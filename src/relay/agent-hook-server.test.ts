@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
 import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
 import { makePaneKey } from '../shared/stable-pane-id'
+import * as agentHookListener from '../shared/agent-hook-listener'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
@@ -257,6 +258,8 @@ describe('RelayAgentHookServer', () => {
       })
       expect(forward.mock.calls.at(-1)?.[0].payload.lastAssistantMessage).toBeUndefined()
 
+      // Let the first 50ms retry miss so continuation across SessionEnd is proven.
+      await new Promise((resolve) => setTimeout(resolve, 70))
       writeFileSync(
         transcriptPath,
         `${JSON.stringify({
@@ -329,6 +332,160 @@ describe('RelayAgentHookServer', () => {
     } finally {
       server.stop()
       vi.unstubAllEnvs()
+    }
+  })
+
+  it('caps the replay cache at 256 panes, evicting the least-recently-updated', async () => {
+    // Mirrors the server's private MAX_CACHED_PANES. The WSL relay never gets a
+    // per-pane teardown signal, so the cache is recency-capped instead.
+    const CAP = 256
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const paneKeyFor = (i: number): string => makePaneKey(`tab-${i}`, LEAF_ID)
+      const postPane = (paneKey: string): Promise<Response> =>
+        fetch(`http://127.0.0.1:${port}/hook/claude`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': token
+          },
+          body: JSON.stringify({
+            paneKey,
+            payload: { hook_event_name: 'UserPromptSubmit', prompt: 'p' }
+          })
+        })
+
+      // Fill the cache to exactly the cap in insertion order 0..CAP-1. Sequential
+      // awaits pin Map order = update recency, which the eviction relies on.
+      for (let i = 0; i < CAP; i++) {
+        await postPane(paneKeyFor(i))
+      }
+      // Refresh the OLDEST pane just before overflow, then push one more pane.
+      // Recency (not insertion) order must now evict pane 1, sparing pane 0.
+      await postPane(paneKeyFor(0))
+      await postPane(paneKeyFor(CAP))
+
+      forward.mockClear()
+      const replayed = server.replayCachedPayloadsForPanes()
+      expect(replayed).toBe(CAP)
+
+      const cachedPaneKeys = new Set(forward.mock.calls.map((call) => call[0].paneKey))
+      expect(cachedPaneKeys.size).toBe(CAP)
+      expect(cachedPaneKeys.has(paneKeyFor(0))).toBe(true)
+      expect(cachedPaneKeys.has(paneKeyFor(CAP))).toBe(true)
+      expect(cachedPaneKeys.has(paneKeyFor(1))).toBe(false)
+    } finally {
+      server.stop()
+    }
+  }, 30_000)
+
+  it('forwards a Grok result when discovery finishes after the old retry window', async () => {
+    let releaseDiscovery!: () => void
+    const discovery = new Promise<void>((resolve) => {
+      releaseDiscovery = resolve
+    })
+    vi.spyOn(agentHookListener, 'preparePendingGrokResultDiscovery').mockReturnValue(discovery)
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    const sessionId = '019e37f4-5135-7b63-a4ab-6d13aa6bf534'
+    const cwd = join(dir, 'workspace')
+    const sessionDir = join(dir, '.grok', 'sessions', encodeURIComponent(cwd), sessionId)
+    mkdirSync(sessionDir, { recursive: true })
+    const history = join(sessionDir, 'chat_history.jsonl')
+    writeFileSync(history, '')
+    vi.stubEnv('HOME', dir)
+    vi.stubEnv('USERPROFILE', dir)
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const post = (payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${port}/hook/grok`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': token
+          },
+          body: JSON.stringify({
+            paneKey: PANE_KEY,
+            tabId: 'tab-1',
+            env: 'remote',
+            version: '1',
+            payload
+          })
+        })
+
+      await post({ hookEventName: 'UserPromptSubmit', prompt: 'delayed relay result' })
+      await post({ hookEventName: 'Stop', sessionId, cwd })
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      expect(forward.mock.calls.at(-1)?.[0].payload.lastAssistantMessage).toBeUndefined()
+
+      writeFileSync(
+        history,
+        `${JSON.stringify({ type: 'assistant', content: 'Relay found after discovery.' })}\n`
+      )
+      releaseDiscovery()
+
+      await vi.waitFor(() => {
+        expect(forward.mock.calls.at(-1)?.[0].payload.lastAssistantMessage).toBe(
+          'Relay found after discovery.'
+        )
+      })
+    } finally {
+      server.stop()
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('does not forward an old result over a newer same-text Grok turn', async () => {
+    let releaseDiscovery!: () => void
+    const discovery = new Promise<void>((resolve) => {
+      releaseDiscovery = resolve
+    })
+    vi.spyOn(agentHookListener, 'preparePendingGrokResultDiscovery').mockReturnValue(discovery)
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const post = (payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${port}/hook/grok`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': token
+          },
+          body: JSON.stringify({
+            paneKey: PANE_KEY,
+            tabId: 'tab-1',
+            env: 'remote',
+            version: '1',
+            payload
+          })
+        })
+
+      await post({ hookEventName: 'UserPromptSubmit', prompt: 'repeat me' })
+      await post({
+        hookEventName: 'Stop',
+        sessionId: '019e37f4-5135-7b63-a4ab-6d13aa6bf535',
+        cwd: join(dir, 'workspace')
+      })
+      await post({ hookEventName: 'UserPromptSubmit', prompt: 'repeat me' })
+      const forwardsBeforeDiscovery = forward.mock.calls.length
+
+      releaseDiscovery()
+      await new Promise((resolve) => setTimeout(resolve, 80))
+
+      expect(forward).toHaveBeenCalledTimes(forwardsBeforeDiscovery)
+      expect(forward.mock.calls.at(-1)?.[0].payload).toMatchObject({
+        state: 'working',
+        prompt: 'repeat me',
+        agentType: 'grok'
+      })
+    } finally {
+      server.stop()
     }
   })
 })

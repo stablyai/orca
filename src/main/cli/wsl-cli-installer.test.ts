@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- WSL CLI tests cover one installer state machine with shared
-   runner fixtures; splitting would duplicate the fake WSL filesystem setup. */
 import type { CliInstallStatus } from '../../shared/cli-install-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 

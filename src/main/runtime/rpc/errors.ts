@@ -51,6 +51,9 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
 
 const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(COMPUTER_ERROR_CODES))
 const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES)
+const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
+  'worktree_id_requires_full_path'
+])
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
   const message = error instanceof Error ? error.message : String(error)
@@ -82,6 +85,20 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     'code' in error &&
     typeof (error as { code: unknown }).code === 'string' &&
     LINEAR_PASSTHROUGH_CODES.has((error as { code: string }).code)
+  ) {
+    return errorResponse(
+      id,
+      meta,
+      (error as { code: string }).code,
+      message,
+      (error as { data?: unknown }).data
+    )
+  }
+  if (
+    error instanceof Error &&
+    'code' in error &&
+    typeof (error as { code: unknown }).code === 'string' &&
+    STRUCTURED_RUNTIME_PASSTHROUGH_CODES.has((error as { code: string }).code)
   ) {
     return errorResponse(
       id,

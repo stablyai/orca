@@ -40,6 +40,7 @@ type SourceControlHeaderToolbarProps = {
   branchSummary: GitBranchCompareSummary | null
   compareBaseRef: string | null
   upstreamStatus?: GitUpstreamStatus
+  manualReviewUrl?: string | null
 }
 
 function HostedReviewToolbarLink({
@@ -143,7 +144,8 @@ export function SourceControlHeaderToolbar({
   onExpandNotes,
   branchSummary,
   compareBaseRef,
-  upstreamStatus
+  upstreamStatus,
+  manualReviewUrl
 }: SourceControlHeaderToolbarProps): React.JSX.Element {
   const filterInputRef = useRef<HTMLInputElement>(null)
   const normalizedFilter = filterQuery.trim()
@@ -288,6 +290,7 @@ export function SourceControlHeaderToolbar({
             summary={branchSummary}
             compareBaseRef={compareBaseRef}
             upstreamStatus={upstreamStatus}
+            manualReviewUrl={manualReviewUrl}
             onChangeBaseRef={onChangeBaseRef}
             onRetry={onRefreshBranchCompare}
           />

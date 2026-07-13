@@ -21,13 +21,28 @@ const { getPathMock, homedirMock } = vi.hoisted(() => ({
 }))
 
 const { fsMockState } = vi.hoisted(() => ({
-  fsMockState: { failSymlink: false }
+  fsMockState: {
+    copyCount: 0,
+    failSymlink: false,
+    trackedReadCount: 0,
+    trackedReadPath: null as string | null
+  }
 }))
 
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof NodeFs>('node:fs')
   return {
     ...actual,
+    cpSync: (...args: Parameters<typeof actual.cpSync>) => {
+      fsMockState.copyCount += 1
+      return actual.cpSync(...args)
+    },
+    readFileSync: (...args: Parameters<typeof actual.readFileSync>) => {
+      if (args[0] === fsMockState.trackedReadPath) {
+        fsMockState.trackedReadCount += 1
+      }
+      return actual.readFileSync(...args)
+    },
     symlinkSync: (...args: Parameters<typeof actual.symlinkSync>) => {
       if (fsMockState.failSymlink) {
         throw new Error('symlink disabled for test')
@@ -51,7 +66,10 @@ vi.mock('node:os', async () => {
   }
 })
 
-import { syncSystemCodexResourcesIntoManagedHome } from './codex-home-paths'
+import {
+  syncCodexGlobalInstructionsIntoManagedHome,
+  syncSystemCodexResourcesIntoManagedHome
+} from './codex-home-paths'
 
 let fakeHomeDir: string
 let userDataDir: string
@@ -88,7 +106,10 @@ function mockElectronAppPaths(): void {
 
 beforeEach(() => {
   mockElectronAppPaths()
+  fsMockState.copyCount = 0
   fsMockState.failSymlink = false
+  fsMockState.trackedReadCount = 0
+  fsMockState.trackedReadPath = null
   fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-codex-resource-home-'))
   userDataDir = mkdtempSync(join(tmpdir(), 'orca-codex-resource-user-data-'))
   previousUserDataPath = process.env.ORCA_USER_DATA_PATH
@@ -217,4 +238,202 @@ describe('syncSystemCodexResourcesIntoManagedHome', () => {
     expect(lstatSync(runtimeProfilePath).isSymbolicLink()).toBe(false)
     expect(readFileSync(runtimeProfilePath, 'utf-8')).toBe('second\n')
   })
+
+  it('mirrors hooks directory into the managed runtime home (regression test for 127 exit)', () => {
+    const systemHooksPath = join(getSystemCodexHomePath(), 'hooks')
+    const runtimeHooksPath = join(getRuntimeCodexHomePath(), 'hooks')
+    mkdirSync(systemHooksPath, { recursive: true })
+    writeFileSync(join(systemHooksPath, 'observe-tool-use.sh'), '#!/bin/bash\necho ok\n')
+
+    syncSystemCodexResourcesIntoManagedHome()
+
+    expect(lstatSync(runtimeHooksPath).isSymbolicLink()).toBe(true)
+    expectSymbolicLinkTargetIfLinked(runtimeHooksPath, systemHooksPath)
+  })
+
+  it('mirrors the global AGENTS.md into the managed runtime home so user instructions survive', () => {
+    const systemAgentsPath = join(getSystemCodexHomePath(), 'AGENTS.md')
+    const runtimeAgentsPath = join(getRuntimeCodexHomePath(), 'AGENTS.md')
+    writeFileSync(systemAgentsPath, '# Global instructions\n')
+
+    syncSystemCodexResourcesIntoManagedHome()
+
+    expect(readFileSync(runtimeAgentsPath, 'utf-8')).toBe('# Global instructions\n')
+    expectSymbolicLinkTargetIfLinked(runtimeAgentsPath, systemAgentsPath)
+  })
+
+  it('skips unchanged global-instruction fallback copies when symlinks fail', () => {
+    fsMockState.failSymlink = true
+    const systemAgentsPath = join(getSystemCodexHomePath(), 'AGENTS.md')
+    writeFileSync(systemAgentsPath, 'first\n')
+
+    syncSystemCodexResourcesIntoManagedHome()
+    expect(fsMockState.copyCount).toBe(1)
+    syncSystemCodexResourcesIntoManagedHome()
+    expect(fsMockState.copyCount).toBe(1)
+    writeFileSync(systemAgentsPath, 'second\n')
+    syncSystemCodexResourcesIntoManagedHome()
+
+    expect(fsMockState.copyCount).toBe(2)
+    expect(readFileSync(join(getRuntimeCodexHomePath(), 'AGENTS.md'), 'utf-8')).toBe('second\n')
+  })
+
+  it('mirrors only global instructions when explicit Codex homes are provided', () => {
+    const systemHomePath = getSystemCodexHomePath()
+    const managedHomePath = join(userDataDir, 'wsl-runtime-home')
+    mkdirSync(join(systemHomePath, 'skills'), { recursive: true })
+    writeFileSync(join(systemHomePath, 'skills', 'system.md'), 'skill\n')
+    writeFileSync(join(systemHomePath, 'AGENTS.md'), '# WSL instructions\n')
+
+    syncCodexGlobalInstructionsIntoManagedHome({ systemHomePath, managedHomePath })
+
+    const runtimeAgentsPath = join(managedHomePath, 'AGENTS.md')
+    expect(readFileSync(runtimeAgentsPath, 'utf-8')).toBe('# WSL instructions\n')
+    // Why: WSL homes are \\wsl.localhost UNC paths, so a host-side symlink would
+    // store a target the distro cannot resolve; global instructions must be a
+    // real copy even when symlinks are available.
+    expect(lstatSync(runtimeAgentsPath).isSymbolicLink()).toBe(false)
+    expect(existsSync(join(managedHomePath, 'skills'))).toBe(false)
+  })
+
+  // Why: creating file symlinks on Windows requires developer mode; the
+  // runtime-home integration test still enforces real-copy behavior there.
+  it.skipIf(process.platform === 'win32')(
+    'materializes symlinked global instructions as a real file for WSL',
+    () => {
+      const systemHomePath = getSystemCodexHomePath()
+      const managedHomePath = join(userDataDir, 'wsl-runtime-home')
+      const instructionSourcePath = join(userDataDir, 'global-instructions.md')
+      writeFileSync(instructionSourcePath, 'linked instructions\n')
+      symlinkSync(instructionSourcePath, join(systemHomePath, 'AGENTS.md'))
+
+      syncCodexGlobalInstructionsIntoManagedHome({ systemHomePath, managedHomePath })
+
+      const runtimeAgentsPath = join(managedHomePath, 'AGENTS.md')
+      expect(lstatSync(runtimeAgentsPath).isSymbolicLink()).toBe(false)
+      expect(readFileSync(runtimeAgentsPath, 'utf-8')).toBe('linked instructions\n')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'replaces an existing system-instruction link despite a malformed marker directory',
+    () => {
+      const systemHomePath = getSystemCodexHomePath()
+      const managedHomePath = join(userDataDir, 'wsl-runtime-home')
+      const systemAgentsPath = join(systemHomePath, 'AGENTS.md')
+      const runtimeAgentsPath = join(managedHomePath, 'AGENTS.md')
+      mkdirSync(managedHomePath, { recursive: true })
+      writeFileSync(systemAgentsPath, 'system\n')
+      symlinkSync(systemAgentsPath, runtimeAgentsPath)
+      mkdirSync(join(managedHomePath, '.orca-resource-copies', 'AGENTS.md.json'), {
+        recursive: true
+      })
+
+      syncCodexGlobalInstructionsIntoManagedHome({ systemHomePath, managedHomePath })
+
+      expect(lstatSync(runtimeAgentsPath).isSymbolicLink()).toBe(false)
+      expect(readFileSync(runtimeAgentsPath, 'utf-8')).toBe('system\n')
+    }
+  )
+
+  it('removes an unowned copy when recording copy ownership fails', () => {
+    const systemHomePath = getSystemCodexHomePath()
+    const managedHomePath = join(userDataDir, 'wsl-runtime-home')
+    writeFileSync(join(systemHomePath, 'AGENTS.md'), 'system\n')
+    mkdirSync(managedHomePath, { recursive: true })
+    writeFileSync(join(managedHomePath, '.orca-resource-copies'), 'blocks marker directory\n')
+
+    syncCodexGlobalInstructionsIntoManagedHome({ systemHomePath, managedHomePath })
+
+    expect(existsSync(join(managedHomePath, 'AGENTS.md'))).toBe(false)
+  })
+
+  it('skips unchanged copies, then refreshes and removes owned global instructions', () => {
+    const systemHomePath = getSystemCodexHomePath()
+    const managedHomePath = join(userDataDir, 'wsl-runtime-home')
+    const systemAgentsPath = join(systemHomePath, 'AGENTS.md')
+    const runtimeAgentsPath = join(managedHomePath, 'AGENTS.md')
+    writeFileSync(systemAgentsPath, 'first\n')
+
+    syncCodexGlobalInstructionsIntoManagedHome({ systemHomePath, managedHomePath })
+    expect(fsMockState.copyCount).toBe(1)
+    syncCodexGlobalInstructionsIntoManagedHome({ systemHomePath, managedHomePath })
+    expect(fsMockState.copyCount).toBe(1)
+    writeFileSync(systemAgentsPath, 'second\n')
+    syncCodexGlobalInstructionsIntoManagedHome({ systemHomePath, managedHomePath })
+
+    expect(fsMockState.copyCount).toBe(2)
+    expect(lstatSync(runtimeAgentsPath).isSymbolicLink()).toBe(false)
+    expect(readFileSync(runtimeAgentsPath, 'utf-8')).toBe('second\n')
+    rmSync(systemAgentsPath)
+    syncCodexGlobalInstructionsIntoManagedHome({ systemHomePath, managedHomePath })
+    expect(existsSync(runtimeAgentsPath)).toBe(false)
+  })
+
+  it('replaces an owned non-file instruction entry without reading it', () => {
+    const systemHomePath = getSystemCodexHomePath()
+    const managedHomePath = join(userDataDir, 'wsl-runtime-home')
+    const runtimeAgentsPath = join(managedHomePath, 'AGENTS.md')
+    writeFileSync(join(systemHomePath, 'AGENTS.md'), 'system\n')
+    syncCodexGlobalInstructionsIntoManagedHome({ systemHomePath, managedHomePath })
+    rmSync(runtimeAgentsPath)
+    mkdirSync(runtimeAgentsPath)
+    fsMockState.trackedReadPath = runtimeAgentsPath
+
+    syncCodexGlobalInstructionsIntoManagedHome({ systemHomePath, managedHomePath })
+
+    expect(fsMockState.trackedReadCount).toBe(0)
+    expect(lstatSync(runtimeAgentsPath).isFile()).toBe(true)
+    expect(readFileSync(runtimeAgentsPath, 'utf-8')).toBe('system\n')
+  })
+
+  it('removes owned instructions instead of mirroring a non-file source', () => {
+    const systemHomePath = getSystemCodexHomePath()
+    const managedHomePath = join(userDataDir, 'wsl-runtime-home')
+    const systemAgentsPath = join(systemHomePath, 'AGENTS.md')
+    const runtimeAgentsPath = join(managedHomePath, 'AGENTS.md')
+    writeFileSync(systemAgentsPath, 'system\n')
+    syncCodexGlobalInstructionsIntoManagedHome({ systemHomePath, managedHomePath })
+    rmSync(systemAgentsPath)
+    mkdirSync(systemAgentsPath)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      syncCodexGlobalInstructionsIntoManagedHome({ systemHomePath, managedHomePath })
+    } finally {
+      warn.mockRestore()
+    }
+
+    expect(existsSync(runtimeAgentsPath)).toBe(false)
+  })
+
+  it('preserves runtime-owned global instructions in an explicit managed home', () => {
+    const systemHomePath = getSystemCodexHomePath()
+    const managedHomePath = join(userDataDir, 'wsl-runtime-home')
+    mkdirSync(managedHomePath, { recursive: true })
+    writeFileSync(join(systemHomePath, 'AGENTS.md'), 'system\n')
+    writeFileSync(join(managedHomePath, 'AGENTS.md'), 'runtime\n')
+
+    syncCodexGlobalInstructionsIntoManagedHome({ systemHomePath, managedHomePath })
+
+    expect(readFileSync(join(managedHomePath, 'AGENTS.md'), 'utf-8')).toBe('runtime\n')
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'preserves an unowned dangling runtime instruction symlink',
+    () => {
+      const systemHomePath = getSystemCodexHomePath()
+      const managedHomePath = join(userDataDir, 'wsl-runtime-home')
+      const runtimeAgentsPath = join(managedHomePath, 'AGENTS.md')
+      const missingTargetPath = join(userDataDir, 'missing-runtime-instructions.md')
+      mkdirSync(managedHomePath, { recursive: true })
+      writeFileSync(join(systemHomePath, 'AGENTS.md'), 'system\n')
+      symlinkSync(missingTargetPath, runtimeAgentsPath)
+
+      syncCodexGlobalInstructionsIntoManagedHome({ systemHomePath, managedHomePath })
+
+      expect(lstatSync(runtimeAgentsPath).isSymbolicLink()).toBe(true)
+      expect(readlinkSync(runtimeAgentsPath)).toBe(missingTargetPath)
+    }
+  )
 })

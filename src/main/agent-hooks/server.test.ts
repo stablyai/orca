@@ -13,7 +13,12 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { AgentHookServer, agentHookServer, _internals } from './server'
+import {
+  AgentHookServer,
+  agentHookServer,
+  CLOSED_AGENT_STATUS_TAB_IDS_MAX,
+  _internals
+} from './server'
 import {
   AGENT_STATUS_MAX_FIELD_LENGTH,
   AGENT_STATUS_STALE_AFTER_MS,
@@ -133,6 +138,89 @@ describe('AgentHookServer listener replay', () => {
           payload: expect.objectContaining({ state: 'done', interrupted: true })
         })
       )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not infer an interrupt while a subagent child is still working', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: {
+            state: 'working',
+            prompt: 'review loop',
+            agentType: 'claude',
+            // Why: a working pane can be child-driven (lead already idle).
+            // Ctrl+C does not stop background children, so no terminal done
+            // may be inferred while one is still running.
+            subagents: [{ id: 'a1', state: 'working', startedAt: 900 }]
+          }
+        },
+        'conn-1'
+      )
+      const baseline = server.getStatusSnapshot()[0]
+
+      vi.setSystemTime(1_500)
+      const applied = server.inferInterrupt({
+        paneKey: PANE,
+        baselineUpdatedAt: baseline.receivedAt,
+        baselineStateStartedAt: baseline.stateStartedAt,
+        baselinePrompt: 'review loop',
+        baselineAgentType: 'claude',
+        intent: 'ctrl-c'
+      })
+
+      expect(applied).toBe(false)
+      expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('carries idle subagent rows through an inferred interrupt', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          payload: {
+            state: 'working',
+            prompt: 'wrap up',
+            agentType: 'claude',
+            subagents: [{ id: 'a1', state: 'idle', startedAt: 900, agentType: 'probe1' }]
+          }
+        },
+        'conn-1'
+      )
+      const baseline = server.getStatusSnapshot()[0]
+
+      vi.setSystemTime(1_500)
+      const applied = server.inferInterrupt({
+        paneKey: PANE,
+        baselineUpdatedAt: baseline.receivedAt,
+        baselineStateStartedAt: baseline.stateStartedAt,
+        baselinePrompt: 'wrap up',
+        baselineAgentType: 'claude',
+        intent: 'ctrl-c'
+      })
+
+      expect(applied).toBe(true)
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        state: 'done',
+        interrupted: true,
+        subagents: [expect.objectContaining({ id: 'a1', state: 'idle' })]
+      })
     } finally {
       vi.useRealTimers()
     }
@@ -3242,6 +3330,30 @@ describe('AgentHookServer prompt-sent telemetry', () => {
     expect(trackMock).toHaveBeenCalledTimes(2)
   })
 
+  it('includes Command Code prompt interaction keys in the IPC snapshot', () => {
+    const server = new AgentHookServer()
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        hasExplicitPrompt: true,
+        promptInteractionKey: 'command-code-transcript-user-1',
+        payload: { state: 'working', prompt: 'rerun', agentType: 'command-code' }
+      },
+      'conn-1'
+    )
+
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      paneKey: PANE,
+      promptInteractionKey: 'command-code-transcript-user-1',
+      state: 'working',
+      prompt: 'rerun',
+      agentType: 'command-code'
+    })
+  })
+
   it('dedupes Command Code direct prompt hooks followed by transcript-backed stop hooks', () => {
     const server = new AgentHookServer()
 
@@ -4954,13 +5066,15 @@ describe('Pi hook normalization', () => {
     expect(result?.payload.agentType).toBe('pi')
   })
 
-  it('session_shutdown maps to done', () => {
+  it('session_shutdown leaves a running Pi status intact', () => {
     const result = _internals.normalizeHookPayload(
       'pi',
       buildBody({ hook_event_name: 'session_shutdown' }),
       'production'
     )
-    expect(result?.payload.state).toBe('done')
+    // Why: Pi also emits shutdown when reloading or replacing its in-process
+    // session while the PTY stays alive; only agent_end proves turn completion.
+    expect(result).toBeNull()
   })
 
   it('done preserves the cached lastAssistantMessage from a prior message_end', () => {
@@ -5300,6 +5414,8 @@ describe('Copilot hook normalization', () => {
         })
       )
 
+      // Let the first 50ms retry miss so continuation across SessionEnd is proven.
+      await new Promise((resolve) => setTimeout(resolve, 70))
       writeFileSync(
         transcriptPath,
         `${JSON.stringify({
@@ -6846,5 +6962,25 @@ describe('AgentHookServer ingestTerminalStatus', () => {
 
     expect(listener).not.toHaveBeenCalled()
     expect(server.getStatusSnapshot()).toEqual([])
+  })
+})
+
+describe('AgentHookServer closed-tab suppression bound', () => {
+  it('bounds closedAgentStatusTabIds with LRU eviction as tabs close', () => {
+    const server = new AgentHookServer()
+    const internals = server as unknown as {
+      markTabClosedForAgentStatus: (tabId: string) => void
+      closedAgentStatusTabIds: Set<string>
+    }
+
+    const total = CLOSED_AGENT_STATUS_TAB_IDS_MAX + 200
+    for (let i = 0; i < total; i += 1) {
+      internals.markTabClosedForAgentStatus(`closed-tab-${i}`)
+    }
+
+    // Set stays bounded; oldest ids are evicted, most-recent are retained.
+    expect(internals.closedAgentStatusTabIds.size).toBe(CLOSED_AGENT_STATUS_TAB_IDS_MAX)
+    expect(internals.closedAgentStatusTabIds.has('closed-tab-0')).toBe(false)
+    expect(internals.closedAgentStatusTabIds.has(`closed-tab-${total - 1}`)).toBe(true)
   })
 })

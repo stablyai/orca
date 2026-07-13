@@ -127,7 +127,8 @@ function MessageRow({
   expandSignal,
   onScrollMessageToTop,
   onLinkClick,
-  allowFileUriLinks = false
+  allowFileUriLinks = false,
+  deliveryFailed = false
 }: {
   message: NativeChatMessage
   expandSignal: boolean
@@ -135,6 +136,7 @@ function MessageRow({
   onScrollMessageToTop: (el: HTMLElement) => void
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
+  deliveryFailed?: boolean
 }): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
   const { prose, tools } = useMemo(() => splitNativeChatBlocks(message.blocks), [message.blocks])
@@ -181,6 +183,14 @@ function MessageRow({
             <ImageAttachmentRefs blocks={prose} />
           )}
         </div>
+        {deliveryFailed ? (
+          <div className="max-w-[85%] text-[11px] text-destructive/80">
+            {translate(
+              'components.native-chat.launchPromptNotDelivered',
+              'Not delivered — check the terminal'
+            )}
+          </div>
+        ) : null}
       </div>
     )
   }
@@ -227,7 +237,8 @@ export function NativeChatMessageList({
   expandSignal,
   fontScale,
   onLinkClick,
-  allowFileUriLinks = false
+  allowFileUriLinks = false,
+  failedDeliveryMessageIds
 }: {
   session: NativeChatLiveSession
   isWorking: boolean
@@ -237,6 +248,7 @@ export function NativeChatMessageList({
   fontScale: number
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
+  failedDeliveryMessageIds?: ReadonlySet<string>
 }): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const [stuckToBottom, setStuckToBottom] = useState(true)
@@ -370,6 +382,7 @@ export function NativeChatMessageList({
               onScrollMessageToTop={scrollMessageToTop}
               onLinkClick={onLinkClick}
               allowFileUriLinks={allowFileUriLinks}
+              deliveryFailed={failedDeliveryMessageIds?.has(message.id) === true}
             />
           ))}
           {showTypingIndicator ? <TypingIndicatorRow /> : null}

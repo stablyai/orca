@@ -13,6 +13,15 @@ import * as runtimeMetadataModule from './runtime-metadata'
 import { readRuntimeMetadata } from './runtime-metadata'
 import { createRuntimeTransportMetadata, OrcaRuntimeRpcServer } from './runtime-rpc'
 import { parsePairingCode } from '../../shared/pairing'
+import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
+import {
+  TerminalStreamOpcode,
+  decodeTerminalStreamFrame,
+  decodeTerminalStreamText,
+  encodeTerminalStreamFrame,
+  encodeTerminalStreamJson,
+  encodeTerminalStreamText
+} from '../../shared/terminal-stream-protocol'
 import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from './rpc/e2ee-crypto'
 import { DeviceRegistry } from './device-registry'
 
@@ -2756,6 +2765,206 @@ describe('OrcaRuntimeRpcServer', () => {
     } finally {
       phoneResponses.dispose()
       phone.ws.close()
+      await server.stop()
+    }
+  })
+
+  it('keeps active runtime multiplex streams responsive while a background stream is ACK-limited over WebSocket', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const writes: { terminal: string; text: string }[] = []
+    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const spawn = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'multiplex-background-pty' })
+      .mockResolvedValueOnce({ id: 'multiplex-active-pty' })
+    runtime.setPtyController({
+      spawn,
+      write: (ptyId, data) => {
+        writes.push({ terminal: ptyId, text: data })
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+
+    const phoneOffer = server.createPairingOffer({
+      address: '127.0.0.1',
+      name: 'phone',
+      scope: 'mobile'
+    })
+    expect(phoneOffer.available).toBe(true)
+    if (!phoneOffer.available) {
+      throw new Error('WebSocket pairing unavailable')
+    }
+    const pairing = parsePairingCode(phoneOffer.pairingUrl)
+    expect(pairing).toBeTruthy()
+    if (!pairing) {
+      throw new Error('Pairing URL did not parse')
+    }
+
+    const metadata = readRuntimeMetadata(userDataPath)
+    const laptopEndpoint = metadata!.transports[0]!.endpoint
+    const laptopAuthToken = metadata!.authToken
+    const worktree = 'id:repo-1::/tmp/worktree-a'
+    const backgroundLeafId = '11111111-1111-4111-8111-111111111111'
+    const activeLeafId = '22222222-2222-4222-8222-222222222222'
+    const backgroundCreateResponse = await sendRequest(laptopEndpoint, {
+      id: 'laptop_create_background',
+      authToken: laptopAuthToken,
+      method: 'terminal.create',
+      params: {
+        worktree,
+        command: 'background',
+        tabId: 'multiplex-background-tab',
+        leafId: backgroundLeafId
+      }
+    })
+    const activeCreateResponse = await sendRequest(laptopEndpoint, {
+      id: 'laptop_create_active',
+      authToken: laptopAuthToken,
+      method: 'terminal.create',
+      params: {
+        worktree,
+        command: 'active',
+        tabId: 'multiplex-active-tab',
+        leafId: activeLeafId,
+        activate: true
+      }
+    })
+    const backgroundTerminal = (backgroundCreateResponse.result as { terminal: { handle: string } })
+      .terminal
+    const activeTerminal = (activeCreateResponse.result as { terminal: { handle: string } })
+      .terminal
+
+    const responses: Record<string, unknown>[] = []
+    const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+    const onError = vi.fn()
+    const subscription = await subscribeRemoteRuntimeRequest(
+      pairing,
+      'terminal.multiplex',
+      {},
+      15_000,
+      {
+        onResponse: (response) => responses.push(response as Record<string, unknown>),
+        onBinary: (bytes) => binaryFrames.push(bytes),
+        onError
+      }
+    )
+
+    try {
+      await vi.waitFor(() =>
+        expect(
+          responses.some(
+            (response) => (response.result as { type?: string } | undefined)?.type === 'ready'
+          )
+        ).toBe(true)
+      )
+      subscription.sendBinary(
+        encodeTerminalStreamFrame({
+          seq: 1,
+          opcode: TerminalStreamOpcode.Subscribe,
+          streamId: 0,
+          payload: encodeTerminalStreamJson({
+            streamId: 21,
+            terminal: backgroundTerminal.handle,
+            client: { id: 'desktop-background', type: 'desktop' },
+            capabilities: { ackOutput: 1 }
+          })
+        })
+      )
+      subscription.sendBinary(
+        encodeTerminalStreamFrame({
+          seq: 2,
+          opcode: TerminalStreamOpcode.Subscribe,
+          streamId: 0,
+          payload: encodeTerminalStreamJson({
+            streamId: 22,
+            terminal: activeTerminal.handle,
+            client: { id: 'desktop-active', type: 'desktop' },
+            capabilities: { ackOutput: 1 }
+          })
+        })
+      )
+      await vi.waitFor(() => {
+        const subscribedStreamIds = responses
+          .map((response) => response.result as { type?: string; streamId?: number } | undefined)
+          .filter((result) => result?.type === 'subscribed')
+          .map((result) => result?.streamId)
+        expect(subscribedStreamIds).toEqual(expect.arrayContaining([21, 22]))
+      })
+      binaryFrames.splice(0)
+
+      const backgroundOutput = 'B'.repeat(700 * 1024)
+      runtime.onPtyData('multiplex-background-pty', backgroundOutput, 1)
+      await vi.waitFor(() => {
+        const backgroundFrames = binaryFrames
+          .map((frame) => decodeTerminalStreamFrame(frame))
+          .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output && frame.streamId === 21)
+        const backgroundBytes = backgroundFrames.reduce(
+          (total, frame) => total + (frame?.payload.byteLength ?? 0),
+          0
+        )
+        expect(backgroundBytes).toBeGreaterThan(0)
+        expect(backgroundBytes).toBeLessThan(backgroundOutput.length)
+      })
+
+      const frameCountBeforeActive = binaryFrames.length
+      runtime.onPtyData('multiplex-active-pty', 'ACTIVE_MULTIPLEX_READY\r\n', 2)
+      await vi.waitFor(() => {
+        const activeOutput = binaryFrames
+          .slice(frameCountBeforeActive)
+          .map((frame) => decodeTerminalStreamFrame(frame))
+          .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output && frame.streamId === 22)
+          .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+          .join('')
+        expect(activeOutput).toContain('ACTIVE_MULTIPLEX_READY')
+      })
+
+      subscription.sendBinary(
+        encodeTerminalStreamFrame({
+          seq: 3,
+          opcode: TerminalStreamOpcode.Input,
+          streamId: 22,
+          payload: encodeTerminalStreamText('still interactive\r')
+        })
+      )
+      await vi.waitFor(() =>
+        expect(writes).toContainEqual({
+          terminal: 'multiplex-active-pty',
+          text: 'still interactive\r'
+        })
+      )
+
+      const backgroundBytesBeforeAck = binaryFrames
+        .map((frame) => decodeTerminalStreamFrame(frame))
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output && frame.streamId === 21)
+        .reduce((total, frame) => total + (frame?.payload.byteLength ?? 0), 0)
+      subscription.sendBinary(
+        encodeTerminalStreamFrame({
+          seq: 4,
+          opcode: TerminalStreamOpcode.Ack,
+          streamId: 21,
+          payload: encodeTerminalStreamJson({ bytes: backgroundBytesBeforeAck })
+        })
+      )
+      await vi.waitFor(() => {
+        const backgroundBytesAfterAck = binaryFrames
+          .map((frame) => decodeTerminalStreamFrame(frame))
+          .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output && frame.streamId === 21)
+          .reduce((total, frame) => total + (frame?.payload.byteLength ?? 0), 0)
+        expect(backgroundBytesAfterAck).toBeGreaterThan(backgroundBytesBeforeAck)
+      })
+      expect(onError).not.toHaveBeenCalled()
+    } finally {
+      subscription.close()
       await server.stop()
     }
   })

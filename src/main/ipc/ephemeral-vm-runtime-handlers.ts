@@ -14,6 +14,7 @@ import {
   removeEnvironment,
   updateEnvironmentFromPairingCode
 } from '../../shared/runtime-environment-store'
+import { clearActiveRuntimeEnvironmentFocusIfMatches } from '../runtime-environment-focus-self-heal'
 import {
   cleanupEphemeralVmRuntime,
   resumeEphemeralVmRuntime,
@@ -102,6 +103,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
       if (result.ok && runtime.runtimeEnvironmentId) {
         try {
           removeEnvironment(userDataPath, runtime.runtimeEnvironmentId)
+          clearActiveRuntimeEnvironmentFocusIfMatches(store, runtime.runtimeEnvironmentId)
         } catch {
           // Cleanup of provider resources matters more than hiding a stale local
           // environment row; users can still remove that manually.

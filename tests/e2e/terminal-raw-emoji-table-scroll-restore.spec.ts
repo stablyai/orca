@@ -180,7 +180,10 @@ function rawEmojiFixtureFrameTailMarker(runId: string): string {
 }
 
 async function setWideRenderedTableViewport(page: Page): Promise<void> {
-  await page.setViewportSize({ width: 1480, height: 820 })
+  const isWindows = await page.evaluate(() => navigator.userAgent.includes('Windows'))
+  // Why: macOS hosted runners need extra room for font/column variance, while
+  // Windows Electron golden rendering is stable at the native-sized viewport.
+  await page.setViewportSize({ width: isWindows ? 1480 : 1760, height: 820 })
   await page.waitForTimeout(250)
   await page.evaluate(() => {
     const store = window.__store
@@ -486,9 +489,28 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
     await sendToTerminal(orcaPage, ptyId, `printf ${JSON.stringify(`${marker}\\n`)}\r`)
     await waitForTerminalOutput(orcaPage, marker, 10_000)
 
-    const diagnostics = await readTerminalRenderDiagnostics(orcaPage)
+    const expectedWebgl = await expectAutoWebgl(orcaPage)
+    // Why: WebGL (re)attaches asynchronously via React visibility effects and a
+    // transient ESC[?25l during a redraw can momentarily set cursorHidden. Let
+    // those eventually-consistent fields settle before the single-shot golden
+    // asserts so runner timing can't flake-block the release. hasComplexScriptOutput
+    // stays single-shot: its not-ready default is also false, so timing can't
+    // turn it into a false failure.
+    let diagnostics = await readTerminalRenderDiagnostics(orcaPage)
+    await expect
+      .poll(
+        async () => {
+          diagnostics = await readTerminalRenderDiagnostics(orcaPage)
+          return diagnostics.hasWebgl === expectedWebgl && diagnostics.cursorHidden === false
+        },
+        {
+          timeout: 15_000,
+          message: `terminal render diagnostics did not settle (expected hasWebgl=${expectedWebgl}, cursorHidden=false)`
+        }
+      )
+      .toBe(true)
     expect(diagnostics.hasComplexScriptOutput).toBe(false)
-    expect(diagnostics.hasWebgl).toBe(await expectAutoWebgl(orcaPage))
+    expect(diagnostics.hasWebgl).toBe(expectedWebgl)
     expect(diagnostics.cursorHidden).toBe(false)
   })
 
@@ -537,6 +559,9 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
       await switchToWorktree(orcaPage, secondWorktreeId)
       await waitForActiveTerminalManager(orcaPage, 30_000)
       await orcaPage.waitForTimeout(1_000)
+      // Why: switching back can replay hidden terminal contents immediately;
+      // make the viewport wide before restore so the table cannot wrap first.
+      await setWideRenderedTableViewport(orcaPage)
       await switchToWorktree(orcaPage, firstWorktreeId)
       // Why: activating another worktree can restore the right sidebar. This
       // golden is about terminal renderer restore at a deliberately wide width.
@@ -553,7 +578,26 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
 
       await scrollActiveTerminalToText(orcaPage, 'Singer')
       await closeFeatureTips(orcaPage)
-      const diagnostics = await readTerminalRenderDiagnostics(orcaPage)
+      const expectedWebgl = await expectAutoWebgl(orcaPage)
+      // Why: after the worktree switch, WebGL reattaches asynchronously (React
+      // visibility effect + attach backoff) and a transient ESC[?25l during the
+      // restore redraw can momentarily set cursorHidden. Let those settle before
+      // the single-shot golden asserts so runner timing can't flake-block the
+      // release; the geometry/wrap/overpaint checks below stay single-shot as the
+      // real regression signal.
+      let diagnostics = await readTerminalRenderDiagnostics(orcaPage)
+      await expect
+        .poll(
+          async () => {
+            diagnostics = await readTerminalRenderDiagnostics(orcaPage)
+            return diagnostics.hasWebgl === expectedWebgl && diagnostics.cursorHidden === false
+          },
+          {
+            timeout: 15_000,
+            message: `terminal render diagnostics did not settle (expected hasWebgl=${expectedWebgl}, cursorHidden=false)`
+          }
+        )
+        .toBe(true)
       const overpaint = await readTerminalRightEdgeOverpaint(orcaPage)
       const wrapDiagnostics = await readTerminalBoxTableWrapDiagnostics(orcaPage)
       const singerGeometry = await readVisibleSingerRowGeometry(orcaPage)
@@ -579,7 +623,7 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
 
       expect(wrapDiagnostics.cols).toBeGreaterThanOrEqual(RAW_EMOJI_BOX_TABLE_WIDTH)
       expect(diagnostics.hasComplexScriptOutput).toBe(false)
-      expect(diagnostics.hasWebgl).toBe(await expectAutoWebgl(orcaPage))
+      expect(diagnostics.hasWebgl).toBe(expectedWebgl)
       expect(diagnostics.cursorHidden).toBe(false)
       expect(overpaint.offenders).toEqual([])
       expect(wrapDiagnostics.wrappedBoxLines).toEqual([])

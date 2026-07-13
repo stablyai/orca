@@ -22,6 +22,8 @@ describe('client UI RPC methods', () => {
       defaultRepoSelection: ['repo-1'],
       defaultLinearTeamSelection: ['team-1'],
       compactWorktreeCards: true,
+      minimaxGroupId: 'group-42',
+      minimaxUsageModels: 'general,abab6.5',
       githubProjects: {
         pinned: [],
         recent: [],
@@ -77,6 +79,8 @@ describe('client UI RPC methods', () => {
         defaultTaskViewPreset: 'my-prs',
         experimentalNewWorktreeCardStyle: true,
         compactWorktreeCards: true,
+        minimaxGroupId: 'group-42',
+        minimaxUsageModels: 'general,abab6.5',
         defaultRepoSelection: settings.defaultRepoSelection,
         defaultLinearTeamSelection: ['team-1', 'team-2'],
         githubProjects: settings.githubProjects
@@ -91,6 +95,8 @@ describe('client UI RPC methods', () => {
       defaultTaskViewPreset: 'my-prs',
       experimentalNewWorktreeCardStyle: true,
       compactWorktreeCards: true,
+      minimaxGroupId: 'group-42',
+      minimaxUsageModels: 'general,abab6.5',
       defaultRepoSelection: settings.defaultRepoSelection,
       defaultLinearTeamSelection: ['team-1', 'team-2'],
       githubProjects: settings.githubProjects
@@ -109,6 +115,63 @@ describe('client UI RPC methods', () => {
       defaultTaskSource: 'jira',
       visibleTaskProviders: ['github', 'jira']
     })
+  })
+
+  it('normalizes manual bot-author overrides before persisting', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateClientSettings: vi.fn(() => ({}))
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('settings.update', {
+        prBotAuthorOverrides: [' GretelFlux ', 'gretelflux', 42, '', 'another-bot']
+      })
+    )
+
+    expect(runtime.updateClientSettings).toHaveBeenCalledWith({
+      prBotAuthorOverrides: ['another-bot', 'gretelflux']
+    })
+  })
+
+  it('caps oversized bot-author override payloads', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateClientSettings: vi.fn(() => ({}))
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('settings.update', {
+        prBotAuthorOverrides: Array.from(
+          { length: 600 },
+          (_, i) => `bot-${String(i).padStart(4, '0')}`
+        )
+      })
+    )
+
+    const [update] = vi.mocked(runtime.updateClientSettings).mock.calls[0]!
+    expect((update as { prBotAuthorOverrides: string[] }).prBotAuthorOverrides).toHaveLength(500)
+  })
+
+  it('routes bot-author deltas to the runtime-owned atomic update', async () => {
+    const settings = { prBotAuthorOverrides: ['alice', 'bob'] }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateClientPRBotAuthorOverride: vi.fn(() => settings)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('settings.updatePRBotAuthorOverride', { author: ' Bob ', isBot: true })
+    )
+
+    expect(runtime.updateClientPRBotAuthorOverride).toHaveBeenCalledWith({
+      author: ' Bob ',
+      isBot: true
+    })
+    expect(response).toMatchObject({ ok: true, result: { settings } })
   })
 
   it('returns the runtime host persisted UI state', async () => {
@@ -176,7 +239,12 @@ describe('client UI RPC methods', () => {
       ...getDefaultUIState(),
       worktreeCardProperties: ['status', 'branch', 'automation', 'inline-agents'],
       _worktreeCardModeDefaulted: true,
-      statusBarItems: ['codex'],
+      statusBarItems: ['codex', 'kimi', 'minimax', 'grok', 'antigravity', 'ports'],
+      _portsStatusBarDefaultAdded: true,
+      _kimiStatusBarDefaultAdded: true,
+      _minimaxStatusBarDefaultAdded: true,
+      _grokStatusBarDefaultAdded: true,
+      _antigravityStatusBarDefaultAdded: true,
       taskResumeState: {
         githubMode: 'items',
         githubItemsQuery: 'is:open',
@@ -212,7 +280,12 @@ describe('client UI RPC methods', () => {
     const payload = {
       worktreeCardProperties: ['status', 'branch', 'automation', 'inline-agents'],
       _worktreeCardModeDefaulted: true,
-      statusBarItems: ['codex'],
+      statusBarItems: ['codex', 'kimi', 'minimax', 'grok', 'antigravity', 'ports'],
+      _portsStatusBarDefaultAdded: true,
+      _kimiStatusBarDefaultAdded: true,
+      _minimaxStatusBarDefaultAdded: true,
+      _grokStatusBarDefaultAdded: true,
+      _antigravityStatusBarDefaultAdded: true,
       taskResumeState: {
         githubMode: 'items',
         githubItemsQuery: 'is:open',

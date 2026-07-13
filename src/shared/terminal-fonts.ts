@@ -5,7 +5,7 @@ export const TERMINAL_FONT_WEIGHT_STEP = 100
 const DEFAULT_TERMINAL_FONT_WEIGHT_BOLD = 700
 
 export function normalizeTerminalFontWeight(fontWeight: number | null | undefined): number {
-  const numericFontWeight = typeof fontWeight === 'number' ? fontWeight : NaN
+  const numericFontWeight = typeof fontWeight === 'number' ? fontWeight : Number.NaN
 
   if (!Number.isFinite(numericFontWeight)) {
     return DEFAULT_TERMINAL_FONT_WEIGHT

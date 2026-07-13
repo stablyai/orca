@@ -1,14 +1,14 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { execFileMock, webContentsFromIdMock, existsSyncMock, readFileSyncMock } = vi.hoisted(
-  () => ({
+const { execFileMock, webContentsFromIdMock, existsSyncMock, readFileSyncMock, stdinWrites } =
+  vi.hoisted(() => ({
     execFileMock: vi.fn(),
     webContentsFromIdMock: vi.fn(),
     existsSyncMock: vi.fn(() => false),
-    readFileSyncMock: vi.fn(() => Buffer.from(''))
-  })
-)
+    readFileSyncMock: vi.fn(() => Buffer.from('')),
+    stdinWrites: [] as string[]
+  }))
 
 vi.mock('child_process', () => ({ execFile: execFileMock }))
 vi.mock('fs', () => ({
@@ -108,6 +108,22 @@ function mockWebContents(id: number, url = 'https://example.com', title = 'Examp
 function succeedWith(data: unknown): void {
   execFileMock.mockImplementation((_bin: string, _args: string[], _opts: unknown, cb: Function) => {
     cb(null, JSON.stringify({ success: true, data }), '')
+    return {
+      stdin: { on: vi.fn(), end: (text: string) => stdinWrites.push(text) }
+    }
+  })
+}
+
+function succeedForContentEditable(data: unknown = { ok: true }): void {
+  execFileMock.mockImplementation((_bin: string, args: string[], _opts: unknown, cb: Function) => {
+    const result =
+      args.includes('get') && args.includes('attr') && args.includes('contenteditable')
+        ? { value: 'true' }
+        : data
+    cb(null, JSON.stringify({ success: true, data: result }), '')
+    return {
+      stdin: { on: vi.fn(), end: (text: string) => stdinWrites.push(text) }
+    }
   })
 }
 
@@ -115,6 +131,150 @@ function failWith(error: string): void {
   execFileMock.mockImplementation((_bin: string, _args: string[], _opts: unknown, cb: Function) => {
     cb(null, JSON.stringify({ success: false, error }), '')
   })
+}
+
+class TestEvent {
+  type: string
+  bubbles: boolean
+
+  constructor(type: string, init?: { bubbles?: boolean }) {
+    this.type = type
+    this.bubbles = init?.bubbles ?? false
+  }
+}
+
+type FillEvalNode = {
+  tagName: string
+  getAttribute: (name: string) => string | null
+  matches: (selector: string) => boolean
+  querySelector?: (selector: string) => FillEvalNode | null
+  dispatchEvent: (event: TestEvent) => boolean
+  value: string
+}
+
+function matchesFillEvalSelector(node: FillEvalNode, selector: string): boolean {
+  return selector.split(',').some((candidate) => {
+    const trimmed = candidate.trim()
+    if (trimmed === 'textarea') {
+      return node.tagName === 'TEXTAREA'
+    }
+    if (!trimmed.startsWith('input') || node.tagName !== 'INPUT') {
+      return false
+    }
+    const excludedTypes = [...trimmed.matchAll(/:not\(\[type='([^']+)'\]\)/g)].map((match) =>
+      match[1].toLowerCase()
+    )
+    const inputType = node.getAttribute('type')?.toLowerCase() ?? ''
+    return !excludedTypes.includes(inputType)
+  })
+}
+
+function createFillEvalNode(options: {
+  tagName: string
+  role?: string
+  ariaControls?: string
+  descendant?: FillEvalNode | null
+  descendants?: FillEvalNode[]
+  type?: string
+}) {
+  const events: TestEvent[] = []
+  let value = ''
+  const proto = {
+    get value() {
+      return value
+    },
+    set value(next: string) {
+      value = next
+    }
+  }
+  const node = Object.create(proto) as FillEvalNode
+
+  node.tagName = options.tagName
+  node.getAttribute = (name: string) => {
+    if (name === 'role') {
+      return options.role ?? null
+    }
+    if (name === 'aria-controls') {
+      return options.ariaControls ?? null
+    }
+    if (name === 'type') {
+      return options.type ?? null
+    }
+    return null
+  }
+  node.matches = vi.fn((selector: string) => matchesFillEvalSelector(node, selector))
+  const descendants = options.descendants ?? (options.descendant ? [options.descendant] : [])
+  node.querySelector = vi.fn(
+    (selector: string) => descendants.find((descendant) => descendant.matches(selector)) ?? null
+  )
+  node.dispatchEvent = vi.fn((event: TestEvent) => {
+    events.push(event)
+    return true
+  })
+
+  return {
+    node,
+    events,
+    get value() {
+      return value
+    }
+  }
+}
+
+function runFillEvalExpressions(
+  expressions: string[],
+  document: { activeElement: unknown; getElementById: (id: string) => unknown },
+  windowObject: Record<string, unknown> = {}
+): void {
+  for (const expression of expressions) {
+    new Function('document', 'Event', 'window', `return (${expression})`)(
+      document,
+      TestEvent,
+      windowObject
+    )
+  }
+}
+
+function createContentEditableEvalEnvironment(initialText: string) {
+  const editor = {
+    tagName: 'DIV',
+    isContentEditable: true,
+    textContent: initialText,
+    matches: vi.fn(() => false),
+    getAttribute: vi.fn((name: string) => (name === 'contenteditable' ? 'true' : null)),
+    dispatchEvent: vi.fn()
+  }
+  let selected = false
+  const selection = {
+    selectAllChildren: vi.fn(() => {
+      selected = true
+    })
+  }
+  const execCommand = vi.fn((command: string, _showUi: boolean, value: string) => {
+    // Chromium treats an empty insertText as a successful no-op; deletion is
+    // required to clear a selected contenteditable through the input pipeline.
+    if (command === 'delete') {
+      if (!selected) {
+        return false
+      }
+      editor.textContent = ''
+    } else if (value.length > 0) {
+      editor.textContent = selected ? value : editor.textContent + value
+    }
+    selected = false
+    return true
+  })
+  return {
+    editor,
+    execCommand,
+    document: {
+      activeElement: editor,
+      body: {},
+      getElementById: () => null,
+      execCommand
+    },
+    windowObject: { getSelection: () => selection }
+  }
 }
 
 const CDP_DISCOVERY_FAILURE =
@@ -125,6 +285,7 @@ describe('AgentBrowserBridge', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    stdinWrites.length = 0
     CdpWsProxyMock.instances.length = 0
     existsSyncMock.mockReturnValue(false)
     readFileSyncMock.mockReturnValue(Buffer.from(''))
@@ -1430,6 +1591,227 @@ describe('AgentBrowserBridge', () => {
     const args = evalCall![1] as string[]
     const expression = args[args.indexOf('eval') + 1]
     expect(() => new Function(expression)).not.toThrow()
+  })
+
+  it('replaces contenteditable text through the browser editing pipeline', async () => {
+    succeedForContentEditable()
+    const environment = createContentEditableEvalEnvironment('existing text')
+
+    await bridge.fill('@editor', 'replacement text')
+
+    runFillEvalExpressions(stdinWrites, environment.document, environment.windowObject)
+
+    expect(environment.editor.textContent).toBe('replacement text')
+    expect(environment.execCommand).toHaveBeenCalledWith('insertText', false, 'replacement text')
+    expect(environment.editor.dispatchEvent).not.toHaveBeenCalled()
+  })
+
+  it('clears selected contenteditable text with a browser delete command', async () => {
+    succeedForContentEditable()
+    const environment = createContentEditableEvalEnvironment('existing text')
+
+    const result = await bridge.clear('@editor')
+
+    runFillEvalExpressions(stdinWrites, environment.document, environment.windowObject)
+
+    expect(environment.editor.textContent).toBe('')
+    expect(environment.execCommand).toHaveBeenCalledWith('delete', false, '')
+    expect(environment.editor.dispatchEvent).not.toHaveBeenCalled()
+    expect(result).toEqual({ cleared: '@editor' })
+  })
+
+  it('fails contenteditable fill when the browser editing command is unavailable', async () => {
+    succeedForContentEditable()
+    const environment = createContentEditableEvalEnvironment('existing text')
+    environment.execCommand.mockReturnValue(false)
+
+    await bridge.fill('@editor', 'replacement text')
+
+    expect(() =>
+      runFillEvalExpressions(stdinWrites, environment.document, environment.windowObject)
+    ).toThrow('Browser rich-text editing command failed')
+    expect(environment.editor.textContent).toBe('existing text')
+    expect(environment.editor.dispatchEvent).not.toHaveBeenCalled()
+  })
+
+  it('inserts paste-sized contenteditable text as one stdin editing transaction', async () => {
+    const firstChunk = 'x'.repeat(AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES)
+    succeedForContentEditable()
+    const environment = createContentEditableEvalEnvironment('existing text')
+
+    await bridge.fill('@editor', `${firstChunk}tail`)
+
+    const evalCalls = execFileMock.mock.calls.filter((call: unknown[]) =>
+      (call[1] as string[]).includes('eval')
+    )
+    runFillEvalExpressions(stdinWrites, environment.document, environment.windowObject)
+
+    expect(evalCalls).toHaveLength(1)
+    expect(evalCalls[0][1]).toContain('--stdin')
+    expect(stdinWrites).toHaveLength(1)
+    expect(environment.editor.textContent).toBe(`${firstChunk}tail`)
+  })
+
+  it('uses target-aware agent-browser fill when clearing a non-rich target', async () => {
+    succeedWith({ filled: '@disabled' })
+
+    const result = await bridge.clear('@disabled')
+
+    const commandArgs = execFileMock.mock.calls.map((call: unknown[]) => call[1] as string[])
+    expect(commandArgs.some((args) => args.includes('eval'))).toBe(false)
+    expect(commandArgs.some((args) => args.includes('fill') && args.includes('@disabled'))).toBe(
+      true
+    )
+    expect(result).toEqual({ cleared: '@disabled' })
+  })
+
+  it('routes focused spinbutton wrappers to editable descendants before filling', async () => {
+    succeedWith({ ok: true })
+
+    await bridge.fill('@spinbutton', '200')
+
+    const expressions = execFileMock.mock.calls
+      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
+      .map((call: unknown[]) => {
+        const args = call[1] as string[]
+        return args[args.indexOf('eval') + 1]
+      })
+
+    const input = createFillEvalNode({ tagName: 'INPUT' })
+    const wrapper = createFillEvalNode({
+      tagName: 'DIV',
+      role: 'spinbutton',
+      descendant: input.node
+    })
+
+    runFillEvalExpressions(expressions, {
+      activeElement: wrapper.node,
+      getElementById: () => null
+    })
+
+    expect(input.value).toBe('200')
+    expect(wrapper.value).toBe('')
+    expect(input.events.map((event) => event.type)).toEqual(['input', 'change'])
+    expect(wrapper.events).toHaveLength(0)
+  })
+
+  it('routes aria-controlled spinbutton wrappers to editable inputs before filling', async () => {
+    succeedWith({ ok: true })
+
+    await bridge.fill('@spinbutton', '200')
+
+    const expressions = execFileMock.mock.calls
+      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
+      .map((call: unknown[]) => {
+        const args = call[1] as string[]
+        return args[args.indexOf('eval') + 1]
+      })
+
+    const input = createFillEvalNode({ tagName: 'INPUT' })
+    const wrapper = createFillEvalNode({
+      tagName: 'DIV',
+      role: 'spinbutton',
+      ariaControls: 'target-id'
+    })
+
+    runFillEvalExpressions(expressions, {
+      activeElement: wrapper.node,
+      getElementById: (id: string) => (id === 'target-id' ? input.node : null)
+    })
+
+    expect(input.value).toBe('200')
+    expect(wrapper.value).toBe('')
+    expect(input.events.map((event) => event.type)).toEqual(['input', 'change'])
+    expect(wrapper.events).toHaveLength(0)
+  })
+
+  it('routes aria-controlled spinbutton containers to editable descendants before filling', async () => {
+    succeedWith({ ok: true })
+
+    await bridge.fill('@spinbutton', '200')
+
+    const expressions = execFileMock.mock.calls
+      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
+      .map((call: unknown[]) => {
+        const args = call[1] as string[]
+        return args[args.indexOf('eval') + 1]
+      })
+
+    const input = createFillEvalNode({ tagName: 'INPUT' })
+    const controlled = createFillEvalNode({ tagName: 'DIV', descendant: input.node })
+    const wrapper = createFillEvalNode({
+      tagName: 'DIV',
+      role: 'spinbutton',
+      ariaControls: 'target-id'
+    })
+
+    runFillEvalExpressions(expressions, {
+      activeElement: wrapper.node,
+      getElementById: (id: string) => (id === 'target-id' ? controlled.node : null)
+    })
+
+    expect(input.value).toBe('200')
+    expect(controlled.value).toBe('')
+    expect(wrapper.value).toBe('')
+    expect(input.events.map((event) => event.type)).toEqual(['input', 'change'])
+    expect(controlled.events).toHaveLength(0)
+    expect(wrapper.events).toHaveLength(0)
+  })
+
+  it('skips non-text spinbutton descendant inputs before filling', async () => {
+    succeedWith({ ok: true })
+
+    await bridge.fill('@spinbutton', '200')
+
+    const expressions = execFileMock.mock.calls
+      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
+      .map((call: unknown[]) => {
+        const args = call[1] as string[]
+        return args[args.indexOf('eval') + 1]
+      })
+
+    const hiddenInput = createFillEvalNode({ tagName: 'INPUT', type: 'hidden' })
+    const numberInput = createFillEvalNode({ tagName: 'INPUT', type: 'number' })
+    const wrapper = createFillEvalNode({
+      tagName: 'DIV',
+      role: 'spinbutton',
+      descendants: [hiddenInput.node, numberInput.node]
+    })
+
+    runFillEvalExpressions(expressions, {
+      activeElement: wrapper.node,
+      getElementById: () => null
+    })
+
+    expect(numberInput.value).toBe('200')
+    expect(hiddenInput.value).toBe('')
+    expect(wrapper.value).toBe('')
+    expect(numberInput.events.map((event) => event.type)).toEqual(['input', 'change'])
+    expect(hiddenInput.events).toHaveLength(0)
+    expect(wrapper.events).toHaveLength(0)
+  })
+
+  it('keeps plain focused inputs as fill targets', async () => {
+    succeedWith({ ok: true })
+
+    await bridge.fill('@input', '200')
+
+    const expressions = execFileMock.mock.calls
+      .filter((call: unknown[]) => (call[1] as string[]).includes('eval'))
+      .map((call: unknown[]) => {
+        const args = call[1] as string[]
+        return args[args.indexOf('eval') + 1]
+      })
+
+    const input = createFillEvalNode({ tagName: 'INPUT' })
+
+    runFillEvalExpressions(expressions, {
+      activeElement: input.node,
+      getElementById: () => null
+    })
+
+    expect(input.value).toBe('200')
+    expect(input.events.map((event) => event.type)).toEqual(['input', 'change'])
   })
 
   it('chunks large agent-browser fill values before eval transport', async () => {

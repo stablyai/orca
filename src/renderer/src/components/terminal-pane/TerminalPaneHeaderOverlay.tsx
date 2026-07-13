@@ -191,6 +191,14 @@ export default function TerminalPaneHeaderOverlay({
                   }
                   if (event.key === 'Enter') {
                     onRenameSubmit()
+                  } else if (event.key === 'Tab') {
+                    // Why: commit on Tab directly instead of relying on the
+                    // browser advancing focus (which fires blur). Headless / no
+                    // window-focus environments (xvfb, some SSH sessions) don't
+                    // always move focus off the input, so the blur-driven commit
+                    // never runs. Submitting closes the editor, so the default
+                    // Tab focus move is moot and any follow-on blur is a no-op.
+                    onRenameSubmit()
                   } else if (event.key === 'Escape') {
                     onRenameCancel()
                   }

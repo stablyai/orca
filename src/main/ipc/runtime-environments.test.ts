@@ -80,9 +80,21 @@ function handler<TArgs, TResult>(
 
 describe('registerRuntimeEnvironmentHandlers', () => {
   let userDataPath: string
+  let activeRuntimeEnvironmentId: string | null
+  let store: {
+    getSettings: () => { activeRuntimeEnvironmentId: string | null }
+    updateSettings: ReturnType<typeof vi.fn>
+  }
 
   beforeEach(() => {
     userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-ipc-'))
+    activeRuntimeEnvironmentId = null
+    store = {
+      getSettings: () => ({ activeRuntimeEnvironmentId }),
+      updateSettings: vi.fn((updates: { activeRuntimeEnvironmentId: string | null }) => {
+        activeRuntimeEnvironmentId = updates.activeRuntimeEnvironmentId
+      })
+    }
     getPathMock.mockReset()
     getPathMock.mockReturnValue(userDataPath)
     handleMock.mockReset()
@@ -104,7 +116,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('registers desktop runtime environment management handlers', () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
 
     expect(handleMock.mock.calls.map((call) => call[0])).toEqual([
       'runtimeEnvironments:list',
@@ -123,7 +135,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('clears stale IPC registrations before registering runtime environment handlers', () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
 
     expect(removeHandlerMock.mock.calls.map((call) => call[0])).toEqual([
       'runtimeEnvironments:list',
@@ -140,7 +152,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('stores, resolves, lists, and removes environments under Electron userData', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
 
     const add = handler<
       { name: string; pairingCode: string },
@@ -149,6 +161,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
     expect(JSON.stringify(added)).not.toContain('device-token')
     expect(JSON.stringify(added)).not.toContain('publicKeyB64')
+    activeRuntimeEnvironmentId = added.environment.id
 
     const list = handler<undefined, { id: string; name: string }[]>('runtimeEnvironments:list')
     expect(await list(null, undefined)).toMatchObject([{ id: added.environment.id, name: 'desk' }])
@@ -170,13 +183,18 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(removed).toMatchObject({
       removed: { id: added.environment.id, name: 'desk' }
     })
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      { activeRuntimeEnvironmentId: null },
+      { notifyListeners: true }
+    )
+    expect(activeRuntimeEnvironmentId).toBeNull()
     expect(closeRemoteRuntimeRequestConnectionMock).toHaveBeenCalledWith(added.environment.id)
     expect(JSON.stringify(removed)).not.toContain('device-token')
     expect(await list(null, undefined)).toEqual([])
   })
 
   it('disconnects a saved runtime without removing it', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
 
     const add = handler<
       { name: string; pairingCode: string },
@@ -200,7 +218,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('marks environments owned by ephemeral VM runtimes in the public list', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
 
     // The ephemeral-VM provision flow persists `source: 'ephemeral-vm'` directly
     // on the environment record (ephemeral-vm.ts), so the public list reads it
@@ -221,7 +239,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('checks a saved remote runtime and records the runtime id on success', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'rpc-1',
       ok: true,
@@ -260,7 +278,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('attaches shared-control diagnostics to saved remote runtime status', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     getRemoteRuntimeSharedControlDiagnosticsMock.mockReturnValue({
       state: 'reconnecting',
       pendingRequestCount: 1,
@@ -296,7 +314,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('attaches shared-control diagnostics to failed saved remote runtime status', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     getRemoteRuntimeSharedControlDiagnosticsMock.mockReturnValue({
       state: 'reconnecting',
       pendingRequestCount: 0,
@@ -334,7 +352,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('returns shared-control diagnostics when saved remote runtime status throws', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     getRemoteRuntimeSharedControlDiagnosticsMock.mockReturnValue({
       state: 'reconnecting',
       pendingRequestCount: 0,
@@ -367,7 +385,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('proxies generic one-shot RPC calls to the saved remote runtime', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'rpc-2',
       ok: true,
@@ -401,7 +419,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('falls back to one-shot RPC when the saved runtime lacks shared-control support', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock.mockImplementation(async (_pairing, method) => {
       if (method === 'status.get') {
         return {
@@ -442,7 +460,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('uses the cached request connection for terminal hot path RPCs', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeConnectionRequestMock.mockResolvedValue({
       id: 'rpc-terminal',
       ok: true,
@@ -482,7 +500,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('keeps terminal hot path RPCs on the cached request connection when shared control is supported', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'status',
       ok: true,
@@ -545,7 +563,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('routes one-shot RPC calls through shared control when the runtime advertises support', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'status',
       ok: true,
@@ -599,7 +617,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('rechecks shared-control support when the saved runtime identity changes', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     let statusCalls = 0
     sendRemoteRuntimeRequestMock.mockImplementation(async (_pairing, method) => {
       if (method === 'status.get') {
@@ -654,7 +672,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('does not fall back after a shared-control request fails on a supported runtime', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'status',
       ok: true,
@@ -691,7 +709,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('keeps browser and terminal heavy streams on dedicated subscription sockets', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     const close = vi.fn()
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'status',
@@ -761,7 +779,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('routes passive subscriptions through shared control when supported', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'status',
       ok: true,
@@ -814,7 +832,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('keeps shared-control subscriptions retained across transient errors until final close', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     const close = vi.fn()
     const senderSend = vi.fn()
     const destroyedListenerRemoved = vi.fn()
@@ -893,7 +911,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('falls back to legacy passive subscriptions when shared control is unsupported', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'status',
       ok: true,
@@ -942,7 +960,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('dedupes concurrent shared-control capability probes per environment', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     let resolveStatus: (value: unknown) => void = () => {}
     sendRemoteRuntimeRequestMock.mockImplementation((_pairing, method) => {
       if (method === 'status.get') {
@@ -989,7 +1007,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('clears rejected shared-control capability probes so a later call can retry', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock
       .mockRejectedValueOnce(new Error('probe failed'))
       .mockResolvedValueOnce({
@@ -1031,7 +1049,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('clears shared-control capability cache when a runtime is disconnected', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'status',
       ok: true,
@@ -1075,7 +1093,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('clears shared-control capability cache when a runtime is removed and re-added', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock.mockResolvedValue({
       id: 'status',
       ok: true,
@@ -1119,7 +1137,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('limits background one-shot RPCs without blocking foreground runtime calls', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     const pendingBackground: ((value: unknown) => void)[] = []
     sendRemoteRuntimeRequestMock.mockImplementation(async (_pairing, method) => {
       if (method === 'status.get') {
@@ -1210,7 +1228,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('starts and stops streaming subscriptions for a saved remote runtime', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     const close = vi.fn()
     const sendBinary = vi.fn()
     const markUsedSpy = vi.spyOn(environmentStore, 'markEnvironmentUsed')
@@ -1307,7 +1325,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('closes streaming subscriptions when their saved runtime is removed', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     const close = vi.fn()
     const sendBinary = vi.fn()
     subscribeRemoteRuntimeRequestMock.mockResolvedValue({
@@ -1371,7 +1389,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('rejects cross-window streaming subscription control', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     const close = vi.fn()
     const sendBinary = vi.fn()
     subscribeRemoteRuntimeRequestMock.mockResolvedValue({
@@ -1441,7 +1459,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('closes a streaming subscription that resolves after the sender is destroyed', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     const close = vi.fn()
     let resolveSubscribe: (value: {
       requestId: string
@@ -1519,7 +1537,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   it('removes the destroyed listener when streaming subscription setup rejects', async () => {
-    registerRuntimeEnvironmentHandlers()
+    registerRuntimeEnvironmentHandlers(store as never)
     subscribeRemoteRuntimeRequestMock.mockRejectedValue(new Error('connect failed'))
 
     const add = handler<

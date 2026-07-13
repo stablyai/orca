@@ -14,6 +14,7 @@ import type {
   UsageRateLimitSource
 } from '../../shared/rate-limit-types'
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import type { NetworkProxySettings } from '../../shared/network-proxy'
 import { fetchViaPty } from './claude-pty'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import {
@@ -299,16 +300,36 @@ type OAuthUsageWindow = {
   resets_at?: string | number
 }
 
+type OAuthUsageLimit = {
+  kind?: string
+  percent?: number
+  resets_at?: string | number
+  is_active?: boolean
+  scope?: { model?: { display_name?: string } | null } | null
+}
+
 type OAuthUsageResponse = {
   five_hour?: OAuthUsageWindow
   seven_day?: OAuthUsageWindow
   fable_weekly?: OAuthUsageWindow
   fable_seven_day?: OAuthUsageWindow
   seven_day_fable?: OAuthUsageWindow
+  limits?: OAuthUsageLimit[] | null
 }
 
 type ClaudeUsageAttemptState = {
   attemptedSources: UsageRateLimitSource[]
+}
+
+function abortedClaudeRateLimitResult(): ProviderRateLimits {
+  return {
+    provider: 'claude',
+    session: null,
+    weekly: null,
+    updatedAt: Date.now(),
+    error: 'Rate-limit fetch aborted',
+    status: 'error'
+  }
 }
 
 function parseResetTimestamp(value: string | number | undefined): number | null {
@@ -379,20 +400,42 @@ function mapWindow(
 }
 
 function mapFableWeeklyWindow(data: OAuthUsageResponse): RateLimitWindow | null {
-  // Why: a bare "fable" field does not prove the window length. Only accept
-  // explicit weekly/seven-day names for the distinct Fable meter.
+  // Why: model quotas moved into structured scoped limits; prefer that current
+  // contract while retaining explicit legacy weekly fields for older responses.
+  const scoped = Array.isArray(data.limits)
+    ? data.limits.find(
+        (limit) =>
+          limit?.kind === 'weekly_scoped' &&
+          limit.is_active !== false &&
+          Number.isFinite(limit.percent) &&
+          limit.scope?.model?.display_name?.trim().toLowerCase() === 'fable'
+      )
+    : undefined
   return (
+    mapWindow(
+      scoped ? { used_percentage: scoped.percent, resets_at: scoped.resets_at } : undefined,
+      10080
+    ) ??
     mapWindow(data.fable_weekly, 10080) ??
     mapWindow(data.fable_seven_day, 10080) ??
     mapWindow(data.seven_day_fable, 10080)
   )
 }
 
-async function fetchViaOAuth(token: string): Promise<ProviderRateLimits> {
+async function fetchViaOAuth(token: string, signal?: AbortSignal): Promise<ProviderRateLimits> {
+  if (signal?.aborted) {
+    return abortedClaudeRateLimitResult()
+  }
   await ensureProxyFromEnv()
+  if (signal?.aborted) {
+    return abortedClaudeRateLimitResult()
+  }
 
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS)
+  // Compose the caller's cancel signal with the request timeout so a timeout
+  // and an external cancel both abort the fetch.
+  const requestSignal = signal
+    ? AbortSignal.any([signal, AbortSignal.timeout(API_TIMEOUT_MS)])
+    : AbortSignal.timeout(API_TIMEOUT_MS)
 
   try {
     // Why: net.fetch uses Chromium's networking stack which respects OS proxy
@@ -405,7 +448,7 @@ async function fetchViaOAuth(token: string): Promise<ProviderRateLimits> {
         // matching the CLI user-agent keeps Orca aligned with that contract.
         'User-Agent': CLAUDE_CODE_USER_AGENT
       },
-      signal: controller.signal
+      signal: requestSignal
     })
 
     if (!res.ok) {
@@ -413,6 +456,9 @@ async function fetchViaOAuth(token: string): Promise<ProviderRateLimits> {
     }
 
     const data = (await res.json()) as OAuthUsageResponse
+    if (signal?.aborted) {
+      return abortedClaudeRateLimitResult()
+    }
 
     return {
       provider: 'claude',
@@ -423,8 +469,11 @@ async function fetchViaOAuth(token: string): Promise<ProviderRateLimits> {
       error: null,
       status: 'ok'
     }
-  } finally {
-    clearTimeout(timeout)
+  } catch (err) {
+    if (signal?.aborted) {
+      return abortedClaudeRateLimitResult()
+    }
+    throw err
   }
 }
 
@@ -505,9 +554,15 @@ async function fetchClaudeUsageViaCli(input: {
   authPreparation?: ClaudeRuntimeAuthPreparation
   oauthCredentials: OAuthCredentialReadResult
   attempts: ClaudeUsageAttemptState
+  networkProxySettings?: NetworkProxySettings
+  signal?: AbortSignal
 }): Promise<ProviderRateLimits> {
   recordAttempt(input.attempts, 'cli')
-  const limits = await fetchViaPty({ authPreparation: input.authPreparation })
+  const limits = await fetchViaPty({
+    authPreparation: input.authPreparation,
+    networkProxySettings: input.networkProxySettings,
+    signal: input.signal
+  })
   return withClaudeUsageMetadata(
     limits,
     metadataForAttempt({
@@ -561,15 +616,19 @@ async function supplementOAuthUsageFromCli(input: {
   oauthCredentials: OAuthCredentialReadResult
   attempts: ClaudeUsageAttemptState
   allowUsagePanelSupplement: boolean
+  networkProxySettings?: NetworkProxySettings
+  signal?: AbortSignal
 }): Promise<ProviderRateLimits> {
-  if (!canSupplementOAuthUsageFromCli(input)) {
+  if (input.signal?.aborted || !canSupplementOAuthUsageFromCli(input)) {
     return input.oauthLimits
   }
   try {
     const cliLimits = await fetchClaudeUsageViaCli({
       authPreparation: input.authPreparation,
       oauthCredentials: input.oauthCredentials,
-      attempts: input.attempts
+      attempts: input.attempts,
+      networkProxySettings: input.networkProxySettings,
+      signal: input.signal
     })
     return mergeClaudeUsageWindows(input.oauthLimits, cliLimits)
   } catch (err) {
@@ -630,24 +689,40 @@ async function attemptCliRepairThenRetryOAuth(input: {
   attempts: ClaudeUsageAttemptState
   oauthCredentials: OAuthCredentialReadResult
 }): Promise<ProviderRateLimits | null> {
+  if (input.options?.signal?.aborted) {
+    return abortedClaudeRateLimitResult()
+  }
   let cliResult: ProviderRateLimits | null = null
   try {
     cliResult = await fetchClaudeUsageViaCli({
       authPreparation: input.options?.authPreparation,
       oauthCredentials: input.oauthCredentials,
-      attempts: input.attempts
+      attempts: input.attempts,
+      networkProxySettings: input.options?.networkProxySettings,
+      signal: input.options?.signal
     })
   } catch (err) {
     warnClaudeUsageFetchFailure(input.options?.authPreparation, input.oauthCredentials, err)
   }
 
+  // Why: bail before credential I/O if the fetch cycle was stopped mid-CLI-repair.
+  if (input.options?.signal?.aborted) {
+    return abortedClaudeRateLimitResult()
+  }
+
   const refreshedCredentials = await readOAuthCredentials(
     resolveOAuthCredentialReadOptions(input.options?.authPreparation)
   )
+  if (input.options?.signal?.aborted) {
+    return abortedClaudeRateLimitResult()
+  }
   if (refreshedCredentials.token) {
     recordAttempt(input.attempts, 'oauth')
     try {
-      const oauthRetry = await fetchViaOAuth(refreshedCredentials.token)
+      const oauthRetry = await fetchViaOAuth(refreshedCredentials.token, input.options?.signal)
+      if (input.options?.signal?.aborted) {
+        return abortedClaudeRateLimitResult()
+      }
       const supplemented = mergeClaudeUsageWindows(oauthRetry, cliResult)
       return withClaudeUsageMetadata(
         supplemented,
@@ -674,11 +749,22 @@ export type FetchClaudeRateLimitsOptions = {
   authPreparation?: ClaudeRuntimeAuthPreparation
   allowPtyFallback?: boolean
   allowUsagePanelSupplement?: boolean
+  networkProxySettings?: NetworkProxySettings
+  signal?: AbortSignal
+}
+
+export type FetchManagedAccountUsageOptions = {
+  allowUsagePanelSupplement?: boolean
+  networkProxySettings?: NetworkProxySettings
+  signal?: AbortSignal
 }
 
 export async function fetchClaudeRateLimits(
   options?: FetchClaudeRateLimitsOptions
 ): Promise<ProviderRateLimits> {
+  if (options?.signal?.aborted) {
+    return abortedClaudeRateLimitResult()
+  }
   const attempts: ClaudeUsageAttemptState = { attemptedSources: [] }
   const allowCliFallback = options?.allowPtyFallback !== false
   const plan = resolveClaudeUsageRefreshPlan({
@@ -701,19 +787,30 @@ export async function fetchClaudeRateLimits(
   const oauthCredentials = await readOAuthCredentials(
     resolveOAuthCredentialReadOptions(options?.authPreparation)
   )
+  if (options?.signal?.aborted) {
+    return abortedClaudeRateLimitResult()
+  }
 
   if (plan.steps.some((step) => step.source === 'oauth') && oauthCredentials.token) {
     recordAttempt(attempts, 'oauth')
     try {
-      const oauthLimits = await fetchViaOAuth(oauthCredentials.token)
+      const oauthLimits = await fetchViaOAuth(oauthCredentials.token, options?.signal)
+      if (options?.signal?.aborted) {
+        return abortedClaudeRateLimitResult()
+      }
       const limits = await supplementOAuthUsageFromCli({
         oauthLimits,
         authPreparation: options?.authPreparation,
         oauthCredentials,
         attempts,
+        networkProxySettings: options?.networkProxySettings,
         allowUsagePanelSupplement:
-          options?.allowUsagePanelSupplement ?? isManagedClaudeAuth(options?.authPreparation)
+          options?.allowUsagePanelSupplement ?? isManagedClaudeAuth(options?.authPreparation),
+        signal: options?.signal
       })
+      if (options?.signal?.aborted) {
+        return abortedClaudeRateLimitResult()
+      }
       return withClaudeUsageMetadata(
         limits,
         metadataForAttempt({
@@ -751,7 +848,9 @@ export async function fetchClaudeRateLimits(
           return await fetchClaudeUsageViaCli({
             authPreparation: options?.authPreparation,
             oauthCredentials,
-            attempts
+            attempts,
+            networkProxySettings: options?.networkProxySettings,
+            signal: options?.signal
           })
         } catch (ptyError) {
           warnClaudeUsageFetchFailure(options?.authPreparation, oauthCredentials, ptyError)
@@ -808,7 +907,9 @@ export async function fetchClaudeRateLimits(
       return await fetchClaudeUsageViaCli({
         authPreparation: options?.authPreparation,
         oauthCredentials,
-        attempts
+        attempts,
+        networkProxySettings: options?.networkProxySettings,
+        signal: options?.signal
       })
     } catch (err) {
       warnClaudeUsageFetchFailure(options?.authPreparation, oauthCredentials, err)
@@ -853,7 +954,9 @@ export async function fetchClaudeRateLimits(
       return await fetchClaudeUsageViaCli({
         authPreparation: options?.authPreparation,
         oauthCredentials,
-        attempts
+        attempts,
+        networkProxySettings: options?.networkProxySettings,
+        signal: options?.signal
       })
     } catch (err) {
       warnClaudeUsageFetchFailure(options?.authPreparation, oauthCredentials, err)
@@ -1060,13 +1163,25 @@ async function fetchManagedUsagePanelSupplement(input: {
   location: ManagedCredentialsLocation
   credentialsJson: string
   oauthLimits: ProviderRateLimits
+  networkProxySettings?: NetworkProxySettings
+  signal?: AbortSignal
 }): Promise<ProviderRateLimits | null> {
+  if (input.signal?.aborted) {
+    return null
+  }
   const authPreparation = getManagedUsagePanelAuthPreparation(input.account, input.location)
   if (!authPreparation) {
     return null
   }
   return withManagedPreviewKeychainCredentials(input.location, input.credentialsJson, async () => {
-    const cliLimits = await fetchViaPty({ authPreparation })
+    const cliLimits = await fetchViaPty({
+      authPreparation,
+      networkProxySettings: input.networkProxySettings,
+      signal: input.signal
+    })
+    if (input.signal?.aborted) {
+      return null
+    }
     if (
       !canTrustManagedUsagePanelSupplement(input.oauthLimits, cliLimits, {
         requireMatchingOAuthWindow: input.location.kind === 'keychain'
@@ -1084,10 +1199,16 @@ async function fetchManagedUsagePanelSupplement(input: {
 
 export async function fetchManagedAccountUsage(
   account: InactiveClaudeAccountInfo,
-  options: { allowUsagePanelSupplement?: boolean } = {}
+  options: FetchManagedAccountUsageOptions = {}
 ): Promise<ProviderRateLimits> {
+  if (options.signal?.aborted) {
+    return abortedClaudeRateLimitResult()
+  }
   const location = resolveManagedCredentialsLocation(account)
   let credentialsJson = location ? await readManagedCredentialsJson(location) : null
+  if (options.signal?.aborted) {
+    return abortedClaudeRateLimitResult()
+  }
   if (!location || !credentialsJson) {
     return {
       provider: 'claude',
@@ -1107,6 +1228,9 @@ export async function fetchManagedAccountUsage(
   let token = parseOAuthCredentialsJson(credentialsJson, 'credentials-file').token
   if (isOauthTokenExpiring(credentialsJson)) {
     const refreshed = await refreshClaudeOauthCredentials(credentialsJson)
+    if (options.signal?.aborted) {
+      return abortedClaudeRateLimitResult()
+    }
     if (refreshed) {
       try {
         await writeManagedCredentialsJson(location, refreshed)
@@ -1133,7 +1257,10 @@ export async function fetchManagedAccountUsage(
   // Why: PTY fallback is intentionally omitted for inactive accounts. The PTY
   // path is used only as a supplement after OAuth succeeds, and it points
   // directly at the managed account's isolated config so selection is unchanged.
-  const oauthLimits = await fetchViaOAuth(token)
+  const oauthLimits = await fetchViaOAuth(token, options.signal)
+  if (options.signal?.aborted) {
+    return abortedClaudeRateLimitResult()
+  }
   if (
     !canSupplementOAuthUsageFromCli({
       oauthLimits,
@@ -1148,7 +1275,9 @@ export async function fetchManagedAccountUsage(
       account,
       location,
       credentialsJson,
-      oauthLimits
+      oauthLimits,
+      networkProxySettings: options.networkProxySettings,
+      signal: options.signal
     })
     return mergeClaudeUsageWindows(oauthLimits, cliLimits)
   } catch (err) {

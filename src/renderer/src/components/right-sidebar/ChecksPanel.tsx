@@ -49,6 +49,10 @@ import {
   PRCommentsList,
   PRTriageStrip
 } from './checks-panel-content'
+import {
+  clearPRCommentsListSelection,
+  type PRCommentsListSelectionClearRequest
+} from './pr-comments-list-selection'
 import { ENTRY_REFRESH_GRACE_MS, shouldEntryRefresh } from './checks-entry-refresh'
 import type {
   GitLabDiscussionResolveResult,
@@ -83,6 +87,7 @@ import { getHostedReviewCacheKey, refreshHostedReviewCard } from '@/store/slices
 import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import { type ChecksPanelReview, selectChecksPanelReview } from './checks-panel-review'
+import { selectReviewCacheEntry } from './review-cache-entry-selection'
 import {
   checksPanelAsyncResultKey,
   checksPanelHostedReviewAsyncResultKey,
@@ -119,6 +124,7 @@ import {
   shouldPollChecksPanelRuntimeSshStatus,
   type ChecksPanelGitStatusSnapshot
 } from './checks-panel-git-status-snapshot'
+import { resolveChecksPanelPRRefreshRequest } from './checks-panel-pr-refresh-request'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -390,7 +396,6 @@ export default function ChecksPanel(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const updateRepo = useAppStore((s) => s.updateRepo)
-  const prCache = useAppStore((s) => s.prCache)
   const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
   const expireGitHubPRRefreshState = useAppStore((s) => s.expireGitHubPRRefreshState)
@@ -435,6 +440,9 @@ export default function ChecksPanel(): React.JSX.Element {
   const [comments, setComments] = useState<PRComment[]>([])
   const [commentsLoading, setCommentsLoading] = useState(false)
   const commentsRef = useRef<PRComment[]>([])
+  const [commentsSelectionClearRequest, setCommentsSelectionClearRequest] =
+    useState<PRCommentsListSelectionClearRequest | null>(null)
+  const commentsSelectionClearTokenRef = useRef(0)
   const [emptyRefreshing, setEmptyRefreshing] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const refreshInFlightRef = useRef(false)
@@ -464,6 +472,7 @@ export default function ChecksPanel(): React.JSX.Element {
   const confirm = useConfirmationDialog()
   const prevChecksRef = useRef<string>('')
   const conflictSummaryRefreshKeyRef = useRef<string | null>(null)
+  const panelVisibleSinceRef = useRef<number | null>(null)
   commentsRef.current = comments
   const prGenerationRecords = useAppStore((s) => s.pullRequestGenerationRecords)
   const allocatePullRequestGenerationRequestId = useAppStore(
@@ -641,8 +650,11 @@ export default function ChecksPanel(): React.JSX.Element {
     refreshContextKeyRef.current = refreshContextKey
     refreshRequestKeyRef.current = null
   }
-  const prCacheEntry = prCacheKey ? prCache[prCacheKey] : undefined
+  // Why: background PR refreshes replace the cache map; Checks only renders
+  // the entry for the active repo and branch.
+  const prCacheEntry = useAppStore((s) => selectReviewCacheEntry(s.prCache, prCacheKey || null))
   const pr: PRInfo | null = prCacheEntry?.data ?? null
+  const prCachedHasPR = prCacheEntry ? prCacheEntry.data !== null : null
   const hostedReview = useAppStore((s) =>
     hostedReviewCacheKey ? (s.hostedReviewCache[hostedReviewCacheKey]?.data ?? null) : null
   )
@@ -726,6 +738,14 @@ export default function ChecksPanel(): React.JSX.Element {
     rawPRRefreshState,
     repo?.id
   ])
+
+  useEffect(() => {
+    if (!isPanelVisible) {
+      panelVisibleSinceRef.current = null
+      return
+    }
+    panelVisibleSinceRef.current = Date.now()
+  }, [isPanelVisible, panelContextKey])
 
   // Why: select only timestamps (not whole cache records) so the entry-refresh
   // effect doesn't re-run on every cache mutation. See
@@ -1212,7 +1232,12 @@ export default function ChecksPanel(): React.JSX.Element {
         staleWhileRevalidate: true
       })
       if (activeWorktreeId && !isGitLabReviewContext) {
-        enqueueGitHubPRRefresh(activeWorktreeId, 'swr', 30)
+        const refreshRequest = resolveChecksPanelPRRefreshRequest({
+          cachedHasPR: prCachedHasPR,
+          cachedFetchedAt: prFetchedAt ?? null,
+          panelVisibleSince: panelVisibleSinceRef.current
+        })
+        enqueueGitHubPRRefresh(activeWorktreeId, refreshRequest.reason, refreshRequest.priority)
       }
     }
   }, [
@@ -1230,6 +1255,8 @@ export default function ChecksPanel(): React.JSX.Element {
     linkedGiteaPR,
     linkedGitLabMR,
     linkedPR,
+    prCachedHasPR,
+    prFetchedAt,
     repo
   ])
 
@@ -2789,6 +2816,15 @@ export default function ChecksPanel(): React.JSX.Element {
     ]
   )
 
+  const clearSentCommentSelection = useCallback((reviewContextKey: string): void => {
+    clearPRCommentsListSelection(reviewContextKey)
+    commentsSelectionClearTokenRef.current += 1
+    setCommentsSelectionClearRequest({
+      contextKey: reviewContextKey,
+      token: commentsSelectionClearTokenRef.current
+    })
+  }, [])
+
   const refreshCommentsAfterBulkResolve = useCallback(
     async (provider: ChecksPanelReview['provider']): Promise<void> => {
       if (provider === 'gitlab') {
@@ -2802,9 +2838,14 @@ export default function ChecksPanel(): React.JSX.Element {
 
   const resolveSelectedThreadsAfterLaunch = useCallback(
     async (resolution: NonNullable<ChecksAgentComposerState['commentResolution']>) => {
+      clearSentCommentSelection(resolution.reviewContextKey)
       let resolved = 0
-      let skipped = 0
+      let skipped = Math.max(
+        0,
+        resolution.selectedGroups.length - resolution.selectedThreadIds.length
+      )
       let failed = 0
+      let attemptedThreadCount = 0
       if (resolution.selectedThreadIds.length === 0) {
         toast.success(
           translate(
@@ -2816,9 +2857,10 @@ export default function ChecksPanel(): React.JSX.Element {
       }
       for (const threadId of resolution.selectedThreadIds) {
         if (asyncResultKeyRef.current !== resolution.reviewContextKey) {
-          skipped += resolution.selectedThreadIds.length - resolved - skipped - failed
+          skipped += resolution.selectedThreadIds.length - attemptedThreadCount
           break
         }
+        attemptedThreadCount += 1
         const currentGroup = groupPRComments(commentsRef.current).find(
           (group) => group.kind === 'thread' && group.threadId === threadId
         )
@@ -2856,7 +2898,7 @@ export default function ChecksPanel(): React.JSX.Element {
         )
       )
     },
-    [handleResolve, refreshCommentsAfterBulkResolve]
+    [clearSentCommentSelection, handleResolve, refreshCommentsAfterBulkResolve]
   )
 
   const handleFixChecksWithAI = useCallback(async (): Promise<void> => {
@@ -3780,6 +3822,7 @@ export default function ChecksPanel(): React.JSX.Element {
         commentsDisabled={!canTargetPRComments}
         commentsDisabledReason={commentsDisabledReason}
         selectionContextKey={stateRequestKey}
+        selectionClearRequest={commentsSelectionClearRequest}
         resolveCommentsWithAIDisabled={Boolean(resolveCommentsWithAIDisabledReason)}
         resolveCommentsWithAIDisabledReason={resolveCommentsWithAIDisabledReason}
         onAddComment={pr ? handleAddPRComment : undefined}

@@ -17,6 +17,7 @@ import type {
   GitStatusEntry,
   Tab
 } from '../../../../shared/types'
+import { isSyncPushStageError } from '@/lib/source-control-remote-error'
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -48,6 +49,10 @@ function createEditorStore(): StoreApi<AppState> {
     browserTabsByWorktree: {},
     activeBrowserTabId: null,
     activeBrowserTabIdByWorktree: {},
+    repos: [{ id: 'repo-1', path: '/repo' }],
+    worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }] },
+    folderWorkspaces: [],
+    projectGroups: [],
     recordFeatureInteraction: vi.fn(),
     ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
   })) as unknown as StoreApi<AppState>
@@ -61,6 +66,10 @@ function createEditorTabsStore(): StoreApi<AppState> {
     browserTabsByWorktree: {},
     activeBrowserTabId: null,
     activeBrowserTabIdByWorktree: {},
+    repos: [{ id: 'repo-1', path: '/repo' }],
+    worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }] },
+    folderWorkspaces: [],
+    projectGroups: [],
     recordFeatureInteraction: vi.fn(),
     ...createTabsSlice(...(args as Parameters<typeof createTabsSlice>)),
     ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
@@ -1459,6 +1468,64 @@ describe('createEditorSlice markdown view state', () => {
       })
     ])
   })
+
+  it('drops markdown visibility for a preview replaced by a diff', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/docs/README.md',
+        relativePath: 'docs/README.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+    store.getState().setMarkdownFrontmatterVisible('/repo/docs/README.md', true)
+    store.getState().setMarkdownTableOfContentsVisible('/repo/docs/README.md', true)
+
+    store.getState().openDiff('wt-1', '/repo/docs/guide.md', 'docs/guide.md', 'markdown', false, {
+      preview: true
+    })
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({})
+    expect(store.getState().markdownTableOfContentsVisible).toEqual({})
+  })
+
+  it('keeps markdown visibility when another preview still references a replaced source', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/docs/README.md',
+        relativePath: 'docs/README.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+    store.getState().openMarkdownPreview({
+      filePath: '/repo/docs/README.md',
+      relativePath: 'docs/README.md',
+      worktreeId: 'wt-1',
+      language: 'markdown'
+    })
+    store.getState().setMarkdownFrontmatterVisible('/repo/docs/README.md', true)
+    store.getState().setMarkdownTableOfContentsVisible('/repo/docs/README.md', true)
+
+    store.getState().openDiff('wt-1', '/repo/docs/guide.md', 'docs/guide.md', 'markdown', false, {
+      preview: true
+    })
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({
+      '/repo/docs/README.md': true
+    })
+    expect(store.getState().markdownTableOfContentsVisible).toEqual({
+      '/repo/docs/README.md': true
+    })
+  })
 })
 
 describe('createEditorSlice editor view mode', () => {
@@ -1625,6 +1692,79 @@ describe('createEditorSlice markdown frontmatter visibility (#4468)', () => {
     store.getState().closeAllFiles()
 
     expect(store.getState().markdownFrontmatterVisible).toEqual({})
+  })
+})
+
+describe('createEditorSlice markdown table of contents visibility', () => {
+  it('stores visible=true as an explicit entry keyed by fileId', () => {
+    const store = createEditorStore()
+
+    store.getState().setMarkdownTableOfContentsVisible('/repo/notes.md', true)
+
+    expect(store.getState().markdownTableOfContentsVisible).toEqual({ '/repo/notes.md': true })
+  })
+
+  it('deletes the entry when visibility resets to hidden', () => {
+    const store = createEditorStore()
+    store.getState().setMarkdownTableOfContentsVisible('/repo/notes.md', true)
+
+    store.getState().setMarkdownTableOfContentsVisible('/repo/notes.md', false)
+
+    expect(store.getState().markdownTableOfContentsVisible).toEqual({})
+  })
+
+  it('drops the visibility flag when replacing a preview tab', () => {
+    const store = createEditorStore()
+    store.getState().openFile(
+      {
+        filePath: '/repo/notes.md',
+        relativePath: 'notes.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+    store.getState().setMarkdownTableOfContentsVisible('/repo/notes.md', true)
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/guide.md',
+        relativePath: 'guide.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+
+    expect(store.getState().markdownTableOfContentsVisible).toEqual({})
+  })
+
+  it('keeps the visibility flag while a preview tab still references the source file', () => {
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().openMarkdownPreview({
+      filePath: '/repo/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown'
+    })
+    store.getState().setMarkdownTableOfContentsVisible('/repo/notes.md', true)
+
+    store.getState().closeFile('/repo/notes.md')
+
+    expect(store.getState().markdownTableOfContentsVisible).toEqual({ '/repo/notes.md': true })
+
+    store.getState().closeFile('markdown-preview::/repo/notes.md')
+
+    expect(store.getState().markdownTableOfContentsVisible).toEqual({})
   })
 })
 
@@ -3367,6 +3507,20 @@ describe('createEditorSlice remote branch actions', () => {
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
+  it('maps pre-push hook failures to hook-specific guidance instead of remote access', async () => {
+    const store = createEditorStore()
+    const pushError = new Error(
+      "git push failed: Command failed: git push origin main\nerror: failed to push some refs to 'origin'\nhusky - pre-push hook exited with code 1\neslint found 2 errors"
+    )
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toThrow(
+      pushError.message
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith('Push blocked — lint failed during push.')
+  })
+
   it('uses a fallback message for generic push errors', async () => {
     const store = createEditorStore()
     const pushError = new Error('network timeout')
@@ -3641,6 +3795,52 @@ describe('createEditorSlice remote branch actions', () => {
     )
   })
 
+  it('marks syncBranch inner push hook failures as sync push-stage failures', async () => {
+    const store = createEditorStore()
+    const pushError = new Error(
+      "git push failed: Command failed: git push origin feature\nerror: failed to push some refs to 'origin'\nhusky - pre-push hook exited with code 1"
+    )
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    let thrown: unknown
+    try {
+      await store.getState().syncBranch('wt-1', '/repo')
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(thrown).toBe(pushError)
+    expect(isSyncPushStageError(thrown)).toBe(true)
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastErrorMock).toHaveBeenCalledWith('Sync blocked — pre-push hook failed.')
+  })
+
+  it('does not classify syncBranch fetch-stage hook-looking failures as push blocked', async () => {
+    const store = createEditorStore()
+    gitFetchMock.mockRejectedValueOnce(
+      new Error('fetch failed before push\npre-push hook docs mention eslint')
+    )
+
+    await expect(store.getState().syncBranch('wt-1', '/repo')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastErrorMock).toHaveBeenCalledWith('Sync failed. Check your connection and try again.')
+    expect(gitPushMock).not.toHaveBeenCalled()
+  })
+
+  it('does not classify syncBranch upstream-status hook-looking failures as push blocked', async () => {
+    const store = createEditorStore()
+    gitUpstreamStatusMock.mockRejectedValueOnce(
+      new Error('upstream status failed before push\npre-push hook docs mention eslint')
+    )
+
+    await expect(store.getState().syncBranch('wt-1', '/repo')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastErrorMock).toHaveBeenCalledWith('Sync failed. Check your connection and try again.')
+    expect(gitPushMock).not.toHaveBeenCalled()
+  })
+
   it('surfaces the pull-blocked toast when syncBranch pull stage fails', async () => {
     // Why: failures in sync's fetch/pull/status stages flow through the
     // outer catch's generic path; push-specific framing only applies to
@@ -3809,6 +4009,47 @@ describe('createEditorSlice activateMarkdownLink', () => {
         isPreview: true
       })
     ])
+  })
+
+  it('rejects ambiguous same-path owner fallback and honors an explicit source owner', async () => {
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/docs/note.md',
+      relativePath: 'docs/note.md',
+      worktreeId: 'wt-1',
+      runtimeEnvironmentId: 'env-source',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().openFile(
+      {
+        filePath: '/repo/docs/note.md',
+        relativePath: 'docs/note.md',
+        worktreeId: 'wt-1',
+        runtimeEnvironmentId: null,
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { suppressActiveRuntimeFallback: true }
+    )
+
+    await store.getState().activateMarkdownLink('https://example.com', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+    expect(openHttpLinkMock).not.toHaveBeenCalled()
+
+    await store.getState().activateMarkdownLink('https://example.com', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo',
+      sourceOwner: { kind: 'local' }
+    })
+    expect(openHttpLinkMock).toHaveBeenCalledWith('https://example.com/', {
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'local' }
+    })
   })
 
   it('stats SSH markdown links through the source worktree connection before opening', async () => {
@@ -4076,9 +4317,36 @@ describe('createEditorSlice activateMarkdownLink', () => {
       worktreeId: 'wt-1',
       worktreeRoot: '/repo'
     })
-    expect(openHttpLinkMock).toHaveBeenCalledWith('https://example.com/', { worktreeId: 'wt-1' })
+    expect(openHttpLinkMock).toHaveBeenCalledWith('https://example.com/', {
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'local' }
+    })
     expect(openUrlMock).not.toHaveBeenCalled()
     expect(store.getState().openFiles).toEqual([])
+  })
+
+  it('does not rescan legacy owner state when the source owner is explicit', async () => {
+    const store = createEditorStore()
+    for (const key of ['openFiles', 'repos', 'worktreesByRepo', 'folderWorkspaces'] as const) {
+      Object.defineProperty(store.getState(), key, {
+        configurable: true,
+        get: () => {
+          throw new Error(`explicit owner must not read ${key}`)
+        }
+      })
+    }
+
+    await store.getState().activateMarkdownLink('https://example.com', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo',
+      sourceOwner: { kind: 'local' }
+    })
+
+    expect(openHttpLinkMock).toHaveBeenCalledWith('https://example.com/', {
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'local' }
+    })
   })
 
   it('opens in-worktree file links in Orca', async () => {
@@ -4354,5 +4622,128 @@ describe('closeFile host mirroring', () => {
       '/other/b.ts'
     )
     expect(store.getState().openFiles).toHaveLength(0)
+  })
+})
+
+describe('read-only editor tabs (AI Vault View Log)', () => {
+  const LOG_PATH = '/home/user/.claude/sessions/log.jsonl'
+
+  const openReadOnlyLog = (store: StoreApi<AppState>): void =>
+    store.getState().openFile(
+      {
+        filePath: LOG_PATH,
+        relativePath: LOG_PATH,
+        worktreeId: 'wt-1',
+        language: 'jsonl',
+        mode: 'edit',
+        readOnly: true,
+        liveTail: true,
+        runtimeEnvironmentId: null
+      },
+      { preview: false, forceContentReload: true, suppressActiveRuntimeFallback: true }
+    )
+
+  it('creates a permanent read-only edit tab', () => {
+    const store = createEditorStore()
+    openReadOnlyLog(store)
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({
+        filePath: LOG_PATH,
+        mode: 'edit',
+        readOnly: true,
+        liveTail: true,
+        isPreview: undefined,
+        runtimeEnvironmentId: null
+      })
+    )
+  })
+
+  it('bumps the reload nonce on repeated View Log of a clean read-only tab', () => {
+    const store = createEditorStore()
+    openReadOnlyLog(store)
+    expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBeUndefined()
+
+    openReadOnlyLog(store)
+    expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBe(1)
+  })
+
+  it('keeps read-only sticky when the same path is opened writable (no silent upgrade)', () => {
+    const store = createEditorStore()
+    openReadOnlyLog(store)
+
+    store.getState().openFile({
+      filePath: LOG_PATH,
+      relativePath: LOG_PATH,
+      worktreeId: 'wt-1',
+      language: 'jsonl',
+      mode: 'edit',
+      runtimeEnvironmentId: null
+    })
+
+    expect(store.getState().openFiles).toHaveLength(1)
+    expect(store.getState().openFiles[0]?.readOnly).toBe(true)
+  })
+
+  it('never flips an existing writable tab to read-only on View Log', () => {
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: LOG_PATH,
+      relativePath: LOG_PATH,
+      worktreeId: 'wt-1',
+      language: 'jsonl',
+      mode: 'edit',
+      runtimeEnvironmentId: null
+    })
+
+    openReadOnlyLog(store)
+
+    expect(store.getState().openFiles).toHaveLength(1)
+    expect(store.getState().openFiles[0]?.readOnly).toBeUndefined()
+  })
+
+  it('markFileDirty and setEditorDraft hard no-op for read-only tabs', () => {
+    const store = createEditorStore()
+    openReadOnlyLog(store)
+
+    store.getState().markFileDirty(LOG_PATH, true)
+    store.getState().setEditorDraft(LOG_PATH, 'stray edit')
+
+    expect(store.getState().openFiles[0]?.isDirty).toBe(false)
+    expect(store.getState().editorDrafts[LOG_PATH]).toBeUndefined()
+  })
+
+  it('hydrates a persisted read-only tab clean and ignores any persisted dirty draft', () => {
+    const store = createEditorStore()
+    store.setState({
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1' }] },
+      folderWorkspaces: []
+    } as never)
+
+    store.getState().hydrateEditorSession({
+      openFilesByWorktree: {
+        'wt-1': [
+          {
+            filePath: LOG_PATH,
+            relativePath: LOG_PATH,
+            worktreeId: 'wt-1',
+            language: 'jsonl',
+            readOnly: true,
+            liveTail: true,
+            // Why: a corrupt/legacy session could carry a draft; hydrate must
+            // hard-strip it so the restored log can never come back writable.
+            dirtyDraftContent: 'should be ignored',
+            lastKnownDiskSignature: 'sig'
+          }
+        ]
+      }
+    } as never)
+
+    const restored = store.getState().openFiles.find((f) => f.filePath === LOG_PATH)
+    expect(restored).toEqual(
+      expect.objectContaining({ readOnly: true, liveTail: true, isDirty: false, mode: 'edit' })
+    )
+    expect(restored?.pendingDiskBaselineVerification).toBeUndefined()
+    expect(store.getState().editorDrafts[LOG_PATH]).toBeUndefined()
   })
 })

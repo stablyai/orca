@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Editor } from '@tiptap/react'
+import { useEditorState, type Editor } from '@tiptap/react'
 import type { DiffComment, MarkdownDocument } from '../../../../shared/types'
 import { useAppStore } from '@/store'
+import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { useLocalImagePick } from './useLocalImagePick'
 import { useRichMarkdownSearch } from './useRichMarkdownSearch'
 import type { LinkBubbleState } from './RichMarkdownLinkBubble'
@@ -10,6 +11,7 @@ import { useEditorScrollRestore } from './useEditorScrollRestore'
 import { useModifierHeldClass } from './useModifierHeldClass'
 import { registerPendingEditorFlush } from './editor-pending-flush'
 import type { MarkdownTocItem } from './markdown-table-of-contents'
+import { findRichMarkdownTocHeadingTarget } from './rich-markdown-toc-heading-target'
 import { selectMarkdownTableOfContents } from './markdown-toc-visibility-gate'
 import { RichMarkdownEditorSurface } from './RichMarkdownEditorSurface'
 import { useRichMarkdownEditorInstance } from './useRichMarkdownEditorInstance'
@@ -22,6 +24,11 @@ import {
   runRichMarkdownContextCommand
 } from './rich-markdown-context-command-routing'
 import { useRichMarkdownSpellcheckAttribute } from './rich-markdown-spellcheck'
+import { useRichMarkdownSuperscriptLinkSetup } from './useRichMarkdownSuperscriptLinkSetup'
+import {
+  formatSelectedHtmlSuperscriptLinkStatus,
+  getSelectedHtmlSuperscriptLinkStatus
+} from './rich-markdown-selected-link-actions'
 
 type RichMarkdownEditorProps = {
   fileId: string
@@ -80,23 +87,13 @@ export default function RichMarkdownEditor({
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
-  const allDiffComments = useAppStore((s): DiffComment[] | undefined => {
-    for (const list of Object.values(s.worktreesByRepo)) {
-      const worktree = list.find((candidate) => candidate.id === worktreeId)
-      if (worktree) {
-        return worktree.diffComments
-      }
-    }
-    return undefined
-  })
-  const worktreeRoot = useAppStore((s) => {
-    for (const list of Object.values(s.worktreesByRepo)) {
-      const wt = list.find((w) => w.id === worktreeId)
-      if (wt) {
-        return wt.path
-      }
-    }
-    return null
+  const allDiffComments = useAppStore((s): DiffComment[] | undefined =>
+    selectWorktreeDiffComments(s, worktreeId)
+  )
+  const { codec, htmlSuperscriptLinkContext, worktreeRoot } = useRichMarkdownSuperscriptLinkSetup({
+    filePath,
+    runtimeEnvironmentId,
+    worktreeId
   })
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const menu = useRichMarkdownMenuController({ markdownDocuments })
@@ -113,12 +110,12 @@ export default function RichMarkdownEditor({
   const editorRef = useRef<Editor | null>(null)
   const cancelAutoFocusRef = useRef<(() => void) | null>(null)
   const serializeTimerRef = useRef<number | null>(null)
-  // Why: normalizeSoftBreaks dispatches a ProseMirror transaction inside onCreate
+  // Why: empty-list repair dispatches a ProseMirror transaction inside onCreate
   // which triggers onUpdate. Without this guard the editor immediately marks the
   // file dirty before the user has typed anything.
   const isInitializingRef = useRef(true)
   // Why: internal maintenance paths can dispatch transactions after mount
-  // (external reloads, soft-break normalization, image-path refresh). Those
+  // (external reloads, empty-list repair, image-path refresh). Those
   // are not user edits, so onUpdate must ignore them or split panes can flip a
   // shared file dirty without any real content change.
   const isApplyingProgrammaticUpdateRef = useRef(false)
@@ -205,6 +202,8 @@ export default function RichMarkdownEditor({
   )
 
   const editor = useRichMarkdownEditorInstance({
+    codec,
+    htmlSuperscriptLinkContext,
     content,
     filePath,
     worktreeId,
@@ -249,6 +248,13 @@ export default function RichMarkdownEditor({
     setSlashMenu: menu.setSlashMenu,
     setDocLinkMenu: menu.setDocLinkMenu
   })
+  // Why: useEditor defaults shouldRerenderOnTransaction to false, so selection-only
+  // citation NodeSelections would leave aria status stale without useEditorState.
+  const selectedCitationStatus = useEditorState({
+    editor,
+    selector: (snapshot) =>
+      getSelectedHtmlSuperscriptLinkStatus(snapshot.editor, htmlSuperscriptLinkContext)
+  })
   useRichMarkdownSpellcheckAttribute(editor, richMarkdownSpellcheckEnabled)
 
   // Why: use useLayoutEffect (synchronous cleanup) so the pending serialization
@@ -274,6 +280,7 @@ export default function RichMarkdownEditor({
   })
 
   useRichMarkdownProgrammaticSync({
+    codec,
     content,
     docLinkMenuSetter: menu.setDocLinkMenu,
     editor,
@@ -298,12 +305,14 @@ export default function RichMarkdownEditor({
     handleLinkRemove,
     handleLinkEditCancel,
     handleLinkOpen,
+    handleLinkCopy,
     toggleLinkFromToolbar
   } = useLinkBubble(editor, rootRef, linkBubble, setLinkBubble, setIsEditingLink, {
     sourceFilePath: filePath,
     worktreeId,
     worktreeRoot,
-    runtimeEnvironmentId
+    runtimeEnvironmentId,
+    htmlSuperscriptLinkContext
   })
 
   useEffect(() => {
@@ -331,18 +340,11 @@ export default function RichMarkdownEditor({
 
   const navigateToTableOfContentsItem = useCallback(
     (id: string): void => {
-      const target = flatTableOfContentsItems.find((item) => item.id === id)
       const container = scrollContainerRef.current
-      if (!target || !container) {
+      if (!container) {
         return
       }
-      const sameTitleIndex = flatTableOfContentsItems
-        .filter((item) => item.title === target.title)
-        .findIndex((item) => item.id === target.id)
-      const matchingHeadings = Array.from(
-        container.querySelectorAll<HTMLElement>('h1, h2, h3')
-      ).filter((candidate) => candidate.textContent?.trim() === target.title)
-      const heading = matchingHeadings.at(Math.max(0, sameTitleIndex))
+      const heading = findRichMarkdownTocHeadingTarget(container, flatTableOfContentsItems, id)
       heading?.scrollIntoView({ block: 'center' })
     },
     [flatTableOfContentsItems]
@@ -352,6 +354,7 @@ export default function RichMarkdownEditor({
     <RichMarkdownEditorSurface
       editor={editor}
       editorFontZoomLevel={editorFontZoomLevel}
+      rootElement={rootRef.current}
       rootRef={setRootElement}
       scrollContainerRef={scrollContainerRef}
       headerSlot={headerSlot}
@@ -385,11 +388,22 @@ export default function RichMarkdownEditor({
       showTableOfContents={showTableOfContents}
       searchState={searchState}
       searchActions={searchActions}
+      citationStatus={
+        selectedCitationStatus
+          ? formatSelectedHtmlSuperscriptLinkStatus(selectedCitationStatus)
+          : ''
+      }
+      linkBubbleOwnerId={codec.transport.key}
       linkBubbleActions={{
+        dismissLinkBubble: () => {
+          setLinkBubble(null)
+          setIsEditingLink(false)
+        },
         handleLinkSave,
         handleLinkRemove,
         handleLinkEditCancel,
         handleLinkOpen,
+        handleLinkCopy,
         setIsEditingLink
       }}
       onToggleLink={toggleLinkFromToolbar}

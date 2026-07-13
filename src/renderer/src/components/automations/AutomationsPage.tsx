@@ -1047,7 +1047,7 @@ export default function AutomationsPage(): React.JSX.Element {
   }, [automationHostTargetKey, isLoading, pendingAutomationRunNavigation, refresh])
 
   const hydratePersistedUIState = useCallback(async (): Promise<void> => {
-    useAppStore.getState().hydratePersistedUI(await window.api.ui.get())
+    useAppStore.getState().hydratePersistedUI(await window.api.ui.get(), 'sync')
   }, [])
 
   useEffect(() => {

@@ -46,12 +46,20 @@ export class IosEmulatorBackend implements EmulatorBackend {
     logcat: false
   }
 
-  private readonly serveSimExecutable: ServeSimExecutable
+  private cachedServeSimExecutable: ServeSimExecutable | undefined
   private readonly waitForEndpointReady: (endpoint: string) => Promise<boolean>
 
   constructor(options: EmulatorBridgeOptions = {}) {
-    this.serveSimExecutable = resolveServeSimExecutable()
     this.waitForEndpointReady = options.waitForEndpointReady ?? waitForServeSimEndpointReady
+  }
+
+  // Why: resolving the executable can materialize the serve-sim runtime (a one-time
+  // recursive copy + xattr subprocess on macOS after each version bump). Defer it
+  // off the startup path — the bridge is constructed before the main window shows —
+  // so it only runs when an emulator command is actually issued.
+  private get serveSimExecutable(): ServeSimExecutable {
+    this.cachedServeSimExecutable ??= resolveServeSimExecutable()
+    return this.cachedServeSimExecutable
   }
 
   isSupportedOnHost(): boolean {

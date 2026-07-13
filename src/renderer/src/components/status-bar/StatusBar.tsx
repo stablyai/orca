@@ -36,6 +36,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '../../store'
+import { selectFloatingWorkspaceHasUnread } from '../../store/selectors'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
@@ -50,10 +51,11 @@ import {
   ProviderIcon,
   ProviderPanel,
   barColor,
+  clampUsedPercent,
   formatResetCreditExpiry,
   getProviderUsageStatusLabel
 } from './tooltip'
-import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
+import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { formatWindowLabel } from '@/lib/window-label-formatter'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
@@ -61,6 +63,7 @@ import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
 import { StatusBarUsageEmptyCta } from './StatusBarUsageEmptyCta'
+import { UsagePercentageDisplayChangeNotice } from './UsagePercentageDisplayChangeNotice'
 import { shouldOpenStatusBarContextMenu } from './status-bar-context-menu-policy'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -71,7 +74,17 @@ import {
   useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import {
+  fetchProviderAccountsSnapshot,
+  selectClaudeProviderAccount,
+  selectCodexProviderAccount
+} from '@/runtime/runtime-provider-accounts-client'
 import { translate } from '@/i18n/i18n'
+import {
+  normalizeUsagePercentageDisplay,
+  type UsagePercentageDisplay
+} from '../../../../shared/usage-percentage-display'
+import { formatUsagePercentageLabel } from './usage-percentage-label'
 
 type StatusBarProps = {
   floatingTerminalOpen: boolean
@@ -131,6 +144,7 @@ export type ClaudeStatusSwitchGroup = {
 type StatusSwitchGroupOptions = {
   fallbackWslDistro?: string | null
   includeFallbackWsl?: boolean
+  hostLabel?: string
 }
 
 function getHostRuntimeLabel(): string {
@@ -156,9 +170,12 @@ function getCodexStatusWslKey(wslDistro: string | null | undefined): string {
   return trimmed ? trimmed : '__default__'
 }
 
-function getCodexStatusRuntimeLabel(target: CodexStatusRuntimeTarget): string {
+function getCodexStatusRuntimeLabel(
+  target: CodexStatusRuntimeTarget,
+  hostLabel = getHostRuntimeLabel()
+): string {
   if (target.runtime === 'host') {
-    return getHostRuntimeLabel()
+    return hostLabel
   }
   return target.wslDistro ? `WSL ${target.wslDistro}` : 'WSL default'
 }
@@ -260,7 +277,7 @@ export function buildCodexStatusSwitchGroups(
     const accountsForTarget = getCodexStatusAccountsForTarget(state, target)
     return {
       key: getCodexStatusRuntimeKey(target),
-      label: getCodexStatusRuntimeLabel(target),
+      label: getCodexStatusRuntimeLabel(target, options.hostLabel),
       runtimeTarget: target,
       targets: [
         {
@@ -419,7 +436,7 @@ export function buildClaudeStatusSwitchGroups(
     const accountsForTarget = getClaudeStatusAccountsForTarget(state, target)
     return {
       key: getCodexStatusRuntimeKey(target),
-      label: getCodexStatusRuntimeLabel(target),
+      label: getCodexStatusRuntimeLabel(target, options.hostLabel),
       runtimeTarget: target,
       targets: [
         {
@@ -507,6 +524,29 @@ function getClaudeStatusAccountsFromSettings(
       wsl: { ...settings.activeClaudeManagedAccountIdsByRuntime?.wsl }
     }
   }
+}
+
+// Why: with a Remote Orca Server active, accounts persisted in local
+// GlobalSettings describe this desktop, not the account owner; the snapshot
+// fetched from the server must win (#7973).
+export function resolveCodexStatusAccountState(
+  settings: GlobalSettings | null | undefined,
+  runtimeState: CodexRateLimitAccountsState
+): CodexRateLimitAccountsState {
+  if (settings?.activeRuntimeEnvironmentId?.trim()) {
+    return runtimeState
+  }
+  return getCodexStatusAccountsFromSettings(settings) ?? runtimeState
+}
+
+export function resolveClaudeStatusAccountState(
+  settings: GlobalSettings | null | undefined,
+  runtimeState: ClaudeRateLimitAccountsState
+): ClaudeRateLimitAccountsState {
+  if (settings?.activeRuntimeEnvironmentId?.trim()) {
+    return runtimeState
+  }
+  return getClaudeStatusAccountsFromSettings(settings) ?? runtimeState
 }
 
 function CodexRestartStatusPrompt(): React.JSX.Element | null {
@@ -647,8 +687,15 @@ function ClaudeSwitcherMenu({
   const inactiveClaudeAccounts = useAppStore((s) => s.rateLimits.inactiveClaudeAccounts)
   const claudeTarget = useAppStore((s) => s.rateLimits.claudeTarget)
   const settings = useAppStore((s) => s.settings)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
+  const providerAccountHostLabel = hasActiveRuntimeEnvironment
+    ? (runtimeEnvironments.find(
+        (environment) => environment.id === settings?.activeRuntimeEnvironmentId?.trim()
+      )?.name ??
+      translate('auto.components.status.bar.StatusBar.remoteServerLabel', 'Remote server'))
+    : undefined
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     navigator.userAgent.includes('Windows') || hasActiveRuntimeEnvironment,
     false,
@@ -660,9 +707,9 @@ function ClaudeSwitcherMenu({
     if (!settings) {
       return 'no-settings'
     }
-    return `${settings.activeClaudeManagedAccountId ?? 'system'}:${JSON.stringify(settings.activeClaudeManagedAccountIdsByRuntime ?? null)}:${settings.claudeManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
+    return `${settings.activeRuntimeEnvironmentId?.trim() || 'local'}:${settings.activeClaudeManagedAccountId ?? 'system'}:${JSON.stringify(settings.activeClaudeManagedAccountIdsByRuntime ?? null)}:${settings.claudeManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
   })
-  const accountState = getClaudeStatusAccountsFromSettings(settings) ?? accounts
+  const accountState = resolveClaudeStatusAccountState(settings, accounts)
 
   useEffect(() => {
     mountedRef.current = true
@@ -671,12 +718,20 @@ function ClaudeSwitcherMenu({
     }
   }, [])
 
+  const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim() || null
+  // Why: keyed on the owner id, not the settings object identity, so routine
+  // settings mutations don't re-run the remote snapshot round trip.
   const loadAccounts = useCallback(async () => {
-    const next = await window.api.claudeAccounts.list()
-    if (mountedRef.current) {
-      setAccounts(next)
+    const snapshot = await fetchProviderAccountsSnapshot({ activeRuntimeEnvironmentId })
+    // Why: a failed Claude half is a substituted empty roster; keep prior state.
+    if (snapshot.failedProviders?.includes('claude')) {
+      console.error('Claude account list failed; keeping previous status bar state.')
+      return
     }
-  }, [])
+    if (mountedRef.current) {
+      setAccounts(snapshot.claude)
+    }
+  }, [activeRuntimeEnvironmentId])
 
   useEffect(() => {
     void loadAccounts().catch((error) => {
@@ -693,13 +748,14 @@ function ClaudeSwitcherMenu({
 
   // Why: inactive-account usage is needed only for the explicit switcher
   // expansion, so fetch it on that event instead of one render later.
+  // Remote-owned accounts have no local inactive-usage cache to fill.
   const handleAccountsExpandedToggle = useCallback((): void => {
     const nextExpanded = !accountsExpanded
     setAccountsExpanded(nextExpanded)
-    if (nextExpanded) {
+    if (nextExpanded && !hasActiveRuntimeEnvironment) {
       void fetchInactiveClaudeAccountUsage()
     }
-  }, [accountsExpanded, fetchInactiveClaudeAccountUsage])
+  }, [accountsExpanded, fetchInactiveClaudeAccountUsage, hasActiveRuntimeEnvironment])
 
   const handleSelectAccount = async (
     accountId: string | null,
@@ -710,7 +766,7 @@ function ClaudeSwitcherMenu({
     }
     setIsSwitching(true)
     try {
-      const next = await window.api.claudeAccounts.select({
+      const next = await selectClaudeProviderAccount(settings, {
         accountId,
         runtime: target.runtime,
         wslDistro: target.wslDistro
@@ -719,7 +775,11 @@ function ClaudeSwitcherMenu({
       if (mountedRef.current) {
         setAccounts(next)
       }
-      await fetchSettings()
+      // Why: remote selections live on the server; local GlobalSettings
+      // account fields are untouched, so refetching them is pure churn.
+      if (!hasActiveRuntimeEnvironment) {
+        await fetchSettings()
+      }
       if (mountedRef.current) {
         setAccountsExpanded(false)
       }
@@ -759,7 +819,8 @@ function ClaudeSwitcherMenu({
     toCodexStatusRuntimeTarget(claudeTarget),
     {
       fallbackWslDistro,
-      includeFallbackWsl: shouldIncludeSettingsWslRuntime(settings)
+      includeFallbackWsl: !hasActiveRuntimeEnvironment && shouldIncludeSettingsWslRuntime(settings),
+      hostLabel: providerAccountHostLabel
     }
   )
   const selectedGroup =
@@ -883,15 +944,15 @@ function ClaudeSwitcherMenu({
 }
 
 // ---------------------------------------------------------------------------
-// Mini progress bar (shows remaining capacity, grey)
+// Mini progress bar (shows consumption / % used, grey)
 // ---------------------------------------------------------------------------
 
-function MiniBar({ leftPct }: { leftPct: number }): React.JSX.Element {
+function MiniBar({ usedPct }: { usedPct: number }): React.JSX.Element {
   return (
     <div className="w-[48px] h-[6px] rounded-full bg-muted overflow-hidden flex-shrink-0">
       <div
         className="h-full rounded-full transition-all duration-300 bg-muted-foreground/40"
-        style={{ width: `${Math.min(100, Math.max(0, leftPct))}%` }}
+        style={{ width: `${clampUsedPercent(usedPct)}%` }}
       />
     </div>
   )
@@ -908,29 +969,34 @@ export function InlineUsageBars({
   limits: ProviderRateLimits
   isFetching: boolean
 }): React.JSX.Element {
+  const display = normalizeUsagePercentageDisplay(
+    useAppStore((state) => state.usagePercentageDisplay)
+  )
+  // Why: the preference changes copy, while bar fill stays consumption-based
+  // so empty/green and full/red keep the meter semantics introduced in #8167.
   const usageWindows = [
     limits.session
       ? {
           key: 'session',
-          left: Math.max(0, Math.round(100 - limits.session.usedPercent)),
-          label: translate('auto.components.status.bar.StatusBar.d79c3362c4', '% 5h')
+          used: clampUsedPercent(limits.session.usedPercent),
+          label: translate('auto.components.status.bar.StatusBar.d79c3362c4', '5h')
         }
       : null,
     limits.weekly
       ? {
           key: 'weekly',
-          left: Math.max(0, Math.round(100 - limits.weekly.usedPercent)),
-          label: translate('auto.components.status.bar.StatusBar.5c938d39ac', '% wk')
+          used: clampUsedPercent(limits.weekly.usedPercent),
+          label: translate('auto.components.status.bar.StatusBar.5c938d39ac', 'wk')
         }
       : null,
     limits.fableWeekly
       ? {
           key: 'fableWeekly',
-          left: Math.max(0, Math.round(100 - limits.fableWeekly.usedPercent)),
-          label: translate('auto.components.status.bar.StatusBar.54e8d6bb2d', '% Fable')
+          used: clampUsedPercent(limits.fableWeekly.usedPercent),
+          label: translate('auto.components.status.bar.StatusBar.54e8d6bb2d', 'Fable')
         }
       : null
-  ].filter((window): window is { key: string; left: number; label: string } => window !== null)
+  ].filter((window): window is { key: string; used: number; label: string } => window !== null)
 
   return (
     <div
@@ -943,13 +1009,12 @@ export function InlineUsageBars({
         <div key={window.key} className="flex min-w-0 items-center gap-1">
           <div className="h-[4px] min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
             <div
-              className={`h-full rounded-full ${barColor(window.left)}`}
-              style={{ width: `${window.left}%` }}
+              className={`h-full rounded-full ${barColor(window.used)}`}
+              style={{ width: `${window.used}%` }}
             />
           </div>
           <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
-            {window.left}
-            {window.label}
+            {formatUsagePercentageLabel(window.used, display)} {window.label}
           </span>
         </div>
       ))}
@@ -1022,14 +1087,21 @@ function InlineUsageSkeleton(): React.JSX.Element {
 }
 
 // ---------------------------------------------------------------------------
-// Window label (shows percent remaining)
+// Window label
 // ---------------------------------------------------------------------------
 
-function WindowLabel({ w, label }: { w: RateLimitWindow; label: string }): React.JSX.Element {
-  const left = Math.max(0, Math.round(100 - w.usedPercent))
+function WindowLabel({
+  w,
+  label,
+  display
+}: {
+  w: RateLimitWindow
+  label: string
+  display: UsagePercentageDisplay
+}): React.JSX.Element {
   return (
     <span className="tabular-nums">
-      {left}% {label}
+      {formatUsagePercentageLabel(w.usedPercent, display)} {label}
     </span>
   )
 }
@@ -1044,10 +1116,12 @@ const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
 
 function ProviderSegment({
   p,
-  compact
+  compact,
+  display
 }: {
   p: ProviderRateLimits | null
   compact: boolean
+  display: UsagePercentageDisplay
 }): React.JSX.Element {
   const provider = p?.provider ?? 'claude'
   const statusLabel = p ? getProviderUsageStatusLabel(p) : ''
@@ -1100,19 +1174,20 @@ function ProviderSegment({
     return (
       <span className="inline-flex items-center gap-1.5">
         <ProviderIcon provider={provider} />
-        {visibleBuckets.map((bucket, i) => {
-          const left = Math.max(0, Math.round(100 - bucket.usedPercent))
-          return (
-            <React.Fragment key={bucket.name}>
-              {i > 0 && <span className="text-muted-foreground">·</span>}
-              <span className="tabular-nums">
-                {bucket.name} {left}%
-              </span>
-            </React.Fragment>
-          )
-        })}
+        {visibleBuckets.map((bucket, i) => (
+          <React.Fragment key={bucket.name}>
+            {i > 0 && <span className="text-muted-foreground">·</span>}
+            <span className="tabular-nums">
+              {bucket.name} {formatUsagePercentageLabel(bucket.usedPercent, display)}
+            </span>
+          </React.Fragment>
+        ))}
         {visibleBuckets.length === 0 && p.session && (
-          <WindowLabel w={p.session} label={formatWindowLabel(p.session.windowMinutes)} />
+          <WindowLabel
+            w={p.session}
+            label={formatWindowLabel(p.session.windowMinutes)}
+            display={display}
+          />
         )}
         {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
       </span>
@@ -1146,11 +1221,11 @@ function ProviderSegment({
   return (
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
-      {p.session && !compact && <MiniBar leftPct={Math.max(0, 100 - p.session.usedPercent)} />}
+      {p.session && !compact && <MiniBar usedPct={clampUsedPercent(p.session.usedPercent)} />}
       {visibleWindows.map((window, index) => (
         <React.Fragment key={window.key}>
           {index > 0 && <span className="text-muted-foreground">·</span>}
-          <WindowLabel w={window.window} label={window.label} />
+          <WindowLabel w={window.window} label={window.label} display={display} />
         </React.Fragment>
       ))}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
@@ -1200,8 +1275,15 @@ function CodexSwitcherMenu({
   const inactiveCodexAccounts = useAppStore((s) => s.rateLimits.inactiveCodexAccounts)
   const codexTarget = useAppStore((s) => s.rateLimits.codexTarget)
   const settings = useAppStore((s) => s.settings)
+  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
+  const providerAccountHostLabel = hasActiveRuntimeEnvironment
+    ? (runtimeEnvironments.find(
+        (environment) => environment.id === settings?.activeRuntimeEnvironmentId?.trim()
+      )?.name ??
+      translate('auto.components.status.bar.StatusBar.remoteServerLabel', 'Remote server'))
+    : undefined
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     navigator.userAgent.includes('Windows') || hasActiveRuntimeEnvironment,
     false,
@@ -1213,16 +1295,24 @@ function CodexSwitcherMenu({
     if (!settings) {
       return 'no-settings'
     }
-    return `${settings.activeCodexManagedAccountId ?? 'system'}:${JSON.stringify(settings.activeCodexManagedAccountIdsByRuntime ?? null)}:${settings.codexManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
+    return `${settings.activeRuntimeEnvironmentId?.trim() || 'local'}:${settings.activeCodexManagedAccountId ?? 'system'}:${JSON.stringify(settings.activeCodexManagedAccountIdsByRuntime ?? null)}:${settings.codexManagedAccounts.map((account) => `${account.id}:${account.updatedAt}`).join('|')}`
   })
-  const accountState = getCodexStatusAccountsFromSettings(settings) ?? accounts
+  const accountState = resolveCodexStatusAccountState(settings, accounts)
 
+  const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim() || null
+  // Why: keyed on the owner id, not the settings object identity, so routine
+  // settings mutations don't re-run the remote snapshot round trip.
   const loadAccounts = useCallback(async () => {
-    const next = await window.api.codexAccounts.list()
-    if (mountedRef.current) {
-      setAccounts(next)
+    const snapshot = await fetchProviderAccountsSnapshot({ activeRuntimeEnvironmentId })
+    // Why: a failed Codex half is a substituted empty roster; keep prior state.
+    if (snapshot.failedProviders?.includes('codex')) {
+      console.error('Codex account list failed; keeping previous status bar state.')
+      return
     }
-  }, [])
+    if (mountedRef.current) {
+      setAccounts(snapshot.codex)
+    }
+  }, [activeRuntimeEnvironmentId])
 
   useEffect(() => {
     mountedRef.current = true
@@ -1255,7 +1345,7 @@ function CodexSwitcherMenu({
     const previousActiveAccountId = getCodexStatusActiveId(accountState, target)
     setIsSwitching(true)
     try {
-      const next = await window.api.codexAccounts.select({
+      const next = await selectCodexProviderAccount(settings, {
         accountId,
         runtime: target.runtime,
         wslDistro: target.wslDistro
@@ -1264,7 +1354,11 @@ function CodexSwitcherMenu({
       if (mountedRef.current) {
         setAccounts(next)
       }
-      await fetchSettings()
+      // Why: remote selections live on the server; local GlobalSettings
+      // account fields are untouched, so refetching them is pure churn.
+      if (!hasActiveRuntimeEnvironment) {
+        await fetchSettings()
+      }
       const nextActiveAccountId = getCodexStatusActiveId(next, target)
       if (previousActiveAccountId !== nextActiveAccountId) {
         await markLiveCodexSessionsForRestart({
@@ -1380,12 +1474,13 @@ function CodexSwitcherMenu({
   const handleAccountsExpandedToggle = useCallback((): void => {
     const nextExpanded = !accountsExpanded
     setAccountsExpanded(nextExpanded)
-    if (nextExpanded) {
+    if (nextExpanded && !hasActiveRuntimeEnvironment) {
       // Why: inactive-account usage is needed only for the explicit switcher
       // expansion, so fetch it on that event instead of one render later.
+      // Remote-owned accounts have no local inactive-usage cache to fill.
       void fetchInactiveCodexAccountUsage()
     }
-  }, [accountsExpanded, fetchInactiveCodexAccountUsage])
+  }, [accountsExpanded, fetchInactiveCodexAccountUsage, hasActiveRuntimeEnvironment])
 
   const selectedRuntimeKey = getCodexStatusRuntimeKey(
     normalizeCodexStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(codexTarget))
@@ -1399,7 +1494,8 @@ function CodexSwitcherMenu({
     toCodexStatusRuntimeTarget(codexTarget),
     {
       fallbackWslDistro,
-      includeFallbackWsl: shouldIncludeSettingsWslRuntime(settings)
+      includeFallbackWsl: !hasActiveRuntimeEnvironment && shouldIncludeSettingsWslRuntime(settings),
+      hostLabel: providerAccountHostLabel
     }
   )
   const selectedGroup =
@@ -1410,7 +1506,10 @@ function CodexSwitcherMenu({
     resetCreditCount !== null
       ? formatResetCreditExpiry(codex.rateLimitResetCredits?.nextExpiresAt, resetCreditCount)
       : null
-  const canRedeemReset = resetCreditCount !== null && resetCreditCount > 0
+  // Why: reset credits redeem against the desktop's own Codex login; with a
+  // remote account owner the credit does not apply to the server's account.
+  const canRedeemReset =
+    !hasActiveRuntimeEnvironment && resetCreditCount !== null && resetCreditCount > 0
 
   return (
     <ProviderDetailsMenu
@@ -1549,7 +1648,10 @@ function CodexSwitcherMenu({
                   const inactiveUsage = target.id
                     ? inactiveCodexAccounts.find((a) => a.accountId === target.id)
                     : null
+                  // Why: sign-in spawns a local `codex login`; a remote-owned
+                  // account cannot be re-authenticated from this desktop.
                   const showSignInAction =
+                    !hasActiveRuntimeEnvironment &&
                     !target.active &&
                     target.id !== null &&
                     isUnavailableInactiveUsage(inactiveUsage?.rateLimits)
@@ -1657,6 +1759,9 @@ export function ProviderDetailsMenu({
   children?: React.ReactNode
 }): React.JSX.Element {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  const usagePercentageDisplay = normalizeUsagePercentageDisplay(
+    useAppStore((s) => s.usagePercentageDisplay)
+  )
   const skipCloseAutoFocusRef = useRef(false)
 
   const handleOpenChange = (nextOpen: boolean): void => {
@@ -1689,11 +1794,17 @@ export function ProviderDetailsMenu({
                       ? 'O'
                       : provider.provider === 'kimi'
                         ? 'K'
-                        : 'X'}
+                        : provider.provider === 'antigravity'
+                          ? 'A'
+                          : provider.provider === 'minimax'
+                            ? 'M'
+                            : provider.provider === 'grok'
+                              ? 'R'
+                              : 'X'}
               </span>
             </span>
           ) : (
-            <ProviderSegment p={provider} compact={compact} />
+            <ProviderSegment p={provider} compact={compact} display={usagePercentageDisplay} />
           )}
         </button>
       </DropdownMenuTrigger>
@@ -1718,7 +1829,11 @@ export function ProviderDetailsMenu({
         {topContent}
         <div className="p-2">
           {/* Why: provider-specific action sections may render richer reset-credit UI. */}
-          <ProviderPanel p={provider} showResetCredits={!hidePanelResetCredits} />
+          <ProviderPanel
+            p={provider}
+            showResetCredits={!hidePanelResetCredits}
+            usagePercentageDisplay={usagePercentageDisplay}
+          />
         </div>
         {children ? (
           <>
@@ -1745,6 +1860,10 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const statusBarItems = useAppStore((s) => s.statusBarItems)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  // Why: same launcher attention dot as the floating-button trigger, so an
+  // unacknowledged bell/agent-completion in the floating workspace is visible
+  // whichever trigger location the user picked (see FloatingTerminalToggleButton).
+  const hasFloatingUnread = useAppStore(selectFloatingWorkspaceHasUnread)
   const floatingTerminalEnabled = settings?.floatingTerminalEnabled === true
   const floatingTerminalTriggerLocation =
     settings?.floatingTerminalTriggerLocation ?? 'floating-button'
@@ -1831,17 +1950,36 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo, kimi } = rateLimits
+  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok } = rateLimits
 
   // Why: a provider earns a bar from either a usable live snapshot or durable
   // setup in Settings. The durable path keeps account switchers visible while
   // usage snapshots hydrate, fail, or temporarily report unavailable.
   // Detection-gating (see status-bar-agent-gating) additionally hides per-CLI
   // bars when the agent isn't installed on PATH.
-  const visibleClaude = getVisibleUsageProvider('claude', claude, settings)
-  const visibleCodex = getVisibleUsageProvider('codex', codex, settings)
-  const visibleGemini = getVisibleUsageProvider('gemini', gemini, settings)
-  const visibleKimi = getVisibleUsageProvider('kimi', kimi, settings)
+  // Why: Antigravity usage has no separate persisted credential. A checked
+  // status item plus detected CLI is the durable signal that the user wants
+  // its usage slot visible while the first snapshot is still pending. The
+  // visibility module additionally requires geminiCliOAuthEnabled (already in
+  // settings) because the snapshot mirrors the Gemini fetch.
+  const antigravityUsageConfigured =
+    statusBarItems.includes('antigravity') &&
+    isStatusBarItemAvailable('antigravity', detectedAgentIds)
+  // Why: thread non-GlobalSettings durability flags from renderer/main state so
+  // bars stay visible after a reload and between snapshot refreshes.
+  const usageSettings = {
+    ...settings,
+    antigravityUsageConfigured,
+    minimaxCookieConfigured: rateLimits.minimaxCookieConfigured,
+    grokAuthConfigured: rateLimits.grokAuthConfigured
+  }
+  const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
+  const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
+  const visibleGemini = getVisibleUsageProvider('gemini', gemini, usageSettings)
+  const visibleKimi = getVisibleUsageProvider('kimi', kimi, usageSettings)
+  const visibleAntigravity = getVisibleUsageProvider('antigravity', antigravity, usageSettings)
+  const visibleMiniMax = getVisibleUsageProvider('minimax', minimax, usageSettings)
+  const visibleGrok = getVisibleUsageProvider('grok', grok, usageSettings)
   const showClaude =
     visibleClaude !== null &&
     statusBarItems.includes('claude') &&
@@ -1858,22 +1996,47 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     visibleKimi !== null &&
     statusBarItems.includes('kimi') &&
     isStatusBarItemAvailable('kimi', detectedAgentIds)
+  const showAntigravity =
+    visibleAntigravity !== null &&
+    statusBarItems.includes('antigravity') &&
+    isStatusBarItemAvailable('antigravity', detectedAgentIds)
+  // Why: MiniMax is a cookie-auth provider, not a CLI on PATH, so detection-gating
+  // doesn't apply (same rationale as OpenCode Go below).
+  const showMiniMax = visibleMiniMax !== null && statusBarItems.includes('minimax')
+  const showGrok =
+    visibleGrok !== null &&
+    statusBarItems.includes('grok') &&
+    isStatusBarItemAvailable('grok', detectedAgentIds)
   // Why: OpenCode Go is a web/cookie-auth provider, not a CLI on PATH, so
   // detection-gating doesn't apply.
-  const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, settings)
+  const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, usageSettings)
   const showOpencodeGo = visibleOpencodeGo !== null && statusBarItems.includes('opencode-go')
   const showSsh = statusBarItems.includes('ssh')
   const showResourceUsage = statusBarItems.includes('resource-usage')
   const showPorts = statusBarItems.includes('ports')
   const showFloatingTerminalToggle =
     floatingTerminalEnabled && floatingTerminalTriggerLocation === 'status-bar'
-  const anyVisible =
-    showClaude || showCodex || showGemini || showOpencodeGo || showKimi || showResourceUsage
+  // Why: which usage-meter children actually render — excludes resource-usage
+  // and other non-meter status items so the % display change callout only
+  // opens when there is a real meter cluster to anchor to.
+  const hasVisibleUsageMeters =
+    showClaude ||
+    showCodex ||
+    showGemini ||
+    showOpencodeGo ||
+    showKimi ||
+    showAntigravity ||
+    showMiniMax ||
+    showGrok
+  const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: a brand-new user with no provider configured would otherwise see an
   // empty left side of the status bar and wonder what's missing. Settings are
   // included because managed accounts are durable even when live usage
   // snapshots are still hydrating or unavailable after an update.
-  const isEmptyUsageState = isUsageEmptyState({ claude, codex, gemini, opencodeGo, kimi }, settings)
+  const isEmptyUsageState = isUsageEmptyState(
+    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok },
+    usageSettings
+  )
   // Why: the teaching CTA is a one-time nudge — once the user hides it, keep it
   // hidden even after providers are disconnected again.
   const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
@@ -1882,13 +2045,19 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     codex?.status === 'fetching' ||
     gemini?.status === 'fetching' ||
     opencodeGo?.status === 'fetching' ||
-    kimi?.status === 'fetching'
+    kimi?.status === 'fetching' ||
+    antigravity?.status === 'fetching' ||
+    minimax?.status === 'fetching' ||
+    grok?.status === 'fetching'
 
   const compact = containerWidth < 900
   const iconOnly = containerWidth < 500
   const floatingTerminalActionLabel = floatingTerminalOpen
     ? 'Minimize Floating Workspace'
     : 'Show Floating Workspace'
+  // Why: only while the panel is closed; the dot reflects unacknowledged
+  // floating-workspace activity and clears via the shared unread paths.
+  const showFloatingWorkspaceAttentionDot = !floatingTerminalOpen && hasFloatingUnread
 
   return (
     <div
@@ -1917,7 +2086,9 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             <StatusBarUsageEmptyCta />
           ) : null
         ) : (
-          <>
+          // Why: one-time usage-display change callout anchors to this cluster so
+          // it sits next to the meters the user is confused by, not a global toast.
+          <UsagePercentageDisplayChangeNotice hasVisibleUsageMeters={hasVisibleUsageMeters}>
             {showClaude && (
               <ClaudeSwitcherMenu claude={visibleClaude} compact={compact} iconOnly={iconOnly} />
             )}
@@ -1932,6 +2103,17 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                 ariaLabel={translate(
                   'auto.components.status.bar.StatusBar.d2375976eb',
                   'Open Gemini usage details'
+                )}
+              />
+            )}
+            {showAntigravity && (
+              <ProviderDetailsMenu
+                provider={visibleAntigravity}
+                compact={compact}
+                iconOnly={iconOnly}
+                ariaLabel={translate(
+                  'auto.components.status.bar.StatusBar.antigravityUsageDetails',
+                  'Open Antigravity usage details'
                 )}
               />
             )}
@@ -1957,7 +2139,29 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                 )}
               />
             )}
-          </>
+            {showMiniMax && (
+              <ProviderDetailsMenu
+                provider={visibleMiniMax}
+                compact={compact}
+                iconOnly={iconOnly}
+                ariaLabel={translate(
+                  'auto.components.status.bar.StatusBar.06741a2f3d',
+                  'Open MiniMax usage details'
+                )}
+              />
+            )}
+            {showGrok && (
+              <ProviderDetailsMenu
+                provider={visibleGrok}
+                compact={compact}
+                iconOnly={iconOnly}
+                ariaLabel={translate(
+                  'auto.components.status.bar.StatusBar.grokUsageAria',
+                  'Open Grok usage details'
+                )}
+              />
+            )}
+          </UsagePercentageDisplayChangeNotice>
         )}
         {anyVisible && !isEmptyUsageState && (
           <Tooltip>
@@ -2002,13 +2206,26 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  className="inline-flex size-5 cursor-pointer items-center justify-center rounded border border-border bg-secondary text-secondary-foreground shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground"
-                  aria-label={floatingTerminalActionLabel}
+                  className="relative inline-flex size-5 cursor-pointer items-center justify-center rounded border border-border bg-secondary text-secondary-foreground shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground"
+                  aria-label={
+                    showFloatingWorkspaceAttentionDot
+                      ? `${floatingTerminalActionLabel}, new activity`
+                      : floatingTerminalActionLabel
+                  }
                   onClick={() => {
                     window.dispatchEvent(new CustomEvent(TOGGLE_FLOATING_TERMINAL_EVENT))
                   }}
                 >
                   <PanelsTopLeft className="size-3.5" />
+                  {showFloatingWorkspaceAttentionDot ? (
+                    // Why: amber = Orca's "needs attention" convention; ring
+                    // matches the button fill so the dot reads on the icon.
+                    <span
+                      aria-hidden
+                      data-floating-terminal-attention
+                      className="pointer-events-none absolute right-0.5 top-0.5 size-1.5 rounded-full bg-amber-500 ring-1 ring-secondary"
+                    />
+                  ) : null}
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={6}>
@@ -2065,6 +2282,21 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
               {translate('auto.components.status.bar.StatusBar.c1df0d67ec', 'Gemini Usage')}
             </DropdownMenuCheckboxItem>
           )}
+          {isStatusBarItemAvailable('antigravity', detectedAgentIds) && (
+            <DropdownMenuCheckboxItem
+              checked={statusBarItems.includes('antigravity')}
+              onCheckedChange={() => {
+                recordFeatureInteraction('usage-tracking')
+                toggleStatusBarItem('antigravity')
+              }}
+            >
+              <AgentIcon agent="antigravity" size={14} />
+              {translate(
+                'auto.components.status.bar.StatusBar.antigravityUsage',
+                'Antigravity Usage'
+              )}
+            </DropdownMenuCheckboxItem>
+          )}
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('opencode-go')}
             onCheckedChange={() => {
@@ -2085,6 +2317,28 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             >
               <AgentIcon agent="kimi" size={14} />
               {translate('auto.components.status.bar.StatusBar.5e59007df4', 'Kimi Usage')}
+            </DropdownMenuCheckboxItem>
+          )}
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('minimax')}
+            onCheckedChange={() => {
+              recordFeatureInteraction('usage-tracking')
+              toggleStatusBarItem('minimax')
+            }}
+          >
+            <MiniMaxIcon size={14} />
+            {translate('auto.components.status.bar.StatusBar.3bbf140864', 'MiniMax Usage')}
+          </DropdownMenuCheckboxItem>
+          {isStatusBarItemAvailable('grok', detectedAgentIds) && (
+            <DropdownMenuCheckboxItem
+              checked={statusBarItems.includes('grok')}
+              onCheckedChange={() => {
+                recordFeatureInteraction('usage-tracking')
+                toggleStatusBarItem('grok')
+              }}
+            >
+              <AgentIcon agent="grok" size={14} />
+              {translate('auto.components.status.bar.StatusBar.grokUsageMenu', 'Grok Usage')}
             </DropdownMenuCheckboxItem>
           )}
           <DropdownMenuCheckboxItem

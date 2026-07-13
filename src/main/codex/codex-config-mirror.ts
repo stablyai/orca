@@ -3,49 +3,72 @@ import { dirname, join } from 'node:path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 import { rewriteRelativePathConfigValues } from './codex-config-path-reference-rewrite'
+import { parseWslUncPath } from '../../shared/wsl-paths'
+import {
+  promoteCodexRuntimeSettingsToSystem,
+  snapshotCodexRuntimeSettingsBaseline,
+  type CodexSettingsPromotionHomes
+} from './config-settings-promotion'
 import {
   createTomlLineScanState,
   getTomlTableHeader,
   isTomlStructuralLine,
   updateTomlLineScanState
 } from './config-toml-line-scan'
+import {
+  normalizeCodexProjectPathForLookup,
+  normalizeCodexProjectPathForRevocationLookup,
+  parseCodexProjectHeaderPath
+} from './config-toml-trust'
 
-function getRuntimeCodexConfigTomlPath(): string {
-  return join(getOrcaManagedCodexHomePath(), 'config.toml')
-}
-
-function getSystemCodexConfigTomlPath(): string {
-  return join(getSystemCodexHomePath(), 'config.toml')
-}
-
-export function syncSystemConfigIntoManagedCodexHome(): void {
+export function syncSystemConfigIntoManagedCodexHome(
+  homes: CodexSettingsPromotionHomes = {
+    runtimeHomePath: getOrcaManagedCodexHomePath(),
+    systemHomePath: getSystemCodexHomePath()
+  }
+): void {
+  // Why: the mirror overwrites runtime settings from ~/.codex, so changes the
+  // user made inside Orca-launched Codex (/model, /approvals) must be written
+  // back to ~/.codex first or this very pass silently reverts them.
+  if (!promoteCodexRuntimeSettingsToSystem(homes)) {
+    // Why: mirroring after a failed write-back would erase the runtime change;
+    // leave both runtime and its old baseline intact so the next launch retries.
+    return
+  }
   try {
-    syncSystemConfigIntoManagedCodexHomeUnsafe()
+    syncSystemConfigIntoManagedCodexHomeUnsafe(homes)
   } catch (error) {
     console.warn('[codex-config] Failed to mirror system Codex config:', error)
+    return
   }
+  // Why: the baseline advances only after a successful mirror; recording an
+  // unpromoted runtime change as Orca-written would strand it forever.
+  snapshotCodexRuntimeSettingsBaseline(homes.runtimeHomePath)
 }
 
-function syncSystemConfigIntoManagedCodexHomeUnsafe(): void {
-  const systemConfigPath = getSystemCodexConfigTomlPath()
-  const runtimeConfigPath = getRuntimeCodexConfigTomlPath()
+function syncSystemConfigIntoManagedCodexHomeUnsafe({
+  runtimeHomePath,
+  systemHomePath
+}: CodexSettingsPromotionHomes): void {
+  const systemConfigPath = join(systemHomePath, 'config.toml')
+  const runtimeConfigPath = join(runtimeHomePath, 'config.toml')
   const systemConfigExists = existsSync(systemConfigPath)
   const runtimeConfigExists = existsSync(runtimeConfigPath)
   if (!systemConfigExists && !runtimeConfigExists) {
     return
   }
 
-  const systemConfig = prepareSystemConfigForRuntimeMirror(
-    systemConfigExists ? readFileSync(systemConfigPath, 'utf-8') : '',
-    dirname(systemConfigPath)
-  )
+  const rawSystemConfig = systemConfigExists ? readFileSync(systemConfigPath, 'utf-8') : ''
+  const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath)
   if (!runtimeConfigExists) {
-    // Why: trust blocks reference a hooks.json path, so system-home hook trust
-    // entries are not valid in Orca's runtime CODEX_HOME until install remaps them.
-    writeFileAtomically(runtimeConfigPath, stripRuntimeOwnedTomlSections(systemConfig))
+    writeFileAtomically(
+      runtimeConfigPath,
+      prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir)
+    )
     return
   }
 
+  const systemConfig = prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir)
   const runtimeConfig = readFileSync(runtimeConfigPath, 'utf-8')
   const mergedConfig = mergeSystemCodexConfigIntoRuntime(runtimeConfig, systemConfig)
   if (mergedConfig !== runtimeConfig) {
@@ -53,11 +76,26 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(): void {
   }
 }
 
+export function resolveCodexConfigMirrorSourceDirectory(systemHomePath: string): string {
+  return parseWslUncPath(systemHomePath)?.linuxPath ?? dirname(join(systemHomePath, 'config.toml'))
+}
+
 function prepareSystemConfigForRuntimeMirror(config: string, systemConfigDir: string): string {
   return rewriteRelativePathConfigValues(
     normalizeDeprecatedCodexHookFeatureFlag(config),
     systemConfigDir
   )
+}
+
+// Why: trust blocks reference a hooks.json path, so system-home hook trust
+// entries are not valid in a fresh runtime CODEX_HOME until install remaps
+// them. Also seeds WSL runtime homes, where systemConfigDir must be the
+// Linux-side ~/.codex the config resolves against inside the distro.
+export function prepareSystemConfigForFreshRuntimeMirror(
+  config: string,
+  systemConfigDir: string
+): string {
+  return stripRuntimeOwnedTomlSections(prepareSystemConfigForRuntimeMirror(config, systemConfigDir))
 }
 
 function normalizeDeprecatedCodexHookFeatureFlag(config: string): string {
@@ -71,7 +109,9 @@ function normalizeDeprecatedCodexHookFeatureFlag(config: string): string {
 
   for (let index = 0; index <= lines.length; index += 1) {
     const line = lines[index]
-    const isHeader = line === undefined || /^[ \t]*\[[^\]]+\][ \t]*(?:#.*)?$/.test(line)
+    // Why: CRLF configs keep a trailing \r after the split, so header anchors
+    // must tolerate it or Windows-shaped configs skip normalization entirely.
+    const isHeader = line === undefined || /^[ \t]*\[[^\]]+\][ \t]*(?:#.*)?\r?$/.test(line)
     if (!isHeader) {
       continue
     }
@@ -80,7 +120,7 @@ function normalizeDeprecatedCodexHookFeatureFlag(config: string): string {
       featureSections.push({ start: featureStart, end: index })
       featureStart = null
     }
-    if (line !== undefined && /^[ \t]*\[features\][ \t]*(?:#.*)?$/.test(line)) {
+    if (line !== undefined && /^[ \t]*\[features\][ \t]*(?:#.*)?\r?$/.test(line)) {
       featureStart = index
     }
   }
@@ -125,16 +165,26 @@ function normalizeFeatureSectionLines(lines: string[], start: number, end: numbe
 }
 
 function mergeSystemCodexConfigIntoRuntime(runtimeConfig: string, systemConfig: string): string {
-  const runtimeSections = getTomlSections(runtimeConfig)
+  const runtimeSections = deduplicateProjectTomlSections(getTomlSections(runtimeConfig))
   const runtimeProjectHeaders = new Set(
     runtimeSections
       .filter((section) => isRuntimeProjectTomlSection(section.header))
       .map((section) => getTomlSectionHeaderKey(section.header))
   )
-  const systemUntrustedProjectHeaders = new Set(
+  const systemProjectSections = deduplicateProjectTomlSections(
     getTomlSections(systemConfig)
-      .filter((section) => isRuntimeProjectTomlSection(section.header))
+  ).filter((section) => isRuntimeProjectTomlSection(section.header))
+  const systemUntrustedProjectHeaders = new Set(
+    systemProjectSections
       .filter((section) => getProjectTrustLevel(section.block) === 'untrusted')
+      .map((section) => getRevocationTomlSectionHeaderKey(section.header))
+  )
+  // Why: an exact-cased trusted entry in ~/.codex is the user's latest explicit
+  // decision for that exact project; a loosely-matched (case-drifted) revocation
+  // must not override it, or re-granting trust would be reverted every mirror.
+  const systemTrustedProjectHeaders = new Set(
+    systemProjectSections
+      .filter((section) => getProjectTrustLevel(section.block) === 'trusted')
       .map((section) => getTomlSectionHeaderKey(section.header))
   )
   // Why: ordinary Codex settings should mirror ~/.codex exactly; runtime hook
@@ -148,7 +198,8 @@ function mergeSystemCodexConfigIntoRuntime(runtimeConfig: string, systemConfig: 
       .filter(
         (section) =>
           !isRuntimeProjectTomlSection(section.header) ||
-          !systemUntrustedProjectHeaders.has(getTomlSectionHeaderKey(section.header))
+          !systemUntrustedProjectHeaders.has(getRevocationTomlSectionHeaderKey(section.header)) ||
+          systemTrustedProjectHeaders.has(getTomlSectionHeaderKey(section.header))
       )
       .map((section) => section.block)
   ])
@@ -165,8 +216,9 @@ function stripRuntimeOwnedTomlSections(
   runtimeProjectHeaders = new Set<string>()
 ): string {
   const lines = config.split('\n')
-  const sections = getTomlSections(config)
-  const firstSectionIndex = sections[0]?.start ?? -1
+  const sourceSections = getTomlSections(config)
+  const sections = deduplicateProjectTomlSections(sourceSections)
+  const firstSectionIndex = sourceSections[0]?.start ?? -1
   const preamble = firstSectionIndex === -1 ? config : lines.slice(0, firstSectionIndex).join('\n')
   return joinTomlBlocks([
     preamble,
@@ -227,11 +279,53 @@ function isRuntimeHookTrustTomlSection(header: string): boolean {
 }
 
 function isRuntimeProjectTomlSection(header: string): boolean {
-  return header.trimStart().startsWith('[projects.')
+  return parseCodexProjectHeaderPath(header) !== null
 }
 
 function getTomlSectionHeaderKey(header: string): string {
-  return header.trim()
+  const projectPath = parseCodexProjectHeaderPath(header)
+  return projectPath === null
+    ? header.trim()
+    : `project:${normalizeCodexProjectPathForLookup(projectPath)}`
+}
+
+// Why: configs written before WSL tails compared case-sensitively can hold a
+// revocation under drifted casing; match it loosely so trust is not resurrected.
+function getRevocationTomlSectionHeaderKey(header: string): string {
+  const projectPath = parseCodexProjectHeaderPath(header)
+  return projectPath === null
+    ? header.trim()
+    : `project:${normalizeCodexProjectPathForRevocationLookup(projectPath)}`
+}
+
+// Why: hook upsert already removes both quote representations, while its paired
+// Windows slash variants are required for Codex 0.140 and must remain distinct.
+function deduplicateProjectTomlSections(sections: TomlSection[]): TomlSection[] {
+  const deduplicated: TomlSection[] = []
+  const projectIndexes = new Map<string, number>()
+  for (const section of sections) {
+    if (!isRuntimeProjectTomlSection(section.header)) {
+      deduplicated.push(section)
+      continue
+    }
+    const key = getTomlSectionHeaderKey(section.header)
+    const existingIndex = projectIndexes.get(key)
+    if (existingIndex === undefined) {
+      projectIndexes.set(key, deduplicated.length)
+      deduplicated.push(section)
+      continue
+    }
+    const existing = deduplicated[existingIndex]
+    if (
+      existing &&
+      getProjectTrustLevel(existing.block) !== 'untrusted' &&
+      getProjectTrustLevel(section.block) === 'untrusted'
+    ) {
+      // Why: revocation must survive self-healing regardless of duplicate order.
+      deduplicated[existingIndex] = section
+    }
+  }
+  return deduplicated
 }
 
 function getProjectTrustLevel(block: string): 'trusted' | 'untrusted' | null {

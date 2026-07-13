@@ -206,11 +206,7 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
     // without depending on boolean fields on the worktree record.
     const primary =
       allWorktrees.find(
-        (worktree) =>
-          worktree.path
-            .split(/[\\/]+/)
-            .filter(Boolean)
-            .pop() === repoBasename
+        (worktree) => worktree.path.split(/[\\/]+/).findLast(Boolean) === repoBasename
       ) ?? allWorktrees[0]
     if (!primary) {
       return null

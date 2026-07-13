@@ -22,6 +22,7 @@ type MockSshClient = {
   _sock: Socket | undefined
   lastExecCommand?: string
   lastConnectConfig?: unknown
+  exec: (cmd: string, cb: (err: Error | undefined, channel: unknown) => void) => void
 }
 let clientInstances: MockSshClient[] = []
 
@@ -132,7 +133,10 @@ vi.mock('./ssh-system-fallback', () => ({
   getOrcaControlSocketPath: getOrcaControlSocketPathMock,
   spawnSystemSsh: spawnSystemSshMock,
   spawnSystemSshCommand: spawnSystemSshCommandMock,
+  downloadFileViaSystemSsh: vi.fn(),
   uploadDirectoryViaSystemSsh: vi.fn(),
+  uploadFileViaSystemSsh: vi.fn(),
+  writeBufferViaSystemSsh: vi.fn(),
   writeFileViaSystemSsh: vi.fn()
 }))
 
@@ -151,7 +155,13 @@ import {
   type SshConnectionCallbacks
 } from './ssh-connection'
 import { resolveWithSshG, type SshResolvedConfig } from './ssh-config-parser'
-import { uploadDirectoryViaSystemSsh, writeFileViaSystemSsh } from './ssh-system-fallback'
+import {
+  downloadFileViaSystemSsh,
+  uploadDirectoryViaSystemSsh,
+  uploadFileViaSystemSsh,
+  writeBufferViaSystemSsh,
+  writeFileViaSystemSsh
+} from './ssh-system-fallback'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { SshTarget } from '../../shared/ssh-types'
 
@@ -272,8 +282,14 @@ describe('SshConnection', () => {
     spawnSystemSshMock.mockImplementation(() => createSystemSshProcess())
     spawnSystemSshCommandMock.mockReset()
     spawnSystemSshCommandMock.mockImplementation(() => createSystemCommandChannel())
+    vi.mocked(downloadFileViaSystemSsh).mockReset()
+    vi.mocked(downloadFileViaSystemSsh).mockResolvedValue(undefined)
     vi.mocked(uploadDirectoryViaSystemSsh).mockReset()
     vi.mocked(uploadDirectoryViaSystemSsh).mockResolvedValue(undefined)
+    vi.mocked(uploadFileViaSystemSsh).mockReset()
+    vi.mocked(uploadFileViaSystemSsh).mockResolvedValue(undefined)
+    vi.mocked(writeBufferViaSystemSsh).mockReset()
+    vi.mocked(writeBufferViaSystemSsh).mockResolvedValue(undefined)
     vi.mocked(writeFileViaSystemSsh).mockReset()
     vi.mocked(writeFileViaSystemSsh).mockResolvedValue(undefined)
     vi.mocked(resolveWithSshG).mockReset()
@@ -707,6 +723,139 @@ describe('SshConnection', () => {
     }
   })
 
+  it('retries a session-limit-refused exec open and succeeds on a later attempt', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    const channel = { close: vi.fn() }
+    const execMock = vi
+      .fn<(cmd: string, cb: (err: Error | undefined, ch: unknown) => void) => void>()
+      .mockImplementationOnce((_cmd, cb) => {
+        cb(
+          Object.assign(new Error('(SSH) Channel open failure: open failed'), { reason: 2 }),
+          undefined
+        )
+      })
+      .mockImplementation((_cmd, cb) => cb(undefined, channel))
+    clientInstances[0].exec = execMock as never
+
+    await expect(conn.exec('printf ready')).resolves.toBe(channel)
+    expect(execMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('surfaces the session-limit error once open retries are exhausted', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    const refusal = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
+      reason: 2
+    })
+    const execMock = vi
+      .fn<(cmd: string, cb: (err: Error | undefined, ch: unknown) => void) => void>()
+      .mockImplementation((_cmd, cb) => cb(refusal, undefined))
+    clientInstances[0].exec = execMock as never
+
+    await expect(conn.exec('printf ready')).rejects.toBe(refusal)
+    expect(execMock).toHaveBeenCalledTimes(4)
+  })
+
+  it('does not retry non-session-limit exec open failures', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    const failure = new Error('Not connected')
+    const execMock = vi
+      .fn<(cmd: string, cb: (err: Error | undefined, ch: unknown) => void) => void>()
+      .mockImplementation((_cmd, cb) => cb(failure, undefined))
+    clientInstances[0].exec = execMock as never
+
+    await expect(conn.exec('printf ready')).rejects.toBe(failure)
+    expect(execMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('bounds an aborted exec to the close grace when ssh2 never invokes the open callback', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    execBehavior = 'pending'
+    const controller = new AbortController()
+
+    vi.useFakeTimers()
+    try {
+      const outcomePromise = conn
+        .exec('printf ready', { signal: controller.signal })
+        .then(() => 'opened')
+        .catch((error: Error) => error.name)
+
+      controller.abort()
+      // Why: a hung socket must not pin the aborted caller for the full 30s
+      // connect timeout — the abort settles at the 5s grace bound instead.
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      await expect(outcomePromise).resolves.toBe('AbortError')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rejects without waiting out the backoff when aborted during a session-limit retry delay', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    const controller = new AbortController()
+    const refusal = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
+      reason: 2
+    })
+    const execMock = vi
+      .fn<(cmd: string, cb: (err: Error | undefined, ch: unknown) => void) => void>()
+      .mockImplementation((_cmd, cb) => cb(refusal, undefined))
+    clientInstances[0].exec = execMock as never
+
+    vi.useFakeTimers()
+    try {
+      const outcomePromise = conn
+        .exec('printf ready', { signal: controller.signal })
+        .then(() => 'opened')
+        .catch((error: Error) => error.name)
+
+      // Flush microtasks so the first refused attempt lands in the backoff.
+      await vi.advanceTimersByTimeAsync(0)
+      controller.abort()
+
+      // No timer advance: the abort alone must release the backoff delay.
+      await expect(outcomePromise).resolves.toBe('AbortError')
+      expect(execMock).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('settles an abort during channel open only after the late channel closes', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    execBehavior = 'pending'
+    const controller = new AbortController()
+    const lateChannel = Object.assign(new EventEmitter(), {
+      close: vi.fn(),
+      resume: vi.fn(),
+      stderr: { resume: vi.fn() }
+    })
+
+    const outcomePromise = conn
+      .exec('printf ready', { signal: controller.signal })
+      .then(() => 'opened')
+      .catch((error: Error) => error.name)
+
+    await Promise.resolve()
+    controller.abort()
+    pendingExecCallback?.(undefined, lateChannel)
+
+    // Why: the sshd session slot is freed only when the channel finishes
+    // closing — settling before 'close' lets the next open race the close.
+    const early = await Promise.race([outcomePromise, Promise.resolve('pending')])
+    expect(early).toBe('pending')
+    expect(lateChannel.close).toHaveBeenCalledTimes(1)
+    expect(lateChannel.resume).toHaveBeenCalled()
+
+    lateChannel.emit('close')
+    await expect(outcomePromise).resolves.toBe('AbortError')
+  })
+
   it('times out when ssh2 never opens an SFTP channel', async () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()
@@ -1018,6 +1167,18 @@ describe('SshConnection', () => {
     await conn.writeFile('C:/Users/me/.orca-remote/relay/.version', '0.1.0', {
       hostPlatform
     })
+    await conn.writeBuffer('C:/Users/me/.orca-remote/relay/logo.png', Buffer.from('png'), {
+      hostPlatform,
+      exclusive: true
+    })
+    await conn.downloadFile('C:/Users/me/.orca-remote/relay/logo.png', '/tmp/logo.png', {
+      hostPlatform
+    })
+    const uploadSession = await conn.openFileUploadSession({ hostPlatform })
+    await uploadSession.uploadFile('/tmp/logo.png', 'C:/Users/me/project/logo.png', {
+      exclusive: true
+    })
+    uploadSession.close()
 
     expect(uploadDirectoryViaSystemSsh).toHaveBeenCalledWith(
       expect.objectContaining({ configHost: 'fdpass-host' }),
@@ -1036,6 +1197,65 @@ describe('SshConnection', () => {
         hostPlatform,
         resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
       })
+    )
+    expect(writeBufferViaSystemSsh).toHaveBeenCalledWith(
+      expect.objectContaining({ configHost: 'fdpass-host' }),
+      'C:/Users/me/.orca-remote/relay/logo.png',
+      Buffer.from('png'),
+      expect.objectContaining({
+        hostPlatform,
+        exclusive: true,
+        resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
+      })
+    )
+    expect(downloadFileViaSystemSsh).toHaveBeenCalledWith(
+      expect.objectContaining({ configHost: 'fdpass-host' }),
+      'C:/Users/me/.orca-remote/relay/logo.png',
+      '/tmp/logo.png',
+      expect.objectContaining({
+        hostPlatform,
+        resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
+      })
+    )
+    expect(uploadFileViaSystemSsh).toHaveBeenCalledWith(
+      expect.objectContaining({ configHost: 'fdpass-host' }),
+      '/tmp/logo.png',
+      'C:/Users/me/project/logo.png',
+      expect.objectContaining({
+        hostPlatform,
+        exclusive: true,
+        resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
+      })
+    )
+  })
+
+  it('keeps an upload session cancelled after the connection disconnects', async () => {
+    const conn = new SshConnection(
+      createTarget({ proxyCommand: 'ssh -W %h:%p bastion.example.com' }),
+      createCallbacks()
+    )
+    vi.mocked(uploadFileViaSystemSsh).mockImplementation(
+      async (_target, _localPath, _remotePath, options) => {
+        if (options?.signal?.aborted) {
+          const error = new Error('System SSH operation was cancelled')
+          error.name = 'AbortError'
+          throw error
+        }
+      }
+    )
+
+    await conn.connect()
+    const uploadSession = await conn.openFileUploadSession()
+    await conn.disconnect()
+
+    await expect(
+      uploadSession.uploadFile('/tmp/late.txt', '/remote/late.txt')
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(uploadFileViaSystemSsh).toHaveBeenCalledWith(
+      expect.anything(),
+      '/tmp/late.txt',
+      '/remote/late.txt',
+      expect.objectContaining({ signal: expect.objectContaining({ aborted: true }) })
     )
   })
 

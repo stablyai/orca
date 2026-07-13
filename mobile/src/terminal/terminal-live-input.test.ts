@@ -5,15 +5,25 @@ import {
   clearTerminalLiveInputFocusTimer,
   defaultTerminalLiveInputHandles,
   filterTerminalLiveInputDefaultCandidates,
+  focusTerminalLiveInputTarget,
   getTerminalLiveSpecialKeyBytes,
   isTerminalLiveInputWithinByteLimit,
   pruneTerminalLiveInputHandles,
   scheduleTerminalLiveInputFocus,
+  type TerminalLiveInputFocusTarget,
   type TerminalLiveInputFocusTimerRef
 } from './terminal-live-input'
 
 function createTimerRef(): TerminalLiveInputFocusTimerRef {
   return { current: null }
+}
+
+function createFocusTarget(isFocused: () => boolean): TerminalLiveInputFocusTarget {
+  return {
+    blur: vi.fn(),
+    focus: vi.fn(),
+    isFocused
+  }
 }
 
 describe('terminal live input', () => {
@@ -180,5 +190,38 @@ describe('terminal live input', () => {
 
     expect(focus).not.toHaveBeenCalled()
     expect(timerRef.current).toBeNull()
+  })
+
+  it('refocuses an already-focused capture input when the keyboard is closed', () => {
+    const input = createFocusTarget(() => true)
+    const refocus = vi.fn()
+
+    focusTerminalLiveInputTarget(input, { keyboardHeight: 0, refocus })
+
+    expect(input.blur).toHaveBeenCalledTimes(1)
+    expect(input.focus).not.toHaveBeenCalled()
+    expect(refocus).toHaveBeenCalledTimes(1)
+  })
+
+  it('focuses the capture input directly when the keyboard is open', () => {
+    const input = createFocusTarget(() => true)
+    const refocus = vi.fn()
+
+    focusTerminalLiveInputTarget(input, { keyboardHeight: 240, refocus })
+
+    expect(input.blur).not.toHaveBeenCalled()
+    expect(input.focus).toHaveBeenCalledTimes(1)
+    expect(refocus).not.toHaveBeenCalled()
+  })
+
+  it('focuses the capture input directly when it is not already focused', () => {
+    const input = createFocusTarget(() => false)
+    const refocus = vi.fn()
+
+    focusTerminalLiveInputTarget(input, { keyboardHeight: 0, refocus })
+
+    expect(input.blur).not.toHaveBeenCalled()
+    expect(input.focus).toHaveBeenCalledTimes(1)
+    expect(refocus).not.toHaveBeenCalled()
   })
 })

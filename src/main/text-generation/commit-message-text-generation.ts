@@ -17,8 +17,12 @@ import {
 } from '../../shared/pull-request-generation'
 import {
   cleanGeneratedCommitMessage,
-  extractAgentErrorMessage
+  excerptAgentFailureOutput
 } from '../../shared/commit-message-prompt'
+import {
+  captureAgentGenerationFailureOutput,
+  type AgentGenerationFailureOutput
+} from './agent-failure-output'
 import {
   buildBranchNamePrompt,
   sanitizeBranchSlug,
@@ -108,7 +112,14 @@ type ResolveCommitMessageSettingsResult =
 
 type InternalTextGenerationResult =
   | { success: true; rawOutput: string; agentLabel?: string }
-  | { success: false; error: string; canceled?: boolean }
+  | {
+      success: false
+      error: string
+      canceled?: boolean
+      /** Bounded full CLI output for on-demand local display. Stripped from
+       *  every renderer-bound result so it never crosses IPC wholesale. */
+      failureOutput?: AgentGenerationFailureOutput
+    }
 
 export type CommitMessageModelDiscoveryLocalOptions = {
   cwd?: string
@@ -148,20 +159,29 @@ function formatAgentCliFailureMessage(
   stdout: string,
   stderr: string,
   exitCode: number | null,
-  options?: { includeLocalMacDnsHint?: boolean }
+  options?: { includeLocalMacDnsHint?: boolean; includeStdoutDetail?: boolean }
 ): string {
-  const detail = sanitizeAgentFailureDetail(extractAgentErrorMessage(stdout, stderr))
-  const message = detail
-    ? `${label} CLI command failed: ${detail}`
-    : `${label} CLI command failed with code ${exitCode}.`
+  const detail = sanitizeAgentFailureDetail(
+    excerptAgentFailureOutput(options?.includeStdoutDetail === false ? '' : stdout, stderr)
+  )
+  const message =
+    exitCode === null
+      ? detail
+        ? `${label} CLI command was terminated before exiting: ${detail}`
+        : `${label} CLI command was terminated before exiting.`
+      : detail
+        ? `${label} CLI command failed with code ${exitCode}: ${detail}`
+        : `${label} CLI command failed with code ${exitCode}.`
   return options?.includeLocalMacDnsHint === false
     ? message
     : withMacTailscaleDnsHint(message, detail)
 }
 
 function sanitizeAgentFailureDetail(detail: string | null): string | null {
+  // Cf covers bidi overrides (U+202E etc.) that could visually reorder the
+  // persisted, client-synced detail.
   const trimmed = detail
-    ?.replace(/\p{Cc}+/gu, ' ')
+    ?.replace(/[\p{Cc}\p{Cf}]+/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()
   if (!trimmed) {
@@ -174,11 +194,20 @@ function sanitizeAgentFailureDetail(detail: string | null): string | null {
       /\\\\[^\s"'`<>\\]+\\(?:[^\s"'`<>\\]+(?:\s+[^\s"'`<>\\]+)*(?=\\)\\)*[^\s"'`<>\\]+/g,
       '[path]'
     )
+    // Only backslashes may repeat: JSON provider bodies double them
+    // (`C:\\Users\\name\\…`), while a URL's `://` must stay single so remedy
+    // links like `https://…` survive redaction.
     .replace(
-      /[A-Za-z]:[\\/](?:[^\s"'`<>\\/|:*?]+(?:\s+[^\s"'`<>\\/|:*?]+)*(?=[\\/])[\\/])*[^\s"'`<>\\/|:*?]+/g,
+      /[A-Za-z]:(?:\\+|\/)(?:[^\s"'`<>\\/|:*?]+(?:\s+[^\s"'`<>\\/|:*?]+)*(?=[\\/])(?:\\+|\/))*[^\s"'`<>\\/|:*?]+/g,
       '[path]'
     )
-    .replace(/(^|[\s"'`(])\/(?:[^\s"'`<>/]+(?:\s+[^\s"'`<>/]+)*(?=\/)\/)*[^\s"'`<>/]+/g, '$1[path]')
+    // Why: require ≥2 segments (one internal `/`) so provider remedy tokens like
+    // `/login` survive while multi-segment paths (`/Users/name/repo`) still redact.
+    // `=:,` prefixes catch key=/path value:/path list,/path shapes in provider bodies.
+    .replace(
+      /(^|[\s"'`(=:,])\/(?:[^\s"'`<>/]+(?:\s+[^\s"'`<>/]+)*(?=\/)\/)+[^\s"'`<>/]+/g,
+      '$1[path]'
+    )
   return redacted.length > 240 ? `${redacted.slice(0, 240).trimEnd()}...` : redacted
 }
 
@@ -661,7 +690,15 @@ async function runLocalPlan(
         })
         return
       }
-      finalizeFromAgentOutput({ code, stdout, stderr, label, emptyResultName, finalize })
+      finalizeFromAgentOutput({
+        code,
+        stdout,
+        stderr,
+        label,
+        emptyResultName,
+        finalize,
+        includeStdoutDetail: operation !== 'branch-name'
+      })
     }
     child.stdout?.on('data', onStdoutData)
     child.stderr?.on('data', onStderrData)
@@ -686,8 +723,18 @@ function finalizeFromAgentOutput(args: {
   emptyResultName: string
   finalize: (result: InternalTextGenerationResult) => void
   includeLocalMacDnsHint?: boolean
+  includeStdoutDetail?: boolean
 }): void {
-  const { code, stdout, stderr, label, emptyResultName, finalize, includeLocalMacDnsHint } = args
+  const {
+    code,
+    stdout,
+    stderr,
+    label,
+    emptyResultName,
+    finalize,
+    includeLocalMacDnsHint,
+    includeStdoutDetail
+  } = args
   if (code !== 0) {
     console.error('[commit-message] Generator failed:', {
       label,
@@ -698,30 +745,34 @@ function finalizeFromAgentOutput(args: {
     finalize({
       success: false,
       error: formatAgentCliFailureMessage(label, stdout, stderr, code, {
-        includeLocalMacDnsHint
-      })
+        includeLocalMacDnsHint,
+        includeStdoutDetail
+      }),
+      failureOutput: captureAgentGenerationFailureOutput(label, code, stdout, stderr) ?? undefined
     })
     return
   }
   const cleaned = cleanGeneratedCommitMessage(stdout)
   if (!cleaned) {
-    const detail = sanitizeAgentFailureDetail(extractAgentErrorMessage(stdout, stderr))
+    // stdout is the (empty) result here, not diagnostics, so only stderr is
+    // excerpted. The run exited 0, so this stays "returned an empty result"
+    // rather than misreporting a command failure.
+    const detail = sanitizeAgentFailureDetail(excerptAgentFailureOutput('', stderr))
     if (detail) {
-      console.error('[commit-message] Generator returned no stdout but reported an error:', {
+      console.error('[commit-message] Generator returned no stdout but wrote to stderr:', {
         label,
         exitCode: code,
         stdout,
         stderr
       })
-      finalize({
-        success: false,
-        error: formatAgentCliFailureMessage(label, stdout, stderr, code, {
-          includeLocalMacDnsHint
-        })
-      })
-      return
     }
-    finalize({ success: false, error: `${label} returned an empty ${emptyResultName}.` })
+    finalize({
+      success: false,
+      error: detail
+        ? `${label} returned an empty ${emptyResultName}. CLI output: ${detail}`
+        : `${label} returned an empty ${emptyResultName}.`,
+      failureOutput: captureAgentGenerationFailureOutput(label, code, stdout, stderr) ?? undefined
+    })
     return
   }
   finalize({
@@ -786,7 +837,9 @@ async function runRemotePlan(
       emptyResultName,
       finalize: resolve,
       // Why: remote agent output reflects the SSH target, not this Mac's DNS.
-      includeLocalMacDnsHint: false
+      includeLocalMacDnsHint: false,
+      // Branch failures persist into synced metadata; stdout may echo the prompt.
+      includeStdoutDetail: operation !== 'branch-name'
     })
   })
 }
@@ -795,7 +848,8 @@ function formatCommitMessageGenerationResult(
   result: InternalTextGenerationResult
 ): GenerateCommitMessageResult {
   if (!result.success) {
-    return result
+    // Keep the bulky local-only capture off the renderer-bound payload.
+    return { success: false, error: result.error, canceled: result.canceled }
   }
   let commitMessage: GeneratedCommitMessage
   try {
@@ -853,8 +907,11 @@ function formatPullRequestFieldsGenerationResult(
   context: PullRequestDraftContext
 ): GeneratePullRequestFieldsResult {
   if (!result.success) {
+    // Keep the bulky local-only capture off the renderer-bound payload.
     return {
-      ...result,
+      success: false,
+      error: result.error,
+      canceled: result.canceled,
       branchChangedByPreparation: context.branchChangedByPreparation
     }
   }
@@ -918,7 +975,12 @@ export async function generatePullRequestFieldsFromContext(
 
 export type GenerateBranchNameResult =
   | { success: true; slug: string; agentLabel?: string }
-  | { success: false; error: string; canceled?: boolean }
+  | {
+      success: false
+      error: string
+      canceled?: boolean
+      failureOutput?: AgentGenerationFailureOutput
+    }
 
 /**
  * Generate a short kebab-case branch name from the work the agent is starting.
@@ -960,7 +1022,14 @@ export async function generateBranchNameFromContext(
   }
   const slug = sanitizeBranchSlug(internalResult.rawOutput)
   if (!slug) {
-    return { success: false, error: 'Generated branch name was empty after sanitization.' }
+    return {
+      success: false,
+      error: 'Generated branch name was empty after sanitization.',
+      // What the model actually returned is the whole diagnosis here.
+      failureOutput:
+        captureAgentGenerationFailureOutput(planned.plan.label, 0, internalResult.rawOutput, '') ??
+        undefined
+    }
   }
   return { success: true, slug, agentLabel: internalResult.agentLabel }
 }

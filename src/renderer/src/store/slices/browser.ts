@@ -49,6 +49,10 @@ import {
   getExecutionHostIdForWorktree,
   getRuntimeEnvironmentIdForWorktree
 } from '@/lib/worktree-runtime-owner'
+import {
+  addAdditionalValidWorkspaceKeys,
+  type WorkspaceSessionHydrationOptions
+} from '@/lib/workspace-session-hydration-keys'
 
 type CreateBrowserTabOptions = {
   activate?: boolean
@@ -168,7 +172,10 @@ export type BrowserSlice = {
   addBrowserPageAnnotation: (annotation: BrowserPageAnnotation) => void
   deleteBrowserPageAnnotation: (pageId: string, annotationId: string) => void
   clearBrowserPageAnnotations: (pageId: string) => void
-  hydrateBrowserSession: (session: WorkspaceSessionState) => void
+  hydrateBrowserSession: (
+    session: WorkspaceSessionState,
+    options?: WorkspaceSessionHydrationOptions
+  ) => void
   switchBrowserTabProfile: (
     workspaceId: string,
     profileId: string | null,
@@ -1504,7 +1511,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       return { browserAnnotationsByPageId: nextByPageId }
     }),
 
-  hydrateBrowserSession: (session) => {
+  hydrateBrowserSession: (session, options) => {
     const persistedTabsByWorktree = session.browserTabsByWorktree ?? {}
     const currentState = get()
     const validWorktreeIdsForCleanup = new Set(
@@ -1516,6 +1523,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     for (const workspace of currentState.folderWorkspaces) {
       validWorktreeIdsForCleanup.add(folderWorkspaceKey(workspace.id))
     }
+    addAdditionalValidWorkspaceKeys(validWorktreeIdsForCleanup, options)
 
     // Why: mirror closeBrowserTab's contract — reducers are pure, imperative
     // side effects bracket them. Compute dropped workspaces first, destroy
@@ -1548,6 +1556,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       for (const workspace of s.folderWorkspaces) {
         validWorktreeIds.add(folderWorkspaceKey(workspace.id))
       }
+      addAdditionalValidWorkspaceKeys(validWorktreeIds, options)
 
       const browserTabsByWorktree: Record<string, BrowserWorkspace[]> = {}
       const browserPagesByWorkspace: Record<string, BrowserPage[]> = {}

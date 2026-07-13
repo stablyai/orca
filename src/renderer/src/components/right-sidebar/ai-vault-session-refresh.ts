@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-vault-types'
+import type { ExecutionHostScope } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 
 const SESSION_LIMIT = 500
@@ -26,7 +27,10 @@ export function resetAiVaultForcedRescanThrottleForTest(): void {
 
 type AiVaultRefreshArgs = { force?: boolean; background?: boolean }
 
-export function useAiVaultSessionRefresh(scopePaths: readonly string[]): {
+export function useAiVaultSessionRefresh(
+  scopePaths: readonly string[],
+  executionHostScope: ExecutionHostScope
+): {
   error: string | null
   loading: boolean
   refresh: (args?: AiVaultRefreshArgs) => Promise<void>
@@ -45,77 +49,99 @@ export function useAiVaultSessionRefresh(scopePaths: readonly string[]): {
   const lastAppliedScanRef = useRef<{ scopeKey: string; scannedAt: string } | null>(null)
   const mountedRef = useRef(true)
   const scopePathsKey = useMemo(() => scopePaths.join('\n'), [scopePaths])
+  const scanScopeKey = `${executionHostScope}\n${scopePathsKey}`
   const scopePathsRef = useRef<readonly string[]>(scopePaths)
   scopePathsRef.current = scopePaths
+  const executionHostScopeRef = useRef<ExecutionHostScope>(executionHostScope)
+  executionHostScopeRef.current = executionHostScope
+  const currentScanScopeKey = useCallback(
+    () => `${executionHostScopeRef.current}\n${scopePathsRef.current.join('\n')}`,
+    []
+  )
 
-  const refresh = useCallback(async (args: AiVaultRefreshArgs = {}): Promise<void> => {
-    // A scope change during an in-flight scan must not be dropped; queue one more
-    // scan so the current scoped view is refreshed after the older scan settles.
-    if (refreshInFlightRef.current) {
-      pendingRefreshRef.current = true
-      pendingForceRef.current ||= args.force === true
-      pendingBackgroundRef.current &&= args.background === true
-      return
-    }
-
-    refreshInFlightRef.current = true
-    const refreshId = refreshIdRef.current + 1
-    refreshIdRef.current = refreshId
-    // A manual force scan counts against the throttle so an auto rescan right
-    // after the button press doesn't trigger a second full scan.
-    if (args.force === true) {
-      lastForcedRescanAt = Date.now()
-    }
-    // Background (refocus) refreshes usually resolve from the main-process
-    // cache; suppressing the loading flag avoids a spinner flash on every
-    // return to the app.
-    if (args.background !== true) {
-      setLoading(true)
-    }
-    setError(null)
-    const scopeKey = scopePathsRef.current.join('\n')
-    try {
-      const result = await window.api.aiVault.listSessions({
-        limit: SESSION_LIMIT,
-        scopePaths: scopePathsRef.current,
-        force: args.force
-      })
-      if (!mountedRef.current || refreshIdRef.current !== refreshId) {
+  const refresh = useCallback(
+    async (args: AiVaultRefreshArgs = {}): Promise<void> => {
+      // A scope change during an in-flight scan must not be dropped; queue one more
+      // scan so the current scoped view is refreshed after the older scan settles.
+      if (refreshInFlightRef.current) {
+        pendingRefreshRef.current = true
+        pendingForceRef.current ||= args.force === true
+        pendingBackgroundRef.current &&= args.background === true
         return
       }
-      // A cache hit returns the snapshot already on screen; skip the state
-      // updates so refocus flips don't force pointless re-renders.
-      if (
-        lastAppliedScanRef.current?.scopeKey === scopeKey &&
-        lastAppliedScanRef.current.scannedAt === result.scannedAt
-      ) {
-        return
+
+      refreshInFlightRef.current = true
+      const refreshId = refreshIdRef.current + 1
+      refreshIdRef.current = refreshId
+      // A manual force scan counts against the throttle so an auto rescan right
+      // after the button press doesn't trigger a second full scan.
+      if (args.force === true) {
+        lastForcedRescanAt = Date.now()
       }
-      lastAppliedScanRef.current = { scopeKey, scannedAt: result.scannedAt }
-      setScanResult(result)
-      setSessions(result.sessions)
-    } catch (err) {
-      if (mountedRef.current && refreshIdRef.current === refreshId) {
-        setError(err instanceof Error ? err.message : String(err))
+      // Background (refocus) refreshes usually resolve from the main-process
+      // cache; suppressing the loading flag avoids a spinner flash on every
+      // return to the app.
+      if (args.background !== true) {
+        setLoading(true)
       }
-    } finally {
-      refreshInFlightRef.current = false
-      if (mountedRef.current && refreshIdRef.current === refreshId) {
-        setLoading(false)
+      setError(null)
+      const scopeKey = scopePathsRef.current.join('\n')
+      const hostScope = executionHostScopeRef.current
+      const scanKey = `${hostScope}\n${scopeKey}`
+      try {
+        const result = await window.api.aiVault.listSessions({
+          limit: SESSION_LIMIT,
+          scopePaths: scopePathsRef.current,
+          executionHostScope: hostScope,
+          force: args.force
+        })
+        if (!mountedRef.current || refreshIdRef.current !== refreshId) {
+          return
+        }
+        // Why: host/scope changes queue a follow-up scan, but the older result
+        // may resolve first and must not briefly paint the wrong history list.
+        if (scanKey !== currentScanScopeKey()) {
+          return
+        }
+        // A cache hit returns the snapshot already on screen; skip the state
+        // updates so refocus flips don't force pointless re-renders.
+        if (
+          lastAppliedScanRef.current?.scopeKey === scanKey &&
+          lastAppliedScanRef.current.scannedAt === result.scannedAt
+        ) {
+          return
+        }
+        lastAppliedScanRef.current = { scopeKey: scanKey, scannedAt: result.scannedAt }
+        setScanResult(result)
+        setSessions(result.sessions)
+      } catch (err) {
+        if (
+          mountedRef.current &&
+          refreshIdRef.current === refreshId &&
+          scanKey === currentScanScopeKey()
+        ) {
+          setError(err instanceof Error ? err.message : String(err))
+        }
+      } finally {
+        refreshInFlightRef.current = false
+        if (mountedRef.current && refreshIdRef.current === refreshId) {
+          setLoading(false)
+        }
+        if (pendingRefreshRef.current && mountedRef.current) {
+          pendingRefreshRef.current = false
+          const force = pendingForceRef.current
+          // The queued refresh is background-only if every queued caller was.
+          const background = pendingBackgroundRef.current
+          pendingForceRef.current = false
+          pendingBackgroundRef.current = true
+          void refresh({ force, background })
+        }
       }
-      if (pendingRefreshRef.current && mountedRef.current) {
-        pendingRefreshRef.current = false
-        const force = pendingForceRef.current
-        // The queued refresh is background-only if every queued caller was.
-        const background = pendingBackgroundRef.current
-        pendingForceRef.current = false
-        pendingBackgroundRef.current = true
-        void refresh({ force, background })
-      }
-    }
-    // Deps are intentionally empty: refresh reads changing values through refs
-    // and recurses on itself, so its identity must stay stable.
-  }, [])
+      // Deps intentionally avoid changing scope values: refresh reads them
+      // through refs and recurses on itself, so its identity must stay stable.
+    },
+    [currentScanScopeKey]
+  )
 
   // Forced rescans triggered by events (refocus, agent-session starts) run
   // immediately when the throttle allows, otherwise once as soon as it frees
@@ -162,7 +188,7 @@ export function useAiVaultSessionRefresh(scopePaths: readonly string[]): {
     if (!force) {
       requestForcedRescan()
     }
-  }, [refresh, requestForcedRescan, scopePathsKey])
+  }, [refresh, requestForcedRescan, scanScopeKey])
 
   // Sessions started while the app was backgrounded should appear when the
   // user returns, so refocus also bypasses the scan cache (throttled). OS

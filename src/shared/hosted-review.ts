@@ -10,6 +10,11 @@ export type HostedReviewProvider =
 
 export type HostedReviewState = 'open' | 'closed' | 'merged' | 'draft'
 
+/** A linked review is identified by a positive integer PR/MR number. */
+export function isPositiveHostedReviewNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
+}
+
 export type HostedReviewInfo = {
   provider: HostedReviewProvider
   number: number
@@ -25,6 +30,9 @@ export type HostedReviewInfo = {
   mergeQueueRequired?: boolean | null
   mergeStateStatus?: string | null
   headSha?: string
+  // Why: mirrors PRInfo.confirmedContainedHeadOid so merged-review staleness
+  // checks accept a worktree head confirmed to be part of the merged PR.
+  confirmedContainedHeadOid?: string
   /** Target branch name for review-created worktree compare-base repair. */
   baseRefName?: string
   conflictSummary?: PRConflictSummary

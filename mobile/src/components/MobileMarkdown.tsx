@@ -15,7 +15,7 @@ const MAX_TABLE_COLUMNS = 8
 function openMarkdownUrl(url: string): void {
   const trimmed = url.trim()
   if (/^(https?:|mailto:)/i.test(trimmed)) {
-    void Linking.openURL(trimmed)
+    void Linking.openURL(trimmed).catch(() => {})
   }
 }
 

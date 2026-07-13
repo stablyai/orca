@@ -7,6 +7,7 @@ import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { formatMessageBanner } from '../../orchestration/formatter'
 import { isGroupAddress, resolveGroupAddress } from '../../orchestration/groups'
 import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
+import { abbreviateOrchestrationTasks } from '../../../../shared/orchestration-task-summary'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
 
 const MESSAGE_TYPES: MessageType[] = [
@@ -54,6 +55,9 @@ const SendParams = z
     priority: z.enum(['normal', 'high', 'urgent']).optional(),
     threadId: OptionalString,
     payload: OptionalString,
+    // Why: the sender's pane key is the remint-stable identity used to verify
+    // worker_done/heartbeat ownership; the from handle stays routing metadata.
+    senderPaneKey: OptionalString,
     devMode: OptionalBoolean
   })
   .superRefine((params, ctx) => {
@@ -72,18 +76,36 @@ const SendParams = z
     })
   })
 
-const CheckParams = z.object({
-  terminal: OptionalString,
-  unread: OptionalBoolean,
-  // Why: `all` surfaces every message for the handle and skips mark-read.
-  // Previously the only way to ask for "all" was the hidden RPC trick
-  // `{unread: false}`. See design doc §3.2 / §3.3.
-  all: OptionalBoolean,
-  types: OptionalString,
-  inject: OptionalBoolean,
-  wait: OptionalBoolean,
-  timeoutMs: OptionalFiniteNumber
-})
+const CheckParams = z
+  .object({
+    terminal: OptionalString,
+    unread: OptionalBoolean,
+    peek: OptionalBoolean,
+    // Why: `all` surfaces every message for the handle and skips mark-read.
+    // Previously the only way to ask for "all" was the hidden RPC trick
+    // `{unread: false}`. See design doc §3.2 / §3.3.
+    all: OptionalBoolean,
+    types: OptionalString,
+    inject: OptionalBoolean,
+    wait: OptionalBoolean,
+    timeoutMs: OptionalFiniteNumber
+  })
+  .superRefine((params, ctx) => {
+    // Why: the CLI encodes --peek as {peek:true, unread:false} so pre-peek
+    // runtimes degrade to the non-consuming all mode; that pair is one mode,
+    // not a conflict.
+    const modes = [
+      params.unread === true,
+      params.peek === true,
+      params.all === true || (params.unread === false && params.peek !== true)
+    ].filter(Boolean)
+    if (modes.length > 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Choose at most one message read mode: --unread, --peek, or --all.'
+      })
+    }
+  })
 
 const ReplyParams = z.object({
   id: requiredString('Missing --id'),
@@ -110,7 +132,10 @@ const TaskCreateParams = z.object({
 
 const TaskListParams = z.object({
   status: z.enum(['pending', 'ready', 'dispatched', 'completed', 'failed', 'blocked']).optional(),
-  ready: OptionalBoolean
+  ready: OptionalBoolean,
+  // Why: truncating specs server-side keeps `--brief` cheap over SSH/relay
+  // transports instead of shipping full specs the CLI then throws away.
+  brief: OptionalBoolean
 })
 
 const TaskUpdateParams = z.object({
@@ -195,14 +220,20 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           type: params.type as MessageType,
           priority: params.priority as MessagePriority,
           threadId: params.threadId,
-          payload: params.payload
+          payload: params.payload,
+          senderPaneKey: params.senderPaneKey
         })
         // Why: worker_done/heartbeat sent via `send` must release the dispatch
         // lock before waking recipients — a coordinator woken by delivery may
         // immediately dispatch to the same terminal, which fails if the lock
         // is still held.
         if (msg.type === 'worker_done' || msg.type === 'heartbeat') {
-          reconcileLifecycleMessage(db, msg)
+          const reconciled = reconcileLifecycleMessage(db, msg)
+          // Why: a suppressed message is already read; waking a `check --wait`
+          // waiter for it would return an empty result before the deadline.
+          if (reconciled.action === 'suppressed') {
+            return { message: msg }
+          }
         }
         runtime.deliverPendingMessagesForHandle(params.to)
         runtime.notifyMessageArrived(params.to, msg.type)
@@ -231,7 +262,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           type: params.type as MessageType,
           priority: params.priority as MessagePriority,
           threadId,
-          payload: params.payload
+          payload: params.payload,
+          senderPaneKey: params.senderPaneKey
         })
       )
       for (const message of messages) {
@@ -264,15 +296,15 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       // Explicit `unread: false` is also honored for one release as a compat
       // shim so in-flight callers don't break (see design doc §5). Otherwise
       // today's behavior is preserved: default is unread-only + mark-read.
-      const showAll = params.all === true || params.unread === false
-      const showUnread = !showAll
+      const showAll = params.all === true || (params.unread === false && params.peek !== true)
+      const consumeUnread = !showAll && params.peek !== true
 
       const readAndReturn = () => {
-        const messages = showUnread
-          ? db.getUnreadMessages(handle, typeFilter)
-          : db.getAllMessagesForHandle(handle, undefined, typeFilter)
+        const messages = showAll
+          ? db.getAllMessagesForHandle(handle, undefined, typeFilter)
+          : db.getUnreadMessages(handle, typeFilter)
 
-        if (showUnread && messages.length > 0) {
+        if (consumeUnread && messages.length > 0) {
           // Why: manual coordinators can consume lifecycle messages before
           // the coordinator loop sees them, but unread `check` is still an
           // authoritative read path for worker_done/heartbeat.
@@ -406,7 +438,10 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
         return base
       })
-      return { tasks, count: tasks.length }
+      return {
+        tasks: params.brief ? abbreviateOrchestrationTasks(tasks) : tasks,
+        count: tasks.length
+      }
     }
   }),
 
@@ -469,13 +504,17 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         if (!hasAgent) {
           throw new Error(
             `Cannot dispatch --inject to terminal ${to}: no recognized agent detected. ` +
-              'Start an agent CLI (e.g. claude, codex, gemini, droid) in the terminal first, ' +
+              'Start an agent CLI (e.g. claude, codex, gemini, droid, cursor) in the terminal first, ' +
               'or dispatch without --inject and send the prompt manually.'
           )
         }
       }
 
-      const ctx = db.createDispatchContext(params.task, to)
+      const ctx = db.createDispatchContext(
+        params.task,
+        to,
+        runtime.getTerminalPaneKey(to) ?? undefined
+      )
 
       // Why: preamble is built here (not before ctx) so `dispatchId` can be
       // the real ctx.id — the preamble-hardening PR made dispatchId required
@@ -492,7 +531,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       let injected = false
       if (params.inject) {
         try {
-          await runtime.sendTerminal(to, { text: preamble, enter: true })
+          await runtime.sendTerminalAgentPrompt(to, preamble)
           injected = true
         } catch (err) {
           db.failDispatch(ctx.id, err instanceof Error ? err.message : String(err))

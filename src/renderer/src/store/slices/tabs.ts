@@ -35,6 +35,10 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import {
+  addAdditionalValidWorkspaceKeys,
+  type WorkspaceSessionHydrationOptions
+} from '@/lib/workspace-session-hydration-keys'
 
 export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
 
@@ -172,7 +176,10 @@ export type TabsSlice = {
     renderableTabCount: number
     activeRenderableTabId: string | null
   }
-  hydrateTabsSession: (session: WorkspaceSessionState) => void
+  hydrateTabsSession: (
+    session: WorkspaceSessionState,
+    options?: WorkspaceSessionHydrationOptions
+  ) => void
 }
 
 // Why: keep the TerminalTab (tabsByWorktree) pin in sync with the unified-tab
@@ -1864,6 +1871,16 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
             }))
     const reconciledUnifiedTabs =
       restoredLegacyTabs.length > 0 ? [...unifiedTabs, ...restoredLegacyTabs] : unifiedTabs
+    // Why: when a freshly-ensured group has no active tab yet, seed it from the
+    // worktree's remembered selection before the first restored tab. Otherwise
+    // returning to a worktree whose terminals only exist in the runtime slice
+    // always reopens on Terminal 1 and drops the tab the user left on.
+    const rememberedLegacyActiveTabId = state.activeTabIdByWorktree[worktreeId]
+    const restoredLegacyTabIds = new Set(restoredLegacyTabs.map((tab) => tab.id))
+    const legacyFallbackActiveTabId =
+      rememberedLegacyActiveTabId && restoredLegacyTabIds.has(rememberedLegacyActiveTabId)
+        ? rememberedLegacyActiveTabId
+        : (restoredLegacyTabs[0]?.id ?? null)
     const reconciledGroups =
       restoredLegacyTabs.length > 0 && reconciliationGroup
         ? updateGroup(ensuredGroupState!.groupsByWorktree[worktreeId] ?? [], {
@@ -1872,7 +1889,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
             // after split groups became the source of truth. Restoring them
             // into the active/root group keeps existing live PTYs reachable
             // instead of making activation spawn a duplicate "Terminal 2".
-            activeTabId: reconciliationGroup.activeTabId ?? restoredLegacyTabs[0]?.id ?? null,
+            activeTabId: reconciliationGroup.activeTabId ?? legacyFallbackActiveTabId,
             tabOrder: dedupeTabOrder([
               ...reconciliationGroup.tabOrder,
               ...restoredLegacyTabs.map((tab) => tab.id)
@@ -2036,7 +2053,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     }
   },
 
-  hydrateTabsSession: (session) => {
+  hydrateTabsSession: (session, options) => {
     const state = get()
     const validWorktreeIds = new Set(
       Object.values(state.worktreesByRepo)
@@ -2047,6 +2064,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     for (const workspace of state.folderWorkspaces) {
       validWorktreeIds.add(folderWorkspaceKey(workspace.id))
     }
+    addAdditionalValidWorkspaceKeys(validWorktreeIds, options)
     set(buildHydratedTabState(session, validWorktreeIds))
   }
 })

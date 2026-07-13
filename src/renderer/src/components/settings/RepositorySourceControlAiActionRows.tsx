@@ -13,6 +13,7 @@ import {
 } from '../../../../shared/source-control-ai-actions'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
+import { Button } from '../ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
@@ -37,9 +38,11 @@ import {
   resolveAgentArgsPlaceholderAgent
 } from './repository-source-control-ai-labels'
 import { hasOwnActionOverride } from './repository-source-control-ai-draft'
+import { getRepositorySourceControlAiActionRecipeSectionId } from './repository-settings-targets'
 import { translate } from '@/i18n/i18n'
 
 type RepositorySourceControlAiActionRowsProps = {
+  repoId: string
   repoAi: RepoSourceControlAiOverrides
   source: SourceControlAiSettings
   defaultTuiAgent: TuiAgent | 'blank' | null | undefined
@@ -48,9 +51,14 @@ type RepositorySourceControlAiActionRowsProps = {
   onActionTemplateChange: (actionId: SourceControlActionId, value: string) => void
   onActionAgentArgsChange: (actionId: SourceControlActionId, value: string) => void
   onAppendVariable: (actionId: SourceControlActionId, variable: string) => void
+  isSaving: boolean
+  actionDirtyById: Record<SourceControlActionId, boolean>
+  onActionDiscard: (actionId: SourceControlActionId) => void
+  onActionSave: (actionId: SourceControlActionId) => void
 }
 
 export function RepositorySourceControlAiActionRows({
+  repoId,
   repoAi,
   source,
   defaultTuiAgent,
@@ -58,7 +66,11 @@ export function RepositorySourceControlAiActionRows({
   onActionAgentChange,
   onActionTemplateChange,
   onActionAgentArgsChange,
-  onAppendVariable
+  onAppendVariable,
+  isSaving,
+  actionDirtyById,
+  onActionDiscard,
+  onActionSave
 }: RepositorySourceControlAiActionRowsProps): React.JSX.Element {
   return (
     <div className="space-y-3">
@@ -90,8 +102,17 @@ export function RepositorySourceControlAiActionRows({
         const agentOptions = getAgentCatalogForAction(actionId, effectiveAgent)
         const agentWarningText = getSourceControlActionAgentWarningText(actionId, effectiveAgent)
         const agentSupportText = getSourceControlActionAgentSupportText(actionId)
+        const actionDirty = actionDirtyById[actionId]
         return (
-          <div key={actionId} className="space-y-3 rounded-md border border-border px-3 py-3">
+          <div
+            key={actionId}
+            id={getRepositorySourceControlAiActionRecipeSectionId(repoId, actionId)}
+            data-settings-section={getRepositorySourceControlAiActionRecipeSectionId(
+              repoId,
+              actionId
+            )}
+            className="scroll-mt-8 space-y-3 rounded-md border border-border px-3 py-3"
+          >
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0 space-y-0.5">
                 <p className="text-xs font-medium text-foreground">
@@ -227,6 +248,54 @@ export function RepositorySourceControlAiActionRows({
                 />
               </div>
             </div>
+            {hasOverride ? (
+              <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
+                <p className="text-[11px] text-muted-foreground">
+                  {actionDirty
+                    ? translate(
+                        'auto.components.settings.RepositorySourceControlAiSection.e57dde9d93',
+                        'Unsaved changes'
+                      )
+                    : translate(
+                        'auto.components.settings.RepositorySourceControlAiSection.ccb07dd027',
+                        'Saved'
+                      )}
+                </p>
+                <div className="flex items-center gap-2">
+                  {actionDirty ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => onActionDiscard(actionId)}
+                      disabled={isSaving}
+                    >
+                      {translate(
+                        'auto.components.settings.RepositorySourceControlAiSection.67b3ff5467',
+                        'Discard'
+                      )}
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="xs"
+                    onClick={() => onActionSave(actionId)}
+                    disabled={!actionDirty || isSaving}
+                  >
+                    {isSaving
+                      ? translate(
+                          'auto.components.settings.RepositorySourceControlAiSection.57e6e9d4b1',
+                          'Saving...'
+                        )
+                      : translate(
+                          'auto.components.settings.RepositorySourceControlAiSection.152268c295',
+                          'Save'
+                        )}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </div>
         )
       })}

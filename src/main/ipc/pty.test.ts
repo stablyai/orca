@@ -2,12 +2,15 @@
 one focused file because the registration helper is stateful and each spawn-path
 assertion reuses the same mocked IPC and node-pty harness. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { userInfo } from 'node:os'
 import { delimiter, join, posix } from 'node:path'
 import {
   TERMINAL_INPUT_CHUNK_MAX_BYTES,
   TERMINAL_INPUT_MAX_BYTES
 } from '../../shared/terminal-input'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../shared/clipboard-text'
+import { redactPtyIdForDiagnostics } from '../../shared/pty-delivery-diagnostics'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 
 const isWindowsHost = process.platform === 'win32'
 const posixOnlyIt = isWindowsHost ? it.skip : it
@@ -16,11 +19,13 @@ const expectedOmpStatusExtension = posix.join(
   'extensions',
   'orca-agent-status.ts'
 )
-const expectedAttributionShimDir = join(
-  '/tmp/orca-user-data',
-  'orca-terminal-attribution',
-  isWindowsHost ? 'win32' : 'posix'
-)
+function expectedAttributionShimDir(): string {
+  return join(
+    '/tmp/orca-user-data',
+    'orca-terminal-attribution',
+    process.platform === 'win32' ? 'win32' : 'posix'
+  )
+}
 
 const {
   handleMock,
@@ -89,7 +94,11 @@ const {
 vi.mock('electron', () => ({
   app: {
     isPackaged: true,
-    getPath: getPathMock
+    getPath: getPathMock,
+    getVersion: () => '0.0.0-test'
+  },
+  powerMonitor: {
+    on: vi.fn()
   },
   nativeTheme: {
     shouldUseDarkColors: true
@@ -160,6 +169,13 @@ vi.mock('../telemetry/classify-error', () => ({
   classifyError: classifyErrorMock
 }))
 
+// Why: the real ensure writes to disk from process.resourcesPath, which does
+// not exist under vitest; env assembly only needs the returned dir path.
+vi.mock('../cli/linux-terminal-orca-cli-shim', () => ({
+  ensureLinuxTerminalOrcaCliShimDir: (options: { userDataPath: string }) =>
+    join(options.userDataPath, 'linux-orca-cli-shim')
+}))
+
 vi.mock('../memory/pty-registry', () => ({
   registerPty: registerPtyMock,
   unregisterPty: unregisterPtyMock
@@ -185,14 +201,24 @@ import {
   setPtyOwnership,
   setLocalPtyProvider,
   rebindLocalProviderListeners,
-  unregisterSshPtyProvider
+  unregisterSshPtyProvider,
+  getLocalPtyProvider
 } from './pty'
+import {
+  _resetHiddenRendererPtyDeliveryGateForTest,
+  isHiddenRendererPty
+} from './pty-hidden-delivery-gate'
+import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { hasLiveClaudePtys, markClaudePtySpawned } from '../claude-accounts/live-pty-gate'
+import * as livePtyGate from '../claude-accounts/live-pty-gate'
 import {
   encodePowerShellCommand,
   getPowerShellOsc133Bootstrap
 } from '../powershell-osc133-bootstrap'
-import { SSH_SESSION_EXPIRED_ERROR } from '../providers/ssh-pty-provider'
+import {
+  SSH_PTY_IDENTITY_MISMATCH_ERROR,
+  SSH_SESSION_EXPIRED_ERROR
+} from '../providers/ssh-pty-provider'
 import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
 
 const POWERSHELL_OSC133_ARGS = [
@@ -228,10 +254,17 @@ describe('registerPtyHandlers', () => {
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
   const mainWindow = {
     isDestroyed: () => false,
+    isFocused: () => true,
+    isVisible: () => true,
+    isMinimized: () => false,
     webContents: {
       on: vi.fn(),
       send: vi.fn(),
-      removeListener: vi.fn()
+      removeListener: vi.fn(),
+      // Why: the did-start-loading reset handler filters to main-frame loads via
+      // isLoadingMainFrame; default true so lifecycle-reset tests still reset. A
+      // subframe-load case overrides it to false.
+      isLoadingMainFrame: vi.fn(() => true)
     }
   }
   const mainWindowIpcEvent = { sender: mainWindow.webContents }
@@ -251,6 +284,8 @@ describe('registerPtyHandlers', () => {
   const savedOrcaOmpStatusExtension = process.env.ORCA_OMP_STATUS_EXTENSION
   const savedOrcaClaudeAgentStatusSettings = process.env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS
   const savedProcessPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+  const savedDisableMacosLoginShell = process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
+  const savedOrcaUserDataPath = process.env.ORCA_USER_DATA_PATH
 
   beforeEach(() => {
     // Why: most PTY spawn tests assert POSIX shell behavior; Windows-specific
@@ -259,6 +294,10 @@ describe('registerPtyHandlers', () => {
       configurable: true,
       value: 'darwin'
     })
+    // Why: with platform forced to darwin, the TCC login(1) wrapper would
+    // rewrite every spawn argv these tests assert. Its own integration test
+    // below re-enables it.
+    process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL = '1'
     delete process.env.OPENCODE_CONFIG_DIR
     delete process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
     delete process.env.ORCA_OPENCODE_CONFIG_DIR
@@ -305,6 +344,9 @@ describe('registerPtyHandlers', () => {
     mainWindow.webContents.on.mockReset()
     mainWindow.webContents.send.mockReset()
     mainWindow.webContents.removeListener.mockReset()
+    // Why: hidden-delivery gate state is module-level by design (PTY-keyed,
+    // not window-keyed); tests must not leak hidden bits across cases.
+    _resetHiddenRendererPtyDeliveryGateForTest()
 
     // Why: mirror real Electron — ipcMain.handle throws on a duplicate channel
     // unless removeHandler cleared it first. This catches a re-registration
@@ -318,7 +360,26 @@ describe('registerPtyHandlers', () => {
     removeHandlerMock.mockImplementation((channel: string) => {
       handlers.delete(channel)
     })
+    // Why: production holds PTY sends until the renderer's pty:data dispatcher
+    // registers and sends pty:rendererDispatcherReady (the §1b boot-window gate).
+    // These tests model a live page whose dispatcher is already listening, so
+    // fire the handshake as soon as it registers. Lifecycle-reset tests re-close
+    // the gate via did-start-loading and re-open it with an explicit handshake.
+    onMock.mockImplementation((channel: string, listener: (...args: unknown[]) => void) => {
+      if (channel === 'pty:rendererDispatcherReady') {
+        listener(mainWindowIpcEvent)
+        // Drain the empty flush the handshake schedules so it can't fire later
+        // (once real output is pending) and perturb send-timing assertions.
+        if (vi.isFakeTimers()) {
+          vi.advanceTimersByTime(0)
+        }
+      }
+    })
     getPathMock.mockReturnValue('/tmp/orca-user-data')
+    // Why: shell-ready wrapper roots resolve from ORCA_USER_DATA_PATH (main
+    // canonicalizes it to app.getPath('userData') at startup before any spawn);
+    // mirror that here so ZDOTDIR/wrapper assertions match the mocked userData.
+    process.env.ORCA_USER_DATA_PATH = '/tmp/orca-user-data'
     existsSyncMock.mockReturnValue(true)
     statSyncMock.mockReturnValue({ isDirectory: () => true, mode: 0o755 })
     readFileSyncMock.mockReturnValue('')
@@ -363,10 +424,34 @@ describe('registerPtyHandlers', () => {
   afterEach(() => {
     _resetWslCachesForTests()
     vi.useRealTimers()
-    unregisterSshPtyProvider('ssh-1')
+    // Why: sshProviders is module-level state; any id left registered leaks
+    // into later tests (pty:listSessions sweeps every registered provider).
+    for (const leakedConnectionId of [
+      'ssh-1',
+      'ssh-a',
+      'ssh-b',
+      'ssh-expired-runtime',
+      'ssh-fresh-fail',
+      'ssh-reattach-1',
+      'ssh-reattach-fail',
+      'ssh-reattach-ok',
+      'ssh-runtime-env'
+    ]) {
+      unregisterSshPtyProvider(leakedConnectionId)
+    }
     setLocalPtyProvider(new LocalPtyProvider())
     if (savedProcessPlatform) {
       Object.defineProperty(process, 'platform', savedProcessPlatform)
+    }
+    if (savedDisableMacosLoginShell !== undefined) {
+      process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL = savedDisableMacosLoginShell
+    } else {
+      delete process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
+    }
+    if (savedOrcaUserDataPath !== undefined) {
+      process.env.ORCA_USER_DATA_PATH = savedOrcaUserDataPath
+    } else {
+      delete process.env.ORCA_USER_DATA_PATH
     }
     if (savedOpenCodeConfigDir !== undefined) {
       process.env.OPENCODE_CONFIG_DIR = savedOpenCodeConfigDir
@@ -477,6 +562,7 @@ describe('registerPtyHandlers', () => {
       acknowledgeDataEvent: vi.fn(),
       hasChildProcesses: vi.fn(),
       getForegroundProcess: vi.fn(),
+      confirmForegroundProcess: vi.fn(),
       serialize: vi.fn(),
       revive: vi.fn(),
       onData: vi.fn(() => () => {}),
@@ -494,12 +580,21 @@ describe('registerPtyHandlers', () => {
     const spawn = vi.fn(async (options: { sessionId?: string }) => ({
       id: options.sessionId ?? 'daemon-pty'
     }))
+    const write = vi.fn()
+    const pauseProducer = vi.fn()
+    const resumeProducer = vi.fn()
     let dataHandler: ((payload: { id: string; data: string }) => void) | null = null
     let exitHandler: ((payload: { id: string; code: number }) => void) | null = null
+    let backgroundStreamHandler:
+      | ((payload: { id: string; kind: 'dataGap'; droppedChars: number }) => void)
+      | null = null
+    const getBufferSnapshot = vi.fn()
     setLocalPtyProvider({
       spawn,
-      write: vi.fn(),
+      write,
       resize: vi.fn(),
+      pauseProducer,
+      resumeProducer,
       kill: vi.fn(),
       shutdown: vi.fn(),
       sendSignal: vi.fn(),
@@ -509,6 +604,7 @@ describe('registerPtyHandlers', () => {
       acknowledgeDataEvent: vi.fn(),
       hasChildProcesses: vi.fn(),
       getForegroundProcess: vi.fn(),
+      confirmForegroundProcess: vi.fn(),
       serialize: vi.fn(),
       revive: vi.fn(),
       onData: vi.fn((handler: (payload: { id: string; data: string }) => void) => {
@@ -516,6 +612,13 @@ describe('registerPtyHandlers', () => {
         return () => {}
       }),
       onReplay: vi.fn(() => () => {}),
+      onBackgroundStreamEvent: vi.fn(
+        (handler: (payload: { id: string; kind: 'dataGap'; droppedChars: number }) => void) => {
+          backgroundStreamHandler = handler
+          return () => {}
+        }
+      ),
+      getBufferSnapshot,
       onExit: vi.fn((handler: (payload: { id: string; code: number }) => void) => {
         exitHandler = handler
         return () => {}
@@ -527,20 +630,29 @@ describe('registerPtyHandlers', () => {
     } as never)
     return {
       spawn,
+      write,
+      pauseProducer,
+      resumeProducer,
+      getBufferSnapshot,
       emitData: (id: string, data: string) => dataHandler?.({ id, data }),
-      emitExit: (id: string, code = 0) => exitHandler?.({ id, code })
+      emitExit: (id: string, code = 0) => exitHandler?.({ id, code }),
+      emitDataGap: (id: string, droppedChars: number) =>
+        backgroundStreamHandler?.({ id, kind: 'dataGap', droppedChars })
     }
   }
 
   function getPtyAckDataListener(): (
     event: unknown,
-    args: { id: string; charCount: number }
+    args: { id: string; charCount?: number; processedChars?: number }
   ) => void {
     const ackCall = onMock.mock.calls.find((call: unknown[]) => call[0] === 'pty:ackData')
     if (!ackCall) {
       throw new Error('missing pty:ackData listener')
     }
-    return ackCall[1] as (event: unknown, args: { id: string; charCount: number }) => void
+    return ackCall[1] as (
+      event: unknown,
+      args: { id: string; charCount?: number; processedChars?: number }
+    ) => void
   }
 
   function getPtySetActiveRendererPtyListener(): (
@@ -569,6 +681,19 @@ describe('registerPtyHandlers', () => {
     return visibleCall[1] as (event: unknown, args: { id: string; visible: boolean }) => void
   }
 
+  function getPtyRendererDispatcherReadyListener(): () => void {
+    const readyCall = onMock.mock.calls.find(
+      (call: unknown[]) => call[0] === 'pty:rendererDispatcherReady'
+    )
+    if (!readyCall) {
+      throw new Error('missing pty:rendererDispatcherReady listener')
+    }
+    const listener = readyCall[1] as (event: unknown) => void
+    // Why: the production handler sender-guards its destructive reconcile, so
+    // tests must present as the main window.
+    return () => listener(mainWindowIpcEvent)
+  }
+
   function getMainWindowWebContentsListener(eventName: string): (...args: unknown[]) => void {
     const listenerCall = mainWindow.webContents.on.mock.calls.find(
       (call: unknown[]) => call[0] === eventName
@@ -591,6 +716,32 @@ describe('registerPtyHandlers', () => {
       event: unknown,
       args: { id: string; cols: number; rows: number }
     ) => void
+  }
+
+  function getPtySetHiddenRendererPtyListener(): (
+    event: unknown,
+    args: { id: string; hidden: boolean }
+  ) => void {
+    const hiddenCall = onMock.mock.calls.find(
+      (call: unknown[]) => call[0] === 'pty:setHiddenRendererPty'
+    )
+    if (!hiddenCall) {
+      throw new Error('missing pty:setHiddenRendererPty listener')
+    }
+    return hiddenCall[1] as (event: unknown, args: { id: string; hidden: boolean }) => void
+  }
+
+  function getPtySetDeliveryInterestListener(): (
+    event: unknown,
+    args: { id: string; interested: boolean }
+  ) => void {
+    const interestCall = onMock.mock.calls.find(
+      (call: unknown[]) => call[0] === 'pty:setPtyDeliveryInterest'
+    )
+    if (!interestCall) {
+      throw new Error('missing pty:setPtyDeliveryInterest listener')
+    }
+    return interestCall[1] as (event: unknown, args: { id: string; interested: boolean }) => void
   }
 
   /** Helper: trigger pty:spawn and return the env passed to node-pty. */
@@ -1135,7 +1286,7 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_GIT_COMMIT_TRAILER).toBe('Co-authored-by: Orca <help@stably.ai>')
       expect(env.ORCA_GH_PR_FOOTER).toBe('Made with [Orca](https://github.com/stablyai/orca) 🐋')
       expect(env.ORCA_GH_ISSUE_FOOTER).toBe('Made with [Orca](https://github.com/stablyai/orca) 🐋')
-      expect(env.PATH).toContain(expectedAttributionShimDir)
+      expect(env.PATH).toContain(expectedAttributionShimDir())
     })
 
     it('skips git/gh attribution shims when attribution is disabled', async () => {
@@ -1147,7 +1298,7 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_GIT_COMMIT_TRAILER).toBeUndefined()
       expect(env.ORCA_GH_PR_FOOTER).toBeUndefined()
       expect(env.ORCA_GH_ISSUE_FOOTER).toBeUndefined()
-      expect(env.PATH ?? '').not.toContain(expectedAttributionShimDir)
+      expect(env.PATH ?? '').not.toContain(expectedAttributionShimDir())
     })
 
     it('prepends git/gh attribution shims for daemon-backed local PTYs', async () => {
@@ -1176,7 +1327,7 @@ describe('registerPtyHandlers', () => {
 
       const env = daemonSpawn.mock.calls.at(-1)![0].env
       expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBe('1')
-      expect(env.PATH).toContain(expectedAttributionShimDir)
+      expect(env.PATH).toContain(expectedAttributionShimDir())
     })
 
     it('overrides ambient CODEX_HOME with the Orca-managed home for system default', async () => {
@@ -1294,6 +1445,7 @@ describe('registerPtyHandlers', () => {
         // from main and PR #2662 command threading for OMP target selection.
         spawnArgs?: {
           cwd?: string
+          worktreeId?: string
           shellOverride?: string
           command?: string
           envToDelete?: string[]
@@ -1487,7 +1639,10 @@ describe('registerPtyHandlers', () => {
               CODEX_HOME: 'C:\\Users\\test\\AppData\\Roaming\\Orca\\codex-runtime-home\\home',
               ORCA_CODEX_HOME: 'C:\\Users\\test\\AppData\\Roaming\\Orca\\codex-runtime-home\\home'
             },
-            { cwd: '\\\\wsl.localhost\\Ubuntu\\home\\test\\repo' }
+            {
+              cwd: '\\\\wsl.localhost\\Ubuntu\\home\\test\\repo',
+              worktreeId: 'repo-1::\\\\wsl.localhost\\Ubuntu\\home\\test\\repo'
+            }
           )
           const { env } = spawnOptions
           expect(env.CODEX_HOME).toBeUndefined()
@@ -1533,6 +1688,28 @@ describe('registerPtyHandlers', () => {
         }
       })
 
+      it('prepends the bare-orca CLI shim dir to PATH for packaged Linux spawns', async () => {
+        const originalPlatform = process.platform
+        Object.defineProperty(process, 'platform', {
+          configurable: true,
+          value: 'linux'
+        })
+        try {
+          const env = await daemonSpawnAndGetEnv({ PATH: '/usr/local/bin:/usr/bin' })
+          const entries = env.PATH.split(delimiter)
+          const shimDir = join('/tmp/orca-user-data', 'linux-orca-cli-shim')
+          // Why: bare `orca` must resolve to the Orca CLI before /usr/bin/orca
+          // (the GNOME screen reader) inside Orca-managed terminals (#7904).
+          expect(entries.indexOf(shimDir)).toBeGreaterThanOrEqual(0)
+          expect(entries.indexOf(shimDir)).toBeLessThan(entries.indexOf('/usr/bin'))
+        } finally {
+          Object.defineProperty(process, 'platform', {
+            configurable: true,
+            value: originalPlatform
+          })
+        }
+      })
+
       it('injects the agent-hook receiver env on the daemon path', async () => {
         const env = await daemonSpawnAndGetEnv({})
         expect(env.ORCA_AGENT_HOOK_PORT).toBe('5678')
@@ -1567,6 +1744,7 @@ describe('registerPtyHandlers', () => {
         const runtime = {
           setPtyController: vi.fn(),
           registerPty: vi.fn(),
+          noteTerminalSpawnCommand: vi.fn(),
           onPtySpawned: vi.fn(),
           onPtyExit: vi.fn(),
           onPtyData: vi.fn()
@@ -1586,6 +1764,47 @@ describe('registerPtyHandlers', () => {
         )
         expect(spawnOptions.env.ORCA_AGENT_HOOK_PORT).toBe('5678')
         expect(spawnOptions.env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
+      })
+
+      it('threads the validated pane identity into registerPty for a runtime-created daemon PTY (#7587)', async () => {
+        type RuntimeSpawnController = {
+          spawn(args: {
+            cols: number
+            rows: number
+            worktreeId?: string
+            tabId?: string
+            leafId?: string
+            env?: Record<string, string>
+          }): Promise<{ id: string }>
+        }
+        const leafId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+        setupDaemonAdapter()
+        const runtime = {
+          setPtyController: vi.fn(),
+          registerPty: vi.fn(),
+          onPtySpawned: vi.fn(),
+          onPtyExit: vi.fn(),
+          onPtyData: vi.fn()
+        }
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
+
+        await controller.spawn({
+          cols: 80,
+          rows: 24,
+          worktreeId: 'wt-runtime',
+          tabId: 'tab-1',
+          leafId
+        })
+
+        // Why: runtime-created spawns (e.g. the mobile-create materialize path)
+        // must thread the same {tabId, leafId} so the catch-path rescue can find
+        // and keep their live PTY (#7587).
+        expect(runtime.registerPty).toHaveBeenCalledWith(expect.any(String), 'wt-runtime', null, {
+          tabId: 'tab-1',
+          leafId
+        })
       })
 
       it('uses the owning project WSL runtime for runtime-created daemon PTYs', async () => {
@@ -1711,6 +1930,7 @@ describe('registerPtyHandlers', () => {
         const runtime = {
           setPtyController: vi.fn(),
           registerPty: vi.fn(),
+          noteTerminalSpawnCommand: vi.fn(),
           onPtySpawned: vi.fn(),
           onPtyExit: vi.fn(),
           onPtyData: vi.fn()
@@ -1737,7 +1957,7 @@ describe('registerPtyHandlers', () => {
 
         const spawnOptions = daemonSpawn.mock.calls.at(-1)?.[0] as DaemonSpawnCall
         expect(spawnOptions.env.PATH.split(delimiter)[0]).toBe('/tmp/orca-agent-teams-bin')
-        expect(spawnOptions.env.PATH).toContain(expectedAttributionShimDir)
+        expect(spawnOptions.env.PATH).toContain(expectedAttributionShimDir())
         expect(spawnOptions.env.TERM_PROGRAM).toBeUndefined()
         expect(spawnOptions.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
         expect(spawnOptions.envToDelete).toEqual(
@@ -1767,7 +1987,7 @@ describe('registerPtyHandlers', () => {
           enableGitHubAttribution: true
         }))
         expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBe('1')
-        expect(env.PATH).toContain(expectedAttributionShimDir)
+        expect(env.PATH).toContain(expectedAttributionShimDir())
       })
 
       it('keeps the Agent Teams tmux shim ahead of host PATH shims on daemon pty:spawn', async () => {
@@ -1788,7 +2008,7 @@ describe('registerPtyHandlers', () => {
         )
 
         expect(spawnOptions.env.PATH.split(delimiter)[0]).toBe('/tmp/orca-agent-teams-bin')
-        expect(spawnOptions.env.PATH).toContain(expectedAttributionShimDir)
+        expect(spawnOptions.env.PATH).toContain(expectedAttributionShimDir())
         expect(spawnOptions.env.TERM_PROGRAM).toBeUndefined()
         expect(spawnOptions.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
         expect(spawnOptions.envToDelete).toEqual(
@@ -1905,7 +2125,7 @@ describe('registerPtyHandlers', () => {
           enableGitHubAttribution: false
         }))
         expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
-        expect(env.PATH ?? '').not.toContain(expectedAttributionShimDir)
+        expect(env.PATH ?? '').not.toContain(expectedAttributionShimDir())
       })
 
       it('does not mutate the caller-provided args.env on the daemon path', async () => {
@@ -2011,9 +2231,11 @@ describe('registerPtyHandlers', () => {
       })
 
       it('does NOT inject host-local env on SSH spawns (connectionId set)', async () => {
-        const sshSpawn = vi.fn(async (_opts: { env: Record<string, string> }) => ({
-          id: 'ssh-pty'
-        }))
+        const sshSpawn = vi.fn(
+          async (_opts: { env: Record<string, string>; paneKey?: string; tabId?: string }) => ({
+            id: 'ssh-pty'
+          })
+        )
         const store = {
           upsertSshRemotePtyLease: vi.fn(),
           persistPtyBinding: vi.fn()
@@ -2062,7 +2284,8 @@ describe('registerPtyHandlers', () => {
           tabId: 'tab-1',
           leafId
         })
-        const env = sshSpawn.mock.calls.at(-1)![0].env
+        const spawnOptions = sshSpawn.mock.calls.at(-1)![0]
+        const env = spawnOptions.env
         // Why: every host-local var must be absent over SSH — the hook
         // server is on the Orca host's 127.0.0.1, dev CLI / attribution /
         // overlay / plugin-dir paths only exist on the local disk, so
@@ -2085,6 +2308,8 @@ describe('registerPtyHandlers', () => {
         expect(env.HTTPS_PROXY).toBeUndefined()
         expect(env.NO_PROXY).toBeUndefined()
         expect(env.FOO).toBe('bar')
+        expect(spawnOptions.paneKey).toBe(makePaneKey('tab-1', leafId))
+        expect(spawnOptions.tabId).toBe('tab-1')
         expect(openCodeBuildPtyEnvMock).not.toHaveBeenCalled()
         expect(piBuildPtyEnvMock).not.toHaveBeenCalled()
         expect(store.upsertSshRemotePtyLease).toHaveBeenCalledWith(
@@ -2116,7 +2341,10 @@ describe('registerPtyHandlers', () => {
           leafId: 'pane:1'
         })
         expect(store.upsertSshRemotePtyLease).toHaveBeenCalledTimes(1)
-        expect(sshSpawn.mock.calls.at(-1)?.[0].env.ORCA_PANE_KEY).toBeUndefined()
+        const legacySpawnOptions = sshSpawn.mock.calls.at(-1)?.[0]
+        expect(legacySpawnOptions?.env.ORCA_PANE_KEY).toBeUndefined()
+        expect(legacySpawnOptions?.paneKey).toBeUndefined()
+        expect(legacySpawnOptions?.tabId).toBe('tab-1')
         expect(store.upsertSshRemotePtyLease.mock.calls[0]?.[0]).not.toHaveProperty('leafId')
         expect(store.persistPtyBinding).not.toHaveBeenCalled()
       })
@@ -2231,6 +2459,78 @@ describe('registerPtyHandlers', () => {
         expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'remote-pty', 'expired')
         expect(openCodeClearPtyMock).toHaveBeenCalledWith(scopedPtyId)
         expect(piClearPtyMock).toHaveBeenCalledWith(scopedPtyId)
+      })
+
+      it('does not clear a scoped SSH session when remote reattach rejects an identity mismatch', async () => {
+        const scopedPtyId = 'ssh:ssh-1@@remote-pty'
+        const remoteWrite = vi.fn()
+        const sshSpawn = vi.fn(async () => {
+          throw new Error(
+            `${SSH_SESSION_EXPIRED_ERROR}: remote-pty ${SSH_PTY_IDENTITY_MISMATCH_ERROR}`
+          )
+        })
+        const store = {
+          markSshRemotePtyLease: vi.fn()
+        }
+        registerSshPtyProvider('ssh-1', {
+          spawn: sshSpawn,
+          write: remoteWrite,
+          resize: vi.fn(),
+          shutdown: vi.fn(),
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        setPtyOwnership(scopedPtyId, 'ssh-1')
+        handlers.clear()
+        registerPtyHandlers(
+          mainWindow as never,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          store as never
+        )
+
+        try {
+          await expect(
+            handlers.get('pty:spawn')!(null, {
+              cols: 80,
+              rows: 24,
+              env: {},
+              connectionId: 'ssh-1',
+              sessionId: scopedPtyId
+            })
+          ).rejects.toThrow(SSH_SESSION_EXPIRED_ERROR)
+
+          expect(store.markSshRemotePtyLease).not.toHaveBeenCalledWith(
+            'ssh-1',
+            'remote-pty',
+            'expired'
+          )
+          expect(openCodeClearPtyMock).not.toHaveBeenCalledWith(scopedPtyId)
+          expect(piClearPtyMock).not.toHaveBeenCalledWith(scopedPtyId)
+          getPtyWriteListener()(mainWindowIpcEvent, {
+            id: scopedPtyId,
+            data: 'echo still-owned'
+          })
+          expect(remoteWrite).toHaveBeenCalledWith(scopedPtyId, 'echo still-owned')
+        } finally {
+          deletePtyOwnership(scopedPtyId)
+        }
       })
 
       it('does not tombstone an SSH lease when explicit kill shutdown fails transiently', async () => {
@@ -2950,6 +3250,40 @@ describe('registerPtyHandlers', () => {
     })
   })
 
+  it('routes runtime foreground confirmation to the provider owning the captured PTY', async () => {
+    const confirmForegroundProcess = vi.fn(async () => 'codex')
+    registerSshPtyProvider('ssh-1', { confirmForegroundProcess } as never)
+    setPtyOwnership('remote-pty', 'ssh-1')
+    const runtime = { setPtyController: vi.fn() }
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+      confirmForegroundProcess: (ptyId: string) => Promise<string | null>
+    }
+
+    await expect(controller.confirmForegroundProcess('remote-pty')).resolves.toBe('codex')
+    expect(confirmForegroundProcess).toHaveBeenCalledOnce()
+    expect(confirmForegroundProcess).toHaveBeenCalledWith('remote-pty')
+    deletePtyOwnership('remote-pty')
+  })
+
+  it('returns unavailable runtime confirmation for unsupported or missing providers', async () => {
+    registerSshPtyProvider('ssh-1', {} as never)
+    setPtyOwnership('unsupported-pty', 'ssh-1')
+    setPtyOwnership('missing-pty', 'missing-connection')
+    const runtime = { setPtyController: vi.fn() }
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+      confirmForegroundProcess: (ptyId: string) => Promise<string | null>
+    }
+
+    await expect(controller.confirmForegroundProcess('unsupported-pty')).resolves.toBeNull()
+    await expect(controller.confirmForegroundProcess('missing-pty')).resolves.toBeNull()
+    deletePtyOwnership('unsupported-pty')
+    deletePtyOwnership('missing-pty')
+  })
+
   it('rethrows non-not-found local provider shutdown failures', async () => {
     setLocalPtyProvider({
       spawn: vi.fn(),
@@ -3156,6 +3490,7 @@ describe('registerPtyHandlers', () => {
     const runtime = {
       setPtyController: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn(() => 13),
@@ -3189,11 +3524,16 @@ describe('registerPtyHandlers', () => {
       const result = await pendingSpawn
 
       daemon.emitData(result.id, 'daemon output')
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
       daemon.emitExit(result.id, 0)
 
       expect(daemon.spawn).toHaveBeenCalledTimes(1)
-      expect(runtime.onPtyData).toHaveBeenCalledWith(result.id, 'daemon output', expect.any(Number))
+      expect(runtime.onPtyData).toHaveBeenCalledWith(
+        result.id,
+        'daemon output',
+        expect.any(Number),
+        'daemon output'.length
+      )
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: result.id,
         data: 'daemon output',
@@ -3210,11 +3550,60 @@ describe('registerPtyHandlers', () => {
     }
   })
 
+  // Why: the cap and its flag must never fire in the common case (renderer keeps
+  // up), so ordinary small output carries no droppedBacklog.
+  it('does not flag droppedBacklog for ordinary small output under the cap', async () => {
+    vi.useFakeTimers()
+    const runtime = {
+      setPtyController: vi.fn(),
+      registerPty: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn(() => 12),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'terminal-handle-small'),
+      registerPreAllocatedHandleForPty: vi.fn()
+    }
+    try {
+      registerPtyHandlers(
+        mainWindow as never,
+        runtime as never,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { awaitLocalPtyStartup: () => Promise.resolve() }
+      )
+      const pendingSpawn = handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        sessionId: 'small-output-session'
+      }) as Promise<{ id: string }>
+      await Promise.resolve()
+      const daemon = installObservableDaemonTestProvider()
+      rebindLocalProviderListeners()
+      const result = await pendingSpawn
+
+      daemon.emitData(result.id, 'small output')
+      await vi.advanceTimersByTimeAsync(50)
+
+      const dataSends = mainWindow.webContents.send.mock.calls.filter(
+        (call) => call[0] === 'pty:data' && (call[1] as { id: string }).id === result.id
+      )
+      expect(dataSends.length).toBeGreaterThan(0)
+      for (const call of dataSends) {
+        expect((call[1] as { droppedBacklog?: boolean }).droppedBacklog).toBeUndefined()
+      }
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('waits for the desktop startup barrier before runtime local spawns resolve the provider', async () => {
     const barrier = makeDeferred()
     const runtime = {
       setPtyController: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -3649,6 +4038,7 @@ describe('registerPtyHandlers', () => {
       listProcesses: vi.fn(),
       hasChildProcesses: vi.fn(),
       getForegroundProcess: vi.fn(),
+      confirmForegroundProcess: vi.fn(),
       serialize: vi.fn(),
       revive: vi.fn(),
       getDefaultShell: vi.fn(),
@@ -3710,6 +4100,7 @@ describe('registerPtyHandlers', () => {
       listProcesses: vi.fn(),
       hasChildProcesses: vi.fn(),
       getForegroundProcess: vi.fn(),
+      confirmForegroundProcess: vi.fn(),
       serialize: vi.fn(),
       revive: vi.fn(),
       getDefaultShell: vi.fn(),
@@ -3726,8 +4117,12 @@ describe('registerPtyHandlers', () => {
     await expect(
       handlers.get('pty:getForegroundProcess')!(null, { id: 'remote-pty' })
     ).resolves.toBeNull()
+    await expect(
+      handlers.get('pty:confirmForegroundProcess')!(null, { id: 'remote-pty' })
+    ).resolves.toBeNull()
     expect(provider.hasChildProcesses).not.toHaveBeenCalled()
     expect(provider.getForegroundProcess).not.toHaveBeenCalled()
+    expect(provider.confirmForegroundProcess).not.toHaveBeenCalled()
   })
 
   // Why: regression for the Claude-Code split-pane garbled-render desync. resize
@@ -3743,12 +4138,13 @@ describe('registerPtyHandlers', () => {
       applied: { cols: number; rows: number } | null
       resize?: (cols: number, rows: number) => void
       getAppliedSize?: (id: string) => Promise<{ cols: number; rows: number } | null>
-    }): void {
+    }): ReturnType<typeof vi.fn> {
+      const write = vi.fn()
       setLocalPtyProvider({
         spawn: vi.fn(async (opts: { sessionId?: string }) => ({
           id: opts.sessionId ?? 'daemon-pty'
         })),
-        write: vi.fn(),
+        write,
         resize: vi.fn(args.resize ?? (() => {})),
         getAppliedSize: vi.fn(args.getAppliedSize ?? (async () => args.applied)),
         kill: vi.fn(),
@@ -3758,6 +4154,7 @@ describe('registerPtyHandlers', () => {
         listProcesses: vi.fn(async () => []),
         getForegroundProcess: vi.fn(async () => null)
       } as never)
+      return write
     }
 
     const resizeListener = (): ((event: unknown, args: unknown) => void) => {
@@ -3885,6 +4282,113 @@ describe('registerPtyHandlers', () => {
 
       expect(runtime.onExternalPtyResize).not.toHaveBeenCalled()
     })
+
+    it('suppresses the host fit cascade while a remote viewer drives the width', async () => {
+      const resizeSpy = vi.fn()
+      setupProviderWithAppliedSize({ applied: { cols: 80, rows: 24 }, resize: resizeSpy })
+      const runtime = {
+        setPtyController: vi.fn(),
+        createPreAllocatedTerminalHandle: vi.fn(() => null),
+        registerPty: vi.fn(),
+        getDriver: vi.fn(() => ({ kind: 'idle' })),
+        // The whole point of the fix: a PTY with a remote viewer reports true,
+        // even though the presence-lock driver state stays idle/desktop.
+        isRemoteDesktopResizeDriven: vi.fn(() => true),
+        isResizeSuppressed: vi.fn(() => false),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn(),
+        recordRemoteDesktopHostReclaimTarget: vi.fn(),
+        onExternalPtyResize: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const spawn = await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
+      const id = (spawn as { id: string }).id
+      resizeSpy.mockClear()
+
+      // Host's own safeFit tries to widen the viewed PTY back to its window.
+      resizeListener()(mainWindowIpcEvent, { id, cols: 125, rows: 48 })
+
+      // It must not reach the PTY while the viewer owns the width.
+      expect(resizeSpy).not.toHaveBeenCalled()
+      expect(runtime.recordRemoteDesktopHostReclaimTarget).toHaveBeenCalledWith(id, 125, 48)
+      expect(runtime.onExternalPtyResize).not.toHaveBeenCalled()
+    })
+
+    it('lets trusted host activity reclaim remote viewport ownership', () => {
+      const claimRemoteDesktopHost = vi.fn().mockResolvedValue(true)
+      const runtime = {
+        setPtyController: vi.fn(),
+        claimRemoteDesktopHost
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const call = onMock.mock.calls.find((entry: unknown[]) => entry[0] === 'pty:claimViewport')
+      const claimListener = call?.[1] as
+        | ((event: unknown, args: { id: string; cols: number; rows: number }) => void)
+        | undefined
+      expect(claimListener).toBeTypeOf('function')
+
+      claimListener?.(mainWindowIpcEvent, { id: 'pty-1', cols: 125, rows: 48 })
+
+      expect(claimRemoteDesktopHost).toHaveBeenCalledWith('pty-1', 125, 48)
+    })
+
+    it('does not forward host input when viewport reclaim fails', async () => {
+      const write = setupProviderWithAppliedSize({ applied: { cols: 80, rows: 24 } })
+      const runtime = {
+        setPtyController: vi.fn(),
+        createPreAllocatedTerminalHandle: vi.fn(() => null),
+        registerPty: vi.fn(),
+        getDriver: vi.fn(() => ({ kind: 'idle' })),
+        claimRemoteDesktopHost: vi.fn().mockResolvedValue(false),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const spawn = await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
+      const id = (spawn as { id: string }).id
+      const claim = onMock.mock.calls.find((entry: unknown[]) => entry[0] === 'pty:claimViewport')
+      const writeEvent = onMock.mock.calls.find((entry: unknown[]) => entry[0] === 'pty:write')
+
+      claim?.[1](mainWindowIpcEvent, { id, cols: 125, rows: 48 })
+      writeEvent?.[1](mainWindowIpcEvent, { id, data: 'x' })
+      await Promise.resolve()
+
+      expect(write).not.toHaveBeenCalled()
+    })
+
+    it('does not populate the remote reclaim cache when only a phone drives', async () => {
+      const resizeSpy = vi.fn()
+      setupProviderWithAppliedSize({ applied: { cols: 80, rows: 24 }, resize: resizeSpy })
+      const runtime = {
+        setPtyController: vi.fn(),
+        createPreAllocatedTerminalHandle: vi.fn(() => null),
+        registerPty: vi.fn(),
+        getDriver: vi.fn(() => ({ kind: 'mobile', clientId: 'phone-A' })),
+        isRemoteDesktopResizeDriven: vi.fn(() => false),
+        isResizeSuppressed: vi.fn(() => false),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn(),
+        recordRemoteDesktopHostReclaimTarget: vi.fn(),
+        onExternalPtyResize: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const spawn = await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
+      const id = (spawn as { id: string }).id
+      resizeSpy.mockClear()
+
+      resizeListener()(mainWindowIpcEvent, { id, cols: 125, rows: 48 })
+
+      expect(resizeSpy).not.toHaveBeenCalled()
+      expect(runtime.recordRemoteDesktopHostReclaimTarget).not.toHaveBeenCalled()
+      expect(runtime.onExternalPtyResize).not.toHaveBeenCalled()
+    })
   })
 
   it('injects ORCA_TERMINAL_HANDLE for non-local PTY providers', async () => {
@@ -3912,6 +4416,7 @@ describe('registerPtyHandlers', () => {
     } as never)
     const runtime = {
       setPtyController: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
       registerPreAllocatedHandleForPty: vi.fn()
     }
@@ -4027,6 +4532,67 @@ describe('registerPtyHandlers', () => {
     )
   })
 
+  it('threads the validated pane identity into registerPty for a renderer PTY spawn (#7587)', async () => {
+    const leafId = '88888888-8888-4888-8888-888888888888'
+    const runtime = {
+      setPtyController: vi.fn(),
+      preAllocateHandleForPty: vi.fn(() => 'term_seam'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      getDriver: vi.fn(() => ({ kind: 'host' })),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never, runtime as never)
+
+    await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24,
+      cwd: '/repo',
+      tabId: 'tab-1',
+      leafId,
+      worktreeId: 'wt-1'
+    })
+
+    // Why: this is the load-bearing wiring for #7587 — the runtime can only back a
+    // stalled mobile create from a live spawn if the spawn threads {tabId, leafId}.
+    expect(runtime.registerPty).toHaveBeenCalledWith(expect.any(String), 'wt-1', null, {
+      tabId: 'tab-1',
+      leafId
+    })
+  })
+
+  it('omits the pane identity from registerPty when the leafId is not a terminal leaf (#7587)', async () => {
+    const runtime = {
+      setPtyController: vi.fn(),
+      preAllocateHandleForPty: vi.fn(() => 'term_seam'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      getDriver: vi.fn(() => ({ kind: 'host' })),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never, runtime as never)
+
+    await handlers.get('pty:spawn')!(mainWindowIpcEvent, {
+      cols: 80,
+      rows: 24,
+      cwd: '/repo',
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      worktreeId: 'wt-1'
+    })
+
+    // Why: legacy numeric pane ids (`pane:N`) are not terminal leaf ids, so the
+    // spawn seam must not fabricate a binding for them (registerPty would ignore
+    // it anyway); this pins that the seam passes a clean `undefined`.
+    expect(runtime.registerPty).toHaveBeenCalledWith(expect.any(String), 'wt-1', null, undefined)
+  })
+
   it('refreshes native Agent Teams env when captured teammate mode lives in launch args', async () => {
     const leafId = '11111111-1111-4111-8111-111111111111'
     const runtime = {
@@ -4137,6 +4703,7 @@ describe('registerPtyHandlers', () => {
       preAllocateHandleForPty: vi.fn(() => 'term_wrong'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
@@ -4188,6 +4755,7 @@ describe('registerPtyHandlers', () => {
       preAllocateHandleForPty: vi.fn(),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
@@ -4227,6 +4795,7 @@ describe('registerPtyHandlers', () => {
       preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -4335,7 +4904,7 @@ describe('registerPtyHandlers', () => {
       cols: 80,
       rows: 24,
       cwd: '/tmp',
-      worktreeId: 'wt-1',
+      worktreeId: 'repo-1::/tmp',
       tabId: 'tab-race',
       leafId,
       env: { ORCA_PANE_KEY: paneKey },
@@ -4349,12 +4918,12 @@ describe('registerPtyHandlers', () => {
       cols: 80,
       rows: 24,
       cwd: '/tmp',
-      worktreeId: 'wt-1',
+      worktreeId: 'repo-1::/tmp',
       tabId: 'tab-race',
       leafId,
       env: {
         ORCA_TAB_ID: 'tab-race',
-        ORCA_WORKTREE_ID: 'wt-1'
+        ORCA_WORKTREE_ID: 'repo-1::/tmp'
       }
     }) as Promise<{ id: string }>
     await Promise.resolve()
@@ -4367,7 +4936,7 @@ describe('registerPtyHandlers', () => {
     ])
     expect(providerSpawn).toHaveBeenCalledTimes(1)
     expect(store.persistPtyBinding).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
+      worktreeId: 'repo-1::/tmp',
       tabId: 'tab-race',
       leafId,
       ptyId: 'pty-shared',
@@ -4449,13 +5018,13 @@ describe('registerPtyHandlers', () => {
       cols: 80,
       rows: 24,
       cwd: '/tmp',
-      worktreeId: 'wt-1',
+      worktreeId: 'repo-1::/tmp',
       tabId: 'tab-race',
       leafId,
       env: {
         ORCA_PANE_KEY: paneKey,
         ORCA_TAB_ID: 'tab-race',
-        ORCA_WORKTREE_ID: 'wt-1'
+        ORCA_WORKTREE_ID: 'repo-1::/tmp'
       }
     }) as Promise<{ id: string }>
     await Promise.resolve()
@@ -4465,7 +5034,7 @@ describe('registerPtyHandlers', () => {
       cols: 80,
       rows: 24,
       cwd: '/tmp',
-      worktreeId: 'wt-1',
+      worktreeId: 'repo-1::/tmp',
       tabId: 'tab-race',
       leafId,
       env: { ORCA_PANE_KEY: paneKey },
@@ -4481,7 +5050,7 @@ describe('registerPtyHandlers', () => {
     ])
     expect(providerSpawn).toHaveBeenCalledTimes(1)
     expect(store.persistPtyBinding).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
+      worktreeId: 'repo-1::/tmp',
       tabId: 'tab-race',
       leafId,
       ptyId: 'pty-renderer',
@@ -4674,6 +5243,7 @@ describe('registerPtyHandlers', () => {
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
@@ -4745,6 +5315,7 @@ describe('registerPtyHandlers', () => {
       preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -4831,6 +5402,7 @@ describe('registerPtyHandlers', () => {
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -4928,6 +5500,7 @@ describe('registerPtyHandlers', () => {
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
@@ -5036,6 +5609,7 @@ describe('registerPtyHandlers', () => {
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
@@ -5129,6 +5703,7 @@ describe('registerPtyHandlers', () => {
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
@@ -5175,6 +5750,110 @@ describe('registerPtyHandlers', () => {
     } finally {
       deletePtyOwnership(appPtyId)
       unregisterSshPtyProvider('ssh-expired-runtime')
+    }
+  })
+
+  it('does not clear runtime-owned SSH reattach state on identity mismatch', async () => {
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        worktreeId?: string
+        connectionId?: string
+        tabId?: string
+        leafId?: string
+        sessionId?: string
+        persistHostSessionBinding?: boolean
+      }): Promise<{ id: string }>
+    }
+    const connectionId = 'ssh-identity-runtime'
+    const appPtyId = `ssh:${connectionId}@@relay-pty`
+    const remoteWrite = vi.fn()
+    registerSshPtyProvider(connectionId, {
+      spawn: vi.fn(async () => {
+        throw new Error(
+          `${SSH_SESSION_EXPIRED_ERROR}: relay-pty ${SSH_PTY_IDENTITY_MISMATCH_ERROR}`
+        )
+      }),
+      write: remoteWrite,
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    const store = {
+      upsertSshRemotePtyLease: vi.fn(),
+      persistPtyBinding: vi.fn(),
+      removeSshRemotePtyLease: vi.fn(),
+      markSshRemotePtyLease: vi.fn()
+    }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      getDriver: vi.fn(() => ({ kind: 'host' })),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    try {
+      setPtyOwnership(appPtyId, connectionId)
+      registerPtyHandlers(
+        mainWindow as never,
+        runtime as never,
+        undefined,
+        undefined,
+        undefined,
+        store as never
+      )
+      const spawnController = controller as unknown as RuntimeSpawnController
+      const leafId = '11111111-1111-4111-8111-111111111111'
+
+      await expect(
+        spawnController.spawn({
+          cols: 80,
+          rows: 24,
+          connectionId,
+          worktreeId: 'wt-remote',
+          tabId: 'tab-remote',
+          leafId,
+          sessionId: appPtyId,
+          persistHostSessionBinding: true
+        })
+      ).rejects.toThrow(SSH_SESSION_EXPIRED_ERROR)
+
+      expect(store.markSshRemotePtyLease).not.toHaveBeenCalledWith(
+        connectionId,
+        'relay-pty',
+        'expired'
+      )
+      expect(store.upsertSshRemotePtyLease).not.toHaveBeenCalled()
+      expect(store.persistPtyBinding).not.toHaveBeenCalled()
+      expect(openCodeClearPtyMock).not.toHaveBeenCalledWith(appPtyId)
+      expect(piClearPtyMock).not.toHaveBeenCalledWith(appPtyId)
+      getPtyWriteListener()(mainWindowIpcEvent, { id: appPtyId, data: 'echo still-owned' })
+      expect(remoteWrite).toHaveBeenCalledWith(appPtyId, 'echo still-owned')
+    } finally {
+      deletePtyOwnership(appPtyId)
+      unregisterSshPtyProvider(connectionId)
     }
   })
 
@@ -5230,6 +5909,7 @@ describe('registerPtyHandlers', () => {
       createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -5288,6 +5968,7 @@ describe('registerPtyHandlers', () => {
       preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -5335,6 +6016,7 @@ describe('registerPtyHandlers', () => {
   it('ignores renderer-provided ORCA_TERMINAL_HANDLE for local PTY spawns', async () => {
     const runtime = {
       setPtyController: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
@@ -5362,6 +6044,7 @@ describe('registerPtyHandlers', () => {
     })
     const runtime = {
       setPtyController: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       preAllocateHandleForPty: vi.fn(() => 'term_wsl'),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
@@ -5385,9 +6068,11 @@ describe('registerPtyHandlers', () => {
     const env = spawnCall[2].env as Record<string, string>
     expect(spawnCall[0]).toBe('wsl.exe')
     expect(env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
+    expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
     expect(env.WSLENV?.split(':')).toEqual(
       expect.arrayContaining([
         'ORCA_TERMINAL_HANDLE/u',
+        'ORCA_USER_DATA_PATH/p',
         'ORCA_AGENT_HOOK_PORT/u',
         'ORCA_AGENT_HOOK_TOKEN/u',
         'ORCA_OMP_SOURCE_AGENT_DIR/p',
@@ -5395,6 +6080,42 @@ describe('registerPtyHandlers', () => {
         'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD'
       ])
     )
+  })
+
+  it('forces managed ORCA_USER_DATA_PATH for WSL spawns even when the caller provides a stale root', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    const runtime = {
+      setPtyController: vi.fn(),
+      preAllocateHandleForPty: vi.fn(() => 'term_wsl'),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    try {
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'wsl.exe',
+        env: {
+          ORCA_USER_DATA_PATH: '/tmp/stale-orca-user-data'
+        }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const spawnCall = spawnMock.mock.calls.at(-1)!
+    const env = spawnCall[2].env as Record<string, string>
+    expect(spawnCall[0]).toBe('wsl.exe')
+    expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
   })
 
   describe('Windows UTF-8 code page', () => {
@@ -5825,6 +6546,114 @@ describe('registerPtyHandlers', () => {
     })
   })
 
+  it('passes floating terminal cwds through to the spawned shell', async () => {
+    // Why: the floating sentinel has no worktree root; its cwd is validated
+    // against trusted-directory grants before it reaches pty:spawn.
+    registerPtyHandlers(mainWindow as never)
+
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      cwd: '/tmp/floating-notes',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+    })
+
+    const [, , options] = spawnMock.mock.calls.at(-1) as [string, string[], { cwd: string }]
+    expect(options.cwd).toBe('/tmp/floating-notes')
+  })
+
+  it('falls back to the worktree root when a saved local cwd no longer exists', async () => {
+    registerPtyHandlers(mainWindow as never)
+    // Why: issue #7239 reproduced in a Japanese-named worktree; the fallback
+    // must return the selected worktree path verbatim.
+    const worktreePath = '/Users/motoki/orca/workspaces/nakamuramotoki/Fableと議論'
+    const missingCwd = `${worktreePath}/deleted-folder`
+    statSyncMock.mockImplementation((target: string) => {
+      if (target === missingCwd) {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      }
+      return { isDirectory: () => true, mode: 0o755 }
+    })
+
+    const result = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      cwd: missingCwd,
+      cwdFallback: 'worktree',
+      worktreeId: `repo-1::${worktreePath}`
+    })) as { startupCwdFallback?: { kind: string; cwd: string } }
+
+    const [, , options] = spawnMock.mock.calls.at(-1) as [string, string[], { cwd: string }]
+    expect(options.cwd).toBe(worktreePath)
+    expect(result.startupCwdFallback).toEqual({ kind: 'worktree', cwd: worktreePath })
+  })
+
+  it('keeps a missing cwd unchanged without the fallback flag', async () => {
+    registerPtyHandlers(mainWindow as never)
+    existsSyncMock.mockImplementation((target: string) => target !== '/repo/app/deleted-folder')
+    statSyncMock.mockImplementation((target: string) => {
+      if (target === '/repo/app/deleted-folder') {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      }
+      return { isDirectory: () => true, mode: 0o755 }
+    })
+
+    // Why: without the renderer opt-in the provider still surfaces its normal
+    // missing-directory error — API/runtime callers keep exact cwd semantics.
+    await expect(
+      handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/repo/app/deleted-folder',
+        worktreeId: 'repo-1::/repo/app'
+      })
+    ).rejects.toThrow('Working directory "/repo/app/deleted-folder" does not exist.')
+
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+
+  it('spawns at an existing outside-worktree cwd without falling back (#7685)', async () => {
+    registerPtyHandlers(mainWindow as never)
+
+    const result = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      cwd: '/repo/app-other',
+      cwdFallback: 'worktree',
+      worktreeId: 'repo-1::/repo/app'
+    })) as { startupCwdFallback?: unknown }
+
+    const [, , options] = spawnMock.mock.calls.at(-1) as [string, string[], { cwd: string }]
+    expect(options.cwd).toBe('/repo/app-other')
+    expect(result.startupCwdFallback).toBeUndefined()
+  })
+
+  it('ignores the cwd fallback flag for session reattach spawns', async () => {
+    registerPtyHandlers(mainWindow as never)
+    existsSyncMock.mockImplementation((target: string) => target !== '/repo/app/deleted-folder')
+    statSyncMock.mockImplementation((target: string) => {
+      if (target === '/repo/app/deleted-folder') {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      }
+      return { isDirectory: () => true, mode: 0o755 }
+    })
+
+    // Why: a reattach must keep the session's exact cwd; remapping it would
+    // silently detach the restored terminal from its recorded state.
+    await expect(
+      handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/repo/app/deleted-folder',
+        cwdFallback: 'worktree',
+        sessionId: 'session-1',
+        worktreeId: 'repo-1::/repo/app'
+      })
+    ).rejects.toThrow('Working directory "/repo/app/deleted-folder" does not exist.')
+
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+
   it('rejects missing WSL worktree cwd instead of validating only the fallback Windows cwd', async () => {
     const originalPlatform = process.platform
     const originalUserProfile = process.env.USERPROFILE
@@ -5835,8 +6664,10 @@ describe('registerPtyHandlers', () => {
     })
     process.env.USERPROFILE = 'C:\\Users\\jinwo'
 
+    // Why: the startup-cwd guard normalizes separators, so the provider sees
+    // the forward-slash UNC form.
     existsSyncMock.mockImplementation((targetPath: string) => {
-      if (targetPath === '\\\\wsl.localhost\\Ubuntu\\home\\jin\\missing') {
+      if (targetPath === '//wsl.localhost/Ubuntu/home/jin/missing') {
         return false
       }
       return true
@@ -5849,10 +6680,11 @@ describe('registerPtyHandlers', () => {
         handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
-          cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\missing'
+          cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\missing',
+          worktreeId: 'repo-1::\\\\wsl.localhost\\Ubuntu\\home\\jin'
         })
       ).rejects.toThrow(
-        'Working directory "\\\\wsl.localhost\\Ubuntu\\home\\jin\\missing" does not exist.'
+        'Working directory "//wsl.localhost/Ubuntu/home/jin/missing" does not exist.'
       )
       expect(spawnMock).not.toHaveBeenCalled()
     } finally {
@@ -5903,6 +6735,35 @@ describe('registerPtyHandlers', () => {
         delete process.env.ZDOTDIR
       } else {
         process.env.ZDOTDIR = originalZdotdir
+      }
+    }
+  })
+
+  posixOnlyIt('wraps macOS spawns in login(1) with SHELL re-asserted via env(1)', async () => {
+    const originalShell = process.env.SHELL
+    // Re-enable the TCC login wrapper the suite-level beforeEach disables.
+    delete process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL
+    process.env.SHELL = '/bin/zsh'
+
+    try {
+      const [file, args, options] = await spawnAndGetCall({ cwd: '/tmp' })
+      expect(file).toBe('/usr/bin/login')
+      expect(args).toEqual([
+        '-flpq',
+        userInfo().username,
+        '/usr/bin/env',
+        'SHELL=/bin/zsh',
+        '/bin/zsh',
+        '-l'
+      ])
+      // The spawn env keeps the real shell so identity/name logic is intact.
+      expect(options.env.SHELL).toBe('/bin/zsh')
+    } finally {
+      process.env.ORCA_DISABLE_MACOS_LOGIN_SHELL = '1'
+      if (originalShell === undefined) {
+        delete process.env.SHELL
+      } else {
+        process.env.SHELL = originalShell
       }
     }
   })
@@ -6218,7 +7079,7 @@ describe('registerPtyHandlers', () => {
       mockProc.emitData('background output')
 
       expect(mainWindow.webContents.send).not.toHaveBeenCalled()
-      vi.advanceTimersByTime(7)
+      vi.advanceTimersByTime(1)
       expect(mainWindow.webContents.send).not.toHaveBeenCalled()
       vi.advanceTimersByTime(1)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
@@ -6247,7 +7108,7 @@ describe('registerPtyHandlers', () => {
 
       setRendererPtyVisible(null, { id: spawnResult.id, visible: true })
       mockProc.emitData('visible output')
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
         data: 'visible output'
@@ -6257,7 +7118,7 @@ describe('registerPtyHandlers', () => {
       setRendererPtyVisible(null, { id: spawnResult.id, visible: false })
       mockProc.emitData('\x1b[2Khidden-width redraw')
       setRendererPtyVisible(null, { id: spawnResult.id, visible: true })
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
 
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
@@ -6283,12 +7144,15 @@ describe('registerPtyHandlers', () => {
       })) as { id: string }
       const setRendererPtyVisible = getPtySetRendererPtyVisibleListener()
       const handleRendererLoading = getMainWindowWebContentsListener('did-start-loading')
+      const handleRendererDispatcherReady = getPtyRendererDispatcherReadyListener()
       mainWindow.webContents.send.mockClear()
 
       setRendererPtyVisible(null, { id: spawnResult.id, visible: true })
       handleRendererLoading()
+      // Reloaded page's dispatcher re-registers, releasing held sends (§1b).
+      handleRendererDispatcherReady()
       mockProc.emitData('reload-gap output')
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
 
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
@@ -6299,12 +7163,430 @@ describe('registerPtyHandlers', () => {
       mainWindow.webContents.send.mockClear()
       setRendererPtyVisible(null, { id: spawnResult.id, visible: true })
       mockProc.emitData('visible output')
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
 
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
         data: 'visible output'
       })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('resets leaked delivery accounting on renderer lifecycle reset so a saturated PTY resumes', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const handleRendererLoading = getMainWindowWebContentsListener('did-start-loading')
+      const handleRendererDispatcherReady = getPtyRendererDispatcherReadyListener()
+      // Drain the initial dispatcher-ready flush (beforeEach fires the handshake
+      // to model a live page) so the flood timing below starts from a clean slate.
+      vi.advanceTimersByTime(1)
+      mainWindow.webContents.send.mockClear()
+
+      // Saturate the PTY past the 512 KB per-PTY high-water with no ACKs.
+      mockProc.emitData('x'.repeat(600 * 1024))
+      vi.advanceTimersByTime(8)
+      for (let index = 0; index < 31; index++) {
+        vi.advanceTimersByTime(1)
+      }
+
+      // Gate closed: sends stop at the cap and the remainder accrues as pending.
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(32)
+      vi.advanceTimersByTime(1)
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(32)
+      expect(vi.getTimerCount()).toBe(0)
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 512 * 1024,
+        pendingChars: 88 * 1024,
+        pendingPtyCount: 1,
+        rendererLifecycleResetCount: 0,
+        lastLifecycleResetClearedChars: 0
+      })
+
+      // Renderer reload: the dead page never ACKs, so its in-flight/pending
+      // accounting must clear or the surviving PTY stays delivery-gated forever.
+      handleRendererLoading()
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 0,
+        rendererInFlightPtyCount: 0,
+        pendingChars: 0,
+        pendingPtyCount: 0,
+        rendererLifecycleResetCount: 1,
+        lastLifecycleResetClearedChars: 512 * 1024
+      })
+
+      // Boot window (§1b): the reloaded page's dispatcher has not re-registered
+      // yet, so main must hold sends — bytes sent into the listener-less page are
+      // dropped but still counted in-flight, which would re-pin the gate. The
+      // output must accrue in pending, unsent and NOT counted in-flight.
+      mainWindow.webContents.send.mockClear()
+      mockProc.emitData('post-reload output')
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 0,
+        pendingChars: 'post-reload output'.length,
+        pendingPtyCount: 1
+      })
+
+      // The reloaded page's dispatcher-ready handshake releases the held backlog.
+      // Counters-zero alone is insufficient — prove delivery actually resumes and
+      // the pending backlog drains (bytes now correctly counted in-flight, the
+      // mirror image of the NOT-counted boot-window hold above).
+      handleRendererDispatcherReady()
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'post-reload output'
+      })
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 'post-reload output'.length,
+        pendingChars: 0,
+        pendingPtyCount: 0
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('ignores a subframe did-start-loading (isLoadingMainFrame false) so an in-page iframe load cannot freeze delivery', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const handleRendererLoading = getMainWindowWebContentsListener('did-start-loading')
+      const ackData = getPtyAckDataListener()
+      // Drain the initial dispatcher-ready flush (beforeEach fires the handshake).
+      vi.advanceTimersByTime(1)
+      mainWindow.webContents.send.mockClear()
+
+      // Saturate the PTY past the 512 KB per-PTY high-water with no ACKs.
+      mockProc.emitData('x'.repeat(600 * 1024))
+      vi.advanceTimersByTime(8)
+      for (let index = 0; index < 31; index++) {
+        vi.advanceTimersByTime(1)
+      }
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(32)
+
+      // A sandboxed srcDoc iframe (notebook HTML output) loading fires
+      // did-start-loading with isLoadingMainFrame() === false. This is NOT a
+      // renderer lifecycle reset: the still-alive page keeps its dispatcher, so
+      // clearing accounting or dropping the ready flag here would freeze every
+      // pane for the whole watchdog window. Nothing must change.
+      mainWindow.webContents.isLoadingMainFrame.mockReturnValueOnce(false)
+      handleRendererLoading()
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 512 * 1024,
+        pendingChars: 88 * 1024,
+        pendingPtyCount: 1,
+        rendererLifecycleResetCount: 0,
+        lastLifecycleResetClearedChars: 0,
+        rendererPtyDispatcherReady: true
+      })
+
+      // The gate is still open: ACKing the in-flight cap drains the held backlog
+      // (a spurious reset would have cleared pending and dropped ready, so this
+      // send would never fire).
+      mainWindow.webContents.send.mockClear()
+      ackData(null, { id: spawnResult.id, charCount: 512 * 1024 })
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reconciles stale delivery accounting when a fresh dispatcher-ready handshake arrives while the gate is still open (missed lifecycle reset)', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const handleRendererDispatcherReady = getPtyRendererDispatcherReadyListener()
+      const ackData = getPtyAckDataListener()
+      // Drain the initial dispatcher-ready flush (beforeEach fires the handshake).
+      vi.advanceTimersByTime(1)
+      mainWindow.webContents.send.mockClear()
+
+      // Saturate the PTY past the 512 KB per-PTY high-water with no ACKs.
+      mockProc.emitData('x'.repeat(600 * 1024))
+      vi.advanceTimersByTime(8)
+      for (let index = 0; index < 31; index++) {
+        vi.advanceTimersByTime(1)
+      }
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 512 * 1024,
+        pendingChars: 88 * 1024,
+        rendererLifecycleResetCount: 0,
+        rendererPtyDispatcherReady: true
+      })
+
+      // A main-frame reload overlapped by an in-page subframe load emits no
+      // did-start-loading, so the lifecycle reset never ran: the gate stayed open
+      // holding the dead page's in-flight accounting. The reloaded page's fresh
+      // dispatcher now sends its one-shot handshake. Receiving it while the gate is
+      // already open is proof a reset was missed, so it must reconcile — clear the
+      // stale accounting and count the reset — before re-opening. Without that
+      // reconcile the survivors stay pinned at the cap forever (this turns red).
+      mainWindow.webContents.send.mockClear()
+      handleRendererDispatcherReady()
+      const reconciled = getPtyRendererDeliveryDebugSnapshot()
+      expect(reconciled).toMatchObject({
+        rendererInFlightChars: 0,
+        pendingChars: 0,
+        pendingPtyCount: 0,
+        rendererLifecycleResetCount: 1,
+        rendererPtyDispatcherReady: true
+      })
+      expect(reconciled.lastLifecycleResetClearedChars).toBeGreaterThan(0)
+
+      // Delivery has resumed: fresh output flows immediately instead of piling up
+      // behind the stale cap.
+      mockProc.emitData('post-reconcile output')
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'post-reconcile output'
+      })
+
+      // A straggler ACK from the dead page is clamped and cannot underflow the
+      // reconciled counters below zero.
+      ackData(null, { id: spawnResult.id, charCount: 512 * 1024 })
+      expect(getPtyRendererDeliveryDebugSnapshot().rendererInFlightChars).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('holds interactive input echo during the boot window until the dispatcher-ready handshake', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const handleRendererLoading = getMainWindowWebContentsListener('did-start-loading')
+      const handleRendererDispatcherReady = getPtyRendererDispatcherReadyListener()
+      const writeListener = getPtyWriteListener()
+      // Drain the initial ready-flush the beforeEach handshake schedules.
+      vi.advanceTimersByTime(1)
+
+      // Reload closes the gate; the reloaded page's dispatcher has not re-registered.
+      handleRendererLoading()
+      mainWindow.webContents.send.mockClear()
+
+      // Prime the interactive window with a keystroke, then emit a small redraw:
+      // shouldSendInteractiveOutputNow() is true here, so ONLY the
+      // `&& rendererPtyDispatcherReady` guard on the interactive fast path keeps this
+      // echo from being sent into the still-listener-less page (removing that flag
+      // check turns this red). It must accrue in pending, unsent and NOT in-flight.
+      const redraw = '\x1b[20;2Hredraw'
+      writeListener(mainWindowIpcEvent, { id: spawnResult.id, data: 'a' })
+      mockProc.emitData(redraw)
+      expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 0,
+        pendingChars: redraw.length,
+        pendingPtyCount: 1
+      })
+
+      // The handshake releases the held echo (drained via the batch flush).
+      handleRendererDispatcherReady()
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: redraw
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('force-opens the delivery gate if no dispatcher-ready handshake arrives after a reload', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const handleRendererLoading = getMainWindowWebContentsListener('did-start-loading')
+      vi.advanceTimersByTime(1)
+
+      // Reload closes the gate and arms the ~10s watchdog; the reloaded page never
+      // sends the handshake (dropped IPC), so output stays held in pending.
+      handleRendererLoading()
+      mainWindow.webContents.send.mockClear()
+      mockProc.emitData('post-reload output')
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererPtyDispatcherReady: false,
+        rendererDispatcherReadyForcedCount: 0
+      })
+
+      // Past the watchdog window (10s) the gate self-heals: ready is forced, the
+      // counter increments, and the held backlog drains — degrading to pre-handshake
+      // behavior instead of a permanent freeze.
+      vi.advanceTimersByTime(10_000)
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'post-reload output'
+      })
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererPtyDispatcherReady: true,
+        rendererDispatcherReadyForcedCount: 1
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('ignores a dispatcher-ready handshake from a sender other than the main window', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const handleRendererLoading = getMainWindowWebContentsListener('did-start-loading')
+      const readyCall = onMock.mock.calls.find(
+        (call: unknown[]) => call[0] === 'pty:rendererDispatcherReady'
+      )!
+      const rawReadyListener = readyCall[1] as (event: unknown) => void
+      vi.advanceTimersByTime(1)
+
+      // Why: a straggler handshake from a dying window's webContents must not
+      // reopen the gate (or trigger the destructive reconcile) for the new page.
+      handleRendererLoading()
+      mainWindow.webContents.send.mockClear()
+      rawReadyListener({ sender: { isDestroyed: () => false } })
+      mockProc.emitData('post-reload output')
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererPtyDispatcherReady: false
+      })
+
+      // The genuine main-window handshake still opens the gate and drains.
+      rawReadyListener({ sender: mainWindow.webContents })
+      vi.advanceTimersByTime(8)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: 'post-reload output'
+      })
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererPtyDispatcherReady: true
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('cancels the dispatcher-ready watchdog when the handshake arrives in time', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, cwd: '/tmp' })
+      const handleRendererLoading = getMainWindowWebContentsListener('did-start-loading')
+      const handleRendererDispatcherReady = getPtyRendererDispatcherReadyListener()
+      vi.advanceTimersByTime(1)
+
+      // Reload arms the watchdog; a timely handshake must cancel it so no orphaned
+      // ~10s timer lingers. Draining the handshake's empty flush must leave zero
+      // pending timers — a surviving watchdog would show up here (the forced-count
+      // guard alone can't catch it, since the watchdog no-ops once ready is true).
+      handleRendererLoading()
+      handleRendererDispatcherReady()
+      vi.advanceTimersByTime(0)
+      expect(vi.getTimerCount()).toBe(0)
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererPtyDispatcherReady: true,
+        rendererDispatcherReadyForcedCount: 0
+      })
+
+      // Advancing well past the watchdog window leaves the forced counter at zero.
+      vi.advanceTimersByTime(20_000)
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererPtyDispatcherReady: true,
+        rendererDispatcherReadyForcedCount: 0
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it("cancels a prior registration's armed dispatcher-ready watchdog when handlers re-register (no orphaned timer across window re-creation)", async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, cwd: '/tmp' })
+      const handleRendererLoading = getMainWindowWebContentsListener('did-start-loading')
+      // Drain the initial dispatcher-ready flush; the baseline is timer-free.
+      vi.advanceTimersByTime(1)
+      expect(vi.getTimerCount()).toBe(0)
+
+      // A reload closes the gate and arms the ~10s self-heal watchdog on THIS
+      // registration's closure.
+      handleRendererLoading()
+      expect(vi.getTimerCount()).toBe(1)
+
+      // Re-registering handlers (macOS re-activate / new window owns delivery) must
+      // cancel that armed watchdog via the cross-registration bridge at the top of
+      // registerPtyHandlers — otherwise the prior closure's timer survives and later
+      // force-opens a dead window's gate. The re-registration's own dispatcher-ready
+      // handshake schedules and drains one 0ms flush; nothing else may remain.
+      registerPtyHandlers(mainWindow as never)
+      expect(vi.getTimerCount()).toBe(0)
+
+      // And no orphaned ~10s watchdog fires later (removing the bridge cancel turns
+      // this red: the prior closure's timer would still be pending here).
+      vi.advanceTimersByTime(20_000)
+      expect(vi.getTimerCount()).toBe(0)
     } finally {
       vi.useRealTimers()
     }
@@ -6330,7 +7612,7 @@ describe('registerPtyHandlers', () => {
       resizePty(null, { id: spawnResult.id, cols: 72, rows: 24 })
       setRendererPtyVisible(null, { id: spawnResult.id, visible: true })
       mockProc.emitData('\x1b[2Khidden-resize redraw')
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
 
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
@@ -6341,7 +7623,7 @@ describe('registerPtyHandlers', () => {
       mainWindow.webContents.send.mockClear()
       resizePty(null, { id: spawnResult.id, cols: 80, rows: 24 })
       mockProc.emitData('visible repaint')
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
 
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
@@ -6374,7 +7656,7 @@ describe('registerPtyHandlers', () => {
       setRendererPtyVisible(null, { id: spawnResult.id, visible: true })
       writePty(mainWindowIpcEvent, { id: spawnResult.id, data: 'x' })
       mockProc.emitData('x')
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
 
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
@@ -6409,7 +7691,7 @@ describe('registerPtyHandlers', () => {
 
       expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
       expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]11;rgb:1111/1111/1111\x1b\\')
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
         data: 'ready'
@@ -6443,7 +7725,7 @@ describe('registerPtyHandlers', () => {
 
       expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
       expect(mockProc.proc.write).toHaveBeenCalledWith('\x1b]11;rgb:1111/1111/1111\x1b\\')
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
         data: 'ready'
@@ -6475,7 +7757,7 @@ describe('registerPtyHandlers', () => {
       mockProc.emitData(`${query}ready`)
 
       expect(mockProc.proc.write).not.toHaveBeenCalled()
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
         data: `${query}ready`
@@ -6509,7 +7791,7 @@ describe('registerPtyHandlers', () => {
       mockProc.emitData(`${command}ready`)
 
       expect(mockProc.proc.write).not.toHaveBeenCalled()
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
         data: `${command}ready`
@@ -6570,7 +7852,7 @@ describe('registerPtyHandlers', () => {
 
       expect(write).toHaveBeenCalledWith(spawnResult.id, '\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
       expect(write).toHaveBeenCalledWith(spawnResult.id, '\x1b]11;rgb:1111/1111/1111\x1b\\')
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
         data: 'daemon-ready'
@@ -6645,7 +7927,7 @@ describe('registerPtyHandlers', () => {
         id: spawnResult.id,
         data: '\x1b]10;?\x1b\\\x1b]11;?\x1b\\ready'
       })
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
 
       expect(write).toHaveBeenCalledWith(spawnResult.id, '\x1b]10;rgb:eeee/eeee/eeee\x1b\\')
       expect(write).toHaveBeenCalledWith(spawnResult.id, '\x1b]11;rgb:1111/1111/1111\x1b\\')
@@ -6685,7 +7967,7 @@ describe('registerPtyHandlers', () => {
         id: spawnResult.id,
         data: '\x1b[20;2Hredraw'
       })
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
       expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()
@@ -6741,7 +8023,7 @@ describe('registerPtyHandlers', () => {
       mockProc.emitData(largeOutput)
 
       expect(mainWindow.webContents.send).not.toHaveBeenCalled()
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
         data: largeOutput
@@ -6777,7 +8059,7 @@ describe('registerPtyHandlers', () => {
       }
 
       expect(mainWindow.webContents.send).toHaveBeenCalledTimes(64)
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
       expect(mainWindow.webContents.send).toHaveBeenCalledTimes(65)
       expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(65, 'pty:data', {
         id: spawnResult.id,
@@ -6815,7 +8097,7 @@ describe('registerPtyHandlers', () => {
         id: spawnResult.id,
         data: redraw
       })
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
       expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()
@@ -6847,7 +8129,7 @@ describe('registerPtyHandlers', () => {
       mockProc.emitData('redraw')
 
       expect(mainWindow.webContents.send).not.toHaveBeenCalled()
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
         data: `${pendingOutput}redraw`
@@ -6882,7 +8164,7 @@ describe('registerPtyHandlers', () => {
       secondProc.emitData('second-terminal-output')
       firstProc.emitData(`${firstChunk}${firstRemainder}`)
 
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
 
       expect(mainWindow.webContents.send).toHaveBeenCalledTimes(2)
       expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(1, 'pty:data', {
@@ -6928,7 +8210,7 @@ describe('registerPtyHandlers', () => {
       mainWindow.webContents.send.mockClear()
 
       firstProc.emitData('x'.repeat(600 * 1024))
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
       for (let index = 0; index < 31; index++) {
         vi.advanceTimersByTime(1)
       }
@@ -6953,7 +8235,7 @@ describe('registerPtyHandlers', () => {
       })
 
       secondProc.emitData('second-terminal-output')
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
 
       expect(mainWindow.webContents.send).toHaveBeenCalledTimes(33)
       expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(33, 'pty:data', {
@@ -6987,6 +8269,775 @@ describe('registerPtyHandlers', () => {
         peakRendererInFlightChars: 512 * 1024 + 'second-terminal-output'.length,
         ackGatedFlushSkipCount: 0
       })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('caps per-PTY pending output while the renderer is starved and heals via a droppedOutput sentinel', async () => {
+    vi.useFakeTimers()
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const ackData = getPtyAckDataListener()
+      mainWindow.webContents.send.mockClear()
+
+      // Saturate the renderer in-flight window (512 KB) with no ACKs — the
+      // frozen/starved-renderer shape from the field reports.
+      mockProc.emitData('x'.repeat(600 * 1024))
+      vi.advanceTimersByTime(2)
+      for (let index = 0; index < 32; index++) {
+        vi.advanceTimersByTime(1)
+      }
+
+      // Keep flooding well past the 2 MB per-PTY pending cap. Main must not
+      // buffer this unboundedly (previously: unbounded string concat).
+      mockProc.emitData('y'.repeat(3 * 1024 * 1024))
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        pendingPtyCount: 1,
+        pendingChars: 0
+      })
+
+      // Later output while dropped must stay O(1), not start re-accumulating.
+      mockProc.emitData('z'.repeat(64 * 1024))
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        pendingPtyCount: 1,
+        pendingChars: 0
+      })
+
+      // Renderer recovers and ACKs: the flush must deliver the droppedOutput
+      // sentinel so the pane repaints from the main-owned snapshot.
+      mainWindow.webContents.send.mockClear()
+      ackData(null, { id: spawn.id, charCount: 512 * 1024 })
+      vi.advanceTimersByTime(2)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawn.id,
+        data: '',
+        droppedOutput: true
+      })
+
+      // Fresh output after the sentinel flows normally again.
+      mainWindow.webContents.send.mockClear()
+      mockProc.emitData('back to normal')
+      vi.advanceTimersByTime(2)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawn.id,
+        data: 'back to normal'
+      })
+    } finally {
+      errorSpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('carves reply-eliciting queries out of a pending-cap bulk drop so probes survive', async () => {
+    vi.useFakeTimers()
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const ackData = getPtyAckDataListener()
+      mainWindow.webContents.send.mockClear()
+
+      // Saturate the in-flight window so everything after buffers in pendingData.
+      mockProc.emitData('x'.repeat(600 * 1024))
+      vi.advanceTimersByTime(2)
+      for (let index = 0; index < 32; index++) {
+        vi.advanceTimersByTime(1)
+      }
+
+      // Flood past the pending cap WITH an embedded DSR probe — the program
+      // that wrote it blocks on the reply (the bench DSR timeout).
+      mockProc.emitData(`${'y'.repeat(2 * 1024 * 1024)}\x1b[6n${'y'.repeat(1024 * 1024)}`)
+      // While latched, a later probe must also be carved out (bounded).
+      mockProc.emitData(`${'z'.repeat(32 * 1024)}\x1b[0c${'z'.repeat(32 * 1024)}`)
+
+      mainWindow.webContents.send.mockClear()
+      ackData(null, { id: spawn.id, charCount: 512 * 1024 })
+      vi.advanceTimersByTime(2)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: spawn.id,
+        data: '\x1b[6n\x1b[0c',
+        droppedOutput: true
+      })
+    } finally {
+      errorSpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('scales the pending-output cap with the scrollback setting', async () => {
+    vi.useFakeTimers()
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      // 50k-row scrollback ⇒ 6 MB pending cap instead of the 2 MB floor.
+      registerPtyHandlers(mainWindow as never, undefined, undefined, (() => ({
+        terminalScrollbackRows: 50_000
+      })) as never)
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, cwd: '/tmp' })
+      mainWindow.webContents.send.mockClear()
+
+      // Saturate the in-flight window with no ACKs, then buffer 3 MB — over
+      // the floor, under the scaled cap: it must be retained, not dropped.
+      mockProc.emitData('x'.repeat(600 * 1024))
+      vi.advanceTimersByTime(2)
+      for (let index = 0; index < 32; index++) {
+        vi.advanceTimersByTime(1)
+      }
+      mockProc.emitData('y'.repeat(3 * 1024 * 1024))
+      expect(getPtyRendererDeliveryDebugSnapshot().pendingChars).toBeGreaterThan(3 * 1024 * 1024)
+
+      // The scaled cap still bounds a runaway flood.
+      mockProc.emitData('z'.repeat(4 * 1024 * 1024))
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        pendingPtyCount: 1,
+        pendingChars: 0
+      })
+    } finally {
+      errorSpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('pauses the producer at the pending high watermark and resumes after drain', async () => {
+    vi.useFakeTimers()
+    try {
+      const provider = installObservableDaemonTestProvider()
+      registerPtyHandlers(mainWindow as never)
+      mainWindow.webContents.send.mockClear()
+
+      // Flood in 64KB chunks like a `yes`-style producer that honors pause —
+      // node-pty pause() stops the fd read, so a real producer stops emitting.
+      const chunk = 'x'.repeat(64 * 1024)
+      let chunks = 0
+      while (provider.pauseProducer.mock.calls.length === 0 && chunks < 100) {
+        provider.emitData('flood-pty', chunk)
+        chunks++
+      }
+
+      // Pause fires exactly once, on the first chunk past the 256KB high
+      // watermark (the 5th 64KB chunk), not once per chunk.
+      expect(provider.pauseProducer).toHaveBeenCalledTimes(1)
+      expect(provider.pauseProducer).toHaveBeenCalledWith('flood-pty')
+      expect(chunks).toBe(5)
+      // Bounded: main buffered at most HIGH + one chunk while paused.
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        pendingPtyCount: 1,
+        pendingChars: 320 * 1024,
+        peakPendingChars: 320 * 1024
+      })
+
+      // Drain to the renderer. Resume must fire exactly once — when pending
+      // drops below the 32KB low watermark — with no pause/resume flapping
+      // while pending crosses the 32-256KB hysteresis band.
+      vi.runAllTimers()
+      expect(provider.resumeProducer).toHaveBeenCalledTimes(1)
+      expect(provider.resumeProducer).toHaveBeenCalledWith('flood-pty')
+      expect(provider.pauseProducer).toHaveBeenCalledTimes(1)
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({ pendingChars: 0 })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('resumes a paused producer when the PTY exits before draining', async () => {
+    vi.useFakeTimers()
+    try {
+      const provider = installObservableDaemonTestProvider()
+      registerPtyHandlers(mainWindow as never)
+      mainWindow.webContents.send.mockClear()
+
+      provider.emitData('flood-pty', 'x'.repeat(320 * 1024))
+      expect(provider.pauseProducer).toHaveBeenCalledTimes(1)
+
+      // Exit while pending is still above the low watermark: the exit path
+      // must release the pause instead of leaving a stale mark behind.
+      provider.emitExit('flood-pty', 0)
+      expect(provider.resumeProducer).toHaveBeenCalledTimes(1)
+      expect(provider.resumeProducer).toHaveBeenCalledWith('flood-pty')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  const DELIVERY_RESYNC_UNANSWERED_WARNING =
+    '[pty] delivery resync probe unanswered — renderer IPC unresponsive'
+
+  function countResyncUnansweredWarnings(warnSpy: { mock: { calls: unknown[][] } }): number {
+    return warnSpy.mock.calls.filter((call) => call[0] === DELIVERY_RESYNC_UNANSWERED_WARNING)
+      .length
+  }
+
+  function getPtyDataSendCalls(): unknown[][] {
+    return mainWindow.webContents.send.mock.calls.filter(
+      (call: unknown[]) => call[0] === 'pty:data'
+    )
+  }
+
+  function getDeliveryResyncProbeCalls(): unknown[][] {
+    return mainWindow.webContents.send.mock.calls.filter(
+      (call: unknown[]) => call[0] === 'pty:requestDeliveryResync'
+    )
+  }
+
+  function getDeliveryResyncResponseListener(): (
+    event: unknown,
+    args: { requestId: number; processedCharsByPty: Record<string, number> }
+  ) => void {
+    const responseCall = onMock.mock.calls.find(
+      (call: unknown[]) => call[0] === 'pty:deliveryResyncResponse'
+    )
+    if (!responseCall) {
+      throw new Error('missing pty:deliveryResyncResponse listener')
+    }
+    return responseCall[1] as (
+      event: unknown,
+      args: { requestId: number; processedCharsByPty: Record<string, number> }
+    ) => void
+  }
+
+  /** Saturates one PTY to its 512 KiB in-flight cap so delivery is fully
+   *  gated for that PTY. Leaves 88 KiB pending and no timers scheduled. */
+  async function spawnAndSaturateRendererDeliveryGate(
+    mockProc: ReturnType<typeof createMockProc>
+  ): Promise<{ id: string }> {
+    registerPtyHandlers(mainWindow as never)
+    const spawnResult = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      cwd: '/tmp'
+    })) as { id: string }
+    mainWindow.webContents.send.mockClear()
+    mockProc.emitData('x'.repeat(600 * 1024))
+    vi.advanceTimersByTime(8)
+    for (let index = 0; index < 32; index++) {
+      vi.advanceTimersByTime(1)
+    }
+    return spawnResult
+  }
+
+  it('self-heals lost ACKs when a later cumulative ACK arrives', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      const spawnResult = await spawnAndSaturateRendererDeliveryGate(mockProc)
+      expect(getPtyDataSendCalls()).toHaveLength(32)
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 512 * 1024,
+        rendererInFlightPtyCount: 1
+      })
+
+      // Every per-chunk ACK was lost, but the next ACK carries the renderer's
+      // full cumulative total — the debt clears without any timer or reset.
+      const ackData = getPtyAckDataListener()
+      ackData(null, { id: spawnResult.id, processedChars: 512 * 1024 })
+
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 0,
+        rendererInFlightPtyCount: 0
+      })
+
+      vi.runOnlyPendingTimers()
+      expect(getPtyDataSendCalls()).toHaveLength(33)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('applies cumulative ACKs idempotently and ignores stale reordered totals', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      const spawnResult = await spawnAndSaturateRendererDeliveryGate(mockProc)
+      const ackData = getPtyAckDataListener()
+
+      ackData(null, { id: spawnResult.id, processedChars: 256 * 1024 })
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 256 * 1024,
+        maxRendererInFlightCharsByPty: 256 * 1024
+      })
+
+      // Replayed duplicate credits nothing further.
+      ackData(null, { id: spawnResult.id, processedChars: 256 * 1024 })
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 256 * 1024
+      })
+
+      // A stale reordered total can never move accounting backwards.
+      ackData(null, { id: spawnResult.id, processedChars: 128 * 1024 })
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 256 * 1024
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('tolerates mixed legacy delta and cumulative ACK payloads', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      const spawnResult = await spawnAndSaturateRendererDeliveryGate(mockProc)
+      const ackData = getPtyAckDataListener()
+
+      // Legacy delta shape (no processedChars) still credits per chunk.
+      ackData(null, { id: spawnResult.id, charCount: 16 * 1024 })
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 496 * 1024
+      })
+
+      // A cumulative total then supersedes without double-crediting the delta.
+      ackData(null, { id: spawnResult.id, processedChars: 512 * 1024 })
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 0,
+        rendererInFlightPtyCount: 0
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('forwards only newly acknowledged cumulative bytes to provider ACK backpressure', async () => {
+    vi.useFakeTimers()
+    const acknowledgeDataEvent = vi.fn()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      setLocalPtyProvider({
+        spawn: vi.fn(async () => ({ id: 'cumulative-pty' })),
+        write: vi.fn(),
+        resize: vi.fn(),
+        shutdown: vi.fn(),
+        sendSignal: vi.fn(),
+        getCwd: vi.fn(),
+        getInitialCwd: vi.fn(),
+        clearBuffer: vi.fn(),
+        acknowledgeDataEvent,
+        hasChildProcesses: vi.fn(),
+        getForegroundProcess: vi.fn(),
+        serialize: vi.fn(),
+        revive: vi.fn(),
+        onData: vi.fn((callback) => {
+          mockProc.proc.onData((data: string) => callback({ id: 'cumulative-pty', data }))
+          return () => {}
+        }),
+        onReplay: vi.fn(() => () => {}),
+        onExit: vi.fn(() => () => {}),
+        listProcesses: vi.fn(async () => []),
+        attach: vi.fn(),
+        getDefaultShell: vi.fn(),
+        getProfiles: vi.fn()
+      } as never)
+      registerPtyHandlers(mainWindow as never)
+      const ackData = getPtyAckDataListener()
+      mainWindow.webContents.send.mockClear()
+
+      mockProc.emitData('remote-output')
+      vi.advanceTimersByTime(8)
+
+      // Why: cumulative totals are clamped to what main actually sent, and a
+      // replayed total must credit SSH/relay flow control with zero, not
+      // duplicate bytes.
+      ackData(null, { id: 'cumulative-pty', processedChars: 1024 })
+      ackData(null, { id: 'cumulative-pty', processedChars: 1024 })
+
+      expect(acknowledgeDataEvent).toHaveBeenNthCalledWith(
+        1,
+        'cumulative-pty',
+        'remote-output'.length
+      )
+      expect(acknowledgeDataEvent).toHaveBeenNthCalledWith(2, 'cumulative-pty', 0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('probes for a delivery resync when data arrives for a fully gated PTY and reconciles on reply', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      const spawnResult = await spawnAndSaturateRendererDeliveryGate(mockProc)
+
+      mockProc.emitData('stuck-output')
+      expect(getDeliveryResyncProbeCalls()).toHaveLength(1)
+      const probePayload = getDeliveryResyncProbeCalls()[0]![1] as { requestId: number }
+
+      // Only one probe may be outstanding at a time.
+      mockProc.emitData('still-stuck')
+      expect(getDeliveryResyncProbeCalls()).toHaveLength(1)
+
+      const respondDeliveryResync = getDeliveryResyncResponseListener()
+      respondDeliveryResync(null, {
+        requestId: probePayload.requestId,
+        processedCharsByPty: { [spawnResult.id]: 512 * 1024 }
+      })
+
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 0,
+        rendererInFlightPtyCount: 0
+      })
+
+      // The reconciled gate lets the held pendingData flush again (one 2ms
+      // batch window = one 16KB slice).
+      vi.advanceTimersByTime(2)
+      expect(getPtyDataSendCalls()).toHaveLength(33)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('ignores resync replies with stale request ids', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      const spawnResult = await spawnAndSaturateRendererDeliveryGate(mockProc)
+      mockProc.emitData('stuck-output')
+      const probePayload = getDeliveryResyncProbeCalls()[0]![1] as { requestId: number }
+
+      const respondDeliveryResync = getDeliveryResyncResponseListener()
+      respondDeliveryResync(null, {
+        requestId: probePayload.requestId + 41,
+        processedCharsByPty: { [spawnResult.id]: 512 * 1024 }
+      })
+
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 512 * 1024
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('clears an unanswered resync probe, warns once per silent streak, and never mutates counters', async () => {
+    vi.useFakeTimers()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      await spawnAndSaturateRendererDeliveryGate(mockProc)
+
+      mockProc.emitData('stuck-output')
+      expect(getDeliveryResyncProbeCalls()).toHaveLength(1)
+
+      vi.advanceTimersByTime(4_999)
+      expect(countResyncUnansweredWarnings(warnSpy)).toBe(0)
+
+      vi.advanceTimersByTime(1)
+      expect(countResyncUnansweredWarnings(warnSpy)).toBe(1)
+      expect(warnSpy).toHaveBeenCalledWith(
+        DELIVERY_RESYNC_UNANSWERED_WARNING,
+        expect.objectContaining({
+          rendererInFlightChars: 512 * 1024,
+          pendingPtyCount: 1
+        })
+      )
+      // No blind reset: counters and pending output are untouched.
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 512 * 1024,
+        pendingChars: 88 * 1024 + 'stuck-output'.length
+      })
+      expect(getPtyDataSendCalls()).toHaveLength(32)
+
+      // The cleared flag lets the next gated arrival probe again, but a
+      // still-silent renderer does not spam a second warn.
+      mockProc.emitData('still-stuck')
+      expect(getDeliveryResyncProbeCalls()).toHaveLength(2)
+      vi.advanceTimersByTime(5_000)
+      expect(countResyncUnansweredWarnings(warnSpy)).toBe(1)
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 512 * 1024
+      })
+    } finally {
+      warnSpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('clears resync probe state when the window is destroyed', async () => {
+    vi.useFakeTimers()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+    let destroyed = false
+    const destroyableWindow = {
+      isDestroyed: () => destroyed,
+      isFocused: () => true,
+      isVisible: () => true,
+      isMinimized: () => false,
+      webContents: { on: vi.fn(), send: vi.fn(), removeListener: vi.fn() }
+    }
+
+    try {
+      registerPtyHandlers(destroyableWindow as never)
+      await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, cwd: '/tmp' })
+      destroyableWindow.webContents.send.mockClear()
+      mockProc.emitData('x'.repeat(600 * 1024))
+      vi.advanceTimersByTime(8)
+      for (let index = 0; index < 32; index++) {
+        vi.advanceTimersByTime(1)
+      }
+      mockProc.emitData('stuck-output')
+      // The outstanding probe's hygiene timeout is the only remaining timer;
+      // the dispatcher-ready handshake already drained the pending flush.
+      expect(vi.getTimerCount()).toBe(1)
+
+      destroyed = true
+      mockProc.emitData('post-destroy output')
+
+      expect(vi.getTimerCount()).toBe(0)
+      vi.advanceTimersByTime(60_000)
+      expect(countResyncUnansweredWarnings(warnSpy)).toBe(0)
+    } finally {
+      warnSpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  // ── Renderer-initiated delivery health/heal (pty:reportRendererDeliveryState) ──
+  // Field wedge repro (v1.4.121-rc.0 snapshot): push delivery dead, invoke
+  // alive. The solicited-resync probe above rides push and can never be
+  // answered in that state; this invoke lane is the recovery that can.
+
+  function reportRendererDeliveryState(args: {
+    receivedCharsByPty: Record<string, number>
+    processedCharsByPty: Record<string, number>
+    heal?: boolean
+    rendererPtyDataListenerCount?: number | null
+  }): {
+    inFlightTotalChars: number
+    inFlightPtyCount: number
+    msSinceLastAck: number | null
+    writtenOff?: { id: string; markerSeq?: number; writtenOffChars: number }[]
+  } {
+    const handler = handlers.get('pty:reportRendererDeliveryState')
+    if (!handler) {
+      throw new Error('missing pty:reportRendererDeliveryState handler')
+    }
+    return handler(null, args) as ReturnType<typeof reportRendererDeliveryState>
+  }
+
+  it('reports delivery health over invoke without mutating any delivery state', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      await spawnAndSaturateRendererDeliveryGate(mockProc)
+
+      // The field wedge in miniature: renderer received nothing, no ACK ever.
+      const health = reportRendererDeliveryState({
+        receivedCharsByPty: {},
+        processedCharsByPty: {}
+      })
+
+      expect(health).toMatchObject({
+        inFlightTotalChars: 512 * 1024,
+        inFlightPtyCount: 1,
+        msSinceLastAck: null
+      })
+      expect(health.writtenOff).toBeUndefined()
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 512 * 1024,
+        pendingChars: 88 * 1024
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('merges cumulative processed totals from a health report as a repair lane', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      const spawnResult = await spawnAndSaturateRendererDeliveryGate(mockProc)
+
+      // Lost-ACK variant: renderer processed everything; only the ACK
+      // messages vanished. A plain report (no heal) must drain the debt.
+      const health = reportRendererDeliveryState({
+        receivedCharsByPty: { [spawnResult.id]: 512 * 1024 },
+        processedCharsByPty: { [spawnResult.id]: 512 * 1024 }
+      })
+
+      expect(health).toMatchObject({ inFlightTotalChars: 0, inFlightPtyCount: 0 })
+      expect(health.writtenOff).toBeUndefined()
+      // Fully reopened gate drains one 16K slice per batcher tick (0/1/2 ms).
+      vi.advanceTimersByTime(2)
+      expect(getPtyDataSendCalls()).toHaveLength(35)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('heals a dead push channel: writes off unreceived bytes and returns restore markers', async () => {
+    vi.useFakeTimers()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      const spawnResult = await spawnAndSaturateRendererDeliveryGate(mockProc)
+
+      const healed = reportRendererDeliveryState({
+        receivedCharsByPty: {},
+        processedCharsByPty: {},
+        heal: true,
+        rendererPtyDataListenerCount: 1
+      })
+
+      // The 512 KiB the renderer provably never received is written off; the
+      // 88 KiB still pending is dropped because the snapshot restore covers
+      // everything at or before the marker (hidden-drop parity).
+      expect(healed.writtenOff).toEqual([{ id: spawnResult.id, writtenOffChars: 512 * 1024 }])
+      expect(healed).toMatchObject({ inFlightTotalChars: 0, inFlightPtyCount: 0 })
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 0,
+        pendingChars: 0,
+        pendingDroppedChars: 88 * 1024
+      })
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[pty] delivery heal: wrote off renderer-bound bytes lost in push channel',
+        expect.objectContaining({ rendererPtyDataListenerCount: 1 })
+      )
+
+      // Delivery is unwedged: fresh output flows to the renderer again.
+      mockProc.emitData('after-heal')
+      vi.advanceTimersByTime(2)
+      expect(getPtyDataSendCalls()).toHaveLength(33)
+    } finally {
+      warnSpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('never writes off bytes the renderer received but has not parsed yet', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      const spawnResult = await spawnAndSaturateRendererDeliveryGate(mockProc)
+
+      // Parse backpressure, not a wedge: every byte arrived, ACK credit is
+      // deferred to the scheduler consume point and will still repay this.
+      const health = reportRendererDeliveryState({
+        receivedCharsByPty: { [spawnResult.id]: 512 * 1024 },
+        processedCharsByPty: {},
+        heal: true,
+        rendererPtyDataListenerCount: 1
+      })
+
+      expect(health.writtenOff).toBeUndefined()
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 512 * 1024,
+        pendingChars: 88 * 1024
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('refuses a heal while main has seen a recent ACK', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      const spawnResult = await spawnAndSaturateRendererDeliveryGate(mockProc)
+      const ackData = getPtyAckDataListener()
+      ackData(null, { id: spawnResult.id, processedChars: 16 * 1024 })
+
+      // Some pty still round-trips ACKs — whatever the renderer thinks, the
+      // channel is not dead, so a heal request must not destroy accounting.
+      const blocked = reportRendererDeliveryState({
+        receivedCharsByPty: {},
+        processedCharsByPty: {},
+        heal: true
+      })
+      expect(blocked.writtenOff).toBeUndefined()
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightChars: 496 * 1024
+      })
+
+      // Once main-side ACK silence crosses the floor, the same heal proceeds.
+      // (The ACK freed a 16K window slot, so one more pending slice shipped
+      // during the advance — the write-off covers 512K un-received again.)
+      vi.advanceTimersByTime(10_000)
+      const healed = reportRendererDeliveryState({
+        receivedCharsByPty: {},
+        processedCharsByPty: {},
+        heal: true
+      })
+      expect(healed.writtenOff).toEqual([{ id: spawnResult.id, writtenOffChars: 512 * 1024 }])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('zeroes renderer in-flight delivery counters when the renderer lifecycle resets', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      await spawnAndSaturateRendererDeliveryGate(mockProc)
+      const handleRendererLoading = getMainWindowWebContentsListener('did-start-loading')
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightPtyCount: 1,
+        rendererInFlightChars: 512 * 1024
+      })
+
+      handleRendererLoading()
+
+      // Why: reload kills the renderer dispatcher that would have ACKed, so
+      // keeping the counters would gate PTYs in the fresh renderer forever.
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        rendererInFlightPtyCount: 0,
+        rendererInFlightChars: 0
+      })
+      // Main now holds sends until the replacement page confirms its dispatcher
+      // is installed; the lifecycle reset arms a bounded handshake watchdog.
+      expect(vi.getTimerCount()).toBe(1)
+
+      mockProc.emitData('after-reload')
+      vi.advanceTimersByTime(2)
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(32)
+
+      getPtyRendererDispatcherReadyListener()()
+      // One 2ms batch window releases the fresh page's held output.
+      vi.advanceTimersByTime(2)
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(33)
     } finally {
       vi.useRealTimers()
     }
@@ -7029,7 +9080,7 @@ describe('registerPtyHandlers', () => {
       mainWindow.webContents.send.mockClear()
 
       mockProc.emitData('remote-output')
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
 
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: 'remote-like-pty',
@@ -7080,7 +9131,7 @@ describe('registerPtyHandlers', () => {
       for (const proc of bulkProcs) {
         proc.emitData('x'.repeat(600 * 1024))
       }
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
       for (let index = 0; index < 400; index++) {
         vi.advanceTimersByTime(1)
       }
@@ -7115,7 +9166,10 @@ describe('registerPtyHandlers', () => {
         data: 'a'
       })
       interactiveProc.emitData(reserveChunk)
-      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(529)
+      // Why: the reserve-exhausted send stays gated, and the fully gated
+      // arrival now also emits one delivery resync probe (not pty:data).
+      expect(getPtyDataSendCalls()).toHaveLength(529)
+      expect(getDeliveryResyncProbeCalls()).toHaveLength(1)
     } finally {
       vi.useRealTimers()
     }
@@ -7146,7 +9200,7 @@ describe('registerPtyHandlers', () => {
       for (const proc of procs) {
         proc.emitData('x'.repeat(600 * 1024))
       }
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
       for (let index = 0; index < 400; index++) {
         vi.advanceTimersByTime(1)
       }
@@ -7187,7 +9241,7 @@ describe('registerPtyHandlers', () => {
       for (let index = 0; index < procs.length - 1; index++) {
         procs[index]!.emitData('x'.repeat(600 * 1024))
       }
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
       for (let index = 0; index < 400; index++) {
         vi.advanceTimersByTime(1)
       }
@@ -7196,13 +9250,18 @@ describe('registerPtyHandlers', () => {
       const activeIndex = procs.length - 1
       procs[activeIndex]!.emitData('active-output')
       setActiveRendererPty(null, { id: spawns[activeIndex]!.id, active: true })
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
 
-      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(513)
-      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(513, 'pty:data', {
-        id: spawns[activeIndex]!.id,
-        data: 'active-output'
-      })
+      // Why: the fully gated arrival also emits one delivery resync probe, so
+      // count pty:data sends rather than raw webContents.send calls.
+      expect(getPtyDataSendCalls()).toHaveLength(513)
+      expect(getPtyDataSendCalls()[512]).toEqual([
+        'pty:data',
+        {
+          id: spawns[activeIndex]!.id,
+          data: 'active-output'
+        }
+      ])
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         activeRendererPtyCount: 1,
         pendingPtyCount: procs.length - 1,
@@ -7230,7 +9289,7 @@ describe('registerPtyHandlers', () => {
       mainWindow.webContents.send.mockClear()
 
       activeProc.emitData('x'.repeat(768 * 1024))
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
       for (let index = 0; index < 31; index++) {
         vi.advanceTimersByTime(1)
       }
@@ -7261,6 +9320,809 @@ describe('registerPtyHandlers', () => {
     }
   })
 
+  describe('hidden renderer delivery gate', () => {
+    it('drops hidden PTY data after model ingestion and emits one out-of-band restore marker', async () => {
+      vi.useFakeTimers()
+      const runtime = {
+        setPtyController: vi.fn(),
+        registerPty: vi.fn(),
+        noteTerminalSpawnCommand: vi.fn(),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn(() => 42),
+        getPtyOutputSequence: vi.fn(() => 42),
+        hasRemoteTerminalViewSubscriber: vi.fn(() => false),
+        createPreAllocatedTerminalHandle: vi.fn(() => 'terminal-handle-1'),
+        registerPreAllocatedHandleForPty: vi.fn()
+      }
+      const daemon = installObservableDaemonTestProvider()
+      try {
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const result = (await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          sessionId: 'daemon-session'
+        })) as { id: string }
+        const setHidden = getPtySetHiddenRendererPtyListener()
+        mainWindow.webContents.send.mockClear()
+
+        setHidden(null, { id: result.id, hidden: true })
+        daemon.emitData(result.id, 'hidden output')
+        vi.advanceTimersByTime(50)
+
+        // Model ingestion still ran — only renderer delivery was dropped.
+        expect(runtime.onPtyData).toHaveBeenCalledWith(
+          result.id,
+          'hidden output',
+          expect.any(Number),
+          'hidden output'.length
+        )
+        expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+        // Why out-of-band: an in-band empty pty:data chunk is ambiguous with
+        // chunks fully consumed by renderer OSC-9999 stripping.
+        expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
+          id: result.id,
+          reason: 'hidden-drop',
+          markerSeq: 42
+        })
+
+        // Subsequent gated chunks drop silently — the marker is one-shot.
+        daemon.emitData(result.id, 'more hidden output')
+        vi.advanceTimersByTime(50)
+        expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+        expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+          hiddenDeliveryGatedPtyCount: 1,
+          hiddenDeliveryGatedVisiblePtyCount: 0,
+          hiddenDeliveryGatedActivePtyCount: 0,
+          hiddenDeliveryDroppedChars: 'hidden output'.length + 'more hidden output'.length,
+          hiddenDeliveryDroppedChunks: 2,
+          pendingPtyCount: 0,
+          rendererInFlightChars: 0
+        })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('surfaces the hidden-yet-visible contradiction in the snapshot and warns on drop', async () => {
+      // Why: v1.4.124-rc.2.perf field snapshot — blank terminal with 2 ptys
+      // hidden-gated and 78MB dropped. The aggregate counts could not say
+      // whether the pane the user was staring at was one of them; this
+      // overlap counter + warn makes the next occurrence decisive.
+      vi.useFakeTimers()
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const daemon = installObservableDaemonTestProvider()
+      try {
+        registerPtyHandlers(mainWindow as never)
+        const result = (await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          sessionId: 'daemon-session'
+        })) as { id: string }
+        const setHidden = getPtySetHiddenRendererPtyListener()
+        const setVisible = getPtySetRendererPtyVisibleListener()
+
+        // The two renderer visibility signals contradict: the pane reports
+        // itself visible while the hidden-delivery gate still holds it.
+        setVisible(null, { id: result.id, visible: true })
+        setHidden(null, { id: result.id, hidden: true })
+        daemon.emitData(result.id, 'starved visible output')
+        vi.advanceTimersByTime(50)
+
+        expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+          hiddenDeliveryGatedPtyCount: 1,
+          hiddenDeliveryGatedVisiblePtyCount: 1,
+          hiddenDeliveryDroppedChars: 'starved visible output'.length
+        })
+        expect(warnSpy).toHaveBeenCalledWith(
+          '[pty] hidden-delivery gate is dropping bytes for a visible/active pty',
+          expect.objectContaining({ id: result.id, visible: true })
+        )
+
+        // Unhiding resolves the contradiction.
+        setHidden(null, { id: result.id, hidden: false })
+        expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+          hiddenDeliveryGatedPtyCount: 0,
+          hiddenDeliveryGatedVisiblePtyCount: 0
+        })
+      } finally {
+        warnSpy.mockRestore()
+        vi.useRealTimers()
+      }
+    })
+
+    it('embeds one-paste freeze diagnostics: per-pty table and breadcrumb history', async () => {
+      vi.useFakeTimers()
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const daemon = installObservableDaemonTestProvider()
+      try {
+        registerPtyHandlers(mainWindow as never)
+        const result = (await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          sessionId: 'daemon-session'
+        })) as { id: string }
+        const setHidden = getPtySetHiddenRendererPtyListener()
+        const setVisible = getPtySetRendererPtyVisibleListener()
+        setVisible(null, { id: result.id, visible: true })
+        setHidden(null, { id: result.id, hidden: true })
+        daemon.emitData(result.id, 'starved visible output')
+        vi.advanceTimersByTime(50)
+
+        const { diagnostics } = getPtyRendererDeliveryDebugSnapshot()
+        expect(diagnostics.appVersion).toBe('0.0.0-test')
+        expect(diagnostics.windowFocused).toBe(true)
+        expect(diagnostics.windowVisible).toBe(true)
+        const entry = diagnostics.perPty.find(
+          (candidate) => candidate.id === redactPtyIdForDiagnostics(result.id)
+        )
+        expect(entry).toMatchObject({
+          hidden: true,
+          visible: true,
+          inFlightChars: 0,
+          pendingChars: 0
+        })
+        // Why redaction is pinned here: daemon session ids embed worktree
+        // paths; the report must never carry the raw id.
+        expect(diagnostics.perPty.some((candidate) => candidate.id === result.id)).toBe(false)
+        const breadcrumbKinds = diagnostics.breadcrumbs.map((crumb) => crumb.kind)
+        expect(breadcrumbKinds).toContain('gate-mark')
+        expect(breadcrumbKinds).toContain('hidden-drop-visible')
+      } finally {
+        warnSpy.mockRestore()
+        vi.useRealTimers()
+      }
+    })
+
+    it('keeps the interactive bypass gated for hidden PTYs', async () => {
+      vi.useFakeTimers()
+      const mockProc = createMockProc()
+      spawnMock.mockReturnValue(mockProc.proc)
+
+      try {
+        registerPtyHandlers(mainWindow as never)
+        const spawnResult = (await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp'
+        })) as { id: string }
+        const writeListener = getPtyWriteListener()
+        const setHidden = getPtySetHiddenRendererPtyListener()
+
+        writeListener(mainWindowIpcEvent, { id: spawnResult.id, data: 'a' })
+        setHidden(null, { id: spawnResult.id, hidden: true })
+        mainWindow.webContents.send.mockClear()
+
+        // A keystroke-sized redraw would take the immediate path when visible.
+        mockProc.emitData('\x1b[20;2Hredraw')
+        vi.advanceTimersByTime(2)
+
+        expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+        expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
+          id: spawnResult.id,
+          reason: 'hidden-drop'
+        })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('suppresses the gate while renderer delivery interest is registered', async () => {
+      vi.useFakeTimers()
+      const mockProc = createMockProc()
+      spawnMock.mockReturnValue(mockProc.proc)
+
+      try {
+        registerPtyHandlers(mainWindow as never)
+        const spawnResult = (await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp'
+        })) as { id: string }
+        const setHidden = getPtySetHiddenRendererPtyListener()
+        const setInterest = getPtySetDeliveryInterestListener()
+        mainWindow.webContents.send.mockClear()
+
+        setHidden(null, { id: spawnResult.id, hidden: true })
+        setInterest(null, { id: spawnResult.id, interested: true })
+        mockProc.emitData('sidecar bytes')
+        vi.advanceTimersByTime(2)
+        expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+          id: spawnResult.id,
+          data: 'sidecar bytes'
+        })
+
+        setInterest(null, { id: spawnResult.id, interested: false })
+        mainWindow.webContents.send.mockClear()
+        mockProc.emitData('gated bytes')
+        vi.advanceTimersByTime(2)
+        expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+        expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
+          id: spawnResult.id,
+          reason: 'hidden-drop'
+        })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it.each([
+      ['terminalHiddenDeliveryGate', { terminalHiddenDeliveryGate: false }],
+      ['terminalMainSideEffectAuthority', { terminalMainSideEffectAuthority: false }]
+    ])('keeps delivery when the %s kill switch is off', async (_name, settings) => {
+      vi.useFakeTimers()
+      const mockProc = createMockProc()
+      spawnMock.mockReturnValue(mockProc.proc)
+
+      try {
+        registerPtyHandlers(mainWindow as never, undefined, undefined, (() => settings) as never)
+        const spawnResult = (await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp'
+        })) as { id: string }
+        const setHidden = getPtySetHiddenRendererPtyListener()
+        mainWindow.webContents.send.mockClear()
+
+        setHidden(null, { id: spawnResult.id, hidden: true })
+        mockProc.emitData('still delivered')
+        vi.advanceTimersByTime(2)
+
+        expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+        expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+          id: spawnResult.id,
+          data: 'still delivered'
+        })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('drops queued pending data when a PTY is marked hidden', async () => {
+      vi.useFakeTimers()
+      const mockProc = createMockProc()
+      spawnMock.mockReturnValue(mockProc.proc)
+
+      try {
+        registerPtyHandlers(mainWindow as never)
+        const spawnResult = (await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp'
+        })) as { id: string }
+        const setHidden = getPtySetHiddenRendererPtyListener()
+        mainWindow.webContents.send.mockClear()
+
+        mockProc.emitData('queued before hidden')
+        expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+        setHidden(null, { id: spawnResult.id, hidden: true })
+
+        // The queued bytes are model-owned; only the restore marker goes out.
+        expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+        expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
+          id: spawnResult.id,
+          reason: 'hidden-drop'
+        })
+        vi.advanceTimersByTime(2)
+        expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+        expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({ pendingPtyCount: 0 })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('re-emits the restore marker on unhide and resumes delivery', async () => {
+      vi.useFakeTimers()
+      const mockProc = createMockProc()
+      spawnMock.mockReturnValue(mockProc.proc)
+
+      try {
+        registerPtyHandlers(mainWindow as never)
+        const spawnResult = (await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp'
+        })) as { id: string }
+        const setHidden = getPtySetHiddenRendererPtyListener()
+        mainWindow.webContents.send.mockClear()
+
+        setHidden(null, { id: spawnResult.id, hidden: true })
+        mockProc.emitData('dropped while hidden')
+        vi.advanceTimersByTime(2)
+        expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+
+        // Why: a renderer reload can replace the view that latched
+        // restore-needed; unhide repeats the marker so the live view heals.
+        setHidden(null, { id: spawnResult.id, hidden: false })
+        expect(mainWindow.webContents.send).toHaveBeenCalledTimes(2)
+        expect(mainWindow.webContents.send).toHaveBeenLastCalledWith('pty:modelRestoreNeeded', {
+          id: spawnResult.id,
+          reason: 'unhide'
+        })
+
+        mockProc.emitData('visible again')
+        vi.advanceTimersByTime(2)
+        expect(mainWindow.webContents.send).toHaveBeenLastCalledWith('pty:data', {
+          id: spawnResult.id,
+          data: 'visible again'
+        })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('does not emit an unhide marker when nothing was dropped', async () => {
+      vi.useFakeTimers()
+      const mockProc = createMockProc()
+      spawnMock.mockReturnValue(mockProc.proc)
+
+      try {
+        registerPtyHandlers(mainWindow as never)
+        const spawnResult = (await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp'
+        })) as { id: string }
+        const setHidden = getPtySetHiddenRendererPtyListener()
+        mainWindow.webContents.send.mockClear()
+
+        setHidden(null, { id: spawnResult.id, hidden: true })
+        setHidden(null, { id: spawnResult.id, hidden: false })
+
+        expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('clears gate state on PTY exit', async () => {
+      vi.useFakeTimers()
+      const mockProc = createMockProc()
+      spawnMock.mockReturnValue(mockProc.proc)
+
+      try {
+        registerPtyHandlers(mainWindow as never)
+        const spawnResult = (await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp'
+        })) as { id: string }
+        const setHidden = getPtySetHiddenRendererPtyListener()
+
+        setHidden(null, { id: spawnResult.id, hidden: true })
+        expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+          hiddenDeliveryGatedPtyCount: 1
+        })
+
+        mockProc.emitExit(0)
+        expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+          hiddenDeliveryGatedPtyCount: 0,
+          deliveryInterestPtyCount: 0
+        })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('keeps drop memory across a hidden remount so reveal still restores', async () => {
+      vi.useFakeTimers()
+      const mockProc = createMockProc()
+      spawnMock.mockReturnValue(mockProc.proc)
+
+      try {
+        registerPtyHandlers(mainWindow as never)
+        const spawnResult = (await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp'
+        })) as { id: string }
+        const setHidden = getPtySetHiddenRendererPtyListener()
+        mainWindow.webContents.send.mockClear()
+
+        setHidden(null, { id: spawnResult.id, hidden: true })
+        mockProc.emitData('dropped while hidden')
+        vi.advanceTimersByTime(2)
+        expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+
+        // Why: a hidden remount (tab move, parking handoff) re-marks the PTY
+        // without an unhide in between. The fresh view never saw the first
+        // marker, so re-marking must NOT erase the drop memory.
+        setHidden(null, { id: spawnResult.id, hidden: true })
+        setHidden(null, { id: spawnResult.id, hidden: false })
+
+        expect(mainWindow.webContents.send).toHaveBeenCalledTimes(2)
+        expect(mainWindow.webContents.send).toHaveBeenLastCalledWith('pty:modelRestoreNeeded', {
+          id: spawnResult.id,
+          reason: 'unhide'
+        })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('keeps drop memory across a renderer reload while clearing hidden/interest state', async () => {
+      vi.useFakeTimers()
+      const runtime = {
+        setPtyController: vi.fn(),
+        registerPty: vi.fn(),
+        noteTerminalSpawnCommand: vi.fn(),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn(() => 42),
+        getPtyOutputSequence: vi.fn(() => 42),
+        hasRemoteTerminalViewSubscriber: vi.fn(() => false),
+        createPreAllocatedTerminalHandle: vi.fn(() => 'terminal-handle-1'),
+        registerPreAllocatedHandleForPty: vi.fn()
+      }
+      const daemon = installObservableDaemonTestProvider()
+      try {
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        // Why daemon provider: it survives renderer reloads (the scenario
+        // under test) and keeps the LocalPtyProvider orphan-kill handler off
+        // this webContents, so 'did-finish-load' maps to the gate reset only.
+        const reloadHandlers = mainWindow.webContents.on.mock.calls
+          .filter((call: unknown[]) => call[0] === 'did-finish-load')
+          .map((call: unknown[]) => call[1] as () => void)
+        expect(reloadHandlers).toHaveLength(1)
+        const result = (await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          sessionId: 'daemon-session'
+        })) as { id: string }
+        const setHidden = getPtySetHiddenRendererPtyListener()
+        mainWindow.webContents.send.mockClear()
+
+        setHidden(null, { id: result.id, hidden: true })
+        daemon.emitData(result.id, 'dropped while hidden')
+        vi.advanceTimersByTime(50)
+        expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+
+        // Renderer reload: hidden marks die with the old renderer, but the
+        // dropped bytes were never restored — memory must survive.
+        reloadHandlers[0]()
+        expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+          hiddenDeliveryGatedPtyCount: 0
+        })
+
+        // The reloaded pane's first sync re-marks hidden, then reveals.
+        setHidden(null, { id: result.id, hidden: true })
+        setHidden(null, { id: result.id, hidden: false })
+        expect(mainWindow.webContents.send).toHaveBeenLastCalledWith('pty:modelRestoreNeeded', {
+          id: result.id,
+          reason: 'unhide',
+          markerSeq: 42
+        })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('clears leaked delivery interest on renderer reload so the gate re-engages', async () => {
+      vi.useFakeTimers()
+      const runtime = {
+        setPtyController: vi.fn(),
+        registerPty: vi.fn(),
+        noteTerminalSpawnCommand: vi.fn(),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn(() => 42),
+        getPtyOutputSequence: vi.fn(() => 42),
+        hasRemoteTerminalViewSubscriber: vi.fn(() => false),
+        createPreAllocatedTerminalHandle: vi.fn(() => 'terminal-handle-1'),
+        registerPreAllocatedHandleForPty: vi.fn()
+      }
+      const daemon = installObservableDaemonTestProvider()
+      try {
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const reloadHandlers = mainWindow.webContents.on.mock.calls
+          .filter((call: unknown[]) => call[0] === 'did-finish-load')
+          .map((call: unknown[]) => call[1] as () => void)
+        expect(reloadHandlers).toHaveLength(1)
+        const result = (await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          sessionId: 'daemon-session'
+        })) as { id: string }
+        const setHidden = getPtySetHiddenRendererPtyListener()
+        const setInterest = getPtySetDeliveryInterestListener()
+        mainWindow.webContents.send.mockClear()
+
+        // A sidecar holds interest, so hidden bytes still flow.
+        setInterest(null, { id: result.id, interested: true })
+        setHidden(null, { id: result.id, hidden: true })
+        daemon.emitData(result.id, 'sidecar bytes')
+        vi.advanceTimersByTime(50)
+        expect(mainWindow.webContents.send).toHaveBeenLastCalledWith(
+          'pty:data',
+          expect.objectContaining({ id: result.id, data: 'sidecar bytes' })
+        )
+
+        // Why: the renderer reload killed the sidecar's ref count without a
+        // release IPC — the leaked hold must not force-feed the PTY forever.
+        reloadHandlers[0]()
+        mainWindow.webContents.send.mockClear()
+        setHidden(null, { id: result.id, hidden: true })
+        daemon.emitData(result.id, 'gated after reload')
+        vi.advanceTimersByTime(50)
+
+        expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+        expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
+          id: result.id,
+          reason: 'hidden-drop',
+          markerSeq: 42
+        })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+  })
+
+  describe('hidden-at-spawn mark (initiallyHidden)', () => {
+    // terminal-query-authority.md §races: the renderer declares hidden-at-
+    // spawn so main marks the PTY before its first byte — the spawn-time
+    // query window where neither side replied (the non-codex DA1 loss) is
+    // closed by the gate + responder owning queries from byte one.
+    function createRuntimeMock() {
+      return {
+        setPtyController: vi.fn(),
+        registerPty: vi.fn(),
+        noteTerminalSpawnCommand: vi.fn(),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn(() => 42),
+        getPtyOutputSequence: vi.fn(() => 42),
+        hasRemoteTerminalViewSubscriber: vi.fn(() => false),
+        createPreAllocatedTerminalHandle: vi.fn(() => 'terminal-handle-1'),
+        registerPreAllocatedHandleForPty: vi.fn()
+      }
+    }
+
+    it('marks a daemon PTY hidden before spawn resolves so byte zero is gated', async () => {
+      vi.useFakeTimers()
+      const runtime = createRuntimeMock()
+      const daemon = installObservableDaemonTestProvider()
+      const spawnGate = makeDeferred()
+      daemon.spawn.mockImplementation(async (options: { sessionId?: string }) => {
+        await spawnGate.promise
+        return { id: options.sessionId ?? 'daemon-pty' }
+      })
+      try {
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const spawnPromise = handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          sessionId: 'daemon-session',
+          initiallyHidden: true
+        }) as Promise<{ id: string }>
+        // Let the handler run up to the awaited provider.spawn.
+        await Promise.resolve()
+        mainWindow.webContents.send.mockClear()
+
+        // Daemon PTYs can emit prompt bytes before spawn() resolves — the
+        // pre-spawn mark must already gate them.
+        expect(isHiddenRendererPty('daemon-session')).toBe(true)
+        daemon.emitData('daemon-session', 'pre-spawn prompt\x1b[c')
+        vi.advanceTimersByTime(50)
+        expect(runtime.onPtyData).toHaveBeenCalledWith(
+          'daemon-session',
+          'pre-spawn prompt\x1b[c',
+          expect.any(Number),
+          'pre-spawn prompt\x1b[c'.length
+        )
+        expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+        expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
+          id: 'daemon-session',
+          reason: 'hidden-drop',
+          markerSeq: 42
+        })
+
+        spawnGate.resolve()
+        const result = await spawnPromise
+        expect(isHiddenRendererPty(result.id)).toBe(true)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('clears the pre-spawn hidden mark when the spawn fails', async () => {
+      const daemon = installObservableDaemonTestProvider()
+      daemon.spawn.mockRejectedValue(new Error('spawn exploded'))
+      registerPtyHandlers(mainWindow as never)
+
+      await expect(
+        handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          sessionId: 'daemon-session',
+          initiallyHidden: true
+        })
+      ).rejects.toThrow('spawn exploded')
+
+      // A later visible attach reusing this session id must not start gated.
+      expect(isHiddenRendererPty('daemon-session')).toBe(false)
+    })
+
+    it('marks local PTYs hidden after spawn, before their first data task', async () => {
+      vi.useFakeTimers()
+      const mockProc = createMockProc()
+      spawnMock.mockReturnValue(mockProc.proc)
+      try {
+        registerPtyHandlers(mainWindow as never)
+        const spawnResult = (await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp',
+          initiallyHidden: true
+        })) as { id: string }
+        mainWindow.webContents.send.mockClear()
+
+        expect(isHiddenRendererPty(spawnResult.id)).toBe(true)
+        mockProc.emitData('first chunk')
+        vi.advanceTimersByTime(2)
+
+        expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+        expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
+          id: spawnResult.id,
+          reason: 'hidden-drop'
+        })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('keeps spawns without the flag delivering to the renderer (visible unchanged)', async () => {
+      vi.useFakeTimers()
+      const mockProc = createMockProc()
+      spawnMock.mockReturnValue(mockProc.proc)
+      try {
+        registerPtyHandlers(mainWindow as never)
+        const spawnResult = (await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp'
+        })) as { id: string }
+        mainWindow.webContents.send.mockClear()
+
+        expect(isHiddenRendererPty(spawnResult.id)).toBe(false)
+        mockProc.emitData('visible output')
+        vi.advanceTimersByTime(2)
+
+        expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+          id: spawnResult.id,
+          data: 'visible output'
+        })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('answers DA1 from the model on the first chunk of a hidden-at-spawn PTY', async () => {
+      // End-to-end through a REAL runtime: spawn-marked → first chunk dropped
+      // → runtime emulator parses the query → reply written to the provider
+      // input path (the renderer never saw the bytes; main is the answerer).
+      const daemon = installObservableDaemonTestProvider()
+      const runtime = new OrcaRuntimeService({
+        getRepo: () => undefined,
+        getRepos: () => [],
+        addRepo: () => {},
+        updateRepo: () => undefined as never,
+        getAllWorktreeMeta: () => ({}),
+        getWorktreeMeta: () => undefined,
+        setWorktreeMeta: () => undefined as never,
+        removeWorktreeMeta: () => {},
+        getGitHubCache: () => ({ pr: {}, issue: {} }) as never,
+        getSettings: () => ({
+          workspaceDir: '/tmp/workspaces',
+          nestWorkspaces: false,
+          refreshLocalBaseRefOnWorktreeCreate: false,
+          branchPrefix: 'none',
+          branchPrefixCustom: '',
+          terminalMainSideEffectAuthority: true,
+          terminalHiddenDeliveryGate: true,
+          terminalModelQueryAuthority: true
+        })
+      } as never)
+
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const result = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        sessionId: 'daemon-session',
+        initiallyHidden: true
+      })) as { id: string }
+
+      daemon.emitData(result.id, '\x1b[c')
+      // Settle the per-PTY emulator writeChain (and the reply it forwards).
+      await runtime.serializeMainTerminalBuffer(result.id)
+
+      expect(daemon.write).toHaveBeenCalledWith(result.id, '\x1b[?1;2c')
+    })
+  })
+
+  it('caps pending renderer delivery per PTY with oldest-drop and one restore marker', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawnResult = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      mainWindow.webContents.send.mockClear()
+
+      // 3 MB in one starved pending entry: the scrollback-scaled cap (2 MB at
+      // default settings) drops the buffered bytes to O(1) memory. One
+      // out-of-band restore marker fires; the droppedOutput sentinel then
+      // routes the pane through the main-owned snapshot repaint.
+      mockProc.emitData('x'.repeat(1024 * 1024) + 'y'.repeat(2 * 1024 * 1024))
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
+        id: spawnResult.id,
+        reason: 'pending-cap'
+      })
+
+      // A second overflow before the entry drains must not re-mark.
+      mockProc.emitData('z'.repeat(64 * 1024))
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)
+
+      vi.advanceTimersByTime(2)
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(2)
+      expect(mainWindow.webContents.send).toHaveBeenLastCalledWith('pty:data', {
+        id: spawnResult.id,
+        data: '',
+        droppedOutput: true
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each([
+    ['terminalHiddenDeliveryGate', { terminalHiddenDeliveryGate: false }],
+    ['terminalMainSideEffectAuthority', { terminalMainSideEffectAuthority: false }]
+  ])(
+    'keeps the pending cap active without a restore marker when the %s kill switch is off',
+    async (_name, settings) => {
+      // Why: the scrollback-scaled pending cap ships independently of the gate
+      // (#7150) — the droppedOutput sentinel repaints the pane from the
+      // main-owned snapshot even with the model/view kill switches off. Only the
+      // gate's out-of-band pty:modelRestoreNeeded marker is switch-scoped.
+      vi.useFakeTimers()
+      const mockProc = createMockProc()
+      spawnMock.mockReturnValue(mockProc.proc)
+
+      try {
+        registerPtyHandlers(mainWindow as never, undefined, undefined, (() => settings) as never)
+        const spawnResult = (await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp'
+        })) as { id: string }
+        mainWindow.webContents.send.mockClear()
+
+        mockProc.emitData('x'.repeat(3 * 1024 * 1024))
+
+        expect(mainWindow.webContents.send).not.toHaveBeenCalledWith(
+          'pty:modelRestoreNeeded',
+          expect.anything()
+        )
+
+        vi.advanceTimersByTime(2)
+        expect(mainWindow.webContents.send).toHaveBeenLastCalledWith('pty:data', {
+          id: spawnResult.id,
+          data: '',
+          droppedOutput: true
+        })
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+
   it('batches stale PTY output after the interactive window expires', async () => {
     vi.useFakeTimers()
     const mockProc = createMockProc()
@@ -7285,7 +10147,7 @@ describe('registerPtyHandlers', () => {
       mockProc.emitData('stale redraw')
 
       expect(mainWindow.webContents.send).not.toHaveBeenCalled()
-      vi.advanceTimersByTime(8)
+      vi.advanceTimersByTime(2)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
         id: spawnResult.id,
         data: 'stale redraw'
@@ -7310,7 +10172,8 @@ describe('registerPtyHandlers', () => {
       const result = await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
-        cwd: '/tmp'
+        cwd: '/tmp',
+        worktreeId: 'repo-1::/tmp'
       })
 
       expect(result).toEqual({ id: expect.any(String), pid: 12345 })
@@ -7350,7 +10213,8 @@ describe('registerPtyHandlers', () => {
       await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
-        cwd: '/tmp'
+        cwd: '/tmp',
+        worktreeId: 'repo-1::/tmp'
       })
 
       expect(spawnMock).toHaveBeenCalledTimes(1)
@@ -7428,6 +10292,34 @@ describe('registerPtyHandlers', () => {
     expect(writeAccepted(mainWindowIpcEvent, { id: result.id, data: 1 })).toBe(false)
     expect(writeAccepted(foreignWindowIpcEvent, { id: result.id, data: 'x' })).toBe(false)
     expect(mockProc.proc.write).not.toHaveBeenCalled()
+  })
+
+  it('silently drops writes to a live PTY after ownership loss until pty:listSessions rebuilds it (frozen-terminal repro)', async () => {
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+    registerPtyHandlers(mainWindow as never)
+    const result = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
+    const write = getPtyWriteListener()
+
+    write(mainWindowIpcEvent, { id: result.id, data: 'alive' })
+    expect(mockProc.proc.write).toHaveBeenCalledWith('alive')
+
+    // Field failure shape (Discord #performance / #2836): a pane can keep
+    // rendering with a ptyId whose ownership entry is gone while the provider
+    // still holds the live PTY — every keystroke then vanishes with no error,
+    // no log, and no signal back to the renderer.
+    deletePtyOwnership(result.id)
+    write(mainWindowIpcEvent, { id: result.id, data: 'dropped' })
+    expect(mockProc.proc.write).not.toHaveBeenCalledWith('dropped')
+
+    // pty:listSessions rebuilds ownership from provider sessions — the
+    // revival lever the frozen-pane e2e probes depend on.
+    await handlers.get('pty:listSessions')!(null, undefined)
+    write(mainWindowIpcEvent, { id: result.id, data: 'revived' })
+    expect(mockProc.proc.write).toHaveBeenCalledWith('revived')
   })
 
   it('chunks large acknowledged pty writes before provider writes', async () => {
@@ -7513,6 +10405,7 @@ describe('registerPtyHandlers', () => {
     } as never)
     const runtime = {
       setPtyController: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       seedHeadlessTerminal: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyData: vi.fn(),
@@ -7666,6 +10559,7 @@ describe('registerPtyHandlers', () => {
         cols: 80,
         rows: 24,
         cwd: '/tmp',
+        worktreeId: 'repo-1::/tmp',
         env: { SHELL: '/opt/homebrew/bin/bash' }
       })
 
@@ -7777,6 +10671,7 @@ describe('registerPtyHandlers', () => {
     }
     const runtime = {
       setPtyController: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyData: vi.fn(),
       onPtyExit: vi.fn(),
@@ -7817,6 +10712,7 @@ describe('registerPtyHandlers', () => {
     }
     const runtime = {
       setPtyController: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
       onPtySpawned: vi.fn(),
       onPtyData: vi.fn(),
       onPtyExit: vi.fn(),
@@ -7825,16 +10721,23 @@ describe('registerPtyHandlers', () => {
     spawnMock.mockReturnValue(proc)
 
     registerPtyHandlers(mainWindow as never, runtime as never)
-    const didFinishLoad = mainWindow.webContents.on.mock.calls.find(
-      ([eventName]) => eventName === 'did-finish-load'
-    )?.[1] as (() => void) | undefined
-    expect(didFinishLoad).toBeTypeOf('function')
+    // Why both: a reload fires the hidden-delivery gate reset AND the orphan
+    // cleanup; invoke every registered listener like a real did-finish-load.
+    const didFinishLoadHandlers = mainWindow.webContents.on.mock.calls
+      .filter(([eventName]) => eventName === 'did-finish-load')
+      .map(([, handler]) => handler as () => void)
+    expect(didFinishLoadHandlers.length).toBeGreaterThan(0)
+    const didFinishLoad = (): void => {
+      for (const handler of didFinishLoadHandlers) {
+        handler()
+      }
+    }
     await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
     // The first load after spawn only advances generation. The second one sees
     // this PTY as belonging to a prior page load and kills it as orphaned.
-    didFinishLoad?.()
-    didFinishLoad?.()
+    didFinishLoad()
+    didFinishLoad()
 
     expect(onDataDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
       killSpy.mock.invocationCallOrder[0]
@@ -7847,6 +10750,9 @@ describe('registerPtyHandlers', () => {
   it('removes the previous orphan-cleanup listener from its original webContents', () => {
     const firstWindow = {
       isDestroyed: () => false,
+      isFocused: () => true,
+      isVisible: () => true,
+      isMinimized: () => false,
       webContents: {
         on: vi.fn(),
         send: vi.fn(),
@@ -7855,6 +10761,9 @@ describe('registerPtyHandlers', () => {
     }
     const secondWindow = {
       isDestroyed: () => false,
+      isFocused: () => true,
+      isVisible: () => true,
+      isMinimized: () => false,
       webContents: {
         on: vi.fn(),
         send: vi.fn(),
@@ -7863,10 +10772,12 @@ describe('registerPtyHandlers', () => {
     }
 
     registerPtyHandlers(firstWindow as never)
-    const didFinishLoad = firstWindow.webContents.on.mock.calls.find(
+    // Two listeners on the first (LocalPtyProvider) window: the renderer-gate
+    // reset and the orphan cleanup.
+    const firstWindowLoadHandlers = firstWindow.webContents.on.mock.calls.filter(
       ([eventName]) => eventName === 'did-finish-load'
-    )?.[1] as (() => void) | undefined
-    expect(didFinishLoad).toBeTypeOf('function')
+    )
+    expect(firstWindowLoadHandlers).toHaveLength(2)
 
     setLocalPtyProvider({
       spawn: vi.fn(),
@@ -7881,13 +10792,200 @@ describe('registerPtyHandlers', () => {
     } as never)
     registerPtyHandlers(secondWindow as never)
 
-    expect(firstWindow.webContents.removeListener).toHaveBeenCalledWith(
-      'did-finish-load',
-      didFinishLoad
-    )
+    // Every first-window load listener was detached from its webContents.
+    for (const [, handler] of firstWindowLoadHandlers) {
+      expect(firstWindow.webContents.removeListener).toHaveBeenCalledWith(
+        'did-finish-load',
+        handler
+      )
+    }
+    // The non-Local provider keeps orphan cleanup off the second window —
+    // only the renderer-gate reset listener remains.
     expect(
-      secondWindow.webContents.on.mock.calls.some(([eventName]) => eventName === 'did-finish-load')
-    ).toBe(false)
+      secondWindow.webContents.on.mock.calls.filter(
+        ([eventName]) => eventName === 'did-finish-load'
+      )
+    ).toHaveLength(1)
+  })
+
+  // Why (#5787): a crash/freeze-recovery reload re-fires did-finish-load on the
+  // single window. The orphan sweep must be suppressed for it so live LOCAL PTYs
+  // stay attached until session restore re-adopts them.
+  it('does not sweep local PTYs during a recovery reload', async () => {
+    const killSpy = vi.fn()
+    const proc = {
+      onData: vi.fn(() => makeDisposable()),
+      onExit: vi.fn(() => makeDisposable()),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: killSpy,
+      process: 'zsh',
+      pid: 12345
+    }
+    const runtime = {
+      setPtyController: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn(),
+      preAllocateHandleForPty: vi.fn()
+    }
+    spawnMock.mockReturnValue(proc)
+    const isRecoveryReloadInFlight = vi.fn(() => true)
+    const markClaudePtyExitedSpy = vi.spyOn(livePtyGate, 'markClaudePtyExited')
+
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { isRecoveryReloadInFlight }
+    )
+    // This branch registers two did-finish-load listeners (renderer delivery-gate
+    // reset first, orphan sweep second); a real reload fires both, so must we —
+    // otherwise the suppression assertion passes vacuously without reaching the sweep.
+    const didFinishLoadHandlers = mainWindow.webContents.on.mock.calls
+      .filter(([eventName]) => eventName === 'did-finish-load')
+      .map(([, handler]) => handler as () => void)
+    expect(didFinishLoadHandlers.length).toBeGreaterThan(0)
+    const didFinishLoad = (): void => didFinishLoadHandlers.forEach((handler) => handler())
+
+    const spawnResult = (await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })) as {
+      id: string
+    }
+
+    // Without the guard the second load would sweep this PTY as a prior-generation
+    // orphan. Under recovery-in-flight neither load may touch it.
+    didFinishLoad()
+    didFinishLoad()
+
+    expect(killSpy).not.toHaveBeenCalled()
+    expect(runtime.onPtyExit).not.toHaveBeenCalled()
+    expect(markClaudePtyExitedSpy).not.toHaveBeenCalled()
+    const listed = await getLocalPtyProvider().listProcesses()
+    expect(listed.some((info) => info.id === spawnResult.id)).toBe(true)
+
+    markClaudePtyExitedSpy.mockRestore()
+  })
+
+  // Why: guard against over-suppression — when no recovery reload is in flight the
+  // sweep MUST still reclaim genuinely orphaned local PTYs.
+  it('still sweeps orphaned local PTYs when no recovery reload is in flight', async () => {
+    const killSpy = vi.fn()
+    const proc = {
+      onData: vi.fn(() => makeDisposable()),
+      onExit: vi.fn(() => makeDisposable()),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: killSpy,
+      process: 'zsh',
+      pid: 12345
+    }
+    const runtime = {
+      setPtyController: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn(),
+      preAllocateHandleForPty: vi.fn()
+    }
+    spawnMock.mockReturnValue(proc)
+    const isRecoveryReloadInFlight = vi.fn(() => false)
+
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { isRecoveryReloadInFlight }
+    )
+    // This branch registers two did-finish-load listeners (renderer delivery-gate
+    // reset first, orphan sweep second); a real reload fires both, so must we.
+    const didFinishLoadHandlers = mainWindow.webContents.on.mock.calls
+      .filter(([eventName]) => eventName === 'did-finish-load')
+      .map(([, handler]) => handler as () => void)
+    const didFinishLoad = (): void => didFinishLoadHandlers.forEach((handler) => handler())
+
+    const spawnResult = (await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })) as {
+      id: string
+    }
+
+    // First load only advances the generation; the second sees this PTY as a
+    // prior-load orphan. With the flag false the guard must NOT suppress the sweep.
+    didFinishLoad()
+    didFinishLoad()
+
+    expect(killSpy).toHaveBeenCalled()
+    expect(runtime.onPtyExit).toHaveBeenCalledWith(spawnResult.id, -1)
+    const listed = await getLocalPtyProvider().listProcesses()
+    expect(listed.some((info) => info.id === spawnResult.id)).toBe(false)
+  })
+
+  // Why (#5787): two PTYs spawned in different load generations must BOTH survive a
+  // recovery reload — even the older one that a normal sweep would reclaim.
+  it('keeps local PTYs from different generations alive across recovery reloads', async () => {
+    const killSpyA = vi.fn()
+    const killSpyB = vi.fn()
+    const runtime = {
+      setPtyController: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn(),
+      preAllocateHandleForPty: vi.fn()
+    }
+    const isRecoveryReloadInFlight = vi.fn(() => true)
+
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { isRecoveryReloadInFlight }
+    )
+    // Fire ALL did-finish-load listeners (gate reset + orphan sweep), as a
+    // real reload does — the sweep listener is the one under test.
+    const didFinishLoadHandlers = mainWindow.webContents.on.mock.calls
+      .filter(([eventName]) => eventName === 'did-finish-load')
+      .map(([, handler]) => handler as () => void)
+    const didFinishLoad = (): void => didFinishLoadHandlers.forEach((handler) => handler())
+
+    spawnMock.mockReturnValue({
+      onData: vi.fn(() => makeDisposable()),
+      onExit: vi.fn(() => makeDisposable()),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: killSpyA,
+      process: 'zsh',
+      pid: 111
+    })
+    const ptyA = (await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })) as { id: string }
+
+    // Advance the generation without sweeping (recovery-in-flight), then spawn a
+    // second PTY so the two live in different load generations.
+    didFinishLoad()
+
+    spawnMock.mockReturnValue({
+      onData: vi.fn(() => makeDisposable()),
+      onExit: vi.fn(() => makeDisposable()),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: killSpyB,
+      process: 'zsh',
+      pid: 222
+    })
+    const ptyB = (await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })) as { id: string }
+
+    didFinishLoad()
+
+    expect(killSpyA).not.toHaveBeenCalled()
+    expect(killSpyB).not.toHaveBeenCalled()
+    const ids = (await getLocalPtyProvider().listProcesses()).map((info) => info.id)
+    expect(ids).toContain(ptyA.id)
+    expect(ids).toContain(ptyB.id)
   })
 
   it('clears PTY state even when kill reports the process is already gone', async () => {
@@ -8143,6 +11241,7 @@ describe('registerPtyHandlers', () => {
     it('returns a hidden-output recovery snapshot with clamped scrollback', async () => {
       const runtime = {
         setPtyController: vi.fn(),
+        getPtyOutputSequence: vi.fn(() => 42),
         serializeHiddenOutputRecoveryBuffer: vi.fn().mockResolvedValue({
           data: 'snapshot\r\n',
           cols: 120,
@@ -8163,14 +11262,146 @@ describe('registerPtyHandlers', () => {
       expect(runtime.serializeHiddenOutputRecoveryBuffer).toHaveBeenCalledWith('pty-1', {
         scrollbackRows: 50_000
       })
+      // Why pendingDeliveryStartSeq === seq: the pending renderer-delivery
+      // queue is empty, so the renderer's post-restore duplicate window is
+      // empty too — low-seq live chunks (fresh seq domain) must not be
+      // dropped against the snapshot baseline.
       expect(result).toEqual({
         data: 'snapshot\r\n',
         cols: 120,
         rows: 40,
         cwd: '/projects/restored',
         seq: 42,
+        pendingDeliveryStartSeq: 42,
         source: 'headless'
       })
+    })
+
+    it('uses the complete provider model after daemon stream thinning', async () => {
+      const provider = installObservableDaemonTestProvider()
+      provider.getBufferSnapshot.mockResolvedValue({
+        data: 'complete daemon scrollback\r\n',
+        cols: 100,
+        rows: 30,
+        seq: 900,
+        source: 'headless'
+      })
+      const runtime = {
+        setPtyController: vi.fn(),
+        getPtyOutputSequence: vi.fn(() => 640),
+        notePtyDataGap: vi.fn(),
+        onPtyExit: vi.fn(),
+        serializeHiddenOutputRecoveryBuffer: vi.fn().mockResolvedValue({
+          data: 'kept tail only\r\n',
+          cols: 100,
+          rows: 30,
+          seq: 640,
+          source: 'headless'
+        })
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      provider.emitDataGap('daemon-pty', 512)
+
+      const result = await handlers.get('pty:getMainBufferSnapshot')!(null, {
+        id: 'daemon-pty',
+        opts: { scrollbackRows: 5000 }
+      })
+
+      expect(runtime.notePtyDataGap).toHaveBeenCalledWith('daemon-pty', 512)
+      expect(provider.getBufferSnapshot).toHaveBeenCalledWith('daemon-pty', {
+        scrollbackRows: 5000
+      })
+      expect(runtime.serializeHiddenOutputRecoveryBuffer).not.toHaveBeenCalled()
+      expect(result).toEqual({
+        data: 'complete daemon scrollback\r\n',
+        cols: 100,
+        rows: 30,
+        seq: 900,
+        source: 'headless',
+        // Bytes between main's current absolute seq and the daemon snapshot
+        // may still be queued on the stream socket and must dedupe on arrival.
+        pendingDeliveryStartSeq: 640
+      })
+      provider.emitExit('daemon-pty')
+    })
+
+    it("never paints main's incomplete tail when a required provider snapshot is unavailable", async () => {
+      const provider = installObservableDaemonTestProvider()
+      provider.getBufferSnapshot.mockResolvedValue(null)
+      const runtime = {
+        setPtyController: vi.fn(),
+        getPtyOutputSequence: vi.fn(() => 640),
+        notePtyDataGap: vi.fn(),
+        onPtyExit: vi.fn(),
+        serializeHiddenOutputRecoveryBuffer: vi.fn().mockResolvedValue({
+          data: 'kept tail only\r\n',
+          cols: 100,
+          rows: 30,
+          seq: 640,
+          source: 'headless'
+        })
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      provider.emitDataGap('daemon-pty', 512)
+
+      const result = await handlers.get('pty:getMainBufferSnapshot')!(null, {
+        id: 'daemon-pty',
+        opts: { scrollbackRows: 5000 }
+      })
+
+      expect(provider.getBufferSnapshot).toHaveBeenCalledWith('daemon-pty', {
+        scrollbackRows: 5000
+      })
+      expect(runtime.serializeHiddenOutputRecoveryBuffer).not.toHaveBeenCalled()
+      expect(result).toBeNull()
+      provider.emitExit('daemon-pty')
+    })
+
+    it('reports where the undelivered pending backlog starts alongside the snapshot', async () => {
+      vi.useFakeTimers()
+      const mockProc = createMockProc()
+      spawnMock.mockReturnValue(mockProc.proc)
+      const runtime = {
+        setPtyController: vi.fn(),
+        registerPty: vi.fn(),
+        noteTerminalSpawnCommand: vi.fn(),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn(),
+        preAllocateHandleForPty: vi.fn(() => null),
+        getPtyOutputSequence: vi.fn(() => 2_472),
+        hasRemoteTerminalViewSubscriber: vi.fn(() => false),
+        serializeHiddenOutputRecoveryBuffer: vi.fn().mockResolvedValue({
+          data: 'snapshot\r\n',
+          cols: 100,
+          rows: 30,
+          seq: 2_472,
+          source: 'headless'
+        })
+      }
+      try {
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const spawnResult = (await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp'
+        })) as { id: string }
+
+        // Starved pending entry: bytes ingested up to seq 2_472 but not yet
+        // flushed to the renderer — they can still arrive after the snapshot.
+        mockProc.emitData('frame-bytes')
+
+        const result = (await handlers.get('pty:getMainBufferSnapshot')!(null, {
+          id: spawnResult.id
+        })) as { pendingDeliveryStartSeq?: number }
+
+        expect(result.pendingDeliveryStartSeq).toBe(2_472 - 'frame-bytes'.length)
+      } finally {
+        vi.useRealTimers()
+      }
     })
   })
 })

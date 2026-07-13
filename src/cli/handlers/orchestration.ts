@@ -8,12 +8,13 @@ import {
 } from '../flags'
 import { RuntimeClientError } from '../runtime-client'
 import { getTerminalHandle } from '../selectors'
+import { abbreviateOrchestrationTasks } from '../../shared/orchestration-task-summary'
 
 // Why: 15 s is well under Claude Code's empirical ~2 min Bash-tool silence
 // budget and generates only ~40 lines per 10 min wait — enough to assure the
 // parent process the subprocess is alive without flooding logs. See design
 // doc §3.4.
-const DEFAULT_HEARTBEAT_INTERVAL_MS = 15_000
+const DEFAULT_KEEPALIVE_INTERVAL_MS = 15_000
 function getLifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
   return `${type} messages must be sent to a concrete coordinator terminal handle, not a group address.`
 }
@@ -21,33 +22,36 @@ function getLifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): str
 // Why: test-only escape hatch so subprocess tests can verify the feature in
 // under 10 s rather than needing a full 15 s silence window. Production users
 // should never set this — there is no surface documentation. A bogus value
-// falls back to the default rather than disabling the heartbeat.
-function resolveHeartbeatIntervalMs(): number {
-  const raw = process.env.ORCA_HEARTBEAT_INTERVAL_MS
+// falls back to the default rather than disabling the keepalive.
+function resolveKeepaliveIntervalMs(): number {
+  const raw = process.env.ORCA_KEEPALIVE_INTERVAL_MS ?? process.env.ORCA_HEARTBEAT_INTERVAL_MS
   if (!raw) {
-    return DEFAULT_HEARTBEAT_INTERVAL_MS
+    return DEFAULT_KEEPALIVE_INTERVAL_MS
   }
   const parsed = Number(raw)
   if (!Number.isFinite(parsed) || parsed <= 0) {
-    return DEFAULT_HEARTBEAT_INTERVAL_MS
+    return DEFAULT_KEEPALIVE_INTERVAL_MS
   }
   return parsed
 }
 
-function startCheckHeartbeat(deadlineMs: number | undefined): () => void {
+function startCheckKeepalive(deadlineMs: number | undefined): () => void {
   const startedAt = Date.now()
   const interval = setInterval(() => {
     const payload = {
+      _keepalive: true,
+      // Why: retain the old marker for scripts filtering merged stderr while
+      // callers migrate to the unambiguous _keepalive field.
       _heartbeat: true,
       elapsedMs: Date.now() - startedAt,
       deadlineMs: deadlineMs ?? null
     }
     // Why: `process.stderr.write` is line-flushed per-call in Node, whereas a
-    // fully-buffered writer would hold all heartbeat lines until exit and
+    // fully-buffered writer would hold all keepalive lines until exit and
     // silently defeat the whole point of the ping. Subprocess test asserts
     // this by reading stderr incrementally. See §3.4.
     process.stderr.write(`${JSON.stringify(payload)}\n`)
-  }, resolveHeartbeatIntervalMs())
+  }, resolveKeepaliveIntervalMs())
   if (typeof interval.unref === 'function') {
     interval.unref()
   }
@@ -73,6 +77,7 @@ type MessageSummary = {
   type?: string
   body?: string
   payload?: string | null
+  read?: number
 }
 
 function getOptionalStructuredMessagePayload(
@@ -127,7 +132,8 @@ async function resolveOrchestrationTerminalHandle(
   flags: Map<string, string | boolean>,
   cwd: string,
   client: Parameters<CommandHandler>[0]['client'],
-  flagName: 'from' | 'terminal'
+  flagName: 'from' | 'terminal',
+  options: { validateEnvHandle?: boolean } = {}
 ): Promise<string> {
   const explicit = getOptionalStringFlag(flags, flagName)
   if (explicit) {
@@ -135,9 +141,173 @@ async function resolveOrchestrationTerminalHandle(
   }
   const envHandle = process.env.ORCA_TERMINAL_HANDLE
   if (envHandle && envHandle.length > 0) {
+    if (flagName === 'from' && options.validateEnvHandle) {
+      // Why: long-lived shells can retain an ORCA_TERMINAL_HANDLE after the
+      // runtime remints the pane handle; do not bake that stale id into
+      // coordinator preambles.
+      const live = await isLiveTerminalHandle(envHandle, client)
+      if (!live) {
+        const reminted = await resolveOrchestrationPaneTerminalHandle(client)
+        if (reminted) {
+          return reminted
+        }
+        throwNoActiveSenderTerminal()
+      }
+    }
     return envHandle
   }
+  if (flagName === 'from') {
+    return await resolveImplicitOrchestrationSender(flags, cwd, client)
+  }
   return await getTerminalHandle(flags, cwd, client)
+}
+
+async function resolveTaskCreatorTerminalHandle(
+  client: Parameters<CommandHandler>[0]['client']
+): Promise<string | undefined> {
+  const envHandle = process.env.ORCA_TERMINAL_HANDLE
+  if (!envHandle || envHandle.length === 0) {
+    return undefined
+  }
+  let live: boolean
+  try {
+    live = await isLiveTerminalHandle(envHandle, client)
+  } catch (err) {
+    if (isOptionalTaskCreatorHandleError(err)) {
+      // Why: creator handles are best-effort lineage metadata; graph
+      // unavailability should not block task creation itself.
+      return undefined
+    }
+    throw err
+  }
+  if (live) {
+    return envHandle
+  }
+  return await resolveOrchestrationPaneTerminalHandle(client, { optional: true })
+}
+
+async function isLiveTerminalHandle(
+  handle: string,
+  client: Parameters<CommandHandler>[0]['client']
+): Promise<boolean> {
+  try {
+    await client.call('terminal.show', { terminal: handle })
+    return true
+  } catch (err) {
+    if (isStaleTerminalIdentityError(err)) {
+      return false
+    }
+    throw err
+  }
+}
+
+function getClientErrorCode(err: unknown): string | undefined {
+  if (!err || typeof err !== 'object') {
+    return undefined
+  }
+  const code = (err as { code?: unknown }).code
+  return typeof code === 'string' ? code : undefined
+}
+
+function isStaleTerminalIdentityError(err: unknown): boolean {
+  const code = getClientErrorCode(err)
+  return code === 'terminal_handle_stale' || code === 'terminal_gone'
+}
+
+function isNoActiveTerminalError(err: unknown): boolean {
+  return getClientErrorCode(err) === 'no_active_terminal'
+}
+
+function isOptionalTaskCreatorHandleError(err: unknown): boolean {
+  const code = getClientErrorCode(err)
+  return code === 'no_active_sender_terminal' || code === 'runtime_unavailable'
+}
+
+async function resolveOrchestrationPaneTerminalHandle(
+  client: Parameters<CommandHandler>[0]['client'],
+  options: { optional?: boolean } = {}
+): Promise<string | undefined> {
+  const paneKey = process.env.ORCA_PANE_KEY
+  if (!paneKey || paneKey.length === 0) {
+    return undefined
+  }
+  try {
+    // Why: pane key reminting preserves the caller identity; focus-based
+    // active-terminal fallback can point at a different pane.
+    const response = await client.call<{ terminal: { handle: string } }>('terminal.resolvePane', {
+      paneKey
+    })
+    return response.result.terminal.handle
+  } catch (err) {
+    if (
+      isPaneRemintUnavailableError(err) ||
+      (options.optional === true && isOptionalPaneRemintUnavailableError(err))
+    ) {
+      return undefined
+    }
+    throw err
+  }
+}
+
+function isPaneRemintUnavailableError(err: unknown): boolean {
+  const code = getClientErrorCode(err)
+  const message = getClientErrorMessage(err)
+  return (
+    code === 'terminal_not_found' ||
+    code === 'terminal_handle_stale' ||
+    code === 'terminal_gone' ||
+    message === 'terminal_not_found' ||
+    message === 'terminal_handle_stale' ||
+    message === 'terminal_gone'
+  )
+}
+
+function isOptionalPaneRemintUnavailableError(err: unknown): boolean {
+  return getClientErrorCode(err) === 'runtime_unavailable'
+}
+
+function getClientErrorMessage(err: unknown): string | undefined {
+  if (err instanceof Error) {
+    return err.message
+  }
+  if (!err || typeof err !== 'object') {
+    return undefined
+  }
+  const message = (err as { message?: unknown }).message
+  return typeof message === 'string' ? message : undefined
+}
+
+async function resolveCoordinatorTerminalHandle(
+  flags: Map<string, string | boolean>,
+  cwd: string,
+  client: Parameters<CommandHandler>[0]['client']
+): Promise<string> {
+  return await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from', {
+    validateEnvHandle: true
+  })
+}
+
+async function resolveImplicitOrchestrationSender(
+  flags: Map<string, string | boolean>,
+  cwd: string,
+  client: Parameters<CommandHandler>[0]['client']
+): Promise<string> {
+  try {
+    return await getTerminalHandle(flags, cwd, client)
+  } catch (err) {
+    if (!isNoActiveTerminalError(err)) {
+      throw err
+    }
+    throwNoActiveSenderTerminal()
+  }
+}
+
+function throwNoActiveSenderTerminal(): never {
+  throw new RuntimeClientError(
+    'no_active_sender_terminal',
+    'Could not determine the sender terminal for this orchestration command. ' +
+      'Pass --from <terminal-handle> or run the command inside a live Orca terminal with ORCA_TERMINAL_HANDLE set.'
+  )
 }
 
 function isDevCliInvocation(): boolean {
@@ -177,6 +347,12 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     const type = getOptionalStringFlag(flags, 'type')
     rejectLifecycleGroupRecipient(type, to)
 
+    // Why: lifecycle senders keep ORCA_TERMINAL_HANDLE verbatim — no liveness
+    // probe (terminal.show throws runtime_unavailable in the exact mid-restart
+    // window worker_done must survive) and no pane remint (pre-payload-
+    // authority runtimes require from === the equally stale assignee_handle,
+    // and coordinator replies route to the sender row while the worker's own
+    // `check` reads its env-handle inbox).
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
     const result = await client.call<
       { message: { id: string } } | { messages: { id: string }[]; recipients: number }
@@ -189,6 +365,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       priority: getOptionalStringFlag(flags, 'priority'),
       threadId: getOptionalStringFlag(flags, 'thread-id'),
       payload: getOptionalStructuredMessagePayload(flags),
+      // Why: the pane key is the remint-stable sender identity the runtime
+      // verifies lifecycle ownership against; older runtimes strip it.
+      senderPaneKey: process.env.ORCA_PANE_KEY || undefined,
       devMode: isDevCliInvocation()
     })
     printResult(result, json, (r) => {
@@ -201,17 +380,27 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
 
   'orchestration check': async ({ flags, client, cwd, json }) => {
     const wait = flags.has('wait')
+    const peek = flags.has('peek')
+    // Why: enforce mode exclusivity client-side too — an older runtime strips
+    // the unknown `peek` param and would otherwise execute --unread --peek as
+    // a destructive mark-read.
+    if ([flags.has('unread'), peek, flags.has('all')].filter(Boolean).length > 1) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Choose at most one message read mode: --unread, --peek, or --all.'
+      )
+    }
     const timeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
     const terminal = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal')
 
     // Why: Claude Code's Bash tool auto-backgrounds subprocesses that produce
     // no output for ~2 min (shorter on the non-interactive path). Emit a
-    // heartbeat line to stderr every HEARTBEAT_INTERVAL_MS while the wait is
+    // keepalive line to stderr every KEEPALIVE_INTERVAL_MS while the wait is
     // active so the parent process can see the subprocess is still alive.
     // Stderr rather than stdout so stdout stays a single final JSON payload,
     // and JSON-shaped rather than `# …` so `2>&1 | jq` pipelines still work
     // (jq refuses `#`-prefixed lines). See design doc §3.4.
-    const stopHeartbeat = wait ? startCheckHeartbeat(timeoutMs) : null
+    const stopKeepalive = wait ? startCheckKeepalive(timeoutMs) : null
     type CheckResult = {
       messages: MessageSummary[]
       count: number
@@ -221,7 +410,12 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     try {
       result = await client.call<CheckResult>('orchestration.check', {
         terminal,
-        unread: flags.has('unread') ? true : undefined,
+        // Why: --peek also sends unread:false so runtimes that predate the
+        // peek param (which their non-strict schema strips) degrade to the
+        // non-consuming all-messages mode instead of the destructive
+        // mark-read default; the read filter below restores peek semantics.
+        unread: flags.has('unread') ? true : peek ? false : undefined,
+        peek: peek ? true : undefined,
         all: flags.has('all') ? true : undefined,
         types: getOptionalStringFlag(flags, 'types'),
         inject: flags.has('inject') ? true : undefined,
@@ -229,7 +423,41 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         timeoutMs
       })
     } finally {
-      stopHeartbeat?.()
+      stopKeepalive?.()
+    }
+    if (peek) {
+      const rawRowCount = result.result.messages.length
+      const unreadOnly = result.result.messages.filter((m) => m.read !== 1)
+      const removedReadRows = unreadOnly.length !== rawRowCount
+      // Why: read rows in a peek response are the pre-peek-runtime signature
+      // (its schema stripped `peek` and it ran the all mode). Such a runtime
+      // returned instead of blocking, so honoring --wait is impossible —
+      // failing beats silently returning empty before the deadline.
+      if (wait && removedReadRows && unreadOnly.length === 0) {
+        throw new RuntimeClientError(
+          'peek_wait_unsupported',
+          'The connected runtime does not support --peek with --wait; upgrade the runtime or use --wait without --peek.'
+        )
+      }
+      // Why: pre-peek runtimes cap the all mode at the newest 100 rows, so a
+      // full page means older unread messages may have been cut off. Warn on
+      // stderr so stdout stays a single JSON payload.
+      if (removedReadRows && rawRowCount >= 100) {
+        console.error(
+          'Warning: this runtime returned only its newest 100 messages for --peek; older unread messages may be missing. Upgrade the runtime for exact peek results.'
+        )
+      }
+      result = {
+        ...result,
+        result: {
+          ...result.result,
+          // Why: a pre-peek runtime builds `formatted` from all rows; drop it
+          // when the read filter removed any so output matches the peek set.
+          ...(removedReadRows ? { formatted: undefined } : {}),
+          messages: unreadOnly,
+          count: unreadOnly.length
+        }
+      }
     }
     printResult(result, json, (r) => {
       if (r.formatted) {
@@ -289,11 +517,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   },
 
   'orchestration task-create': async ({ flags, client, json }) => {
-    const callerTerminalHandle =
-      typeof process.env.ORCA_TERMINAL_HANDLE === 'string' &&
-      process.env.ORCA_TERMINAL_HANDLE.length > 0
-        ? process.env.ORCA_TERMINAL_HANDLE
-        : undefined
+    const callerTerminalHandle = await resolveTaskCreatorTerminalHandle(client)
     const result = await client.call<{ task: { id: string; status: string } }>(
       'orchestration.taskCreate',
       {
@@ -309,6 +533,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   },
 
   'orchestration task-list': async ({ flags, client, json }) => {
+    const brief = flags.has('brief')
     const result = await client.call<{
       tasks: {
         id: string
@@ -318,13 +543,26 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         status: string
         assignee_handle?: string | null
         dispatch_id?: string | null
+        spec_truncated?: boolean
       }[]
       count: number
     }>('orchestration.taskList', {
       status: getOptionalStringFlag(flags, 'status'),
-      ready: flags.has('ready') ? true : undefined
+      ready: flags.has('ready') ? true : undefined,
+      brief: brief ? true : undefined
     })
-    printResult(result, json, (r) => {
+    // Why: current runtimes abbreviate server-side (rows carry
+    // spec_truncated) so full specs never cross the wire; older runtimes
+    // strip the brief param and need the client-side fallback.
+    const needsClientAbbreviation =
+      brief && result.result.tasks.some((task) => task.spec_truncated === undefined)
+    const output = needsClientAbbreviation
+      ? {
+          ...result,
+          result: { ...result.result, tasks: abbreviateOrchestrationTasks(result.result.tasks) }
+        }
+      : result
+    printResult(output, json, (r) => {
       if (r.count === 0) {
         return 'No tasks.'
       }
@@ -361,7 +599,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   },
 
   'orchestration dispatch': async ({ flags, client, cwd, json }) => {
-    const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
+    const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const dryRun = flags.has('dry-run') ? true : undefined
     const returnPreamble = flags.has('return-preamble') ? true : undefined
     // Why: --to is only required for non-dry-run; the RPC handler re-enforces.
@@ -437,7 +675,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     // Why: resolve --from when previewing so the preamble embeds a real
     // coordinator handle, matching what an actual dispatch would produce.
     const from = showPreamble
-      ? await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
+      ? await resolveCoordinatorTerminalHandle(flags, cwd, client)
       : undefined
     const result = await client.call<{
       dispatch: { id: string; task_id: string; status: string } | null
@@ -460,7 +698,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   },
 
   'orchestration run': async ({ flags, client, cwd, json }) => {
-    const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
+    const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const result = await client.call<{
       runId: string
       status: string

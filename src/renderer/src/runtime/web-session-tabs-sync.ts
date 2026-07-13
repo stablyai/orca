@@ -48,6 +48,7 @@ import {
   normalizeCompatibleAgentStatusEntryForOwner,
   normalizeCompatibleAgentTitleForOwner
 } from '../../../shared/agent-title-owner'
+import { resolvePaneAgentOwner } from '../../../shared/pane-agent-owner'
 import { resolveTerminalLayoutRoot } from './remote-terminal-layout-resolution'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { clearWebSessionFocusIntent, peekWebSessionFocusIntent } from './web-session-focus-intent'
@@ -66,6 +67,7 @@ import {
   endWebRuntimeWakeTerminalRespawn,
   shouldSkipWebRuntimeWakeTerminalRespawn
 } from './web-runtime-wake-terminal-respawn'
+import { isRuntimeSubscriptionReplayResponse } from '../../../shared/runtime-subscription-replay'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 
@@ -170,6 +172,18 @@ export function getLastKnownHostTerminalTabCount(
   return (
     lastHostTerminalTabCountByWorktree.get(sessionTabsFreshnessKey(environmentId, worktreeId)) ?? 0
   )
+}
+
+// Why: a post-reconnect subscription replay re-emits the current snapshot with
+// an unchanged epoch/version; dropping the freshness entry lets the monotonic
+// gate accept that replay as authoritative instead of freezing the mirror
+// (#7718). Normal-operation ordering protection is untouched — this only runs
+// for responses the connection tagged as reconnect replays.
+export function acceptReplayedWebSessionTabsSnapshot(
+  environmentId: string,
+  worktreeId: string
+): void {
+  latestSessionTabsSnapshotByWorktree.delete(sessionTabsFreshnessKey(environmentId, worktreeId))
 }
 
 export function shouldApplyWebSessionTabsSnapshot(
@@ -529,10 +543,12 @@ function buildMirroredTerminalTabs(
       .filter((ptyId): ptyId is string => typeof ptyId === 'string' && ptyId.length > 0)
     const launchAgent =
       activeSurface.launchAgent ?? surfaces.find((surface) => surface.launchAgent)?.launchAgent
-    const ownerAgent =
-      launchAgent ??
-      activeSurface.agentStatus?.agentType ??
-      surfaces.find((surface) => surface.agentStatus?.agentType)?.agentStatus?.agentType
+    const ownerAgent = resolvePaneAgentOwner({
+      launchAgent,
+      hookAgent: activeSurface.agentStatus?.agentType,
+      siblingHookAgent: surfaces.find((surface) => surface.agentStatus?.agentType)?.agentStatus
+        ?.agentType
+    })
     const title = normalizeCompatibleAgentTitleForOwner(
       activeSurface.title.trim() || surfaces[0]?.title.trim() || 'Terminal',
       ownerAgent
@@ -611,7 +627,10 @@ function remapHostAgentStatus(surface: TerminalSurface): AgentStatusEntry | null
   if (!paneKey) {
     return null
   }
-  const ownerAgent = surface.launchAgent ?? surface.agentStatus.agentType
+  const ownerAgent = resolvePaneAgentOwner({
+    launchAgent: surface.launchAgent,
+    hookAgent: surface.agentStatus.agentType
+  })
   return {
     ...normalizeCompatibleAgentStatusEntryForOwner(surface.agentStatus, ownerAgent),
     paneKey
@@ -697,7 +716,8 @@ function buildMirroredAgentStatusPatch(
       sortRelevantChange ||
       !existing ||
       existing.state !== entry.state ||
-      !isAgentStatusFresh(existing, now)
+      !isAgentStatusFresh(existing, now) ||
+      isMirroredCommandCodeTurnBump(existing, entry)
   }
 
   if (!changed) {
@@ -1278,12 +1298,26 @@ function agentStatusEntryEqual(a: AgentStatusEntry | undefined, b: AgentStatusEn
     a.interactivePrompt === b.interactivePrompt &&
     a.lastAssistantMessage === b.lastAssistantMessage &&
     a.interrupted === b.interrupted &&
+    a.promptInteractionKey === b.promptInteractionKey &&
     sameAgentStateHistory(a.stateHistory, b.stateHistory)
   )
 }
 
 function isAgentStatusFresh(entry: Pick<AgentStatusEntry, 'updatedAt'>, now: number): boolean {
   return now - entry.updatedAt <= AGENT_STATUS_STALE_AFTER_MS
+}
+
+function isMirroredCommandCodeTurnBump(
+  existing: AgentStatusEntry | undefined,
+  entry: AgentStatusEntry
+): boolean {
+  return (
+    existing?.agentType === 'command-code' &&
+    entry.agentType === 'command-code' &&
+    existing.state === 'working' &&
+    entry.state === 'working' &&
+    entry.stateStartedAt > existing.stateStartedAt
+  )
 }
 
 function sameStringRecord(
@@ -2500,7 +2534,13 @@ export function useWebSessionTabsSync(): void {
                 return
               }
               const event = response.result as SessionTabsStreamEvent
+              const replayed = isRuntimeSubscriptionReplayResponse(response)
               if (event.type === 'snapshots') {
+                if (replayed) {
+                  for (const snapshot of event.snapshots) {
+                    acceptReplayedWebSessionTabsSnapshot(environmentId, snapshot.worktree)
+                  }
+                }
                 useAppStore.setState((state) =>
                   applyFreshWebSessionTabsSnapshots(state, event.snapshots, environmentId)
                 )
@@ -2508,6 +2548,9 @@ export function useWebSessionTabsSync(): void {
               }
               if (event.type !== 'snapshot' && event.type !== 'updated') {
                 return
+              }
+              if (replayed) {
+                acceptReplayedWebSessionTabsSnapshot(environmentId, event.worktree)
               }
               useAppStore.setState((state) =>
                 applyFreshWebSessionTabsSnapshot(state, event, environmentId)
@@ -2586,6 +2629,9 @@ export function useWebSessionTabsSync(): void {
             const event = response.result as SessionTabsStreamEvent
             if (event.type !== 'snapshot' && event.type !== 'updated') {
               return
+            }
+            if (isRuntimeSubscriptionReplayResponse(response)) {
+              acceptReplayedWebSessionTabsSnapshot(environmentId, event.worktree)
             }
             const fresh = shouldApplyWebSessionTabsSnapshot(event, environmentId)
             const syncState = useAppStore.getState()

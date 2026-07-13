@@ -25,6 +25,7 @@ import type { SessionInfo } from '../daemon/types'
 import { listRegisteredPtys, registerPty } from './pty-registry'
 import { listRepoWorktrees } from '../repo-worktrees'
 import { parsePtySessionId } from '../../shared/pty-session-id-format'
+import { splitWorktreeId } from '../../shared/worktree-id'
 import type { Store } from '../persistence'
 
 // Why: `attachMainWindowServices` runs on every macOS dock re-activation
@@ -70,34 +71,62 @@ export async function hydrateLocalPtyRegistryAtBoot(store: Pick<Store, 'getRepos
     // renderer-side union still covers that case.
     hasHydrated = true
 
-    // Why: build a worktree-id → connectionId map so we can SSH-gate each
-    // session before registering. Live git enumeration matches the path
-    // shape used by `mintPtySessionId` (`${repoId}::${path}`).
-    const repos = store.getRepos()
-    const repoConnectionIdByWorktreeId = new Map<string, string | null>()
+    // Why: ask the daemon which repos matter before launching Git worktree
+    // enumeration. Most configured repos have no preserved session at boot,
+    // so scanning all of them creates pure background subprocess churn.
+    const reposById = new Map(store.getRepos().map((repo) => [repo.id, repo]))
+    // Why: live git enumeration verifies that a referenced local worktree
+    // still exists instead of resurrecting removed worktrees.
+    const liveLocalWorktreeIds = new Set<string>()
+    const resolvedRepoIds = new Set<string>()
 
-    for (const repo of repos) {
-      const connectionId = repo.connectionId ?? null
-      if (connectionId) {
-        // Why: SSH PTYs are never registered for local process sampling, so
-        // avoid startup SSH/git enumeration for repos we will skip anyway.
-        continue
+    let sessionInfos = await collectSessionInfos(provider)
+    let alreadyRegistered = new Set(listRegisteredPtys().map((p) => p.ptyId))
+
+    // Why: repo selection and registration must come from the same daemon
+    // snapshot. Git enumeration can take seconds, so after each scan pass we
+    // re-read daemon and registry state; sessions that exited or were
+    // authoritatively registered meanwhile are not resurrected or overwritten,
+    // and a session that only became visible during a slow scan (e.g. a
+    // briefly unreachable legacy adapter) gets its repo scanned on the next
+    // pass instead of being silently dropped. Terminates because every pass
+    // permanently resolves at least one new repo id.
+    for (;;) {
+      const newlyReferencedRepos = new Map<string, ReturnType<(typeof store)['getRepos']>[number]>()
+      for (const info of sessionInfos) {
+        if (alreadyRegistered.has(info.sessionId)) {
+          continue
+        }
+        const { worktreeId } = parsePtySessionId(info.sessionId)
+        const parsedWorktreeId = worktreeId ? splitWorktreeId(worktreeId) : null
+        if (!parsedWorktreeId || resolvedRepoIds.has(parsedWorktreeId.repoId)) {
+          continue
+        }
+        const repo = reposById.get(parsedWorktreeId.repoId)
+        if (!repo || (repo.connectionId ?? null)) {
+          // Why: unknown repos can't be proven local, and SSH PTYs are never
+          // registered for local process sampling — resolve without git
+          // enumeration so neither can extend the loop.
+          resolvedRepoIds.add(parsedWorktreeId.repoId)
+          continue
+        }
+        newlyReferencedRepos.set(repo.id, repo)
       }
-      const worktrees = await listRepoWorktrees(repo)
-      for (const wt of worktrees) {
-        const worktreeId = `${repo.id}::${wt.path}`
-        repoConnectionIdByWorktreeId.set(worktreeId, connectionId)
+      if (newlyReferencedRepos.size === 0) {
+        break
       }
+
+      for (const repo of newlyReferencedRepos.values()) {
+        resolvedRepoIds.add(repo.id)
+        const worktrees = await listRepoWorktrees(repo)
+        for (const wt of worktrees) {
+          liveLocalWorktreeIds.add(`${repo.id}::${wt.path}`)
+        }
+      }
+
+      sessionInfos = await collectSessionInfos(provider)
+      alreadyRegistered = new Set(listRegisteredPtys().map((p) => p.ptyId))
     }
-
-    // Why: SessionInfo is read through the adapter's listSessions() so we
-    // get the pid alongside each id. Routing through every adapter
-    // (current + legacy) keeps protocol coverage symmetric with the
-    // orphan-cleanup path.
-    const sessionInfos = await collectSessionInfos(provider)
-
-    const alreadyRegistered = new Set(listRegisteredPtys().map((p) => p.ptyId))
-
     for (const info of sessionInfos) {
       // Why: pid-write ordering — `pty:spawn` is the authoritative
       // writer for in-session sessions; if that fired before this loop
@@ -115,10 +144,7 @@ export async function hydrateLocalPtyRegistryAtBoot(store: Pick<Store, 'getRepos
       // `src/main/ipc/pty.ts`. If the repo isn't in the store, skip the
       // session: we can't prove it's local, and the renderer-side union
       // still surfaces the session at the cost of a missing pid sample.
-      if (!repoConnectionIdByWorktreeId.has(worktreeId)) {
-        continue
-      }
-      if (repoConnectionIdByWorktreeId.get(worktreeId)) {
+      if (!liveLocalWorktreeIds.has(worktreeId)) {
         continue
       }
       registerPty({

@@ -37,14 +37,21 @@ import {
 } from '../../runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { getHostedReviewCacheKey, refreshHostedReviewCard } from './hosted-review'
+import { isPositiveHostedReviewNumber } from '../../../../shared/hosted-review'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from './browser-webview-cleanup'
 import { toast } from 'sonner'
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
 import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'
+import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
+import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
 import { branchName } from '@/lib/git-utils'
 import { markInputQuietSchedulerInput, scheduleAfterInputQuiet } from '@/lib/input-quiet-scheduler'
 import { clearSessionCommitDraftForWorktree } from '@/lib/source-control-commit-draft-session'
+import {
+  forgetHugeRepoWarningDismissalsForWorktrees,
+  migrateHugeRepoWarningDismissal
+} from '@/lib/source-control-huge-repo-warning-dismissals'
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
 import { showPreservedBranchToast } from '@/components/sidebar/preserved-branch-toast'
 import { translate } from '@/i18n/i18n'
@@ -64,20 +71,34 @@ import {
   worktreeWorkspaceKey
 } from '../../../../shared/workspace-scope'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import {
+  classifyWorktreeForceDeleteReason,
+  getLockedWorktreeRemovalReason,
+  isLockedWorktreeRemovalError
+} from '../../../../shared/worktree-removal'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
 // Why: old runtime servers only have `worktree.list`; preserve the large-list
 // UI hydration parity this slice used before `worktree.detectedList` existed.
 const REMOTE_WORKTREE_LIST_PARITY_LIMIT = 10_000
+const WORKTREE_REMOVAL_AMBIGUOUS_ERROR =
+  'Workspace identity is ambiguous across hosts. Refresh projects and try again.'
 const ACTIVE_WORKTREE_TERMINAL_PREP_DELAY_MS = 300
 const ACTIVE_WORKTREE_TERMINAL_PREP_INPUT_QUIET_MS = 450
 const ACTIVE_WORKTREE_TERMINAL_PREP_IDLE_TIMEOUT_MS = 180
-const WORKTREE_REFRESH_CONCURRENCY = 5
+// Why: each repo's `git worktree list` is an independent main-process child, so
+// a higher ceiling cuts startup scan batches (#7225) while staying bounded so
+// one UI moment can't launch every git probe at once.
+export const WORKTREE_REFRESH_CONCURRENCY = 8
 const pendingActivationTerminalPrepCancels = new Map<string, () => void>()
 const detachedHeadAutoDerivedDisplayNames = new Map<string, string>()
 const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
 const hostedReviewPushTargetLookupsInFlight = new Set<string>()
 const detectedWorktreeRefreshesInFlight = new Map<string, Promise<DetectedWorktreeListResult>>()
+
+type BackgroundRuntimeRefreshOptions = {
+  reuseRecentCompatibilityFailure?: boolean
+}
 
 async function mapReposForWorktreeRefresh<TRepo extends { id: string }, TResult>(
   repos: readonly TRepo[],
@@ -281,30 +302,6 @@ function toVisibleTabType(contentType: string): WorkspaceVisibleTabType {
   return 'editor'
 }
 
-const FORCE_RETRYABLE_WORKTREE_REMOVAL_MESSAGES = [
-  'Worktree has uncommitted or untracked changes',
-  'contains modified or untracked files',
-  'Worktree is no longer registered with Git but its directory remains',
-  'Worktree is no longer registered with Git and its directory is already gone'
-] as const
-
-// Why: local preflight formatting can surface raw git porcelain instead of the
-// friendly dirty-worktree message; only those status prefixes are forceable.
-const FORMATTED_DIRTY_WORKTREE_REMOVAL_PATTERN =
-  /Failed to delete worktree at [^\n]*\.\s*(?:(?:[MADRCUT][ MADRCUT]| [MADRCUT]|\?\?)\s+\S)/
-
-function canRetryWorktreeRemovalWithForce(error: string, force: boolean | undefined): boolean {
-  if (force) {
-    return false
-  }
-  // Why: force only helps backend safety refusals that are explicitly safe to
-  // retry with user confirmation; transport/provider errors need recovery first.
-  return (
-    FORCE_RETRYABLE_WORKTREE_REMOVAL_MESSAGES.some((message) => error.includes(message)) ||
-    FORMATTED_DIRTY_WORKTREE_REMOVAL_PATTERN.test(error)
-  )
-}
-
 type WorktreeWithLineage = Worktree & {
   parentWorktreeId?: string | null
   childWorktreeIds?: string[]
@@ -354,6 +351,21 @@ function repoHostId(
 ): ExecutionHostId {
   const repo = findRepoForHost(state.repos, repoId, { hostId, settings: state.settings })
   return repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
+}
+
+function repoHasExecutionHost(
+  state: Pick<AppState, 'repos'>,
+  repoId: string,
+  hostId: ExecutionHostId,
+  ownerWasMissingAtStart: boolean
+): boolean {
+  const repoOwners = state.repos.filter((repo) => repo.id === repoId)
+  // Why: worktrees can load before the repo catalog during startup; only reject
+  // a missing owner when this request previously observed an owned repo.
+  return (
+    (repoOwners.length === 0 && ownerWasMissingAtStart) ||
+    repoOwners.some((repo) => getRepoExecutionHostId(repo) === hostId)
+  )
 }
 
 function toVisibleWorktrees(
@@ -852,7 +864,8 @@ function settingsForWorktreeOwner(
 
 async function listDetectedWorktreesForRepo(
   settings: AppState['settings'],
-  repoId: string
+  repoId: string,
+  options: BackgroundRuntimeRefreshOptions = {}
 ): Promise<DetectedWorktreeListResult> {
   const target = getActiveRuntimeTarget(settings)
   if (target.kind === 'local') {
@@ -870,7 +883,10 @@ async function listDetectedWorktreesForRepo(
       target,
       'worktree.detectedList',
       { repo: repoId },
-      { timeoutMs: 15_000 }
+      {
+        timeoutMs: 15_000,
+        reuseRecentCompatibilityFailure: options.reuseRecentCompatibilityFailure
+      }
     )
   } catch (error) {
     if (!isRuntimeMethodNotFoundError(error)) {
@@ -880,7 +896,10 @@ async function listDetectedWorktreesForRepo(
       target,
       'worktree.list',
       { repo: repoId, limit: REMOTE_WORKTREE_LIST_PARITY_LIMIT },
-      { timeoutMs: 15_000 }
+      {
+        timeoutMs: 15_000,
+        reuseRecentCompatibilityFailure: options.reuseRecentCompatibilityFailure
+      }
     )
     return toLegacyDetectedWorktreeResult(repoId, legacy)
   }
@@ -889,22 +908,38 @@ async function listDetectedWorktreesForRepo(
 function detectedWorktreeRefreshKey(
   settings: AppState['settings'],
   repoId: string,
-  options: { executionHostId: ExecutionHostId; requireAuthoritative?: boolean }
+  options: {
+    executionHostId: ExecutionHostId
+    requireAuthoritative?: boolean
+    reuseRecentCompatibilityFailure?: boolean
+  }
 ): string {
   const target = getActiveRuntimeTarget(settings)
   const targetKey = target.kind === 'local' ? 'local' : `runtime:${target.environmentId}`
-  return [
+  const parts = [
     repoId,
     options.executionHostId,
     targetKey,
     options.requireAuthoritative === true ? 'authoritative' : 'best-effort'
-  ].join('\n')
+  ]
+  // Why: only remote targets run a compat preflight, so a foreground (reuse:false)
+  // refresh must not coalesce onto a background reuse:true scan that reused a
+  // stale failure — it must re-probe. Local targets have no preflight; keep them
+  // coalesced so a foreground/background collision stays one git scan.
+  if (target.kind === 'environment') {
+    parts.push(options.reuseRecentCompatibilityFailure === true ? 'reuse-failure' : 'reprobe')
+  }
+  return parts.join('\n')
 }
 
 async function listDetectedWorktreesForRepoCoalesced(
   settings: AppState['settings'],
   repoId: string,
-  options: { executionHostId: ExecutionHostId; requireAuthoritative?: boolean }
+  options: {
+    executionHostId: ExecutionHostId
+    requireAuthoritative?: boolean
+    reuseRecentCompatibilityFailure?: boolean
+  }
 ): Promise<DetectedWorktreeListResult> {
   const key = detectedWorktreeRefreshKey(settings, repoId, options)
   const existing = detectedWorktreeRefreshesInFlight.get(key)
@@ -913,7 +948,9 @@ async function listDetectedWorktreesForRepoCoalesced(
   }
   // Why: startup/event fan-out can ask for the same repo/host refresh many
   // times at once; share only the scan promise so state merge semantics stay local.
-  const refresh = listDetectedWorktreesForRepo(settings, repoId)
+  const refresh = listDetectedWorktreesForRepo(settings, repoId, {
+    reuseRecentCompatibilityFailure: options.reuseRecentCompatibilityFailure
+  })
   detectedWorktreeRefreshesInFlight.set(key, refresh)
   try {
     return await refresh
@@ -924,7 +961,10 @@ async function listDetectedWorktreesForRepoCoalesced(
   }
 }
 
-async function listWorktreeLineageForRuntime(settings: AppState['settings']): Promise<{
+async function listWorktreeLineageForRuntime(
+  settings: AppState['settings'],
+  options: BackgroundRuntimeRefreshOptions = {}
+): Promise<{
   worktreeLineageById: Record<string, WorktreeLineage>
   workspaceLineageByChildKey: Record<string, WorkspaceLineage>
 }> {
@@ -951,7 +991,10 @@ async function listWorktreeLineageForRuntime(settings: AppState['settings']): Pr
     await callRuntimeRpc<{
       lineage: Record<string, WorktreeLineage>
       workspaceLineage?: Record<string, WorkspaceLineage>
-    }>(target, 'worktree.lineageList', undefined, { timeoutMs: 15_000 })
+    }>(target, 'worktree.lineageList', undefined, {
+      timeoutMs: 15_000,
+      reuseRecentCompatibilityFailure: options.reuseRecentCompatibilityFailure
+    })
   )
 }
 
@@ -1057,9 +1100,10 @@ function applyWorktreeLineageUpdate(
 
 async function refreshWorktreeLineageForSettings(
   settings: AppState['settings'],
-  set: Parameters<StateCreator<AppState>>[0]
+  set: Parameters<StateCreator<AppState>>[0],
+  options: BackgroundRuntimeRefreshOptions = {}
 ): Promise<void> {
-  const lineage = await listWorktreeLineageForRuntime(settings)
+  const lineage = await listWorktreeLineageForRuntime(settings, options)
   const hostId = getSettingsFocusedExecutionHostId(settings)
   set((s) => ({
     worktreeLineageById: mergeLineageForHost(s, hostId, lineage.worktreeLineageById),
@@ -1079,7 +1123,9 @@ async function refreshRemoteWorktreeLineageBestEffort(
     return
   }
   try {
-    const lineage = await listWorktreeLineageForRuntime(settings)
+    const lineage = await listWorktreeLineageForRuntime(settings, {
+      reuseRecentCompatibilityFailure: true
+    })
     const hostId = getSettingsFocusedExecutionHostId(settings)
     set((s) => ({
       worktreeLineageById: mergeLineageForHost(s, hostId, lineage.worktreeLineageById),
@@ -1113,6 +1159,41 @@ function getWorktreeHostId(
   }
   const repo = findRepoForHost(state.repos, repoId, { settings: state.settings })
   return repo ? getRepoExecutionHostId(repo) : null
+}
+
+function resolveWorktreeRemovalHost(
+  state: Pick<AppState, 'repos' | 'settings' | 'worktreesByRepo' | 'detectedWorktreesByRepo'>,
+  worktreeId: string
+): { hostId: ExecutionHostId | null; ambiguous: boolean } {
+  const hostIds = new Set<ExecutionHostId>()
+  for (const worktrees of Object.values(state.worktreesByRepo)) {
+    for (const worktree of worktrees) {
+      if (worktree.id === worktreeId && worktree.hostId) {
+        hostIds.add(worktree.hostId)
+      }
+    }
+  }
+  for (const result of Object.values(state.detectedWorktreesByRepo)) {
+    for (const worktree of result.worktrees) {
+      if (worktree.id === worktreeId && worktree.hostId) {
+        hostIds.add(worktree.hostId)
+      }
+    }
+  }
+  if (hostIds.size > 1) {
+    return { hostId: null, ambiguous: true }
+  }
+  if (hostIds.size === 1) {
+    return { hostId: hostIds.values().next().value ?? null, ambiguous: false }
+  }
+
+  const repoId = getRepoIdFromWorktreeId(worktreeId)
+  const repoHostIds = new Set(
+    state.repos.filter((repo) => repo.id === repoId).map(getRepoExecutionHostId)
+  )
+  return repoHostIds.size > 1
+    ? { hostId: null, ambiguous: true }
+    : { hostId: repoHostIds.values().next().value ?? null, ambiguous: false }
 }
 
 function mergeLineageForHost(
@@ -1304,10 +1385,6 @@ function getHostedReviewPushTargetLookup(worktree: Worktree): {
   return null
 }
 
-function isPositiveHostedReviewNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0
-}
-
 type HostedReviewLinkKey =
   | 'linkedPR'
   | 'linkedGitLabMR'
@@ -1446,6 +1523,19 @@ export function resetHostedReviewLinkMutationGenerationForTests(): void {
   hostedReviewLinkMutationGenerationByWorktreeId.clear()
   hostedReviewLinkClearTombstonesByWorktreeId.clear()
   hostedReviewLinkWorktreeIdAliases.clear()
+}
+
+export function setDetachedHeadAutoDerivedDisplayNameForTests(
+  worktreeId: string,
+  displayName: string
+): void {
+  detachedHeadAutoDerivedDisplayNames.set(worktreeId, displayName)
+}
+
+export function getDetachedHeadAutoDerivedDisplayNameForTests(
+  worktreeId: string
+): string | undefined {
+  return detachedHeadAutoDerivedDisplayNames.get(worktreeId)
 }
 
 function hostedReviewLinksAreCleared(worktree: Worktree): boolean {
@@ -1808,15 +1898,40 @@ function buildWorktreeRenameState(
 function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<AppState> {
   const worktreeIdSet = new Set(worktreeIds)
   pruneHostedReviewLinkMutationGenerations(worktreeIdSet)
+  // Why: every authoritative and explicit purge converges here, including
+  // fetchAllWorktrees; centralizing prevents a deleted path inheriting UI state.
+  forgetHugeRepoWarningDismissalsForWorktrees(worktreeIdSet)
 
   // Collect every tab id (and removed file id) we are about to orphan.
   const doomedTabIds = new Set<string>()
+  // Why: some terminal/agent maps are keyed by ptyId, not tabId. Collect every
+  // durable wake hint too, because slept panes have already left the live index.
+  const doomedPtyIds = new Set<string>()
+  const addDoomedPtyId = (ptyId: string | null | undefined): void => {
+    if (!ptyId) {
+      return
+    }
+    doomedPtyIds.add(ptyId)
+  }
+  const addDoomedTabPtyIds = (tabId: string, tabPtyId: string | null | undefined): void => {
+    for (const ptyId of s.ptyIdsByTabId?.[tabId] ?? []) {
+      addDoomedPtyId(ptyId)
+    }
+    addDoomedPtyId(tabPtyId)
+    addDoomedPtyId(s.lastKnownRelayPtyIdByTabId?.[tabId])
+    for (const ptyId of Object.values(s.terminalLayoutsByTabId?.[tabId]?.ptyIdsByLeafId ?? {})) {
+      addDoomedPtyId(ptyId)
+    }
+  }
   const doomedBrowserWorkspaceIds = new Set<string>()
   const doomedPageIds = new Set<string>()
   const removedFileIds = new Set<string>()
   for (const id of worktreeIdSet) {
     for (const tab of s.tabsByWorktree[id] ?? []) {
       doomedTabIds.add(tab.id)
+      // Null-tolerant like the omit* helpers below: some callers pass partial
+      // state that omits this slice; the production store always inits it to {}.
+      addDoomedTabPtyIds(tab.id, tab.ptyId)
       // Why: a removed worktree's panes are gone for good, so drop their
       // hibernation output epochs from that module-level map (mirrors the
       // hosted-review prune above). A future pane mints a fresh leafId at epoch 0.
@@ -1825,7 +1940,14 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     for (const workspace of s.browserTabsByWorktree[id] ?? []) {
       doomedBrowserWorkspaceIds.add(workspace.id)
     }
+    // Why: drop this worktree's auto-derived detached-HEAD display name so the
+    // module-level map doesn't retain removed worktrees for the whole session.
+    detachedHeadAutoDerivedDisplayNames.delete(id)
   }
+  // Why: same rationale for the doomed tabs' foreground last-seen timestamps and
+  // consumed agent-startup delivery guards — retired tab ids never recur.
+  forgetForegroundTerminalTabs(doomedTabIds)
+  forgetAgentStartupDeliveriesForTabs(doomedTabIds)
   // Why: the per-page browser maps are keyed by page id, not worktree/workspace id.
   // Collect every page owned by a doomed workspace so this bulk purge can evict
   // them. (The single removeWorktree path clears these via closeBrowserTab, but the
@@ -1900,6 +2022,36 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     }
     return changed ? out : obj
   }
+  const omitByPtyId = <T>(obj: Record<string, T>): Record<string, T> => {
+    let changed = false
+    const out = { ...obj }
+    for (const ptyId of doomedPtyIds) {
+      if (ptyId in out) {
+        delete out[ptyId]
+        changed = true
+      }
+    }
+    return changed ? out : obj
+  }
+  // Pane-scoped maps are keyed by `${tabId}:${leafId}` (stable-pane-id); tabId
+  // never contains ":", so the segment before the first ":" is the owning tab.
+  const omitByPaneKeyTabPrefix = <T>(obj: Record<string, T>): Record<string, T> => {
+    // Null-tolerant like omitByTabId: some worktree-isolation callers omit these
+    // slices entirely, and the production store always initializes them to {}.
+    if (!obj) {
+      return obj
+    }
+    let changed = false
+    const out = { ...obj }
+    for (const paneKey of Object.keys(obj)) {
+      const sep = paneKey.indexOf(':')
+      if (sep > 0 && doomedTabIds.has(paneKey.slice(0, sep))) {
+        delete out[paneKey]
+        changed = true
+      }
+    }
+    return changed ? out : obj
+  }
   const omitByBrowserWorkspaceId = <T>(obj: Record<string, T>): Record<string, T> => {
     let changed = false
     const out = { ...obj }
@@ -1959,6 +2111,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     }
     return next
   })()
+  const nextAgentStatusByPaneKey = omitByPaneKeyTabPrefix(s.agentStatusByPaneKey)
 
   return {
     // Worktree-scoped terminal/tab state
@@ -1969,6 +2122,50 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     ptyIdsByTabId: omitByTabId(s.ptyIdsByTabId),
     runtimePaneTitlesByTabId: omitByTabId(s.runtimePaneTitlesByTabId),
     automaticAgentResumeClaimsByTabId: omitByTabId(s.automaticAgentResumeClaimsByTabId),
+    nativeChatLaunchPromptByTabId: omitByTabId(s.nativeChatLaunchPromptByTabId),
+    // Why: bulk/hydration purge must drop the per-tab pane-expand flags too;
+    // this path never runs terminal teardown, so nothing else evicts them.
+    expandedPaneByTabId: omitByTabId(s.expandedPaneByTabId),
+    canExpandPaneByTabId: omitByTabId(s.canExpandPaneByTabId),
+    // Why: these per-tab / per-pty terminal+agent maps are evicted on the single
+    // removeWorktree path (via closeTab / shutdownWorktreeTerminals) but this bulk
+    // reconcile / remove-project / hydration-stale path runs no terminal teardown,
+    // so without these lines each one strands an entry per tab/pane of every
+    // externally-removed worktree for the renderer's whole session. lastKnownRelay
+    // and the two ptyId maps retain an entry for a live pane's entire lifetime
+    // (highest value); the pending* one-shots are consumed at pane mount so usually
+    // already empty at removal, but strand when a tab's pane never mounted.
+    lastKnownRelayPtyIdByTabId: omitByTabId(s.lastKnownRelayPtyIdByTabId),
+    pendingInitialCwdByTabId: omitByTabId(s.pendingInitialCwdByTabId),
+    pendingIssueCommandSplitByTabId: omitByTabId(s.pendingIssueCommandSplitByTabId),
+    pendingSetupSplitByTabId: omitByTabId(s.pendingSetupSplitByTabId),
+    pendingStartupByTabId: omitByTabId(s.pendingStartupByTabId),
+    codexRestartNoticeByPtyId: omitByPtyId(s.codexRestartNoticeByPtyId),
+    migrationUnsupportedByPtyId: omitByPtyId(s.migrationUnsupportedByPtyId),
+    suppressedPtyExitIds: omitByPtyId(s.suppressedPtyExitIds),
+    pendingCodexPaneRestartIds: omitByPtyId(s.pendingCodexPaneRestartIds),
+    // Why: these tab/pane-scoped agent-status, unread, and input maps are only
+    // cleared on the single removeWorktree path (via shutdownWorktreeTerminals /
+    // dropAgentStatusByWorktree / clearPaneForegroundAgentByWorktree, which read
+    // tabsByWorktree while it is still populated). The bulk reconcile / remove-
+    // project / hydration-stale paths that reach this reducer never run terminal
+    // teardown, so without this they orphan an entry per agent pane of every
+    // externally-removed worktree for the session (plus a phantom unread dock
+    // badge). retainedAgentsByPaneKey and runtimeAgentOrchestrationByPaneKey are
+    // intentionally omitted here — both self-heal (pruneRetainedAgents on a
+    // worktreesByRepo change; the runtime map is replaced wholesale each sync).
+    agentStatusByPaneKey: nextAgentStatusByPaneKey,
+    ...(nextAgentStatusByPaneKey !== s.agentStatusByPaneKey
+      ? { agentStatusEpoch: s.agentStatusEpoch + 1 }
+      : {}),
+    agentLaunchConfigByPaneKey: omitByPaneKeyTabPrefix(s.agentLaunchConfigByPaneKey),
+    acknowledgedAgentsByPaneKey: omitByPaneKeyTabPrefix(s.acknowledgedAgentsByPaneKey),
+    paneForegroundAgentByPaneKey: omitByPaneKeyTabPrefix(s.paneForegroundAgentByPaneKey),
+    sleepingAgentSessionsByPaneKey: omitByPaneKeyTabPrefix(s.sleepingAgentSessionsByPaneKey),
+    unreadTerminalTabs: omitByTabId(s.unreadTerminalTabs),
+    unreadTerminalPanes: omitByPaneKeyTabPrefix(s.unreadTerminalPanes),
+    unreadAgentCompletionPanes: omitByPaneKeyTabPrefix(s.unreadAgentCompletionPanes),
+    lastTerminalInputAtByPaneKey: omitByPaneKeyTabPrefix(s.lastTerminalInputAtByPaneKey),
     // Delete state
     deleteStateByWorktreeId: omitByWorktree(s.deleteStateByWorktreeId),
     baseStatusByWorktreeId: omitByWorktree(s.baseStatusByWorktreeId),
@@ -2086,6 +2283,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     try {
       const ownerState = get()
       const hostId = repoHostId(ownerState, repoId)
+      const ownerWasMissingAtStart = !ownerState.repos.some((repo) => repo.id === repoId)
       const setup = getProjectHostSetupForRepoHost(ownerState, repoId, hostId)
       const result = await listDetectedWorktreesForRepoCoalesced(
         settingsForRepoOwner(ownerState, repoId, hostId),
@@ -2093,6 +2291,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         { executionHostId: hostId }
       )
       set((s) => {
+        if (!repoHasExecutionHost(s, repoId, hostId, ownerWasMissingAtStart)) {
+          return s
+        }
         // Why: detected-only refreshes can overlap host-scoped visible refreshes;
         // keep detected state stamped/merged so SSH/runtime rows are not clobbered.
         const mergedDetected = mergeDetectedWorktreesForHost(
@@ -2120,6 +2321,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     try {
       const ownerState = get()
       const hostId = repoHostId(ownerState, repoId)
+      const ownerWasMissingAtStart = !ownerState.repos.some((repo) => repo.id === repoId)
       const setup = getProjectHostSetupForRepoHost(ownerState, repoId, hostId)
       const settings = settingsForRepoOwner(ownerState, repoId, hostId)
       const detected = await listDetectedWorktreesForRepoCoalesced(settings, repoId, {
@@ -2140,6 +2342,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       )
       if (areWorktreesEqual(currentForHost, worktrees)) {
         set((s) => {
+          if (!repoHasExecutionHost(s, repoId, hostId, ownerWasMissingAtStart)) {
+            return s
+          }
           const matchOptions = worktreeHostMatchOptions(s, repoId, hostId)
           const removedIds = getRemovedWorktreeIdsAfterAuthoritativeScan(
             s,
@@ -2193,22 +2398,30 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // to-navigate silently fails because findWorktreeById returns undefined.
       // Keep the stale-but-correct data until the next successful refresh.
       if (!detected.authoritative && worktrees.length === 0 && currentForHost.length > 0) {
-        set((s) => ({
-          detectedWorktreesByRepo: {
-            ...s.detectedWorktreesByRepo,
-            [repoId]: mergeDetectedWorktreesForHost(
-              s.detectedWorktreesByRepo[repoId],
-              detected,
-              hostId,
-              setup,
-              worktreeHostMatchOptions(s, repoId, hostId)
-            )
+        set((s) => {
+          if (!repoHasExecutionHost(s, repoId, hostId, ownerWasMissingAtStart)) {
+            return s
           }
-        }))
+          return {
+            detectedWorktreesByRepo: {
+              ...s.detectedWorktreesByRepo,
+              [repoId]: mergeDetectedWorktreesForHost(
+                s.detectedWorktreesByRepo[repoId],
+                detected,
+                hostId,
+                setup,
+                worktreeHostMatchOptions(s, repoId, hostId)
+              )
+            }
+          }
+        })
         return false
       }
 
       set((s) => {
+        if (!repoHasExecutionHost(s, repoId, hostId, ownerWasMissingAtStart)) {
+          return s
+        }
         // Why: hidden worktrees are not in worktreesByRepo. Purge decisions
         // must diff against the previous authoritative detected list so hiding
         // does not delete state, and deleting a hidden worktree still does.
@@ -2249,7 +2462,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }
   },
 
-  fetchAllWorktrees: async () => {
+  fetchAllWorktrees: async (options) => {
     const { repos } = get()
 
     // Why: once the one-shot hydration-time purge has fired, subsequent
@@ -2257,46 +2470,62 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     // double-probe the IPC for the per-repo success signal.
     if (get().hasHydratedWorktreePurge) {
       await mapReposForWorktreeRefresh(repos, async (r) => {
-        const hostId = getRepoExecutionHostId(r)
-        const setup = getProjectHostSetupForRepoHost(get(), r.id, hostId)
-        const settings = settingsForKnownRepoOwner(get().settings, r)
-        const detected = await listDetectedWorktreesForRepoCoalesced(settings, r.id, {
-          executionHostId: hostId
-        })
-        const worktrees = sanitizeHostedReviewLinksForBranchClears(
-          toVisibleWorktrees(detected, hostId, setup),
-          get().worktreesByRepo[r.id]
-        )
-        set((s) => {
-          const matchOptions = worktreeHostMatchOptions(s, r.id, hostId)
-          const removedIds = getRemovedWorktreeIdsAfterAuthoritativeScan(s, r.id, detected, hostId)
-          const mergedWorktrees = mergeWorktreesForHost(
-            s.worktreesByRepo[r.id],
-            worktrees,
-            hostId,
-            matchOptions
+        try {
+          const hostId = getRepoExecutionHostId(r)
+          const setup = getProjectHostSetupForRepoHost(get(), r.id, hostId)
+          const settings = settingsForKnownRepoOwner(get().settings, r)
+          const detected = await listDetectedWorktreesForRepoCoalesced(settings, r.id, {
+            executionHostId: hostId,
+            reuseRecentCompatibilityFailure: true
+          })
+          const worktrees = sanitizeHostedReviewLinksForBranchClears(
+            toVisibleWorktrees(detected, hostId, setup),
+            get().worktreesByRepo[r.id]
           )
-          const mergedDetected = mergeDetectedWorktreesForHost(
-            s.detectedWorktreesByRepo[r.id],
-            detected,
-            hostId,
-            setup,
-            matchOptions
-          )
-          if (
-            areWorktreesEqual(s.worktreesByRepo[r.id], mergedWorktrees) &&
-            areDetectedWorktreeResultsEqual(s.detectedWorktreesByRepo[r.id], mergedDetected) &&
-            removedIds.length === 0
-          ) {
-            return s
+          set((s) => {
+            if (!repoHasExecutionHost(s, r.id, hostId, false)) {
+              return s
+            }
+            const matchOptions = worktreeHostMatchOptions(s, r.id, hostId)
+            const removedIds = getRemovedWorktreeIdsAfterAuthoritativeScan(
+              s,
+              r.id,
+              detected,
+              hostId
+            )
+            const mergedWorktrees = mergeWorktreesForHost(
+              s.worktreesByRepo[r.id],
+              worktrees,
+              hostId,
+              matchOptions
+            )
+            const mergedDetected = mergeDetectedWorktreesForHost(
+              s.detectedWorktreesByRepo[r.id],
+              detected,
+              hostId,
+              setup,
+              matchOptions
+            )
+            if (
+              areWorktreesEqual(s.worktreesByRepo[r.id], mergedWorktrees) &&
+              areDetectedWorktreeResultsEqual(s.detectedWorktreesByRepo[r.id], mergedDetected) &&
+              removedIds.length === 0
+            ) {
+              return s
+            }
+            return {
+              worktreesByRepo: { ...s.worktreesByRepo, [r.id]: mergedWorktrees },
+              detectedWorktreesByRepo: { ...s.detectedWorktreesByRepo, [r.id]: mergedDetected },
+              sortEpoch: s.sortEpoch + 1,
+              ...(removedIds.length > 0 ? buildWorktreePurgeState(s, removedIds) : {})
+            }
+          })
+        } catch (err) {
+          if (notifyRuntimeScopeForbiddenIfNeeded(err)) {
+            return
           }
-          return {
-            worktreesByRepo: { ...s.worktreesByRepo, [r.id]: mergedWorktrees },
-            detectedWorktreesByRepo: { ...s.detectedWorktreesByRepo, [r.id]: mergedDetected },
-            sortEpoch: s.sortEpoch + 1,
-            ...(removedIds.length > 0 ? buildWorktreePurgeState(s, removedIds) : {})
-          }
-        })
+          console.error(`Failed to fetch worktrees for repo ${r.id}:`, err)
+        }
       })
       return
     }
@@ -2326,7 +2555,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           const detected = await listDetectedWorktreesForRepoCoalesced(
             settingsForKnownRepoOwner(get().settings, r),
             r.id,
-            { executionHostId: hostId }
+            { executionHostId: hostId, reuseRecentCompatibilityFailure: true }
           )
           const current = get().worktreesByRepo[r.id]
           const list = sanitizeHostedReviewLinksForBranchClears(
@@ -2342,6 +2571,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             !(list.length === 0 && currentForHost.length > 0 && !detected.authoritative)
           ) {
             set((s) => {
+              if (!repoHasExecutionHost(s, r.id, hostId, false)) {
+                return s
+              }
               const matchOptions = worktreeHostMatchOptions(s, r.id, hostId)
               return {
                 worktreesByRepo: {
@@ -2362,18 +2594,23 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               }
             })
           } else {
-            set((s) => ({
-              detectedWorktreesByRepo: {
-                ...s.detectedWorktreesByRepo,
-                [r.id]: mergeDetectedWorktreesForHost(
-                  s.detectedWorktreesByRepo[r.id],
-                  detected,
-                  hostId,
-                  setup,
-                  worktreeHostMatchOptions(s, r.id, hostId)
-                )
+            set((s) => {
+              if (!repoHasExecutionHost(s, r.id, hostId, false)) {
+                return s
               }
-            }))
+              return {
+                detectedWorktreesByRepo: {
+                  ...s.detectedWorktreesByRepo,
+                  [r.id]: mergeDetectedWorktreesForHost(
+                    s.detectedWorktreesByRepo[r.id],
+                    detected,
+                    hostId,
+                    setup,
+                    worktreeHostMatchOptions(s, r.id, hostId)
+                  )
+                }
+              }
+            })
           }
           return { repoId: r.id, ok: detected.authoritative, detected }
         } catch (err) {
@@ -2391,10 +2628,31 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // Defer; try again on the next fetchAllWorktrees call.
       return
     }
+    if (
+      options?.hydrationPurge === 'defer' ||
+      get().workspaceSessionReady === false ||
+      get().hydrationSucceeded === false
+    ) {
+      // Why: startup first refreshes only local repos so the app can paint
+      // before remote runtime timeouts. Keep the one-shot purge available for
+      // the later all-host refresh, after a clean session hydrate and when
+      // remote worktree ids are known too.
+      return
+    }
     const validIds = new Set<string>()
     // Why: floating is persisted renderer state, but not a repo worktree that
     // authoritative runtime scans can return.
     validIds.add(FLOATING_TERMINAL_WORKTREE_ID)
+    // Why: folder workspaces persist terminal tabs under `folder:<id>` keys,
+    // but authoritative repo scans can never return those synthetic ids.
+    for (const workspace of get().folderWorkspaces ?? []) {
+      validIds.add(folderWorkspaceKey(workspace.id))
+    }
+    for (const key of Object.keys(get().restoredRuntimeHostIdByWorkspaceSessionKey ?? {})) {
+      if (parseWorkspaceKey(key)?.type === 'folder') {
+        validIds.add(key)
+      }
+    }
     for (const result of Object.values(get().detectedWorktreesByRepo)) {
       if (!result.authoritative) {
         continue
@@ -2418,7 +2676,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     try {
       // Why: lineage is a focused-host refresh — fetch from the focused host and
       // host-merge so other hosts' previously fetched lineage is preserved.
-      await refreshWorktreeLineageForSettings(get().settings, set)
+      await refreshWorktreeLineageForSettings(get().settings, set, {
+        reuseRecentCompatibilityFailure: true
+      })
     } catch (err) {
       console.error('Failed to fetch worktree lineage:', err)
     }
@@ -2966,35 +3226,74 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     })
   },
 
-  removeWorktree: async (worktreeId, force) => {
+  removeWorktree: async (worktreeId, force, options) => {
+    const removalOwner = resolveWorktreeRemovalHost(get(), worktreeId)
+    if (removalOwner.ambiguous) {
+      return { ok: false, error: WORKTREE_REMOVAL_AMBIGUOUS_ERROR }
+    }
+    const hostId = removalOwner.hostId ?? undefined
+    const forgetLocalOnly = options?.mode === 'forget-local'
     set((s) => ({
       deleteStateByWorktreeId: {
         ...s.deleteStateByWorktreeId,
         [worktreeId]: {
           isDeleting: true,
+          phase: 'deleting',
           error: null,
-          canForceDelete: false
+          canForceDelete: false,
+          forceDeleteReason: null
         }
       }
     }))
 
     try {
-      const repoIdForTrust = getRepoIdFromWorktreeId(worktreeId)
-      const trustDecision = await ensureHooksConfirmed(get(), repoIdForTrust, 'archive')
-      const skipArchive = trustDecision === 'skip'
+      // Why: forget-local touches no remote, so there is no archive hook to run
+      // and no need to prompt for hook trust.
+      const skipArchive = forgetLocalOnly
+        ? true
+        : (await ensureHooksConfirmed(
+            get(),
+            getRepoIdFromWorktreeId(worktreeId),
+            'archive',
+            hostId
+          )) === 'skip'
 
       const worktreeBeforeRemoval = get()
         .allWorktrees()
         .find((entry) => entry.id === worktreeId)
-      const target = getActiveRuntimeTarget(settingsForWorktreeOwner(get(), worktreeId))
-      const removalResult = await (target.kind === 'local'
-        ? window.api.worktrees.remove({ worktreeId, force, skipArchive })
-        : callRuntimeRpc<RemoveWorktreeResult>(
-            target,
-            'worktree.rm',
-            { worktree: toRuntimeWorktreeSelector(worktreeId), force, runHooks: !skipArchive },
-            { timeoutMs: 60_000 }
-          ))
+      const currentOwner = resolveWorktreeRemovalHost(get(), worktreeId)
+      if (
+        currentOwner.ambiguous ||
+        (hostId && currentOwner.hostId && currentOwner.hostId !== hostId)
+      ) {
+        throw new Error(WORKTREE_REMOVAL_AMBIGUOUS_ERROR)
+      }
+      // Why: forget-local always clears Orca's own records via the local IPC
+      // handler regardless of the workspace's execution host — the whole point
+      // is that the remote (SSH relay / runtime) is gone or unreachable.
+      const target = getActiveRuntimeTarget(
+        hostId
+          ? settingsForExecutionHostOwner(get().settings, hostId)
+          : settingsForWorktreeOwner(get(), worktreeId)
+      )
+      const removalResult = await (forgetLocalOnly
+        ? window.api.worktrees.forgetLocal({ worktreeId, hostId })
+        : target.kind === 'local'
+          ? window.api.worktrees.remove({ worktreeId, hostId, force, skipArchive })
+          : callRuntimeRpc<RemoveWorktreeResult>(
+              target,
+              'worktree.rm',
+              {
+                worktree: toRuntimeWorktreeSelector(worktreeId),
+                force,
+                runHooks: !skipArchive
+              },
+              { timeoutMs: 60_000 }
+            ))
+
+      // Why: invalidate stale probes as soon as deletion is authoritative, so
+      // an old toast cannot mutate a same-path replacement during UI teardown.
+      forgetHugeRepoWarningDismissalsForWorktrees([worktreeId])
 
       const worktreeDisplayName = worktreeBeforeRemoval?.displayName?.trim()
       if (worktreeDisplayName) {
@@ -3035,6 +3334,13 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const tabs = get().tabsByWorktree[worktreeId] ?? []
       const tabIds = new Set(tabs.map((t) => t.id))
 
+      // Why: this path deletes tabsByWorktree wholesale (not via closeTab), so
+      // purge the module-level maps keyed by this worktree/its tabs here too —
+      // matching buildWorktreePurgeState so retired ids don't accumulate.
+      detachedHeadAutoDerivedDisplayNames.delete(worktreeId)
+      forgetForegroundTerminalTabs(tabIds)
+      forgetAgentStartupDeliveriesForTabs(tabIds)
+
       // Why: deletion is async (backend + terminal/browser teardown awaited
       // above), so snapshot the sidebar's current top-row anchor in the same
       // tick we remove the row. Recording at click time goes stale across the
@@ -3055,11 +3361,20 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         const nextAutomaticAgentResumeClaimsByTabId = {
           ...s.automaticAgentResumeClaimsByTabId
         }
+        const nextNativeChatLaunchPromptByTabId = { ...s.nativeChatLaunchPromptByTabId }
+        // Why: closeTab deletes these two per-tab maps but removeWorktree missed
+        // them, so a split pane's expand flags outlived its deleted worktree for
+        // the renderer's whole session. Purge them here to match closeTab.
+        const nextExpandedPaneByTabId = { ...s.expandedPaneByTabId }
+        const nextCanExpandPaneByTabId = { ...s.canExpandPaneByTabId }
         for (const tabId of tabIds) {
           delete nextLayouts[tabId]
           delete nextPtyIdsByTabId[tabId]
           delete nextRuntimePaneTitlesByTabId[tabId]
           delete nextAutomaticAgentResumeClaimsByTabId[tabId]
+          delete nextNativeChatLaunchPromptByTabId[tabId]
+          delete nextExpandedPaneByTabId[tabId]
+          delete nextCanExpandPaneByTabId[tabId]
         }
         const nextDeleteState = { ...s.deleteStateByWorktreeId }
         delete nextDeleteState[worktreeId]
@@ -3205,7 +3520,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           ptyIdsByTabId: nextPtyIdsByTabId,
           runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
           automaticAgentResumeClaimsByTabId: nextAutomaticAgentResumeClaimsByTabId,
+          nativeChatLaunchPromptByTabId: nextNativeChatLaunchPromptByTabId,
           terminalLayoutsByTabId: nextLayouts,
+          expandedPaneByTabId: nextExpandedPaneByTabId,
+          canExpandPaneByTabId: nextCanExpandPaneByTabId,
           deleteStateByWorktreeId: nextDeleteState,
           baseStatusByWorktreeId: (() => {
             const nextStatus = { ...s.baseStatusByWorktreeId }
@@ -3302,7 +3620,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // prune effect cannot be the only stale-draft cleanup path.
       clearSessionCommitDraftForWorktree(worktreeId)
       const preservedBranch = removalResult?.preservedBranch
-      if (preservedBranch) {
+      if (preservedBranch && options?.suppressPreservedBranchToast !== true) {
         showPreservedBranchToast(removalResult, worktreeBeforeRemoval, (branch, expectedHead) => {
           void get().forceDeletePreservedBranch(worktreeId, branch, expectedHead)
         })
@@ -3314,13 +3632,17 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // handled user decision point surfaced by the delete toast, not an app error.
       console.warn('Failed to remove worktree:', err)
       const error = err instanceof Error ? err.message : String(err)
+      const forceDeleteReason = classifyWorktreeForceDeleteReason(error, force)
+      const locked = isLockedWorktreeRemovalError(error)
       set((s) => ({
         deleteStateByWorktreeId: {
           ...s.deleteStateByWorktreeId,
           [worktreeId]: {
             isDeleting: false,
             error,
-            canForceDelete: canRetryWorktreeRemovalWithForce(error, force)
+            canForceDelete: forceDeleteReason !== null,
+            forceDeleteReason,
+            ...(locked ? { lockReason: getLockedWorktreeRemovalReason(error) } : {})
           }
         }
       }))
@@ -3342,8 +3664,35 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         }
         nextDeleteState[worktreeId] = {
           isDeleting: true,
+          phase: 'deleting',
           error: null,
-          canForceDelete: false
+          canForceDelete: false,
+          forceDeleteReason: null
+        }
+        changed = true
+      }
+      return changed ? { deleteStateByWorktreeId: nextDeleteState } : {}
+    })
+  },
+
+  markWorktreesQueuedForDeletion: (worktreeIds) => {
+    if (worktreeIds.length === 0) {
+      return
+    }
+    set((s) => {
+      const nextDeleteState = { ...s.deleteStateByWorktreeId }
+      let changed = false
+      for (const worktreeId of new Set(worktreeIds)) {
+        const current = nextDeleteState[worktreeId]
+        if (current?.isDeleting && current.error === null && !current.canForceDelete) {
+          continue
+        }
+        nextDeleteState[worktreeId] = {
+          isDeleting: true,
+          phase: 'queued',
+          error: null,
+          canForceDelete: false,
+          forceDeleteReason: null
         }
         changed = true
       }
@@ -3410,8 +3759,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       ? clearOlderHostedReviewLinksForReplacement(updates, existingWorktree)
       : updates
     // Why: manual PR linking only supplies the PR number. Resolve the PR head
-    // branch here so Push targets the review branch, but don't repeat that
-    // network lookup for no-op linkedPR metadata saves.
+    // branch here so Push targets the review branch; re-saving the same PR can
+    // also heal older metadata that lost pushTarget.
     const linkedPrForPushTarget = isPositiveHostedReviewNumber(normalizedUpdates.linkedPR)
       ? normalizedUpdates.linkedPR
       : null
@@ -3419,7 +3768,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       linkedPrForPushTarget !== null &&
       normalizedUpdates.pushTarget === undefined &&
       existingWorktree &&
-      existingWorktree.linkedPR !== linkedPrForPushTarget &&
       !existingWorktree.pushTarget
         ? await resolveGitHubReviewPushTarget(
             settingsForWorktreeOwner(get(), worktreeId),
@@ -4503,6 +4851,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     if (oldWorktreeId === newWorktreeId) {
       return
     }
+    // Why: invalidate pre-rename toast actions before publishing the new path,
+    // while carrying the dismissal forward for the same logical worktree.
+    migrateHugeRepoWarningDismissal(oldWorktreeId, newWorktreeId)
     set((s) => buildWorktreeRenameState(s, oldWorktreeId, newWorktreeId))
     migrateHostedReviewLinkMutationGeneration(oldWorktreeId, newWorktreeId)
   }

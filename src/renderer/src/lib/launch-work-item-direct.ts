@@ -16,6 +16,7 @@ import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { getConnectionId } from '@/lib/connection-context'
 import type { GitPushTarget, SetupDecision, TuiAgent } from '../../../shared/types'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
+import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
 import {
   buildDirectWorkItemAgentStartupPlan,
   buildDirectWorkItemStartupOpts,
@@ -70,6 +71,16 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   const repoOwnerSettings = getSettingsForRepoRuntimeOwner(store, repoId)
   const promptDelivery = args.promptDelivery ?? 'draft'
   const repoConnectionId = repo.connectionId?.trim() || null
+  const githubIdentity =
+    item.number !== null && (item.type === 'issue' || item.type === 'pr')
+      ? resolveGitHubWorkItemIdentity({
+          type: item.type,
+          number: item.number,
+          url: item.url
+        })
+      : null
+  const itemType = githubIdentity?.type ?? item.type
+  const itemNumber = githubIdentity?.number ?? item.number
   const repoProjectRuntime = repoConnectionId
     ? undefined
     : getLocalRepoProjectExecutionRuntimeContext(store, repoId, CLIENT_PLATFORM)
@@ -107,10 +118,10 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     trustDecision === 'skip' ? 'skip' : setupResolution.decision
 
   const workspaceIntentName =
-    item.number !== null
+    itemNumber !== null
       ? getWorkspaceIntentName({
           sourceText: item.pasteContent,
-          workItem: { ...item, number: item.number }
+          workItem: { ...item, type: itemType, number: itemNumber }
         })
       : null
   const workspaceName = getWorkspaceSeedName({
@@ -118,18 +129,18 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       ? getLinearIssueWorkspaceName({ identifier: item.linearIdentifier, title: item.title })
       : (workspaceIntentName?.seedName ?? ''),
     prompt: '',
-    linkedIssueNumber: item.type === 'issue' ? (item.number ?? null) : null,
-    linkedPR: item.type === 'pr' ? (item.number ?? null) : null
+    linkedIssueNumber: itemType === 'issue' ? (itemNumber ?? null) : null,
+    linkedPR: itemType === 'pr' ? (itemNumber ?? null) : null
   })
   let resolvedBaseBranch = baseBranch
   let resolvedPushTarget: GitPushTarget | undefined
   let resolvedBranchNameOverride: string | undefined
   let resolvedCompareBaseRef: string | undefined
-  if (!resolvedBaseBranch && item.type === 'pr' && item.number) {
+  if (!resolvedBaseBranch && itemType === 'pr' && itemNumber) {
     try {
       // Why: direct "Use PR" launches bypass the Start-from picker, so they
       // must still resolve the PR head before `git worktree add`.
-      const result = await resolveDirectPrStartPoint(repoId, item.number, repoOwnerSettings, item)
+      const result = await resolveDirectPrStartPoint(repoId, itemNumber, repoOwnerSettings, item)
       resolvedBaseBranch = result.baseBranch
       resolvedPushTarget = result.pushTarget
       resolvedBranchNameOverride = result.branchNameOverride
@@ -157,15 +168,15 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       undefined,
       telemetrySource,
       workspaceIntentName?.displayName ?? item.title,
-      item.type === 'issue' && item.number ? item.number : undefined,
-      item.type === 'pr' && item.number ? item.number : undefined,
+      itemType === 'issue' && itemNumber ? itemNumber : undefined,
+      itemType === 'pr' && itemNumber ? itemNumber : undefined,
       resolvedPushTarget,
       undefined,
       item.linearIdentifier,
       resolvedBranchNameOverride,
       undefined,
-      item.type === 'mr' && item.number ? item.number : undefined,
-      gitLabIssueNumber(item),
+      itemType === 'mr' && itemNumber ? itemNumber : undefined,
+      gitLabIssueNumber({ ...item, type: itemType, number: itemNumber }),
       undefined,
       undefined,
       undefined,

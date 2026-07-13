@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: this integration spec keeps the SSH relay,
-agent-hook server, and replay/interrupt ordering fixtures together so regressions
-cover the full mux-to-main path. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { Store } from '../persistence'

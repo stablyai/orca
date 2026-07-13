@@ -24,6 +24,7 @@ import {
   AlertTriangle,
   ArrowUp,
   Bot,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronsRight,
@@ -35,9 +36,9 @@ import {
   GitBranch,
   Globe,
   Keyboard as KeyboardIcon,
-  ListChecks,
   MessageSquare,
   Monitor,
+  MoreHorizontal,
   Plus,
   RefreshCw,
   Send,
@@ -61,17 +62,25 @@ import {
   useReconnectAttempt,
   useLastConnectedAt
 } from '../../../../src/transport/client-context'
-import { classifyConnection } from '../../../../src/transport/connection-health'
+import {
+  classifyConnection,
+  verdictDisplayLabel
+} from '../../../../src/transport/connection-health'
 import { useResponsiveLayout } from '../../../../src/layout/responsive-layout'
 import {
   type ActivePanel,
   canDockSessionPanel,
   resolvePanelAction,
+  shouldShowSessionHeaderChecksAction,
   panelRouteDescriptor
 } from '../../../../src/session/session-panel-host'
 import { useMobilePrBranchContext } from '../../../../src/session/use-mobile-pr-branch-context'
 import { SessionDockColumn } from '../../../../src/session/SessionDockColumn'
+import { MobileSessionHeaderIconButton } from '../../../../src/session/MobileSessionHeaderIconButton'
+import { MobileSessionHeaderMoreActionsSheet } from '../../../../src/session/MobileSessionHeaderMoreActionsSheet'
+import { MOBILE_AI_VAULT_CAPABILITY } from '../../../../src/agent-history/agent-history-capability'
 import type { ConnectionState, RpcFailure, RpcSuccess } from '../../../../src/transport/types'
+import { headlessActivationNeedsHostRenderer } from '../../../../src/worktree/worktree-activation-result'
 import { useMobileDictation } from '../../../../src/hooks/use-mobile-dictation'
 import {
   triggerMediumImpact,
@@ -84,7 +93,7 @@ import type {
   TerminalKeyboardAvoidanceMetrics,
   TerminalModes,
   TerminalWebViewHandle
-} from '../../../../src/terminal/TerminalWebView'
+} from '../../../../src/terminal/terminal-webview-contract'
 import { isTerminalOscLinkRanges } from '../../../../src/terminal/terminal-osc-link-ranges'
 import { useTerminalViewportRefit } from '../../../../src/terminal/terminal-viewport-refit'
 import {
@@ -96,11 +105,15 @@ import { createTerminalLiveAccessoryInput } from '../../../../src/terminal/termi
 import { getTerminalLiveAccessoryRawSendTarget } from '../../../../src/terminal/terminal-live-accessory-raw-send-target'
 import {
   clearTerminalLiveInputFocusTimer,
+  focusTerminalLiveInputTarget,
   isTerminalLiveInputWithinByteLimit,
   scheduleTerminalLiveInputFocus
 } from '../../../../src/terminal/terminal-live-input'
+import { dismissTerminalKeyboard } from '../../../../src/terminal/terminal-keyboard-dismiss'
 import type { TerminalLiveInputSender } from '../../../../src/terminal/terminal-live-input-sender'
 import { isTerminalSendRpcAccepted } from '../../../../src/terminal/terminal-send-rpc-response'
+import { sendMobileTerminalQueryReply } from '../../../../src/terminal/mobile-terminal-query-reply'
+import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../../../src/shared/protocol-version'
 import { useTerminalLiveInputCommit } from '../../../../src/terminal/use-terminal-live-input-commit'
 import {
   getTerminalCommandKeyboardType,
@@ -850,20 +863,16 @@ export default function SessionScreen() {
       setActivePanel(null)
     }
   }, [canDockPanel, activePanel])
-  // Session-level PR context feeds the docked PR panel and gates the GitHub-only
-  // PR entry so GitLab/other providers do not open a GitHub RPC surface.
-  const {
-    branch: prBranch,
-    headSha: prHeadSha,
-    status: prStatus,
-    isGithubRepo: prIsGithubRepo,
-    repoLoaded: prRepoContextLoaded,
-    loaded: prContextLoaded
-  } = useMobilePrBranchContext({
-    client,
-    connState,
-    worktreeId
-  })
+  // Session-level GitHub remote probe gates the PR dock icon so non-GitHub
+  // providers do not open the hosted-review surface. Branch/head/status for the
+  // hub are loaded inside MobileSourceControlPanel — skip the unused identity RPCs.
+  const { isGithubRepo: prIsGithubRepo, repoLoaded: prRepoContextLoaded } =
+    useMobilePrBranchContext({
+      client,
+      connState,
+      worktreeId,
+      includeBranchIdentity: false
+    })
   useEffect(() => {
     if (prRepoContextLoaded && !prIsGithubRepo && activePanel === 'pr') {
       setActivePanel(null)
@@ -937,6 +946,7 @@ export default function SessionScreen() {
     useState<MobileNewTabAgentLoadState>('idle')
   const [createTabAgentOptions, setCreateTabAgentOptions] = useState<MobileNewTabAgentOption[]>([])
   const [showCreateBrowserModal, setShowCreateBrowserModal] = useState(false)
+  const [showHeaderMoreActions, setShowHeaderMoreActions] = useState(false)
   const [actionTarget, setActionTarget] = useState<Terminal | null>(null)
   const [markdownActionTarget, setMarkdownActionTarget] = useState<Extract<
     MobileSessionTab,
@@ -997,6 +1007,9 @@ export default function SessionScreen() {
   const terminalCwdRef = useRef<Map<string, string>>(new Map())
   const initialModesSeenRef = useRef<Set<string>>(new Set())
   const deviceTokenRef = useRef<string | null>(null)
+  // Why: state (not a ref) — the connection verdict needs a re-render once
+  // the endpoint loads so the Tailscale hint can appear.
+  const [hostEndpoint, setHostEndpoint] = useState<string | null>(null)
   const clientRef = useRef<RpcClient | null>(null)
   const connStateRef = useRef<ConnectionState>(connState)
   // Why: measured once from TerminalWebView on mount, then passed with every
@@ -1005,6 +1018,7 @@ export default function SessionScreen() {
   const viewportMeasuredRef = useRef(false)
   const terminalRefs = useRef<Map<string, TerminalWebViewHandle>>(new Map())
   const liveInputRef = useRef<TextInput>(null)
+  const commandInputRef = useRef<TextInput>(null)
   const liveInputFocusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sendLiveTerminalInputRef = useRef<TerminalLiveInputSender>(async () => false)
   const sessionTabActionSheetKeyboardHideSubRef = useRef<ReturnType<
@@ -1094,6 +1108,12 @@ export default function SessionScreen() {
     activeSessionTab?.type !== 'browser'
   const liveInputEnabled = activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
   const [browserScreencastSupported, setBrowserScreencastSupported] = useState<boolean | null>(null)
+  // Why: hosts without aiVault.v1 reject aiVault.listSessions, so the header
+  // entry stays hidden there (mirrors the gated host-list action) instead of
+  // opening a dead-end "update this host" panel.
+  const [agentSessionHistorySupported, setAgentSessionHistorySupported] = useState<boolean | null>(
+    null
+  )
   // Why: stable callbacks (handleFileTap) read the live value via this ref, since
   // the capability probe resolves after the callbacks are created.
   const browserScreencastSupportedRef = useRef(browserScreencastSupported)
@@ -2406,9 +2426,13 @@ export default function SessionScreen() {
     terminalGestureInputInFlightRef.current.clear()
   }, [connState])
 
+  const hostQueryReplyInputSupportedRef = useRef(false)
+
   useEffect(() => {
     if (!client || connState !== 'connected') {
       setBrowserScreencastSupported(null)
+      setAgentSessionHistorySupported(null)
+      hostQueryReplyInputSupportedRef.current = false
       return
     }
     let stale = false
@@ -2422,10 +2446,19 @@ export default function SessionScreen() {
         setBrowserScreencastSupported(
           status.capabilities?.includes('browser.screencast.v1') === true
         )
+        setAgentSessionHistorySupported(
+          status.capabilities?.includes(MOBILE_AI_VAULT_CAPABILITY) === true
+        )
+        // Why: hosts without this capability strip inputKind from terminal.send,
+        // so a forwarded xterm reply would become floor-stealing shell input.
+        hostQueryReplyInputSupportedRef.current =
+          status.capabilities?.includes(TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY) === true
       })
       .catch(() => {
         if (!stale) {
           setBrowserScreencastSupported(false)
+          setAgentSessionHistorySupported(false)
+          hostQueryReplyInputSupportedRef.current = false
         }
       })
     return () => {
@@ -2449,6 +2482,7 @@ export default function SessionScreen() {
       const host = hosts.find((h) => h.id === hostId)
       if (host) {
         deviceTokenRef.current = host.deviceToken
+        setHostEndpoint(host.endpoint)
       }
     })
     return () => {
@@ -2494,6 +2528,7 @@ export default function SessionScreen() {
     }
   }, [])
 
+  const pendingForegroundRecoveryRef = useRef(false)
   useEffect(() => {
     let previousAppState: AppStateStatus | null = AppState.currentState
     const sub = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
@@ -2506,9 +2541,13 @@ export default function SessionScreen() {
       if (!shouldRecover) {
         return
       }
+      for (const terminalRef of terminalRefs.current.values()) {
+        terminalRef.prepareForForegroundRecovery()
+      }
       // Why: iOS can resume a live WKWebView with a blank xterm backing store
-      // without firing web-ready/reconnect; replay scrollback to repaint it.
-      recoverActiveTerminalAfterForeground({
+      // without firing web-ready/reconnect; invalidate the native readiness
+      // latch before replay so init waits for the document's pong.
+      const outcome = recoverActiveTerminalAfterForeground({
         activeHandleRef,
         terminalRefs,
         initializedHandlesRef,
@@ -2517,11 +2556,35 @@ export default function SessionScreen() {
         subscribeToTerminal,
         schedule: scheduleDelayedAction
       })
+      pendingForegroundRecoveryRef.current = outcome === 'deferred'
     })
     return () => {
       sub.remove()
     }
   }, [scheduleDelayedAction, subscribeToTerminal, unsubscribeTerminal])
+
+  // Why: resume usually lands mid-reconnect (the socket dies after ~60-80s of
+  // background), so the recovery above defers. Re-run it once the connection
+  // is back; otherwise a blanked WKWebView whose socket was merely probed (no
+  // stream replay) stays stale until a manual tab switch.
+  useEffect(() => {
+    if (connState !== 'connected' || !pendingForegroundRecoveryRef.current) {
+      return
+    }
+    pendingForegroundRecoveryRef.current = false
+    if (AppState.currentState !== 'active') {
+      return
+    }
+    recoverActiveTerminalAfterForeground({
+      activeHandleRef,
+      terminalRefs,
+      initializedHandlesRef,
+      connStateRef,
+      unsubscribeTerminal,
+      subscribeToTerminal,
+      schedule: scheduleDelayedAction
+    })
+  }, [connState, scheduleDelayedAction, subscribeToTerminal, unsubscribeTerminal])
 
   // Why: viewport refits for layout changes outside the subscribe path
   // (tab strip toggling, fold/unfold, rotation) live in a dedicated hook —
@@ -2535,6 +2598,7 @@ export default function SessionScreen() {
     clientRef,
     deviceTokenRef,
     initializedHandlesRef,
+    connState,
     tabStripVisible: terminals.length > 1,
     textScale: terminalTextScale,
     terminalFrameWidth,
@@ -2683,6 +2747,11 @@ export default function SessionScreen() {
       timers.push(setTimeout(fn, ms))
     }
     void (async () => {
+      const reportActivationOutcome = (response: RpcSuccess | null): void => {
+        if (!disposed && response && headlessActivationNeedsHostRenderer(response.result)) {
+          showToast('Open Orca on the host to wake sleeping agents.', 3000)
+        }
+      }
       if (client && created !== '1') {
         // Why: mobile needs host-owned tabs hydrated for this route, but should
         // not pull other paired clients, especially desktop, into this worktree.
@@ -2691,6 +2760,7 @@ export default function SessionScreen() {
             worktree: `id:${worktreeId}`,
             notifyClients: false
           })
+          .then((response) => reportActivationOutcome(response.ok ? response : null))
           .catch(() => null)
       }
       if (disposed) {
@@ -2712,12 +2782,13 @@ export default function SessionScreen() {
             return
           }
           void (async () => {
-            await client
+            const activationResponse = await client
               .sendRequest('worktree.activate', {
                 worktree: `id:${worktreeId}`,
                 notifyClients: false
               })
               .catch(() => null)
+            reportActivationOutcome(activationResponse?.ok ? activationResponse : null)
             if (disposed) {
               return
             }
@@ -2733,7 +2804,7 @@ export default function SessionScreen() {
         clearTimeout(t)
       }
     }
-  }, [client, connState, created, fetchSessionTabs, fetchTerminals, worktreeId])
+  }, [client, connState, created, fetchSessionTabs, fetchTerminals, showToast, worktreeId])
 
   useEffect(() => {
     if (!client || connState !== 'connected') {
@@ -3000,10 +3071,15 @@ export default function SessionScreen() {
       // this, subscribe(viewport=null) lands on the server first and the
       // post-scrollback measure path's resubscribe sees alreadyMeasured=true
       // (because measureViewportOnce won the race) and silently skips.
-      if (handle === activeHandleRef.current && !terminalUnsubsRef.current.has(handle)) {
+      // Why: a just-created tab can briefly lose activeHandleRef to a lagging
+      // session-tab snapshot; honor the pending marker so its one web-ready
+      // subscribe still fires (see handleCreateTerminal).
+      const isIntendedActive = () =>
+        handle === activeHandleRef.current || handle === pendingActiveTerminalHandleRef.current
+      if (isIntendedActive() && !terminalUnsubsRef.current.has(handle)) {
         void (async () => {
           await measureViewportOnce(handle)
-          if (handle === activeHandleRef.current && !terminalUnsubsRef.current.has(handle)) {
+          if (isIntendedActive() && !terminalUnsubsRef.current.has(handle)) {
             subscribeToTerminal(handle)
           }
         })()
@@ -3134,8 +3210,12 @@ export default function SessionScreen() {
     if (!canSend || !liveInputEnabled) {
       return
     }
-    liveInputRef.current?.focus()
-  }, [canSend, liveInputEnabled])
+    focusTerminalLiveInputTarget(liveInputRef.current, {
+      keyboardHeight,
+      refocus: () =>
+        scheduleTerminalLiveInputFocus(liveInputFocusTimerRef, () => liveInputRef.current?.focus())
+    })
+  }, [canSend, keyboardHeight, liveInputEnabled])
 
   const clearSessionTabActionSheetKeyboardListener = useCallback(() => {
     sessionTabActionSheetKeyboardHideSubRef.current?.remove()
@@ -3202,6 +3282,15 @@ export default function SessionScreen() {
       scheduleDelayedAction
     ]
   )
+
+  const dismissSoftwareKeyboard = useCallback(() => {
+    dismissTerminalKeyboard({
+      clearPendingLiveInputFocus: () => clearTerminalLiveInputFocusTimer(liveInputFocusTimerRef),
+      commandInput: commandInputRef.current,
+      dismissKeyboard: () => Keyboard.dismiss(),
+      liveInput: liveInputRef.current
+    })
+  }, [])
 
   const handleTerminalTap = useCallback(
     (handle: string) => {
@@ -3481,6 +3570,18 @@ export default function SessionScreen() {
     },
     [allowTerminalGestureInput, client, connState, enqueueTerminalGestureInput]
   )
+
+  const handleTerminalQueryReply = useCallback((handle: string, bytes: string) => {
+    void sendMobileTerminalQueryReply({
+      bytes,
+      client: clientRef.current,
+      clientId: deviceTokenRef.current,
+      connected: connStateRef.current === 'connected',
+      handle,
+      hostSupportsQueryReplyInput: hostQueryReplyInputSupportedRef.current,
+      subscribedTerminals: terminalUnsubsRef.current
+    })
+  }, [])
 
   async function handleClearTerminal(target: Terminal) {
     if (!client) {
@@ -3866,6 +3967,11 @@ export default function SessionScreen() {
         if (typeof created.terminal === 'string') {
           const createdHandle = created.terminal
           defaultTerminalHandlesToLiveInput([createdHandle])
+          // Why: session-tab snapshots can lag the create RPC. Without the
+          // handle marker, applySessionTabs snaps activeHandleRef back to the
+          // previous terminal, and the new pane's web-ready subscribe (gated
+          // on the active handle) is skipped — blank tab until a manual switch.
+          pendingActiveTerminalHandleRef.current = createdHandle
           activeHandleRef.current = createdHandle
           setActiveHandle(createdHandle)
           setTerminals((prev) => {
@@ -3920,6 +4026,9 @@ export default function SessionScreen() {
               })
           }
         } else {
+          // Why: a prior pending handle must not outlive a create that returned
+          // no terminal; web-ready subscribe gates on this ref as active.
+          pendingActiveTerminalHandleRef.current = null
           activeHandleRef.current = null
           setActiveHandle(null)
         }
@@ -4248,13 +4357,14 @@ export default function SessionScreen() {
     void handleCreateTerminal()
   }, [client, creating, creatingBrowser, creatingMarkdown, showEmptyState, worktreeId])
 
-  // Why: the reconnect loop parks at its give-up cap; without an in-session
-  // affordance the only recovery is leaving the screen or restarting the
-  // app (issue #5049). Surface tap-to-retry once the verdict escalates.
+  // Why: the reconnect loop slows to a 90s trickle at its give-up cap;
+  // surface tap-to-retry once the verdict escalates so recovery doesn't
+  // wait out the trickle timer (issue #5049).
   const connectionVerdict = classifyConnection({
     state: connState,
     reconnectAttempts,
-    lastConnectedAt
+    lastConnectedAt,
+    endpoint: hostEndpoint
   })
   const showConnectionRetry =
     connectionVerdict.kind === 'warning' || connectionVerdict.kind === 'unreachable'
@@ -4267,7 +4377,7 @@ export default function SessionScreen() {
           ? '1 tab'
           : `${visibleTabs.length} tabs`
       : showConnectionRetry
-        ? `${connectionVerdict.label} — tap to retry`
+        ? `${verdictDisplayLabel(connectionVerdict)} — tap to retry`
         : MOBILE_SESSION_STATUS_LABELS[connState]
 
   // Why: keep safe-area padding in layout at all times, then visually translate
@@ -4406,17 +4516,34 @@ export default function SessionScreen() {
       setActivePanel(action.next)
       return
     }
+    const descriptor = panelRouteDescriptor(action.panel)
     router.push({
-      pathname: panelRouteDescriptor(action.panel).pathname,
+      pathname: descriptor.pathname,
       params: {
         hostId,
         worktreeId,
         name: worktreeName || '',
-        // Source control's post-diff-open dismissal keys off origin: 'session' (U2).
-        ...(action.panel === 'sourceControl' ? { origin: 'session' } : {})
+        // SC + PR both land on the source-control hub; post-diff-open dismissal
+        // keys off origin: 'session' (U2). Files keeps its own route without origin.
+        ...(action.panel === 'sourceControl' || action.panel === 'pr' ? { origin: 'session' } : {}),
+        // The PR panel routes into the hub's Pull Request segment via descriptor params.
+        ...descriptor.params
       }
     })
   }
+
+  const openAgentSessionHistory = () => {
+    const params = new URLSearchParams({ name: worktreeName || '' })
+    router.push(`/h/${hostId}/agent-history/${encodeURIComponent(worktreeId)}?${params.toString()}`)
+  }
+  const showAgentSessionHistoryAction =
+    !isFolderWorkspaceRoute && agentSessionHistorySupported === true
+  const showChecksAction = shouldShowSessionHeaderChecksAction({
+    isFolderWorkspaceRoute,
+    repoContextLoaded: prRepoContextLoaded,
+    hostedChecksSupported: prIsGithubRepo
+  })
+  const showHeaderMoreButton = showAgentSessionHistoryAction || showChecksAction
 
   return (
     <View ref={setMobileSessionRootRef} style={styles.container}>
@@ -4453,45 +4580,27 @@ export default function SessionScreen() {
                 </Text>
               </Pressable>
             </View>
-            <Pressable
-              style={({ pressed }) => [
-                styles.filesButton,
-                pressed && styles.filesButtonPressed,
-                activePanel === 'files' && styles.filesButtonActive
-              ]}
-              onPress={() => handlePanelTap('files')}
-              hitSlop={8}
+            <MobileSessionHeaderIconButton
+              active={activePanel === 'files'}
               accessibilityLabel="Open file explorer"
-            >
-              <Folder size={18} color={colors.textSecondary} strokeWidth={2.1} />
-            </Pressable>
+              icon={Folder}
+              onPress={() => handlePanelTap('files')}
+            />
             {!isFolderWorkspaceRoute && (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.filesButton,
-                  pressed && styles.filesButtonPressed,
-                  activePanel === 'sourceControl' && styles.filesButtonActive
-                ]}
-                onPress={() => handlePanelTap('sourceControl')}
-                hitSlop={8}
+              <MobileSessionHeaderIconButton
+                active={activePanel === 'sourceControl'}
                 accessibilityLabel="Open source control"
-              >
-                <GitBranch size={18} color={colors.textSecondary} strokeWidth={2.1} />
-              </Pressable>
+                icon={GitBranch}
+                onPress={() => handlePanelTap('sourceControl')}
+              />
             )}
-            {prRepoContextLoaded && prIsGithubRepo ? (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.filesButton,
-                  pressed && styles.filesButtonPressed,
-                  activePanel === 'pr' && styles.filesButtonActive
-                ]}
-                onPress={() => handlePanelTap('pr')}
-                hitSlop={8}
-                accessibilityLabel="Open pull request"
-              >
-                <ListChecks size={18} color={colors.textSecondary} strokeWidth={2.1} />
-              </Pressable>
+            {showHeaderMoreButton ? (
+              <MobileSessionHeaderIconButton
+                active={activePanel === 'pr'}
+                accessibilityLabel="More session actions"
+                icon={MoreHorizontal}
+                onPress={() => setShowHeaderMoreActions(true)}
+              />
             ) : null}
           </View>
 
@@ -4566,28 +4675,27 @@ export default function SessionScreen() {
                     </View>
                   </Pressable>
                 ))}
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.newTerminalButton,
-                    pressed && styles.newTerminalButtonPressed,
-                    (creating ||
-                      creatingBrowser ||
-                      creatingMarkdown ||
-                      connState !== 'connected') &&
-                      styles.newTerminalButtonDisabled
-                  ]}
-                  disabled={
-                    creating || creatingBrowser || creatingMarkdown || connState !== 'connected'
-                  }
-                  onPress={() => {
-                    setCreateError('')
-                    setShowCreateTabDrawer(true)
-                  }}
-                  accessibilityLabel="New tab"
-                >
-                  <Plus size={16} color={colors.textSecondary} strokeWidth={2.2} />
-                </Pressable>
               </ScrollView>
+              {/* Why: pinned outside the scroll strip so the new-agent button
+                  stays reachable no matter how far the tabs scroll. */}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.newTerminalButton,
+                  pressed && styles.newTerminalButtonPressed,
+                  (creating || creatingBrowser || creatingMarkdown || connState !== 'connected') &&
+                    styles.newTerminalButtonDisabled
+                ]}
+                disabled={
+                  creating || creatingBrowser || creatingMarkdown || connState !== 'connected'
+                }
+                onPress={() => {
+                  setCreateError('')
+                  setShowCreateTabDrawer(true)
+                }}
+                accessibilityLabel="New tab"
+              >
+                <Plus size={16} color={colors.textSecondary} strokeWidth={2.2} />
+              </Pressable>
             </View>
           )}
         </SafeAreaView>
@@ -4752,6 +4860,7 @@ export default function SessionScreen() {
                     onKeyboardAvoidanceMetrics={handleKeyboardAvoidanceMetrics}
                     onHaptic={handleHaptic}
                     onTerminalInput={handleTerminalInput}
+                    onTerminalQueryReply={handleTerminalQueryReply}
                     onTerminalTap={handleTerminalTap}
                     onFileTap={handleFileTap}
                     onOpenUrl={handleTerminalOpenUrl}
@@ -4776,10 +4885,38 @@ export default function SessionScreen() {
               >
                 {/* Accessory keys */}
                 <View style={styles.accessoryBar}>
+                  {/* Why: a fixed, always-visible escape hatch from the open
+                  keyboard. Kept outside the horizontal ScrollView so it does
+                  not scroll away, and out of the terminal-byte shortcut path so
+                  it cannot be hidden by user shortcut customization (#5106). */}
+                  {keyboardLift > 0 && (
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.keyboardDismissKey,
+                        pressed && styles.accessoryKeyPressed
+                      ]}
+                      onPress={dismissSoftwareKeyboard}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel="Dismiss keyboard"
+                      accessibilityHint="Hides the software keyboard and keeps the current terminal session open."
+                    >
+                      <View style={styles.keyboardDismissGlyph}>
+                        <KeyboardIcon size={15} color={colors.textSecondary} strokeWidth={2} />
+                        <ChevronDown
+                          size={10}
+                          color={colors.textSecondary}
+                          strokeWidth={2.5}
+                          style={styles.keyboardDismissChevron}
+                        />
+                      </View>
+                    </Pressable>
+                  )}
                   {/* Why: with default tap handling the first tap on any accessory
                   key dismisses the open keyboard and is swallowed, so live
                   input lost its keyboard on every Esc/Tab press (#5106). */}
                   <ScrollView
+                    style={styles.accessoryScroll}
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.accessoryContent}
@@ -4947,10 +5084,16 @@ export default function SessionScreen() {
                 {liveInputEnabled ? (
                   <View style={[styles.inputBar, styles.liveInputBar]}>
                     <Pressable
-                      style={styles.liveInputFocusTarget}
+                      style={({ pressed }) => [
+                        styles.liveInputFocusTarget,
+                        pressed && styles.liveInputFocusTargetPressed,
+                        !canSend && styles.liveInputFocusTargetDisabled
+                      ]}
                       disabled={!canSend}
                       onPress={focusLiveInput}
-                      accessibilityLabel="Focus live terminal input"
+                      accessibilityRole="button"
+                      accessibilityLabel="Show keyboard for live terminal input"
+                      accessibilityHint="Typed text is sent directly to the active terminal"
                     >
                       <KeyboardIcon size={16} color={colors.textSecondary} strokeWidth={2} />
                       <MobileTerminalLiveInputStatus
@@ -4981,6 +5124,7 @@ export default function SessionScreen() {
                       onKeyPress={handleLiveInputKeyPress}
                       onSubmitEditing={handleLiveInputSubmit}
                       placeholder=""
+                      showSoftInputOnFocus
                       autoCapitalize="none"
                       autoCorrect={false}
                       spellCheck={false}
@@ -4998,6 +5142,7 @@ export default function SessionScreen() {
                 ) : (
                   <View style={styles.inputBar}>
                     <TextInput
+                      ref={commandInputRef}
                       // Why: Android caches the IME inputType at mount, so toggling
                       // autocomplete must remount there; iOS can update without a focus-costly remount.
                       key={
@@ -5009,9 +5154,10 @@ export default function SessionScreen() {
                       }
                       style={styles.textInput}
                       value={input}
-                      onChangeText={(text) =>
-                        setInput((previousText) => normalizeTerminalTextInput(text, previousText))
-                      }
+                      // Why: iOS kills an active dictation/IME session when JS
+                      // writes a value that differs from the native field text;
+                      // store the raw field text and normalize at send time.
+                      onChangeText={setInput}
                       placeholder="Type a command…"
                       placeholderTextColor={colors.textMuted}
                       autoCapitalize="none"
@@ -5063,13 +5209,6 @@ export default function SessionScreen() {
               hostId={hostId}
               worktreeId={worktreeId}
               name={worktreeName || ''}
-              client={client}
-              connState={connState}
-              branch={prBranch}
-              headSha={prHeadSha}
-              gitStatus={prStatus}
-              isGithubRepo={prIsGithubRepo}
-              branchContextLoaded={prContextLoaded && prRepoContextLoaded}
               availableWidth={sessionContentRowWidth}
               onRequestClose={() => setActivePanel(null)}
               onFileOpenStart={handleFileOpenStart}
@@ -5078,6 +5217,15 @@ export default function SessionScreen() {
           )}
         </View>
       </View>
+
+      <MobileSessionHeaderMoreActionsSheet
+        visible={showHeaderMoreActions}
+        showAgentSessionHistory={showAgentSessionHistoryAction}
+        showChecks={showChecksAction}
+        onOpenAgentSessionHistory={openAgentSessionHistory}
+        onOpenChecks={() => handlePanelTap('pr')}
+        onClose={() => setShowHeaderMoreActions(false)}
+      />
 
       <ActionSheetModal
         visible={showCreateTabDrawer}

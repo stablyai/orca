@@ -23,7 +23,9 @@ import { createOpenCodeUsageSlice } from './slices/opencode-usage'
 import { createBrowserSlice } from './slices/browser'
 import { createRateLimitSlice } from './slices/rate-limits'
 import { createSshSlice } from './slices/ssh'
+import { createRuntimeEnvironmentSshSlice } from './slices/runtime-environment-ssh'
 import { createAgentStatusSlice } from './slices/agent-status'
+import { createPaneForegroundAgentSlice } from './slices/pane-foreground-agent'
 import { createDiffCommentsSlice } from './slices/diffComments'
 import { createDetectedAgentsSlice } from './slices/detected-agents'
 import { createWorktreeNavHistorySlice } from './slices/worktree-nav-history'
@@ -33,6 +35,8 @@ import { createRuntimeStatusSlice } from './slices/runtime-status'
 import { createPullRequestGenerationSlice } from './slices/pull-request-generation'
 import { createCommitMessageGenerationSlice } from './slices/commit-message-generation'
 import { createPinnedTabCloseConfirmSlice } from './slices/pinned-tab-close-confirm'
+import { createOrcaProfilesSlice } from './slices/orca-profiles'
+import { createNewIssueDraftSlice } from './slices/new-issue-draft'
 import { e2eConfig } from '@/lib/e2e-config'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
 
@@ -60,7 +64,9 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createBrowserSlice(...a),
   ...createRateLimitSlice(...a),
   ...createSshSlice(...a),
+  ...createRuntimeEnvironmentSshSlice(...a),
   ...createAgentStatusSlice(...a),
+  ...createPaneForegroundAgentSlice(...a),
   ...createDiffCommentsSlice(...a),
   ...createDetectedAgentsSlice(...a),
   ...createWorktreeNavHistorySlice(...a),
@@ -69,7 +75,9 @@ export const useAppStore = create<AppState>()((...a) => ({
   ...createRuntimeStatusSlice(...a),
   ...createPullRequestGenerationSlice(...a),
   ...createCommitMessageGenerationSlice(...a),
-  ...createPinnedTabCloseConfirmSlice(...a)
+  ...createPinnedTabCloseConfirmSlice(...a),
+  ...createOrcaProfilesSlice(...a),
+  ...createNewIssueDraftSlice(...a)
 }))
 
 registerHttpLinkStoreAccessor(() => useAppStore.getState())

@@ -4,13 +4,14 @@ import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../providers/types'
 
 type ProviderMock = IPtyProvider & {
-  emitData: (id: string, data: string) => void
+  emitData: (id: string, data: string, sequenceChars?: number) => void
   emitReplay: (id: string, data: string) => void
   emitExit: (id: string, code: number) => void
 }
 
 function createProvider(label: string, sessions: string[] = []): ProviderMock {
-  const dataListeners: ((payload: { id: string; data: string }) => void)[] = []
+  const dataListeners: ((payload: { id: string; data: string; sequenceChars?: number }) => void)[] =
+    []
   const replayListeners: ((payload: { id: string; data: string }) => void)[] = []
   const exitListeners: ((payload: { id: string; code: number }) => void)[] = []
   return {
@@ -36,20 +37,23 @@ function createProvider(label: string, sessions: string[] = []): ProviderMock {
     acknowledgeDataEvent: vi.fn(),
     hasChildProcesses: vi.fn(async () => false),
     getForegroundProcess: vi.fn(async () => null),
+    confirmForegroundProcess: vi.fn(async () => `${label}-confirmed`),
     serialize: vi.fn(async () => '{}'),
     revive: vi.fn(async () => {}),
     listProcesses: vi.fn(async () => sessions.map((id) => ({ id, cwd: '', title: label }))),
     getDefaultShell: vi.fn(async () => '/bin/zsh'),
     getProfiles: vi.fn(async () => []),
-    onData: vi.fn((callback: (payload: { id: string; data: string }) => void) => {
-      dataListeners.push(callback)
-      return () => {
-        const idx = dataListeners.indexOf(callback)
-        if (idx !== -1) {
-          dataListeners.splice(idx, 1)
+    onData: vi.fn(
+      (callback: (payload: { id: string; data: string; sequenceChars?: number }) => void) => {
+        dataListeners.push(callback)
+        return () => {
+          const idx = dataListeners.indexOf(callback)
+          if (idx !== -1) {
+            dataListeners.splice(idx, 1)
+          }
         }
       }
-    }),
+    ),
     onReplay: vi.fn((callback: (payload: { id: string; data: string }) => void) => {
       replayListeners.push(callback)
       return () => {
@@ -68,9 +72,9 @@ function createProvider(label: string, sessions: string[] = []): ProviderMock {
         }
       }
     }),
-    emitData: (id: string, data: string) => {
+    emitData: (id: string, data: string, sequenceChars?: number) => {
       for (const listener of dataListeners) {
-        listener({ id, data })
+        listener({ id, data, ...(sequenceChars === undefined ? {} : { sequenceChars }) })
       }
     },
     emitReplay: (id: string, data: string) => {
@@ -105,6 +109,19 @@ function createDaemonAdapter(
 }
 
 describe('DegradedDaemonPtyProvider', () => {
+  it('routes fresh foreground confirmation to the session owner', async () => {
+    const current = createDaemonAdapter('daemon', ['daemon-session'])
+    const fallback = createProvider('fallback')
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+    await provider.discoverDaemonSessions()
+    const fresh = await provider.spawn({ cols: 80, rows: 24 })
+
+    await expect(provider.confirmForegroundProcess('daemon-session')).resolves.toBe(
+      'daemon-confirmed'
+    )
+    await expect(provider.confirmForegroundProcess(fresh.id)).resolves.toBe('fallback-confirmed')
+  })
+
   it('routes discovered daemon sessions to the daemon and fresh PTYs to the fallback', async () => {
     const current = createDaemonAdapter('daemon', ['daemon-session'])
     const fallback = createProvider('fallback')
@@ -151,6 +168,30 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(fallback.write).not.toHaveBeenCalled()
   })
 
+  it('routes authoritative recovery snapshots to the owning daemon', async () => {
+    const current = createDaemonAdapter('daemon', ['daemon-session'])
+    const fallback = createProvider('fallback')
+    const snapshot = {
+      data: 'alt frame',
+      scrollbackAnsi: 'normal history',
+      cols: 80,
+      rows: 24,
+      seq: 42,
+      source: 'headless' as const
+    }
+    current.getBufferSnapshot = vi.fn(async () => snapshot)
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+
+    await provider.discoverDaemonSessions()
+
+    await expect(
+      provider.getBufferSnapshot('daemon-session', { scrollbackRows: 50_000 })
+    ).resolves.toEqual(snapshot)
+    expect(current.getBufferSnapshot).toHaveBeenCalledWith('daemon-session', {
+      scrollbackRows: 50_000
+    })
+  })
+
   it('forwards replay output from fallback and daemon providers', () => {
     const current = createDaemonAdapter('daemon')
     const fallback = createProvider('fallback')
@@ -171,6 +212,22 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(replaySpy).toHaveBeenNthCalledWith(2, {
       id: 'fallback-session',
       data: 'fallback replay'
+    })
+  })
+
+  it('preserves explicit sequence accounting on daemon data events', () => {
+    const current = createDaemonAdapter('daemon')
+    const fallback = createProvider('fallback')
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+    const dataSpy = vi.fn()
+    provider.onData(dataSpy)
+
+    current.emitData('daemon-session', '\x1b[6n', 0)
+
+    expect(dataSpy).toHaveBeenCalledWith({
+      id: 'daemon-session',
+      data: '\x1b[6n',
+      sequenceChars: 0
     })
   })
 

@@ -10,11 +10,13 @@ import {
   resolveProcessCwd,
   processHasChildren,
   getForegroundProcessName,
+  isProcessAlive,
   listShellProfiles
 } from './pty-shell-utils'
 import { getRelayShellLaunchConfig } from './pty-shell-launch'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
+import { buildStartupCommandSubmission } from '../shared/startup-command-submission'
 import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
 import {
   createShellReadyScanState,
@@ -61,8 +63,13 @@ type ManagedPty = {
    *  state when this PTY exits. Symmetric with Orca's local pty.ts. */
   paneKey?: string
   tabId?: string
+  /** Attach-only identity metadata supplied over RPC. Kept separate from
+   *  paneKey/tabId because those fields also control shell env/revive hooks. */
+  attachIdentity?: PtyIdentity
   worktreeId?: string
   terminalHandle?: string
+  explicitTerm?: string
+  envToDelete: string[]
   startupCommand?: ManagedStartupCommand
 }
 
@@ -172,11 +179,38 @@ type SerializedPtyEntry = {
   cwd: string
   paneKey?: string
   tabId?: string
+  attachIdentity?: PtyIdentity
   worktreeId?: string
   terminalHandle?: string
+  explicitTerm?: string
+  envToDelete?: string[]
+}
+
+function sanitizeEnvToDelete(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value
+        .filter((key): key is string => typeof key === 'string' && key.length > 0)
+        .slice(0, 1_024)
+    : []
 }
 
 export type PtyExitListener = (event: { id: string; paneKey?: string }) => void
+
+type PtyIdentity = { paneKey?: string; tabId?: string }
+
+/**
+ * True when a reattach's expected pane identity contradicts the target PTY's
+ * own. Used to reject cross-relay-generation id collisions: a reset relay mints
+ * `pty-N` from 1 again, so an old lease's `pty-N` can name a different pane's
+ * fresh PTY. Only compares fields present on *both* sides — absent identity on
+ * either side is permissive so legacy PTYs and identity-less callers still attach.
+ */
+export function attachIdentityMismatches(expected: PtyIdentity, managed: PtyIdentity): boolean {
+  return Boolean(
+    (expected.paneKey && managed.paneKey && expected.paneKey !== managed.paneKey) ||
+    (expected.tabId && managed.tabId && expected.tabId !== managed.tabId)
+  )
+}
 /** Returns env to merge into the PTY's spawn env. Receives spawn context so
  *  augmenters that need a per-PTY identity (e.g. OPENCODE_CONFIG_DIR overlay
  *  paths derived from the renderer's paneKey) can compute it without pulling
@@ -261,9 +295,19 @@ export class PtyHandler {
    *  otherwise agent-status over SSH silently breaks on every revive. */
   private buildSpawnEnv(
     rendererEnv: Record<string, string> | undefined,
-    ctx: { id: string; paneKey?: string; shell: string; command?: string }
+    ctx: { id: string; paneKey?: string; shell: string; command?: string },
+    envToDelete: readonly string[] = []
   ): Record<string, string> {
-    const baseEnv = { ...process.env, ...rendererEnv } as Record<string, string>
+    const baseEnv = {
+      ...process.env,
+      TERM: 'xterm-256color',
+      COLORTERM: 'truecolor',
+      TERM_PROGRAM: 'Orca',
+      TERM_PROGRAM_VERSION:
+        rendererEnv?.ORCA_APP_VERSION || process.env.ORCA_APP_VERSION || '0.0.0-dev',
+      FORCE_HYPERLINK: '1',
+      ...rendererEnv
+    } as Record<string, string>
     const augmented: Record<string, string> = {}
     for (const augmenter of this.envAugmenters) {
       try {
@@ -274,7 +318,25 @@ export class PtyHandler {
         )
       }
     }
-    return { ...baseEnv, ...augmented }
+    const result = { ...baseEnv, ...augmented }
+    // Why: match local/daemon precedence so relay defaults and augmenters
+    // cannot resurrect attribution or identity values explicitly removed.
+    for (const key of envToDelete) {
+      delete result[key]
+    }
+    if (
+      !envToDelete.includes('TERM') &&
+      rendererEnv &&
+      Object.prototype.hasOwnProperty.call(rendererEnv, 'TERM')
+    ) {
+      result.TERM = rendererEnv.TERM
+    }
+    // Why: node-pty treats missing/empty TERM as its own platform-specific
+    // default. Normalize here so POSIX and Windows relay children agree.
+    if (!result.TERM) {
+      result.TERM = 'xterm-256color'
+    }
+    return result
   }
 
   private clearStartupCommandTimer(managed: ManagedPty): void {
@@ -323,8 +385,14 @@ export class PtyHandler {
       }
     }
     const submit = process.platform === 'win32' ? '\r' : '\n'
-    const endsWithSubmit = startup.command.endsWith('\r') || startup.command.endsWith('\n')
-    const payload = endsWithSubmit ? startup.command : `${startup.command}${submit}`
+    // Why: a multiline startup prompt is pasted literally via bracketed paste
+    // only when the Orca shell-ready wrapper is active (waitForShellReady) —
+    // that is the bash/zsh overlay that arms bracketed-paste mode. Other remote
+    // shells keep the raw submit path so the ESC[200~ markers are not echoed.
+    const payload = buildStartupCommandSubmission(startup.command, {
+      submit,
+      bracketedPasteSafe: startup.waitForShellReady
+    })
     managed.startupCommand = undefined
     managed.pty.write(payload)
   }
@@ -534,6 +602,15 @@ export class PtyHandler {
     const rows = (params.rows as number) || 24
     const cwd = (params.cwd as string) || resolveDefaultCwd()
     const env = params.env as Record<string, string> | undefined
+    const envToDelete = sanitizeEnvToDelete(params.envToDelete)
+    const explicitTerm =
+      !envToDelete.includes('TERM') &&
+      env &&
+      Object.prototype.hasOwnProperty.call(env, 'TERM') &&
+      typeof env.TERM === 'string' &&
+      env.TERM.length > 0
+        ? env.TERM
+        : undefined
     const shellOverride =
       typeof params.shellOverride === 'string' ? params.shellOverride.trim() : ''
     const resolvedShellOverride = resolvePtyShellOverride(shellOverride)
@@ -557,7 +634,7 @@ export class PtyHandler {
       typeof params.terminalWindowsWslDistro === 'string' ? params.terminalWindowsWslDistro : null
     const commandDelivery = params.commandDelivery === 'provider' ? 'provider' : 'renderer'
     const shouldProviderDeliverCommand = commandDelivery === 'provider' && command !== undefined
-    const spawnEnv = this.buildSpawnEnv(env, { id, paneKey, shell, command })
+    const spawnEnv = this.buildSpawnEnv(env, { id, paneKey, shell, command }, envToDelete)
     const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(spawnEnv, command)
     const shouldEmitShellReadyMarker =
       launchCommandHint !== undefined &&
@@ -579,7 +656,9 @@ export class PtyHandler {
     // When overlays are injected, the launch wrapper keeps those paths after
     // user startup files re-export their defaults.
     const term = pty.spawn(shell, shellLaunch.args, {
-      name: 'xterm-256color',
+      // Why: node-pty overwrites env.TERM with `name`; keep caller-selected
+      // terminal identities instead of losing them at the final spawn boundary.
+      name: spawnEnv.TERM ?? 'xterm-256color',
       cols,
       rows,
       cwd,
@@ -593,6 +672,10 @@ export class PtyHandler {
     // separate ptyId→paneKey map. ORCA_PANE_KEY is shaped `${tabId}:${paneId}`
     // and is bounded by the renderer; the relay treats it as opaque.
     const tabId = typeof env?.ORCA_TAB_ID === 'string' ? env.ORCA_TAB_ID : undefined
+    const attachIdentity = {
+      paneKey: typeof params.paneKey === 'string' ? params.paneKey : paneKey,
+      tabId: typeof params.tabId === 'string' ? params.tabId : tabId
+    }
     const worktreeId = typeof env?.ORCA_WORKTREE_ID === 'string' ? env.ORCA_WORKTREE_ID : undefined
     const managed: ManagedPty = {
       id,
@@ -601,7 +684,10 @@ export class PtyHandler {
       buffered: '',
       paneKey,
       tabId,
+      ...(attachIdentity.paneKey || attachIdentity.tabId ? { attachIdentity } : {}),
       worktreeId,
+      ...(explicitTerm !== undefined ? { explicitTerm } : {}),
+      envToDelete,
       ...(terminalHandle ? { terminalHandle } : {}),
       ...(shouldProviderDeliverCommand
         ? {
@@ -658,6 +744,41 @@ export class PtyHandler {
     // silent failure into the existing error callers already handle.
     if (!managed || managed.disposed) {
       throw new Error(`PTY "${id}" not found`)
+    }
+
+    // Why: a reattach can arrive for a relay PTY whose backing shell already
+    // died without node-pty delivering onExit (e.g. the child was reaped out of
+    // band while the SSH channel was down). The map entry lingers, so attach
+    // would otherwise "succeed" with an empty replay and strand the reattached
+    // pane on a black, unresponsive shell. Prove liveness here; if the pid is
+    // provably gone, reap the stale entry and report not-found so the caller
+    // drops the dead lease and spawns fresh — the same recovery path an expired
+    // grace window already takes.
+    if (managed.pty.pid && !isProcessAlive(managed.pty.pid)) {
+      this.notifyExitListener(managed)
+      disposeManagedPty(managed)
+      this.ptys.delete(id)
+      this.clearPtyFlowState(id)
+      throw new Error(`PTY "${id}" not found`)
+    }
+
+    // Why: PTY ids are a per-relay-process counter (pty-1, pty-2, …). When the
+    // relay changes generation — an app update deploys a new content-hashed
+    // relay dir, or a grace-expired relay restarts — the counter resets, so an
+    // old lease's `pty-N` can name a freshly spawned `pty-N` that belongs to a
+    // *different* pane. Attaching by id alone then wires a tab to the wrong
+    // shell. Reject when the caller's expected identity disagrees with this
+    // PTY's own so the client falls back to a fresh spawn. Absent identity on
+    // either side stays permissive for backward compatibility.
+    const mismatch = attachIdentityMismatches(
+      {
+        paneKey: typeof params.expectedPaneKey === 'string' ? params.expectedPaneKey : undefined,
+        tabId: typeof params.expectedTabId === 'string' ? params.expectedTabId : undefined
+      },
+      managed.attachIdentity ?? { paneKey: managed.paneKey, tabId: managed.tabId }
+    )
+    if (mismatch) {
+      throw new Error(`PTY "${id}" not found (identity mismatch)`)
     }
 
     // Replay buffered output. During pty.spawn({ sessionId }) the renderer has
@@ -865,7 +986,10 @@ export class PtyHandler {
         cwd: managed.initialCwd,
         paneKey: managed.paneKey,
         tabId: managed.tabId,
+        attachIdentity: managed.attachIdentity,
         worktreeId: managed.worktreeId,
+        ...(managed.explicitTerm !== undefined ? { explicitTerm: managed.explicitTerm } : {}),
+        envToDelete: managed.envToDelete,
         ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {})
       })
     }
@@ -907,6 +1031,16 @@ export class PtyHandler {
       if (entry.terminalHandle) {
         revivedEnv.ORCA_TERMINAL_HANDLE = entry.terminalHandle
       }
+      const explicitTerm =
+        typeof entry.explicitTerm === 'string' && entry.explicitTerm.length > 0
+          ? entry.explicitTerm
+          : undefined
+      if (explicitTerm !== undefined) {
+        revivedEnv.TERM = explicitTerm
+      }
+      // Why: serialized state can come from an older or untrusted client, so
+      // revive reapplies the same bounds as a fresh spawn before retaining it.
+      const envToDelete = sanitizeEnvToDelete(entry.envToDelete)
       const shell = resolveDefaultShell()
       // Why: `command` is intentionally absent from this revive path because
       // SerializedPtyEntry (see line 99) does not persist it — ManagedPty
@@ -915,14 +1049,19 @@ export class PtyHandler {
       // undefined` for revived PTYs and prepares the Pi default plus OMP's
       // typed-command wrapper. Plumbing `command` through serialization is a
       // separate, larger change.
-      const spawnEnv = this.buildSpawnEnv(revivedEnv, {
-        id: entry.id,
-        paneKey: entry.paneKey,
-        shell
-      })
+      const spawnEnv = this.buildSpawnEnv(
+        revivedEnv,
+        {
+          id: entry.id,
+          paneKey: entry.paneKey,
+          shell
+        },
+        envToDelete
+      )
       const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv)
       const term = ptyMod.spawn(shell, shellLaunch.args, {
-        name: 'xterm-256color',
+        // Why: revive must preserve the same terminal identity as fresh spawn.
+        name: spawnEnv.TERM ?? 'xterm-256color',
         cols: entry.cols,
         rows: entry.rows,
         cwd: entry.cwd,
@@ -937,7 +1076,10 @@ export class PtyHandler {
         buffered: '',
         paneKey: entry.paneKey,
         tabId: entry.tabId,
+        attachIdentity: entry.attachIdentity,
         worktreeId: entry.worktreeId,
+        ...(explicitTerm !== undefined ? { explicitTerm } : {}),
+        envToDelete,
         ...(entry.terminalHandle ? { terminalHandle: entry.terminalHandle } : {})
       })
 
@@ -947,7 +1089,7 @@ export class PtyHandler {
       // revived PTY.
       const match = entry.id.match(/^pty-(\d+)$/)
       if (match) {
-        const revivedNum = parseInt(match[1], 10)
+        const revivedNum = Number.parseInt(match[1], 10)
         if (revivedNum >= this.nextId) {
           this.nextId = revivedNum + 1
         }

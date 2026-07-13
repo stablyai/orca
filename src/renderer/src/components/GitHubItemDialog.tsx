@@ -127,6 +127,7 @@ import {
   getPrCommentAudienceFilters,
   type PRCommentAudienceFilter
 } from '@/lib/pr-comment-audience'
+import { usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
 import {
   getPRCommentGroupCount,
   getPRCommentGroupId,
@@ -166,6 +167,7 @@ import {
 import { lookupGitHubWorkItemDetailsForSource } from '@/lib/github-work-item-source-lookup'
 import {
   canUseGitHubRepoContext,
+  getGitHubMutationRoutingSettings,
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost
 } from '@/lib/github-source-runtime-context'
@@ -1578,9 +1580,9 @@ function patchCachedWorkItemBody(cacheKey: string, body: string): void {
 }
 
 // Why: install once at module load — every dialog instance shares the cache,
-// so a single subscription is enough. The preload bridge re-emits the
-// main-process broadcast for every window, so each renderer invalidates its
-// own cache when any window's mutation lands. We track the unsubscribe so
+// so a single subscription is enough. Main targets the registered app renderer
+// for non-origin mutations, and this listener invalidates the matching entry.
+// We track the unsubscribe so
 // Vite HMR doesn't accumulate listeners across module reloads in dev.
 let workItemMutatedUnsub: (() => void) | undefined
 let workItemDetailsCacheEventUnsub: (() => void) | undefined
@@ -3123,10 +3125,14 @@ function ConversationTab({
   const [bodyEditing, setBodyEditing] = useState(false)
   const [bodySaving, setBodySaving] = useState(false)
   const canUseRepoMutationContext = canUseGitHubRepoContext(repoPath, sourceContext)
-  const commentCounts = useMemo(() => getPRCommentAudienceCounts(comments), [comments])
+  const botAuthorOverrides = usePRBotAuthorOverrides()
+  const commentCounts = useMemo(
+    () => getPRCommentAudienceCounts(comments, botAuthorOverrides),
+    [botAuthorOverrides, comments]
+  )
   const visibleComments = useMemo(
-    () => filterPRCommentsByAudience(comments, commentFilter),
-    [commentFilter, comments]
+    () => filterPRCommentsByAudience(comments, commentFilter, botAuthorOverrides),
+    [botAuthorOverrides, commentFilter, comments]
   )
   const visibleCommentGroups = useMemo(() => groupPRComments(visibleComments), [visibleComments])
   const resolvedTimelineItems = timelineItems ?? EMPTY_GITHUB_ISSUE_TIMELINE_ITEMS
@@ -3848,7 +3854,11 @@ function PRActionsPanel({
   const actionItem = { ...item, state: localState }
   const mergePresentation = presentGitHubPRMergeState(actionItem)
   const mergeMethods = resolveGitHubPRMergeMethods(actionItem.mergeMethodSettings)
-  const sourceSettings = getTaskSourceRuntimeSettings(sourceContext)
+  const sourceSettings = useAppStore(
+    useShallow((s) =>
+      getGitHubMutationRoutingSettings(s, item.repoId ?? repoId ?? null, sourceContext)
+    )
+  )
   const mergeTarget = getActiveRuntimeTarget(sourceSettings)
   const canMutateWithRepoContext =
     !!repoPath || !!projectOrigin || mergeTarget.kind === 'environment'
@@ -5451,32 +5461,36 @@ async function runPullRequestStateUpdate(args: {
     }
     return
   }
-  const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
-  if (!args.repoPath && !runtimeHost) {
+  // Why: close/reopen must route by the repo owner host like merge (#6957).
+  const target = getActiveRuntimeTarget(
+    getGitHubMutationRoutingSettings(useAppStore.getState(), args.repoId, args.sourceContext)
+  )
+  if (!args.repoPath && target.kind !== 'environment') {
     throw new Error('No repo context available for this pull request.')
   }
-  const res = runtimeHost
-    ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updatePRState>>>(
-        { kind: 'environment', environmentId: runtimeHost.environmentId },
-        'github.updatePRState',
-        {
-          repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId ?? ''),
+  const res =
+    target.kind === 'environment'
+      ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updatePRState>>>(
+          target,
+          'github.updatePRState',
+          {
+            repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId ?? ''),
+            prNumber: args.number,
+            updates: args.updates
+          },
+          { timeoutMs: 30_000 }
+        )
+      : await window.api.gh.updatePRState({
+          repoPath: args.repoPath ?? '',
+          repoId: args.repoId ?? undefined,
+          sourceContext: args.sourceContext,
           prNumber: args.number,
           updates: args.updates
-        },
-        { timeoutMs: 30_000 }
-      )
-    : await window.api.gh.updatePRState({
-        repoPath: args.repoPath ?? '',
-        repoId: args.repoId ?? undefined,
-        sourceContext: args.sourceContext,
-        prNumber: args.number,
-        updates: args.updates
-      })
+        })
   if (!res.ok) {
     throw new Error(res.error)
   }
-  if (runtimeHost) {
+  if (target.kind === 'environment') {
     notifyWorkItemDetailsMutation(
       {
         repoPath: args.repoPath ?? '',
@@ -5557,10 +5571,10 @@ function GHEditSection({
   onUse: (item: GitHubWorkItem) => void
   onOpenOrUse?: (item: GitHubWorkItem) => void
   attachedWorkspaceLabel?: string | null
-  /** `'horizontal'` is the legacy strip rendered above the conversation; the
-   *  `'sidebar'` layout matches the GitHub issue page's right rail with each
-   *  metadata row stacked under a section heading. */
-  layout?: 'horizontal' | 'sidebar'
+  /** Two surfaces only: compact pill strip for the non-issue drawer/header
+   *  (`horizontal`), and labeled property columns above the issue page body
+   *  (`top-columns`). */
+  layout?: 'horizontal' | 'top-columns'
 }): React.JSX.Element | null {
   const [labelPopoverOpen, setLabelPopoverOpen] = useState(false)
   const [assigneePopoverOpen, setAssigneePopoverOpen] = useState(false)
@@ -6141,11 +6155,13 @@ function GHEditSection({
     </svg>
   )
 
-  if (layout === 'sidebar') {
+  if (layout === 'top-columns') {
+    // Why: issue page body should match the header width — property fields sit
+    // as top columns so the description is not squeezed by a right rail.
     return (
-      <aside className="flex flex-col gap-5 text-[13px]">
+      <aside className="grid grid-cols-2 gap-x-6 gap-y-5 text-[13px] sm:grid-cols-4">
         {/* State */}
-        <section>
+        <section className="min-w-0">
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
             {translate('auto.components.GitHubItemDialog.00ccdf9b5a', 'Status')}
           </div>
@@ -6153,7 +6169,7 @@ function GHEditSection({
         </section>
 
         {/* Assignees */}
-        <section>
+        <section className="min-w-0">
           <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
             <span>{translate('auto.components.GitHubItemDialog.83ac703dda', 'Assignees')}</span>
             <Popover open={assigneePopoverOpen} onOpenChange={setAssigneePopoverOpen}>
@@ -6246,7 +6262,7 @@ function GHEditSection({
         </section>
 
         {/* Labels */}
-        <section>
+        <section className="min-w-0">
           <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
             <span>{translate('auto.components.GitHubItemDialog.217e55d87c', 'Labels')}</span>
             <Popover open={labelPopoverOpen} onOpenChange={setLabelPopoverOpen}>
@@ -6326,69 +6342,21 @@ function GHEditSection({
           )}
         </section>
 
-        <section>
+        <section className="min-w-0">
+          {/* Why: primary open/start CTA lives only in the issue header — property
+              columns are metadata (status, assignees, labels, attached workspace). */}
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
             {translate('auto.components.GitHubItemDialog.2e4d806c92', 'Workspace')}
           </div>
           {attachedWorkspaceLabel ? (
-            <div className="mb-2 flex min-w-0 items-center gap-1.5 text-[12px] text-muted-foreground">
+            <div className="flex min-w-0 items-center gap-1.5 text-[12px] text-muted-foreground">
               <FolderKanban className="size-3.5 shrink-0" />
               <span className="truncate">{attachedWorkspaceLabel}</span>
             </div>
-          ) : null}
-          {hasAttachedWorkspace ? (
-            <DropdownMenu modal={false}>
-              <ButtonGroup className="w-full">
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={handleOpenOrUseWorkspace}
-                  className="flex-1 gap-1.5"
-                  aria-label={translate(
-                    'auto.components.GitHubItemDialog.84855fedd0',
-                    'Open workspace attached to issue'
-                  )}
-                >
-                  {translate('auto.components.GitHubItemDialog.726db41722', 'Open workspace')}
-                  <ArrowRight className="size-3.5" />
-                </Button>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    aria-label={translate(
-                      'auto.components.GitHubItemDialog.fe6ff12dc2',
-                      'More issue workspace actions'
-                    )}
-                  >
-                    <ChevronDown className="size-3.5" />
-                  </Button>
-                </DropdownMenuTrigger>
-              </ButtonGroup>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => onUse(item)}>
-                  <Plus className="size-4" />
-                  {translate('auto.components.GitHubItemDialog.36182aa57f', 'Start new workspace')}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           ) : (
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => onUse(item)}
-              className="w-full gap-1.5"
-              aria-label={translate(
-                'auto.components.GitHubItemDialog.0ab4664a8b',
-                'Start workspace from issue'
-              )}
-            >
-              {translate(
-                'auto.components.GitHubItemDialog.0ab4664a8b',
-                'Start workspace from issue'
-              )}
-              <ArrowRight className="size-3.5" />
-            </Button>
+            <div className="text-[12px] text-muted-foreground">
+              {translate('auto.components.GitHubItemDialog.886a64b081', 'None yet')}
+            </div>
           )}
         </section>
       </aside>
@@ -7125,6 +7093,7 @@ export default function GitHubItemDialog({
   const comments = details?.comments ?? []
   const timelineItems = details?.timelineItems ?? []
   const files = details?.files ?? []
+  const filesUnavailable = details?.filesUnavailable ?? false
   const checks = details?.checks ?? []
   const [pendingViewedPaths, setPendingViewedPaths] = useState<Set<string>>(() => new Set())
   // Why: clipboard IPC can resolve after the dialog unmounts; skip copied-state
@@ -7650,7 +7619,31 @@ export default function GitHubItemDialog({
           <div className="px-4 py-6 text-[12px] text-destructive">{error}</div>
         ) : isIssuePage ? (
           <div className="h-full min-h-0 overflow-y-auto scrollbar-sleek bg-background">
-            <div className="mx-auto grid w-full max-w-[1280px] grid-cols-1 gap-8 px-6 py-6 lg:grid-cols-[minmax(0,1fr)_260px]">
+            {/* Why: match the header's full content width — property columns sit
+                above the body so the description is not squeezed by a right rail.
+                Outer px-2 + ConversationTab px-4 totals the header's px-6. */}
+            <div className="w-full px-2 py-6">
+              {(canUseDetailsRepoContext || projectOrigin) && (
+                <div className="mb-5 border-b border-border/60 px-4 pb-5">
+                  <GHEditSection
+                    item={workItem}
+                    repoPath={repoPath}
+                    repoId={effectiveRepoId}
+                    sourceContext={sourceContext}
+                    projectOrigin={projectOrigin}
+                    localState={localState}
+                    localLabels={localLabels}
+                    onStateChange={setLocalState}
+                    onLabelsChange={setLocalLabels}
+                    onMutated={invalidateCurrentDetailsCache}
+                    assignees={details?.assignees ?? []}
+                    onUse={onUse}
+                    onOpenOrUse={handleOpenOrUseIssueWorkspace}
+                    attachedWorkspaceLabel={issueAttachedWorkspaceLabel}
+                    layout="top-columns"
+                  />
+                </div>
+              )}
               <div className="min-w-0">
                 <ConversationTab
                   item={displayWorkItem ?? workItem}
@@ -7692,29 +7685,6 @@ export default function GitHubItemDialog({
                   }}
                 />
               </div>
-              {(canUseDetailsRepoContext || projectOrigin) && (
-                <div className="min-w-0">
-                  <div className="lg:sticky lg:top-4">
-                    <GHEditSection
-                      item={workItem}
-                      repoPath={repoPath}
-                      repoId={effectiveRepoId}
-                      sourceContext={sourceContext}
-                      projectOrigin={projectOrigin}
-                      localState={localState}
-                      localLabels={localLabels}
-                      onStateChange={setLocalState}
-                      onLabelsChange={setLocalLabels}
-                      onMutated={invalidateCurrentDetailsCache}
-                      assignees={details?.assignees ?? []}
-                      onUse={onUse}
-                      onOpenOrUse={handleOpenOrUseIssueWorkspace}
-                      attachedWorkspaceLabel={issueAttachedWorkspaceLabel}
-                      layout="sidebar"
-                    />
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         ) : (
@@ -7821,6 +7791,21 @@ export default function GitHubItemDialog({
                       <div className="flex items-center justify-center py-10">
                         <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
                       </div>
+                    ) : filesUnavailable && files.length === 0 ? (
+                      // Why: the file fetch failed (rate limit, auth, unresolved
+                      // remote); offer a retry instead of implying the PR is empty.
+                      <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
+                        <div className="text-[12px] text-muted-foreground">
+                          {translate(
+                            'auto.components.GitHubItemDialog.filesUnavailable',
+                            "Couldn't load changed files."
+                          )}
+                        </div>
+                        <Button variant="outline" size="sm" onClick={invalidateCurrentDetailsCache}>
+                          <RefreshCw className="size-3.5" />
+                          {translate('auto.components.GitHubItemDialog.filesRetry', 'Retry')}
+                        </Button>
+                      </div>
                     ) : files.length === 0 ? (
                       <div className="px-4 py-10 text-center text-[12px] text-muted-foreground">
                         {translate(
@@ -7855,7 +7840,12 @@ export default function GitHubItemDialog({
   ) : null
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm">
+    // Why: GitHub item details render inline (not a Radix dialog), so e2e needs a
+    // stable hook to scope assertions to this detail surface.
+    <div
+      data-testid="github-item-detail"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-border/50 bg-background shadow-sm"
+    >
       {content}
     </div>
   )

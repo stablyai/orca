@@ -23,14 +23,42 @@ export const WATCHER_IGNORE_DIRS: string[] = [
 // therefore meaningful: the first 8 get true daemon-side exclusion on macOS.
 export const MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT = 8
 
-export function buildParcelWatcherIgnoreOption(ignoreDirs: readonly string[]): string[] {
-  if (process.platform !== 'darwin') {
-    return [...ignoreDirs]
+export type ParcelWatcherIgnoreOptions = {
+  ignore?: string[]
+  // @parcel/watcher's wrapper preserves this native option even though its
+  // public TypeScript declaration omits it. See parcel-bundler/watcher#244.
+  ignoreGlobs?: string[]
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&')
+}
+
+function buildNestedDirectoryRegex(ignoreDirs: readonly string[]): string {
+  const alternatives = ignoreDirs.map(escapeRegex).join('|')
+  if (process.platform === 'win32') {
+    return `^(?:[^\\\\/]+[\\\\/])*(?:${alternatives})(?:[\\\\/].*)?$`
   }
-  return [
-    ...ignoreDirs.slice(0, MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT),
-    ...ignoreDirs
-      .slice(MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT)
-      .flatMap((dir) => [`**/${dir}`, `**/${dir}/**`])
-  ]
+  // Why: backslash is a legal POSIX filename character, not a path separator.
+  return `^(?:[^/]+/)*(?:${alternatives})(?:/.*)?$`
+}
+
+export function buildParcelWatcherIgnoreOptions(
+  ignoreDirs: readonly string[]
+): ParcelWatcherIgnoreOptions {
+  if (ignoreDirs.length === 0) {
+    return {}
+  }
+  if (process.platform !== 'darwin') {
+    // Why: Parcel 2.5.6 turns leading-** globs into nested-lookahead regexes
+    // that are pathological in native std::regex (10-17x slower upstream).
+    // One component-aware regex preserves nested pruning without that CPU cost.
+    return { ignoreGlobs: [buildNestedDirectoryRegex(ignoreDirs)] }
+  }
+  const daemonExcludedDirs = ignoreDirs.slice(0, MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT)
+  const remainingDirs = ignoreDirs.slice(MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT)
+  return {
+    ignore: [...daemonExcludedDirs],
+    ...(remainingDirs.length > 0 ? { ignoreGlobs: [buildNestedDirectoryRegex(remainingDirs)] } : {})
+  }
 }

@@ -58,8 +58,26 @@ vi.mock('../setup-guide/SetupGuideProgressRing', () => ({
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: ({ children }: { children: ReactNode }) => <>{children}</>,
   DropdownMenuContent: ({ children }: { children: ReactNode }) => <>{children}</>,
-  DropdownMenuItem: ({ children, onSelect }: { children: ReactNode; onSelect?: () => void }) => (
-    <button data-testid="menu-item" onClick={onSelect}>
+  DropdownMenuItem: ({
+    children,
+    disabled,
+    onPointerDown,
+    onSelect,
+    title
+  }: {
+    children: ReactNode
+    disabled?: boolean
+    onPointerDown?: (event: React.PointerEvent<HTMLButtonElement>) => void
+    onSelect?: (event: Event) => void
+    title?: string
+  }) => (
+    <button
+      data-testid="menu-item"
+      disabled={disabled}
+      onClick={() => onSelect?.(new Event('menu.itemSelect'))}
+      onPointerDown={onPointerDown}
+      title={title}
+    >
       {children}
     </button>
   ),
@@ -250,6 +268,43 @@ describe('SidebarSettingsHelpMenu', () => {
   it('renders Check for Updates menu item', () => {
     const html = renderToStaticMarkup(<SidebarSettingsHelpMenu />)
     expect(html).toContain('Check for Updates')
+    expect(html).toMatch(/(⇧\+click|Shift\+click) checks the latest RC/)
+    expect(html).toMatch(/(⌘\+click|Ctrl\+click) checks the latest perf build/)
+  })
+
+  it('passes update-check modifier options through the updater bridge', async () => {
+    const container = await renderMenu()
+    const checkButton = findMenuItem(container, 'Check for Updates')
+    const primaryModifier = navigator.userAgent.includes('Mac')
+      ? { metaKey: true }
+      : { ctrlKey: true }
+
+    await act(async () => {
+      checkButton.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, shiftKey: true }))
+      checkButton.click()
+    })
+    await act(async () => {
+      checkButton.dispatchEvent(
+        new MouseEvent('pointerdown', { bubbles: true, ...primaryModifier })
+      )
+      checkButton.click()
+    })
+    await act(async () => {
+      checkButton.click()
+    })
+
+    expect(mocks.updaterCheck).toHaveBeenNthCalledWith(1, {
+      includePrerelease: true,
+      includePerfPrerelease: false
+    })
+    expect(mocks.updaterCheck).toHaveBeenNthCalledWith(2, {
+      includePrerelease: false,
+      includePerfPrerelease: true
+    })
+    expect(mocks.updaterCheck).toHaveBeenNthCalledWith(3, {
+      includePrerelease: false,
+      includePerfPrerelease: false
+    })
   })
 
   it('renders shortcut keys in the settings tooltip', () => {

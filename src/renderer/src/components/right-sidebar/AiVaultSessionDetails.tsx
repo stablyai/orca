@@ -3,13 +3,20 @@ import { FileJson, FolderGit2, MessageSquare, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import type { AiVaultSession } from '../../../../shared/ai-vault-types'
+import {
+  isAiVaultSessionResumableContent,
+  type AiVaultScope,
+  type AiVaultSession
+} from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { sessionDetailConversationTurns } from './ai-vault-session-display'
+import { SessionSubagentsSection } from './AiVaultSessionSubagents'
+import { SessionUnsavedConversationNotice } from './AiVaultSessionUnsavedNotice'
 import {
   aiVaultWorktreeCompactPath,
   aiVaultWorktreeStatusLabel,
   shouldShowAiVaultWorktreeStatusBadge,
+  shouldShowAiVaultSessionWorktreeLine,
   type AiVaultSessionWorktreeInfo
 } from './ai-vault-session-worktree'
 
@@ -17,6 +24,7 @@ export function SessionInlineDetails({
   id,
   session,
   worktreeInfo,
+  vaultScope,
   resumeActions,
   onResumeInWorktree,
   onResumeInNewTab,
@@ -25,16 +33,22 @@ export function SessionInlineDetails({
   id: string
   session: AiVaultSession
   worktreeInfo: AiVaultSessionWorktreeInfo | null
+  vaultScope: AiVaultScope
   resumeActions: {
     worktree: { worktreeId: string | null; disabled: boolean }
     newTab: { worktreeId: string | null; disabled: boolean }
   }
   onResumeInWorktree: () => void
   onResumeInNewTab: () => void
-  onOpenLog: () => void
+  onOpenLog?: () => void
 }): React.JSX.Element {
-  const showResumeInWorktree = Boolean(resumeActions.worktree.worktreeId)
-  const showResumeInNewTab = !showResumeInWorktree || Boolean(resumeActions.newTab.worktreeId)
+  // A zero-turn transcript would resume into an empty conversation, so the plain
+  // resume affordances are withheld and a distinct "not saved" state is shown.
+  const hasResumableContent = isAiVaultSessionResumableContent(session)
+  const showResumeInWorktree = hasResumableContent && Boolean(resumeActions.worktree.worktreeId)
+  const showResumeInNewTab =
+    hasResumableContent &&
+    (!resumeActions.worktree.worktreeId || Boolean(resumeActions.newTab.worktreeId))
   const detailTurns = sessionDetailConversationTurns(session, 3)
   const worktreeDisplay = worktreeInfo
 
@@ -51,34 +65,44 @@ export function SessionInlineDetails({
       }}
     >
       <div className="space-y-3 p-3">
-        <SessionReceiptSection
-          icon={<MessageSquare className="size-3" />}
-          label={translate(
-            'auto.components.right.sidebar.AiVaultSessionDetails.latestTurns',
-            'Latest turns'
-          )}
-        >
-          {detailTurns.length > 0 ? (
-            <div className="space-y-1.5">
-              {detailTurns.map((turn, index) => (
-                <ConversationTurnCard
-                  key={`${turn.timestamp ?? 'turn'}-${index}`}
-                  role={turn.role}
-                  text={turn.text}
-                />
-              ))}
-            </div>
-          ) : (
-            <SessionDetailEmptyState
-              message={translate(
-                'auto.components.right.sidebar.AiVaultSessionDetails.noPreviewAvailable',
-                'No conversation preview available'
-              )}
-            />
-          )}
-        </SessionReceiptSection>
+        {hasResumableContent ? (
+          <SessionReceiptSection
+            icon={<MessageSquare className="size-3" />}
+            label={translate(
+              'auto.components.right.sidebar.AiVaultSessionDetails.latestTurns',
+              'Latest turns'
+            )}
+          >
+            {detailTurns.length > 0 ? (
+              <div className="space-y-1.5">
+                {detailTurns.map((turn, index) => (
+                  <ConversationTurnCard
+                    key={`${turn.timestamp ?? 'turn'}-${index}`}
+                    role={turn.role}
+                    text={turn.text}
+                  />
+                ))}
+              </div>
+            ) : (
+              <SessionDetailEmptyState
+                message={translate(
+                  'auto.components.right.sidebar.AiVaultSessionDetails.noPreviewAvailable',
+                  'No conversation preview available'
+                )}
+              />
+            )}
+          </SessionReceiptSection>
+        ) : (
+          // An unsaved session has no turns to show; the notice replaces the
+          // preview section instead of stacking a second empty state under it.
+          <SessionUnsavedConversationNotice session={session} logAvailable={Boolean(onOpenLog)} />
+        )}
 
-        {worktreeDisplay ? (
+        <SessionSubagentsSection session={session} />
+
+        {shouldShowAiVaultSessionWorktreeLine(worktreeDisplay, {
+          vaultScope
+        }) ? (
           <SessionReceiptSection
             icon={<FolderGit2 className="size-3" />}
             label={translate(
@@ -86,67 +110,71 @@ export function SessionInlineDetails({
               'Worktree'
             )}
           >
-            <WorktreeMetadataLines worktreeInfo={worktreeDisplay} />
+            <WorktreeMetadataLines worktreeInfo={worktreeDisplay} vaultScope={vaultScope} />
           </SessionReceiptSection>
         ) : null}
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5 border-t border-sidebar-border/80 bg-sidebar-accent/15 px-3 py-2">
-        {showResumeInWorktree ? (
-          <Button
-            type="button"
-            variant="default"
-            size="xs"
-            disabled={resumeActions.worktree.disabled}
-            draggable={false}
-            onClick={(event) => {
-              event.stopPropagation()
-              onResumeInWorktree()
-            }}
-            className="h-7 shrink-0 px-2.5 text-[11px]"
-          >
-            <Play className="size-3.5" />
-            {translate(
-              'auto.components.right.sidebar.AiVaultSessionDetails.resumeInWorktree',
-              'Resume in Worktree'
-            )}
-          </Button>
-        ) : null}
-        {showResumeInNewTab ? (
-          <Button
-            type="button"
-            variant={showResumeInWorktree ? 'secondary' : 'default'}
-            size="xs"
-            disabled={resumeActions.newTab.disabled}
-            draggable={false}
-            onClick={(event) => {
-              event.stopPropagation()
-              onResumeInNewTab()
-            }}
-            className="h-7 shrink-0 px-2.5 text-[11px]"
-          >
-            <Play className="size-3.5" />
-            {translate(
-              'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewTab',
-              'Resume in New Tab'
-            )}
-          </Button>
-        ) : null}
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          draggable={false}
-          onClick={(event) => {
-            event.stopPropagation()
-            onOpenLog()
-          }}
-          className="h-7 shrink-0 px-2.5 text-[11px] text-muted-foreground"
-        >
-          <FileJson className="size-3.5" />
-          {translate('auto.components.right.sidebar.AiVaultSessionDetails.viewLog', 'View Log')}
-        </Button>
-      </div>
+      {showResumeInWorktree || showResumeInNewTab || onOpenLog ? (
+        <div className="flex flex-wrap items-center gap-1.5 border-t border-sidebar-border/80 bg-sidebar-accent/15 px-3 py-2">
+          {showResumeInWorktree ? (
+            <Button
+              type="button"
+              variant="default"
+              size="xs"
+              disabled={resumeActions.worktree.disabled}
+              draggable={false}
+              onClick={(event) => {
+                event.stopPropagation()
+                onResumeInWorktree()
+              }}
+              className="h-7 shrink-0 px-2.5 text-[11px]"
+            >
+              <Play className="size-3.5" />
+              {translate(
+                'auto.components.right.sidebar.AiVaultSessionDetails.resumeInWorktree',
+                'Resume in Worktree'
+              )}
+            </Button>
+          ) : null}
+          {showResumeInNewTab ? (
+            <Button
+              type="button"
+              variant={showResumeInWorktree ? 'secondary' : 'default'}
+              size="xs"
+              disabled={resumeActions.newTab.disabled}
+              draggable={false}
+              onClick={(event) => {
+                event.stopPropagation()
+                onResumeInNewTab()
+              }}
+              className="h-7 shrink-0 px-2.5 text-[11px]"
+            >
+              <Play className="size-3.5" />
+              {translate(
+                'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewTab',
+                'Resume in New Tab'
+              )}
+            </Button>
+          ) : null}
+          {onOpenLog ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              draggable={false}
+              onClick={(event) => {
+                event.stopPropagation()
+                onOpenLog()
+              }}
+              className="h-7 shrink-0 px-2.5 text-[11px] text-muted-foreground"
+            >
+              <FileJson className="size-3.5" />
+              {translate('auto.components.right.sidebar.AiVaultSessionDetails.viewLog', 'View Log')}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -200,9 +228,11 @@ function ConversationTurnCard({
 }
 
 function WorktreeMetadataLines({
-  worktreeInfo
+  worktreeInfo,
+  vaultScope
 }: {
   worktreeInfo: AiVaultSessionWorktreeInfo
+  vaultScope: AiVaultScope
 }): React.JSX.Element {
   const compactPath = aiVaultWorktreeCompactPath(worktreeInfo.path)
   const pathLine =
@@ -212,7 +242,9 @@ function WorktreeMetadataLines({
   return (
     <div className="grid min-w-0 gap-1 text-[11px] leading-4">
       <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
-        {shouldShowAiVaultWorktreeStatusBadge(worktreeInfo.status) ? (
+        {shouldShowAiVaultWorktreeStatusBadge(worktreeInfo.status, {
+          vaultScope
+        }) ? (
           <>
             <span className="shrink-0 text-[10px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
               {aiVaultWorktreeStatusLabel(worktreeInfo.status)}

@@ -21,6 +21,9 @@ export type PreambleParams = {
     behind: number
     recentSubjects: string[]
   }
+  // Why: prompt-returning agents should idle after worker_done, while bare
+  // shells have no agent prompt for Orca to reuse.
+  workerKind?: 'prompt-returning-agent' | 'bare-shell'
 }
 
 // Why: 5 minutes is frequent enough that the coordinator's stale-heartbeat
@@ -39,6 +42,10 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   // socket. Without this, agents inside the dev Electron app would call the
   // production CLI and talk to the wrong Orca instance (Section 6.4).
   const cli = params.devMode ? 'orca-dev' : 'orca'
+  const postDoneInstructions = buildPostWorkerDoneInstructions({
+    cli,
+    workerKind: params.workerKind ?? 'prompt-returning-agent'
+  })
 
   const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
 Your coordinator's terminal handle is: ${params.coordinatorHandle}
@@ -110,17 +117,7 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # Check for messages from the coordinator:
   ${cli} orchestration check
 
-=== AFTER YOU SEND worker_done ===
-
-Keep the shell session open for a grace period (10 minutes) in case the
-coordinator sends a follow-up or re-dispatches you. Poll with
-\`${cli} orchestration check\` every 2 minutes during that window. If no
-follow-up arrives, you may exit after the grace period — the coordinator
-will not expect further output from you.
-
-If the coordinator re-dispatches you (you will receive a fresh preamble +
-TASK block), reset your polling and start the new task. Do not respond
-to the previous task's follow-ups after a re-dispatch.`
+${postDoneInstructions}`
 
   // Why: the drift section fires only when the coordinator allowed dispatch
   // against a stale worktree (via `allow-stale-base: true` in the task spec,
@@ -134,6 +131,43 @@ to the previous task's follow-ups after a re-dispatch.`
 
 === TASK ===
 ${params.taskSpec}`
+}
+
+function buildPostWorkerDoneInstructions({
+  cli,
+  workerKind
+}: {
+  cli: string
+  workerKind: NonNullable<PreambleParams['workerKind']>
+}): string {
+  // Why: re-dispatch reaches idle agents as terminal input; inbox polling
+  // after completion cannot receive that new TASK block and looks hung.
+  if (workerKind === 'bare-shell') {
+    return `=== AFTER YOU SEND worker_done ===
+
+worker_done ends your turn for this task. Your dispatched work is complete:
+stop and take no further actions — do NOT start new or unrelated work,
+do NOT run a sleep/poll loop, and do NOT keep calling
+\`${cli} orchestration check\`. The coordinator has already recorded your
+completion and expects no further output.
+
+Exit the shell after completion. Bare-shell workers have no idle agent
+prompt for Orca to reuse; if the coordinator has more for you it will
+dispatch or prompt another worker with a fresh TASK block.`
+  }
+
+  return `=== AFTER YOU SEND worker_done ===
+
+worker_done ends your turn for this task. Your dispatched work is complete:
+stop, return to an idle prompt, and take no further actions — do NOT start
+new or unrelated work, do NOT run a sleep/poll loop, and do NOT keep calling
+\`${cli} orchestration check\`. The coordinator has already recorded your
+completion and expects no further output.
+
+Do not exit the shell. Your terminal stays available, and if the
+coordinator has more for you it will re-engage this terminal with a fresh
+preamble + TASK block, which arrives as new input. When that happens,
+reset and start the new task; ignore the previous task's follow-ups.`
 }
 
 function buildDriftSection(drift: NonNullable<PreambleParams['baseDrift']>): string {

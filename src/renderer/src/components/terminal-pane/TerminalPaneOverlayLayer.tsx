@@ -11,7 +11,10 @@ import {
 } from '../activity/activity-terminal-portal'
 import TerminalPane from './TerminalPane'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
+import { shouldMountBackgroundWorktreeTab } from '../terminal/background-terminal-worktree-mount'
 import { useNativeChatToggleShortcut } from '../native-chat/use-native-chat-toggle-shortcut'
+import { shouldDeferParkedPtyExitTabClose } from './terminal-parked-tab-watchers'
+import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
 
 type TerminalOverlayAssignment = {
   unifiedTabId: string
@@ -237,6 +240,12 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
         if (consumeSuppressedPtyExit(ptyId)) {
           return
         }
+        // Why: a parked multi-leaf tab has no PaneManager to promote split
+        // siblings, so closing the tab here would kill them; the reveal
+        // remount handles dead PTYs per leaf instead.
+        if (shouldDeferParkedPtyExitTabClose(terminalTabId, ptyId)) {
+          return
+        }
         closeTab(terminalTabId)
         leaveWorktreeIfEmpty()
       }}
@@ -278,12 +287,20 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   worktreeId,
   worktreePath,
   isWorktreeActive,
-  activityTerminalPortals = EMPTY_ACTIVITY_PORTALS
+  coldParkTerminalPanes = false,
+  shouldMeasureHiddenWorktree = false,
+  activityTerminalPortals = EMPTY_ACTIVITY_PORTALS,
+  backgroundMountTabIds = null
 }: {
   worktreeId: string
   worktreePath: string
   isWorktreeActive: boolean
+  coldParkTerminalPanes?: boolean
+  shouldMeasureHiddenWorktree?: boolean
   activityTerminalPortals?: ActivityTerminalPortalTarget[]
+  /** Non-null for targeted background mounts: only these terminal tabs get a
+   *  TerminalPane, so waking one slept agent does not connect every saved tab. */
+  backgroundMountTabIds?: ReadonlySet<string> | null
 }): React.JSX.Element | null {
   const { terminalTabs, unifiedTabs, groups, activeGroupId } = useAppStore(
     useShallow((state) => ({
@@ -346,40 +363,59 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
     return entries
   }, [groupActiveTabById, unifiedTabs])
 
+  const parkedTerminalTabIds = useTerminalTabColdParking({
+    worktreeId,
+    terminalTabs,
+    assignments,
+    isWorktreeActive,
+    coldParkTerminalPanes,
+    shouldMeasureHiddenWorktree,
+    activityTerminalPortals
+  })
+
   if (!worktreePath) {
     return null
   }
 
   return (
     <>
-      {terminalTabs.map((terminalTab) => {
-        const assignment = assignments.get(terminalTab.id)
-        const isVisible = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
-        const isActive = Boolean(isVisible && assignment && assignment.groupId === activeGroupId)
-        const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
-          worktreeId,
-          tabId: terminalTab.id
-        })
-        return (
-          <TerminalOverlaySlot
-            key={terminalTab.id}
-            terminalTabId={terminalTab.id}
-            terminalGeneration={terminalTab.generation}
-            worktreeId={worktreeId}
-            worktreePath={worktreePath}
-            startupCwd={terminalTab.startupCwd}
-            groupId={assignment?.groupId}
-            isWorktreeActive={isWorktreeActive}
-            isVisible={isVisible}
-            isActive={isActive}
-            activityTerminalPortal={activityTerminalPortal}
-            onFocusOwningGroup={focusOwningGroup}
-            consumeSuppressedPtyExit={consumeSuppressedPtyExit}
-            closeTab={closeTab}
-            leaveWorktreeIfEmpty={leaveWorktreeIfEmpty}
-          />
+      {terminalTabs
+        .filter((terminalTab) =>
+          shouldMountBackgroundWorktreeTab(backgroundMountTabIds, terminalTab.id)
         )
-      })}
+        .map((terminalTab) => {
+          const assignment = assignments.get(terminalTab.id)
+          const isVisible = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
+          const isActive = Boolean(isVisible && assignment && assignment.groupId === activeGroupId)
+          const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
+            worktreeId,
+            tabId: terminalTab.id
+          })
+          // Why: parking unmounts only the view; the parked watcher owns exit
+          // and side-effect handling until this tab is eligible to remount.
+          if (parkedTerminalTabIds.has(terminalTab.id)) {
+            return null
+          }
+          return (
+            <TerminalOverlaySlot
+              key={terminalTab.id}
+              terminalTabId={terminalTab.id}
+              terminalGeneration={terminalTab.generation}
+              worktreeId={worktreeId}
+              worktreePath={worktreePath}
+              startupCwd={terminalTab.startupCwd}
+              groupId={assignment?.groupId}
+              isWorktreeActive={isWorktreeActive}
+              isVisible={isVisible}
+              isActive={isActive}
+              activityTerminalPortal={activityTerminalPortal}
+              onFocusOwningGroup={focusOwningGroup}
+              consumeSuppressedPtyExit={consumeSuppressedPtyExit}
+              closeTab={closeTab}
+              leaveWorktreeIfEmpty={leaveWorktreeIfEmpty}
+            />
+          )
+        })}
     </>
   )
 })

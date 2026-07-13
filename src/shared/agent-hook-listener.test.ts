@@ -6,18 +6,26 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync }
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
+  clearPaneCacheState,
   createHookListenerState,
   getEndpointFileName,
   hasPendingAgentResultText,
+  markClaudeLeadTurnInterrupted,
+  seedClaudeSubagentRosterFromSnapshots,
   HOOK_REQUEST_MAX_BYTES,
   isShellSafeEndpointValue,
   normalizeHookPayload,
   parseFormEncodedBody,
+  preparePendingGrokResultDiscovery,
   readRequestBody,
   resolveHookSource,
   writeEndpointFile,
   type HookListenerState
 } from './agent-hook-listener'
+import {
+  clearGrokSessionPathLookupCacheForTests,
+  findGrokChatHistoryBySessionId
+} from './grok-session-paths'
 import { makePaneKey } from './stable-pane-id'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -51,6 +59,7 @@ describe('shared agent-hook-listener', () => {
   })
 
   afterEach(() => {
+    clearGrokSessionPathLookupCacheForTests()
     vi.unstubAllEnvs()
   })
 
@@ -170,11 +179,72 @@ describe('shared agent-hook-listener', () => {
     )
 
     expect(event?.payload.toolName).toBe('AskUserQuestion')
+    // Why: the auto-allowed AskUserQuestion PreToolUse is a human-input boundary,
+    // so it must read as waiting (amber attention) rather than a working spinner.
+    expect(event?.payload.state).toBe('waiting')
     const expected = JSON.stringify(questions)
     expect(event?.payload.interactivePrompt).toBe(expected)
     // Why: must NOT be truncated to the 160-char toolInput preview cap.
     expect(expected.length).toBeGreaterThan(200)
     expect(event?.payload.interactivePrompt!.length).toBe(expected.length)
+  })
+
+  it('maps Claude AskUserQuestion PreToolUse to waiting, then back to working on answer', () => {
+    const question = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'AskUserQuestion',
+          tool_input: { questions: [{ question: 'Pick', options: ['a', 'b'] }] }
+        }
+      },
+      'production'
+    )
+    const answered = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          tool_name: 'AskUserQuestion',
+          tool_response: { selected: ['a'] }
+        }
+      },
+      'production'
+    )
+
+    expect(question?.payload).toMatchObject({
+      agentType: 'claude',
+      state: 'waiting',
+      toolName: 'AskUserQuestion'
+    })
+    expect(answered?.payload).toMatchObject({
+      agentType: 'claude',
+      state: 'working',
+      toolName: 'AskUserQuestion'
+    })
+  })
+
+  it('keeps a normal Claude PreToolUse tool call as working', () => {
+    const event = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'Bash',
+          tool_input: { command: 'ls' }
+        }
+      },
+      'production'
+    )
+    expect(event?.payload.state).toBe('working')
+    expect(event?.payload.toolName).toBe('Bash')
   })
 
   it('leaves interactivePrompt undefined for a normal tool call', () => {
@@ -808,6 +878,97 @@ describe('shared agent-hook-listener', () => {
     expect(event).toBeNull()
   })
 
+  it('keeps the cached prompt when a harness-injected turn fires UserPromptSubmit', () => {
+    normalizeHookPayload(
+      state,
+      'claude',
+      { paneKey: PANE_KEY, payload: { hook_event_name: 'UserPromptSubmit', prompt: 'fix login' } },
+      'production'
+    )
+    // Why: the harness injects background task notifications as user turns;
+    // they must not replace the user's real prompt in status labels.
+    const event = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'UserPromptSubmit',
+          prompt: '<task-notification> <task-id>bzthj2b8r</task-id> <tool-use-id>t1</tool-use-id>'
+        }
+      },
+      'production'
+    )
+    expect(event).not.toBeNull()
+    expect(event!.payload.state).toBe('working')
+    expect(event!.payload.prompt).toBe('fix login')
+    expect(event!.hasExplicitPrompt).toBe(false)
+  })
+
+  it('resolves an empty prompt for a harness-injected turn with nothing cached', () => {
+    const event = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'UserPromptSubmit',
+          prompt: '<system-reminder>background context</system-reminder>'
+        }
+      },
+      'production'
+    )
+    expect(event).not.toBeNull()
+    expect(event!.payload.prompt).toBe('')
+    expect(event!.hasExplicitPrompt).toBe(false)
+  })
+
+  it('treats a custom-element paste as an explicit user turn, not machinery', () => {
+    normalizeHookPayload(
+      state,
+      'claude',
+      { paneKey: PANE_KEY, payload: { hook_event_name: 'UserPromptSubmit', prompt: 'fix login' } },
+      'production'
+    )
+    // Why: a real prompt starting with an unknown kebab tag (<my-custom-element>)
+    // is the user's turn — it must reset the cached prompt and count as explicit,
+    // so interrupt recovery does not leave the pane visibly done.
+    const event = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'UserPromptSubmit',
+          prompt: '<my-custom-element> render this component'
+        }
+      },
+      'production'
+    )
+    expect(event).not.toBeNull()
+    expect(event!.payload.prompt).toBe('<my-custom-element> render this component')
+    expect(event!.hasExplicitPrompt).toBe(true)
+  })
+
+  it('treats a Grok user_query prompt as an explicit user turn', () => {
+    const event = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'user_prompt_submit',
+          prompt: '<user_query>fix the bug</user_query>'
+        }
+      },
+      'production'
+    )
+    expect(event).not.toBeNull()
+    // Grok wraps the real typed prompt; the envelope is stripped but it stays explicit.
+    expect(event!.payload.prompt).toBe('fix the bug')
+    expect(event!.hasExplicitPrompt).toBe(true)
+  })
+
   it('isolates caches between listener instances', () => {
     const a = createHookListenerState()
     const b = createHookListenerState()
@@ -1314,6 +1475,18 @@ describe('shared agent-hook-listener', () => {
     ).toBe(false)
   })
 
+  it('lets Copilot Stop consume a generic message without scheduling transcript retry', () => {
+    expect(
+      hasPendingAgentResultText('copilot', {
+        payload: {
+          hookEventName: 'Stop',
+          message: 'Copilot final response',
+          transcript_path: '/tmp/copilot-transcript.jsonl'
+        }
+      })
+    ).toBe(false)
+  })
+
   it('normalizes Grok hookEventName payloads and keeps prompt across tool events', () => {
     const prompt = normalizeHookPayload(
       state,
@@ -1354,6 +1527,141 @@ describe('shared agent-hook-listener', () => {
       agentType: 'grok',
       toolName: 'run_terminal_cmd',
       toolInput: 'pnpm test'
+    })
+  })
+
+  it('previews Grok-native tool names (run_terminal_command / search_replace)', () => {
+    const shell = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'PreToolUse',
+          tool_name: 'run_terminal_command',
+          tool_input: { command: 'git status' }
+        }
+      },
+      'production'
+    )
+    const edit = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'PreToolUse',
+          toolName: 'search_replace',
+          toolInput: { path: 'src/app.ts', old_string: 'a', new_string: 'b' }
+        }
+      },
+      'production'
+    )
+    expect(shell?.payload).toMatchObject({
+      agentType: 'grok',
+      state: 'working',
+      toolName: 'run_terminal_command',
+      toolInput: 'git status'
+    })
+    expect(edit?.payload).toMatchObject({
+      agentType: 'grok',
+      state: 'working',
+      toolName: 'search_replace',
+      toolInput: 'src/app.ts'
+    })
+  })
+
+  it('maps Grok ask_user_question PreToolUse to waiting with interactivePrompt', () => {
+    const questions = [
+      {
+        question: 'Ship to which region?',
+        options: [{ label: 'us-east', description: 'US East' }]
+      }
+    ]
+    const waiting = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'PreToolUse',
+          tool_name: 'ask_user_question',
+          tool_input: { questions }
+        }
+      },
+      'production'
+    )
+    const answered = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'post_tool_use',
+          toolName: 'ask_user_question',
+          toolInput: { questions },
+          toolResponse: { selected: ['us-east'] }
+        }
+      },
+      'production'
+    )
+    expect(waiting?.payload).toMatchObject({
+      agentType: 'grok',
+      state: 'waiting',
+      toolName: 'ask_user_question'
+    })
+    expect(waiting?.payload.interactivePrompt).toContain('Ship to which region?')
+    expect(answered?.payload).toMatchObject({
+      agentType: 'grok',
+      state: 'working',
+      toolName: 'ask_user_question'
+    })
+    expect(answered?.payload.interactivePrompt).toBeUndefined()
+  })
+
+  it('does not recreate a Grok question card on post_tool_use_failure', () => {
+    const event = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'post_tool_use_failure',
+          toolName: 'ask_user_question',
+          toolInput: { questions: [{ question: 'Retry?', options: ['yes', 'no'] }] },
+          error: 'cancelled'
+        }
+      },
+      'production'
+    )
+
+    expect(event?.payload.state).toBe('working')
+    expect(event?.payload.interactivePrompt).toBeUndefined()
+  })
+
+  it('maps Grok StopFailure to done', () => {
+    normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: { hookEventName: 'UserPromptSubmit', prompt: 'do work' }
+      },
+      'production'
+    )
+    const done = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: { hookEventName: 'StopFailure', error: 'api timeout' }
+      },
+      'production'
+    )
+    expect(done?.payload).toMatchObject({
+      agentType: 'grok',
+      state: 'done',
+      prompt: 'do work'
     })
   })
 
@@ -1494,7 +1802,7 @@ describe('shared agent-hook-listener', () => {
     expect(event).toBeNull()
   })
 
-  it('reads Grok final assistant text from chat history on Stop', () => {
+  it('enriches Grok Stop from chat history despite a generic status message', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-grok-session-'))
     const sessionId = '019e37f4-5135-7b63-a4ab-6d13aa6bf528'
     const cwd = join(tmpDir, 'workspace')
@@ -1518,18 +1826,82 @@ describe('shared agent-hook-listener', () => {
         'production'
       )
 
+      const body = {
+        paneKey: PANE_KEY,
+        payload: { hookEventName: 'Stop', sessionId, cwd, message: 'Session completed' }
+      }
+      expect(hasPendingAgentResultText('grok', body)).toBe(true)
+      const done = normalizeHookPayload(state, 'grok', body, 'production')
+
+      expect(done?.payload.state).toBe('done')
+      expect(done?.payload.lastAssistantMessage).toBe('Hi! How can I help you today?')
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('uses the hook envelope Grok home instead of the listener service environment', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-grok-envelope-home-'))
+    const serviceGrokHome = join(tmpDir, 'service-grok')
+    const hookGrokHome = join(tmpDir, 'hook-grok')
+    const sessionId = '019e37f4-5135-7b63-a4ab-6d13aa6bf529'
+    const cwd = join(tmpDir, 'workspace')
+    const sessionDir = join(hookGrokHome, 'sessions', encodeURIComponent(cwd), sessionId)
+    try {
+      vi.stubEnv('GROK_HOME', serviceGrokHome)
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'chat_history.jsonl'),
+        `${JSON.stringify({ type: 'assistant', content: 'from effective Grok home' })}\n`
+      )
+
       const done = normalizeHookPayload(
         state,
         'grok',
         {
           paneKey: PANE_KEY,
+          grokHome: hookGrokHome,
           payload: { hookEventName: 'Stop', sessionId, cwd }
         },
         'production'
       )
 
-      expect(done?.payload.state).toBe('done')
-      expect(done?.payload.lastAssistantMessage).toBe('Hi! How can I help you today?')
+      expect(done?.payload.lastAssistantMessage).toBe('from effective Grok home')
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
+    'relative/grok-home',
+    join(tmpdir(), 'x'.repeat(4096)),
+    `${join(tmpdir(), 'grok-home')}\ninvalid`
+  ])('ignores invalid hook-envelope Grok home %s', (grokHome) => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-grok-invalid-home-'))
+    const serviceGrokHome = join(tmpDir, 'service-grok')
+    const sessionId = '019e37f4-5135-7b63-a4ab-6d13aa6bf530'
+    const cwd = join(tmpDir, 'workspace')
+    const sessionDir = join(serviceGrokHome, 'sessions', encodeURIComponent(cwd), sessionId)
+    try {
+      vi.stubEnv('GROK_HOME', serviceGrokHome)
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'chat_history.jsonl'),
+        `${JSON.stringify({ type: 'assistant', content: 'fallback result' })}\n`
+      )
+
+      const done = normalizeHookPayload(
+        state,
+        'grok',
+        {
+          paneKey: PANE_KEY,
+          grokHome,
+          payload: { hookEventName: 'Stop', sessionId, cwd }
+        },
+        'production'
+      )
+
+      expect(done?.payload.lastAssistantMessage).toBe('fallback result')
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })
     }
@@ -1575,6 +1947,50 @@ describe('shared agent-hook-listener', () => {
         }
       })
     ).toBe(true)
+  })
+
+  it('enriches a long-cwd Grok result after async discovery completes', async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-grok-pending-home-'))
+    const hookGrokHome = join(tmpDir, 'hook-grok')
+    const sessionId = '019e37f4-5135-7b63-a4ab-6d13aa6bf531'
+    const cwd = `/${'long-workspace/'.repeat(30)}`
+    const sessionDir = join(hookGrokHome, 'sessions', 'workspace-slug', sessionId)
+    try {
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'chat_history.jsonl'),
+        `${JSON.stringify({ type: 'assistant', content: 'from slug session' })}\n`
+      )
+
+      const body = {
+        paneKey: PANE_KEY,
+        grokHome: hookGrokHome,
+        payload: { hookEventName: 'SessionEnd', sessionId, cwd }
+      }
+      const discovery = preparePendingGrokResultDiscovery('grok', body)
+      expect(discovery).not.toBeNull()
+      await discovery
+      await expect(
+        findGrokChatHistoryBySessionId(join(hookGrokHome, 'sessions'), sessionId)
+      ).resolves.toBe(join(sessionDir, 'chat_history.jsonl'))
+
+      const done = normalizeHookPayload(state, 'grok', body, 'production')
+      expect(done?.payload.lastAssistantMessage).toBe('from slug session')
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not schedule Grok discovery for an invalid session id', () => {
+    expect(
+      hasPendingAgentResultText('grok', {
+        payload: {
+          hookEventName: 'SessionEnd',
+          sessionId: '../escape',
+          cwd: '/tmp/workspace'
+        }
+      })
+    ).toBe(false)
   })
 
   it('normalizes Hermes pre_llm_call to a working turn with prompt text', () => {
@@ -1777,6 +2193,466 @@ describe('shared agent-hook-listener', () => {
     expect(done?.payload.state).toBe('done')
     expect(done?.payload.prompt).toBe('summarize')
     expect(done?.payload.lastAssistantMessage).toBe('Hermes is wired up.')
+  })
+
+  describe('claude subagent tracking', () => {
+    const claudeEvent = (
+      payload: Record<string, unknown>,
+      paneKey: string = PANE_KEY
+    ): ReturnType<typeof normalizeHookPayload> =>
+      normalizeHookPayload(state, 'claude', { paneKey, payload }, 'production')
+
+    it('keeps Stop as done when background_tasks is empty', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'ship it' })
+      const stop = claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
+      expect(stop?.payload.state).toBe('done')
+      expect(stop?.payload.subagents).toBeUndefined()
+    })
+
+    it('reports Stop as working while a background subagent is still running', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'review the PR' })
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a1',
+        agent_type: 'general-purpose'
+      })
+      const stop = claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [
+          {
+            id: 'a1',
+            type: 'subagent',
+            status: 'running',
+            description: 'Review loop',
+            agent_type: 'general-purpose'
+          }
+        ]
+      })
+      expect(stop?.payload.state).toBe('working')
+      expect(stop?.payload.subagents).toEqual([
+        {
+          id: 'a1',
+          state: 'working',
+          startedAt: expect.any(Number),
+          agentType: 'general-purpose',
+          description: 'Review loop'
+        }
+      ])
+
+      // Why: the child finishing wakes the lead; its final Stop reports an
+      // empty roster and the pane resolves to done with no child rows left.
+      claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
+      const finalStop = claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
+      expect(finalStop?.payload.state).toBe('done')
+      expect(finalStop?.payload.subagents).toBeUndefined()
+    })
+
+    it('emits a status refresh with the lead state on subagent lifecycle events', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'kick off reviewers' })
+      claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
+
+      const spawned = claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'r1',
+        agent_type: 'code-reviewer'
+      })
+      // Why: lead already stopped, but a live child means the pane is working.
+      expect(spawned?.payload.state).toBe('working')
+      expect(spawned?.payload.prompt).toBe('kick off reviewers')
+      expect(spawned?.payload.subagents).toEqual([
+        {
+          id: 'r1',
+          state: 'working',
+          startedAt: expect.any(Number),
+          agentType: 'code-reviewer',
+          description: undefined
+        }
+      ])
+
+      const stopped = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'r1' })
+      expect(stopped?.payload.state).toBe('done')
+      expect(stopped?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'r1', state: 'idle' })
+      ])
+    })
+
+    it('keeps gating on tracked children when background_tasks is absent (older Claude)', () => {
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a1',
+        agent_type: 'general-purpose'
+      })
+      const stop = claudeEvent({ hook_event_name: 'Stop' })
+      expect(stop?.payload.state).toBe('working')
+      expect(stop?.payload.subagents).toEqual([expect.objectContaining({ id: 'a1' })])
+    })
+
+    it('marks subagent-origin tool events as child activity without adopting them as lead state', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'go' })
+      claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
+
+      // Why: hook events from inside a subagent carry agent_id; they must keep
+      // the child row live but not overwrite what the lead was last doing.
+      const childTool = claudeEvent({
+        hook_event_name: 'PreToolUse',
+        agent_id: 'a9',
+        agent_type: 'general-purpose',
+        tool_name: 'Bash',
+        tool_input: { command: 'pnpm test' }
+      })
+      expect(childTool?.payload.state).toBe('working')
+      expect(childTool?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'a9', state: 'working' })
+      ])
+
+      const stopped = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a9' })
+      // Why: the lead's own last state was done, so with no working children
+      // the pane settles back to done rather than a phantom working spinner.
+      expect(stopped?.payload.state).toBe('done')
+    })
+
+    it('resolves teams-mode teammates to done despite background_tasks reporting running', () => {
+      // Why: this is the interactive agent-teams shape observed live —
+      // lifecycle events use `a<name>-<hex>` agent ids while background_tasks
+      // uses unrelated task ids and keeps idle-but-alive teammates as
+      // status "running". The unmatched task entry must neither create a
+      // duplicate child row nor keep the pane spinning forever.
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'spawn probe' })
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'aprobe1-6d3cb5b52120b7bf',
+        agent_type: 'probe1'
+      })
+      const spawnStop = claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [
+          {
+            id: 'tlkjjs0jv',
+            type: 'teammate',
+            status: 'running',
+            description: 'Run the shell command: sleep 25.'
+          }
+        ]
+      })
+      expect(spawnStop?.payload.state).toBe('working')
+      expect(spawnStop?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'aprobe1-6d3cb5b52120b7bf', state: 'working' })
+      ])
+
+      claudeEvent({
+        hook_event_name: 'SubagentStop',
+        agent_id: 'aprobe1-6d3cb5b52120b7bf',
+        agent_type: 'probe1'
+      })
+      const idled = claudeEvent({
+        hook_event_name: 'TeammateIdle',
+        teammate_name: 'probe1',
+        team_name: 'session-56c87269'
+      })
+      expect(idled?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'aprobe1-6d3cb5b52120b7bf', state: 'idle' })
+      ])
+
+      const wakeStop = claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [
+          {
+            id: 'tlkjjs0jv',
+            type: 'teammate',
+            status: 'running',
+            description: 'Run the shell command: sleep 25.'
+          }
+        ]
+      })
+      expect(wakeStop?.payload.state).toBe('done')
+      expect(wakeStop?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'aprobe1-6d3cb5b52120b7bf', state: 'idle' })
+      ])
+    })
+
+    it('scopes subagent rosters per pane', () => {
+      claudeEvent(
+        { hook_event_name: 'SubagentStart', agent_id: 'a1', agent_type: 'general-purpose' },
+        PANE_KEY
+      )
+      const otherPane = makePaneKey('tab-2', '22222222-2222-4222-8222-222222222222')
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'other' }, otherPane)
+      const otherStop = claudeEvent({ hook_event_name: 'Stop', background_tasks: [] }, otherPane)
+      expect(otherStop?.payload.state).toBe('done')
+      expect(otherStop?.payload.subagents).toBeUndefined()
+    })
+
+    it('clears roster state when the pane cache is cleared', () => {
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a1',
+        agent_type: 'general-purpose'
+      })
+      clearPaneCacheState(state, PANE_KEY)
+      const stop = claudeEvent({ hook_event_name: 'Stop' })
+      expect(stop?.payload.state).toBe('done')
+      expect(stop?.payload.subagents).toBeUndefined()
+    })
+
+    it('does not clear a live AskUserQuestion card on subagent lifecycle events', () => {
+      const question = claudeEvent({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'AskUserQuestion',
+        tool_input: { questions: [{ question: 'Pick', options: ['a', 'b'] }] }
+      })
+      expect(question?.payload.state).toBe('waiting')
+
+      const spawned = claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a1',
+        agent_type: 'general-purpose'
+      })
+      expect(spawned?.payload.state).toBe('waiting')
+      expect(spawned?.payload.interactivePrompt).toBe(question?.payload.interactivePrompt)
+
+      // Why: child-origin tool events must not overwrite the lead's cached
+      // question card or read as the lead's own working state either.
+      const childTool = claudeEvent({
+        hook_event_name: 'PreToolUse',
+        agent_id: 'a1',
+        agent_type: 'general-purpose',
+        tool_name: 'Bash',
+        tool_input: { command: 'sleep 5' }
+      })
+      expect(childTool?.payload.state).toBe('waiting')
+      expect(childTool?.payload.interactivePrompt).toBe(question?.payload.interactivePrompt)
+      expect(childTool?.payload.toolName).toBe('AskUserQuestion')
+    })
+
+    it('preserves the interrupted flag across a gated working window', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'long job' })
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a1',
+        agent_type: 'general-purpose'
+      })
+      const interruptedStop = claudeEvent({ hook_event_name: 'Stop', is_interrupt: true })
+      // Why: the child is still running, so the pane stays working and the
+      // parse layer clamps `interrupted` off this intermediate emit.
+      expect(interruptedStop?.payload.state).toBe('working')
+      expect(interruptedStop?.payload.interrupted).toBeUndefined()
+
+      const drained = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
+      expect(drained?.payload.state).toBe('done')
+      // Why: the user's cancellation must survive to the terminal done so the
+      // row reads "Interrupted by user" instead of a normal completion.
+      expect(drained?.payload.interrupted).toBe(true)
+    })
+
+    it('releases a child-owned wait when the blocked child stops without another tool event', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'guarded task' })
+      const blocked = claudeEvent({
+        hook_event_name: 'PermissionRequest',
+        agent_id: 'a-blocked',
+        agent_type: 'general-purpose',
+        tool_name: 'Bash',
+        tool_input: { command: 'rm -rf build' }
+      })
+      expect(blocked?.payload.state).toBe('waiting')
+
+      // Why: the blocked child dying (killed, errored) must not pin the
+      // permission wait on the pane forever.
+      const stopped = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a-blocked' })
+      expect(stopped?.payload.state).toBe('working')
+    })
+
+    it('restores a finished lead to done after a child permission wait clears', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'bg task' })
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a1',
+        agent_type: 'general-purpose'
+      })
+      claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [{ id: 'a1', type: 'subagent', status: 'running' }]
+      })
+
+      const blocked = claudeEvent({
+        hook_event_name: 'PermissionRequest',
+        agent_id: 'a1',
+        tool_name: 'Bash',
+        tool_input: { command: 'rm -rf build' }
+      })
+      expect(blocked?.payload.state).toBe('waiting')
+
+      const approved = claudeEvent({
+        hook_event_name: 'PreToolUse',
+        agent_id: 'a1',
+        tool_name: 'Bash',
+        tool_input: { command: 'rm -rf build' }
+      })
+      expect(approved?.payload.state).toBe('working')
+
+      // Why: the lead already stopped before the wait; draining the child
+      // must resolve to done, not pin the pane on an invented 'working'.
+      const drained = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
+      expect(drained?.payload.state).toBe('done')
+    })
+
+    it('resolves to done when a blocked child dies after the lead finished', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'bg task' })
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a1',
+        agent_type: 'general-purpose'
+      })
+      claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [{ id: 'a1', type: 'subagent', status: 'running' }]
+      })
+      claudeEvent({
+        hook_event_name: 'PermissionRequest',
+        agent_id: 'a1',
+        tool_name: 'Bash',
+        tool_input: { command: 'sleep 999' }
+      })
+
+      const stopped = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
+      expect(stopped?.payload.state).toBe('done')
+    })
+
+    it('demotes a snapshot-seeded child missing from a present background_tasks list', () => {
+      seedClaudeSubagentRosterFromSnapshots(state, PANE_KEY, [
+        { id: 'a77', state: 'working', startedAt: 1000, agentType: 'general-purpose' }
+      ])
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'after restart' })
+      // Why: teams sessions never send an EMPTY list — the alive teammate
+      // entry must not keep a phantom pre-restart child gating the pane.
+      const stop = claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [
+          { id: 'tlkjjs0jv', type: 'teammate', status: 'running', description: 'alive' }
+        ]
+      })
+      expect(stop?.payload.state).toBe('done')
+      expect(stop?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'a77', state: 'idle' })
+      ])
+    })
+
+    it('keeps a snapshot-seeded child working while background_tasks still lists it', () => {
+      seedClaudeSubagentRosterFromSnapshots(state, PANE_KEY, [
+        { id: 'a77', state: 'working', startedAt: 1000, agentType: 'general-purpose' }
+      ])
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'after restart' })
+      const stop = claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [{ id: 'a77', type: 'subagent', status: 'running' }]
+      })
+      expect(stop?.payload.state).toBe('working')
+      expect(stop?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'a77', state: 'working' })
+      ])
+    })
+
+    it('does not adopt a known child turn-boundary event as the lead state', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'go' })
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a1',
+        agent_type: 'general-purpose'
+      })
+      // Why: a CLI that stops converting child Stops to SubagentStop must not
+      // retire the pane while the lead still works.
+      const childStop = claudeEvent({ hook_event_name: 'Stop', agent_id: 'a1' })
+      expect(childStop?.payload.state).toBe('working')
+      expect(childStop?.payload.prompt).toBe('go')
+
+      const leadStop = claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
+      expect(leadStop?.payload.state).toBe('done')
+    })
+
+    it('scopes TeammateIdle to the exact teammate name for hyphen-prefix names', () => {
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'alane-hooks-6d3cb5b5',
+        agent_type: 'lane-hooks'
+      })
+      // Why: teammate "lane" must not idle "lane-hooks"'s rows via the
+      // `a<name>-` prefix — the id suffix after the name is hyphen-free hex.
+      const idledOther = claudeEvent({
+        hook_event_name: 'TeammateIdle',
+        teammate_name: 'lane',
+        team_name: 'session-x'
+      })
+      expect(idledOther?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'alane-hooks-6d3cb5b5', state: 'working' })
+      ])
+
+      const idled = claudeEvent({
+        hook_event_name: 'TeammateIdle',
+        teammate_name: 'lane-hooks',
+        team_name: 'session-x'
+      })
+      expect(idled?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'alane-hooks-6d3cb5b5', state: 'idle' })
+      ])
+    })
+
+    it('keeps an inferred interrupt terminal across later child lifecycle events', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'cancel me' })
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'aprobe-1',
+        agent_type: 'probe'
+      })
+      claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'aprobe-1' })
+      markClaudeLeadTurnInterrupted(state, PANE_KEY)
+
+      const idled = claudeEvent({
+        hook_event_name: 'TeammateIdle',
+        teammate_name: 'probe',
+        team_name: 'session-x'
+      })
+      expect(idled?.payload.state).toBe('done')
+      expect(idled?.payload.interrupted).toBe(true)
+    })
+
+    it('seeds the roster from persisted snapshots so a teammate-bearing Stop keeps child rows', () => {
+      seedClaudeSubagentRosterFromSnapshots(state, PANE_KEY, [
+        { id: 'aprobe2-abc', state: 'idle', startedAt: 1000, agentType: 'probe2' }
+      ])
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'after restart' })
+      const stop = claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [
+          { id: 'tlkjjs0jv', type: 'teammate', status: 'running', description: 'alive teammate' }
+        ]
+      })
+      expect(stop?.payload.state).toBe('done')
+      expect(stop?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'aprobe2-abc', state: 'idle' })
+      ])
+    })
+
+    it('rebuilds a running one-shot subagent from background_tasks after restart', () => {
+      // Why: fresh listener state (post-restart) has no roster; a Stop that
+      // reports a running non-teammate task must resurrect the child row and
+      // keep the pane working rather than declaring done.
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'resume' })
+      const stop = claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [
+          {
+            id: 'a77',
+            type: 'subagent',
+            status: 'running',
+            description: 'long build',
+            agent_type: 'general-purpose'
+          }
+        ]
+      })
+      expect(stop?.payload.state).toBe('working')
+      expect(stop?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'a77', state: 'working', description: 'long build' })
+      ])
+    })
   })
 
   describe('writeEndpointFile', () => {

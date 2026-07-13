@@ -1,7 +1,3 @@
-/* eslint-disable max-lines --
- * Why: agent title detection is intentionally table-driven in one place so the
- * supported title variants stay readable and regressions are easy to compare.
- */
 import { describe, expect, it, test, vi } from 'vitest'
 import {
   detectAgentStatusFromTitle,
@@ -394,9 +390,58 @@ describe('normalizeTerminalTitle', () => {
     expect(normalizeTerminalTitle('bash')).toBe('bash')
   })
 
+  it('collapses Grok rotating working titles to one stable label', () => {
+    // Grok interpolates a rotating status/tool phrase between the spinner and its
+    // name, so each frame is a distinct title; they must all fold to one label.
+    expect(normalizeTerminalTitle('⠋ - Waiting for response… - grok')).toBe('⠋ Grok')
+    expect(normalizeTerminalTitle('⠴ - Thinking - grok')).toBe('⠋ Grok')
+    expect(normalizeTerminalTitle('⠙ - Responding - grok')).toBe('⠋ Grok')
+    expect(normalizeTerminalTitle('⠦ - Sleep 2s then echo hello-from-grok… - grok')).toBe('⠋ Grok')
+    expect(
+      normalizeTerminalTitle('⠹ - Waiting for response… - Execute Shell Command sleep 2 - grok')
+    ).toBe('⠋ Grok')
+    // Idempotent: re-normalizing our own collapsed label stays stable.
+    expect(normalizeTerminalTitle('⠋ Grok')).toBe('⠋ Grok')
+  })
+
+  it('leaves Grok idle and session titles unchanged', () => {
+    // No spinner → not a working frame; the meaningful final title still shows.
+    expect(normalizeTerminalTitle('grok')).toBe('grok')
+    expect(normalizeTerminalTitle('Fix the auth bug - grok')).toBe('Fix the auth bug - grok')
+    // Names "grok" mid-title but ends with another agent → not a Grok frame.
+    expect(normalizeTerminalTitle('⠋ debugging grok - claude')).toBe('⠋ debugging grok - claude')
+    // Claude/Codex task text ending in "grok" must not collapse — only the
+    // Grok frame shape "spinner - phrase - grok" is the rotating-frame signal.
+    expect(normalizeTerminalTitle('⠋ wire up grok')).toBe('⠋ wire up grok')
+    expect(normalizeTerminalTitle('⠋ Codex is thinking about grok')).toBe(
+      '⠋ Codex is thinking about grok'
+    )
+    expect(normalizeTerminalTitle('⠋ support for Grok')).toBe('⠋ support for Grok')
+    // Trailing " - grok" alone is not enough without the post-spinner delimiter.
+    expect(normalizeTerminalTitle('⠋ fix the flaky suite - grok')).toBe(
+      '⠋ fix the flaky suite - grok'
+    )
+  })
+
   it('collapses Pi spinner and idle titles to stable labels', () => {
     expect(normalizeTerminalTitle('⠋ π - my-project')).toBe('⠋ Pi')
     expect(normalizeTerminalTitle('π - my-project')).toBe('Pi')
+    expect(normalizeTerminalTitle('⠋ π: my-project')).toBe('⠋ Pi')
+    expect(normalizeTerminalTitle('π: my-project')).toBe('Pi')
+    expect(normalizeTerminalTitle('π -')).toBe('Pi')
+    expect(normalizeTerminalTitle('π:')).toBe('Pi')
+    expect(normalizeTerminalTitle('π ')).toBe('Pi')
+  })
+
+  it('does not collapse Pi-compatible titles whose cwd mentions Gemini', () => {
+    expect(normalizeTerminalTitle('⠋ π - gemini')).toBe('⠋ Pi')
+    expect(normalizeTerminalTitle('π - gemini')).toBe('Pi')
+    expect(normalizeTerminalTitle('⠋ π: gemini')).toBe('⠋ Pi')
+    expect(normalizeTerminalTitle('π: gemini')).toBe('Pi')
+    expect(normalizeTerminalTitle('⠋ π gemini')).toBe('⠋ Pi')
+    expect(normalizeTerminalTitle('π gemini')).toBe('Pi')
+    expect(normalizeTerminalTitle('⠋ π - gemini-project')).toBe('⠋ Pi')
+    expect(normalizeTerminalTitle('π - gemini-project')).toBe('Pi')
   })
 })
 
@@ -409,6 +454,17 @@ describe('isGeminiTerminalTitle', () => {
 
   it('does not match other terminal titles', () => {
     expect(isGeminiTerminalTitle('⠂ Claude Code')).toBe(false)
+    expect(isGeminiTerminalTitle('⠋ π - gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('π - gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('⠋ π: gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('π: gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('⠋ π gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('π gemini')).toBe(false)
+    expect(isGeminiTerminalTitle('π -')).toBe(false)
+    expect(isGeminiTerminalTitle('π:')).toBe(false)
+    expect(isGeminiTerminalTitle('π ')).toBe(false)
+    expect(isGeminiTerminalTitle('⠋ π - gemini-project')).toBe(false)
+    expect(isGeminiTerminalTitle('/tmp/gemini/working')).toBe(false)
     expect(isGeminiTerminalTitle('bash')).toBe(false)
   })
 })
@@ -477,6 +533,19 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('Aider idle')).toBe('Aider')
     expect(getAgentLabel('Devin working')).toBe('Devin')
   })
+
+  // Why: `cursor` is ordinary editor vocabulary in another agent's task title, so a
+  // bare token is not Cursor identity — a Claude tab working on cursor code was being
+  // mislabeled Cursor on the worktree card. Match Cursor's closed title set only.
+  it('labels Cursor by identity, not a bare "cursor" token in another agent title', () => {
+    expect(getAgentLabel('Cursor Agent')).toBe('Cursor')
+    expect(getAgentLabel('⠋ Cursor Agent')).toBe('Cursor')
+    expect(getAgentLabel('Cursor ready')).toBe('Cursor')
+    expect(getAgentLabel('Cursor - action required')).toBe('Cursor')
+    expect(getAgentLabel('⠋ preserve cursor visibility across replays')).toBe('Claude Code')
+    expect(getAgentLabel('⠋ Codex: fix cursor offsets')).toBe('Codex')
+    expect(getAgentLabel('Terminal Cursor and Orca slows down')).toBeNull()
+  })
 })
 
 describe('isClaudeAgent', () => {
@@ -484,6 +553,13 @@ describe('isClaudeAgent', () => {
     expect(isClaudeAgent('⠋ Claude Code')).toBe(true)
     expect(isClaudeAgent('⠋ OpenClaude')).toBe(false)
     expect(isClaudeAgent('OpenClaude ready')).toBe(false)
+  })
+
+  // Why: a braille Claude title merely mentioning a text cursor is still Claude, so its
+  // prompt-cache paths must fire; only Cursor's own identity titles are excluded.
+  it('counts cursor-mentioning Claude braille titles as Claude, excludes real Cursor', () => {
+    expect(isClaudeAgent('⠋ preserve cursor visibility across replays')).toBe(true)
+    expect(isClaudeAgent('⠋ Cursor Agent')).toBe(false)
   })
 
   it('does not classify non-prefix Claude mentions as Claude agent titles', () => {

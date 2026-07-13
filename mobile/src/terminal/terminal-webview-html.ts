@@ -7,7 +7,10 @@ import { TERMINAL_PATH_TAP_JS } from './terminal-path-tap-injected'
 import { XTERM_ENGINE_CSS, XTERM_ENGINE_JS } from './terminal-webview-engine.generated'
 import { TERMINAL_REFLOW_JS } from './terminal-webview-reflow-injected'
 import { TERMINAL_TAP_DISPATCH_JS } from './terminal-webview-tap-dispatch-injected'
+import { TERMINAL_WEBVIEW_THEME_JS } from './terminal-webview-theme-injected'
+import { TERMINAL_QUERY_REPLY_JS } from './terminal-webview-query-reply-injected'
 import { URL_TAP_WEBVIEW_JS } from './terminal-webview-url-tap'
+import { TERMINAL_WEBGL_RECOVERY_JS } from './terminal-webview-webgl-recovery-injected'
 
 const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
   background: colors.terminalBg,
@@ -213,7 +216,7 @@ window.onerror = function(msg) {
   var CLAUDE_STATUS_DOT_PATTERN = new RegExp(CLAUDE_STATUS_DOT + '[' + TEXT_PRESENTATION_SELECTOR + EMOJI_PRESENTATION_SELECTOR + ']*', 'g');
   var statusDotPendingSelector = false;
   var PRIVATE_MODE_SCAN_TAIL_LIMIT = 4096;
-  var term = null;
+  var term = null; ${TERMINAL_QUERY_REPLY_JS}
   var scrollIndicator = document.getElementById('scroll-indicator');
   var scrollThumb = document.getElementById('scroll-thumb');
   var scrollIndicatorHideTimer = null;
@@ -253,6 +256,14 @@ window.onerror = function(msg) {
   function fontPxForScale(scale) {
     return Math.max(MIN_FONT_PX, Math.round(BASE_FONT_PX * scale));
   }
+  function isIOSWebView() {
+    if (/iP(ad|hone|od)/.test(navigator.userAgent)) return true;
+    return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  }
+  // Why: iOS WebKit does not reliably resolve "SF Mono" by CSS family name and can
+  // fall to a non-monospace face; lead with the ui-monospace generic to avoid that.
+  var TERMINAL_FONT_FALLBACKS = '"Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", monospace';
+  var terminalFontFamily = (isIOSWebView() ? 'ui-monospace, ' : '"SF Mono", ') + TERMINAL_FONT_FALLBACKS;
   // Why: change the real font size, then resize the grid to fit the viewport at
   // the new cell metrics so the text shows at its true size immediately. RN's
   // refit (measure → updateViewport) then makes the server reflow the PTY to the
@@ -284,7 +295,10 @@ window.onerror = function(msg) {
   var initRows = 24;
   var terminalGeneration = 0;
   var defaultTheme = ${JSON.stringify(DEFAULT_TERMINAL_THEME)};
+  var terminalThemeInput = null;
   var terminalTheme = defaultTheme;
+  var webglAddon = null;
+  var webglRecoveryTimer = null;
   var activeAltScreenSnapshot = false;
   var trackedMouseTrackingMode = 'none';
   var sgrMouseMode = false;
@@ -372,27 +386,7 @@ window.onerror = function(msg) {
     }, 550);
   }
 
-  function normalizeTerminalTheme(input) {
-    var source = input && typeof input === 'object' && input.theme && typeof input.theme === 'object'
-      ? input.theme
-      : null;
-    if (!source) return defaultTheme;
-    var next = {};
-    var keys = Object.keys(defaultTheme);
-    for (var i = 0; i < keys.length; i++) {
-      var key = keys[i];
-      if (typeof source[key] === 'string') next[key] = source[key];
-    }
-    return Object.assign({}, defaultTheme, next);
-  }
-
-  function applyTerminalTheme(input) {
-    terminalTheme = normalizeTerminalTheme(input);
-    var background = terminalTheme.background || '${colors.terminalBg}';
-    document.documentElement.style.background = background;
-    document.body.style.background = background;
-    if (term) term.options.theme = terminalTheme;
-  }
+${TERMINAL_WEBVIEW_THEME_JS}
 
   function getCellHeight() {
     if (!term || !term._core) return 15;
@@ -606,6 +600,10 @@ window.onerror = function(msg) {
     writeQueue.push(normalizeStatusDotPresentation(data));
   }
 
+  function enqueueWriteBoundary(callback) {
+    writeQueue.push(callback);
+  }
+
   function nextQueuedWrite() {
     if (writeQueueHead >= writeQueue.length) {
       resetWriteQueue();
@@ -651,6 +649,7 @@ window.onerror = function(msg) {
     if (!ready || !term || writesDraining || gen !== terminalGeneration) return;
     var next = nextQueuedWrite();
     if (typeof next !== 'string') {
+      if (typeof next === 'function') return next(), pumpWrites(gen);
       var callbacks = afterDrainCallbacks;
       afterDrainCallbacks = [];
       for (var i = 0; i < callbacks.length; i++) callbacks[i]();
@@ -671,6 +670,8 @@ window.onerror = function(msg) {
     pumpWrites(terminalGeneration);
   }
 
+${TERMINAL_WEBGL_RECOVERY_JS}
+
   function init(cols, rows, initialData, nextTheme, nextFontScale, preserveScroll, nextOscLinks) {
     if (typeof nextFontScale === 'number' && nextFontScale > 0) currentTextScale = nextFontScale;
     // Why: a width-reflow re-stream rewraps the same content at new cols.
@@ -680,6 +681,11 @@ window.onerror = function(msg) {
     var scrollAnchorRows = prevB ? Math.max(0, (prevB.baseY || 0) - (prevB.viewportY || 0)) : -1;
     terminalGeneration++;
     var gen = terminalGeneration;
+    // Why: snapshot replay can contain old queries whose replies must never
+    // re-enter the live PTY. Each replacement terminal earns authority anew.
+    resetTerminalDataReplyAuthority();
+    cancelWebglContextRecovery();
+    webglAddon = null;
     ready = false;
     resetWriteQueue();
     statusDotPendingSelector = false;
@@ -729,12 +735,14 @@ window.onerror = function(msg) {
       cols: cols || 80,
       rows: rows || 24,
       theme: terminalTheme,
-      fontFamily: '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", monospace',
+      fontFamily: terminalFontFamily,
       fontSize: fontPxForScale(currentTextScale),
       fontWeight: '300',
       fontWeightBold: '500',
       scrollback: 5000,
-      disableStdin: true,
+      // Why: xterm suppresses parser-generated query replies when disableStdin
+      // is true. Native accepts only validated reply grammars from onData.
+      disableStdin: false,
       cursorBlink: false,
       cursorStyle: 'bar',
       cursorInactiveStyle: 'none',
@@ -742,9 +750,7 @@ window.onerror = function(msg) {
       allowProposedApi: true
     });
     term.open(surface);
-    if (window.WebglAddon && window.WebglAddon.WebglAddon) {
-      try { var webglAddon = new window.WebglAddon.WebglAddon(); term.loadAddon(webglAddon); if (webglAddon.onContextLoss) webglAddon.onContextLoss(function() { try { webglAddon && webglAddon.dispose && webglAddon.dispose(); } catch (e) {} }); } catch (e) {}
-    }
+    attachWebglAddon(true);
     if (window.Unicode11Addon && window.Unicode11Addon.Unicode11Addon) try { term.loadAddon(new window.Unicode11Addon.Unicode11Addon()); term.unicode.activeVersion = '11'; } catch (e) {}
     if (typeof replayData === 'string' && replayData.length > 0) {
       enqueueWrite(replayData);
@@ -754,6 +760,7 @@ window.onerror = function(msg) {
     resetEvictionCounter();
     cancelSelect();
     attachTermObservers();
+    attachTerminalQueryReplyBridge(term, gen);
 
     requestAnimationFrame(function() {
       if (gen !== terminalGeneration) return;
@@ -928,7 +935,9 @@ window.onerror = function(msg) {
       handledMessageIds.push(msg.id);
       if (handledMessageIds.length > 256) handledMessageIds.shift();
     }
-    if (msg.type === 'init') {
+    if (msg.type === 'ping') {
+      notify({ type: 'pong', pingId: msg.id });
+    } else if (msg.type === 'init') {
       init(msg.cols, msg.rows, msg.initialData, msg.terminalTheme, msg.fontScale, msg.preserveScroll, msg.oscLinks);
     } else if (msg.type === 'set-font-scale') {
       // Why: ignore RN echoing back the value a pinch just set (msg.fontScale ===
@@ -946,7 +955,7 @@ window.onerror = function(msg) {
       write(msg.data);
     } else if (msg.type === 'clear') {
       terminalGeneration++;
-      resetWriteQueue();
+      resetWriteQueue(); resumeTerminalDataReplyAuthority(); // Why: clear drops the replay boundary.
       statusDotPendingSelector = false;
       afterDrainCallbacks = [];
       writesDraining = false;

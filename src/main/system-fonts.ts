@@ -3,6 +3,9 @@ import { execFile } from 'node:child_process'
 let cachedFonts: string[] | null = null
 let fontsPromise: Promise<string[]> | null = null
 const SYSTEM_FONT_LIST_TIMEOUT_MS = 15_000
+// Why: large macOS font catalogs can make system_profiler exceed 15s even
+// when it is healthy; keep the longer wait scoped to that slow command.
+const MAC_SYSTEM_FONT_LIST_TIMEOUT_MS = 45_000
 
 export async function listSystemFontFamilies(): Promise<string[]> {
   if (cachedFonts) {
@@ -43,23 +46,26 @@ function loadSystemFontFamilies(): Promise<string[]> {
 }
 
 function listMacFonts(): Promise<string[]> {
-  return execFileText('system_profiler', ['SPFontsDataType', '-json'], 32 * 1024 * 1024).then(
-    (output) => {
-      const parsed = JSON.parse(output) as {
-        SPFontsDataType?: {
-          typefaces?: {
-            family?: string
-          }[]
+  return execFileText(
+    'system_profiler',
+    ['SPFontsDataType', '-json'],
+    32 * 1024 * 1024,
+    MAC_SYSTEM_FONT_LIST_TIMEOUT_MS
+  ).then((output) => {
+    const parsed = JSON.parse(output) as {
+      SPFontsDataType?: {
+        typefaces?: {
+          family?: string
         }[]
-      }
-
-      return uniqueSorted(
-        (parsed.SPFontsDataType ?? []).flatMap((font) =>
-          (font.typefaces ?? []).map((typeface) => typeface.family)
-        )
-      )
+      }[]
     }
-  )
+
+    return uniqueSorted(
+      (parsed.SPFontsDataType ?? []).flatMap((font) =>
+        (font.typefaces ?? []).map((typeface) => typeface.family)
+      )
+    )
+  })
 }
 
 function listLinuxFonts(): Promise<string[]> {
@@ -95,7 +101,12 @@ $fonts.Families | ForEach-Object { $_.Name }
   )
 }
 
-function execFileText(command: string, args: string[], maxBuffer: number): Promise<string> {
+function execFileText(
+  command: string,
+  args: string[],
+  maxBuffer: number,
+  timeoutMs = SYSTEM_FONT_LIST_TIMEOUT_MS
+): Promise<string> {
   return new Promise((resolve, reject) => {
     let settled = false
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -123,7 +134,7 @@ function execFileText(command: string, args: string[], maxBuffer: number): Promi
         // should fall back instead of keeping settings IPC pending forever.
         child.kill()
         reject(new Error(`Timed out listing system fonts with ${command}`))
-      }, SYSTEM_FONT_LIST_TIMEOUT_MS)
+      }, timeoutMs)
       if (typeof timer === 'object' && 'unref' in timer) {
         timer.unref()
       }

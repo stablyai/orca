@@ -12,32 +12,41 @@ export type RepositoryGitHubAvatarResolution = {
   upstream: GitHubRepositoryIdentity | null
 }
 
-export async function resolveRepositoryUpstreamLive(
+function resolveRepositoryIdentityLive(
   runtimeTarget: RuntimeTarget,
-  repo: Repo
+  repo: Repo,
+  method: 'github.repoUpstream' | 'github.repoSlug',
+  localCall: (args: {
+    repoPath: string
+    repoId: string
+  }) => Promise<GitHubRepositoryIdentity | null>
 ): Promise<GitHubRepositoryIdentity | null> {
   return runtimeTarget.kind === 'environment'
-    ? await callRuntimeRpc<GitHubRepositoryIdentity | null>(
+    ? callRuntimeRpc<GitHubRepositoryIdentity | null>(
         runtimeTarget,
-        'github.repoUpstream',
+        method,
         { repo: repo.id },
         { timeoutMs: 30_000 }
       )
-    : await window.api.gh.repoUpstream({ repoPath: repo.path, repoId: repo.id })
+    : localCall({ repoPath: repo.path, repoId: repo.id })
 }
 
-async function resolveRepositorySlugLive(
+export function resolveRepositoryUpstreamLive(
   runtimeTarget: RuntimeTarget,
   repo: Repo
 ): Promise<GitHubRepositoryIdentity | null> {
-  return runtimeTarget.kind === 'environment'
-    ? await callRuntimeRpc<GitHubRepositoryIdentity | null>(
-        runtimeTarget,
-        'github.repoSlug',
-        { repo: repo.id },
-        { timeoutMs: 30_000 }
-      )
-    : await window.api.gh.repoSlug({ repoPath: repo.path, repoId: repo.id })
+  return resolveRepositoryIdentityLive(runtimeTarget, repo, 'github.repoUpstream', (args) =>
+    window.api.gh.repoUpstream(args)
+  )
+}
+
+function resolveRepositorySlugLive(
+  runtimeTarget: RuntimeTarget,
+  repo: Repo
+): Promise<GitHubRepositoryIdentity | null> {
+  return resolveRepositoryIdentityLive(runtimeTarget, repo, 'github.repoSlug', (args) =>
+    window.api.gh.repoSlug(args)
+  )
 }
 
 export async function resolveRepositoryGitHubAvatar(
@@ -52,9 +61,8 @@ export async function resolveRepositoryGitHubAvatar(
   if (upstream) {
     return { repoIcon: githubAvatarIcon(upstream), upstream }
   }
-  // Why: a null live upstream is ambiguous (offline/unauthed vs genuinely not a
-  // fork). Don't downgrade a known fork identity to the origin slug — keep the
-  // last-known parent avatar so a transient failure can't clobber fork identity.
+  // Why: a null live upstream is ambiguous (offline/unauthed vs. not-a-fork). Keep
+  // the last-known parent avatar so a transient failure can't clobber fork identity.
   if (repo.upstream) {
     return { repoIcon: githubAvatarIcon(repo.upstream), upstream: repo.upstream }
   }

@@ -566,6 +566,13 @@
   margin: 0.75em 0;
 }
 
+/* Why: document markdown files treat source newlines inside a paragraph as
+   soft breaks, so prose must collapse them instead of inheriting Tiptap's
+   editable-root `break-spaces` behavior. */
+.rich-markdown-editor-shell .rich-markdown-editor p {
+  white-space: normal;
+}
+
 .rich-markdown-editor .tiptap-mathematics-render {
   border-radius: 4px;
 }
@@ -1019,6 +1026,27 @@
   color: #58a6ff;
 }
 
+.rich-markdown-editor sup[data-rich-markdown-html-superscript-link] {
+  line-height: 0;
+}
+
+.rich-markdown-editor .rich-markdown-html-superscript-link {
+  color: #0969da;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  text-underline-offset: 2px;
+}
+
+.dark .rich-markdown-editor .rich-markdown-html-superscript-link {
+  color: #58a6ff;
+}
+
+.rich-markdown-mod-held
+  .rich-markdown-editor
+  .rich-markdown-html-superscript-link[data-actionable] {
+  cursor: pointer;
+}
+
 .rich-markdown-editor img {
   max-width: 100%;
   border-radius: 8px;
@@ -1374,8 +1402,9 @@
 /* ── Link Bubble ──────────────────────────────────────── */
 
 .rich-markdown-link-bubble {
-  position: absolute;
-  z-index: 30;
+  position: fixed;
+  z-index: 60;
+  -webkit-app-region: no-drag;
   display: flex;
   align-items: center;
   gap: 2px;

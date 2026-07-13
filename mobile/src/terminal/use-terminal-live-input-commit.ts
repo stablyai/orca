@@ -1,10 +1,6 @@
 import { useCallback, useEffect, type RefObject } from 'react'
 import type { TextInput } from 'react-native'
-import {
-  getTerminalLiveSpecialKeyDecision,
-  getTerminalLiveSubmitSequence,
-  getTerminalLiveTextChangeDecision
-} from './terminal-live-text-commit'
+import { getTerminalLiveSpecialKeyDecision } from './terminal-live-text-commit'
 import { sendTerminalLiveControlAfterPendingFlush } from './terminal-live-control-send-order'
 import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
@@ -56,11 +52,12 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
   setLiveInputCapture
 }: TerminalLiveInputCommitOptions<TTabType>): TerminalLiveInputCommitHandlers {
   const {
+    applyLiveInputMirror,
     clearPendingLiveInputCommit,
     flushPendingLiveInputText,
+    heldLiveInputTextRef,
     pendingLiveInputHandleRef,
-    pendingLiveInputTextRef,
-    schedulePendingLiveInputCommit,
+    sentLiveInputTextRef,
     waitForPendingLiveInputFlush
   } = useTerminalLivePendingInputFlush({
     activeHandleRef,
@@ -76,10 +73,13 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     if (!pendingHandle) {
       return
     }
+    // Why: a lagging mobile tab list briefly yields no active tab object; a
+    // null/undefined type is "unknown", not "left the terminal" — flush guards
+    // still block sends if the tab truly changed.
     if (
       !activeHandle ||
       pendingHandle !== activeHandle ||
-      activeSessionTabType !== 'terminal' ||
+      (activeSessionTabType != null && activeSessionTabType !== 'terminal') ||
       !liveInputTerminalHandles.has(activeHandle)
     ) {
       clearPendingLiveInputCommit()
@@ -93,7 +93,9 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
         clearPendingLiveInputCommit()
         return waitForPendingLiveInputFlush()
       }
-      if (pendingHandle === handle && pendingLiveInputTextRef.current.length > 0) {
+      // Why: external bytes (dictation/paste) land after the field's echo on the
+      // PTY; the field session must fully end or later diffs would erase them.
+      if (pendingHandle === handle) {
         return flushPendingLiveInputText(handle)
       }
       return waitForPendingLiveInputFlush()
@@ -107,36 +109,18 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
         clearPendingLiveInputCommit()
         return
       }
-      const normalizedText = normalizeTerminalTextInput(text)
-      const decision = getTerminalLiveTextChangeDecision(normalizedText)
-      switch (decision.kind) {
-        case 'ignore':
-          clearPendingLiveInputCommit()
-          return
-        case 'send-now':
-          clearPendingLiveInputCommit()
-          void sendTerminalLiveControlAfterPendingFlush(waitForPendingLiveInputFlush, () =>
-            sendLiveTerminalInputRef.current(activeHandle, decision.text)
-          )
-          return
-        case 'defer':
-          // Why: React Native does not expose composition events here, so keep
-          // probable IME text in the native field until the commit timer settles.
-          setLiveInputCapture(decision.text)
-          schedulePendingLiveInputCommit(activeHandle, decision.text, decision.delayMs)
-          return
-        default:
-          decision satisfies never
-      }
+      // Why: iOS kills an active dictation/IME session when JS writes a value
+      // that differs from the native field text, so the controlled capture must
+      // echo the field verbatim; only the PTY mirror sees normalized text.
+      setLiveInputCapture(text)
+      applyLiveInputMirror(activeHandle, normalizeTerminalTextInput(text))
     },
     [
       activeHandle,
+      applyLiveInputMirror,
       clearPendingLiveInputCommit,
       liveInputTerminalHandles,
-      schedulePendingLiveInputCommit,
-      sendLiveTerminalInputRef,
-      setLiveInputCapture,
-      waitForPendingLiveInputFlush
+      setLiveInputCapture
     ]
   )
 
@@ -145,26 +129,25 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       if (!activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
         return
       }
-      const pendingText =
-        pendingLiveInputHandleRef.current === activeHandle ? pendingLiveInputTextRef.current : ''
-      if (pendingLiveInputHandleRef.current && pendingLiveInputHandleRef.current !== activeHandle) {
+      const ownsPendingState = pendingLiveInputHandleRef.current === activeHandle
+      if (pendingLiveInputHandleRef.current && !ownsPendingState) {
         clearPendingLiveInputCommit()
       }
       const decision = getTerminalLiveSpecialKeyDecision({
         key: event.nativeEvent.key,
-        pendingText
+        heldText: ownsPendingState ? heldLiveInputTextRef.current : '',
+        sentText: ownsPendingState ? sentLiveInputTextRef.current : ''
       })
       switch (decision.kind) {
         case 'ignore':
         case 'local-edit':
           return
         case 'send-now':
-          clearPendingLiveInputCommit()
           void sendTerminalLiveControlAfterPendingFlush(waitForPendingLiveInputFlush, () =>
             sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
           )
           return
-        case 'flush-then-send':
+        case 'commit-held-then-send':
           void sendTerminalLiveControlAfterPendingFlush(
             () => flushPendingLiveInputText(activeHandle),
             () => sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
@@ -186,13 +169,14 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
 
   const handleLiveInputAccessoryBytes = useTerminalLiveAccessoryInputCommit({
     activeHandle,
+    applyLiveInputMirror,
     clearPendingLiveInputCommit,
     flushPendingLiveInputText,
+    heldLiveInputTextRef,
     liveInputRef,
     liveInputTerminalHandles,
     pendingLiveInputHandleRef,
-    pendingLiveInputTextRef,
-    schedulePendingLiveInputCommit,
+    sentLiveInputTextRef,
     sendLiveTerminalInputRef,
     setLiveInputCapture,
     waitForPendingLiveInputFlush
@@ -202,28 +186,11 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     if (!activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
       return
     }
-    const pendingText =
-      pendingLiveInputHandleRef.current === activeHandle ? pendingLiveInputTextRef.current : ''
-    const sequence = getTerminalLiveSubmitSequence(pendingText)
-    if (sequence.length === 2) {
-      void sendTerminalLiveControlAfterPendingFlush(
-        () => flushPendingLiveInputText(activeHandle),
-        () => sendLiveTerminalInputRef.current(activeHandle, sequence[1])
-      )
-      return
-    }
-    clearPendingLiveInputCommit()
-    void sendTerminalLiveControlAfterPendingFlush(waitForPendingLiveInputFlush, () =>
-      sendLiveTerminalInputRef.current(activeHandle, sequence[0])
+    void sendTerminalLiveControlAfterPendingFlush(
+      () => flushPendingLiveInputText(activeHandle),
+      () => sendLiveTerminalInputRef.current(activeHandle, '\r')
     )
-  }, [
-    activeHandle,
-    clearPendingLiveInputCommit,
-    flushPendingLiveInputText,
-    liveInputTerminalHandles,
-    sendLiveTerminalInputRef,
-    waitForPendingLiveInputFlush
-  ])
+  }, [activeHandle, flushPendingLiveInputText, liveInputTerminalHandles, sendLiveTerminalInputRef])
 
   return {
     clearPendingLiveInputCommit,

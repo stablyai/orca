@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
 import {
   canResumeAiVaultSessionOnTarget,
+  getAiVaultResumeWorkspaceExecutionHostId,
   getAiVaultResumeRepoTargetStatus,
   getAiVaultResumeWorktreeTargetStatus,
   getAiVaultResumeWorkspaceTargetStatus,
@@ -68,10 +69,78 @@ describe('ai vault session storage compatibility', () => {
     ).toBe(true)
   })
 
-  it('never allows runtime or unknown targets', () => {
+  it('allows host-tagged SSH sessions only on the matching SSH target', () => {
     expect(
-      canResumeAiVaultSessionOnTarget({ sessionFilePath: wslSessionFile, targetStatus: 'runtime' })
+      canResumeAiVaultSessionOnTarget({
+        sessionFilePath: '/home/ada/.codex/sessions/remote.jsonl',
+        sessionExecutionHostId: 'ssh:dev-box',
+        targetStatus: 'ssh',
+        targetExecutionHostId: 'ssh:dev-box'
+      })
+    ).toBe(true)
+    expect(
+      canResumeAiVaultSessionOnTarget({
+        sessionFilePath: '/home/ada/.codex/sessions/remote.jsonl',
+        sessionExecutionHostId: 'ssh:dev-box',
+        targetStatus: 'ssh',
+        targetExecutionHostId: 'ssh:other-box'
+      })
     ).toBe(false)
+    expect(
+      canResumeAiVaultSessionOnTarget({
+        sessionFilePath: '/home/ada/.codex/sessions/remote.jsonl',
+        sessionExecutionHostId: 'ssh:dev-box',
+        targetStatus: 'local',
+        targetExecutionHostId: 'local'
+      })
+    ).toBe(false)
+    expect(
+      canResumeAiVaultSessionOnTarget({
+        sessionFilePath: '/home/ada/.codex/sessions/remote.jsonl',
+        sessionExecutionHostId: 'ssh:dev-box',
+        targetStatus: 'local'
+      })
+    ).toBe(false)
+  })
+
+  it('allows WSL-stored local sessions on any SSH target even with explicit host ids', () => {
+    expect(
+      canResumeAiVaultSessionOnTarget({
+        sessionFilePath: wslSessionFile,
+        sessionExecutionHostId: 'local',
+        targetStatus: 'ssh',
+        targetExecutionHostId: 'ssh:dev-box'
+      })
+    ).toBe(true)
+  })
+
+  it('allows runtime sessions only on the matching runtime target', () => {
+    expect(
+      canResumeAiVaultSessionOnTarget({
+        sessionFilePath: '/home/ada/.codex/sessions/remote.jsonl',
+        sessionExecutionHostId: 'runtime:env-1',
+        targetStatus: 'runtime',
+        targetExecutionHostId: 'runtime:env-1'
+      })
+    ).toBe(true)
+    expect(
+      canResumeAiVaultSessionOnTarget({
+        sessionFilePath: '/home/ada/.codex/sessions/remote.jsonl',
+        sessionExecutionHostId: 'runtime:env-1',
+        targetStatus: 'runtime',
+        targetExecutionHostId: 'runtime:env-2'
+      })
+    ).toBe(false)
+    expect(
+      canResumeAiVaultSessionOnTarget({
+        sessionFilePath: wslSessionFile,
+        targetStatus: 'runtime',
+        targetExecutionHostId: 'runtime:env-1'
+      })
+    ).toBe(false)
+  })
+
+  it('never allows unknown targets', () => {
     expect(
       canResumeAiVaultSessionOnTarget({ sessionFilePath: hostSessionFile, targetStatus: 'unknown' })
     ).toBe(false)
@@ -103,8 +172,11 @@ describe('ai vault resume target ownership', () => {
       true
     )
     expect(
-      isUnsupportedAiVaultResumeRepo({ connectionId: null, executionHostId: 'runtime:env-1' })
+      isSupportedAiVaultResumeRepo({ connectionId: null, executionHostId: 'runtime:env-1' })
     ).toBe(true)
+    expect(
+      isUnsupportedAiVaultResumeRepo({ connectionId: null, executionHostId: 'runtime:env-1' })
+    ).toBe(false)
   })
 
   it('resolves runtime-owned worktree targets through their repo owner', () => {
@@ -164,6 +236,34 @@ describe('ai vault resume target ownership', () => {
         'worktree:repo-1::/repo/orca'
       )
     ).toBe('runtime')
+  })
+
+  it('resolves exact execution host ids for active workspaces', () => {
+    const state = makeState({
+      worktreesByRepo: {
+        'repo-1': [{ id: 'repo-1::/repo/orca', repoId: 'repo-1', hostId: 'ssh:ssh-1' }]
+      },
+      repos: [{ id: 'repo-1', connectionId: null, executionHostId: 'local' }]
+    })
+
+    expect(getAiVaultResumeWorkspaceExecutionHostId(state, 'repo-1::/repo/orca')).toBe('ssh:ssh-1')
+    expect(getAiVaultResumeWorkspaceExecutionHostId(state, 'worktree:repo-1::/repo/orca')).toBe(
+      'ssh:ssh-1'
+    )
+  })
+
+  it('resolves local execution host ids for local workspaces', () => {
+    expect(
+      getAiVaultResumeWorkspaceExecutionHostId(
+        makeState({
+          worktreesByRepo: {
+            'repo-1': [{ id: 'repo-1::/repo/orca', repoId: 'repo-1' }]
+          },
+          repos: [{ id: 'repo-1', connectionId: null, executionHostId: 'local' }]
+        }),
+        'repo-1::/repo/orca'
+      )
+    ).toBe('local')
   })
 
   it('supports folder workspaces owned by SSH project groups', () => {

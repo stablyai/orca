@@ -52,7 +52,7 @@ describe('OrcaRuntimeService terminal startup cwd', () => {
     )
   })
 
-  it('rejects requested terminal cwd values outside the selected worktree', async () => {
+  it('spawns terminals at a requested cwd outside the selected worktree (#7685)', async () => {
     const runtime = new OrcaRuntimeService()
     stubLaunchScope(runtime)
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-1' })
@@ -63,10 +63,14 @@ describe('OrcaRuntimeService terminal startup cwd', () => {
       getForegroundProcess: async () => null
     })
 
-    await expect(runtime.createTerminal('id:wt-1', { cwd: '/repo/app-other' })).rejects.toThrow(
-      'Terminal cwd must be inside the selected worktree.'
+    await runtime.createTerminal('id:wt-1', { cwd: '/repo/app-other' })
+
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: '/repo/app-other',
+        worktreeId: 'wt-1'
+      })
     )
-    expect(spawn).not.toHaveBeenCalled()
   })
 
   it('reveals main-spawned terminals with their nested startup cwd', async () => {
@@ -105,6 +109,9 @@ describe('OrcaRuntimeService terminal startup cwd', () => {
 
   it('materializes restored headless mobile tabs in the persisted startup cwd', async () => {
     const store = {
+      // wt-1 is a worktree id, not a registered repo, so getRepo returns null;
+      // the selector validator calls it to reject repo ids passed as worktree ids.
+      getRepo: () => null,
       getWorkspaceSession: () => ({
         activeRepoId: null,
         activeWorktreeId: 'wt-1',

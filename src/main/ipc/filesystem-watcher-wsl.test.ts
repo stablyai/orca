@@ -172,4 +172,26 @@ describe('createWslWatcher', () => {
 
     await expect(promise).rejects.toThrow('write EPIPE')
   })
+
+  it('kills the snapshot process when the install abort signal fires during startup', async () => {
+    const child = new FakeChildProcess()
+    spawnMock.mockReturnValueOnce(child)
+    const controller = new AbortController()
+    const promise = createWslWatcher(ROOT_KEY, ROOT_KEY, makeDeps(), controller.signal)
+
+    controller.abort()
+
+    await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
+    expect(child.kill).toHaveBeenCalledOnce()
+  })
+
+  it('rejects immediately when the install abort signal is already aborted', async () => {
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(createWslWatcher(ROOT_KEY, ROOT_KEY, makeDeps(), controller.signal)).rejects.toMatchObject({
+      name: 'AbortError'
+    })
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
 })

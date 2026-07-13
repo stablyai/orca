@@ -1,4 +1,4 @@
-import { detectAgentStatusFromTitle, isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { resolveRuntimePaneTitleLeafId } from '@/lib/runtime-pane-title-leaf-id'
@@ -152,7 +152,18 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
         // been working for an hour. Falls back to the current stateStartedAt
         // when stateHistory is empty (e.g. fresh after restart).
         const prior = mostRecentAttentionInHistory(entry.stateHistory)
-        ts = prior ?? entry.stateStartedAt
+        if (prior === null) {
+          ts = entry.stateStartedAt
+        } else if (entry.agentType === 'command-code') {
+          // Why: Command Code has no UserPromptSubmit hook, so a new prompt while
+          // still `working` only advances stateStartedAt (no new history row). It
+          // must beat the stale prior-attention timestamp. Other agents keep the
+          // prior-attention ordering — their real state transitions already mark
+          // the turn boundary, so scoping avoids reordering them.
+          ts = Math.max(prior, entry.stateStartedAt)
+        } else {
+          ts = prior
+        }
       }
     } else {
       // Title-heuristic fallback (no fresh hook entry for this pane). Hook
@@ -308,7 +319,7 @@ export function buildAttentionByWorktree(
           }
           panes.push({
             kind: 'title',
-            status: detectAgentStatusFromTitle(title),
+            status: classifyTitleActivity(title),
             worktreeLastActivityAt: worktree.lastActivityAt
           })
         }
@@ -318,7 +329,7 @@ export function buildAttentionByWorktree(
         // titles or hook entries exist for this tab.
         panes.push({
           kind: 'title',
-          status: detectAgentStatusFromTitle(tab.title),
+          status: classifyTitleActivity(tab.title),
           worktreeLastActivityAt: worktree.lastActivityAt
         })
       }

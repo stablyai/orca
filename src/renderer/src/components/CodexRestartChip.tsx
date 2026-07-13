@@ -1,7 +1,9 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '../store'
+import { selectCodexRestartInputs } from './codex-restart-chip-inputs'
 import { translate } from '@/i18n/i18n'
 import { shouldFocusMobileDriverAction } from './terminal-pane/mobile-driver-overlay-focus'
 import {
@@ -73,8 +75,14 @@ export default function CodexRestartChip({
   worktreeId: string
 }): React.JSX.Element | null {
   const tabs = useAppStore((s) => s.tabsByWorktree[worktreeId] ?? EMPTY_TABS)
-  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
-  const codexRestartNoticeByPtyId = useAppStore((s) => s.codexRestartNoticeByPtyId)
+  // Why: both of these maps churn on unrelated pty lifecycle events (ptyIdsByTabId
+  // on attach/detach; codexRestartNoticeByPtyId is re-spread even when empty on
+  // pty teardown), so subscribe to them only while a restart notice actually
+  // exists. Otherwise this per-worktree chip re-rendered on every pty event to
+  // compute "no notice → render nothing". See codex-restart-chip-inputs.
+  const { ptyIdsByTabId, codexRestartNoticeByPtyId } = useAppStore(
+    useShallow(selectCodexRestartInputs)
+  )
   const staleWorktreePtyIds = useMemo(
     () =>
       collectStalePtyIdsForTabs({

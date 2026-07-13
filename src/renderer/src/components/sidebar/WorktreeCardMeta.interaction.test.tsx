@@ -138,6 +138,26 @@ describe('WorktreeCardDetailsHover interactions', () => {
     return onUnlinkReview
   }
 
+  function renderEditableHover(onRenameWorkspaceTitle = vi.fn()): ReturnType<typeof vi.fn> {
+    container = document.createElement('div')
+    root = createRoot(container)
+    act(() => {
+      root.render(
+        <WorktreeCardDetailsHover
+          issue={null}
+          linearIssue={null}
+          review={null}
+          comment={null}
+          workspaceTitle="Editable hover title"
+          onRenameWorkspaceTitle={onRenameWorkspaceTitle}
+        >
+          <span>Workspace card</span>
+        </WorktreeCardDetailsHover>
+      )
+    })
+    return onRenameWorkspaceTitle
+  }
+
   it('defers hover close while the review menu is open', () => {
     renderHover()
 
@@ -175,6 +195,44 @@ describe('WorktreeCardDetailsHover interactions', () => {
     })
 
     expect(container.textContent).not.toContain('More PR actions')
+  })
+
+  it('keeps the hover mounted while the workspace title is being edited', () => {
+    renderEditableHover()
+
+    act(() => {
+      interactionMocks.onHoverOpenChange?.(true)
+    })
+    const title = container.querySelector('[data-worktree-title-inline-rename]')
+
+    act(() => {
+      title?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }))
+    })
+    const input = container.querySelector('[data-worktree-title-rename-input]')
+
+    expect(input).not.toBeNull()
+    expect(input?.className).toContain('bg-input/40')
+    expect(input?.className).toContain('rounded-sm')
+    expect(input?.className).toContain('selection:bg-[Highlight]')
+    expect(input?.className).toContain('focus-visible:ring-[1px]')
+
+    act(() => {
+      interactionMocks.onHoverOpenChange?.(false)
+    })
+
+    expect(container.querySelector('[data-hover-open]')?.getAttribute('data-hover-open')).toBe(
+      'true'
+    )
+
+    act(() => {
+      input?.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+      )
+    })
+
+    expect(container.querySelector('[data-hover-open]')?.getAttribute('data-hover-open')).toBe(
+      'false'
+    )
   })
 
   it('invokes unlink and closes the hover from the menu item', () => {

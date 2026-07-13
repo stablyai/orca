@@ -1,3 +1,5 @@
+import { isPushHookFailure } from './source-control-push-failure'
+
 // Why: git's stderr often embeds the full remote URL, which can include a
 // credential. Redact carefully: classic `user:password@` forms always carry
 // a credential on any scheme (HTTPS, ssh://, git://, git+ssh://), but a
@@ -108,6 +110,12 @@ export function normalizeGitErrorMessage(error: unknown, operation?: GitRemoteOp
     (raw.includes('non-fast-forward') || raw.includes('fetch first'))
   ) {
     return 'Push rejected: remote has newer commits (non-fast-forward). Please pull or sync first.'
+  }
+
+  if (operation === 'push' && isPushHookFailure(raw)) {
+    // Why: local pre-push hooks put the actionable lint/hook output before
+    // git's generic "failed to push some refs" tail line.
+    return raw.trim()
   }
 
   if (raw.includes('could not read Username') || raw.includes('Authentication failed')) {

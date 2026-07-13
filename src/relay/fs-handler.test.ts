@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: this suite covers relay filesystem RPCs,
-   Space scans, file watcher lifecycle edges, and cross-platform path behavior together. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { FsHandler } from './fs-handler'
 import { MAX_TEXT_FILE_SIZE } from './fs-handler-utils'
@@ -9,6 +7,7 @@ import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { subscribeWithInProcessWatcher } from '../main/ipc/parcel-watcher-in-process-fallback'
 
 const { mockSubscribe } = vi.hoisted(() => ({
   mockSubscribe: vi.fn()
@@ -123,7 +122,11 @@ describe('FsHandler', () => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-fs-'))
     dispatcher = createMockDispatcher()
     const ctx = new RelayContext()
-    handler = new FsHandler(dispatcher as unknown as RelayDispatcher, ctx)
+    handler = new FsHandler(dispatcher as unknown as RelayDispatcher, ctx, {
+      dispose: vi.fn(),
+      forgetRoot: vi.fn(),
+      subscribe: subscribeWithInProcessWatcher
+    })
   })
 
   afterEach(async () => {

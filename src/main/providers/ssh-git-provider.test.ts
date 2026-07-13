@@ -7,6 +7,7 @@ type MockMultiplexer = {
   notify: ReturnType<typeof vi.fn>
   onNotification: ReturnType<typeof vi.fn>
   onNotificationByMethod: ReturnType<typeof vi.fn>
+  onDispose: ReturnType<typeof vi.fn>
   dispose: ReturnType<typeof vi.fn>
   isDisposed: ReturnType<typeof vi.fn>
 }
@@ -17,6 +18,9 @@ function createMockMux(): MockMultiplexer {
     notify: vi.fn(),
     onNotification: vi.fn(),
     onNotificationByMethod: vi.fn().mockReturnValue(vi.fn()),
+    // Why: requestGitStreamable subscribes to onDispose before awaiting the
+    // response so it can reject in-flight reassembly if the link drops.
+    onDispose: vi.fn().mockReturnValue(vi.fn()),
     dispose: vi.fn(),
     isDisposed: vi.fn().mockReturnValue(false)
   }
@@ -320,7 +324,10 @@ describe('SshGitProvider', () => {
       'git.exec',
       {
         args: ['clone', '--progress', '--', 'git@example.com:repo.git', 'repo'],
-        cwd: '/home/user'
+        cwd: '/home/user',
+        // Why: exec opts into response streaming so a large stdout is chunked
+        // onto the bulk lane; old relays ignore the flag.
+        __streamResponse: true
       },
       {
         signal: controller.signal,
@@ -353,7 +360,8 @@ describe('SshGitProvider', () => {
     })
     expect(mux.request).toHaveBeenCalledWith('git.exec', {
       args: ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
-      cwd: '/home/user/repo'
+      cwd: '/home/user/repo',
+      __streamResponse: true
     })
   })
 
@@ -636,7 +644,10 @@ describe('SshGitProvider', () => {
     expect(mux.request).toHaveBeenCalledWith('git.diff', {
       worktreePath: '/home/user/repo',
       filePath: 'src/index.ts',
-      staged: true
+      staged: true,
+      // Why: opts into response streaming; a small result still comes back as a
+      // single frame (relay decides), and old relays ignore the flag.
+      __streamResponse: true
     })
     expect(result).toEqual(diffResult)
   })
@@ -850,14 +861,16 @@ describe('SshGitProvider', () => {
       '/home/user/repo',
       'origin',
       'main',
-      'refs/remotes/origin/main'
+      'refs/remotes/origin/main',
+      { skipAutoMaintenance: true }
     )
 
     expect(mux.request).toHaveBeenCalledWith('git.fetchRemoteTrackingRef', {
       worktreePath: '/home/user/repo',
       remote: 'origin',
       branch: 'main',
-      ref: 'refs/remotes/origin/main'
+      ref: 'refs/remotes/origin/main',
+      skipAutoMaintenance: true
     })
   })
 
@@ -878,7 +891,8 @@ describe('SshGitProvider', () => {
     const result = await provider.getBranchDiff('/home/user/repo', 'main')
     expect(mux.request).toHaveBeenCalledWith('git.branchDiff', {
       worktreePath: '/home/user/repo',
-      baseRef: 'main'
+      baseRef: 'main',
+      __streamResponse: true
     })
     expect(result).toEqual(diffs)
   })
@@ -1031,6 +1045,42 @@ describe('SshGitProvider', () => {
 
     mux.request.mockResolvedValueOnce(undefined)
     await provider.stageFile('/home/user/repo', 'src/file.ts')
+
+    mux.request.mockResolvedValueOnce(diff)
+    const second = provider.getDiff('/home/user/repo', 'src/file.ts', false, true)
+
+    pendingDiff.resolve()
+    await expect(Promise.all([first, second])).resolves.toEqual([diff, diff])
+    expect(mux.request).toHaveBeenCalledTimes(3)
+  })
+
+  it.each([
+    [
+      'clone',
+      (provider: SshGitProvider) =>
+        provider.clone(['clone', '--', 'https://example.com/repo.git', 'repo'], '/projects')
+    ],
+    [
+      'mutating git.exec',
+      (provider: SshGitProvider) =>
+        provider.exec(['commit', '--allow-empty', '-m', 'initialize'], '/home/user/repo')
+    ]
+  ])('clears pending diff RPCs when %s runs', async (_name, mutate) => {
+    const diff = {
+      kind: 'text',
+      originalContent: 'old',
+      modifiedContent: 'new',
+      originalIsBinary: false,
+      modifiedIsBinary: false
+    }
+    const pendingDiff = deferredValue(diff)
+    mux.request.mockReturnValueOnce(pendingDiff.promise)
+
+    const first = provider.getDiff('/home/user/repo', 'src/file.ts', false, true)
+    await waitForRequestCount(mux.request, 1)
+
+    mux.request.mockResolvedValueOnce({ stdout: '', stderr: '' })
+    await mutate(provider)
 
     mux.request.mockResolvedValueOnce(diff)
     const second = provider.getDiff('/home/user/repo', 'src/file.ts', false, true)

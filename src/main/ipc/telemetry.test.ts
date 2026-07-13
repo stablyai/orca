@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: a single test file pins the IPC boundary behavior for all four telemetry handlers plus the cohort-injection invariants; splitting would fragment the threat-model coverage. */
 // IPC boundary behavior for the telemetry surface. Strict type narrows must
 // drop obviously-malformed calls before they reach the validator (the
 // renderer is in the threat model). Pins the consent-mutation rate limit:

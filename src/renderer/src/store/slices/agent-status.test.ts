@@ -664,6 +664,101 @@ describe('agent status tool + assistant fields', () => {
     expect(store.getState().agentStatusEpoch).toBe(firstEpoch + 1)
     expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
   })
+
+  it('bumps sort epoch when Command Code starts a new prompt while still working', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'first task', agentType: 'command-code' },
+        'command-code',
+        { updatedAt: 1_000, stateStartedAt: 1_000 }
+      )
+    const firstSortEpoch = store.getState().sortEpoch
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'second task', agentType: 'command-code' },
+        'command-code',
+        { updatedAt: 2_000, stateStartedAt: 2_000 }
+      )
+
+    const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+    expect(entry.prompt).toBe('second task')
+    expect(entry.stateStartedAt).toBe(2_000)
+    expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
+  })
+
+  it('bumps sort epoch when Command Code reruns the same prompt with a new turn key', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store.getState().setAgentStatus(
+      'tab-1:1',
+      {
+        state: 'working',
+        prompt: 'same task',
+        agentType: 'command-code',
+        promptInteractionKey: 'command-code-transcript-a'
+      },
+      'command-code',
+      { updatedAt: 1_000, stateStartedAt: 1_000 }
+    )
+    const firstSortEpoch = store.getState().sortEpoch
+
+    store.getState().setAgentStatus(
+      'tab-1:1',
+      {
+        state: 'working',
+        prompt: 'same task',
+        agentType: 'command-code',
+        promptInteractionKey: 'command-code-transcript-b'
+      },
+      'command-code',
+      { updatedAt: 2_000, stateStartedAt: 2_000 }
+    )
+
+    const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+    expect(entry.prompt).toBe('same task')
+    expect(entry.promptInteractionKey).toBe('command-code-transcript-b')
+    expect(entry.stateStartedAt).toBe(2_000)
+    expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
+  })
+
+  it('bumps sort epoch when main advances Command Code stateStartedAt without a renderer-visible key change', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    // First turn carries no interaction key (e.g. transcript read failed), so
+    // the renderer stores no promptInteractionKey to compare against.
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'same task', agentType: 'command-code' },
+        'command-code',
+        { updatedAt: 1_000, stateStartedAt: 1_000 }
+      )
+    const firstSortEpoch = store.getState().sortEpoch
+
+    // Main detected a new turn via interaction-key change and reset stateStartedAt,
+    // but the renderer can't see the key change (no key, identical prompt text).
+    // The authoritative stateStartedAt advance must still re-sort.
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'working', prompt: 'same task', agentType: 'command-code' },
+        'command-code',
+        { updatedAt: 2_000, stateStartedAt: 2_000 }
+      )
+
+    const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+    expect(entry.stateStartedAt).toBe(2_000)
+    expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
+  })
 })
 
 describe('agent status PR refresh handoff', () => {

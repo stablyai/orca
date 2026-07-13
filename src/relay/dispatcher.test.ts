@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: dispatcher behavior is stateful across
-   primary, socket, timeout, and cancellation paths; keeping fixtures shared
-   makes regression tests easier to audit. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { RelayDispatcher } from './dispatcher'
 import {
@@ -397,5 +394,187 @@ describe('RelayDispatcher', () => {
     dispatcher.invalidateClient()
 
     expect(listener).toHaveBeenCalledWith(1)
+  })
+
+  it('detaches the primary client when its write throws (frame lost, trigger reconnect)', () => {
+    // Regression: a primary-client write throw dropped the frame (possibly
+    // pty.data/pty.exit) with no resend AND without notifying detach, so the
+    // owning Orca's reconnect + PTY-reattach path never engaged until the ~20s
+    // keepalive timeout — output/pane-death were silently lost in the meantime.
+    let throwOnWrite = false
+    const detachDispatcher = new RelayDispatcher((data) => {
+      if (throwOnWrite) {
+        throw new Error('socket closed')
+      }
+      written.push(Buffer.from(data))
+    })
+    try {
+      const detachListener = vi.fn()
+      detachDispatcher.onClientDetached(detachListener)
+
+      // A frame the owning Orca must not silently miss (e.g. a pane exit).
+      throwOnWrite = true
+      detachDispatcher.notify('pty.exit', { id: 'pty-1', code: 0 })
+
+      // Fix: the write failure detaches the primary so the reconnect/reattach
+      // machinery runs promptly instead of waiting for keepalive timeout.
+      expect(detachListener).toHaveBeenCalledWith(1)
+
+      // Recovery: a reconnecting socket swaps the write via setWrite; the client
+      // is usable again and later frames flow to the new sink.
+      throwOnWrite = false
+      const recovered: Buffer[] = []
+      detachDispatcher.setWrite((data) => {
+        recovered.push(Buffer.from(data))
+      })
+      detachDispatcher.notify('pty.data', { id: 'pty-1', data: 'x' })
+      expect(recovered.length).toBeGreaterThan(0)
+    } finally {
+      detachDispatcher.dispose()
+    }
+  })
+
+  it('aborts in-flight primary requests when a client write throws', () => {
+    let throwOnWrite = false
+    const detachDispatcher = new RelayDispatcher(() => {
+      if (throwOnWrite) {
+        throw new Error('socket closed')
+      }
+    })
+    let requestSignal: AbortSignal | undefined
+    try {
+      detachDispatcher.onRequest('slow.method', async (_params, context) => {
+        requestSignal = context.signal
+        await new Promise<void>((resolve) => {
+          context.signal?.addEventListener('abort', () => resolve(), { once: true })
+        })
+      })
+      detachDispatcher.feed(
+        encodeJsonRpcFrame({ jsonrpc: '2.0', id: 9, method: 'slow.method' }, 1, 0)
+      )
+
+      expect(requestSignal?.aborted).toBe(false)
+      throwOnWrite = true
+      detachDispatcher.notify('pty.exit', { id: 'pty-1', code: 0 })
+
+      expect(requestSignal?.aborted).toBe(true)
+    } finally {
+      detachDispatcher.dispose()
+    }
+  })
+
+  describe('notifyBulk (bulk lane backpressure)', () => {
+    it('resolves immediately when the sink accepts the frame', async () => {
+      const frames: Buffer[] = []
+      const bulkDispatcher = new RelayDispatcher((data) => {
+        frames.push(Buffer.from(data))
+        return true
+      })
+      try {
+        await bulkDispatcher.notifyBulk('bulk.event', { seq: 0 })
+        expect(frames).toHaveLength(1)
+        const frame = decodeFirstFrame(frames[0])
+        const msg = JSON.parse(frame.payload.toString()) as JsonRpcNotification
+        expect(msg.method).toBe('bulk.event')
+      } finally {
+        bulkDispatcher.dispose()
+      }
+    })
+
+    it('holds the next bulk frame until the saturated sink drains', async () => {
+      const frames: Buffer[] = []
+      const drainWaiters = new Set<() => void>()
+      const bulkDispatcher = new RelayDispatcher(
+        (data) => {
+          frames.push(Buffer.from(data))
+          return false
+        },
+        { waitWriteDrain: (cb) => drainWaiters.add(cb) }
+      )
+      try {
+        let firstSettled = false
+        const first = bulkDispatcher.notifyBulk('bulk.event', { seq: 0 }).then(() => {
+          firstSettled = true
+        })
+        void bulkDispatcher.notifyBulk('bulk.event', { seq: 1 })
+        await vi.advanceTimersByTimeAsync(0)
+
+        // First frame written, but its send has not settled and the second
+        // frame is not admitted while the sink stays saturated.
+        expect(frames).toHaveLength(1)
+        expect(firstSettled).toBe(false)
+
+        for (const cb of Array.from(drainWaiters)) {
+          drainWaiters.delete(cb)
+          cb()
+        }
+        await first
+        await vi.advanceTimersByTimeAsync(0)
+        expect(frames).toHaveLength(2)
+      } finally {
+        bulkDispatcher.dispose()
+      }
+    })
+
+    it('interactive notify() frames are not gated behind a stalled bulk lane', async () => {
+      const frames: Buffer[] = []
+      const bulkDispatcher = new RelayDispatcher(
+        (data) => {
+          frames.push(Buffer.from(data))
+          return false
+        },
+        { waitWriteDrain: () => {} }
+      )
+      try {
+        void bulkDispatcher.notifyBulk('bulk.event', { seq: 0 })
+        void bulkDispatcher.notifyBulk('bulk.event', { seq: 1 })
+        await vi.advanceTimersByTimeAsync(0)
+        expect(frames).toHaveLength(1)
+
+        bulkDispatcher.notify('pty.data', { id: 'pty-1', data: 'x' })
+        expect(frames).toHaveLength(2)
+        const msg = JSON.parse(
+          decodeFirstFrame(frames[1]).payload.toString()
+        ) as JsonRpcNotification
+        expect(msg.method).toBe('pty.data')
+      } finally {
+        bulkDispatcher.dispose()
+      }
+    })
+
+    it('releases a parked bulk send when the dispatcher is disposed', async () => {
+      const bulkDispatcher = new RelayDispatcher(() => false, { waitWriteDrain: () => {} })
+      const pending = bulkDispatcher.notifyBulk('bulk.event', { seq: 0 })
+      await vi.advanceTimersByTimeAsync(0)
+      bulkDispatcher.dispose()
+      await expect(pending).resolves.toBeUndefined()
+    })
+
+    it('targets only the requested client and resolves for missing clients', async () => {
+      const primaryFrames: Buffer[] = []
+      const secondaryFrames: Buffer[] = []
+      const bulkDispatcher = new RelayDispatcher((data) => {
+        primaryFrames.push(Buffer.from(data))
+        return true
+      })
+      try {
+        const secondaryId = bulkDispatcher.attachClient((data) => {
+          secondaryFrames.push(Buffer.from(data))
+          return true
+        })
+
+        await bulkDispatcher.notifyBulk('bulk.event', { seq: 0 }, { clientId: secondaryId })
+        expect(primaryFrames).toHaveLength(0)
+        expect(secondaryFrames).toHaveLength(1)
+
+        await expect(
+          bulkDispatcher.notifyBulk('bulk.event', { seq: 1 }, { clientId: 999 })
+        ).resolves.toBeUndefined()
+        expect(primaryFrames).toHaveLength(0)
+        expect(secondaryFrames).toHaveLength(1)
+      } finally {
+        bulkDispatcher.dispose()
+      }
+    })
   })
 })

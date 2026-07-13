@@ -1,8 +1,37 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../../store'
-import { resolveTabAgentFromTitle } from '@/lib/use-tab-agent'
+import type { AgentType } from '../../../../shared/agent-status-types'
+import type { TerminalPaneLayoutNode } from '../../../../shared/types'
+import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import { canToggleNativeChat } from './native-chat-availability'
+import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { isMacPlatform, matchesNativeChatToggleShortcut } from './native-chat-shortcut'
+import { getConnectionIdFromState } from '@/lib/connection-context'
+
+export function isNativeChatShortcutTitleFallbackSafe(
+  root: TerminalPaneLayoutNode | null | undefined
+): boolean {
+  return !root || root.type === 'leaf'
+}
+
+export function resolveNativeChatToggleShortcutDetectedAgent({
+  terminalTabId,
+  activeLeafId,
+  agentStatusByPaneKey
+}: {
+  terminalTabId: string
+  activeLeafId: string | null
+  agentStatusByPaneKey: Record<string, { agentType?: AgentType }>
+}): AgentType | null {
+  if (activeLeafId) {
+    return agentStatusByPaneKey[`${terminalTabId}:${activeLeafId}`]?.agentType ?? null
+  }
+  return (
+    Object.entries(agentStatusByPaneKey).find(([paneKey]) =>
+      paneKey.startsWith(`${terminalTabId}:`)
+    )?.[1].agentType ?? null
+  )
+}
 
 /** Toggles the active worktree's focused agent-terminal tab between the terminal
  *  and native chat views via the keyboard. Gated to the active worktree so only
@@ -34,22 +63,30 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
         (candidate) => candidate.id === tab.entityId
       )
       // Carry the agent identity (not just "an agent exists") so the chord stays
-      // inert on unsupported agents like Grok, matching the menu/header gate.
+      // inert on unsupported agents (e.g. Gemini), matching the menu/header gate.
       // Pane keys are `${entityId}:${leafId}` — the backing terminal tab id, not
       // the unified tab id.
-      const detectedAgent =
-        Object.entries(state.agentStatusByPaneKey).find(([paneKey]) =>
-          paneKey.startsWith(`${tab.entityId}:`)
-        )?.[1].agentType ?? null
+      const terminalLayout = state.terminalLayoutsByTabId[tab.entityId]
+      const activeLeafId = terminalLayout?.activeLeafId ?? null
+      const detectedAgent = resolveNativeChatToggleShortcutDetectedAgent({
+        terminalTabId: tab.entityId,
+        activeLeafId,
+        agentStatusByPaneKey: state.agentStatusByPaneKey
+      })
+      const titleFallbackAgent = isNativeChatShortcutTitleFallbackSafe(terminalLayout?.root)
+        ? (resolveCommittedTitleAgentType(tab.label ?? '') ??
+          (terminalTab ? resolveCommittedTitleAgentType(terminalTab.title) : null))
+        : null
       if (
         !canToggleNativeChat({
           experimentalNativeChatEnabled: state.settings?.experimentalNativeChat === true,
           contentType: 'terminal',
-          launchAgent: terminalTab?.launchAgent,
+          launchAgent: detectedAgent ? null : terminalTab?.launchAgent,
           detectedAgent,
-          resolvedAgent:
-            resolveTabAgentFromTitle(tab.label ?? '') ??
-            (terminalTab ? resolveTabAgentFromTitle(terminalTab.title) : null),
+          resolvedAgent: detectedAgent ? null : titleFallbackAgent,
+          nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
+            getConnectionIdFromState(state, worktreeId)
+          ),
           isChatViewMode: tab.viewMode === 'chat'
         })
       ) {

@@ -16,7 +16,7 @@ import { readWorkingDiffFile } from './git-working-file-read'
 export type GitExec = (
   args: string[],
   cwd: string,
-  opts?: { maxBuffer?: number; disableOptionalLocks?: boolean; stdin?: string }
+  opts?: { maxBuffer?: number; disableOptionalLocks?: boolean; stdin?: string; timeout?: number }
 ) => Promise<{ stdout: string; stderr: string }>
 
 export type GitBufferExec = (args: string[], cwd: string) => Promise<Buffer>
@@ -203,7 +203,7 @@ export async function branchCompare(
       worktreePath
     )
     summary.changedFiles = entries.length
-    summary.commitsAhead = parseInt(countOut.trim(), 10) || 0
+    summary.commitsAhead = Number.parseInt(countOut.trim(), 10) || 0
     summary.status = 'ready'
     return { summary, entries }
   } catch (error) {

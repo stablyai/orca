@@ -1,7 +1,8 @@
-/* eslint-disable max-lines -- Why: SSH filesystem provider coverage keeps relay fallback,
-SFTP binary writes, watch fan-out, and provider lifecycle tests together so
-transport parity regressions are visible in one suite. */
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { PassThrough } from 'node:stream'
 import { SshFilesystemProvider } from './ssh-filesystem-provider'
 import { JsonRpcErrorCode } from '../ssh/relay-protocol'
 
@@ -204,6 +205,23 @@ describe('SshFilesystemProvider', () => {
       expect(mux.request).not.toHaveBeenCalledWith('fs.writeFile', expect.anything())
     })
 
+    it('writes decoded bytes through raw transfer when provided', async () => {
+      const writeBuffer = vi.fn().mockResolvedValue(undefined)
+      provider = new SshFilesystemProvider('conn-1', mux as never, undefined, { writeBuffer })
+
+      await provider.writeFileBase64('/home/user/logo.png', 'cG5n')
+      await provider.writeFileBase64Chunk('/home/user/logo.png', 'bW9yZQ==', true)
+
+      expect(writeBuffer).toHaveBeenNthCalledWith(1, '/home/user/logo.png', Buffer.from('png'), {
+        append: false,
+        exclusive: true
+      })
+      expect(writeBuffer).toHaveBeenNthCalledWith(2, '/home/user/logo.png', Buffer.from('more'), {
+        append: true,
+        exclusive: false
+      })
+    })
+
     it('can append decoded chunks through SFTP', async () => {
       const writeStream = {
         on: vi.fn((_event: string, _handler: (...args: unknown[]) => void) => writeStream),
@@ -228,6 +246,15 @@ describe('SshFilesystemProvider', () => {
   })
 
   describe('downloadFile', () => {
+    it('downloads raw bytes through raw transfer when provided', async () => {
+      const downloadFile = vi.fn().mockResolvedValue(undefined)
+      provider = new SshFilesystemProvider('conn-1', mux as never, undefined, { downloadFile })
+
+      await provider.downloadFile('/home/user/archive.zip', '/tmp/archive.zip')
+
+      expect(downloadFile).toHaveBeenCalledWith('/home/user/archive.zip', '/tmp/archive.zip')
+    })
+
     it('downloads raw bytes through SFTP and closes the session', async () => {
       const sftp = {
         fastGet: vi.fn(
@@ -263,6 +290,48 @@ describe('SshFilesystemProvider', () => {
       ).rejects.toThrow('download failed')
 
       expect(sftp.end).toHaveBeenCalled()
+    })
+  })
+
+  describe('openFileUploadSession', () => {
+    it('uses one SFTP session for multiple files and closes it once', async () => {
+      const createWriteStream = vi.fn(() => {
+        const stream = new PassThrough()
+        stream.resume()
+        return stream
+      })
+      const sftp = { createWriteStream, end: vi.fn() }
+      const createSftp = vi.fn().mockResolvedValue(sftp)
+      provider = new SshFilesystemProvider('conn-1', mux as never, createSftp as never)
+      const dir = mkdtempSync(join(tmpdir(), 'orca-sftp-upload-session-'))
+      const first = join(dir, 'first.txt')
+      const second = join(dir, 'second.txt')
+      writeFileSync(first, 'first')
+      writeFileSync(second, 'second')
+
+      try {
+        const session = await provider.openFileUploadSession()
+        await session.uploadFile(first, '/remote/first.txt', { exclusive: true })
+        await session.uploadFile(second, '/remote/second.txt', { exclusive: true })
+        session.close()
+
+        expect(createSftp).toHaveBeenCalledOnce()
+        expect(createWriteStream).toHaveBeenCalledTimes(2)
+        expect(sftp.end).toHaveBeenCalledOnce()
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    })
+
+    it('uses the transport-owned upload session when provided', async () => {
+      const uploadSession = { uploadFile: vi.fn(), close: vi.fn() }
+      const openFileUploadSession = vi.fn().mockResolvedValue(uploadSession)
+      provider = new SshFilesystemProvider('conn-1', mux as never, undefined, {
+        openFileUploadSession
+      })
+
+      await expect(provider.openFileUploadSession()).resolves.toBe(uploadSession)
+      expect(openFileUploadSession).toHaveBeenCalledOnce()
     })
   })
 
@@ -420,7 +489,11 @@ describe('SshFilesystemProvider', () => {
   it('listFiles sends fs.listFiles request', async () => {
     mux.request.mockResolvedValue(['src/index.ts', 'package.json'])
     const result = await provider.listFiles('/home/user/project')
-    expect(mux.request).toHaveBeenCalledWith('fs.listFiles', { rootPath: '/home/user/project' })
+    expect(mux.request).toHaveBeenCalledWith(
+      'fs.listFiles',
+      { rootPath: '/home/user/project' },
+      { signal: undefined }
+    )
     expect(result).toEqual(['src/index.ts', 'package.json'])
   })
 
@@ -429,16 +502,35 @@ describe('SshFilesystemProvider', () => {
     await provider.listFiles('/home/user/project', {
       excludePaths: ['/home/user/project/worktrees/b']
     })
-    expect(mux.request).toHaveBeenCalledWith('fs.listFiles', {
-      rootPath: '/home/user/project',
-      excludePaths: ['/home/user/project/worktrees/b']
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'fs.listFiles',
+      {
+        rootPath: '/home/user/project',
+        excludePaths: ['/home/user/project/worktrees/b']
+      },
+      { signal: undefined }
+    )
   })
 
   it('listFiles omits excludePaths when empty', async () => {
     mux.request.mockResolvedValue([])
     await provider.listFiles('/home/user/project', { excludePaths: [] })
-    expect(mux.request).toHaveBeenCalledWith('fs.listFiles', { rootPath: '/home/user/project' })
+    expect(mux.request).toHaveBeenCalledWith(
+      'fs.listFiles',
+      { rootPath: '/home/user/project' },
+      { signal: undefined }
+    )
+  })
+
+  it('listFiles forwards the cancellation signal to the mux request (#7721)', async () => {
+    mux.request.mockResolvedValue([])
+    const controller = new AbortController()
+    await provider.listFiles('/home/user/project', { signal: controller.signal })
+    expect(mux.request).toHaveBeenCalledWith(
+      'fs.listFiles',
+      { rootPath: '/home/user/project' },
+      { signal: controller.signal }
+    )
   })
 
   describe('watch', () => {
@@ -446,8 +538,97 @@ describe('SshFilesystemProvider', () => {
       const callback = vi.fn()
       const unsub = await provider.watch('/home/user/project', callback)
 
-      expect(mux.request).toHaveBeenCalledWith('fs.watch', { rootPath: '/home/user/project' })
+      expect(mux.request).toHaveBeenCalledWith(
+        'fs.watch',
+        { rootPath: '/home/user/project' },
+        { signal: expect.any(AbortSignal) }
+      )
       expect(typeof unsub).toBe('function')
+    })
+
+    it('uses a registration-owned cancellation signal for the mux fs.watch request', async () => {
+      mux.request.mockResolvedValue(undefined)
+      const controller = new AbortController()
+      const callback = vi.fn()
+
+      await provider.watch('/home/user/project', callback, { signal: controller.signal })
+
+      expect(mux.request).toHaveBeenCalledWith(
+        'fs.watch',
+        { rootPath: '/home/user/project' },
+        { signal: expect.any(AbortSignal) }
+      )
+      const physicalSignal = mux.request.mock.calls[0][2]?.signal
+      expect(physicalSignal).not.toBe(controller.signal)
+      expect(physicalSignal?.aborted).toBe(false)
+    })
+
+    it('rejects promptly when the watch signal aborts during setup', async () => {
+      let resolveWatch: () => void = () => {}
+      mux.request.mockImplementationOnce(
+        (_method, _params, options?: { signal?: AbortSignal }) =>
+          new Promise<void>((resolve, reject) => {
+            resolveWatch = resolve
+            options?.signal?.addEventListener(
+              'abort',
+              () => {
+                const error = new Error('Request "fs.watch" was cancelled') as Error & {
+                  name: string
+                }
+                error.name = 'AbortError'
+                reject(error)
+              },
+              { once: true }
+            )
+          })
+      )
+      const controller = new AbortController()
+      const pendingWatch = provider.watch('/home/user/project', vi.fn(), {
+        signal: controller.signal
+      })
+
+      controller.abort()
+
+      await expect(pendingWatch).rejects.toMatchObject({ name: 'AbortError' })
+      expect(mux.request.mock.calls[0][2]?.signal?.aborted).toBe(true)
+      resolveWatch()
+    })
+
+    it('keeps shared setup alive when only its first caller aborts', async () => {
+      let resolveWatch: () => void = () => {}
+      let physicalSignal: AbortSignal | undefined
+      mux.request.mockImplementationOnce(
+        (_method, _params, options?: { signal?: AbortSignal }) =>
+          new Promise<void>((resolve) => {
+            resolveWatch = resolve
+            physicalSignal = options?.signal
+          })
+      )
+      const firstController = new AbortController()
+      const first = vi.fn()
+      const second = vi.fn()
+
+      const firstWatch = provider.watch('/home/user/project', first, {
+        signal: firstController.signal
+      })
+      const secondWatch = provider.watch('/home/user/project', second)
+      firstController.abort()
+
+      await expect(firstWatch).rejects.toMatchObject({ name: 'AbortError' })
+      expect(physicalSignal?.aborted).toBe(false)
+
+      resolveWatch()
+      const unsubscribeSecond = await secondWatch
+      const notifHandler = mux.onNotification.mock.calls[0][0]
+      const events = [{ kind: 'update', absolutePath: '/home/user/project/file.ts' }]
+      notifHandler('fs.changed', { events })
+
+      expect(first).not.toHaveBeenCalled()
+      expect(second).toHaveBeenCalledWith(events)
+      unsubscribeSecond()
+      expect(mux.notify).toHaveBeenCalledWith('fs.unwatch', {
+        rootPath: '/home/user/project'
+      })
     })
 
     it('forwards fs.changed notifications to watch callback', async () => {
@@ -468,7 +649,11 @@ describe('SshFilesystemProvider', () => {
       const unsubSecond = await provider.watch('/home/user/project', second)
 
       expect(mux.request).toHaveBeenCalledTimes(1)
-      expect(mux.request).toHaveBeenCalledWith('fs.watch', { rootPath: '/home/user/project' })
+      expect(mux.request).toHaveBeenCalledWith(
+        'fs.watch',
+        { rootPath: '/home/user/project' },
+        { signal: expect.any(AbortSignal) }
+      )
 
       const notifHandler = mux.onNotification.mock.calls[0][0]
       const events = [{ kind: 'update', absolutePath: '/home/user/project/file.ts' }]

@@ -1,6 +1,7 @@
 import { AI_VAULT_AGENTS, type AiVaultAgent } from '../../../shared/ai-vault-types'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import { measureClipboardTextByteLength } from '../../../shared/clipboard-text'
+import { normalizeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 
 export const AI_VAULT_SESSION_DRAG_TYPE = 'application/x-orca-ai-vault-session'
 export const AI_VAULT_SESSION_DRAG_START_EVENT = 'orca-ai-vault-session-drag-start'
@@ -15,6 +16,7 @@ export type AiVaultSessionDragPayload = {
   // Why: drop targets must know where the session file lives (host vs local
   // WSL) to reject SSH panes that cannot reach it.
   sessionFilePath?: string
+  sessionExecutionHostId?: ExecutionHostId
   // Why: drag/drop resume must preserve planned env/default args, not just the shell command.
   env?: Record<string, string>
   launchConfig?: SleepingAgentLaunchConfig
@@ -67,6 +69,8 @@ function isSerializedPayload(value: unknown): value is SerializedAiVaultSessionD
     isNonEmptyString(payload.title) &&
     isNonEmptyString(payload.command) &&
     (payload.sessionFilePath === undefined || isNonEmptyString(payload.sessionFilePath)) &&
+    (payload.sessionExecutionHostId === undefined ||
+      Boolean(normalizeExecutionHostId(payload.sessionExecutionHostId))) &&
     (payload.env === undefined || isStringRecord(payload.env)) &&
     (payload.launchConfig === undefined || isLaunchConfig(payload.launchConfig))
   )
@@ -114,13 +118,23 @@ export function readAiVaultSessionDragData(
     if (!isSerializedPayload(parsed)) {
       return null
     }
-    const { agent, sessionId, title, command, sessionFilePath, env, launchConfig } = parsed
+    const {
+      agent,
+      sessionId,
+      title,
+      command,
+      sessionFilePath,
+      sessionExecutionHostId,
+      env,
+      launchConfig
+    } = parsed
     return {
       agent,
       sessionId,
       title,
       command,
       ...(sessionFilePath ? { sessionFilePath } : {}),
+      ...(sessionExecutionHostId ? { sessionExecutionHostId } : {}),
       ...(env ? { env } : {}),
       ...(launchConfig ? { launchConfig } : {})
     }

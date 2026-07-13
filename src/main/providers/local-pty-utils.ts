@@ -1,10 +1,13 @@
-import { basename, join } from 'node:path'
+import { basename, isAbsolute, join } from 'node:path'
 import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants } from 'node:fs'
 import type * as pty from 'node-pty'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { wslUncDirectoryExists } from '../wsl'
+import { wrapShellSpawnForMacosTccAttribution } from './macos-tcc-login-shell'
 
 let didEnsureSpawnHelperExecutable = false
+
+const UNIX_SHELL_FALLBACKS = ['/bin/zsh', '/bin/bash', '/bin/sh'] as const
 
 function toUnpackedAsarPath(candidate: string): string {
   return candidate
@@ -43,6 +46,25 @@ export function getShellValidationError(shellPath: string): string | null {
     return `Shell "${shellPath}" is not executable. Check file permissions.`
   }
   return null
+}
+
+/**
+ * Resolves an absolute Unix shell before node-pty forks. Bare commands and
+ * relative paths stay untouched so execvp can resolve them against PATH or cwd.
+ */
+export function resolveUnixShellPath(shellPath: string): string {
+  if (!isAbsolute(shellPath)) {
+    return shellPath
+  }
+  const candidates = [
+    shellPath,
+    ...UNIX_SHELL_FALLBACKS.filter((candidate) => candidate !== shellPath)
+  ]
+  const resolved = candidates.find((candidate) => getShellValidationError(candidate) === null)
+  if (resolved) {
+    return resolved
+  }
+  throw new Error(`No executable Unix shell found (tried: ${candidates.join(', ')})`)
 }
 
 /**
@@ -225,8 +247,9 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
 
   if (!primaryError) {
     try {
+      const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, env)
       return {
-        process: ptySpawn(shellPath, shellArgs, {
+        process: ptySpawn(wrapped.file, wrapped.args, {
           name: termName,
           cols,
           rows,
@@ -250,7 +273,7 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
 
   // Try fallback shells on Unix
   if (process.platform !== 'win32') {
-    const fallbackShells = ['/bin/zsh', '/bin/bash', '/bin/sh'].filter((s) => s !== shellPath)
+    const fallbackShells = UNIX_SHELL_FALLBACKS.filter((candidate) => candidate !== shellPath)
     for (const fallback of fallbackShells) {
       if (getShellValidationError(fallback)) {
         continue
@@ -260,7 +283,12 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
         env.SHELL = fallback
         onBeforeFallbackSpawn?.(env, fallback)
         Object.assign(env, fallbackReady?.env ?? {})
-        const proc = ptySpawn(fallback, fallbackReady?.args ?? ['-l'], {
+        const wrapped = wrapShellSpawnForMacosTccAttribution(
+          fallback,
+          fallbackReady?.args ?? ['-l'],
+          env
+        )
+        const proc = ptySpawn(wrapped.file, wrapped.args, {
           name: termName,
           cols,
           rows,

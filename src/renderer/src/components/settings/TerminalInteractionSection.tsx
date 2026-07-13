@@ -8,6 +8,7 @@ import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { getTerminalRightClickToPasteSearchEntry } from './terminal-windows-search'
 import { OSC52_CLIPBOARD_SETTING_ID } from '../terminal-pane/osc52-clipboard-setting-anchor'
+import { isMacPlatform } from '../terminal-pane/terminal-link-open-hints'
 import { translate } from '@/i18n/i18n'
 import {
   DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
@@ -24,7 +25,6 @@ type TerminalInteractionSectionProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
   searchQuery: string
-  isWindows: boolean
 }
 
 type ScrollSpeedSliderProps = {
@@ -89,9 +89,30 @@ function ScrollSpeedSlider({
 export function TerminalInteractionSection({
   settings,
   updateSettings,
-  searchQuery,
-  isWindows
+  searchQuery
 }: TerminalInteractionSectionProps): React.JSX.Element {
+  // Why: the context-menu escape hatch is gated on the Control key on every
+  // platform (see use-terminal-pane-context-menu), so macOS wording is
+  // "Control-click" while Windows/Linux keep "Ctrl+right-click".
+  const isMac = isMacPlatform()
+  const rightClickPasteDescription = isMac
+    ? translate(
+        'auto.components.settings.TerminalInteractionSection.567633ff50',
+        'Right-click pastes the clipboard into the terminal. Control-click to open the context menu.'
+      )
+    : translate(
+        'auto.components.settings.TerminalPane.af0c3b6e39',
+        'Right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.'
+      )
+  const rightClickPasteSwitchDescription = isMac
+    ? translate(
+        'auto.components.settings.TerminalInteractionSection.c64497148a',
+        'Right-click pastes the clipboard. Control-click opens the context menu.'
+      )
+    : translate(
+        'auto.components.settings.TerminalPane.16753eea48',
+        'Right-click pastes the clipboard. Ctrl+right-click opens the context menu.'
+      )
   return (
     <section key="pane-interaction" className="space-y-3">
       <SettingsSubsectionHeader
@@ -223,31 +244,21 @@ export function TerminalInteractionSection({
           </div>
         </SearchableSetting>
 
-        {/* Why: the Windows-only right-click toggle lives in this section, so the
-            section must also match that search term or settings search would hide
-            the control even though it is present. */}
-        {isWindows &&
-        matchesSettingsSearch(searchQuery, getTerminalRightClickToPasteSearchEntry()) ? (
+        {matchesSettingsSearch(searchQuery, getTerminalRightClickToPasteSearchEntry()) ? (
           <SearchableSetting
             title={translate(
               'auto.components.settings.TerminalPane.9c178cf8aa',
               'Right-click to paste'
             )}
-            description={translate(
-              'auto.components.settings.TerminalPane.af0c3b6e39',
-              'On Windows, right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.'
-            )}
-            keywords={['terminal', 'windows', 'right click', 'paste', 'context menu']}
+            description={rightClickPasteDescription}
+            keywords={['terminal', 'right click', 'paste', 'context menu']}
           >
             <SettingsSwitchRow
               label={translate(
                 'auto.components.settings.TerminalPane.9c178cf8aa',
                 'Right-click to paste'
               )}
-              description={translate(
-                'auto.components.settings.TerminalPane.16753eea48',
-                'On Windows, right-click pastes the clipboard. Ctrl+right-click opens the context menu.'
-              )}
+              description={rightClickPasteSwitchDescription}
               checked={settings.terminalRightClickToPaste}
               onChange={() =>
                 updateSettings({
@@ -329,7 +340,7 @@ export function TerminalInteractionSection({
           )}
           description={translate(
             'auto.components.settings.TerminalPane.69c64a479c',
-            'Let tmux, Neovim, and fzf copy to the system clipboard over the PTY (including over SSH).'
+            'Let Grok, tmux, Neovim, and fzf copy to the system clipboard over the PTY (including over SSH).'
           )}
           keywords={[
             'osc 52',
@@ -339,6 +350,7 @@ export function TerminalInteractionSection({
             'neovim',
             'nvim',
             'fzf',
+            'grok',
             'ssh',
             'remote',
             'copy',
@@ -352,7 +364,7 @@ export function TerminalInteractionSection({
             )}
             description={translate(
               'auto.components.settings.TerminalPane.6e6480a7df',
-              'Let programs in the terminal (tmux, Neovim, fzf, SSH) copy to your system clipboard.'
+              'Let programs in the terminal (Grok, tmux, Neovim, fzf, SSH) copy to your system clipboard.'
             )}
             checked={settings.terminalAllowOsc52Clipboard}
             onChange={() =>

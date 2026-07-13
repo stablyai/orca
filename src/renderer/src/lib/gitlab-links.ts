@@ -4,10 +4,12 @@ import { isWorkItemLinkQueryTooLarge } from './work-item-link-query-bounds'
 // be self-hosted (gitlab.example.com), so the URL pattern uses the
 // project-internal `/-/` separator as the GitLab-specific signal rather
 // than locking to gitlab.com. Anything matching `/<path>/-/(issues|
-// merge_requests)/<digits>` is treated as a GitLab item URL regardless
-// of host.
-const GL_ITEM_PATH_RE = /\/(?:issues|merge_requests)\/(\d+)(?:\/.*)?$/i
-const GL_ITEM_PATH_FULL_RE = /^\/(.+)\/-\/(issues|merge_requests)\/(\d+)(?:\/.*)?$/i
+// work_items|merge_requests)/<digits>` is treated as a GitLab item URL
+// regardless of host. Modern GitLab emits issue URLs as
+// `/-/work_items/<iid>`; treat that as an issue work item, same as the
+// legacy `/-/issues/<iid>` form.
+const GL_ITEM_PATH_RE = /\/(?:issues|work_items|merge_requests)\/(\d+)(?:\/.*)?$/i
+const GL_ITEM_PATH_FULL_RE = /^\/(.+)\/-\/(issues|work_items|merge_requests)\/(\d+)(?:\/.*)?$/i
 
 export type ProjectSlug = {
   /** GitLab hostname, preserving self-hosted instances from pasted URLs. */

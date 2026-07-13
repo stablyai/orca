@@ -1,13 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { fromWebContentsMock, getAllWindowsMock, handleMock, onMock, removeAllListenersMock } =
-  vi.hoisted(() => ({
-    fromWebContentsMock: vi.fn(),
-    getAllWindowsMock: vi.fn(() => []),
-    handleMock: vi.fn(),
-    onMock: vi.fn(),
-    removeAllListenersMock: vi.fn()
-  }))
+const {
+  fromIdMock,
+  fromWebContentsMock,
+  getAllWebContentsMock,
+  getAllWindowsMock,
+  handleMock,
+  onMock,
+  removeAllListenersMock
+} = vi.hoisted(() => ({
+  fromIdMock: vi.fn(),
+  fromWebContentsMock: vi.fn(),
+  getAllWebContentsMock: vi.fn(),
+  getAllWindowsMock: vi.fn(() => []),
+  handleMock: vi.fn(),
+  onMock: vi.fn(),
+  removeAllListenersMock: vi.fn()
+}))
 
 vi.mock('electron', () => ({
   BrowserWindow: {
@@ -18,12 +27,17 @@ vi.mock('electron', () => ({
     handle: handleMock,
     on: onMock,
     removeAllListeners: removeAllListenersMock
+  },
+  webContents: {
+    fromId: fromIdMock,
+    getAllWebContents: getAllWebContentsMock
   }
 }))
 
 import {
   clearTrustedUIRendererWebContentsId,
   registerUIHandlers,
+  sendToTrustedUIRenderer,
   setTrustedUIRendererWebContentsId
 } from './ui'
 
@@ -56,10 +70,13 @@ function getNativePasteHandler():
   return onMock.mock.calls.find(([channel]) => channel === 'ui:performNativePaste')?.[1]
 }
 
-describe('registerUIHandlers', () => {
+describe('UI IPC', () => {
   beforeEach(() => {
     vi.stubEnv('ELECTRON_RENDERER_URL', '')
+    fromIdMock.mockReset()
     fromWebContentsMock.mockReset()
+    getAllWebContentsMock.mockReset()
+    getAllWebContentsMock.mockReturnValue([])
     getAllWindowsMock.mockReset()
     getAllWindowsMock.mockReturnValue([])
     handleMock.mockReset()
@@ -70,6 +87,69 @@ describe('registerUIHandlers', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs()
+  })
+
+  it('sends app events once to the trusted renderer without waking 100 browser guests', () => {
+    const rendererSend = vi.fn()
+    const guestSends = Array.from({ length: 100 }, () => vi.fn())
+    getAllWebContentsMock.mockReturnValue(
+      guestSends.map((send, index) => ({
+        id: index + 100,
+        isDestroyed: () => false,
+        send
+      }))
+    )
+    fromIdMock.mockReturnValue({ id: 17, isDestroyed: () => false, send: rendererSend })
+    setTrustedUIRendererWebContentsId(17)
+
+    sendToTrustedUIRenderer('gh:prRefreshEvent', { sequence: 1 })
+
+    expect(fromIdMock).toHaveBeenCalledOnce()
+    expect(fromIdMock).toHaveBeenCalledWith(17)
+    expect(rendererSend).toHaveBeenCalledOnce()
+    expect(rendererSend).toHaveBeenCalledWith('gh:prRefreshEvent', { sequence: 1 })
+    expect(getAllWebContentsMock).not.toHaveBeenCalled()
+    expect(guestSends.reduce((total, send) => total + send.mock.calls.length, 0)).toBe(0)
+  })
+
+  it('skips missing, destroyed, and originating renderers', () => {
+    const rendererSend = vi.fn()
+    setTrustedUIRendererWebContentsId(17)
+
+    fromIdMock.mockReturnValueOnce(undefined)
+    sendToTrustedUIRenderer('gh:workItemMutated', { number: 7 })
+
+    fromIdMock.mockReturnValueOnce({ id: 17, isDestroyed: () => true, send: rendererSend })
+    sendToTrustedUIRenderer('gh:workItemMutated', { number: 7 })
+
+    sendToTrustedUIRenderer('gh:workItemMutated', { number: 7 }, 17)
+
+    expect(fromIdMock).toHaveBeenCalledTimes(2)
+    expect(rendererSend).not.toHaveBeenCalled()
+  })
+
+  it('routes to a reopened window without retaining the closed renderer', () => {
+    const oldRendererSend = vi.fn()
+    const newRendererSend = vi.fn()
+    fromIdMock.mockImplementation((id) =>
+      id === 17
+        ? { id, isDestroyed: () => false, send: oldRendererSend }
+        : { id, isDestroyed: () => false, send: newRendererSend }
+    )
+
+    setTrustedUIRendererWebContentsId(17)
+    sendToTrustedUIRenderer('gh:prRefreshEvent', { sequence: 1 })
+
+    setTrustedUIRendererWebContentsId(42)
+    clearTrustedUIRendererWebContentsId(17)
+    sendToTrustedUIRenderer('gh:prRefreshEvent', { sequence: 2 })
+
+    clearTrustedUIRendererWebContentsId(42)
+    sendToTrustedUIRenderer('gh:prRefreshEvent', { sequence: 3 })
+
+    expect(oldRendererSend).toHaveBeenCalledTimes(1)
+    expect(newRendererSend).toHaveBeenCalledTimes(1)
+    expect(newRendererSend).toHaveBeenCalledWith('gh:prRefreshEvent', { sequence: 2 })
   })
 
   it('routes native paste fallback to the requesting webContents only', () => {

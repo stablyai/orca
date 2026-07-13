@@ -21,7 +21,7 @@ vi.mock('node-pty', () => ({
 
 // Auth gate is covered separately; these tests assume a signed-in Codex.
 vi.mock('./codex-auth-presence', () => ({
-  codexAuthExists: vi.fn(() => true)
+  probeCodexAuthPresence: vi.fn(() => 'present')
 }))
 
 import { fetchCodexRateLimits } from './codex-fetcher'

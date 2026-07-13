@@ -1,4 +1,3 @@
-/* oxlint-disable max-lines -- Why: diagnostics bundle fixtures cover collection, preview deletion, upload URL hardening, and byte caps as one contract surface. Splitting would duplicate the temp-file/server harness and make edge-case coverage harder to audit. */
 // Bundle collection + upload tests. Upload helpers live outside bundle.ts, but
 // this suite keeps the diagnostic bundle contract in one place.
 
@@ -70,8 +69,7 @@ describe('bundle — collection', () => {
       osRelease: '24.0.0',
       orcaChannel: 'dev'
     })
-    const lines = bundle.payload.split('\n').filter(Boolean)
-    const header = JSON.parse(lines[0])
+    const header = JSON.parse(bundle.payload.split('\n').find(Boolean) ?? '')
     expect(header.type).toBe('bundle-header')
     expect(header.bundle_submission_id).toBe(bundle.bundleSubmissionId)
     expect(header.app_version).toBe('1.2.3')
@@ -140,6 +138,53 @@ describe('bundle — collection', () => {
     expect(bundle.spanCount).toBe(1)
     expect(bundle.payload).toContain('"name":"recent"')
     expect(bundle.payload).not.toContain('"name":"old"')
+  })
+
+  it('merges the daemon lifecycle log, bounded by the same lookback', () => {
+    const daemonFile = join(dir, 'daemon.log')
+    writeFileSync(traceFile, makeNDJSON([makeSpan({ name: 'recent' })]))
+    writeFileSync(
+      daemonFile,
+      makeNDJSON([
+        { src: 'daemon', ts: new Date().toISOString(), pid: 1, event: 'startup' },
+        {
+          src: 'daemon',
+          // 1h ago — outside the 30m window, must be dropped.
+          ts: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+          pid: 1,
+          event: 'session-exited'
+        }
+      ])
+    )
+    const bundle = collectBundle({
+      traceFilePath: traceFile,
+      maxFiles: 10,
+      daemonLogFilePath: daemonFile,
+      daemonLogMaxFiles: 3,
+      lookbackMinutes: 30,
+      appVersion: '1',
+      platform: 'darwin',
+      arch: 'arm64',
+      osRelease: '24',
+      orcaChannel: 'dev'
+    })
+    expect(bundle.payload).toContain('"event":"startup"')
+    expect(bundle.payload).toContain('"name":"recent"')
+    expect(bundle.payload).not.toContain('"event":"session-exited"')
+  })
+
+  it('collects no daemon log lines when no daemon log path is given', () => {
+    writeFileSync(traceFile, makeNDJSON([makeSpan({ name: 'recent' })]))
+    const bundle = collectBundle({
+      traceFilePath: traceFile,
+      maxFiles: 10,
+      appVersion: '1',
+      platform: 'darwin',
+      arch: 'arm64',
+      osRelease: '24',
+      orcaChannel: 'dev'
+    })
+    expect(bundle.payload).not.toContain('"src":"daemon"')
   })
 
   it('runs the redactor on the merged payload (belt-and-suspenders)', () => {

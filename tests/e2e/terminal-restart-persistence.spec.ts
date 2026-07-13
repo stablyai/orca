@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Restart persistence E2E covers separate lifecycle regressions that need real relaunches. */
 /**
  * E2E tests for terminal scrollback persistence across clean app restarts.
  *

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildCommitPrompt,
   cleanGeneratedCommitMessage,
-  extractAgentErrorMessage,
+  excerptAgentFailureOutput,
   planCustomCommand,
   STAGED_DIFF_BYTE_BUDGET,
   tokenizeCustomCommandTemplate,
@@ -136,108 +136,114 @@ describe('cleanGeneratedCommitMessage', () => {
   })
 })
 
-describe('extractAgentErrorMessage', () => {
-  it('returns the inner message from a Codex JSON error payload', () => {
-    const stderr = [
-      '--------',
-      'workdir: C:\\Storage\\Projects\\bagplanner',
-      'model: gpt-5.3-codex-spark',
-      'reasoning effort: medium',
-      '--------',
-      'user',
-      'You are generating a single git commit message...',
-      'hook: SessionStart',
-      'hook: SessionStart Completed',
-      'ERROR: {"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The \'gpt-5.3-codex-spark\' model is not supported when using Codex with a ChatGPT account."}}'
-    ].join('\n')
-    expect(extractAgentErrorMessage('', stderr)).toBe(
-      "The 'gpt-5.3-codex-spark' model is not supported when using Codex with a ChatGPT account."
+describe('excerptAgentFailureOutput', () => {
+  // Real Codex failure shape: config preamble first, operative ERROR line last.
+  const codexErrorLine =
+    'ERROR: {"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The \'gpt-5.3-codex-spark\' model is not supported when using Codex with a ChatGPT account."}}'
+  const codexStderr = [
+    '--------',
+    'workdir: C:\\Storage\\Projects\\bagplanner',
+    'model: gpt-5.3-codex-spark',
+    'reasoning effort: medium',
+    '--------',
+    'user',
+    'You are generating a single git commit message...',
+    'hook: SessionStart',
+    'hook: SessionStart Completed',
+    codexErrorLine
+  ].join('\n')
+
+  it('excerpts both ends so a tail-anchored Codex error stays visible', () => {
+    expect(excerptAgentFailureOutput('', codexStderr)).toBe(
+      `-------- workdir: C:\\Storage\\Projects\\bagplanner … ${codexErrorLine.slice(0, 130).trimEnd()}…`
     )
   })
 
-  it('returns the payload for non-JSON error lines', () => {
-    const out = 'preamble line\nERROR: {bad json oops'
-    expect(extractAgentErrorMessage(out, '')).toBe('{bad json oops')
-  })
+  // Real pi 0.80.6 auth failure: primary line and remedy first, doc paths last.
+  const piAuthStderr = [
+    'No API key found for github-copilot.',
+    '',
+    'Use /login to log into a provider via OAuth or API key. See:',
+    '  /private/tmp/pi-exit1-repro/node_modules/@earendil-works/pi-coding-agent/docs/providers.md',
+    '  /private/tmp/pi-exit1-repro/node_modules/@earendil-works/pi-coding-agent/docs/models.md'
+  ].join('\n')
 
-  it('uses the last ERROR line when several are emitted', () => {
-    const out = ['ERROR: first failure', 'retry message', 'ERROR: second failure'].join('\n')
-    expect(extractAgentErrorMessage(out, '')).toBe('second failure')
-  })
-
-  it('uses the last ERROR line in large CRLF output without line-array splitting', () => {
-    const splitSpy = vi.spyOn(String.prototype, 'split')
-    const out = `${'preamble\r\n'.repeat(10_000)}ERROR: first failure\r\nretry\r\nERROR: second failure\r\n`
-
-    expect(extractAgentErrorMessage(out, '')).toBe('second failure')
-
-    const usedLineSplit = splitSpy.mock.calls.some(
-      ([separator]) => separator instanceof RegExp && separator.source === '\\r?\\n'
+  it('keeps a head-anchored pi auth failure visible', () => {
+    expect(excerptAgentFailureOutput('', piAuthStderr)).toBe(
+      'No API key found for github-copilot. Use /login to log into a provider via OAuth or API key. See: … /private/tmp/pi-exit1-repro/node_modules/@earendil-works/pi-coding-agent/docs/models.md'
     )
-    expect(usedLineSplit).toBe(false)
   })
 
-  it('matches an `Error:` line emitted on stdout', () => {
-    expect(extractAgentErrorMessage('Error: model unavailable\n', '')).toBe('model unavailable')
-  })
-
-  it('matches ANSI-colored `Error:` lines emitted by CLIs', () => {
+  it('prefers stderr and never excerpts an echoed prompt from stdout', () => {
     expect(
-      extractAgentErrorMessage('', '\u001b[91m\u001b[1mError: \u001b[0mNo payment method\n')
-    ).toBe('No payment method')
-  })
-
-  it('matches tool-specific `Error during ...:` lines', () => {
-    expect(
-      extractAgentErrorMessage(
-        '',
-        'Error during droid execution: Authentication failed. Please log into Factory.\n'
+      excerptAgentFailureOutput(
+        'You are generating a single git commit message for /secret/repo',
+        'No API key found for openai.'
       )
-    ).toBe('Authentication failed. Please log into Factory.')
+    ).toBe('No API key found for openai.')
   })
 
-  it('matches wrapped provider error-code payloads with quoted message fields', () => {
-    const stdout = [
-      "Error code: 401 - {'error': {'message': 'The API Key appears to be invalid or ma",
-      "y have expired. Please verify your credentials and try again.', 'type': 'invalid",
-      "_authentication_error'}}"
-    ].join('\n')
-    expect(extractAgentErrorMessage(stdout, '')).toBe(
-      'The API Key appears to be invalid or may have expired. Please verify your credentials and try again.'
+  it('falls back to stdout when stderr is blank', () => {
+    expect(excerptAgentFailureOutput('Not logged in · Please run /login', ' \n')).toBe(
+      'Not logged in · Please run /login'
     )
   })
 
-  it('extracts wrapped provider error-code payloads from large output without replacement passes', () => {
-    const replaceSpy = vi.spyOn(String.prototype, 'replace')
-    const echoedPrompt = 'echoed pasted prompt '.repeat(10_000)
-    const stdout = [
-      `${echoedPrompt}Error code: 401 - {'error': {'message': 'The API Key appears to be invalid or ma`,
-      "y have expired. Please verify your credentials and try again.', 'type': 'invalid",
-      "_authentication_error'}}"
-    ].join('\r\n')
+  it('returns null when both streams are blank', () => {
+    expect(excerptAgentFailureOutput('   \n\t', '')).toBeNull()
+  })
 
-    expect(extractAgentErrorMessage(stdout, '')).toBe(
-      'The API Key appears to be invalid or may have expired. Please verify your credentials and try again.'
+  it('joins up to three lines without an ellipsis', () => {
+    expect(excerptAgentFailureOutput('', 'one\ntwo\nthree\n')).toBe('one two three')
+  })
+
+  it('does not parse or unwrap JSON payloads', () => {
+    expect(excerptAgentFailureOutput('', '401: {"message":"Invalid API key provided"}')).toBe(
+      '401: {"message":"Invalid API key provided"}'
     )
-    expect(replaceSpy).not.toHaveBeenCalled()
   })
 
-  it('does not strip ANSI across a paste-sized single-line log before error-code fallback', () => {
-    const replaceSpy = vi.spyOn(String.prototype, 'replace')
-    const pastedLog = 'x'.repeat(20_000)
-    const stdout = `${pastedLog}Error code: 400 - {'message': 'bad request'}`
-
-    expect(extractAgentErrorMessage(stdout, '')).toBe('bad request')
-    expect(replaceSpy).not.toHaveBeenCalled()
+  it('strips ANSI colors and OSC titles', () => {
+    const esc = String.fromCharCode(27)
+    const bel = String.fromCharCode(7)
+    expect(
+      excerptAgentFailureOutput(
+        '',
+        `${esc}]0;pi${bel}${esc}[91mError: no payment method${esc}[0m\n`
+      )
+    ).toBe('Error: no payment method')
   })
 
-  it('returns null when no ERROR line is present', () => {
-    expect(extractAgentErrorMessage('plain log\nmore log\n', '')).toBeNull()
+  it('treats bare `\\r` progress frames as line boundaries', () => {
+    expect(excerptAgentFailureOutput('', 'Fetching 50%\rFetching 100%\rConnection error.')).toBe(
+      'Fetching 50% Fetching 100% Connection error.'
+    )
   })
 
-  it('returns the JSON payload `message` field when no nested error is set', () => {
-    const out = 'ERROR: {"message":"top-level only"}'
-    expect(extractAgentErrorMessage(out, '')).toBe('top-level only')
+  it('handles CRLF output', () => {
+    expect(excerptAgentFailureOutput('', 'one\r\ntwo\r\n')).toBe('one two')
+  })
+
+  it('collapses repeated retry lines instead of echoing them twice', () => {
+    expect(excerptAgentFailureOutput('', 'Retrying request…\n'.repeat(10))).toBe(
+      'Retrying request… Retrying request…'
+    )
+  })
+
+  it('truncates an overlong single line to the persistence budget', () => {
+    const line = `Error: ${'m'.repeat(300)}`
+    expect(excerptAgentFailureOutput('', line)).toBe(`Error: ${'m'.repeat(233)}…`)
+  })
+
+  it('reads the head and tail windows of oversized multi-line output', () => {
+    const stderr = `first line\n${'filler line\n'.repeat(3000)}last: operative error`
+    expect(excerptAgentFailureOutput('', stderr)).toBe(
+      'first line filler line … last: operative error'
+    )
+  })
+
+  it('bounds the excerpt for a giant single-line stream', () => {
+    expect(excerptAgentFailureOutput('', 'x'.repeat(20_000))).toBe(`${'x'.repeat(100)}…`)
   })
 })
 

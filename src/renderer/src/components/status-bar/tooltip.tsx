@@ -1,12 +1,20 @@
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
+import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { translate } from '@/i18n/i18n'
 import {
   getProviderDisplayName,
   getProviderUsageErrorMessage,
   getProviderUsageStatusLabel
 } from './usage-error-copy'
+import {
+  clampUsedPercent,
+  type UsagePercentageDisplay
+} from '../../../../shared/usage-percentage-display'
+import { formatUsagePercentageLabel } from './usage-percentage-label'
+
+// Re-exported from its shared home so status-bar callers keep a single import.
+export { clampUsedPercent }
 
 export {
   getProviderDisplayName,
@@ -92,6 +100,15 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   }
   if (provider === 'kimi') {
     return <AgentIcon agent="kimi" size={13} />
+  }
+  if (provider === 'antigravity') {
+    return <AgentIcon agent="antigravity" size={13} />
+  }
+  if (provider === 'minimax') {
+    return <MiniMaxIcon size={13} />
+  }
+  if (provider === 'grok') {
+    return <AgentIcon agent="grok" size={13} />
   }
   return <ClaudeIcon size={13} />
 }
@@ -182,13 +199,14 @@ export function getWindowSections(
 // `text-background` for primary text and `text-background/50` for secondary
 // to stay readable inside the inverted tooltip container.
 
-// Why: color-coded by remaining capacity so users can quickly gauge urgency.
-// Green = comfortable (>40% left), yellow = caution (20-40%), red = critical (<20%).
-export function barColor(leftPct: number): string {
-  if (leftPct > 40) {
+// Why: color-coded by consumption so users can quickly gauge urgency.
+// Matches common harness usage meters (Claude/Codex): bars fill with % used.
+// Green = comfortable (<60% used), yellow = caution (60-80%), red = critical (≥80%).
+export function barColor(usedPct: number): string {
+  if (usedPct < 60) {
     return 'bg-green-500'
   }
-  if (leftPct > 20) {
+  if (usedPct < 80) {
     return 'bg-yellow-500'
   }
   return 'bg-red-500'
@@ -198,12 +216,14 @@ export function ProviderPanel({
   p,
   inverted = false,
   className,
-  showResetCredits = true
+  showResetCredits = true,
+  usagePercentageDisplay = 'used'
 }: {
   p: ProviderRateLimits | null
   inverted?: boolean
   className?: string
   showResetCredits?: boolean
+  usagePercentageDisplay?: UsagePercentageDisplay
 }): React.JSX.Element {
   const textClass = inverted ? 'text-background' : 'text-foreground'
   const mutedClass = inverted ? 'text-background/60' : 'text-muted-foreground'
@@ -273,7 +293,9 @@ export function ProviderPanel({
     if (!w) {
       return null
     }
-    const leftPct = Math.max(0, Math.round(100 - w.usedPercent))
+    // Why: preference changes the copy only; consumption-based bar direction
+    // preserves the empty/green to full/red meter convention from #8167.
+    const usedPct = clampUsedPercent(w.usedPercent)
     const resetLabel = w.resetsAt ? formatResetCountdown(w.resetsAt - Date.now()) : null
 
     return (
@@ -281,15 +303,12 @@ export function ProviderPanel({
         <div className={`font-medium ${textClass}`}>{label}</div>
         <div className={`h-[6px] w-full overflow-hidden rounded-full ${emptyBarClass}`}>
           <div
-            className={`h-full rounded-full ${barColor(leftPct)} transition-all duration-300`}
-            style={{ width: `${Math.min(100, Math.max(0, leftPct))}%` }}
+            className={`h-full rounded-full ${barColor(usedPct)} transition-all duration-300`}
+            style={{ width: `${usedPct}%` }}
           />
         </div>
         <div className={`flex justify-between ${mutedClass}`}>
-          <span>
-            {leftPct}
-            {translate('auto.components.status.bar.tooltip.cedb7b99e3', '% left')}
-          </span>
+          <span>{formatUsagePercentageLabel(usedPct, usagePercentageDisplay)}</span>
           {resetLabel && <span>{resetLabel}</span>}
         </div>
       </div>

@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { agentLabel } from './ai-vault-session-filters'
 import { translate } from '@/i18n/i18n'
-import { SessionActionMenuItems } from './AiVaultSessionRow'
+import { SessionActionMenuItems } from './AiVaultSessionActionMenuItems'
 import {
   aiVaultWorktreeJumpTooltip,
   type AiVaultSessionWorktreeInfo
@@ -64,11 +64,11 @@ export function SessionRowTrailingActions({
   showJumpToWorktree: boolean
   onJumpToWorktree?: () => void
   onResume: () => void
-  onCopyResume: () => void
+  onCopyResume?: () => void
   onCopyId: () => void
   onCopyPath: () => void
-  onOpenLog: () => void
-  onRevealLog: () => void
+  onOpenLog?: () => void
+  onRevealLog?: () => void
   onOpenCwd?: () => void
 }) {
   const jumpToWorktreeTooltip = aiVaultWorktreeJumpTooltip(worktreeInfo)

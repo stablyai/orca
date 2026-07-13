@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: browser IPC tests share one mocked trust-boundary handler registry plus registration waiters; splitting would duplicate setup and weaken coverage. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {

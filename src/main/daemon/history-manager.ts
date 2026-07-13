@@ -132,6 +132,31 @@ export class HistoryManager {
     })
   }
 
+  // Why: wake after sleep re-spawns a session whose history was closed by the
+  // sleep-time kill. Re-register the writer without deleting checkpoint.json
+  // (still the only recovery data until the next tick) and clear endedAt so
+  // the next sleep can cold-restore this session again.
+  reopenSession(sessionId: string): void {
+    this.disabledSessions.delete(sessionId)
+    this.registerWriter(sessionId)
+    const writer = this.writers.get(sessionId)
+    if (!writer) {
+      return
+    }
+    try {
+      this.updateMeta(writer.dir, { endedAt: null, exitCode: null })
+    } catch (err) {
+      this.handleWriteError(sessionId, err)
+    }
+  }
+
+  suspendSession(sessionId: string): void {
+    // Why: if a fresh daemon cannot accept recovered scrollback, leaving its
+    // writer active would let the next checkpoint overwrite the only good copy.
+    this.writers.delete(sessionId)
+    this.disabledSessions.delete(sessionId)
+  }
+
   /** Appends one take batch to the incremental log. Returns 'needs-checkpoint'
    *  when the log is at capacity — the caller must take a full snapshot, which
    *  subsumes the un-appended records (they were already applied to the live

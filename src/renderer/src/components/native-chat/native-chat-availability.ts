@@ -1,25 +1,8 @@
 import type { Tab, TuiAgent } from '../../../../shared/types'
 import type { AgentType } from '../../../../shared/agent-status-types'
+import { isNativeChatSupportedAgent } from '@/lib/native-chat-supported-agent'
 
-/** Agents whose transcripts the native chat view can actually parse and render.
- *  Native chat depends on provider-specific transcript/streaming parsing, so the
- *  toggle must stay limited to the providers we support — currently Claude
- *  (including the OpenClaude variant) and Codex. Other agents (Grok, Gemini, …)
- *  run fine in the terminal but have no native-chat rendering, so they must not
- *  show the toggle. */
-const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set<string>([
-  'claude',
-  'openclaude',
-  'codex'
-])
-
-/** Whether the given agent identity (from any signal: launch hint, live
- *  detection, or title resolution) is one native chat can render. */
-export function isNativeChatSupportedAgent(
-  agent: TuiAgent | AgentType | null | undefined
-): boolean {
-  return agent != null && NATIVE_CHAT_SUPPORTED_AGENTS.has(agent)
-}
+export { isNativeChatSupportedAgent }
 
 /** Inputs that decide whether a tab may toggle into the native chat view.
  *  Kept as a plain shape (not the live store) so the decision stays pure and
@@ -39,6 +22,8 @@ export type NativeChatAvailabilityInput = {
    *  terminal title resolver) when it identifies the foreground as an agent
    *  before hooks arrive. */
   resolvedAgent?: TuiAgent | null
+  /** Whether this renderer's native-chat reader can access the agent transcript. */
+  nativeChatTranscriptIsLocalReadable?: boolean
   /** Already-chat tabs must always be allowed to toggle back to terminal, even
    *  if live hook state was lost during a dev/app restart. */
   isChatViewMode?: boolean
@@ -47,10 +32,9 @@ export type NativeChatAvailabilityInput = {
 /** Native chat is a rendering of a coding-agent conversation, so the toggle is
  *  only meaningful on terminals that actually run an agent we can parse. Plain
  *  shells, non-terminal surfaces (editor, browser, …), and unsupported agents
- *  (Grok, Gemini, …) never qualify. Eligibility is the union of the launch-time
- *  hint, live detection, and title resolution — but only when that signal names
- *  a supported agent — so the control appears for both Orca-launched and
- *  user-started Claude/Codex sessions. */
+ *  (Gemini, …) never qualify. Live identity is authoritative when present;
+ *  launch metadata is next, and title resolution only fills the pre-hook gap for
+ *  manually-started Claude/Codex/Grok sessions. */
 export function canToggleNativeChat(input: NativeChatAvailabilityInput): boolean {
   if (input.experimentalNativeChatEnabled !== true) {
     return false
@@ -58,10 +42,12 @@ export function canToggleNativeChat(input: NativeChatAvailabilityInput): boolean
   if (input.contentType !== 'terminal') {
     return false
   }
-  return (
-    input.isChatViewMode === true ||
-    isNativeChatSupportedAgent(input.launchAgent) ||
-    isNativeChatSupportedAgent(input.detectedAgent) ||
-    isNativeChatSupportedAgent(input.resolvedAgent)
-  )
+  if (input.isChatViewMode === true) {
+    return true
+  }
+  const agent = input.detectedAgent ?? input.launchAgent ?? input.resolvedAgent
+  if (agent === 'grok' && input.nativeChatTranscriptIsLocalReadable !== true) {
+    return false
+  }
+  return isNativeChatSupportedAgent(agent)
 }

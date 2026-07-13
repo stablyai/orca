@@ -1,4 +1,7 @@
-import { getWorktreeSidebarBoundaryDrop } from './worktree-sidebar-drag-autoscroll'
+import {
+  computeWorktreeSidebarHeaderDropPreview,
+  type WorktreeSidebarHeaderDropPreview
+} from './worktree-sidebar-header-drop-preview'
 import type { Row } from './worktree-list-groups'
 import type { ProjectGroup } from '../../../../shared/types'
 
@@ -11,14 +14,16 @@ export type ProjectGroupHeaderDragRect = {
   headerIndex: number
   top: number
   bottom: number
+  sectionBottom?: number
 }
 
-export type ProjectGroupHeaderDropPreview = {
-  dropIndex: number
-  dropIndicatorY: number
+export type ProjectGroupHeaderDropPreview = WorktreeSidebarHeaderDropPreview
+
+export type ProjectGroupTabOrderUpdate = {
+  groupId: string
+  tabOrder: number
 }
 
-const INDICATOR_GAP_PX = 4
 const ROOT_PROJECT_GROUP_HEADER_BUCKET = 'root'
 
 type SidebarProjectGroupHeader = ProjectGroup | { id: null } | undefined
@@ -60,36 +65,6 @@ export function getSidebarOrderedProjectGroupHeaderIdsByBucket(
   return buckets
 }
 
-export function getProjectGroupTabOrderForSidebarDrop(args: {
-  siblings: readonly ProjectGroup[]
-  dropIndex: number
-}): number {
-  const ordered = args.siblings.slice()
-  if (ordered.length === 0) {
-    return 0
-  }
-  const getOrder = (group: ProjectGroup | undefined): number | undefined =>
-    group && Number.isFinite(group.tabOrder) ? group.tabOrder : undefined
-  const before = getOrder(ordered[args.dropIndex - 1])
-  const after = getOrder(ordered[args.dropIndex])
-  if (before === undefined && after === undefined) {
-    return 0
-  }
-  if (before === undefined) {
-    return after !== undefined ? after - 1 : 0
-  }
-  if (after === undefined) {
-    return before + 1
-  }
-  if (after > before) {
-    const midpoint = before + (after - before) / 2
-    return Number.isFinite(midpoint) ? midpoint : before / 2 + after / 2
-  }
-  // Why: duplicate legacy ranks leave no slot between siblings; a finite anchor
-  // lets the next drag establish a stable persisted order.
-  return before + 1
-}
-
 export function mapSidebarProjectGroupDropIndexToSiblingInsertIndex(args: {
   sidebarDropIndex: number
   sourceIndex: number
@@ -104,6 +79,47 @@ export function mapSidebarProjectGroupDropIndexToSiblingInsertIndex(args: {
   return Math.max(0, Math.min(args.siblingCount, adjustedDropIndex))
 }
 
+export function getProjectGroupTabOrderUpdatesForSidebarDrop(args: {
+  sidebarProjectGroupHeaderIds: readonly string[]
+  draggedGroupId: string
+  sidebarDropIndex: number
+  projectGroupById: ReadonlyMap<string, ProjectGroup>
+}): ProjectGroupTabOrderUpdate[] {
+  const sourceIndex = args.sidebarProjectGroupHeaderIds.indexOf(args.draggedGroupId)
+  if (sourceIndex === -1) {
+    return []
+  }
+  const siblingIds = args.sidebarProjectGroupHeaderIds.filter(
+    (groupId) => groupId !== args.draggedGroupId
+  )
+  const siblingDropIndex = mapSidebarProjectGroupDropIndexToSiblingInsertIndex({
+    sidebarDropIndex: args.sidebarDropIndex,
+    sourceIndex,
+    siblingCount: siblingIds.length
+  })
+  const sourceIndexInSiblings = Math.min(sourceIndex, siblingIds.length)
+  if (siblingDropIndex === sourceIndexInSiblings) {
+    return []
+  }
+
+  const orderedIds = siblingIds.slice()
+  orderedIds.splice(siblingDropIndex, 0, args.draggedGroupId)
+
+  const updates: ProjectGroupTabOrderUpdate[] = []
+  for (const [index, groupId] of orderedIds.entries()) {
+    const group = args.projectGroupById.get(groupId)
+    if (!group) {
+      continue
+    }
+    // Why: legacy groups can all have tabOrder=0, so a one-row midpoint update
+    // cannot express an insertion inside that equal-rank block.
+    if (group.tabOrder !== index) {
+      updates.push({ groupId, tabOrder: index })
+    }
+  }
+  return updates
+}
+
 function getVirtualRowStart(virtualRow: HTMLElement | null): number | null {
   if (!virtualRow) {
     return null
@@ -114,6 +130,15 @@ function getVirtualRowStart(virtualRow: HTMLElement | null): number | null {
   }
   const start = Number(rawStart)
   return Number.isFinite(start) ? start : null
+}
+
+function getOptionalNumberAttribute(element: HTMLElement, attribute: string): number | undefined {
+  const rawValue = element.getAttribute(attribute)
+  if (rawValue === null) {
+    return undefined
+  }
+  const value = Number(rawValue)
+  return Number.isFinite(value) ? value : undefined
 }
 
 export function measureProjectGroupHeaderDragRects(
@@ -145,7 +170,8 @@ export function measureProjectGroupHeaderDragRects(
       bucketKey: elementBucketKey,
       headerIndex,
       top,
-      bottom: top + rect.height
+      bottom: top + rect.height,
+      sectionBottom: getOptionalNumberAttribute(element, 'data-project-group-header-section-end')
     })
   })
   rects.sort((left, right) => left.top - right.top)
@@ -160,51 +186,12 @@ export function computeProjectGroupHeaderDropPreview(args: {
   sidebarProjectGroupHeaderIds: readonly string[]
 }): ProjectGroupHeaderDropPreview | null {
   const { rects, sidebarProjectGroupHeaderIds } = args
-  if (rects.length === 0 || sidebarProjectGroupHeaderIds.length === 0) {
-    return null
-  }
-
-  const localY = args.pointerY - args.containerTop + args.scrollTop
-  const first = rects[0]!
-  const last = rects.at(-1)!
-  const boundaryDrop = getWorktreeSidebarBoundaryDrop({
-    localY,
-    firstRect: {
-      worktreeId: first.groupId,
-      groupIndex: first.headerIndex,
-      top: first.top,
-      bottom: first.bottom
-    },
-    lastRect: {
-      worktreeId: last.groupId,
-      groupIndex: last.headerIndex,
-      top: last.top,
-      bottom: last.bottom
-    },
-    sourceGroupSize: sidebarProjectGroupHeaderIds.length
+  return computeWorktreeSidebarHeaderDropPreview({
+    pointerY: args.pointerY,
+    containerTop: args.containerTop,
+    scrollTop: args.scrollTop,
+    rects,
+    headerCount: sidebarProjectGroupHeaderIds.length,
+    getId: (rect) => rect.groupId
   })
-  if (boundaryDrop.kind === 'outside') {
-    return null
-  }
-
-  let dropIndex = last.headerIndex + 1
-  let indicatorY = last.bottom + INDICATOR_GAP_PX
-  if (boundaryDrop.kind === 'drop') {
-    dropIndex = boundaryDrop.dropIndex
-    indicatorY = boundaryDrop.indicatorY
-  } else {
-    for (const rect of rects) {
-      const mid = (rect.top + rect.bottom) / 2
-      if (localY < mid) {
-        dropIndex = rect.headerIndex
-        indicatorY = Math.max(0, rect.top - INDICATOR_GAP_PX)
-        break
-      }
-    }
-  }
-
-  return {
-    dropIndex,
-    dropIndicatorY: Math.max(args.scrollTop, indicatorY)
-  }
 }

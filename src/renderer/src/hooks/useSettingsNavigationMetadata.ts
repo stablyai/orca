@@ -154,7 +154,7 @@ export function buildSettingsNavigationMetadata({
       ),
       description: translate(
         'auto.hooks.useSettingsNavigationMetadata.b1c2f8b0ac',
-        'Optional account switching for Claude, Codex, Gemini, and OpenCode Go.'
+        'Optional account switching and usage setup for Claude, Codex, Gemini, OpenCode Go, MiniMax, and Grok.'
       ),
       icon: UserCog,
       searchEntries: getAccountsPaneSearchEntries(),
@@ -424,7 +424,7 @@ export function buildSettingsNavigationMetadata({
       title: translate('auto.hooks.useSettingsNavigationMetadata.d72a58b5b9', 'Stats & Usage'),
       description: translate(
         'auto.hooks.useSettingsNavigationMetadata.b351014180',
-        'Orca stats plus Claude, Codex, and OpenCode usage analytics.'
+        'Orca stats plus Claude, Codex, OpenCode token analytics and Grok subscription usage.'
       ),
       icon: BarChart3,
       searchEntries: getStatsPaneSearchEntries(),
@@ -551,9 +551,12 @@ export function buildSettingsNavigationMetadata({
 }
 
 export function useSettingsNavigationMetadata(): SettingsNavSection[] {
-  // Why: subscribe metadata consumers to language changes; translated memo
-  // contents refresh on rerender without depending on i18n.language directly.
-  useTranslation()
+  // Why: useTranslation subscribes to language changes, but the active locale
+  // must also be a memo dependency below — a rerender alone returns the cached
+  // previous-language sections, leaving the Settings sidebar and Cmd+J palette
+  // stuck in the old language until Settings is remounted.
+  const { i18n } = useTranslation()
+  const activeLocale = i18n.language
   const repos = useAppStore((state) => state.repos)
   const settings = useAppStore((state) => state.settings)
   const isMac = isMacUserAgent()
@@ -584,6 +587,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
         isDev: import.meta.env.DEV,
         repos
       }),
-    [isMac, isWindows, isWindowsTerminalHost, isWebClient, repos]
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- activeLocale is read implicitly by the translate() calls inside buildSettingsNavigationMetadata; without it the memo keeps the previous language's sections.
+    [isMac, isWindows, isWindowsTerminalHost, isWebClient, repos, activeLocale]
   )
 }

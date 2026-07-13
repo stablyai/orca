@@ -1,236 +1,301 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FsChangeEvent } from '../../shared/types'
+import type {
+  WatcherProcessCallback,
+  WatcherProcessHooks,
+  WatcherProcessSubscription
+} from '../ipc/parcel-watcher-process'
+import { WatcherProcessFailure } from '../ipc/parcel-watcher-process-failure'
+import {
+  WATCHER_IGNORE_DIRS,
+  buildParcelWatcherIgnoreOptions
+} from '../ipc/filesystem-watcher-ignore'
 
-type MockWorker = {
-  terminated: boolean
-  postedMessages: unknown[]
-  workerData: unknown
-  on(event: string, listener: (arg?: unknown) => void): MockWorker
-  once(event: string, listener: (arg?: unknown) => void): MockWorker
-  off(event: string, listener: (arg?: unknown) => void): MockWorker
-  postMessage(message: unknown): void
-  terminate(): Promise<number>
-  emit(event: string, arg?: unknown): void
-  listenerCount(event: string): number
+const {
+  forgetRuntimeWatcherProcessRootMock,
+  resetRuntimeWatcherProcessForTestMock,
+  subscribeViaRuntimeWatcherProcessMock
+} = vi.hoisted(() => ({
+  forgetRuntimeWatcherProcessRootMock: vi.fn(),
+  resetRuntimeWatcherProcessForTestMock: vi.fn(),
+  subscribeViaRuntimeWatcherProcessMock: vi.fn()
+}))
+
+vi.mock('../ipc/parcel-watcher-process', () => ({
+  forgetRuntimeWatcherProcessRoot: forgetRuntimeWatcherProcessRootMock,
+  resetRuntimeWatcherProcessForTest: resetRuntimeWatcherProcessForTestMock,
+  subscribeViaRuntimeWatcherProcess: subscribeViaRuntimeWatcherProcessMock
+}))
+
+import {
+  resetRuntimeRootWatchersForTest,
+  watchFileExplorerInWatcherProcess
+} from './file-watcher-host'
+
+type InstalledWatch = {
+  callback: WatcherProcessCallback
+  hooks: WatcherProcessHooks
+  unsubscribe: ReturnType<typeof vi.fn<() => Promise<void>>>
 }
 
-const workerState = vi.hoisted(() => {
-  const instances: MockWorker[] = []
-  class MockWorkerImpl {
-    terminated = false
-    postedMessages: unknown[] = []
-    workerData: unknown
-    private listeners = new Map<string, { listener: (arg?: unknown) => void; once: boolean }[]>()
-
-    constructor(_workerPath: string, options: { workerData?: unknown }) {
-      this.workerData = options.workerData
-      instances.push(this as unknown as MockWorker)
+function installSuccessfulWatch(): InstalledWatch {
+  let callback: WatcherProcessCallback | undefined
+  let hooks: WatcherProcessHooks | undefined
+  const unsubscribe = vi.fn(async () => undefined)
+  subscribeViaRuntimeWatcherProcessMock.mockImplementationOnce(
+    async (
+      _rootPath: string,
+      nextCallback: WatcherProcessCallback,
+      _options: unknown,
+      nextHooks: WatcherProcessHooks
+    ): Promise<WatcherProcessSubscription> => {
+      callback = nextCallback
+      hooks = nextHooks
+      return { unsubscribe }
     }
-
-    on(event: string, listener: (arg?: unknown) => void): this {
-      const list = this.listeners.get(event) ?? []
-      list.push({ listener, once: false })
-      this.listeners.set(event, list)
-      return this
-    }
-
-    once(event: string, listener: (arg?: unknown) => void): this {
-      const list = this.listeners.get(event) ?? []
-      list.push({ listener, once: true })
-      this.listeners.set(event, list)
-      return this
-    }
-
-    off(event: string, listener: (arg?: unknown) => void): this {
-      const list = this.listeners.get(event) ?? []
-      this.listeners.set(
-        event,
-        list.filter((entry) => entry.listener !== listener)
-      )
-      return this
-    }
-
-    postMessage(message: unknown): void {
-      this.postedMessages.push(message)
-    }
-
-    async terminate(): Promise<number> {
-      this.terminated = true
-      return 0
-    }
-
-    emit(event: string, arg?: unknown): void {
-      const entries = this.listeners.get(event)?.slice() ?? []
-      for (const entry of entries) {
-        if (entry.once) {
-          this.off(event, entry.listener)
-        }
-        entry.listener(arg)
+  )
+  return {
+    get callback() {
+      if (!callback) {
+        throw new Error('watch callback not installed')
       }
-    }
-
-    listenerCount(event: string): number {
-      return this.listeners.get(event)?.length ?? 0
-    }
+      return callback
+    },
+    get hooks() {
+      if (!hooks) {
+        throw new Error('watch hooks not installed')
+      }
+      return hooks
+    },
+    unsubscribe
   }
-  return { instances, MockWorkerImpl }
-})
-
-vi.mock('electron', () => ({
-  app: { isPackaged: false }
-}))
-
-vi.mock('worker_threads', () => ({
-  Worker: workerState.MockWorkerImpl
-}))
-
-import { watchFileExplorerInWorker } from './file-watcher-host'
-
-function lastWorker(): MockWorker {
-  const worker = workerState.instances.at(-1)
-  if (!worker) {
-    throw new Error('no worker spawned')
-  }
-  return worker
 }
 
-describe('watchFileExplorerInWorker', () => {
+describe('watchFileExplorerInWatcherProcess', () => {
   beforeEach(() => {
-    workerState.instances.length = 0
+    forgetRuntimeWatcherProcessRootMock.mockReset()
+    resetRuntimeWatcherProcessForTestMock.mockReset()
+    subscribeViaRuntimeWatcherProcessMock.mockReset()
   })
 
   afterEach(() => {
+    resetRuntimeRootWatchersForTest()
     vi.restoreAllMocks()
   })
 
-  it('resolves to an unsubscribe fn once the worker reports ready', async () => {
-    const promise = watchFileExplorerInWorker('/repo', vi.fn())
-    const worker = lastWorker()
-    expect(worker.workerData).toMatchObject({ rootPath: '/repo' })
+  it('installs a bounded watch in the shared runtime watcher process', async () => {
+    const watch = installSuccessfulWatch()
 
-    worker.emit('message', { type: 'ready' })
-    const dispose = await promise
-    expect(typeof dispose).toBe('function')
-  })
+    const dispose = await watchFileExplorerInWatcherProcess('/repo', vi.fn())
 
-  it('forwards worker events to the callback only after ready', async () => {
-    const onEvents = vi.fn<(events: FsChangeEvent[]) => void>()
-    const promise = watchFileExplorerInWorker('/repo', onEvents)
-    const worker = lastWorker()
-    worker.emit('message', { type: 'ready' })
-    await promise
-
-    const events: FsChangeEvent[] = [
-      { kind: 'update', absolutePath: '/repo/a.txt', isDirectory: false }
-    ]
-    worker.emit('message', { type: 'events', events })
-    expect(onEvents).toHaveBeenCalledWith(events)
-  })
-
-  it('rejects if the worker errors before the crawl goes live', async () => {
-    const promise = watchFileExplorerInWorker('/repo', vi.fn())
-    const worker = lastWorker()
-    worker.emit('message', { type: 'error', message: 'addon missing' })
-
-    await expect(promise).rejects.toThrow('addon missing')
-    expect(worker.terminated).toBe(true)
-  })
-
-  it('rejects if the worker exits before ready', async () => {
-    const promise = watchFileExplorerInWorker('/repo', vi.fn())
-    const worker = lastWorker()
-    worker.emit('exit', 1)
-
-    await expect(promise).rejects.toThrow(/exited before ready/)
-  })
-
-  it('emits an overflow if a live worker crashes', async () => {
-    const onEvents = vi.fn<(events: FsChangeEvent[]) => void>()
-    const promise = watchFileExplorerInWorker('/repo', onEvents)
-    const worker = lastWorker()
-    worker.emit('message', { type: 'ready' })
-    await promise
-
-    worker.emit('error', new Error('boom'))
-    expect(onEvents).toHaveBeenCalledWith([{ kind: 'overflow', absolutePath: '/repo' }])
-  })
-
-  it('unsubscribes and waits for a clean worker exit without force-terminating', async () => {
-    const promise = watchFileExplorerInWorker('/repo', vi.fn())
-    const worker = lastWorker()
-    worker.emit('message', { type: 'ready' })
-    const dispose = await promise
-
-    const disposed = dispose()
-    expect(worker.postedMessages).toContainEqual({ type: 'unsubscribe' })
-    // The worker unsubscribes its native watcher, closes its port and exits on
-    // its own — no force terminate, which is what corrupts the native watcher.
-    worker.emit('exit', 0)
-    await disposed
-    expect(worker.terminated).toBe(false)
-    expect(worker.listenerCount('exit')).toBe(1)
-
-    // Idempotent: a second dispose does nothing further.
-    await dispose()
-    expect(
-      worker.postedMessages.filter((m) => (m as { type?: string }).type === 'unsubscribe')
-    ).toHaveLength(1)
-  })
-
-  it('shares pending dispose work across racing callers', async () => {
-    const promise = watchFileExplorerInWorker('/repo', vi.fn())
-    const worker = lastWorker()
-    worker.emit('message', { type: 'ready' })
-    const dispose = await promise
+    expect(subscribeViaRuntimeWatcherProcessMock).toHaveBeenCalledWith(
+      '/repo',
+      expect.any(Function),
+      buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS),
+      expect.objectContaining({
+        delivery: { includeDirectoryMetadata: true, maxEventsPerBatch: 200 },
+        onInterruption: expect.any(Function),
+        onOverflow: expect.any(Function),
+        onTerminalError: expect.any(Function),
+        signal: expect.any(AbortSignal)
+      })
+    )
 
     const firstDispose = dispose()
     const secondDispose = dispose()
     expect(secondDispose).toBe(firstDispose)
-    expect(
-      worker.postedMessages.filter((m) => (m as { type?: string }).type === 'unsubscribe')
-    ).toHaveLength(1)
-
-    worker.emit('exit', 0)
-    await Promise.all([firstDispose, secondDispose])
-    expect(worker.terminated).toBe(false)
+    await firstDispose
+    expect(watch.unsubscribe).toHaveBeenCalledTimes(1)
   })
 
-  it('force-terminates the worker only if it fails to exit within the timeout', async () => {
-    vi.useFakeTimers()
-    try {
-      const promise = watchFileExplorerInWorker('/repo', vi.fn())
-      const worker = lastWorker()
-      worker.emit('message', { type: 'ready' })
-      const dispose = await promise
-
-      const disposed = dispose()
-      expect(worker.postedMessages).toContainEqual({ type: 'unsubscribe' })
-      expect(worker.listenerCount('exit')).toBe(2)
-      // Worker is wedged and never emits exit: the backstop must terminate it.
-      await vi.advanceTimersByTimeAsync(10_000)
-      await disposed
-      expect(worker.terminated).toBe(true)
-      expect(worker.listenerCount('exit')).toBe(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('stops forwarding events after dispose', async () => {
+  it('maps child-enriched watcher events without host-process stat work', async () => {
+    const watch = installSuccessfulWatch()
     const onEvents = vi.fn<(events: FsChangeEvent[]) => void>()
-    const promise = watchFileExplorerInWorker('/repo', onEvents)
-    const worker = lastWorker()
-    worker.emit('message', { type: 'ready' })
-    const dispose = await promise
-    const disposed = dispose()
-    worker.emit('exit', 0)
-    await disposed
-    onEvents.mockClear()
+    await watchFileExplorerInWatcherProcess('/repo', onEvents)
 
-    worker.emit('message', {
-      type: 'events',
-      events: [{ kind: 'update', absolutePath: '/repo/a.txt' }]
-    })
+    watch.callback(null, [
+      { type: 'update', path: '/repo/file.txt', isDirectory: false },
+      { type: 'create', path: '/repo/dir', isDirectory: true },
+      { type: 'delete', path: '/repo/gone.txt' }
+    ])
+
+    expect(onEvents).toHaveBeenCalledWith([
+      { kind: 'update', absolutePath: '/repo/file.txt', isDirectory: false },
+      { kind: 'create', absolutePath: '/repo/dir', isDirectory: true },
+      { kind: 'delete', absolutePath: '/repo/gone.txt', isDirectory: undefined }
+    ])
+  })
+
+  it('turns child overflow and recoverable watcher errors into a conservative refresh', async () => {
+    const watch = installSuccessfulWatch()
+    const onEvents = vi.fn<(events: FsChangeEvent[]) => void>()
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    await watchFileExplorerInWatcherProcess('/repo', onEvents)
+
+    watch.hooks.onOverflow?.()
+    watch.callback(new Error('Events were dropped by the FSEvents client.'), [])
+
+    expect(onEvents).toHaveBeenNthCalledWith(1, [{ kind: 'overflow', absolutePath: '/repo' }])
+    expect(onEvents).toHaveBeenNthCalledWith(2, [{ kind: 'overflow', absolutePath: '/repo' }])
+  })
+
+  it('refreshes only after the child has resubscribed', async () => {
+    const watch = installSuccessfulWatch()
+    const onEvents = vi.fn<(events: FsChangeEvent[]) => void>()
+    await watchFileExplorerInWatcherProcess('/repo', onEvents)
+
+    watch.hooks.onInterruption?.()
+
+    expect(onEvents).toHaveBeenCalledWith([{ kind: 'overflow', absolutePath: '/repo' }])
+  })
+
+  it('keeps same-root subscribers alive while a failed shard is replaced', async () => {
+    const watch = installSuccessfulWatch()
+    const replacement = installSuccessfulWatch()
+    const firstEvents = vi.fn<(events: FsChangeEvent[]) => void>()
+    const secondEvents = vi.fn<(events: FsChangeEvent[]) => void>()
+    const firstError = vi.fn()
+    const secondError = vi.fn()
+    await watchFileExplorerInWatcherProcess('/repo', firstEvents, firstError)
+    await watchFileExplorerInWatcherProcess('/repo', secondEvents, secondError)
+
+    watch.hooks.onTerminalError?.(
+      new WatcherProcessFailure('crashed repeatedly', 'supervisor', 'supervisor_crash_fuse')
+    )
+    await vi.waitFor(() => expect(subscribeViaRuntimeWatcherProcessMock).toHaveBeenCalledTimes(2))
+    watch.callback(null, [{ type: 'update', path: '/repo/late.txt' }])
+    replacement.callback(null, [{ type: 'update', path: '/repo/recovered.txt' }])
+
+    expect(firstError).not.toHaveBeenCalled()
+    expect(secondError).not.toHaveBeenCalled()
+    expect(firstEvents).toHaveBeenCalledWith([{ kind: 'overflow', absolutePath: '/repo' }])
+    expect(firstEvents).toHaveBeenCalledWith([
+      { kind: 'update', absolutePath: '/repo/recovered.txt', isDirectory: undefined }
+    ])
+    expect(secondEvents).toHaveBeenCalledTimes(2)
+  })
+
+  it('ends subscribers only after isolated recovery also fails', async () => {
+    const watch = installSuccessfulWatch()
+    subscribeViaRuntimeWatcherProcessMock.mockRejectedValueOnce(new Error('isolated failure'))
+    const onEvents = vi.fn<(events: FsChangeEvent[]) => void>()
+    const onTerminalError = vi.fn()
+    await watchFileExplorerInWatcherProcess('/repo', onEvents, onTerminalError)
+
+    watch.hooks.onTerminalError?.(
+      new WatcherProcessFailure('crashed repeatedly', 'supervisor', 'supervisor_crash_fuse')
+    )
+
+    await vi.waitFor(() =>
+      expect(onTerminalError).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'isolated failure' })
+      )
+    )
+    expect(onEvents).toHaveBeenCalledWith([{ kind: 'overflow', absolutePath: '/repo' }])
+  })
+
+  it('cancels a pending physical watch when its only client aborts', async () => {
+    let physicalSignal: AbortSignal | undefined
+    subscribeViaRuntimeWatcherProcessMock.mockImplementation(
+      (_rootPath, _callback, _options, hooks: WatcherProcessHooks) =>
+        new Promise<WatcherProcessSubscription>((_resolve, reject) => {
+          physicalSignal = hooks.signal
+          hooks.signal?.addEventListener(
+            'abort',
+            () => reject(new Error('physical watch aborted')),
+            { once: true }
+          )
+        })
+    )
+    const controller = new AbortController()
+    const pending = watchFileExplorerInWatcherProcess('/repo', vi.fn(), vi.fn(), controller.signal)
+
+    controller.abort()
+
+    await expect(pending).rejects.toThrow('aborted')
+    expect(physicalSignal?.aborted).toBe(true)
+  })
+
+  it('keeps pending setup alive when another same-root client still owns it', async () => {
+    let physicalSignal: AbortSignal | undefined
+    let resolvePhysical: ((subscription: WatcherProcessSubscription) => void) | undefined
+    const unsubscribe = vi.fn(async () => undefined)
+    subscribeViaRuntimeWatcherProcessMock.mockImplementation(
+      (_rootPath, _callback, _options, hooks: WatcherProcessHooks) => {
+        physicalSignal = hooks.signal
+        return new Promise<WatcherProcessSubscription>((resolve) => {
+          resolvePhysical = resolve
+        })
+      }
+    )
+    const controller = new AbortController()
+    const first = watchFileExplorerInWatcherProcess('/repo', vi.fn(), vi.fn(), controller.signal)
+    const second = watchFileExplorerInWatcherProcess('/repo', vi.fn())
+
+    controller.abort()
+    await expect(first).rejects.toThrow('aborted')
+    expect(physicalSignal?.aborted).toBe(false)
+
+    resolvePhysical?.({ unsubscribe })
+    await expect(second).resolves.toEqual(expect.any(Function))
+    expect(subscribeViaRuntimeWatcherProcessMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('shares one native subscription per root across same-root callers', async () => {
+    const firstRoot = installSuccessfulWatch()
+    const secondRoot = installSuccessfulWatch()
+
+    await watchFileExplorerInWatcherProcess('/repo-a', vi.fn())
+    await watchFileExplorerInWatcherProcess('/repo-a', vi.fn())
+    await watchFileExplorerInWatcherProcess('/repo-b', vi.fn())
+
+    expect(subscribeViaRuntimeWatcherProcessMock).toHaveBeenCalledTimes(2)
+    expect(subscribeViaRuntimeWatcherProcessMock).toHaveBeenNthCalledWith(
+      1,
+      '/repo-a',
+      expect.any(Function),
+      expect.any(Object),
+      expect.any(Object)
+    )
+    expect(subscribeViaRuntimeWatcherProcessMock).toHaveBeenNthCalledWith(
+      2,
+      '/repo-b',
+      expect.any(Function),
+      expect.any(Object),
+      expect.any(Object)
+    )
+    expect(firstRoot.unsubscribe).not.toHaveBeenCalled()
+    expect(secondRoot.unsubscribe).not.toHaveBeenCalled()
+  })
+
+  it('stops forwarding events after the last subscriber disposes', async () => {
+    const watch = installSuccessfulWatch()
+    const onEvents = vi.fn<(events: FsChangeEvent[]) => void>()
+    const dispose = await watchFileExplorerInWatcherProcess('/repo', onEvents)
+
+    await dispose()
+    watch.callback(null, [{ type: 'update', path: '/repo/a.txt' }])
+    watch.hooks.onInterruption?.()
+
     expect(onEvents).not.toHaveBeenCalled()
+  })
+
+  it('propagates an initial watcher process subscription failure', async () => {
+    subscribeViaRuntimeWatcherProcessMock.mockRejectedValue(new Error('watcher unavailable'))
+
+    await expect(watchFileExplorerInWatcherProcess('/repo', vi.fn())).rejects.toThrow(
+      'watcher unavailable'
+    )
+  })
+
+  it('does not retry a root-specific initial subscription failure', async () => {
+    subscribeViaRuntimeWatcherProcessMock.mockRejectedValue(
+      new WatcherProcessFailure('root unavailable', 'subscription', 'subscribe_failed')
+    )
+
+    await expect(watchFileExplorerInWatcherProcess('/missing', vi.fn())).rejects.toThrow(
+      'root unavailable'
+    )
+    expect(subscribeViaRuntimeWatcherProcessMock).toHaveBeenCalledTimes(1)
   })
 })

@@ -1,8 +1,11 @@
-/* eslint-disable max-lines -- Why: this file co-locates tightly-coupled scenario
-   tests for the resource-usage merge function. Splitting them weakens the
-   single-source view of how snapshot + daemon-session inputs combine. */
 import { describe, expect, it } from 'vitest'
-import type { MemorySnapshot, TerminalTab, WorktreeMemory } from '../../../../shared/types'
+import type {
+  BrowserWorkspace,
+  MemorySnapshot,
+  TerminalTab,
+  Worktree,
+  WorktreeMemory
+} from '../../../../shared/types'
 import { mergeSnapshotAndSessions, UNATTRIBUTED_REPO_ID } from './mergeSnapshotAndSessions'
 import type { DaemonSession, MergeContext } from './resource-usage-merge-types'
 
@@ -53,12 +56,55 @@ const baseCtx = (overrides: Partial<MergeContext> = {}): MergeContext => ({
   workspaceSessionReady: true,
   repoDisplayNameById: new Map(),
   repoConnectionIdById: new Map(),
+  repoRuntimeScopedById: new Map(),
   ...overrides
 })
 
 describe('mergeSnapshotAndSessions', () => {
   it('returns empty list when both inputs are empty', () => {
     expect(mergeSnapshotAndSessions(null, [], baseCtx())).toEqual([])
+  })
+
+  it('includes browser-only workspaces in their repo', () => {
+    const worktree = {
+      id: 'orca::/Users/me/browser-only',
+      repoId: 'orca',
+      displayName: 'browser-only'
+    } as Worktree
+    const browser = {
+      id: 'browser-1',
+      worktreeId: worktree.id,
+      title: 'Orca docs',
+      url: 'https://docs.orca.dev',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: 1
+    } as BrowserWorkspace
+    const out = mergeSnapshotAndSessions(
+      null,
+      [],
+      baseCtx({
+        repoDisplayNameById: new Map([['orca', 'ORCA']]),
+        worktreeById: new Map([[worktree.id, worktree]]),
+        browserTabsByWorktree: { [worktree.id]: [browser] }
+      })
+    )
+
+    expect(out[0]).toMatchObject({
+      repoId: 'orca',
+      repoName: 'ORCA',
+      worktrees: [
+        {
+          worktreeId: worktree.id,
+          worktreeName: 'browser-only',
+          sessions: [],
+          browsers: [browser]
+        }
+      ]
+    })
   })
 
   it('passes through snapshot worktrees with numeric metrics and hasLocalSamples', () => {
@@ -249,6 +295,58 @@ describe('mergeSnapshotAndSessions', () => {
     })
     expect(local.worktrees[0].isRemote).toBe(false)
     expect(remote.worktrees[0].isRemote).toBe(true)
+  })
+
+  it('excludes runtime-scoped rows while preserving SSH and unattributed sessions', () => {
+    const runtimeWt: WorktreeMemory = {
+      worktreeId: 'runtime-repo::/runtime/Wt',
+      worktreeName: 'Wt',
+      repoId: 'runtime-repo',
+      repoName: 'RUNTIME',
+      cpu: 5,
+      memory: 500_000_000,
+      history: [],
+      sessions: [{ sessionId: 'runtime-pty', paneKey: null, pid: 2, cpu: 5, memory: 500_000_000 }]
+    }
+    const sessions: DaemonSession[] = [
+      { id: 'runtime-repo::/runtime/Wt@@future-runtime', cwd: '', title: 'runtime/Wt' },
+      { id: 'ssh-repo::/remote/Wt@@ssh-session', cwd: '', title: 'ssh/Wt' },
+      { id: 'opaque-local-orphan', cwd: '', title: 'orphan shell' }
+    ]
+    const ctx = baseCtx({
+      repoConnectionIdById: new Map<string, string | null>([
+        ['runtime-repo', null],
+        ['ssh-repo', 'ssh-target-1']
+      ]),
+      repoRuntimeScopedById: new Map([
+        ['runtime-repo', true],
+        ['ssh-repo', false]
+      ])
+    })
+
+    const out = mergeSnapshotAndSessions(makeSnapshot([runtimeWt]), sessions, ctx)
+
+    expect(out.map((repo) => repo.repoId)).toEqual(['ssh-repo', UNATTRIBUTED_REPO_ID])
+    expect(out.find((repo) => repo.repoId === 'runtime-repo')).toBeUndefined()
+
+    const ssh = out.find((repo) => repo.repoId === 'ssh-repo')!
+    expect(ssh.hasRemoteChildren).toBe(true)
+    expect(ssh.worktrees[0]).toMatchObject({
+      isRemote: true,
+      cpu: null,
+      memory: null
+    })
+    expect(ssh.worktrees[0].sessions[0]).toMatchObject({
+      sessionId: 'ssh-repo::/remote/Wt@@ssh-session',
+      bound: false
+    })
+
+    const orphan = out.find((repo) => repo.repoId === UNATTRIBUTED_REPO_ID)!
+    expect(orphan.hasRemoteChildren).toBe(false)
+    expect(orphan.worktrees[0].sessions[0]).toMatchObject({
+      sessionId: 'opaque-local-orphan',
+      bound: false
+    })
   })
 
   it('unresolvable session falls into unattributed bucket without flagging remote', () => {

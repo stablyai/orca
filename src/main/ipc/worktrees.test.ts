@@ -1,11 +1,14 @@
 /* eslint-disable max-lines */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as GitUsernameModule from '../git/git-username'
 import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { CreateWorktreeResult, GitWorktreeInfo, Worktree } from '../../shared/types'
+import * as localWorktreeFilesystem from '../local-worktree-filesystem'
 
 const ORIGINAL_PLATFORM = process.platform
+const removeWorktreeLinkedPathsMock = vi.hoisted(() => vi.fn())
 
 function setPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', {
@@ -24,8 +27,9 @@ const {
   addSparseWorktreeMock,
   removeWorktreeMock,
   forceDeleteLocalBranchMock,
-  getGitUsernameMock,
-  getDefaultBaseRefMock,
+  resolveLocalGitUsernameMock,
+  getBaseRefDefaultMock,
+  resolveDefaultBaseRefWithLocalGitMock,
   resolveDefaultBaseRefViaExecMock,
   getDefaultRemoteMock,
   getBranchConflictKindMock,
@@ -73,8 +77,9 @@ const {
   addSparseWorktreeMock: vi.fn(),
   removeWorktreeMock: vi.fn(),
   forceDeleteLocalBranchMock: vi.fn(),
-  getGitUsernameMock: vi.fn(),
-  getDefaultBaseRefMock: vi.fn(),
+  resolveLocalGitUsernameMock: vi.fn(),
+  getBaseRefDefaultMock: vi.fn(),
+  resolveDefaultBaseRefWithLocalGitMock: vi.fn(),
   resolveDefaultBaseRefViaExecMock: vi.fn(),
   getDefaultRemoteMock: vi.fn(),
   getBranchConflictKindMock: vi.fn(),
@@ -127,12 +132,17 @@ vi.mock('../git/runner', () => ({
 }))
 
 vi.mock('../git/repo', () => ({
-  getGitUsername: getGitUsernameMock,
-  getDefaultBaseRef: getDefaultBaseRefMock,
+  getBaseRefDefault: getBaseRefDefaultMock,
+  resolveDefaultBaseRefWithLocalGit: resolveDefaultBaseRefWithLocalGitMock,
   resolveDefaultBaseRefViaExec: resolveDefaultBaseRefViaExecMock,
   getDefaultRemote: getDefaultRemoteMock,
   getBranchConflictKind: getBranchConflictKindMock
 }))
+
+vi.mock('../git/git-username', async () => {
+  const actual = await vi.importActual<typeof GitUsernameModule>('../git/git-username')
+  return { ...actual, resolveLocalGitUsername: resolveLocalGitUsernameMock }
+})
 
 vi.mock('../github/client', () => ({
   getPRForBranch: getPRForBranchMock,
@@ -161,6 +171,11 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   getSshFilesystemProvider: getSshFilesystemProviderMock
+}))
+
+vi.mock('./worktree-symlinks', () => ({
+  createWorktreeLinkedPaths: vi.fn(),
+  removeWorktreeLinkedPaths: removeWorktreeLinkedPathsMock
 }))
 
 vi.mock('./ssh', () => ({
@@ -231,7 +246,11 @@ import {
   notifyWorktreesChanged
 } from './worktree-remote'
 import { invalidateAuthorizedRootsCache, resolveRegisteredWorktreePath } from './filesystem-auth'
-import { __resetDetectedWorktreeScanCacheForTests, registerWorktreeHandlers } from './worktrees'
+import {
+  __getDetectedWorktreeScanCacheStatsForTests,
+  __resetDetectedWorktreeScanCacheForTests,
+  registerWorktreeHandlers
+} from './worktrees'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
@@ -270,6 +289,7 @@ describe('registerWorktreeHandlers', () => {
     resolveManagedMrBase: ReturnType<typeof vi.fn>
     createTerminal: ReturnType<typeof vi.fn>
     splitTerminal: ReturnType<typeof vi.fn>
+    notifyWorktreesChangedForRemoteClients: ReturnType<typeof vi.fn>
   }
 
   beforeEach(() => {
@@ -286,8 +306,9 @@ describe('registerWorktreeHandlers', () => {
       addSparseWorktreeMock,
       removeWorktreeMock,
       forceDeleteLocalBranchMock,
-      getGitUsernameMock,
-      getDefaultBaseRefMock,
+      resolveLocalGitUsernameMock,
+      getBaseRefDefaultMock,
+      resolveDefaultBaseRefWithLocalGitMock,
       resolveDefaultBaseRefViaExecMock,
       getDefaultRemoteMock,
       getBranchConflictKindMock,
@@ -331,7 +352,8 @@ describe('registerWorktreeHandlers', () => {
       clearProviderPtyStateMock,
       getLocalPtyProviderMock,
       deleteWorktreeHistoryDirMock,
-      advertisedUrlWatcherForgetWorktreeMock
+      advertisedUrlWatcherForgetWorktreeMock,
+      removeWorktreeLinkedPathsMock
     ]) {
       m.mockReset()
     }
@@ -386,8 +408,9 @@ describe('registerWorktreeHandlers', () => {
       }
     ])
     store.getAllWorktreeLineage.mockReturnValue({})
-    getGitUsernameMock.mockReturnValue('')
-    getDefaultBaseRefMock.mockReturnValue('origin/main')
+    resolveLocalGitUsernameMock.mockResolvedValue('')
+    getBaseRefDefaultMock.mockResolvedValue('origin/main')
+    resolveDefaultBaseRefWithLocalGitMock.mockResolvedValue('origin/main')
     resolveDefaultBaseRefViaExecMock.mockResolvedValue('origin/main')
     getDefaultRemoteMock.mockResolvedValue('origin')
     getBranchConflictKindMock.mockResolvedValue(null)
@@ -477,7 +500,8 @@ describe('registerWorktreeHandlers', () => {
         handle: 'term-setup',
         tabId: 'tab-startup',
         paneRuntimeId: -1
-      })
+      }),
+      notifyWorktreesChangedForRemoteClients: vi.fn()
     }
     registerWorktreeHandlers(mainWindow as never, store as never, runtimeStub as never)
   })
@@ -487,17 +511,39 @@ describe('registerWorktreeHandlers', () => {
     expect(handlers['worktrees:resolveMrBase']).toBeDefined()
   })
 
+  it('clears the branch rename failure-output handler before re-registering IPC handlers', () => {
+    expect(removeHandlerMock).toHaveBeenCalledWith('worktrees:getBranchRenameFailureOutput')
+    expect(handlers['worktrees:getBranchRenameFailureOutput']).toBeDefined()
+  })
+
   it('prefetches the local default create base through the runtime refresh cache', async () => {
+    const repo = {
+      id: 'repo-1',
+      path: '/workspace/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      worktreeBaseRef: 'origin/master'
+    }
     const remoteBase = {
       remote: 'origin',
       branch: 'main',
       ref: 'refs/remotes/origin/main',
       base: 'origin/main'
     }
-    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(remoteBase)
+    store.getRepo.mockReturnValue(repo)
+    runtimeStub.resolveRemoteTrackingBase.mockImplementation(async (_repoPath, baseBranch) =>
+      baseBranch === 'origin/main' ? remoteBase : null
+    )
+    runtimeStub.hasRemoteTrackingRef.mockResolvedValue(true)
 
     await handlers['worktrees:prefetchCreateBase'](null, { repoId: 'repo-1' })
 
+    expect(getBaseRefDefaultMock).toHaveBeenCalledWith('/workspace/repo')
+    expect(runtimeStub.resolveRemoteTrackingBase).toHaveBeenCalledWith(
+      '/workspace/repo',
+      'origin/master'
+    )
     expect(runtimeStub.resolveRemoteTrackingBase).toHaveBeenCalledWith(
       '/workspace/repo',
       'origin/main'
@@ -640,8 +686,8 @@ describe('registerWorktreeHandlers', () => {
   function mockKnownFeatureWorktree(
     path = '/workspace/feature-wt',
     repoPath = '/workspace/repo'
-  ): void {
-    listWorktreesMock.mockResolvedValue([
+  ): GitWorktreeInfo[] {
+    const worktrees: GitWorktreeInfo[] = [
       {
         path: repoPath,
         head: 'main',
@@ -656,7 +702,9 @@ describe('registerWorktreeHandlers', () => {
         isBare: false,
         isMainWorktree: false
       }
-    ])
+    ]
+    listWorktreesMock.mockResolvedValue(worktrees)
+    return worktrees
   }
 
   function makeWorktreeMeta(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -709,6 +757,24 @@ describe('registerWorktreeHandlers', () => {
       isPinned: true
     })
     expect(result).toMatchObject({ comment: 'keep me', isPinned: true })
+  })
+
+  it('pushes a remote-client invalidation for renames but not read-state updates', () => {
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    handlers['worktrees:updateMeta'](null, {
+      worktreeId: 'repo-1::/workspace/feature-wt',
+      updates: { isUnread: false }
+    })
+    // Why: per-click isUnread writes must stay event-free (PR #209), while a
+    // rename must reach paired remote clients that no longer poll for titles.
+    expect(runtimeStub.notifyWorktreesChangedForRemoteClients).not.toHaveBeenCalled()
+
+    handlers['worktrees:updateMeta'](null, {
+      worktreeId: 'repo-1::/workspace/feature-wt',
+      updates: { displayName: 'Renamed workspace' }
+    })
+    expect(runtimeStub.notifyWorktreesChangedForRemoteClients).toHaveBeenCalledWith('repo-1')
   })
 
   it('does not trust renderer-authored automation provenance during local create', async () => {
@@ -857,6 +923,13 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('uses branchNameOverride for the git branch while keeping the sanitized worktree path', async () => {
+    store.getSettings.mockReturnValue({
+      branchPrefix: 'git-username',
+      nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: false,
+      workspaceDir: '/workspace'
+    })
+    resolveLocalGitUsernameMock.mockResolvedValue('unused-user')
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/feature-something',
@@ -884,6 +957,7 @@ describe('registerWorktreeHandlers', () => {
       'origin/main',
       false
     )
+    expect(resolveLocalGitUsernameMock).not.toHaveBeenCalled()
     expect(result).toMatchObject({
       worktree: expect.objectContaining({
         path: '/workspace/feature-something',
@@ -1991,12 +2065,6 @@ describe('registerWorktreeHandlers', () => {
 
   it('routes local worktree creation through the selected WSL project runtime', async () => {
     mockSelectedWslProjectRuntime()
-    resolveDefaultBaseRefViaExecMock.mockImplementation(
-      async (exec: (args: string[]) => Promise<{ stdout: string }>) => {
-        await exec(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'])
-        return 'origin/main'
-      }
-    )
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/repo',
@@ -2028,10 +2096,10 @@ describe('registerWorktreeHandlers', () => {
       false,
       { wslDistro: 'Ubuntu' }
     )
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'],
-      { cwd: '/workspace/repo', wslDistro: 'Ubuntu' }
-    )
+    expect(resolveDefaultBaseRefWithLocalGitMock).toHaveBeenCalledWith({
+      cwd: '/workspace/repo',
+      wslDistro: 'Ubuntu'
+    })
     expect(getBranchConflictKindMock).toHaveBeenCalledWith(
       '/workspace/repo',
       'improve-dashboard',
@@ -2574,6 +2642,199 @@ describe('registerWorktreeHandlers', () => {
     expect(listWorktreesMock).toHaveBeenCalledTimes(1)
   })
 
+  it('does not retain invalidated detected scans after they settle', async () => {
+    let resolveScan: (worktrees: GitWorktreeInfo[]) => void = () => {}
+    listWorktreesMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveScan = resolve as (worktrees: GitWorktreeInfo[]) => void
+        })
+    )
+
+    const pendingList = handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
+    await Promise.resolve()
+
+    expect(__getDetectedWorktreeScanCacheStatsForTests()).toMatchObject({
+      cacheSize: 0,
+      inFlightSize: 1
+    })
+
+    notifyWorktreesChanged(mainWindow as never, 'repo-1')
+
+    expect(__getDetectedWorktreeScanCacheStatsForTests()).toMatchObject({
+      cacheSize: 0,
+      inFlightSize: 0
+    })
+
+    resolveScan([
+      {
+        path: '/workspace/repo',
+        head: 'main-head',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+    await pendingList
+
+    expect(__getDetectedWorktreeScanCacheStatsForTests()).toMatchObject({
+      cacheSize: 0,
+      inFlightSize: 0
+    })
+  })
+
+  it('does not accumulate scan bookkeeping across prolonged repository churn', async () => {
+    store.getRepo.mockImplementation((repoId: string) => ({
+      id: repoId,
+      path: `/workspace/${repoId}`,
+      displayName: repoId,
+      badgeColor: '#000',
+      addedAt: 0,
+      worktreeBaseRef: null
+    }))
+    listWorktreesMock.mockImplementation(async (repoPath: string) => [
+      {
+        path: repoPath,
+        head: 'main-head',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+
+    for (let index = 0; index < 128; index += 1) {
+      const repoId = `repo-${index}`
+      await handlers['worktrees:listDetected'](null, { repoId })
+      notifyWorktreesChanged(mainWindow as never, repoId)
+    }
+
+    expect(__getDetectedWorktreeScanCacheStatsForTests()).toEqual({
+      cacheSize: 0,
+      inFlightSize: 0
+    })
+    expect(listWorktreesMock).toHaveBeenCalledTimes(128)
+  })
+
+  it('keeps a replacement scan current after an older scan settles first', async () => {
+    const resolvers: ((worktrees: GitWorktreeInfo[]) => void)[] = []
+    listWorktreesMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve as (worktrees: GitWorktreeInfo[]) => void)
+        })
+    )
+    const result = [
+      {
+        path: '/workspace/repo',
+        head: 'main-head',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ]
+
+    const staleList = handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
+    await Promise.resolve()
+    notifyWorktreesChanged(mainWindow as never, 'repo-1')
+    const replacementList = handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
+    await Promise.resolve()
+
+    resolvers[0](result)
+    await staleList
+    expect(__getDetectedWorktreeScanCacheStatsForTests()).toEqual({
+      cacheSize: 0,
+      inFlightSize: 1
+    })
+
+    resolvers[1](result)
+    await replacementList
+    expect(__getDetectedWorktreeScanCacheStatsForTests()).toEqual({
+      cacheSize: 1,
+      inFlightSize: 0
+    })
+  })
+
+  it('does not let an older scan overwrite a replacement that settles first', async () => {
+    const resolvers: ((worktrees: GitWorktreeInfo[]) => void)[] = []
+    listWorktreesMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve as (worktrees: GitWorktreeInfo[]) => void)
+        })
+    )
+    store.getAllWorktreeLineage.mockReturnValue({
+      'repo-1::/workspace/fresh-worktree': {
+        worktreeId: 'repo-1::/workspace/fresh-worktree',
+        worktreeInstanceId: 'child-instance',
+        parentWorktreeId: 'repo-1::/workspace/repo',
+        parentWorktreeInstanceId: 'parent-instance',
+        origin: 'manual',
+        capture: {
+          source: 'manual-action',
+          confidence: 'explicit'
+        },
+        createdAt: 0
+      }
+    })
+    const mainWorktree: GitWorktreeInfo = {
+      path: '/workspace/repo',
+      head: 'main-head',
+      branch: 'refs/heads/main',
+      isBare: false,
+      isMainWorktree: true
+    }
+
+    const staleList = handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
+    await Promise.resolve()
+    notifyWorktreesChanged(mainWindow as never, 'repo-1')
+    const replacementList = handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
+    await Promise.resolve()
+
+    resolvers[1]([
+      mainWorktree,
+      {
+        path: '/workspace/fresh-worktree',
+        head: 'fresh-head',
+        branch: 'refs/heads/fresh-worktree',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    await replacementList
+
+    resolvers[0]([
+      mainWorktree,
+      {
+        path: '/workspace/stale-worktree',
+        head: 'stale-head',
+        branch: 'refs/heads/stale-worktree',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    await staleList
+
+    const cached = (await handlers['worktrees:listDetected'](null, {
+      repoId: 'repo-1'
+    })) as { worktrees: Worktree[] }
+    expect(cached.worktrees.map((worktree) => worktree.path)).toEqual([
+      '/workspace/repo',
+      '/workspace/fresh-worktree'
+    ])
+    expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
+    await expect(
+      resolveRegisteredWorktreePath('/workspace/fresh-worktree', store as never)
+    ).resolves.toBe(resolve('/workspace/fresh-worktree'))
+    await expect(
+      resolveRegisteredWorktreePath('/workspace/stale-worktree', store as never)
+    ).rejects.toThrow('Access denied: unknown repository or worktree path')
+    expect(listWorktreesMock).toHaveBeenCalledTimes(2)
+    expect(__getDetectedWorktreeScanCacheStatsForTests()).toEqual({
+      cacheSize: 1,
+      inFlightSize: 0
+    })
+  })
+
   it('fetches the same-repo PR head via the SSH tracking-ref RPC, not git.exec', async () => {
     const fetchRemoteTrackingRef = vi.fn(async () => {})
     const exec = vi.fn(async (args: string[]) => {
@@ -2759,13 +3020,21 @@ describe('registerWorktreeHandlers', () => {
       addWorktree: vi.fn().mockResolvedValue(undefined),
       listWorktrees: vi.fn().mockResolvedValue([
         {
+          path: '/remote/repo',
+          head: 'base123',
+          branch: 'refs/heads/main',
+          isBare: false,
+          isMainWorktree: true
+        },
+        {
           path: '/remote/improve-dashboard',
           head: 'abc123',
           branch: 'refs/heads/improve-dashboard',
           isBare: false,
           isMainWorktree: false
         }
-      ])
+      ]),
+      worktreeIsClean: vi.fn().mockResolvedValue({ clean: true })
     }
     const mux = {
       request: vi.fn().mockResolvedValue(undefined),
@@ -2787,6 +3056,16 @@ describe('registerWorktreeHandlers', () => {
       manualOrder: 123_456
     })
 
+    expect(provider.exec).not.toHaveBeenCalledWith(
+      ['config', '--get', 'github.user'],
+      '/remote/repo'
+    )
+    expect(provider.exec).not.toHaveBeenCalledWith(
+      ['config', '--get', 'user.username'],
+      '/remote/repo'
+    )
+    expect(provider.listWorktrees).toHaveBeenCalledTimes(1)
+    expect(provider.worktreeIsClean).not.toHaveBeenCalled()
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-ssh::/remote/improve-dashboard',
       expect.objectContaining({
@@ -3663,7 +3942,7 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
-  it('does not create an SSH worktree when remote-tracking base refresh fails', async () => {
+  it('keeps an explicit SSH base strict when refresh fails and no local base ref exists', async () => {
     const repo = {
       id: 'repo-ssh',
       path: '/remote/repo',
@@ -3699,18 +3978,248 @@ describe('registerWorktreeHandlers', () => {
     await expect(
       handlers['worktrees:create'](null, {
         repoId: 'repo-ssh',
-        name: 'improve-dashboard'
+        name: 'improve-dashboard',
+        baseBranch: 'origin/master'
       })
     ).rejects.toThrow(
-      'Could not refresh base ref "origin/main" from "origin". Check your network and try again.'
+      'Could not refresh base ref "origin/master" from "origin". Check your network and try again.'
     )
 
     expect(provider.addWorktree).not.toHaveBeenCalled()
+    expect(resolveDefaultBaseRefViaExecMock).not.toHaveBeenCalled()
+    expect(provider.fetchRemoteTrackingRef).toHaveBeenCalledWith(
+      '/remote/repo',
+      'origin',
+      'master',
+      'refs/remotes/origin/master',
+      { skipAutoMaintenance: true }
+    )
+  })
+
+  it('creates an SSH worktree from the detected default base when the persisted base is stale', async () => {
+    // Regression: a stale persisted repo base must fall back to the detected
+    // primary default instead of blocking creation.
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/master'
+    }
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'symbolic-ref') {
+          return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
+        }
+        if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/master^{commit}')) {
+          return { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/main^{commit}')) {
+          return { stdout: `${'a'.repeat(40)}\n`, stderr: '' }
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValueOnce([
+        {
+          path: '/remote/improve-dashboard',
+          head: 'abc123',
+          branch: 'refs/heads/improve-dashboard',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    }
+    const mux = {
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'improve-dashboard'
+    })
+
+    expect(resolveDefaultBaseRefViaExecMock).toHaveBeenCalled()
     expect(provider.fetchRemoteTrackingRef).toHaveBeenCalledWith(
       '/remote/repo',
       'origin',
       'main',
-      'refs/remotes/origin/main'
+      'refs/remotes/origin/main',
+      { skipAutoMaintenance: true }
+    )
+    expect(provider.addWorktree).toHaveBeenCalledWith(
+      '/remote/repo',
+      'improve-dashboard',
+      '/remote/improve-dashboard',
+      {
+        base: 'origin/main'
+      }
+    )
+  })
+
+  it('keeps a usable SSH persisted local branch base after registering the repo root', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'develop'
+    }
+    let repoRootRegistered = false
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'config') {
+          return { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'symbolic-ref') {
+          return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
+        }
+        if (args[0] === 'rev-parse' && args.includes('refs/heads/develop^{commit}')) {
+          return { stdout: repoRootRegistered ? 'develop-sha\n' : '', stderr: '' }
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/local-branch-base',
+          head: 'develop-sha',
+          branch: 'refs/heads/local-branch-base',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    }
+    const mux = {
+      request: vi
+        .fn()
+        .mockImplementation(async (_method: string, payload: { rootPath: string }) => {
+          if (payload.rootPath === repo.path) {
+            repoRootRegistered = true
+          }
+        }),
+      notify: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'local-branch-base'
+    })
+
+    expect(mux.request).toHaveBeenCalledWith('session.registerRoot', { rootPath: repo.path })
+    expect(provider.fetchRemoteTrackingRef).not.toHaveBeenCalled()
+    expect(provider.addWorktree).toHaveBeenCalledWith(
+      '/remote/repo',
+      'local-branch-base',
+      '/remote/local-branch-base',
+      {
+        base: 'develop'
+      }
+    )
+  })
+
+  it('keeps a usable SSH slash-named local branch base that matches a remote prefix', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'team/feature'
+    }
+    let repoRootRegistered = false
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'config') {
+          return { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'remote') {
+          return { stdout: 'team\norigin\n', stderr: '' }
+        }
+        if (args[0] === 'symbolic-ref') {
+          return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
+        }
+        if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/main')) {
+          return { stdout: 'main-sha\n', stderr: '' }
+        }
+        if (args[0] === 'rev-parse' && args.includes('refs/remotes/team/feature^{commit}')) {
+          return { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'rev-parse' && args.includes('refs/heads/team/feature^{commit}')) {
+          return { stdout: repoRootRegistered ? 'team-feature-sha\n' : '', stderr: '' }
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/slash-local-base',
+          head: 'team-feature-sha',
+          branch: 'refs/heads/slash-local-base',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    }
+    const mux = {
+      request: vi
+        .fn()
+        .mockImplementation(async (_method: string, payload: { rootPath: string }) => {
+          if (payload.rootPath === repo.path) {
+            repoRootRegistered = true
+          }
+        }),
+      notify: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'slash-local-base'
+    })
+
+    expect(provider.fetchRemoteTrackingRef).not.toHaveBeenCalledWith(
+      '/remote/repo',
+      'team',
+      'feature',
+      'refs/remotes/team/feature'
+    )
+    expect(provider.addWorktree).toHaveBeenCalledWith(
+      '/remote/repo',
+      'slash-local-base',
+      '/remote/slash-local-base',
+      {
+        base: 'team/feature'
+      }
     )
   })
 
@@ -3735,7 +4244,6 @@ describe('registerWorktreeHandlers', () => {
       addWorktree: vi.fn().mockResolvedValue(undefined),
       listWorktrees: vi
         .fn()
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([
           {
             path: '/remote/first-worktree',
@@ -3745,7 +4253,6 @@ describe('registerWorktreeHandlers', () => {
             isMainWorktree: false
           }
         ])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([
           {
             path: '/remote/second-worktree',
@@ -3780,7 +4287,8 @@ describe('registerWorktreeHandlers', () => {
       '/remote/repo',
       'origin',
       'main',
-      'refs/remotes/origin/main'
+      'refs/remotes/origin/main',
+      { skipAutoMaintenance: true }
     )
     expect(provider.addWorktree).toHaveBeenCalledTimes(2)
   })
@@ -3914,6 +4422,160 @@ describe('registerWorktreeHandlers', () => {
 
     expect(provider.fetchRemoteTrackingRef).toHaveBeenCalledTimes(1)
     expect(provider.addWorktree).toHaveBeenCalledTimes(1)
+  })
+
+  it('registers the SSH repo root before create-base prefetch probes refs', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/master'
+    }
+    const registeredRoots = new Set<string>()
+    const events: string[] = []
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        events.push(`exec:${args[0]}:${registeredRoots.has('/remote/repo')}`)
+        if (!registeredRoots.has('/remote/repo')) {
+          throw new Error('root not registered')
+        }
+        if (args[0] === 'symbolic-ref') {
+          return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
+        }
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/master^{commit}')) {
+          throw new Error('missing stale base')
+        }
+        if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/main^{commit}')) {
+          return { stdout: 'main-sha\n', stderr: '' }
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/prefetched-worktree',
+          head: 'abc123',
+          branch: 'refs/heads/prefetched-worktree',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    }
+    const mux = {
+      request: vi
+        .fn()
+        .mockImplementation(async (_method: string, payload: { rootPath: string }) => {
+          events.push(`register:${payload.rootPath}`)
+          registeredRoots.add(payload.rootPath)
+        }),
+      notify: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    await handlers['worktrees:prefetchCreateBase'](null, {
+      repoId: 'repo-ssh'
+    })
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'prefetched-worktree'
+    })
+
+    expect(events[0]).toBe('register:/remote/repo')
+    expect(events).not.toContain('exec:symbolic-ref:false')
+    expect(provider.addWorktree).toHaveBeenCalledWith(
+      '/remote/repo',
+      'prefetched-worktree',
+      '/remote/prefetched-worktree',
+      {
+        base: 'origin/main'
+      }
+    )
+  })
+
+  it('does not let SSH prefetch turn a persisted slash-named local branch into a remote-tracking base', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'team/feature'
+    }
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'symbolic-ref') {
+          return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
+        }
+        if (args[0] === 'remote') {
+          return { stdout: 'team\norigin\n', stderr: '' }
+        }
+        if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/main')) {
+          return { stdout: 'main-sha\n', stderr: '' }
+        }
+        if (args[0] === 'rev-parse' && args.includes('refs/remotes/team/feature^{commit}')) {
+          throw new Error('missing remote-tracking ref')
+        }
+        if (args[0] === 'rev-parse' && args.includes('refs/heads/team/feature^{commit}')) {
+          return { stdout: 'team-feature-sha\n', stderr: '' }
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/slash-local-base',
+          head: 'team-feature-sha',
+          branch: 'refs/heads/slash-local-base',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    }
+    const mux = {
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    await handlers['worktrees:prefetchCreateBase'](null, {
+      repoId: 'repo-ssh'
+    })
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'slash-local-base'
+    })
+
+    expect(provider.fetchRemoteTrackingRef).not.toHaveBeenCalledWith(
+      '/remote/repo',
+      'team',
+      'feature',
+      'refs/remotes/team/feature'
+    )
+    expect(provider.addWorktree).toHaveBeenCalledWith(
+      '/remote/repo',
+      'slash-local-base',
+      '/remote/slash-local-base',
+      {
+        base: 'team/feature'
+      }
+    )
   })
 
   it('shares in-flight SSH create-base resolution with create', async () => {
@@ -4171,7 +4833,16 @@ describe('registerWorktreeHandlers', () => {
         isMainWorktree: false
       }
     ])
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'created-sha\n', stderr: '' })
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (
+        args[0] === 'rev-parse' &&
+        (args.includes('refs/remotes/origin/master^{commit}') ||
+          args.includes('refs/heads/origin/master^{commit}'))
+      ) {
+        throw new Error('missing ref')
+      }
+      return { stdout: 'created-sha\n', stderr: '' }
+    })
 
     const createPromise = handlers['worktrees:create'](null, {
       repoId: 'repo-1',
@@ -4200,18 +4871,103 @@ describe('registerWorktreeHandlers', () => {
     )
   })
 
-  it('does not create when the pre-create remote-tracking refresh fails', async () => {
+  it('creates from the detected default base when the persisted base is stale', async () => {
+    // Regression: a stale persisted repo base must fall back to the detected
+    // primary default instead of blocking creation.
     const remoteBase = {
       remote: 'origin',
       branch: 'main',
       ref: 'refs/remotes/origin/main',
       base: 'origin/main'
     }
-    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(remoteBase)
+    store.getRepo.mockReturnValue({
+      id: 'repo-1',
+      path: '/workspace/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      worktreeBaseRef: 'origin/master'
+    })
+    runtimeStub.resolveRemoteTrackingBase.mockImplementation(async (_repoPath, baseBranch) =>
+      baseBranch === 'origin/main' ? remoteBase : null
+    )
     runtimeStub.hasRemoteTrackingRef.mockResolvedValue(true)
+    runtimeStub.getOrStartRemoteTrackingBaseRefresh.mockResolvedValue({
+      ok: true,
+      errorKind: 'git_error'
+    })
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/improve-dashboard',
+        head: 'created-sha',
+        branch: 'improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (
+        args[0] === 'rev-parse' &&
+        (args.includes('refs/remotes/origin/master^{commit}') ||
+          args.includes('refs/heads/origin/master^{commit}'))
+      ) {
+        throw new Error('missing ref')
+      }
+      return { stdout: 'created-sha\n', stderr: '' }
+    })
+
+    const result = (await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard'
+    })) as CreateWorktreeResult
+
+    expect(addWorktreeMock).toHaveBeenCalled()
+    expect(runtimeStub.resolveRemoteTrackingBase).toHaveBeenCalledWith(
+      '/workspace/repo',
+      'origin/master'
+    )
+    expect(runtimeStub.resolveRemoteTrackingBase).toHaveBeenCalledWith(
+      '/workspace/repo',
+      'origin/main'
+    )
+    expect(runtimeStub.getOrStartRemoteTrackingBaseRefresh).toHaveBeenCalledWith(
+      '/workspace/repo',
+      remoteBase
+    )
+    expect(result.worktree.id).toBe('repo-1::/workspace/improve-dashboard')
+  })
+
+  it('keeps a usable persisted local branch base when a detected default exists', async () => {
+    store.getRepo.mockReturnValue({
+      id: 'repo-1',
+      path: '/workspace/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      worktreeBaseRef: 'develop'
+    })
+    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(null)
     runtimeStub.getOrStartRemoteTrackingBaseRefresh.mockResolvedValue({
       ok: false,
       errorKind: 'git_error'
+    })
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/improve-dashboard',
+        head: 'created-sha',
+        branch: 'improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'rev-parse' && args.includes('refs/heads/develop^{commit}')) {
+        return { stdout: 'develop-sha\n', stderr: '' }
+      }
+      if (args[0] === 'fetch') {
+        throw new Error('network unavailable')
+      }
+      return { stdout: 'created-sha\n', stderr: '' }
     })
 
     await expect(
@@ -4219,11 +4975,109 @@ describe('registerWorktreeHandlers', () => {
         repoId: 'repo-1',
         name: 'improve-dashboard'
       })
+    ).resolves.toEqual(expect.objectContaining({ worktree: expect.any(Object) }))
+
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/improve-dashboard',
+      'improve-dashboard',
+      'develop',
+      false
+    )
+  })
+
+  it('keeps a usable persisted slash-named local branch base that matches a remote prefix', async () => {
+    const remoteBase = {
+      remote: 'team',
+      branch: 'feature',
+      ref: 'refs/remotes/team/feature',
+      base: 'team/feature'
+    }
+    store.getRepo.mockReturnValue({
+      id: 'repo-1',
+      path: '/workspace/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      worktreeBaseRef: 'team/feature'
+    })
+    runtimeStub.resolveRemoteTrackingBase.mockImplementation(async (_repoPath, baseBranch) =>
+      baseBranch === 'team/feature' ? remoteBase : null
+    )
+    runtimeStub.hasRemoteTrackingRef.mockResolvedValue(false)
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/slash-local-base',
+        head: 'created-sha',
+        branch: 'slash-local-base',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'rev-parse' && args.includes('refs/remotes/team/feature^{commit}')) {
+        throw new Error('missing remote-tracking ref')
+      }
+      if (args[0] === 'rev-parse' && args.includes('refs/heads/team/feature^{commit}')) {
+        return { stdout: 'team-feature-sha\n', stderr: '' }
+      }
+      if (args[0] === 'fetch') {
+        throw new Error('network unavailable')
+      }
+      return { stdout: 'created-sha\n', stderr: '' }
+    })
+
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-1',
+        name: 'slash-local-base'
+      })
+    ).resolves.toEqual(expect.objectContaining({ worktree: expect.any(Object) }))
+
+    expect(runtimeStub.getOrStartRemoteTrackingBaseRefresh).not.toHaveBeenCalled()
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/slash-local-base',
+      'slash-local-base',
+      'team/feature',
+      false
+    )
+  })
+
+  it('keeps an explicit base strict when the pre-create refresh fails', async () => {
+    const remoteBase = {
+      remote: 'origin',
+      branch: 'master',
+      ref: 'refs/remotes/origin/master',
+      base: 'origin/master'
+    }
+    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(remoteBase)
+    runtimeStub.hasRemoteTrackingRef.mockResolvedValue(false)
+    runtimeStub.getOrStartRemoteTrackingBaseRefresh.mockResolvedValue({
+      ok: false,
+      errorKind: 'git_error'
+    })
+    store.getRepo.mockReturnValue({
+      id: 'repo-1',
+      path: '/workspace/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      worktreeBaseRef: 'origin/main'
+    })
+
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-1',
+        name: 'improve-dashboard',
+        baseBranch: 'origin/master'
+      })
     ).rejects.toThrow(
-      'Could not refresh base ref "origin/main" from "origin". Check your network and try again.'
+      'Could not refresh base ref "origin/master" from "origin". Check your network and try again.'
     )
 
     expect(addWorktreeMock).not.toHaveBeenCalled()
+    expect(resolveDefaultBaseRefViaExecMock).not.toHaveBeenCalled()
   })
 
   it('delegates remote-tracking base freshness to the runtime before create', async () => {
@@ -4328,7 +5182,7 @@ describe('registerWorktreeHandlers', () => {
     // no origin/main, no origin/master, and no local main/master), we must
     // fail loudly with a message that prompts the user to pick a base
     // branch, not hand a non-existent ref to `git worktree add`.
-    resolveDefaultBaseRefViaExecMock.mockResolvedValue(null)
+    resolveDefaultBaseRefWithLocalGitMock.mockResolvedValue(null)
     store.getRepo.mockReturnValue({
       id: 'repo-1',
       path: '/workspace/repo',
@@ -5660,7 +6514,11 @@ describe('registerWorktreeHandlers', () => {
     const worktreePath = join(parentDir, 'feature-wt')
     await mkdir(worktreePath, { recursive: true })
     await writeFile(join(worktreePath, 'scratch.txt'), 'delete me')
-    mockKnownFeatureWorktree(worktreePath, repoPath)
+    const registeredWorktrees = mockKnownFeatureWorktree(worktreePath, repoPath)
+    listWorktreesMock
+      .mockResolvedValueOnce(registeredWorktrees)
+      .mockResolvedValueOnce(registeredWorktrees)
+      .mockResolvedValue([])
     store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta())
     const longPathError = Object.assign(new Error('git worktree remove failed'), {
       stderr: 'error: failed to delete deep/file.txt: Filename too long'
@@ -5694,7 +6552,11 @@ describe('registerWorktreeHandlers', () => {
 
   it('does not create a preserved-branch target when long-path recovery preserves branch by policy', async () => {
     setPlatform('win32')
-    mockKnownFeatureWorktree()
+    const registeredWorktrees = mockKnownFeatureWorktree()
+    listWorktreesMock
+      .mockResolvedValueOnce(registeredWorktrees)
+      .mockResolvedValueOnce(registeredWorktrees)
+      .mockResolvedValue([])
     store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta({ preserveBranchOnDelete: true }))
     removeWorktreeMock.mockRejectedValue(
       Object.assign(new Error('git worktree remove failed'), {
@@ -5734,39 +6596,49 @@ describe('registerWorktreeHandlers', () => {
     expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
   })
 
-  it('keeps metadata when Windows long-path recovery deletes the directory but prune fails', async () => {
+  it('refuses Windows recovery while Git still reports the row and keeps metadata', async () => {
     setPlatform('win32')
     mockKnownFeatureWorktree()
     store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta())
+    const removePathSpy = vi
+      .spyOn(localWorktreeFilesystem, 'removeLocalWorktreePath')
+      .mockResolvedValue(undefined)
     removeWorktreeMock.mockRejectedValue(
       Object.assign(new Error('git worktree remove failed'), {
         stderr: 'error: failed to delete deep/file.txt: Filename too long'
       })
     )
-    gitExecFileAsyncMock.mockRejectedValue(
-      Object.assign(new Error('git prune failed'), {
-        stderr: 'fatal: unable to lock worktree admin dir'
-      })
-    )
 
-    await expect(
-      handlers['worktrees:remove'](null, {
-        worktreeId: 'repo-1::/workspace/feature-wt',
-        force: true
-      })
-    ).rejects.toThrow('Git still has stale worktree registration')
+    try {
+      await expect(
+        handlers['worktrees:remove'](null, {
+          worktreeId: 'repo-1::/workspace/feature-wt',
+          force: true
+        })
+      ).rejects.toThrow(
+        'Failed to force delete worktree at /workspace/feature-wt. error: failed to delete deep/file.txt: Filename too long'
+      )
 
-    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
-    expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('worktrees:changed', {
-      repoId: 'repo-1'
-    })
+      expect(removePathSpy).not.toHaveBeenCalled()
+      expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
+        ['worktree', 'prune'],
+        expect.anything()
+      )
+      expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+      expect(mainWindow.webContents.send).not.toHaveBeenCalledWith('worktrees:changed', {
+        repoId: 'repo-1'
+      })
+    } finally {
+      removePathSpy.mockRestore()
+    }
   })
 
   it('retries stale Git registration cleanup after prior local filesystem recovery', async () => {
     setPlatform('win32')
     const missingWorktreePath = 'C:\\workspace\\already-removed'
     const worktreeId = `repo-1::${missingWorktreePath}`
-    mockKnownFeatureWorktree(missingWorktreePath)
+    const registeredWorktrees = mockKnownFeatureWorktree(missingWorktreePath)
+    listWorktreesMock.mockResolvedValueOnce(registeredWorktrees).mockResolvedValue([])
     store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta())
 
     const result = await handlers['worktrees:remove'](null, {
@@ -5784,6 +6656,40 @@ describe('registerWorktreeHandlers', () => {
       cwd: '/workspace/repo'
     })
     expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId)
+  })
+
+  it('preserves a locked missing registration even with force', async () => {
+    setPlatform('win32')
+    const missingWorktreePath = 'C:\\workspace\\locked-already-removed'
+    const worktreeId = `repo-1::${missingWorktreePath}`
+    const registeredWorktrees: GitWorktreeInfo[] = [
+      {
+        path: '/workspace/repo',
+        head: 'main',
+        branch: 'main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: missingWorktreePath,
+        head: 'feature',
+        branch: 'feature',
+        isBare: false,
+        isMainWorktree: false,
+        locked: true,
+        lockReason: 'active agent session'
+      }
+    ]
+    listWorktreesMock.mockResolvedValue(registeredWorktrees)
+    store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta())
+    removeWorktreeMock.mockResolvedValue({})
+
+    await expect(handlers['worktrees:remove'](null, { worktreeId, force: true })).rejects.toThrow(
+      'Worktree is locked by Git. Lock reason: active agent session'
+    )
+
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
   })
 
   it('refuses to delete the root workspace for folder-mode repos', async () => {
@@ -6334,6 +7240,169 @@ describe('registerWorktreeHandlers', () => {
     expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined)
   })
 
+  it('uses the workspace host when duplicate repo ids exist across local and SSH', async () => {
+    const localRepo = {
+      id: 'repo-shared',
+      path: '/local/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0,
+      worktreeBaseRef: null
+    }
+    const sshRepo = {
+      ...localRepo,
+      path: '/remote/repo',
+      displayName: 'ssh',
+      connectionId: 'conn-1'
+    }
+    const provider = {
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: sshRepo.path,
+          head: 'main',
+          branch: 'main',
+          isBare: false,
+          isMainWorktree: true
+        },
+        {
+          path: '/remote/feature-wt',
+          head: 'feature',
+          branch: 'feature',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      removeWorktree: vi.fn().mockResolvedValue(undefined),
+      worktreeIsClean: vi.fn().mockResolvedValue({ clean: true })
+    }
+    store.getRepo.mockReturnValue(localRepo)
+    store.getRepos.mockReturnValue([localRepo, sshRepo])
+    getSshGitProviderMock.mockReturnValue(provider)
+
+    await handlers['worktrees:remove'](null, {
+      worktreeId: 'repo-shared::/remote/feature-wt',
+      hostId: 'ssh:conn-1'
+    })
+
+    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined)
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when duplicate repo ids are deleted without a host', async () => {
+    const localRepo = {
+      id: 'repo-shared',
+      path: '/local/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const sshRepo = { ...localRepo, path: '/remote/repo', connectionId: 'conn-1' }
+    store.getRepos.mockReturnValue([localRepo, sshRepo])
+
+    await expect(
+      handlers['worktrees:remove'](null, {
+        worktreeId: 'repo-shared::/remote/feature-wt'
+      })
+    ).rejects.toThrow('Repo not found: repo-shared')
+
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(getSshGitProviderMock).not.toHaveBeenCalled()
+  })
+
+  it('inspects hooks on the requested host when repo ids collide', async () => {
+    const localRepo = {
+      id: 'repo-shared',
+      path: '/local/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const sshRepo = { ...localRepo, path: '/remote/repo', connectionId: 'conn-1' }
+    const fsProvider = {
+      readFile: vi.fn().mockResolvedValue({
+        content: 'scripts:\n  archive: remote-cleanup',
+        isBinary: false
+      })
+    }
+    store.getRepos.mockReturnValue([localRepo, sshRepo])
+    getSshFilesystemProviderMock.mockReturnValue(fsProvider)
+    parseOrcaYamlMock.mockReturnValue({ scripts: { archive: 'remote-cleanup' } })
+
+    await expect(
+      handlers['hooks:check'](null, {
+        repoId: 'repo-shared',
+        hostId: 'ssh:conn-1'
+      })
+    ).resolves.toEqual({
+      status: 'ok',
+      hasHooks: true,
+      hooks: { scripts: { archive: 'remote-cleanup' } },
+      mayNeedUpdate: false
+    })
+    expect(fsProvider.readFile).toHaveBeenCalledWith('/remote/repo/orca.yaml')
+    expect(hasHooksFileMock).not.toHaveBeenCalled()
+  })
+
+  it('fails hook inspection closed when duplicate repo ids omit the host', async () => {
+    const localRepo = {
+      id: 'repo-shared',
+      path: '/local/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const sshRepo = { ...localRepo, path: '/remote/repo', connectionId: 'conn-1' }
+    store.getRepos.mockReturnValue([localRepo, sshRepo])
+
+    await expect(handlers['hooks:check'](null, { repoId: 'repo-shared' })).resolves.toEqual({
+      status: 'error',
+      hasHooks: false,
+      hooks: null,
+      mayNeedUpdate: false
+    })
+    expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
+    expect(hasHooksFileMock).not.toHaveBeenCalled()
+  })
+
+  it('does not coalesce forget requests for the same id on different hosts', async () => {
+    const localRepo = {
+      id: 'repo-shared',
+      path: '/local/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const sshRepo = { ...localRepo, path: '/remote/repo', connectionId: 'conn-1' }
+    store.getRepos.mockReturnValue([localRepo, sshRepo])
+    let finishFirst!: () => void
+    killAllProcessesForWorktreeMock
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishFirst = () =>
+              resolve({ runtimeStopped: 0, providerStopped: 0, registryStopped: 0 })
+          })
+      )
+      .mockResolvedValueOnce({ runtimeStopped: 0, providerStopped: 0, registryStopped: 0 })
+
+    const first = handlers['worktrees:forgetLocal'](null, {
+      worktreeId: 'repo-shared::/same/path',
+      hostId: 'local'
+    }) as Promise<unknown>
+    await vi.waitFor(() => expect(killAllProcessesForWorktreeMock).toHaveBeenCalledTimes(1))
+
+    await expect(
+      handlers['worktrees:forgetLocal'](null, {
+        worktreeId: 'repo-shared::/same/path',
+        hostId: 'ssh:conn-1'
+      })
+    ).resolves.toEqual({})
+    expect(killAllProcessesForWorktreeMock).toHaveBeenCalledTimes(2)
+
+    finishFirst()
+    await expect(first).resolves.toEqual({})
+  })
+
   it('preserves the branch on remove for worktrees created from an existing local branch', async () => {
     mockKnownFeatureWorktree()
     removeWorktreeMock.mockResolvedValue(undefined)
@@ -6656,14 +7725,16 @@ describe('registerWorktreeHandlers', () => {
     await mkdir(adminWorktreePath, { recursive: true })
     await writeFile(join(orphanPath, '.git'), `gitdir: ${adminWorktreePath}\n`)
     await writeFile(join(adminWorktreePath, 'gitdir'), `${join(orphanPath, '.git')}\n`)
-    store.getRepo.mockReturnValue({
+    const repo = {
       id: 'repo-1',
       path: repoPath,
       displayName: 'repo',
       badgeColor: '#000',
       addedAt: 0,
       worktreeBaseRef: null
-    })
+    }
+    store.getRepo.mockReturnValue(repo)
+    store.getRepos.mockReturnValue([repo])
     mockKnownFeatureWorktree(join(parentDir, 'real-feature'), repoPath)
     store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta({ createdAt: Date.now() }))
 
@@ -6697,14 +7768,16 @@ describe('registerWorktreeHandlers', () => {
     await mkdir(adminWorktreePath, { recursive: true })
     await writeFile(join(orphanPath, '.git'), `gitdir: ${adminWorktreePath}\n`)
     await writeFile(join(adminWorktreePath, 'gitdir'), `${join(orphanPath, '.git')}\n`)
-    store.getRepo.mockReturnValue({
+    const repo = {
       id: 'repo-1',
       path: repoPath,
       displayName: 'repo',
       badgeColor: '#000',
       addedAt: 0,
       worktreeBaseRef: null
-    })
+    }
+    store.getRepo.mockReturnValue(repo)
+    store.getRepos.mockReturnValue([repo])
     mockKnownFeatureWorktree(join(parentDir, 'real-feature'), repoPath)
     store.getWorktreeMeta.mockReturnValue(
       makeWorktreeMeta({ orcaCreatedAt: Date.now(), orcaCreationSource: 'runtime' })
@@ -6926,6 +7999,7 @@ describe('registerWorktreeHandlers', () => {
     }) as Promise<unknown>
     const second = handlers['worktrees:remove'](null, {
       worktreeId: 'repo-1::/workspace/feature-wt',
+      hostId: 'local',
       force: true
     }) as Promise<unknown>
 
@@ -6963,6 +8037,7 @@ describe('registerWorktreeHandlers', () => {
     await expect(
       handlers['worktrees:remove'](null, {
         worktreeId: 'repo-1::/workspace/feature-wt',
+        hostId: 'local',
         force: true
       })
     ).rejects.toThrow('Worktree deletion already in progress')
@@ -7131,6 +8206,86 @@ describe('registerWorktreeHandlers', () => {
       })
     ).rejects.toThrow('Failed to delete worktree at /workspace/feature-wt. ?? scratch.txt')
 
+    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('fails locked dirty-force deletes before hooks, link cleanup, or PTY teardown', async () => {
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/repo',
+        head: 'main',
+        branch: 'main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: '/workspace/feature-wt',
+        head: 'feature',
+        branch: 'feature',
+        isBare: false,
+        isMainWorktree: false,
+        locked: true,
+        lockReason: 'active agent session'
+      }
+    ])
+    store.getRepo.mockReturnValue({
+      id: 'repo-1',
+      path: '/workspace/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      symlinkPaths: ['node_modules']
+    })
+    getEffectiveHooksMock.mockReturnValue({ scripts: { archive: 'echo archived' } })
+
+    await expect(
+      handlers['worktrees:remove'](null, {
+        worktreeId: 'repo-1::/workspace/feature-wt',
+        force: true
+      })
+    ).rejects.toThrow(
+      'Failed to force delete worktree at /workspace/feature-wt. Worktree is locked by Git.'
+    )
+
+    expect(assertWorktreeCleanForRemovalMock).not.toHaveBeenCalled()
+    expect(runHookMock).not.toHaveBeenCalled()
+    expect(removeWorktreeLinkedPathsMock).not.toHaveBeenCalled()
+    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('rechecks a local Git lock after the archive hook before teardown', async () => {
+    const unlockedWorktrees = mockKnownFeatureWorktree()
+    const lockedWorktrees = unlockedWorktrees.map((worktree) =>
+      worktree.path === '/workspace/feature-wt'
+        ? { ...worktree, locked: true, lockReason: 'locked during archive' }
+        : worktree
+    )
+    listWorktreesMock
+      .mockResolvedValueOnce(unlockedWorktrees)
+      .mockResolvedValueOnce(lockedWorktrees)
+    store.getRepo.mockReturnValue({
+      id: 'repo-1',
+      path: '/workspace/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      symlinkPaths: ['node_modules']
+    })
+    getEffectiveHooksMock.mockReturnValue({ scripts: { archive: 'echo archived' } })
+    runHookMock.mockResolvedValue({ success: true, output: '' })
+
+    await expect(
+      handlers['worktrees:remove'](null, {
+        worktreeId: 'repo-1::/workspace/feature-wt',
+        force: true
+      })
+    ).rejects.toThrow('Worktree is locked by Git')
+
+    expect(runHookMock).toHaveBeenCalled()
+    expect(removeWorktreeLinkedPathsMock).not.toHaveBeenCalled()
+    expect(assertWorktreeCleanForRemovalMock).not.toHaveBeenCalled()
     expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
     expect(removeWorktreeMock).not.toHaveBeenCalled()
   })
@@ -7347,5 +8502,81 @@ describe('registerWorktreeHandlers', () => {
     expect(addWorktreeMock).not.toHaveBeenCalled()
     expect(store.setWorktreeMeta).not.toHaveBeenCalled()
     expect(createSetupRunnerScriptMock).not.toHaveBeenCalled()
+  })
+
+  describe('worktrees:forgetLocal', () => {
+    it('forgets a workspace pinned to a removed SSH target without touching the provider', async () => {
+      const repo = {
+        id: 'repo-1',
+        path: '/workspace/repo',
+        displayName: 'repo',
+        badgeColor: '#000',
+        addedAt: 0,
+        connectionId: 'ssh-dead',
+        worktreeBaseRef: null
+      }
+      const ptyProvider = {} as never
+      const worktreeId = 'repo-1::/workspace/feature-wt'
+      store.getRepo.mockReturnValue(repo)
+      getLocalPtyProviderMock.mockReturnValue(ptyProvider)
+      // Why: a removed/disconnected SSH target has no live provider; forgetLocal
+      // must not reach for one.
+      getSshGitProviderMock.mockReturnValue(undefined)
+
+      const result = await handlers['worktrees:forgetLocal'](null, { worktreeId })
+
+      expect(result).toEqual({})
+      expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith(worktreeId, {
+        runtime: runtimeStub,
+        localProvider: ptyProvider,
+        onPtyStopped: clearProviderPtyStateMock
+      })
+      expect(runtimeStub.clearOptimisticReconcileToken).toHaveBeenCalledWith(worktreeId)
+      expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId)
+      expect(advertisedUrlWatcherForgetWorktreeMock).toHaveBeenCalledWith(worktreeId)
+      expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
+        repoId: 'repo-1'
+      })
+      // The whole point: local-only cleanup never dispatches to the SSH provider.
+      expect(getSshGitProviderMock).not.toHaveBeenCalled()
+      expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
+      expect(listWorktreesMock).not.toHaveBeenCalled()
+      expect(removeWorktreeMock).not.toHaveBeenCalled()
+    })
+
+    it('throws when the repo is missing', async () => {
+      store.getRepo.mockReturnValue(undefined)
+
+      await expect(
+        handlers['worktrees:forgetLocal'](null, {
+          worktreeId: 'repo-gone::/workspace/feature-wt'
+        })
+      ).rejects.toThrow(/Repo not found/)
+
+      expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+      expect(getSshGitProviderMock).not.toHaveBeenCalled()
+    })
+
+    it('rejects forgetting a folder project root', async () => {
+      const repo = {
+        id: 'repo-folder',
+        path: '/workspace/folder',
+        displayName: 'folder',
+        badgeColor: '#000',
+        addedAt: 0,
+        kind: 'folder' as const
+      }
+      store.getRepo.mockReturnValue(repo)
+
+      await expect(
+        handlers['worktrees:forgetLocal'](null, {
+          worktreeId: `${repo.id}::${repo.path}`
+        })
+      ).rejects.toThrow(/project root workspace/)
+
+      expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+      expect(deleteWorktreeHistoryDirMock).not.toHaveBeenCalled()
+    })
   })
 })

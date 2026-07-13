@@ -1,4 +1,5 @@
 import type { GlobalSettings, OrcaHooks } from '../../../shared/types'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { SetupScriptImportCandidate } from '../../../shared/setup-script-imports'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 
@@ -20,11 +21,12 @@ export type IssueCommandReadResult = {
 
 export async function checkRuntimeHooks(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
-  repoId: string
+  repoId: string,
+  hostId?: ExecutionHostId
 ): Promise<HookCheckResult> {
   const target = getActiveRuntimeTarget(settings)
   if (target.kind !== 'environment') {
-    return window.api.hooks.check({ repoId })
+    return window.api.hooks.check({ repoId, ...(hostId ? { hostId } : {}) })
   }
   return callRuntimeRpc<HookCheckResult>(
     target,
