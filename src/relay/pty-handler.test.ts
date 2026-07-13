@@ -1191,6 +1191,8 @@ describe('PtyHandler', () => {
   })
 
   it('fails closed when full POSIX PTY session teardown cannot be verified', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     const mockKill = vi.fn()
     mockKillPosixPtySession.mockResolvedValue(false)
     mockPtySpawn.mockReturnValue({
@@ -1200,13 +1202,17 @@ describe('PtyHandler', () => {
       onExit: vi.fn()
     })
 
-    await dispatcher.callRequest('pty.spawn', {})
+    try {
+      await dispatcher.callRequest('pty.spawn', {})
 
-    await expect(
-      dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
-    ).rejects.toThrow('Unable to verify full PTY session teardown: pty-1')
-    expect(mockKill).not.toHaveBeenCalled()
-    expect(handler.activePtyCount).toBe(1)
+      await expect(
+        dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+      ).rejects.toThrow('Unable to verify full PTY session teardown: pty-1')
+      expect(mockKill).not.toHaveBeenCalled()
+      expect(handler.activePtyCount).toBe(1)
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
   })
 
   it('does not signal a recycled root pid after the POSIX session kill succeeds', async () => {
