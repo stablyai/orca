@@ -37,6 +37,7 @@ test('resolveWebChatResumeAgent: 유효 native-chat 에이전트만 통과', () 
   expect(resolveWebChatResumeAgent('blank', [])).toBeNull()
   expect(resolveWebChatResumeAgent(null, [])).toBeNull()
   expect(resolveWebChatResumeAgent('claude', ['claude'])).toBeNull() // disabled
+  expect(resolveWebChatResumeAgent('gemini', [])).toBeNull() // native-chat 미지원
 })
 
 test('resumeWebChatAsLocalAgent: 시드로 launchAgentInNewTab 호출', async () => {
@@ -60,6 +61,19 @@ test('resumeWebChatAsLocalAgent: 빈 대화면 launch 안 하고 toast', async (
   ;(
     window as unknown as { api: { nativeChat: { readSession: unknown } } }
   ).api.nativeChat.readSession = vi.fn(async () => ({ messages: [] }))
+  await resumeWebChatAsLocalAgent({
+    session: { agent: 'gemini-web', sessionId: 'c_1', title: 'T' },
+    agent: 'claude',
+    worktreeId: 'w1'
+  })
+  expect(launchSpy).not.toHaveBeenCalled()
+  expect(toastError).toHaveBeenCalled()
+})
+
+test('resumeWebChatAsLocalAgent: 세션 읽기 에러면 launch 안 하고 toast', async () => {
+  ;(
+    window as unknown as { api: { nativeChat: { readSession: unknown } } }
+  ).api.nativeChat.readSession = vi.fn(async () => ({ error: 'boom' }))
   await resumeWebChatAsLocalAgent({
     session: { agent: 'gemini-web', sessionId: 'c_1', title: 'T' },
     agent: 'claude',
