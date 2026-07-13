@@ -1,0 +1,152 @@
+:root {
+  --bg: #fff;
+  --ink: #1f2733;
+  --ink-soft: #5b6675;
+  --ink-faint: #9aa4b2;
+  --line: #e8ebf0;
+  --line-soft: #eef1f5;
+  --accent: #4f6bed;
+  --accent-soft: #eef1fe;
+  --ok: #12a568;
+  --bad: #dc4b4b;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1c1f;
+    --ink: #ececed;
+    --ink-soft: #9c9da2;
+    --ink-faint: #6b6c72;
+    --line: #2a2a2e;
+    --line-soft: #212124;
+    --accent: #6b83f0;
+    --accent-soft: #26262c;
+  }
+}
+body {
+  margin: 0;
+  width: 320px;
+  font-family: -apple-system, system-ui, 'Apple SD Gothic Neo', sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+}
+.hd {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 14px 15px;
+}
+.dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: linear-gradient(135deg, #5b7cfa, #8a6bf0);
+}
+.nm {
+  font-weight: 700;
+  font-size: 14px;
+}
+.conn {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 9px;
+  border-radius: 999px;
+  color: var(--ink-soft);
+  background: var(--line-soft);
+}
+.conn.ok {
+  color: #0d7a4d;
+  background: #eefaf3;
+}
+.conn.ok::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+}
+.conn.bad {
+  color: #a12d2d;
+  background: #fdeeee;
+}
+.site {
+  margin: 2px 15px 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--line-soft);
+  font-size: 13px;
+  font-weight: 600;
+}
+.site .sub {
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+.cta {
+  margin: 12px 15px;
+  display: block;
+  width: calc(100% - 30px);
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+  font-size: 13.5px;
+  padding: 12px;
+  border-radius: 11px;
+  cursor: pointer;
+}
+.cta:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.prog {
+  margin: 0 15px 12px;
+}
+.prog-h {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  margin-bottom: 7px;
+}
+.bar {
+  height: 8px;
+  background: var(--line-soft);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.fill {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, #5b7cfa, #8a6bf0);
+  border-radius: 999px;
+  transition: width 0.3s;
+}
+.fill.done {
+  background: var(--ok);
+}
+.opt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 15px 8px;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  cursor: pointer;
+  user-select: none;
+}
+.opt input {
+  margin: 0;
+  cursor: pointer;
+}
+.foot {
+  border-top: 1px solid var(--line-soft);
+  padding: 9px 15px;
+  font-size: 11px;
+  color: var(--ink-faint);
+  text-align: center;
+}
