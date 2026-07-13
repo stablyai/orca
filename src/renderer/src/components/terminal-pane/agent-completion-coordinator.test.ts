@@ -40,6 +40,7 @@ function createRejectableDeferred<T>(): {
 }
 
 const HOOK_DONE_QUIET_MS = 1_500
+const CODEX_ATTENTION_QUIET_MS = 1_500
 
 describe('agent completion coordinator', () => {
   beforeEach(() => {
@@ -1432,6 +1433,174 @@ describe('agent completion coordinator', () => {
     )
   })
 
+  it('cancels a transient Codex waiting attention when work resumes before the quiet window', () => {
+    const dispatchCompletion = vi.fn()
+    const dispatchAttention = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      dispatchAttention,
+      isLive: () => true
+    })
+
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'implement notifications',
+      agentType: 'codex'
+    })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      prompt: 'implement notifications',
+      agentType: 'codex',
+      toolName: 'Bash',
+      toolInput: 'npm run test:submit'
+    })
+
+    vi.advanceTimersByTime(CODEX_ATTENTION_QUIET_MS - 1)
+    expect(dispatchAttention).not.toHaveBeenCalled()
+
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'implement notifications',
+      agentType: 'codex',
+      toolName: 'Bash',
+      toolInput: 'npm run test:submit'
+    })
+    vi.advanceTimersByTime(1)
+
+    expect(dispatchAttention).not.toHaveBeenCalled()
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+  })
+
+  it('cancels a transient Codex blocked attention when work resumes before the quiet window', () => {
+    const dispatchCompletion = vi.fn()
+    const dispatchAttention = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      dispatchAttention,
+      isLive: () => true
+    })
+
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'implement notifications',
+      agentType: 'codex'
+    })
+    coordinator.observeHookStatus({
+      state: 'blocked',
+      prompt: 'implement notifications',
+      agentType: 'codex',
+      toolName: 'Bash',
+      toolInput: 'rm file'
+    })
+
+    vi.advanceTimersByTime(CODEX_ATTENTION_QUIET_MS - 1)
+    expect(dispatchAttention).not.toHaveBeenCalled()
+
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'implement notifications',
+      agentType: 'codex',
+      toolName: 'Bash',
+      toolInput: 'rm file'
+    })
+    vi.advanceTimersByTime(1)
+
+    expect(dispatchAttention).not.toHaveBeenCalled()
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+  })
+
+  it('delays a persistent Codex waiting attention until the quiet window expires', () => {
+    const dispatchCompletion = vi.fn()
+    const dispatchAttention = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      dispatchAttention,
+      isLive: () => true
+    })
+
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'implement notifications',
+      agentType: 'codex'
+    })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      prompt: 'implement notifications',
+      agentType: 'codex',
+      toolName: 'Bash',
+      toolInput: 'npm run test:submit'
+    })
+
+    vi.advanceTimersByTime(CODEX_ATTENTION_QUIET_MS - 1)
+    expect(dispatchAttention).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1)
+    expect(dispatchAttention).toHaveBeenCalledTimes(1)
+    expect(dispatchAttention).toHaveBeenCalledWith(
+      'codex',
+      expect.objectContaining({
+        source: 'hook',
+        agentStatus: expect.objectContaining({
+          state: 'waiting',
+          agentType: 'codex',
+          toolInput: 'npm run test:submit'
+        })
+      })
+    )
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+  })
+
+  it('keeps non-Codex waiting attention immediate', () => {
+    const dispatchCompletion = vi.fn()
+    const dispatchAttention = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      dispatchAttention,
+      isLive: () => true
+    })
+
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'fix the bug',
+      agentType: 'claude'
+    })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      prompt: 'fix the bug',
+      agentType: 'claude',
+      toolName: 'Shell',
+      toolInput: 'pnpm test'
+    })
+
+    expect(dispatchAttention).toHaveBeenCalledTimes(1)
+    expect(dispatchAttention).toHaveBeenCalledWith(
+      'claude',
+      expect.objectContaining({
+        source: 'hook',
+        agentStatus: expect.objectContaining({
+          state: 'waiting',
+          agentType: 'claude'
+        })
+      })
+    )
+  })
+
   it('suppresses the attention dispatch when shouldSuppressHookCompletion matches', () => {
     // Why: guards the merge seam where the suppressor must short-circuit before
     // the attention path, so auto-approved Codex pauses never notify.
@@ -1471,6 +1640,35 @@ describe('agent completion coordinator', () => {
 
     expect(dispatchAttention).not.toHaveBeenCalled()
     expect(dispatchCompletion).not.toHaveBeenCalled()
+  })
+
+  it('clears a pending Codex attention timer on dispose', () => {
+    const dispatchAttention = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion: vi.fn(),
+      dispatchAttention,
+      isLive: () => true
+    })
+
+    coordinator.observeHookStatus({
+      state: 'working',
+      prompt: 'implement notifications',
+      agentType: 'codex'
+    })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      prompt: 'implement notifications',
+      agentType: 'codex'
+    })
+
+    coordinator.dispose()
+    vi.advanceTimersByTime(CODEX_ATTENTION_QUIET_MS)
+
+    expect(dispatchAttention).not.toHaveBeenCalled()
   })
 
   it('does not dispatch completion when a blocked state arrives mid-turn', () => {

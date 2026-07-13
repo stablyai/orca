@@ -61,6 +61,7 @@ const PENDING_TITLE_TTL_MS = Math.max(2_000, INSPECTION_TIMEOUT_MS + 500)
 const PENDING_TITLE_MAX_TTL_MS = Math.max(30_000, PENDING_TITLE_TTL_MS)
 const COMPLETION_REPLAY_GUARD_MS = 1_000
 const HOOK_DONE_QUIET_MS = 1_500
+const CODEX_ATTENTION_QUIET_MS = 1_500
 
 const POLL_TIER_INTERVAL_MS: Record<PollCadenceTier, number> = {
   active: ACTIVE_POLL_INTERVAL_MS,
@@ -106,6 +107,8 @@ export function createAgentCompletionCoordinator(
   let pendingHookDoneTimer: ReturnType<typeof setTimeout> | null = null
   let pendingHookDoneTitle: string | null = null
   let pendingHookDonePayload: AgentCompletionStatusSnapshot | null = null
+  let pendingAttentionTimer: ReturnType<typeof setTimeout> | null = null
+  let pendingAttentionPayload: AgentCompletionStatusSnapshot | null = null
   let pendingProcessExitAgent: RecognizedAgentProcess | null = null
   let pendingTitleSequence = 0
   let pendingTitle: {
@@ -153,6 +156,14 @@ export function createAgentCompletionCoordinator(
     }
     pendingHookDoneTitle = null
     pendingHookDonePayload = null
+  }
+
+  function clearPendingAttention(): void {
+    if (pendingAttentionTimer !== null) {
+      clearTimeout(pendingAttentionTimer)
+      pendingAttentionTimer = null
+    }
+    pendingAttentionPayload = null
   }
 
   function establishAgentEvidence(): void {
@@ -282,6 +293,7 @@ export function createAgentCompletionCoordinator(
       completionIdentity?: LastCompletionIdentity | null
     } = {}
   ): void {
+    clearPendingAttention()
     if (source !== 'hook' && pendingHookDoneTimer !== null) {
       return
     }
@@ -338,6 +350,21 @@ export function createAgentCompletionCoordinator(
       source: 'hook',
       agentStatus: payload
     })
+  }
+
+  function scheduleCodexAttention(payload: AgentCompletionStatusSnapshot): void {
+    pendingAttentionPayload = payload
+    if (pendingAttentionTimer !== null) {
+      return
+    }
+    pendingAttentionTimer = setTimeout(() => {
+      pendingAttentionTimer = null
+      const pendingPayload = pendingAttentionPayload
+      pendingAttentionPayload = null
+      if (pendingPayload) {
+        dispatchAttention(pendingPayload)
+      }
+    }, CODEX_ATTENTION_QUIET_MS)
   }
 
   function scheduleHookDoneCompletion(title: string, payload: AgentCompletionStatusSnapshot): void {
@@ -789,6 +816,7 @@ export function createAgentCompletionCoordinator(
       // so the quiet-window timer never fires a false completion notification.
       if (isAttentionHookState(payload.state)) {
         clearPendingHookDone()
+        clearPendingAttention()
       }
       return
     }
@@ -797,6 +825,7 @@ export function createAgentCompletionCoordinator(
     }
     if (payload.state === 'working') {
       clearPendingHookDone()
+      clearPendingAttention()
       workingStatusObserved = true
       requiresFreshWorking = false
       lastCompletionIdentity = null
@@ -810,10 +839,15 @@ export function createAgentCompletionCoordinator(
       // Why: a permission/elicitation pause arriving before the quiet window
       // must cancel a provisional 'done' so it never becomes a false completion.
       clearPendingHookDone()
-      dispatchAttention(payload)
+      if (payload.agentType === 'codex') {
+        scheduleCodexAttention(payload)
+      } else {
+        dispatchAttention(payload)
+      }
       return
     }
     if (isCompletionHookState(payload.state)) {
+      clearPendingAttention()
       if (isRecognizedAgentType(payload.agentType)) {
         establishAgentEvidence()
       }
@@ -885,6 +919,7 @@ export function createAgentCompletionCoordinator(
 
   function resetCompletionState(options: { requireFreshWorking?: boolean } = {}): void {
     clearPendingHookDone()
+    clearPendingAttention()
     dropPendingTitle()
     agentIdentityEstablished = false
     hasAgentRunEvidence = false
@@ -905,6 +940,7 @@ export function createAgentCompletionCoordinator(
     disposed = true
     clearPollTimer()
     clearPendingHookDone()
+    clearPendingAttention()
     dropPendingTitle()
     // Why: the dedup identity is module-scoped so it survives a live-stream remount
     // (dispose-then-recreate with the same paneKey while isLive() stays true). Only
