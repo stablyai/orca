@@ -141,13 +141,30 @@ export class CodexRuntimeHomeService {
   prepareForCodexLaunch(target?: CodexAccountSelectionTarget): string | null {
     if (target?.runtime === 'wsl') {
       const wslTarget = this.resolveWslDefaultTarget(target)
+      if (this.getSelectedAccountId(wslTarget) === null) {
+        // Why: account isolation must not relocate ordinary WSL Codex state.
+        // Without a managed selection, let Codex keep using its native ~/.codex.
+        return this.getWslSystemCodexHomePath(wslTarget)
+      }
       const syncedRuntimeHomePath = this.syncWslRuntimeForCurrentSelection(wslTarget)
+      if (this.getSelectedAccountId(wslTarget) === null) {
+        return this.getWslSystemCodexHomePath(wslTarget)
+      }
       this.syncWslConfigAndGlobalInstructionsForLaunch(wslTarget, syncedRuntimeHomePath)
       const runtimeHomePath = syncedRuntimeHomePath ?? this.getWslSystemCodexHomePath(wslTarget)
       this.startWslSessionBridgeForLaunch(wslTarget, runtimeHomePath)
       return runtimeHomePath
     }
+    const hostTarget = { runtime: 'host' } as const
+    if (this.getSelectedAccountId(hostTarget) === null) {
+      // Why: CODEX_HOME relocates sessions and every other Codex state file,
+      // so only opt into Orca's runtime home for an explicitly managed account.
+      return null
+    }
     this.syncForCurrentSelection()
+    if (this.getSelectedAccountId(hostTarget) === null) {
+      return null
+    }
     syncSystemCodexResourcesIntoManagedHome()
     syncSystemConfigIntoManagedCodexHome()
     // Why: historical Codex sessions can be large; bridge them after launch
@@ -255,7 +272,14 @@ export class CodexRuntimeHomeService {
       const syncedRuntimeHomePath = this.getPreparedWslRateLimitHomePath(wslTarget)
       return syncedRuntimeHomePath ?? this.getWslSystemCodexHomePath(wslTarget)
     }
+    const hostTarget = { runtime: 'host' } as const
+    if (this.getSelectedAccountId(hostTarget) === null) {
+      return null
+    }
     this.syncForCurrentSelection()
+    if (this.getSelectedAccountId(hostTarget) === null) {
+      return null
+    }
     syncSystemCodexResourcesIntoManagedHome()
     syncSystemConfigIntoManagedCodexHome()
     return this.getRuntimeHomePath()
@@ -338,10 +362,9 @@ export class CodexRuntimeHomeService {
           this.persistRuntimeLogoutMarker(null)
           this.lastWrittenAuthJson = null
         } else if (this.lastWrittenAuthJson === null) {
-          // Why: Orca-launched Codex sessions now use an Orca-owned CODEX_HOME
-          // even when no managed account is selected. Seed that runtime home
-          // from the user's current system-default auth once so dev/prod Orca
-          // terminals stay logged in without mutating ~/.codex on startup.
+          // Why: explicit account-transition syncs may still need a coherent
+          // fallback runtime snapshot, even though system launches now use
+          // native ~/.codex and do not enter this path during ordinary startup.
           this.restoreSystemDefaultSnapshot({ detectExternalLogin: false })
         } else {
           this.persistRuntimeLogoutMarker()
@@ -516,6 +539,10 @@ export class CodexRuntimeHomeService {
       return null
     }
     return accounts.find((account) => account.id === activeAccountId) ?? null
+  }
+
+  private getSelectedAccountId(target: CodexAccountSelectionTarget): string | null {
+    return getSelectedCodexAccountIdForTarget(this.store.getSettings(), target)
   }
 
   private getWslManagedHomePath(account: CodexManagedAccount | null): string | null {

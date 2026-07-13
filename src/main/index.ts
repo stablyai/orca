@@ -704,7 +704,10 @@ async function startServeAgentHookServer(): Promise<void> {
   }
 }
 
-function prepareCodexRuntimeHomeForLaunch(target?: CodexAccountSelectionTarget): string | null {
+function prepareCodexRuntimeHomeForLaunch(
+  target?: CodexAccountSelectionTarget,
+  nativeHostHomePath?: string
+): string | null {
   const runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target)
   const hookTarget =
     target?.runtime === 'wsl'
@@ -718,10 +721,8 @@ function prepareCodexRuntimeHomeForLaunch(target?: CodexAccountSelectionTarget):
     // Why: launch prep is reachable after startup via PTY/runtime paths; honor
     // the persisted off switch so those launches cannot reinstall removed hooks.
     const status = hooksEnabled
-      ? (codexHookService.installForRuntimeHome(runtimeHomePath, hookTarget) ??
-        codexHookService.install())
-      : (codexHookService.refreshRuntimeUserHooksForRuntimeHome(runtimeHomePath, hookTarget) ??
-        codexHookService.refreshRuntimeUserHooks())
+      ? codexHookService.installForLaunchHome(runtimeHomePath, hookTarget, nativeHostHomePath)
+      : codexHookService.refreshForLaunchHome(runtimeHomePath, hookTarget, nativeHostHomePath)
     if (status.state === 'error') {
       console.warn(
         `[codex-hook-service] failed to ${
