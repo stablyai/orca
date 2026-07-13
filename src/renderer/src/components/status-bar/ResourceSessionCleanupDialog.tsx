@@ -59,14 +59,14 @@ function getDialogDescription(state: ResourceSessionCleanupReviewState): string 
   }
 }
 
-function getKillButtonLabel(inactiveCount: number): string {
+function getCloseButtonLabel(inactiveCount: number): string {
   if (inactiveCount === 0) {
-    return translate(`${TRANSLATION_PREFIX}.none`, 'No inactive terminals to kill')
+    return translate(`${TRANSLATION_PREFIX}.none`, 'No inactive terminals to close')
   }
   if (inactiveCount === 1) {
-    return translate(`${TRANSLATION_PREFIX}.killOne`, 'Kill 1 inactive terminal')
+    return translate(`${TRANSLATION_PREFIX}.closeOne`, 'Close 1 inactive terminal')
   }
-  return translate(`${TRANSLATION_PREFIX}.killMany`, 'Kill {{value0}} inactive terminals', {
+  return translate(`${TRANSLATION_PREFIX}.closeMany`, 'Close {{value0}} inactive terminals', {
     value0: inactiveCount
   })
 }
@@ -99,7 +99,7 @@ function ResourceSessionCleanupDialogActions({
             {translate(`${TRANSLATION_PREFIX}.cancel`, 'Cancel')}
           </Button>
           <Button variant="destructive" onClick={onConfirm} disabled={inactiveCount === 0}>
-            {getKillButtonLabel(inactiveCount)}
+            {getCloseButtonLabel(inactiveCount)}
           </Button>
         </>
       )

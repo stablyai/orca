@@ -60,7 +60,7 @@ describe('ResourceSessionCleanupDialog', () => {
     expect(screen.getByText('1 inactive terminal can be closed.')).toBeTruthy()
     expect(screen.getByText('2 active or unverified terminals will be protected.')).toBeTruthy()
     expect(
-      (screen.getByRole('button', { name: 'Kill 1 inactive terminal' }) as HTMLButtonElement)
+      (screen.getByRole('button', { name: 'Close 1 inactive terminal' }) as HTMLButtonElement)
         .disabled
     ).toBe(false)
   })
@@ -80,7 +80,7 @@ describe('ResourceSessionCleanupDialog', () => {
     expect(
       (
         screen.getByRole('button', {
-          name: 'No inactive terminals to kill'
+          name: 'No inactive terminals to close'
         }) as HTMLButtonElement
       ).disabled
     ).toBe(true)
