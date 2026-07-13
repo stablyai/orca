@@ -169,6 +169,32 @@ describe('RepoMultiCombobox groups section', () => {
     expect(onChange).not.toHaveBeenCalled()
   })
 
+  it('mirrors child selection on group rows: none, partial minus with count, all check', () => {
+    renderCombobox({ groups, selected: new Set(['r1']) })
+
+    const platformIndicator = container.querySelector(
+      '[data-command-value="group:g1"] [data-group-selection-state]'
+    )
+    expect(platformIndicator?.getAttribute('data-group-selection-state')).toBe('partial')
+    expect(container.querySelector('[data-command-value="group:g1"]')?.textContent).toContain(
+      '1/2 projects'
+    )
+    expect(
+      container
+        .querySelector('[data-command-value="group:g2"] [data-group-selection-state]')
+        ?.getAttribute('data-group-selection-state')
+    ).toBe('none')
+
+    renderCombobox({ groups, selected: new Set(['r1', 'r2']) })
+    const fullIndicator = container.querySelector(
+      '[data-command-value="group:g1"] [data-group-selection-state]'
+    )
+    expect(fullIndicator?.getAttribute('data-group-selection-state')).toBe('all')
+    expect(container.querySelector('[data-command-value="group:g1"]')?.textContent).toContain(
+      '2 projects'
+    )
+  })
+
   it('filters group rows by the search query', () => {
     renderCombobox({ groups })
 

@@ -2428,7 +2428,8 @@
               "65a3dae41d": "No projects",
               "f6c169f19a": "Groups",
               "55821ddef9": "Projects",
-              "2f01be5a6c": "{{value0}} projects"
+              "2f01be5a6c": "{{value0}} projects",
+              "fec864f87b": "{{value0}}/{{value1}} projects"
             }
           }
         },

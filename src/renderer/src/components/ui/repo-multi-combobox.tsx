@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import { Check, ChevronsUpDown } from 'lucide-react'
+import { Check, ChevronsUpDown, Minus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Command,
@@ -98,6 +98,24 @@ export function getVisibleComboboxGroups(
       repoIds: group.repoIds.filter((repoId) => selectableIds.has(repoId))
     }))
     .filter((group) => group.repoIds.length > 0)
+}
+
+/** Aggregate selection of a group row's repos. A group is never a selection
+ *  of its own — its indicator mirrors the child repos (all → check, some →
+ *  minus), so a fully-selected list does not read as duplicate selections. */
+export function getComboboxGroupSelection(
+  selected: ReadonlySet<string>,
+  groupRepoIds: readonly string[]
+): { state: 'none' | 'partial' | 'all'; selectedCount: number } {
+  let selectedCount = 0
+  for (const repoId of groupRepoIds) {
+    if (selected.has(repoId)) {
+      selectedCount += 1
+    }
+  }
+  const state =
+    selectedCount === 0 ? 'none' : selectedCount === groupRepoIds.length ? 'all' : 'partial'
+  return { state, selectedCount }
 }
 
 /** Toggle semantics for a group row: selects the group's repos, or deselects
@@ -293,7 +311,7 @@ export default function RepoMultiCombobox({
                 heading={translate('auto.components.ui.repo.multi.combobox.f6c169f19a', 'Groups')}
               >
                 {visibleGroups.map((group) => {
-                  const groupSelected = group.repoIds.every((repoId) => selected.has(repoId))
+                  const groupSelection = getComboboxGroupSelection(selected, group.repoIds)
                   return (
                     <CommandItem
                       key={`group:${group.id}`}
@@ -301,19 +319,34 @@ export default function RepoMultiCombobox({
                       onSelect={() => toggleGroup(group.repoIds)}
                       className="items-center gap-2 px-3 py-1.5 text-xs"
                     >
-                      <Check
-                        className={cn(
-                          'size-3 text-muted-foreground',
-                          groupSelected ? 'opacity-70' : 'opacity-0'
+                      <span
+                        data-group-selection-state={groupSelection.state}
+                        className="flex size-3 shrink-0 items-center justify-center"
+                      >
+                        {groupSelection.state === 'partial' ? (
+                          <Minus className="size-3 text-muted-foreground opacity-70" />
+                        ) : (
+                          <Check
+                            className={cn(
+                              'size-3 text-muted-foreground',
+                              groupSelection.state === 'all' ? 'opacity-70' : 'opacity-0'
+                            )}
+                          />
                         )}
-                      />
+                      </span>
                       <span className="min-w-0 flex-1 truncate">{group.name}</span>
                       <span className="pl-2 text-[10px] text-muted-foreground">
-                        {translate(
-                          'auto.components.ui.repo.multi.combobox.2f01be5a6c',
-                          '{{value0}} projects',
-                          { value0: group.repoIds.length }
-                        )}
+                        {groupSelection.state === 'partial'
+                          ? translate(
+                              'auto.components.ui.repo.multi.combobox.fec864f87b',
+                              '{{value0}}/{{value1}} projects',
+                              { value0: groupSelection.selectedCount, value1: group.repoIds.length }
+                            )
+                          : translate(
+                              'auto.components.ui.repo.multi.combobox.2f01be5a6c',
+                              '{{value0}} projects',
+                              { value0: group.repoIds.length }
+                            )}
                       </span>
                     </CommandItem>
                   )

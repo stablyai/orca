@@ -2428,7 +2428,8 @@
               "65a3dae41d": "Sin proyectos",
               "f6c169f19a": "Grupos",
               "55821ddef9": "Proyectos",
-              "2f01be5a6c": "{{value0}} proyectos"
+              "2f01be5a6c": "{{value0}} proyectos",
+              "fec864f87b": "{{value0}}/{{value1}} proyectos"
             }
           }
         },
