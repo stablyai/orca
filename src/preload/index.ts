@@ -4242,6 +4242,13 @@ const api = {
         }
     > => ipcRenderer.invoke('mobile:getPairingQR', args),
 
+    getWindowsFirewallStatus: (args?: { address?: string }) =>
+      ipcRenderer.invoke('mobile:getWindowsFirewallStatus', args),
+
+    repairWindowsFirewall: () => ipcRenderer.invoke('mobile:repairWindowsFirewall'),
+
+    openWindowsNetworkSettings: () => ipcRenderer.invoke('mobile:openWindowsNetworkSettings'),
+
     getRuntimePairingUrl: (args?: {
       address?: string
       rotate?: boolean
