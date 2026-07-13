@@ -121,6 +121,9 @@ describe('scanAiVaultSessions Codex worker sessions', () => {
       droidSessionsDir: join(root, 'droid-sessions'),
       droidProjectsDir: join(root, 'droid-projects'),
       kimiSessionsDir: join(root, 'kimi-sessions'),
+      // Why: keep the scan off the real chat-import chats.db so imported web
+      // chats can't leak into this exact-match assertion.
+      webchatDbPath: join(root, 'webchat', 'chats.db'),
       platform: 'darwin'
     })
 
