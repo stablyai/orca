@@ -84,4 +84,26 @@ describe('processChatImportHostMessage', () => {
     )
     expect(res.type).toBe('ERROR')
   })
+
+  it('echoes the request _id back on the response', () => {
+    const db = tempDb()
+    const res = processChatImportHostMessage(
+      db,
+      JSON.stringify({ type: 'INGESTED_IDS', source: 'CHATGPT', _id: 42 }),
+      'now'
+    )
+    expect(res).toMatchObject({ type: 'INGESTED_IDS', externalIds: [], _id: 42 })
+  })
+
+  it('responds to PING with PONG (echoing _id)', () => {
+    const db = tempDb()
+    const res = processChatImportHostMessage(db, JSON.stringify({ type: 'PING', _id: 7 }), 'now')
+    expect(res).toEqual({ type: 'PONG', _id: 7 })
+  })
+
+  it('omits _id when the request has none', () => {
+    const db = tempDb()
+    const res = processChatImportHostMessage(db, JSON.stringify({ type: 'PING' }), 'now')
+    expect(res).toEqual({ type: 'PONG' })
+  })
 })

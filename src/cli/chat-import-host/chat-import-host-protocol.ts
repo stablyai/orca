@@ -7,9 +7,10 @@ import {
 } from '../../main/chat-import/chat-import-store'
 
 export type ChatImportHostResponse =
-  | { type: 'INGESTED_IDS'; externalIds: string[] }
-  | { type: 'INGEST'; ok: true; id: string }
-  | { type: 'ERROR'; error: string }
+  | { type: 'INGESTED_IDS'; externalIds: string[]; _id?: number | string }
+  | { type: 'INGEST'; ok: true; id: string; _id?: number | string }
+  | { type: 'PONG'; _id?: number | string }
+  | { type: 'ERROR'; error: string; _id?: number | string }
 
 const SOURCES: readonly WebChatSource[] = ['CHATGPT', 'CLAUDE', 'GEMINI']
 
@@ -68,22 +69,32 @@ export function processChatImportHostMessage(
     return { type: 'ERROR', error: 'not an object' }
   }
   const request = message as Record<string, unknown>
+  // Why: the extension correlates each response to its request via _id; echo it back.
+  const idField: { _id?: number | string } =
+    typeof request._id === 'number' || typeof request._id === 'string' ? { _id: request._id } : {}
+  const withId = (r: ChatImportHostResponse): ChatImportHostResponse => ({ ...r, ...idField })
   try {
+    if (request.type === 'PING') {
+      return withId({ type: 'PONG' })
+    }
     if (request.type === 'INGESTED_IDS') {
       if (!isSource(request.source)) {
-        return { type: 'ERROR', error: 'bad source' }
+        return withId({ type: 'ERROR', error: 'bad source' })
       }
-      return { type: 'INGESTED_IDS', externalIds: listIngestedExternalIds(db, request.source) }
+      return withId({
+        type: 'INGESTED_IDS',
+        externalIds: listIngestedExternalIds(db, request.source)
+      })
     }
     if (request.type === 'INGEST') {
       const conv = parseConversation(request.conv)
       if (!conv) {
-        return { type: 'ERROR', error: 'bad conversation' }
+        return withId({ type: 'ERROR', error: 'bad conversation' })
       }
-      return { type: 'INGEST', ok: true, id: upsertWebConversation(db, conv, syncedAt) }
+      return withId({ type: 'INGEST', ok: true, id: upsertWebConversation(db, conv, syncedAt) })
     }
-    return { type: 'ERROR', error: `unknown type: ${String(request.type)}` }
+    return withId({ type: 'ERROR', error: `unknown type: ${String(request.type)}` })
   } catch (err) {
-    return { type: 'ERROR', error: err instanceof Error ? err.message : String(err) }
+    return withId({ type: 'ERROR', error: err instanceof Error ? err.message : String(err) })
   }
 }
