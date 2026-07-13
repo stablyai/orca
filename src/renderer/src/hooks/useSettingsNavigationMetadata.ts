@@ -12,6 +12,7 @@ import {
   Bug,
   Cable,
   FlaskConical,
+  FolderInput,
   GitBranch,
   Globe,
   Keyboard,
@@ -53,6 +54,7 @@ import { getInputPaneSearchEntries } from '@/components/settings/input-search'
 import { getTerminalPaneSearchEntries } from '@/components/settings/terminal-search'
 import { getQuickCommandsPaneSearchEntries } from '@/components/settings/quick-commands-search'
 import { getBrowserPaneCombinedSearchEntries } from '@/components/settings/browser-pane-search'
+import { getWebChatImportPaneSearchEntries } from '@/components/settings/web-chat-import-search'
 import { getNotificationsPaneSearchEntries } from '@/components/settings/notifications-search'
 import { getOrchestrationPaneSearchEntries } from '@/components/settings/orchestration-search'
 import {
@@ -363,6 +365,20 @@ export function buildSettingsNavigationMetadata({
       ),
       icon: PanelsTopLeft,
       searchEntries: getFloatingWorkspaceSearchEntries(),
+      group: 'workflows'
+    },
+    {
+      id: 'web-chat-import',
+      title: translate(
+        'auto.hooks.useSettingsNavigationMetadata.webChatImportTitle',
+        'Web Chat Import'
+      ),
+      description: translate(
+        'auto.hooks.useSettingsNavigationMetadata.webChatImportDescription',
+        'Set where ChatGPT, Claude.ai, and Gemini conversations are imported from.'
+      ),
+      icon: FolderInput,
+      searchEntries: getWebChatImportPaneSearchEntries(),
       group: 'workflows'
     },
     {

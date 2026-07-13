@@ -37,6 +37,7 @@ import { InputPane } from './InputPane'
 import { ShortcutsPane } from './ShortcutsPane'
 import { TerminalPane } from './TerminalPane'
 import { FloatingWorkspacePane } from './FloatingWorkspacePane'
+import { WebChatImportPane } from './WebChatImportPane'
 import { useGhosttyImport } from './useGhosttyImport'
 import { useWarpThemeImport } from './useWarpThemeImport'
 import { RepositoryPane } from './RepositoryPane'
@@ -1423,6 +1424,23 @@ function Settings(): React.JSX.Element {
                 >
                   {isSectionMounted('floating-workspace') ? (
                     <FloatingWorkspacePane settings={settings} updateSettings={updateSettings} />
+                  ) : null}
+                </SettingsSection>
+
+                <SettingsSection
+                  id="web-chat-import"
+                  title={translate(
+                    'auto.components.settings.Settings.webChatImportTitle',
+                    'Web Chat Import'
+                  )}
+                  description={translate(
+                    'auto.components.settings.Settings.webChatImportDescription',
+                    'Set where ChatGPT, Claude.ai, and Gemini conversations are imported from.'
+                  )}
+                  searchEntries={getSectionSearchEntries('web-chat-import')}
+                >
+                  {isSectionMounted('web-chat-import') ? (
+                    <WebChatImportPane settings={settings} updateSettings={updateSettings} />
                   ) : null}
                 </SettingsSection>
 
