@@ -721,6 +721,10 @@ import {
   registerTerminalViewAttributesApplier
 } from './terminal-view-attribute-store'
 import { killAllProcessesForWorktree } from './worktree-teardown'
+import {
+  MobileNotificationReplayBuffer,
+  type ReplayableMobileNotification
+} from './mobile-notification-replay'
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
 import {
   createMobileSessionTabsNotifyCoalescer,
@@ -2034,6 +2038,10 @@ type ResolvedWorktreeInFlight = {
   promise: Promise<ResolvedWorktreeSnapshot>
 }
 
+// Why: notificationSeq is the desktop-assigned monotonic sequence used for
+// mobile reconnect catch-up (#8129). It is added on dispatch (and replay) so a
+// client can watermark the last event it delivered and request exactly the
+// events after it — idempotent, no duplicate local pushes.
 export type MobileNotificationDispatchEvent = {
   type: 'notification'
   source: 'agent-task-complete' | 'terminal-bell' | 'test'
@@ -2041,11 +2049,13 @@ export type MobileNotificationDispatchEvent = {
   body: string
   worktreeId?: string
   notificationId?: string
+  notificationSeq?: number
 }
 
 export type MobileNotificationDismissEvent = {
   type: 'dismiss'
   notificationId: string
+  notificationSeq?: number
 }
 
 export type MobileNotificationEvent =
@@ -7356,10 +7366,28 @@ export class OrcaRuntimeService {
     return this.notificationListeners.size
   }
 
+  // Why: bounded replay buffer for the mobile reconnect catch-up (#8129).
+  // Every dispatched notification is recorded with a monotonic seq so a
+  // reconnecting client can fetch exactly the events it missed. Kept on the
+  // service instance (not per-client) because the buffer is a global,
+  // idempotent-by-seq source of truth; clients watermark their own position.
+  private readonly mobileNotificationReplay = new MobileNotificationReplayBuffer()
+
   dispatchMobileNotification(event: MobileNotificationEvent): void {
+    const seq = this.mobileNotificationReplay.record(event)
     for (const listener of this.notificationListeners) {
-      listener(event)
+      // Why: surface the desktop-assigned seq to live listeners so they can
+      // watermark the last event delivered and feed it back to getMissedSince
+      // on reconnect (idempotent catch-up, no duplicate local pushes).
+      listener({ ...event, notificationSeq: seq })
     }
+  }
+
+  // Returns notifications dispatched after lastSeenSeq. Idempotent: the same
+  // watermark always yields the same set, so a client cannot be re-pushed an
+  // already-delivered event (the adversarial-review gate for #8129).
+  getMissedNotificationsSince(lastSeenSeq: number): ReplayableMobileNotification[] {
+    return this.mobileNotificationReplay.getMissedSince(lastSeenSeq)
   }
 
   dismissMobileNotification(notificationId: string): void {
