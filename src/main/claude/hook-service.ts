@@ -12,6 +12,12 @@ import {
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
 import {
+  buildPosixHookPayloadCapture,
+  buildWindowsHookEnvironmentGuardLines,
+  buildWindowsHookStdinDrainEpilogue,
+  WINDOWS_HOOK_STDIN_DRAIN_LABEL
+} from '../agent-hooks/hook-stdin-contract'
+import {
   applyManagedHooks,
   CLAUDE_EVENTS,
   CLAUDE_HOOK_SETTINGS,
@@ -50,7 +56,7 @@ function getManagedScript(
         ? [
             // Why: Devin imports .claude hooks by default. Skip Orca's managed
             // Claude hook there so status posts stay attributed to Devin.
-            'if not "%DEVIN_PROJECT_DIR%"=="" exit /b 0'
+            `if not "%DEVIN_PROJECT_DIR%"=="" goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`
           ]
         : []),
       // Why: the endpoint file holds the *live* port/token for this Orca
@@ -60,9 +66,7 @@ function getManagedScript(
       // reaches the current server. Falls through to PTY env if the file
       // is missing (first run / pre-endpoint-file / running outside Orca).
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
-      'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0',
-      'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
-      'if "%ORCA_PANE_KEY%"=="" exit /b 0',
+      ...buildWindowsHookEnvironmentGuardLines(),
       // Why: post via curl.exe, not a second PowerShell. Claude's launcher is
       // already an encoded PowerShell command (Git Bash needs it to survive
       // spaces); a PowerShell post on top of that meant two interpreter
@@ -70,12 +74,14 @@ function getManagedScript(
       // curl works the same here as for the POSIX/Codex hooks.
       buildWindowsAgentHookCurlPostCommand('claude'),
       'exit /b 0',
+      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }
 
   return [
     '#!/bin/sh',
+    ...buildPosixHookPayloadCapture(),
     ...(options.skipWhenDevinImportsClaude
       ? [
           // Why: Devin imports .claude hooks by default. Skip Orca's managed
@@ -103,10 +109,6 @@ function getManagedScript(
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
-    '  exit 0',
-    'fi',
-    'payload=$(cat)',
-    'if [ -z "$payload" ]; then',
     '  exit 0',
     'fi',
     // Why: worktreeId embeds a filesystem path, so hand-building JSON in POSIX
