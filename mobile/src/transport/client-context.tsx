@@ -46,11 +46,10 @@ type ContextValue = {
   // unreachable, re-pair?" prompt.
   getLastConnectedAt: (hostId: string) => number | null
   subscribeHostState: (hostId: string, listener: (state: ConnectionState) => void) => () => void
-  getAllClients: () => Array<{ hostId: string; client: RpcClient }>
+  getClient: (hostId: string) => RpcClient | null
   subscribeAllHosts: (listener: () => void) => () => void
-  // Why: lets the home screen feed already-loaded HostProfiles in so we
-  // don't pay loadHosts() latency twice (once in the focus-effect, again
-  // inside openEntry).
+  // Why: keeps loaded profiles fresh for later reconnects that do not carry
+  // the profile argument used by initial multi-host acquisition.
   primeHosts: (hosts: HostProfile[]) => void
 }
 
@@ -301,12 +300,8 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
     []
   )
 
-  const getAllClients = useCallback((): Array<{ hostId: string; client: RpcClient }> => {
-    const out: Array<{ hostId: string; client: RpcClient }> = []
-    for (const [hostId, entry] of storeRef.current) {
-      out.push({ hostId, client: entry.client })
-    }
-    return out
+  const getClient = useCallback((hostId: string): RpcClient | null => {
+    return storeRef.current.get(hostId)?.client ?? null
   }, [])
 
   const subscribeAllHosts = useCallback((listener: () => void) => {
@@ -358,7 +353,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       getReconnectAttempt,
       getLastConnectedAt,
       subscribeHostState,
-      getAllClients,
+      getClient,
       subscribeAllHosts,
       primeHosts
     }),
@@ -371,7 +366,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       getReconnectAttempt,
       getLastConnectedAt,
       subscribeHostState,
-      getAllClients,
+      getClient,
       subscribeAllHosts,
       primeHosts
     ]
@@ -418,11 +413,11 @@ export function useHostClient(hostId: string | undefined): {
       // Why: the client materialises after an async open, and forceReconnect
       // swaps in a fresh client object. Re-read on every state change so a
       // mounted screen never keeps driving a stale (closed) client.
-      const found = ctx.getAllClients().find((entry) => entry.hostId === hostId)
-      if (found && found.client !== clientRef.current) {
-        clientRef.current = found.client
+      const currentClient = ctx.getClient(hostId)
+      if (currentClient && currentClient !== clientRef.current) {
+        clientRef.current = currentClient
         force((n) => n + 1)
-      } else if (!found && clientRef.current) {
+      } else if (!currentClient && clientRef.current) {
         // Why: closeHost deletes the entry without a replacement; holding the
         // closed client would let screens keep issuing requests that can never
         // resolve (STA-1511). Null it so they render disconnected states.
@@ -446,15 +441,16 @@ export function useHostClient(hostId: string | undefined): {
   return { client: clientRef.current, state }
 }
 
-// Why: home screen renders all paired hosts at once. Acquires each on
+// Why: multi-host screens render all paired hosts at once. Acquires each on
 // mount, releases on unmount. The provider's refcounting ensures we
 // don't double-open if a host-detail screen is also open.
-export function useAllHostClients(hostIds: string[]): Array<{
+export function useAllHostClients(hosts: readonly HostProfile[]): Array<{
   hostId: string
   client: RpcClient
   state: ConnectionState
 }> {
   const ctx = useCtx()
+  const hostIds = useMemo(() => hosts.map((host) => host.id), [hosts])
   // Stable key so we don't tear down on every render of the array.
   const key = useMemo(() => [...hostIds].sort().join(','), [hostIds])
   const [tick, setTick] = useState(0)
@@ -463,14 +459,18 @@ export function useAllHostClients(hostIds: string[]): Array<{
     if (hostIds.length === 0) {
       return
     }
-    for (const id of hostIds) {
-      ctx.acquire(id)
-    }
     const unsubs: Array<() => void> = []
+    // Why: a supplied profile lets openEntry finish synchronously. Subscribe
+    // first so that fast path cannot publish client readiness before we listen.
     for (const id of hostIds) {
       unsubs.push(ctx.subscribeHostState(id, () => setTick((n) => n + 1)))
     }
     unsubs.push(ctx.subscribeAllHosts(() => setTick((n) => n + 1)))
+    for (const host of hosts) {
+      // Why: the caller already loaded these profiles. Passing them into acquire
+      // avoids a redundant coalesced host-store read after that load completes.
+      ctx.acquire(host.id, host)
+    }
     return () => {
       for (const u of unsubs) {
         u()
@@ -485,9 +485,9 @@ export function useAllHostClients(hostIds: string[]): Array<{
   return useMemo(() => {
     const out: Array<{ hostId: string; client: RpcClient; state: ConnectionState }> = []
     for (const id of hostIds) {
-      const all = ctx.getAllClients().find((entry) => entry.hostId === id)
-      if (all) {
-        out.push({ hostId: id, client: all.client, state: ctx.getState(id) })
+      const client = ctx.getClient(id)
+      if (client) {
+        out.push({ hostId: id, client, state: ctx.getState(id) })
       }
     }
     return out

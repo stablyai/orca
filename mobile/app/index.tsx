@@ -322,15 +322,12 @@ export default function HomeScreen() {
   // Why: read shared clients from the per-host store. Replaces the prior
   // pattern of opening N independent WebSockets here. See
   // docs/mobile-shared-client-per-host.md.
-  const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
-  const allClients = useAllHostClients(hostIds)
+  const allClients = useAllHostClients(hosts)
   const closeHostClient = useCloseHost()
   const forceReconnectHost = useForceReconnect()
   const primeHosts = usePrimeHosts()
-  // Why: feed the loaded HostProfiles into the provider's prime cache as
-  // soon as we have them. This avoids a second Keychain pass inside
-  // openEntry on cold start (which serialised behind the first one and
-  // showed up as multi-second connect latency).
+  // Why: keep the provider cache current for later reconnects. Initial all-host
+  // acquisition also receives these profiles directly, before this effect runs.
   useEffect(() => {
     if (hosts.length > 0) {
       primeHosts(hosts)

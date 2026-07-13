@@ -45,8 +45,7 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
   useEffect(() => {
     void loadHosts().then(setHosts)
   }, [])
-  const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
-  const hostClients = useAllHostClients(hostIds)
+  const hostClients = useAllHostClients(hosts)
   // Voice dictation runs on the paired desktop, so pick the first connected host.
   const client: RpcClient | null = useMemo(
     () => hostClients.find((entry) => entry.state === 'connected')?.client ?? null,

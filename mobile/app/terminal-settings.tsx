@@ -126,8 +126,7 @@ export default function TerminalSettingsScreen() {
   useEffect(() => {
     void loadHosts().then(setHosts)
   }, [])
-  const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
-  const hostClients = useAllHostClients(hostIds)
+  const hostClients = useAllHostClients(hosts)
   const hostClientsById = useMemo(
     () => new Map(hostClients.map((entry) => [entry.hostId, entry.client])),
     [hostClients]

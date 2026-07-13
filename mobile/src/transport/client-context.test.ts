@@ -17,7 +17,7 @@ vi.mock('./connection-revival-triggers', () => ({
   subscribeConnectionRevivalTriggers: () => () => {}
 }))
 
-import { RpcClientProvider, useCloseHost, useHostClient } from './client-context'
+import { RpcClientProvider, useAllHostClients, useCloseHost, useHostClient } from './client-context'
 
 type FakeClient = RpcClient & {
   emitState: (state: ConnectionState) => void
@@ -113,6 +113,38 @@ async function renderHarness(hostId: string): Promise<Harness> {
         throw new Error('closeHost not rendered')
       }
       closeHost(id)
+    },
+    unmount: () => mounted.unmount()
+  }
+}
+
+async function renderAllHostsHarness(hosts: (typeof HOST)[]): Promise<{
+  readonly clients: ReturnType<typeof useAllHostClients>
+  readonly unmount: () => void
+}> {
+  let clients: ReturnType<typeof useAllHostClients> = []
+  let renderer: ReactTestRenderer | null = null
+
+  function Probe(): null {
+    clients = useAllHostClients(hosts)
+    return null
+  }
+
+  const restore = suppressReactTestRendererDeprecationWarning()
+  try {
+    await act(async () => {
+      renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
+    })
+  } finally {
+    restore()
+  }
+  if (!renderer) {
+    throw new Error('all-hosts harness did not render')
+  }
+  const mounted = renderer as ReactTestRenderer
+  return {
+    get clients() {
+      return clients
     },
     unmount: () => mounted.unmount()
   }
@@ -228,5 +260,25 @@ describe('useHostClient', () => {
     })
 
     expect(connectMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('useAllHostClients', () => {
+  it('reuses already-loaded host profiles without rereading the host store', async () => {
+    const hosts = Array.from({ length: 20 }, (_, index) => ({
+      ...HOST,
+      id: `host-${index}`,
+      name: `Host ${index}`,
+      endpoint: `ws://127.0.0.1:${index + 1}`
+    }))
+    loadHostsMock.mockResolvedValue(hosts)
+    connectMock.mockImplementation(() => makeFakeClient('connected'))
+
+    const harness = await renderAllHostsHarness(hosts)
+
+    expect(harness.clients).toHaveLength(hosts.length)
+    expect(connectMock).toHaveBeenCalledTimes(hosts.length)
+    expect(loadHostsMock).not.toHaveBeenCalled()
+    harness.unmount()
   })
 })
