@@ -74,4 +74,67 @@ describe('createProjectHeaderDragSession', () => {
 
     expect(session?.repoId).toBe('repo-a')
   })
+
+  it('arms a drag session when pressing the project icon svg (SVGElement target)', () => {
+    const header = document.createElement('div')
+    header.setAttribute('data-repo-header-drag-handle', '')
+    // The project icon renders as an <svg>; pressing it makes the event target
+    // an SVGElement, which must still arm the drag.
+    const iconSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    header.append(iconSvg)
+    const scrollContainer = document.createElement('div')
+    document.body.append(scrollContainer, header)
+
+    const repoById = new Map<string, Repo>([['repo-a', createRepo('repo-a')]])
+    const sidebarRepoHeaderIdsByBucket = new Map([['ungrouped', ['repo-a', 'repo-b']]])
+
+    const session = createProjectHeaderDragSession({
+      event: {
+        button: 0,
+        pointerId: 1,
+        clientX: 10,
+        clientY: 20,
+        target: iconSvg,
+        currentTarget: header
+      } as unknown as React.PointerEvent<HTMLElement>,
+      repoId: 'repo-a',
+      repoById,
+      sidebarRepoHeaderIdsByBucket,
+      getScrollContainer: () => scrollContainer
+    })
+
+    expect(session?.repoId).toBe('repo-a')
+  })
+
+  it('does not arm a drag session when pressing an svg icon inside an action button', () => {
+    const header = document.createElement('div')
+    header.setAttribute('data-repo-header-drag-handle', '')
+    const actionButton = document.createElement('button')
+    actionButton.setAttribute('data-repo-header-action', '')
+    const actionIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    actionButton.append(actionIcon)
+    header.append(actionButton)
+    const scrollContainer = document.createElement('div')
+    document.body.append(scrollContainer, header)
+
+    const repoById = new Map<string, Repo>([['repo-a', createRepo('repo-a')]])
+    const sidebarRepoHeaderIdsByBucket = new Map([['ungrouped', ['repo-a', 'repo-b']]])
+
+    const session = createProjectHeaderDragSession({
+      event: {
+        button: 0,
+        pointerId: 1,
+        clientX: 10,
+        clientY: 20,
+        target: actionIcon,
+        currentTarget: header
+      } as unknown as React.PointerEvent<HTMLElement>,
+      repoId: 'repo-a',
+      repoById,
+      sidebarRepoHeaderIdsByBucket,
+      getScrollContainer: () => scrollContainer
+    })
+
+    expect(session).toBeNull()
+  })
 })
