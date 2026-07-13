@@ -123,6 +123,7 @@ import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut
 import { useContextualTour } from './contextual-tours/use-contextual-tour'
 import { openTabBarEntry, type TabCreateEntryArgs } from './tab-bar/tab-create-entry-action'
 import { closeTerminalTab } from './terminal/terminal-tab-actions'
+import { useDeferredTerminalWorktreeRender } from './terminal/use-deferred-terminal-worktree-render'
 import { translate } from '@/i18n/i18n'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
@@ -253,7 +254,7 @@ function Terminal(): React.JSX.Element | null {
     [allWorktrees, folderWorkspaces]
   )
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
-  const renderedActiveWorktreeId = activeWorktreeId
+  const renderedActiveWorktreeId = useDeferredTerminalWorktreeRender(activeWorktreeId)
   const activeView = useAppStore((s) => s.activeView)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const pendingStartupByTabId = useAppStore((s) => s.pendingStartupByTabId)
