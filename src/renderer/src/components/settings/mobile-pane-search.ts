@@ -39,10 +39,10 @@ export const getMobilePaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
-    title: translate('auto.components.settings.mobile.pane.search.d96c315227', 'Network Interface'),
+    title: translate('auto.components.settings.mobile.pane.search.d96c315227', 'Network addresses'),
     description: translate(
       'auto.components.settings.mobile.pane.search.3190ef67a4',
-      'Choose which network address to use for mobile pairing.'
+      'Choose ordered network addresses to advertise for mobile pairing.'
     ),
     keywords: [
       ...translateSearchKeyword(
