@@ -53,6 +53,7 @@ import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { getConnectionIdFromState } from '@/lib/connection-context'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { useOptionalShortcutLabel, useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
   type BuiltInWindowsTerminalShell,
@@ -1122,7 +1123,9 @@ function TabBarInner({
                   canToggleNativeChat({
                     experimentalNativeChatEnabled: nativeChatEnabled,
                     contentType: 'terminal',
-                    launchAgent: terminalTab.launchAgent,
+                    launchAgent: isTuiAgent(terminalTab.launchAgent)
+                      ? terminalTab.launchAgent
+                      : null,
                     detectedAgent,
                     resolvedAgent,
                     nativeChatTranscriptIsLocalReadable,

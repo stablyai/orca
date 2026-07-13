@@ -400,7 +400,7 @@ export default function AutomationsPage(): React.JSX.Element {
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
   const agentIds = getAgentCatalog(settings?.customAgents ?? []).map((agent) => agent.id)
-  const enabledAgents = filterEnabledTuiAgents(agentIds, settings?.disabledTuiAgents).filter(
+  const firstEnabledAgent = filterEnabledTuiAgents(agentIds, settings?.disabledTuiAgents).find(
     (agentId) =>
       !isCustomAgentId(agentId) || customAgentForId(agentId, settings?.customAgents)?.enabled
   )
@@ -409,7 +409,7 @@ export default function AutomationsPage(): React.JSX.Element {
     settings.defaultTuiAgent !== 'blank' &&
     isTuiAgentEnabled(settings.defaultTuiAgent, settings.disabledTuiAgents)
       ? settings.defaultTuiAgent
-      : (enabledAgents[0] ?? AGENTS[0])
+      : (firstEnabledAgent ?? AGENTS[0])
 
   const [automations, setAutomations] = useState<Automation[]>([])
   const [runs, setRuns] = useState<AutomationRun[]>([])

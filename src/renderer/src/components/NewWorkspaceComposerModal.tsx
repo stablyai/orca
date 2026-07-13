@@ -17,11 +17,7 @@ import {
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import type {
-  TuiAgent,
-  WorkspaceCreateTelemetrySource,
-  WorkspaceStatus
-} from '../../../shared/types'
+import type { WorkspaceCreateTelemetrySource, WorkspaceStatus } from '../../../shared/types'
 import type { AgentId } from '../../../shared/custom-agent'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'

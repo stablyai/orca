@@ -24,6 +24,7 @@ import TerminalSearch from '@/components/TerminalSearch'
 import type { PtyTransport } from './pty-transport'
 import { fitPanes, isWindowsUserAgent } from './pane-helpers'
 import { getConnectionId, getConnectionIdFromState } from '@/lib/connection-context'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import {
   getExplicitRuntimeEnvironmentIdForWorktree,
   getRuntimeEnvironmentIdForWorktree
@@ -715,7 +716,10 @@ export default function TerminalPane({
       return canToggleNativeChat({
         experimentalNativeChatEnabled: nativeChatEnabled,
         contentType: 'terminal',
-        launchAgent: detectedAgent ? null : terminalTab?.launchAgent,
+        launchAgent:
+          detectedAgent || !isTuiAgent(terminalTab?.launchAgent)
+            ? null
+            : terminalTab.launchAgent,
         detectedAgent,
         resolvedAgent: detectedAgent ? null : resolveTitleAgentForLeaf(leafId),
         nativeChatTranscriptIsLocalReadable,
@@ -3045,7 +3049,9 @@ export default function TerminalPane({
                 terminalTabId={tabId}
                 paneKey={makePaneKey(tabId, chatPane.leafId)}
                 targetPtyId={chatPanePtyId}
-                launchAgent={terminalTab?.launchAgent}
+                launchAgent={
+                  isTuiAgent(terminalTab?.launchAgent) ? terminalTab.launchAgent : undefined
+                }
                 resolvedAgent={chatPaneResolvedAgent}
                 onSwitchToTerminal={() => toggleNativeChatForLeaf(chatPane.leafId)}
                 contextMenuActions={{

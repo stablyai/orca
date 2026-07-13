@@ -26,6 +26,7 @@ import type {
   Repo,
   TuiAgent
 } from '../../../../shared/types'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { STEPS, type StepNumber } from './use-onboarding-flow-types'
 import { persistStep, useCloseWith, usePersistCurrentStep } from './use-onboarding-flow-persistence'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -262,11 +263,12 @@ export function useOnboardingFlow(
     'forward'
   )
   const [stepIndex, setStepIndex] = useState(initialStep)
-  const [selectedAgent, setSelectedAgent] = useState<TuiAgent | null>(
-    settings?.defaultTuiAgent && settings.defaultTuiAgent !== 'blank'
-      ? settings.defaultTuiAgent
+  const [selectedAgent, setSelectedAgent] = useState<TuiAgent | null>(() => {
+    const defaultAgent = settings?.defaultTuiAgent
+    return defaultAgent && defaultAgent !== 'blank' && isTuiAgent(defaultAgent)
+      ? defaultAgent
       : null
-  )
+  })
   const [yoloPermissions, setYoloPermissions] = useState(
     resolveAgentPermissionModeSummary({
       agentDefaultArgs: settings?.agentDefaultArgs,

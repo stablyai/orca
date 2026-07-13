@@ -846,6 +846,7 @@ type RuntimeStore = {
     branchPrefixCustom: string
     defaultTuiAgent?: GlobalSettings['defaultTuiAgent']
     disabledTuiAgents?: GlobalSettings['disabledTuiAgents']
+    customAgents?: GlobalSettings['customAgents']
     agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
     agentDefaultArgs?: GlobalSettings['agentDefaultArgs']
     agentDefaultEnv?: GlobalSettings['agentDefaultEnv']
@@ -14279,8 +14280,10 @@ export class OrcaRuntimeService {
     }
   }
 
-  private markLocalWorkspaceTrustedForAgent(agent: TuiAgent, workspacePath: string): void {
-    if (!isTuiAgent(agent)) return
+  private markLocalWorkspaceTrustedForAgent(agent: AgentId, workspacePath: string): void {
+    if (!isTuiAgent(agent)) {
+      return
+    }
     const preset = TUI_AGENT_CONFIG[agent].preflightTrust
     if (!preset) {
       return
@@ -14299,10 +14302,13 @@ export class OrcaRuntimeService {
   }
 
   private async markRemoteWorkspaceTrustedForAgent(
-    agent: TuiAgent,
+    agent: AgentId,
     connectionId: string,
     workspacePath: string
   ): Promise<void> {
+    if (!isTuiAgent(agent)) {
+      return
+    }
     const preset = TUI_AGENT_CONFIG[agent].preflightTrust
     if (!preset) {
       return
@@ -14741,7 +14747,9 @@ export class OrcaRuntimeService {
           ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
           : {}),
         ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
-        ...(effectiveCreatedWithAgent ? { createdWithAgent: effectiveCreatedWithAgent } : {}),
+        ...(isTuiAgent(effectiveCreatedWithAgent)
+          ? { createdWithAgent: effectiveCreatedWithAgent }
+          : {}),
         ...(args.comment !== undefined ? { comment: args.comment } : {}),
         ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
         ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {})
@@ -14834,7 +14842,9 @@ export class OrcaRuntimeService {
         activate: args.activate,
         ...(effectiveStartup ? { startup: effectiveStartup } : {}),
         ...(effectiveStartupFollowup ? { startupFollowup: effectiveStartupFollowup } : {}),
-        ...(effectiveCreatedWithAgent ? { createdWithAgent: effectiveCreatedWithAgent } : {}),
+        ...(isTuiAgent(effectiveCreatedWithAgent)
+          ? { createdWithAgent: effectiveCreatedWithAgent }
+          : {}),
         ...(effectiveDraftPaste ? { startupDraftPaste: effectiveDraftPaste } : {})
       })
       const recordedLineage = this.recordCreatedWorktreeLineage(result.worktree, lineageResolution)
@@ -15318,7 +15328,9 @@ export class OrcaRuntimeService {
         ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
         : {}),
       ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
-      ...(effectiveCreatedWithAgent ? { createdWithAgent: effectiveCreatedWithAgent } : {}),
+      ...(isTuiAgent(effectiveCreatedWithAgent)
+        ? { createdWithAgent: effectiveCreatedWithAgent }
+        : {}),
       ...(args.pendingFirstAgentMessageRename === true && effectiveCreatedWithAgent
         ? { pendingFirstAgentMessageRename: true }
         : {}),
@@ -15644,7 +15656,7 @@ export class OrcaRuntimeService {
       runHooks?: boolean
       activate?: boolean
       setupDecision?: 'run' | 'skip' | 'inherit'
-      createdWithAgent?: TuiAgent
+      createdWithAgent?: AgentId
       pendingFirstAgentMessageRename?: boolean
       automationProvenance?: AutomationWorkspaceProvenance
       startup?: WorktreeStartupLaunch
@@ -15694,7 +15706,9 @@ export class OrcaRuntimeService {
         ...(args.pushTarget ? { pushTarget: args.pushTarget } : {}),
         ...(args.workspaceStatus ? { workspaceStatus: args.workspaceStatus as never } : {}),
         ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
-        ...(args.createdWithAgent ? { createdWithAgent: args.createdWithAgent } : {}),
+        ...(isTuiAgent(args.createdWithAgent)
+          ? { createdWithAgent: args.createdWithAgent }
+          : {}),
         ...(args.pendingFirstAgentMessageRename === true
           ? { pendingFirstAgentMessageRename: true }
           : {}),
@@ -17835,7 +17849,7 @@ export class OrcaRuntimeService {
 
   async launchAgentTerminal(
     worktreeSelector: string,
-    opts: { agent: TuiAgent; prompt: string; title?: string }
+    opts: { agent: AgentId; prompt: string; title?: string }
   ): Promise<RuntimeTerminalCreate> {
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     const repo = this.store?.getRepo(worktree.repoId)

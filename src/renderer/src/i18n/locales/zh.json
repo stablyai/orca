@@ -4930,7 +4930,16 @@
           "3f1bdf3cb4": "环境文本过长，无法安全解析。",
           "codexSessionSource": "要导入的 Codex 主目录",
           "codexSessionSourceInfo": "关于导入 Codex 历史记录",
-          "codexSessionSourceTooltip": "Orca 在隔离的主目录中运行 Codex。将此项指向您现有的 Codex 主目录以导入会话历史记录。留空则使用 ~/.codex。"
+          "codexSessionSourceTooltip": "Orca 在隔离的主目录中运行 Codex。将此项指向您现有的 Codex 主目录以导入会话历史记录。留空则使用 ~/.codex。",
+          "customAgents": "Custom agents",
+          "customAgentsDescription": "Launch your own agent CLI with the same terminal workflow as built-in agents.",
+          "addCustomAgent": "Add agent",
+          "disabled": "Disabled",
+          "enabled": "Enabled",
+          "enable": "Enable",
+          "editCustomAgent": "Edit custom agent",
+          "removeCustomAgent": "Remove custom agent",
+          "noCustomAgents": "No custom agents configured."
         },
         "AppIconSelector": {
           "d5a112dc9b": "下一个图标",
@@ -9032,6 +9041,26 @@
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
           "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
+        },
+        "CustomAgentDialog": {
+          "required": "Name and command are required.",
+          "promptPlaceholder": "The template must include {prompt}.",
+          "editTitle": "Edit custom agent",
+          "createTitle": "Create custom agent",
+          "description": "Configure a command Orca can launch in a terminal.",
+          "name": "Name",
+          "command": "Command",
+          "promptMode": "Prompt delivery",
+          "pty": "Type into the terminal",
+          "argv": "Append as an argument",
+          "template": "Use a command template",
+          "templateLabel": "Command template",
+          "uploadIcon": "Choose PNG icon",
+          "terminalIcon": "Use terminal icon",
+          "cancel": "Cancel",
+          "save": "Save agent",
+          "commandPlaceholder": "my-agent --interactive",
+          "importIconFailed": "Failed to import icon"
         }
       },
       "right": {

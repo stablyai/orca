@@ -56,6 +56,7 @@ type AgentComboboxProps = {
 
 const BLANK_VALUE = '__none__'
 const TRIGGER_MIN_WIDTH_CLASS = '!min-w-[260px]'
+const EMPTY_CUSTOM_AGENTS: readonly CustomAgentDefinition[] = []
 
 type ItemRenderArgs = {
   key: string
@@ -123,7 +124,7 @@ export default function AgentCombobox({
   triggerClassName,
   onTriggerEnter,
   allowNarrowTrigger = false,
-  customAgents = []
+  customAgents = EMPTY_CUSTOM_AGENTS
 }: AgentComboboxProps): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')

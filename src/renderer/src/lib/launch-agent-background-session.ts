@@ -15,7 +15,7 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
@@ -51,7 +51,8 @@ export async function launchAgentBackgroundSession(
   if (!worktree) {
     throw new Error('The target workspace is no longer available.')
   }
-  const preflight = TUI_AGENT_CONFIG[agent].preflightTrust
+  const agentConfig = isTuiAgent(agent) ? TUI_AGENT_CONFIG[agent] : null
+  const preflight = agentConfig?.preflightTrust
   if (preflight && worktree.path && window.api.agentTrust?.markTrusted) {
     try {
       await window.api.agentTrust.markTrusted({
@@ -81,7 +82,7 @@ export async function launchAgentBackgroundSession(
   })
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
-  const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
+  const isFollowupPath = agentConfig?.promptInjectionMode === 'stdin-after-start'
 
   const pasteDraftAfterLaunch = hasPrompt && isFollowupPath ? trimmedPrompt : null
   const startupPlan = buildAgentStartupPlan({
@@ -230,7 +231,7 @@ export async function launchAgentBackgroundSession(
         tabId: tab.id,
         leafId,
         telemetry: {
-          agent_kind: tuiAgentToAgentKind(agent),
+          agent_kind: isTuiAgent(agent) ? tuiAgentToAgentKind(agent) : 'other',
           launch_source: launchSource ?? 'unknown',
           request_kind: 'new'
         }
@@ -329,7 +330,6 @@ export async function launchAgentBackgroundSession(
         // Best-effort close; retiring the invalid hidden tab must still proceed.
       }
     }
-    runBestEffortAgentBackgroundCleanups(() => store.closeTab(tab.id, { recordInteraction: false }))
-    throw error
+    runBestEffortAgentBackgroundCleanups(() => store.closeTab(tab.id, { recordInteraction: false })); throw error
   }
 }

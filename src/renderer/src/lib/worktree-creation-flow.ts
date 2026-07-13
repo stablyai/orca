@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import {
   activateAndRevealWorktree,
   ensureWorktreeHasInitialTerminal,
@@ -108,7 +108,7 @@ async function preflightAgentTrust(
   // as menu input on first launch. Pre-write the trust artifact before any
   // terminal spawns. Best-effort — the worktree already exists, so a failure
   // here must not strand it.
-  if (!request.agent || !window.api.agentTrust?.markTrusted) {
+  if (!isTuiAgent(request.agent) || !window.api.agentTrust?.markTrusted) {
     return
   }
   const preflight = TUI_AGENT_CONFIG[request.agent].preflightTrust

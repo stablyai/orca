@@ -1,4 +1,4 @@
-import type { SetupDecision, TuiAgent } from './types'
+import type { SetupDecision } from './types'
 import type { AgentId } from './custom-agent'
 import type { TaskSourceContext, WorkspaceRunContext } from './task-source-context'
 

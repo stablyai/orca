@@ -9,6 +9,7 @@ import { useRepoById } from '@/store/selectors'
 import { renderSourceControlActionCommandTemplate } from '../../../../shared/source-control-ai-actions'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../../shared/types'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { SourceControlAgentActionDialogProps } from './SourceControlAgentActionDialog'
 import type { UseSourceControlAgentActionDialogResult } from './source-control-agent-action-dialog-result'
 import { useSavedSourceControlAgentActionAutoStart } from './useSavedSourceControlAgentActionAutoStart'
@@ -83,8 +84,9 @@ export function useSourceControlAgentActionDialog({
         typeof connectionId === 'string'
           ? await ensureRemoteDetectedAgents(connectionId)
           : await ensureDetectedAgents()
-      setDetectedAgents(nextAgents)
-      return nextAgents
+      const nativeAgents = nextAgents.filter(isTuiAgent)
+      setDetectedAgents(nativeAgents)
+      return nativeAgents
     } finally {
       setDetecting(false)
     }
@@ -231,7 +233,7 @@ export function useSourceControlAgentActionDialog({
     detecting,
     isStarting,
     detectedAgents,
-    disabledAgents,
+      disabledAgents: (disabledAgents ?? []).filter(isTuiAgent),
     onAutoStart: ({ detectedAgents: agentsForLaunch, saveTargetValue: matchedTargetValue }) =>
       startWithDetectedAgents({
         detectedAgents: agentsForLaunch,

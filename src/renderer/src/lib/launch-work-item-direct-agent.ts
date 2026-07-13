@@ -10,6 +10,8 @@ import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
+import type { AgentId } from '../../../shared/custom-agent'
+import { isTuiAgent } from '../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../shared/types'
 import {
   resolveTuiAgentLaunchArgs,
@@ -18,7 +20,7 @@ import {
 import { translate } from '@/i18n/i18n'
 
 export function buildDirectWorkItemAgentStartupPlan(args: {
-  agent: TuiAgent | null
+  agent: AgentId | null
   agentArgs?: string | null
   draftContent: string
   promptDelivery: 'draft' | 'submit-after-ready'
@@ -100,7 +102,7 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
 }
 
 export function buildDirectWorkItemStartupOpts(
-  agent: TuiAgent | null,
+  agent: AgentId | null,
   plan: AgentStartupPlan | null,
   launchSource: LaunchSource
 ): {
@@ -108,7 +110,7 @@ export function buildDirectWorkItemStartupOpts(
     command: string
     env?: Record<string, string>
     launchConfig?: SleepingAgentLaunchConfig
-    launchAgent?: TuiAgent
+    launchAgent?: AgentId
     draftPrompt?: string
     startupCommandDelivery?: StartupCommandDelivery
     telemetry?: AgentStartedTelemetry
@@ -120,7 +122,9 @@ export function buildDirectWorkItemStartupOpts(
   const telemetry: AgentStartedTelemetry | null =
     agent === null
       ? null
-      : { agent_kind: tuiAgentToAgentKind(agent), launch_source: launchSource, request_kind: 'new' }
+      : isTuiAgent(agent)
+        ? { agent_kind: tuiAgentToAgentKind(agent), launch_source: launchSource, request_kind: 'new' }
+        : null
   return {
     startup: {
       command: plan.launchCommand,
@@ -161,10 +165,12 @@ export async function pasteDirectWorkItemDraftWhenAgentReady(args: {
       )
       // Why: process-startup timeout has no v1 enum slot; the `unknown` slice
       // on the dashboard is the trigger to add one.
-      track('agent_error', {
-        error_class: 'unknown',
-        agent_kind: tuiAgentToAgentKind(startupPlan.agent)
-      })
+      if (isTuiAgent(startupPlan.agent)) {
+        track('agent_error', {
+          error_class: 'unknown',
+          agent_kind: tuiAgentToAgentKind(startupPlan.agent)
+        })
+      }
     }
   })
 }

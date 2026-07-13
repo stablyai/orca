@@ -70,7 +70,7 @@ export function CustomAgentDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next) resetFromProps(); onOpenChange(next) }}>
+    <Dialog open={open} onOpenChange={(next) => { if (!next) {resetFromProps();} onOpenChange(next) }}>
       <DialogContent className="sm:max-w-[560px]">
         <DialogHeader>
           <DialogTitle>
@@ -90,7 +90,7 @@ export function CustomAgentDialog({
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="custom-agent-command">{translate('auto.components.settings.CustomAgentDialog.command', 'Command')}</Label>
-            <Input id="custom-agent-command" value={command} onChange={(event) => setCommand(event.target.value)} spellCheck={false} className="font-mono" placeholder="my-agent --interactive" />
+            <Input id="custom-agent-command" value={command} onChange={(event) => setCommand(event.target.value)} spellCheck={false} className="font-mono" placeholder={translate('auto.components.settings.CustomAgentDialog.commandPlaceholder', 'my-agent --interactive')} />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="custom-agent-prompt-mode">{translate('auto.components.settings.CustomAgentDialog.promptMode', 'Prompt delivery')}</Label>
@@ -113,9 +113,9 @@ export function CustomAgentDialog({
             <Button type="button" variant="outline" size="sm" onClick={async () => {
               try {
                 const result = await window.api.shell.pickRepoIconImage()
-                if (result) setIcon({ kind: 'image', dataUrl: result.dataUrl, fileName: result.fileName })
+                if (result) {setIcon({ kind: 'image', dataUrl: result.dataUrl, fileName: result.fileName })}
               } catch (error) {
-                toast.error(error instanceof Error ? error.message : 'Failed to import icon')
+                toast.error(error instanceof Error ? error.message : translate('auto.components.settings.CustomAgentDialog.importIconFailed', 'Failed to import icon'))
               }
             }}>
               <Upload data-icon="inline-start" />{translate('auto.components.settings.CustomAgentDialog.uploadIcon', 'Choose PNG icon')}

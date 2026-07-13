@@ -10,10 +10,10 @@ import type {
   TabGroup,
   TabGroupLayoutNode,
   TerminalTab,
-  TuiAgent,
   WorkspaceSessionState,
   WorkspaceVisibleTabType
 } from '../../../../shared/types'
+import type { AgentId } from '../../../../shared/custom-agent'
 import { emitNativeChatToggled } from '@/lib/native-chat-telemetry'
 import {
   dedupeTabOrder,
@@ -1083,7 +1083,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     let toggled: {
       from: 'terminal' | 'chat'
       to: 'terminal' | 'chat'
-      agent: TuiAgent | null
+      agent: AgentId | null
     } | null = null
     set((state) => {
       const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
@@ -1108,7 +1108,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     const committed = toggled as {
       from: 'terminal' | 'chat'
       to: 'terminal' | 'chat'
-      agent: TuiAgent | null
+      agent: AgentId | null
     } | null
     if (committed) {
       emitNativeChatToggled(committed)

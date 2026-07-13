@@ -17,7 +17,6 @@ import type {
   TabGroupLayoutNode,
   TerminalColorOverrides,
   TerminalLayoutSnapshot,
-  TuiAgent,
   Worktree,
   WorktreeLineage,
   WorkspaceLineage,

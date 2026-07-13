@@ -36,7 +36,7 @@ export function isAgentId(value: unknown): value is AgentId {
 }
 
 export function normalizeAgentIds(value: unknown): AgentId[] {
-  if (!Array.isArray(value)) return []
+  if (!Array.isArray(value)) {return []}
   const seen = new Set<string>()
   const result: AgentId[] = []
   for (const item of value) {
@@ -65,23 +65,23 @@ export function createCustomAgentId(name: string, existing: Iterable<string> = [
 }
 
 export function normalizeCustomAgents(value: unknown): CustomAgentDefinition[] {
-  if (!Array.isArray(value)) return []
+  if (!Array.isArray(value)) {return []}
   const seen = new Set<string>()
   const normalized: CustomAgentDefinition[] = []
   for (const candidate of value) {
-    if (!candidate || typeof candidate !== 'object') continue
+    if (!candidate || typeof candidate !== 'object') {continue}
     const item = candidate as Partial<CustomAgentDefinition>
-    if (!isCustomAgentId(item.id) || seen.has(item.id)) continue
+    if (!isCustomAgentId(item.id) || seen.has(item.id)) {continue}
     const name = typeof item.name === 'string' ? item.name.trim().slice(0, MAX_CUSTOM_AGENT_NAME_LENGTH) : ''
     const command = typeof item.command === 'string' ? item.command.trim().slice(0, MAX_CUSTOM_AGENT_COMMAND_LENGTH) : ''
-    if (!name || !command) continue
+    if (!name || !command) {continue}
     const promptMode = item.promptMode === 'argv' || item.promptMode === 'template' ? item.promptMode : 'pty'
     const promptTemplate = typeof item.promptTemplate === 'string'
       ? item.promptTemplate.slice(0, MAX_CUSTOM_AGENT_TEMPLATE_LENGTH)
       : undefined
-    if (promptMode === 'template' && (!promptTemplate || !promptTemplate.includes('{prompt}'))) continue
+    if (promptMode === 'template' && (!promptTemplate || !promptTemplate.includes('{prompt}'))) {continue}
     const icon = normalizeCustomAgentIcon(item.icon, name)
-    if (!icon) continue
+    if (!icon) {continue}
     seen.add(item.id)
     normalized.push({
       id: item.id,
@@ -97,9 +97,9 @@ export function normalizeCustomAgents(value: unknown): CustomAgentDefinition[] {
 }
 
 function normalizeCustomAgentIcon(value: unknown, name: string): CustomAgentIcon | null {
-  if (!value || typeof value !== 'object') return { kind: 'letter', value: name.charAt(0).toUpperCase() }
+  if (!value || typeof value !== 'object') {return { kind: 'letter', value: name.charAt(0).toUpperCase() }}
   const icon = value as Partial<CustomAgentIcon>
-  if (icon.kind === 'terminal') return { kind: 'terminal' }
+  if (icon.kind === 'terminal') {return { kind: 'terminal' }}
   if (icon.kind === 'letter') {
     const letter = typeof icon.value === 'string' ? icon.value.trim().slice(0, 2) : ''
     return { kind: 'letter', value: letter || name.charAt(0).toUpperCase() }

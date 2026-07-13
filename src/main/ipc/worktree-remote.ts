@@ -62,7 +62,6 @@ import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
 import { TUI_AGENT_CONFIG, isTuiAgent } from '../../shared/tui-agent-config'
-import { isAgentId } from '../../shared/custom-agent'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { getSshGitUsername } from '../git/git-username'
 import { runWorktreeChangeInvalidators } from './worktree-change-invalidators'
@@ -1893,8 +1892,8 @@ export async function createRemoteWorktree(
       : shouldSetDisplayName(effectiveRequestedName, branchName, effectiveSanitizedName)
         ? { displayName: effectiveRequestedName }
         : {}),
-    ...(isAgentId(args.createdWithAgent) ? { createdWithAgent: args.createdWithAgent } : {}),
-    ...(args.pendingFirstAgentMessageRename === true && isAgentId(args.createdWithAgent)
+    ...(isTuiAgent(args.createdWithAgent) ? { createdWithAgent: args.createdWithAgent } : {}),
+    ...(args.pendingFirstAgentMessageRename === true && isTuiAgent(args.createdWithAgent)
       ? { pendingFirstAgentMessageRename: true }
       : {}),
     ...(sparseDirectories.length > 0
@@ -2523,8 +2522,8 @@ export async function createLocalWorktree(
           sparsePresetId
         }
       : {}),
-    ...(isAgentId(args.createdWithAgent) ? { createdWithAgent: args.createdWithAgent } : {}),
-    ...(args.pendingFirstAgentMessageRename === true && isAgentId(args.createdWithAgent)
+    ...(isTuiAgent(args.createdWithAgent) ? { createdWithAgent: args.createdWithAgent } : {}),
+    ...(args.pendingFirstAgentMessageRename === true && isTuiAgent(args.createdWithAgent)
       ? { pendingFirstAgentMessageRename: true }
       : {}),
     ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),

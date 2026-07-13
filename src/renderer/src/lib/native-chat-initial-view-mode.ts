@@ -1,4 +1,5 @@
-import type { GlobalSettings, Tab, TuiAgent } from '../../../shared/types'
+import type { GlobalSettings, Tab } from '../../../shared/types'
+import type { AgentId } from '../../../shared/custom-agent'
 import { isNativeChatSupportedAgent } from '@/lib/native-chat-supported-agent'
 
 export type NativeChatLaunchPromptDelivery = 'auto-submit' | 'draft' | 'submit-after-ready'
@@ -14,7 +15,7 @@ export type NativeChatLaunchPromptDelivery = 'auto-submit' | 'draft' | 'submit-a
 export function decideInitialAgentTabViewMode(args: {
   experimentalNativeChat?: boolean
   openAgentTabsInChatByDefault?: boolean
-  agent?: TuiAgent | null
+  agent?: AgentId | null
   promptDelivery?: NativeChatLaunchPromptDelivery
   nativeChatTranscriptIsLocalReadable?: boolean
 }): Tab['viewMode'] {
@@ -39,7 +40,7 @@ export function initialAgentTabViewModeProps(
     | null
     | undefined,
   options: {
-    agent?: TuiAgent | null
+    agent?: AgentId | null
     promptDelivery?: NativeChatLaunchPromptDelivery
     nativeChatTranscriptIsLocalReadable?: boolean
   } = {}

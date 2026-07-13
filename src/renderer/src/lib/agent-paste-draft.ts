@@ -1,5 +1,6 @@
-import type { TuiAgent } from '../../../shared/types'
+import type { AgentId } from '../../../shared/custom-agent'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { useAppStore } from '@/store'
 import {
   inspectRuntimeTerminalProcess,
@@ -77,7 +78,7 @@ export function getSettingsForAgentTabRuntimeOwner(
 export async function pasteDraftWhenAgentReady(args: {
   tabId: string
   content: string
-  agent?: TuiAgent
+  agent?: AgentId
   submit?: boolean
   forcePaste?: boolean
   timeoutMs?: number
@@ -85,7 +86,7 @@ export async function pasteDraftWhenAgentReady(args: {
 }): Promise<boolean> {
   const { tabId, content, agent, submit, forcePaste, timeoutMs, onTimeout } = args
 
-  const agentConfig = agent ? TUI_AGENT_CONFIG[agent] : null
+  const agentConfig = agent && isTuiAgent(agent) ? TUI_AGENT_CONFIG[agent] : null
 
   // Why: agents with a native draft prefill mechanism (flag or env var)
   // launch with the URL already in their input box. Pasting again would
@@ -132,14 +133,14 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
   tabId: string
   ptyId: string
   content: string
-  agent?: TuiAgent
+  agent?: AgentId
   submit?: boolean
   forcePaste?: boolean
   timeoutMs?: number
   onTimeout?: () => void
 }): Promise<boolean> {
   const { tabId, ptyId, content, agent, submit, forcePaste, timeoutMs, onTimeout } = args
-  const agentConfig = agent ? TUI_AGENT_CONFIG[agent] : null
+  const agentConfig = agent && isTuiAgent(agent) ? TUI_AGENT_CONFIG[agent] : null
 
   if (agentDeliversDraftViaNativePrefill(agent, forcePaste)) {
     return false

@@ -37,6 +37,7 @@ import {
 } from '../../../../shared/agent-status-osc'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { isAgentId } from '../../../../shared/custom-agent'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 
 // Re-export public API so existing consumers keep working.
 export {
@@ -692,6 +693,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         // resolve cwd on the remote host.
         const shouldSendLocalCwdFallback =
           cwdFallback === 'worktree' && !connectionId && !options.sessionId
+        const ptyLaunchAgent = isTuiAgent(options.launchAgent ?? launchAgent)
+          ? options.launchAgent ?? launchAgent
+          : undefined
         const result = await window.api.pty.spawn({
           cols: options.cols ?? 80,
           rows: options.rows ?? 24,
@@ -705,9 +709,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           ...((options.launchToken ?? launchToken)
             ? { launchToken: options.launchToken ?? launchToken }
             : {}),
-          ...((options.launchAgent ?? launchAgent)
-            ? { launchAgent: options.launchAgent ?? launchAgent }
-            : {}),
+          ...(ptyLaunchAgent ? { launchAgent: ptyLaunchAgent } : {}),
           ...((options.startupCommandDelivery ?? startupCommandDelivery)
             ? { startupCommandDelivery: options.startupCommandDelivery ?? startupCommandDelivery }
             : {}),

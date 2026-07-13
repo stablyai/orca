@@ -4945,7 +4945,16 @@
           "3f1bdf3cb4": "El texto de entorno es demasiado grande para analizarlo de forma segura.",
           "codexSessionSource": "Directorio Codex a importar",
           "codexSessionSourceInfo": "Sobre la importación del historial de Codex",
-          "codexSessionSourceTooltip": "Orca ejecuta Codex en un directorio aislado. Señala aquí a tu directorio Codex existente para importar el historial de sesiones. Dejar vacío usa ~/.codex."
+          "codexSessionSourceTooltip": "Orca ejecuta Codex en un directorio aislado. Señala aquí a tu directorio Codex existente para importar el historial de sesiones. Dejar vacío usa ~/.codex.",
+          "customAgents": "Custom agents",
+          "customAgentsDescription": "Launch your own agent CLI with the same terminal workflow as built-in agents.",
+          "addCustomAgent": "Add agent",
+          "disabled": "Disabled",
+          "enabled": "Enabled",
+          "enable": "Enable",
+          "editCustomAgent": "Edit custom agent",
+          "removeCustomAgent": "Remove custom agent",
+          "noCustomAgents": "No custom agents configured."
         },
         "AppIconSelector": {
           "d5a112dc9b": "Icono siguiente",
@@ -9032,6 +9041,26 @@
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
           "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
+        },
+        "CustomAgentDialog": {
+          "required": "Name and command are required.",
+          "promptPlaceholder": "The template must include {prompt}.",
+          "editTitle": "Edit custom agent",
+          "createTitle": "Create custom agent",
+          "description": "Configure a command Orca can launch in a terminal.",
+          "name": "Name",
+          "command": "Command",
+          "promptMode": "Prompt delivery",
+          "pty": "Type into the terminal",
+          "argv": "Append as an argument",
+          "template": "Use a command template",
+          "templateLabel": "Command template",
+          "uploadIcon": "Choose PNG icon",
+          "terminalIcon": "Use terminal icon",
+          "cancel": "Cancel",
+          "save": "Save agent",
+          "commandPlaceholder": "my-agent --interactive",
+          "importIconFailed": "Failed to import icon"
         }
       },
       "right": {

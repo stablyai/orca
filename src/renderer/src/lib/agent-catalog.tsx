@@ -47,7 +47,7 @@ function getCatalogPlatform(): NodeJS.Platform {
   return typeof process === 'undefined' ? 'linux' : process.platform
 }
 
-const NATIVE_AGENT_CATALOG = createLocalizedCatalog((): AgentCatalogEntry[] => [
+const NATIVE_AGENT_CATALOG = createLocalizedCatalog((): NativeAgentCatalogEntry[] => [
   {
     id: 'claude',
     label: translate('auto.lib.agent.catalog.0708ed89f1', 'Claude'),
@@ -313,7 +313,8 @@ export function getAgentCatalog(customAgents: readonly CustomAgentDefinition[] =
 }
 
 // Why: tests and a few legacy call sites still import a catalog snapshot.
-export const AGENT_CATALOG: AgentCatalogEntry[] = getAgentCatalog()
+export const AGENT_CATALOG: NativeAgentCatalogEntry[] = getAgentCatalog()
+const EMPTY_CUSTOM_AGENTS: readonly CustomAgentDefinition[] = []
 
 export function getAgentLabel(agent: AgentId): string {
   return getAgentCatalog().find((entry) => entry.id === agent)?.label ?? agent
@@ -322,7 +323,7 @@ export function getAgentLabel(agent: AgentId): string {
 export function AgentIcon({
   agent,
   size = 14,
-  customAgents = []
+  customAgents = EMPTY_CUSTOM_AGENTS
 }: {
   agent: AgentId | null | undefined
   size?: number
@@ -365,7 +366,7 @@ export function AgentIcon({
   const catalogEntry = getAgentCatalog(customAgents ?? []).find((a) => a.id === agent)
   if (isCustomAgentId(agent)) {
     const customIcon = customAgentForId(agent, customAgents)
-    if (customIcon?.icon.kind === 'terminal') return <Terminal size={size} aria-hidden />
+    if (customIcon?.icon.kind === 'terminal') {return <Terminal size={size} aria-hidden />}
     if (customIcon?.icon.kind === 'letter') {
       return <AgentLetterIcon letter={customIcon.icon.value} size={size} />
     }

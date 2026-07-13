@@ -1,4 +1,5 @@
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 
 export type OnboardingSettingsHydrationUpdate = {
   settingsHydrated: boolean
@@ -37,7 +38,12 @@ export function resolveOnboardingSettingsHydration({
     settings.defaultTuiAgent && settings.defaultTuiAgent !== 'blank'
       ? settings.defaultTuiAgent
       : null
-  if (!agentInteracted && settingsAgent !== null && currentAgent !== settingsAgent) {
+  if (
+    !agentInteracted &&
+    settingsAgent !== null &&
+    isTuiAgent(settingsAgent) &&
+    currentAgent !== settingsAgent
+  ) {
     update.selectedAgent = settingsAgent
   }
 

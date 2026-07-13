@@ -1,5 +1,5 @@
 import type { AgentType } from '../../../shared/agent-status-types'
-import type { TuiAgent } from '../../../shared/types'
+import type { AgentId } from '../../../shared/custom-agent'
 
 /** Agents whose transcripts the native chat view can parse and render. */
 export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set<string>([
@@ -13,7 +13,7 @@ export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set<string>
 ])
 
 export function isNativeChatSupportedAgent(
-  agent: TuiAgent | AgentType | null | undefined
+  agent: AgentId | AgentType | null | undefined
 ): boolean {
   return agent != null && NATIVE_CHAT_SUPPORTED_AGENTS.has(agent)
 }

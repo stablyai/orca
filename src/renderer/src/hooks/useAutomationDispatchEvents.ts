@@ -8,6 +8,7 @@ import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
 import { observeExistingAutomationSession } from '@/lib/automation-session-observer'
 import { launchWorktreeBackgroundTerminals } from '@/lib/launch-worktree-background-terminals'
 import { useAppStore } from '@/store'
+import { isTuiAgent } from '../../../shared/tui-agent-config'
 import type {
   AutomationDispatchResult,
   AutomationPrecheckResult
@@ -339,7 +340,7 @@ export function useAutomationDispatchEvents(): void {
             checkCurrentStatus()
           }
           const dispatchStartedAt = Date.now()
-          if (automation.reuseSession) {
+          if (automation.reuseSession && isTuiAgent(automation.agentId)) {
             const reusableSession = findReusableAutomationSession({
               automationId: automation.id,
               agentId: automation.agentId,

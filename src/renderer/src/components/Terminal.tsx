@@ -14,6 +14,7 @@ import { useAppStore } from '../store'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { useAllWorktrees } from '../store/selectors'
 import { getConnectionId } from '../lib/connection-context'
+import type { AgentId } from '../../../shared/custom-agent'
 import { basename } from '../lib/path'
 import {
   Dialog,
@@ -35,7 +36,7 @@ import {
 } from './editor/editor-autosave'
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import EditorAutosaveController from './editor/EditorAutosaveController'
-import type { Tab, TabContentType, TabGroupLayoutNode, TuiAgent } from '../../../shared/types'
+import type { Tab, TabContentType, TabGroupLayoutNode } from '../../../shared/types'
 import { hasFeatureInteraction } from '../../../shared/feature-interactions'
 import BrowserPane from './browser-pane/BrowserPane'
 import BrowserPaneOverlayLayer from './browser-pane/BrowserPaneOverlayLayer'
@@ -1138,7 +1139,7 @@ function Terminal(): React.JSX.Element | null {
   )
 
   const handleNewAgentTab = useCallback(
-    (agent: TuiAgent) => {
+    (agent: AgentId) => {
       if (!activeWorktreeId) {
         return
       }
@@ -1579,7 +1580,7 @@ function Terminal(): React.JSX.Element | null {
       if (!e.repeat) {
         const state = useAppStore.getState()
         let agentActionId: KeybindingActionId | null = null
-        let agentToLaunch: TuiAgent | null = null
+        let agentToLaunch: AgentId | null = null
         if (matchShortcut('tab.newAgent')) {
           const connectionId = getConnectionId(activeWorktreeId)
           agentActionId = 'tab.newAgent'

@@ -20,7 +20,11 @@ import { activateAndRevealWorktree, type AgentStartedTelemetry } from '@/lib/wor
 import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
-import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
+import {
+  filterEnabledTuiAgents,
+  isTuiAgentEnabled,
+  normalizeDisabledTuiAgents
+} from '../../../shared/tui-agent-selection'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import {
@@ -28,7 +32,7 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
-import { isCustomAgentId } from '../../../shared/custom-agent'
+import { isCustomAgentId, type AgentId } from '../../../shared/custom-agent'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -385,7 +389,7 @@ export type UseComposerStateResult = {
   promptTextareaRef: React.RefObject<HTMLTextAreaElement | null>
   nameInputRef: React.RefObject<HTMLInputElement | null>
   submit: () => Promise<void>
-  submitQuick: (agent: import('../../../shared/custom-agent').AgentId | null) => Promise<void>
+  submitQuick: (agent: AgentId | null) => Promise<void>
   /** Invoked by the Enter handler to re-check whether submission should fire. */
   createDisabled: boolean
 }
@@ -1103,7 +1107,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [forkPushWarning, setForkPushWarning] = useState<string | null>(null)
   const disabledTuiAgentKey = (settings?.disabledTuiAgents ?? []).join('\u0000')
   const disabledTuiAgents = useMemo<TuiAgent[]>(
-    () => settings?.disabledTuiAgents ?? [],
+    () => normalizeDisabledTuiAgents(settings?.disabledTuiAgents),
     // Why: settings IPC round-trips clone arrays; agent availability only
     // changes when the disabled-agent content changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1124,6 +1128,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const fallbackDefaultAgent: TuiAgent =
     settings?.defaultTuiAgent &&
     settings.defaultTuiAgent !== 'blank' &&
+    isTuiAgent(settings.defaultTuiAgent) &&
     isTuiAgentEnabled(settings.defaultTuiAgent, disabledTuiAgents)
       ? settings.defaultTuiAgent
       : (enabledCatalogAgents[0] ?? 'claude')
@@ -3320,7 +3325,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     folderTargetRequiresConnection
 
   const submitFolderTarget = useCallback(
-    async (requestedAgent: import('../../../shared/custom-agent').AgentId | null): Promise<void> => {
+    async (requestedAgent: AgentId | null): Promise<void> => {
       if (!selectedProjectGroup?.parentPath || folderCreateDisabled) {
         return
       }
@@ -3841,9 +3846,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   }, [])
 
   const submitQuick = useCallback(
-    async (requestedAgent: TuiAgent | null): Promise<void> => {
+    async (requestedAgent: AgentId | null): Promise<void> => {
       if (isProjectGroupTarget) {
-        await submitFolderTarget(requestedAgent)
+        await submitFolderTarget(isTuiAgent(requestedAgent) ? requestedAgent : null)
         return
       }
       const workspaceNameSeed = getWorkspaceSeedName({
@@ -3875,7 +3880,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             ? linkedWorkItem
             : smartGitHubResolution.linkedWorkItem
         const agent =
-          requestedAgent && isTuiAgentEnabled(requestedAgent, disabledTuiAgents)
+          requestedAgent &&
+          isTuiAgent(requestedAgent) &&
+          isTuiAgentEnabled(requestedAgent, disabledTuiAgents)
             ? requestedAgent
             : null
         const submitLinkedIssueNumber =
@@ -4354,7 +4361,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     normalizedLinkQuery,
     onSelectLinkedItem: handleSelectLinkedItem,
     tuiAgent,
-    onTuiAgentChange: setTuiAgent,
+    onTuiAgentChange: (agent) => {
+      if (isTuiAgent(agent)) {
+        setTuiAgent(agent)
+      }
+    },
     detectedAgentIds: isProjectGroupTarget ? folderDetectedAgentIds : detectedAgentIds,
     onOpenAgentSettings: handleOpenAgentSettings,
     advancedOpen,

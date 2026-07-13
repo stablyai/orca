@@ -5,22 +5,22 @@ import {
   type KeybindingDefinition
 } from '../../../../shared/keybindings'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
-import type { TuiAgent } from '../../../../shared/types'
+import type { AgentId } from '../../../../shared/custom-agent'
 
 export type ShortcutGroup = {
   title: string
   items: KeybindingDefinition[]
 }
 
-export const EMPTY_DISABLED_TUI_AGENTS: readonly TuiAgent[] = []
+export const EMPTY_DISABLED_TUI_AGENTS: readonly AgentId[] = []
 
 export function disabledAgentTabActionIds(
-  disabledTuiAgents: readonly TuiAgent[]
+  disabledTuiAgents: readonly AgentId[]
 ): KeybindingActionId[] {
   return normalizeDisabledTuiAgents(disabledTuiAgents).map((agent) => agentTabActionId(agent))
 }
 
-export function groupDefinitions(disabledTuiAgents: readonly TuiAgent[]): ShortcutGroup[] {
+export function groupDefinitions(disabledTuiAgents: readonly AgentId[]): ShortcutGroup[] {
   // Why: per-agent launch rows only make sense for agents the user keeps
   // enabled in Settings → Agents; hiding disabled ones keeps the Agents group
   // scoped to what the chord could actually launch.

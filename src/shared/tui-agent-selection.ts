@@ -1,5 +1,6 @@
 import type { TuiAgent } from './types'
 import type { AgentId } from './custom-agent'
+import { isCustomAgentId } from './custom-agent'
 import { isTuiAgent } from './tui-agent-config'
 
 // Keep this order in sync with the desktop agent catalog. It defines the
@@ -49,12 +50,25 @@ export function pickTuiAgent(
   preferred: TuiAgent | 'blank' | null | undefined,
   detected: Iterable<TuiAgent>,
   disabled?: Iterable<unknown> | null
-): TuiAgent | null {
+): TuiAgent | null
+export function pickTuiAgent(
+  preferred: AgentId | 'blank' | null | undefined,
+  detected: Iterable<TuiAgent>,
+  disabled?: Iterable<unknown> | null
+): AgentId | null
+export function pickTuiAgent(
+  preferred: AgentId | 'blank' | null | undefined,
+  detected: Iterable<TuiAgent>,
+  disabled?: Iterable<unknown> | null
+): AgentId | null {
   if (preferred === 'blank') {
     return null
   }
   const disabledSet = new Set(normalizeDisabledTuiAgents(disabled))
   const detectedSet = detected instanceof Set ? detected : new Set(detected)
+  if (preferred && isCustomAgentId(preferred)) {
+    return preferred
+  }
   if (preferred && detectedSet.has(preferred) && !disabledSet.has(preferred)) {
     return preferred
   }
@@ -67,14 +81,18 @@ export function pickTuiAgent(
 }
 
 export function normalizeDisabledTuiAgents(value: unknown): TuiAgent[] {
-  if (!Array.isArray(value)) return []
+  if (!Array.isArray(value)) {return []}
   const seen = new Set<TuiAgent>()
-  for (const item of value) if (isTuiAgent(item)) seen.add(item)
+  for (const item of value) {
+    if (isTuiAgent(item)) {
+      seen.add(item)
+    }
+  }
   return [...seen]
 }
 
 export function isTuiAgentEnabled(agent: AgentId, disabled?: Iterable<unknown> | null): boolean {
-  if (!isTuiAgent(agent)) return true
+  if (!isTuiAgent(agent)) {return true}
   return !normalizeDisabledTuiAgents(disabled).includes(agent)
 }
 

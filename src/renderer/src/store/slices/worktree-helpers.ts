@@ -8,7 +8,6 @@ import type {
   GitPushTarget,
   RemoveWorktreeResult,
   SetupDecision,
-  TuiAgent,
   WorkspaceCreateTelemetrySource,
   WorkspaceStatus,
   WorkspaceLineage,
@@ -20,6 +19,7 @@ import type {
   WorktreeMeta,
   WorkspaceKey
 } from '../../../../shared/types'
+import type { AgentId } from '../../../../shared/custom-agent'
 import type { WorktreeForceDeleteReason } from '../../../../shared/worktree-removal'
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
 import type {
@@ -137,7 +137,7 @@ export type WorktreeSlice = {
     linkedIssue?: number,
     linkedPR?: number,
     pushTarget?: GitPushTarget,
-    createdWithAgent?: TuiAgent,
+    createdWithAgent?: AgentId,
     linkedLinearIssue?: string,
     branchNameOverride?: string,
     workspaceStatus?: WorkspaceStatus,

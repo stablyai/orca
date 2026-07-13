@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useAppStore } from '../../store'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { TerminalPaneLayoutNode } from '../../../../shared/types'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import { canToggleNativeChat } from './native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
@@ -81,7 +82,11 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
         !canToggleNativeChat({
           experimentalNativeChatEnabled: state.settings?.experimentalNativeChat === true,
           contentType: 'terminal',
-          launchAgent: detectedAgent ? null : terminalTab?.launchAgent,
+          launchAgent: detectedAgent
+            ? null
+            : terminalTab?.launchAgent && isTuiAgent(terminalTab.launchAgent)
+              ? terminalTab.launchAgent
+              : null,
           detectedAgent,
           resolvedAgent: detectedAgent ? null : titleFallbackAgent,
           nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(

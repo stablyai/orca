@@ -18,7 +18,7 @@ import {
 export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence'
-import type { GlobalSettings, TuiAgent } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/types'
 import { terminalOutputBacklogCapChars } from '../../shared/terminal-scrollback-policy'
 import type {
   PtyDeliveryWriteOff,

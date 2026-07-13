@@ -6,6 +6,7 @@ import {
 import { ALL_TUI_AGENTS } from '../../../shared/tui-agent-display-names'
 import { normalizeDisabledTuiAgents, pickTuiAgent } from '../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../shared/types'
+import type { AgentId } from '../../../shared/custom-agent'
 
 export type BoundAgentTabAction = {
   agent: TuiAgent
@@ -20,7 +21,7 @@ export type BoundAgentTabAction = {
  */
 export function listBoundAgentTabActions(
   keybindings: KeybindingOverrides | undefined,
-  disabledTuiAgents: readonly TuiAgent[] | null | undefined
+  disabledTuiAgents: readonly AgentId[] | null | undefined
 ): BoundAgentTabAction[] {
   if (!keybindings) {
     return []
@@ -47,10 +48,10 @@ export function listBoundAgentTabActions(
  * through to auto-pick instead of doing nothing.
  */
 export function resolveDefaultAgentForNewTab(args: {
-  defaultTuiAgent: TuiAgent | 'blank' | null | undefined
+  defaultTuiAgent: AgentId | 'blank' | null | undefined
   detectedAgentIds: readonly TuiAgent[] | null | undefined
-  disabledTuiAgents: readonly TuiAgent[] | null | undefined
-}): TuiAgent | null {
+  disabledTuiAgents: readonly AgentId[] | null | undefined
+}): AgentId | null {
   const preferred = args.defaultTuiAgent === 'blank' ? null : args.defaultTuiAgent
   return pickTuiAgent(preferred, args.detectedAgentIds ?? [], args.disabledTuiAgents)
 }

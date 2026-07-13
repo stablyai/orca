@@ -1,6 +1,7 @@
 import { isTuiAgent } from './tui-agent-config'
 import { YOLO_TUI_AGENT_ARGS, YOLO_TUI_AGENT_ENV } from './tui-agent-permissions'
 import type { TuiAgent } from './types'
+import type { AgentId } from './custom-agent'
 
 const UNSUPPORTED_TUI_AGENT_ARGS: Partial<Record<TuiAgent, readonly string[]>> = {
   opencode: ['--dangerously-skip-permissions'],
@@ -71,19 +72,20 @@ export function normalizeTuiAgentEnvRecord(
   return normalized
 }
 
-export function getTuiAgentDefaultArgs(agent: TuiAgent): string {
-  return DEFAULT_TUI_AGENT_ARGS[agent] ?? ''
+export function getTuiAgentDefaultArgs(agent: AgentId): string {
+  return isTuiAgent(agent) ? (DEFAULT_TUI_AGENT_ARGS[agent] ?? '') : ''
 }
 
-export function getTuiAgentDefaultEnv(agent: TuiAgent): Record<string, string> {
-  return { ...DEFAULT_TUI_AGENT_ENV[agent] }
+export function getTuiAgentDefaultEnv(agent: AgentId): Record<string, string> {
+  return isTuiAgent(agent) ? { ...DEFAULT_TUI_AGENT_ENV[agent] } : {}
 }
 
 export function resolveTuiAgentLaunchArgs(
-  agent: TuiAgent,
+  agent: AgentId,
   configuredArgs: Partial<Record<TuiAgent, string>> | null | undefined
 ): string {
   if (
+    isTuiAgent(agent) &&
     configuredArgs &&
     Object.prototype.hasOwnProperty.call(configuredArgs, agent) &&
     typeof configuredArgs[agent] === 'string'
@@ -94,10 +96,10 @@ export function resolveTuiAgentLaunchArgs(
 }
 
 export function resolveTuiAgentLaunchEnv(
-  agent: TuiAgent,
+  agent: AgentId,
   configuredEnv: Partial<Record<TuiAgent, Record<string, string>>> | null | undefined
 ): Record<string, string> {
-  if (configuredEnv && Object.prototype.hasOwnProperty.call(configuredEnv, agent)) {
+  if (isTuiAgent(agent) && configuredEnv && Object.prototype.hasOwnProperty.call(configuredEnv, agent)) {
     return { ...configuredEnv[agent] }
   }
   return getTuiAgentDefaultEnv(agent)

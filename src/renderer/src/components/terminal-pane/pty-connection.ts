@@ -215,6 +215,7 @@ import {
   recognizeAgentProcessFromCommandLine
 } from '../../../../shared/agent-process-recognition'
 import type { SetupSplitDirection, TuiAgent } from '../../../../shared/types'
+import type { AgentId } from '../../../../shared/custom-agent'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import { createDraftPasteReadyScanner } from '../../../../shared/draft-paste-ready-scanner'
@@ -1150,10 +1151,10 @@ export function connectPanePty(
   }
   const registerEffectiveLaunchConfig = (
     effectiveLaunchConfig: PtyConnectResult['launchConfig'] | undefined,
-    metadata?: { launchToken?: string; launchAgent?: TuiAgent }
+    metadata?: { launchToken?: string; launchAgent?: AgentId }
   ): void => {
     if (!effectiveLaunchConfig) {
-      if (metadata?.launchAgent) {
+      if (metadata?.launchAgent && isTuiAgent(metadata.launchAgent)) {
         // Why: daemon launch identity can outlive the process while Orca is
         // closed. Use it to request confirmation, never as current byte authority.
         useAppStore.getState().setPaneForegroundAgent(cacheKey, {
@@ -1170,7 +1171,9 @@ export function connectPanePty(
     )?.agent
     useAppStore.getState().registerAgentLaunchConfig(cacheKey, effectiveLaunchConfig, {
       agentType:
-        metadata?.launchAgent ??
+        (metadata?.launchAgent && isTuiAgent(metadata.launchAgent)
+          ? metadata.launchAgent
+          : undefined) ??
         paneStartup?.launchAgent ??
         paneStartup?.initialAgentStatus?.agent ??
         persistedLaunchAgent,

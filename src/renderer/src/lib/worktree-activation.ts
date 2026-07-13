@@ -127,7 +127,7 @@ type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string
-      launchAgent?: TuiAgent
+      launchAgent?: AgentId
       draftPrompt?: string
       initialAgentStatus?: { agent: TuiAgent; prompt: string }
       showSessionRestoredBanner?: boolean

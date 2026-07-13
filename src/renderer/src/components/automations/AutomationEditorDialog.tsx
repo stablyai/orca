@@ -12,7 +12,6 @@ import type {
   ProjectHostSetup,
   Repo,
   SetupDecision,
-  TuiAgent,
   Worktree
 } from '../../../../shared/types'
 import type { AgentId } from '../../../../shared/custom-agent'
