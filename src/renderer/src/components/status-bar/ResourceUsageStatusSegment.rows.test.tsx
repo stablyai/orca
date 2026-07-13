@@ -123,16 +123,16 @@ describe('resource manager row presentation', () => {
     expect(container.querySelector('button[aria-label="Kill session ssh-b"]')).not.toBeNull()
   })
 
-  it('keeps kill affordances on the orphan bucket rows', () => {
+  it('keeps an explicit kill affordance on unbound terminal rows', () => {
     renderWorktreeRow(
       makeWorktree({
         worktreeId: ORPHAN_WORKTREE_ID,
-        worktreeName: 'Orphaned terminals',
-        sessions: [makeSession({ sessionId: 'orphan-a', bound: false, tabId: null })]
+        worktreeName: 'Unbound terminals',
+        sessions: [makeSession({ sessionId: 'unbound-a', bound: false, tabId: null })]
       })
     )
 
-    expect(container.querySelector('button[aria-label="Kill session orphan-a"]')).not.toBeNull()
+    expect(container.querySelector('button[aria-label="Kill session unbound-a"]')).not.toBeNull()
   })
 
   it('shows browsers as read-only workspace resources', () => {

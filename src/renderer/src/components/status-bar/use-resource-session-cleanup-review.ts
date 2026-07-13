@@ -95,6 +95,15 @@ export function useResourceSessionCleanupReview({
           readBindings: dependencies.readBindings,
           killInactiveSessions: dependencies.killInactiveSessions
         })
+        try {
+          // Why: the execution inventory is intentionally captured before the
+          // guarded shutdown. Refresh once afterward so completed rows reflect
+          // what the daemon actually retained rather than that pre-kill snapshot.
+          await listCurrentSessions()
+        } catch {
+          // The per-session outcomes remain authoritative even if the optional
+          // presentation refresh is temporarily unavailable.
+        }
         if (mountedRef.current) {
           setState({ phase: 'completed', review, result })
         }

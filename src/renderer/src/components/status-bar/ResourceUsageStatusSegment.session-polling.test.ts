@@ -24,6 +24,18 @@ describe('ResourceUsageStatusSegment session inventory', () => {
     // with large preserved-session sets. Keep continuous use off the closed path.
     expect(openEffectIndex).toBeGreaterThanOrEqual(0)
     expect(refreshIndex).toBeGreaterThan(openEffectIndex)
+    expect(source).not.toContain('window.api.pty.hasChildProcesses')
+    expect(source).not.toContain('window.api.pty.confirmForegroundProcess')
+  })
+
+  it('routes unbound cleanup through review and keeps individual confirmation', () => {
+    const source = readFileSync(SOURCE_PATH, 'utf8')
+
+    expect(source).toContain('useResourceSessionCleanupReview')
+    expect(source).toContain('setKillConfirm(session)')
+    expect(source).not.toContain('if (!session.bound)')
+    expect(source).not.toContain('Promise.allSettled(orphans.map')
+    expect(source).not.toContain('window.api.pty.kill(session.sessionId)')
   })
 
   it('seeds the closed badge from daemon inventory instead of wake-hint bound PTYs', () => {

@@ -114,6 +114,31 @@ describe('useResourceSessionCleanupReview', () => {
     })
   })
 
+  it('refreshes the visible session inventory after guarded cleanup settles', async () => {
+    const listSessions = vi
+      .fn()
+      .mockResolvedValueOnce([session('idle')])
+      .mockResolvedValueOnce([session('idle')])
+      .mockResolvedValueOnce([])
+    const onSessionsLoaded = vi.fn()
+    const { result } = renderHook(() =>
+      useResourceSessionCleanupReview({
+        dependencies: dependencies({ listSessions }),
+        onSessionsLoaded
+      })
+    )
+
+    await act(async () => {
+      await result.current.review()
+    })
+    await act(async () => {
+      await result.current.confirm()
+    })
+
+    expect(listSessions).toHaveBeenCalledTimes(3)
+    expect(onSessionsLoaded).toHaveBeenLastCalledWith([])
+  })
+
   it('lets confirmed cleanup settle after unmount without renderer callbacks', async () => {
     const refreshedSessions = deferred<DaemonSession[]>()
     const cleanup = deferred<{ id: string; outcome: 'killed' }[]>()
