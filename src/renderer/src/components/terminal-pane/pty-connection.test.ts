@@ -895,6 +895,7 @@ describe('connectPanePty', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+    vi.restoreAllMocks()
     if (originalRequestAnimationFrame) {
       globalThis.requestAnimationFrame = originalRequestAnimationFrame
     } else {
@@ -16480,6 +16481,9 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('pty-replaced-codex')
     transportFactoryQueue.push(transport)
     vi.useFakeTimers()
+    // Why: this assertion places the hook update between two active-cadence
+    // inspections, so pin the coordinator's poll jitter like its unit tests do.
+    vi.spyOn(Math, 'random').mockReturnValue(0.5)
     const getForegroundProcess = vi.mocked(window.api.pty.getForegroundProcess)
     getForegroundProcess.mockResolvedValue('codex')
     const paneKey = makePaneKey('tab-1', LEAF_1)
