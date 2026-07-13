@@ -9,7 +9,8 @@ const {
   mkdirSyncMock,
   writeFileSyncMock,
   spawnMock,
-  resolveAgentForegroundProcessMock
+  resolveAgentForegroundProcessMock,
+  killPosixPtySessionMock
 } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
   statSyncMock: vi.fn(),
@@ -17,7 +18,8 @@ const {
   mkdirSyncMock: vi.fn(),
   writeFileSyncMock: vi.fn(),
   spawnMock: vi.fn(),
-  resolveAgentForegroundProcessMock: vi.fn()
+  resolveAgentForegroundProcessMock: vi.fn(),
+  killPosixPtySessionMock: vi.fn()
 }))
 
 vi.mock('fs', () => ({
@@ -38,6 +40,10 @@ vi.mock('electron', () => ({
 
 vi.mock('node-pty', () => ({
   spawn: spawnMock
+}))
+
+vi.mock('../../relay/pty-session-kill', () => ({
+  killPosixPtySession: killPosixPtySessionMock
 }))
 
 // Resolve PowerShell family names to deterministic absolute paths (the fs mock
@@ -123,6 +129,8 @@ describe('LocalPtyProvider', () => {
     accessSyncMock.mockReturnValue(undefined)
     mkdirSyncMock.mockReset()
     writeFileSyncMock.mockReset()
+    killPosixPtySessionMock.mockReset()
+    killPosixPtySessionMock.mockResolvedValue(true)
     resolveAgentForegroundProcessMock.mockReset()
     resolveAgentForegroundProcessMock.mockImplementation(
       async (_pid: number, fallbackProcess: string | null) => fallbackProcess
@@ -942,7 +950,7 @@ describe('LocalPtyProvider', () => {
   })
 
   describe('shutdown', () => {
-    it('kills the PTY process', async () => {
+    it('kills the complete POSIX PTY session', async () => {
       // Why: capture the spy reference before shutdown triggers onExit →
       // POSIX kill neutralization. After neutralization, mockProc.kill is
       // replaced with a non-spy no-op to close the UnixTerminal.destroy() →
@@ -950,7 +958,8 @@ describe('LocalPtyProvider', () => {
       const killSpy = mockProc.kill
       const { id } = await provider.spawn({ cols: 80, rows: 24 })
       await provider.shutdown(id, { immediate: true })
-      expect(killSpy).toHaveBeenCalled()
+      expect(killPosixPtySessionMock).toHaveBeenCalledWith(12345, undefined)
+      expect(killSpy).not.toHaveBeenCalled()
     })
 
     it('invokes onExit callback via the node-pty exit handler', async () => {
@@ -963,7 +972,9 @@ describe('LocalPtyProvider', () => {
 
     it('does not destroy after an intentional Windows shutdown kill', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-      const killSpy = vi.fn()
+      const killSpy = vi.fn(() => {
+        exitCb?.({ exitCode: -1 })
+      })
       const destroySpy = vi.fn(() => {
         killSpy()
       })
@@ -978,6 +989,56 @@ describe('LocalPtyProvider', () => {
 
       expect(killSpy).toHaveBeenCalledTimes(1)
       expect(destroySpy).not.toHaveBeenCalled()
+    })
+
+    it('awaits Windows native exit and does not double-kill after a timeout', async () => {
+      vi.useFakeTimers()
+      try {
+        Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+        const killSpy = vi.fn()
+        spawnMock.mockReturnValue({
+          ...mockProc,
+          kill: killSpy
+        })
+        const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+        const firstStop = provider.shutdown(id, { immediate: true })
+        const firstStopRejected = expect(firstStop).rejects.toThrow(
+          `Unable to verify full PTY session teardown: ${id}`
+        )
+        await vi.advanceTimersByTimeAsync(3000)
+        await firstStopRejected
+        expect((await provider.listProcesses()).some((session) => session.id === id)).toBe(true)
+
+        const retry = provider.shutdown(id, { immediate: false })
+        expect(killSpy).toHaveBeenCalledTimes(1)
+        exitCb?.({ exitCode: -1 })
+        await expect(retry).resolves.toBeUndefined()
+        expect((await provider.listProcesses()).some((session) => session.id === id)).toBe(false)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('retains the ConPTY owner when the native Windows kill throws', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const killError = new Error('native close failed')
+      spawnMock.mockReturnValue({
+        ...mockProc,
+        kill: vi.fn(() => {
+          throw killError
+        })
+      })
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      await expect(provider.shutdown(id, { immediate: true })).rejects.toThrow(killError)
+
+      expect((await provider.listProcesses()).some((session) => session.id === String(id))).toBe(
+        true
+      )
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+      killPosixPtySessionMock.mockResolvedValue(true)
+      await provider.shutdown(id, { immediate: true })
     })
 
     it('cancels pending shell-ready startup delivery on forced shutdown', async () => {
@@ -998,6 +1059,21 @@ describe('LocalPtyProvider', () => {
     it('is a no-op for unknown PTY ids', async () => {
       await provider.shutdown('nonexistent', { immediate: true })
       expect(mockProc.kill).not.toHaveBeenCalled()
+    })
+
+    it('retains the PTY owner when complete POSIX teardown is unverified', async () => {
+      killPosixPtySessionMock.mockResolvedValue(false)
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      await expect(provider.shutdown(id, { immediate: true })).rejects.toThrow(
+        `Unable to verify full PTY session teardown: ${id}`
+      )
+
+      expect((await provider.listProcesses()).some((session) => session.id === String(id))).toBe(
+        true
+      )
+      killPosixPtySessionMock.mockResolvedValue(true)
+      await provider.shutdown(id, { immediate: true })
     })
   })
 

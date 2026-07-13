@@ -10,12 +10,14 @@ const {
   isPwshAvailableMock,
   validateWorkingDirectoryMock,
   resolveUnixShellPathMock,
-  resolveAgentForegroundProcessMock
+  resolveAgentForegroundProcessMock,
+  killPosixPtySessionMock
 } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
   isPwshAvailableMock: vi.fn(),
   resolveUnixShellPathMock: vi.fn((shellPath: string) => shellPath),
   resolveAgentForegroundProcessMock: vi.fn(),
+  killPosixPtySessionMock: vi.fn(),
   validateWorkingDirectoryMock: vi.fn((cwd: string) => {
     if (cwd.includes('definitely-missing')) {
       throw new Error(
@@ -27,6 +29,10 @@ const {
 
 vi.mock('node-pty', () => ({
   spawn: spawnMock
+}))
+
+vi.mock('../../relay/pty-session-kill', () => ({
+  killPosixPtySession: killPosixPtySessionMock
 }))
 
 vi.mock('../pwsh', () => ({
@@ -113,6 +119,8 @@ describe('createPtySubprocess', () => {
 
   beforeEach(() => {
     spawnMock.mockReset()
+    killPosixPtySessionMock.mockReset()
+    killPosixPtySessionMock.mockResolvedValue(true)
     isPwshAvailableMock.mockReset()
     resolveAgentForegroundProcessMock.mockReset()
     resolveAgentForegroundProcessMock.mockImplementation(
@@ -1249,6 +1257,26 @@ describe('createPtySubprocess', () => {
 
     expect(killSpy).toHaveBeenCalledWith(77, 'SIGKILL')
     killSpy.mockRestore()
+  })
+
+  itOnPosixHost('proves the complete POSIX PTY session stopped before acknowledging', async () => {
+    const proc = mockPtyProcess(77)
+    Object.assign(proc, { ptsName: '/dev/ttys042' })
+    spawnMock.mockReturnValue(proc)
+    const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+
+    await expect(handle.forceKillAndWait?.()).resolves.toBe(true)
+
+    expect(killPosixPtySessionMock).toHaveBeenCalledWith(77, '/dev/ttys042')
+  })
+
+  itOnPosixHost('fails closed when complete POSIX PTY session death is unverified', async () => {
+    const proc = mockPtyProcess(77)
+    spawnMock.mockReturnValue(proc)
+    killPosixPtySessionMock.mockResolvedValue(false)
+    const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+
+    await expect(handle.forceKillAndWait?.()).resolves.toBe(false)
   })
 
   it('routes onData events', () => {

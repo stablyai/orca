@@ -390,6 +390,41 @@ describe('TerminalHost', () => {
       expect(host.isKilled('session-1')).toBe(true)
     })
 
+    it('awaits verified immediate teardown before reaping the session', async () => {
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+      lastSubprocess.forceKillAndWait = vi.fn(async () => true)
+
+      await host.killAndWait('session-1', { immediate: true })
+
+      expect(lastSubprocess.forceKillAndWait).toHaveBeenCalledOnce()
+      expect(lastSubprocess.dispose).toHaveBeenCalled()
+      expect(host.listSessions()).toEqual([])
+      expect(host.isKilled('session-1')).toBe(true)
+    })
+
+    it('retains a retryable owner when immediate teardown cannot be verified', async () => {
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+      lastSubprocess.forceKillAndWait = vi.fn(async () => false)
+
+      await expect(host.killAndWait('session-1', { immediate: true })).rejects.toThrow(
+        'Unable to verify full PTY session teardown: session-1'
+      )
+
+      expect(lastSubprocess.dispose).not.toHaveBeenCalled()
+      expect(host.listSessions()).toHaveLength(1)
+      expect(host.isKilled('session-1')).toBe(false)
+    })
+
     it('throws for non-existent session', () => {
       expect(() => host.kill('missing')).toThrow('Session not found')
     })

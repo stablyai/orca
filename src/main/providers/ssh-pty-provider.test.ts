@@ -1,5 +1,10 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { SshPtyProvider } from './ssh-pty-provider'
+import {
+  SSH_PTY_IMMEDIATE_SHUTDOWN_TIMEOUT_MS,
+  SSH_PTY_LEGACY_INVENTORY_TIMEOUT_MS,
+  SSH_PTY_TEARDOWN_LIVENESS_TIMEOUT_MS,
+  SshPtyProvider
+} from './ssh-pty-provider'
 import { POWERLEVEL10K_WIZARD_DISABLE_ENV } from '../pty/powerlevel10k-wizard-env'
 import { JsonRpcErrorCode } from '../ssh/relay-protocol'
 
@@ -419,20 +424,28 @@ describe('SshPtyProvider', () => {
 
   it('shutdown sends pty.shutdown request', async () => {
     await provider.shutdown(scopedPty1, { immediate: true })
-    expect(mux.request).toHaveBeenCalledWith('pty.shutdown', {
-      id: 'pty-1',
-      immediate: true,
-      keepHistory: false
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'pty.shutdown',
+      {
+        id: 'pty-1',
+        immediate: true,
+        keepHistory: false
+      },
+      { timeoutMs: SSH_PTY_IMMEDIATE_SHUTDOWN_TIMEOUT_MS }
+    )
   })
 
   it('shutdown forwards keepHistory: true over the relay', async () => {
     await provider.shutdown(scopedPty1, { immediate: true, keepHistory: true })
-    expect(mux.request).toHaveBeenCalledWith('pty.shutdown', {
-      id: 'pty-1',
-      immediate: true,
-      keepHistory: true
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'pty.shutdown',
+      {
+        id: 'pty-1',
+        immediate: true,
+        keepHistory: true
+      },
+      { timeoutMs: SSH_PTY_IMMEDIATE_SHUTDOWN_TIMEOUT_MS }
+    )
   })
 
   it('sendSignal sends pty.sendSignal request', async () => {
@@ -505,6 +518,9 @@ describe('SshPtyProvider', () => {
     await expect(provider.hasPtyAsync('ssh:conn-1@@pty-2')).resolves.toBe(false)
 
     expect(mux.request.mock.calls.filter(([method]) => method === 'pty.hasPty')).toHaveLength(2)
+    for (const call of mux.request.mock.calls.filter(([method]) => method === 'pty.hasPty')) {
+      expect(call[2]).toEqual({ timeoutMs: SSH_PTY_TEARDOWN_LIVENESS_TIMEOUT_MS })
+    }
     expect(
       mux.request.mock.calls.filter(([method]) => method === 'pty.listProcesses')
     ).toHaveLength(0)
@@ -540,6 +556,9 @@ describe('SshPtyProvider', () => {
     expect(
       mux.request.mock.calls.filter(([method]) => method === 'pty.listProcesses')
     ).toHaveLength(1)
+    expect(mux.request.mock.calls.find(([method]) => method === 'pty.listProcesses')?.[2]).toEqual({
+      timeoutMs: SSH_PTY_LEGACY_INVENTORY_TIMEOUT_MS
+    })
 
     await provider.shutdown(scopedPty1, { immediate: true })
     await expect(provider.hasPtyAsync(scopedPty1)).resolves.toBe(false)

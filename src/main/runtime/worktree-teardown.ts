@@ -2,6 +2,7 @@ import type { IPtyProvider } from '../providers/types'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { listRegisteredPtys } from '../memory/pty-registry'
 import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
+import { mapPtyStopsWithConcurrency } from './pty-stop-concurrency'
 
 export type WorktreeTeardownDeps = {
   runtime?: OrcaRuntimeService
@@ -103,17 +104,15 @@ async function sweepLocalProvider(
 
   const failedShutdowns = new Map<string, unknown>()
   const stopped = new Set<string>()
-  await Promise.all(
-    [...targets].map(async ([ptyId]) => {
-      try {
-        await provider.shutdown(ptyId, { immediate: true })
-        stopped.add(ptyId)
-        clearStoppedPtyState(ptyId, onPtyStopped)
-      } catch (error) {
-        failedShutdowns.set(ptyId, error)
-      }
-    })
-  )
+  await mapPtyStopsWithConcurrency([...targets.keys()], async (ptyId) => {
+    try {
+      await provider.shutdown(ptyId, { immediate: true })
+      stopped.add(ptyId)
+      clearStoppedPtyState(ptyId, onPtyStopped)
+    } catch (error) {
+      failedShutdowns.set(ptyId, error)
+    }
+  })
 
   if (failedShutdowns.size > 0) {
     // Why: duplicate/stale registry rows may report "not found" after another

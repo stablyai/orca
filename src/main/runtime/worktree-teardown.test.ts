@@ -38,6 +38,24 @@ function createProviderStub(
   } as unknown as IPtyProvider
 }
 
+async function releaseBoundedShutdownWaves(
+  shutdown: ReturnType<typeof vi.fn>,
+  pending: { settle: () => void }[],
+  targetCount: number
+): Promise<number> {
+  await vi.waitFor(() => expect(shutdown).toHaveBeenCalledTimes(8))
+  let waves = 0
+  while (shutdown.mock.calls.length < targetCount) {
+    waves += 1
+    const callsBeforeRelease = shutdown.mock.calls.length
+    pending.splice(0).forEach(({ settle }) => settle())
+    await vi.waitFor(() => expect(shutdown.mock.calls.length).toBeGreaterThan(callsBeforeRelease))
+  }
+  waves += 1
+  pending.splice(0).forEach(({ settle }) => settle())
+  return waves
+}
+
 describe('killAllProcessesForWorktree', () => {
   beforeEach(() => {
     listRegisteredPtysMock.mockReset()
@@ -234,6 +252,85 @@ describe('killAllProcessesForWorktree', () => {
     })
     expect(localProvider.listProcesses).toHaveBeenCalledTimes(2)
     expect(localProvider.shutdown).toHaveBeenCalledTimes(1)
+  })
+
+  it('bounds a 50-session headless fallback sweep to seven shutdown waves', async () => {
+    const sessions = Array.from({ length: 50 }, (_, index) => ({
+      id: `w1@@${index}`,
+      cwd: '/tmp/w1',
+      title: 'shell'
+    }))
+    const localProvider = createProviderStub(async () => sessions)
+    const pending: { settle: () => void }[] = []
+    let active = 0
+    let peak = 0
+    vi.mocked(localProvider.shutdown).mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          active += 1
+          peak = Math.max(peak, active)
+          pending.push({
+            settle: () => {
+              active -= 1
+              resolve()
+            }
+          })
+        })
+    )
+    listRegisteredPtysMock.mockReturnValue([])
+
+    const teardown = killAllProcessesForWorktree('w1', { localProvider })
+    const waves = await releaseBoundedShutdownWaves(
+      vi.mocked(localProvider.shutdown),
+      pending,
+      sessions.length
+    )
+
+    await expect(teardown).resolves.toEqual({
+      runtimeStopped: 0,
+      providerStopped: 50,
+      registryStopped: 0
+    })
+    expect(peak).toBe(8)
+    expect(waves).toBe(7)
+  })
+
+  it('waits for seven bounded failure waves before rejecting a 50-session sweep', async () => {
+    const sessions = Array.from({ length: 50 }, (_, index) => ({
+      id: `w1@@${index}`,
+      cwd: '/tmp/w1',
+      title: 'shell'
+    }))
+    const localProvider = createProviderStub(async () => sessions)
+    const pending: { settle: () => void }[] = []
+    let active = 0
+    let peak = 0
+    vi.mocked(localProvider.shutdown).mockImplementation(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          active += 1
+          peak = Math.max(peak, active)
+          pending.push({
+            settle: () => {
+              active -= 1
+              reject(new Error('shutdown timed out after 3000ms'))
+            }
+          })
+        })
+    )
+    listRegisteredPtysMock.mockReturnValue([])
+
+    const teardown = killAllProcessesForWorktree('w1', { localProvider })
+    const waves = await releaseBoundedShutdownWaves(
+      vi.mocked(localProvider.shutdown),
+      pending,
+      sessions.length
+    )
+
+    await expect(teardown).rejects.toThrow('Failed to stop local worktree terminals')
+    expect(localProvider.listProcesses).toHaveBeenCalledTimes(2)
+    expect(peak).toBe(8)
+    expect(waves).toBe(7)
   })
 
   it('awaits each runtime stop before fallback sweeps and preserves unrelated sessions', async () => {

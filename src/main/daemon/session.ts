@@ -65,6 +65,8 @@ export type SubprocessHandle = {
   clear?(): void
   kill(): void
   forceKill(): void
+  /** Force-stop the complete native PTY and prove no runnable owner remains. */
+  forceKillAndWait?(): Promise<boolean>
   signal(sig: string): void
   onData(cb: (data: string) => void): void
   onExit(cb: (code: number) => void): void
@@ -491,6 +493,20 @@ export class Session {
     this._state = 'exited'
     // Why: free the headless emulator's scrollback here too (this path skips
     // dispose()). Matches forceDispose(); reaping just drops the map entry.
+    this.emulator.dispose()
+  }
+
+  async forceKillAndDisposeSubprocessAndWait(): Promise<void> {
+    const stopped = this.subprocess.forceKillAndWait
+      ? await this.subprocess.forceKillAndWait()
+      : (this.subprocess.forceKill(), true)
+    if (!stopped) {
+      // Why: disposing here would erase the only retryable owner while its
+      // process may still hold the worktree. The daemon request must fail.
+      throw new Error(`Unable to verify full PTY session teardown: ${this.sessionId}`)
+    }
+    this.#teardownSubprocess()
+    this._state = 'exited'
     this.emulator.dispose()
   }
 

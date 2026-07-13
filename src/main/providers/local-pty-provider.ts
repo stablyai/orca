@@ -58,6 +58,7 @@ import { readWindowsConptyProcessIds } from './windows-conpty-process-membership
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from './pty-default-cwd'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
+import { killPosixPtySession } from '../../relay/pty-session-kill'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -77,6 +78,9 @@ const ptyTerminalHandle = new Map<string, string>()
 // to invoke/clean them up on a destroyed environment, triggering a SIGABRT.
 const ptyDisposables = new Map<string, { dispose: () => void }[]>()
 const ptyCleanupCallbacks = new Map<string, () => void>()
+const windowsImmediateKills = new WeakSet<pty.IPty>()
+
+const WINDOWS_PTY_EXIT_TIMEOUT_MS = 3000
 
 let loadGeneration = 0
 const ptyLoadGeneration = new Map<string, number>()
@@ -180,6 +184,44 @@ function clearPtyState(id: string): void {
   ptyAgentForegroundContextPaths.delete(id)
   ptyTerminalHandle.delete(id)
   ptyLoadGeneration.delete(id)
+}
+
+function waitForPtyExit(
+  id: string,
+  proc: pty.IPty
+): {
+  promise: Promise<boolean>
+  cancel: () => void
+} {
+  let settled = false
+  let timer: NodeJS.Timeout | undefined
+  let resolvePromise: (exited: boolean) => void = () => {}
+  const finish = (exited: boolean): void => {
+    if (settled) {
+      return
+    }
+    settled = true
+    if (timer) {
+      clearTimeout(timer)
+    }
+    exitListeners.delete(onExit)
+    resolvePromise(exited)
+  }
+  const onExit: ExitCallback = (payload) => {
+    if (payload.id === id) {
+      finish(true)
+    }
+  }
+  const promise = new Promise<boolean>((resolve) => {
+    resolvePromise = resolve
+    exitListeners.add(onExit)
+    if (ptyProcesses.get(id) !== proc) {
+      finish(true)
+      return
+    }
+    timer = setTimeout(() => finish(false), WINDOWS_PTY_EXIT_TIMEOUT_MS)
+  })
+  return { promise, cancel: () => finish(false) }
 }
 
 /**
@@ -800,7 +842,7 @@ export class LocalPtyProvider implements IPtyProvider {
       // Why: release the master ptmx fd on the natural-exit path — without
       // this, a shell that exits cleanly (the common case) never releases its
       // fd until the next GC. See docs/fix-pty-fd-leak.md.
-      destroyPtyProcess(proc)
+      destroyPtyProcess(proc, { alreadyKilled: windowsImmediateKills.has(proc) })
       this.opts.onExit?.(id, exitCode)
       for (const cb of exitListeners) {
         cb({ id, code: exitCode })
@@ -882,10 +924,47 @@ export class LocalPtyProvider implements IPtyProvider {
     return { cols: proc.cols, rows: proc.rows }
   }
 
-  async shutdown(id: string, _opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+  async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
     const proc = ptyProcesses.get(id)
     if (!proc) {
       return
+    }
+    if (process.platform === 'win32' && windowsImmediateKills.has(proc)) {
+      if (!(await waitForPtyExit(id, proc).promise)) {
+        throw new Error(`Unable to verify full PTY session teardown: ${id}`)
+      }
+      return
+    }
+    let alreadyKilled = false
+    if (opts.immediate) {
+      if (process.platform === 'win32') {
+        // Why: ConPTY close completes asynchronously. Deletion must await the
+        // native exit event, while a timeout keeps the owner retryable.
+        const exitWaiter = waitForPtyExit(id, proc)
+        try {
+          windowsImmediateKills.add(proc)
+          proc.kill()
+        } catch (error) {
+          exitWaiter.cancel()
+          windowsImmediateKills.delete(proc)
+          if (ptyProcesses.get(id) === proc) {
+            throw error
+          }
+        }
+        if (!(await exitWaiter.promise)) {
+          throw new Error(`Unable to verify full PTY session teardown: ${id}`)
+        }
+        return
+      } else {
+        const killedSession = await killPosixPtySession(
+          proc.pid,
+          (proc as unknown as { ptsName?: unknown }).ptsName
+        )
+        if (!killedSession) {
+          throw new Error(`Unable to verify full PTY session teardown: ${id}`)
+        }
+        alreadyKilled = true
+      }
     }
     // Why: disposePtyListeners removes the onExit callback, so the natural
     // exit cleanup path from node-pty won't fire. Cleanup and notification
@@ -894,10 +973,12 @@ export class LocalPtyProvider implements IPtyProvider {
     // the natural onExit callback from running the usual clearPtyState path.
     runPtyCleanup(id)
     disposePtyListeners(id)
-    try {
-      proc.kill()
-    } catch {
-      /* Process may already be dead */
+    if (!alreadyKilled) {
+      try {
+        proc.kill()
+      } catch {
+        /* Generic terminal close preserves the previous already-dead behavior. */
+      }
     }
     destroyPtyProcess(proc, { alreadyKilled: true })
     clearPtyState(id)

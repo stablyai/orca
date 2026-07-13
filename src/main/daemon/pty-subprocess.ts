@@ -58,6 +58,7 @@ import { parsePtySessionId } from './pty-session-id'
 import { getAgentForegroundContextPaths } from '../providers/agent-foreground-context-paths'
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
+import { killPosixPtySession } from '../../relay/pty-session-kill'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -893,6 +894,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let dead = false
   let disposed = false
   let nodePtyKillIssued = false
+  const exitWaiters = new Set<() => void>()
   let cachedAgentForeground: { processName: string; refreshedAt: number } | null = null
   const agentForegroundContextPaths = getAgentForegroundContextPaths({
     cwd: opts.cwd,
@@ -1001,6 +1003,10 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   }
   proc.onExit(() => {
     dead = true
+    for (const resolve of exitWaiters) {
+      resolve()
+    }
+    exitWaiters.clear()
     cachedAgentForeground = null
     startupAgentForeground = null
     // Why: UnixTerminal.destroy() registers `_socket.once('close', () => this.kill('SIGHUP'))`
@@ -1203,6 +1209,36 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
           // Process may already be dead
         }
       }
+    },
+    forceKillAndWait: async () => {
+      if (dead) {
+        return true
+      }
+      if (process.platform !== 'win32') {
+        return killPosixPtySession(proc.pid, (proc as unknown as { ptsName?: unknown }).ptsName)
+      }
+      if (!nodePtyKillIssued) {
+        try {
+          nodePtyKillIssued = true
+          proc.kill()
+        } catch {
+          return false
+        }
+      }
+      if (dead) {
+        return true
+      }
+      return new Promise<boolean>((resolve) => {
+        const onExit = (): void => {
+          clearTimeout(timeout)
+          resolve(true)
+        }
+        const timeout = setTimeout(() => {
+          exitWaiters.delete(onExit)
+          resolve(false)
+        }, 3000)
+        exitWaiters.add(onExit)
+      })
     },
     signal: (sig) => {
       // Why: same recycled-pid hazard as forceKill. Once dead, silently drop

@@ -17,6 +17,11 @@ type RemoteCliBridgeEnv = {
 
 export const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
 export const SSH_PTY_IDENTITY_MISMATCH_ERROR = 'SSH_PTY_IDENTITY_MISMATCH'
+// Why: eight bounded workers keep a 50-PTY failure near one 30s batch,
+// while leaving enough time for the relay's targeted 3s kill-and-verify path.
+export const SSH_PTY_IMMEDIATE_SHUTDOWN_TIMEOUT_MS = 3250
+export const SSH_PTY_TEARDOWN_LIVENESS_TIMEOUT_MS = 1000
+export const SSH_PTY_LEGACY_INVENTORY_TIMEOUT_MS = 2000
 
 export function isSshPtyNotFoundError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err)
@@ -54,8 +59,15 @@ export class SshPtyProvider implements IPtyProvider {
     this.mux = mux
     this.ptyLiveness = new SshPtyLiveness({
       probe: async (id) =>
-        (await this.mux.request('pty.hasPty', { id: this.toRelayPtyId(id) })) === true,
-      listIds: async () => (await this.listProcesses()).map((session) => session.id)
+        (await this.mux.request(
+          'pty.hasPty',
+          { id: this.toRelayPtyId(id) },
+          { timeoutMs: SSH_PTY_TEARDOWN_LIVENESS_TIMEOUT_MS }
+        )) === true,
+      listIds: async () =>
+        (await this.requestProcessList(SSH_PTY_LEGACY_INVENTORY_TIMEOUT_MS)).map(
+          (session) => session.id
+        )
     })
 
     // Subscribe to relay notifications for PTY events
@@ -250,11 +262,15 @@ export class SshPtyProvider implements IPtyProvider {
   }
 
   async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
-    await this.mux.request('pty.shutdown', {
-      id: this.toRelayPtyId(id),
-      immediate: opts.immediate ?? false,
-      keepHistory: opts.keepHistory ?? false
-    })
+    await this.mux.request(
+      'pty.shutdown',
+      {
+        id: this.toRelayPtyId(id),
+        immediate: opts.immediate ?? false,
+        keepHistory: opts.keepHistory ?? false
+      },
+      opts.immediate ? { timeoutMs: SSH_PTY_IMMEDIATE_SHUTDOWN_TIMEOUT_MS } : undefined
+    )
     this.ptyLiveness.markStopped(id)
   }
 
@@ -302,7 +318,15 @@ export class SshPtyProvider implements IPtyProvider {
   }
 
   async listProcesses(): Promise<PtyProcessInfo[]> {
-    const result = await this.mux.request('pty.listProcesses')
+    return this.requestProcessList()
+  }
+
+  private async requestProcessList(timeoutMs?: number): Promise<PtyProcessInfo[]> {
+    const result = await this.mux.request(
+      'pty.listProcesses',
+      undefined,
+      timeoutMs === undefined ? undefined : { timeoutMs }
+    )
     const sessions = (result as PtyProcessInfo[]).map((session) => ({
       ...session,
       id: this.toAppPtyId(session.id)

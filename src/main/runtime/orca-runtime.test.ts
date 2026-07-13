@@ -29615,6 +29615,31 @@ describe('OrcaRuntimeService', () => {
       expect(removeWorktree).not.toHaveBeenCalled()
     })
 
+    it('keeps spawn admission closed through post-Git metadata cleanup', async () => {
+      const localProvider = createProviderStub(async () => [])
+      const runtime = new OrcaRuntimeService(store, undefined, {
+        getLocalProvider: () => localProvider as never
+      })
+      const originalRemoveWorktreeMeta = store.removeWorktreeMeta
+      let rejectedDuringMetadataCleanup = false
+      store.removeWorktreeMeta = () => {
+        expect(() => runtime.beginWorktreePtySpawn(TEST_WORKTREE_ID)).toThrow(
+          'Worktree teardown is in progress'
+        )
+        rejectedDuringMetadataCleanup = true
+      }
+
+      try {
+        await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
+        const release = runtime.beginWorktreePtySpawn(TEST_WORKTREE_ID)
+        release()
+
+        expect(rejectedDuringMetadataCleanup).toBe(true)
+      } finally {
+        store.removeWorktreeMeta = originalRemoveWorktreeMeta
+      }
+    })
+
     it('thunk resolves the installed provider lazily, not at construction time', async () => {
       // Simulates the daemon adapter being installed AFTER OrcaRuntimeService
       // construction (setLocalPtyProvider(routedAdapter) in daemon-init).
@@ -29664,12 +29689,20 @@ describe('OrcaRuntimeService', () => {
         isMainWorktree: false
       }
       const remoteWorktreeId = `${remoteRepo.id}::${remoteWorktree.path}`
+      let runtime: OrcaRuntimeService
+      let rejectedDuringRemoteMetadataCleanup = false
       const runtimeStore = {
         ...store,
         getRepos: () => [remoteRepo],
         getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
         getAllWorktreeMeta: () => ({ [remoteWorktreeId]: makeWorktreeMeta() }),
-        getWorktreeMeta: (id: string) => (id === remoteWorktreeId ? makeWorktreeMeta() : undefined)
+        getWorktreeMeta: (id: string) => (id === remoteWorktreeId ? makeWorktreeMeta() : undefined),
+        removeWorktreeMeta: () => {
+          expect(() => runtime.beginWorktreePtySpawn(remoteWorktreeId)).toThrow(
+            'Worktree teardown is in progress'
+          )
+          rejectedDuringRemoteMetadataCleanup = true
+        }
       }
       const callOrder: string[] = []
       const gitProvider = {
@@ -29690,7 +29723,7 @@ describe('OrcaRuntimeService', () => {
       }
       const localProvider = createProviderStub(async () => [])
       registerSshGitProvider('ssh-1', gitProvider as never)
-      const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
         getLocalProvider: () => localProvider as never
       })
       let releaseFirstStop = () => {}
@@ -29726,12 +29759,15 @@ describe('OrcaRuntimeService', () => {
 
         releaseFirstStop()
         await removal
+        const releasePostRemovalSpawn = runtime.beginWorktreePtySpawn(remoteWorktreeId)
+        releasePostRemovalSpawn()
 
         expect(callOrder).toEqual([
           'stop:ssh:ssh-1@@existing',
           'stop:ssh:ssh-1@@late',
           'git-remove'
         ])
+        expect(rejectedDuringRemoteMetadataCleanup).toBe(true)
       } finally {
         unregisterSshGitProvider('ssh-1')
       }

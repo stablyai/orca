@@ -207,6 +207,17 @@ export class TerminalHost {
     session.kill()
   }
 
+  async killAndWait(sessionId: string, opts: { immediate?: boolean } = {}): Promise<void> {
+    if (!opts.immediate) {
+      this.kill(sessionId, opts)
+      return
+    }
+    const session = this.getAliveSession(sessionId)
+    await session.forceKillAndDisposeSubprocessAndWait()
+    this.recordTombstone(sessionId)
+    this.reapSession(sessionId)
+  }
+
   // Why: dispose a dead session's headless emulator and drop it from the map so
   // exited terminals don't pin ~5000 rows of scrollback for the daemon's life.
   // No-ops on live sessions (a live session must never be disposed here) and on

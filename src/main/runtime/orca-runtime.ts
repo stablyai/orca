@@ -714,6 +714,7 @@ import {
   registerTerminalViewAttributesApplier
 } from './terminal-view-attribute-store'
 import { killAllProcessesForWorktree } from './worktree-teardown'
+import { mapPtyStopsWithConcurrency } from './pty-stop-concurrency'
 import { WorktreePtyAdmission } from './worktree-pty-admission'
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
 import {
@@ -2123,27 +2124,6 @@ async function hasLocalWorktreeBaseRef(
     (gitArgs) => gitExecFileAsync(gitArgs, { cwd: repoPath, ...options }),
     baseRef
   )
-}
-
-async function mapPtyStopsWithConcurrency(
-  ptyIds: readonly string[],
-  concurrency: number,
-  stopPty: (ptyId: string) => Promise<boolean>
-): Promise<boolean[]> {
-  const results = Array<boolean>(ptyIds.length)
-  let nextIndex = 0
-  const stopNext = async (): Promise<void> => {
-    while (nextIndex < ptyIds.length) {
-      const index = nextIndex
-      nextIndex += 1
-      results[index] = await stopPty(ptyIds[index])
-    }
-  }
-  // Why: remote tools may each consume the full timeout. A small worker pool
-  // bounds resource use without making teardown latency linear in PTY count.
-  const workers = Array.from({ length: Math.min(concurrency, ptyIds.length) }, () => stopNext())
-  await Promise.all(workers)
-  return results
 }
 
 export class OrcaRuntimeService {
@@ -17204,45 +17184,42 @@ export class OrcaRuntimeService {
       }
       if (repo.connectionId) {
         const remoteRemoveOptions = !deleteBranch ? { deleteBranch } : {}
-        const rawRemovalResult = await this.runWithWorktreePtyTeardown(
-          removalTarget.id,
-          async () => {
-            const localProvider = this.getLocalProvider()
-            if (localProvider) {
-              await killAllProcessesForWorktree(removalTarget.id, {
-                runtime: this,
-                localProvider,
-                onPtyStopped: this.onPtyStopped ?? undefined
-              })
-            }
-            return Object.keys(remoteRemoveOptions).length > 0
-              ? provider!.removeWorktree(canonicalWorktreePath, force, remoteRemoveOptions)
-              : provider!.removeWorktree(canonicalWorktreePath, force)
+        return this.runWithWorktreePtyTeardown(removalTarget.id, async () => {
+          const localProvider = this.getLocalProvider()
+          if (localProvider) {
+            await killAllProcessesForWorktree(removalTarget.id, {
+              runtime: this,
+              localProvider,
+              onPtyStopped: this.onPtyStopped ?? undefined
+            })
           }
-        )
-        const removalResult = this.preserveBranchHeadFallback(
-          rawRemovalResult,
-          registeredWorktree.head
-        )
-        await cleanupUnusedWorktreePushTargetRemoteSsh(
-          provider!,
-          repo.path,
-          removalTarget.id,
-          removedPushTarget,
-          store
-        )
-        this.rememberPreservedBranchCleanupTarget(
-          removalTarget.id,
-          removalResult,
-          registeredWorktree.head,
-          removedPushTarget
-        )
-        this.clearOptimisticReconcileToken(removalTarget.id)
-        this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
-        this.invalidateResolvedWorktreeCache()
-        invalidateAuthorizedRootsCache()
-        this.notifyWorktreesChanged(repo.id)
-        return removalResult ?? {}
+          const rawRemovalResult = await (Object.keys(remoteRemoveOptions).length > 0
+            ? provider!.removeWorktree(canonicalWorktreePath, force, remoteRemoveOptions)
+            : provider!.removeWorktree(canonicalWorktreePath, force))
+          const removalResult = this.preserveBranchHeadFallback(
+            rawRemovalResult,
+            registeredWorktree.head
+          )
+          await cleanupUnusedWorktreePushTargetRemoteSsh(
+            provider!,
+            repo.path,
+            removalTarget.id,
+            removedPushTarget,
+            store
+          )
+          this.rememberPreservedBranchCleanupTarget(
+            removalTarget.id,
+            removalResult,
+            registeredWorktree.head,
+            removedPushTarget
+          )
+          this.clearOptimisticReconcileToken(removalTarget.id)
+          this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
+          this.invalidateResolvedWorktreeCache()
+          invalidateAuthorizedRootsCache()
+          this.notifyWorktreesChanged(repo.id)
+          return removalResult ?? {}
+        })
       }
 
       const hooks = getEffectiveHooks(repo)
@@ -17408,31 +17385,30 @@ export class OrcaRuntimeService {
             throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
           }
         }
+        await cleanupUnusedWorktreePushTargetRemote(
+          repo.path,
+          removalTarget.id,
+          removedPushTarget,
+          store,
+          localWorktreeGitOptions
+        )
+        this.rememberPreservedBranchCleanupTarget(
+          removalTarget.id,
+          removalResult,
+          refreshedRegisteredWorktree.head,
+          removedPushTarget
+        )
+        this.clearOptimisticReconcileToken(removalTarget.id)
+        this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
+        this.invalidateResolvedWorktreeCache()
+        invalidateAuthorizedRootsCache()
+        this.notifyWorktreesChanged(repo.id)
+        return {
+          ...removalResult,
+          ...(warning ? { warning } : {})
+        }
       } finally {
         releaseWorktreePtyTeardown()
-      }
-
-      await cleanupUnusedWorktreePushTargetRemote(
-        repo.path,
-        removalTarget.id,
-        removedPushTarget,
-        store,
-        localWorktreeGitOptions
-      )
-      this.rememberPreservedBranchCleanupTarget(
-        removalTarget.id,
-        removalResult,
-        refreshedRegisteredWorktree.head,
-        removedPushTarget
-      )
-      this.clearOptimisticReconcileToken(removalTarget.id)
-      this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
-      this.invalidateResolvedWorktreeCache()
-      invalidateAuthorizedRootsCache()
-      this.notifyWorktreesChanged(repo.id)
-      return {
-        ...removalResult,
-        ...(warning ? { warning } : {})
       }
     })()
     this.removeManagedWorktreeInFlight.set(removalTarget.id, { optionsKey, promise: removal })
@@ -18968,7 +18944,7 @@ export class OrcaRuntimeService {
     }
     const ids = [...ptyIds]
     const stopResults = opts.worktreeTeardown
-      ? await mapPtyStopsWithConcurrency(ids, 8, stopPty)
+      ? await mapPtyStopsWithConcurrency(ids, stopPty)
       : await Promise.all(ids.map(stopPty))
     let stopped = 0
     const failedPtyIds: string[] = []

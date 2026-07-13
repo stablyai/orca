@@ -6778,6 +6778,24 @@ describe('registerWorktreeHandlers', () => {
     expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
   })
 
+  it('holds PTY admission until Git and metadata removal both complete', async () => {
+    const worktreeId = 'repo-1::/workspace/feature-wt'
+    const releaseTeardown = vi.fn()
+    mockKnownFeatureWorktree()
+    store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta())
+    removeWorktreeMock.mockResolvedValue({})
+    runtimeStub.beginWorktreePtyTeardown.mockResolvedValue(releaseTeardown)
+
+    await handlers['worktrees:remove'](null, { worktreeId })
+
+    expect(removeWorktreeMock.mock.invocationCallOrder[0]).toBeLessThan(
+      store.removeWorktreeMeta.mock.invocationCallOrder[0]
+    )
+    expect(store.removeWorktreeMeta.mock.invocationCallOrder[0]).toBeLessThan(
+      releaseTeardown.mock.invocationCallOrder[0]
+    )
+  })
+
   it('runs the archive hook on remove when skipArchive is not set', async () => {
     mockKnownFeatureWorktree()
     removeWorktreeMock.mockResolvedValue(undefined)
@@ -8689,6 +8707,28 @@ describe('registerWorktreeHandlers', () => {
 
       expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
       expect(getSshGitProviderMock).not.toHaveBeenCalled()
+    })
+
+    it('keeps metadata when local terminal teardown cannot be verified', async () => {
+      const worktreeId = 'repo-1::/workspace/feature-wt'
+      store.getRepo.mockReturnValue({
+        id: 'repo-1',
+        path: '/workspace/repo',
+        displayName: 'repo',
+        badgeColor: '#000',
+        addedAt: 0,
+        connectionId: 'removed-ssh-target'
+      })
+      killAllProcessesForWorktreeMock.mockRejectedValue(
+        new Error('Failed to stop remote worktree terminals')
+      )
+
+      await expect(handlers['worktrees:forgetLocal'](null, { worktreeId })).rejects.toThrow(
+        'Failed to stop remote worktree terminals'
+      )
+
+      expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+      expect(deleteWorktreeHistoryDirMock).not.toHaveBeenCalled()
     })
 
     it('rejects forgetting a folder project root', async () => {
