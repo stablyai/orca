@@ -93,6 +93,10 @@ export function filterAiVaultSessions(
         return false
       }
       if (filters.scope === 'workspace') {
+        // Why: 읽기전용 웹 대화는 아직 워크스페이스에 속하지 않는다(M6 로컬 세션화 시 노출).
+        if (session.readOnly) {
+          return false
+        }
         const cwd = session.cwd
         if (
           !cwd ||

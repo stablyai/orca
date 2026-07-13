@@ -114,4 +114,56 @@ describe('/shared ai-vault-session-filters (lifted core)', () => {
   it('builds preview search text from conversation turns', () => {
     expect(sessionPreviewSearchText(baseSession)).toContain('scope tabs')
   })
+
+  it('webSession has readOnly property properly set', () => {
+    const makeSession = (overrides: Partial<AiVaultSession> = {}): AiVaultSession => ({
+      ...baseSession,
+      ...overrides
+    })
+    const webSession = makeSession({ agent: 'gemini-web', readOnly: true })
+    expect(webSession.readOnly).toBe(true)
+    expect(webSession.agent).toBe('gemini-web')
+  })
+
+  it('excludes read-only web chats from the workspace scope', () => {
+    const makeSession = (overrides: Partial<AiVaultSession> = {}): AiVaultSession => ({
+      ...baseSession,
+      ...overrides
+    })
+    const webSession = makeSession({
+      agent: 'gemini-web',
+      readOnly: true,
+      cwd: '/Users/ada/repo/app'
+    })
+    const out = filterAiVaultSessions([webSession], {
+      query: '',
+      agents: ['gemini-web'],
+      scope: 'workspace',
+      sort: 'updated',
+      activeWorktreePaths: ['/Users/ada/repo'],
+      hideEmptySessions: false
+    })
+    expect(out).toHaveLength(0)
+  })
+
+  it('keeps read-only web chats in the all scope', () => {
+    const makeSession = (overrides: Partial<AiVaultSession> = {}): AiVaultSession => ({
+      ...baseSession,
+      ...overrides
+    })
+    const webSession = makeSession({
+      agent: 'gemini-web',
+      readOnly: true,
+      cwd: '/Users/ada/repo/app'
+    })
+    const out = filterAiVaultSessions([webSession], {
+      query: '',
+      agents: ['gemini-web'],
+      scope: 'all',
+      sort: 'updated',
+      activeWorktreePaths: [],
+      hideEmptySessions: false
+    })
+    expect(out.map((s) => s.id)).toContain(webSession.id)
+  })
 })
