@@ -1405,11 +1405,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   markdownFrontmatterVisible: {},
   setMarkdownFrontmatterVisible: (fileId, visible) =>
     set((s) => {
-      // Why: default is hidden. Writing `false` explicitly when no entry exists
-      // would grow the record unnecessarily; delete instead so the shape stays
-      // minimal and hydration round-trips cleanly — same trade-off as
-      // setEditorViewMode above.
-      if (!visible) {
+      // Why: default is visible. Writing `true` explicitly when no entry exists
+      // would grow the record unnecessarily; delete instead so the map only
+      // carries hide overrides and hydration round-trips cleanly — same
+      // trade-off as setEditorViewMode above.
+      if (visible) {
         if (!(fileId in s.markdownFrontmatterVisible)) {
           return s
         }
@@ -1417,7 +1417,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         delete next[fileId]
         return { markdownFrontmatterVisible: next }
       }
-      return { markdownFrontmatterVisible: { ...s.markdownFrontmatterVisible, [fileId]: true } }
+      return { markdownFrontmatterVisible: { ...s.markdownFrontmatterVisible, [fileId]: false } }
     }),
 
   // Markdown table of contents visibility
@@ -4496,24 +4496,26 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const nextActiveTabType =
         nextActiveFileId || activeTabType !== 'editor' ? activeTabType : 'terminal'
       const openFileIds = new Set(openFiles.map((file) => file.id))
-      const visibleFrontmatterEntries = new Map<string, boolean>()
+      // Why: visible is the default, so only restore per-file hide overrides
+      // (`false`); legacy `true` entries collapse back to the default.
+      const hiddenFrontmatterEntries = new Map<string, boolean>()
       for (const [persistedFileId, visible] of Object.entries(
         persistedMarkdownFrontmatterVisible
       )) {
-        if (!visible) {
+        if (visible) {
           continue
         }
         if (openFileIds.has(persistedFileId)) {
-          visibleFrontmatterEntries.set(persistedFileId, true)
+          hiddenFrontmatterEntries.set(persistedFileId, false)
         }
         for (const migrations of Object.values(editorFileIdMigrationsByWorktree)) {
           const migratedFileId = migrations.get(persistedFileId)
           if (migratedFileId && openFileIds.has(migratedFileId)) {
-            visibleFrontmatterEntries.set(migratedFileId, true)
+            hiddenFrontmatterEntries.set(migratedFileId, false)
           }
         }
       }
-      const markdownFrontmatterVisible = Object.fromEntries(visibleFrontmatterEntries)
+      const markdownFrontmatterVisible = Object.fromEntries(hiddenFrontmatterEntries)
 
       return {
         openFiles,

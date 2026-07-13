@@ -619,12 +619,11 @@ export default function MarkdownPreview({
       .replace(/\r?\n(?:---|\+\+\+)\r?\n?$/, '')
       .trim()
   }, [frontMatter])
-  // Why: front matter is hidden by default (#4468) and controlled from the
-  // markdown preview actions menu, keeping metadata out of the reading surface
-  // unless the user explicitly asks for it.
+  // Why: front matter shows by default and is toggled off from the markdown
+  // preview actions menu; the store map only carries per-file hide overrides.
   const toggleableSourceFileId: string | null = sourceFileId ?? null
   const frontmatterVisible = toggleableSourceFileId
-    ? (frontmatterVisibleByFile[toggleableSourceFileId] ?? false)
+    ? (frontmatterVisibleByFile[toggleableSourceFileId] ?? true)
     : true
   const [activeAnnotationBlockKey, setActiveAnnotationBlockKey] = useState<string | null>(null)
   const [reviewNotesCopied, setReviewNotesCopied] = useState(false)

@@ -1482,7 +1482,7 @@ describe('createEditorSlice markdown view state', () => {
       },
       { preview: true }
     )
-    store.getState().setMarkdownFrontmatterVisible('/repo/docs/README.md', true)
+    store.getState().setMarkdownFrontmatterVisible('/repo/docs/README.md', false)
     store.getState().setMarkdownTableOfContentsVisible('/repo/docs/README.md', true)
 
     store.getState().openDiff('wt-1', '/repo/docs/guide.md', 'docs/guide.md', 'markdown', false, {
@@ -1512,7 +1512,7 @@ describe('createEditorSlice markdown view state', () => {
       worktreeId: 'wt-1',
       language: 'markdown'
     })
-    store.getState().setMarkdownFrontmatterVisible('/repo/docs/README.md', true)
+    store.getState().setMarkdownFrontmatterVisible('/repo/docs/README.md', false)
     store.getState().setMarkdownTableOfContentsVisible('/repo/docs/README.md', true)
 
     store.getState().openDiff('wt-1', '/repo/docs/guide.md', 'docs/guide.md', 'markdown', false, {
@@ -1520,7 +1520,7 @@ describe('createEditorSlice markdown view state', () => {
     })
 
     expect(store.getState().markdownFrontmatterVisible).toEqual({
-      '/repo/docs/README.md': true
+      '/repo/docs/README.md': false
     })
     expect(store.getState().markdownTableOfContentsVisible).toEqual({
       '/repo/docs/README.md': true
@@ -1573,28 +1573,28 @@ describe('createEditorSlice editor view mode', () => {
 })
 
 describe('createEditorSlice markdown frontmatter visibility (#4468)', () => {
-  it('stores visible=true as an explicit entry keyed by fileId', () => {
+  it('stores hidden=false as an explicit entry keyed by fileId', () => {
     const store = createEditorStore()
-
-    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
-
-    expect(store.getState().markdownFrontmatterVisible).toEqual({ '/repo/notes.md': true })
-  })
-
-  it('deletes the entry when visibility resets to hidden', () => {
-    const store = createEditorStore()
-    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
 
     store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', false)
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({ '/repo/notes.md': false })
+  })
+
+  it('deletes the entry when visibility resets to visible', () => {
+    const store = createEditorStore()
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', false)
+
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
 
     expect(store.getState().markdownFrontmatterVisible).toEqual({})
   })
 
-  it('is a no-op when hiding a file that was never shown', () => {
+  it('is a no-op when showing a file that was never hidden', () => {
     const store = createEditorStore()
     const before = store.getState().markdownFrontmatterVisible
 
-    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', false)
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
 
     expect(store.getState().markdownFrontmatterVisible).toBe(before)
   })
@@ -1608,7 +1608,7 @@ describe('createEditorSlice markdown frontmatter visibility (#4468)', () => {
       language: 'markdown',
       mode: 'edit'
     })
-    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', false)
 
     store.getState().closeFile('/repo/notes.md')
 
@@ -1630,11 +1630,11 @@ describe('createEditorSlice markdown frontmatter visibility (#4468)', () => {
       worktreeId: 'wt-1',
       language: 'markdown'
     })
-    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', false)
 
     store.getState().closeFile('/repo/notes.md')
 
-    expect(store.getState().markdownFrontmatterVisible).toEqual({ '/repo/notes.md': true })
+    expect(store.getState().markdownFrontmatterVisible).toEqual({ '/repo/notes.md': false })
 
     store.getState().closeFile('markdown-preview::/repo/notes.md')
 
@@ -1662,7 +1662,7 @@ describe('createEditorSlice markdown frontmatter visibility (#4468)', () => {
       },
       { sourceFileId: '/repo/notes.md' }
     )
-    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', false)
 
     store.getState().openFile(
       {
@@ -1675,7 +1675,7 @@ describe('createEditorSlice markdown frontmatter visibility (#4468)', () => {
       { preview: true }
     )
 
-    expect(store.getState().markdownFrontmatterVisible).toEqual({ '/repo/notes.md': true })
+    expect(store.getState().markdownFrontmatterVisible).toEqual({ '/repo/notes.md': false })
   })
 
   it('drops the visibility flag when all files are closed', () => {
@@ -1687,7 +1687,7 @@ describe('createEditorSlice markdown frontmatter visibility (#4468)', () => {
       language: 'markdown',
       mode: 'edit'
     })
-    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', false)
 
     store.getState().closeAllFiles()
 
