@@ -90,6 +90,8 @@ export type HostProfile = {
   deviceToken: string
   publicKeyB64: string
   lastConnected: number
+  /** Sticky reconnect hint only (KTD9). */
+  lastGoodEndpoint?: string
   endpoints?: MobileAccessEndpoint[]
   relayHostId?: MobileRelayHostOverlay['relayHostId']
   relay?: MobileRelayHostOverlay['relay']
@@ -102,6 +104,7 @@ export const HostProfileSchema = z.object({
   deviceToken: z.string().min(1),
   publicKeyB64: z.string().min(1),
   lastConnected: z.number().finite(),
+  lastGoodEndpoint: z.string().min(1).optional(),
   endpoints: z.array(MobileAccessEndpointSchema).min(1).max(16).optional(),
   relayHostId: z
     .string()
@@ -117,6 +120,7 @@ export const StoredHostProfileSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   endpoint: z.string().min(1),
+  lastGoodEndpoint: z.string().min(1).optional(),
   publicKeyB64: z.string().min(1),
   lastConnected: z.number().finite()
 })

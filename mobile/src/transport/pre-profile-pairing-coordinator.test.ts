@@ -132,6 +132,7 @@ describe('pre-profile pairing coordinator', () => {
       id: `host-${now}`,
       name: 'Blue Whale',
       endpoint: directOffer.endpoint,
+      endpoints: [{ id: 'direct-primary', kind: 'lan', url: directOffer.endpoint }],
       deviceToken: directOffer.deviceToken,
       publicKeyB64: directOffer.publicKeyB64,
       lastConnected: now
@@ -162,6 +163,7 @@ describe('pre-profile pairing coordinator', () => {
       id: 'host-existing',
       name: 'Studio Mac',
       endpoint: directOffer.endpoint,
+      endpoints: [{ id: 'direct-primary', kind: 'lan', url: directOffer.endpoint }],
       deviceToken: directOffer.deviceToken,
       publicKeyB64: directOffer.publicKeyB64,
       lastConnected: now
@@ -265,7 +267,10 @@ describe('pre-profile pairing coordinator', () => {
     await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
 
     expect(deps.saveHost).toHaveBeenCalledWith(
-      expect.not.objectContaining({ endpoints: expect.anything() })
+      expect.objectContaining({
+        endpoint: relayOffer.endpoint,
+        endpoints: [{ id: 'direct-primary', kind: 'lan', url: relayOffer.endpoint }]
+      })
     )
     expect(events).toEqual([
       'save-journal',

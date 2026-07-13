@@ -58,6 +58,7 @@ const HOST = {
   id: 'host-1',
   name: 'Host 1',
   endpoint: 'ws://127.0.0.1:1',
+  endpoints: ['ws://127.0.0.1:1'],
   deviceToken: 'token',
   publicKeyB64: 'key',
   lastConnected: 0

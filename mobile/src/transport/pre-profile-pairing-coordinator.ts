@@ -7,7 +7,13 @@ import {
 } from '../../../src/shared/mobile-relay-credential-contract'
 import { connect, type ConnectOptions } from './rpc-client'
 import { resolvePairingHostIdentity, saveHost } from './host-store'
-import type { HostProfile, PairingOffer, RpcResponse } from './types'
+import {
+  normalizePairingEndpoints,
+  type HostProfile,
+  type MobileAccessEndpoint,
+  type PairingOffer,
+  type RpcResponse
+} from './types'
 import {
   createMobileRelayPairingJournal,
   type MobileRelayPairingJournal
@@ -234,16 +240,36 @@ async function runPairing(
   return { hostId }
 }
 
+function classifyEndpointKind(url: string): MobileAccessEndpoint['kind'] {
+  try {
+    const hostname = new URL(url).hostname
+    if (hostname.endsWith('.ts.net') || /^100\.(?:\d{1,3}\.){2}\d{1,3}$/.test(hostname)) {
+      return 'tailscale'
+    }
+  } catch {}
+  return 'lan'
+}
+
 function baseHost(
   offer: PairingOffer,
   hostId: string,
   name: string,
   lastConnected: number
 ): HostProfile {
+  const urls = normalizePairingEndpoints(offer.endpoint, offer.endpoints)
+  const endpoints = urls.map((url, index) => {
+    const kind = classifyEndpointKind(url)
+    return {
+      id: index === 0 ? 'direct-primary' : `direct-${index}`,
+      kind,
+      url
+    }
+  })
   return {
     id: hostId,
     name,
-    endpoint: offer.endpoint,
+    endpoint: urls[0]!,
+    endpoints,
     deviceToken: offer.deviceToken,
     publicKeyB64: offer.publicKeyB64,
     lastConnected
