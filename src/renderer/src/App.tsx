@@ -69,6 +69,7 @@ import { OrcaProfileSwitcher } from './components/orca-profiles/OrcaProfileSwitc
 import {
   OPEN_FLOATING_TERMINAL_EVENT,
   shouldForceCloseFloatingTerminal,
+  shouldMountFloatingTerminalPanel,
   shouldOpenFloatingTerminalOnRequest,
   TOGGLE_FLOATING_TERMINAL_EVENT,
   requestFloatingTerminalOpenMaximized
@@ -542,7 +543,11 @@ function App(): React.JSX.Element {
   // Why: a closed empty floating workspace is not startup-critical. Once it owns
   // tabs, keep it mounted while closed so hidden terminal/browser/editor panes
   // retain their local state.
-  const shouldMountFloatingTerminalPanel = floatingTerminalEnabled || floatingVisibleTabCount > 0
+  const shouldMountFloatingTerminalPanelForState = shouldMountFloatingTerminalPanel({
+    enabled: floatingTerminalEnabled,
+    open: floatingTerminalOpen,
+    visibleTabCount: floatingVisibleTabCount
+  })
   // Why: the floating workspace is a transient overlay; hotkey minimize should
   // return keyboard focus to the surface the user was working in before it.
   const floatingTerminalReturnFocusRef = useRef<HTMLElement | null>(null)
@@ -2519,7 +2524,7 @@ function App(): React.JSX.Element {
                 ) : null}
               </div>
             </RecoverableRenderErrorBoundary>
-            {shouldMountFloatingTerminalPanel ? (
+            {shouldMountFloatingTerminalPanelForState ? (
               <Suspense fallback={null}>
                 <RecoverableRenderErrorBoundary
                   boundaryId="overlay.floating-workspace"

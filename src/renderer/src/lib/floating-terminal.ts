@@ -37,6 +37,14 @@ export function shouldForceCloseFloatingTerminal(opts: {
   return !opts.enabled && opts.visibleTabCount === 0
 }
 
+export function shouldMountFloatingTerminalPanel(opts: {
+  enabled: boolean
+  open: boolean
+  visibleTabCount: number
+}): boolean {
+  return (opts.enabled && opts.open) || opts.visibleTabCount > 0
+}
+
 export function consumeFloatingTerminalOpenMaximizedIntent(): boolean {
   if (openMaximizedIntentAt === null) {
     return false
