@@ -2658,6 +2658,28 @@ describe('createPtySubprocess', () => {
       }
     })
 
+    it('waits through node-pty Windows process enumeration before verifying exit', async () => {
+      vi.useFakeTimers()
+      const proc = mockPtyProcess(123456)
+      spawnMock.mockReturnValue(proc)
+      const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+      try {
+        const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+        handle.kill()
+
+        const stopped = handle.forceKillAndWait!()
+        await vi.advanceTimersByTimeAsync(5100)
+        proc._simulateExit(0)
+
+        await expect(stopped).resolves.toBe(true)
+        expect(proc.kill).toHaveBeenCalledOnce()
+      } finally {
+        vi.useRealTimers()
+        restorePlatform(origPlatform)
+      }
+    })
+
     it('dispose() on Windows skips destroy after forceKill falls back to node-pty kill()', () => {
       const proc = mockPtyProcess(123456) as ReturnType<typeof mockPtyProcess> & {
         destroy: ReturnType<typeof vi.fn>

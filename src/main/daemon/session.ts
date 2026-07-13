@@ -497,9 +497,17 @@ export class Session {
   }
 
   async forceKillAndDisposeSubprocessAndWait(): Promise<void> {
-    const stopped = this.subprocess.forceKillAndWait
-      ? await this.subprocess.forceKillAndWait()
-      : (this.subprocess.forceKill(), true)
+    let stopped: boolean
+    if (this.subprocess.forceKillAndWait) {
+      stopped = await this.subprocess.forceKillAndWait()
+    } else {
+      try {
+        this.subprocess.forceKill()
+      } catch {
+        // Why: the child can exit between liveness inspection and the legacy kill call.
+      }
+      stopped = true
+    }
     if (!stopped) {
       // Why: disposing here would erase the only retryable owner while its
       // process may still hold the worktree. The daemon request must fail.

@@ -82,6 +82,9 @@ const PTY_SPAWN_HEALTH_TIMEOUT_MS = 4_000
 // fallback (losing daemon persistence) until a manual restart.
 const PTY_SPAWN_HEALTH_RETRY_ATTEMPTS = 2
 const PENDING_PRE_LISTENER_DATA_MAX_CHARS = 512 * 1024
+// Why: node-pty can spend up to 5s enumerating a Windows console tree before
+// its fallback runs; leave bounded headroom for the native exit event to land.
+const WINDOWS_PTY_EXIT_TIMEOUT_MS = 8_000
 
 export type PtySubprocessOptions = {
   sessionId: string
@@ -1236,7 +1239,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         const timeout = setTimeout(() => {
           exitWaiters.delete(onExit)
           resolve(false)
-        }, 3000)
+        }, WINDOWS_PTY_EXIT_TIMEOUT_MS)
         exitWaiters.add(onExit)
       })
     },

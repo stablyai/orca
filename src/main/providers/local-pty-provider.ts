@@ -80,7 +80,9 @@ const ptyDisposables = new Map<string, { dispose: () => void }[]>()
 const ptyCleanupCallbacks = new Map<string, () => void>()
 const windowsImmediateKills = new WeakSet<pty.IPty>()
 
-const WINDOWS_PTY_EXIT_TIMEOUT_MS = 3000
+// Why: node-pty can spend up to 5s enumerating a Windows console tree before
+// its fallback runs; leave bounded headroom for the native exit event to land.
+const WINDOWS_PTY_EXIT_TIMEOUT_MS = 8_000
 
 let loadGeneration = 0
 const ptyLoadGeneration = new Map<string, number>()
