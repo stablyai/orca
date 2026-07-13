@@ -1,4 +1,6 @@
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import type { TerminalTab } from '../../../shared/types'
+import { resolveTerminalTabTitle } from '../../../shared/tab-title-resolution'
 import {
   findOrcaDispatchTaskMarkerIndex,
   ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX,
@@ -45,37 +47,39 @@ export function orchestrationLabelsMatchLiveDispatch(
   return liveTaskId === orchestrationTaskId
 }
 
-export type AgentRowTabNameFields = {
-  customTitle?: string | null
-  generatedTitle?: string | null
-}
-
-/**
- * Manual/auto tab names that the middle terminal strip already shows.
- * Why: the left sidebar agent list historically preferred the agent-status
- * prompt (or a bare "Done"/"Working" state label), so `terminal rename` and
- * tab double-click renames never appeared on the left. Prefer these when set
- * so left and middle stay one identity.
- */
-export function getAgentRowTabName(tab: AgentRowTabNameFields | null | undefined): string {
-  return tab?.customTitle?.trim() || tab?.generatedTitle?.trim() || ''
-}
+export type AgentRowTabNameFields = Pick<
+  TerminalTab,
+  'customTitle' | 'quickCommandLabel' | 'generatedTitle'
+>
 
 /**
  * Sidebar/dashboard primary label for an agent row.
- * Order: tab custom/generated title → prompt/orchestration preview → state label.
+ *
+ * Why: route the explicit/auto tab-name tiers through the same
+ * `resolveTerminalTabTitle` the middle terminal strip, tab bar, and jump
+ * palette use, so a `terminal rename` / tab rename shows identically on the
+ * left — a separate ordering here would silently drift (e.g. skip
+ * `quickCommandLabel` or ignore the auto-title setting) and reopen the
+ * "Done - Claude" mismatch this fixes.
+ *
+ * Order: customTitle → quickCommandLabel → generatedTitle (if enabled) →
+ * prompt/orchestration preview → state label. The prompt preview deliberately
+ * takes the resolver's `title` slot: for an agent row the live prompt is a more
+ * meaningful identity than the raw shell title, so we pass `title: ''` to skip
+ * that tier and hand control to the preview/state fallback.
  */
 export function getAgentRowDisplayLabel(args: {
   entry: Pick<AgentStatusEntry, 'orchestration' | 'prompt'>
   tab?: AgentRowTabNameFields | null
+  generatedTitlesEnabled: boolean
   fallbackStateLabel: string
 }): string {
-  const named = getAgentRowTabName(args.tab)
-  if (named) {
-    return named
+  const promptPreview = getAgentRowPrimaryText(args.entry)
+  const fallback = promptPreview || args.fallbackStateLabel
+  if (!args.tab) {
+    return fallback
   }
-  const prompt = getAgentRowPrimaryText(args.entry)
-  return prompt || args.fallbackStateLabel
+  return resolveTerminalTabTitle({ ...args.tab, title: '' }, args.generatedTitlesEnabled, fallback)
 }
 
 export function getAgentRowPrimaryText(

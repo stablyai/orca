@@ -11,6 +11,7 @@ import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 import { getAgentRowDisplayLabel } from '@/lib/agent-row-primary-text'
+import { useAppStore } from '@/store'
 
 // Why: the dashboard tracks its own rollup states (incl. 'idle'); narrow to the
 // shared dot states for rendering, falling back to 'idle' for any unknown
@@ -200,9 +201,12 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   // Why: prefer the middle-panel tab name when set so left/dashboard agent
   // rows stay aligned with `terminal rename` / tab customTitle. Fall back to
   // prompt, then state label ("Working", "Done", …) when the prompt is empty.
+  // Gate generatedTitle on the same setting the tab strip uses.
+  const generatedTitlesEnabled = useAppStore((s) => s.settings?.tabAutoGenerateTitle === true)
   const displayLabel = getAgentRowDisplayLabel({
     entry: agent.entry,
     tab: agent.tab,
+    generatedTitlesEnabled,
     fallbackStateLabel: agentStateLabel(asDotState(agent.state))
   })
   // Why: the tool row describes what the agent is *currently* doing; once it

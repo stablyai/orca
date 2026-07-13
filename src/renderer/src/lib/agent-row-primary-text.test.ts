@@ -4,7 +4,6 @@ import {
   getAgentRowDisplayLabel,
   getAgentRowGeneratedTitleText,
   getAgentRowPrimaryText,
-  getAgentRowTabName,
   getOrcaDispatchTaskId,
   isOrcaDispatchPrompt
 } from './agent-row-primary-text'
@@ -287,49 +286,73 @@ Checkout race body`,
   })
 })
 
-describe('getAgentRowTabName', () => {
-  it('prefers customTitle over generatedTitle', () => {
-    expect(
-      getAgentRowTabName({ customTitle: 'PROBE-LEFT-NAME', generatedTitle: 'auto from prompt' })
-    ).toBe('PROBE-LEFT-NAME')
-  })
-
-  it('uses generatedTitle when customTitle is absent', () => {
-    expect(getAgentRowTabName({ customTitle: null, generatedTitle: 'auto from prompt' })).toBe(
-      'auto from prompt'
-    )
-  })
-
-  it('treats whitespace-only titles as unset', () => {
-    expect(getAgentRowTabName({ customTitle: '   ', generatedTitle: null })).toBe('')
-  })
-})
-
 describe('getAgentRowDisplayLabel', () => {
+  const unnamedTab = { customTitle: null, quickCommandLabel: null, generatedTitle: null }
+
   it('prefers the tab customTitle over the agent-status prompt', () => {
     expect(
       getAgentRowDisplayLabel({
         entry: { prompt: 'ok lets go ahead' },
-        tab: { customTitle: 'PROBE-LEFT-NAME', generatedTitle: null },
+        tab: { ...unnamedTab, customTitle: 'PROBE-LEFT-NAME' },
+        generatedTitlesEnabled: true,
         fallbackStateLabel: 'Done'
       })
     ).toBe('PROBE-LEFT-NAME')
+  })
+
+  it('prefers quickCommandLabel over generatedTitle and prompt, matching the tab strip', () => {
+    expect(
+      getAgentRowDisplayLabel({
+        entry: { prompt: 'ok lets go ahead' },
+        tab: { customTitle: null, quickCommandLabel: 'pnpm test', generatedTitle: 'auto title' },
+        generatedTitlesEnabled: true,
+        fallbackStateLabel: 'Done'
+      })
+    ).toBe('pnpm test')
+  })
+
+  it('uses generatedTitle only when the auto-title setting is enabled', () => {
+    const args = {
+      entry: { prompt: 'ok lets go ahead' },
+      tab: { ...unnamedTab, generatedTitle: 'auto from prompt' },
+      fallbackStateLabel: 'Done'
+    }
+    expect(getAgentRowDisplayLabel({ ...args, generatedTitlesEnabled: true })).toBe(
+      'auto from prompt'
+    )
+    // Gate off: falls through to the prompt preview, matching the middle tab.
+    expect(getAgentRowDisplayLabel({ ...args, generatedTitlesEnabled: false })).toBe(
+      'ok lets go ahead'
+    )
   })
 
   it('falls back to prompt then state label when the tab is unnamed', () => {
     expect(
       getAgentRowDisplayLabel({
         entry: { prompt: 'ok lets go ahead' },
-        tab: { customTitle: null, generatedTitle: null },
+        tab: unnamedTab,
+        generatedTitlesEnabled: true,
         fallbackStateLabel: 'Done'
       })
     ).toBe('ok lets go ahead')
     expect(
       getAgentRowDisplayLabel({
         entry: { prompt: '' },
-        tab: { customTitle: null, generatedTitle: null },
+        tab: unnamedTab,
+        generatedTitlesEnabled: true,
         fallbackStateLabel: 'Done'
       })
     ).toBe('Done')
+  })
+
+  it('uses the prompt preview / state label when no tab is present', () => {
+    expect(
+      getAgentRowDisplayLabel({
+        entry: { prompt: '' },
+        tab: null,
+        generatedTitlesEnabled: true,
+        fallbackStateLabel: 'Working'
+      })
+    ).toBe('Working')
   })
 })
