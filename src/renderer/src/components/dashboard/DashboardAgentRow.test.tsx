@@ -408,4 +408,34 @@ describe('DashboardAgentRow', () => {
     expect(classTokens(markup)).toContain('worktree-agent-lineage-parent-row')
     expect(markup).toContain('aria-label="Show 2 child agents"')
   })
+
+  it('shows the tab customTitle instead of the prompt on a normal agent row', () => {
+    const markup = renderRow(
+      makeAgent(
+        { tab: { ...makeAgent().tab, customTitle: 'PROBE-LEFT-NAME' } },
+        { prompt: 'ok lets go ahead' }
+      )
+    )
+
+    expect(markup).toContain('PROBE-LEFT-NAME')
+    expect(markup).not.toContain('ok lets go ahead')
+  })
+
+  it('keeps a subagent row on its own description, ignoring the parent tab title', () => {
+    // Why: subagent rows borrow the parent's tab; adopting its customTitle would
+    // relabel every child with the parent's name.
+    const markup = renderRow(
+      makeAgent(
+        {
+          paneKey: 'tab-1:leaf-1::subagent:a1',
+          rowSource: 'subagent',
+          tab: { ...makeAgent().tab, customTitle: 'PROBE-LEFT-NAME' }
+        },
+        { prompt: 'review the auth middleware' }
+      )
+    )
+
+    expect(markup).toContain('review the auth middleware')
+    expect(markup).not.toContain('PROBE-LEFT-NAME')
+  })
 })

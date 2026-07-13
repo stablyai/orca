@@ -55,7 +55,9 @@ function getCompactAgentPrimary(
   // "Done - Claude" while the tab already had a human name.
   return getAgentRowDisplayLabel({
     entry: agent.entry,
-    tab: agent.tab,
+    // Why: subagent rows borrow the parent's tab, so adopting its title would
+    // relabel every child with the parent's name — keep their own description.
+    tab: agent.rowSource === 'subagent' ? null : agent.tab,
     generatedTitlesEnabled,
     fallbackStateLabel: agentStateLabel(getAgentDotState(agent))
   })
