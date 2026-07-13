@@ -35,6 +35,7 @@ export function useAddRepoHostSelection({
   const setSshConnectionState = useAppStore((s) => s.setSshConnectionState)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
+  const hasPendingSshCredentialRequest = useAppStore((s) => s.sshCredentialQueue.length > 0)
   const { hostOptions } = useSidebarHostScopeOptions()
   const ephemeralRuntimeEnvironmentIds = useMemo(
     () =>
@@ -89,6 +90,15 @@ export function useAddRepoHostSelection({
     }
     previousOpenRef.current = isOpen
   }, [isOpen, selectableHostOptions, settings])
+
+  // Why: the SSH credential dialog renders below popovers (dialog z-50 vs
+  // popover z-60), so a host selector left open during a connect attempt
+  // covers the password/passphrase prompt.
+  useEffect(() => {
+    if (hasPendingSshCredentialRequest) {
+      setHostSelectorOpen(false)
+    }
+  }, [hasPendingSshCredentialRequest])
 
   const handleSelectAddProjectHost = useCallback(
     async (hostId: ExecutionHostId): Promise<void> => {
