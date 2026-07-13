@@ -45,6 +45,7 @@ import { TaskProviderLogo } from '../src/components/TaskProviderLogo'
 import { TextInputModal } from '../src/components/TextInputModal'
 import { ActionSheetModal, type ActionSheetAction } from '../src/components/ActionSheetModal'
 import { ConfirmModal } from '../src/components/ConfirmModal'
+import { useDrawerHandoff } from '../src/components/drawer-handoff'
 import { setCachedWorktrees, getCachedWorktrees } from '../src/cache/worktree-cache'
 import { loadHomeSnapshot, saveHomeSnapshot } from '../src/cache/home-snapshot-cache'
 import { colors, spacing, radii } from '../src/theme/mobile-theme'
@@ -327,6 +328,10 @@ export default function HomeScreen() {
   const closeHostClient = useCloseHost()
   const forceReconnectHost = useForceReconnect()
   const primeHosts = usePrimeHosts()
+  // Why: the long-press action sheet auto-dismisses on tap; defer the follow-up
+  // confirm/rename drawer until its hide animation finishes so the two modals
+  // never present at once (that freezes iOS — issue #8555).
+  const runDrawerHandoff = useDrawerHandoff()
   // Why: feed the loaded HostProfiles into the provider's prime cache as
   // soon as we have them. This avoids a second Keychain pass inside
   // openEntry on cold start (which serialised behind the first one and
@@ -1082,16 +1087,14 @@ export default function HomeScreen() {
             label: 'Rename',
             icon: Edit3,
             onPress: () => {
-              setActionTarget(null)
-              setRenameTarget(host)
+              runDrawerHandoff(() => setRenameTarget(host))
             }
           })
           items.push({
             label: 'Remove',
             destructive: true,
             onPress: () => {
-              setActionTarget(null)
-              setConfirmRemove(host)
+              runDrawerHandoff(() => setConfirmRemove(host))
             }
           })
           return items

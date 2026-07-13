@@ -24,7 +24,10 @@ import Animated, {
 } from 'react-native-reanimated'
 import { colors, spacing } from '../theme/mobile-theme'
 import { resolveBottomDrawerMounted } from './bottom-drawer-mount-state'
+import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
 import { useResponsiveLayout } from '../layout/responsive-layout'
+
+export { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
 
 const DISMISS_THRESHOLD = 80
 const SPRING_CONFIG = { damping: 28, stiffness: 400 }
@@ -33,7 +36,6 @@ const SPRING_CONFIG = { damping: 28, stiffness: 400 }
 // the drawer cannot expand further.
 const RUBBER_BAND_FACTOR = 0.25
 const SHOW_DURATION = 180
-export const BOTTOM_DRAWER_HIDE_DURATION_MS = 150
 const TOP_SCROLL_EPSILON = 1
 
 type Props = {
