@@ -5,6 +5,8 @@ import { MobileE2EEV2PhysicalChannel } from './mobile-e2ee-v2-physical-channel'
 import { isRpcResponse } from './rpc-response-shape'
 import type { RpcResponse } from './types'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
+export { RelayOuterError } from './mobile-relay-e2ee-link'
+import { RelayOuterError } from './mobile-relay-e2ee-link'
 
 type PendingRequest = {
   resolve: (response: RpcResponse) => void
@@ -15,12 +17,6 @@ type PendingRequest = {
 export type PairingCandidateClient = {
   sendRequest(method: string, params?: unknown): Promise<RpcResponse>
   close(): void
-}
-
-export class RelayOuterError extends Error {
-  constructor(readonly code: number) {
-    super(`relay_outer_${code}`)
-  }
 }
 
 export function connectMobileRelayForPairing(args: {

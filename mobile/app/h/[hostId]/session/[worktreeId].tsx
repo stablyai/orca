@@ -56,12 +56,11 @@ import {
   saveTerminalTextScale,
   type MobileTerminalLinkOpenMode
 } from '../../../../src/storage/preferences'
+import { useHostClient, useForceReconnect } from '../../../../src/transport/client-context'
 import {
-  useHostClient,
-  useForceReconnect,
-  useReconnectAttempt,
-  useLastConnectedAt
-} from '../../../../src/transport/client-context'
+  useLastConnectedAt,
+  useReconnectAttempt
+} from '../../../../src/transport/client-context-connection-metrics'
 import {
   classifyConnection,
   verdictDisplayLabel

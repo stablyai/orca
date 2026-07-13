@@ -18,6 +18,7 @@ import { deriveSharedKey } from './e2ee'
 import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
 import { deriveMobileE2EEV2KeySchedule } from './mobile-e2ee-v2-key-schedule'
 import {
+  MobileE2EEAuthenticationError,
   MobileE2EEV2PhysicalChannel,
   type MobileE2EEV2Socket
 } from './mobile-e2ee-v2-physical-channel'
@@ -119,6 +120,24 @@ describe('mobile E2EE v2 physical channel', () => {
     expect(typeof ctx.sent[1]).toBe('string')
     expect(ctx.onAuthenticated).toHaveBeenCalledOnce()
     expect(ctx.onError).not.toHaveBeenCalled()
+  })
+
+  it('classifies the encrypted desktop device-token rejection as global auth failure', async () => {
+    const ctx = setup(async () => null)
+    await ctx.channel.handleMessage(JSON.stringify(ctx.ready))
+    const rejection = serverFrame(
+      new TextEncoder().encode(
+        JSON.stringify({ type: 'e2ee_error', error: { code: 'unauthorized' } })
+      ),
+      'text',
+      0n,
+      ctx.schedule
+    )
+
+    await ctx.channel.handleMessage(Buffer.from(rejection).toString('base64'))
+
+    expect(ctx.onError.mock.calls[0]![0]).toBeInstanceOf(MobileE2EEAuthenticationError)
+    expect(ctx.onAuthenticated).not.toHaveBeenCalled()
   })
 
   it('serializes delayed binary conversion before a later text counter', async () => {

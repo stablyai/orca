@@ -7,6 +7,12 @@ import type { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
 type ChannelState = 'awaiting-ready' | 'awaiting-authenticated' | 'ready'
 type OutboundItem = { kind: 'text'; plaintext: string } | { kind: 'binary'; plaintext: Uint8Array }
 
+export class MobileE2EEAuthenticationError extends Error {
+  constructor() {
+    super('E2EE device authentication rejected')
+  }
+}
+
 export type MobileE2EEV2Socket = {
   readonly OPEN: number
   readonly readyState: number
@@ -98,6 +104,9 @@ export class MobileE2EEV2PhysicalChannel {
       return
     }
     if (this.state === 'awaiting-authenticated') {
+      if (typeof plaintext === 'string' && isAuthenticationRejection(plaintext)) {
+        throw new MobileE2EEAuthenticationError()
+      }
       if (typeof plaintext !== 'string' || !this.isAuthenticated(plaintext)) {
         throw new Error('Invalid E2EE v2 authenticated response')
       }
@@ -163,5 +172,14 @@ export class MobileE2EEV2PhysicalChannel {
     }
     this.outboundQueue.enqueue(item)
     return true
+  }
+}
+
+function isAuthenticationRejection(plaintext: string): boolean {
+  try {
+    const message = JSON.parse(plaintext) as Record<string, unknown>
+    return message.type === 'e2ee_error'
+  } catch {
+    return false
   }
 }

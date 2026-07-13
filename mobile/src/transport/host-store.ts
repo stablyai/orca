@@ -13,11 +13,12 @@ import {
   scheduleHostCredentialCleanup
 } from './host-credential-cleanup'
 import {
-  loadMobileRelayHostOverlays,
+  loadMobileRelayHostOverlayState,
   removeMobileRelayHostOverlay,
   saveMobileRelayHostOverlay
 } from './mobile-relay-host-overlay-store'
 import { deleteMobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
+import { scheduleOrphanedMobileRelayCleanup } from './mobile-relay-orphan-cleanup'
 
 const STORAGE_KEY = 'orca:hosts'
 // Why: SecureStore keys must match [A-Za-z0-9._-]; colons are rejected.
@@ -131,7 +132,14 @@ async function doLoadHosts(): Promise<HostProfile[]> {
   if (!storedHosts) {
     return []
   }
-  const overlays = await loadMobileRelayHostOverlays(new Set(storedHosts.map(({ id }) => id)))
+  const overlayState = await loadMobileRelayHostOverlayState(
+    new Set(storedHosts.map(({ id }) => id))
+  )
+  await scheduleOrphanedMobileRelayCleanup({
+    hostIds: overlayState.orphanHostIds,
+    deleteCredential: deleteHostCredentials
+  })
+  const overlays = overlayState.overlays
 
   const out: HostProfile[] = []
   for (const stored of storedHosts) {

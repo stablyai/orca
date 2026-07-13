@@ -49,17 +49,26 @@ async function mutateOverlays(
 export async function loadMobileRelayHostOverlays(
   existingHostIds: ReadonlySet<string>
 ): Promise<Map<string, MobileRelayHostOverlay>> {
+  return (await loadMobileRelayHostOverlayState(existingHostIds)).overlays
+}
+
+export async function loadMobileRelayHostOverlayState(
+  existingHostIds: ReadonlySet<string>
+): Promise<{ overlays: Map<string, MobileRelayHostOverlay>; orphanHostIds: string[] }> {
   await overlayMutation
   const overlays = parseOverlays(await AsyncStorage.getItem(OVERLAY_STORAGE_KEY)) ?? []
   const active = new Map<string, MobileRelayHostOverlay>()
+  const orphanHostIds: string[] = []
   for (const overlay of overlays) {
     // Why: an older app can remove the legacy base without knowing this
     // namespace; never let the retained overlay resurrect that host later.
     if (existingHostIds.has(overlay.hostId)) {
       active.set(overlay.hostId, overlay)
+    } else {
+      orphanHostIds.push(overlay.hostId)
     }
   }
-  return active
+  return { overlays: active, orphanHostIds }
 }
 
 export async function saveMobileRelayHostOverlay(overlay: MobileRelayHostOverlay): Promise<void> {
