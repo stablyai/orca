@@ -97,6 +97,22 @@
       "rules": {
         "max-lines": ["error", { "max": 800, "skipBlankLines": true, "skipComments": true }]
       }
+    },
+    {
+      "files": ["extensions/chat-import/**"],
+      "env": {
+        "browser": true,
+        "webextensions": true,
+        "node": true,
+        "commonjs": true
+      },
+      "rules": {
+        "curly": "off",
+        "prefer-template": "off",
+        "no-unused-vars": "off",
+        "unicorn/prefer-at": "off",
+        "unicorn/prefer-includes": "off"
+      }
     }
   ],
   "ignorePatterns": ["**/node_modules", "**/dist", "**/out"]
