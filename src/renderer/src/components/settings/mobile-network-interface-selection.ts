@@ -152,13 +152,26 @@ export function moveAdvertiseAddress(
   index: number,
   direction: -1 | 1
 ): string[] {
+  return reorderAdvertiseAddresses(current, index, index + direction)
+}
+
+/** Reorder by moving `fromIndex` to `toIndex` (used by drag-and-drop). */
+export function reorderAdvertiseAddresses(
+  current: readonly string[],
+  fromIndex: number,
+  toIndex: number
+): string[] {
   const next = [...current]
-  const target = index + direction
-  if (index < 0 || index >= next.length || target < 0 || target >= next.length) {
+  if (
+    fromIndex === toIndex ||
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= next.length ||
+    toIndex >= next.length
+  ) {
     return next
   }
-  const tmp = next[index]!
-  next[index] = next[target]!
-  next[target] = tmp
+  const [item] = next.splice(fromIndex, 1)
+  next.splice(toIndex, 0, item!)
   return next
 }

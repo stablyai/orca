@@ -1,18 +1,36 @@
 import React, { useMemo, useState } from 'react'
-import { ArrowDown, ArrowUp, Plus } from 'lucide-react'
+import {
+  closestCenter,
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy
+} from '@dnd-kit/sortable'
+import { Plus } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
-import { Checkbox } from '../ui/checkbox'
 import { CustomAddressDialog, type CustomAddressDialogCopy } from '../network/CustomAddressDialog'
 import { parseManualNetworkAddress } from '../../../../shared/network/manual-address'
 import { cn } from '../../lib/utils'
 import {
   addAdvertiseAddress,
   MAX_MOBILE_ADVERTISE_ADDRESSES,
-  moveAdvertiseAddress,
   removeAdvertiseAddress,
+  reorderAdvertiseAddresses,
   type MobileNetworkInterface
 } from '../settings/mobile-network-interface-selection'
+import {
+  SortableOrderedNetworkAddressRow,
+  StaticOrderedNetworkAddressRow,
+  type OrderedNetworkAddressRowModel
+} from './OrderedNetworkAddressRow'
 
 export type OrderedNetworkAddressPickerProps = {
   networkInterfaces: readonly MobileNetworkInterface[]
@@ -23,23 +41,15 @@ export type OrderedNetworkAddressPickerProps = {
   id?: string
 }
 
-type Row = {
-  address: string
-  label: string
-  selected: boolean
-  priorityIndex: number | null
-  isCustom: boolean
-}
-
 function buildRows(
   networkInterfaces: readonly MobileNetworkInterface[],
   selectedAddresses: readonly string[]
-): Row[] {
+): OrderedNetworkAddressRowModel[] {
   const discoveredByAddress = new Map(
     networkInterfaces.map((iface) => [iface.address, iface] as const)
   )
   const selectedSet = new Set(selectedAddresses)
-  const rows: Row[] = []
+  const rows: OrderedNetworkAddressRowModel[] = []
 
   selectedAddresses.forEach((address, index) => {
     const iface = discoveredByAddress.get(address)
@@ -107,8 +117,17 @@ export function OrderedNetworkAddressPicker({
     () => buildRows(networkInterfaces, selectedAddresses),
     [networkInterfaces, selectedAddresses]
   )
+  const selectedRows = rows.filter((row) => row.selected)
+  const unselectedRows = rows.filter((row) => !row.selected)
   const atCap = selectedAddresses.length >= MAX_MOBILE_ADVERTISE_ADDRESSES
   const canRemove = selectedAddresses.length > 1
+  const dragDisabled = disabled || selectedAddresses.length < 2
+
+  // Why: require a short drag distance so checkbox clicks don't start a reorder.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
 
   const toggleAddress = (address: string, checked: boolean): void => {
     if (checked) {
@@ -122,12 +141,25 @@ export function OrderedNetworkAddressPicker({
     onSelectedAddressesChange(addAdvertiseAddress(selectedAddresses, address))
   }
 
+  const handleDragEnd = (event: DragEndEvent): void => {
+    const { active, over } = event
+    if (!over || active.id === over.id) {
+      return
+    }
+    const fromIndex = selectedAddresses.indexOf(String(active.id))
+    const toIndex = selectedAddresses.indexOf(String(over.id))
+    if (fromIndex < 0 || toIndex < 0) {
+      return
+    }
+    onSelectedAddressesChange(reorderAdvertiseAddresses(selectedAddresses, fromIndex, toIndex))
+  }
+
   return (
     <div id={id} className={cn('flex w-full flex-col gap-2', className)}>
       <p className="text-muted-foreground text-xs">
         {translate(
           'auto.components.mobile.OrderedNetworkAddressPicker.priority-hint',
-          'Priority is top to bottom — the phone tries these addresses in order.'
+          'Priority is top to bottom — drag selected addresses to change the order the phone tries them.'
         )}
       </p>
       {rows.length === 0 ? (
@@ -145,93 +177,31 @@ export function OrderedNetworkAddressPicker({
             'Network addresses to advertise'
           )}
         >
-          {rows.map((row) => {
-            const selectedIndex = selectedAddresses.indexOf(row.address)
-            const checkboxDisabled =
-              disabled || (!row.selected && atCap) || (row.selected && !canRemove)
-            return (
-              <li key={row.address} className="flex items-center gap-2 px-2.5 py-1.5 text-sm">
-                <span
-                  className={cn(
-                    'text-muted-foreground w-4 shrink-0 text-center text-xs tabular-nums',
-                    !row.selected && 'invisible'
-                  )}
-                  aria-hidden={!row.selected}
-                >
-                  {row.priorityIndex ?? '–'}
-                </span>
-                <Checkbox
-                  checked={row.selected}
-                  disabled={checkboxDisabled}
-                  onCheckedChange={(value) => {
-                    toggleAddress(row.address, value === true)
-                  }}
-                  aria-label={
-                    row.isCustom
-                      ? translate(
-                          'auto.components.mobile.OrderedNetworkAddressPicker.custom-option',
-                          '{{address}} (custom)',
-                          { address: row.address }
-                        )
-                      : row.label
-                  }
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext items={[...selectedAddresses]} strategy={verticalListSortingStrategy}>
+              {selectedRows.map((row) => (
+                <SortableOrderedNetworkAddressRow
+                  key={row.address}
+                  row={row}
+                  checkboxDisabled={disabled || !canRemove}
+                  dragDisabled={dragDisabled}
+                  onToggle={toggleAddress}
                 />
-                <span className="min-w-0 flex-1 truncate">
-                  {row.isCustom
-                    ? translate(
-                        'auto.components.mobile.OrderedNetworkAddressPicker.custom-option',
-                        '{{address}} (custom)',
-                        { address: row.address }
-                      )
-                    : row.label}
-                </span>
-                {row.selected ? (
-                  <div className="flex shrink-0 items-center gap-0.5">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-xs"
-                      disabled={disabled || selectedIndex <= 0}
-                      onClick={() =>
-                        onSelectedAddressesChange(
-                          moveAdvertiseAddress(selectedAddresses, selectedIndex, -1)
-                        )
-                      }
-                      aria-label={translate(
-                        'auto.components.mobile.OrderedNetworkAddressPicker.move-up',
-                        'Move {{address}} up',
-                        { address: row.address }
-                      )}
-                    >
-                      <ArrowUp />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-xs"
-                      disabled={
-                        disabled ||
-                        selectedIndex < 0 ||
-                        selectedIndex >= selectedAddresses.length - 1
-                      }
-                      onClick={() =>
-                        onSelectedAddressesChange(
-                          moveAdvertiseAddress(selectedAddresses, selectedIndex, 1)
-                        )
-                      }
-                      aria-label={translate(
-                        'auto.components.mobile.OrderedNetworkAddressPicker.move-down',
-                        'Move {{address}} down',
-                        { address: row.address }
-                      )}
-                    >
-                      <ArrowDown />
-                    </Button>
-                  </div>
-                ) : null}
-              </li>
-            )
-          })}
+              ))}
+            </SortableContext>
+          </DndContext>
+          {unselectedRows.map((row) => (
+            <StaticOrderedNetworkAddressRow
+              key={row.address}
+              row={row}
+              checkboxDisabled={disabled || atCap}
+              onToggle={toggleAddress}
+            />
+          ))}
         </ul>
       )}
       <Button

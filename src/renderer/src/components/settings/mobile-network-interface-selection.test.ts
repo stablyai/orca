@@ -7,6 +7,7 @@ import {
   orderedAdvertiseAddressesEqual,
   refreshOrderedAdvertiseAddresses,
   removeAdvertiseAddress,
+  reorderAdvertiseAddresses,
   seedOrderedAdvertiseAddresses,
   selectRefreshedNetworkAddress,
   type MobileNetworkInterface
@@ -139,6 +140,12 @@ describe('cap / toggle / reorder helpers', () => {
     expect(moveAdvertiseAddress(['a', 'b', 'c'], 1, -1)).toEqual(['b', 'a', 'c'])
     expect(moveAdvertiseAddress(['a', 'b', 'c'], 1, 1)).toEqual(['a', 'c', 'b'])
     expect(moveAdvertiseAddress(['a', 'b', 'c'], 0, -1)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('reorders addresses by index for drag-and-drop', () => {
+    expect(reorderAdvertiseAddresses(['a', 'b', 'c'], 2, 0)).toEqual(['c', 'a', 'b'])
+    expect(reorderAdvertiseAddresses(['a', 'b', 'c'], 0, 2)).toEqual(['b', 'c', 'a'])
+    expect(reorderAdvertiseAddresses(['a', 'b', 'c'], 1, 1)).toEqual(['a', 'b', 'c'])
   })
 
   it('compares ordered lists', () => {
