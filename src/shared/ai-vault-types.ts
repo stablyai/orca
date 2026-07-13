@@ -7,7 +7,8 @@ import {
 import type { TuiAgent } from './types'
 import type { ExecutionHostId, ExecutionHostScope } from './execution-host'
 
-export const AI_VAULT_AGENTS = [
+// Local CLI agents scanned from on-disk transcripts (all TuiAgent).
+const TUI_AI_VAULT_AGENTS = [
   'claude',
   'codex',
   'hermes',
@@ -26,6 +27,13 @@ export const AI_VAULT_AGENTS = [
   'kimi'
 ] as const satisfies readonly TuiAgent[]
 
+// Why: web chat transcripts are imported read-only records, not a launchable
+// CLI agent, so they aren't TuiAgent members.
+export const WEB_CHAT_AGENTS = ['chatgpt', 'claude-web', 'gemini-web'] as const
+export type WebChatAgent = (typeof WEB_CHAT_AGENTS)[number]
+
+export const AI_VAULT_AGENTS = [...TUI_AI_VAULT_AGENTS, ...WEB_CHAT_AGENTS] as const
+
 // Why: the aiVault.listSessions RPC schema CLAMPS scopePaths to this bound
 // (safe: scope paths only widen discovery). Producer-side caps against the same
 // value are optional belt-and-braces, not required for the request to succeed.
@@ -35,6 +43,10 @@ export type AiVaultAgent = (typeof AI_VAULT_AGENTS)[number]
 export type AiVaultScope = 'workspace' | 'project' | 'all'
 export type AiVaultSort = 'updated' | 'created'
 export type AiVaultGroup = 'project' | 'folder' | 'agent'
+
+export function isWebChatAgent(agent: AiVaultAgent): agent is WebChatAgent {
+  return (WEB_CHAT_AGENTS as readonly string[]).includes(agent)
+}
 
 export const AI_VAULT_AGENT_LABELS = {
   claude: 'Claude',
@@ -52,7 +64,10 @@ export const AI_VAULT_AGENT_LABELS = {
   openclaw: 'OpenClaw',
   devin: 'Devin',
   droid: 'Droid',
-  kimi: 'Kimi'
+  kimi: 'Kimi',
+  chatgpt: 'ChatGPT',
+  'claude-web': 'Claude.ai',
+  'gemini-web': 'Gemini'
 } as const satisfies Record<AiVaultAgent, string>
 
 export type AiVaultSessionPreviewMessage = {
@@ -100,6 +115,8 @@ export type AiVaultSession = {
   // recoverable signal for zero-turn sessions.
   subagentTranscriptCount: number
   resumeCommand: string
+  // 읽기 전용 웹 대화는 CLI 이어하기가 없다. 렌더러가 이어하기 UI를 숨긴다.
+  readOnly: boolean
   subagent: AiVaultSessionSubagentInfo | null
 }
 
@@ -184,6 +201,10 @@ export function buildAiVaultResumeCommand(args: {
 }): string {
   const { agent, sessionId, cwd, platform, commandOverride, codexHome, resumeFilePath, shell } =
     args
+  // Why: 웹 대화는 읽기 전용 — CLI 이어하기 명령이 없다(빈 문자열).
+  if (isWebChatAgent(agent)) {
+    return ''
+  }
   const baseCommand = commandOverride?.trim() || defaultAiVaultResumeCommandBase(agent)
   // Why: OMP's `--resume` accepts an absolute transcript path, which resolves
   // regardless of which session-dir root (custom OMP_CODING_AGENT_DIR / WSL
@@ -281,7 +302,7 @@ export function aiVaultAgentLabel(agent: AiVaultAgent): string {
   return AI_VAULT_AGENT_LABELS[agent]
 }
 
-function defaultAiVaultResumeCommandBase(agent: AiVaultAgent): string {
+function defaultAiVaultResumeCommandBase(agent: Exclude<AiVaultAgent, WebChatAgent>): string {
   if (agent === 'cursor') {
     return 'cursor-agent'
   }
@@ -295,7 +316,7 @@ function defaultAiVaultResumeCommandBase(agent: AiVaultAgent): string {
 }
 
 function buildAgentResumeInvocation(
-  agent: AiVaultAgent,
+  agent: Exclude<AiVaultAgent, WebChatAgent>,
   baseCommand: string,
   sessionArg: string
 ): string {
