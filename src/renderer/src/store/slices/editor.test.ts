@@ -498,6 +498,43 @@ describe('createEditorSlice openDiff', () => {
     )
   })
 
+  it('keeps a diff for an owner-less worktree off the focused global runtime', () => {
+    const store = createEditorStore()
+    // A remote runtime is globally focused, but wt-1's repo names no explicit
+    // owner, so its diff must read locally rather than through that runtime.
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' } as AppState['settings']
+    })
+
+    store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({
+        id: 'wt-1::diff::unstaged::file.ts',
+        runtimeEnvironmentId: undefined
+      })
+    )
+  })
+
+  it('routes an explicitly runtime-owned worktree diff to its owner over the focused runtime', () => {
+    const store = createEditorStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' } as AppState['settings'],
+      repos: [
+        { id: 'repo-1', executionHostId: 'runtime:owner-env' }
+      ] as unknown as AppState['repos'],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'repo-1::/srv/wt', repoId: 'repo-1', hostId: 'runtime:owner-env' }]
+      } as unknown as AppState['worktreesByRepo']
+    })
+
+    store.getState().openDiff('repo-1::/srv/wt', '/srv/wt/file.ts', 'file.ts', 'typescript', false)
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({ runtimeEnvironmentId: 'owner-env' })
+    )
+  })
+
   it('repairs an existing diff tab entry to the correct mode and staged state', () => {
     const store = createEditorStore()
 

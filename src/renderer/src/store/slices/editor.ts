@@ -63,7 +63,7 @@ import {
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
 import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
   addAdditionalValidWorkspaceKeys,
   type WorkspaceSessionHydrationOptions
@@ -335,9 +335,10 @@ function resolveDiffRuntimeEnvironmentId(
   if (explicitRuntimeEnvironmentId !== undefined) {
     return explicitRuntimeEnvironmentId
   }
-  // Why: Source Control callers often know only the worktree. Runtime-host
-  // diffs still need their owner stamped so content loads through runtime RPC.
-  return getRuntimeEnvironmentIdForWorktree(state, worktreeId) ?? undefined
+  // Why: route diffs by the worktree's EXPLICIT owner (#6957). A merely focused
+  // global runtime must not read an owner-less worktree's diff from the wrong
+  // host; unknown owner reads locally (undefined), never the focused runtime.
+  return getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId) ?? undefined
 }
 
 export type PendingEditorReveal = {
