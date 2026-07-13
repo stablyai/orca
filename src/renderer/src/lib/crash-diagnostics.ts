@@ -5,7 +5,7 @@ import type {
 import { getBrowserWebviewMemoryProfile } from '../components/browser-pane/webview-registry'
 import { recordRendererCrashBreadcrumb } from './crash-breadcrumb-recorder'
 
-const RENDERER_MEMORY_SAMPLE_INTERVAL_MS = 60_000
+const RENDERER_DIAGNOSTICS_SAMPLE_INTERVAL_MS = 60_000
 const BYTES_PER_MEGABYTE = 1024 * 1024
 
 type BrowserPerformanceMemory = {
@@ -15,7 +15,7 @@ type BrowserPerformanceMemory = {
 }
 
 let rendererCrashDiagnosticsInstalled = false
-let rendererMemoryInterval: number | null = null
+let rendererDiagnosticsInterval: number | null = null
 
 // Why re-exported from a leaf module: terminal modules and their e2e-visible
 // import chains need breadcrumb recording without this file's import.meta /
@@ -31,13 +31,11 @@ export function installRendererCrashDiagnostics(): void {
   window.addEventListener('error', recordRendererError)
   window.addEventListener('unhandledrejection', recordRendererUnhandledRejection)
 
-  if (getPerformanceMemory()) {
-    recordRendererMemory('startup')
-    rendererMemoryInterval = window.setInterval(
-      () => recordRendererMemory('interval'),
-      RENDERER_MEMORY_SAMPLE_INTERVAL_MS
-    )
-  }
+  recordRendererDiagnostics('startup')
+  rendererDiagnosticsInterval = window.setInterval(
+    () => recordRendererDiagnostics('interval'),
+    RENDERER_DIAGNOSTICS_SAMPLE_INTERVAL_MS
+  )
 }
 
 export function _disposeRendererCrashDiagnosticsForTests(): void {
@@ -51,9 +49,9 @@ function disposeRendererCrashDiagnostics(): void {
   rendererCrashDiagnosticsInstalled = false
   window.removeEventListener('error', recordRendererError)
   window.removeEventListener('unhandledrejection', recordRendererUnhandledRejection)
-  if (rendererMemoryInterval !== null) {
-    window.clearInterval(rendererMemoryInterval)
-    rendererMemoryInterval = null
+  if (rendererDiagnosticsInterval !== null) {
+    window.clearInterval(rendererDiagnosticsInterval)
+    rendererDiagnosticsInterval = null
   }
 }
 
@@ -83,6 +81,11 @@ function recordRendererUnhandledRejection(event: PromiseRejectionEvent): void {
   )
 }
 
+function recordRendererDiagnostics(reason: string): void {
+  recordRendererMemory(reason)
+  recordRendererSurface(reason)
+}
+
 function recordRendererMemory(reason: string): void {
   const memory = getPerformanceMemory()
   if (!memory) {
@@ -99,6 +102,42 @@ function recordRendererMemory(reason: string): void {
       heapLimitMB: toMegabytes(memory.jsHeapSizeLimit),
       browserWebviews: browserWebviews.browserWebviewCount,
       registeredBrowserGuests: browserWebviews.registeredBrowserGuestCount
+    })
+  )
+}
+
+function recordRendererSurface(reason: string): void {
+  if (typeof document === 'undefined' || typeof window === 'undefined') {
+    return
+  }
+
+  const root = document.getElementById('root')
+  const rootRect = root?.getBoundingClientRect()
+  const bodyRect = document.body?.getBoundingClientRect()
+  const rootStyle = root ? window.getComputedStyle(root) : undefined
+  const bodyStyle = document.body ? window.getComputedStyle(document.body) : undefined
+
+  recordRendererCrashBreadcrumb(
+    'renderer_surface',
+    compactBreadcrumbData({
+      reason,
+      visibilityState: document.visibilityState,
+      hasFocus: typeof document.hasFocus === 'function' ? document.hasFocus() : undefined,
+      innerWidth: window.innerWidth,
+      innerHeight: window.innerHeight,
+      devicePixelRatio: window.devicePixelRatio,
+      rootPresent: Boolean(root),
+      rootChildElementCount: root?.childElementCount,
+      rootWidth: rootRect ? Math.round(rootRect.width) : undefined,
+      rootHeight: rootRect ? Math.round(rootRect.height) : undefined,
+      bodyWidth: bodyRect ? Math.round(bodyRect.width) : undefined,
+      bodyHeight: bodyRect ? Math.round(bodyRect.height) : undefined,
+      rootDisplay: rootStyle?.display,
+      rootVisibility: rootStyle?.visibility,
+      rootBackgroundColor: rootStyle?.backgroundColor,
+      bodyDisplay: bodyStyle?.display,
+      bodyVisibility: bodyStyle?.visibility,
+      bodyBackgroundColor: bodyStyle?.backgroundColor
     })
   )
 }

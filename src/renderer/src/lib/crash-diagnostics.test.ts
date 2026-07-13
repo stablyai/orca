@@ -11,13 +11,27 @@ describe('renderer crash diagnostics', () => {
   let setIntervalMock: ReturnType<typeof vi.fn>
   let clearIntervalMock: ReturnType<typeof vi.fn>
   let removeEventListenerMock: ReturnType<typeof vi.fn>
+  let rootElement: {
+    childElementCount: number
+    getBoundingClientRect: ReturnType<typeof vi.fn>
+  }
+  let bodyElement: {
+    getBoundingClientRect: ReturnType<typeof vi.fn>
+  }
 
   beforeEach(async () => {
     vi.resetModules()
     listeners = new Map()
     recordBreadcrumbMock = vi.fn()
-    setIntervalMock = vi.fn(() => 1)
+    setIntervalMock = vi.fn(() => setIntervalMock.mock.calls.length + 1)
     clearIntervalMock = vi.fn()
+    rootElement = {
+      childElementCount: 1,
+      getBoundingClientRect: vi.fn(() => ({ width: 1200, height: 800 }))
+    }
+    bodyElement = {
+      getBoundingClientRect: vi.fn(() => ({ width: 1200, height: 800 }))
+    }
     removeEventListenerMock = vi.fn((type: string, listener: Listener) => {
       listeners.set(
         type,
@@ -38,6 +52,14 @@ describe('renderer crash diagnostics', () => {
       removeEventListener: removeEventListenerMock,
       setInterval: setIntervalMock,
       clearInterval: clearIntervalMock,
+      innerWidth: 1200,
+      innerHeight: 800,
+      devicePixelRatio: 1.5,
+      getComputedStyle: vi.fn((element: unknown) =>
+        element === rootElement
+          ? { display: 'block', visibility: 'visible', backgroundColor: 'rgba(0, 0, 0, 0)' }
+          : { display: 'block', visibility: 'visible', backgroundColor: 'rgb(10, 10, 10)' }
+      ),
       performance: {
         memory: {
           usedJSHeapSize: 32 * 1024 * 1024,
@@ -45,6 +67,12 @@ describe('renderer crash diagnostics', () => {
           jsHeapSizeLimit: 512 * 1024 * 1024
         }
       }
+    })
+    vi.stubGlobal('document', {
+      visibilityState: 'visible',
+      body: bodyElement,
+      hasFocus: vi.fn(() => true),
+      getElementById: vi.fn((id: string) => (id === 'root' ? rootElement : null))
     })
     vi.doMock('../components/browser-pane/webview-registry', () => ({
       getBrowserWebviewMemoryProfile: () => ({
@@ -68,7 +96,7 @@ describe('renderer crash diagnostics', () => {
     })
   })
 
-  it('installs startup, error, rejection, and memory breadcrumbs once', () => {
+  it('installs startup, error, rejection, memory, and surface breadcrumbs once', () => {
     diagnostics.installRendererCrashDiagnostics()
     diagnostics.installRendererCrashDiagnostics()
 
@@ -83,6 +111,29 @@ describe('renderer crash diagnostics', () => {
         heapLimitMB: 512,
         browserWebviews: 4,
         registeredBrowserGuests: 3
+      }
+    })
+    expect(recordBreadcrumbMock).toHaveBeenCalledWith({
+      name: 'renderer_surface',
+      data: {
+        reason: 'startup',
+        visibilityState: 'visible',
+        hasFocus: true,
+        innerWidth: 1200,
+        innerHeight: 800,
+        devicePixelRatio: 1.5,
+        rootPresent: true,
+        rootChildElementCount: 1,
+        rootWidth: 1200,
+        rootHeight: 800,
+        bodyWidth: 1200,
+        bodyHeight: 800,
+        rootDisplay: 'block',
+        rootVisibility: 'visible',
+        rootBackgroundColor: 'rgba(0, 0, 0, 0)',
+        bodyDisplay: 'block',
+        bodyVisibility: 'visible',
+        bodyBackgroundColor: 'rgb(10, 10, 10)'
       }
     })
 
@@ -116,14 +167,14 @@ describe('renderer crash diagnostics', () => {
     })
   })
 
-  it('disposes global listeners and the memory interval', () => {
+  it('disposes global listeners and diagnostic intervals', () => {
     diagnostics.installRendererCrashDiagnostics()
 
     diagnostics._disposeRendererCrashDiagnosticsForTests()
 
     expect(removeEventListenerMock).toHaveBeenCalledWith('error', expect.any(Function))
     expect(removeEventListenerMock).toHaveBeenCalledWith('unhandledrejection', expect.any(Function))
-    expect(clearIntervalMock).toHaveBeenCalledWith(1)
+    expect(clearIntervalMock).toHaveBeenCalledTimes(1)
     expect(listeners.get('error')).toHaveLength(0)
     expect(listeners.get('unhandledrejection')).toHaveLength(0)
   })
