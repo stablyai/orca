@@ -83,6 +83,11 @@ import {
   isSshPtyNotFoundError
 } from '../providers/ssh-pty-errors'
 import { parseAppSshPtyId, toAppSshPtyId, toRelaySshPtyId } from '../providers/ssh-pty-id'
+import {
+  normalizePtyInactiveCleanupIds,
+  type PtyInactiveCleanupResult
+} from '../../shared/pty-inactive-cleanup'
+import { inspectPtyInactiveCleanupTargets } from './pty-inactive-cleanup'
 import { createPtySpawnTiming } from './pty-spawn-timing'
 import {
   isSafePtySessionId,
@@ -605,6 +610,20 @@ function tryGetProviderForAgentSessionOwner(ptyId: string): IPtyProvider | undef
   } catch {
     return undefined
   }
+}
+
+function resolveInactiveCleanupProvider(ptyId: string): IPtyProvider | null {
+  const ownedConnectionId = ptyOwnership.get(ptyId)
+  if (ownedConnectionId !== undefined) {
+    return ownedConnectionId ? (sshProviders.get(ownedConnectionId) ?? null) : localProvider
+  }
+  const parsedSshId = parseAppSshPtyId(ptyId)
+  if (parsedSshId) {
+    // Why: disconnected remote sessions must never be inspected or killed through
+    // the local provider merely because their SSH provider is temporarily absent.
+    return sshProviders.get(parsedSshId.connectionId) ?? null
+  }
+  return localProvider
 }
 
 function normalizeNodePtySpawnError(err: unknown): Error {
@@ -1750,6 +1769,8 @@ export function registerPtyHandlers(
   // Remove prior handlers so re-registration (e.g. macOS re-activate creating a new window) doesn't double-register.
   ipcMain.removeHandler('pty:spawn')
   ipcMain.removeHandler('pty:kill')
+  ipcMain.removeHandler('pty:inspectInactiveCleanup')
+  ipcMain.removeHandler('pty:killInactiveSessions')
   ipcMain.removeHandler('pty:listSessions')
   ipcMain.removeHandler('pty:hasPty')
   ipcMain.removeHandler('pty:hasChildProcesses')
@@ -6031,7 +6052,7 @@ export function registerPtyHandlers(
     runtime?.clearHeadlessTerminalBuffer(args.id).catch(() => {})
   })
 
-  ipcMain.handle('pty:kill', async (_event, args: { id: string; keepHistory?: boolean }) => {
+  const shutdownPty = async (args: { id: string; keepHistory?: boolean }): Promise<void> => {
     if (typeof args?.id !== 'string' || !args.id || args.id.startsWith('remote:')) {
       // Why: runtime terminal handles belong to terminal.close; unowned PTY routing could target the local provider.
       throw new Error('Invalid PTY provider id')
@@ -6077,7 +6098,49 @@ export function registerPtyHandlers(
       rememberSyntheticKillExit(args.id)
       sendPtyExitToRenderer({ id: args.id, code: -1 })
     }
+  }
+
+  ipcMain.handle('pty:kill', async (_event, args: { id: string; keepHistory?: boolean }) =>
+    shutdownPty(args)
+  )
+
+  ipcMain.handle('pty:inspectInactiveCleanup', async (_event, args: { ids?: unknown }) => {
+    const ids = normalizePtyInactiveCleanupIds(args?.ids)
+    return inspectPtyInactiveCleanupTargets(
+      ids.map((id) => ({ id, provider: resolveInactiveCleanupProvider(id) }))
+    )
   })
+
+  ipcMain.handle(
+    'pty:killInactiveSessions',
+    async (_event, args: { ids?: unknown }): Promise<PtyInactiveCleanupResult[]> => {
+      const ids = normalizePtyInactiveCleanupIds(args?.ids)
+      // Why: classification is repeated at the destructive boundary because a
+      // reviewed shell may have started an agent while the dialog was open.
+      const inspections = await inspectPtyInactiveCleanupTargets(
+        ids.map((id) => ({ id, provider: resolveInactiveCleanupProvider(id) }))
+      )
+      return Promise.all(
+        inspections.map(async ({ id, safety }): Promise<PtyInactiveCleanupResult> => {
+          if (safety === 'active') {
+            return { id, outcome: 'protected-active' }
+          }
+          if (safety === 'unknown') {
+            return { id, outcome: 'protected-unknown' }
+          }
+          if (safety === 'gone') {
+            return { id, outcome: 'gone' }
+          }
+          try {
+            await shutdownPty({ id, keepHistory: false })
+            return { id, outcome: 'killed' }
+          } catch {
+            return { id, outcome: 'failed' }
+          }
+        })
+      )
+    }
+  )
 
   ipcMain.handle('pty:listSessions', async (): Promise<PtyListedSession[]> => {
     const deduped = new Map<string, PtyListedSession>()

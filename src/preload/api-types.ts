@@ -275,6 +275,7 @@ import type {
 } from '../shared/types'
 import type { PtyModelRestoreNeededEvent } from '../shared/pty-model-restore-marker'
 import type { PtyListedSession } from '../shared/pty-listed-session'
+import type { PtyCleanupInspection, PtyInactiveCleanupResult } from '../shared/pty-inactive-cleanup'
 import type {
   PtyRendererDeliveryHealthReply,
   PtyRendererDeliveryStateReport
@@ -1518,6 +1519,8 @@ export type PreloadApi = {
     signal: (id: string, signal: string) => void
     clearBuffer: (id: string) => void
     kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
+    inspectInactiveCleanup: (ids: string[]) => Promise<PtyCleanupInspection[]>
+    killInactiveSessions: (ids: string[]) => Promise<PtyInactiveCleanupResult[]>
     ackColdRestore: (id: string) => void
     ackData: (id: string, charCount: number, processedChars?: number) => void
     onDeliveryResyncRequest: (callback: (payload: { requestId: number }) => void) => () => void

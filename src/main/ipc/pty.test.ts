@@ -282,6 +282,41 @@ function makeDeferred() {
   return { promise, resolve }
 }
 
+function makeInactiveCleanupProvider(args: {
+  ids: string[] | (() => string[])
+  shutdown: ReturnType<typeof vi.fn>
+  hasChildProcesses?: (id: string) => Promise<boolean>
+  confirmForegroundProcess?: (id: string) => Promise<string | null>
+}): never {
+  return {
+    spawn: vi.fn(),
+    attach: vi.fn(),
+    write: vi.fn(),
+    resize: vi.fn(),
+    shutdown: args.shutdown,
+    sendSignal: vi.fn(),
+    getCwd: vi.fn(),
+    getInitialCwd: vi.fn(),
+    clearBuffer: vi.fn(),
+    acknowledgeDataEvent: vi.fn(),
+    hasChildProcesses: vi.fn(args.hasChildProcesses ?? (async () => false)),
+    getForegroundProcess: vi.fn(),
+    confirmForegroundProcess: vi.fn(args.confirmForegroundProcess ?? (async () => 'zsh')),
+    serialize: vi.fn(),
+    revive: vi.fn(),
+    onData: vi.fn(() => () => {}),
+    onReplay: vi.fn(() => () => {}),
+    onExit: vi.fn(() => () => {}),
+    listProcesses: vi.fn(async () => {
+      const ids = typeof args.ids === 'function' ? args.ids() : args.ids
+      return ids.map((id) => ({ id, cwd: '/tmp', title: id }))
+    }),
+    providesAgentSessionOwnerListings: vi.fn(() => true),
+    getDefaultShell: vi.fn(),
+    getProfiles: vi.fn()
+  } as never
+}
+
 describe('registerPtyHandlers', () => {
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
   const mainWindow = {
@@ -5633,6 +5668,96 @@ describe('registerPtyHandlers', () => {
       handlers.get('pty:kill')!(null, { id: 'remote:env-1@@terminal-1' })
     ).rejects.toThrow('Invalid PTY provider id')
     expect(shutdown).not.toHaveBeenCalled()
+  })
+
+  it('inactive cleanup protects active processes and kills only a freshly confirmed shell', async () => {
+    const shutdown = vi.fn().mockResolvedValue(undefined)
+    setLocalPtyProvider(
+      makeInactiveCleanupProvider({
+        ids: ['idle', 'agent'],
+        shutdown,
+        hasChildProcesses: async (id) => id === 'agent',
+        confirmForegroundProcess: async (id) => (id === 'idle' ? 'zsh' : 'claude')
+      })
+    )
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never)
+
+    await expect(
+      handlers.get('pty:inspectInactiveCleanup')!(null, { ids: ['idle', 'agent'] })
+    ).resolves.toEqual([
+      { id: 'idle', safety: 'inactive' },
+      { id: 'agent', safety: 'active' }
+    ])
+    await expect(
+      handlers.get('pty:killInactiveSessions')!(null, { ids: ['idle', 'agent'] })
+    ).resolves.toEqual([
+      { id: 'idle', outcome: 'killed' },
+      { id: 'agent', outcome: 'protected-active' }
+    ])
+    expect(shutdown).toHaveBeenCalledOnce()
+    expect(shutdown).toHaveBeenCalledWith('idle', { immediate: true, keepHistory: false })
+  })
+
+  it('inactive cleanup protects a disconnected SSH session without falling back local', async () => {
+    const localShutdown = vi.fn().mockResolvedValue(undefined)
+    setLocalPtyProvider(
+      makeInactiveCleanupProvider({ ids: ['ssh:missing@@agent'], shutdown: localShutdown })
+    )
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never)
+
+    await expect(
+      handlers.get('pty:killInactiveSessions')!(null, { ids: ['ssh:missing@@agent'] })
+    ).resolves.toEqual([{ id: 'ssh:missing@@agent', outcome: 'protected-unknown' }])
+    expect(localShutdown).not.toHaveBeenCalled()
+  })
+
+  it('inactive cleanup revalidates after review and reports a disappeared session as gone', async () => {
+    const shutdown = vi.fn().mockResolvedValue(undefined)
+    let listed = true
+    setLocalPtyProvider(
+      makeInactiveCleanupProvider({ ids: () => (listed ? ['idle'] : []), shutdown })
+    )
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never)
+
+    await expect(
+      handlers.get('pty:inspectInactiveCleanup')!(null, { ids: ['idle'] })
+    ).resolves.toEqual([{ id: 'idle', safety: 'inactive' }])
+    listed = false
+    await expect(
+      handlers.get('pty:killInactiveSessions')!(null, { ids: ['idle'] })
+    ).resolves.toEqual([{ id: 'idle', outcome: 'gone' }])
+    expect(shutdown).not.toHaveBeenCalled()
+  })
+
+  it('inactive cleanup isolates shutdown failures and normalizes requested ids', async () => {
+    const shutdown = vi.fn(async (id: string) => {
+      if (id === 'broken') {
+        throw new Error('daemon unavailable')
+      }
+    })
+    setLocalPtyProvider(makeInactiveCleanupProvider({ ids: ['broken', 'idle'], shutdown }))
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never)
+
+    await expect(
+      handlers.get('pty:killInactiveSessions')!(null, {
+        ids: ['broken', '', 'broken', 7, 'idle']
+      })
+    ).resolves.toEqual([
+      { id: 'broken', outcome: 'failed' },
+      { id: 'idle', outcome: 'killed' }
+    ])
+    expect(shutdown).toHaveBeenCalledTimes(2)
+  })
+
+  it('inactive cleanup removes both guarded handlers before re-registration', () => {
+    registerPtyHandlers(mainWindow as never)
+
+    expect(removeHandlerMock).toHaveBeenCalledWith('pty:inspectInactiveCleanup')
+    expect(removeHandlerMock).toHaveBeenCalledWith('pty:killInactiveSessions')
   })
 
   it('synthesizes runtime exit after ordinary daemon-backed pty kill', async () => {
