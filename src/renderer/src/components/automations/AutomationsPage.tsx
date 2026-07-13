@@ -117,6 +117,7 @@ import {
   getVisibleAutomationSetupDecision,
   resolveAutomationSetupDecisionForSave
 } from './automation-setup-decision'
+import { resolveDefaultAutomationAgent } from './automation-default-agent'
 import { getAutomationTemplates, type AutomationTemplate } from './automation-templates'
 import { getAutomationTargetAvailability } from './automation-target-availability'
 import { buildAutomationRunContextForRepo } from './automation-run-context'
@@ -271,10 +272,7 @@ function buildHermesCronSchedule(draft: AutomationDraft): string {
   })
 }
 
-function getAgentLabel(
-  agentId: string,
-  customAgents?: readonly CustomAgentDefinition[]
-): string {
+function getAgentLabel(agentId: string, customAgents?: readonly CustomAgentDefinition[]): string {
   return getAgentCatalog(customAgents ?? []).find((agent) => agent.id === agentId)?.label ?? agentId
 }
 
@@ -404,12 +402,12 @@ export default function AutomationsPage(): React.JSX.Element {
     (agentId) =>
       !isCustomAgentId(agentId) || customAgentForId(agentId, settings?.customAgents)?.enabled
   )
-  const defaultAgent =
-    settings?.defaultTuiAgent &&
-    settings.defaultTuiAgent !== 'blank' &&
-    isTuiAgentEnabled(settings.defaultTuiAgent, settings.disabledTuiAgents)
-      ? settings.defaultTuiAgent
-      : (firstEnabledAgent ?? AGENTS[0])
+  const defaultAgent = resolveDefaultAutomationAgent({
+    defaultTuiAgent: settings?.defaultTuiAgent,
+    disabledTuiAgents: settings?.disabledTuiAgents,
+    customAgents: settings?.customAgents,
+    fallback: firstEnabledAgent ?? AGENTS[0]
+  })
 
   const [automations, setAutomations] = useState<Automation[]>([])
   const [runs, setRuns] = useState<AutomationRun[]>([])

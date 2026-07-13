@@ -16,6 +16,7 @@ import { inlineAgentDraftFitsPlatform } from './agent-draft-platform-limit'
 import type { TuiAgent } from './types'
 import type { AgentId, CustomAgentDefinition } from './custom-agent'
 import { customAgentForId, isCustomAgentId } from './custom-agent'
+import { getCommandTokenPathBasename, getFirstCommandToken } from './command-token-scanner'
 export { buildAgentResumeStartupPlan } from './tui-agent-resume-startup'
 export type AgentStartupPlan = {
   agent: AgentId
@@ -39,13 +40,22 @@ export function resolveBaseCommand(args: {
   customAgents?: readonly CustomAgentDefinition[]
 }): { ok: true; command: string } | { ok: false; error: string } {
   const override = args.cmdOverrides[args.agent]
-  const command =
-    override ||
-    (args.customAgent || customAgentForId(args.agent, args.customAgents)
-      ? (args.customAgent || customAgentForId(args.agent, args.customAgents))!.command
-      : getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent as TuiAgent], args.platform, {
-          isRemote: args.isRemote
-        }))
+  let command: string
+  if (override) {
+    command = override
+  } else if (isCustomAgentId(args.agent)) {
+    // Why: a custom id can be orphaned (deleted/disabled/not-yet-hydrated) —
+    // fall through to an error instead of indexing TUI_AGENT_CONFIG with it.
+    const customAgent = args.customAgent ?? customAgentForId(args.agent, args.customAgents)
+    if (!customAgent) {
+      return { ok: false, error: `Unknown custom agent: ${args.agent}` }
+    }
+    command = customAgent.command
+  } else {
+    command = getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[args.agent], args.platform, {
+      isRemote: args.isRemote
+    })
+  }
   const suffix = planAgentCliArgsSuffix(args.agentArgs, args.shell)
   if (!suffix.ok) {
     return suffix
@@ -54,6 +64,22 @@ export function resolveBaseCommand(args: {
   // --profile-v2 makes Codex load a second hook representation and warn.
   return { ok: true, command: suffix.suffix ? `${command} ${suffix.suffix}` : command }
 }
+// Why: readiness waits (`isExpectedAgentProcess`) match against the real
+// foreground process name — the literal `custom:*` id never matches it, so
+// derive expectedProcess from the custom agent's own command binary instead.
+function buildCustomAgentTuiConfig(
+  agent: AgentId,
+  customAgent: CustomAgentDefinition | undefined
+): TuiAgentConfig {
+  const commandToken = customAgent?.command ? getFirstCommandToken(customAgent.command) : ''
+  return {
+    detectCmd: '',
+    launchCmd: '',
+    expectedProcess: commandToken ? getCommandTokenPathBasename(commandToken) : agent,
+    promptInjectionMode: customAgent?.promptMode === 'argv' ? 'argv' : 'stdin-after-start'
+  }
+}
+
 export function buildAgentStartupPlan(args: {
   agent: AgentId
   prompt: string
@@ -74,12 +100,7 @@ export function buildAgentStartupPlan(args: {
   const trimmedPrompt = prompt.trim()
   const customAgent = args.customAgent ?? customAgentForId(agent, args.customAgents)
   const config: TuiAgentConfig = isCustomAgentId(agent)
-    ? {
-        detectCmd: '',
-        launchCmd: '',
-        expectedProcess: agent,
-        promptInjectionMode: customAgent?.promptMode === 'argv' ? 'argv' : 'stdin-after-start'
-      }
+    ? buildCustomAgentTuiConfig(agent, customAgent)
     : TUI_AGENT_CONFIG[agent]
   const usesQuery = config.promptInjectionMode === 'hermes-query' && Boolean(trimmedPrompt)
   const baseCommand = resolveBaseCommand({
@@ -131,7 +152,9 @@ export function buildAgentStartupPlan(args: {
 
   if (isCustomAgentId(agent) && customAgent?.promptMode === 'template') {
     const template = customAgent.promptTemplate
-    if (!template || !template.includes('{prompt}')) {return null}
+    if (!template || !template.includes('{prompt}')) {
+      return null
+    }
     return {
       agent,
       launchCommand: template.replaceAll('{prompt}', quotedPrompt),
@@ -236,7 +259,7 @@ export function buildAgentDraftLaunchPlan(args: {
   const shell = resolveStartupShell(platform, args.shell)
   const customAgent = args.customAgent ?? customAgentForId(agent, args.customAgents)
   const config: TuiAgentConfig = isCustomAgentId(agent)
-    ? { detectCmd: '', launchCmd: '', expectedProcess: agent, promptInjectionMode: 'stdin-after-start' }
+    ? buildCustomAgentTuiConfig(agent, customAgent)
     : TUI_AGENT_CONFIG[agent]
   const trimmed = draft.trim()
   if (!trimmed) {

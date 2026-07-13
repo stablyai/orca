@@ -34,7 +34,10 @@ export type QuickLaunchAgentMenuItemsProps = {
   onPromptDelivered?: () => void
 }
 
-function getCatalogEntry(agent: AgentId, customAgents: readonly CustomAgentDefinition[]): { id: AgentId; label: string } | null {
+function getCatalogEntry(
+  agent: AgentId,
+  customAgents: readonly CustomAgentDefinition[]
+): { id: AgentId; label: string } | null {
   return getAgentCatalog(customAgents).find((a) => a.id === agent) ?? null
 }
 
@@ -170,12 +173,21 @@ function QuickLaunchAgentMenuItemsInner({
         toast.message(getLaunchWatchdogTimeoutMessage(label))
       })
     },
-    [worktreeId, groupId, onFocusTerminal, prompt, promptDelivery, launchSource, onPromptDelivered, customAgents]
+    [
+      worktreeId,
+      groupId,
+      onFocusTerminal,
+      prompt,
+      promptDelivery,
+      launchSource,
+      onPromptDelivered,
+      customAgents
+    ]
   )
 
   const enabledDetectedIds = detectedIds ? filterEnabledTuiAgents(detectedIds, disabledAgents) : []
   const customIds = customAgents.filter((agent) => agent.enabled).map((agent) => agent.id)
-  const agents = detectedIds ? orderAgents(defaultAgent, [...enabledDetectedIds, ...customIds], customAgents) : []
+  const agents = orderAgents(defaultAgent, [...enabledDetectedIds, ...customIds], customAgents)
 
   return (
     <>

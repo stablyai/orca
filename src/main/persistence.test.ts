@@ -4659,6 +4659,58 @@ describe('Store', () => {
     expect(updated.disabledTuiAgents).toEqual(['gemini', 'opencode'])
   })
 
+  it('keeps a disabled custom agent id across restart instead of stripping it', async () => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({
+        settings: {
+          disabledTuiAgents: ['codex', 'custom:forge']
+        }
+      })
+    )
+    const store = await createStore()
+
+    expect(store.getSettings().disabledTuiAgents).toEqual([
+      'codex',
+      'custom:forge',
+      'claude-agent-teams'
+    ])
+  })
+
+  it('normalizes malformed persisted custom agents on load', async () => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({
+        settings: {
+          customAgents: [
+            {
+              id: 'custom:forge',
+              name: 'Forge',
+              command: 'forge',
+              promptMode: 'pty',
+              icon: { kind: 'terminal' },
+              enabled: true
+            },
+            { id: 'custom:no-command', name: 'Broken', command: '', promptMode: 'pty' },
+            { id: 'not-a-valid-id', name: 'Bad Id', command: 'bad' }
+          ]
+        }
+      })
+    )
+    const store = await createStore()
+
+    expect(store.getSettings().customAgents).toEqual([
+      {
+        id: 'custom:forge',
+        name: 'Forge',
+        command: 'forge',
+        promptMode: 'pty',
+        icon: { kind: 'terminal' },
+        enabled: true
+      }
+    ])
+  })
+
   it('enables Claude Agent Teams by default for fresh installs', async () => {
     const store = await createStore()
 

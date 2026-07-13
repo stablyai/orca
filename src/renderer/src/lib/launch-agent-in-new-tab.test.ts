@@ -165,6 +165,21 @@ describe('launchAgentInNewTab', () => {
     })
   })
 
+  it('fails gracefully instead of crashing when launching an orphaned custom agent id', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    let result: unknown
+    expect(() => {
+      result = launchAgentInNewTab({
+        agent: 'custom:ghost',
+        worktreeId: 'wt-1'
+      })
+    }).not.toThrow()
+
+    expect(result).toBeNull()
+    expect(mockCreateTab).not.toHaveBeenCalled()
+  })
+
   it('opens supported submit-after-ready launches in chat and seeds a launch prompt echo', async () => {
     store.settings = {
       agentCmdOverrides: {},

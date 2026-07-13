@@ -1,6 +1,5 @@
 import type { AgentId } from '../../../shared/custom-agent'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
+import { TUI_AGENT_CONFIG, isTuiAgent } from '../../../shared/tui-agent-config'
 import { useAppStore } from '@/store'
 import {
   inspectRuntimeTerminalProcess,

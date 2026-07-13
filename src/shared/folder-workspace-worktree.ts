@@ -1,5 +1,5 @@
 import type { FolderWorkspace, Worktree } from './types'
-import { isTuiAgent } from './tui-agent-config'
+import { isAgentId } from './custom-agent'
 import { folderWorkspaceKey } from './workspace-scope'
 
 export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Worktree {
@@ -27,7 +27,7 @@ export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Wor
     manualOrder: folderWorkspace.manualOrder,
     lastActivityAt: folderWorkspace.lastActivityAt,
     createdAt: folderWorkspace.createdAt,
-    ...(isTuiAgent(folderWorkspace.createdWithAgent)
+    ...(isAgentId(folderWorkspace.createdWithAgent)
       ? { createdWithAgent: folderWorkspace.createdWithAgent }
       : {}),
     pendingFirstAgentMessageRename: folderWorkspace.pendingFirstAgentMessageRename,

@@ -143,7 +143,7 @@ import type {
   DirEntry
 } from '../../shared/types'
 import type { AgentId } from '../../shared/custom-agent'
-import { customAgentForId, isCustomAgentId } from '../../shared/custom-agent'
+import { customAgentForId, isAgentId, isCustomAgentId } from '../../shared/custom-agent'
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
 import {
   getRepoExecutionHostId,
@@ -14747,7 +14747,7 @@ export class OrcaRuntimeService {
           ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
           : {}),
         ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
-        ...(isTuiAgent(effectiveCreatedWithAgent)
+        ...(isAgentId(effectiveCreatedWithAgent)
           ? { createdWithAgent: effectiveCreatedWithAgent }
           : {}),
         ...(args.comment !== undefined ? { comment: args.comment } : {}),
@@ -14842,7 +14842,7 @@ export class OrcaRuntimeService {
         activate: args.activate,
         ...(effectiveStartup ? { startup: effectiveStartup } : {}),
         ...(effectiveStartupFollowup ? { startupFollowup: effectiveStartupFollowup } : {}),
-        ...(isTuiAgent(effectiveCreatedWithAgent)
+        ...(isAgentId(effectiveCreatedWithAgent)
           ? { createdWithAgent: effectiveCreatedWithAgent }
           : {}),
         ...(effectiveDraftPaste ? { startupDraftPaste: effectiveDraftPaste } : {})
@@ -15328,7 +15328,7 @@ export class OrcaRuntimeService {
         ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
         : {}),
       ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
-      ...(isTuiAgent(effectiveCreatedWithAgent)
+      ...(isAgentId(effectiveCreatedWithAgent)
         ? { createdWithAgent: effectiveCreatedWithAgent }
         : {}),
       ...(args.pendingFirstAgentMessageRename === true && effectiveCreatedWithAgent
@@ -15706,9 +15706,7 @@ export class OrcaRuntimeService {
         ...(args.pushTarget ? { pushTarget: args.pushTarget } : {}),
         ...(args.workspaceStatus ? { workspaceStatus: args.workspaceStatus as never } : {}),
         ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
-        ...(isTuiAgent(args.createdWithAgent)
-          ? { createdWithAgent: args.createdWithAgent }
-          : {}),
+        ...(isAgentId(args.createdWithAgent) ? { createdWithAgent: args.createdWithAgent } : {}),
         ...(args.pendingFirstAgentMessageRename === true
           ? { pendingFirstAgentMessageRename: true }
           : {}),
@@ -18141,7 +18139,8 @@ export class OrcaRuntimeService {
     const settings = this.store.getSettings()
     if (
       !isTuiAgentEnabled(opts.agent, settings.disabledTuiAgents) ||
-      (isCustomAgentId(opts.agent) && customAgentForId(opts.agent, settings.customAgents)?.enabled !== true)
+      (isCustomAgentId(opts.agent) &&
+        customAgentForId(opts.agent, settings.customAgents)?.enabled !== true)
     ) {
       throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
     }

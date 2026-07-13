@@ -246,7 +246,10 @@ function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayl
   }
 
   const state = useAppStore.getState()
-  if (isCustomAgentId(agent) && customAgentForId(agent, state.settings?.customAgents)?.enabled !== true) {
+  if (
+    isCustomAgentId(agent) &&
+    customAgentForId(agent, state.settings?.customAgents)?.enabled !== true
+  ) {
     return undefined
   }
   const repo = state.repos.find((entry) => entry.id === worktree.repoId)
@@ -285,7 +288,7 @@ function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayl
       ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
       : {}),
     telemetry: {
-      agent_kind: tuiAgentToAgentKind(agent),
+      agent_kind: isCustomAgentId(agent) ? 'other' : tuiAgentToAgentKind(agent),
       launch_source: 'sidebar',
       request_kind: 'resume'
     }

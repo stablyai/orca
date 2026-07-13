@@ -1012,6 +1012,43 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('persists createdWithAgent for a custom agent on folder-mode workspaces', async () => {
+    const repo = {
+      id: 'repo-folder',
+      path: '/workspace/folder',
+      displayName: 'folder',
+      badgeColor: '#000',
+      addedAt: 0,
+      kind: 'folder' as const
+    }
+    store.getRepo.mockReturnValue(repo)
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => ({
+      displayName: '',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      ...meta
+    }))
+
+    const result = (await handlers['worktrees:create'](null, {
+      repoId: 'repo-folder',
+      name: 'folder-session',
+      createdWithAgent: 'custom:forge'
+    })) as { worktree: { id: string } }
+
+    expect(result.worktree).toEqual(
+      expect.objectContaining({
+        createdWithAgent: 'custom:forge'
+      })
+    )
+  })
+
   it('spawns a startup terminal and setup terminal after local worktree registration', async () => {
     addWorktreeMock.mockResolvedValue({})
     listWorktreesMock.mockResolvedValueOnce([
@@ -1843,6 +1880,37 @@ describe('registerWorktreeHandlers', () => {
         linkedPR: 456,
         linkedLinearIssue: 'ENG-123',
         manualOrder: 123_456
+      })
+    })
+  })
+
+  it('persists createdWithAgent for a custom agent during local create', async () => {
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/improve-dashboard',
+        head: 'abc123',
+        branch: 'improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    const result = await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard',
+      createdWithAgent: 'custom:forge'
+    })
+
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/improve-dashboard',
+      expect.objectContaining({
+        createdWithAgent: 'custom:forge'
+      })
+    )
+    expect(result).toMatchObject({
+      worktree: expect.objectContaining({
+        createdWithAgent: 'custom:forge'
       })
     })
   })

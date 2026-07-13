@@ -97,6 +97,16 @@ describe('folderWorkspaceToWorktree', () => {
     })
   })
 
+  it('keeps a custom agent id instead of stripping it as an unrecognized TUI agent', () => {
+    const worktree = folderWorkspaceToWorktree(
+      makeFolderWorkspace({
+        createdWithAgent: 'custom:forge'
+      })
+    )
+
+    expect(worktree.createdWithAgent).toBe('custom:forge')
+  })
+
   it('keeps review-style tasks attached only to the folder workspace record', () => {
     const githubPr = folderWorkspaceToWorktree(
       makeFolderWorkspace({

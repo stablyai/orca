@@ -500,7 +500,7 @@ export type Worktree = {
   /** Agent selected when Orca originally created the worktree. Used only to
    *  seed a replacement terminal if the user later reopens the worktree after
    *  closing every visible surface. */
-  createdWithAgent?: TuiAgent
+  createdWithAgent?: AgentId
   /** True while an auto-named workspace is waiting for the first agent message
    *  to drive the branch/title rename. */
   pendingFirstAgentMessageRename?: boolean
@@ -604,7 +604,7 @@ export type WorktreeMeta = {
   /** See {@link Worktree.createdAt}. Persisted to orca-data.json. */
   createdAt?: number
   /** See {@link Worktree.createdWithAgent}. Persisted to orca-data.json. */
-  createdWithAgent?: TuiAgent
+  createdWithAgent?: AgentId
   /** See {@link Worktree.pendingFirstAgentMessageRename}. */
   pendingFirstAgentMessageRename?: boolean
   /** See {@link Worktree.firstAgentMessageRenameError}. */

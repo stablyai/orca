@@ -122,8 +122,12 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   const effectiveAgentArgs =
     agentArgs !== undefined
       ? agentArgs
-      : isCustomAgentId(agent) ? undefined : resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
-  const agentEnv = isCustomAgentId(agent) ? undefined : resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
+      : isCustomAgentId(agent)
+        ? undefined
+        : resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
+  const agentEnv = isCustomAgentId(agent)
+    ? undefined
+    : resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
   const startupPlanBase = {
     agent,
     cmdOverrides,
@@ -137,8 +141,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const customAgent = customAgentForId(agent, store.settings?.customAgents)
-  const isFollowupPath = customAgent
-    ? customAgent.promptMode === 'pty'
+  const isFollowupPath = isCustomAgentId(agent)
+    ? customAgent?.promptMode === 'pty'
     : TUI_AGENT_CONFIG[agent as TuiAgent].promptInjectionMode === 'stdin-after-start'
   // Why: argv/flag agents fold the prompt into the launch command and
   // auto-submit — keeping behavior consistent with the composer/tab-bar `+`

@@ -1,6 +1,5 @@
 import type { AgentId } from '../../../shared/custom-agent'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
-import { isTuiAgent } from '../../../shared/tui-agent-config'
+import { TUI_AGENT_CONFIG, isTuiAgent } from '../../../shared/tui-agent-config'
 
 // Why: agents with a native draft-prefill flag/env launch with the prompt
 // already in their input box, so the paste helpers intentionally no-op (return

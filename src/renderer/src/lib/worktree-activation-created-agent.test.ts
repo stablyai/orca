@@ -114,6 +114,125 @@ describe('activateAndRevealWorktree created agent reopen', () => {
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith(worktree.id)
   })
 
+  it('reopens an empty worktree with the custom agent selected at creation time', () => {
+    const worktree = { ...makeWorktree(), createdWithAgent: 'custom:my-agent' as const }
+    const revealWorktreeInSidebar = vi.fn()
+
+    useAppStore.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/workspace/repo',
+          displayName: 'repo',
+          badgeColor: '#000000',
+          addedAt: 0
+        }
+      ],
+      worktreesByRepo: { 'repo-1': [worktree] },
+      activeRepoId: 'repo-1',
+      activeView: 'terminal',
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {},
+      groupsByWorktree: {},
+      layoutByWorktree: {},
+      activeGroupIdByWorktree: {},
+      openFiles: [],
+      browserTabsByWorktree: {},
+      activeFileIdByWorktree: {},
+      activeBrowserTabIdByWorktree: {},
+      activeTabTypeByWorktree: {},
+      activeTabIdByWorktree: {},
+      tabBarOrderByWorktree: {},
+      pendingStartupByTabId: {},
+      settings: {
+        agentCmdOverrides: {},
+        setupScriptLaunchMode: 'new-tab',
+        customAgents: [
+          {
+            id: 'custom:my-agent',
+            name: 'My Agent',
+            command: '/usr/local/bin/my-agent',
+            promptMode: 'pty',
+            icon: { kind: 'terminal' },
+            enabled: true
+          }
+        ]
+      } as unknown as ReturnType<typeof useAppStore.getState>['settings'],
+      markWorktreeVisited: vi.fn(),
+      recordWorktreeVisit: vi.fn(),
+      refreshGitHubForWorktreeIfStale: vi.fn(),
+      revealWorktreeInSidebar
+    })
+
+    const result = activateAndRevealWorktree(worktree.id)
+    const state = useAppStore.getState()
+    const reopenedTab = state.tabsByWorktree[worktree.id]?.[0]
+
+    expect(result).toEqual({ primaryTabId: reopenedTab?.id })
+    expect(reopenedTab).toBeDefined()
+    expect(state.pendingStartupByTabId[reopenedTab!.id]).toMatchObject({
+      command: '/usr/local/bin/my-agent',
+      launchAgent: 'custom:my-agent',
+      telemetry: {
+        agent_kind: 'other',
+        launch_source: 'sidebar',
+        request_kind: 'resume'
+      }
+    })
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith(worktree.id)
+  })
+
+  it('does not reopen a worktree whose creation-time custom agent was since deleted or disabled', () => {
+    const worktree = { ...makeWorktree(), createdWithAgent: 'custom:ghost' as const }
+    const revealWorktreeInSidebar = vi.fn()
+
+    useAppStore.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/workspace/repo',
+          displayName: 'repo',
+          badgeColor: '#000000',
+          addedAt: 0
+        }
+      ],
+      worktreesByRepo: { 'repo-1': [worktree] },
+      activeRepoId: 'repo-1',
+      activeView: 'terminal',
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {},
+      groupsByWorktree: {},
+      layoutByWorktree: {},
+      activeGroupIdByWorktree: {},
+      openFiles: [],
+      browserTabsByWorktree: {},
+      activeFileIdByWorktree: {},
+      activeBrowserTabIdByWorktree: {},
+      activeTabTypeByWorktree: {},
+      activeTabIdByWorktree: {},
+      tabBarOrderByWorktree: {},
+      pendingStartupByTabId: {},
+      settings: {
+        agentCmdOverrides: {},
+        setupScriptLaunchMode: 'new-tab',
+        customAgents: []
+      } as unknown as ReturnType<typeof useAppStore.getState>['settings'],
+      markWorktreeVisited: vi.fn(),
+      recordWorktreeVisit: vi.fn(),
+      refreshGitHubForWorktreeIfStale: vi.fn(),
+      revealWorktreeInSidebar
+    })
+
+    const result = activateAndRevealWorktree(worktree.id)
+    const state = useAppStore.getState()
+    const reopenedTab = state.tabsByWorktree[worktree.id]?.[0]
+
+    expect(result).toEqual({ primaryTabId: reopenedTab?.id })
+    expect(reopenedTab).toBeDefined()
+    expect(state.pendingStartupByTabId[reopenedTab!.id]).toBeUndefined()
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith(worktree.id)
+  })
+
   it('uses WSL launch quoting when reopening a Windows-path WSL project agent', () => {
     const worktree = {
       ...makeWorktree(),

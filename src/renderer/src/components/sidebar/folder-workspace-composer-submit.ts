@@ -139,7 +139,9 @@ async function preflightFolderWorkspaceAgentTrust(args: {
   if (!args.agent || !window.api.agentTrust?.markTrusted) {
     return
   }
-  const preflight = isCustomAgentId(args.agent) ? undefined : TUI_AGENT_CONFIG[args.agent].preflightTrust
+  const preflight = isCustomAgentId(args.agent)
+    ? undefined
+    : TUI_AGENT_CONFIG[args.agent].preflightTrust
   if (!preflight || !args.workspacePath) {
     return
   }
@@ -198,7 +200,8 @@ export async function submitFolderWorkspaceCreate({
           agentEnv,
           platform: launchPlatform,
           shell: launchShell,
-          isRemote: launchIsRemote
+          isRemote: launchIsRemote,
+          customAgents
         })
       : quickAgent
         ? buildAgentStartupPlan({
@@ -209,7 +212,7 @@ export async function submitFolderWorkspaceCreate({
             agentEnv,
             platform: launchPlatform,
             shell: launchShell,
-          isRemote: launchIsRemote,
+            isRemote: launchIsRemote,
             allowEmptyPromptLaunch: true,
             customAgents
           })
