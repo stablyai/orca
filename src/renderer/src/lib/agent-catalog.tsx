@@ -1,5 +1,6 @@
 import type React from 'react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
+import antigravityLogoUrl from '../../../../resources/antigravity-logo.png?url'
 import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
 import type { TuiAgent } from '../../../shared/types'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
@@ -127,6 +128,9 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     id: 'antigravity',
     label: translate('auto.lib.agent.catalog.691dd11789', 'Antigravity'),
     cmd: 'agy',
+    // Why: bundle the official favicon so the icon renders offline and over
+    // SSH like Claude/Codex, instead of depending on the remote favicon fetch.
+    iconUrl: antigravityLogoUrl,
     faviconDomain: 'antigravity.google',
     homepageUrl: 'https://antigravity.google/docs/cli-overview'
   },

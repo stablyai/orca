@@ -4,6 +4,7 @@ import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
 import { SUBAGENT_DIR_NAME } from './session-scanner-subagent-transcripts'
 import { discoverFiles, discoverOpenClawFiles } from './session-scanner-discovery'
+import { antigravityDiscoveries } from './session-scanner-antigravity-sources'
 import { droidDiscoveries, kimiDiscoveries } from './session-scanner-droid-kimi-sources'
 import { opencodeDiscoveries } from './session-scanner-opencode-sources'
 import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner-types'
@@ -136,6 +137,7 @@ function standardDiscoveries(
     ]).map((rootDir) =>
       discoverFiles({ rootDir, limit, agent: 'copilot', issues, extensions: ['.jsonl'] })
     ),
+    ...antigravityDiscoveries(options, wslHomeDirs, limit, issues),
     ...cursorDiscoveries(options, wslHomeDirs, limit, issues),
     ...grokDiscoveries(options, wslHomeDirs, limit, issues),
     ...devinDiscoveries(options, wslHomeDirs, limit, issues),

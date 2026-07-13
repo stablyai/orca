@@ -1,4 +1,6 @@
 import type { AiVaultSession } from '../../shared/ai-vault-types'
+import { sessionIdFromFileName } from './session-scanner-accumulator'
+import { parseAntigravitySqliteSession } from './session-scanner-antigravity-sqlite'
 import { parseDevinSessionFile } from './session-scanner-devin-parser'
 import { parseDroidSessionFile } from './session-scanner-droid-parser'
 import { parseGrokSessionFile } from './session-scanner-grok-parser'
@@ -37,6 +39,14 @@ export async function parseAgentSessionFile(
       return parseCodexSessionFile(candidate.file, platform, candidate.codexHome)
     case 'gemini':
       return parseGeminiSessionFile(candidate.file, platform)
+    case 'antigravity':
+      // Why: each Antigravity conversation is its own SQLite DB whose filename
+      // is the conversation id used for `agy --conversation <id>` resume.
+      return parseAntigravitySqliteSession({
+        dbPath: candidate.file.path,
+        sessionId: sessionIdFromFileName(candidate.file.path),
+        platform
+      })
     case 'copilot':
       return parseCopilotSessionFile(candidate.file, platform)
     case 'cursor':
