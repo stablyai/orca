@@ -31,6 +31,7 @@ import type {
 import type { StartupCommandDelivery } from './codex-startup-delivery'
 import type { AgentKind, LaunchSource, RequestKind } from './telemetry-events'
 import type { SleepingAgentLaunchConfig, SleepingAgentSessionRecord } from './agent-session-resume'
+import type { WebChatAgent } from './ai-vault-types'
 import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
 import type { TerminalCustomTheme } from './terminal-custom-themes'
 import type { UiLanguage } from './ui-language'
@@ -2983,6 +2984,10 @@ export type GlobalSettings = {
    *  effectively present at runtime — the renderer should still fall back to
    *  defaults when reading optional sub-fields. */
   voice?: VoiceSettings
+  /** Per-agent web chat directory overrides. Missing agents default to
+   *  workspaceDir/<source subfolder>. Optional for backward compatibility;
+   *  `getDefaultSettings()` initializes to {}. */
+  webChatDirByAgent?: Partial<Record<WebChatAgent, string>>
 }
 
 export type OrcaWorkspaceLayout = {

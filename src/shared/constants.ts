@@ -403,6 +403,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
       customAgentCommand: ''
     },
     sourceControlAi: getDefaultSourceControlAiSettings(),
+    webChatDirByAgent: {},
     voice: getDefaultVoiceSettings()
   }
 }
