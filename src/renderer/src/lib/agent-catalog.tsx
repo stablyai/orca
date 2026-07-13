@@ -4,6 +4,7 @@ import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
 import type { TuiAgent } from '../../../shared/types'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import {
+  AgentFaviconIcon,
   AgentLetterIcon,
   AiderIcon,
   CopilotIcon,
@@ -351,20 +352,17 @@ export function AgentIcon({
       />
     )
   }
+  const label = catalogEntry?.label ?? agent
   if (catalogEntry?.faviconDomain) {
-    // Why: agents without a published SVG icon use their site favicon via
-    // Google's favicon service — same source the README uses for the agent badge list.
+    // Agents without a published SVG icon use their site favicon via Google's
+    // favicon service, falling back to the letter badge if that request fails.
     return (
-      <img
-        src={`https://www.google.com/s2/favicons?domain=${catalogEntry.faviconDomain}&sz=64`}
-        width={size}
-        height={size}
-        alt=""
-        aria-hidden
-        style={{ borderRadius: 2 }}
+      <AgentFaviconIcon
+        domain={catalogEntry.faviconDomain}
+        fallbackLetter={label.charAt(0).toUpperCase()}
+        size={size}
       />
     )
   }
-  const label = catalogEntry?.label ?? agent
   return <AgentLetterIcon letter={label.charAt(0).toUpperCase()} size={size} />
 }

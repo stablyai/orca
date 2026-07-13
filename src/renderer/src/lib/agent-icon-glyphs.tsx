@@ -168,3 +168,37 @@ export function AgentLetterIcon({
     </svg>
   )
 }
+
+// Agents without a bundled SVG use their site favicon, fetched from Google's
+// favicon service at runtime. That request fails whenever Google is unreachable
+// — offline, behind a corporate firewall, in a region that blocks Google, or on
+// a remote SSH host with no egress — which otherwise leaves a broken-image
+// glyph. Fall back to the letter badge so the icon degrades cleanly.
+export function AgentFaviconIcon({
+  domain,
+  fallbackLetter,
+  size = 14
+}: {
+  domain: string
+  fallbackLetter: string
+  size?: number
+}): React.JSX.Element {
+  // Track the domain that failed rather than a bare boolean so switching the
+  // icon to a different agent (same component slot) retries its favicon instead
+  // of inheriting the previous agent's failure.
+  const [failedDomain, setFailedDomain] = React.useState<string | null>(null)
+  if (failedDomain === domain) {
+    return <AgentLetterIcon letter={fallbackLetter} size={size} />
+  }
+  return (
+    <img
+      src={`https://www.google.com/s2/favicons?domain=${domain}&sz=64`}
+      width={size}
+      height={size}
+      alt=""
+      aria-hidden
+      style={{ borderRadius: 2 }}
+      onError={() => setFailedDomain(domain)}
+    />
+  )
+}
