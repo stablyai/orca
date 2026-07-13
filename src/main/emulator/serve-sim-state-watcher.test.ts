@@ -2,7 +2,11 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { ServeSimStateWatcher, type ServeSimStateDetectedEvent } from './serve-sim-state-watcher'
+import {
+  SERVE_SIM_STATE_DIR_EXISTENCE_POLL_MS,
+  ServeSimStateWatcher,
+  type ServeSimStateDetectedEvent
+} from './serve-sim-state-watcher'
 
 const TEST_UDID = '11111111-2222-3333-4444-555555555555'
 
@@ -45,7 +49,9 @@ describe('ServeSimStateWatcher', () => {
     const parentDir = await mkdtemp(join(tmpdir(), 'orca-serve-sim-watch-'))
     cleanupPaths.push(parentDir)
     const stateDir = join(parentDir, 'serve-sim')
-    const watcher = new ServeSimStateWatcher({ stateDir })
+    // Force darwin (the poll is macOS-only) and a fast interval so this
+    // cross-platform test exercises the existence-poll -> attach path quickly.
+    const watcher = new ServeSimStateWatcher({ stateDir, platform: 'darwin', existencePollMs: 50 })
     const events: ServeSimStateDetectedEvent[] = []
 
     watcher.bindPty('pty-1', 'worktree-1')
@@ -76,6 +82,29 @@ describe('ServeSimStateWatcher', () => {
     })
 
     watcher.stop()
+  })
+
+  it('does not arm the existence poll on non-macOS platforms', () => {
+    // serve-sim state never appears off macOS, so start() must not leave a
+    // recurring timer waking the daemon for a directory that can never exist.
+    for (const platform of ['win32', 'linux'] as const) {
+      const watcher = new ServeSimStateWatcher({
+        stateDir: join(tmpdir(), `orca-serve-sim-nonmac-${process.pid}-${platform}`),
+        platform
+      })
+      watcher.start()
+      const poll = (watcher as unknown as { stateDirPoll: unknown }).stateDirPoll
+      expect(poll).toBeNull()
+      watcher.stop()
+    }
+  })
+
+  it('defaults the existence poll to a coarse (battery-friendly) interval', () => {
+    expect(SERVE_SIM_STATE_DIR_EXISTENCE_POLL_MS).toBe(2_000)
+    const watcher = new ServeSimStateWatcher()
+    expect((watcher as unknown as { existencePollMs: number }).existencePollMs).toBe(
+      SERVE_SIM_STATE_DIR_EXISTENCE_POLL_MS
+    )
   })
 
   it('does not buffer repeated brace-free PTY output while waiting for metadata', () => {
