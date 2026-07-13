@@ -22,17 +22,25 @@ export async function runGoToDefinition(ctx: GoToDefinitionContext): Promise<voi
     ctx.fallback()
     return
   }
-  const response = await ctx.find({
-    worktreeId: ctx.worktreeId,
-    worktreeRoot: ctx.worktreeRoot,
-    symbol: ctx.symbol
-  })
-  const outcome = resolveGoToDefinition(response, ctx.currentPath, ctx.currentLine)
-  if (outcome.kind === 'open') {
-    ctx.openAt(outcome.target)
-  } else if (outcome.kind === 'peek') {
-    ctx.peek(outcome.targets)
-  } else {
+  try {
+    const response = await ctx.find({
+      worktreeId: ctx.worktreeId,
+      worktreeRoot: ctx.worktreeRoot,
+      symbol: ctx.symbol
+    })
+    const outcome = resolveGoToDefinition(response, ctx.currentPath, ctx.currentLine)
+    if (outcome.kind === 'open') {
+      ctx.openAt(outcome.target)
+    } else if (outcome.kind === 'peek') {
+      ctx.peek(outcome.targets)
+    } else {
+      ctx.fallback()
+    }
+  } catch {
+    // Why: find() is an IPC round-trip; a rejection (main-process error) must
+    // degrade to the search-in-files fallback rather than surface as an
+    // unhandled rejection — the sole caller invokes this as `void
+    // runGoToDefinition(...)`, discarding the promise.
     ctx.fallback()
   }
 }

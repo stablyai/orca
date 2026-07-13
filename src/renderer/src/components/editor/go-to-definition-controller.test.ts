@@ -63,4 +63,16 @@ describe('runGoToDefinition', () => {
     await runGoToDefinition(c)
     expect(c.fallback).toHaveBeenCalledOnce()
   })
+
+  it('falls back without throwing when find() rejects (IPC failure)', async () => {
+    const c = ctx({
+      find: vi.fn(async (): Promise<FindDefinitionsResponse> => {
+        throw new Error('ipc boom')
+      })
+    })
+    await expect(runGoToDefinition(c)).resolves.toBeUndefined()
+    expect(c.fallback).toHaveBeenCalledOnce()
+    expect(c.openAt).not.toHaveBeenCalled()
+    expect(c.peek).not.toHaveBeenCalled()
+  })
 })

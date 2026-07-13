@@ -5,14 +5,14 @@ const require = createRequire(import.meta.url)
 
 /** grammarKey -> wasm filename inside @vscode/tree-sitter-wasm/wasm */
 const WASM_FILES: Record<string, string> = {
-  typescript: 'tree-sitter-typescript.wasm',
+  // language-config.ts maps both `typescript` and `javascript` language IDs to
+  // grammarKey `tsx` (the tsx grammar parses .ts/.js/.jsx/.tsx), so there are 5
+  // distinct grammar keys here — no plain `typescript` key is requested.
   tsx: 'tree-sitter-tsx.wasm',
   python: 'tree-sitter-python.wasm',
   go: 'tree-sitter-go.wasm',
   rust: 'tree-sitter-rust.wasm',
   java: 'tree-sitter-java.wasm'
-  // Note: all six grammars needed by language-config.ts's CONFIGS are present
-  // in @vscode/tree-sitter-wasm@0.3.1's wasm/ directory, so none were dropped.
 }
 
 let wasmDir: string | null = null
