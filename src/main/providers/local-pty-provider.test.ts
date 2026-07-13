@@ -1006,7 +1006,7 @@ describe('LocalPtyProvider', () => {
         const firstStopRejected = expect(firstStop).rejects.toThrow(
           `Unable to verify full PTY session teardown: ${id}`
         )
-        await vi.advanceTimersByTimeAsync(3000)
+        await vi.advanceTimersByTimeAsync(8000)
         await firstStopRejected
         expect((await provider.listProcesses()).some((session) => session.id === id)).toBe(true)
 
