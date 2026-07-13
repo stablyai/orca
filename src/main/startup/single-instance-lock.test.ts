@@ -55,11 +55,11 @@ describe('acquireSingleInstanceLock', () => {
     expect(acquired).toBe(true)
     expect(fake.requestSingleInstanceLock).toHaveBeenCalledTimes(1)
     expect(fake.on).toHaveBeenCalledTimes(1)
-    expect(fake.on).toHaveBeenCalledWith('second-instance', onSecondInstance)
+    expect(fake.on).toHaveBeenCalledWith('second-instance', expect.any(Function))
     expect(fake.listeners['second-instance']).toHaveLength(1)
   })
 
-  it('fires the registered callback when second-instance dispatches', () => {
+  it('fires the callback with the second instance argv when second-instance dispatches', () => {
     const onSecondInstance = vi.fn()
     const fake = makeFakeApp(true)
 
@@ -67,9 +67,13 @@ describe('acquireSingleInstanceLock', () => {
 
     const [registered] = fake.listeners['second-instance'] ?? []
     expect(registered).toBeDefined()
-    registered?.()
+    // Why: mirror Electron's (event, argv, cwd, additionalData) dispatch so the
+    // handler receives the protocol URL that Windows/Linux pass as an argv entry.
+    const argv = ['/path/to/Orca', 'orca://focus?terminal=term_abc']
+    registered?.({}, argv, '/cwd')
 
     expect(onSecondInstance).toHaveBeenCalledTimes(1)
+    expect(onSecondInstance).toHaveBeenCalledWith(argv)
   })
 })
 

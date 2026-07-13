@@ -3,7 +3,7 @@
    startup. Splitting by line count would fragment tightly coupled startup
    logic across files without a cleaner ownership seam. */
 import { existsSync, statSync } from 'node:fs'
-import { isAbsolute, join } from 'node:path'
+import { isAbsolute, join, resolve } from 'node:path'
 import os from 'node:os'
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
@@ -43,6 +43,8 @@ import { OrcaRuntimeService } from './runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
 import { awaitRuntimeFileWatcherUnsubscribes } from './runtime/orca-runtime-files'
 import { clearRuntimeMetadataIfOwned } from './runtime/runtime-metadata'
+import { createDeepLinkDispatcher } from './deep-link/deep-link-dispatcher'
+import { ORCA_URL_SCHEME, findOrcaUrlInArgv } from './deep-link/orca-deep-link'
 import { ensureMainI18n, setMainUiLanguage } from './i18n/main-i18n'
 import {
   getNextDefaultOnAppearanceSettingValue,
@@ -461,6 +463,49 @@ function focusExistingWindow(): void {
   })
 }
 
+// Why: `orca://focus?terminal=…` deep links reuse the same reveal action as
+// `orca terminal focus` (runtime.focusTerminal) instead of reinventing focus.
+// A deep link can be fired by any web page, so the dispatcher only focuses/
+// reveals a local pane — it never executes commands or mutates state.
+const deepLinkDispatcher = createDeepLinkDispatcher({
+  focusWindow: focusExistingWindow,
+  getRuntime: () => runtime,
+  warn: console.warn
+})
+
+// Why: any orca:// launch should surface the app. On Windows/Linux the URL
+// arrives as an argv entry on the relaunch; macOS delivers it via `open-url`.
+function handleSecondInstance(argv: string[]): void {
+  const url = findOrcaUrlInArgv(argv)
+  if (url) {
+    void deepLinkDispatcher.dispatch(url)
+    return
+  }
+  focusExistingWindow()
+}
+
+function registerOrcaProtocolClient(): void {
+  // Why: packaged macOS builds register the scheme via CFBundleURLTypes (written
+  // by electron-builder's `protocols` config); this runtime call covers
+  // Windows/Linux and dev. In dev, Electron runs our entry as an argument, so
+  // the launcher must re-invoke this instance with the script path.
+  if (process.defaultApp) {
+    if (process.argv.length >= 2) {
+      app.setAsDefaultProtocolClient(ORCA_URL_SCHEME, process.execPath, [resolve(process.argv[1])])
+    }
+  } else {
+    app.setAsDefaultProtocolClient(ORCA_URL_SCHEME)
+  }
+}
+
+// Why: register the open-url listener at module load (before whenReady) so a
+// macOS cold-start protocol launch is delivered rather than dropped. The
+// dispatcher polls for renderer-graph readiness, so an early event still lands.
+app.on('open-url', (event, url) => {
+  event.preventDefault()
+  void deepLinkDispatcher.dispatch(url)
+})
+
 // Why: a webContents-scoped flag that auto-expires so an intent set for one renderer
 // can't leak to a later load. `consume` clears on a positive match for one-shot
 // signals (the recovery reload fires exactly one did-finish-load).
@@ -561,7 +606,7 @@ const hasSingleInstanceLock =
     ? true
     : bypassSingleInstanceLock
       ? true
-      : acquireSingleInstanceLock(app, focusExistingWindow)
+      : acquireSingleInstanceLock(app, handleSecondInstance)
 if (startupDiagnosticsEnabled) {
   logStartupDiagnostic('single-instance-lock-result', {
     acquired: hasSingleInstanceLock,
@@ -606,6 +651,7 @@ if (hasSingleInstanceLock) {
     platform: process.platform
   })
   configureElectronNetworkCompatibility()
+  registerOrcaProtocolClient()
   enableRendererHeapHeadroom()
   maybeApplyGpuFallbackForThisLaunch()
   if (!gpuFallbackActiveThisLaunch) {
@@ -2196,6 +2242,14 @@ app.whenReady().then(async () => {
       console.error('[runtime] Failed to start local RPC transport:', error)
     })
   ])
+
+  // Why: Windows/Linux cold-start protocol launches arrive in process.argv, not
+  // via open-url. Route it now that the window and runtime exist; the dispatcher
+  // waits for renderer-graph readiness before revealing the pane. No-op on macOS.
+  const coldStartDeepLink = findOrcaUrlInArgv(process.argv)
+  if (coldStartDeepLink) {
+    void deepLinkDispatcher.dispatch(coldStartDeepLink)
+  }
 
   // Why: the macOS notification permission dialog must fire after the window
   // is visible and focused. If it fires before the window exists, the system

@@ -49,6 +49,16 @@ const winSpeechNativeResource = {
 module.exports = {
   appId: 'com.stablyai.orca',
   productName: 'Orca',
+  // Why: register the `orca://` URL scheme with the OS so deep links (e.g.
+  // orca://focus?terminal=…) launch or surface the app. On macOS this becomes
+  // the app bundle's CFBundleURLTypes; Windows/Linux also register at runtime
+  // via app.setAsDefaultProtocolClient.
+  protocols: [
+    {
+      name: 'Orca',
+      schemes: ['orca']
+    }
+  ],
   directories: {
     buildResources: 'resources/build'
   },
