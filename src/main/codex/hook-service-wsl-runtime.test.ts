@@ -1,13 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join, win32 as pathWin32 } from 'node:path'
 
-import {
-  MANAGED_HOOK_TIMEOUT_SECONDS,
-  wrapPosixDirectHookCommand
-} from '../agent-hooks/installer-utils'
+import { MANAGED_HOOK_TIMEOUT_SECONDS } from '../agent-hooks/installer-utils'
 import {
   computeTrustKey,
   computeTrustedHash,
@@ -22,6 +19,11 @@ import {
 
 type HooksConfig = {
   hooks: Record<string, { hooks?: { command?: string }[] }[]>
+}
+
+type HookRun = {
+  exitCode: number | null
+  stdinErrors: NodeJS.ErrnoException[]
 }
 
 const managedEvents = [
@@ -70,11 +72,35 @@ function getManagedTrustEntry(
 }
 
 function expectedManagedCommand(scriptPath: string): string {
-  return wrapPosixDirectHookCommand(scriptPath)
+  const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
+  return `if [ -f ${quoted} ] && [ -r ${quoted} ]; then /bin/sh ${quoted}; else cat >/dev/null 2>&1 || :; fi`
 }
 
-function expectedCurrentMainManagedCommand(scriptPath: string): string {
-  return `if [ -f '${scriptPath}' ] && [ -r '${scriptPath}' ]; then /bin/sh '${scriptPath}'; else cat >/dev/null 2>&1 || :; fi`
+function expectedLegacyDirectCommand(scriptPath: string): string {
+  return `/bin/sh ${scriptPath}`
+}
+
+function runInstalledHook(command: string, shellFlag: '-c' | '-lc'): Promise<HookRun> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('/bin/sh', [shellFlag, command], {
+      stdio: ['pipe', 'ignore', 'ignore']
+    })
+    const stdinErrors: NodeJS.ErrnoException[] = []
+    const timeout = setTimeout(() => {
+      child.kill('SIGKILL')
+      reject(new Error('installed Codex hook did not finish after stdin closed'))
+    }, 10_000)
+    child.on('error', (error) => {
+      clearTimeout(timeout)
+      reject(error)
+    })
+    child.stdin.on('error', (error: NodeJS.ErrnoException) => stdinErrors.push(error))
+    child.on('close', (exitCode) => {
+      clearTimeout(timeout)
+      resolve({ exitCode, stdinErrors })
+    })
+    child.stdin.end(Buffer.alloc(1_000_000, 'x'))
+  })
 }
 
 describe('Codex WSL runtime hook install', () => {
@@ -161,7 +187,7 @@ describe('Codex WSL runtime hook install', () => {
     expect(trustEntries.has(newKey)).toBe(true)
   })
 
-  it('removes current-main guarded WSL trust when upgrading to a direct launcher', () => {
+  it('removes legacy direct WSL trust when returning to a guarded launcher', () => {
     const plan = createTestPlan()
     writeFileSync(plan.configPath, '{"hooks":{}}\n', 'utf-8')
 
@@ -172,7 +198,7 @@ describe('Codex WSL runtime hook install', () => {
     }
     const oldEntry = getManagedTrustEntry(
       oldPlan,
-      expectedCurrentMainManagedCommand(oldPlan.commandScriptPath)
+      expectedLegacyDirectCommand(oldPlan.commandScriptPath)
     )
     const oldKey = computeTrustKey(oldEntry)
     writeFileSync(
@@ -220,8 +246,8 @@ describe('Codex WSL runtime hook install', () => {
       const command = installed.hooks.UserPromptSubmit[0]?.hooks?.[0]?.command
       expect(command).toBe(expectedManagedCommand(plan.commandScriptPath))
 
-      // Why: Codex cannot carry a guarded launcher in both execution models;
-      // the managed script itself must own stdin before any early return.
+      // Why: WSL files written through UNC may not preserve executable bits;
+      // a readable guard must still launch the script through /bin/sh.
       const result = spawnSync('/bin/sh', ['-c', command!], {
         input: Buffer.alloc(1_000_000, 'x')
       })
@@ -229,6 +255,61 @@ describe('Codex WSL runtime hook install', () => {
       expect(result.status).toBe(0)
     }
   )
+
+  for (const shellFlag of ['-c', '-lc'] as const) {
+    it.skipIf(process.platform === 'win32')(
+      `runs WSL hook paths containing spaces and single quotes under shell ${shellFlag}`,
+      async () => {
+        for (const homeName of ['Jorge Silva', "O'Brien"]) {
+          const basePlan = createTestPlan()
+          const scriptPath = join(
+            dirname(basePlan.configPath),
+            homeName,
+            '.orca',
+            'agent-hooks',
+            'codex-hook.sh'
+          )
+          const plan = {
+            ...basePlan,
+            scriptPath,
+            commandScriptPath: scriptPath
+          }
+          writeFileSync(plan.configPath, '{"hooks":{}}\n', 'utf-8')
+          writeFileSync(plan.tomlPath, '', 'utf-8')
+
+          expect(_internals.installManagedHooksIntoWslRuntime(plan).state).toBe('installed')
+          const installed = JSON.parse(readFileSync(plan.configPath, 'utf-8')) as HooksConfig
+          const command = installed.hooks.UserPromptSubmit[0]?.hooks?.[0]?.command
+          expect(command).toBe(expectedManagedCommand(scriptPath))
+
+          const result = await runInstalledHook(command!, shellFlag)
+          expect(result).toEqual({ exitCode: 0, stdinErrors: [] })
+        }
+      }
+    )
+
+    it.skipIf(process.platform === 'win32')(
+      `drains large stdin when the WSL runtime script is missing under shell ${shellFlag}`,
+      async () => {
+        const basePlan = createTestPlan()
+        const plan = {
+          ...basePlan,
+          commandScriptPath: basePlan.scriptPath
+        }
+        writeFileSync(plan.configPath, '{"hooks":{}}\n', 'utf-8')
+        writeFileSync(plan.tomlPath, '', 'utf-8')
+
+        expect(_internals.installManagedHooksIntoWslRuntime(plan).state).toBe('installed')
+        const installed = JSON.parse(readFileSync(plan.configPath, 'utf-8')) as HooksConfig
+        const command = installed.hooks.UserPromptSubmit[0]?.hooks?.[0]?.command
+        expect(command).toBeDefined()
+        rmSync(plan.scriptPath, { force: true })
+
+        const result = await runInstalledHook(command!, shellFlag)
+        expect(result).toEqual({ exitCode: 0, stdinErrors: [] })
+      }
+    )
+  }
 
   it('sweeps all managed WSL trust for disable or confirmed absence', () => {
     // Why: disable and confirmed absence intentionally pass []. Transient
@@ -431,9 +512,9 @@ describe('Codex WSL runtime hook install', () => {
     const installed = JSON.parse(readFileSync(plan.configPath, 'utf-8')) as HooksConfig
     expect(Object.keys(installed.hooks).sort()).toEqual([...managedEvents].sort())
     const managedCommand = installed.hooks.UserPromptSubmit[0]?.hooks?.[0]?.command
-    // Why: dual-model Codex launcher — no if/then/fi; unquoted when path is safe (#8110).
+    // Why: Codex executes through a POSIX shell, so the launcher must guard
+    // missing scripts and own stdin before returning successfully.
     expect(managedCommand).toBe(expectedManagedCommand(plan.commandScriptPath))
-    expect(managedCommand).not.toMatch(/\bif\b|\bthen\b|\bfi\b/)
     expect(installed.hooks.UserPromptSubmit[1]?.hooks?.[0]?.command).toBe(userCommand)
     expect(readFileSync(plan.scriptPath, 'utf-8')).toContain('command -v curl.exe')
 

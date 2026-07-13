@@ -158,10 +158,10 @@ describe('CodexHookService', () => {
     expect(trustConfig).toContain(':permission_request:0:0')
   })
 
-  // Why: #8110 — managed Codex commands must not use if/then/fi; dual-model
-  // wrapper emits `/bin/sh <path>` (quoted only when the path needs it).
+  // Why: Codex runs hook commands through a POSIX shell and writes the full
+  // payload to stdin, so missing managed scripts must drain before exit.
   it.skipIf(process.platform === 'win32')(
-    'writes dual-model POSIX managed commands without shell control-flow',
+    'writes guarded POSIX managed commands for every event',
     () => {
       expect(new CodexHookService().install().state).toBe('installed')
 
@@ -169,12 +169,13 @@ describe('CodexHookService', () => {
       const hooksConfig = JSON.parse(
         readFileSync(join(managedCodexHome, 'hooks.json'), 'utf-8')
       ) as { hooks: Record<string, { hooks?: { command?: string }[] }[]> }
+      const expectedCommand = wrapPosixHookCommand(
+        join(tmpHome, '.orca', 'agent-hooks', 'codex-hook.sh')
+      )
 
       for (const eventName of localManagedCodexEvents()) {
         const command = hooksConfig.hooks[eventName]?.[0]?.hooks?.[0]?.command ?? ''
-        expect(command).toMatch(/^\/bin\/sh /)
-        expect(command).toContain('agent-hooks/codex-hook.sh')
-        expect(command).not.toMatch(/\bif\b|\bthen\b|\bfi\b/)
+        expect(command).toBe(expectedCommand)
       }
     }
   )

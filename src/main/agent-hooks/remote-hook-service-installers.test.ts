@@ -35,6 +35,7 @@ import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
 import { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-controls'
+import { wrapPosixHookCommand } from './installer-utils'
 import {
   installRemoteManagedAgentHooks,
   REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
@@ -243,8 +244,7 @@ describe('remote hook service installers', () => {
       'Stop'
     ]) {
       const command = hooks.hooks[eventName]?.[0]?.hooks?.[0]?.command
-      expect(command).toBe('/bin/sh /home/dev/.orca/agent-hooks/codex-hook.sh')
-      expect(command).not.toMatch(/\bif\b|\bthen\b|\bfi\b/)
+      expect(command).toBe(wrapPosixHookCommand('/home/dev/.orca/agent-hooks/codex-hook.sh'))
     }
     expect(fs.files.get('/home/dev/.orca/agent-hooks/codex-hook.sh')).toContain('#!/bin/sh')
     expect(fs.modes.get('/home/dev/.orca/agent-hooks/codex-hook.sh')).toBe(0o755)

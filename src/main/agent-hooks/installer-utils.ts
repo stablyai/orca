@@ -150,24 +150,6 @@ export function wrapPosixHookCommand(scriptPath: string, env: Record<string, str
   return `if [ -f ${quoted} ] && [ -r ${quoted} ] && [ -x ${quoted} ]; then ${invocation}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
 }
 
-// Why: #8110 surfaces exit 127 + Broken pipe when Codex runs Orca-managed
-// hooks. Current Codex (codex-rs hooks command_runner) launches via
-// `$SHELL -lc <command>` with the whole string as one arg — so if/then/fi
-// and single-quoted paths both parse. Reports of pure whitespace argv-exec
-// still match the observed 127 when argv0 becomes `if` or the path keeps
-// literal quote characters. Emit `/bin/sh <path>` without shell control-flow:
-// unquoted when the path is argv-safe (no IFS/metacharacters), otherwise
-// POSIX single-quoted so shell -lc still works for spaced home dirs.
-export function wrapPosixDirectHookCommand(scriptPath: string): string {
-  return `/bin/sh ${isPosixArgvSafePath(scriptPath) ? scriptPath : quotePosixShellString(scriptPath)}`
-}
-
-// Absolute POSIX path free of whitespace and shell metacharacters so both
-// `$SHELL -lc` and naive whitespace argv-split yield the same two-arg form.
-function isPosixArgvSafePath(scriptPath: string): boolean {
-  return /^\/[A-Za-z0-9._/@%+=:,-]+$/.test(scriptPath)
-}
-
 function quotePowerShellString(value: string): string {
   return `'${value.replaceAll("'", "''")}'`
 }

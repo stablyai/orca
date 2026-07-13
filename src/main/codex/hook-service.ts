@@ -12,7 +12,6 @@ import {
   MANAGED_HOOK_TIMEOUT_SECONDS,
   readHooksJson,
   removeManagedCommands,
-  wrapPosixDirectHookCommand,
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
   writeHooksJson,
@@ -134,35 +133,40 @@ function getManagedScriptPath(): string {
 function getManagedCommand(scriptPath: string): string {
   return process.platform === 'win32'
     ? wrapWindowsCmdHookCommand(scriptPath)
-    : wrapPosixDirectHookCommand(scriptPath)
+    : wrapPosixHookCommand(scriptPath)
 }
 
 export { createCodexWslRuntimeHookInstallPlan }
 export type { CodexWslRuntimeHookInstallPlan }
 
-// Why: WSL runtime hooks are written from Windows through UNC; /bin/sh only
-// needs the script readable. Same dual-model shape as local POSIX (#8110) —
-// no if/then/fi tokens in the command string.
 function wrapReadablePosixHookCommand(scriptPath: string): string {
-  return wrapPosixDirectHookCommand(scriptPath)
+  const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
+  // Why: WSL runtime hooks are written from Windows through UNC, where the
+  // executable bit is not reliable; a missing script must still own stdin.
+  return `if [ -f ${quoted} ] && [ -r ${quoted} ]; then /bin/sh ${quoted}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
 }
 
-// Why: remove/status trust matching must still recognize pre-#8110 guarded
-// commands and the intermediate quoted `/bin/sh '…'` form so upgrade
-// reinstall/remove can clear their hashes.
+function getLegacyDirectPosixHookCommand(scriptPath: string): string {
+  const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
+  // Why: #8390 wrote this command into hooks.json and trust hashes; cleanup
+  // must keep recognizing it after guarded launchers become current again.
+  return `/bin/sh ${/^\/[A-Za-z0-9._/@%+=:,-]+$/.test(scriptPath) ? scriptPath : quoted}`
+}
+
+// Why: remove/status trust matching must recognize every launcher Orca wrote
+// so upgrade reinstall/remove can clear stale hashes without user cleanup.
 function codexPosixTrustCommandVariants(scriptPath: string): string[] {
-  const direct = wrapPosixDirectHookCommand(scriptPath)
+  const guarded = wrapPosixHookCommand(scriptPath)
+  const guardedReadable = wrapReadablePosixHookCommand(scriptPath)
+  const legacyDirect = getLegacyDirectPosixHookCommand(scriptPath)
   const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
   const quotedDirect = `/bin/sh ${quoted}`
-  const guardedReadableWithDrain = `if [ -f ${quoted} ] && [ -r ${quoted} ]; then /bin/sh ${quoted}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
   return [
-    direct,
-    // Intermediate #8390 form before dual-model unquoted paths.
-    ...(quotedDirect === direct ? [] : [quotedDirect]),
-    // Current-main launchers must remain removable after switching Codex to
-    // its control-flow-free direct command shape.
-    wrapPosixHookCommand(scriptPath),
-    guardedReadableWithDrain,
+    guarded,
+    ...(guardedReadable === guarded ? [] : [guardedReadable]),
+    legacyDirect,
+    // Intermediate #8390 form before conditional unquoted direct paths.
+    ...(quotedDirect === legacyDirect ? [] : [quotedDirect]),
     `if [ -x ${quoted} ]; then /bin/sh ${quoted}; fi`,
     `if [ -r ${quoted} ]; then /bin/sh ${quoted}; fi`
   ]
@@ -1397,7 +1401,7 @@ export class CodexHookService {
         }
       }
 
-      const command = wrapPosixDirectHookCommand(remoteScriptPath)
+      const command = wrapPosixHookCommand(remoteScriptPath)
       const nextHooks = { ...config.hooks }
       const managedEvents = new Set<string>(CODEX_EVENTS)
       const isManagedCommand = createManagedCommandMatcher('codex-hook.sh')

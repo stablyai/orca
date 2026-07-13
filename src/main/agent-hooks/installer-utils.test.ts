@@ -11,7 +11,7 @@ import {
   chmodSync
 } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import {
   buildWindowsAgentHookPostCommand,
@@ -20,7 +20,6 @@ import {
   getSharedManagedScriptPath,
   hookDefinitionHasManagedCommand,
   removeManagedCommands,
-  wrapPosixDirectHookCommand,
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
   wrapWindowsGitBashHookCommand,
@@ -318,6 +317,24 @@ describe('wrapPosixHookCommand', () => {
     )
   })
 
+  for (const shellFlag of ['-c', '-lc'] as const) {
+    it.skipIf(process.platform === 'win32')(
+      `runs hook paths containing spaces and single quotes under shell ${shellFlag}`,
+      () => {
+        for (const homeName of ['Jorge Silva', "O'Brien"]) {
+          const scriptPath = join(tmpDir, homeName, '.orca', 'agent-hooks', 'codex-hook.sh')
+          mkdirSync(dirname(scriptPath), { recursive: true })
+          writeFileSync(scriptPath, '#!/bin/sh\nexit 0\n', 'utf-8')
+          chmodSync(scriptPath, 0o755)
+
+          const result = spawnSync('/bin/sh', [shellFlag, wrapPosixHookCommand(scriptPath)])
+          expect(result.error, `${homeName} spawn error`).toBeUndefined()
+          expect(result.status, `${homeName} exit status`).toBe(0)
+        }
+      }
+    )
+  }
+
   it('can scope environment variables to the guarded script invocation', () => {
     const cmd = wrapPosixHookCommand('/does/not/exist.sh', {
       ORCA_COPILOT_HOOK_EVENT: 'UserPromptSubmit'
@@ -378,55 +395,6 @@ describe('wrapPosixHookCommand', () => {
       const cmd = wrapPosixHookCommand(scriptPath)
       const result = spawnSync('/bin/sh', ['-c', cmd])
       expect(result.status).toBe(7)
-    }
-  )
-})
-
-describe('wrapPosixDirectHookCommand', () => {
-  // Why: #8110 — never emit if/then/fi; prefer unquoted path when argv-safe.
-  it('emits unquoted /bin/sh <path> for argv-safe paths', () => {
-    const cmd = wrapPosixDirectHookCommand('/Users/a/.orca/agent-hooks/codex-hook.sh')
-    expect(cmd).toBe('/bin/sh /Users/a/.orca/agent-hooks/codex-hook.sh')
-    expect(cmd).not.toMatch(/\bif\b|\bthen\b|\bfi\b/)
-    expect(cmd).not.toContain("'")
-  })
-
-  it('single-quotes paths with spaces so shell -lc still works', () => {
-    const cmd = wrapPosixDirectHookCommand('/Users/Jorge Silva/.orca/agent-hooks/codex-hook.sh')
-    expect(cmd).toBe("/bin/sh '/Users/Jorge Silva/.orca/agent-hooks/codex-hook.sh'")
-  })
-
-  it('escapes embedded single quotes the same way as the guarded wrapper', () => {
-    const cmd = wrapPosixDirectHookCommand("/path/with'quote/x.sh")
-    expect(cmd).toBe("/bin/sh '/path/with'\\''quote/x.sh'")
-  })
-
-  it.skipIf(process.platform === 'win32')(
-    'runs under pure whitespace argv-split without stripping quotes',
-    () => {
-      // Why: naive argv-exec keeps quote characters inside argv tokens. The
-      // dual-model form must not rely on a shell (or a test helper) to strip them.
-      const scriptPath = join(tmpDir, 'ok.sh')
-      writeFileSync(scriptPath, '#!/bin/sh\nexit 0\n', 'utf-8')
-      chmodSync(scriptPath, 0o755)
-      const cmd = wrapPosixDirectHookCommand(scriptPath)
-      const argv = cmd.split(/\s+/)
-      expect(argv[0]).toBe('/bin/sh')
-      expect(argv[1]).toBe(scriptPath)
-      const result = spawnSync(argv[0]!, argv.slice(1))
-      expect(result.status).toBe(0)
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')(
-    'runs under shell -lc the way current Codex command_runner does',
-    () => {
-      const scriptPath = join(tmpDir, 'ok-lc.sh')
-      writeFileSync(scriptPath, '#!/bin/sh\nexit 0\n', 'utf-8')
-      chmodSync(scriptPath, 0o755)
-      const cmd = wrapPosixDirectHookCommand(scriptPath)
-      const result = spawnSync('/bin/sh', ['-lc', cmd])
-      expect(result.status).toBe(0)
     }
   )
 })
