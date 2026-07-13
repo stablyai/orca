@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { MobileRelayHostOverlay } from './mobile-relay-host-overlay'
 
 const asyncStorageMock = vi.hoisted(() => ({
   getItem: vi.fn(),
@@ -32,9 +33,17 @@ vi.mock('./host-credential-cleanup', () => ({
   retryPendingHostCredentialCleanups: vi.fn()
 }))
 
-import { removeHost, renameHost, resetHostStoreForTests, updateLastConnected } from './host-store'
+import {
+  loadHosts,
+  removeHost,
+  renameHost,
+  resetHostStoreForTests,
+  updateLastConnected
+} from './host-store'
+import { resetMobileRelayHostOverlayStoreForTests } from './mobile-relay-host-overlay-store'
 
 const HOSTS_STORAGE_KEY = 'orca:hosts'
+const OVERLAY_STORAGE_KEY = 'orca:mobile-relay:host-overlays:v2'
 const HOST_ONE = {
   id: 'host-1',
   name: 'Host 1',
@@ -52,16 +61,22 @@ const HOST_TWO = {
 
 describe('host-store list mutations', () => {
   let storedHostsRaw: string
+  let storedOverlayRaw: string | null
 
   beforeEach(() => {
     vi.clearAllMocks()
     resetHostStoreForTests()
+    resetMobileRelayHostOverlayStoreForTests()
     scheduleCleanupMock.mockReset()
     scheduleCleanupMock.mockResolvedValue(undefined)
     storedHostsRaw = JSON.stringify([HOST_ONE, HOST_TWO])
+    storedOverlayRaw = null
     asyncStorageMock.getItem.mockImplementation(async (key: string) => {
       if (key === HOSTS_STORAGE_KEY) {
         return storedHostsRaw
+      }
+      if (key === OVERLAY_STORAGE_KEY) {
+        return storedOverlayRaw
       }
       return null
     })
@@ -70,6 +85,9 @@ describe('host-store list mutations', () => {
         storedHostsRaw = raw
       }
     })
+    secureStoreMock.getItemAsync.mockImplementation(async (key: string) =>
+      key.endsWith(HOST_ONE.id) || key.endsWith(HOST_TWO.id) ? `token-${key.at(-1)}` : null
+    )
   })
 
   it('commits the removal when credential cleanup scheduling rejects', async () => {
@@ -79,6 +97,40 @@ describe('host-store list mutations', () => {
 
     expect(JSON.parse(storedHostsRaw)).toEqual([HOST_TWO])
     expect(scheduleCleanupMock).toHaveBeenCalledWith(HOST_ONE.id, expect.any(Function))
+  })
+
+  it('merges v2 endpoints only onto an existing legacy base host', async () => {
+    const overlay: MobileRelayHostOverlay = {
+      v: 2,
+      hostId: HOST_ONE.id,
+      endpoints: [
+        { id: 'direct-primary', kind: 'lan', url: HOST_ONE.endpoint },
+        {
+          id: 'relay-primary',
+          kind: 'relay',
+          url: 'wss://relay-c1.onorca.dev/v1/connect/AbCdEf0123_-xyZ9'
+        }
+      ],
+      relayHostId: 'AbCdEf0123_-xyZ9',
+      relay: {
+        v: 1,
+        directorUrl: 'https://relay.onorca.dev',
+        cellUrl: 'https://relay-c1.onorca.dev',
+        assignmentEpoch: 7,
+        relayHostId: 'AbCdEf0123_-xyZ9',
+        e2eeFraming: 2
+      }
+    }
+    storedOverlayRaw = JSON.stringify([overlay, { ...overlay, hostId: 'removed-by-old-build' }])
+
+    const hosts = await loadHosts()
+
+    expect(hosts.find(({ id }) => id === HOST_ONE.id)).toMatchObject({
+      endpoints: overlay.endpoints,
+      relayHostId: overlay.relayHostId,
+      relay: overlay.relay
+    })
+    expect(hosts.some(({ id }) => id === 'removed-by-old-build')).toBe(false)
   })
 
   it('awaits cleanup scheduling after metadata commit', async () => {

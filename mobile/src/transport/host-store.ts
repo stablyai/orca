@@ -12,6 +12,12 @@ import {
   retryPendingHostCredentialCleanups,
   scheduleHostCredentialCleanup
 } from './host-credential-cleanup'
+import {
+  loadMobileRelayHostOverlays,
+  removeMobileRelayHostOverlay,
+  saveMobileRelayHostOverlay
+} from './mobile-relay-host-overlay-store'
+import { deleteMobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 
 const STORAGE_KEY = 'orca:hosts'
 // Why: SecureStore keys must match [A-Za-z0-9._-]; colons are rejected.
@@ -59,6 +65,11 @@ async function deleteDeviceToken(hostId: string): Promise<void> {
     return
   }
   await SecureStore.deleteItemAsync(tokenKey(hostId), KEYCHAIN_OPTIONS)
+}
+
+async function deleteHostCredentials(hostId: string): Promise<void> {
+  await deleteDeviceToken(hostId)
+  await deleteMobileRelayCredentialBundle(hostId)
 }
 
 // Why: SecureStore reads on Android Keystore can take 50-200ms each, and
@@ -120,6 +131,7 @@ async function doLoadHosts(): Promise<HostProfile[]> {
   if (!storedHosts) {
     return []
   }
+  const overlays = await loadMobileRelayHostOverlays(new Set(storedHosts.map(({ id }) => id)))
 
   const out: HostProfile[] = []
   for (const stored of storedHosts) {
@@ -144,7 +156,18 @@ async function doLoadHosts(): Promise<HostProfile[]> {
       token = fetched
       tokenCache.set(stored.id, token)
     }
-    out.push({ ...stored, deviceToken: token })
+    const overlay = overlays.get(stored.id)
+    out.push({
+      ...stored,
+      deviceToken: token,
+      ...(overlay
+        ? {
+            endpoints: overlay.endpoints,
+            relayHostId: overlay.relayHostId,
+            relay: overlay.relay
+          }
+        : {})
+    })
   }
   return out
 }
@@ -215,15 +238,30 @@ export async function saveHost(host: HostProfile): Promise<void> {
   // from current metadata.
   await writeDeviceToken(stored.id, validated.deviceToken)
   tokenCache.set(stored.id, validated.deviceToken)
+  if (validated.endpoints) {
+    await saveMobileRelayHostOverlay({
+      v: 2,
+      hostId: stored.id,
+      endpoints: validated.endpoints,
+      relayHostId: validated.relayHostId,
+      relay: validated.relay
+    })
+  }
 }
 
 export async function removeHost(hostId: string): Promise<void> {
   await mutateStoredHosts((hosts) => hosts.filter((h) => h.id !== hostId))
   tokenCache.delete(hostId)
+  try {
+    await removeMobileRelayHostOverlay(hostId)
+  } catch {
+    // The missing legacy base is authoritative, so a retained overlay cannot
+    // resurrect this host and can be cleaned on a later explicit retry.
+  }
   // Why: await only the durable cleanup intent (AsyncStorage). Native keychain
   // delete can reject or stall and must not freeze removeHost / the UI.
   try {
-    await scheduleHostCredentialCleanup(hostId, deleteDeviceToken)
+    await scheduleHostCredentialCleanup(hostId, deleteHostCredentials)
   } catch {
     // Metadata is already committed; orphan-token recovery is best-effort.
   }
@@ -234,7 +272,7 @@ export async function retryPendingHostCredentialCleanup(): Promise<{
   remainingIds: string[]
   storageUnreadable: boolean
 }> {
-  return retryPendingHostCredentialCleanups(deleteDeviceToken)
+  return retryPendingHostCredentialCleanups(deleteHostCredentials)
 }
 
 export async function renameHost(hostId: string, newName: string): Promise<void> {
