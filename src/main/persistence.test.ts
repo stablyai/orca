@@ -3092,6 +3092,50 @@ describe('Store', () => {
     expect(persisted.repos[0].gitUsername).toBe('testuser')
   })
 
+  it('targets background enrichment mutations to one duplicate-ID host lifecycle', async () => {
+    const store = await createStore()
+    const sshRepo = makeRepo({
+      id: 'shared',
+      path: '/same/path',
+      connectionId: 'ssh-target',
+      executionHostId: 'ssh:ssh-target'
+    })
+    const localRepo = makeRepo({ id: 'shared', path: '/same/path', addedAt: 2 })
+    store.addRepo(sshRepo)
+    store.addRepo(localRepo)
+
+    expect(store.setResolvedRepoGitUsername('shared', 'local-user', localRepo)).toBe(true)
+    const identity = {
+      canonicalKey: 'git.company.test/team/local',
+      remoteName: 'origin',
+      remoteUrl: 'git@git.company.test:team/local.git'
+    }
+    expect(store.updateRepo('shared', { gitRemoteIdentity: identity }, localRepo)?.addedAt).toBe(2)
+
+    const [hydratedSsh, hydratedLocal] = store.getRepos()
+    expect(hydratedSsh?.gitUsername).toBe('')
+    expect(hydratedSsh?.gitRemoteIdentity).toBeUndefined()
+    expect(hydratedLocal?.gitUsername).toBe('local-user')
+    expect(hydratedLocal?.gitRemoteIdentity).toEqual(identity)
+
+    const localSnapshot = { ...localRepo }
+    expect(
+      store.updateRepo('shared', { executionHostId: 'runtime:environment-1' }, localRepo)
+        ?.executionHostId
+    ).toBe('runtime:environment-1')
+    expect(store.setResolvedRepoGitUsername('shared', 'stale-user', localSnapshot)).toBe(false)
+
+    store.removeProjectForHost('shared', 'runtime:environment-1')
+    const replacement = makeRepo({ id: 'shared', path: '/same/path', addedAt: 3 })
+    store.addRepo(replacement)
+    expect(store.setResolvedRepoGitUsername('shared', 'still-stale', localSnapshot)).toBe(false)
+    expect(store.setResolvedRepoGitUsername('shared', 'replacement-user', replacement)).toBe(true)
+
+    const [remainingSsh, replacementLocal] = store.getRepos()
+    expect(remainingSsh?.gitUsername).toBe('')
+    expect(replacementLocal?.gitUsername).toBe('replacement-user')
+  })
+
   it('deleteProjectGroup ungroups repos from the deleted group subtree', async () => {
     const store = await createStore()
     const root = store.createProjectGroup({ name: 'Platform', createdFrom: 'folder-scan' })

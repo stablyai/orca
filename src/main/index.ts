@@ -1813,6 +1813,9 @@ app.whenReady().then(async () => {
     // hosts; the window-only registerCoreHandlers path never runs under serve.
     getAdditionalAiVaultCodexHomePaths: () =>
       codexRuntimeHome ? [codexRuntimeHome.getHostRuntimeHomePath()] : [],
+    // Why: the desktop Store can contain paths owned by other runtimes; only
+    // headless serve may execute local git against runtime-stamped paths.
+    ownsPersistedRuntimeHostPaths: isServeMode,
     buildAgentHookPtyEnv: () =>
       isAgentStatusHooksEnabled(store?.getSettings()) ? agentHookServer.buildPtyEnv() : {}
   })

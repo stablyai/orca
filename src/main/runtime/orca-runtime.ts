@@ -2504,6 +2504,7 @@ export class OrcaRuntimeService {
   private readonly onTerminalSideEffects: ((batch: TerminalSideEffectBatch) => void) | null
   private readonly getAgentStatusSnapshotFn: (() => AgentStatusIpcPayload[]) | null
   private readonly buildAgentHookPtyEnv: (() => Record<string, string>) | null
+  private readonly ownsPersistedRuntimeHostPaths: boolean
   private accountServices: RuntimeAccountServices | null = null
   private commitMessageAgentEnv: CommitMessageAgentEnvironmentResolvers | null = null
   private automationService: AutomationService | null = null
@@ -2537,9 +2538,13 @@ export class OrcaRuntimeService {
       // managed-Codex sessions. The runtime ctor runs in BOTH window and serve.
       getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
       buildAgentHookPtyEnv?: () => Record<string, string>
+      // Why: only headless serve owns runtime-stamped filesystem paths; the
+      // desktop runtime service shares a Store containing other runtime hosts.
+      ownsPersistedRuntimeHostPaths?: boolean
     }
   ) {
     this.store = store
+    this.ownsPersistedRuntimeHostPaths = deps?.ownsPersistedRuntimeHostPaths === true
     if (stats) {
       this.stats = stats
       this.agentDetector = new AgentDetector(stats)
@@ -11400,6 +11405,10 @@ export class OrcaRuntimeService {
       return
     }
     enrichMissingRepoGitRemoteIdentities(this.store, {
+      // Why: class identity is not authority; desktop also constructs this
+      // service, while only headless serve owns persisted runtime-host paths.
+      probeRuntimeHostPaths: this.ownsPersistedRuntimeHostPaths,
+      notificationChannel: 'runtime',
       onChanged: () => {
         this.invalidateResolvedWorktreeCache()
         this.notifyReposChanged()

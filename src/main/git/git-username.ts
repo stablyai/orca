@@ -17,7 +17,7 @@ const GH_LOGIN_PROBE_TIMEOUT_MS = 2500
 const GH_LOGIN_PROBE_WALL_MS = 10_000
 // Why: a timed-out probe says nothing about the account, so don't pin '' for
 // the whole session — retry after a cooldown instead of hammering a stuck gh.
-const GH_LOGIN_TIMEOUT_RETRY_MS = 5 * 60 * 1000
+export const LOCAL_GIT_USERNAME_TIMEOUT_RETRY_MS = 5 * 60 * 1000
 const LOCAL_GIT_READ_TIMEOUT_MS = 5000
 
 export function normalizeGitUsername(value: string): string {
@@ -151,7 +151,10 @@ async function getGhLoginOutcome(): Promise<GhLoginOutcome> {
   if (cachedGhLogin !== null) {
     return { login: cachedGhLogin, timedOut: false }
   }
-  if (ghLoginTimedOutAt !== null && Date.now() - ghLoginTimedOutAt < GH_LOGIN_TIMEOUT_RETRY_MS) {
+  if (
+    ghLoginTimedOutAt !== null &&
+    Date.now() - ghLoginTimedOutAt < LOCAL_GIT_USERNAME_TIMEOUT_RETRY_MS
+  ) {
     return { login: '', timedOut: true }
   }
   if (ghLoginProbeInFlight) {

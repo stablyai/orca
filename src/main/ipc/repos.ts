@@ -1164,6 +1164,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
 
   ipcMain.handle('repos:list', () => {
     enrichMissingRepoGitRemoteIdentities(store, {
+      notificationChannel: 'desktop',
       onChanged: () => notifyReposChanged(mainWindow)
     })
     // Why: username resolution spawns git/gh and must stay off this handler's
@@ -1177,6 +1178,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
 
   ipcMain.handle('projects:list', () => {
     enrichMissingRepoGitRemoteIdentities(store, {
+      notificationChannel: 'desktop',
       onChanged: () => notifyReposChanged(mainWindow)
     })
     return store.getProjects()
@@ -1193,6 +1195,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
 
   ipcMain.handle('projectHostSetups:list', () => {
     enrichMissingRepoGitRemoteIdentities(store, {
+      notificationChannel: 'desktop',
       onChanged: () => notifyReposChanged(mainWindow)
     })
     return store.getProjectHostSetups()

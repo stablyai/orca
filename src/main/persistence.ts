@@ -2600,6 +2600,21 @@ export type StoreOptions = {
   dataFile?: string
 }
 
+type RepoEnrichmentLifecycle = Pick<
+  Repo,
+  'id' | 'path' | 'connectionId' | 'executionHostId' | 'addedAt'
+>
+
+function repoMatchesEnrichmentLifecycle(repo: Repo, expected: RepoEnrichmentLifecycle): boolean {
+  return (
+    repo.id === expected.id &&
+    repo.addedAt === expected.addedAt &&
+    repo.path === expected.path &&
+    (repo.connectionId ?? null) === (expected.connectionId ?? null) &&
+    (repo.executionHostId ?? null) === (expected.executionHostId ?? null)
+  )
+}
+
 export class Store {
   private state: PersistedState
   private readonly dataFile: string
@@ -2619,7 +2634,6 @@ export class Store {
   private lastWrittenStateHash: string | null = null
   private firstPendingSaveAt: number | null = null
   private githubCacheDirty = false
-  private gitUsernameCache = new Map<string, string>()
   private loadNeedsSave = false
   private settingsChangeListeners = new Set<
     (
@@ -3941,13 +3955,20 @@ export class Store {
    * Kept out of updateRepo's whitelist so the renderer-facing update surface
    * cannot write it directly. Returns true when the hydrated value changed.
    */
-  setResolvedRepoGitUsername(id: string, username: string): boolean {
-    const repo = this.state.repos.find((r) => r.id === id)
+  setResolvedRepoGitUsername(
+    id: string,
+    username: string,
+    expectedLifecycle?: RepoEnrichmentLifecycle
+  ): boolean {
+    const repo = this.state.repos.find(
+      (candidate) =>
+        candidate.id === id &&
+        (!expectedLifecycle || repoMatchesEnrichmentLifecycle(candidate, expectedLifecycle))
+    )
     if (!repo) {
       return false
     }
-    const previous = this.gitUsernameCache.get(repo.path) ?? repo.gitUsername ?? ''
-    this.gitUsernameCache.set(repo.path, username)
+    const previous = repo.gitUsername ?? ''
     if (previous === username) {
       return false
     }
@@ -4368,9 +4389,14 @@ export class Store {
     > & {
       sourceControlAi?: Repo['sourceControlAi'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
-    }
+    },
+    expectedLifecycle?: RepoEnrichmentLifecycle
   ): Repo | null {
-    const repo = this.state.repos.find((r) => r.id === id)
+    const repo = this.state.repos.find(
+      (candidate) =>
+        candidate.id === id &&
+        (!expectedLifecycle || repoMatchesEnrichmentLifecycle(candidate, expectedLifecycle))
+    )
     if (!repo) {
       return null
     }
@@ -4553,12 +4579,9 @@ export class Store {
     // Why: username resolution spawns git/gh subprocesses, so it must never
     // run inside hydration — the first getRepos() of a launch executes on the
     // Electron main thread and a stuck probe froze startup for minutes on
-    // Windows (issue #7225). Hydration only reads the enrichment cache or the
-    // value persisted by a previous launch; repo-git-username-enrichment.ts
-    // refreshes both in the background.
-    const gitUsername = isFolderRepo(repo)
-      ? ''
-      : (this.gitUsernameCache.get(repo.path) ?? repo.gitUsername ?? '')
+    // Windows (issue #7225). Hydration reads the in-memory persisted value;
+    // repo-git-username-enrichment.ts refreshes that record in the background.
+    const gitUsername = isFolderRepo(repo) ? '' : (repo.gitUsername ?? '')
 
     return {
       ...repoWithoutIcon,
