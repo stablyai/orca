@@ -4720,7 +4720,8 @@
           "955a21f262": "Opciones de la misión"
         },
         "MissionMemberErrorCopy": {
-          "c8affe1f4b": "Este repositorio aún no tiene commits ni rama predeterminada. Crea un commit inicial (o define una rama predeterminada en la configuración del proyecto) y vuelve a intentarlo."
+          "c8affe1f4b": "Este repositorio aún no tiene commits ni rama predeterminada. Crea un commit inicial (o define una rama predeterminada en la configuración del proyecto) y vuelve a intentarlo.",
+          "cf94215034": "La rama base {{value0}} no existe en este proyecto. Créala allí o cambia la rama base de la misión y vuelve a intentarlo."
         }
       },
       "shared": {
