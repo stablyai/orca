@@ -56,6 +56,33 @@ describe('installNativeMessagingHost (darwin)', () => {
     // launcher invokes the CLI host subcommand
     const launcher = readFileSync(result.launcherPath, 'utf8')
     expect(launcher).toContain('chat-import-host')
+    // ELECTRON_RUN_AS_NODE makes a packaged Electron binary behave like
+    // node; real node ignores the env var, so it's always safe to set.
+    expect(launcher).toContain('ELECTRON_RUN_AS_NODE=1')
+  })
+})
+
+describe('installNativeMessagingHost (linux)', () => {
+  it('writes an executable launcher and a manifest into the Chrome host dir', () => {
+    const home = tempHome()
+    const userData = join(home, '.config', 'orca')
+    const result = installNativeMessagingHost({
+      platform: 'linux',
+      homeDir: home,
+      userDataPath: userData,
+      browser: 'chrome',
+      extensionId: 'abcd',
+      execCommand: { command: '/usr/bin/node', args: ['/app/out/cli/index.js'] },
+      runRegistry: vi.fn()
+    })
+    expect(existsSync(result.launcherPath)).toBe(true)
+    const manifest = JSON.parse(readFileSync(result.manifestPath, 'utf8'))
+    expect(manifest.name).toBe(NATIVE_MESSAGING_HOST_NAME)
+    expect(manifest.path).toBe(result.launcherPath)
+    expect(result.manifestPath).toContain(join('.config', 'google-chrome', 'NativeMessagingHosts'))
+    const launcher = readFileSync(result.launcherPath, 'utf8')
+    expect(launcher).toContain('chat-import-host')
+    expect(launcher).toContain('ELECTRON_RUN_AS_NODE=1')
   })
 })
 
@@ -73,9 +100,31 @@ describe('installNativeMessagingHost (win32)', () => {
       runRegistry
     })
     expect(result.launcherPath.endsWith('.cmd')).toBe(true)
+    const launcher = readFileSync(result.launcherPath, 'utf8')
+    expect(launcher).toContain('set ELECTRON_RUN_AS_NODE=1')
     expect(runRegistry).toHaveBeenCalledWith(
       expect.stringContaining(
         `Software\\Google\\Chrome\\NativeMessagingHosts\\${NATIVE_MESSAGING_HOST_NAME}`
+      ),
+      result.manifestPath
+    )
+  })
+
+  it('registers under the Edge registry hive when --browser edge is used', () => {
+    const home = tempHome()
+    const runRegistry = vi.fn()
+    const result = installNativeMessagingHost({
+      platform: 'win32',
+      homeDir: home,
+      userDataPath: join(home, 'AppData', 'Roaming', 'orca'),
+      browser: 'edge',
+      extensionId: 'abcd',
+      execCommand: { command: 'C:\\app\\orca.exe', args: [] },
+      runRegistry
+    })
+    expect(runRegistry).toHaveBeenCalledWith(
+      expect.stringContaining(
+        `Software\\Microsoft\\Edge\\NativeMessagingHosts\\${NATIVE_MESSAGING_HOST_NAME}`
       ),
       result.manifestPath
     )
