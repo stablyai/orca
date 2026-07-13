@@ -2826,11 +2826,18 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       get().purgeWorktreeTerminalState(worktreeIds)
 
       set((s) => {
+        // Why: compute repo survival up front so worktree/detected buckets can be
+        // dropped wholesale when the repo id is gone from every host. A leftover
+        // worktree stamped with an abandoned host (e.g. a removed SSH connection)
+        // otherwise lingers in worktreesByRepo with no repo to render under and
+        // surfaces as an "Unknown" ghost row in the sidebar.
+        const nextRepos = s.repos.filter((r) => !repoMatchesHostIdentity(r, projectId, ownerHostId))
+        const repoIdFullyRemoved = !nextRepos.some((r) => r.id === projectId)
         const nextWorktrees = { ...s.worktreesByRepo }
         const remainingWorktrees = (nextWorktrees[projectId] ?? []).filter(
           (worktree) => !worktreeBelongsToHost(worktree, ownerHostId)
         )
-        if (remainingWorktrees.length > 0) {
+        if (remainingWorktrees.length > 0 && !repoIdFullyRemoved) {
           nextWorktrees[projectId] = remainingWorktrees
         } else {
           delete nextWorktrees[projectId]
@@ -2841,7 +2848,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           const remainingDetected = detected.worktrees.filter(
             (worktree) => !worktreeBelongsToHost(worktree, ownerHostId)
           )
-          if (remainingDetected.length > 0) {
+          if (remainingDetected.length > 0 && !repoIdFullyRemoved) {
             nextDetectedWorktrees[projectId] = { ...detected, worktrees: remainingDetected }
           } else {
             delete nextDetectedWorktrees[projectId]
@@ -2874,13 +2881,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         const activeFileCleared = s.activeFileId
           ? s.openFiles.some((f) => f.id === s.activeFileId && worktreeIdSet.has(f.worktreeId))
           : false
-        const nextRepos = s.repos.filter((r) => !repoMatchesHostIdentity(r, projectId, ownerHostId))
         // Why: when no sibling host still owns this repo id, drop every persisted
         // timestamp for the repo's worktrees — including unhydrated SSH/remote ones
         // absent from worktreeIdSet, which pruneLastVisitedTimestamps would otherwise
         // defer forever as "not yet hydrated" after the repo is gone. When a duplicate
         // id remains on another host, stay host-scoped via worktreeIdSet.
-        const repoIdFullyRemoved = !nextRepos.some((r) => r.id === projectId)
+        // (nextRepos / repoIdFullyRemoved are derived above to gate bucket cleanup.)
         let nextLastVisitedAtByWorktreeId = s.lastVisitedAtByWorktreeId
         for (const id of Object.keys(s.lastVisitedAtByWorktreeId)) {
           if (
