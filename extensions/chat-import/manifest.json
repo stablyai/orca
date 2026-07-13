@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Orca Chat Import",
+  "version": "0.1.0",
+  "description": "Import ChatGPT/Claude/Gemini web chats into Orca's AI Vault.",
+  "permissions": ["storage", "activeTab", "nativeMessaging"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["https://chatgpt.com/*", "https://claude.ai/*", "https://gemini.google.com/*"],
+      "js": ["lib/util.js", "lib/normalize.js", "content.js"]
+    }
+  ],
+  "action": { "default_popup": "popup.html" }
+}
