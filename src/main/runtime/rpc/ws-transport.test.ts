@@ -442,6 +442,70 @@ describe('WebSocketTransport', () => {
     expect(wss.clients.size).toBe(0)
   }, 5_000)
 
+  it('reaps a client kept warm by app frames but silent on pong (driver fast-fail, #4500)', async () => {
+    // Why: regression for #4500 — the permanent-driver-lock hole. A socket
+    // kept "warm" by inbound app frames (or a proxy that re-pongs on the
+    // client's behalf) must still be reaped if it never answers the server's
+    // ping, or the mobile terminal driver lock sticks forever. Pong-liveness
+    // is now distinct from message-liveness in the heartbeat tick.
+    const tls = makeTls()
+    const transport = new WebSocketTransport({
+      host: '127.0.0.1',
+      port: 0,
+      tlsCert: tls.cert,
+      tlsKey: tls.key,
+      heartbeatIntervalMs: 50
+    })
+    transport.onMessage(() => {})
+    transports.push(transport)
+
+    let serverClosed = false
+    transport.onConnectionClose(() => {
+      serverClosed = true
+    })
+
+    await transport.start()
+
+    // Why: connect a client that will NOT auto-pong server pings, so its
+    // pong-liveness stays false while we keep it "warm" with app frames.
+    const client = await new Promise<WebSocket>((resolve, reject) => {
+      const ws = new WebSocket(`wss://127.0.0.1:${transport.resolvedPort}`, {
+        rejectUnauthorized: false,
+        autoPong: false
+      })
+      ws.once('open', () => resolve(ws))
+      ws.once('error', reject)
+    })
+
+    const wss = (transport as unknown as { wss: { clients: Set<{ readyState: number }> } }).wss
+    for (const c of wss.clients) {
+      transport.setClientId(c as never, 'warm-no-pong-client')
+    }
+
+    // Why: keep the socket warm via inbound app frames (this re-arms
+    // wsAlive) but never pong — the heartbeat must still reap it because
+    // pong-liveness is what frees the mobile terminal driver.
+    const warmTimer = setInterval(() => {
+      if (client.readyState === client.OPEN) {
+        client.send(JSON.stringify({ id: 'keepalive', method: 'noop' }))
+      }
+    }, 20)
+
+    const start = Date.now()
+    while (!serverClosed && Date.now() - start < 2_000) {
+      await new Promise((r) => setTimeout(r, 25))
+    }
+    clearInterval(warmTimer)
+    // Give the close handler a tick to settle the wss.clients set.
+    await new Promise((r) => setTimeout(r, 50))
+
+    expect(serverClosed).toBe(true)
+    expect(wss.clients.size).toBe(0)
+    if (client.readyState !== client.CLOSED && client.readyState !== client.CLOSING) {
+      client.terminate()
+    }
+  }, 5_000)
+
   // Why: paired mobile devices store ws://ip:port endpoints, so the fallback
   // port must stay stable across restarts or pairings go permanently dead
   // when the preferred port is held by another instance (STA-1511).

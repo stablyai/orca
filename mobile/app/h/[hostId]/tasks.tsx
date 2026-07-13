@@ -37,7 +37,8 @@ import type { RpcSuccess } from '../../../src/transport/types'
 import {
   useHostClient,
   useLastConnectedAt,
-  useReconnectAttempt
+  useReconnectAttempt,
+  useLastConnectionError
 } from '../../../src/transport/client-context'
 import { classifyConnection } from '../../../src/transport/connection-health'
 import { StatusDot } from '../../../src/components/StatusDot'
@@ -2197,6 +2198,7 @@ export default function MobileTasksScreen() {
   const { client, state: connState } = useHostClient(hostId)
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
+  const lastConnectionError = useLastConnectionError(hostId)
   const clientRef = useRef<RpcClient | null>(null)
   const reposRef = useRef<RepoSummary[]>([])
   const loadGenerationRef = useRef(0)
@@ -8656,7 +8658,8 @@ export default function MobileTasksScreen() {
   const headerVerdict = classifyConnection({
     state: connState,
     reconnectAttempts,
-    lastConnectedAt
+    lastConnectedAt,
+    lastConnectionError
   })
   const emptyLabel =
     connState !== 'connected'

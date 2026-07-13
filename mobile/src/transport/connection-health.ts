@@ -39,6 +39,11 @@ export type ConnectionVerdict =
     }
   | { kind: 'auth-failed'; label: string }
 
+// Why: the most recent fatal socket error (from ws.onerror), carried
+// into the verdict so the UI can show the real failure (#6784) instead
+// of only a canned label. Callers read it off the RpcClient.
+export type ConnectionError = string | null
+
 // Why: the rpc-client's lastConnectedAt is a one-shot timestamp; we have
 // to recompute "are we currently stale" against now() each render.
 // Centralized so home + host-detail show identical verdicts.
@@ -49,11 +54,18 @@ export function classifyConnection(args: {
   // Optional pinned host endpoint — enables the Tailscale hint on
   // warning/unreachable verdicts. Callers without it get plain labels.
   endpoint?: string | null
+  // Optional last fatal socket error (ws.onerror). When present it is
+  // surfaced as the hint so the user sees the real cause (#6784).
+  lastConnectionError?: ConnectionError
   nowMs?: number
 }): ConnectionVerdict {
   const { state, reconnectAttempts, lastConnectedAt } = args
   const now = args.nowMs ?? Date.now()
-  const hint = isTailscaleEndpoint(args.endpoint) ? TAILSCALE_HINT : undefined
+  // Why: prefer the real socket error over the generic Tailscale hint
+  // when both are available — the socket error is the proximate cause.
+  const hint =
+    args.lastConnectionError ??
+    (isTailscaleEndpoint(args.endpoint) ? TAILSCALE_HINT : undefined)
 
   if (state === 'auth-failed') {
     return { kind: 'auth-failed', label: 'Auth failed' }

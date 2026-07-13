@@ -46,6 +46,28 @@ describe('classifyConnection Tailscale hint', () => {
     expect('hint' in verdict && verdict.hint).toBeFalsy()
   })
 
+  it('surfaces the real socket error as the hint (issue #6784)', () => {
+    const warning = classifyConnection({
+      ...base,
+      reconnectAttempts: 3,
+      endpoint: 'ws://192.168.1.50:6768',
+      lastConnectionError: 'WebSocket error: getaddrinfo ENOTFOUND host.local'
+    })
+    expect(warning.kind).toBe('warning')
+    // Why: the real cause must win over a canned/derived hint.
+    expect(warning.hint).toBe('WebSocket error: getaddrinfo ENOTFOUND host.local')
+  })
+
+  it('keeps a plain label when there is no socket error', () => {
+    const warning = classifyConnection({
+      ...base,
+      reconnectAttempts: 3,
+      endpoint: 'ws://192.168.1.50:6768'
+    })
+    expect(warning.kind).toBe('warning')
+    expect('hint' in warning && warning.hint).toBeFalsy()
+  })
+
   it('never hints on healthy states', () => {
     const verdict = classifyConnection({
       state: 'connected',

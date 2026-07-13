@@ -29,6 +29,7 @@ import { loadHosts, renameHost } from '../src/transport/host-store'
 import { removeHostAndCloseClient } from '../src/transport/host-removal-lifecycle'
 import { pickResumeWorktree } from '../src/worktree/resume-worktree'
 import type { RpcClient } from '../src/transport/rpc-client'
+import { useHostConnectionState } from '../src/transport/use-host-connection-state'
 import {
   useAllHostClients,
   useCloseHost,
@@ -308,9 +309,6 @@ export default function HomeScreen() {
   const [actionTarget, setActionTarget] = useState<HostProfile | null>(null)
   const [renameTarget, setRenameTarget] = useState<HostProfile | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<HostProfile | null>(null)
-  const [hostStates, setHostStates] = useState<Record<string, ConnectionState>>({})
-  const [hostAttempts, setHostAttempts] = useState<Record<string, number>>({})
-  const [hostLastConnected, setHostLastConnected] = useState<Record<string, number | null>>({})
   const [stats, setStats] = useState<StatsSummary | null>(null)
   const [worktreeInfo, setWorktreeInfo] = useState<Record<string, HostWorktreeInfo>>({})
   const [accountsByHost, setAccountsByHost] = useState<Record<string, AccountsSnapshot>>({})
@@ -324,6 +322,8 @@ export default function HomeScreen() {
   // docs/mobile-shared-client-per-host.md.
   const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
   const allClients = useAllHostClients(hostIds)
+  // Why (#6784): mirror per-host connection state + real socket errors for the home verdict.
+  const { hostStates, hostAttempts, hostLastConnected, hostConnErrors } = useHostConnectionState({ allClients, hosts })
   const closeHostClient = useCloseHost()
   const forceReconnectHost = useForceReconnect()
   const primeHosts = usePrimeHosts()
@@ -424,75 +424,6 @@ export default function HomeScreen() {
     [hosts]
   )
 
-  // Why: mirror per-host connection state into hostStates so existing
-  // render code (status dots, connecting indicators) keeps working.
-  useEffect(() => {
-    setHostAttempts((prev) => {
-      const next: Record<string, number> = { ...prev }
-      let changed = false
-      for (const entry of allClients) {
-        const a = entry.client.getReconnectAttempt()
-        if (next[entry.hostId] !== a) {
-          next[entry.hostId] = a
-          changed = true
-        }
-      }
-      return changed ? next : prev
-    })
-    setHostLastConnected((prev) => {
-      const next: Record<string, number | null> = { ...prev }
-      let changed = false
-      for (const entry of allClients) {
-        const t = entry.client.getLastConnectedAt()
-        if (next[entry.hostId] !== t) {
-          next[entry.hostId] = t
-          changed = true
-        }
-      }
-      return changed ? next : prev
-    })
-    setHostStates((prev) => {
-      const next: Record<string, ConnectionState> = { ...prev }
-      let changed = false
-      const liveIds = new Set(allClients.map((e) => e.hostId))
-      for (const entry of allClients) {
-        if (next[entry.hostId] !== entry.state) {
-          next[entry.hostId] = entry.state
-          changed = true
-        }
-      }
-      // Why: when a paired host disappears from allClients (because the
-      // user tapped Disconnect, or the host record was invalid) the card
-      // must reflect that. We only force-update hosts whose state was
-      // already tracked — otherwise the initial-acquire frame (entry not
-      // yet materialised) would briefly flip every host to 'disconnected'.
-      for (const host of hosts) {
-        if (liveIds.has(host.id)) {
-          continue
-        }
-        if (!host.publicKeyB64 || !host.deviceToken) {
-          if (next[host.id] !== 'auth-failed') {
-            next[host.id] = 'auth-failed'
-            changed = true
-          }
-          continue
-        }
-        const prevState = next[host.id]
-        if (prevState && prevState !== 'disconnected' && prevState !== 'auth-failed') {
-          next[host.id] = 'disconnected'
-          changed = true
-        }
-      }
-      // Drop entries for hosts we no longer track at all.
-      for (const id of Object.keys(next)) {
-        if (!liveIds.has(id) && hosts.some((h) => h.id === id) === false) {
-          delete next[id]
-          changed = true
-        }
-      }
-      return changed ? next : prev
-    })
-  }, [allClients, hosts])
 
   // Why: per-host streaming subscriptions (notifications + accounts) and
   // one-shot stats fetches when each host transitions to 'connected'.
@@ -824,13 +755,15 @@ export default function HomeScreen() {
             const state = hostStates[item.id] ?? 'connecting'
             const attempts = hostAttempts[item.id] ?? 0
             const lastConnectedAt = hostLastConnected[item.id] ?? null
+            const lastConnectionError = hostConnErrors[item.id] ?? null
             const connected = state === 'connected'
             const info = worktreeInfo[item.id]
             const verdict = classifyConnection({
               state,
               reconnectAttempts: attempts,
               lastConnectedAt,
-              endpoint: item.endpoint
+              endpoint: item.endpoint,
+              lastConnectionError
             })
             const isError =
               verdict.kind === 'warning' ||

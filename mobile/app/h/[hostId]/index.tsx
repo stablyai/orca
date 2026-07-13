@@ -6,7 +6,8 @@ import {
   SectionList,
   Pressable,
   ActivityIndicator,
-  Alert
+  Alert,
+  RefreshControl
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, usePathname, useRouter } from 'expo-router'
@@ -35,8 +36,10 @@ import {
   useCloseHost,
   useForceReconnect,
   useReconnectAttempt,
-  useLastConnectedAt
+  useLastConnectedAt,
+  useLastConnectionError
 } from '../../../src/transport/client-context'
+import { useWorktreeResync } from '../../../src/transport/use-worktree-resync'
 import {
   classifyConnection,
   type ConnectionVerdict
@@ -59,7 +62,7 @@ import { ProtocolBlockScreen } from '../../../src/components/ProtocolBlockScreen
 import { AuthFailedBanner } from '../../../src/components/AuthFailedBanner'
 import { MobileSearchField } from '../../../src/components/MobileSearchField'
 import { WorkspaceDetailPlaceholder } from '../../../src/components/WorkspaceDetailPlaceholder'
-import { getCachedWorktrees } from '../../../src/cache/worktree-cache'
+import { getCachedWorktrees, setCachedWorktrees } from '../../../src/cache/worktree-cache'
 import { setCachedRepos } from '../../../src/cache/repo-cache'
 import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
 import { useResponsiveLayout } from '../../../src/layout/responsive-layout'
@@ -142,6 +145,7 @@ export function HostScreen({
   const { client, state: connState } = useHostClient(hostId)
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
+  const lastConnectionError = useLastConnectionError(hostId)
   const clientRef = useRef<RpcClient | null>(null)
   const fetchWorktreesInFlightRef = useRef(false)
   const fetchRepoMetadataInFlightRef = useRef(false)
@@ -459,6 +463,14 @@ export function HostScreen({
             areWorktreeListsEqual(current, result.worktrees) ? current : result.worktrees
           )
           setWorktreesLoaded(true)
+          // Why (#8498): the host detail screen used to read only from
+          // the home-seeded cache (initialCache), so a partial/fresh refetch
+          // here could not correct a poisoned snapshot. Write the same
+          // snapshot back through the cache so a later remount (or the
+          // resume card) sees the freshest worktree.ps, not a stale one.
+          if (hostId) {
+            setCachedWorktrees(hostId, result.worktrees)
+          }
           // Drop the optimistic active override once the host confirms it (the
           // activate RPC has landed and worktree.ps now reports it active), so we
           // stop overriding and respect any later desktop-driven change.
@@ -612,6 +624,15 @@ export function HostScreen({
     }, 3000)
     return () => clearInterval(interval)
   }, [embedded, connState, fetchWorktrees, fetchRepoMetadata, syncViewSettingsFromDesktop])
+
+  // Why (#8498): reconnect refetch + manual pull-to-refresh, extracted to
+  // useWorktreeResync so this screen stays under its max-lines budget.
+  const { refreshing, onRefresh } = useWorktreeResync({
+    client,
+    connState,
+    fetchWorktrees,
+    fetchRepoMetadata,
+  })
 
   const updateLocalPins = useCallback(
     (worktreeId: string, pinned: boolean) => {
@@ -877,7 +898,8 @@ export function HostScreen({
             const headerVerdict = classifyConnection({
               state: connState,
               reconnectAttempts,
-              lastConnectedAt
+              lastConnectedAt,
+              lastConnectionError
             })
             return (
               <>
@@ -1229,7 +1251,16 @@ export function HostScreen({
             )
           }}
           ItemSeparatorComponent={ListSeparator}
-          renderItem={({ item }) => (
+          // Why (#8498): manual pull-to-refresh forces a fresh worktree
+          // snapshot after a reconnect or whenever the cache looks stale.
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.textSecondary}
+              colors={[colors.textSecondary]}
+            />
+          }          renderItem={({ item }) => (
             <WorktreeListRow
               item={item}
               isReadOnly={isReadOnly}

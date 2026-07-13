@@ -86,6 +86,10 @@ export type RpcClient = {
   // to distinguish "host moved/never reachable" from "transient blip".
   getLastConnectedAt: () => number | null
   onStateChange: (listener: (state: ConnectionState) => void) => () => void
+  // Why: the last fatal ws error message (from ws.onerror) — surfaced
+  // into the connection verdict so the UI can show the real failure
+  // (#6784) instead of a canned label. Cleared on a successful connect.
+  getLastConnectionError: () => string | null
   // Why: app-resume hook. Android/iOS can kill the TCP path or park the
   // reconnect loop while the app is backgrounded; callers invoke this on
   // AppState 'active' so the session recovers without an app restart.
@@ -190,6 +194,10 @@ export function connect(
   // every 'connected'.
   let authRejectionCount = 0
   let lastConnectedAt: number | null = null
+  // Why: most recent fatal ws.onerror message (#6784). Carried into
+  // the connection verdict so the UI shows the real failure instead of
+  // a canned label. Cleared on a successful handshake.
+  let lastConnectionError: string | null = null
   // Why: cheap diagnostics for RN/OkHttp process-state poisoning: do retry
   // attempts differ, is anything inbound, and are closes instant or slow?
   let lastInboundAt: number | null = null
@@ -249,6 +257,9 @@ export function connect(
     })
     if (next === 'connected') {
       lastConnectedAt = Date.now()
+      // Why: a clean handshake proves the link is healthy — clear any
+      // stale error so the verdict doesn't keep showing a dead cause (#6784).
+      lastConnectionError = null
       // Why: a clean handshake proves the token is valid — clear the auth
       // retry budget so a future isolated rejection gets the full budget again.
       authRejectionCount = 0
@@ -685,6 +696,10 @@ export function connect(
       // onclose fires right after, but logging the error message gives us
       // the original cause that the close code alone can hide.
       const e = event as { message?: string } | undefined
+      const message = e?.message ?? null
+      // Why: capture the real failure so the connection verdict can show
+      // it to the user instead of a canned label (#6784).
+      captureConnectionError(message)
       const errEvent = describeSocketEvent(event)
       console.log('[net] ws.onerror', {
         message: e?.message,
@@ -1205,6 +1220,10 @@ export function connect(
 
     getLastConnectedAt(): number | null {
       return lastConnectedAt
+    },
+
+    getLastConnectionError(): string | null {
+      return lastConnectionError
     },
 
     onStateChange(listener: (state: ConnectionState) => void): () => void {

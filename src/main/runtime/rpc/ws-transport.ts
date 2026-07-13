@@ -72,6 +72,14 @@ export class WebSocketTransport implements RpcTransport {
   // sweep. A socket missing from the set when the next sweep fires is
   // assumed dead and terminated.
   private wsAlive = new WeakSet<WebSocket>()
+  // Why: tracks whether each socket has returned a PONG (not just any
+  // inbound frame) since the last heartbeat sweep. This is the
+  // pong-liveness signal distinct from message-liveness — a socket kept
+  // "warm" by inbound app frames (or a proxy that re-pongs on the
+  // client's behalf) must still be reaped if it has not actually
+  // answered the server's ping, or the mobile driver lock can stick
+  // permanently (issue #4500). See the heartbeat tick below.
+  private wsPonged = new WeakSet<WebSocket>()
   private messageHandler: WebSocketMessageHandler | null = null
   private connectionCloseHandler:
     | ((clientId: string | null, ws: WebSocket, hasOtherConnections: boolean) => void)
@@ -242,14 +250,21 @@ export class WebSocketTransport implements RpcTransport {
         return
       }
       for (const ws of wss.clients) {
-        if (!this.wsAlive.has(ws)) {
-          // Why: terminate() (vs close()) skips the close handshake and
-          // immediately fires the 'close' event, freeing the slot. close()
+        // Why: reap unless the socket has BOTH sent a pong AND shown any
+        // liveness since the previous tick. Requiring pong-liveness (not
+        // just message-liveness) is the #4500 fix: a socket that only
+        // answers with app frames — or a proxy that pongs on the client's
+        // behalf while the real client is dead — would otherwise keep the
+        // connection warm forever and strand the mobile terminal driver.
+        if (!this.wsAlive.has(ws) || !this.wsPonged.has(ws)) {
+          // Why: terminate() (vs close()) skips the close
+          // handshake and immediately fires the 'close' event, freeing the slot. close()
           // on an already-dead socket can hang for the OS-level TCP timeout.
           ws.terminate()
           continue
         }
         this.wsAlive.delete(ws)
+        this.wsPonged.delete(ws)
         try {
           ws.ping()
         } catch {
@@ -306,7 +321,11 @@ export class WebSocketTransport implements RpcTransport {
   private handleConnection(ws: WebSocket): void {
     let finalized = false
     const onPong = (): void => {
+      // Why: a pong specifically re-arms pong-liveness. Message traffic
+      // re-arms wsAlive (below) but does NOT satisfy wsPonged, so a
+      // socket warm only via app frames is still reaped (#4500).
       this.wsAlive.add(ws)
+      this.wsPonged.add(ws)
     }
     const onMessage = (data: WebSocket.RawData, isBinary: boolean): void => {
       // Why: any inbound traffic counts as proof of life, not just pongs.
@@ -369,9 +388,11 @@ export class WebSocketTransport implements RpcTransport {
     this.preAuthTimers.set(ws, preAuthTimer)
 
     // Why: seed alive=true so the first heartbeat tick after connect doesn't
-    // treat a fresh socket as dead. Subsequent pongs (or any inbound traffic)
-    // re-arm it.
+    // treat a fresh socket as dead. Seed ponged=true too, giving the
+    // client one grace tick to actually answer the first ping; a client
+    // that never pongs is reaped on the next sweep (#4500).
     this.wsAlive.add(ws)
+    this.wsPonged.add(ws)
 
     ws.on('pong', onPong)
     ws.on('message', onMessage)

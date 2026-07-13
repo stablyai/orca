@@ -279,6 +279,12 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
     return storeRef.current.get(hostId)?.client.getLastConnectedAt() ?? null
   }, [])
 
+  // Why (#6784): surface the real socket error so the connection verdict
+  // can render it instead of a canned label.
+  const getLastConnectionError = useCallback((hostId: string): string | null => {
+    return storeRef.current.get(hostId)?.client.getLastConnectionError() ?? null
+  }, [])
+
   const subscribeHostState = useCallback(
     (hostId: string, listener: (state: ConnectionState) => void) => {
       let set = stateListenersRef.current.get(hostId)
@@ -357,6 +363,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       getState,
       getReconnectAttempt,
       getLastConnectedAt,
+      getLastConnectionError,
       subscribeHostState,
       getAllClients,
       subscribeAllHosts,
@@ -370,6 +377,7 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       getState,
       getReconnectAttempt,
       getLastConnectedAt,
+      getLastConnectionError,
       subscribeHostState,
       getAllClients,
       subscribeAllHosts,
@@ -551,3 +559,7 @@ export function useLastConnectedAt(hostId: string | undefined): number | null {
   }, [ctx, hostId])
   return hostId ? ctx.getLastConnectedAt(hostId) : null
 }
+
+// Why (#6784): re-exported from its own module to keep this file under its
+// max-lines budget; the definition lives in use-last-connection-error.ts.
+export { useLastConnectionError } from './use-last-connection-error'

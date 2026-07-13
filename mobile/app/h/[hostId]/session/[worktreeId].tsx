@@ -60,7 +60,8 @@ import {
   useHostClient,
   useForceReconnect,
   useReconnectAttempt,
-  useLastConnectedAt
+  useLastConnectedAt,
+  useLastConnectionError
 } from '../../../../src/transport/client-context'
 import {
   classifyConnection,
@@ -838,6 +839,7 @@ export default function SessionScreen() {
   const { client, state: connState } = useHostClient(hostId)
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
+  const lastConnectionError = useLastConnectionError(hostId)
   const forceReconnectHost = useForceReconnect()
   const worktreeName = useLiveWorktreeName({
     client,
@@ -4364,7 +4366,8 @@ export default function SessionScreen() {
     state: connState,
     reconnectAttempts,
     lastConnectedAt,
-    endpoint: hostEndpoint
+    endpoint: hostEndpoint,
+    lastConnectionError
   })
   const showConnectionRetry =
     connectionVerdict.kind === 'warning' || connectionVerdict.kind === 'unreachable'
