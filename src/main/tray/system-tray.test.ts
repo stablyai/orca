@@ -1,21 +1,27 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as SystemTrayModule from './system-tray'
 
-const { trayInstances, menuFromTemplateMock, createAppIconImageMock, resizedImage } = vi.hoisted(
-  () => {
-    const resizedImage = { resized: true }
-    return {
-      trayInstances: [] as FakeTray[],
-      menuFromTemplateMock: vi.fn((template: unknown) => ({ template })),
-      createAppIconImageMock: vi.fn(),
-      resizedImage
-    }
+const {
+  trayInstances,
+  menuFromTemplateMock,
+  createAppIconImageMock,
+  composeAttentionMock,
+  resizedImage
+} = vi.hoisted(() => {
+  const resizedImage = { resized: true }
+  return {
+    trayInstances: [] as FakeTray[],
+    menuFromTemplateMock: vi.fn((template: unknown) => ({ template })),
+    createAppIconImageMock: vi.fn(),
+    composeAttentionMock: vi.fn((image: unknown) => ({ dotted: image })),
+    resizedImage
   }
-)
+})
 
 class FakeTray {
   setToolTip = vi.fn()
   setContextMenu = vi.fn()
+  setImage = vi.fn()
   on = vi.fn()
   destroy = vi.fn()
   isDestroyed = vi.fn(() => false)
@@ -31,6 +37,10 @@ vi.mock('electron', () => ({
 
 vi.mock('../app-icon', () => ({
   createAppIconImage: createAppIconImageMock
+}))
+
+vi.mock('./tray-attention-icon', () => ({
+  composeTrayAttentionIcon: composeAttentionMock
 }))
 
 type TrayModule = typeof SystemTrayModule
@@ -55,6 +65,7 @@ function builtMenuItems(): MenuItem[] {
 beforeEach(() => {
   trayInstances.length = 0
   menuFromTemplateMock.mockClear()
+  composeAttentionMock.mockClear()
   createAppIconImageMock.mockReset()
   createAppIconImageMock.mockReturnValue({ resize: vi.fn(() => resizedImage) })
 })
@@ -123,6 +134,57 @@ describe('createSystemTray', () => {
 
     expect(tray).toBeNull()
     expect(trayInstances).toHaveLength(0)
+  })
+})
+
+describe('setTrayAttention', () => {
+  it('swaps in the dotted icon when active and restores the base when cleared', async () => {
+    setPlatform('win32')
+    const { createSystemTray, setTrayAttention } = await loadModule()
+    createSystemTray({ appIcon: 'classic', onOpen: vi.fn(), onQuit: vi.fn() })
+    const tray = trayInstances[0]
+    tray.setImage.mockClear()
+
+    setTrayAttention(true)
+    expect(composeAttentionMock).toHaveBeenCalledWith(resizedImage)
+    expect(tray.setImage).toHaveBeenCalledWith({ dotted: resizedImage })
+
+    tray.setImage.mockClear()
+    setTrayAttention(false)
+    expect(tray.setImage).toHaveBeenCalledWith(resizedImage)
+  })
+
+  it('ignores repeated same-state calls', async () => {
+    setPlatform('win32')
+    const { createSystemTray, setTrayAttention } = await loadModule()
+    createSystemTray({ appIcon: 'classic', onOpen: vi.fn(), onQuit: vi.fn() })
+    const tray = trayInstances[0]
+    tray.setImage.mockClear()
+
+    setTrayAttention(true)
+    setTrayAttention(true)
+
+    expect(tray.setImage).toHaveBeenCalledTimes(1)
+  })
+
+  it('reflects attention that was requested before the tray was created', async () => {
+    setPlatform('win32')
+    const { createSystemTray, setTrayAttention } = await loadModule()
+
+    // Fire the event before the (deferred) tray exists.
+    setTrayAttention(true)
+    createSystemTray({ appIcon: 'classic', onOpen: vi.fn(), onQuit: vi.fn() })
+    const tray = trayInstances[0]
+
+    expect(tray.setImage).toHaveBeenCalledWith({ dotted: resizedImage })
+  })
+
+  it('is a safe no-op on non-win32 platforms', async () => {
+    setPlatform('darwin')
+    const { setTrayAttention } = await loadModule()
+
+    expect(() => setTrayAttention(true)).not.toThrow()
+    expect(composeAttentionMock).not.toHaveBeenCalled()
   })
 })
 

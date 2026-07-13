@@ -104,6 +104,10 @@ import {
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
 import { parseWorkspaceSession } from '../shared/workspace-session-schema'
+import { normalizeUsagePercentageDisplay } from '../shared/usage-percentage-display'
+import { isExistingPersistedProfile } from '../shared/project-order-manual-default-notice'
+import { resolveUsagePercentageDisplayChangeNoticeDismissed } from '../shared/usage-percentage-display-change-notice'
+import { normalizePRBotAuthorOverrides } from '../shared/pr-bot-author-overrides'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostOrder,
@@ -113,6 +117,10 @@ import {
   type ExecutionHostId
 } from '../shared/execution-host'
 import { toRelaySshPtyId } from './providers/ssh-pty-id'
+import {
+  migrateUiHostScopeSshTargetId,
+  migrateWorkspaceSessionSshTargetId
+} from './ssh/ssh-target-id-migration'
 import { isWslUncPath } from '../shared/wsl-paths'
 import {
   isTerminalLeafId,
@@ -126,6 +134,11 @@ import {
 } from './agent-hooks/migration-unsupported-pty-state'
 import { agentHookServer } from './agent-hooks/server'
 import { pruneLocalTerminalScrollbackBuffers } from '../shared/workspace-session-terminal-buffers'
+import {
+  backfillAutomationRunNumbers,
+  nextAutomationRunNumber,
+  pruneAutomationRuns
+} from '../shared/automation-run-retention'
 import { pruneWorkspaceSessionBrowserHistory } from '../shared/workspace-session-browser-history'
 import {
   FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
@@ -199,6 +212,7 @@ import {
   normalizeTuiAgentEnvRecord
 } from '../shared/tui-agent-launch-defaults'
 import { normalizeTerminalCursorStyleDefault } from '../shared/terminal-cursor-style-settings'
+import { normalizeTerminalLineHeight } from '../shared/terminal-line-height-settings'
 import { normalizeUiLanguage } from '../shared/ui-language'
 import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
 import { persistedUIValuesEqual } from '../shared/persisted-ui-equality'
@@ -215,8 +229,10 @@ import {
 import {
   collectTerminalScrollbackSnapshotRefs,
   deleteTerminalScrollbackSnapshotSync,
+  getProfileTerminalScrollbackSnapshotRoot,
   migrateWorkspaceSessionTerminalScrollbackSnapshots,
-  readTerminalScrollbackSnapshotSync
+  readTerminalScrollbackSnapshotSync,
+  type TerminalScrollbackSnapshotStorage
 } from './terminal-scrollback-snapshots'
 import { track } from './telemetry/client'
 import { getCohortAtEmit } from './telemetry/cohort-classifier'
@@ -338,8 +354,8 @@ function getDataFile(): string {
 // the content-hash guard by design). It lives in memory during the session
 // and is snapshotted here best-effort at quit so PR/issue badges still paint
 // instantly on the next launch. Loss of this file costs nothing.
-function getGithubCacheFile(): string {
-  return join(dirname(getDataFile()), 'orca-github-cache.json')
+function getGithubCacheFile(dataFile = getDataFile()): string {
+  return join(dirname(dataFile), 'orca-github-cache.json')
 }
 
 // Why: worktrees deleted outside Orca (git CLI worktree remove, rm -rf,
@@ -418,9 +434,9 @@ function gcStaleWorktreeMeta(state: PersistedState): number {
   return removed
 }
 
-function readGithubCacheSnapshot(): PersistedState['githubCache'] | null {
+function readGithubCacheSnapshot(dataFile: string): PersistedState['githubCache'] | null {
   try {
-    const parsed = JSON.parse(readFileSync(getGithubCacheFile(), 'utf-8')) as unknown
+    const parsed = JSON.parse(readFileSync(getGithubCacheFile(dataFile), 'utf-8')) as unknown
     const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
       typeof value === 'object' && value !== null && !Array.isArray(value)
     if (
@@ -1342,10 +1358,6 @@ function resolveSetupGuideSidebarDismissedOnLoad(
   // Why: the sidebar checklist is a new-user prompt. Once onboarding is
   // closed, persisted false is just the old default value, not a user opt-in.
   return onboarding.closedAt !== null || persistedDismissed === true
-}
-
-function shouldDefaultNewWorktreeCardStyleOn(onboarding: OnboardingState): boolean {
-  return onboarding.closedAt === null
 }
 
 // Why: read a settings field that was removed from GlobalSettings but can
@@ -2570,7 +2582,8 @@ function backfillFolderScopeConnectionIds(state: PersistedState): {
 
 function deleteRemovedTerminalScrollbackSnapshots(
   prior: WorkspaceSessionState | undefined,
-  next: WorkspaceSessionState
+  next: WorkspaceSessionState,
+  storage?: TerminalScrollbackSnapshotStorage
 ): void {
   if (!prior) {
     return
@@ -2578,16 +2591,26 @@ function deleteRemovedTerminalScrollbackSnapshots(
   const nextRefs = collectTerminalScrollbackSnapshotRefs(next)
   for (const ref of collectTerminalScrollbackSnapshotRefs(prior)) {
     if (!nextRefs.has(ref)) {
-      deleteTerminalScrollbackSnapshotSync(ref)
+      deleteTerminalScrollbackSnapshotSync(ref, storage)
     }
   }
 }
 
+export type StoreOptions = {
+  dataFile?: string
+}
+
 export class Store {
   private state: PersistedState
+  private readonly dataFile: string
+  private readonly terminalScrollbackSnapshotStorage: TerminalScrollbackSnapshotStorage
   private writeTimer: ReturnType<typeof setTimeout> | null = null
   private pendingWrite: Promise<void> | null = null
   private writeGeneration = 0
+  // Why: after a profile transfer rewrites this store's file on disk behind
+  // its back, the stale in-memory state must never be persisted again — a
+  // late sync flush before the relaunch would resurrect the moved project.
+  private writesFrozen = false
   // Why: hash of the plaintext state as of the last successful write. Saves
   // triggered by mutations that net out to identical state skip the full
   // 1.6MB pretty-print + tmp write + rename. Hashing plaintext (not the
@@ -2607,7 +2630,16 @@ export class Store {
   >()
   private uiChangeListeners = new Set<(ui: PersistedState['ui']) => void>()
 
-  constructor() {
+  constructor(options: StoreOptions = {}) {
+    // Why: profile switching creates more than one possible state path. Capture
+    // the path per Store instance so late async writes cannot follow a global path.
+    this.dataFile = options.dataFile ?? getDataFile()
+    const profileSnapshotRoot = getProfileTerminalScrollbackSnapshotRoot(this.dataFile)
+    const legacySnapshotRoot = getProfileTerminalScrollbackSnapshotRoot(getDataFile())
+    this.terminalScrollbackSnapshotStorage = {
+      snapshotRoot: profileSnapshotRoot,
+      fallbackSnapshotRoot: legacySnapshotRoot === profileSnapshotRoot ? null : legacySnapshotRoot
+    }
     const loaded = this.load()
     const normalized = normalizePersistedPaneIdentityState(loaded)
     this.state = normalized.state
@@ -2816,7 +2848,7 @@ export class Store {
     // would be absent on every pre-telemetry install and misclassify existing
     // users as fresh, flipping them to default-on in violation of the
     // social contract we installed them under.
-    const dataFile = getDataFile()
+    const dataFile = this.dataFile
     const fileExistedOnLoad = existsSync(dataFile)
     logPersistenceStartupMilestone('persistence-load-start', {
       fileExists: fileExistedOnLoad
@@ -2965,6 +2997,20 @@ export class Store {
           parsed.settings
         )
         const migratedTerminalCursorStyle = normalizeTerminalCursorStyleDefault(parsed.settings)
+        const migratedTerminalLineHeight = normalizeTerminalLineHeight(
+          parsed.settings?.terminalLineHeight
+        )
+        const terminalRightClickToPasteDefaultedForPlatform =
+          parsed.settings?.terminalRightClickToPasteDefaultedForPlatform === true
+        if (!terminalRightClickToPasteDefaultedForPlatform) {
+          this.loadNeedsSave = true
+        }
+        if (
+          parsed.settings?.terminalLineHeight !== undefined &&
+          parsed.settings.terminalLineHeight !== migratedTerminalLineHeight
+        ) {
+          this.loadNeedsSave = true
+        }
         const rawTaskProviderSettings = normalizeTaskProviderSettings({
           visibleTaskProviders: parsed.settings?.visibleTaskProviders,
           defaultTaskSource: parsed.settings?.defaultTaskSource
@@ -3041,16 +3087,6 @@ export class Store {
         if (!parsed.onboarding) {
           this.loadNeedsSave = true
         }
-        const defaultNewWorktreeCardStyle =
-          shouldDefaultNewWorktreeCardStyleOn(normalizedOnboarding)
-        const migratedExperimentalNewWorktreeCardStyle =
-          parsed.settings?.experimentalNewWorktreeCardStyle ?? defaultNewWorktreeCardStyle
-        if (
-          parsed.settings?.experimentalNewWorktreeCardStyle === undefined &&
-          defaultNewWorktreeCardStyle
-        ) {
-          this.loadNeedsSave = true
-        }
         const normalizedProjectGroups = normalizeProjectGroups(parsed.projectGroups)
         const loadedCompactWorktreeCards =
           parsed.settings?.compactWorktreeCards ??
@@ -3082,7 +3118,16 @@ export class Store {
           ),
           settings: {
             ...defaults.settings,
+            // Why (#7977): a persisted experimentalNewWorktreeCardStyle:true is
+            // kept even though the default is now false. The v1.4.130 open-
+            // onboarding auto-default wrote the same plain boolean as a real
+            // opt-in, so a rollback migration would also revert genuine opt-ins;
+            // product intent was only to change the default, and the setting
+            // stays user-toggleable.
             ...stripLegacyTerminalScrollbackBytes(parsed.settings),
+            prBotAuthorOverrides: normalizePRBotAuthorOverrides(
+              parsed.settings?.prBotAuthorOverrides
+            ),
             // Why: v1.3.42 renamed the cosmetic sidekick setting to pet. Carry
             // the old persisted flag forward once so enabled users don't lose it.
             experimentalPet:
@@ -3101,12 +3146,19 @@ export class Store {
               primarySelectionDefaultedForTerminalDefaults || stampPrimarySelectionTerminalDefaults,
             ...migratedAutoRenameBranchFromWork,
             ...migratedTerminalCursorStyle,
+            terminalLineHeight: migratedTerminalLineHeight,
+            // Why: the old global true default was inherited, while false was
+            // always an explicit opt-out and must survive this one-shot reset.
+            terminalRightClickToPaste: terminalRightClickToPasteDefaultedForPlatform
+              ? (parsed.settings?.terminalRightClickToPaste ??
+                defaults.settings.terminalRightClickToPaste)
+              : parsed.settings?.terminalRightClickToPaste === false
+                ? false
+                : defaults.settings.terminalRightClickToPaste,
+            terminalRightClickToPasteDefaultedForPlatform: true,
             ...migratedTerminalTuiScrollSensitivity.settings,
             experimentalActivity: migratedExperimentalActivity,
             experimentalActivityDefaultedOffForAllUsers: true,
-            // Why: open first-run onboarding is the local fresh-install signal;
-            // closed/backfilled onboarding identifies existing profiles.
-            experimentalNewWorktreeCardStyle: migratedExperimentalNewWorktreeCardStyle,
             // Why: compact worktree cards graduated from Experimental; preserve
             // the old opt-in for profiles written during the rollout.
             compactWorktreeCards: loadedCompactWorktreeCards,
@@ -3274,6 +3326,25 @@ export class Store {
             ) {
               this.loadNeedsSave = true
             }
+            // Why: only upgraded profiles that still use the new default get
+            // the one-time usage-display change notice; brand-new profiles and
+            // users who already chose remaining stay quiet.
+            const usagePercentageDisplayChangeNoticeDismissed =
+              resolveUsagePercentageDisplayChangeNoticeDismissed({
+                rawDismissed: parsed.ui?.usagePercentageDisplayChangeNoticeDismissed,
+                rawUsagePercentageDisplay: parsed.ui?.usagePercentageDisplay,
+                isExistingProfile: isExistingPersistedProfile({
+                  repoCount: parsed.repos?.length ?? 0,
+                  onboardingClosedAt: normalizedOnboarding.closedAt,
+                  ui: parsed.ui
+                })
+              })
+            if (
+              parsed.ui?.usagePercentageDisplayChangeNoticeDismissed !==
+              usagePercentageDisplayChangeNoticeDismissed
+            ) {
+              this.loadNeedsSave = true
+            }
             return {
               ...defaults.ui,
               // Why: missing card properties should follow the persisted card
@@ -3287,6 +3358,7 @@ export class Store {
               rightSidebarOpen,
               rightSidebarTab: normalizeRightSidebarTab(parsed.ui?.rightSidebarTab),
               setupGuideSidebarDismissed,
+              usagePercentageDisplayChangeNoticeDismissed,
               setupGuideBrowserMilestoneMigrated:
                 typeof parsed.ui?.setupGuideBrowserMilestoneMigrated === 'boolean'
                   ? parsed.ui.setupGuideBrowserMilestoneMigrated
@@ -3361,7 +3433,18 @@ export class Store {
             parsed.legacyPaneKeyAliasEntries
           ),
           automations: Array.isArray(parsed.automations) ? parsed.automations : [],
-          automationRuns: Array.isArray(parsed.automationRuns) ? parsed.automationRuns : [],
+          automationRuns: (() => {
+            if (!Array.isArray(parsed.automationRuns)) {
+              return []
+            }
+            const runs = pruneAutomationRuns(backfillAutomationRunNumbers(parsed.automationRuns))
+            // Why: nothing else on the load path marks state dirty, so without
+            // this an oversized legacy file only shrinks at the next unrelated save.
+            if (runs.length !== parsed.automationRuns.length) {
+              this.loadNeedsSave = true
+            }
+            return runs
+          })(),
           onboarding: normalizedOnboarding
         }
       }
@@ -3391,24 +3474,16 @@ export class Store {
     }
 
     if (result === null) {
-      const defaults = getDefaultPersistedState(homedir())
-      const isFreshDefaultProfile =
-        !fileExistedOnLoad && shouldDefaultNewWorktreeCardStyleOn(defaults.onboarding)
-      result = {
-        ...defaults,
-        settings: {
-          ...defaults.settings,
-          // Why: a corrupt existing data file also falls back to defaults; only
-          // the absent-file path is a true fresh install.
-          experimentalNewWorktreeCardStyle: isFreshDefaultProfile
-        }
-      }
+      result = getDefaultPersistedState(homedir())
     }
 
     const workspaceSession = pruneWorkspaceSessionBrowserHistory(
       pruneLocalTerminalScrollbackBuffers(result.workspaceSession, result.repos)
     )
-    const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(workspaceSession)
+    const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(
+      workspaceSession,
+      this.terminalScrollbackSnapshotStorage
+    )
     if (migratedScrollback.changed) {
       this.loadNeedsSave = true
     }
@@ -3464,7 +3539,7 @@ export class Store {
       // poll refresh happens this session — the seed survives the migration.
       this.githubCacheDirty = true
     } else {
-      migrated.githubCache = readGithubCacheSnapshot() ?? migrated.githubCache
+      migrated.githubCache = readGithubCacheSnapshot(this.dataFile) ?? migrated.githubCache
     }
 
     logPersistenceStartupMilestone('persistence-load-done', {
@@ -3612,6 +3687,9 @@ export class Store {
   // Why: async writes avoid blocking the main Electron thread on every
   // debounced save during active use.
   private async writeToDiskAsync(): Promise<void> {
+    if (this.writesFrozen) {
+      return
+    }
     const gen = this.writeGeneration
     const stateHash = this.computeStateHash()
     // Why: a mutation burst that nets out to already-persisted state (or a
@@ -3620,7 +3698,7 @@ export class Store {
       return
     }
     const payload = this.buildStateToSave()
-    const dataFile = getDataFile()
+    const dataFile = this.dataFile
     const dir = dirname(dataFile)
     await mkdir(dir, { recursive: true }).catch(() => {})
     const tmpFile = `${dataFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
@@ -3665,6 +3743,9 @@ export class Store {
   // Why: synchronous variant kept only for flush() at shutdown, where the
   // process may exit before an async write completes.
   private writeToDiskSync(opts: { force?: boolean } = {}): void {
+    if (this.writesFrozen) {
+      return
+    }
     const stateHash = this.computeStateHash()
     // Why: skipping is safe under flushOrThrow's durability contract — a
     // matching hash means this exact state is already the file's content.
@@ -3674,7 +3755,7 @@ export class Store {
     if (!opts.force && stateHash === this.lastWrittenStateHash) {
       return
     }
-    const dataFile = getDataFile()
+    const dataFile = this.dataFile
     const dir = dirname(dataFile)
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true })
@@ -4677,12 +4758,15 @@ export class Store {
       return existing
     }
     const now = Date.now()
-    const runNumber =
-      (this.state.automationRuns ?? []).filter((run) => run.automationId === automation.id).length +
-      1
+    // Why: retention prunes old runs, so the count of retained runs is no longer
+    // the run's ordinal — carry the number forward from the newest survivor.
+    const runNumber = nextAutomationRunNumber(
+      (this.state.automationRuns ?? []).filter((run) => run.automationId === automation.id)
+    )
     const run: AutomationRun = {
       id: randomUUID(),
       automationId: automation.id,
+      runNumber,
       runContext: automation.runContext ?? null,
       sourceContext: automation.sourceContext ?? null,
       title: `${automation.name} run ${runNumber}`,
@@ -4704,7 +4788,7 @@ export class Store {
       dispatchedAt: null,
       createdAt: now
     }
-    this.state.automationRuns = [...(this.state.automationRuns ?? []), run]
+    this.state.automationRuns = pruneAutomationRuns([...(this.state.automationRuns ?? []), run])
     if (trigger === 'manual') {
       this.recordFeatureInteraction('automation-run')
     }
@@ -5203,6 +5287,13 @@ export class Store {
     if ('uiLanguage' in updates) {
       sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)
     }
+    if ('prBotAuthorOverrides' in updates) {
+      // Why: every writer (desktop IPC, paired web RPC, and migrations) reaches
+      // this boundary, so the persisted list stays bounded and well-formed.
+      sanitizedUpdates.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
+        updates.prBotAuthorOverrides
+      )
+    }
     const historyWithPreviousLayout = buildWorkspaceDirHistoryForUpdate(
       this.state.settings,
       sanitizedUpdates
@@ -5290,6 +5381,9 @@ export class Store {
         this.state.ui?.workspaceBoardColumnWidth
       ),
       syncTaskStatusFromWorkspaceBoard: this.state.ui?.syncTaskStatusFromWorkspaceBoard === true,
+      usagePercentageDisplay: normalizeUsagePercentageDisplay(
+        this.state.ui?.usagePercentageDisplay
+      ),
       // Why: strict boolean coercion so a missing/legacy value reads as false
       // (first-run notice still fires) rather than leaking a non-bool through.
       trayMinimizeNoticeShown: this.state.ui?.trayMinimizeNoticeShown === true,
@@ -5369,6 +5463,9 @@ export class Store {
         sanitizedUpdates.syncTaskStatusFromWorkspaceBoard !== undefined
           ? sanitizedUpdates.syncTaskStatusFromWorkspaceBoard === true
           : this.state.ui?.syncTaskStatusFromWorkspaceBoard === true,
+      usagePercentageDisplay: normalizeUsagePercentageDisplay(
+        sanitizedUpdates.usagePercentageDisplay ?? this.state.ui?.usagePercentageDisplay
+      ),
       markdownTocPanelWidth: clampMarkdownTocPanelWidth(
         sanitizedUpdates.markdownTocPanelWidth ?? this.state.ui?.markdownTocPanelWidth
       ),
@@ -5529,7 +5626,7 @@ export class Store {
   }
 
   readTerminalScrollbackSnapshot(ref: string): string | null {
-    return readTerminalScrollbackSnapshotSync(ref)
+    return readTerminalScrollbackSnapshotSync(ref, this.terminalScrollbackSnapshotStorage)
   }
 
   /** Resolve the worktree a terminal tab belongs to, from the session's
@@ -5703,9 +5800,12 @@ export class Store {
       }
     }
     session = pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
-    const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(session)
+    const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(
+      session,
+      this.terminalScrollbackSnapshotStorage
+    )
     session = migratedScrollback.session
-    deleteRemovedTerminalScrollbackSnapshots(prior, session)
+    deleteRemovedTerminalScrollbackSnapshots(prior, session, this.terminalScrollbackSnapshotStorage)
     this.state.workspaceSession = session
     this.scheduleSave()
   }
@@ -6095,16 +6195,16 @@ export class Store {
   /**
    * Re-point every repo and worktree meta pinned to a removed SSH target id
    * onto a re-added target's id, so orphaned workspaces reattach to the live
-   * host instead of remaining un-removable ghosts. Returns the number of repos
-   * re-pointed (0 when nothing referenced the old id).
+   * host instead of remaining un-removable ghosts. Returns the ids of repos
+   * re-pointed (empty when nothing referenced the old id).
    */
-  reassignSshTargetId(oldTargetId: string, newTargetId: string): number {
+  reassignSshTargetId(oldTargetId: string, newTargetId: string): string[] {
     if (oldTargetId === newTargetId) {
-      return 0
+      return []
     }
     const oldHostId = toSshExecutionHostId(oldTargetId)
     const newHostId = toSshExecutionHostId(newTargetId)
-    let repoCount = 0
+    const repoIds = new Set<string>()
     for (const repo of this.state.repos) {
       const matchesConnection = repo.connectionId === oldTargetId
       const matchesHost = repo.executionHostId === oldHostId
@@ -6121,7 +6221,7 @@ export class Store {
       if (matchesHost) {
         repo.executionHostId = newHostId
       }
-      repoCount++
+      repoIds.add(repo.id)
     }
     // Re-point worktree metas whose hostId pointed at the old SSH host.
     let metaChanged = false
@@ -6131,16 +6231,74 @@ export class Store {
         metaChanged = true
       }
     }
-    // Why: repo-row rewrites can affect host-setup compatibility, but meta-only
-    // rewrites cannot — keep that sync under the repo gate. Persist whenever
-    // either repos OR metas changed, so meta-only re-points aren't lost on quit.
-    if (repoCount > 0) {
+    // Why: the old id also survives in session pty ids, the startup reconnect
+    // list, sleeping-agent records, host setups, host-scope UI, and pty leases;
+    // any un-migrated carrier later throws `SSH target not found` (STA-1468).
+    let carrierChanged = migrateWorkspaceSessionSshTargetId(
+      this.state.workspaceSession,
+      oldTargetId,
+      newTargetId
+    )
+    for (const session of Object.values(this.state.workspaceSessionsByHostId ?? {})) {
+      if (session && migrateWorkspaceSessionSshTargetId(session, oldTargetId, newTargetId)) {
+        carrierChanged = true
+      }
+    }
+    // Why: partitions are read by host id, so one stored under the removed id
+    // would be orphaned. No writer keys partitions by ssh host today, but the
+    // schema tolerates it — re-key rather than strand it. If the new key
+    // already has a partition, that one is live; drop the dead old one.
+    const partitions = this.state.workspaceSessionsByHostId
+    const oldPartition = partitions?.[oldHostId]
+    if (partitions && oldPartition) {
+      delete partitions[oldHostId]
+      partitions[newHostId] ??= oldPartition
+      carrierChanged = true
+    }
+    if (migrateUiHostScopeSshTargetId(this.state.ui, oldTargetId, newTargetId)) {
+      carrierChanged = true
+    }
+    for (const lease of this.state.sshRemotePtyLeases ?? []) {
+      if (lease.targetId === oldTargetId) {
+        lease.targetId = newTargetId
+        carrierChanged = true
+      }
+    }
+    let setupsChanged = false
+    const keptSetups: ProjectHostSetup[] = []
+    for (const setup of this.state.projectHostSetups) {
+      if (setup.hostId !== oldHostId) {
+        keptSetups.push(setup)
+        continue
+      }
+      const duplicate = this.state.projectHostSetups.some(
+        (entry) =>
+          entry !== setup && entry.projectId === setup.projectId && entry.hostId === newHostId
+      )
+      // Why: a setup already exists for the re-added host — the old row is a
+      // stale ghost that would violate the (projectId, hostId) uniqueness.
+      if (duplicate) {
+        setupsChanged = true
+        continue
+      }
+      setup.hostId = newHostId
+      setup.updatedAt = Date.now()
+      keptSetups.push(setup)
+      setupsChanged = true
+    }
+    if (setupsChanged) {
+      this.state.projectHostSetups = keptSetups
+    }
+    // Why: repo-row and host-setup rewrites can affect host-setup compatibility,
+    // but meta-only rewrites cannot — keep that sync under this gate. Persist
+    // whenever anything changed, so partial re-points aren't lost on quit.
+    if (repoIds.size > 0 || setupsChanged) {
       this.syncProjectHostSetupCompatibilityState()
     }
-    if (repoCount > 0 || metaChanged) {
+    if (repoIds.size > 0 || metaChanged || carrierChanged || setupsChanged) {
       this.scheduleSave()
     }
-    return repoCount
+    return [...repoIds]
   }
 
   // ── SSH Remote PTY Leases ──────────────────────────────────────────
@@ -6352,13 +6510,24 @@ export class Store {
     this.writeGithubCacheSnapshotSync()
   }
 
+  // Why: called after a project move rewrote this store's data file directly.
+  // From that point until relaunch, the in-memory state is stale and any
+  // write (debounced, sync, or shutdown flush) would undo the transfer.
+  freezeWrites(): void {
+    this.writesFrozen = true
+    if (this.writeTimer) {
+      clearTimeout(this.writeTimer)
+      this.writeTimer = null
+    }
+  }
+
   // Why best-effort: the sidecar is a refetchable cache — a failed write only
   // costs a cold badge paint on next launch, never data.
   private writeGithubCacheSnapshotSync(): void {
     if (!this.githubCacheDirty) {
       return
     }
-    const cacheFile = getGithubCacheFile()
+    const cacheFile = getGithubCacheFile(this.dataFile)
     const tmpFile = `${cacheFile}.${process.pid}.tmp`
     try {
       writeFileSync(tmpFile, JSON.stringify(this.state.githubCache), 'utf-8')

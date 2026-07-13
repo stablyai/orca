@@ -1,13 +1,8 @@
 import { useRef, useCallback, forwardRef, useImperativeHandle, useEffect, useMemo } from 'react'
-import { View, type StyleProp, type ViewStyle } from 'react-native'
-import { WebView } from 'react-native-webview'
-import type { WebViewMessageEvent } from 'react-native-webview'
+import { Platform, View } from 'react-native'
+import { WebView, type WebViewMessageEvent } from 'react-native-webview'
 import type { TerminalOscLinkRange } from './terminal-osc-link-ranges'
-import type {
-  MobileTerminalTheme,
-  TerminalSelectionEvents,
-  TerminalWebViewHandle
-} from './terminal-webview-contract'
+import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
 import {
   TerminalWebViewEngineErrorOverlay,
   useTerminalWebViewEngineErrorState
@@ -17,24 +12,11 @@ import { useTerminalWebReadyWatchdog } from './terminal-webview-ready-watchdog'
 import { XTERM_WEBVIEW_SOURCE } from './terminal-webview-html'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
 import { createTerminalWebViewPendingMessages } from './terminal-webview-pending-messages'
+import { routeTerminalQueryReply } from './terminal-webview-query-reply-routing'
 
-export type {
-  MobileTerminalTheme,
-  TerminalKeyboardAvoidanceMetrics,
-  TerminalModes,
-  TerminalSelectionEvents,
-  TerminalWebViewHandle
-} from './terminal-webview-contract'
+type Props = TerminalWebViewProps
 
-type Props = {
-  style?: StyleProp<ViewStyle>
-  terminalTheme?: MobileTerminalTheme
-  // Why: baseline zoom multiplier ("text size") applied on top of the fit-to-width
-  // scale; raw xterm fontSize can't drive apparent size because the fit cancels it.
-  textScale?: number
-  onWebReady?: () => void
-  onEngineError?: (message: string) => void
-} & TerminalSelectionEvents
+export type { TerminalWebViewHandle } from './terminal-webview-contract'
 
 export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function TerminalWebView(
   {
@@ -50,6 +32,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     onKeyboardAvoidanceMetrics,
     onHaptic,
     onTerminalInput,
+    onTerminalQueryReply,
     onTerminalTap,
     onFileTap,
     onOpenUrl,
@@ -61,6 +44,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
   const isWebReadyRef = useRef(false)
   const pendingMessages = useMemo(() => createTerminalWebViewPendingMessages(), [])
   const messageIdRef = useRef(0)
+  const pendingPingIdRef = useRef<number | null>(null)
   const terminalThemeKey = useMemo(() => JSON.stringify(terminalTheme ?? null), [terminalTheme])
   const measureResolveRef = useRef<
     ((result: { cols: number; rows: number } | null) => void) | null
@@ -80,7 +64,9 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
 
   const sendToWebView = useCallback((msg: TerminalWebViewCommand) => {
     messageIdRef.current += 1
-    webViewRef.current?.postMessage(JSON.stringify({ ...msg, id: messageIdRef.current }))
+    const id = messageIdRef.current
+    webViewRef.current?.postMessage(JSON.stringify({ ...msg, id }))
+    return id
   }, [])
 
   const flushPendingMessages = useCallback(() => {
@@ -98,6 +84,30 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     [pendingMessages, sendToWebView]
   )
 
+  const confirmWebReady = useCallback(
+    (notifyParent: boolean) => {
+      pendingPingIdRef.current = null
+      isWebReadyRef.current = true
+      clearWebReadyWatchdog()
+      clearEngineError()
+      if (notifyParent) {
+        onWebReady?.()
+      }
+      // Why: reload clears queued commands, so readiness must always restore the
+      // native-selected theme even when its value did not change in React.
+      sendToWebView({ type: 'set-theme', terminalTheme })
+      flushPendingMessages()
+    },
+    [
+      clearEngineError,
+      clearWebReadyWatchdog,
+      flushPendingMessages,
+      onWebReady,
+      sendToWebView,
+      terminalTheme
+    ]
+  )
+
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
       let msg: Record<string, unknown>
@@ -106,13 +116,16 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       } catch {
         return
       }
+      routeTerminalQueryReply(msg, onTerminalQueryReply)
 
       if (msg.type === 'web-ready') {
-        isWebReadyRef.current = true
-        clearWebReadyWatchdog()
-        clearEngineError()
-        onWebReady?.()
-        flushPendingMessages()
+        confirmWebReady(true)
+      } else if (
+        msg.type === 'pong' &&
+        typeof msg.pingId === 'number' &&
+        msg.pingId === pendingPingIdRef.current
+      ) {
+        confirmWebReady(false)
       } else if (msg.type === 'ready') {
         // Why: the WebView's init() rAF chain has run — term is open,
         // renderService is populated, first paint has happened. Resolve
@@ -208,11 +221,8 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       }
     },
     [
-      flushPendingMessages,
-      clearEngineError,
-      clearWebReadyWatchdog,
+      confirmWebReady,
       reportEngineError,
-      onWebReady,
       onSelectionMode,
       onSelectionCopy,
       onSelectionEvicted,
@@ -220,6 +230,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       onKeyboardAvoidanceMetrics,
       onHaptic,
       onTerminalInput,
+      onTerminalQueryReply,
       onTerminalTap,
       onFileTap,
       onOpenUrl,
@@ -229,6 +240,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
 
   const handleLoadStart = useCallback(() => {
     isWebReadyRef.current = false
+    pendingPingIdRef.current = null
     armWebReadyWatchdog()
     // Why: messages queued for a previous WebView generation are stale after a reload;
     // dropping them avoids replaying terminal chunks before the next init snapshot.
@@ -239,6 +251,17 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     clearEngineError()
     webViewRef.current?.reload()
   }, [clearEngineError])
+
+  const handleContentProcessDidTerminate = useCallback(() => {
+    // Why: WKWebView content-process loss is recoverable; stale commands belong
+    // to the dead document and the replacement must prove readiness before replay.
+    isWebReadyRef.current = false
+    pendingPingIdRef.current = null
+    pendingMessages.clear()
+    clearEngineError()
+    armWebReadyWatchdog()
+    webViewRef.current?.reload()
+  }, [armWebReadyWatchdog, clearEngineError, pendingMessages])
 
   useEffect(() => {
     postMessage({ type: 'set-theme', terminalTheme })
@@ -253,6 +276,16 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
   useImperativeHandle(
     ref,
     () => ({
+      prepareForForegroundRecovery() {
+        if (Platform.OS !== 'ios') {
+          return
+        }
+        // Why: direct ping is the only command allowed through while readiness is
+        // invalid; init/write commands queue until this exact document answers.
+        isWebReadyRef.current = false
+        armWebReadyWatchdog()
+        pendingPingIdRef.current = sendToWebView({ type: 'ping' })
+      },
       write(data: string) {
         postMessage({ type: 'write', data })
       },
@@ -363,7 +396,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         })
       }
     }),
-    [postMessage, sendToWebView, terminalTheme, textScale]
+    [armWebReadyWatchdog, postMessage, sendToWebView, terminalTheme, textScale]
   )
 
   return (
@@ -389,9 +422,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         onRenderProcessGone={(event) =>
           reportNativeEngineError('Terminal WebView render process ended', event)
         }
-        onContentProcessDidTerminate={(event) =>
-          reportNativeEngineError('Terminal WebView content process ended', event)
-        }
+        onContentProcessDidTerminate={handleContentProcessDidTerminate}
       />
       {engineError ? (
         <TerminalWebViewEngineErrorOverlay message={engineError} onReload={handleReload} />

@@ -140,6 +140,24 @@ describe('keybindings', () => {
     })
   })
 
+  it('binds F7 / Shift+F7 for diff-change navigation and matches their events', () => {
+    // Opt-in actions accept bare / Shift-only function keys...
+    expect(normalizeKeybindingListForAction('editor.nextChange', 'F7')).toEqual(['F7'])
+    expect(normalizeKeybindingListForAction('editor.previousChange', 'Shift+F7')).toEqual([
+      'Shift+F7'
+    ])
+    // ...but they stay unsafe for actions that do not opt in.
+    expect(normalizeKeybinding('F7')).toMatchObject({ ok: false })
+    expect(normalizeKeybinding('Shift+F7')).toMatchObject({ ok: false })
+
+    const f7 = { key: 'F7', code: 'F7', control: false, meta: false, alt: false, shift: false }
+    const shiftF7 = { ...f7, shift: true }
+    expect(keybindingMatchesAction('editor.nextChange', f7, 'darwin')).toBe(true)
+    expect(keybindingMatchesAction('editor.nextChange', shiftF7, 'darwin')).toBe(false)
+    expect(keybindingMatchesAction('editor.previousChange', shiftF7, 'darwin')).toBe(true)
+    expect(keybindingMatchesAction('editor.previousChange', f7, 'darwin')).toBe(false)
+  })
+
   it('formats keybindings with platform labels', () => {
     expect(formatKeybindingList(['Mod+Shift+J'], 'darwin')).toBe('⌘⇧J')
     expect(formatKeybindingList(['Mod+Shift+J'], 'linux')).toBe('Ctrl+Shift+J')

@@ -3,9 +3,17 @@ import { resolveRuntimePath } from './cross-platform-path'
 import { parseWorkspaceKey } from './workspace-scope'
 import { splitWorktreeIdForFilesystem } from './worktree-id'
 
+export type TerminalStartupCwdMissingDirFallback = {
+  // Why: only local callers can probe the filesystem — SSH/remote worktree
+  // paths live on another host — so the existence check is injected.
+  directoryExists: (path: string) => boolean
+  onFallbackToWorkspaceRoot?: (missingCwd: string) => void
+}
+
 export function resolveTerminalStartupCwd(
   worktreePath: string,
-  requestedCwd?: string | null
+  requestedCwd?: string | null,
+  missingDirFallback?: TerminalStartupCwdMissingDirFallback
 ): string | undefined {
   const trimmedCwd = requestedCwd?.trim()
   if (!trimmedCwd) {
@@ -14,13 +22,29 @@ export function resolveTerminalStartupCwd(
   // Why: resolve relative requests against the worktree root and normalize
   // `..`; the cwd is intentionally not constrained to the worktree, so opening
   // or splitting a terminal outside it (e.g. after `cd ..`) is allowed. (#7685)
-  return resolveRuntimePath(worktreePath, trimmedCwd)
+  const resolvedCwd = resolveRuntimePath(worktreePath, trimmedCwd)
+  if (
+    missingDirFallback &&
+    resolvedCwd !== worktreePath &&
+    !missingDirFallback.directoryExists(resolvedCwd) &&
+    missingDirFallback.directoryExists(worktreePath)
+  ) {
+    // Why: a persisted/inherited startup folder can be deleted later; spawning
+    // into it fails on every retry and bricks terminal creation for that tab
+    // (#7239), so recover at the workspace root. If the root is missing too
+    // (unmounted volume, stopped WSL distro), keep the requested cwd so the
+    // provider surfaces its normal error instead of a misleading fallback.
+    missingDirFallback.onFallbackToWorkspaceRoot?.(resolvedCwd)
+    return worktreePath
+  }
+  return resolvedCwd
 }
 
 export function resolveTerminalStartupCwdForWorkspace(args: {
   workspaceId?: string
   requestedCwd?: string | null
   resolveFolderWorkspacePath?: (folderWorkspaceId: string) => string | null | undefined
+  missingDirFallback?: TerminalStartupCwdMissingDirFallback
 }): string | undefined {
   if (!args.requestedCwd || args.requestedCwd.trim().length === 0) {
     return undefined
@@ -39,7 +63,7 @@ export function resolveTerminalStartupCwdForWorkspace(args: {
     // back to the provider default rather than guessing a base.
     return undefined
   }
-  return resolveTerminalStartupCwd(workspacePath, args.requestedCwd)
+  return resolveTerminalStartupCwd(workspacePath, args.requestedCwd, args.missingDirFallback)
 }
 
 function resolveTerminalWorkspacePath(

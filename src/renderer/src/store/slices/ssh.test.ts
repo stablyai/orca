@@ -146,13 +146,25 @@ describe('createSshSlice', () => {
   it('keeps SSH target label references stable when refreshed metadata is unchanged', () => {
     const store = createTestStore()
     const labels = new Map([['ssh-1', 'Remote']])
-    store.setState({ sshTargetLabels: labels })
+    store.setState({ sshTargetLabels: labels, sshTargetsHydrated: true })
     const previousState = store.getState()
 
     store.getState().setSshTargetsMetadata([{ id: 'ssh-1', label: 'Remote' }])
 
     expect(store.getState()).toBe(previousState)
     expect(store.getState().sshTargetLabels).toBe(labels)
+  })
+
+  it('marks targets hydrated on the first load, even when the list is empty', () => {
+    const store = createTestStore()
+    expect(store.getState().sshTargetsHydrated).toBe(false)
+
+    store.getState().setSshTargetsMetadata([])
+
+    // Why: an empty target set is still positive knowledge — the overlay's
+    // targetRemoved derivation may only trust absence after a real load.
+    expect(store.getState().sshTargetsHydrated).toBe(true)
+    expect(store.getState().sshTargetLabels.size).toBe(0)
   })
 
   it('keeps SSH connection state references stable when duplicate state arrives', () => {

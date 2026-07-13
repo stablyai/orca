@@ -36,8 +36,8 @@
    the install terminals inside centered setup modals), that black layer
    anti-aliases into a faint 1px line above/below the themed .xterm. Match
    xterm's own selector so this also covers terminals mounted outside the pane
-   manager, and let the themed .xterm background show through; our scrollbar is
-   already custom-styled below. */
+   manager, and let the themed .xterm background show through; the viewport
+   reuses the canonical editor scrollbar rules in main.css. */
 .xterm:not(.allow-transparency) .xterm-viewport {
   background-color: transparent;
 }

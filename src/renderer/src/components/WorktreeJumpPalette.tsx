@@ -32,7 +32,7 @@ import {
   isAutomationGeneratedWorkspace,
   isDefaultBranchWorkspace
 } from '@/components/sidebar/visible-worktrees'
-import { isInactiveWorkspace } from '@/lib/worktree-activity-state'
+import { getLiveAgentStatusByWorktreeId, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
 import StatusIndicator from '@/components/sidebar/StatusIndicator'
 import { cn } from '@/lib/utils'
@@ -104,6 +104,9 @@ import {
   getCmdJQuickActions,
   CREATE_WORKSPACE_QUICK_ACTION_ID
 } from '@/components/cmd-j/quick-actions'
+import { buildWorktreeChecksReviewIndex } from '@/components/cmd-j/worktree-checks-review-index'
+import { selectWorktreePaletteCacheInputs } from '@/components/cmd-j/worktree-palette-cache-inputs'
+import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 import {
   getComposerEligibleRepos,
   resolveComposerGitRepoId
@@ -379,8 +382,12 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     terminalLayoutsByTabId,
     tabsByWorktree
   } = useAppStore(useShallow((s) => selectPaletteStatusInputs(s, visible || statusInputsLingering)))
-  const prCache = useAppStore((s) => s.prCache)
-  const issueCache = useAppStore((s) => s.issueCache)
+  const agentStatusEpoch = useAppStore((s) =>
+    visible || statusInputsLingering ? s.agentStatusEpoch : 0
+  )
+  const { prCache, issueCache, hostedReviewCache } = useAppStore(
+    useShallow((s) => selectWorktreePaletteCacheInputs(s, visible || statusInputsLingering))
+  )
   const migrationUnsupportedByPtyId = useAppStore((s) => s.migrationUnsupportedByPtyId)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeTabType = useAppStore((s) => s.activeTabType)
@@ -436,6 +443,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const preserveCreateLookupOnCloseRef = useRef(false)
 
   const repoMap = useMemo(() => new Map(repos.map((r) => [r.id, r])), [repos])
+  const repoByHostIdentity = useMemo(
+    () => new Map(repos.map((repo) => [getRepoHostIdentity(repo), repo])),
+    [repos]
+  )
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
   // Why: host badges only appear when more than one execution host exists; reuse
   // the same registry the sidebar host-scope strip builds so labels stay in sync.
@@ -465,6 +476,19 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const hasQuery = deferredQuery.trim().length > 0
   const isLoading = repos.length > 0 && Object.keys(worktreesByRepo).length === 0
 
+  // Why: keep running-agent workspaces visible under "Hide sleeping" even when
+  // their live PTY is momentarily absent, matching the sidebar filter. #7197
+  const liveAgentActivity = useMemo(() => {
+    void agentStatusEpoch
+    const statusByWorktreeId = getLiveAgentStatusByWorktreeId(
+      agentStatusByPaneKey,
+      tabsByWorktree,
+      Date.now()
+    )
+    return { statusByWorktreeId, worktreeIds: new Set(statusByWorktreeId.keys()) }
+  }, [agentStatusByPaneKey, agentStatusEpoch, tabsByWorktree])
+  const worktreeIdsWithLiveAgent = liveAgentActivity.worktreeIds
+
   // Why: the empty-query palette mirrors sidebar filters so opening Search
   // starts from the same quiet list. Typed search switches to the global
   // non-archived scope below.
@@ -482,7 +506,13 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         }
         if (
           !showSleepingWorkspaces &&
-          isInactiveWorkspace(worktree.id, tabsByWorktree, ptyIdsByTabId, browserTabsByWorktree)
+          isInactiveWorkspace(
+            worktree.id,
+            tabsByWorktree,
+            ptyIdsByTabId,
+            browserTabsByWorktree,
+            worktreeIdsWithLiveAgent
+          )
         ) {
           return false
         }
@@ -495,7 +525,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       hideDefaultBranchWorkspace,
       ptyIdsByTabId,
       showSleepingWorkspaces,
-      tabsByWorktree
+      tabsByWorktree,
+      worktreeIdsWithLiveAgent
     ]
   )
 
@@ -599,6 +630,18 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     [browserSortedWorktrees]
   )
 
+  const checksReviewByWorktree = useMemo(
+    () =>
+      buildWorktreeChecksReviewIndex({
+        worktrees: allWorktrees,
+        repoByHostIdentity,
+        prCache,
+        hostedReviewCache,
+        settings
+      }),
+    [allWorktrees, hostedReviewCache, prCache, repoByHostIdentity, settings]
+  )
+
   const worktreeMatches = useMemo(
     () =>
       searchWorktrees(
@@ -607,9 +650,18 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         repoMap,
         prCache,
         issueCache,
-        getWorkspacePortsByWorktreeId(workspacePortScan)
+        getWorkspacePortsByWorktreeId(workspacePortScan),
+        checksReviewByWorktree
       ),
-    [sortedWorktrees, deferredQuery, repoMap, prCache, issueCache, workspacePortScan]
+    [
+      sortedWorktrees,
+      deferredQuery,
+      repoMap,
+      prCache,
+      issueCache,
+      workspacePortScan,
+      checksReviewByWorktree
+    ]
   )
 
   const browserPageEntries = useMemo<SearchableBrowserPage[]>(() => {
@@ -1825,7 +1877,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                   tabsByWorktree[worktree.id] ?? [],
                   browserTabsByWorktree[worktree.id] ?? [],
                   ptyIdsByTabId,
-                  runtimePaneTitlesByTabId
+                  runtimePaneTitlesByTabId,
+                  { liveAgentStatus: liveAgentActivity.statusByWorktreeId.get(worktree.id) }
                 )
                 const statusLabel = getWorktreeStatusLabel(status)
                 const isCurrentWorktree = activeWorktreeId === worktree.id
@@ -2340,5 +2393,7 @@ function getPaletteSupportingTextLabel(
       return translate('worktreeJumpPalette.matchLabel.port', 'Port')
     case 'pr':
       return translate('worktreeJumpPalette.matchLabel.pr', 'PR')
+    case 'mr':
+      return translate('worktreeJumpPalette.matchLabel.mr', 'MR')
   }
 }

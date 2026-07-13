@@ -293,3 +293,129 @@ describe('useNativeChatLiveSession — transport routing', () => {
     expect(latest?.messages.map((m) => m.id)).not.toContain('stale')
   })
 })
+
+// Regression for #8401: a just-created Claude Code session's transcript can
+// take up to minutes to exist on disk, so the first readSession commonly
+// misses. Before this fix, the hook settled into a permanent 'error' phase
+// on that first miss and never recovered.
+describe('useNativeChatLiveSession — notFound retry (#8401)', () => {
+  const AGENT = 'claude' as const
+  const SESSION = 'sess-notfound'
+  const PANE = 'pane-notfound'
+  const roots: Root[] = []
+  let latest: NativeChatLiveSession | null = null
+
+  function Probe(props: UseNativeChatLiveSessionArgs): null {
+    latest = useNativeChatLiveSession(props)
+    return null
+  }
+
+  async function render(props: UseNativeChatLiveSessionArgs): Promise<Root> {
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    roots.push(root)
+    await act(async () => {
+      root.render(createElement(Probe, props))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    return root
+  }
+
+  beforeEach(() => {
+    useAppStore.setState({ agentStatusByPaneKey: {} })
+  })
+
+  afterEach(() => {
+    for (const root of roots.splice(0)) {
+      act(() => root.unmount())
+    }
+    latest = null
+    vi.clearAllMocks()
+    resetMockTransports()
+    vi.useRealTimers()
+  })
+
+  it('retries a notFound miss with backoff and settles into ready without ever exposing an error', async () => {
+    vi.useFakeTimers()
+    const transport = getMockTransport('env-1')
+    transport.readSession
+      .mockResolvedValueOnce({ error: 'No transcript found', notFound: true })
+      .mockResolvedValueOnce({ messages: [assistant('a-1', 'hello')] })
+
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    expect(latest?.status).toBe('loading')
+
+    // First backoff step (1s) fires the second readSession, which resolves.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000)
+    })
+
+    expect(latest?.status).not.toBe('error')
+    expect(transport.readSession).toHaveBeenCalledTimes(2)
+    expect(latest?.messages.map((m) => m.id)).toContain('a-1')
+  })
+
+  it('surfaces an error once the ~60s retry window is exhausted', async () => {
+    vi.useFakeTimers()
+    const transport = getMockTransport('env-1')
+    transport.readSession.mockResolvedValue({ error: 'No transcript found', notFound: true })
+
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    expect(latest?.status).toBe('loading')
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(70_000)
+    })
+
+    expect(latest?.status).toBe('error')
+    expect(latest?.error).toBe('No transcript found')
+  })
+
+  it('renders live-appended content instead of loading while the read is still retrying', async () => {
+    vi.useFakeTimers()
+    const transport = getMockTransport('env-1')
+    transport.readSession.mockResolvedValue({ error: 'No transcript found', notFound: true })
+    let onAppended: ((messages: NativeChatMessage[]) => void) | null = null
+    transport.subscribe.mockImplementationOnce(
+      (_args: unknown, cb: (m: NativeChatMessage[]) => void) => {
+        onAppended = cb
+        return transport.unsubscribe
+      }
+    )
+
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    expect(latest?.status).toBe('loading')
+
+    // The watcher's first drain lands mid-retry — content must win over the spinner.
+    await act(async () => {
+      onAppended?.([assistant('a-early', 'landed during retry')])
+    })
+
+    expect(latest?.status).not.toBe('loading')
+    expect(latest?.messages.map((m) => m.id)).toContain('a-early')
+  })
+
+  it('renders live-appended content even when the initial read settled into a permanent error', async () => {
+    const transport = getMockTransport('env-1')
+    transport.readSession.mockResolvedValueOnce({ error: 'unreadable transcript' })
+    let onAppended: ((messages: NativeChatMessage[]) => void) | null = null
+    transport.subscribe.mockImplementationOnce(
+      (_args: unknown, cb: (m: NativeChatMessage[]) => void) => {
+        onAppended = cb
+        return transport.unsubscribe
+      }
+    )
+
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    expect(latest?.status).toBe('error')
+
+    await act(async () => {
+      onAppended?.([assistant('a-late', 'landed late')])
+    })
+
+    expect(latest?.status).not.toBe('error')
+    expect(latest?.error).toBeUndefined()
+    expect(latest?.messages.map((m) => m.id)).toContain('a-late')
+  })
+})

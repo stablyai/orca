@@ -20,6 +20,7 @@ import {
   Sparkles,
   RefreshCw,
   AlertTriangle,
+  Bot,
   MoreHorizontal,
   Pencil,
   SlidersHorizontal,
@@ -59,9 +60,11 @@ import {
   getPRCommentAudienceCounts,
   getPRCommentAudienceEmptyLabel,
   isBotPRComment,
+  normalizePRCommentAuthorLogin,
   getPrCommentAudienceFilters,
   type PRCommentAudienceFilter
 } from '@/lib/pr-comment-audience'
+import { setPRBotAuthorOverride, usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
 import {
   getPRCommentGroupId,
   getPRCommentGroupRoot,
@@ -1478,20 +1481,27 @@ export function isMutablePRConversationComment(comment: PRComment): boolean {
 
 function CommentMoreMenu({
   comment,
+  botAuthorOverrides,
   onStartEdit,
   onDelete,
   onQueueForAgent
 }: {
   comment: PRComment
+  botAuthorOverrides: ReadonlySet<string>
   onStartEdit?: () => void
   onDelete?: () => void | Promise<void>
   onQueueForAgent?: () => void
 }): React.JSX.Element | null {
+  const authorLogin = normalizePRCommentAuthorLogin(comment.author)
+  const isOverriddenBot = authorLogin.length > 0 && botAuthorOverrides.has(authorLogin)
+  // Why: the override is an escape hatch for bots the heuristics miss, so hide
+  // the action when the author is already detected as a bot without it.
+  const hasMarkAsBot = authorLogin.length > 0 && (isOverriddenBot || !isBotPRComment(comment))
   const hasGoToComment = Boolean(comment.url)
   const hasEdit = Boolean(onStartEdit)
   const hasDelete = Boolean(onDelete)
   const hasQueue = Boolean(onQueueForAgent)
-  if (!hasGoToComment && !hasEdit && !hasDelete && !hasQueue) {
+  if (!hasGoToComment && !hasEdit && !hasDelete && !hasQueue && !hasMarkAsBot) {
     return null
   }
 
@@ -1548,6 +1558,25 @@ function CommentMoreMenu({
             <Trash />
             {translate('auto.components.right.sidebar.checks.panel.content.6cc6eace26', 'Delete')}
           </DropdownMenuItem>
+        ) : null}
+        {hasMarkAsBot ? (
+          <>
+            {(hasQueue || hasGoToComment || hasEdit || hasDelete) && <DropdownMenuSeparator />}
+            <DropdownMenuItem
+              onSelect={() => setPRBotAuthorOverride(comment.author, !isOverriddenBot)}
+            >
+              <Bot />
+              {isOverriddenBot
+                ? translate(
+                    'auto.components.right.sidebar.checks.panel.content.b3195cba33',
+                    'Unmark author as bot'
+                  )
+                : translate(
+                    'auto.components.right.sidebar.checks.panel.content.f588b46a6c',
+                    'Mark author as bot'
+                  )}
+            </DropdownMenuItem>
+          </>
         ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -1625,6 +1654,7 @@ function PRCommentActionBadge({
 /** A single comment row — used for both root and reply comments. */
 function CommentRow({
   comment,
+  botAuthorOverrides,
   isReply,
   showResolve,
   showReply,
@@ -1641,6 +1671,7 @@ function CommentRow({
   onQueueForAgent
 }: {
   comment: PRComment
+  botAuthorOverrides: ReadonlySet<string>
   isReply: boolean
   showResolve: boolean
   showReply?: boolean
@@ -1656,7 +1687,7 @@ function CommentRow({
   onDeleteComment?: (comment: PRComment) => void | Promise<void>
   onQueueForAgent?: () => void
 }): React.JSX.Element {
-  const automated = isBotPRComment(comment)
+  const automated = isBotPRComment(comment, botAuthorOverrides)
   const canMutateComment = isMutablePRConversationComment(comment)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(comment.body)
@@ -1761,6 +1792,7 @@ function CommentRow({
       <CopyButton text={buildCopyText(comment)} />
       <CommentMoreMenu
         comment={comment}
+        botAuthorOverrides={botAuthorOverrides}
         onStartEdit={canMutateComment && onEditComment ? handleStartEdit : undefined}
         onDelete={canMutateComment && onDeleteComment ? handleDelete : undefined}
         onQueueForAgent={!isReply ? onQueueForAgent : undefined}
@@ -1926,6 +1958,7 @@ function CommentRow({
 
 function PRCommentGroupView({
   group,
+  botAuthorOverrides,
   replyingGroupId,
   selectionControl,
   actionState,
@@ -1942,6 +1975,7 @@ function PRCommentGroupView({
   onQueueForAgent
 }: {
   group: PRCommentGroup
+  botAuthorOverrides: ReadonlySet<string>
   replyingGroupId: string | null
   selectionControl?: React.ReactNode
   actionState: PRCommentGroupActionState
@@ -1983,6 +2017,7 @@ function PRCommentGroupView({
     group.kind === 'standalone' ? presentation.groupStandalone : presentation.groupThread
   )
   const sharedRowProps = {
+    botAuthorOverrides,
     actionState,
     isQueued,
     replyDisabled,
@@ -2060,6 +2095,7 @@ function PRCommentGroupView({
 
 function ResolvedCommentGroupsSection({
   groups,
+  botAuthorOverrides,
   replyingGroupId,
   replyDisabled,
   replyDisabledReason,
@@ -2072,6 +2108,7 @@ function ResolvedCommentGroupsSection({
   onDeleteComment
 }: {
   groups: PRCommentGroup[]
+  botAuthorOverrides: ReadonlySet<string>
   replyingGroupId: string | null
   replyDisabled?: boolean
   replyDisabledReason?: string
@@ -2104,6 +2141,7 @@ function ResolvedCommentGroupsSection({
               <PRCommentGroupView
                 key={getPRCommentGroupId(group)}
                 group={group}
+                botAuthorOverrides={botAuthorOverrides}
                 replyingGroupId={replyingGroupId}
                 actionState="resolved"
                 isQueued={false}
@@ -2207,7 +2245,11 @@ export function PRCommentsList({
   const [isAddingComment, setIsAddingComment] = useState(false)
   const addCommentSurfaceRef = useRef<HTMLDivElement>(null)
   const shouldScrollAddCommentRef = useRef(false)
-  const commentCounts = React.useMemo(() => getPRCommentAudienceCounts(comments), [comments])
+  const botAuthorOverrides = usePRBotAuthorOverrides()
+  const commentCounts = React.useMemo(
+    () => getPRCommentAudienceCounts(comments, botAuthorOverrides),
+    [botAuthorOverrides, comments]
+  )
   const {
     isSelectingForAI,
     selectedGroupIds,
@@ -2219,8 +2261,8 @@ export function PRCommentsList({
     toggleGroupSelection
   } = usePRCommentsListSelection(comments, selectionContextKey, selectionClearRequest)
   const visibleComments = React.useMemo(
-    () => filterPRCommentsByAudience(comments, commentFilter),
-    [commentFilter, comments]
+    () => filterPRCommentsByAudience(comments, commentFilter, botAuthorOverrides),
+    [botAuthorOverrides, commentFilter, comments]
   )
   const groups = React.useMemo(() => groupPRComments(visibleComments), [visibleComments])
   const triageGroups = React.useMemo(() => partitionPRCommentGroupsForTriage(groups), [groups])
@@ -2301,6 +2343,7 @@ export function PRCommentsList({
       <PRCommentGroupView
         key={groupId}
         group={group}
+        botAuthorOverrides={botAuthorOverrides}
         replyingGroupId={replyingGroupId}
         selectionControl={renderSelectionControl(group)}
         actionState={actionState}
@@ -2631,6 +2674,7 @@ export function PRCommentsList({
               {triageGroups.conversation.map(renderCommentGroup)}
               <ResolvedCommentGroupsSection
                 groups={triageGroups.resolved}
+                botAuthorOverrides={botAuthorOverrides}
                 replyingGroupId={replyingGroupId}
                 replyDisabled={commentsDisabled}
                 replyDisabledReason={commentsDisabledReason}

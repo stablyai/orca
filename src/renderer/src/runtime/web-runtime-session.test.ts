@@ -37,6 +37,8 @@ vi.mock('../store', () => ({
 
 vi.mock('./web-session-tabs-sync', () => ({
   applyFreshWebSessionTabsSnapshot: mocks.applyFreshWebSessionTabsSnapshot,
+  applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) =>
+    mocks.setState(buildPatch),
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
 }))
 
@@ -488,6 +490,7 @@ describe('createWebRuntimeSessionTerminal', () => {
           agentEnv: { CODEX_PROFILE: 'captured' }
         },
         launchAgent: 'codex',
+        viewMode: 'chat',
         activate: true
       })
     ).resolves.toBe(true)
@@ -508,6 +511,7 @@ describe('createWebRuntimeSessionTerminal', () => {
           agentEnv: { CODEX_PROFILE: 'captured' }
         },
         launchAgent: 'codex',
+        viewMode: 'chat',
         activate: true
       },
       timeoutMs: 15_000

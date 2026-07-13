@@ -15,7 +15,7 @@ description: >-
 
 # Orca CLI
 
-Use `orca` when Orca's running editor/runtime is the source of truth. On Linux, use `orca-ide` wherever this file says `orca`.
+Use `orca` when Orca's running editor/runtime is the source of truth. Inside Orca-managed terminals, `orca` always resolves to the Orca CLI on every platform. In any other shell on Linux, use `orca-ide` wherever this file says `orca` — outside Orca's terminals, bare `orca` on Linux is usually the GNOME Orca screen reader (`/usr/bin/orca`), and running it starts speech on the user's machine.
 
 **Dev builds (`pnpm dev`):** after `pnpm build:cli`, the dev CLI is exposed as `orca-dev` (the global shim points at this checkout's wrapper + out/cli). Inside a dev Orca's terminals use `orca-dev emulator ...` (or `./config/scripts/orca-dev.mjs emulator ...` for worktree-local invocation that does not depend on the /usr/local/bin symlink). Plain `orca` targets any installed production Orca. The app's own agent preambles use `orca-dev` automatically in dev mode.
 
@@ -24,7 +24,9 @@ Use plain shell tools when Orca state does not matter.
 ## Start Here
 
 ```bash
-command -v orca || command -v orca-ide
+# Prefer orca-ide first: on Linux, a bare `orca` hit outside an Orca-managed
+# terminal is likely the GNOME screen reader, not the Orca CLI.
+command -v orca-ide || command -v orca
 orca status --json
 orca worktree ps --json
 orca terminal list --json
@@ -55,11 +57,15 @@ Use `--no-parent` and omit `--base-branch` for independent top-level handoffs un
 
 Custom Codex model/effort handoff:
 
-`worktree create --agent codex --prompt ...` launches the known Codex agent but does not accept Codex-specific `--model` or `-c model_reasoning_effort=...` arguments. For requests such as `gpt-5.5 xhigh`, create the independent worktree, launch the requested Codex command there, wait only for TUI readiness if needed to avoid losing input, send the prompt, and stop:
+`worktree create --agent codex --prompt ...` launches the known Codex agent but does not accept Codex-specific `--model` or `-c model_reasoning_effort=...` arguments. For requests such as `gpt-5.5 xhigh`, create the independent worktree, launch the requested Codex command there, wait only for TUI readiness if needed to avoid losing input, send the prompt, and stop.
+
+**Extra first terminal:** when no repo default-terminal configuration supplies a primary terminal, bare `worktree create` (no `--agent`) opens a fallback shell before the later `terminal create --command ...` adds the agent. Configured default tabs are materialized instead and may run real commands. Prefer `--agent` whenever the built-in launcher is enough. When custom argv forces the two-step path, target the agent handle only; close a prior terminal only after `terminal list` or `terminal show` confirms it is an unused shell.
+
+The create result's `worktree.id` already contains both pieces Orca needs: `<repoId>::<worktreePath>`. Copy that whole value into the next command; do not shorten it to the repo id.
 
 ```bash
 orca worktree create --name <task-name> --no-parent --json
-orca terminal create --worktree id:<newWorktreeId> --title <task-name> --command 'codex --model gpt-5.5 -c model_reasoning_effort="xhigh"' --json
+orca terminal create --worktree id:<repoId>::<newWorktreePath> --title <task-name> --command 'codex --model gpt-5.5 -c model_reasoning_effort="xhigh"' --json
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
 orca terminal send --terminal <handle> --text "<task brief>" --enter --json
 ```
@@ -73,6 +79,8 @@ orca terminal send --terminal <handle> --text "<task brief>" --enter --json
 ## Worktrees
 
 An Orca worktree is Orca's tracked view of a repo checkout, its metadata, terminals, browser tabs, and UI state.
+
+Think of its id as a two-part address: `<repoId>::<worktreePath>`. For example, `repo-123::/Users/me/orca/fix-login` means “the `fix-login` checkout inside repo `repo-123`.” Always copy the complete `id` field from `orca worktree create --json` or `orca worktree list --json`; `repo-123` alone identifies only the repo.
 
 Common commands:
 
@@ -91,23 +99,24 @@ orca worktree create --repo id:<repoId> --name related-task --parent-worktree ac
 orca worktree create --repo id:<repoId> --name folder-child --parent-worktree folder:<folderId> --json
 orca worktree create --name child-task --agent codex --prompt "hi" --json
 orca worktree create --name independent-task --no-parent --json
-orca worktree set --worktree id:<worktreeId> --display-name "My Task" --json
+orca worktree set --worktree id:<repoId>::<worktreePath> --display-name "My Task" --json
 orca worktree set --worktree active --comment "reproduced bug; testing fix" --json
 orca worktree set --worktree active --workspace-status in-review --json
-orca worktree rm --worktree id:<worktreeId> --force --json
+orca worktree rm --worktree id:<repoId>::<worktreePath> --force --json
 ```
 
 Selectors:
 
-- `id:<worktreeId>`, `name:<displayName>`, `path:<absolutePath>`, `branch:<branchName>`, `issue:<number>`
+- `id:<repoId>::<worktreePath>`, `name:<displayName>`, `path:<absolutePath>`, `branch:<branchName>`, `issue:<number>`
+- The full id is the exact `<repo-id>::<path>` value returned by `orca worktree create --json` or `orca worktree list --json`; a bare repo id is not a worktree id.
 - `active` / `current` for the enclosing Orca-managed worktree from the shell cwd
-- For `worktree create --parent-worktree` only, folder/worktree parent context keys are also valid: `folder:<folderId>`, `worktree:<worktreeId>`, `id:folder:<folderId>`, `id:worktree:<worktreeId>`
+- For `worktree create --parent-worktree` only, folder/worktree parent context keys are also valid: `folder:<folderId>`, `worktree:<repoId>::<worktreePath>`, `id:folder:<folderId>`, `id:worktree:<repoId>::<worktreePath>`
 
 Lineage rules:
 
 - When creating from inside an Orca-managed worktree or folder context, Orca infers the current parent context when it can.
 - Use `--parent-worktree active` when the child worktree relationship should be explicit.
-- Use `--parent-worktree folder:<folderId>` or `--parent-worktree worktree:<worktreeId>` when a folder or worktree parent context should be explicit.
+- Use `--parent-worktree folder:<folderId>` or `--parent-worktree worktree:<repoId>::<worktreePath>` when a folder or worktree parent context should be explicit.
 - Use `--no-parent` only when the new work is independent.
 - `--no-parent` only controls Orca lineage; it does not choose the Git base. For independent top-level work, omit `--base-branch` so Orca uses the repo default base, or explicitly pass the repo default base. Never base it on the current feature branch unless the user asks for stacked work or "branch from current".
 - If `--repo` is omitted, Orca infers the repo from the current Orca worktree when possible.
@@ -121,13 +130,15 @@ orca worktree create --name task --setup skip --json
 orca worktree create --name task --run-hooks --json
 ```
 
-- `--agent <id>` launches that agent in the first terminal; `--prompt <text>` sends initial work to it.
+- `--agent <id>` launches that agent **in the first terminal** (Orca docs: *"`--agent` launches the selected agent in the first terminal"*); `--prompt <text>` sends initial work to it. Known ids include `claude`, `codex`, `omp`, `pi`, `grok`, and other installed TUI agents.
+- **Prefer agent-first create for agent workers.** `orca worktree create --agent <id> --prompt "..."` puts the agent in the worktree's first terminal without adding a separate fallback shell for that worker. Repo setup or default-terminal settings may still add tabs or splits. Without configured default tabs, the bare-create fallback shell plus a later `terminal create --command <agent>` is an anti-pattern for ordinary agent worktrees — use `--agent` instead of “create worktree, then open agent.” Configured default tabs are intentional surfaces; never treat one as disposable without verifying that it is an unused shell.
+- After create, use exactly one agent handle: `startupTerminal.handle` from the create response when present, or the matching result from `orca terminal list --worktree id:<repoId>::<newWorktreePath> --json` (or `name:<displayName>`) when the response omits it. If a handle later returns `terminal_handle_stale`, re-list it; never dual-send to old and replacement handles.
 - `--setup run|skip|inherit` controls repo setup hooks. Default is `inherit`, which follows the repo's setup policy.
 - `--run-hooks` is a legacy alias for `--setup run`; it also reveals/activates the new worktree.
 - `--agent`, `--activate`, and `--run-hooks` reveal the new worktree. Plain create stays in the background.
-- Let Orca choose setup terminal placement from repo settings, including tab vs split behavior. Do not manually create extra setup terminals.
-- If an older installed CLI rejects `--agent`, `--prompt`, or `--setup`, create the worktree normally, then run `orca terminal create --worktree <selector> --command "codex"` and `orca terminal send` if a prompt is needed.
-- `worktree create` creates a new checkout. For a fresh agent in the current checkout, use `orca terminal create --worktree active --command "codex" --json`.
+- Let Orca choose setup terminal placement from repo settings, including tab vs split behavior. Do not manually create extra setup terminals when `--agent` already owns the first tab.
+- If an older installed CLI rejects `--agent`, `--prompt`, or `--setup`, create the worktree normally, then run `orca terminal create --worktree <selector> --command "<requested-agent>"` and `orca terminal send` if a prompt is needed. This can leave a fallback shell when no default tabs are configured; close it only after confirming it is unused.
+- `worktree create` creates a new checkout. For a fresh agent in the **current** checkout (no new worktree), use `orca terminal create --worktree active --command "codex" --json` — that path does not create a second worktree shell.
 
 ## Worktree Comments
 
@@ -148,7 +159,7 @@ Card status uses `--workspace-status <id>`; defaults are `todo`, `in-progress`, 
 Common commands:
 
 ```bash
-orca terminal list --worktree id:<worktreeId> --json
+orca terminal list --worktree id:<repoId>::<worktreePath> --json
 orca terminal show --terminal <handle> --json
 orca terminal read --terminal <handle> --json
 orca terminal read --terminal <handle> --cursor <cursor> --limit 1000 --json
@@ -157,7 +168,7 @@ orca terminal send --terminal <handle> --text "continue" --enter --json
 orca terminal send --text "echo hello" --enter --json
 orca terminal wait --terminal <handle> --for exit --timeout-ms 5000 --json
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 300000 --json
-orca terminal stop --worktree id:<worktreeId> --json
+orca terminal stop --worktree id:<repoId>::<worktreePath> --json
 orca terminal create --json
 orca terminal create --title "Worker" --json
 orca terminal create --worktree active --command "codex" --json
@@ -173,10 +184,10 @@ Terminal rules:
 - `--terminal` is optional for most commands; omitted means the active terminal in the current worktree.
 - Use `terminal read` before `terminal send` unless the next input is obvious.
 - Use `terminal send` only for direct terminal input or one-off prompts where no task state, inbox, or reply tracking is needed.
-- For structured coordination, invoke the `orchestration` skill; it uses `orca orchestration ...` commands for messages, handoffs, task DAGs, dispatches, inbox/reply flows, and coordinator loops.
-- Use `terminal create --worktree active --command "<agent>"` for a fresh agent in the current worktree. Use `worktree create --agent <agent>` only for a separate checkout.
-- Use `terminal wait --for tui-idle` for agent CLIs such as Claude Code, Gemini, and Codex; always pass `--timeout-ms`.
-- Terminal handles are runtime-scoped. If Orca restarts or returns `terminal_handle_stale`, reacquire with `terminal list`.
+- For structured coordination, invoke the `orchestration` skill; it uses `orca orchestration ...` commands for messages, handoffs, task DAGs, dispatches, inbox/reply flows, and coordinator loops. A receiving agent can run `orca orchestration check --unread --inject` to render its unread mail in agent-readable form; this checks the caller's inbox and does not remotely deliver input to another terminal.
+- Use `terminal create --worktree active --command "<agent>"` for a fresh agent in the current worktree. Use `worktree create --agent <agent>` only for a separate checkout (agent in the first terminal — do not also `terminal create` the same agent).
+- Use `terminal wait --for tui-idle` for agent CLIs such as Claude Code, Gemini, Codex, OMP, Pi, and Grok; always pass `--timeout-ms`.
+- Terminal handles are runtime-scoped. Use `startupTerminal.handle` as the sole agent handle when `worktree create --agent` returns it; if Orca restarts, omits the handle, or returns `terminal_handle_stale`, reacquire with `terminal list` and continue with the replacement only.
 - For long output, use cursor reads. After a limited tail preview, page from `oldestCursor`; after a cursor read, continue with `nextCursor` while `limited` is true and `nextCursor !== latestCursor`.
 - `--direction horizontal` splits left/right. `--direction vertical` splits top/bottom.
 

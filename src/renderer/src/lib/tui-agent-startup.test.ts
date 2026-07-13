@@ -183,7 +183,7 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
-  it('launches Grok first and injects the prompt after startup', () => {
+  it('launches Grok with the prompt as a positional argv', () => {
     expect(
       buildAgentStartupPlan({
         agent: 'grok',
@@ -193,9 +193,9 @@ describe('buildAgentStartupPlan', () => {
       })
     ).toEqual({
       agent: 'grok',
-      launchCommand: 'grok',
+      launchCommand: "grok -- 'Trace the failing test'",
       expectedProcess: 'grok',
-      followupPrompt: 'Trace the failing test',
+      followupPrompt: null,
       launchConfig: emptyLaunchConfig('grok')
     })
   })

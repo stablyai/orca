@@ -48,6 +48,7 @@ import {
   normalizeCompatibleAgentStatusEntryForOwner,
   normalizeCompatibleAgentTitleForOwner
 } from '../../../shared/agent-title-owner'
+import { resolvePaneAgentOwner } from '../../../shared/pane-agent-owner'
 import { resolveTerminalLayoutRoot } from './remote-terminal-layout-resolution'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { clearWebSessionFocusIntent, peekWebSessionFocusIntent } from './web-session-focus-intent'
@@ -66,6 +67,7 @@ import {
   endWebRuntimeWakeTerminalRespawn,
   shouldSkipWebRuntimeWakeTerminalRespawn
 } from './web-runtime-wake-terminal-respawn'
+import { isRuntimeSubscriptionReplayResponse } from '../../../shared/runtime-subscription-replay'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 
@@ -170,6 +172,18 @@ export function getLastKnownHostTerminalTabCount(
   return (
     lastHostTerminalTabCountByWorktree.get(sessionTabsFreshnessKey(environmentId, worktreeId)) ?? 0
   )
+}
+
+// Why: a post-reconnect subscription replay re-emits the current snapshot with
+// an unchanged epoch/version; dropping the freshness entry lets the monotonic
+// gate accept that replay as authoritative instead of freezing the mirror
+// (#7718). Normal-operation ordering protection is untouched — this only runs
+// for responses the connection tagged as reconnect replays.
+export function acceptReplayedWebSessionTabsSnapshot(
+  environmentId: string,
+  worktreeId: string
+): void {
+  latestSessionTabsSnapshotByWorktree.delete(sessionTabsFreshnessKey(environmentId, worktreeId))
 }
 
 export function shouldApplyWebSessionTabsSnapshot(
@@ -529,10 +543,12 @@ function buildMirroredTerminalTabs(
       .filter((ptyId): ptyId is string => typeof ptyId === 'string' && ptyId.length > 0)
     const launchAgent =
       activeSurface.launchAgent ?? surfaces.find((surface) => surface.launchAgent)?.launchAgent
-    const ownerAgent =
-      launchAgent ??
-      activeSurface.agentStatus?.agentType ??
-      surfaces.find((surface) => surface.agentStatus?.agentType)?.agentStatus?.agentType
+    const ownerAgent = resolvePaneAgentOwner({
+      launchAgent,
+      hookAgent: activeSurface.agentStatus?.agentType,
+      siblingHookAgent: surfaces.find((surface) => surface.agentStatus?.agentType)?.agentStatus
+        ?.agentType
+    })
     const title = normalizeCompatibleAgentTitleForOwner(
       activeSurface.title.trim() || surfaces[0]?.title.trim() || 'Terminal',
       ownerAgent
@@ -611,7 +627,10 @@ function remapHostAgentStatus(surface: TerminalSurface): AgentStatusEntry | null
   if (!paneKey) {
     return null
   }
-  const ownerAgent = surface.launchAgent ?? surface.agentStatus.agentType
+  const ownerAgent = resolvePaneAgentOwner({
+    launchAgent: surface.launchAgent,
+    hookAgent: surface.agentStatus.agentType
+  })
   return {
     ...normalizeCompatibleAgentStatusEntryForOwner(surface.agentStatus, ownerAgent),
     paneKey
@@ -666,6 +685,7 @@ function buildMirroredAgentStatusPatch(
 
   let nextAgentStatusByPaneKey = state.agentStatusByPaneKey
   let changed = false
+  let aggregateRelevantChange = false
   let sortRelevantChange = false
 
   for (const paneKey of Object.keys(state.agentStatusByPaneKey)) {
@@ -680,6 +700,7 @@ function buildMirroredAgentStatusPatch(
     }
     delete nextAgentStatusByPaneKey[paneKey]
     changed = true
+    aggregateRelevantChange = true
     sortRelevantChange = true
   }
 
@@ -693,11 +714,16 @@ function buildMirroredAgentStatusPatch(
     }
     nextAgentStatusByPaneKey[paneKey] = entry
     changed = true
-    sortRelevantChange =
-      sortRelevantChange ||
+    const entryAttributionChanged =
+      existing?.worktreeId !== entry.worktreeId || existing?.tabId !== entry.tabId
+    const entrySortRelevantChange =
       !existing ||
       existing.state !== entry.state ||
-      !isAgentStatusFresh(existing, now)
+      !isAgentStatusFresh(existing, now) ||
+      entryAttributionChanged ||
+      isMirroredCommandCodeTurnBump(existing, entry)
+    aggregateRelevantChange = aggregateRelevantChange || entrySortRelevantChange
+    sortRelevantChange = sortRelevantChange || entrySortRelevantChange
   }
 
   if (!changed) {
@@ -706,7 +732,7 @@ function buildMirroredAgentStatusPatch(
 
   return {
     agentStatusByPaneKey: nextAgentStatusByPaneKey,
-    agentStatusEpoch: sortRelevantChange ? state.agentStatusEpoch + 1 : state.agentStatusEpoch,
+    agentStatusEpoch: aggregateRelevantChange ? state.agentStatusEpoch + 1 : state.agentStatusEpoch,
     sortEpoch: sortRelevantChange ? state.sortEpoch + 1 : state.sortEpoch
   }
 }
@@ -1272,18 +1298,34 @@ function agentStatusEntryEqual(a: AgentStatusEntry | undefined, b: AgentStatusEn
     a.stateStartedAt === b.stateStartedAt &&
     a.agentType === b.agentType &&
     a.paneKey === b.paneKey &&
+    a.worktreeId === b.worktreeId &&
+    a.tabId === b.tabId &&
     a.terminalTitle === b.terminalTitle &&
     a.toolName === b.toolName &&
     a.toolInput === b.toolInput &&
     a.interactivePrompt === b.interactivePrompt &&
     a.lastAssistantMessage === b.lastAssistantMessage &&
     a.interrupted === b.interrupted &&
+    a.promptInteractionKey === b.promptInteractionKey &&
     sameAgentStateHistory(a.stateHistory, b.stateHistory)
   )
 }
 
 function isAgentStatusFresh(entry: Pick<AgentStatusEntry, 'updatedAt'>, now: number): boolean {
   return now - entry.updatedAt <= AGENT_STATUS_STALE_AFTER_MS
+}
+
+function isMirroredCommandCodeTurnBump(
+  existing: AgentStatusEntry | undefined,
+  entry: AgentStatusEntry
+): boolean {
+  return (
+    existing?.agentType === 'command-code' &&
+    entry.agentType === 'command-code' &&
+    existing.state === 'working' &&
+    entry.state === 'working' &&
+    entry.stateStartedAt > existing.stateStartedAt
+  )
 }
 
 function sameStringRecord(
@@ -2409,6 +2451,23 @@ export function applyFreshWebSessionTabsSnapshots(
     : applyWebSessionTabsSnapshots(state, freshSnapshots, environmentId, now)
 }
 
+export function applyWebSessionTabsStorePatch(
+  buildPatch: (state: AppState) => WebSessionTabsSyncState | Partial<WebSessionTabsSyncState>
+): void {
+  let mirroredAgentStatusChanged = false
+  useAppStore.setState((state) => {
+    const patch = buildPatch(state)
+    mirroredAgentStatusChanged =
+      patch !== state && Object.prototype.hasOwnProperty.call(patch, 'agentStatusByPaneKey')
+    return patch
+  })
+  // Why: paired-web snapshots bypass setAgentStatus, so they must explicitly
+  // arm the same stale-boundary timer as local hook events.
+  if (mirroredAgentStatusChanged) {
+    useAppStore.getState().scheduleAgentStatusFreshness()
+  }
+}
+
 export function useWebSessionTabsSync(): void {
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const runtimeSessionMirrorEnvironmentKey = useAppStore((state) =>
@@ -2466,7 +2525,7 @@ export function useWebSessionTabsSync(): void {
             console.warn('[web-session-tabs-sync] initial listAll returned an invalid payload')
             return
           }
-          useAppStore.setState((state) =>
+          applyWebSessionTabsStorePatch((state) =>
             applyFreshWebSessionTabsSnapshots(state, result.snapshots, environmentId)
           )
         })
@@ -2500,8 +2559,14 @@ export function useWebSessionTabsSync(): void {
                 return
               }
               const event = response.result as SessionTabsStreamEvent
+              const replayed = isRuntimeSubscriptionReplayResponse(response)
               if (event.type === 'snapshots') {
-                useAppStore.setState((state) =>
+                if (replayed) {
+                  for (const snapshot of event.snapshots) {
+                    acceptReplayedWebSessionTabsSnapshot(environmentId, snapshot.worktree)
+                  }
+                }
+                applyWebSessionTabsStorePatch((state) =>
                   applyFreshWebSessionTabsSnapshots(state, event.snapshots, environmentId)
                 )
                 return
@@ -2509,7 +2574,10 @@ export function useWebSessionTabsSync(): void {
               if (event.type !== 'snapshot' && event.type !== 'updated') {
                 return
               }
-              useAppStore.setState((state) =>
+              if (replayed) {
+                acceptReplayedWebSessionTabsSnapshot(environmentId, event.worktree)
+              }
+              applyWebSessionTabsStorePatch((state) =>
                 applyFreshWebSessionTabsSnapshot(state, event, environmentId)
               )
             },
@@ -2587,6 +2655,9 @@ export function useWebSessionTabsSync(): void {
             if (event.type !== 'snapshot' && event.type !== 'updated') {
               return
             }
+            if (isRuntimeSubscriptionReplayResponse(response)) {
+              acceptReplayedWebSessionTabsSnapshot(environmentId, event.worktree)
+            }
             const fresh = shouldApplyWebSessionTabsSnapshot(event, environmentId)
             const syncState = useAppStore.getState()
             const localWorktreeTabs = syncState.tabsByWorktree[activeWorktreeId] ?? []
@@ -2611,7 +2682,7 @@ export function useWebSessionTabsSync(): void {
               skipWakeRespawn: shouldSkipWebRuntimeWakeTerminalRespawn(activeWorktreeId)
             })
             if (fresh) {
-              useAppStore.setState((state) =>
+              applyWebSessionTabsStorePatch((state) =>
                 applyWebSessionTabsSnapshot(state, event, environmentId)
               )
             }

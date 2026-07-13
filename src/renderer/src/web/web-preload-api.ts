@@ -10,6 +10,7 @@ import type {
   NativeChatAppendedMessages
 } from '../../../preload/api-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { AiVaultListArgs, AiVaultListResult } from '../../../shared/ai-vault-types'
 import { buildNativeChatUnsubscribe } from '../../../shared/native-chat-stream-unsubscribe'
 import type {
   ComputerUsePermissionSetupResult,
@@ -34,6 +35,7 @@ import type {
   WorkspaceSessionState
 } from '../../../shared/types'
 import type { SkillDiscoveryResult } from '../../../shared/skills'
+import type { SshConnectionState, SshTarget } from '../../../shared/ssh-types'
 import {
   getDefaultOnboardingState,
   getDefaultSettings,
@@ -44,10 +46,25 @@ import {
   normalizeWorktreeCardProperties,
   ONBOARDING_FLOW_VERSION
 } from '../../../shared/constants'
+import {
+  createDefaultLocalOrcaProfile,
+  DEFAULT_LOCAL_ORCA_PROFILE_ID
+} from '../../../shared/orca-profiles'
 import { legacyBaseRefSearchResult } from '../../../shared/base-ref-search-result'
+import { EMPTY_PTY_MAIN_DELIVERY_DIAGNOSTICS } from '../../../shared/pty-delivery-diagnostics'
 import { createE2EConfig } from '../../../shared/e2e-config'
 import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
-import { LOCAL_EXECUTION_HOST_ID, normalizeExecutionHostId } from '../../../shared/execution-host'
+import {
+  applyPRBotAuthorOverride,
+  normalizePRBotAuthorOverrides
+} from '../../../shared/pr-bot-author-overrides'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostScope,
+  normalizeExecutionHostId,
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import {
@@ -58,6 +75,7 @@ import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../shared/auto
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
+import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentage-display'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
 import {
@@ -447,6 +465,15 @@ export function installWebPreloadApi(): void {
 }
 
 function createWebPreloadApi(): Partial<PreloadApi> {
+  const webOrcaProfileAuthStatus = () =>
+    Promise.resolve({
+      activeProfileId: DEFAULT_LOCAL_ORCA_PROFILE_ID,
+      configured: false,
+      state: 'unconfigured' as const,
+      persistence: 'none' as const,
+      setupMessage: 'Orca Cloud sign-in is not available in the browser fallback.'
+    })
+
   return {
     app: {
       getIdentity: () =>
@@ -493,11 +520,66 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         displayServer: null
       })
     },
+    orcaProfiles: {
+      list: () =>
+        Promise.resolve({
+          activeProfileId: DEFAULT_LOCAL_ORCA_PROFILE_ID,
+          profiles: [createDefaultLocalOrcaProfile(0)],
+          multiProfileUi: false
+        }),
+      authStatus: webOrcaProfileAuthStatus,
+      createLocal: () =>
+        Promise.resolve({
+          activeProfileId: DEFAULT_LOCAL_ORCA_PROFILE_ID,
+          profiles: [createDefaultLocalOrcaProfile(0)],
+          profile: createDefaultLocalOrcaProfile(0)
+        }),
+      createCloudLinked: async () => ({
+        status: 'unconfigured',
+        auth: await webOrcaProfileAuthStatus()
+      }),
+      switchProfile: () => Promise.resolve({ status: 'already-active' }),
+      transferProject: (args) =>
+        Promise.resolve({
+          status: 'duplicate-target',
+          sourceProfileId: args.sourceProfileId,
+          targetProfileId: args.targetProfileId,
+          sourceRepoId: args.repoId,
+          duplicateRepoId: args.repoId
+        }),
+      findProjectProfiles: async () => ({ projects: [] }),
+      connectCurrent: async () => ({
+        status: 'unconfigured',
+        auth: await webOrcaProfileAuthStatus()
+      }),
+      refreshAuth: async () => ({
+        status: 'unconfigured',
+        auth: await webOrcaProfileAuthStatus()
+      }),
+      signOutCurrent: async () => ({
+        status: 'signed-out',
+        auth: await webOrcaProfileAuthStatus(),
+        activeProfileId: DEFAULT_LOCAL_ORCA_PROFILE_ID,
+        profiles: [createDefaultLocalOrcaProfile(0)]
+      }),
+      selectOrg: async () => ({
+        status: 'unconfigured',
+        auth: await webOrcaProfileAuthStatus()
+      }),
+      orgMembersList: async () => ({ status: 'unconfigured' }),
+      orgMemberInvite: async () => ({ status: 'unconfigured' }),
+      orgInviteRevoke: async () => ({ status: 'unconfigured' }),
+      orgMemberChangeRole: async () => ({ status: 'unconfigured' }),
+      orgMemberRemove: async () => ({ status: 'unconfigured' })
+    },
     e2e: {
       getConfig: () => createE2EConfig({})
     },
     settings: {
       get: async () => getRuntimeBackedStoredSettings(),
+      // Why: localStorage-backed settings are synchronous in the web client,
+      // so the pre-hydration kill-switch read works the same as desktop.
+      getSync: () => getStoredSettings(),
       set: async (updates) => {
         if (updates.activeRuntimeEnvironmentId === null) {
           disconnectActiveRuntimeEnvironment()
@@ -512,6 +594,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         writeJson(SETTINGS_STORAGE_KEY, next)
         return syncRuntimeBackedSettings(sanitizedUpdates, next)
       },
+      updatePRBotAuthorOverride: (args) => updateRuntimePRBotAuthorOverride(args),
       listFonts: () => Promise.resolve([]),
       onChanged: () => noopUnsubscribe
     } satisfies Partial<WebSettingsApi> as unknown as WebSettingsApi,
@@ -626,19 +709,12 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     memory: {
       getSnapshot: () => Promise.resolve(createEmptyMemorySnapshot())
     },
-    aiVault: {
-      listSessions: () =>
-        Promise.resolve({
-          sessions: [],
-          issues: [],
-          scannedAt: new Date().toISOString()
-        }),
-      onWindowFocused: () => () => {}
-    },
+    aiVault: createAiVaultApi(),
     preflight: createPreflightApi(),
     notifications: createNotificationsApi(),
     rateLimits: createRateLimitsApi(),
     minimaxCredentials: createMiniMaxCredentialsApi(),
+    grokAccounts: createGrokAccountsApi(),
     codexAccounts: createAccountsApi(),
     claudeAccounts: createAccountsApi(),
     cli: createCliApi(),
@@ -674,6 +750,9 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     mobile: {
       listNetworkInterfaces: () => Promise.resolve({ interfaces: [] }),
       getPairingQR: () => Promise.resolve({ available: false }),
+      getWindowsFirewallStatus: () => Promise.resolve({ supported: false }),
+      repairWindowsFirewall: () => Promise.resolve({ ok: false, reason: 'unsupported' }),
+      openWindowsNetworkSettings: () => Promise.resolve(false),
       getRuntimePairingUrl: () => Promise.resolve({ available: false }),
       listDevices: () => Promise.resolve({ devices: [] }),
       revokeDevice: () => Promise.resolve({ revoked: false }),
@@ -1116,6 +1195,52 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
   }
 }
 
+function createAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault']> {
+  return {
+    listSessions: (args?: AiVaultListArgs) => {
+      const environment = requireActiveEnvironment()
+      const executionHostId = toRuntimeExecutionHostId(environment.id)
+      const requestedScope = normalizeExecutionHostScope(
+        args?.executionHostScope ?? executionHostId
+      )
+      if (requestedScope !== 'all' && requestedScope !== executionHostId) {
+        return Promise.resolve(webAiVaultUnavailableResult(requestedScope))
+      }
+      // Why: the browser client has no local filesystem; every history scan
+      // runs on the paired server and must be stamped as that runtime host.
+      return callRuntimeResult<AiVaultListResult>('aiVault.listSessions', {
+        limit: args?.limit,
+        force: args?.force,
+        scopePaths: args?.scopePaths,
+        executionHostId
+      })
+    },
+    // Why: the runtime RPC surface only exposes aiVault.listSessions; subagent
+    // transcript listing has no server-side method yet, so the browser client
+    // reports an empty (not erroring) result.
+    listSubagentSessions: () => Promise.resolve({ sessions: [], issues: [] }),
+    onWindowFocused: () => noopUnsubscribe
+  }
+}
+
+function webAiVaultUnavailableResult(executionHostId: ExecutionHostId): AiVaultListResult {
+  return {
+    sessions: [],
+    issues: [
+      {
+        executionHostId,
+        agent: 'codex',
+        path: executionHostId,
+        message: translate(
+          'auto.web.webPreloadApi.aiVaultUnavailableForHost',
+          'Agent Session History is not available for this execution host.'
+        )
+      }
+    ],
+    scannedAt: new Date().toISOString()
+  }
+}
+
 function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
   return {
     list: async () => (await callRuntimeResult<{ repos: Repo[] }>('repo.list')).repos,
@@ -1289,11 +1414,12 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         targetBranch,
         isCrossRepository
       }),
-    remove: async ({ worktreeId, force }) => {
+    remove: async ({ worktreeId, force, skipArchive }) => {
       invalidateRuntimeWorktreeCaches()
       return callRuntimeResult<RemoveWorktreeResult>('worktree.rm', {
         worktree: toRuntimeWorktreeSelector(worktreeId),
-        force
+        force,
+        runHooks: skipArchive !== true
       })
     },
     // Why: forget-locally clears a workspace pinned to a disconnected/removed
@@ -1339,7 +1465,12 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
     persistSortOrder: async ({ orderedIds }) => {
       await callRuntimeResult('worktree.persistSortOrder', { orderedIds })
     },
+    // Why: the capture lives in desktop main memory and is not exposed over
+    // pairing; the dialog falls back to the persisted excerpt on web clients.
+    getBranchRenameFailureOutput: async () => null,
     onChanged: () => noopUnsubscribe,
+    onGitStatusMetadataChanged: () => noopUnsubscribe,
+    onHeadIdentitiesChanged: () => noopUnsubscribe,
     onBaseStatus: () => noopUnsubscribe,
     onRemoteBranchConflict: () => noopUnsubscribe
   }
@@ -1361,6 +1492,14 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
         relativePath: file.relativePath
       })
     },
+    readLocalLogTail: async () => {
+      throw new Error('Local log tailing is unavailable in paired web clients.')
+    },
+    startLocalLogTail: async () => {
+      throw new Error('Local log tailing is unavailable in paired web clients.')
+    },
+    stopLocalLogTail: async () => {},
+    onLocalLogTailChanged: () => noopUnsubscribe,
     downloadFile: async () => {
       throw new Error('Remote file download is unavailable in paired web clients.')
     },
@@ -1466,6 +1605,10 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
         }
       )
       return result.files.map((entry) => entry.relativePath)
+    },
+    cancelListFiles: async () => {
+      // Why: the paired-web path lists files over runtime RPC with its own
+      // request timeout; there is no host-side scan to abort from here.
     },
     search: async (args) => {
       const file = await resolveRuntimeFilePath(args.rootPath)
@@ -2233,6 +2376,9 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     respondMobileMarkdownRequest: () => {},
     onCloseTerminal: () => noopUnsubscribe,
     onSleepWorktree: () => noopUnsubscribe,
+    // Why: paired web is a full renderer that wakes on activation; mobile wake is
+    // desktop-host-scoped, so the web client never receives this signal.
+    onResumeSleepingAgents: () => noopUnsubscribe,
     onTerminalZoom: () => noopUnsubscribe,
     // Why: a paired web client has no OS sleep signal; occlusion-driven
     // visibilitychange already covers its wake recovery.
@@ -2456,8 +2602,7 @@ function createNotificationsApi(): NonNullable<Partial<PreloadApi>['notification
     openSystemSettings: () => Promise.resolve(),
     getPermissionStatus: () =>
       Promise.resolve({ supported: false, platform: getBrowserPlatform(), requested: false }),
-    requestPermission: () =>
-      Promise.resolve({ supported: false, platform: getBrowserPlatform(), requested: false }),
+    probeDelivery: () => Promise.resolve({ state: 'unsupported' as const, authoritative: false }),
     playSound: () => Promise.resolve({ played: false, reason: 'missing-path' })
   }
 }
@@ -2469,8 +2614,11 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     gemini: null,
     opencodeGo: null,
     kimi: null,
+    antigravity: null,
     minimax: null,
+    grok: null,
     minimaxCookieConfigured: false,
+    grokAuthConfigured: false,
     claudeTarget: { runtime: 'host', wslDistro: null },
     codexTarget: { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: [],
@@ -2488,6 +2636,7 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     fetchInactiveClaudeAccounts: () => Promise.resolve(),
     fetchInactiveCodexAccounts: () => Promise.resolve(),
     refreshMiniMax: () => Promise.resolve(empty),
+    refreshGrok: () => Promise.resolve(empty),
     onUpdate: () => noopUnsubscribe
   }
 }
@@ -2499,6 +2648,19 @@ function createMiniMaxCredentialsApi(): NonNullable<Partial<PreloadApi>['minimax
     getStatus: () => Promise.resolve(notConfigured),
     saveCookie: () => Promise.reject(unsupportedError),
     clearCookie: () => Promise.resolve(notConfigured)
+  }
+}
+
+function createGrokAccountsApi(): NonNullable<Partial<PreloadApi>['grokAccounts']> {
+  const unsigned = {
+    signedIn: false,
+    email: null,
+    teamId: null,
+    tokenFresh: false,
+    error: null
+  }
+  return {
+    getStatus: () => Promise.resolve(unsigned)
   }
 }
 
@@ -2565,6 +2727,7 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     write: () => {},
     writeAccepted: () => Promise.resolve(false),
     resize: () => {},
+    claimViewport: () => {},
     reportGeometry: () => {},
     signal: () => {},
     // Web panes clear the host buffer via the terminal.clearBuffer runtime RPC.
@@ -2572,15 +2735,34 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     kill: () => Promise.resolve(),
     ackColdRestore: () => {},
     ackData: () => {},
+    onDeliveryResyncRequest: () => noopUnsubscribe,
+    respondDeliveryResync: () => {},
+    // Why healthy stub: web terminals ride the remote-runtime transport, not
+    // main's delivery gate — a zero-in-flight reply keeps the watchdog idle.
+    reportRendererDeliveryState: () =>
+      Promise.resolve({ inFlightTotalChars: 0, inFlightPtyCount: 0, msSinceLastAck: null }),
+    getPtyDataListenerCount: () => 0,
+    rendererDispatcherReady: () => {},
     setActiveRendererPty: () => {},
     setRendererPtyVisible: () => {},
+    setHiddenRendererPty: () => {},
+    setPtyDeliveryInterest: () => {},
+    // Why no-op: remote-runtime PTYs are never hidden-gate markable, so the
+    // web client has no main-side responder to feed.
+    publishTerminalViewAttributes: () => {},
     hasChildProcesses: () => Promise.resolve(false),
     getForegroundProcess: () => Promise.resolve(null),
+    // Why: paired web panes cannot provide a local post-boundary process scan.
+    confirmForegroundProcess: () => Promise.resolve(null),
     getCwd: () => Promise.resolve('~'),
     getSize: () => Promise.resolve(null),
     listSessions: () => Promise.resolve([]),
     hasPty: () => Promise.resolve(null),
     getMainBufferSnapshot: () => Promise.resolve(null),
+    // Why: remote-runtime PTYs never transit local main, so the web client has
+    // no side-effect facts source; renderer byte parsing stays authoritative.
+    onSideEffect: () => noopUnsubscribe,
+    getSideEffectSnapshot: () => Promise.resolve(null),
     getRendererDeliveryDebugSnapshot: () =>
       Promise.resolve({
         pendingPtyCount: 0,
@@ -2595,11 +2777,24 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
         peakMaxPendingCharsByPty: 0,
         peakRendererInFlightChars: 0,
         peakMaxRendererInFlightCharsByPty: 0,
-        ackGatedFlushSkipCount: 0
+        ackGatedFlushSkipCount: 0,
+        hiddenDeliveryGatedPtyCount: 0,
+        hiddenDeliveryGatedVisiblePtyCount: 0,
+        hiddenDeliveryGatedActivePtyCount: 0,
+        deliveryInterestPtyCount: 0,
+        hiddenDeliveryDroppedChars: 0,
+        hiddenDeliveryDroppedChunks: 0,
+        pendingDroppedChars: 0,
+        diagnostics: EMPTY_PTY_MAIN_DELIVERY_DIAGNOSTICS,
+        rendererLifecycleResetCount: 0,
+        lastLifecycleResetClearedChars: 0,
+        rendererPtyDispatcherReady: false,
+        rendererDispatcherReadyForcedCount: 0
       }),
     resetRendererDeliveryDebug: () => Promise.resolve(),
     onData: () => noopUnsubscribe,
     onReplay: () => noopUnsubscribe,
+    onModelRestoreNeeded: () => noopUnsubscribe,
     onExit: () => noopUnsubscribe,
     onSerializeBufferRequest: () => noopUnsubscribe,
     onClearBufferRequest: () => noopUnsubscribe,
@@ -2618,19 +2813,51 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
 
 function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
   return {
-    listTargets: () => Promise.resolve([]),
-    listRemovedTargetLabels: () => Promise.resolve({}),
+    // Why: SSH connections are owned by the paired host. Read/connect route to
+    // its runtime RPC so remote worktrees can show real connection state and
+    // reconnect (STA-1468); target management stays desktop-only.
+    listTargets: async () => {
+      if (!requireActiveEnvironmentOrNull()) {
+        return []
+      }
+      const { targets } = await callRuntimeResult<{ targets: SshTarget[] }>('ssh.listTargets')
+      return targets
+    },
+    listRemovedTargetLabels: async () => {
+      if (!requireActiveEnvironmentOrNull()) {
+        return {}
+      }
+      const { labels } = await callRuntimeResult<{ labels: Record<string, string> }>(
+        'ssh.listRemovedTargetLabels'
+      )
+      return labels
+    },
     addTarget: () =>
       Promise.reject(new Error('SSH target management is unavailable in the web client.')),
     updateTarget: () =>
       Promise.reject(new Error('SSH target management is unavailable in the web client.')),
     removeTarget: () => Promise.resolve(),
-    importConfig: () => Promise.resolve([]),
-    connect: () => Promise.resolve(null),
+    importConfig: () => Promise.resolve({ targets: [], repoReadoptions: [] }),
+    connect: async (args) => {
+      const { state } = await callRuntimeResult<{ state: SshConnectionState | null }>(
+        'ssh.connect',
+        { targetId: args.targetId }
+      )
+      return state
+    },
     disconnect: () => Promise.resolve(),
     terminateSessions: () => Promise.resolve(),
     resetRelay: () => Promise.resolve(),
-    getState: () => Promise.resolve(null),
+    getState: async (args) => {
+      if (!requireActiveEnvironmentOrNull()) {
+        return null
+      }
+      const { state } = await callRuntimeResult<{ state: SshConnectionState | null }>(
+        'ssh.getState',
+        { targetId: args.targetId }
+      )
+      return state
+    },
     needsPassphrasePrompt: () => Promise.resolve(false),
     testConnection: () =>
       Promise.resolve({
@@ -2885,6 +3112,11 @@ async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
     if (typeof result.settings.minimaxUsageModels === 'string') {
       runtimeSettings.minimaxUsageModels = result.settings.minimaxUsageModels
     }
+    if (Array.isArray(result.settings.prBotAuthorOverrides)) {
+      runtimeSettings.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
+        result.settings.prBotAuthorOverrides
+      )
+    }
     const next = mergeSettings(local, runtimeSettings)
     writeJson(SETTINGS_STORAGE_KEY, next)
     return next
@@ -2914,6 +3146,11 @@ async function syncRuntimeBackedSettings(
   if (typeof updates.minimaxUsageModels === 'string') {
     runtimeUpdates.minimaxUsageModels = updates.minimaxUsageModels
   }
+  if (Array.isArray(updates.prBotAuthorOverrides)) {
+    runtimeUpdates.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
+      updates.prBotAuthorOverrides
+    )
+  }
   if (Object.keys(runtimeUpdates).length === 0) {
     return localNext
   }
@@ -2930,6 +3167,36 @@ async function syncRuntimeBackedSettings(
     // Why: unpaired/offline web clients still need local settings persistence.
     return localNext
   }
+}
+
+async function updateRuntimePRBotAuthorOverride(args: {
+  author: string
+  isBot: boolean
+}): Promise<GlobalSettings> {
+  const local = getStoredSettings()
+  if (requireActiveEnvironmentOrNull()) {
+    // Why: a paired client must not report a successful mark that the
+    // authoritative runtime failed to persist and will later overwrite.
+    const result = await callRuntimeResult<{ settings: Partial<GlobalSettings> }>(
+      'settings.updatePRBotAuthorOverride',
+      args,
+      15_000
+    )
+    const next = mergeSettings(local, {
+      prBotAuthorOverrides: normalizePRBotAuthorOverrides(result.settings.prBotAuthorOverrides)
+    })
+    writeJson(SETTINGS_STORAGE_KEY, next)
+    return next
+  }
+  const next = mergeSettings(local, {
+    prBotAuthorOverrides: applyPRBotAuthorOverride(
+      local.prBotAuthorOverrides,
+      args.author,
+      args.isBot
+    )
+  })
+  writeJson(SETTINGS_STORAGE_KEY, next)
+  return next
 }
 
 function getStoredOnboarding(): OnboardingState {
@@ -3038,6 +3305,9 @@ function mergeWebUIState(
       safeUpdates._worktreeCardModeDefaulted ?? base._worktreeCardModeDefaulted,
     agentActivityDisplayMode: normalizeAgentActivityDisplayMode(
       safeUpdates.agentActivityDisplayMode ?? base.agentActivityDisplayMode
+    ),
+    usagePercentageDisplay: normalizeUsagePercentageDisplay(
+      safeUpdates.usagePercentageDisplay ?? base.usagePercentageDisplay
     )
   }
 }

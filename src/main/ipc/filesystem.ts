@@ -120,6 +120,8 @@ import { buildReadDirErrorBreadcrumb, type ReadDirThrowSite } from './readdir-er
 import { splitWorktreeId } from '../../shared/worktree-id'
 import { getRuntimePathBasename } from '../../shared/cross-platform-path'
 import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
+import { registerLocalLogTailHandlers } from './local-log-tail'
+import { localLogFileIdentity } from '../ai-vault/local-log-tail-reader'
 
 // Why: Monaco has large-file optimizations like VS Code; blocking at 5MB makes
 // ordinary JSON/log files inaccessible before the editor can degrade features.
@@ -147,6 +149,38 @@ const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
 }
 const WINDOWS_RESERVED_LOCAL_BASENAME = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$/i
 const LOCAL_FILENAME_REPLACEMENT_CHARS = new Set(['<', '>', ':', '"', '/', '\\', '|', '?', '*'])
+
+async function readLocalLogSnapshot(filePath: string): Promise<{
+  content: string
+  isBinary: boolean
+  fileIdentity?: string
+}> {
+  const handle = await open(filePath, 'r')
+  try {
+    const stats = await handle.stat()
+    if (stats.size > MAX_TEXT_FILE_SIZE) {
+      throw new Error(
+        `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${MAX_TEXT_FILE_SIZE / 1024 / 1024}MB limit`
+      )
+    }
+    const buffer = await handle.readFile()
+    if (buffer.byteLength > MAX_TEXT_FILE_SIZE) {
+      throw new Error(
+        `File too large: ${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB exceeds ${MAX_TEXT_FILE_SIZE / 1024 / 1024}MB limit`
+      )
+    }
+    if (isBinaryBuffer(buffer)) {
+      return { content: '', isBinary: true }
+    }
+    return {
+      content: buffer.toString('utf8'),
+      isBinary: false,
+      fileIdentity: localLogFileIdentity(stats)
+    }
+  } finally {
+    await handle.close()
+  }
+}
 
 type DownloadFileResult = { canceled: true } | { canceled: false; destinationPath: string }
 
@@ -534,13 +568,22 @@ export function registerFilesystemHandlers(
     'fs:readFile',
     async (
       _event,
-      args: { filePath: string; connectionId?: string }
-    ): Promise<{ content: string; isBinary: boolean; isImage?: boolean; mimeType?: string }> => {
+      args: { filePath: string; connectionId?: string; includeLocalLogMetadata?: boolean }
+    ): Promise<{
+      content: string
+      isBinary: boolean
+      isImage?: boolean
+      mimeType?: string
+      fileIdentity?: string
+    }> => {
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
         return provider.readFile(args.filePath)
       }
       const filePath = await resolveAuthorizedPath(args.filePath, store)
+      if (args.includeLocalLogMetadata === true) {
+        return readLocalLogSnapshot(filePath)
+      }
       const stats = await stat(filePath)
       const mimeType = PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
       const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
@@ -1026,29 +1069,56 @@ export function registerFilesystemHandlers(
   )
 
   // ─── List all files (for quick-open) ─────────────────────
+  // Why #7721: keyed by renderer-generated token so a workspace switch can
+  // abort the previous workspace's full-tree scan (SSH relays otherwise stack
+  // scans that starve interactive fs.readDir/fs.stat past their 30s timeout).
+  const listFilesCancellations = new Map<string, AbortController>()
   ipcMain.handle(
     'fs:listFiles',
     async (
       _event,
-      args: { rootPath: string; connectionId?: string; excludePaths?: string[] }
-    ): Promise<string[]> => {
-      if (args.connectionId) {
-        const provider = getSshFilesystemProvider(args.connectionId)
-        // Why: when the SSH connection is not yet established (cold start) or
-        // temporarily disconnected, return [] so quick-open shows "No matching
-        // files" instead of an error banner. The file list will repopulate when
-        // the user re-opens quick-open after the connection is restored.
-        if (!provider) {
-          return []
-        }
-        // Why: forward excludePaths through to the remote provider.
-        // Dropping it here would silently double-scan nested linked worktrees
-        // over SSH and contribute to timeout-induced partial results.
-        return provider.listFiles(args.rootPath, { excludePaths: args.excludePaths })
+      args: {
+        rootPath: string
+        connectionId?: string
+        excludePaths?: string[]
+        requestToken?: string
       }
-      return listQuickOpenFiles(args.rootPath, store, args.excludePaths)
+    ): Promise<string[]> => {
+      const controller = args.requestToken ? new AbortController() : null
+      if (controller && args.requestToken) {
+        listFilesCancellations.set(args.requestToken, controller)
+      }
+      try {
+        if (args.connectionId) {
+          const provider = getSshFilesystemProvider(args.connectionId)
+          // Why: when the SSH connection is not yet established (cold start) or
+          // temporarily disconnected, return [] so quick-open shows "No matching
+          // files" instead of an error banner. The file list will repopulate when
+          // the user re-opens quick-open after the connection is restored.
+          if (!provider) {
+            return []
+          }
+          // Why: forward excludePaths through to the remote provider.
+          // Dropping it here would silently double-scan nested linked worktrees
+          // over SSH and contribute to timeout-induced partial results.
+          return await provider.listFiles(args.rootPath, {
+            excludePaths: args.excludePaths,
+            signal: controller?.signal
+          })
+        }
+        return await listQuickOpenFiles(args.rootPath, store, args.excludePaths, controller?.signal)
+      } finally {
+        if (args.requestToken) {
+          listFilesCancellations.delete(args.requestToken)
+        }
+      }
     }
   )
+
+  ipcMain.handle('fs:cancelListFiles', (_event, args: { requestToken: string }): void => {
+    // Why: best-effort — the entry is gone once the listing settles.
+    listFilesCancellations.get(args.requestToken)?.abort()
+  })
 
   // ─── Git operations ─────────────────────────────────────
   ipcMain.handle(
@@ -2189,4 +2259,6 @@ export function registerFilesystemHandlers(
       return getRemoteCommitUrl(worktreePath, sha)
     }
   )
+
+  registerLocalLogTailHandlers(store)
 }

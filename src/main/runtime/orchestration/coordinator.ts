@@ -29,6 +29,12 @@ export type CoordinatorRuntime = {
     behind: number
     recentSubjects: string[]
   } | null>
+  // Why: optional so lightweight runtime fakes keep compiling; when present,
+  // dispatch records the remint-stable pane identity of the assignee.
+  getTerminalPaneKey?(handle: string): string | null
+  // Why: Windows can host native and WSL workers concurrently, so the
+  // worker pane—not the coordinator process—selects the packaged CLI name.
+  getTerminalOrchestrationCliCommand?(handle: string): 'orca' | 'orca-ide'
 }
 
 // Why (§3.1): single threshold, no warn/refuse split. Coordinator picked 20
@@ -461,7 +467,11 @@ export class Coordinator {
       }
     }
 
-    const dispatch = this.db.createDispatchContext(task.id, targetHandle)
+    const dispatch = this.db.createDispatchContext(
+      task.id,
+      targetHandle,
+      this.runtime.getTerminalPaneKey?.(targetHandle) ?? undefined
+    )
 
     // Why: agents dispatched by the coordinator must use orca-dev in dev mode
     // so they talk to the dev runtime's socket, not production (Section 6.4).
@@ -477,7 +487,11 @@ export class Coordinator {
       // part of its instructions).
       taskSpec: strippedSpec,
       coordinatorHandle: this.opts.coordinatorHandle,
+      workerHandle: targetHandle,
       devMode: process.env.ORCA_USER_DATA_PATH?.includes('orca-dev'),
+      ...(this.runtime.getTerminalOrchestrationCliCommand
+        ? { cliCommand: this.runtime.getTerminalOrchestrationCliCommand(targetHandle) }
+        : {}),
       // Why (§3.2): drift section fires only when behind > 0. The preamble
       // builder gates on this itself; passing the object unconditionally lets
       // the coordinator stay dumb about the display rule.

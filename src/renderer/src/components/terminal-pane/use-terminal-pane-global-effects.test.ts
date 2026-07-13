@@ -1,11 +1,13 @@
 /* eslint-disable max-lines -- Why: these hook tests share a mocked React lifecycle harness with global event cases. */
 import type * as ReactModule from 'react'
+import type * as StoreModule from '@/store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PASTE_TERMINAL_TEXT_EVENT, SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import {
   registerLivePaneManager,
   unregisterLivePaneManager
 } from '@/lib/pane-manager/pane-manager-registry'
+import { useAppStore } from '@/store'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 import { TERMINAL_PASTE_DIRECT_MAX_BYTES } from './terminal-paste-coordinator'
 
@@ -94,6 +96,20 @@ vi.mock('./terminal-bracketed-paste', () => ({
 vi.mock('./terminal-input-activity', () => ({
   recordTerminalUserInputForLeaf: mocks.recordTerminalUserInputForLeaf
 }))
+
+// Why: this suite invokes the hook outside a real React render (the react mock
+// above runs effects synchronously and manages refs by hand), so a reactive
+// useAppStore(selector) call would throw an "Invalid hook call". Read the
+// current snapshot synchronously instead; getState/setState stay real so tests
+// can seed terminalLayoutsByTabId.
+vi.mock('@/store', async (importOriginal) => {
+  const actual = await importOriginal<typeof StoreModule>()
+  const realHook = actual.useAppStore
+  const testHook = ((selector?: (state: ReturnType<typeof realHook.getState>) => unknown) =>
+    selector ? selector(realHook.getState()) : realHook.getState()) as typeof realHook
+  Object.assign(testHook, realHook)
+  return { ...actual, useAppStore: testHook }
+})
 
 class MockResizeObserver {
   observe = vi.fn()
@@ -190,6 +206,7 @@ describe('useTerminalPaneGlobalEffects', () => {
   beforeEach(() => {
     resetHookRefs()
     vi.clearAllMocks()
+    useAppStore.setState({ terminalLayoutsByTabId: {} })
     ;(globalThis as unknown as { window: unknown }).window = {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
@@ -588,8 +605,29 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(manager.refreshAllPanes).toHaveBeenCalledTimes(1)
   })
 
-  it('reports the active local PTY to the main output scheduler', () => {
-    const manager = {
+  function seedActiveLeafPty(tabId: string, activeLeafId: string, ptyId: string): void {
+    useAppStore.setState({
+      terminalLayoutsByTabId: {
+        [tabId]: {
+          root: null,
+          activeLeafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [activeLeafId]: ptyId }
+        }
+      }
+    })
+  }
+
+  function makeActivePtyManager(): {
+    getPanes: ReturnType<typeof vi.fn>
+    resumeRendering: ReturnType<typeof vi.fn>
+    resetWebglTextureAtlases: ReturnType<typeof vi.fn>
+    scheduleRevealRepaint: ReturnType<typeof vi.fn>
+    scheduleRevealPresent: ReturnType<typeof vi.fn>
+    suspendRendering: ReturnType<typeof vi.fn>
+    getActivePane: ReturnType<typeof vi.fn>
+  } {
+    return {
       getPanes: vi.fn(() => [{ id: 1, terminal: { name: 'terminal-a' } }]),
       resumeRendering: vi.fn(),
       resetWebglTextureAtlases: vi.fn(),
@@ -598,8 +636,11 @@ describe('useTerminalPaneGlobalEffects', () => {
       suspendRendering: vi.fn(),
       getActivePane: vi.fn(() => ({ id: 1, terminal: { name: 'terminal-a' } }))
     }
-    const transport = { getPtyId: vi.fn(() => 'pty-active') }
-    const paneTransports = new Map([[1, transport]])
+  }
+
+  it('reports the active local PTY to the main output scheduler', () => {
+    const manager = makeActivePtyManager()
+    seedActiveLeafPty('tab-1', 'leaf-1', 'pty-active')
 
     beginHookRender()
     useTerminalPaneGlobalEffects({
@@ -611,13 +652,69 @@ describe('useTerminalPaneGlobalEffects', () => {
       paneCount: 1,
       managerRef: { current: manager as never },
       containerRef: { current: null },
-      paneTransportsRef: { current: paneTransports as never },
+      paneTransportsRef: { current: new Map() },
       isActiveRef: { current: false },
       isVisibleRef: { current: false },
       toggleExpandPane: vi.fn()
     })
 
     expect(window.api.pty.setActiveRendererPty).toHaveBeenCalledWith('pty-active', true)
+  })
+
+  it('re-reports the active PTY when the active leaf rebinds to a new PTY without visibility changing', () => {
+    const manager = makeActivePtyManager()
+    const mountArgs = {
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      isActive: true,
+      isVisible: true,
+      isWorktreeActive: true,
+      isSyncFitEnabled: true,
+      paneCount: 1,
+      managerRef: { current: manager as never },
+      containerRef: { current: null },
+      paneTransportsRef: { current: new Map() },
+      isActiveRef: { current: false },
+      isVisibleRef: { current: false },
+      toggleExpandPane: vi.fn()
+    }
+
+    seedActiveLeafPty('tab-1', 'leaf-1', 'pty-old')
+    beginHookRender()
+    useTerminalPaneGlobalEffects(mountArgs)
+    expect(window.api.pty.setActiveRendererPty).toHaveBeenCalledWith('pty-old', true)
+
+    // Deferred reattach rebinds the active leaf to a new PTY; isActive/isVisible/
+    // isWorktreeActive never flip, so only the reactive leaf→PTY binding changes.
+    seedActiveLeafPty('tab-1', 'leaf-1', 'pty-new')
+    beginHookRender()
+    useTerminalPaneGlobalEffects(mountArgs)
+
+    expect(window.api.pty.setActiveRendererPty).toHaveBeenCalledWith('pty-new', true)
+  })
+
+  it('does not report a backgrounded tab active even when its active leaf has a live PTY', () => {
+    const manager = makeActivePtyManager()
+    seedActiveLeafPty('tab-1', 'leaf-1', 'pty-active')
+
+    beginHookRender()
+    useTerminalPaneGlobalEffects({
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      isActive: false,
+      isVisible: false,
+      isWorktreeActive: false,
+      isSyncFitEnabled: false,
+      paneCount: 1,
+      managerRef: { current: manager as never },
+      containerRef: { current: null },
+      paneTransportsRef: { current: new Map() },
+      isActiveRef: { current: false },
+      isVisibleRef: { current: false },
+      toggleExpandPane: vi.fn()
+    })
+
+    expect(window.api.pty.setActiveRendererPty).not.toHaveBeenCalled()
   })
 
   it('enforces scroll intent after hidden layout changes the viewport', () => {

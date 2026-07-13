@@ -29,13 +29,23 @@ type AppStoreApi = Pick<StoreApi<AppState>, 'getState' | 'subscribe'>
 const VERIFY_RETRY_MS = 2_000
 const VERIFY_SLOW_RETRY_MS = 15_000
 const VERIFY_FAST_ATTEMPTS = 30
+// Why: a session restored with many dirty tabs would otherwise fire one disk
+// read per tab simultaneously — on SSH/remote runtimes that's N concurrent
+// 15s-timeout RPCs competing with connection recovery at startup. Verifies
+// beyond the cap queue and start as slots free up; none are dropped.
+const MAX_CONCURRENT_VERIFY_READS = 3
 
 export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
-  // Why: dedupes in-flight verifications; the store's pending flag is the
-  // durable "needs verification" signal.
+  // Why: dedupes queued + in-flight verifications; the store's pending flag is
+  // the durable "needs verification" signal.
   const inFlightFileIds = new Set<string>()
   const attemptsByFileId = new Map<string, number>()
   const retryTimers = new Set<ReturnType<typeof setTimeout>>()
+  // Why: queue ids, not OpenFile snapshots. Ids are paths, so a snapshot can go
+  // stale (close/reopen or save at the same path) while it waits for a slot;
+  // the live file is re-read at dispatch instead.
+  const verifyQueue: string[] = []
+  let activeVerifyReads = 0
   let disposed = false
 
   // Why: distinguishes "file was deleted while the app was closed" (a
@@ -144,6 +154,36 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
     }
   }
 
+  const pumpVerifyQueue = (): void => {
+    while (!disposed && activeVerifyReads < MAX_CONCURRENT_VERIFY_READS && verifyQueue.length > 0) {
+      const fileId = verifyQueue.shift()!
+      // Why: re-read the live file when the slot opens. A queued id may now
+      // resolve to a reopened or saved same-path tab, so re-validate it against
+      // the current state before spending a disk read; skipping frees the dedupe
+      // marker so a later scan can re-queue it if it needs verification again.
+      const file = store.getState().openFiles.find((f) => f.id === fileId)
+      if (
+        !file ||
+        !file.pendingDiskBaselineVerification ||
+        !file.isDirty ||
+        !file.lastKnownDiskSignature ||
+        file.externalMutation === 'changed' ||
+        !canAutoSaveOpenFile(file)
+      ) {
+        inFlightFileIds.delete(fileId)
+        continue
+      }
+      activeVerifyReads += 1
+      const onSettled = (): void => {
+        activeVerifyReads -= 1
+        pumpVerifyQueue()
+      }
+      // Why: verify() never rejects by design, but a rejection here must still
+      // release the slot or the queue stalls permanently.
+      void verify(file).then(onSettled, onSettled)
+    }
+  }
+
   const scan = (): void => {
     if (disposed) {
       return
@@ -160,8 +200,9 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
         continue
       }
       inFlightFileIds.add(file.id)
-      void verify(file)
+      verifyQueue.push(file.id)
     }
+    pumpVerifyQueue()
   }
 
   let previousOpenFiles = store.getState().openFiles
@@ -182,5 +223,6 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
       clearTimeout(timer)
     }
     retryTimers.clear()
+    verifyQueue.length = 0
   }
 }

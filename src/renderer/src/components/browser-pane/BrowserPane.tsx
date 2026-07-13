@@ -45,8 +45,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { BrowserAnnotationSendMenuContent } from './BrowserAnnotationSendMenuContent'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -61,6 +60,7 @@ import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { ORCA_BROWSER_BLANK_URL, ORCA_BROWSER_PARTITION } from '../../../../shared/constants'
+import { getOrcaProfileBrowserDefaultPartition } from '../../../../shared/orca-profiles'
 import type {
   BrowserLoadError,
   BrowserPage as BrowserPageState,
@@ -2843,10 +2843,20 @@ function BrowserPagePane({
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const consumeAddressBarFocusRequest = useAppStore((s) => s.consumeAddressBarFocusRequest)
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
+  const activeOrcaProfileId = useAppStore((s) => s.activeOrcaProfileId)
+  const fallbackBrowserPartition = activeOrcaProfileId
+    ? getOrcaProfileBrowserDefaultPartition(activeOrcaProfileId)
+    : null
+  const defaultSessionProfile = browserSessionProfiles.find((p) => p.id === 'default') ?? null
   const sessionProfile = sessionProfileId
     ? (browserSessionProfiles.find((p) => p.id === sessionProfileId) ?? null)
-    : null
-  const webviewPartition = sessionPartition ?? sessionProfile?.partition ?? ORCA_BROWSER_PARTITION
+    : defaultSessionProfile
+  const webviewPartition =
+    sessionPartition ??
+    sessionProfile?.partition ??
+    defaultSessionProfile?.partition ??
+    fallbackBrowserPartition ??
+    ORCA_BROWSER_PARTITION
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
   const clearBrowserSessionImportState = useAppStore((s) => s.clearBrowserSessionImportState)
   const showBrowserZoomFeedback = useCallback((level: number): void => {
@@ -5297,7 +5307,7 @@ function BrowserPagePane({
                     <TooltipContent side="bottom" sideOffset={6}>
                       {translate(
                         'auto.components.browser.pane.BrowserPane.95af781091',
-                        'Send feedback to a new agent'
+                        'Send feedback to an agent'
                       )}
                     </TooltipContent>
                   </Tooltip>
@@ -5307,13 +5317,10 @@ function BrowserPagePane({
                     onInteractOutside={preventAgentSendTargetOutsideDismiss}
                     onPointerDownOutside={preventAgentSendTargetOutsideDismiss}
                   >
-                    <QuickLaunchAgentMenuItems
+                    <BrowserAnnotationSendMenuContent
                       worktreeId={worktreeId}
                       groupId={activeGroupId ?? worktreeId}
-                      onFocusTerminal={focusTerminalTabSurface}
                       prompt={browserAnnotationsPrompt}
-                      promptDelivery="submit-after-ready"
-                      launchSource="notes_send"
                       onPromptDelivered={handleBrowserAnnotationsSentToAgent}
                     />
                   </DropdownMenuContent>
@@ -5571,7 +5578,7 @@ function BrowserPagePane({
                         <TooltipContent side="bottom" sideOffset={6}>
                           {translate(
                             'auto.components.browser.pane.BrowserPane.95af781091',
-                            'Send feedback to a new agent'
+                            'Send feedback to an agent'
                           )}
                         </TooltipContent>
                       </Tooltip>
@@ -5581,13 +5588,10 @@ function BrowserPagePane({
                         onInteractOutside={preventAgentSendTargetOutsideDismiss}
                         onPointerDownOutside={preventAgentSendTargetOutsideDismiss}
                       >
-                        <QuickLaunchAgentMenuItems
+                        <BrowserAnnotationSendMenuContent
                           worktreeId={worktreeId}
                           groupId={activeGroupId ?? worktreeId}
-                          onFocusTerminal={focusTerminalTabSurface}
                           prompt={browserAnnotationsPrompt}
-                          promptDelivery="submit-after-ready"
-                          launchSource="notes_send"
                           onPromptDelivered={handleBrowserAnnotationsSentToAgent}
                         />
                       </DropdownMenuContent>

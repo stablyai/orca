@@ -97,7 +97,10 @@ export async function diagnoseAuth(): Promise<GitLabAuthDiagnostic> {
       ? 'GLAB_TOKEN'
       : null
   try {
-    const { stdout, stderr } = await glabExecFileAsync(['auth', 'status'])
+    // Why: a host-global diagnostic must not wake an unrelated default WSL distro.
+    const { stdout, stderr } = await glabExecFileAsync(['auth', 'status'], {
+      allowDefaultWslFallback: false
+    })
     const output = `${stdout}\n${stderr}`
     const hosts = parseGlabAuthStatusHosts(output)
     return {

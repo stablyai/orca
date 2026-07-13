@@ -117,10 +117,6 @@ export default function TabBarCreateEntry({
     [agentOptions, query]
   )
 
-  useEffect(() => {
-    onQueryChange?.(query)
-  }, [onQueryChange, query])
-
   if (selectedIndexQuery !== query) {
     setSelectedIndexQuery(query)
     if (selectedIndex !== 0) {
@@ -249,7 +245,11 @@ export default function TabBarCreateEntry({
           ref={inputRef}
           value={query}
           onChange={(event) => {
-            setQuery(event.target.value)
+            const nextQuery = event.target.value
+            // Why: the parent query only changes in response to typing, so publish
+            // it in this event rather than a later effect after the render commits.
+            setQuery(nextQuery)
+            onQueryChange?.(nextQuery)
             setError(null)
           }}
           disabled={disabled}

@@ -64,8 +64,10 @@ type EffectiveUpstreamStatusCacheEntry = {
 }
 
 const SUBMODULE_PATHS_CACHE_TTL_MS = 5_000
+export const MAX_SUBMODULE_PATHS_CACHE_ENTRIES = 512
 type SubmodulePathsCacheEntry = { paths: string[]; expiresAt: number }
 const submodulePathsCache = new Map<string, SubmodulePathsCacheEntry>()
+let submodulePathsCacheGeneration = 0
 
 // Why: the effective-upstream resolution chain (symbolic-ref + rev-parse ×2-3
 // + config snapshot) costs 4-5 subprocess spawns and only changes when branch
@@ -92,15 +94,37 @@ const statusReadsInFlight = new Map<string, Promise<GitStatusResult>>()
 // Why: a mutation invalidates both in-flight diff reads and in-flight status
 // coalescing; clearing only the diff dedupe would let a post-mutation
 // getStatus() join a pre-mutation read and return stale entries.
-function clearGitReadInvalidationState(): void {
+export function invalidateGitReadCaches(): void {
   gitDiffReadDedupe.clear()
   statusReadsInFlight.clear()
-  submodulePathsCache.clear()
+  clearSubmodulePathsCache()
   resolvedUpstreamNameCache.clear()
 }
 
+export async function runWithGitReadCacheInvalidation<T>(run: () => Promise<T>): Promise<T> {
+  invalidateGitReadCaches()
+  try {
+    return await run()
+  } finally {
+    // Why: a read that started during the mutation can be stale too, so the
+    // post-mutation boundary retires both pre-existing and overlapping reads.
+    invalidateGitReadCaches()
+  }
+}
+
 export function clearSubmodulePathsCacheForTests(): void {
+  clearSubmodulePathsCache()
+}
+
+function clearSubmodulePathsCache(): void {
   submodulePathsCache.clear()
+  // Why: a pre-mutation .gitmodules read must not repopulate the cache after
+  // the mutation invalidated it.
+  submodulePathsCacheGeneration += 1
+}
+
+export function getSubmodulePathsCacheCountForTests(): number {
+  return submodulePathsCache.size
 }
 
 function gitRuntimeOptionsKey(options: GitRuntimeOptions): readonly unknown[] {
@@ -113,6 +137,44 @@ function getSubmodulePathsCacheKey(worktreePath: string, options: GitRuntimeOpti
   return [worktreePath, ...gitRuntimeOptionsKey(options)].join('\0')
 }
 
+function pruneExpiredSubmodulePathsCache(now: number): void {
+  for (const [cacheKey, entry] of submodulePathsCache) {
+    if (entry.expiresAt <= now) {
+      submodulePathsCache.delete(cacheKey)
+    }
+  }
+}
+
+function trimSubmodulePathsCache(): void {
+  while (submodulePathsCache.size > MAX_SUBMODULE_PATHS_CACHE_ENTRIES) {
+    const oldestKey = submodulePathsCache.keys().next().value
+    if (oldestKey === undefined) {
+      break
+    }
+    submodulePathsCache.delete(oldestKey)
+  }
+}
+
+function getCachedSubmodulePaths(cacheKey: string, now: number): string[] | null {
+  const cached = submodulePathsCache.get(cacheKey)
+  if (!cached) {
+    return null
+  }
+  if (cached.expiresAt <= now) {
+    submodulePathsCache.delete(cacheKey)
+    return null
+  }
+  submodulePathsCache.delete(cacheKey)
+  submodulePathsCache.set(cacheKey, cached)
+  return cached.paths
+}
+
+function rememberSubmodulePaths(cacheKey: string, paths: string[], now: number): void {
+  submodulePathsCache.delete(cacheKey)
+  submodulePathsCache.set(cacheKey, { paths, expiresAt: now + SUBMODULE_PATHS_CACHE_TTL_MS })
+  trimSubmodulePathsCache()
+}
+
 // Why: status tests reuse this reset hook, so every cross-call memoization layer
 // must reset together even though the historical name mentions upstream only.
 export function clearEffectiveUpstreamStatusCacheForTests(): void {
@@ -120,7 +182,7 @@ export function clearEffectiveUpstreamStatusCacheForTests(): void {
   effectiveUpstreamStatusInFlight.clear()
   retiredEffectiveUpstreamStatusInFlight.clear()
   effectiveUpstreamStatusWriteGeneration.clear()
-  clearGitReadInvalidationState()
+  invalidateGitReadCaches()
 }
 
 export function getEffectiveUpstreamStatusCacheCountForTests(): number {
@@ -908,14 +970,18 @@ export async function abortMerge(
   worktreePath: string,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  await gitExecFileAsync(['merge', '--abort'], gitOptionsForWorktree(worktreePath, options))
+  await runWithGitReadCacheInvalidation(() =>
+    gitExecFileAsync(['merge', '--abort'], gitOptionsForWorktree(worktreePath, options))
+  )
 }
 
 export async function abortRebase(
   worktreePath: string,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  await gitExecFileAsync(['rebase', '--abort'], gitOptionsForWorktree(worktreePath, options))
+  await runWithGitReadCacheInvalidation(() =>
+    gitExecFileAsync(['rebase', '--abort'], gitOptionsForWorktree(worktreePath, options))
+  )
 }
 
 export async function resolveGitDir(worktreePath: string): Promise<string> {
@@ -945,10 +1011,14 @@ export async function listSubmodulePaths(
 ): Promise<string[]> {
   const now = Date.now()
   const cacheKey = getSubmodulePathsCacheKey(worktreePath, options)
-  const cached = submodulePathsCache.get(cacheKey)
-  if (cached && cached.expiresAt > now) {
-    return cached.paths
+  const cached = getCachedSubmodulePaths(cacheKey, now)
+  if (cached) {
+    return cached
   }
+  // Why: prune on misses so removed worktrees do not accumulate while hot
+  // cache hits stay O(1).
+  pruneExpiredSubmodulePathsCache(now)
+  const cacheGeneration = submodulePathsCacheGeneration
   let paths: string[] = []
   try {
     const { stdout } = await gitExecFileAsync(
@@ -971,7 +1041,9 @@ export async function listSubmodulePaths(
     // No .gitmodules (or git config failure) — treat as a repo without submodules.
     paths = []
   }
-  submodulePathsCache.set(cacheKey, { paths, expiresAt: now + SUBMODULE_PATHS_CACHE_TTL_MS })
+  if (cacheGeneration === submodulePathsCacheGeneration) {
+    rememberSubmodulePaths(cacheKey, paths, Date.now())
+  }
   return paths
 }
 
@@ -1834,14 +1906,14 @@ export async function stageFile(
   filePath: string,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  clearGitReadInvalidationState()
+  invalidateGitReadCaches()
   try {
     await gitExecFileAsync(
-      ['add', '--', literalPathspec(filePath)],
+      ['add', '--', literalPathspec(filePath, options)],
       gitOptionsForWorktree(worktreePath, options)
     )
   } finally {
-    clearGitReadInvalidationState()
+    invalidateGitReadCaches()
   }
 }
 
@@ -1853,13 +1925,13 @@ export async function unstageFile(
   filePath: string,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  clearGitReadInvalidationState()
+  invalidateGitReadCaches()
   try {
-    await gitExecFileAsync(['restore', '--staged', '--', literalPathspec(filePath)], {
+    await gitExecFileAsync(['restore', '--staged', '--', literalPathspec(filePath, options)], {
       ...gitOptionsForWorktree(worktreePath, options)
     })
   } finally {
-    clearGitReadInvalidationState()
+    invalidateGitReadCaches()
   }
 }
 
@@ -1916,7 +1988,7 @@ export async function commitChanges(
   message: string,
   options: GitRuntimeOptions = {}
 ): Promise<{ success: boolean; error?: string }> {
-  clearGitReadInvalidationState()
+  invalidateGitReadCaches()
   try {
     await gitExecFileAsync(['commit', '-m', message], gitOptionsForWorktree(worktreePath, options))
     return { success: true }
@@ -1939,7 +2011,7 @@ export async function commitChanges(
       (error instanceof Error ? error.message : 'Commit failed')
     return { success: false, error: errorMessage }
   } finally {
-    clearGitReadInvalidationState()
+    invalidateGitReadCaches()
   }
 }
 
@@ -1951,7 +2023,7 @@ export async function discardChanges(
   filePath: string,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  clearGitReadInvalidationState()
+  invalidateGitReadCaches()
   const resolvedWorktree = path.resolve(worktreePath)
   const resolvedTarget = path.resolve(worktreePath, filePath)
   try {
@@ -1961,9 +2033,12 @@ export async function discardChanges(
 
     let tracked = false
     try {
-      await gitExecFileAsync(['ls-files', '--error-unmatch', '--', literalPathspec(filePath)], {
-        ...gitOptionsForWorktree(worktreePath, options)
-      })
+      await gitExecFileAsync(
+        ['ls-files', '--error-unmatch', '--', literalPathspec(filePath, options)],
+        {
+          ...gitOptionsForWorktree(worktreePath, options)
+        }
+      )
       tracked = true
     } catch {
       // File is not tracked by git
@@ -1971,7 +2046,7 @@ export async function discardChanges(
 
     if (tracked) {
       await gitExecFileAsync(
-        ['restore', '--worktree', '--source=HEAD', '--', literalPathspec(filePath)],
+        ['restore', '--worktree', '--source=HEAD', '--', literalPathspec(filePath, options)],
         {
           ...gitOptionsForWorktree(worktreePath, options)
         }
@@ -1983,7 +2058,7 @@ export async function discardChanges(
       cleanUntrackedPaths(worktreePath, [targetPath], options)
     )
   } finally {
-    clearGitReadInvalidationState()
+    invalidateGitReadCaches()
   }
 }
 
@@ -1991,9 +2066,11 @@ function normalizeGitPathForCompare(filePath: string): string {
   return filePath.replace(/\\/g, '/').replace(/\/+$/, '')
 }
 
-function literalPathspec(filePath: string): string {
-  // Why: source-control selections are concrete paths, not user-authored Git globs.
-  return `:(literal)${filePath}`
+function literalPathspec(filePath: string, options: GitRuntimeOptions): string {
+  // Why: Windows validation produces backslashes, but Git running inside WSL
+  // needs POSIX paths. Host paths stay untouched so POSIX filenames remain literal.
+  const runtimePath = options.wslDistro ? filePath.replace(/\\/g, '/') : filePath
+  return `:(literal)${runtimePath}`
 }
 
 function isTrackedPathSpec(filePath: string, trackedPaths: readonly string[]): boolean {
@@ -2013,7 +2090,7 @@ async function listTrackedPathSpecs(
   for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
     const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
     const { stdout } = await gitExecFileAsync(
-      ['ls-files', '-z', '--', ...chunk.map(literalPathspec)],
+      ['ls-files', '-z', '--', ...chunk.map((filePath) => literalPathspec(filePath, options))],
       {
         ...gitOptionsForWorktree(worktreePath, options)
       }
@@ -2038,9 +2115,12 @@ async function cleanUntrackedPaths(
     const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
     if (chunk.length > 0) {
       // Why: Git pathspec cleanup avoids raw recursive deletion through symlinked parents.
-      await gitExecFileAsync(['clean', '-ffdx', '--', ...chunk.map(literalPathspec)], {
-        ...gitOptionsForWorktree(worktreePath, options)
-      })
+      await gitExecFileAsync(
+        ['clean', '-ffdx', '--', ...chunk.map((filePath) => literalPathspec(filePath, options))],
+        {
+          ...gitOptionsForWorktree(worktreePath, options)
+        }
+      )
     }
   }
 }
@@ -2053,7 +2133,7 @@ export async function bulkDiscardChanges(
   filePaths: string[],
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  clearGitReadInvalidationState()
+  invalidateGitReadCaches()
   if (filePaths.length === 0) {
     return
   }
@@ -2082,7 +2162,13 @@ export async function bulkDiscardChanges(
         for (let i = 0; i < trackedPaths.length; i += BULK_CHUNK_SIZE) {
           const chunk = trackedPaths.slice(i, i + BULK_CHUNK_SIZE)
           await gitExecFileAsync(
-            ['restore', '--worktree', '--source=HEAD', '--', ...chunk.map(literalPathspec)],
+            [
+              'restore',
+              '--worktree',
+              '--source=HEAD',
+              '--',
+              ...chunk.map((filePath) => literalPathspec(filePath, options))
+            ],
             {
               ...gitOptionsForWorktree(worktreePath, options)
             }
@@ -2091,7 +2177,7 @@ export async function bulkDiscardChanges(
       }
     )
   } finally {
-    clearGitReadInvalidationState()
+    invalidateGitReadCaches()
   }
 }
 
@@ -2117,7 +2203,7 @@ export async function bulkStageFiles(
   filePaths: string[],
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  clearGitReadInvalidationState()
+  invalidateGitReadCaches()
   if (filePaths.length === 0) {
     return
   }
@@ -2125,12 +2211,12 @@ export async function bulkStageFiles(
     for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
       const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
       await gitExecFileAsync(
-        ['add', '--', ...chunk.map(literalPathspec)],
+        ['add', '--', ...chunk.map((filePath) => literalPathspec(filePath, options))],
         gitOptionsForWorktree(worktreePath, options)
       )
     }
   } finally {
-    clearGitReadInvalidationState()
+    invalidateGitReadCaches()
   }
 }
 
@@ -2142,18 +2228,26 @@ export async function bulkUnstageFiles(
   filePaths: string[],
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  clearGitReadInvalidationState()
+  invalidateGitReadCaches()
   if (filePaths.length === 0) {
     return
   }
   try {
     for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
       const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
-      await gitExecFileAsync(['restore', '--staged', '--', ...chunk.map(literalPathspec)], {
-        ...gitOptionsForWorktree(worktreePath, options)
-      })
+      await gitExecFileAsync(
+        [
+          'restore',
+          '--staged',
+          '--',
+          ...chunk.map((filePath) => literalPathspec(filePath, options))
+        ],
+        {
+          ...gitOptionsForWorktree(worktreePath, options)
+        }
+      )
     }
   } finally {
-    clearGitReadInvalidationState()
+    invalidateGitReadCaches()
   }
 }

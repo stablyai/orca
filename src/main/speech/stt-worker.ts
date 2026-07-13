@@ -1,7 +1,8 @@
 /* oxlint-disable typescript-eslint/no-explicit-any -- sherpa-onnx native addon has no type definitions */
 import { parentPort, workerData } from 'node:worker_threads'
-import { readdirSync } from 'node:fs'
 import { resampleToRate } from './stt-audio-resample'
+import { OfflineAudioChunker } from './stt-offline-audio-chunker'
+import { buildHotwordsConfig, resolveFile, resolveTokens } from './stt-worker-model-config'
 
 type WorkerMessage =
   | {
@@ -27,7 +28,7 @@ let sherpa: any = null
 let recognizer: any = null
 let stream: any = null
 let isStreaming = false
-let offlineBuffer: Float32Array[] = []
+let offlineChunker: OfflineAudioChunker | null = null
 let offlineSampleRate = 16000
 
 function loadSherpa(): any {
@@ -38,80 +39,13 @@ function loadSherpa(): any {
   return require(modulePath)
 }
 
-// Why: different models name their ONNX files differently (e.g.
-// encoder.int8.onnx vs tiny-encoder.onnx vs encoder-epoch-99-avg-1.onnx).
-// We resolve the actual path from the manifest's files list by searching
-// for the role name anywhere in the filename.
-function resolveFile(files: string[], role: string, modelDir: string, ext = '.onnx'): string {
-  const match = files.find((f) => f.includes(role) && f.endsWith(ext))
-  if (!match) {
-    throw new Error(`No *${role}*${ext} found in model files: ${files.join(', ')}`)
-  }
-  return `${modelDir}/${match}`
-}
-
-function resolveTokens(files: string[], modelDir: string): string {
-  const match = files.find((f) => f.endsWith('tokens.txt'))
-  if (!match) {
-    throw new Error(`No *tokens.txt found in model files: ${files.join(', ')}`)
-  }
-  return `${modelDir}/${match}`
-}
-
-// Why: BPE models need a vocab file for hotwords token matching. The file
-// ships in the model archive but isn't listed in the manifest. We discover
-// it at runtime to avoid breaking existing downloads.
-function discoverBpeVocab(modelDir: string): string | undefined {
-  try {
-    const entries = readdirSync(modelDir)
-    const vocabFile = entries.find((f) => f.endsWith('.vocab'))
-    return vocabFile ? `${modelDir}/${vocabFile}` : undefined
-  } catch {
-    return undefined
-  }
-}
-
-function buildHotwordsConfig(msg: Extract<WorkerMessage, { type: 'init' }>): {
-  decodingMethod: string
-  hotwordsFile?: string
-  hotwordsScore?: number
-  modelingUnit?: string
-  bpeVocab?: string
-} {
-  if (msg.modelType !== 'transducer' || !msg.hotwordsFilePath) {
-    return { decodingMethod: 'greedy_search' }
-  }
-
-  const unit = msg.modelingUnit
-  if (unit?.includes('bpe')) {
-    const bpeVocab = discoverBpeVocab(msg.modelDir)
-    if (!bpeVocab) {
-      return { decodingMethod: 'greedy_search' }
-    }
-    return {
-      decodingMethod: 'modified_beam_search',
-      hotwordsFile: msg.hotwordsFilePath,
-      hotwordsScore: 1.5,
-      modelingUnit: unit,
-      bpeVocab
-    }
-  }
-
-  return {
-    decodingMethod: 'modified_beam_search',
-    hotwordsFile: msg.hotwordsFilePath,
-    hotwordsScore: 1.5,
-    modelingUnit: unit
-  }
-}
-
 function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
   try {
     sherpa = loadSherpa()
 
     const { modelDir, modelType, streaming, sampleRate, files } = msg
     isStreaming = streaming
-    offlineBuffer = []
+    offlineChunker = streaming ? null : new OfflineAudioChunker(sampleRate)
     offlineSampleRate = sampleRate
 
     const tokens = resolveTokens(files, modelDir)
@@ -203,6 +137,35 @@ function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
   }
 }
 
+// Why: an offline stream is single-use — always mint a fresh stream after an
+// attempt so a failed decode cannot leave a spent stream on a warm worker.
+function decodeOfflineChunk(samples: Float32Array): string {
+  try {
+    sherpa.acceptWaveformOffline(stream, { sampleRate: offlineSampleRate, samples })
+    sherpa.decodeOfflineStream(recognizer, stream)
+    const resultJson = sherpa.getOfflineStreamResultAsJson(stream)
+    const result = JSON.parse(resultJson)
+    return result?.text?.trim() ?? ''
+  } finally {
+    if (sherpa && recognizer) {
+      stream = sherpa.createOfflineStream(recognizer)
+    }
+  }
+}
+
+// Why: warm-worker reuse must not see residual audio or a spent offline stream.
+// Recovery failures are swallowed so they cannot skip the stopped lifecycle signal.
+function resetOfflineSessionState(): void {
+  try {
+    offlineChunker = new OfflineAudioChunker(offlineSampleRate)
+    if (sherpa && recognizer) {
+      stream = sherpa.createOfflineStream(recognizer)
+    }
+  } catch {
+    // Non-fatal: prefer posting stopped over stranding stopDictation for 60s.
+  }
+}
+
 function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
   if (!recognizer || !stream) {
     return
@@ -236,9 +199,28 @@ function handleFeed(msg: Extract<WorkerMessage, { type: 'feed' }>): void {
         sherpa.reset(recognizer, stream)
       }
     } else {
-      // Why: offline recognizers cannot decode incrementally — they need all
-      // audio buffered first, then decoded in one shot when dictation stops.
-      offlineBuffer.push(new Float32Array(samples))
+      // Why: decoding one unbounded capture in a single call makes ONNX tensor
+      // sizes scale with dictation length until a >=2 GiB allocation SIGTRAPs
+      // the whole app (#7925). Decode bounded chunks as they fill instead;
+      // each consumer already appends multiple 'final' segments per session.
+      const readyChunks = offlineChunker?.push(new Float32Array(samples)) ?? []
+      // Why: keep decoding later ready windows after one failure — push() has
+      // already removed them from the chunker, and decodeOfflineChunk refreshes
+      // the stream in finally so a spent stream cannot poison the next attempt.
+      let firstError: unknown = null
+      for (const chunk of readyChunks) {
+        try {
+          const text = decodeOfflineChunk(chunk)
+          if (text) {
+            parentPort?.postMessage({ type: 'final', text })
+          }
+        } catch (err) {
+          firstError ??= err
+        }
+      }
+      if (firstError) {
+        throw firstError
+      }
     }
   } catch (err) {
     parentPort?.postMessage({ type: 'error', error: String(err) })
@@ -265,40 +247,33 @@ function handleStop(): void {
       }
       stream = sherpa.createOnlineStream(recognizer)
     } else {
-      // Why: offline recognizer decodes all audio at once — concatenate
-      // buffered chunks into a single Float32Array and feed it to the stream.
-      const totalLength = offlineBuffer.reduce((sum, chunk) => sum + chunk.length, 0)
-      if (totalLength > 0) {
-        const combined = new Float32Array(totalLength)
-        let offset = 0
-        for (const chunk of offlineBuffer) {
-          combined.set(chunk, offset)
-          offset += chunk.length
-        }
-        sherpa.acceptWaveformOffline(stream, { sampleRate: offlineSampleRate, samples: combined })
-        sherpa.decodeOfflineStream(recognizer, stream)
-        const resultJson = sherpa.getOfflineStreamResultAsJson(stream)
-        const result = JSON.parse(resultJson)
-        const text = result?.text?.trim()
+      // Why: the remainder is below the chunk limit by construction, so this
+      // last decode is bounded too.
+      const remaining = offlineChunker?.flush()
+      if (remaining && remaining.length > 0) {
+        const text = decodeOfflineChunk(remaining)
         if (text) {
           parentPort?.postMessage({ type: 'final', text })
         }
       }
-      offlineBuffer = []
-      stream = sherpa.createOfflineStream(recognizer)
+      resetOfflineSessionState()
     }
   } catch (err) {
+    if (!isStreaming) {
+      resetOfflineSessionState()
+    }
     parentPort?.postMessage({ type: 'error', error: String(err) })
+  } finally {
+    // Why: stopDictation waits on this signal; recovery must never prevent it.
+    parentPort?.postMessage({ type: 'stopped' })
   }
-
-  parentPort?.postMessage({ type: 'stopped' })
 }
 
 function handleTeardown(): void {
   stream = null
   recognizer = null
   sherpa = null
-  offlineBuffer = []
+  offlineChunker = null
   process.exit(0)
 }
 

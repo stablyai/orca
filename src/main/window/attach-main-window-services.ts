@@ -328,6 +328,7 @@ function registerRuntimeWindowLifecycle(
           ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
           ...(opts.launchToken ? { launchToken: opts.launchToken } : {}),
           ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
+          ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
           activate: opts.activate !== false,
           ...(opts.presentation ? { presentation: opts.presentation } : {}),
           // Why: pre-minted tabId from main keeps the renderer's tab id aligned
@@ -389,6 +390,7 @@ function registerRuntimeWindowLifecycle(
       }) as Promise<RuntimeMarkdownSaveTabResult>,
     closeTerminal: (tabId, paneRuntimeId) => send('ui:closeTerminal', { tabId, paneRuntimeId }),
     sleepWorktree: (worktreeId) => send('ui:sleepWorktree', { worktreeId }),
+    resumeSleepingAgents: (worktreeId) => send('ui:resumeSleepingAgents', { worktreeId }),
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) =>
       send('runtime:terminalFitOverrideChanged', { ptyId, mode, cols, rows }),
     terminalDriverChanged: (ptyId, driver) =>

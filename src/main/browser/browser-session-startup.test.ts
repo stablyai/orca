@@ -1,20 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 function installRegistryMock(): {
+  configureForOrcaProfileMock: ReturnType<typeof vi.fn>
   applyPendingCookieImportMock: ReturnType<typeof vi.fn>
   initializeBrowserSessionsFromPersistedStateMock: ReturnType<typeof vi.fn>
 } {
+  const configureForOrcaProfileMock = vi.fn()
   const applyPendingCookieImportMock = vi.fn()
   const initializeBrowserSessionsFromPersistedStateMock = vi.fn()
 
   vi.doMock('./browser-session-registry', () => ({
     browserSessionRegistry: {
+      configureForOrcaProfile: configureForOrcaProfileMock,
       applyPendingCookieImport: applyPendingCookieImportMock,
       initializeBrowserSessionsFromPersistedState: initializeBrowserSessionsFromPersistedStateMock
     }
   }))
 
   return {
+    configureForOrcaProfileMock,
     applyPendingCookieImportMock,
     initializeBrowserSessionsFromPersistedStateMock
   }
@@ -35,6 +39,31 @@ describe('initializeBrowserSessionsForApp', () => {
 
     expect(applyPendingCookieImportMock).toHaveBeenCalledOnce()
     expect(initializeBrowserSessionsFromPersistedStateMock).toHaveBeenCalledOnce()
+    expect(applyPendingCookieImportMock.mock.invocationCallOrder[0]).toBeLessThan(
+      initializeBrowserSessionsFromPersistedStateMock.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('configures the active Orca profile before replaying browser sessions', async () => {
+    const {
+      configureForOrcaProfileMock,
+      applyPendingCookieImportMock,
+      initializeBrowserSessionsFromPersistedStateMock
+    } = installRegistryMock()
+    const { initializeBrowserSessionsForApp } = await import('./browser-session-startup')
+
+    initializeBrowserSessionsForApp({
+      orcaProfileId: 'local-work',
+      profileDirectory: '/profiles/local-work'
+    })
+
+    expect(configureForOrcaProfileMock).toHaveBeenCalledWith({
+      orcaProfileId: 'local-work',
+      profileDirectory: '/profiles/local-work'
+    })
+    expect(configureForOrcaProfileMock.mock.invocationCallOrder[0]).toBeLessThan(
+      applyPendingCookieImportMock.mock.invocationCallOrder[0]
+    )
     expect(applyPendingCookieImportMock.mock.invocationCallOrder[0]).toBeLessThan(
       initializeBrowserSessionsFromPersistedStateMock.mock.invocationCallOrder[0]
     )

@@ -2,9 +2,10 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { TooltipProvider } from '../ui/tooltip'
 import { LinearIntegrationCard } from './task-tracker-integration-cards'
 
 const LOCAL_HOST_LABEL = getExecutionHostLabel('local')
@@ -86,12 +87,27 @@ async function renderCard(): Promise<HTMLDivElement> {
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root?.render(<LinearIntegrationCard />)
+    root?.render(
+      <TooltipProvider>
+        <LinearIntegrationCard />
+      </TooltipProvider>
+    )
   })
   return container
 }
 
 describe('LinearIntegrationCard account scope', () => {
+  beforeEach(() => {
+    // Why: the embedded agent-skill CTA scans installed skills through
+    // window.api; without a stub it renders a scan error instead of a state.
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        skills: { discover: async () => ({ skills: [], sources: [], scannedAt: 0 }) }
+      }
+    })
+  })
+
   afterEach(async () => {
     if (root) {
       await act(async () => {
@@ -102,6 +118,7 @@ describe('LinearIntegrationCard account scope', () => {
     container?.remove()
     container = null
     mocks.store.current = null
+    Reflect.deleteProperty(window, 'api')
   })
 
   it('shows local-client account ownership when Linear is disconnected', async () => {

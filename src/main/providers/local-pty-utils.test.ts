@@ -33,7 +33,11 @@ vi.mock('./macos-tcc-login-shell', () => ({
   wrapShellSpawnForMacosTccAttribution: wrapSpawnMock
 }))
 
-import { spawnShellWithFallback, validateWorkingDirectory } from './local-pty-utils'
+import {
+  resolveUnixShellPath,
+  spawnShellWithFallback,
+  validateWorkingDirectory
+} from './local-pty-utils'
 
 const WSL_UNC_DIR = '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
 const NATIVE_DIR = 'C:\\Users\\jin\\repo'
@@ -99,6 +103,48 @@ describe('validateWorkingDirectory', () => {
     statSyncMock.mockReturnValue(dirStats(false))
 
     expect(() => validateWorkingDirectory(NATIVE_DIR)).toThrow(/is not a directory/)
+  })
+})
+
+describe('resolveUnixShellPath', () => {
+  beforeEach(() => {
+    existsSyncMock.mockReset()
+    accessSyncMock.mockReset()
+  })
+
+  it('preserves non-absolute shells for execvp PATH and cwd resolution', () => {
+    expect(resolveUnixShellPath('bash')).toBe('bash')
+    expect(resolveUnixShellPath('./bin/custom-shell')).toBe('./bin/custom-shell')
+    expect(existsSyncMock).not.toHaveBeenCalled()
+  })
+
+  it('selects an executable fallback before node-pty can fork a missing shell', () => {
+    existsSyncMock.mockImplementation((path) => path === '/bin/sh')
+    accessSyncMock.mockReturnValue(undefined)
+
+    expect(resolveUnixShellPath('/missing/zsh')).toBe('/bin/sh')
+    expect(existsSyncMock.mock.calls.map(([path]) => path)).toEqual([
+      '/missing/zsh',
+      '/bin/zsh',
+      '/bin/bash',
+      '/bin/sh'
+    ])
+  })
+
+  it('reports every attempted shell when no executable candidate exists', () => {
+    existsSyncMock.mockReturnValue(false)
+
+    expect(() => resolveUnixShellPath('/missing/zsh')).toThrow(
+      'No executable Unix shell found (tried: /missing/zsh, /bin/zsh, /bin/bash, /bin/sh)'
+    )
+  })
+
+  it('dedupes a preferred shell that is already a fallback candidate', () => {
+    existsSyncMock.mockImplementation((path) => path === '/bin/sh')
+    accessSyncMock.mockReturnValue(undefined)
+
+    expect(resolveUnixShellPath('/bin/sh')).toBe('/bin/sh')
+    expect(existsSyncMock.mock.calls.map(([path]) => path)).toEqual(['/bin/sh'])
   })
 })
 

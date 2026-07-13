@@ -848,6 +848,43 @@ async function fetchIssueWorkItem(
   return mapIssueWorkItem(JSON.parse(stdout) as Record<string, unknown>)
 }
 
+// REST /pulls/{n} has requested_reviewers but not latestReviews. When the JSON
+// `gh pr view` path fails, still pull review fields from gh so mobile/desktop
+// reviewer lists (CodeRabbit COMMENTED, etc.) are not silently empty.
+const WORK_ITEM_PR_REVIEW_JSON_FIELDS = 'reviewRequests,latestReviews'
+
+async function fetchPullRequestReviewFields(
+  number: number,
+  ownerRepo: OwnerRepo | null,
+  ghOptions: GhExecOptions
+): Promise<Pick<MainWorkItem, 'reviewRequests' | 'latestReviews'>> {
+  try {
+    const args = ownerRepo
+      ? [
+          'pr',
+          'view',
+          String(number),
+          '--repo',
+          `${ownerRepo.owner}/${ownerRepo.repo}`,
+          '--json',
+          WORK_ITEM_PR_REVIEW_JSON_FIELDS
+        ]
+      : ['pr', 'view', String(number), '--json', WORK_ITEM_PR_REVIEW_JSON_FIELDS]
+    const { stdout } = await ghExecFileAsync(args, ghOptions)
+    const item = JSON.parse(stdout) as Record<string, unknown>
+    return {
+      ...(item.reviewRequests !== undefined
+        ? { reviewRequests: usersFromUnknown(item.reviewRequests) }
+        : {}),
+      ...(item.latestReviews !== undefined
+        ? { latestReviews: latestReviewsFromUnknown(item.latestReviews) }
+        : {})
+    }
+  } catch {
+    return {}
+  }
+}
+
 async function fetchPullRequestWorkItem(
   repoPath: string,
   ownerRepo: OwnerRepo | null,
@@ -872,24 +909,36 @@ async function fetchPullRequestWorkItem(
       )
       const item = JSON.parse(stdout) as Record<string, unknown>
       const mapped = mapPullRequestWorkItem(item, ownerRepo)
+      // Why: merge-metadata GraphQL is best-effort. A failure here must not fall
+      // through to the REST path below — that path drops latestReviews and blanks
+      // the mobile/desktop reviewer list for bots that only left a review.
       const baseRefName = typeof item.baseRefName === 'string' ? item.baseRefName : undefined
-      const mergeMetadata = await detectRepositoryMergeMetadata(ownerRepo, baseRefName, ghOptions)
-      return {
-        ...mapped,
-        mergeQueueRequired: mergeMetadata.mergeQueueRequired,
-        ...(mergeMetadata.autoMergeAllowed !== null
-          ? { autoMergeAllowed: mergeMetadata.autoMergeAllowed }
-          : {}),
-        ...(mergeMetadata.mergeMethodSettings
-          ? { mergeMethodSettings: mergeMetadata.mergeMethodSettings }
-          : {})
+      try {
+        const mergeMetadata = await detectRepositoryMergeMetadata(ownerRepo, baseRefName, ghOptions)
+        return {
+          ...mapped,
+          mergeQueueRequired: mergeMetadata.mergeQueueRequired,
+          ...(mergeMetadata.autoMergeAllowed !== null
+            ? { autoMergeAllowed: mergeMetadata.autoMergeAllowed }
+            : {}),
+          ...(mergeMetadata.mergeMethodSettings
+            ? { mergeMethodSettings: mergeMetadata.mergeMethodSettings }
+            : {})
+        }
+      } catch {
+        return mapped
       }
     } catch {
       const { stdout } = await ghExecFileAsync(
         ['api', `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${number}`],
         ghOptions
       )
-      return mapPullRequestWorkItem(JSON.parse(stdout) as Record<string, unknown>, ownerRepo)
+      const mapped = mapPullRequestWorkItem(
+        JSON.parse(stdout) as Record<string, unknown>,
+        ownerRepo
+      )
+      const reviewFields = await fetchPullRequestReviewFields(number, ownerRepo, ghOptions)
+      return { ...mapped, ...reviewFields }
     }
   }
 
@@ -2343,6 +2392,7 @@ type TrackedUpstreamBranch = {
 }
 
 const TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS = 30_000
+const TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_ENTRIES = 512
 
 type TrackedUpstreamSnapshotCacheEntry = {
   expiresAt: number
@@ -2362,12 +2412,49 @@ const trackedUpstreamSnapshotInFlight = new Map<
   string,
   Promise<TrackedUpstreamSnapshotProbeResult>
 >()
-const trackedUpstreamSnapshotGenerations = new Map<string, number>()
+const trackedUpstreamSnapshotGenerations = new Map<string, symbol>()
 
-function beginTrackedUpstreamSnapshotProbe(cacheKey: string): number {
-  const nextGeneration = (trackedUpstreamSnapshotGenerations.get(cacheKey) ?? 0) + 1
-  trackedUpstreamSnapshotGenerations.set(cacheKey, nextGeneration)
-  return nextGeneration
+function beginTrackedUpstreamSnapshotProbe(cacheKey: string): symbol {
+  const generation = Symbol()
+  trackedUpstreamSnapshotGenerations.set(cacheKey, generation)
+  return generation
+}
+
+function finishTrackedUpstreamSnapshotProbe(cacheKey: string, generation: symbol): void {
+  // Why: generations only guard an active probe; retaining completed repo keys
+  // leaks worktree/runtime identities after the short-lived snapshot TTL expires.
+  if (trackedUpstreamSnapshotGenerations.get(cacheKey) === generation) {
+    trackedUpstreamSnapshotGenerations.delete(cacheKey)
+  }
+}
+
+function pruneTrackedUpstreamSnapshotCache(now: number): void {
+  for (const [cacheKey, cached] of trackedUpstreamSnapshotCache) {
+    if (cached.expiresAt <= now) {
+      trackedUpstreamSnapshotCache.delete(cacheKey)
+    }
+  }
+  // Why: workspace/runtime churn can create unbounded unique keys within one
+  // TTL window, so expiry sweeping alone is not a memory bound.
+  while (trackedUpstreamSnapshotCache.size > TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_ENTRIES) {
+    const oldestKey = trackedUpstreamSnapshotCache.keys().next().value
+    if (oldestKey === undefined) {
+      break
+    }
+    trackedUpstreamSnapshotCache.delete(oldestKey)
+  }
+}
+
+export function _getTrackedUpstreamBranchCacheSizesForTests(): {
+  snapshots: number
+  inFlight: number
+  generations: number
+} {
+  return {
+    snapshots: trackedUpstreamSnapshotCache.size,
+    inFlight: trackedUpstreamSnapshotInFlight.size,
+    generations: trackedUpstreamSnapshotGenerations.size
+  }
 }
 
 export function __resetTrackedUpstreamBranchCacheForTests(): void {
@@ -2461,6 +2548,7 @@ async function getTrackedUpstreamBranch(
         upstreamsByBranchName: getCacheableTrackedUpstreamSnapshot(result.upstreamsByBranchName),
         expiresAt: Date.now() + TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS
       })
+      pruneTrackedUpstreamSnapshotCache(Date.now())
     }
     if (trackedUpstreamSnapshotGenerations.get(cacheKey) !== probeGeneration) {
       const fresherCached = trackedUpstreamSnapshotCache.get(cacheKey)
@@ -2473,6 +2561,7 @@ async function getTrackedUpstreamBranch(
     if (trackedUpstreamSnapshotInFlight.get(cacheKey) === probe) {
       trackedUpstreamSnapshotInFlight.delete(cacheKey)
     }
+    finishTrackedUpstreamSnapshotProbe(cacheKey, probeGeneration)
   }
 }
 

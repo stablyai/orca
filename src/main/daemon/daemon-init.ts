@@ -8,7 +8,7 @@ module-level spawner/adapter singletons must stay co-located so a future
 change cannot leave them drifting out of sync. */
 import { join } from 'node:path'
 import { app } from 'electron'
-import { mkdirSync, existsSync, unlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { fork } from 'node:child_process'
 import { connect } from 'node:net'
 import {
@@ -34,7 +34,8 @@ import {
   getProcessStartedAtMs,
   checkDaemonHealth,
   isDaemonStaleForCurrentBundle,
-  killStaleDaemon
+  killStaleDaemon,
+  parseDaemonPidFile
 } from './daemon-health'
 import {
   collectPinnedDaemonVersions,
@@ -255,9 +256,7 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
       // Why: a busy machine (e.g. right after an update) can time out the
       // health check while the daemon is alive and owning terminals. Killing
       // it would destroy every live session, so re-verify with a session list
-      // first. Only a verified non-empty list preserves: a daemon that cannot
-      // even list sessions cannot serve terminals, and replacing it is the
-      // only recovery.
+      // first.
       const liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
       if (liveSessionCount !== null && liveSessionCount > 0) {
         if (health === 'pty-spawn-unhealthy') {
@@ -272,6 +271,20 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
         }
         console.warn(
           `[daemon] Preserving daemon that failed the health check because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
+        )
+        return createPreservedDaemonHandle(runtimeDir)
+      }
+      // Why: on a Windows update relaunch the daemon can be wedged past every
+      // RPC budget (final checkpoint flush + installer/AV disk pressure), so
+      // both the health check AND the session list time out while sessions
+      // are still alive — failing closed here is what killed those sessions.
+      // A pipe that still accepts connections proves a live daemon: adopt it
+      // and let the adapter reconnect once the daemon drains. 'rejected'
+      // means the daemon answered and refused the handshake — it can never be
+      // adopted, so replacement stays the only recovery.
+      if (liveSessionCount === null && health !== 'rejected' && (await probeSocket(socketPath))) {
+        console.warn(
+          '[daemon] Preserving unresponsive daemon because its socket still accepts connections'
         )
         return createPreservedDaemonHandle(runtimeDir)
       }
@@ -298,10 +311,13 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
         // userData keeps process.cwd() valid after a repo/worktree is deleted.
         cwd: userDataPath,
         // Why: detached + unref lets the daemon outlive the Electron process.
-        // stdio 'ignore' prevents the child from holding the parent's stdout
-        // open, which would prevent Electron from exiting cleanly.
+        // stdout stays 'ignore' so the child never holds the parent's stdout
+        // open (which would block Electron exit); stderr is 'pipe' so a
+        // module-load crash during startup is captured instead of discarded
+        // (v1.4.129-rc.1 shipped a daemon that only logged "exited with code 1"
+        // because stderr was thrown away). The pipe is destroyed on readiness.
         detached: true,
-        stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+        stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
         // Why: run the relocated Orca.exe copy instead of the install-dir one.
         // It is byte-identical, so run-as-node behavior is unchanged; only the
         // image path moves out of the updater's kill zone.
@@ -319,6 +335,30 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
         }
       }
     )
+
+    // Why: keep only the startup-window stderr tail so a crash cause is
+    // visible without unbounded memory if the daemon spews before dying.
+    const STARTUP_STDERR_MAX_BYTES = 8192
+    let startupStderr = ''
+    let collectingStderr = true
+    const onStartupStderr = (chunk: Buffer): void => {
+      if (!collectingStderr) {
+        return
+      }
+      startupStderr += chunk.toString('utf8')
+      if (startupStderr.length > STARTUP_STDERR_MAX_BYTES) {
+        startupStderr = startupStderr.slice(-STARTUP_STDERR_MAX_BYTES)
+      }
+    }
+    child.stderr?.on('data', onStartupStderr)
+    // Why: once the daemon is up (or has failed) the parent must not keep a
+    // live handle on the detached daemon's stderr — a piped stream would ref
+    // the parent event loop and prevent Electron from exiting cleanly.
+    const releaseStderr = (): void => {
+      collectingStderr = false
+      child.stderr?.off('data', onStartupStderr)
+      child.stderr?.destroy()
+    }
 
     // Wait for the daemon to signal readiness via IPC
     await new Promise<void>((resolve, reject) => {
@@ -338,6 +378,14 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
         }
         settled = true
         cleanupStartupListeners()
+        // Why: stderr was previously discarded, so a startup crash surfaced only
+        // as "exited with code 1". Attach the captured tail to the thrown error
+        // (which the fallback path reports) and log it so the real cause shows.
+        const stderrTail = startupStderr.trim()
+        if (stderrTail) {
+          console.warn(`[daemon] startup failed; captured stderr tail:\n${stderrTail}`)
+        }
+        releaseStderr()
         if (child.pid) {
           try {
             process.kill(child.pid, 'SIGTERM')
@@ -345,7 +393,9 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
             // Already dead
           }
         }
-        reject(error)
+        reject(
+          stderrTail ? new Error(`${error.message}\nDaemon stderr (tail):\n${stderrTail}`) : error
+        )
       }
       function onReadyMessage(msg: unknown): void {
         if (msg && typeof msg === 'object' && (msg as { type?: string }).type === 'ready') {
@@ -361,19 +411,29 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
             // killStaleDaemon() can verify the pid still belongs to the daemon
             // we forked before SIGTERMing it. Prevents pid-recycling hazard
             // where the OS hands the daemon's old pid to an unrelated process.
+            // Why the ready-message fallback: Windows has no cheap OS query
+            // for start time, so the daemon self-reports it — without this the
+            // recycling guard was permanently inert on win32.
+            const selfReported = (msg as { startedAtMs?: unknown }).startedAtMs
             writeFileSync(
               getDaemonPidPath(runtimeDir),
               serializeDaemonPidFile({
                 pid: child.pid,
-                startedAtMs: getProcessStartedAtMs(child.pid),
+                startedAtMs:
+                  getProcessStartedAtMs(child.pid) ??
+                  (typeof selfReported === 'number' && Number.isFinite(selfReported)
+                    ? selfReported
+                    : null),
                 entryPath,
                 appVersion: app.getVersion()
               }),
               { mode: 0o600 }
             )
           }
-          // Why: disconnect IPC channel and unref so Electron can exit
-          // without waiting for the daemon. The daemon keeps running.
+          // Why: disconnect IPC channel, release the stderr pipe, and unref so
+          // Electron can exit without waiting for the daemon. The daemon keeps
+          // running detached.
+          releaseStderr()
           child.disconnect()
           child.unref()
           resolve()
@@ -782,6 +842,21 @@ export async function cleanupDaemonForProtocol(
   return { cleaned: didRequestShutdown || didKillStaleDaemon, killedCount }
 }
 
+function legacyDaemonProcessMayBeAlive(runtimeDir: string, protocolVersion: number): boolean {
+  try {
+    const parsed = parseDaemonPidFile(
+      readFileSync(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
+    )
+    if (!parsed) {
+      return false
+    }
+    process.kill(parsed.pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
 async function createLegacyDaemonAdapters(runtimeDir: string): Promise<DaemonPtyAdapter[]> {
   const adapters: DaemonPtyAdapter[] = []
   for (const protocolVersion of PREVIOUS_DAEMON_PROTOCOL_VERSIONS) {
@@ -791,23 +866,27 @@ async function createLegacyDaemonAdapters(runtimeDir: string): Promise<DaemonPty
       // Why: dead legacy daemons leave pid/token files behind forever (one per
       // protocol bump). A stale pid eventually gets recycled by an unrelated
       // process, turning any future identity check into a PowerShell spawn.
-      // The socket is provably dead, so remove the leftovers — mirrors what
-      // cleanupDaemonForProtocol already does for the current version.
-      for (const stalePath of [
-        getDaemonPidPath(runtimeDir, protocolVersion),
-        getDaemonTokenPath(runtimeDir, protocolVersion)
-      ]) {
-        try {
-          unlinkSync(stalePath)
-        } catch {
-          // Best-effort
+      // Only clean up when the pid-file process is provably gone: a live
+      // legacy daemon can transiently fail the 1s probe right after an update
+      // (wedged event loop, exhausted pipe backlog), and deleting its token
+      // file would make its sessions permanently unadoptable.
+      if (!legacyDaemonProcessMayBeAlive(runtimeDir, protocolVersion)) {
+        for (const stalePath of [
+          getDaemonPidPath(runtimeDir, protocolVersion),
+          getDaemonTokenPath(runtimeDir, protocolVersion)
+        ]) {
+          try {
+            unlinkSync(stalePath)
+          } catch {
+            // Best-effort
+          }
         }
-      }
-      if (process.platform !== 'win32' && existsSync(socketPath)) {
-        try {
-          unlinkSync(socketPath)
-        } catch {
-          // Best-effort
+        if (process.platform !== 'win32' && existsSync(socketPath)) {
+          try {
+            unlinkSync(socketPath)
+          } catch {
+            // Best-effort
+          }
         }
       }
       continue

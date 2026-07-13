@@ -8,7 +8,8 @@ import {
   getPaneIdsForPty,
   onOverrideChange,
   hydrateOverrides,
-  getAllOverrides
+  getAllOverrides,
+  getMobileFitOverridePtyIds
 } from './mobile-fit-overrides'
 
 afterEach(() => {
@@ -34,6 +35,18 @@ describe('setFitOverride / getFitOverrideForPty', () => {
 
     const override = getFitOverrideForPty('pty-1')
     expect(override).toEqual({ mode: 'mobile-fit', cols: 49, rows: 20 })
+  })
+
+  it('stores and releases a remote desktop fit hold', () => {
+    setFitOverride('pty-remote', 'remote-desktop-fit', 96, 32)
+    expect(getFitOverrideForPty('pty-remote')).toEqual({
+      mode: 'remote-desktop-fit',
+      cols: 96,
+      rows: 32
+    })
+
+    setFitOverride('pty-remote', 'desktop-fit', 120, 40)
+    expect(getFitOverrideForPty('pty-remote')).toBeNull()
   })
 
   it('removes the override when mode is desktop-fit', () => {
@@ -322,6 +335,13 @@ describe('getAllOverrides', () => {
     // Verify it's a copy, not the internal map
     all.delete('pty-1')
     expect(getFitOverrideForPty('pty-1')).not.toBeNull()
+  })
+
+  it('excludes remote desktop holds from mobile bulk restore', () => {
+    setFitOverride('pty-mobile', 'mobile-fit', 49, 20)
+    setFitOverride('pty-remote', 'remote-desktop-fit', 100, 30)
+
+    expect(getMobileFitOverridePtyIds()).toEqual(['pty-mobile'])
   })
 })
 

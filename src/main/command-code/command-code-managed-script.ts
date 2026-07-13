@@ -1,4 +1,9 @@
 import { buildWindowsAgentHookPostCommand } from '../agent-hooks/installer-utils'
+import {
+  buildPosixHookPayloadCapture,
+  buildWindowsHookEnvironmentGuardLines,
+  buildWindowsHookStdinDrainEpilogue
+} from '../agent-hooks/hook-stdin-contract'
 
 export type CommandCodeManagedScriptTarget = 'local' | 'posix'
 
@@ -11,9 +16,7 @@ export function buildCommandCodeManagedScript(
       'setlocal',
       'if "%ORCA_AGENT_HOOK_PORT%"=="" if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       'if "%ORCA_AGENT_HOOK_TOKEN%"=="" if not "%ORCA_AGENT_HOOK_PORT%"=="" call :sourceEndpointByPort',
-      'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0',
-      'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
-      'if "%ORCA_PANE_KEY%"=="" exit /b 0',
+      ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAgentHookPostCommand('command-code'),
       'exit /b 0',
       ':sourceEndpointByPort',
@@ -25,12 +28,14 @@ export function buildCommandCodeManagedScript(
       'if not "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
       'for /f "tokens=2 delims==" %%P in (\'findstr /b /c:"set ORCA_AGENT_HOOK_PORT=" "%~1" 2^>nul\') do if "%%P"=="%ORCA_AGENT_HOOK_PORT%" call "%~1" 2>nul',
       'exit /b 0',
+      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }
 
   return [
     '#!/bin/sh',
+    ...buildPosixHookPayloadCapture(),
     '__orca_read_ancestor_var() {',
     '  __orca_name="$1"',
     '  __orca_pid="${PPID:-}"',
@@ -114,10 +119,6 @@ export function buildCommandCodeManagedScript(
     '  done',
     'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
-    '  exit 0',
-    'fi',
-    'payload=$(cat)',
-    'if [ -z "$payload" ]; then',
     '  exit 0',
     'fi',
     // Timeout caps best-effort hook posts if the local listener stalls.

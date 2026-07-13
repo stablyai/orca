@@ -26,11 +26,11 @@ export default function globalSetup(): void {
 
   // ── 1. Build the Electron app ──────────────────────────────────────
   if (process.env.SKIP_BUILD && existsSync(outMain)) {
-    console.log('[e2e] SKIP_BUILD set and out/main/index.js exists — skipping build')
+    console.error('[e2e] SKIP_BUILD set and out/main/index.js exists — skipping build')
   } else {
     // Why: --mode e2e is the build-time signal that exposes window.__store;
     // the explicit env var keeps older local overrides working too.
-    console.log('[e2e] Building Electron app with electron-vite build --mode e2e...')
+    console.error('[e2e] Building Electron app with electron-vite build --mode e2e...')
     execSync('npx electron-vite build --mode e2e', {
       env: { ...process.env, VITE_EXPOSE_STORE: 'true' },
       cwd: root,
@@ -39,13 +39,13 @@ export default function globalSetup(): void {
       // when healthy; global setup should not fail before specs can run.
       timeout: ELECTRON_E2E_BUILD_TIMEOUT_MS
     })
-    console.log('[e2e] Build complete.')
+    console.error('[e2e] Build complete.')
   }
   if (process.env.ORCA_E2E_SSH_LOCALHOST === '1' || process.env.ORCA_E2E_SSH_DOCKER === '1') {
     // Why: the SSH specs deploy Orca's relay from out/relay. The
     // normal Electron E2E build does not produce that bundle, so build it only
     // for explicit SSH runs.
-    console.log('[e2e] Building SSH relay bundle for SSH E2E...')
+    console.error('[e2e] Building SSH relay bundle for SSH E2E...')
     execSync('pnpm run build:relay', {
       cwd: root,
       stdio: 'inherit',
@@ -90,9 +90,9 @@ export default function globalSetup(): void {
     cwd: testRepoDir,
     stdio: 'pipe'
   })
-  console.log(`[e2e] Secondary worktree created at ${worktreeDir}`)
+  console.error(`[e2e] Secondary worktree created at ${worktreeDir}`)
 
   // Write the test repo path so the fixture can read it
   writeFileSync(TEST_REPO_PATH_FILE, testRepoDir)
-  console.log(`[e2e] Test repo created at ${testRepoDir}`)
+  console.error(`[e2e] Test repo created at ${testRepoDir}`)
 }

@@ -5,12 +5,14 @@ import type { GitHubPRRefreshCandidate, PRInfo } from '../../shared/types'
 
 const {
   sendMock,
+  sendToTrustedUIRendererMock,
   getAllWebContentsMock,
   getPRForBranchOutcomeMock,
   getRateLimitMock,
   rateLimitGuardMock
 } = vi.hoisted(() => ({
   sendMock: vi.fn(),
+  sendToTrustedUIRendererMock: vi.fn(),
   getAllWebContentsMock: vi.fn(),
   getPRForBranchOutcomeMock: vi.fn(),
   getRateLimitMock: vi.fn(),
@@ -31,6 +33,10 @@ vi.mock('./rate-limit', () => ({
   getRateLimit: getRateLimitMock,
   noteRateLimitSpend: vi.fn(),
   rateLimitGuard: rateLimitGuardMock
+}))
+
+vi.mock('../ipc/ui', () => ({
+  sendToTrustedUIRenderer: sendToTrustedUIRendererMock
 }))
 
 function makeCandidate(
@@ -82,6 +88,10 @@ describe('pr-refresh-coordinator', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     sendMock.mockReset()
+    sendToTrustedUIRendererMock.mockReset()
+    sendToTrustedUIRendererMock.mockImplementation((channel, payload) => {
+      sendMock(channel, payload)
+    })
     getAllWebContentsMock.mockReset()
     getPRForBranchOutcomeMock.mockReset()
     getRateLimitMock.mockReset()
@@ -99,6 +109,29 @@ describe('pr-refresh-coordinator', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('sends each refresh event once without broadcasting to 100 browser guests', async () => {
+    const guestSends = Array.from({ length: 100 }, () => vi.fn())
+    getAllWebContentsMock.mockReturnValue(
+      guestSends.map((send, index) => ({
+        id: index + 100,
+        isDestroyed: () => false,
+        send
+      }))
+    )
+    const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
+
+    enqueuePRRefresh(makeCandidate({ isBare: true }), 'manual')
+
+    expect(sendToTrustedUIRendererMock).toHaveBeenCalledOnce()
+    expect(sendToTrustedUIRendererMock).toHaveBeenCalledWith(
+      'gh:prRefreshEvent',
+      expect.objectContaining({ status: 'skipped', skippedReason: 'bare' })
+    )
+    expect(sendMock).toHaveBeenCalledOnce()
+    expect(getAllWebContentsMock).not.toHaveBeenCalled()
+    expect(guestSends.reduce((total, send) => total + send.mock.calls.length, 0)).toBe(0)
   })
 
   it('forwards the candidate worktree head into the branch lookup options', async () => {

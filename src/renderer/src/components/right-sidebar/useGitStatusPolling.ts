@@ -7,7 +7,7 @@ import { getConnectionId } from '@/lib/connection-context'
 import { getRuntimeGitConflictOperation } from '@/runtime/runtime-git-client'
 import { refreshGitStatusForWorktree } from './git-status-refresh'
 import { type CoalescedPollRunner, createCoalescedPollRunner } from './coalesced-poll-runner'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
 import {
   hasInteractiveActiveGitStatusConsumer,
   shouldPollActiveGitStatus
@@ -22,6 +22,16 @@ const INTERACTIVE_STATUS_POLL_INTERVAL_MS = MIN_STATUS_REFRESH_INTERVAL_MS
 // metadata watch, shell command completion) cover branch switches; the
 // terminal-only poll is a last-resort backstop for shells without either.
 const TERMINAL_ONLY_STATUS_POLL_INTERVAL_MS = 30_000
+// Why: on a large monorepo one status refresh can take tens of seconds, so the
+// fixed 3s gap kept a git process running almost continuously while the
+// workspace was idle (#7983). Evidence-free ticks wait 5x the previous poll
+// duration (~1/6 duty cycle); change signals wait only 1x so real changes in a
+// slow repo still surface promptly; the cap bounds worst-case staleness.
+const SLOW_GIT_POLL_BACKOFF = {
+  idleMultiplier: 5,
+  changeSignalMultiplier: 1,
+  maxIntervalMs: 5 * 60_000
+}
 
 export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   const enabled = options.enabled ?? true
@@ -100,6 +110,12 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   }, [allWorktrees, conflictOperationByWorktree, activeWorktreeId, repoMap])
 
   const runFetchStatus = useCallback(async () => {
+    // Why: a backoff-deferred run can fire long after the window hides; skip
+    // the scan instead of running tens of seconds of git work nobody can see.
+    // The becoming-visible run catches up via the change-signal lane.
+    if (!isWindowVisible()) {
+      return
+    }
     if (!shouldPollActiveWorktreeGitStatus || !activeWorktreeId || !worktreePath) {
       return
     }
@@ -144,7 +160,8 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   const statusPollRunnerRef = useRef<CoalescedPollRunner | null>(null)
   useEffect(() => {
     const runner = createCoalescedPollRunner(() => runFetchStatusRef.current(), {
-      minIntervalMs: MIN_STATUS_REFRESH_INTERVAL_MS
+      minIntervalMs: MIN_STATUS_REFRESH_INTERVAL_MS,
+      slowTaskBackoff: SLOW_GIT_POLL_BACKOFF
     })
     statusPollRunnerRef.current = runner
     return () => {
@@ -157,24 +174,33 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     statusPollRunnerRef.current?.run()
   }, [])
 
+  // Why: file-watch and push signals carry evidence something changed, so they
+  // take the runner's short-backoff lane instead of evidence-free tick pacing.
+  const fetchStatusOnChangeSignal = useCallback(() => {
+    statusPollRunnerRef.current?.run({ changeSignal: true })
+  }, [])
+
   useEffect(() => {
     if (!activeStatusPollScope) {
       return
     }
     // Why: this root-level poll should pause while hidden, but visible
     // unfocused windows still need fresh status for second-display workflows.
+    // Change signals are dropped while hidden, so the becoming-visible run
+    // rides the short-backoff lane to catch up on anything that was missed.
     return installWindowVisibilityInterval({
       run: fetchStatus,
+      runOnVisible: fetchStatusOnChangeSignal,
       intervalMs: activeStatusPollIntervalMs
     })
-  }, [activeStatusPollIntervalMs, activeStatusPollScope, fetchStatus])
+  }, [activeStatusPollIntervalMs, activeStatusPollScope, fetchStatus, fetchStatusOnChangeSignal])
 
   useGitStatusFileWatchRefresh({
     activeConnectionId,
     activeRepoSupportsGit,
     activeWorktreeId,
     enabled,
-    fetchStatus,
+    fetchStatus: fetchStatusOnChangeSignal,
     gitStatusHugeByWorktree,
     isConnectionReady,
     openFiles,
@@ -188,7 +214,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     activeRepoId,
     activeWorktreeId,
     enabled: shouldPollActiveWorktreeGitStatus,
-    fetchStatus
+    fetchStatus: fetchStatusOnChangeSignal
   })
 
   // Why: poll conflict operation for non-active worktrees that have a stale
@@ -203,6 +229,12 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     }
 
     const pollStale = async (): Promise<void> => {
+      // Why: a backoff-deferred run can fire long after the window hides; skip
+      // the probe instead of running SSH/RPC work nobody can see. The
+      // becoming-visible run catches up via the change-signal lane.
+      if (!isWindowVisible()) {
+        return
+      }
       for (const { id, path } of staleConflictWorktrees) {
         try {
           const connectionId = getConnectionId(id) ?? undefined
@@ -225,13 +257,18 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     }
 
     // Why: remote conflict probes can exceed the 3s interval. Keep one poll in
-    // flight and coalesce skipped ticks into one trailing pass so stale badges
-    // catch up without stacking SSH/RPC work.
-    const pollRunner = createCoalescedPollRunner(pollStale)
+    // flight, coalesce skipped ticks into one trailing pass, and back off after
+    // slow probe chains so stale badges catch up without stacking SSH/RPC work.
+    const pollRunner = createCoalescedPollRunner(pollStale, {
+      slowTaskBackoff: SLOW_GIT_POLL_BACKOFF
+    })
     // Why: conflict badges are visible sidebar state; keep them fresh in
     // visible unfocused windows, but do not poll disconnected hidden windows.
+    // The becoming-visible run rides the short-backoff lane so badges catch
+    // up promptly after a hidden stretch.
     const stopVisiblePoll = installWindowVisibilityInterval({
       run: () => pollRunner.run(),
+      runOnVisible: () => pollRunner.run({ changeSignal: true }),
       intervalMs: MIN_STATUS_REFRESH_INTERVAL_MS
     })
     return () => {

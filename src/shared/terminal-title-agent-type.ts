@@ -6,6 +6,7 @@ import {
   QODER_TERMINAL_LABEL,
   titleHasAgentName
 } from './agent-name-token-match'
+import { isCursorAgentTitle } from './agent-title-core'
 import {
   getPiCompatibleSyntheticAgentLabel,
   isLegacyPiCompatibleTitle
@@ -39,6 +40,24 @@ export function isPiTerminalTitle(title: string): boolean {
   return isLegacyPiCompatibleTitle(title) && !containsBrailleSpinner(title)
 }
 
+// Why: Grok Build's working OSC titles use a fixed frame shape —
+// "spinner - <rotating phrase> - grok" — so every frame is a distinct title
+// that flips tab and sidebar labels. Require BOTH the post-spinner " - "
+// delimiter and the trailing identity " - grok" so Claude/Codex task text
+// like "⠋ fix the flaky suite - grok" or "⠋ wire up grok" is not mislabeled.
+// Spinner marks working; no-spinner session titles ("Fix the auth bug - grok")
+// pass through. The bare "spinner + grok" branch keeps our own collapsed
+// label idempotent under re-normalization.
+const GROK_ROTATING_FRAME_RE = /^[\u2800-\u28FF]+\s+-\s+[\s\S]+?\s-\s+grok\s*$/i
+const GROK_COLLAPSED_WORKING_TITLE_RE = /^[\u2800-\u28FF]+\s+grok\s*$/i
+
+export function isGrokRotatingWorkingTitle(title: string): boolean {
+  if (!containsBrailleSpinner(title)) {
+    return false
+  }
+  return GROK_ROTATING_FRAME_RE.test(title) || GROK_COLLAPSED_WORKING_TITLE_RE.test(title)
+}
+
 export function isPiAgentTitle(title: string): boolean {
   return isLegacyPiCompatibleTitle(title)
 }
@@ -67,9 +86,9 @@ export function isClaudeAgent(title: string): boolean {
     return true
   }
   if (containsBrailleSpinner(title)) {
-    // Why: named non-Claude agents can carry braille spinners too; Claude-only
-    // prompt-cache paths must not fire for those explicit agent titles.
-    return !lower.includes('cursor') && !lower.includes('openclaude')
+    // Why: named non-Claude agents carry braille spinners too. Gate Cursor by its
+    // identity title, not the token, so a Claude title mentioning a cursor stays Claude.
+    return !isCursorAgentTitle(title) && !lower.includes('openclaude')
   }
   // Why: permission/action-required Claude titles can omit the usual prefixes.
   // Token-match so cwd/worktree titles like "claude-scratch" do not become
@@ -153,14 +172,9 @@ export function getAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'aider')) {
     return 'Aider'
   }
-  // Why: the cursor-agent native title is the literal string "Cursor Agent"
-  // (verified against the 2026.04.17 release) — Orca synthesizes the same
-  // label from hook events so the braille-spinner + agent-name path lights
-  // up working/permission/idle transitions in the renderer. Match before
-  // `isClaudeAgent` because Claude's generic braille heuristic would
-  // otherwise claim every "⠋ Cursor Agent" frame as Claude. Token-match so a
-  // cwd like "~/cursor-rules" can't masquerade as a Cursor agent.
-  if (titleHasAgentName(title, 'cursor')) {
+  // Why: `cursor` is ordinary editor vocabulary, not identity. Match Cursor's closed
+  // title set (mirrors @cursor routing), before `isClaudeAgent` claims the braille frame.
+  if (isCursorAgentTitle(title)) {
     return 'Cursor'
   }
   // Why: synthesized "⠋ Droid" working title needs to be matched before Claude's braille heuristic.

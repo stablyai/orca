@@ -631,13 +631,20 @@ describe('attachMainWindowServices', () => {
     const notifier = runtime.setNotifier.mock.calls[0][0] as {
       revealTerminalSession: (
         worktreeId: string,
-        opts: { ptyId: string; title?: string; cwd?: string; activate?: boolean }
+        opts: {
+          ptyId: string
+          title?: string
+          cwd?: string
+          viewMode?: 'terminal' | 'chat'
+          activate?: boolean
+        }
       ) => Promise<{ tabId: string; title?: string }>
     }
     const revealPromise = notifier.revealTerminalSession('wt-1', {
       ptyId: 'pty-1',
       title: 'SSH tmux',
-      cwd: '/repo/packages/web'
+      cwd: '/repo/packages/web',
+      viewMode: 'chat'
     })
     const sentPayload = sendMock.mock.calls.find(
       ([channel]) => channel === 'ui:createTerminal'
@@ -645,7 +652,7 @@ describe('attachMainWindowServices', () => {
     const handler = onMock.mock.calls.find(
       ([channel]) => channel === 'terminal:tabCreateReply'
     )?.[1]
-    expect(sentPayload.cwd).toBe('/repo/packages/web')
+    expect(sentPayload).toMatchObject({ cwd: '/repo/packages/web', viewMode: 'chat' })
 
     handler?.(
       { sender: { send: vi.fn() } },

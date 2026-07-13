@@ -2,6 +2,7 @@ import { resolve } from 'node:path'
 import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { createPlainNodeEntryGuardPlugin } from './build-plugins/plain-node-entry-guard'
 
 // Why: the telemetry transport is gated by two compile-time constants that
 // only the official CI release workflow sets. Contributor / `pnpm dev` /
@@ -181,7 +182,6 @@ export default defineConfig({
           'computer-sidecar': resolve('src/main/computer/sidecar-entry.ts'),
           'stt-worker': resolve('src/main/speech/stt-worker.ts'),
           'warp-theme-parser-worker': resolve('src/main/warp-themes/warp-theme-parser-worker.ts'),
-          'file-watcher-worker': resolve('src/main/runtime/file-watcher-worker.ts'),
           // Why: forked with ELECTRON_RUN_AS_NODE so @parcel/watcher faults
           // can't take down the main process (issue #7547).
           'parcel-watcher-process-entry': resolve('src/main/ipc/parcel-watcher-process-entry.ts'),
@@ -191,7 +191,7 @@ export default defineConfig({
             'src/main/agent-hooks/managed-agent-hook-controls.ts'
           )
         },
-        plugins: [createStartupDiagnosticsBootstrapPlugin()]
+        plugins: [createStartupDiagnosticsBootstrapPlugin(), createPlainNodeEntryGuardPlugin()]
       }
     },
     // Why: compile-time substitution for the telemetry gate. See the block

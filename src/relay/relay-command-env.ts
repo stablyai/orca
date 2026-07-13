@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
 import { posix, win32 } from 'node:path'
+import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../shared/git-output-locale'
 
 const POSIX_RELAY_PATH_FALLBACKS = ['/usr/local/bin', '/opt/homebrew/bin', '/usr/bin', '/bin']
 const WINDOWS_RELAY_PATH_FALLBACKS = [
@@ -153,4 +154,17 @@ export function buildRelayCommandEnv(
     ...baseEnv,
     [key]: [...segments].join(delimiter)
   }
+}
+
+/**
+ * Env for relay-spawned git specifically: the PATH fallbacks above plus a
+ * pinned English UTF-8 locale, because relay git output is machine-parsed
+ * (stderr phrase matching, progress regexes) and a gettext-enabled git under
+ * a non-English host locale translates it (issue #7808).
+ */
+export function buildRelayGitEnv(
+  baseEnv: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): NodeJS.ProcessEnv {
+  return { ...buildRelayCommandEnv(baseEnv, platform), ...UNTRANSLATED_GIT_OUTPUT_ENV }
 }

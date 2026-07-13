@@ -41,6 +41,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
           resize: vi.fn(),
           kill: vi.fn(),
           ackData: vi.fn(),
+          rendererDispatcherReady: vi.fn(),
           onData: vi.fn(
             (
               cb: (payload: {
@@ -91,8 +92,21 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     dispatcherCallback?.({ id: 'pty-pi', data: 'chunk', rawLength: 10, background: true } as never)
 
     expect(handler).toHaveBeenCalledWith('chunk', { rawLength: 10, background: true })
-    expect(window.api.pty.ackData).toHaveBeenCalledWith('pty-pi', 10)
+    expect(window.api.pty.ackData).toHaveBeenCalledWith('pty-pi', 10, 10)
     ptyDataHandlers.delete('pty-pi')
+  })
+
+  it('signals main that the pty:data listener is live exactly once per page load', async () => {
+    // Why: main holds every pty send until this handshake arrives, so a send that
+    // silently became a no-op (it is optional-chained) would pin the delivery gate
+    // until the 10s self-heal watchdog. Assert it fires, and fires only once — the
+    // second transport attach must not re-signal (ptyDispatcherAttached guard).
+    const { ensurePtyDispatcher } = await import('./pty-dispatcher')
+
+    ensurePtyDispatcher()
+    ensurePtyDispatcher()
+
+    expect(window.api.pty.rendererDispatcherReady).toHaveBeenCalledTimes(1)
   })
 
   it('routes Pi OSC title frames from pty:data → onTitleChange via the dispatcher', async () => {
@@ -285,7 +299,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
 
     dispatcherCallback?.({ id: 'pty-early', data: 'setup starts here\r\n', rawLength: 19 })
     expect(onData).not.toHaveBeenCalled()
-    expect(window.api.pty.ackData).toHaveBeenCalledWith('pty-early', 19)
+    expect(window.api.pty.ackData).toHaveBeenCalledWith('pty-early', 19, 19)
 
     resolveSpawn({ id: 'pty-early' })
     await connectPromise

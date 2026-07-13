@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 import { LINEAR_PROJECT_CREATE_METHOD } from './linear-project-create'
+import { LinearIssueAttributeFilterSchema } from './linear-issue-attribute-filter-schema'
 
 const VALID_FILTERS = ['assigned', 'created', 'all', 'completed'] as const
 const VALID_CUSTOM_VIEW_MODELS = ['issue', 'project'] as const
@@ -37,8 +38,10 @@ const ListIssues = z
   .object({
     filter: z.enum(VALID_FILTERS).optional(),
     limit: OptionalFiniteNumber,
-    workspaceId: OptionalString
+    workspaceId: OptionalString,
+    attributeFilter: LinearIssueAttributeFilterSchema.optional()
   })
+  .strict()
   .optional()
 
 const CreateIssue = z.object({
@@ -164,7 +167,9 @@ export const LINEAR_METHODS: RpcMethod[] = [
     name: 'linear.listIssues',
     params: ListIssues,
     handler: async (params, { runtime }) =>
-      runtime.linearListIssues(params?.filter, params?.limit, params?.workspaceId)
+      runtime.linearListIssues(params?.filter, params?.limit, params?.workspaceId, {
+        attributeFilter: params?.attributeFilter
+      })
   }),
   defineMethod({
     name: 'linear.createIssue',

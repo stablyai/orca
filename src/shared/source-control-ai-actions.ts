@@ -6,6 +6,7 @@ export type SourceControlTextActionId = 'commitMessage' | 'pullRequest' | 'branc
 
 export type SourceControlLaunchActionId =
   | 'fixCommitFailure'
+  | 'fixPushFailure'
   | 'fixChecks'
   | 'resolveConflicts'
   | 'resolveComments'
@@ -30,6 +31,7 @@ export const SOURCE_CONTROL_TEXT_ACTION_IDS = [
 
 export const SOURCE_CONTROL_LAUNCH_ACTION_IDS = [
   'fixCommitFailure',
+  'fixPushFailure',
   'fixChecks',
   'resolveConflicts',
   'resolveComments'
@@ -48,6 +50,7 @@ export const SOURCE_CONTROL_TEXT_ACTION_LABELS: Record<SourceControlTextActionId
 
 export const SOURCE_CONTROL_LAUNCH_ACTION_LABELS: Record<SourceControlLaunchActionId, string> = {
   fixCommitFailure: 'Commit failure fixes',
+  fixPushFailure: 'Push failure fixes',
   fixChecks: 'Broken checks fixes',
   resolveConflicts: 'Conflict resolution',
   resolveComments: 'Review comment resolution'
@@ -66,6 +69,7 @@ export const DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES: Record<
   pullRequest: '{basePrompt}',
   branchName: '{basePrompt}',
   fixCommitFailure: '{basePrompt}',
+  fixPushFailure: '{basePrompt}',
   fixChecks: '{basePrompt}',
   resolveConflicts: '{basePrompt}',
   resolveComments: '{basePrompt}'
@@ -85,6 +89,7 @@ export const SOURCE_CONTROL_ACTION_VARIABLES: Record<SourceControlActionId, stri
   ],
   branchName: ['basePrompt', 'firstPrompt', 'assistantMessage'],
   fixCommitFailure: ['basePrompt'],
+  fixPushFailure: ['basePrompt'],
   fixChecks: ['basePrompt'],
   resolveConflicts: ['basePrompt'],
   resolveComments: ['basePrompt']
