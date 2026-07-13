@@ -32,7 +32,7 @@ import {
   isAutomationGeneratedWorkspace,
   isDefaultBranchWorkspace
 } from '@/components/sidebar/visible-worktrees'
-import { isInactiveWorkspace } from '@/lib/worktree-activity-state'
+import { getLiveAgentStatusByWorktreeId, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
 import StatusIndicator from '@/components/sidebar/StatusIndicator'
 import { cn } from '@/lib/utils'
@@ -379,6 +379,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     terminalLayoutsByTabId,
     tabsByWorktree
   } = useAppStore(useShallow((s) => selectPaletteStatusInputs(s, visible || statusInputsLingering)))
+  const agentStatusEpoch = useAppStore((s) =>
+    visible || statusInputsLingering ? s.agentStatusEpoch : 0
+  )
   const prCache = useAppStore((s) => s.prCache)
   const issueCache = useAppStore((s) => s.issueCache)
   const migrationUnsupportedByPtyId = useAppStore((s) => s.migrationUnsupportedByPtyId)
@@ -465,6 +468,19 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const hasQuery = deferredQuery.trim().length > 0
   const isLoading = repos.length > 0 && Object.keys(worktreesByRepo).length === 0
 
+  // Why: keep running-agent workspaces visible under "Hide sleeping" even when
+  // their live PTY is momentarily absent, matching the sidebar filter. #7197
+  const liveAgentActivity = useMemo(() => {
+    void agentStatusEpoch
+    const statusByWorktreeId = getLiveAgentStatusByWorktreeId(
+      agentStatusByPaneKey,
+      tabsByWorktree,
+      Date.now()
+    )
+    return { statusByWorktreeId, worktreeIds: new Set(statusByWorktreeId.keys()) }
+  }, [agentStatusByPaneKey, agentStatusEpoch, tabsByWorktree])
+  const worktreeIdsWithLiveAgent = liveAgentActivity.worktreeIds
+
   // Why: the empty-query palette mirrors sidebar filters so opening Search
   // starts from the same quiet list. Typed search switches to the global
   // non-archived scope below.
@@ -482,7 +498,13 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         }
         if (
           !showSleepingWorkspaces &&
-          isInactiveWorkspace(worktree.id, tabsByWorktree, ptyIdsByTabId, browserTabsByWorktree)
+          isInactiveWorkspace(
+            worktree.id,
+            tabsByWorktree,
+            ptyIdsByTabId,
+            browserTabsByWorktree,
+            worktreeIdsWithLiveAgent
+          )
         ) {
           return false
         }
@@ -495,7 +517,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       hideDefaultBranchWorkspace,
       ptyIdsByTabId,
       showSleepingWorkspaces,
-      tabsByWorktree
+      tabsByWorktree,
+      worktreeIdsWithLiveAgent
     ]
   )
 
@@ -1825,7 +1848,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                   tabsByWorktree[worktree.id] ?? [],
                   browserTabsByWorktree[worktree.id] ?? [],
                   ptyIdsByTabId,
-                  runtimePaneTitlesByTabId
+                  runtimePaneTitlesByTabId,
+                  { liveAgentStatus: liveAgentActivity.statusByWorktreeId.get(worktree.id) }
                 )
                 const statusLabel = getWorktreeStatusLabel(status)
                 const isCurrentWorktree = activeWorktreeId === worktree.id

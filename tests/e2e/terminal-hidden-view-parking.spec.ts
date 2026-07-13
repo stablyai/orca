@@ -16,10 +16,7 @@ import {
   waitForActiveTerminalManager,
   waitForPaneIdentitySnapshot
 } from './helpers/terminal'
-import {
-  parkHiddenTabBehindDecoy,
-  waitForTabParked
-} from './helpers/terminal-hidden-parking'
+import { parkHiddenTabBehindDecoy, waitForTabParked } from './helpers/terminal-hidden-parking'
 
 // Why: the parking wiring registers this handle (dev/exposeStore builds only)
 // so tests can detect that hidden-view parking is compiled in and which delay
