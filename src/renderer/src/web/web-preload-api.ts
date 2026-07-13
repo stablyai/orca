@@ -714,6 +714,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     notifications: createNotificationsApi(),
     rateLimits: createRateLimitsApi(),
     minimaxCredentials: createMiniMaxCredentialsApi(),
+    commandCodeCredentials: createCommandCodeCredentialsApi(),
     grokAccounts: createGrokAccountsApi(),
     codexAccounts: createAccountsApi(),
     claudeAccounts: createAccountsApi(),
@@ -2622,7 +2623,9 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     antigravity: null,
     minimax: null,
     grok: null,
+    commandCode: null,
     minimaxCookieConfigured: false,
+    commandCodeCookieConfigured: false,
     grokAuthConfigured: false,
     claudeTarget: { runtime: 'host', wslDistro: null },
     codexTarget: { runtime: 'host', wslDistro: null },
@@ -2649,6 +2652,20 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
 function createMiniMaxCredentialsApi(): NonNullable<Partial<PreloadApi>['minimaxCredentials']> {
   const notConfigured = { configured: false }
   const unsupportedError = new Error('MiniMax cookie storage is only available in the desktop app.')
+  return {
+    getStatus: () => Promise.resolve(notConfigured),
+    saveCookie: () => Promise.reject(unsupportedError),
+    clearCookie: () => Promise.resolve(notConfigured)
+  }
+}
+
+function createCommandCodeCredentialsApi(): NonNullable<
+  Partial<PreloadApi>['commandCodeCredentials']
+> {
+  const notConfigured = { configured: false }
+  const unsupportedError = new Error(
+    'Command Code cookie storage is only available in the desktop app.'
+  )
   return {
     getStatus: () => Promise.resolve(notConfigured),
     saveCookie: () => Promise.reject(unsupportedError),

@@ -25,6 +25,8 @@ import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
 import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
+import { fetchCommandCodeRateLimits } from './command-code-fetcher'
+import { hasCommandCodeSessionCookie } from '../command-code/command-code-cookie-store'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 import {
   normalizeCodexAccountSelectionTarget,
@@ -56,6 +58,10 @@ type MiniMaxRateLimitConfig = {
 type MiniMaxResolvedConfig = {
   config: MiniMaxRateLimitConfig
   error: string | null
+}
+
+type CommandCodeRateLimitConfig = {
+  sessionCookie: string
 }
 
 type GeminiCliOAuthEnabledResolver = () => boolean
@@ -106,6 +112,7 @@ type InternalRateLimitState = {
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
+  commandCode: ProviderRateLimits | null
 }
 
 function normalizePollingInterval(ms: number): number {
@@ -140,7 +147,8 @@ export class RateLimitService {
     kimi: null,
     antigravity: null,
     minimax: null,
-    grok: null
+    grok: null,
+    commandCode: null
   }
   private grokAuthConfigured = readGrokAuthSession().status === 'ok'
   private pollInterval: number = DEFAULT_POLL_MS
@@ -156,7 +164,8 @@ export class RateLimitService {
     kimi: 0,
     minimax: 0,
     grok: 0,
-    antigravity: 0
+    antigravity: 0,
+    'command-code': 0
   }
   // Why: consecutive applied failures per provider drive exponential backoff of
   // the fast activation-retry lane; reset on any successful/unavailable result.
@@ -168,7 +177,8 @@ export class RateLimitService {
     kimi: 0,
     minimax: 0,
     grok: 0,
-    antigravity: 0
+    antigravity: 0,
+    'command-code': 0
   }
   private mainWindow: BrowserWindow | null = null
   private detachWindowListeners: (() => void) | null = null
@@ -183,8 +193,10 @@ export class RateLimitService {
   private claudeFetchGeneration = 0
   private opencodeFetchGeneration = 0
   private minimaxFetchGeneration = 0
+  private commandCodeFetchGeneration = 0
   private lastOpencodeConfigHash = ''
   private lastMiniMaxConfigHash = ''
+  private lastCommandCodeConfigHash = ''
   private codexHomePathResolver: CodexHomePathResolver | null = null
   private codexFetchTarget: NormalizedCodexAccountSelectionTarget = {
     runtime: 'host',
@@ -197,6 +209,7 @@ export class RateLimitService {
   }
   private openCodeGoConfigResolver: (() => OpenCodeGoRateLimitConfig) | null = null
   private miniMaxConfigResolver: (() => MiniMaxRateLimitConfig) | null = null
+  private commandCodeConfigResolver: (() => CommandCodeRateLimitConfig) | null = null
   private geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
   private inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null
   private inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
@@ -242,6 +255,10 @@ export class RateLimitService {
 
   setMiniMaxConfigResolver(resolver: () => MiniMaxRateLimitConfig): void {
     this.miniMaxConfigResolver = resolver
+  }
+
+  setCommandCodeConfigResolver(resolver: () => CommandCodeRateLimitConfig): void {
+    this.commandCodeConfigResolver = resolver
   }
 
   setGeminiCliOAuthEnabledResolver(resolver: GeminiCliOAuthEnabledResolver): void {
@@ -324,6 +341,7 @@ export class RateLimitService {
       // its presence on the pushed state so the renderer keeps the MiniMax
       // bar visible across reloads and between snapshot refreshes.
       minimaxCookieConfigured: hasMiniMaxSessionCookie(),
+      commandCodeCookieConfigured: hasCommandCodeSessionCookie(),
       grokAuthConfigured: this.grokAuthConfigured,
       claudeTarget: this.claudeFetchTarget,
       codexTarget: this.codexFetchTarget,
@@ -367,6 +385,14 @@ export class RateLimitService {
     this.updateState({
       ...this.state,
       minimax: this.withFetchingStatus(null, 'minimax')
+    })
+  }
+
+  invalidateCommandCodeCredentialState(): void {
+    this.commandCodeFetchGeneration += 1
+    this.updateState({
+      ...this.state,
+      commandCode: this.withFetchingStatus(null, 'command-code')
     })
   }
 
@@ -774,7 +800,8 @@ export class RateLimitService {
       kimi: this.state.kimi,
       minimax: this.state.minimax,
       grok: this.state.grok,
-      antigravity: this.state.antigravity
+      antigravity: this.state.antigravity,
+      'command-code': this.state.commandCode
     }
     return Object.entries(byProvider).map(([provider, limits]) => ({
       provider: provider as ActiveRateLimitProvider,
@@ -1320,6 +1347,7 @@ export class RateLimitService {
       | 'minimax'
       | 'grok'
       | 'antigravity'
+      | 'command-code'
   ): ProviderRateLimits {
     if (!current) {
       return {
@@ -1388,6 +1416,17 @@ export class RateLimitService {
     }
     const miniMaxGeneration = this.minimaxFetchGeneration
 
+    const commandCodeConfig = this.commandCodeConfigResolver?.() ?? {
+      sessionCookie: ''
+    }
+    const currentCommandCodeConfigHash = commandCodeConfig.sessionCookie
+    const commandCodeConfigChanged = currentCommandCodeConfigHash !== this.lastCommandCodeConfigHash
+    if (commandCodeConfigChanged) {
+      this.lastCommandCodeConfigHash = currentCommandCodeConfigHash
+      this.commandCodeFetchGeneration += 1
+    }
+    const commandCodeGeneration = this.commandCodeFetchGeneration
+
     // Mark all providers as fetching while keeping previous data visible.
     // Codex account changes clear Codex separately before this method is
     // called, so ordinary refreshes still preserve the current values.
@@ -1404,6 +1443,9 @@ export class RateLimitService {
       minimax: miniMaxConfigChanged
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
+      commandCode: commandCodeConfigChanged
+        ? this.withFetchingStatus(null, 'command-code')
+        : this.withFetchingStatus(previousState.commandCode, 'command-code'),
       grok: this.withFetchingStatus(previousState.grok, 'grok')
     })
 
@@ -1418,32 +1460,53 @@ export class RateLimitService {
       (reason) => ({ status: 'rejected', reason }) as const
     )
 
-    const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
-      await Promise.allSettled([
-        fetchClaudeRateLimits({
-          authPreparation: claudeAuthPreparation,
-          allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
-          allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
-          networkProxySettings: this.networkProxySettingsResolver?.(),
+    const [
+      claudeResult,
+      codexResult,
+      geminiResult,
+      opencodeGoResult,
+      kimiResult,
+      miniMaxResult,
+      commandCodeResult
+    ] = await Promise.allSettled([
+      fetchClaudeRateLimits({
+        authPreparation: claudeAuthPreparation,
+        allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+        allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+        networkProxySettings: this.networkProxySettingsResolver?.(),
+        signal
+      }),
+      missingWslCodexHome ??
+        fetchCodexRateLimits({
+          codexHomePath,
+          allowPtyFallback: this.shouldAllowCodexPtyFallback(),
           signal
         }),
-        missingWslCodexHome ??
-          fetchCodexRateLimits({
-            codexHomePath,
-            allowPtyFallback: this.shouldAllowCodexPtyFallback(),
-            signal
+      fetchGeminiRateLimits(geminiCliOAuthEnabled),
+      fetchOpenCodeGoRateLimits(cookie, workspaceIdOverride || undefined),
+      fetchKimiRateLimits(),
+      miniMaxConfigResult.error
+        ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
+        : fetchMiniMaxRateLimits({
+            cookie: miniMaxCookie,
+            groupId: miniMaxGroupId,
+            models: miniMaxModels
           }),
-        fetchGeminiRateLimits(geminiCliOAuthEnabled),
-        fetchOpenCodeGoRateLimits(cookie, workspaceIdOverride || undefined),
-        fetchKimiRateLimits(),
-        miniMaxConfigResult.error
-          ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
-          : fetchMiniMaxRateLimits({
-              cookie: miniMaxCookie,
-              groupId: miniMaxGroupId,
-              models: miniMaxModels
-            })
-      ])
+      (async () => {
+        const commandCodeCookie = commandCodeConfig.sessionCookie
+        if (!commandCodeCookie) {
+          return {
+            provider: 'command-code' as const,
+            session: null,
+            weekly: null,
+            updatedAt: Date.now(),
+            error: 'No Command Code session cookie configured',
+            status: 'unavailable' as const
+          } satisfies ProviderRateLimits
+        }
+        return fetchCommandCodeRateLimits({ cookieHeader: commandCodeCookie })
+      })()
+    ])
 
     if (signal.aborted) {
       return
@@ -1539,6 +1602,21 @@ export class RateLimitService {
             status: 'error'
           } satisfies ProviderRateLimits)
 
+    const commandCode =
+      commandCodeResult.status === 'fulfilled'
+        ? commandCodeResult.value
+        : ({
+            provider: 'command-code',
+            session: null,
+            weekly: null,
+            updatedAt: Date.now(),
+            error:
+              commandCodeResult.reason instanceof Error
+                ? commandCodeResult.reason.message
+                : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
+
     const latestCodexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
     const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
@@ -1554,6 +1632,7 @@ export class RateLimitService {
       this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
     const shouldApplyOpencode = opencodeGeneration === this.opencodeFetchGeneration
     const shouldApplyMiniMax = miniMaxGeneration === this.minimaxFetchGeneration
+    const shouldApplyCommandCode = commandCodeGeneration === this.commandCodeFetchGeneration
 
     if (shouldApplyClaude) {
       this.trackActiveFailureStreak('claude', claude)
@@ -1595,7 +1674,12 @@ export class RateLimitService {
         ? miniMaxConfigChanged
           ? miniMax
           : this.applyStalePolicy(miniMax, previousState.minimax)
-        : this.state.minimax
+        : this.state.minimax,
+      commandCode: shouldApplyCommandCode
+        ? commandCodeConfigChanged
+          ? commandCode
+          : this.applyStalePolicy(commandCode, previousState.commandCode)
+        : this.state.commandCode
     })
 
     const grokResult = await grokResultPromise

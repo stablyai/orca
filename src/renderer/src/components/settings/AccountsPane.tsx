@@ -38,6 +38,7 @@ import {
   OpenCodeGoIcon
 } from '../status-bar/icons'
 import { toast } from 'sonner'
+import { AgentIcon } from '@/lib/agent-catalog'
 import {
   getAccountsClaudeSearchEntries,
   getAccountsCodexSearchEntries,
@@ -46,6 +47,7 @@ import {
   getAccountsGrokSearchEntries,
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
+  getAccountsCommandCodeSearchEntries,
   getAccountsPaneSearchEntries
 } from './accounts-search'
 import { GrokAccountsSection } from './GrokAccountsSection'
@@ -146,6 +148,316 @@ function MiniMaxCookieHelpPopover(): React.JSX.Element {
         ))}
       </ol>
     </div>
+  )
+}
+
+function CommandCodeCookieHelpPopover(): React.JSX.Element {
+  const steps = [
+    translate(
+      'auto.components.settings.AccountsPane.commandCodeHelpStep1',
+      'Open commandcode.ai in your browser and sign in.'
+    ),
+    translate(
+      'auto.components.settings.AccountsPane.commandCodeHelpStep2',
+      'Open DevTools (F12) → Network tab.'
+    ),
+    translate(
+      'auto.components.settings.AccountsPane.commandCodeHelpStep3',
+      'Refresh the page, click any request to api.commandcode.ai.'
+    ),
+    translate(
+      'auto.components.settings.AccountsPane.commandCodeHelpStep4',
+      'Under Request Headers, copy the Cookie value.'
+    ),
+    translate(
+      'auto.components.settings.AccountsPane.commandCodeHelpStep5',
+      'Paste it here and click Save.'
+    )
+  ]
+  return (
+    <div className="space-y-3 p-3 text-xs">
+      <div className="space-y-1">
+        <p className="font-medium">
+          {translate(
+            'auto.components.settings.AccountsPane.commandCodeHelpTitle',
+            'How to copy the cookie'
+          )}
+        </p>
+        <p className="text-muted-foreground">
+          {translate(
+            'auto.components.settings.AccountsPane.commandCodeHelpDesc',
+            'Stored locally. Orca sends it only to api.commandcode.ai for usage refreshes.'
+          )}
+        </p>
+      </div>
+      <ol className="list-decimal space-y-1 pl-4 text-muted-foreground">
+        {steps.map((step) => (
+          <li key={step}>{step}</li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
+function CommandCodeSection(): React.JSX.Element {
+  const commandCodeRateLimits = useAppStore((s) => s.rateLimits.commandCode)
+  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  const [commandCodeCookieDraft, setCommandCodeCookieDraft] = useState('')
+  const [commandCodeConfigured, setCommandCodeConfigured] = useState(false)
+  const [commandCodeCredentialBusy, setCommandCodeCredentialBusy] = useState(false)
+
+  const refreshCommandCodeCredentialStatus = async (): Promise<void> => {
+    try {
+      const status = await window.api.commandCodeCredentials.getStatus()
+      setCommandCodeConfigured(status.configured)
+    } catch (error) {
+      console.error('Failed to load Command Code credential status:', error)
+    }
+  }
+
+  const saveCommandCodeCookie = async (): Promise<void> => {
+    if (!commandCodeCookieDraft.trim()) {
+      toast.error(
+        translate(
+          'auto.components.settings.AccountsPane.commandCodeCookieRequired',
+          'Command Code cookie is required.'
+        )
+      )
+      return
+    }
+    setCommandCodeCredentialBusy(true)
+    try {
+      const status = await window.api.commandCodeCredentials.saveCookie(
+        commandCodeCookieDraft.trim()
+      )
+      if (!status.configured) {
+        throw new Error(
+          translate(
+            'auto.components.settings.AccountsPane.commandCodeCookieNotSaved',
+            'Command Code cookie was not saved.'
+          )
+        )
+      }
+      setCommandCodeConfigured(status.configured)
+      setCommandCodeCookieDraft('')
+      recordFeatureInteraction('usage-tracking')
+      toast.success(
+        translate(
+          'auto.components.settings.AccountsPane.commandCodeCookieSaved',
+          'Command Code cookie saved.'
+        )
+      )
+    } catch (error) {
+      toast.error(
+        translate(
+          'auto.components.settings.AccountsPane.commandCodeCookieFailed',
+          'Command Code cookie update failed.'
+        ),
+        { description: String((error as Error)?.message ?? error) }
+      )
+    } finally {
+      setCommandCodeCredentialBusy(false)
+    }
+  }
+
+  const clearCommandCodeCookie = async (): Promise<void> => {
+    setCommandCodeCredentialBusy(true)
+    try {
+      const status = await window.api.commandCodeCredentials.clearCookie()
+      setCommandCodeConfigured(status.configured)
+      setCommandCodeCookieDraft('')
+      recordFeatureInteraction('usage-tracking')
+    } catch (error) {
+      toast.error(
+        translate(
+          'auto.components.settings.AccountsPane.commandCodeCookieFailed',
+          'Command Code cookie update failed.'
+        ),
+        { description: String((error as Error)?.message ?? error) }
+      )
+    } finally {
+      setCommandCodeCredentialBusy(false)
+    }
+  }
+
+  useEffect(() => {
+    void refreshCommandCodeCredentialStatus()
+  }, [])
+
+  return (
+    <section id="accounts-command-code" className="space-y-4 scroll-mt-6">
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <AgentIcon agent="command-code" size={16} />
+            {translate('auto.components.settings.AccountsPane.commandCodeTitle', 'Command Code')}
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.AccountsPane.commandCodeDesc',
+              'Show your Command Code credit usage in the status bar.'
+            )}
+          </p>
+        </div>
+        <a
+          href="https://commandcode.ai"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+        >
+          {translate(
+            'auto.components.settings.AccountsPane.commandCodeOpenConsole',
+            'Open console'
+          )}
+          <ExternalLink className="size-3" />
+        </a>
+      </div>
+
+      <div
+        className={cn(
+          'flex items-start gap-3 rounded-lg border bg-muted/20 p-3',
+          commandCodeConfigured ? 'border-border/60' : 'border-border/40'
+        )}
+      >
+        <ShieldCheck
+          className={cn(
+            'mt-0.5 size-4 shrink-0',
+            commandCodeConfigured ? 'text-foreground' : 'text-muted-foreground'
+          )}
+        />
+        <div className="space-y-0.5">
+          <p className="text-xs font-medium">
+            {commandCodeConfigured
+              ? translate(
+                  'auto.components.settings.AccountsPane.commandCodeStored',
+                  'Stored locally'
+                )
+              : translate(
+                  'auto.components.settings.AccountsPane.commandCodeNotSet',
+                  'Cookie not set'
+                )}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.AccountsPane.commandCodeEncrypted',
+              'Stored locally and sent only to api.commandcode.ai for usage refreshes.'
+            )}
+          </p>
+        </div>
+      </div>
+
+      <SearchableSetting
+        title={translate(
+          'auto.components.settings.AccountsPane.commandCodeCookieLabel',
+          'Command Code Session Cookie'
+        )}
+        description={translate(
+          'auto.components.settings.AccountsPane.commandCodeCookieDesc',
+          'Paste your Command Code session cookie for local rate-limit fetching.'
+        )}
+        keywords={['command-code', 'command code', 'cookie', 'session', 'rate limit', 'status bar']}
+        className="space-y-2"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Label>
+              {translate(
+                'auto.components.settings.AccountsPane.commandCodeCookieLabel',
+                'Command Code Session Cookie'
+              )}
+            </Label>
+            <Badge
+              variant={commandCodeConfigured ? 'secondary' : 'outline'}
+              className="h-5 gap-1 rounded-full px-2 text-[10px] font-medium text-muted-foreground"
+            >
+              {commandCodeConfigured ? (
+                <Lock className="size-3" />
+              ) : (
+                <LockOpen className="size-3" />
+              )}
+              {commandCodeConfigured
+                ? translate('auto.components.settings.AccountsPane.commandCodeSaved', 'Saved')
+                : translate(
+                    'auto.components.settings.AccountsPane.commandCodeNotSaved',
+                    'Not saved'
+                  )}
+            </Badge>
+          </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="xs"
+                className="h-6 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <HelpCircle className="size-3" />
+                {translate('auto.components.settings.AccountsPane.commandCodeHowTo', 'How to copy')}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" side="bottom" sideOffset={6} className="w-80 p-0">
+              <CommandCodeCookieHelpPopover />
+            </PopoverContent>
+          </Popover>
+        </div>
+        <div className="flex gap-2">
+          <Input
+            type="password"
+            value={commandCodeCookieDraft}
+            onChange={(e) => setCommandCodeCookieDraft(e.target.value)}
+            placeholder={translate(
+              'auto.components.settings.AccountsPane.commandCodeCookiePlaceholder',
+              'Paste the Cookie header from DevTools'
+            )}
+            spellCheck={false}
+            className="flex-1 text-xs"
+          />
+          <Button
+            size="xs"
+            onClick={() => void saveCommandCodeCookie()}
+            disabled={commandCodeCredentialBusy || !commandCodeCookieDraft.trim()}
+            className="h-7 shrink-0 text-xs"
+          >
+            {commandCodeCredentialBusy ? <Loader2 className="size-3 animate-spin" /> : null}
+            {commandCodeConfigured
+              ? translate('auto.components.settings.AccountsPane.commandCodeReplace', 'Replace')
+              : translate('auto.components.settings.AccountsPane.commandCodeSave', 'Save')}
+          </Button>
+        </div>
+        {commandCodeConfigured && (
+          <div className="mt-2 space-y-1.5 border-t border-border/50 pt-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">
+                {commandCodeRateLimits?.updatedAt
+                  ? translate(
+                      'auto.components.settings.AccountsPane.6cde72a6e6',
+                      'Last refreshed {{ago}}',
+                      {
+                        ago: formatMiniMaxRelativeRefresh(
+                          commandCodeRateLimits.updatedAt,
+                          Date.now()
+                        )
+                      }
+                    )
+                  : null}
+              </span>
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => void clearCommandCodeCookie()}
+                disabled={commandCodeCredentialBusy}
+                className="h-6 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+              >
+                <Trash2 className="size-3" />
+                {translate(
+                  'auto.components.settings.AccountsPane.commandCodeForget',
+                  'Forget cookie'
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
+      </SearchableSetting>
+    </section>
   )
 }
 
@@ -1810,6 +2122,9 @@ export function AccountsPane({
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsCommandCodeSearchEntries()) ? (
+      <CommandCodeSection key="command-code" />
     ) : null
   ].filter(Boolean)
 

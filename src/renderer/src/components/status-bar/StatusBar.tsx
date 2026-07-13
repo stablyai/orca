@@ -1217,8 +1217,8 @@ export function ProviderSegment({
         }
       : null,
     // Why: monthly is chip-visible only when it's the sole window (Grok
-    // unified billing); providers with session/weekly data (OpenCode Go)
-    // keep monthly tooltip-only so the chip stays uncluttered.
+    // unified billing); providers with session/weekly data (OpenCode Go,
+    // Command Code) keep monthly tooltip-only so the chip stays uncluttered.
     p.monthly && !p.session && !p.weekly
       ? {
           key: 'monthly',
@@ -1960,7 +1960,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok } = rateLimits
+  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, commandCode } =
+    rateLimits
 
   // Why: a provider earns a bar from either a usable live snapshot or durable
   // setup in Settings. The durable path keeps account switchers visible while
@@ -1981,7 +1982,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     ...settings,
     antigravityUsageConfigured,
     minimaxCookieConfigured: rateLimits.minimaxCookieConfigured,
-    grokAuthConfigured: rateLimits.grokAuthConfigured
+    grokAuthConfigured: rateLimits.grokAuthConfigured,
+    commandCodeCookieConfigured: rateLimits.commandCodeCookieConfigured
   }
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
   const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
@@ -1990,6 +1992,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const visibleAntigravity = getVisibleUsageProvider('antigravity', antigravity, usageSettings)
   const visibleMiniMax = getVisibleUsageProvider('minimax', minimax, usageSettings)
   const visibleGrok = getVisibleUsageProvider('grok', grok, usageSettings)
+  const visibleCommandCode = getVisibleUsageProvider('command-code', commandCode, usageSettings)
   const showClaude =
     visibleClaude !== null &&
     statusBarItems.includes('claude') &&
@@ -2017,6 +2020,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     visibleGrok !== null &&
     statusBarItems.includes('grok') &&
     isStatusBarItemAvailable('grok', detectedAgentIds)
+  const showCommandCode = visibleCommandCode !== null && statusBarItems.includes('command-code')
   // Why: OpenCode Go is a web/cookie-auth provider, not a CLI on PATH, so
   // detection-gating doesn't apply.
   const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, usageSettings)
@@ -2037,14 +2041,15 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     showKimi ||
     showAntigravity ||
     showMiniMax ||
-    showGrok
+    showGrok ||
+    showCommandCode
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: a brand-new user with no provider configured would otherwise see an
   // empty left side of the status bar and wonder what's missing. Settings are
   // included because managed accounts are durable even when live usage
   // snapshots are still hydrating or unavailable after an update.
   const isEmptyUsageState = isUsageEmptyState(
-    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok },
+    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, commandCode },
     usageSettings
   )
   // Why: the teaching CTA is a one-time nudge — once the user hides it, keep it
@@ -2058,7 +2063,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     kimi?.status === 'fetching' ||
     antigravity?.status === 'fetching' ||
     minimax?.status === 'fetching' ||
-    grok?.status === 'fetching'
+    grok?.status === 'fetching' ||
+    commandCode?.status === 'fetching'
 
   const compact = containerWidth < 900
   const iconOnly = containerWidth < 500
@@ -2168,6 +2174,17 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                 ariaLabel={translate(
                   'auto.components.status.bar.StatusBar.grokUsageAria',
                   'Open Grok usage details'
+                )}
+              />
+            )}
+            {showCommandCode && (
+              <ProviderDetailsMenu
+                provider={visibleCommandCode}
+                compact={compact}
+                iconOnly={iconOnly}
+                ariaLabel={translate(
+                  'auto.components.status.bar.StatusBar.commandCodeUsageAria',
+                  'Open Command Code usage details'
                 )}
               />
             )}
@@ -2351,6 +2368,19 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
               {translate('auto.components.status.bar.StatusBar.grokUsageMenu', 'Grok Usage')}
             </DropdownMenuCheckboxItem>
           )}
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('command-code')}
+            onCheckedChange={() => {
+              recordFeatureInteraction('usage-tracking')
+              toggleStatusBarItem('command-code')
+            }}
+          >
+            <AgentIcon agent="command-code" size={14} />
+            {translate(
+              'auto.components.status.bar.StatusBar.commandCodeUsageMenu',
+              'Command Code Usage'
+            )}
+          </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('ssh')}
             onCheckedChange={() => {

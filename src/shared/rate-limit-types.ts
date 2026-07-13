@@ -53,6 +53,7 @@ export type ProviderRateLimits = {
     | 'minimax'
     | 'grok'
     | 'antigravity'
+    | 'command-code'
   /** 5-hour session window, null if not available. */
   session: RateLimitWindow | null
   /** 7-day weekly window, null if not available. */
@@ -120,6 +121,7 @@ export type RateLimitState = {
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
+  commandCode: ProviderRateLimits | null
   /**
    * True when a MiniMax session cookie is persisted on disk. The cookie lives
    * outside GlobalSettings, so this flag is the durable signal that the
@@ -127,6 +129,8 @@ export type RateLimitState = {
    * between snapshot refreshes.
    */
   minimaxCookieConfigured: boolean
+  /** True when a Command Code session cookie is persisted on disk. */
+  commandCodeCookieConfigured: boolean
   /** True when main finds a Grok CLI session file (~/.grok/auth.json or GROK_HOME). */
   grokAuthConfigured: boolean
   claudeTarget: RateLimitRuntimeTarget

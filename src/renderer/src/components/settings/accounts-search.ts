@@ -212,6 +212,32 @@ export const getAccountsGrokSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsCommandCodeSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate(
+      'auto.components.settings.accounts.search.commandCodeUsage',
+      'Command Code Usage'
+    ),
+    description: translate(
+      'auto.components.settings.accounts.search.commandCodeCookieDescription',
+      'Paste your commandcode.ai session cookie for monthly credit usage in the status bar.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.commandCodeKeyword',
+        'command code'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.61f7d1fcbe', 'cookie'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.9c4e40cf6b', 'session'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.e949b08ffb',
+        'rate limit'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.86edc96bc9', 'status bar')
+    ]
+  }
+])
+
 export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   ...getAccountsLocationSearchEntries(),
   ...getAccountsClaudeSearchEntries(),
@@ -219,5 +245,6 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsGeminiSearchEntries(),
   ...getAccountsOpencodeSearchEntries(),
   ...getAccountsMiniMaxSearchEntries(),
-  ...getAccountsGrokSearchEntries()
+  ...getAccountsGrokSearchEntries(),
+  ...getAccountsCommandCodeSearchEntries()
 ])
