@@ -1891,6 +1891,15 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     if (!worktree) {
       return
     }
+    // Why: the picker uses a local Electron file dialog, which can't browse a
+    // remote host's filesystem. Guard remote worktrees instead of letting the
+    // user pick a local file that doesn't belong to the remote worktree.
+    const connectionId =
+      state.repos.find((entry) => entry.id === worktree.repoId)?.connectionId ?? undefined
+    if (connectionId) {
+      toast.error('Opening a markdown file is not supported for remote worktrees yet.')
+      return
+    }
     try {
       const document = await window.api.app.pickWorktreeMarkdownDocument(worktree.path)
       if (!document) {

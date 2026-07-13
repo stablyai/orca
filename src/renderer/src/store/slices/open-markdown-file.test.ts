@@ -82,6 +82,27 @@ describe('openMarkdownFileInActiveWorkspace', () => {
     expect(store.getState().openFiles).toHaveLength(0)
   })
 
+  it('guards remote worktrees instead of opening the local file dialog', async () => {
+    const pickWorktreeMarkdownDocument = vi.fn()
+    globalThis.window.api = {
+      app: { pickWorktreeMarkdownDocument }
+    } as unknown as Window['api']
+
+    const store = createTestStore()
+    const remoteRepo = { ...TEST_REPO, connectionId: 'conn-1' }
+    store.setState({
+      repos: [remoteRepo],
+      worktreesByRepo: { [remoteRepo.id]: [wt1] },
+      activeWorktreeId: wt1.id
+    })
+
+    await store.getState().openMarkdownFileInActiveWorkspace('group-1')
+
+    expect(pickWorktreeMarkdownDocument).not.toHaveBeenCalled()
+    expect(toast.error).toHaveBeenCalled()
+    expect(store.getState().openFiles).toHaveLength(0)
+  })
+
   it('shows a toast error when the picker rejects', async () => {
     const pickWorktreeMarkdownDocument = vi.fn().mockRejectedValue(new Error('boom'))
     globalThis.window.api = {
