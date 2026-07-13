@@ -182,6 +182,21 @@ Host silent-host
     expect(hosts[2].gssapiAuthentication).toBeUndefined()
   })
 
+  it('keeps the first GSSAPIAuthentication value like OpenSSH', () => {
+    const hosts = parseSshConfig(`
+Host enabled
+  GSSAPIAuthentication yes
+  GSSAPIAuthentication no
+
+Host disabled
+  GSSAPIAuthentication no
+  GSSAPIAuthentication yes
+`)
+
+    expect(hosts[0].gssapiAuthentication).toBe(true)
+    expect(hosts[1].gssapiAuthentication).toBe(false)
+  })
+
   it('parses ProxyCommand, ProxyUseFdpass, and ProxyJump', () => {
     const config = `
 Host internal

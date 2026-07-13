@@ -299,6 +299,36 @@ describe('spawnSystemSsh', () => {
     expect(args).toContain('GSSAPIAuthentication=yes')
   })
 
+  it('restricts Kerberos probes to non-interactive GSSAPI authentication', () => {
+    spawnSystemSshCommand(
+      createTarget({
+        configHost: 'krb-host; touch /tmp/not-run',
+        source: 'ssh-config',
+        gssapiAuthentication: true
+      }),
+      'echo ready',
+      { gssapiOnly: true, wrapCommand: false }
+    )
+
+    const args = spawnMock.mock.calls[0][1] as string[]
+    expect(args).toEqual(
+      expect.arrayContaining([
+        '-o',
+        'BatchMode=yes',
+        '-o',
+        'GSSAPIAuthentication=yes',
+        '-o',
+        'PreferredAuthentications=gssapi-with-mic'
+      ])
+    )
+    expect(args).not.toContain('BatchMode=no')
+    const standaloneControlIdx = args.indexOf('-S')
+    expect(standaloneControlIdx).toBeGreaterThan(-1)
+    expect(args[standaloneControlIdx + 1]).toBe('none')
+    expect(args.at(-2)).toBe('deploy@krb-host; touch /tmp/not-run')
+    expect(args.at(-1)).toBe('echo ready')
+  })
+
   it('leaves GSSAPI to the Host block for ssh-config targets', () => {
     const args = buildSshArgs(
       createTarget({ configHost: 'krb-host', source: 'ssh-config', gssapiAuthentication: true })

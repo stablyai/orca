@@ -107,7 +107,8 @@ export function parseSshConfig(content: string): SshConfigHost[] {
         break
       case 'gssapiauthentication':
         for (const host of current) {
-          host.gssapiAuthentication = value.toLowerCase() === 'yes'
+          // Why: OpenSSH uses the first obtained value for each parameter.
+          host.gssapiAuthentication ??= value.toLowerCase() === 'yes'
         }
         break
       case 'proxycommand':

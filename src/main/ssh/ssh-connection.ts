@@ -74,6 +74,7 @@ export class SshConnection {
   private systemOperationAbortController = new AbortController()
   private systemSshResolvedConfig: SshResolvedConfig | null = null
   private systemSshControlMasterDisabledForSession = false
+  private systemSshGssapiOnlyForSession = false
   private useSystemSshTransport = false
   private state: SshConnectionState
   private callbacks: SshConnectionCallbacks
@@ -534,11 +535,11 @@ export class SshConnection {
     }
     // Why: ssh2 has no gssapi-with-mic support, so hosts that explicitly
     // request GSSAPIAuthentication try Kerberos SSO via the system OpenSSH
-    // binary first. OpenSSH still permits other methods when GSSAPI fails
-    // (e.g. no ticket), so fall through to ssh2 where credential prompts work.
+    // binary first. Restrict the probe to GSSAPI so missing tickets fall through
+    // to Orca's existing key and credential-prompt path.
     if (this.target.gssapiAuthentication === true) {
       try {
-        await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved)
+        await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved, true)
         return
       } catch (probeErr) {
         if (this.disposed || !this.isCurrentConnectAttempt(connectGeneration)) {
@@ -551,6 +552,7 @@ export class SshConnection {
     // itself — otherwise exec/sftp keep routing through the failed transport.
     this.systemSshResolvedConfig = null
     this.systemSshControlMasterDisabledForSession = false
+    this.systemSshGssapiOnlyForSession = false
     this.useSystemSshTransport = false
 
     const config = buildConnectConfig(this.target, resolved)
@@ -591,6 +593,7 @@ export class SshConnection {
         } catch {
           this.systemSshResolvedConfig = null
           this.systemSshControlMasterDisabledForSession = false
+          this.systemSshGssapiOnlyForSession = false
           this.useSystemSshTransport = false
           throw err
         }
@@ -663,11 +666,12 @@ export class SshConnection {
         this.proxyProcess?.kill()
         this.proxyProcess = null
         try {
-          await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved)
+          await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved, true)
           return
         } catch {
           this.systemSshResolvedConfig = null
           this.systemSshControlMasterDisabledForSession = false
+          this.systemSshGssapiOnlyForSession = false
           this.useSystemSshTransport = false
         }
         // Why: if a disconnect/reconnect superseded this attempt mid-probe, throw
@@ -816,12 +820,15 @@ export class SshConnection {
 
   private async doSystemSshProbeWithControlMasterRetry(
     connectGeneration: number,
-    resolved: SshResolvedConfig | null
+    resolved: SshResolvedConfig | null,
+    gssapiOnly = false
   ): Promise<void> {
     this.systemSshResolvedConfig = cloneResolvedConfig(resolved)
     this.systemSshControlMasterDisabledForSession = false
+    this.systemSshGssapiOnlyForSession = gssapiOnly
     const controlPath = getOrcaControlSocketPath(this.target, {
-      resolvedConfig: this.systemSshResolvedConfig
+      resolvedConfig: this.systemSshResolvedConfig,
+      gssapiOnly: this.systemSshGssapiOnlyForSession
     })
     try {
       await this.doSystemSshProbe(connectGeneration)
@@ -990,6 +997,9 @@ export class SshConnection {
     }
     if (this.systemSshControlMasterDisabledForSession) {
       options.disableControlMaster = true
+    }
+    if (this.systemSshGssapiOnlyForSession) {
+      options.gssapiOnly = true
     }
     return options
   }
@@ -1171,6 +1181,7 @@ export class SshConnection {
     this.systemSsh = null
     this.systemSshResolvedConfig = null
     this.systemSshControlMasterDisabledForSession = false
+    this.systemSshGssapiOnlyForSession = false
     this.useSystemSshTransport = false
   }
 
@@ -1183,6 +1194,7 @@ export class SshConnection {
     this.systemSsh = null
     this.systemSshResolvedConfig = null
     this.systemSshControlMasterDisabledForSession = false
+    this.systemSshGssapiOnlyForSession = false
     this.useSystemSshTransport = false
     this.setState('connecting')
     try {
@@ -1224,6 +1236,7 @@ export class SshConnection {
       this.useSystemSshTransport = false
       this.systemSshResolvedConfig = null
       this.systemSshControlMasterDisabledForSession = false
+      this.systemSshGssapiOnlyForSession = false
       this.setState('error', err instanceof Error ? err.message : String(err))
       throw err
     }
@@ -1252,6 +1265,7 @@ export class SshConnection {
     this.systemSsh = null
     this.systemSshResolvedConfig = null
     this.systemSshControlMasterDisabledForSession = false
+    this.systemSshGssapiOnlyForSession = false
     this.useSystemSshTransport = false
     this.setState('disconnected')
   }

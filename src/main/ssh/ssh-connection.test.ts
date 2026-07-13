@@ -1064,14 +1064,25 @@ describe('SshConnection', () => {
     const conn = new SshConnection(createTarget({ gssapiAuthentication: true }), createCallbacks())
 
     await conn.connect()
+    await conn.exec('echo after-connect')
 
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(true)
     expect(clientInstances).toHaveLength(0)
-    expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
+    expect(spawnSystemSshCommandMock).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({ gssapiAuthentication: true }),
       'echo ORCA-SYSTEM-SSH-OK',
-      { wrapCommand: false }
+      {
+        gssapiOnly: true,
+        wrapCommand: false
+      }
+    )
+    expect(spawnSystemSshCommandMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ gssapiAuthentication: true }),
+      'echo after-connect',
+      { gssapiOnly: true }
     )
   })
 
@@ -1091,7 +1102,10 @@ describe('SshConnection', () => {
     expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
       expect.objectContaining({ gssapiAuthentication: true }),
       'echo ORCA-SYSTEM-SSH-OK',
-      { wrapCommand: false }
+      {
+        gssapiOnly: true,
+        wrapCommand: false
+      }
     )
   })
 

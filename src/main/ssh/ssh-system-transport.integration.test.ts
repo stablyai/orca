@@ -32,7 +32,7 @@ function writeFakeSsh(dir: string): string {
     `#!/bin/sh
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    -o|-p|-i|-J) shift 2 ;;
+    -o|-p|-i|-J|-S) shift 2 ;;
     -T) shift ;;
     --) shift; break ;;
     -*) shift ;;
