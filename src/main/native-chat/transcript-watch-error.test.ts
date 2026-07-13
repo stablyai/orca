@@ -98,9 +98,11 @@ describe('native chat transcript watcher errors', () => {
   it('surfaces an error snapshot when the initial drain throws', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-initial-error-'))
     roots.push(root)
-    // The transcript file is absent, so the first drain's stat throws before any
-    // snapshot reads — the watched directory exists, so the subscription binds.
+    // A directory sitting at the transcript path: it exists (so install does not
+    // defer to the not-yet-flushed resolve poll, #8401) but every tail read
+    // throws EISDIR — a persistent real read error, not a missing file.
     const filePath = join(root, 'transcript.jsonl')
+    await mkdir(filePath)
     const onInitialSnapshot = vi.fn()
     const onAppend = vi.fn()
     const subscription = await subscribeNativeChatTranscript({
@@ -127,7 +129,10 @@ describe('native chat transcript watcher errors', () => {
   it('still wins with a real initial snapshot once the transcript becomes readable', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-initial-recover-'))
     roots.push(root)
+    // Same unreadable-directory setup as above; the error frame must not be
+    // terminal once the path is replaced with a readable transcript.
     const filePath = join(root, 'transcript.jsonl')
+    await mkdir(filePath)
     const onInitialSnapshot = vi.fn()
     const subscription = await subscribeNativeChatTranscript({
       agent: 'claude',
@@ -144,6 +149,7 @@ describe('native chat transcript watcher errors', () => {
 
     // initialDrain stays true after the error, so a recovered read delivers the
     // real snapshot instead of stranding the client on the error frame.
+    await rm(filePath, { recursive: true, force: true })
     await writeFile(filePath, claudeLine('u-recovered', 'user', 'back'))
     watchCallbacks[0]!('change', 'transcript.jsonl')
     await vi.waitFor(() =>

@@ -38,8 +38,9 @@ import {
   claudeRosterHasWorkingSubagent,
   claudeRosterToSnapshots,
   claudeTeammateIdMatchesName,
+  finishClaudeSubagent,
   foldClaudeBackgroundTasksIntoRoster,
-  markClaudeSubagentIdle,
+  isClaudeTeammateLifecycleId,
   markClaudeTeammateIdleByName,
   readClaudeBackgroundAgentTasks,
   upsertWorkingClaudeSubagent,
@@ -690,6 +691,17 @@ function toolUpdate(
     hasToolUpdate: true,
     hasToolInputField: options?.hasToolInputField === true
   }
+}
+
+/** Clear the active-tool metadata (name/input/prompt) so a just-failed tool
+ *  stops looking in-flight. Why: the compact sidebar prioritizes current-tool
+ *  metadata over the failure message, so a completed failed tool must no
+ *  longer look active or the error text stays hidden behind the tool name. */
+function clearActiveToolFieldsUpdate(): ToolSnapshot {
+  return toolUpdate(
+    { toolName: undefined, toolInput: undefined, interactivePrompt: undefined },
+    { hasToolInputField: true }
+  )
 }
 
 /** True for the AskUserQuestion tool across the casing variants different
@@ -1375,10 +1387,11 @@ function extractClaudeToolFields(
   hookPayload: Record<string, unknown>
 ): ToolSnapshot {
   const update: ToolSnapshot = {}
-  if (
+  if (eventName === 'PostToolUseFailure') {
+    Object.assign(update, clearActiveToolFieldsUpdate())
+  } else if (
     eventName === 'PreToolUse' ||
     eventName === 'PostToolUse' ||
-    eventName === 'PostToolUseFailure' ||
     eventName === 'PermissionRequest'
   ) {
     const toolName = readString(hookPayload, 'tool_name')
@@ -1600,12 +1613,20 @@ function extractCursorToolFields(
     eventName === 'postToolUse' ||
     eventName === 'postToolUseFailure'
   ) {
-    const toolName = readString(hookPayload, 'tool_name')
-    const toolInput = deriveToolInputPreview(toolName, hookPayload.tool_input)
-    const update: ToolSnapshot = toolUpdate(
-      { toolName, toolInput },
-      { hasToolInputField: hasOwnField(hookPayload, 'tool_input') }
-    )
+    const update: ToolSnapshot = {}
+    if (eventName === 'postToolUseFailure') {
+      Object.assign(update, clearActiveToolFieldsUpdate())
+    } else {
+      const toolName = readString(hookPayload, 'tool_name')
+      const toolInput = deriveToolInputPreview(toolName, hookPayload.tool_input)
+      Object.assign(
+        update,
+        toolUpdate(
+          { toolName, toolInput },
+          { hasToolInputField: hasOwnField(hookPayload, 'tool_input') }
+        )
+      )
+    }
     if (eventName === 'postToolUse') {
       const responseText = extractToolResponseText(hookPayload.tool_output)
       if (responseText) {
@@ -1750,10 +1771,11 @@ function extractCopilotToolFields(
   hookPayload: Record<string, unknown>
 ): ToolSnapshot {
   const update: ToolSnapshot = {}
-  if (
+  if (eventName === 'PostToolUseFailure' || eventName === 'ErrorOccurred') {
+    Object.assign(update, clearActiveToolFieldsUpdate())
+  } else if (
     eventName === 'PreToolUse' ||
     eventName === 'PostToolUse' ||
-    eventName === 'PostToolUseFailure' ||
     eventName === 'PermissionRequest'
   ) {
     const copilotToolCall = readCopilotToolCall(hookPayload)
@@ -2016,29 +2038,40 @@ function extractGrokToolFields(
   grokHome?: string
 ): ToolSnapshot {
   if (isGrokEvent(eventName, 'pre_tool_use', 'post_tool_use', 'post_tool_use_failure')) {
-    const toolName =
-      readString(hookPayload, 'toolName') ??
-      readString(hookPayload, 'tool_name') ??
-      readString(hookPayload, 'name')
-    const rawInput =
-      hookPayload.toolInput ?? hookPayload.tool_input ?? hookPayload.input ?? hookPayload.arguments
-    const toolInput =
-      deriveToolInputPreview(toolName, rawInput) ?? deriveFallbackToolInputPreview(rawInput)
-    // Why: Grok's ask_user_question is auto-allowed and arrives as PreToolUse
-    // (not PermissionRequest). Capture the full question payload so the live
-    // card path can render options instead of only a waiting Notification.
-    const interactivePrompt = deriveInteractivePrompt(toolName, rawInput, eventName)
-    const update: ToolSnapshot = toolUpdate(
-      { toolName, toolInput, interactivePrompt },
-      {
-        hasToolInputField: hasAnyOwnField(hookPayload, [
-          'toolInput',
-          'tool_input',
-          'input',
-          'arguments'
-        ])
-      }
-    )
+    const update: ToolSnapshot = {}
+    if (isGrokEvent(eventName, 'post_tool_use_failure')) {
+      Object.assign(update, clearActiveToolFieldsUpdate())
+    } else {
+      const toolName =
+        readString(hookPayload, 'toolName') ??
+        readString(hookPayload, 'tool_name') ??
+        readString(hookPayload, 'name')
+      const rawInput =
+        hookPayload.toolInput ??
+        hookPayload.tool_input ??
+        hookPayload.input ??
+        hookPayload.arguments
+      const toolInput =
+        deriveToolInputPreview(toolName, rawInput) ?? deriveFallbackToolInputPreview(rawInput)
+      // Why: Grok's ask_user_question is auto-allowed and arrives as PreToolUse
+      // (not PermissionRequest). Capture the full question payload so the live
+      // card path can render options instead of only a waiting Notification.
+      const interactivePrompt = deriveInteractivePrompt(toolName, rawInput, eventName)
+      Object.assign(
+        update,
+        toolUpdate(
+          { toolName, toolInput, interactivePrompt },
+          {
+            hasToolInputField: hasAnyOwnField(hookPayload, [
+              'toolInput',
+              'tool_input',
+              'input',
+              'arguments'
+            ])
+          }
+        )
+      )
+    }
     if (isGrokEvent(eventName, 'post_tool_use', 'post_tool_use_failure')) {
       const responseText =
         extractToolResponseText(hookPayload.toolResponse) ??
@@ -2379,7 +2412,14 @@ function normalizeClaudeSubagentLifecycleEvent(
         Date.now()
       )
     } else {
-      markClaudeSubagentIdle(roster, agentId)
+      // Why: SubagentStop carries the session's task inventory; a stopping
+      // agent listed id-exact as a subagent task is a workflow/named one-shot
+      // (teammate lifecycle ids never appear there), not a resumable teammate.
+      const stopTasks = readClaudeBackgroundAgentTasks(hookPayload)
+      finishClaudeSubagent(roster, agentId, {
+        listedAsSubagentTask:
+          stopTasks.present && stopTasks.tasks.some((task) => !task.teammate && task.id === agentId)
+      })
       // Why: a blocked child that dies (killed, errored) without another tool
       // event would otherwise pin its permission/question wait on the pane
       // forever — nothing else references that agent again.
@@ -2417,9 +2457,13 @@ export function seedClaudeSubagentRosterFromSnapshots(
       startedAt: snapshot.startedAt,
       agentType: snapshot.agentType,
       description: snapshot.description,
+      // Why: teammate name and agent type can differ, but the provider id
+      // shape survives persistence and keeps the row across restart folds.
+      ...(isClaudeTeammateLifecycleId(snapshot.id) ? { teammate: true as const } : {}),
       // Why: the seed can be a phantom (child finished while Orca was down,
       // its SubagentStop lost). Let a PRESENT background_tasks list that
-      // omits the id demote it instead of gating the pane 'working' forever.
+      // omits the id remove it (or demote a teammate) instead of gating the
+      // pane 'working' forever.
       backgroundTasksAuthoritative: true
     })
   }
@@ -2577,7 +2621,8 @@ function normalizeClaudeEvent(
       foldClaudeBackgroundTasksIntoRoster(
         getOrCreateClaudeSubagentRoster(state, paneKey),
         backgroundTasks.tasks,
-        Date.now()
+        Date.now(),
+        { inventoryComplete: !backgroundTasks.truncated }
       )
     }
   }

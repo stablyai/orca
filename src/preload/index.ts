@@ -53,6 +53,7 @@ import type {
   UpdateStatus,
   WorktreeBaseStatusEvent,
   WorktreeDefaultTabsLaunch,
+  WorktreeHeadIdentity,
   WorktreeRemoteBranchConflictEvent
 } from '../shared/types'
 import type { PtyModelRestoreNeededEvent } from '../shared/pty-model-restore-marker'
@@ -723,6 +724,24 @@ const api = {
       ) => callback(data)
       ipcRenderer.on('worktrees:changed', listener)
       return () => ipcRenderer.removeListener('worktrees:changed', listener)
+    },
+
+    onGitStatusMetadataChanged: (callback: (data: { repoId: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { repoId: string }) =>
+        callback(data)
+      ipcRenderer.on('worktrees:gitStatusMetadataChanged', listener)
+      return () => ipcRenderer.removeListener('worktrees:gitStatusMetadataChanged', listener)
+    },
+
+    onHeadIdentitiesChanged: (
+      callback: (data: { repoId: string; identities: WorktreeHeadIdentity[] }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { repoId: string; identities: WorktreeHeadIdentity[] }
+      ) => callback(data)
+      ipcRenderer.on('worktrees:headIdentitiesChanged', listener)
+      return () => ipcRenderer.removeListener('worktrees:headIdentitiesChanged', listener)
     },
 
     onBaseStatus: (callback: (data: WorktreeBaseStatusEvent) => void): (() => void) => {

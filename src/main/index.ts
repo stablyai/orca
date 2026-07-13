@@ -85,6 +85,7 @@ import {
 import { maybeRedirectAppImageCliLaunch } from './startup/appimage-cli-redirect'
 import { maybeRedirectPackagedCliEntryLaunch } from './startup/packaged-cli-entry-redirect'
 import { startFirstWindowStartupServices } from './startup/first-window-startup-services'
+import { createWslCliReconciliationStartupBarrier } from './startup/wsl-cli-reconciliation-startup-barrier'
 import { getDevInstanceIdentity } from './startup/dev-instance-identity'
 import { hydrateShellPath, mergePathSegments } from './startup/hydrate-shell-path'
 import {
@@ -187,6 +188,7 @@ import { applyElectronProxySettings } from './network/proxy-settings'
 import { preserveAgentAuthBeforeRestart } from './agent-auth-restart-preservation'
 import { CliInstaller } from './cli/cli-installer'
 import { installLinuxBareOrcaDispatcher } from './cli/linux-bare-orca-dispatcher'
+import { reconcileManagedWslCliRegistrations } from './cli/wsl-cli-registration-reconciliation'
 import { selfHealRuntimeEnvironmentFocus } from './runtime-environment-focus-self-heal'
 
 let mainWindow: BrowserWindow | null = null
@@ -225,6 +227,12 @@ let keybindings: KeybindingService | null = null
 const expectedRendererReload = createWebContentsTimedFlag()
 const recoveryReloadInFlight = createWebContentsTimedFlag()
 let firstWindowStartupServicesReady: Promise<void> = Promise.resolve()
+let managedWslCliReconciliationReady: Promise<void> = Promise.resolve()
+let managedWslCliStartupBarrierReady: Promise<void> = Promise.resolve()
+// Why: the serve barrier fails open at its budget, so headless clients need the
+// reconciliation state at ready time to know a WSL PTY launch may still race an
+// un-migrated registration. 'settled' covers the off-Windows no-op fast path.
+let managedWslCliReconciliationStatus: 'pending' | 'settled' | 'failed' = 'settled'
 // Why: GPU child crashes clustered right after launch indicate a broken driver;
 // track them so Orca can move this build onto software rendering.
 const gpuLaunchTimeMs = Date.now()
@@ -610,7 +618,9 @@ if (hasSingleInstanceLock) {
 }
 
 ipcMain.handle('app:awaitFirstWindowStartupServices', async () => {
-  await firstWindowStartupServicesReady
+  // Why: window rendering and local RPC startup stay independent, but restored
+  // WSL terminals get a bounded chance to receive launcher repairs first.
+  await Promise.all([firstWindowStartupServicesReady, managedWslCliStartupBarrierReady])
 })
 
 ipcMain.handle(
@@ -1378,6 +1388,9 @@ async function printServeReady(options: ServeOptions): Promise<void> {
         type: 'orca_server_ready',
         runtimeId: runtime.getRuntimeId(),
         endpoint,
+        // Why: the WSL reconciliation barrier fails open, so 'pending' warns clients
+        // it outlived the startup budget and a WSL PTY launch may still race a repair.
+        managedWslCliReconciliation: managedWslCliReconciliationStatus,
         pairing: pairing.available
           ? {
               url: pairing.pairingUrl,
@@ -1601,6 +1614,37 @@ app.whenReady().then(async () => {
   logStartupMilestone('app-ready')
   electronApp.setAppUserModelId(devInstanceIdentity.appUserModelId)
   app.setName(devInstanceIdentity.name)
+
+  // Why: managed WSL launchers live outside the Windows app bundle, so keep
+  // their launcher and bridge contract synchronized across app updates.
+  managedWslCliReconciliationStatus = 'pending'
+  managedWslCliReconciliationReady = reconcileManagedWslCliRegistrations({
+    isPackaged: app.isPackaged,
+    userDataPath: getCanonicalUserDataPath(),
+    appVersion: app.getVersion()
+  })
+    .then((results) => {
+      for (const result of results) {
+        if (result.outcome === 'failed') {
+          console.warn(
+            `[wsl-cli] ${result.distro} managed registration reconciliation failed: ${result.error}`
+          )
+        } else if (result.outcome === 'repaired') {
+          console.log(`[wsl-cli] Repaired managed registration in ${result.distro}.`)
+        }
+      }
+      managedWslCliReconciliationStatus = 'settled'
+    })
+    .catch((error) => {
+      managedWslCliReconciliationStatus = 'failed'
+      console.warn(
+        '[wsl-cli] Managed registration reconciliation discovery failed:',
+        error instanceof Error ? error.message : String(error)
+      )
+    })
+  managedWslCliStartupBarrierReady = createWslCliReconciliationStartupBarrier(
+    managedWslCliReconciliationReady
+  )
 
   const activeOrcaProfile = ensureActiveOrcaProfile()
   store = new Store({ dataFile: activeOrcaProfile.dataFile })
@@ -2056,6 +2100,13 @@ app.whenReady().then(async () => {
   }
 
   if (serveOptions) {
+    // Why: give managed WSL launchers a brief chance to migrate before headless
+    // PTYs become reachable without letting slow repairs withhold all RPC readiness.
+    logStartupMilestone('wsl-cli-barrier-start')
+    await managedWslCliStartupBarrierReady
+    logStartupMilestone('wsl-cli-barrier-resolved', {
+      reconciliation: managedWslCliReconciliationStatus
+    })
     await startServeAgentHookServer()
     registerHeadlessPtyRuntime(
       runtime,

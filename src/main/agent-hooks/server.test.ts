@@ -3791,8 +3791,17 @@ describe('Claude hook normalization', () => {
     expect(result?.payload.toolInput).toBeUndefined()
   })
 
-  it('PostToolUseFailure surfaces the error text as lastAssistantMessage', () => {
-    const result = _internals.normalizeHookPayload(
+  it('PostToolUseFailure clears stale tool fields until the next PreToolUse', () => {
+    _internals.normalizeHookPayload(
+      'claude',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Edit',
+        tool_input: { file_path: '/src/config.ts' }
+      }),
+      'production'
+    )
+    const failed = _internals.normalizeHookPayload(
       'claude',
       buildBody({
         hook_event_name: 'PostToolUseFailure',
@@ -3802,9 +3811,27 @@ describe('Claude hook normalization', () => {
       }),
       'production'
     )
-    expect(result?.payload.state).toBe('working')
-    expect(result?.payload.toolName).toBe('Edit')
-    expect(result?.payload.lastAssistantMessage).toBe('file is read-only')
+    expect(failed?.payload).toMatchObject({
+      state: 'working',
+      lastAssistantMessage: 'file is read-only'
+    })
+    expect(failed?.payload.toolName).toBeUndefined()
+    expect(failed?.payload.toolInput).toBeUndefined()
+
+    const retry = _internals.normalizeHookPayload(
+      'claude',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'Read',
+        tool_input: { file_path: '/src/config.ts' }
+      }),
+      'production'
+    )
+    expect(retry?.payload).toMatchObject({
+      state: 'working',
+      toolName: 'Read',
+      toolInput: '/src/config.ts'
+    })
   })
 
   it('PreToolUse normalizes to working + tool fields', () => {
@@ -4524,6 +4551,36 @@ describe('Cursor hook normalization', () => {
     expect(result?.payload.toolInput).toBe('/repo/src/app.ts')
   })
 
+  it('postToolUseFailure surfaces the error and clears stale tool fields', () => {
+    _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({
+        hook_event_name: 'preToolUse',
+        tool_name: 'Read',
+        tool_input: { file_path: '/repo/src/app.ts' }
+      }),
+      'production'
+    )
+    const failed = _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({
+        hook_event_name: 'postToolUseFailure',
+        tool_name: 'Read',
+        tool_input: { file_path: '/repo/src/app.ts' },
+        error_message: 'file not found'
+      }),
+      'production'
+    )
+    // Why: keeping toolName set would let the compact sidebar show the tool
+    // instead of the failure text, hiding the error from the user.
+    expect(failed?.payload).toMatchObject({
+      state: 'working',
+      lastAssistantMessage: 'file not found'
+    })
+    expect(failed?.payload.toolName).toBeUndefined()
+    expect(failed?.payload.toolInput).toBeUndefined()
+  })
+
   it('afterAgentResponse carries text into lastAssistantMessage', () => {
     const result = _internals.normalizeHookPayload(
       'cursor',
@@ -5160,6 +5217,36 @@ describe('Copilot hook normalization', () => {
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.toolName).toBe('bash')
     expect(result?.payload.toolInput).toBe('pnpm test')
+  })
+
+  it('PostToolUseFailure surfaces the error and clears stale tool fields', () => {
+    _internals.normalizeHookPayload(
+      'copilot',
+      buildBody({
+        hook_event_name: 'PreToolUse',
+        toolName: 'bash',
+        toolInput: { command: 'pnpm test' }
+      }),
+      'production'
+    )
+    const failed = _internals.normalizeHookPayload(
+      'copilot',
+      buildBody({
+        hook_event_name: 'PostToolUseFailure',
+        toolName: 'bash',
+        toolInput: { command: 'pnpm test' },
+        error_message: 'command not found'
+      }),
+      'production'
+    )
+    // Why: keeping toolName set would let the compact sidebar show the tool
+    // instead of the failure text, hiding the error from the user.
+    expect(failed?.payload).toMatchObject({
+      state: 'working',
+      lastAssistantMessage: 'command not found'
+    })
+    expect(failed?.payload.toolName).toBeUndefined()
+    expect(failed?.payload.toolInput).toBeUndefined()
   })
 
   it('PreToolUse ask_user maps to blocked and surfaces the question', () => {

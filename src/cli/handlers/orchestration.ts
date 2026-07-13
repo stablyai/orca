@@ -80,6 +80,16 @@ type MessageSummary = {
   read?: number
 }
 
+type LifecycleSendRejection = {
+  action: 'rejected'
+  code: string
+  reason: string
+}
+
+type OrchestrationSendResult =
+  | { message: { id: string }; lifecycle?: LifecycleSendRejection }
+  | { messages: { id: string }[]; recipients: number }
+
 function getOptionalStructuredMessagePayload(
   flags: Map<string, string | boolean>
 ): string | undefined {
@@ -347,6 +357,16 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     const type = getOptionalStringFlag(flags, 'type')
     rejectLifecycleGroupRecipient(type, to)
 
+    if (
+      (type === 'worker_done' || type === 'heartbeat') &&
+      !getOptionalStringFlag(flags, 'from') &&
+      !process.env.ORCA_TERMINAL_HANDLE
+    ) {
+      // Why: focus is not lifecycle authority; injected dispatches carry an
+      // explicit worker handle so an identity-less subprocess must fail closed.
+      throwNoActiveSenderTerminal()
+    }
+
     // Why: lifecycle senders keep ORCA_TERMINAL_HANDLE verbatim — no liveness
     // probe (terminal.show throws runtime_unavailable in the exact mid-restart
     // window worker_done must survive) and no pane remint (pre-payload-
@@ -354,9 +374,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     // and coordinator replies route to the sender row while the worker's own
     // `check` reads its env-handle inbox).
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
-    const result = await client.call<
-      { message: { id: string } } | { messages: { id: string }[]; recipients: number }
-    >('orchestration.send', {
+    const result = await client.call<OrchestrationSendResult>('orchestration.send', {
       from,
       to,
       subject: getRequiredStringFlag(flags, 'subject'),
@@ -370,8 +388,16 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       senderPaneKey: process.env.ORCA_PANE_KEY || undefined,
       devMode: isDevCliInvocation()
     })
+    if ('message' in result.result && result.result.lifecycle?.action === 'rejected') {
+      // Why: a persisted diagnostic is not a successful lifecycle signal;
+      // the non-zero status prevents workers from treating it as completion.
+      process.exitCode = 1
+    }
     printResult(result, json, (r) => {
       if ('message' in r) {
+        if (r.lifecycle?.action === 'rejected') {
+          return `Rejected ${r.message.id}: ${r.lifecycle.reason}`
+        }
         return `Sent ${r.message.id}`
       }
       return `Sent ${r.messages.length} messages to ${r.recipients} recipients`

@@ -317,6 +317,26 @@ describe('orchestration send structured payload flags', () => {
     })
     expect(callMock).not.toHaveBeenCalled()
   })
+
+  it.each(['worker_done', 'heartbeat'] as const)(
+    'does not resolve an identity-less %s sender from the active terminal',
+    async (type) => {
+      getTerminalHandleMock.mockResolvedValue('term_active_coordinator')
+
+      await expect(
+        invokeSend(
+          new Map<string, string | boolean>([
+            ['to', 'term_coord'],
+            ['subject', 'update'],
+            ['type', type]
+          ])
+        )
+      ).rejects.toMatchObject({ code: 'no_active_sender_terminal' })
+
+      expect(getTerminalHandleMock).not.toHaveBeenCalled()
+      expect(callMock).not.toHaveBeenCalled()
+    }
+  )
 })
 
 describe('orchestration dispatch coordinator handle', () => {

@@ -244,7 +244,7 @@ describe('remote hook service installers', () => {
     ]) {
       const command = hooks.hooks[eventName]?.[0]?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/codex-hook.sh')
-      expect(command).toMatch(/^if \[ -x /)
+      expect(command).toMatch(/^if \[ -f /)
     }
     expect(fs.files.get('/home/dev/.orca/agent-hooks/codex-hook.sh')).toContain('#!/bin/sh')
     expect(fs.modes.get('/home/dev/.orca/agent-hooks/codex-hook.sh')).toBe(0o755)
@@ -338,7 +338,7 @@ describe('remote hook service installers', () => {
     for (const eventName of ['BeforeAgent', 'AfterAgent', 'AfterTool', 'BeforeTool']) {
       const command = geminiConfig.hooks[eventName]?.[0]?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/gemini-hook.sh')
-      expect(command).toMatch(/^if \[ -x /)
+      expect(command).toMatch(/^if \[ -f /)
     }
     expect(geminiConfig.hooks.PreToolUse).toBeUndefined()
 
@@ -398,7 +398,7 @@ describe('remote hook service installers', () => {
       const definition = commandCodeConfig.hooks[eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/command-code-hook.sh')
-      expect(command).toMatch(/^if \[ -x /)
+      expect(command).toMatch(/^if \[ -f /)
     }
     expect(commandCodeConfig.hooks.PreToolUse?.[0]?.matcher).toBe('.*')
     expect(commandCodeConfig.hooks.PostToolUse?.[0]?.matcher).toBe('.*')
@@ -421,7 +421,7 @@ describe('remote hook service installers', () => {
       const definition = grokConfig.hooks[eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/grok-hook.sh')
-      expect(command).toMatch(/^if \[ -x /)
+      expect(command).toMatch(/^if \[ -f /)
     }
     // Why: Grok tool matchers are real regexes; bare `*` is invalid match-all.
     expect(grokConfig.hooks.PreToolUse?.[0]?.matcher).toBe('.*')
@@ -443,14 +443,14 @@ describe('remote hook service installers', () => {
       const definition = devinConfig.hooks[eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/devin-hook.sh')
-      expect(command).toMatch(/^if \[ -x /)
+      expect(command).toMatch(/^if \[ -f /)
     }
     for (const eventName of ['PreToolUse', 'PostToolUse', 'PermissionRequest']) {
       const definition = devinConfig.hooks[eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(definition?.matcher).toBeUndefined()
       expect(command).toContain('/home/dev/.orca/agent-hooks/devin-hook.sh')
-      expect(command).toMatch(/^if \[ -x /)
+      expect(command).toMatch(/^if \[ -f /)
     }
     expect(devin.fs.files.get('/home/dev/.orca/agent-hooks/devin-hook.sh')).toContain('/hook/devin')
   })
@@ -506,9 +506,9 @@ describe('remote hook service installers', () => {
     ]) {
       expect(config).toContain(`event = "${eventName}"`)
     }
-    // The command points at the POSIX managed script via the `[ -x ]` guard.
+    // The command points at the POSIX managed script via the regular-file guard.
     expect(config).toContain('/home/dev/.orca/agent-hooks/kimi-hook.sh')
-    expect(config).toMatch(/command = "if \[ -x /)
+    expect(config).toMatch(/command = "if \[ -f /)
     expect(fs.files.get('/home/dev/.orca/agent-hooks/kimi-hook.sh')).toContain('/hook/kimi')
   })
 
@@ -749,7 +749,7 @@ describe('remote hook service installers', () => {
       const definition = config.hooks[eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/droid-hook.sh')
-      expect(command).toMatch(/^if \[ -x /)
+      expect(command).toMatch(/^if \[ -f /)
     }
     // Tool/permission events carry a `*` matcher; lifecycle events do not.
     expect(config.hooks.PreToolUse?.[0]?.matcher).toBe('*')

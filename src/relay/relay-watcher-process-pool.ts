@@ -15,6 +15,9 @@ export function createRelayWatcherProcessPool(
   entryPath = getRelayWatcherProcessEntryPath()
 ): RelayWatcherProcessPool {
   return new RuntimeWatcherProcessPool({
+    // Why: one SSH workspace normally installs three roots, and each remote
+    // watcher child carries substantial Node/native-addon process overhead.
+    maxSharedSupervisors: 1,
     createSupervisor: () =>
       new WatcherProcessSupervisor({
         entryPath,

@@ -1702,6 +1702,7 @@ describe('registerPtyHandlers', () => {
           // (the GNOME screen reader) inside Orca-managed terminals (#7904).
           expect(entries.indexOf(shimDir)).toBeGreaterThanOrEqual(0)
           expect(entries.indexOf(shimDir)).toBeLessThan(entries.indexOf('/usr/bin'))
+          expect(env.ORCA_CLI_COMMAND).toBeUndefined()
         } finally {
           Object.defineProperty(process, 'platform', {
             configurable: true,
@@ -1801,10 +1802,13 @@ describe('registerPtyHandlers', () => {
         // Why: runtime-created spawns (e.g. the mobile-create materialize path)
         // must thread the same {tabId, leafId} so the catch-path rescue can find
         // and keep their live PTY (#7587).
-        expect(runtime.registerPty).toHaveBeenCalledWith(expect.any(String), 'wt-runtime', null, {
-          tabId: 'tab-1',
-          leafId
-        })
+        expect(runtime.registerPty).toHaveBeenCalledWith(
+          expect.any(String),
+          'wt-runtime',
+          null,
+          { tabId: 'tab-1', leafId },
+          false
+        )
       })
 
       it('uses the owning project WSL runtime for runtime-created daemon PTYs', async () => {
@@ -1859,6 +1863,13 @@ describe('registerPtyHandlers', () => {
           expect(spawnOptions.shellOverride).toBe('wsl.exe')
           expect(spawnOptions.terminalWindowsWslDistro).toBe('Ubuntu')
           expect(spawnOptions.terminalWindowsPowerShellImplementation).toBe('auto')
+          expect(runtime.registerPty).toHaveBeenCalledWith(
+            expect.any(String),
+            'repo-1::C:\\repo',
+            null,
+            undefined,
+            true
+          )
         })
       })
 
@@ -4558,10 +4569,13 @@ describe('registerPtyHandlers', () => {
 
     // Why: this is the load-bearing wiring for #7587 — the runtime can only back a
     // stalled mobile create from a live spawn if the spawn threads {tabId, leafId}.
-    expect(runtime.registerPty).toHaveBeenCalledWith(expect.any(String), 'wt-1', null, {
-      tabId: 'tab-1',
-      leafId
-    })
+    expect(runtime.registerPty).toHaveBeenCalledWith(
+      expect.any(String),
+      'wt-1',
+      null,
+      { tabId: 'tab-1', leafId },
+      false
+    )
   })
 
   it('omits the pane identity from registerPty when the leafId is not a terminal leaf (#7587)', async () => {
@@ -4590,7 +4604,13 @@ describe('registerPtyHandlers', () => {
     // Why: legacy numeric pane ids (`pane:N`) are not terminal leaf ids, so the
     // spawn seam must not fabricate a binding for them (registerPty would ignore
     // it anyway); this pins that the seam passes a clean `undefined`.
-    expect(runtime.registerPty).toHaveBeenCalledWith(expect.any(String), 'wt-1', null, undefined)
+    expect(runtime.registerPty).toHaveBeenCalledWith(
+      expect.any(String),
+      'wt-1',
+      null,
+      undefined,
+      false
+    )
   })
 
   it('refreshes native Agent Teams env when captured teammate mode lives in launch args', async () => {
@@ -6069,10 +6089,12 @@ describe('registerPtyHandlers', () => {
     expect(spawnCall[0]).toBe('wsl.exe')
     expect(env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
     expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
+    expect(env.ORCA_CLI_COMMAND).toBe('orca-ide')
     expect(env.WSLENV?.split(':')).toEqual(
       expect.arrayContaining([
         'ORCA_TERMINAL_HANDLE/u',
         'ORCA_USER_DATA_PATH/p',
+        'ORCA_CLI_COMMAND/u',
         'ORCA_AGENT_HOOK_PORT/u',
         'ORCA_AGENT_HOOK_TOKEN/u',
         'ORCA_OMP_SOURCE_AGENT_DIR/p',

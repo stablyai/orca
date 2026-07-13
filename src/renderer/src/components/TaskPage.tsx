@@ -9736,13 +9736,21 @@ export default function TaskPage(): React.JSX.Element {
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             ) : (
-                              <button
+                              <Button
                                 type="button"
+                                // Why: Open resumes an existing workspace — solid primary so it
+                                // reads as the stronger action vs outline Start (new workspace).
+                                variant={attachedWorkspace ? 'default' : 'outline'}
+                                size="xs"
                                 data-contextual-tour-target="tasks-start-workspace"
                                 onClick={(event) => {
                                   event.stopPropagation()
                                   handleOpenOrUseGitHubWorkItem(item)
                                 }}
+                                className={cn(
+                                  'min-w-[72px] gap-1 font-semibold',
+                                  attachedWorkspace ? 'shadow-xs' : 'bg-background/80'
+                                )}
                                 aria-label={
                                   attachedWorkspace
                                     ? translate(
@@ -9754,13 +9762,12 @@ export default function TaskPage(): React.JSX.Element {
                                         'Start workspace from issue'
                                       )
                                 }
-                                className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-background/80 px-2 py-1 text-[11px] text-foreground transition hover:bg-muted/60"
                               >
                                 {attachedWorkspace
                                   ? translate('auto.components.TaskPage.606a85c774', 'Open')
                                   : translate('auto.components.TaskPage.7d08e8be0f', 'Start')}
                                 <ArrowRight className="size-3" />
-                              </button>
+                              </Button>
                             )}
                             {item.type !== 'pr' ? (
                               <DropdownMenu modal={false}>

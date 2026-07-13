@@ -1552,6 +1552,8 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
     // pairing; the dialog falls back to the persisted excerpt on web clients.
     getBranchRenameFailureOutput: async () => null,
     onChanged: () => noopUnsubscribe,
+    onGitStatusMetadataChanged: () => noopUnsubscribe,
+    onHeadIdentitiesChanged: () => noopUnsubscribe,
     onBaseStatus: () => noopUnsubscribe,
     onRemoteBranchConflict: () => noopUnsubscribe
   }

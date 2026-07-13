@@ -1,285 +1,101 @@
-import { watch, type FSWatcher } from 'node:fs'
-import { open, stat } from 'node:fs/promises'
-import { basename, dirname } from 'node:path'
-import type { AgentType, NativeChatMessage } from '../../shared/native-chat-types'
-import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
+import type { NativeChatMessage } from '../../shared/native-chat-types'
+import { resolveSessionFilePath } from './session-file-resolver'
 import {
-  readIncrementalTranscriptMessages,
-  resetIncrementalTranscriptState,
-  type IncrementalTranscriptState
-} from './transcript-incremental-reader'
-import {
-  nativeChatLineDecoderForAgent,
-  readNativeChatTranscriptTailFile
-} from './transcript-tail-reader'
+  installTranscriptWatcher,
+  type NativeChatTranscriptSubscription,
+  type SubscribeNativeChatTranscriptArgs
+} from './transcript-watch-engine'
+import { nativeChatLineDecoderForAgent } from './transcript-tail-reader'
 
 export { readNativeChatTranscriptTail } from './transcript-tail-reader'
+export {
+  getActiveNativeChatWatcherCount,
+  type NativeChatTranscriptSubscription,
+  type SubscribeNativeChatTranscriptArgs
+} from './transcript-watch-engine'
 
-export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
-  agent: AgentType
-  sessionId: string
-  onAppend: (messages: NativeChatMessage[]) => void
-  onInitialSnapshot?: (
-    messages: NativeChatMessage[],
-    hasMore: boolean,
-    beforeOffset: number,
-    /** Set when the initial drain could not deliver a transcript; the subscriber
-     *  surfaces it as an error snapshot so a watching client never sticks on
-     *  'loading'. Empty messages accompany it. */
-    error?: string
-  ) => void
-  onReplace?: (messages: NativeChatMessage[], hasMore: boolean, beforeOffset: number) => void
-  initialLimit?: number
-  filePath?: string
-  debounceMs?: number
-}
-
-export type NativeChatTranscriptSubscription = {
-  unsubscribe: () => void
-  watching: boolean
-}
-
-const DEFAULT_DEBOUNCE_MS = 40
-const ROTATION_RETRY_MS = 25
-const MAX_ROTATION_RETRY_MS = 2_000
-let activeWatcherCount = 0
-
-export function getActiveNativeChatWatcherCount(): number {
-  return activeWatcherCount
-}
-
-async function fileVersion(filePath: string): Promise<{ identity: string; size: number }> {
-  const value = await stat(filePath)
-  return { identity: `${value.dev}:${value.ino}`, size: value.size }
-}
-
-async function boundaryFingerprint(filePath: string, offset: number): Promise<string> {
-  if (offset <= 0) {
-    return ''
+/** One resolve+install attempt. Returns null when the file isn't resolvable
+ *  yet, or vanished between resolve and `watch()` — either case is retried by
+ *  the resolve-poll rather than treated as a hard failure. */
+async function attemptInstall(
+  args: SubscribeNativeChatTranscriptArgs,
+  decode: (line: string, fallbackId: string) => NativeChatMessage | null
+): Promise<NativeChatTranscriptSubscription | null> {
+  const filePath = args.filePath ?? (await resolveSessionFilePath(args.agent, args.sessionId, args))
+  if (!filePath) {
+    return null
   }
-  const start = Math.max(0, offset - 64)
-  const handle = await open(filePath, 'r')
-  try {
-    const buffer = Buffer.allocUnsafe(offset - start)
-    const { bytesRead } = await handle.read(buffer, 0, buffer.length, start)
-    return buffer.subarray(0, bytesRead).toString('base64')
-  } finally {
-    await handle.close()
-  }
+  return installTranscriptWatcher(filePath, decode, args)
 }
 
-export async function subscribeNativeChatTranscript(
-  args: SubscribeNativeChatTranscriptArgs
-): Promise<NativeChatTranscriptSubscription> {
-  const { agent, sessionId, onAppend, onInitialSnapshot, onReplace, initialLimit, debounceMs } =
-    args
-  const resolvedDecode = nativeChatLineDecoderForAgent(agent)
-  const resolvedFilePath = args.filePath ?? (await resolveSessionFilePath(agent, sessionId, args))
-  if (!resolvedFilePath || !resolvedDecode) {
-    return { unsubscribe: () => {}, watching: false }
-  }
-  const filePath = resolvedFilePath
-  const decode = resolvedDecode
+// Why: Claude Code (and other agents) can take from ~3s to minutes to flush a
+// brand-new session's first JSONL line (#8401) — resolveSessionFilePath
+// genuinely has nothing to find yet. Poll for it instead of going deaf; each
+// attempt is a cheap glob, so the cost of polling is negligible next to the
+// gap it covers.
+const INITIAL_RESOLVE_POLL_MS = 500
+const MAX_RESOLVE_POLL_MS = 5_000
 
-  const state: IncrementalTranscriptState = {
-    offset: 0,
-    pendingChunks: [],
-    pendingStart: 0,
-    pendingBytes: 0,
-    droppingOversizedRecord: false
-  }
-  let watchedIdentity: string | null = null
-  let watchedBoundary = ''
-  let initialDrain = true
-  // Guards the one-time error snapshot emitted when the initial drain throws, so
-  // a persistently-failing retry loop can't spam the subscriber with error frames.
-  let initialErrorEmitted = false
+/**
+ * Background retry loop for a transcript that hasn't been resolvable yet.
+ * Returns a subscription immediately (per subscribeNativeChatTranscript's
+ * contract); the loop keeps retrying resolve+install until it succeeds or
+ * unsubscribe() cancels it. Reports watching:true — the engine's first drain
+ * delivers the initial snapshot once the file appears, so subscribers must not
+ * settle a merely not-yet-flushed transcript into a permanent error (#8401).
+ */
+function subscribeViaResolvePoll(
+  args: SubscribeNativeChatTranscriptArgs,
+  decode: (line: string, fallbackId: string) => NativeChatMessage | null
+): NativeChatTranscriptSubscription {
   let closed = false
-  let reading = false
-  let pendingReadRequested = false
-  let rotationRetryCount = 0
-  let debounceTimer: ReturnType<typeof setTimeout> | null = null
-  let watcher: FSWatcher | null = null
-  let watcherNeedsRebind = false
+  let installed: NativeChatTranscriptSubscription | null = null
+  let pollTimer: ReturnType<typeof setTimeout> | null = null
+  let delay = args.resolvePollIntervalMs ?? INITIAL_RESOLVE_POLL_MS
 
-  function scheduleDrain(): void {
+  function scheduleAttempt(): void {
     if (closed) {
       return
     }
-    if (debounceTimer) {
-      clearTimeout(debounceTimer)
-    }
-    debounceTimer = setTimeout(() => {
-      debounceTimer = null
-      void drain()
-    }, debounceMs ?? DEFAULT_DEBOUNCE_MS)
-  }
-
-  function scheduleRotationRetry(): void {
-    if (closed || debounceTimer) {
-      return
-    }
-    const retryDelay = Math.min(
-      ROTATION_RETRY_MS * 2 ** Math.min(rotationRetryCount, 7),
-      MAX_ROTATION_RETRY_MS
-    )
-    rotationRetryCount += 1
-    debounceTimer = setTimeout(() => {
-      debounceTimer = null
-      void drain()
-    }, retryDelay)
-  }
-
-  async function readAndEmitAppends(): Promise<void> {
-    const remaining = await readIncrementalTranscriptMessages(
-      filePath,
-      state,
-      decode,
-      (messages) => {
-        if (!closed) {
-          onAppend(messages)
-        }
-      }
-    )
-    if (!closed && remaining.length > 0) {
-      onAppend(remaining)
+    pollTimer = setTimeout(() => {
+      pollTimer = null
+      void runAttempt()
+    }, delay)
+    // Why: never hold the event loop open (headless `orca serve` shutdown) for
+    // a session that may genuinely never resolve.
+    pollTimer.unref?.()
+    // Only back off in production; a test-supplied interval stays fixed so
+    // tests resolve in bounded, predictable time.
+    if (args.resolvePollIntervalMs === undefined) {
+      delay = Math.min(delay * 2, MAX_RESOLVE_POLL_MS)
     }
   }
 
-  async function drainOnce(): Promise<void> {
-    const current = await fileVersion(filePath)
-    const currentBoundary = await boundaryFingerprint(filePath, state.offset)
+  async function runAttempt(): Promise<void> {
     if (closed) {
       return
     }
-    if (watcherNeedsRebind) {
-      bindWatcher()
-    }
-    const identityChanged = watchedIdentity !== null && current.identity !== watchedIdentity
-    const contentReplaced =
-      identityChanged ||
-      current.size < state.offset ||
-      (state.offset > 0 && watchedBoundary !== currentBoundary)
-    if (contentReplaced) {
-      resetIncrementalTranscriptState(state)
-    }
-    watchedIdentity = current.identity
-
-    const replacementSnapshot =
-      contentReplaced && !initialDrain && onReplace && initialLimit
-        ? await readNativeChatTranscriptTailFile(filePath, initialLimit, decode)
-        : null
-    if (closed) {
-      return
-    }
-    if (replacementSnapshot && onReplace) {
-      state.offset = replacementSnapshot.consumedTo
-      state.pendingStart = state.offset
-      onReplace(
-        replacementSnapshot.messages,
-        replacementSnapshot.hasMore,
-        replacementSnapshot.beforeOffset
-      )
-      await readAndEmitAppends()
-      watchedBoundary = await boundaryFingerprint(filePath, state.offset)
-      rotationRetryCount = 0
-      return
-    }
-
-    const initialSnapshot =
-      initialDrain && onInitialSnapshot && initialLimit
-        ? await readNativeChatTranscriptTailFile(filePath, initialLimit, decode)
-        : null
-    if (closed) {
-      return
-    }
-    if (initialDrain && onInitialSnapshot) {
-      initialDrain = false
-      if (initialSnapshot) {
-        state.offset = initialSnapshot.consumedTo
-        state.pendingStart = state.offset
-        onInitialSnapshot(
-          initialSnapshot.messages,
-          initialSnapshot.hasMore,
-          initialSnapshot.beforeOffset
-        )
-        await readAndEmitAppends()
-      } else {
-        const messages = await readIncrementalTranscriptMessages(filePath, state, decode)
-        onInitialSnapshot(messages, false, 0)
-      }
-    } else {
-      initialDrain = false
-      await readAndEmitAppends()
-    }
-    watchedBoundary = await boundaryFingerprint(filePath, state.offset)
-    rotationRetryCount = 0
-  }
-
-  async function drain(): Promise<void> {
-    if (closed) {
-      return
-    }
-    if (reading) {
-      pendingReadRequested = true
-      return
-    }
-    reading = true
+    let result: NativeChatTranscriptSubscription | null
     try {
-      do {
-        pendingReadRequested = false
-        try {
-          await drainOnce()
-        } catch {
-          // Why: unlink/recreate can detach fs.watch from the pathname. Keep one
-          // capped-backoff retry alive until a successor appears or we unsubscribe.
-          // A still-pending initial drain also surfaces one error snapshot so a
-          // watching client isn't stranded at 'loading' when the read keeps
-          // throwing; initialDrain stays true so a recovered read can still win.
-          if (initialDrain && onInitialSnapshot && !initialErrorEmitted) {
-            initialErrorEmitted = true
-            onInitialSnapshot([], false, 0, 'Transcript unavailable')
-          }
-          scheduleRotationRetry()
-          break
-        }
-      } while (pendingReadRequested && !closed)
-    } finally {
-      reading = false
+      result = await attemptInstall(args, decode)
+    } catch {
+      // Why: a transient resolve failure (EACCES/EIO during the glob) must not
+      // kill the poll loop with an unhandled rejection — retry like a miss.
+      result = null
     }
+    if (closed) {
+      // unsubscribe() ran while this attempt was in flight.
+      result?.unsubscribe()
+      return
+    }
+    if (result) {
+      installed = result
+      return
+    }
+    scheduleAttempt()
   }
 
-  function bindWatcher(): void {
-    const watchedName = basename(filePath)
-    // Why: file watchers stay bound to an unlinked inode on macOS. Watching
-    // the parent keeps observing a successor even after a long recreate gap.
-    const nextWatcher = watch(dirname(filePath), (_event, changedName) => {
-      if (changedName === null || changedName.toString() === watchedName) {
-        scheduleDrain()
-      }
-    })
-    nextWatcher.on('error', () => {
-      // Why: Windows can emit EPERM when a watched directory disappears. An
-      // error listener prevents a process crash and retries against its successor.
-      if (closed || watcher !== nextWatcher) {
-        return
-      }
-      watcherNeedsRebind = true
-      nextWatcher.close()
-      watcher = null
-      scheduleRotationRetry()
-    })
-    watcher = nextWatcher
-    watcherNeedsRebind = false
-  }
-
-  try {
-    bindWatcher()
-  } catch {
-    return { unsubscribe: () => {}, watching: false }
-  }
-  activeWatcherCount++
-  scheduleDrain()
+  scheduleAttempt()
 
   return {
     watching: true,
@@ -288,13 +104,47 @@ export async function subscribeNativeChatTranscript(
         return
       }
       closed = true
-      if (debounceTimer) {
-        clearTimeout(debounceTimer)
-        debounceTimer = null
+      if (pollTimer) {
+        clearTimeout(pollTimer)
+        pollTimer = null
       }
-      watcher?.close()
-      watcher = null
-      activeWatcherCount--
+      installed?.unsubscribe()
+      installed = null
     }
   }
+}
+
+/**
+ * Subscribe to live appends on an agent's transcript file. Returns an
+ * unsubscribe fn that tears the watcher down completely.
+ *
+ * Handles file rotation/replacement: when the file shrinks (a new session id
+ * resolved to a smaller/newer file, or the file was truncated), the offset is
+ * reset to 0 so the replacement's content is read from the top.
+ *
+ * When the transcript isn't resolvable yet (a just-created session whose
+ * agent hasn't flushed its first JSONL line, #8401), returns the subscription
+ * immediately and keeps retrying resolve+install in the background rather
+ * than returning a no-op that never recovers.
+ */
+export async function subscribeNativeChatTranscript(
+  args: SubscribeNativeChatTranscriptArgs
+): Promise<NativeChatTranscriptSubscription> {
+  const decode = nativeChatLineDecoderForAgent(args.agent)
+  if (!decode) {
+    // Nothing watchable — return a no-op teardown so callers can unconditionally
+    // unsubscribe without null-checks.
+    return { unsubscribe: () => {}, watching: false }
+  }
+  // Why: a blank session id (and no explicit file) can never resolve — bail out
+  // instead of resolve-polling an unresolvable target forever.
+  if (!args.filePath && !args.sessionId.trim()) {
+    return { unsubscribe: () => {}, watching: false }
+  }
+
+  const installed = await attemptInstall(args, decode)
+  if (installed) {
+    return installed
+  }
+  return subscribeViaResolvePoll(args, decode)
 }

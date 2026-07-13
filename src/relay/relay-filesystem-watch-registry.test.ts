@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { WatcherProcessFailure } from '../main/ipc/parcel-watcher-process-failure'
+import { WatcherProcessSupervisor } from '../main/ipc/parcel-watcher-process-supervisor'
 import type {
   WatcherProcessCallback,
   WatcherProcessHooks,
@@ -15,6 +16,29 @@ type InstalledWatch = {
   callback: WatcherProcessCallback
   hooks: WatcherProcessHooks
   unsubscribe: ReturnType<typeof vi.fn<() => Promise<void>>>
+}
+
+type InstalledSupervisorWatch = InstalledWatch & { dir: string }
+
+function stubRelayWatcherSupervisors() {
+  const installed = new Map<WatcherProcessSupervisor, InstalledSupervisorWatch[]>()
+  vi.spyOn(WatcherProcessSupervisor.prototype, 'subscribe').mockImplementation(function (
+    this: WatcherProcessSupervisor,
+    dir,
+    callback,
+    _options,
+    hooks = {}
+  ) {
+    const watches = installed.get(this) ?? []
+    const unsubscribe = vi.fn(async () => undefined)
+    watches.push({ dir, callback, hooks, unsubscribe })
+    installed.set(this, watches)
+    return Promise.resolve({ unsubscribe })
+  })
+  const dispose = vi
+    .spyOn(WatcherProcessSupervisor.prototype, 'dispose')
+    .mockImplementation(() => undefined)
+  return { installed, dispose }
 }
 
 class FakeWatcherPool {
@@ -148,6 +172,81 @@ describe('RelayFilesystemWatchRegistry', () => {
 })
 
 describe('createRelayWatcherProcessPool', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it('uses one healthy watcher process per SSH host for each standard repo', async () => {
+    const { installed } = stubRelayWatcherSupervisors()
+    const firstHostPool = createRelayWatcherProcessPool()
+    const secondHostPool = createRelayWatcherProcessPool()
+    const repoBase = join(tmpdir(), 'ssh-repo')
+    const roots = [repoBase, join(repoBase, '.git'), join(repoBase, 'worktree')]
+    try {
+      for (const root of roots) {
+        await firstHostPool.subscribe(root, vi.fn(), {}, {})
+        await secondHostPool.subscribe(root, vi.fn(), {}, {})
+      }
+
+      expect(
+        Array.from(installed.values()).map((watches) => watches.map(({ dir }) => dir))
+      ).toEqual([roots, roots])
+    } finally {
+      firstHostPool.dispose()
+      secondHostPool.dispose()
+    }
+  })
+
+  it('quarantines and recovers each standard-repo root after the shared child fails', async () => {
+    const { installed, dispose } = stubRelayWatcherSupervisors()
+    const pool = createRelayWatcherProcessPool()
+    const dispatcher = createDispatcher()
+    const registry = new RelayFilesystemWatchRegistry(
+      dispatcher as unknown as RelayDispatcher,
+      pool
+    )
+    const repoBase = join(tmpdir(), 'ssh-repo-recovery')
+    const roots = [repoBase, join(repoBase, '.git'), join(repoBase, 'worktree')]
+    try {
+      for (const root of roots) {
+        await registry.watch(root, context(1))
+      }
+      const healthyWatches = Array.from(installed.values())[0]
+      const failure = new WatcherProcessFailure(
+        'file watcher process crashed repeatedly',
+        'supervisor',
+        'supervisor_crash_fuse'
+      )
+
+      for (const watch of healthyWatches) {
+        watch.hooks.onTerminalError?.(failure)
+      }
+      await Promise.resolve()
+
+      const recoveredWatches = Array.from(installed.values()).slice(1)
+      expect(dispose).toHaveBeenCalledTimes(1)
+      expect(recoveredWatches.map((watches) => watches.map(({ dir }) => dir))).toEqual(
+        roots.map((root) => [root])
+      )
+      expect(dispatcher.notify.mock.calls.slice(0, roots.length)).toEqual(
+        roots.map((root) => ['fs.changed', { events: [{ kind: 'overflow', absolutePath: root }] }])
+      )
+
+      for (const watches of recoveredWatches) {
+        const [{ callback, dir }] = watches
+        callback(null, [{ type: 'update', path: join(dir, 'recovered.txt') }])
+      }
+      expect(dispatcher.notify.mock.calls.slice(roots.length)).toEqual(
+        roots.map((root) => [
+          'fs.changed',
+          {
+            events: [{ kind: 'update', absolutePath: join(root, 'recovered.txt') }]
+          }
+        ])
+      )
+    } finally {
+      registry.dispose()
+    }
+  })
+
   it('fails closed instead of loading the native watcher in the relay process', async () => {
     const previousVitest = process.env.VITEST
     process.env.VITEST = 'true'
