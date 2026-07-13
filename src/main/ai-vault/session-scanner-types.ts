@@ -1,4 +1,4 @@
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
+import type { AiVaultAgent, WebChatAgent } from '../../shared/ai-vault-types'
 import type {
   AiVaultScanIssue,
   AiVaultSession,
@@ -32,6 +32,10 @@ export type AiVaultScanOptions = {
   // Why: chat-import SQLite DB path for imported web conversations (ChatGPT/
   // Claude.ai/Gemini). Tests inject a temp DB; unset falls back to chatImportDbPath().
   webchatDbPath?: string
+  // Why: per-agent working directory for web chat sessions, set via settings.
+  // Applied as a scan post-process (see scanAiVaultSessions) since the parse
+  // cache keys off file mtime and would never re-apply a settings change.
+  webChatCwdByAgent?: Partial<Record<WebChatAgent, string>>
   limit?: number
   limitPerAgent?: number
   // Active workspace/project paths whose sessions must be included regardless of

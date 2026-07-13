@@ -3,6 +3,7 @@ import type {
   AiVaultScanIssue,
   AiVaultSession
 } from '../../shared/ai-vault-types'
+import { isWebChatAgent } from '../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import { withSpan } from '../observability/tracer'
 import { sessionSortTime } from './session-scanner-accumulator'
@@ -113,11 +114,29 @@ export async function scanAiVaultSessions(
     span.setAttribute('bytesRead', parseStats.bytesRead)
     span.setAttribute('issues', issues.length)
 
+    const mergedSessions = mergeSessions(cappedSessions, scopeSessions)
+
     return {
-      sessions: mergeSessions(cappedSessions, scopeSessions),
+      sessions: applyWebChatCwd(mergedSessions, options.webChatCwdByAgent),
       issues: issues.map((issue) => ({ executionHostId, ...issue })),
       scannedAt: new Date().toISOString()
     }
+  })
+}
+
+// Why: web chat cwd comes from settings, so it's applied outside the parse
+// cache (which keys off file mtime) on every scan rather than threaded
+// through the parser chain, so a settings change is reflected immediately.
+function applyWebChatCwd(
+  sessions: AiVaultSession[],
+  webChatCwdByAgent: AiVaultScanOptions['webChatCwdByAgent']
+): AiVaultSession[] {
+  if (!webChatCwdByAgent) {
+    return sessions
+  }
+  return sessions.map((session) => {
+    const cwd = isWebChatAgent(session.agent) ? webChatCwdByAgent[session.agent] : undefined
+    return cwd ? { ...session, cwd } : session
   })
 }
 

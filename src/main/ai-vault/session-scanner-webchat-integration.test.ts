@@ -50,4 +50,64 @@ describe('scanAiVaultSessions web chat', () => {
       messageCount: 2
     })
   })
+
+  it('applies webChatCwdByAgent to web chat session cwd', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-webchat-int-'))
+    dirs.push(dir)
+    const dbPath = join(dir, 'chats.db')
+    const db = new SyncDatabase(dbPath)
+    initChatImportSchema(db)
+    upsertWebConversation(
+      db,
+      {
+        source: 'CHATGPT',
+        externalId: 'c1',
+        title: 'Web title',
+        createdAt: null,
+        updatedAt: '2026-07-05T00:00:00.000Z',
+        messages: [
+          { role: 'USER', idx: 0, text: 'q', createdAt: null },
+          { role: 'AI', idx: 1, text: 'a', createdAt: null }
+        ]
+      },
+      'now'
+    )
+    db.close()
+
+    const result = await scanAiVaultSessions({
+      platform: 'darwin',
+      webchatDbPath: dbPath,
+      webChatCwdByAgent: { chatgpt: '/x/ChatGPT' }
+    })
+    const web = result.sessions.find((s) => s.agent === 'chatgpt')
+    expect(web?.cwd).toBe('/x/ChatGPT')
+  })
+
+  it('leaves web chat session cwd null when webChatCwdByAgent is not provided', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-webchat-int-'))
+    dirs.push(dir)
+    const dbPath = join(dir, 'chats.db')
+    const db = new SyncDatabase(dbPath)
+    initChatImportSchema(db)
+    upsertWebConversation(
+      db,
+      {
+        source: 'CHATGPT',
+        externalId: 'c1',
+        title: 'Web title',
+        createdAt: null,
+        updatedAt: '2026-07-05T00:00:00.000Z',
+        messages: [
+          { role: 'USER', idx: 0, text: 'q', createdAt: null },
+          { role: 'AI', idx: 1, text: 'a', createdAt: null }
+        ]
+      },
+      'now'
+    )
+    db.close()
+
+    const result = await scanAiVaultSessions({ platform: 'darwin', webchatDbPath: dbPath })
+    const web = result.sessions.find((s) => s.agent === 'chatgpt')
+    expect(web?.cwd).toBeNull()
+  })
 })
