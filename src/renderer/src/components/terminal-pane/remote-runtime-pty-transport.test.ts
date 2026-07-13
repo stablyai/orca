@@ -167,7 +167,8 @@ describe('createRemoteRuntimePtyTransport', () => {
     })
 
     expect(onError).not.toHaveBeenCalled()
-    expect(transport.getPtyId()).toBe('remote:terminal-1')
+    expect(transport.getPtyId()).toBe('remote:env-1@@terminal-1')
+    expect(transport.getRuntimeEnvironmentId?.()).toBe('env-1')
     await vi.waitFor(() =>
       expect(latestSubscribePayload().capabilities).toEqual({
         ackOutput: 1,
@@ -188,6 +189,18 @@ describe('createRemoteRuntimePtyTransport', () => {
       client: { id: expect.stringMatching(/^desktop:tab-1:pane:1:/), type: 'desktop' },
       viewport: { cols: 120, rows: 40 }
     })
+  })
+
+  it('scopes the same legacy handle independently for each runtime environment', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const first = createRemoteRuntimePtyTransport('env-1', { worktreeId: 'wt-1' })
+    const second = createRemoteRuntimePtyTransport('env-2', { worktreeId: 'wt-2' })
+
+    first.attach({ existingPtyId: 'remote:terminal-1', callbacks: {} })
+    second.attach({ existingPtyId: 'remote:terminal-1', callbacks: {} })
+
+    expect(first.getPtyId()).toBe('remote:env-1@@terminal-1')
+    expect(second.getPtyId()).toBe('remote:env-2@@terminal-1')
   })
 
   it('parks passive peers when another remote desktop owns the grid', async () => {

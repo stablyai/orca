@@ -44,7 +44,7 @@ import type {
   RuntimeFileReadResult,
   RuntimeTerminalPathResolution
 } from '../../shared/runtime-types'
-import { watchFileExplorerInWorker } from './file-watcher-host'
+import { watchFileExplorerInWatcherProcess } from './file-watcher-host'
 import { wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
 import { isENOENT, resolveAuthorizedPath } from '../ipc/filesystem-auth'
@@ -921,7 +921,9 @@ export class RuntimeFileCommands {
 
   async watchFileExplorer(
     worktreeSelector: string,
-    callback: (events: FsChangeEvent[]) => void
+    callback: (events: FsChangeEvent[]) => void,
+    onTerminalError: (error: Error) => void = () => undefined,
+    signal?: AbortSignal
   ): Promise<() => void> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, '')
     const provider = target.connectionId ? getSshFilesystemProvider(target.connectionId) : null
@@ -929,7 +931,9 @@ export class RuntimeFileCommands {
       if (!provider) {
         throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      return provider.watch(target.path, callback)
+      // Why: the RPC layer already threads AbortSignal for local watches; SSH
+      // must cancel the remote fs.watch request instead of waiting it out.
+      return provider.watch(target.path, callback, { signal })
     }
 
     const rootPath = await resolveAuthorizedPath(target.path, this.host.requireStore())
@@ -940,9 +944,14 @@ export class RuntimeFileCommands {
     if (process.platform === 'win32') {
       return watchWindowsRuntimeFileExplorer(rootPath, callback)
     }
-    // Why: the watcher runs in a worker thread so @parcel/watcher's blocking
-    // recursive crawl can't starve the main/`serve` process (issue #5308).
-    const dispose = await watchFileExplorerInWorker(rootPath, callback)
+    // Why: the forked watcher keeps the blocking crawl and native faults out
+    // of the main/`serve` process (issues #5308 and #8212).
+    const dispose = await watchFileExplorerInWatcherProcess(
+      rootPath,
+      callback,
+      onTerminalError,
+      signal
+    )
     return () => {
       trackRuntimeFileWatcherUnsubscribe(rootPath, dispose)
     }

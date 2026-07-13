@@ -88,4 +88,32 @@ describe('CloseTerminalDialog', () => {
 
     expect(onConfirm).toHaveBeenCalledWith(true)
   })
+
+  it('resets the skip preference when the dialog closes and reopens', async () => {
+    const onConfirm = vi.fn()
+    const onCancel = vi.fn()
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    mountedRoots.push(root)
+    const render = async (open: boolean): Promise<void> => {
+      await act(async () => {
+        root.render(<CloseTerminalDialog open={open} onCancel={onCancel} onConfirm={onConfirm} />)
+      })
+    }
+
+    await render(true)
+    const checkbox = document.body.querySelector<HTMLButtonElement>('[role="checkbox"]')
+    await act(async () => {
+      checkbox?.click()
+    })
+    expect(checkbox?.getAttribute('aria-checked')).toBe('true')
+
+    await render(false)
+    await render(true)
+
+    expect(document.body.querySelector('[role="checkbox"]')?.getAttribute('aria-checked')).toBe(
+      'false'
+    )
+  })
 })

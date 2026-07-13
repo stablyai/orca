@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.138-rc.2",
+  "version": "1.4.138-rc.5",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -83,6 +83,7 @@
     "test:e2e:terminal-perf:summarize": "node config/scripts/summarize-terminal-perf-report.mjs",
     "test:e2e:terminal-perf:html-report": "node config/scripts/generate-terminal-perf-html-report.mjs",
     "test:e2e:ssh-docker-perf": "node config/scripts/run-ssh-docker-perf-e2e.mjs",
+    "test:e2e:ssh-docker-watcher-isolation": "node config/scripts/run-ssh-docker-watcher-isolation-e2e.mjs",
     "test:e2e:source-control-scale": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/source-control-large-file-count.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
     "win-update-e2e": "node tools/win-update-e2e/run.mjs",
     "test:e2e:ssh-codex-artifacts-repro": "node config/scripts/run-ssh-codex-artifacts-repro-e2e.mjs",
@@ -93,6 +94,8 @@
     "bench:daemon-coldstart": "pnpm run ensure:electron-runtime && node tools/benchmarks/daemon-coldstart-bench.mjs",
     "bench:main-thread-jank": "pnpm run ensure:electron-runtime && node tools/benchmarks/main-thread-jank-bench.mjs",
     "bench:multi-workspace-typing": "pnpm run ensure:electron-runtime && node config/scripts/run-multi-workspace-typing-bench.mjs",
+    "bench:cold-park-reveal": "pnpm run ensure:electron-runtime && node tools/benchmarks/terminal-cold-park-reveal-bench.mjs",
+    "bench:cold-park-resource": "pnpm run ensure:electron-runtime && node tools/benchmarks/terminal-cold-park-resource-bench.mjs",
     "bench:compare": "node config/scripts/compare-benchmark-artifacts.mjs"
   },
   "dependencies": {

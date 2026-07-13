@@ -1736,6 +1736,115 @@ describe('runtime file client', () => {
     expect(unsubscribe).toHaveBeenCalled()
   })
 
+  it('surfaces terminal watcher errors and allows a fresh subscription after stream end', async () => {
+    const onError = vi.fn()
+    const unsubscribe = vi.fn()
+    let callbacks: { onResponse: (response: unknown) => void; onClose: () => void } | undefined
+    runtimeEnvironmentSubscribe.mockImplementation((_args, nextCallbacks) => {
+      callbacks = nextCallbacks
+      return Promise.resolve({ unsubscribe, sendBinary: vi.fn() })
+    })
+
+    await subscribeRuntimeFileChanges(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/remote/repo'
+      },
+      vi.fn(),
+      onError
+    )
+    callbacks?.onResponse({
+      id: 'rpc-error',
+      ok: true,
+      result: { type: 'error', message: 'file watcher process crashed repeatedly' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    callbacks?.onResponse({
+      id: 'rpc-end',
+      ok: true,
+      result: { type: 'end' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'file watcher process crashed repeatedly' })
+    )
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+
+    await subscribeRuntimeFileChanges(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/remote/repo'
+      },
+      vi.fn(),
+      vi.fn()
+    )
+    expect(runtimeEnvironmentSubscribe).toHaveBeenCalledTimes(2)
+    callbacks?.onResponse({
+      id: 'rpc-second-end',
+      ok: true,
+      result: { type: 'end' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+  })
+
+  it('evicts a terminal watch before notifying error listeners that retry', async () => {
+    const callbacks: {
+      onResponse: (response: unknown) => void
+      onClose: () => void
+    }[] = []
+    runtimeEnvironmentSubscribe.mockImplementation((_args, nextCallbacks) => {
+      callbacks.push(nextCallbacks)
+      return Promise.resolve({ unsubscribe: vi.fn(), sendBinary: vi.fn() })
+    })
+    const retryPayload = vi.fn()
+    let retryPromise: Promise<() => void> | undefined
+    const context = {
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      worktreeId: 'wt-1',
+      worktreePath: '/remote/repo'
+    }
+    await subscribeRuntimeFileChanges(context, vi.fn(), () => {
+      retryPromise = subscribeRuntimeFileChanges(context, retryPayload, vi.fn())
+    })
+
+    callbacks[0].onResponse({
+      id: 'rpc-error',
+      ok: true,
+      result: { type: 'error', message: 'terminal watcher failure' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    await retryPromise
+    const subscribeCallCount = runtimeEnvironmentSubscribe.mock.calls.length
+    callbacks[0].onResponse({
+      id: 'rpc-end',
+      ok: true,
+      result: { type: 'end' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    callbacks[1]?.onResponse({
+      id: 'rpc-changed',
+      ok: true,
+      result: {
+        type: 'changed',
+        worktree: 'id:wt-1',
+        events: [{ kind: 'update', absolutePath: '/remote/repo/retry.txt' }]
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    callbacks[1]?.onResponse({
+      id: 'rpc-retry-end',
+      ok: true,
+      result: { type: 'end' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    expect(subscribeCallCount).toBe(2)
+    expect(retryPayload).toHaveBeenCalledTimes(1)
+  })
+
   it('shares one remote file watch subscription across listeners for the same worktree', async () => {
     const firstPayload = vi.fn()
     const secondPayload = vi.fn()

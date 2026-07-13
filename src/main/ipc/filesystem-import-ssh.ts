@@ -1,10 +1,17 @@
-import { lstat, readdir, realpath } from 'node:fs/promises'
-import { basename, join, posix, resolve } from 'node:path'
+import { lstat } from 'node:fs/promises'
+import { basename, posix, resolve } from 'node:path'
 import { authorizeExternalPath, isENOENT } from './filesystem-auth'
 import { getSshConnectionManager } from './ssh'
 import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import type { FileUploadSession, IFilesystemProvider } from '../providers/types'
 import type { ImportItemResult } from './filesystem-mutations'
+import { assertSafeRemotePathSegment, type RemotePathFlavor } from '../ssh/ssh-remote-platform'
+import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
+import {
+  captureLocalUploadRoot,
+  preScanSshImportDirectory,
+  uploadSshImportDirectory
+} from './filesystem-import-ssh-directory'
 
 // Why: the SSH import path uses SshFilesystemProvider instead of direct SFTP so
 // system-SSH transports (ProxyCommand/ProxyJump/FIDO2) get the same workflows.
@@ -47,6 +54,10 @@ export async function importExternalPathsSsh(
     throw new Error('Remote file upload is unavailable. Reconnect the SSH target and retry.')
   }
   const uploadSession = await provider.openFileUploadSession()
+  // Why: filename legality follows the remote filesystem, not the client's OS.
+  const remotePathFlavor: RemotePathFlavor = isWindowsAbsolutePathLike(destDir)
+    ? 'windows'
+    : 'posix'
   try {
     for (const sourcePath of sourcePaths) {
       const result = await importOneSourceSsh(
@@ -54,7 +65,8 @@ export async function importExternalPathsSsh(
         uploadSession,
         sourcePath,
         destDir,
-        reservedNames
+        reservedNames,
+        remotePathFlavor
       )
       results.push(result)
       if (result.status === 'imported') {
@@ -76,11 +88,23 @@ async function importOneSourceSsh(
   uploadSession: FileUploadSession,
   sourcePath: string,
   destDir: string,
-  reservedNames: Set<string>
+  reservedNames: Set<string>,
+  remotePathFlavor: RemotePathFlavor
 ): Promise<ImportItemResult> {
   const resolvedSource = resolve(sourcePath)
 
   authorizeExternalPath(resolvedSource)
+
+  const originalName = basename(resolvedSource)
+  try {
+    assertSafeRemotePathSegment(originalName, remotePathFlavor)
+  } catch (error) {
+    return {
+      sourcePath,
+      status: 'failed',
+      reason: error instanceof Error ? error.message : String(error)
+    }
+  }
 
   let sourceStat: Awaited<ReturnType<typeof lstat>>
   try {
@@ -114,17 +138,13 @@ async function importOneSourceSsh(
 
   const isDir = sourceStat.isDirectory()
 
-  if (isDir) {
-    const hasSymlink = await preScanForSymlinks(resolvedSource)
-    if (hasSymlink) {
-      return { sourcePath, status: 'skipped', reason: 'symlink' }
-    }
-  }
-
-  const originalName = basename(resolvedSource)
-
   let createdDestDir: string | null = null
   try {
+    const rootRealPath = isDir ? await captureLocalUploadRoot(resolvedSource, sourceStat) : null
+    if (isDir && (await preScanSshImportDirectory(resolvedSource, remotePathFlavor))) {
+      return { sourcePath, status: 'skipped', reason: 'symlink' }
+    }
+
     const finalName = await deconflictName(provider, destDir, originalName, reservedNames)
     const destPath = `${destDir}/${finalName}`
     const renamed = finalName !== originalName
@@ -132,12 +152,13 @@ async function importOneSourceSsh(
     if (isDir) {
       await provider.createDirNoClobber(destPath)
       createdDestDir = destPath
-      await uploadDirectoryViaProvider(
+      await uploadSshImportDirectory(
         provider,
         uploadSession,
         resolvedSource,
         destPath,
-        await realpath(resolvedSource)
+        rootRealPath!,
+        remotePathFlavor
       )
     } else {
       await uploadSession.uploadFile(resolvedSource, destPath, { exclusive: true })
@@ -217,36 +238,6 @@ async function ensureDropStagingDir(provider: IFilesystemProvider, destDir: stri
   await provider.createDir(destDir)
 }
 
-async function uploadDirectoryViaProvider(
-  provider: IFilesystemProvider,
-  uploadSession: FileUploadSession,
-  localDir: string,
-  remoteDir: string,
-  rootRealPath: string
-): Promise<void> {
-  await assertLocalUploadPathInsideRoot(rootRealPath, localDir)
-  const entries = await readdir(localDir, { withFileTypes: true })
-  for (const entry of entries) {
-    const localPath = join(localDir, entry.name)
-    const remotePath = `${remoteDir}/${entry.name}`
-    await assertLocalUploadPathInsideRoot(rootRealPath, localPath)
-    const statResult = await lstat(localPath)
-
-    // Why: skip symlinks and special files even after the up-front pre-scan;
-    // this closes the TOCTOU gap if one is created during upload.
-    if (statResult.isSymbolicLink() || (!statResult.isFile() && !statResult.isDirectory())) {
-      continue
-    }
-
-    if (statResult.isDirectory()) {
-      await provider.createDirNoClobber(remotePath)
-      await uploadDirectoryViaProvider(provider, uploadSession, localPath, remotePath, rootRealPath)
-      continue
-    }
-    await uploadSession.uploadFile(localPath, remotePath, { exclusive: true })
-  }
-}
-
 async function remotePathExists(
   provider: IFilesystemProvider,
   remotePath: string
@@ -273,38 +264,4 @@ function isRemoteMissingError(error: unknown): boolean {
       error.message
     )
   )
-}
-
-async function preScanForSymlinks(dirPath: string): Promise<boolean> {
-  const entries = await readdir(dirPath, { withFileTypes: true })
-  for (const entry of entries) {
-    if (entry.isSymbolicLink()) {
-      return true
-    }
-    if (entry.isDirectory()) {
-      const childPath = join(dirPath, entry.name)
-      if (await preScanForSymlinks(childPath)) {
-        return true
-      }
-    }
-  }
-  return false
-}
-
-async function assertLocalUploadPathInsideRoot(
-  rootRealPath: string,
-  candidatePath: string
-): Promise<void> {
-  const candidateRealPath = await realpath(candidatePath)
-  const root = rootRealPath.replace(/[\\/]+$/g, '')
-  const candidate = candidateRealPath.replace(/[\\/]+$/g, '')
-  const rootComparable = process.platform === 'win32' ? root.toLowerCase() : root
-  const candidateComparable = process.platform === 'win32' ? candidate.toLowerCase() : candidate
-  if (candidateComparable === rootComparable) {
-    return
-  }
-  const boundary = process.platform === 'win32' ? '\\' : '/'
-  if (!candidateComparable.startsWith(`${rootComparable}${boundary}`)) {
-    throw new Error(`Upload source escapes selected directory: ${candidatePath}`)
-  }
 }

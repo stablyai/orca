@@ -52,6 +52,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').confirmClosePinnedTab).toBe(true)
   })
 
+  it('keeps file-editor word wrapping enabled by default', () => {
+    expect(getDefaultSettings('/tmp').editorWordWrap).toBe(true)
+  })
+
   it('keeps rich Markdown spellcheck enabled by default', () => {
     expect(getDefaultSettings('/tmp').richMarkdownSpellcheckEnabled).toBe(true)
   })

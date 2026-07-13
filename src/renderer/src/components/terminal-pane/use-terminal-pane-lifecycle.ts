@@ -31,6 +31,7 @@ import {
 import { createTerminalHandleLinkProvider } from './terminal-handle-links'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import { handleOscLink } from './terminal-osc-link-routing'
+import { handleTerminalWebLinkClick } from './terminal-web-link-click'
 import {
   installHttpLinkClickFallback,
   type TerminalLinkRoutingPreferenceRequester
@@ -66,6 +67,7 @@ import { parseOsc7 } from './parse-osc7'
 import { guardParserHandler } from './terminal-parser-handler-guard'
 import { resolveTerminalJisYenInput } from './terminal-jis-yen-input'
 import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
+import { installTerminalImeLinuxCandidateState } from './terminal-ime-linux-candidate-state'
 import {
   armTerminalImePendingCandidateKeyRelease,
   clearTerminalImePendingCandidateKeyRelease,
@@ -495,6 +497,7 @@ export function getPreviousVisibleForTerminalPane(args: {
   return args.previous.isVisible
 }
 
+/** Wires mounted terminal panes to renderer state and terminal event handling. */
 export function useTerminalPaneLifecycle({
   tabId,
   worktreeId,
@@ -890,9 +893,17 @@ export function useTerminalPaneLifecycle({
           !isMac &&
           navigator.userAgent.includes('Linux') &&
           !/Android|CrOS/.test(navigator.userAgent)
+        const linuxImeCandidateState = isLinux
+          ? installTerminalImeLinuxCandidateState(pane.terminal.element)
+          : null
         const macNativeTextInputSourceTracker = isMac ? getMacNativeTextInputSourceTracker() : null
         const imeCompositionTracker = installTerminalImeCompositionTracker(pane.terminal.element)
-        imeCompositionDisposablesRef.current.set(pane.id, imeCompositionTracker)
+        imeCompositionDisposablesRef.current.set(pane.id, {
+          dispose: () => {
+            imeCompositionTracker.dispose()
+            linuxImeCandidateState?.dispose()
+          }
+        })
         // Why: only known macOS native text paths need xterm keydown bypass.
         // Source gates cover physical CJK/Vietnamese IME rewrites; synthetic
         // Unicode key events are detected by missing physical key identity.
@@ -911,6 +922,13 @@ export function useTerminalPaneLifecycle({
             }
         imeNativeTextForwarderDisposablesRef.current.set(pane.id, imeNativeTextForwarder)
         pane.terminal.attachCustomKeyEventHandler((e) => {
+          const linuxCandidateClassification = linuxImeCandidateState?.classifyKeyboardEvent(e) ?? {
+            candidateDigitGuardActive: false
+          }
+          /** Advances the fallback state after every terminal key event path. */
+          const observeLinuxCandidateEvent = (): void => {
+            linuxImeCandidateState?.observeKeyboardEvent(e, linuxCandidateClassification)
+          }
           const now = Date.now()
           const pendingCandidateReleaseGuardActive =
             shouldApplyTerminalImePendingCandidateKeyRelease(
@@ -924,6 +942,8 @@ export function useTerminalPaneLifecycle({
               imeCompositionTracker.isCandidateKeyGuardActive() ||
               pendingCandidateReleaseGuardActive,
             pendingCandidateKeyReleaseActive: pendingCandidateReleaseGuardActive,
+            linuxOrphanCandidateDigitGuardActive:
+              linuxCandidateClassification.candidateDigitGuardActive,
             isMac,
             isLinux
           }
@@ -941,11 +961,13 @@ export function useTerminalPaneLifecycle({
                 now
               )
             }
+            observeLinuxCandidateEvent()
             return false
           }
           clearTerminalImePendingCandidateKeyRelease(pendingTerminalImeCandidateKeyReleases, e)
           if (pendingTerminalInterruptKeyup && shouldSuppressTerminalInterruptKeyup(e)) {
             pendingTerminalInterruptKeyup = false
+            observeLinuxCandidateEvent()
             return false
           }
           if (
@@ -965,11 +987,13 @@ export function useTerminalPaneLifecycle({
             } else {
               pendingTerminalInterruptKeyup = false
             }
+            observeLinuxCandidateEvent()
             return false
           }
           if (shouldSuppressTerminalModifierKeyboardEvent(e)) {
             // Why: stale Kitty keyboard reporting can encode standalone
             // modifier presses before Ctrl+C reaches the interrupt handler.
+            observeLinuxCandidateEvent()
             return false
           }
 
@@ -983,6 +1007,7 @@ export function useTerminalPaneLifecycle({
               // Keep it on xterm's onData path so PTY input guards still run.
               pane.terminal.input(jisYenInput.data)
             }
+            observeLinuxCandidateEvent()
             return false
           }
 
@@ -998,13 +1023,16 @@ export function useTerminalPaneLifecycle({
           if (imeNativeTextForwarder.claimKeyEvent(e)) {
             // Why: bypass xterm's kitty encoder for native text keydowns so the
             // committed glyph survives via the input event.
+            observeLinuxCandidateEvent()
             return false
           }
 
-          return !shouldBypassXtermKeyboardEvent(e, {
+          const shouldBypass = shouldBypassXtermKeyboardEvent(e, {
             isMac,
             hasSelection: pane.terminal.hasSelection()
           })
+          observeLinuxCandidateEvent()
+          return !shouldBypass
         })
 
         const linkProviderDisposable = pane.terminal.registerLinkProvider(
@@ -1453,28 +1481,16 @@ export function useTerminalPaneLifecycle({
       terminalTuiScrollSensitivity: () =>
         normalizeTerminalTuiMouseWheelMultiplier(settingsRef.current?.terminalTuiScrollSensitivity),
       onLinkClick: (event, url) => {
-        if (!event) {
-          return
-        }
         const activePane = managerRef.current?.getActivePane()
-        const handled = handleOscLink(url, event, {
+        handleTerminalWebLinkClick(url, event, {
           ...linkDeps,
+          terminal: activePane?.terminal ?? null,
           startupCwd: activePane ? getPaneLinkCwd(activePane.id) : startupCwd,
           runtimeEnvironmentId: activePane
             ? (linkDeps.getRuntimeEnvironmentIdForPane?.(activePane.id) ?? null)
             : null,
           requestOpenLinksInAppPreference
         })
-        // Why: Cmd/Ctrl+click on a plain-text URL (WebLinksAddon) takes focus
-        // away from the terminal before the click's mouseup reaches
-        // ownerDocument. That leaves xterm's SelectionService drag-select
-        // mousemove listener attached, so subsequent mouse motion extends a
-        // phantom selection until the next click/Esc. Explicitly clearing the
-        // selection also detaches those listeners (see
-        // SelectionService._removeMouseDownListeners).
-        if (handled) {
-          managerRef.current?.getActivePane()?.terminal.clearSelection()
-        }
       },
       formatLinkTooltip: (url, openLinkHint) => formatTerminalUrlTooltip(url, openLinkHint),
       // Why: TerminalPane instances stay mounted for hidden visited worktrees

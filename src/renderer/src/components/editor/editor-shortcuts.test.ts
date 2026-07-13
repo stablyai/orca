@@ -17,7 +17,11 @@ vi.mock('@/store', () => ({
   }
 }))
 
-import { installEditorFindShortcut, installMonacoEditorFindShortcut } from './editor-shortcuts'
+import {
+  installEditorFindShortcut,
+  installMonacoDiffChangeNavigationShortcut,
+  installMonacoEditorFindShortcut
+} from './editor-shortcuts'
 
 type ShortcutFixture = {
   container: HTMLDivElement
@@ -194,5 +198,87 @@ describe('installEditorFindShortcut', () => {
     expect(getAction).toHaveBeenCalledWith('actions.find')
     expect(run).toHaveBeenCalledTimes(1)
     dispose()
+  })
+})
+
+describe('installMonacoDiffChangeNavigationShortcut', () => {
+  function createDiffNavigationFixture(): {
+    container: HTMLDivElement
+    dispose: () => void
+    input: HTMLTextAreaElement
+    goToDiff: ReturnType<typeof vi.fn>
+    onDownstreamKeyDown: ReturnType<typeof vi.fn>
+  } {
+    const container = document.createElement('div')
+    const input = document.createElement('textarea')
+    const goToDiff = vi.fn()
+    const onDownstreamKeyDown = vi.fn()
+    container.appendChild(input)
+    document.body.appendChild(container)
+    input.addEventListener('keydown', onDownstreamKeyDown)
+
+    return {
+      container,
+      dispose: installMonacoDiffChangeNavigationShortcut({
+        getContainerDomNode: () => container,
+        goToDiff
+      }),
+      input,
+      goToDiff,
+      onDownstreamKeyDown
+    }
+  }
+
+  it.each([
+    { key: 'F7', shiftKey: false, direction: 'next' },
+    { key: 'F7', shiftKey: true, direction: 'previous' }
+  ] as const)('routes $key (shift=$shiftKey) to $direction', ({ key, shiftKey, direction }) => {
+    const fixture = createDiffNavigationFixture()
+
+    const event = dispatchKeyDown(fixture.input, { key, code: key, shiftKey })
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(fixture.goToDiff).toHaveBeenCalledWith(direction)
+    expect(fixture.onDownstreamKeyDown).not.toHaveBeenCalled()
+    fixture.dispose()
+  })
+
+  it('consumes repeats without navigating again', () => {
+    const fixture = createDiffNavigationFixture()
+
+    const event = dispatchKeyDown(fixture.input, {
+      key: 'F7',
+      code: 'F7',
+      repeat: true
+    })
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(fixture.goToDiff).not.toHaveBeenCalled()
+    expect(fixture.onDownstreamKeyDown).not.toHaveBeenCalled()
+    fixture.dispose()
+  })
+
+  it('honors custom bindings and removes the listener when disposed', () => {
+    shortcutState.keybindings = { 'editor.nextChange': ['Mod+G'] }
+    const fixture = createDiffNavigationFixture()
+
+    const defaultEvent = dispatchKeyDown(fixture.input, { key: 'F7', code: 'F7' })
+    const customEvent = dispatchKeyDown(fixture.input, {
+      key: 'g',
+      code: 'KeyG',
+      metaKey: true
+    })
+    fixture.dispose()
+    const disposedEvent = dispatchKeyDown(fixture.input, {
+      key: 'g',
+      code: 'KeyG',
+      metaKey: true
+    })
+
+    expect(defaultEvent.defaultPrevented).toBe(false)
+    expect(customEvent.defaultPrevented).toBe(true)
+    expect(disposedEvent.defaultPrevented).toBe(false)
+    expect(fixture.goToDiff).toHaveBeenCalledTimes(1)
+    expect(fixture.goToDiff).toHaveBeenCalledWith('next')
   })
 })

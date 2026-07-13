@@ -198,6 +198,13 @@ describe('orchestration skill guidance', () => {
     expect(messaging).toContain('`@grok`')
   })
 
+  it('documents @cursor in the Messaging group address list', () => {
+    const skill = readSkill()
+    const messaging = getSection(skill, 'Messaging')
+
+    expect(messaging).toContain('`@cursor`')
+  })
+
   it('keeps agent-first launch, handle recovery, and inbox injection distinct', () => {
     const skill = readSkill()
     const messaging = getSection(skill, 'Messaging')

@@ -1,6 +1,13 @@
 import { spawn as spawnProcess, type SpawnOptions } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
+import { StringDecoder } from 'node:string_decoder'
+import {
+  getEphemeralVmRecipeResultConnection,
+  parseEphemeralVmRecipeResult
+} from '../../shared/ephemeral-vm-recipes'
 import { RuntimeClientError } from './types'
+
+const IGNORED_NON_RECIPE_STDOUT = '[serve] ignored non-recipe stdout'
 
 export function launchOrcaApp(): void {
   const overrideCommand = process.env.ORCA_OPEN_COMMAND
@@ -155,7 +162,7 @@ function waitForRecipeJson(child: ReturnType<typeof spawnProcess>): Promise<numb
       clearTimeout(timeout)
       child.stdout?.off('data', onData)
       child.off('error', onError)
-      child.off('exit', onExit)
+      child.off('close', onClose)
       if (error) {
         reject(error)
         return
@@ -164,42 +171,69 @@ function waitForRecipeJson(child: ReturnType<typeof spawnProcess>): Promise<numb
       child.unref()
       resolve(0)
     }
-    const emitLine = (line: string): void => {
-      process.stdout.write(`${line}\n`)
-      finish()
+    const writeIgnoredRecipeStdout = (): void => {
+      // Why: non-readiness child stdout is untrusted and cannot be safely
+      // redacted, including schema-valid results with arbitrary user data.
+      process.stderr.write(`${IGNORED_NON_RECIPE_STDOUT}\n`)
     }
-    const onData = (chunk: Buffer | string): void => {
-      output += chunk.toString()
-      const newlineIndex = output.indexOf('\n')
-      if (newlineIndex === -1) {
+    const processRecipeOutputLine = (line: string): void => {
+      const normalizedLine = line.endsWith('\r') ? line.slice(0, -1) : line
+      if (!normalizedLine.trim()) {
         return
       }
-      emitLine(output.slice(0, newlineIndex))
+      const parsed = parseEphemeralVmRecipeResult(normalizedLine)
+      if (!parsed.ok) {
+        writeIgnoredRecipeStdout()
+        return
+      }
+      if (getEphemeralVmRecipeResultConnection(parsed.result).type !== 'orca-server') {
+        writeIgnoredRecipeStdout()
+        return
+      }
+      process.stdout.write(`${normalizedLine.trim()}\n`)
+      finish()
+    }
+    const stdoutDecoder = new StringDecoder('utf8')
+    const onData = (chunk: Buffer | string): void => {
+      output += typeof chunk === 'string' ? chunk : stdoutDecoder.write(chunk)
+      while (!settled) {
+        const newlineIndex = output.indexOf('\n')
+        if (newlineIndex === -1) {
+          return
+        }
+        const line = output.slice(0, newlineIndex)
+        output = output.slice(newlineIndex + 1)
+        processRecipeOutputLine(line)
+      }
     }
     const onError = (error: Error): void => {
       finish(error)
     }
-    const onExit = (code: number | null, signal: NodeJS.Signals | null): void => {
+    const onClose = (code: number | null, signal: NodeJS.Signals | null): void => {
       if (settled) {
         return
       }
-      const trimmed = output.trim()
-      if (trimmed) {
-        emitLine(trimmed)
+      output += stdoutDecoder.end()
+      if (output.trim()) {
+        processRecipeOutputLine(output)
+      }
+      if (settled) {
         return
       }
       finish(
         new RuntimeClientError(
           'runtime_serve_failed',
           typeof code === 'number'
-            ? `Orca serve exited before printing recipe JSON with code ${code}.`
-            : `Orca serve exited before printing recipe JSON via ${signal}.`
+            ? `Orca serve exited before printing valid recipe JSON with code ${code}.`
+            : `Orca serve exited before printing valid recipe JSON via ${signal}.`
         )
       )
     }
     child.stdout?.on('data', onData)
     child.once('error', onError)
-    child.once('exit', onExit)
+    // Why: `exit` can precede the final piped stdout data. `close` waits until
+    // stdio closes so a last recipe chunk is not mistaken for missing output.
+    child.once('close', onClose)
   })
 }
 

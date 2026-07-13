@@ -219,6 +219,7 @@ import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import { createDraftPasteReadyScanner } from '../../../../shared/draft-paste-ready-scanner'
 import { sendAgentDraftPasteContent } from '@/lib/agent-draft-paste-content'
+import { writeTerminalPastePtyInput } from './terminal-pty-paste-writer'
 import {
   beginAgentStartupDeliveryAttempt,
   releaseAgentStartupDeliveryAttempt
@@ -3938,6 +3939,7 @@ export function connectPanePty(
     let startupDraftReadinessArmed = false
     let startupDraftPasteSettled = !ownsStartupDraftPaste
     let startupDraftPasteInFlight = false
+    let startupDraftInputRecorded = false
     let startupDraftQuietTimer: ReturnType<typeof setTimeout> | null = null
     let startupDraftHardTimer: ReturnType<typeof setTimeout> | null = null
     const clearStartupDraftPasteTimers = (): void => {
@@ -3981,7 +3983,18 @@ export function connectPanePty(
       startupDraftPasteAttempted = true
       cleanupStartupDraftPasteTimers()
       const settings = getSettingsForWorktreeRuntimeOwner(useAppStore.getState(), deps.worktreeId)
-      void sendAgentDraftPasteContent(settings, ptyId, startupDraftPrompt)
+      // Why: xterm focus reports share this transport queue. Bypassing it can
+      // race CSI I against the draft on ConPTY and expose a literal `[I` prefix.
+      void sendAgentDraftPasteContent(settings, ptyId, startupDraftPrompt, async (data) => {
+        const accepted = await writeTerminalPastePtyInput(transport, data)
+        if (accepted && !startupDraftInputRecorded) {
+          // Why: this transport write bypasses xterm's user-input signal; keep
+          // the composed draft from being discarded by later hibernation.
+          startupDraftInputRecorded = true
+          recordTerminalInputForHibernation()
+        }
+        return accepted
+      })
         .catch(() => false)
         .finally(() => {
           startupDraftPasteInFlight = false
@@ -7152,12 +7165,13 @@ export function connectPanePty(
             onError: reportError
           }
         })
-        bindActivePanePty(attachPtyId, {
+        const attachedPtyId = transport.getPtyId() ?? attachPtyId
+        bindActivePanePty(attachedPtyId, {
           updateTabPtyId: 'if-missing',
           sampleVisibleForegroundAgent: true
         })
         if (attachPtyId === eagerLivePtyId) {
-          registerPaneSerializerFor(attachPtyId)
+          registerPaneSerializerFor(attachedPtyId)
         }
       } catch (err) {
         reportError(err instanceof Error ? err.message : String(err))
@@ -7207,9 +7221,10 @@ export function connectPanePty(
                 onError: reportError
               }
             })
+            const attachedPtyId = transport.getPtyId() ?? spawnedPtyId
             // Why: this path reuses a PTY spawned by an earlier mount, so no
             // later spawn event will bind this remounted pane's DOM/container.
-            bindActivePanePty(spawnedPtyId, {
+            bindActivePanePty(attachedPtyId, {
               updateTabPtyId: 'if-missing',
               sampleVisibleForegroundAgent: true
             })

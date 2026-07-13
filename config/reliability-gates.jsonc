@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-11",
+  "updatedAt": "2026-07-12",
   "policy": {
     "maturityLevels": [
       "experimental",
@@ -16,6 +16,251 @@
     }
   },
   "gates": [
+    {
+      "id": "git-worktree.refresh-event-semantics",
+      "title": "Index-only Git metadata cannot trigger structural worktree refresh fanout",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "main-preload-renderer-contract",
+      "surfaces": [
+        "terminal input availability",
+        "worktree discovery",
+        "Source Control status refresh"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "ssh"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local",
+        "ssh"
+      ],
+      "coverageNotes": "Local deterministic evidence covers git-common classification, desktop watcher debounce counts, non-overlapping poller semantics, macOS native-watch fallback, preload cleanup, and Source Control active-visible repo filtering. Linux/Windows are covered at the shared poller layer by forcing the non-darwin path; live platform runs remain gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/7086"
+      ],
+      "invariant": "Index-only Git activity below the common Git directory must not emit worktrees:changed, invalidate worktree caches, or trigger fetchWorktrees fanout; structural add/remove/HEAD/gitdir/locked/config.worktree changes must still refresh worktrees and nudge Source Control; external head moves (commit, amend, reset) must reach background worktree rows through spawn-free metadata reads, never through structural fanout.",
+      "oracle": "Classify exact git-common paths as structural, status-only, or ignored; count notifications from debounced watcher events; force the Linux/Windows poll path to emit allowlisted leaf events, detect linked HEAD rewrites independent of entry-directory mtime, and surface in-place index rewrites via the backstop re-stat; diff head identities from metadata-file reads and notify only real head moves; assert Source Control subscribes to both structural and status-only signals with active-repo and visibility filters.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktree-base-directory-event-filter.test.ts src/main/ipc/worktree-base-directory-watcher.test.ts src/main/ipc/worktree-base-directory-poller.test.ts src/main/ipc/worktree-head-identity-reader.test.ts src/renderer/src/hooks/worktree-head-identity-apply.test.ts src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts src/renderer/src/hooks/useIpcEvents.test.ts"
+      ],
+      "testFiles": [
+        "src/main/ipc/worktree-base-directory-event-filter.test.ts",
+        "src/main/ipc/worktree-base-directory-watcher.test.ts",
+        "src/main/ipc/worktree-base-directory-poller.test.ts",
+        "src/main/ipc/worktree-head-identity-reader.test.ts",
+        "src/renderer/src/hooks/worktree-head-identity-apply.test.ts",
+        "src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts",
+        "src/renderer/src/hooks/useIpcEvents.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/ipc/worktree-base-directory-event-filter.test.ts",
+          "assertions": [
+            "primary HEAD and packed-refs classify as structural while primary index classifies as status-only",
+            "linked HEAD/gitdir/locked classify as structural while linked index classifies as status-only",
+            "HEAD reflog appends classify as status-only for linked and primary checkouts while per-ref reflogs stay ignored",
+            "config.worktree classifies as structural at both linked and primary levels",
+            "ignored common-dir churn, spaces, Windows separators, and outside-root paths do not match structurally"
+          ]
+        },
+        {
+          "file": "src/main/ipc/worktree-base-directory-watcher.test.ts",
+          "assertions": [
+            "linked index bursts produce zero notifyWorktreesChanged calls and one debounced status-only notification",
+            "linked HEAD and locked metadata still produce a structural worktree notification",
+            "status-only head moves emit head identities without structural fanout and only when heads actually changed",
+            "structural notifications re-baseline head identities silently and SSH watches never read identities",
+            "SSH-shaped index renames are status-only while overflow remains conservatively structural"
+          ]
+        },
+        {
+          "file": "src/main/ipc/worktree-base-directory-poller.test.ts",
+          "assertions": [
+            "non-darwin git-common polling emits entry create/delete and allowlisted HEAD/index leaf events",
+            "linked HEAD rewrites are detected even after restoring the entry-directory mtime",
+            "linked and primary HEAD reflog appends emit despite bumping no watched leaf or entry dir",
+            "in-place index rewrites surface through the periodic backstop re-stat",
+            "primary checkout HEAD changes and macOS narrow watch/fallback behavior still emit"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts",
+          "assertions": [
+            "Source Control nudges only for the active visible repo on structural and status-only signals",
+            "preload subscriptions and terminal command-finished listeners are cleaned up"
+          ]
+        },
+        {
+          "file": "src/main/ipc/worktree-head-identity-reader.test.ts",
+          "assertions": [
+            "loose-ref, packed-refs, detached, unborn, and relative-gitdir layouts resolve or skip without spawning Git",
+            "traversal-shaped or backslash/colon symrefs are rejected before any path join and only hex object ids are ever emitted"
+          ]
+        },
+        {
+          "file": "src/renderer/src/hooks/worktree-head-identity-apply.test.ts",
+          "assertions": [
+            "head identities patch matching rows by path (including Windows separator/casing drift) and skip unknown rows"
+          ]
+        },
+        {
+          "file": "src/renderer/src/hooks/useIpcEvents.test.ts",
+          "assertions": [
+            "renderer preload API fixtures include the status-metadata and head-identity subscription contracts"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktree-base-directory-event-filter.test.ts src/main/ipc/worktree-base-directory-watcher.test.ts src/main/ipc/worktree-base-directory-poller.test.ts src/main/ipc/worktree-head-identity-reader.test.ts src/renderer/src/hooks/worktree-head-identity-apply.test.ts src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts src/renderer/src/hooks/useIpcEvents.test.ts",
+          "result": "passed",
+          "durationSeconds": 3.12,
+          "summary": "7 files and 130 tests passed locally, adding head-identity emit-on-change without structural fanout, reflog status triggers, config.worktree structural classification, the in-place index backstop, and the spawn-free head reader with symref traversal rejection and hex-object-id output validation."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "focused main/preload/renderer unit and polling tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "New experimental deterministic gate with one local macOS run; needs CI soak before promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The watcher count assertions fail against the old single-signal classifier because linked index events call notifyWorktreesChanged. Saved CI red/green artifacts are still needed before blocking promotion."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Index-only bursts produce zero structural notifications, so renderer fetchWorktrees and detected-worktree cache invalidation are not reached. The non-darwin poller stays bounded and non-overlapping, compares HEAD/gitdir/locked signatures every tick, and gates linked index inspection behind the entry-directory signature. A 30-second live Electron run with 2,000 external linked-status calls delivered 50 ordered input chunks and recorded zero Orca-owned git worktree spawns across six diagnostic windows; a locked create/delete positive control still caused structural refreshes."
+      },
+      "promotionCriteria": [
+        "Run in soak for at least 100 consecutive passes or 14 days across required CI platforms.",
+        "Attach live Electron main-thread diagnostic evidence for repeated linked-worktree index rewrites while typing.",
+        "Add Linux/Windows live watcher evidence if shared poller-layer coverage diverges from platform behavior."
+      ],
+      "knownGaps": [
+        "The live Electron diagnostic and screenshot evidence must remain attached to the motivating PR for durable review.",
+        "Linux and Windows are forced through the shared non-darwin poller in unit tests but are not live-tested here.",
+        "Git loose ref watching remains outside this incident fix by design.",
+        "SSH watches classify head-move triggers but skip the metadata-read identity diff; remote background-worktree heads still wait on a structural event or activation."
+      ],
+      "demotionRule": "Keep experimental or demote if the focused gate flakes without a product or harness bug, if index-only churn can emit worktrees:changed, or if structural add/remove/HEAD/lock changes fail to converge."
+    },
+    {
+      "id": "editor.live-log-append-stability",
+      "title": "Long live session logs retain their Monaco viewport while appending",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "editor-runtime",
+      "layer": "renderer-electron-contract",
+      "surfaces": ["Agent Session History View Log", "Monaco external-content reconciliation", "renderer crash containment"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Focused tests and real-Monaco 9/50 MiB benchmarks are platform-independent. Local macOS Electron evidence opens a synthetic 9 MiB transcript through Agent Session History at fixed 900x720 viewport, 13px font, 1x zoom, and asserts the full 9 MiB model length loaded as a font-metric-independent containment check (word-wrap pixel geometry varies ~10% across runners, so a generous content-height floor is only a collapsed/truncated-render smoke check), then verifies three five-second-cadence watcher appends with Find open and closed. Live Windows/Linux evidence remains uncollected.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/pull/8432"],
+      "invariant": "Append-only external file growth changes only Monaco's model suffix, retaining the viewport, selection, Find state, and renderer liveness above the append point; arbitrary rewrites continue to replace the model content.",
+      "oracle": "Focused tests assert one post-mount content owner, actual outer lifecycle remount ordering across retained path models, exact end-of-model suffix edits with one model read, no-op equality, and full replacement for non-appends. With Node forced GC, real-Monaco benchmarks alternate 30 suffix and 30 replacement samples after five warmups on fresh equivalent models at 9 and 50 MiB, forcing GC and event-loop settlement between every arm. The Electron scenario alternates an e2e-only legacy setValue red control and the fixed watcher append from restored equivalent model/geometry at the measured legacy-failure cadence, asserting that the control disrupts anchor state while the fixed path preserves visible ranges, selection, complete Find state, scroll offset, renderer survival, and forced-GC heap/native-memory budgets.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/editor/monaco-content-sync.test.ts src/renderer/src/components/editor/MonacoEditor.content-owner.test.tsx src/renderer/src/components/editor/EditorContent.monaco-lifecycle.test.tsx",
+        "node --expose-gc ./node_modules/vitest/vitest.mjs bench src/renderer/src/components/editor/monaco-content-sync.bench.ts --pool=threads",
+        "pnpm run test:e2e -- tests/e2e/agent-session-log-tail-stability.spec.ts --workers=1"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/editor/monaco-content-sync.test.ts",
+        "src/renderer/src/components/editor/MonacoEditor.content-owner.test.tsx",
+        "src/renderer/src/components/editor/EditorContent.monaco-lifecycle.test.tsx",
+        "src/renderer/src/components/editor/monaco-content-sync.bench.ts",
+        "tests/e2e/agent-session-log-tail-stability.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/editor/monaco-content-sync.test.ts",
+          "assertions": [
+            "append-only drift reads the current model once and inserts only at the previous model end",
+            "identical content emits no edit and non-append drift retains full replacement plus undo stops",
+            "a stale retained target model reconciles on mount without explicit undo stops while prior-path content and undo history remain isolated"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/editor/MonacoEditor.content-owner.test.tsx",
+          "assertions": ["the Monaco wrapper receives defaultValue and no controlled value prop"]
+        },
+        {
+          "file": "src/renderer/src/components/editor/EditorContent.monaco-lifecycle.test.tsx",
+          "assertions": ["a same-pane path switch unmounts the prior outer Monaco before real mount reconciliation refreshes the stale target; the prior retained model content and undo sentinel remain untouched"]
+        },
+        {
+          "file": "src/renderer/src/components/editor/monaco-content-sync.bench.ts",
+          "assertions": ["with forced GC and deterministic settlement between every arm, fresh real-Monaco 9 MiB and 50 MiB models alternate 30 append and 30 replacement samples after five warmups; append p95 stays below 50/100ms and at least 2x faster"]
+        },
+        {
+          "file": "tests/e2e/agent-session-log-tail-stability.spec.ts",
+          "assertions": [
+            "production Agent Session History opens a synthetic 9 MiB View Log and confirms the full model length loaded as font-metric-independent containment, with a generous content-height floor as a collapsed/truncated-render smoke check",
+            "an executable e2e-only legacy setValue control disrupts selection/Find/anchor state at each fixed-geometry five-second sample, then restores the equivalent model state before the fixed arm",
+            "three alternating watcher suffix appends preserve visible ranges, selection, scroll offset, Find open/query/active-match state, and exact suffix content",
+            "the renderer remains responsive with no render-process-gone event and forced-GC JS-heap/working-set/private-memory peak and retained budgets hold against paired legacy controls"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/editor/monaco-content-sync.test.ts src/renderer/src/components/editor/MonacoEditor.content-owner.test.tsx src/renderer/src/components/editor/EditorContent.monaco-lifecycle.test.tsx",
+          "result": "passed",
+          "durationSeconds": 5,
+          "summary": "Focused editor ownership, edit-shape, mount reconciliation, lifecycle-key, and actual same-pane retained-model remount tests passed."
+        },
+        {
+          "date": "2026-07-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "node --expose-gc ./node_modules/vitest/vitest.mjs bench src/renderer/src/components/editor/monaco-content-sync.bench.ts --pool=threads",
+          "result": "passed",
+          "durationSeconds": 75,
+          "summary": "Forced-GC, settled, alternating fresh-model Monaco p95: 9 MiB append 4.02-5.51ms versus replacement 81.42-83.76ms; 50 MiB append 22.72-26.60ms versus replacement 445.11-449.21ms."
+        },
+        {
+          "date": "2026-07-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run test:e2e -- tests/e2e/agent-session-log-tail-stability.spec.ts --workers=1",
+          "result": "passed",
+          "durationSeconds": 78,
+          "summary": "The production View Log journey alternated retained e2e-only legacy-red controls with fixed appends from restored equivalent state; every control detected instability while the fixed path retained viewport, selection, complete Find state, renderer liveness, and normalized forced-GC/native memory budgets."
+        }
+      ],
+      "runtimeBudget": { "p95Seconds": 600, "scope": "local focused renderer tests plus one Electron production-journey scenario" },
+      "flakeHistory": { "status": "unknown", "evidence": "New deterministic gate with local macOS passes; CI soak history is not yet available." },
+      "redGreenEvidence": { "status": "complete", "evidence": "The retained Electron gate itself executes the former read-only wrapper setValue behavior behind MODE=e2e at fixed 900x720, 13px, 1x zoom, the full 9 MiB model length loaded (with a generous content-height floor, since word-wrap pixel geometry is runner-dependent), and five-second cadence. The control retains a flat incoming value like the former controlled IPC prop. Each legacy arm must disrupt selection, Find active-match state, visible range, or scroll anchor, then restore identical model length/tail/geometry and anchor state before the fixed watcher arm; every fixed arm must preserve them. Production builds never install the control. The original exact-file dev repro also recorded renderer exit code 5." },
+      "performanceBudget": { "required": true, "evidence": "Every update retrieves the model value once and performs at most one equality-or-prefix comparison; a matching append submits only the suffix. The registered Node command requires --expose-gc and --pool=threads so worker GC is available; alternating fresh real-Monaco arms force GC and deterministic event-loop settlement after every operation. Observed p95 ranges: 9 MiB append 4.02-5.51ms versus replacement 81.42-83.76ms; 50 MiB append 22.72-26.60ms versus replacement 445.11-449.21ms. Electron alternates each legacy replacement control and fixed watcher suffix from equivalent restored model state/geometry, samples forced-GC JS heap plus app.getAppMetrics renderer working set and OS private memory before/after/settled, asserts retained memory within max(20MiB,10%), and requires suffix peak deltas for jsHeapMb, workingSetMb, and privateMb not exceed the paired legacy controls." },
+      "promotionCriteria": [
+        "Collect stable soak history on macOS, Linux, and Windows.",
+        "Accumulate 100 consecutive deterministic gate passes or 14 days without unexplained flakes."
+      ],
+      "knownGaps": [
+        "No live Windows or Linux View Log evidence yet."
+      ],
+      "demotionRule": "Quarantine the Electron scenario if it flakes without a product or harness bug; demote if viewport/Find drift, renderer loss, p95 regression, or memory retention exceeds the registered budgets."
+    },
     {
       "id": "terminal-session.snapshot-freshness",
       "title": "Stale liveness snapshots cannot close newer PTY bindings",
@@ -1772,10 +2017,11 @@
         "remote-runtime"
       ],
       "coveredPlatforms": [
-        "macos"
+        "macos",
+        "linux"
       ],
       "coveredProviders": [],
-      "coverageNotes": "Local macOS evidence on main@1282f5c2d, deterministic renderer-unit coverage for the Linux/Sogou candidate-key policy, and a local Electron/CDP live-PTY Sogou-style repro. Real Linux/Sogou OS IME automation, Windows ConPTY post-agent reset, and the CJK/Vietnamese/Arabic matrix remain registered gaps.",
+      "coverageNotes": "Local macOS and containerized Linux evidence, deterministic renderer-unit coverage for the Linux/Sogou candidate-key policy including the legacy orphaned-keyup fallback, and Electron/CDP live-PTY Sogou-style repros. Real Linux/Sogou OS IME automation, Windows ConPTY post-agent reset, and the CJK/Vietnamese/Arabic matrix remain registered gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6699",
         "https://github.com/stablyai/orca/pull/6682",
@@ -1783,9 +2029,10 @@
         "https://github.com/stablyai/orca/pull/6999"
       ],
       "invariant": "Composition, native text forwarding, synthetic input, paste, and platform keyboard bypass paths must not send preedit/control bytes before commit and must commit text exactly once to the intended PTY.",
-      "oracle": "The current renderer-unit slice asserts native text commits route to the intended PTY once, composition/preedit bookkeeping does not leak premature text, input-source classification handles synthetic/native paths, paste/runtime forwarding avoids duplicate terminal payloads for covered fixtures, and Linux/Sogou candidate Space/digit selectors do not leak keydown/keypress/keyup while ordinary post-IME typing remains available. The Electron/CDP live-PTY repro verifies Sogou-style Space and digit candidate selectors submit only the committed Chinese text. Real IME paths and the full CJK/Vietnamese/Arabic/JIS-yen matrix run in follow-up platform soak where automation is possible.",
+      "oracle": "The current renderer-unit slice asserts native text commits route to the intended PTY once, composition/preedit bookkeeping does not leak premature text, input-source classification handles synthetic/native paths, paste/runtime forwarding avoids duplicate terminal payloads for covered fixtures, and Linux/Sogou candidate Space/digit selectors do not leak keydown/keypress/keyup while ordinary and long-held letter-to-digit typing remains available. The Electron/CDP live-PTY repro verifies Sogou-style Space and digit selectors submit only the committed Chinese text, while the legacy orphaned-letter-keyup sequence sends no selector byte to the PTY. Real legacy IME commit preservation and the full CJK/Vietnamese/Arabic/JIS-yen matrix run in follow-up platform soak where automation is possible.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/terminal-ime-input-source.test.ts src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-linux-candidate-state.test.ts",
         "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts"
       ],
       "testFiles": [
@@ -1794,6 +2041,7 @@
         "src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-ime-linux-candidate-state.test.ts",
         "src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts",
         "src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
         "tests/e2e/chinese-ime-chat-input-repro.spec.ts"
@@ -1835,6 +2083,14 @@
           ]
         },
         {
+          "file": "src/renderer/src/components/terminal-pane/terminal-ime-linux-candidate-state.test.ts",
+          "assertions": [
+            "an orphaned plain-letter keyup arms exactly the next bare digit guard",
+            "ordinary, overlapping, shifted, and long-held letter keydowns keep following digits available",
+            "physical letter tracking survives cross-pane focus handoff and clears on renderer-window blur"
+          ]
+        },
+        {
           "file": "src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts",
           "assertions": [
             "standalone Linux 229 keydowns reach xterm while Windows 229 keydowns stay suppressed",
@@ -1852,11 +2108,39 @@
           "assertions": [
             "Sogou-style Space candidate selection submits only the committed Chinese character",
             "Sogou-style digit candidate selection submits only the committed Chinese phrase",
-            "Post-composition Sogou-style digit selection stays out of the PTY after compositionend"
+            "Post-composition Sogou-style digit selection stays out of the PTY after compositionend",
+            "Legacy orphaned-letter-keyup digit selection submits no selector byte to the PTY; real legacy candidate commit preservation remains a platform gap"
           ]
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-07-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-linux-candidate-state.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.619,
+          "summary": "1 state test file and 10 tests passed on macOS, including orphan-keyup, shifted/modifier-changed releases, intervening-key cancellation, cross-pane focus handoff, window/terminal blur cleanup, and long-held-letter coverage; the complete 8-file slice also passed 158 tests."
+        },
+        {
+          "date": "2026-07-11",
+          "runner": "local",
+          "platform": "linux",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-linux-candidate-state.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.747,
+          "summary": "1 state test file and 10 tests passed in Debian 12 arm64 Docker under Node 24, including orphan-keyup, shifted/modifier-changed releases, intervening-key cancellation, cross-pane focus handoff, window/terminal blur cleanup, and long-held-letter coverage; the complete 8-file slice also passed 158 tests."
+        },
+        {
+          "date": "2026-07-11",
+          "runner": "local",
+          "platform": "linux",
+          "command": "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts",
+          "result": "passed",
+          "durationSeconds": 30.3,
+          "summary": "Debian 12 arm64 Docker with Node 24 and Xvfb passed both live Electron/PTY IME scenarios; the orphaned-letter-keyup candidate digit submitted no selector byte, and the real-Codex opt-in scenario was skipped."
+        },
         {
           "date": "2026-07-07",
           "runner": "local",
@@ -1890,7 +2174,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Terminal IME hot-path audit clean on 2026-07-07: candidate guard adds O(1) boolean checks plus a bounded Space/digit release map; composition listeners are disposed with pane lifecycle; no polling, IPC fan-out, subprocess work, or SSH/remote transport cost added."
+        "evidence": "Terminal IME hot-path audit clean on 2026-07-11: candidate guards add O(1) boolean checks plus bounded per-pane Space/digit state and one renderer-scoped currently pressed physical-letter set; ref-counted renderer and pane blur listeners are disposed with pane lifecycle; no per-pane keyboard-event fan-out, polling, IPC, subprocess work, or SSH/remote transport cost added."
       },
       "promotionCriteria": [
         "Cover deterministic byte/cell oracles first.",
@@ -1997,16 +2281,17 @@
         "macos"
       ],
       "coveredProviders": [],
-      "coverageNotes": "Deterministic main/renderer tests run on macOS and exercise simulated Windows plus POSIX/Linux process-confirmation behavior. They cover exact local-ConPTY membership, detached-child rejection, unchanged SSH/WSL/remote fallback, process-confirmed Droid routing and launch-triggered confirmation, typed-alias and forged-OSC isolation, shells without OSC 133, split/detach ownership with preserved shell classification, stale PTY exit/rebind rejection, command-generation revocation, daemon v21 warm-reattach identity, unavailable inspection, and lazy subprocess/RPC callback counts. The Electron byte test runs only on Windows; live Windows and Linux PTY evidence remains uncollected. Test failures report exact expected bytes; no product telemetry or raw terminal logging is added.",
+      "coverageNotes": "Deterministic main/renderer tests run on macOS and exercise simulated Windows plus POSIX/Linux process-confirmation behavior. They cover exact local-ConPTY membership, detached-child rejection, SSH and paired-runtime host-platform routing including legacy runtime PTY IDs, active-PTY ownership after worktree host changes, Windows-to-WSL routing, unknown-metadata fallback, production handler composition, KKP authorization on every host, process-confirmed Droid routing and launch-triggered confirmation, typed-alias and forged-OSC isolation, shells without OSC 133, split/detach ownership with preserved shell classification, stale PTY exit/rebind rejection, command-generation revocation, daemon v21 warm-reattach identity, unavailable inspection, and lazy subprocess/RPC callback counts. A live linux-arm64 Docker target additionally proved real relay deployment, SSH PTY host detection, and exact inactive/active KKP bytes. The Electron byte test runs only on Windows; live Windows evidence remains uncollected. Test failures report exact expected bytes; no product telemetry or raw terminal logging is added.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/7620",
         "https://github.com/stablyai/orca/pull/7668"
       ],
-      "invariant": "Shift+Enter sends CSI-u only when the active pane is a genuine local Windows ConPTY with allowlisted Droid ownership or fresh routing-trusted Droid process evidence. Every new command and PTY replacement revokes stale routing until current evidence settles. All other Windows panes preserve Esc+CR; non-Windows panes remain CSI-u; SSH/WSL/remote behavior is unchanged; split or reused panes cannot inherit sibling or prior-PTY authority; unrelated keys perform no agent or ConPTY lookup.",
-      "oracle": "Main/renderer tests assert exact bytes for local and non-local Windows plus non-Windows policy cells. Fresh Windows process evidence authorizes bytes only after a recognized global candidate is intersected with the exact ConPTY console process list; detached descendants, helper failure/timeout/root-only fallback, stale PTY exit/rebind results, typed text, and hook/OSC output fail closed. A new OSC 133;C immediately publishes a routing-neutral generation, including during D-to-C races. In cmd.exe/Git Bash/custom shells without OSC 133, accepted inferred commands start the same fresh generation; accepted submit/interrupt, title exit, focus, and visibility revoke trusted Droid bytes while one bounded confirmation runs. Detach preserves the live PTY's source shell override so WSL/native classification cannot change with the current default. Ordinary fast shell commands use cached/no-scan paths; routing-relevant confirmation bypasses cached process snapshots and keeps the bounded three-read ladder. Daemon protocol v21 persists only an allowlisted launchAgent; warm reattach uses it as a display/confirmation hint and restores routing only after current process proof. The Windows Electron test focuses the real xterm textarea and records exact renderer-to-main PTY writes.",
+      "invariant": "Shift+Enter key recognition follows the client OS, while emitted bytes follow the active application and PTY host: active Kitty keyboard protocol authorizes CSI-u on every host; otherwise Windows hosts use Esc+CR except when allowlisted Droid ownership or fresh routing-trusted Droid process evidence authorizes CSI-u, and non-Windows hosts use Esc+CR. The active SSH connection, remote-runtime PTY owner, or live local session outranks later worktree ownership changes, and missing host-platform metadata falls back to the client. Every new command and PTY replacement revokes stale agent routing until current evidence settles; split or reused panes cannot inherit sibling or prior-PTY authority; unrelated keys perform no host, agent, protocol, or ConPTY lookup.",
+      "oracle": "Renderer tests assert exact bytes across client/PTY-host combinations, including Kitty keyboard protocol active and inactive on Windows and non-Windows hosts, and prove SSH identity, the environment encoded in an active remote-runtime PTY id, and live local-session identity outrank current worktree ownership, while unavailable platform metadata falls back to the client. A live linux-arm64 SSH PTY independently captured Esc+CR with KKP inactive and CSI-u with KKP active. Fresh Windows process evidence authorizes Droid bytes only after a recognized global candidate is intersected with the exact ConPTY console process list; detached descendants, helper failure/timeout/root-only fallback, stale PTY exit/rebind results, typed text, and hook/OSC output fail closed. A new OSC 133;C immediately publishes a routing-neutral generation, including during D-to-C races. In cmd.exe/Git Bash/custom shells without OSC 133, accepted inferred commands start the same fresh generation; accepted submit/interrupt, title exit, focus, and visibility revoke trusted Droid bytes while one bounded confirmation runs. Detach preserves the live PTY's source shell override so WSL/native classification cannot change with the current default. Ordinary fast shell commands use cached/no-scan paths; routing-relevant confirmation bypasses cached process snapshots and keeps the bounded three-read ladder. Daemon protocol v21 persists only an allowlisted launchAgent; warm reattach uses it as a display/confirmation hint and restores routing only after current process proof. The Windows Electron test focuses the real xterm textarea and records exact renderer-to-main PTY writes.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/daemon-server.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/daemon/pty-subprocess-foreground-scan-cadence.test.ts src/main/daemon/pty-subprocess.test.ts src/main/ipc/pty.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/renderer/src/components/terminal-pane/pane-foreground-agent-tracker.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/terminal-shortcut-policy.test.ts src/renderer/src/components/terminal-pane/terminal-windows-shift-enter.test.ts src/renderer/src/store/slices/store-cascades.test.ts src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts src/shared/agent-process-recognition.test.ts src/shared/process-table-snapshot.test.ts tests/e2e/terminal-foreground-confirmation.unit.test.ts",
-        "pnpm run test:e2e -- tests/e2e/terminal-shortcuts.spec.ts"
+        "pnpm run test:e2e -- tests/e2e/terminal-shortcuts.spec.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/keyboard-handlers.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts src/renderer/src/components/terminal-pane/terminal-input-host-platform.test.ts"
       ],
       "testFiles": [
         "src/main/daemon/daemon-foreground-confirmation-protocol.test.ts",
@@ -2021,9 +2306,12 @@
         "src/main/providers/local-pty-provider.test.ts",
         "src/main/providers/windows-conpty-process-membership.test.ts",
         "src/renderer/src/components/terminal-pane/pane-foreground-agent-tracker.test.ts",
+        "src/renderer/src/components/terminal-pane/keyboard-handlers.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
         "src/renderer/src/components/terminal-pane/pty-transport.test.ts",
+        "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-input-host-platform.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-shortcut-policy.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-windows-shift-enter.test.ts",
         "src/renderer/src/store/slices/store-cascades.test.ts",
@@ -2094,11 +2382,32 @@
           ]
         },
         {
+          "file": "src/renderer/src/components/terminal-pane/keyboard-handlers.test.ts",
+          "assertions": [
+            "the production keyboard-policy boundary requires active-host routing and composes macOS Shift+Enter with Windows PTY bytes"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.test.ts",
+          "assertions": [
+            "a legacy remote PTY id retains the transport's captured runtime environment identity"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-input-host-platform.test.ts",
+          "assertions": [
+            "SSH terminals use remote-platform metadata and execution-host identity when the active transport has not captured a connection id",
+            "encoded and legacy active remote-runtime PTY identities plus a live local PTY session outrank later worktree host changes",
+            "a live WSL session normalizes to a Linux terminal host",
+            "missing SSH/runtime platform metadata and local terminals fall back to the client platform"
+          ]
+        },
+        {
           "file": "src/renderer/src/components/terminal-pane/terminal-shortcut-policy.test.ts",
           "assertions": [
             "Windows defaults and non-Droid agents preserve Esc+CR while explicit Droid capability selects CSI-u",
-            "SSH, WSL, and remote Windows-client panes preserve Esc+CR without consulting the Droid capability",
-            "non-Windows Shift+Enter remains CSI-u and unrelated keys invoke neither agent nor ConPTY callbacks"
+            "Windows and non-Windows PTYs reached cross-OS use CSI-u only with active Kitty keyboard protocol unless trusted Windows Droid evidence independently authorizes it",
+            "unrelated keys invoke neither host, agent, nor protocol callbacks"
           ]
         },
         {
@@ -2199,20 +2508,20 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Callback-count tests prove unrelated ordinary keys invoke neither ConPTY nor agent resolution. Windows Shift+Enter performs two store reads: one local-ConPTY classification with an O(tabs-in-worktree) tab lookup, then two pane-keyed O(1) ownership lookups. Typed text performs no routing write. Ordinary fast OSC 133;C-to-D shell commands perform no fresh confirmation RPC or process scan. An accepted submit/interrupt while trusted Droid is current, a typed allowlisted agent command, title exit, focus, visibility transition, or an idle burst after trusted Droid Shift+Enter can schedule the bounded confirmation ladder; each event cancels/deduplicates prior work and no timer recurs after settling. Windows confirmation performs one fresh process-table scan and forks exact ConPTY membership only after a recognized agent candidate appears; no recognized candidate makes zero helper calls. Same-turn fresh requests share one scan and later arrivals queue at most one successor. Recovery remains three bounded one-shot reads (350 ms, 1.2 s, 6 s). No polling loop, provider fanout, persistent listener, hidden-pane wake loop, or per-printable-key work is added."
+        "evidence": "Callback-count tests prove unrelated ordinary keys invoke neither host, agent, nor Kitty-protocol resolution. Host and agent callbacks are created once per keyboard effect, so printable input adds no per-key allocations or store reads. Shift+Enter performs bounded synchronous active-transport and indexed store lookups, plus at most one pane-keyed protocol-mode lookup when trusted Windows Droid evidence does not already authorize CSI-u, with no IPC, RPC, subprocess, polling, listener, or timer. Typed text performs no routing write. Ordinary fast OSC 133;C-to-D shell commands perform no fresh confirmation RPC or process scan. An accepted submit/interrupt while trusted Droid is current, a typed allowlisted agent command, title exit, focus, visibility transition, or an idle burst after trusted Droid Shift+Enter can schedule the bounded confirmation ladder; each event cancels/deduplicates prior work and no timer recurs after settling. Windows confirmation performs one fresh process-table scan and forks exact ConPTY membership only after a recognized agent candidate appears; no recognized candidate makes zero helper calls. Same-turn fresh requests share one scan and later arrivals queue at most one successor. Recovery remains three bounded one-shot reads (350 ms, 1.2 s, 6 s). No polling loop, provider fanout, persistent listener, hidden-pane wake loop, or per-printable-key work is added."
       },
       "promotionCriteria": [
         "Run the exact PTY-byte Electron oracle on Windows without silent platform skips.",
-        "Collect stable runtime and flake history for local and daemon Windows ConPTY while retaining deterministic unchanged-provider assertions for SSH, WSL, and remote runtime.",
+        "Collect stable runtime and flake history for local and daemon Windows ConPTY while retaining deterministic host-routing assertions for SSH, WSL, and remote runtime.",
         "Attach saved intentional-break evidence for Droid capability removal and split-sibling identity leakage."
       ],
       "knownGaps": [
-        "No Windows runner or live Linux PTY evidence is attached; the Electron byte test skips on macOS and Linux, while Linux behavior is covered only by deterministic POSIX unit paths.",
-        "Droid inside SSH, WSL, or remote-runtime intentionally keeps the pre-existing Windows-client Esc+CR behavior because local foreground confirmation is unavailable; this PR narrows the exception to issue #7620's local ConPTY surface.",
+        "No Windows runner or live Windows PTY evidence is attached; the Electron byte test skips on macOS and Linux, while a live Linux SSH PTY covers only the remote Linux host path.",
+        "Droid agent-specific CSI-u authorization is available only from trusted pane evidence; without it, Windows and non-Windows PTY hosts depend on the application's Kitty keyboard protocol state.",
         "The Electron test injects allowlisted pane identity rather than launching the real Droid and Antigravity binaries.",
         "If both Windows process-enumeration backends remain unavailable through the bounded ladder, routing fails closed to the legacy Esc+CR path; no live Droid artifact covers that degraded host configuration.",
         "Protocol v21 restarts older daemons because the minimal persisted launchAgent is a new contract; sessions preserved by pre-v21 daemons cannot supply warm-reattach launch ownership and fail closed until current process confirmation or restart.",
-        "No live daemon, SSH, WSL, remote-runtime, paired-web, or restore/replay byte artifact has been collected.",
+        "No live daemon, WSL, remote-runtime, paired-web, or restore/replay byte artifact has been collected; SSH is covered only by a macOS-client-to-Linux-host relay run.",
         "A running PTY keeps its spawn-time ORCA_PANE_KEY after pane-to-tab detach. This change transfers launch/process routing evidence and retires the stale hook snapshot, but does not redesign future hook reattribution across tab IDs."
       ],
       "demotionRule": "Keep non-blocking or demote to protection none if the Windows byte test silently skips, flakes without an actionable artifact, routes bytes using tab/title/terminal-output heuristics, or adds any ordinary-key lookup, IPC, polling, scan, or lifecycle leak."
@@ -3582,6 +3891,288 @@
         "No live Electron reload-survival assertion yet — the gate proves the main-side accounting reset, not the full renderer reattach paint."
       ],
       "demotionRule": "Demote or quarantine if the gate flakes once without a product bug or harness bug filed to the owner."
+    },
+    {
+      "id": "runtime-files.watcher-process-isolation",
+      "title": "Runtime and SSH relay watcher faults stay process-isolated without disrupting host services",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime-platform",
+      "layer": "process-rpc-contract",
+      "surfaces": [
+        "headless orca serve",
+        "paired file explorer",
+        "runtime editor external-change detection",
+        "desktop filesystem watcher",
+        "SSH relay filesystem watcher and live PTYs"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "remote-runtime",
+        "ssh"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local",
+        "remote-runtime",
+        "ssh"
+      ],
+      "coverageNotes": "Deterministic tests cover a four-child healthy runtime pool plus at most four bounded quarantine children, one quarantine attempt per watch lifetime, queue-aware cancellation, bounded initial and crash-resubscribe crawls, physical desktop-install abort, stale-generation rejection, per-child stat bounds, final-overflow RPC delivery, and renderer eviction before terminal callbacks can retry. A built-entry macOS harness drives the real supervisor, kills its child with SIGSEGV, then requires automatic resubscription and a later event. SSH now bundles the same child boundary beside relay.js, requires both artifacts for install completeness, and preserves registration-owned same-root cancellation. A built-relay harness kills that child and requires the original relay PID and existing PTY to survive before overflow and precise events resume.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/5308",
+        "https://github.com/stablyai/orca/issues/7547",
+        "https://github.com/stablyai/orca/issues/8212"
+      ],
+      "invariant": "Local runtime and SSH relay roots use at most four shared watcher children while healthy and at most four additional quarantine children after shard failure. Cancelling queued setup removes only that request; cancelling an active crawl restarts one shard and restores its healthy records. Setup deadlines start only when the child owns the crawl; the runtime RPC transport owns the normal 15-second initial budget, while a 60-second recovery deadline quarantines a root that would otherwise pin its shard. A crash-fused shared shard moves affected roots into the bounded quarantine pool, and a second fused quarantine ends those watch lifetimes instead of spawning replacements indefinitely. Every interrupted setup emits overflow after recovery, event delivery stays bounded, and the SSH relay, PTYs, Git, and other filesystem operations never load the watcher native addon or share its fault boundary.",
+      "oracle": "Fill the four-child healthy pool with multiple roots, inject IPC disconnect-before-exit, queued and active setup cancellation, initial and crash-resubscribe timeouts, and shard-level terminal failure, then assert healthy roots are restored, affected roots spread across no more than four quarantine supervisors, a second quarantine fuse creates no replacement, stale generations stop delivering, and existing same-root clients receive overflow plus later events without error/end. Abort a pending desktop install and require worktree close and app shutdown to settle before the native crawl resolves. Verify relay build hashes and remote install probes require both relay.js and relay-watcher.js. Launch the built relay with a real PTY and Parcel watch, kill only the watcher child, and require the same relay PID and PTY to answer before a replacement child delivers overflow and a post-crash event.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/providers/ssh-filesystem-provider.test.ts src/renderer/src/runtime/runtime-file-client.test.ts",
+        "pnpm run build:electron-vite",
+        "node config/scripts/runtime-file-watcher-fault-harness.mjs",
+        "ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mjs",
+        "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
+        "pnpm run build:relay",
+        "node config/scripts/relay-watcher-fault-harness.mjs"
+      ],
+      "testFiles": [
+        "src/main/ipc/parcel-watcher-process.test.ts",
+        "src/main/ipc/runtime-watcher-process-pool.test.ts",
+        "src/main/ipc/parcel-watcher-process-entry.test.ts",
+        "src/main/ipc/parcel-watcher-event-delivery.test.ts",
+        "src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts",
+        "src/main/ipc/filesystem-watcher-wsl.test.ts",
+        "src/main/runtime/file-watcher-host.test.ts",
+        "src/main/runtime/rpc/methods/files.test.ts",
+        "src/main/providers/ssh-filesystem-provider.test.ts",
+        "src/renderer/src/runtime/runtime-file-client.test.ts",
+        "config/scripts/runtime-file-watcher-fault-harness.mjs",
+        "src/relay/relay-filesystem-watch-registry.test.ts",
+        "src/relay/fs-handler.test.ts",
+        "src/relay/subprocess.test.ts",
+        "src/main/ssh/ssh-relay-versioned-install.test.ts",
+        "config/scripts/package-electron-runtime-contract.test.mjs",
+        "config/scripts/relay-watcher-fault-harness.mjs"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/ipc/parcel-watcher-process.test.ts",
+          "assertions": [
+            "initial-subscribe crashes complete with an interruption refresh",
+            "IPC disconnect recovery restores every existing root before accepting new setup",
+            "queued abort removes one request without restarting healthy roots, while active abort or crawl-scoped timeout restores the shard",
+            "a crash-resubscribe crawl deadline ends only the stuck root and tears down its shard process",
+            "missing built entries fail closed and unavailable canary storage remains optional",
+            "fault-harness PID reporting cannot clobber an existing filesystem path"
+          ]
+        },
+        {
+          "file": "src/main/ipc/runtime-watcher-process-pool.test.ts",
+          "assertions": [
+            "healthy roots spread across at most four shared supervisors before sharing",
+            "a supervisor-scoped failure spreads affected roots across at most four quarantine supervisors",
+            "a second fused quarantine creates no further replacement for that watch lifetime",
+            "a root-specific failure preserves healthy shard assignments",
+            "a live root whose crash-resubscribe times out moves to quarantine",
+            "an older same-root teardown cannot erase a newer watch lease's assignment"
+          ]
+        },
+        {
+          "file": "src/main/ipc/parcel-watcher-process-entry.test.ts",
+          "assertions": [
+            "queued cancellation removes the request before Parcel starts its crawl",
+            "active cancellation requests one host restart and emits no stale subscribed acknowledgement",
+            "runtime batches receive directory metadata before child IPC",
+            "an FSEvents dropped-events error is reported as recoverable and later events continue",
+            "batches above the configured event limit become one overflow before stat or IPC fanout",
+            "while process.send is backpressured, later bursts retain at most one bounded pending batch and collapse excess paths to overflow",
+            "unsubscribe discards pending delivery before it can perform stale stat work"
+          ]
+        },
+        {
+          "file": "src/main/ipc/parcel-watcher-event-delivery.test.ts",
+          "assertions": [
+            "eight concurrent root batches never exceed eight active directory metadata stats within one child"
+          ]
+        },
+        {
+          "file": "src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts",
+          "assertions": [
+            "worktree deletion physically aborts pending native setup and settles before its crawl resolves",
+            "app shutdown physically aborts pending native setup and releases a late native handle"
+          ]
+        },
+        {
+          "file": "src/main/runtime/file-watcher-host.test.ts",
+          "assertions": [
+            "same-root clients share one physical watch and one client abort cannot cancel another owner's setup",
+            "shard failure preserves existing subscribers through isolated recovery and rejects stale-generation events",
+            "only failed isolated recovery ends subscribers, after a conservative overflow"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/files.test.ts",
+          "assertions": [
+            "pre-ready transport abort reaches RuntimeFileCommands as the owning AbortSignal",
+            "terminal watcher loss flushes a final overflow change before error/end and unregisters cleanup"
+          ]
+        },
+        {
+          "file": "src/main/providers/ssh-filesystem-provider.test.ts",
+          "assertions": [
+            "an SSH caller abort rejects promptly without cancelling another same-root subscriber's shared setup",
+            "the physical relay request is cancelled when the last pending subscriber leaves",
+            "provider disposal cancels pending setup and sends one remote unwatch"
+          ]
+        },
+        {
+          "file": "src/renderer/src/runtime/runtime-file-client.test.ts",
+          "assertions": [
+            "terminal error evicts the shared renderer watch before an error callback can synchronously retry",
+            "the old stream's later end cannot evict or orphan the replacement stream",
+            "the end response releases retained preload and main-process subscription bookkeeping",
+            "a later same-root listener opens a fresh server subscription instead of reusing a dead stream"
+          ]
+        },
+        {
+          "file": "src/relay/relay-filesystem-watch-registry.test.ts",
+          "assertions": [
+            "replacement emits overflow before later ordered events",
+            "terminal shard failure preserves same-root clients through recovery",
+            "pending setup aborts only after the last same-root client leaves",
+            "a missing child fails closed even if the relay inherits a VITEST environment"
+          ]
+        },
+        {
+          "file": "src/relay/fs-handler.test.ts",
+          "assertions": [
+            "shared watches retain the twenty-root budget and release after every client leaves"
+          ]
+        },
+        {
+          "file": "src/relay/subprocess.test.ts",
+          "assertions": [
+            "the real relay bundle serves PTY, filesystem, and Git requests with its adjacent watcher child"
+          ]
+        },
+        {
+          "file": "src/main/ssh/ssh-relay-versioned-install.test.ts",
+          "assertions": [
+            "remote completeness requires relay.js, relay-watcher.js, and the install sentinel"
+          ]
+        },
+        {
+          "file": "config/scripts/package-electron-runtime-contract.test.mjs",
+          "assertions": [
+            "every release platform packages and gates the hashed watcher child"
+          ]
+        },
+        {
+          "file": "config/scripts/runtime-file-watcher-fault-harness.mjs",
+          "assertions": [
+            "the built watcher entry delivers an event before fault injection",
+            "the harness parent survives watcher-child SIGSEGV",
+            "the real supervisor automatically replaces the child, resubscribes, and delivers a post-crash event"
+          ]
+        },
+        {
+          "file": "config/scripts/relay-watcher-fault-harness.mjs",
+          "assertions": [
+            "the built relay and existing PTY survive watcher-child fault injection",
+            "replacement emits overflow and a precise post-crash event"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
+          "result": "passed",
+          "durationSeconds": 4.5,
+          "summary": "Five relay registry, handler, bundled subprocess, install, and package contract files passed with 114 tests."
+        },
+        {
+          "date": "2026-07-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "node config/scripts/relay-watcher-fault-harness.mjs",
+          "result": "passed",
+          "durationSeconds": 0.61,
+          "summary": "The relay PID and existing PTY survived watcher-child SIGSEGV; overflow and precise events resumed from a replacement child."
+        },
+        {
+          "date": "2026-07-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/providers/ssh-filesystem-provider.test.ts src/renderer/src/runtime/runtime-file-client.test.ts",
+          "result": "passed",
+          "durationSeconds": 1.7,
+          "summary": "10 focused supervisor, pool, child-entry, delivery, desktop/WSL cleanup, runtime-host, RPC, SSH ownership, and renderer-client test files passed with 223 tests."
+        },
+        {
+          "date": "2026-07-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "node config/scripts/runtime-file-watcher-fault-harness.mjs",
+          "result": "passed",
+          "durationSeconds": 5,
+          "summary": "All 26 built-entry SIGSEGV injections preserved the parent, replaced and resubscribed the child, and delivered a post-crash event; watcher-canary temp-directory count remained 6 before and after the final five-run leak check."
+        },
+        {
+          "date": "2026-07-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "node config/scripts/runtime-file-watcher-fault-harness.mjs",
+          "result": "passed",
+          "durationSeconds": 0.3,
+          "summary": "The source-bundled real supervisor delivered through the built child before and after SIGSEGV; the parent survived and automatic resubscription used a replacement PID."
+        },
+        {
+          "date": "2026-07-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "node config/scripts/runtime-file-watcher-fault-harness.mjs",
+          "result": "passed",
+          "durationSeconds": 2.2,
+          "summary": "Ten consecutive invocations survived, automatically replaced and resubscribed the child, and delivered a post-crash event. The watcher-canary temp-directory count remained 8 before and after the loop."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 60,
+        "scope": "focused process/RPC contract tests plus built child fault harness"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "New deterministic unit coverage and ten consecutive local built-entry harness passes; still below the CI and soak history required for promotion."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Red tests reproduced the reviewed failures: IPC disconnect-before-exit orphaned existing roots, queue-admission deadlines cascaded shard replacement, a fused shard created one child per root, destructive desktop cleanup waited indefinitely for native setup, and synchronous renderer retry joined a terminal stream. Earlier red coverage also reproduced missing-entry fail-open, terminal recovery loss, stale same-root lease deletion, and unbounded per-child stat lanes. The bounded quarantine and cancellation rewrite passes those contracts, and the real-supervisor built-entry harness survives SIGSEGV with automatic replacement. CI/soak history is still absent."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Healthy operation is capped at four shared child processes instead of one child per root; based on the prior 51.9 MiB one-child measurement this bounds the unremeasured eight-root healthy ceiling near 207.6 MiB rather than the rejected 388.7 MiB per-root design. Degraded operation adds at most four quarantine children, distributes affected roots by least load, disposes empty slots, and permits no replacement after a quarantine shard itself fuses. Each child caps directory stats at eight across its assigned roots (at most 32 healthy or 64 total logical stat operations), each subscription retains at most one active plus one bounded pending batch, and no polling or serve-process stat fanout is added."
+      },
+      "promotionCriteria": [
+        "Run the built-entry SIGSEGV harness in soak for at least 100 consecutive passes or 14 days on macOS.",
+        "Add an eight-root/six-writer event-loop-delay soak artifact with an explicit latency budget.",
+        "Add a packaged orca serve pairing scenario that proves a connected client refreshes after child replacement."
+      ],
+      "knownGaps": [
+        "The fault harness bundles the real source supervisor and drives the built child, but it does not launch a packaged orca serve pairing session or exercise app.asar path resolution.",
+        "The four-child healthy and four-child quarantine memory ceilings are inferred from the earlier one-child measurement; direct degraded-state RSS plus sustained six-writer event-loop-delay and CPU soak evidence is still absent.",
+        "Linux native watcher fault containment is source-equivalent but not live fault-injected in this evidence run.",
+        "Windows runtime watches bypass this path; SSH registration ownership is deterministic-contract tested but not live-relay fault-injected."
+      ],
+      "demotionRule": "Demote or quarantine if the fault harness flakes without a product or harness bug, if healthy operation exceeds four runtime watcher children, if total healthy plus quarantine operation exceeds eight, if quarantine children outlive their roots or repeat after fusing, if event delivery becomes unbounded, or if metadata/stat work returns to the serve process."
     }
   ]
 }

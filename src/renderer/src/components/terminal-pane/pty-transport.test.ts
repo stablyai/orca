@@ -238,7 +238,18 @@ describe('createIpcPtyTransport', () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const localTransport = createIpcPtyTransport({
       cwd: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\alice\\repo',
-      shellOverride: 'wsl.exe'
+      shellOverride: 'wsl.exe',
+      projectRuntime: {
+        status: 'resolved',
+        runtime: {
+          kind: 'wsl',
+          hostPlatform: 'wsl',
+          projectId: 'repo',
+          distro: 'Ubuntu-24.04',
+          reason: 'project-override',
+          cacheKey: 'repo:wsl'
+        }
+      }
     })
     const sshTransport = createIpcPtyTransport({
       connectionId: 'ssh-1',
@@ -251,6 +262,51 @@ describe('createIpcPtyTransport', () => {
       shellOverride: 'wsl.exe'
     })
     expect(sshTransport.getLocalSessionMetadata?.()).toBeNull()
+  })
+
+  it('keeps captured Windows and WSL metadata when existing PTYs reattach', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const currentWslForWindowsPty = createIpcPtyTransport({
+      cwd: 'C:\\repo',
+      shellOverride: 'pwsh.exe',
+      projectRuntime: {
+        status: 'resolved',
+        runtime: {
+          kind: 'wsl',
+          hostPlatform: 'wsl',
+          projectId: 'repo',
+          distro: 'Ubuntu-24.04',
+          reason: 'project-override',
+          cacheKey: 'repo:wsl'
+        }
+      }
+    })
+    const currentWindowsForWslPty = createIpcPtyTransport({
+      cwd: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\alice\\repo',
+      shellOverride: 'wsl.exe',
+      projectRuntime: {
+        status: 'resolved',
+        runtime: {
+          kind: 'windows-host',
+          hostPlatform: 'win32',
+          projectId: 'repo',
+          reason: 'project-override',
+          cacheKey: 'repo:windows'
+        }
+      }
+    })
+
+    currentWslForWindowsPty.attach({ existingPtyId: 'windows-pty', callbacks: {} })
+    currentWindowsForWslPty.attach({ existingPtyId: 'wsl-pty', callbacks: {} })
+
+    expect(currentWslForWindowsPty.getLocalSessionMetadata?.()).toEqual({
+      cwd: 'C:\\repo',
+      shellOverride: 'pwsh.exe'
+    })
+    expect(currentWindowsForWslPty.getLocalSessionMetadata?.()).toEqual({
+      cwd: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\alice\\repo',
+      shellOverride: 'wsl.exe'
+    })
   })
 
   it('sends the missing-cwd fallback flag only for local IPC spawns', async () => {

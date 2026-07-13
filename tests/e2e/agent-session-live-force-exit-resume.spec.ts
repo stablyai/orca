@@ -196,6 +196,11 @@ test('resumes a live agent record after force-exit restart when pane PTY ownersh
       }
     )
 
+    // Drive the product's own quit-capture path (what the 60s timer / beforeunload
+    // run) so the live record is flushed deterministically instead of racing the
+    // debounced session writer before the poll below.
+    await page.evaluate(() => window.__store?.getState().captureAllSleepingAgentSessions())
+
     await expect
       .poll(() => persistedLiveRecordExists(session.userDataDir), {
         timeout: 15_000,

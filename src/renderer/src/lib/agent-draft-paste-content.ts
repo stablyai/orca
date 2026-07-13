@@ -16,10 +16,13 @@ const AGENT_DRAFT_PASTE_ESCAPE_CODE_POINT = 0x1b
 const AGENT_DRAFT_PASTE_INERT_ESCAPE_CODE_POINT = 0x241b
 const AGENT_DRAFT_PASTE_INERT_ESCAPE = '\u241b'
 
+export type AgentDraftPtyInputWriter = (data: string) => boolean | Promise<boolean>
+
 export async function sendAgentDraftPasteContent(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string,
-  content: string
+  content: string,
+  writePty?: AgentDraftPtyInputWriter
 ): Promise<boolean> {
   if (content.length > AGENT_DRAFT_PASTE_MAX_BYTES) {
     return false
@@ -29,10 +32,11 @@ export async function sendAgentDraftPasteContent(
     stopAfterBytes: AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES
   })
   if (!directMeasurement.exceededLimit) {
-    return await sendRuntimePtyInputVerified(
+    return await writeAgentDraftPtyInput(
       settings,
       ptyId,
-      [BRACKETED_PASTE_START, sanitizeTerminalPasteText(content), BRACKETED_PASTE_END].join('')
+      [BRACKETED_PASTE_START, sanitizeTerminalPasteText(content), BRACKETED_PASTE_END].join(''),
+      writePty
     )
   }
 
@@ -46,16 +50,16 @@ export async function sendAgentDraftPasteContent(
   for (const chunk of iterateAgentDraftPasteContentChunks(content)) {
     let accepted = false
     try {
-      accepted = await sendRuntimePtyInputVerified(settings, ptyId, chunk)
+      accepted = await writeAgentDraftPtyInput(settings, ptyId, chunk, writePty)
     } catch {
       if (bracketedPasteOpen && chunk !== BRACKETED_PASTE_END) {
-        await closeAgentDraftBracketedPaste(settings, ptyId)
+        await closeAgentDraftBracketedPaste(settings, ptyId, writePty)
       }
       return false
     }
     if (!accepted) {
       if (bracketedPasteOpen && chunk !== BRACKETED_PASTE_END) {
-        await closeAgentDraftBracketedPaste(settings, ptyId)
+        await closeAgentDraftBracketedPaste(settings, ptyId, writePty)
       }
       return false
     }
@@ -182,14 +186,24 @@ function yieldToAgentDraftPastePreflight(): Promise<void> {
   return new Promise((resolve) => globalThis.setTimeout(resolve, 0))
 }
 
+async function writeAgentDraftPtyInput(
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  ptyId: string,
+  data: string,
+  writePty?: AgentDraftPtyInputWriter
+): Promise<boolean> {
+  return writePty ? await writePty(data) : await sendRuntimePtyInputVerified(settings, ptyId, data)
+}
+
 async function closeAgentDraftBracketedPaste(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
-  ptyId: string
+  ptyId: string,
+  writePty?: AgentDraftPtyInputWriter
 ): Promise<void> {
   try {
     // Why: once the opener reached the PTY, a failed content chunk should not
     // leave the target TUI in bracketed-paste mode.
-    await sendRuntimePtyInputVerified(settings, ptyId, BRACKETED_PASTE_END)
+    await writeAgentDraftPtyInput(settings, ptyId, BRACKETED_PASTE_END, writePty)
   } catch {
     // The original write already failed; callers only need the paste to fail closed.
   }
