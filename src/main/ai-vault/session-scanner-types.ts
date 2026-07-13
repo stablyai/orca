@@ -12,6 +12,9 @@ export type AiVaultScanOptions = {
   additionalCodexSessionsDirs?: readonly string[]
   wslHomeDirs?: readonly string[]
   geminiSessionsDir?: string
+  // Why: Antigravity sessions live in ~/.gemini/antigravity-cli/conversations
+  // as per-conversation SQLite DBs; tests inject a temp dir here.
+  antigravityConversationsDir?: string
   copilotSessionsDir?: string
   cursorProjectsDir?: string
   opencodeStorageDir?: string

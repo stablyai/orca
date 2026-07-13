@@ -68,6 +68,9 @@ function resumableStateFactoryFor(
       return candidate.file.path.endsWith('.jsonl')
         ? () => createGeminiJsonlSessionResumeState(candidate.file)
         : null
+    // Why: Antigravity reads SQLite rows (protobuf blobs), not append-only
+    // JSONL, so it keeps unchanged-file reuse only and re-parses whole on change.
+    case 'antigravity':
     case 'devin':
     case 'grok':
     case 'hermes':

@@ -16,6 +16,7 @@ const TUI_AI_VAULT_AGENTS = [
   'omp',
   'cursor',
   'gemini',
+  'antigravity',
   'rovo',
   'copilot',
   'opencode',
@@ -55,6 +56,7 @@ export const AI_VAULT_AGENT_LABELS = {
   omp: 'OMP',
   cursor: 'Cursor',
   gemini: 'Gemini',
+  antigravity: 'Antigravity',
   rovo: 'Rovo Dev',
   copilot: 'GitHub Copilot',
   opencode: 'OpenCode',
@@ -335,6 +337,10 @@ function buildAgentResumeInvocation(
       return `${baseCommand} --session ${sessionArg}`
     case 'copilot':
       return `${baseCommand} --resume=${sessionArg}`
+    // Why: Antigravity resumes a conversation by its id (the .db filename)
+    // via `agy --conversation <id>`, unlike the `--resume` family below.
+    case 'antigravity':
+      return `${baseCommand} --conversation ${sessionArg}`
     case 'claude':
     case 'cursor':
     case 'gemini':

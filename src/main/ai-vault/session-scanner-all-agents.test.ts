@@ -1,0 +1,454 @@
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
+import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
+import { scanAiVaultSessions } from './session-scanner'
+import {
+  isolatedScanRoots,
+  jsonLines,
+  seedWebChatDb,
+  writeAntigravityConversationDb
+} from './session-scanner-test-fixtures'
+
+let tempRoots: string[] = []
+
+afterEach(async () => {
+  await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
+  tempRoots = []
+})
+
+describe('scanAiVaultSessions all-agent coverage', () => {
+  it('indexes every supported agent transcript format with native resume commands', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-all-agents-'))
+    tempRoots.push(root)
+    const roots = isolatedScanRoots(root)
+
+    await mkdir(join(roots.claudeProjectsDir, 'project'), { recursive: true })
+    await writeFile(
+      join(roots.claudeProjectsDir, 'project', 'claude-session.jsonl'),
+      jsonLines([
+        {
+          type: 'user',
+          sessionId: 'claude-session',
+          timestamp: '2026-05-01T10:00:00.000Z',
+          cwd: '/tmp/claude',
+          message: { role: 'user', content: 'Claude title' }
+        }
+      ])
+    )
+
+    await mkdir(join(roots.codexSessionsDir, '2026', '05', '01'), { recursive: true })
+    await writeFile(
+      join(roots.codexSessionsDir, '2026', '05', '01', 'rollout-2026-codex-session.jsonl'),
+      jsonLines([
+        {
+          timestamp: '2026-05-01T10:01:00.000Z',
+          type: 'session_meta',
+          payload: { id: 'codex-session', cwd: '/tmp/codex' }
+        },
+        {
+          timestamp: '2026-05-01T10:01:01.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'text', text: 'Codex title' }]
+          }
+        }
+      ])
+    )
+
+    await mkdir(roots.geminiSessionsDir, { recursive: true })
+    await writeFile(
+      join(roots.geminiSessionsDir, 'gemini-session.json'),
+      JSON.stringify({
+        sessionId: 'gemini-session',
+        startTime: '2026-05-01T10:02:00.000Z',
+        lastUpdated: '2026-05-01T10:02:01.000Z',
+        messages: [
+          {
+            type: 'user',
+            timestamp: '2026-05-01T10:02:00.000Z',
+            content: [{ text: 'Gemini title' }]
+          },
+          {
+            type: 'gemini',
+            timestamp: '2026-05-01T10:02:01.000Z',
+            model: 'gemini-2.5-pro',
+            tokens: { input: 10, output: 5 }
+          }
+        ]
+      })
+    )
+
+    writeAntigravityConversationDb({
+      dir: roots.antigravityConversationsDir,
+      conversationId: 'a0000000-0000-4000-8000-00000000000a',
+      workspaceUri: 'file:///tmp/antigravity',
+      userText: 'Antigravity title',
+      unixSeconds: 1_781_850_000
+    })
+
+    await mkdir(roots.copilotSessionsDir, { recursive: true })
+    await writeFile(
+      join(roots.copilotSessionsDir, 'copilot-session.jsonl'),
+      jsonLines([
+        {
+          type: 'session.start',
+          data: { sessionId: 'copilot-session', startTime: '2026-05-01T10:03:00.000Z' },
+          timestamp: '2026-05-01T10:03:00.000Z'
+        },
+        {
+          type: 'session.info',
+          data: {
+            infoType: 'folder_trust',
+            message: 'Folder /tmp/copilot has been added to trusted folders.'
+          },
+          timestamp: '2026-05-01T10:03:01.000Z'
+        },
+        {
+          type: 'user.message',
+          data: { transformedContent: 'Copilot title' },
+          timestamp: '2026-05-01T10:03:02.000Z'
+        }
+      ])
+    )
+
+    await mkdir(join(roots.cursorProjectsDir, 'project', 'agent-transcripts'), { recursive: true })
+    await writeFile(
+      join(roots.cursorProjectsDir, 'project', 'agent-transcripts', 'cursor-session.jsonl'),
+      jsonLines([
+        {
+          role: 'user',
+          message: { content: [{ type: 'text', text: 'Cursor title' }] }
+        },
+        { role: 'assistant', message: { content: [{ type: 'text', text: 'Done' }] } }
+      ])
+    )
+
+    await mkdir(join(roots.opencodeStorageDir, 'session', 'project'), { recursive: true })
+    await mkdir(join(roots.opencodeStorageDir, 'message', 'opencode-session'), { recursive: true })
+    await writeFile(
+      join(roots.opencodeStorageDir, 'session', 'project', 'ses_opencode.json'),
+      JSON.stringify({
+        id: 'opencode-session',
+        directory: '/tmp/opencode',
+        title: 'OpenCode title',
+        time: { created: 1_777_634_000_000, updated: 1_777_634_001_000 }
+      })
+    )
+    await writeFile(
+      join(roots.opencodeStorageDir, 'message', 'opencode-session', 'msg_1.json'),
+      JSON.stringify({
+        role: 'user',
+        summary: { title: 'OpenCode title' },
+        time: { created: 1_777_634_000_000 },
+        tokens: { input: 7, output: 3 }
+      })
+    )
+
+    await mkdir(join(roots.grokSessionsDir, encodeURIComponent('/tmp/grok'), 'grok-session'), {
+      recursive: true
+    })
+    await writeFile(
+      join(roots.grokSessionsDir, encodeURIComponent('/tmp/grok'), 'grok-session', 'summary.json'),
+      JSON.stringify({
+        info: { id: 'grok-session', cwd: '/tmp/grok' },
+        session_summary: '',
+        created_at: '2026-05-01T10:04:00.000Z',
+        updated_at: '2026-05-01T10:04:01.000Z',
+        num_chat_messages: 2,
+        current_model_id: 'grok-build',
+        head_branch: 'feature/grok-vault'
+      })
+    )
+    await writeFile(
+      join(
+        roots.grokSessionsDir,
+        encodeURIComponent('/tmp/grok'),
+        'grok-session',
+        'chat_history.jsonl'
+      ),
+      jsonLines([
+        {
+          type: 'user',
+          content: [
+            {
+              type: 'text',
+              text: '<user_info>context</user_info><user_query>Grok title</user_query>'
+            }
+          ]
+        },
+        { type: 'assistant', content: 'Done' }
+      ])
+    )
+
+    await mkdir(roots.hermesSessionsDir, { recursive: true })
+    await writeFile(
+      join(roots.hermesSessionsDir, 'session_hermes-session.json'),
+      JSON.stringify({
+        session_id: 'hermes-session',
+        model: 'hermes-1',
+        cwd: '/tmp/hermes',
+        session_start: '2026-05-01T10:05:00.000Z',
+        last_updated: '2026-05-01T10:05:01.000Z',
+        messages: [{ role: 'user', content: 'Hermes title' }]
+      })
+    )
+
+    await mkdir(join(roots.rovoSessionsDir, 'rovo-session'), { recursive: true })
+    await writeFile(
+      join(roots.rovoSessionsDir, 'rovo-session', 'metadata.json'),
+      JSON.stringify({ title: 'Rovo title', workspace_path: '/tmp/rovo' })
+    )
+    await writeFile(
+      join(roots.rovoSessionsDir, 'rovo-session', 'session_context.json'),
+      JSON.stringify({
+        message_history: [
+          {
+            kind: 'request',
+            timestamp: '2026-05-01T10:06:00.000Z',
+            parts: [{ part_kind: 'user-prompt', content: 'Rovo title' }]
+          }
+        ]
+      })
+    )
+
+    await mkdir(join(roots.openclawStateDir, 'agents', 'default', 'sessions'), { recursive: true })
+    await writeFile(
+      join(roots.openclawStateDir, 'agents', 'default', 'sessions', 'openclaw-session.jsonl'),
+      jsonLines([
+        {
+          type: 'session',
+          id: 'openclaw-session',
+          timestamp: '2026-05-01T10:07:00.000Z',
+          cwd: '/tmp/openclaw'
+        },
+        {
+          type: 'message',
+          timestamp: '2026-05-01T10:07:01.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'OpenClaw title' }] }
+        }
+      ])
+    )
+
+    await mkdir(roots.piSessionsDir, { recursive: true })
+    await writeFile(
+      join(roots.piSessionsDir, 'pi-session.jsonl'),
+      jsonLines([
+        {
+          type: 'session',
+          id: 'pi-session',
+          timestamp: '2026-05-01T10:08:00.000Z',
+          cwd: '/tmp/pi'
+        },
+        {
+          type: 'message',
+          timestamp: '2026-05-01T10:08:01.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'Pi title' }] }
+        }
+      ])
+    )
+
+    const ompSessionFile = join(roots.ompSessionsDir, 'omp-session.jsonl')
+    await mkdir(roots.ompSessionsDir, { recursive: true })
+    await writeFile(
+      ompSessionFile,
+      jsonLines([
+        {
+          type: 'session',
+          version: 3,
+          id: 'omp-session',
+          title: 'OMP session title',
+          timestamp: '2026-05-01T10:08:30.000Z',
+          cwd: '/tmp/omp'
+        },
+        {
+          type: 'model_change',
+          model: 'gpt-5.4-mini',
+          timestamp: '2026-05-01T10:08:30.500Z'
+        },
+        {
+          type: 'message',
+          timestamp: '2026-05-01T10:08:31.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'OMP title' }] }
+        },
+        {
+          type: 'message',
+          timestamp: '2026-05-01T10:08:32.000Z',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'OMP answer' }],
+            model: 'gpt-5.4-mini',
+            // totalTokens deliberately != input+output so the assertion proves
+            // the explicit-total field is read, not an input/output sum.
+            usage: { input: 10, output: 5, totalTokens: 160 }
+          }
+        }
+      ])
+    )
+
+    await mkdir(roots.devinTranscriptsDir, { recursive: true })
+    await writeFile(
+      join(roots.devinTranscriptsDir, 'devin-session.json'),
+      JSON.stringify({
+        session_id: 'devin-session',
+        working_directory: '/tmp/devin',
+        agent: { model_name: 'swe-1-6-fast' },
+        steps: [
+          {
+            metadata: {
+              created_at: '2026-05-01T10:10:00.000Z',
+              is_user_input: true,
+              metrics: { input_tokens: 1, output_tokens: 2 }
+            },
+            text: 'Devin vault title'
+          }
+        ]
+      })
+    )
+
+    await mkdir(roots.droidSessionsDir, { recursive: true })
+    await writeFile(
+      join(roots.droidSessionsDir, 'droid-session.jsonl'),
+      jsonLines([
+        {
+          type: 'system',
+          session_id: 'droid-session',
+          timestamp: '2026-05-01T10:09:00.000Z',
+          model: 'droid-model',
+          cwd: '/tmp/droid'
+        },
+        {
+          type: 'message',
+          session_id: 'droid-session',
+          timestamp: '2026-05-01T10:09:01.000Z',
+          role: 'user',
+          text: 'Droid title'
+        },
+        {
+          type: 'completion',
+          session_id: 'droid-session',
+          timestamp: '2026-05-01T10:09:02.000Z',
+          usage: { input_tokens: 2, output_tokens: 3 }
+        }
+      ])
+    )
+
+    // Kimi: <sessions>/wd_*/session_*/state.json + sibling agents/main/wire.jsonl,
+    // with the work dir resolved from the top-level session_index.jsonl.
+    const kimiSessionDir = join(roots.kimiSessionsDir, 'wd_app_abc', 'session_kimi-session')
+    await mkdir(join(kimiSessionDir, 'agents', 'main'), { recursive: true })
+    await writeFile(
+      join(kimiSessionDir, 'state.json'),
+      JSON.stringify({
+        createdAt: '2026-05-01T10:11:00.000Z',
+        updatedAt: '2026-05-01T10:11:05.000Z',
+        title: 'Kimi vault title',
+        lastPrompt: 'Kimi vault title',
+        agents: { main: { type: 'main', parentAgentId: null } }
+      })
+    )
+    await writeFile(
+      join(root, 'session_index.jsonl'),
+      jsonLines([
+        { sessionId: 'session_kimi-session', sessionDir: kimiSessionDir, workDir: '/tmp/kimi' }
+      ])
+    )
+    await writeFile(
+      join(kimiSessionDir, 'agents', 'main', 'wire.jsonl'),
+      jsonLines([
+        { type: 'config.update', modelAlias: 'kimi-k2.6', time: 1781853559132 },
+        {
+          type: 'context.append_message',
+          message: {
+            role: 'user',
+            content: [{ type: 'text', text: 'Kimi vault title' }],
+            origin: { kind: 'user' }
+          },
+          time: 1781853559164
+        },
+        {
+          type: 'context.append_loop_event',
+          event: { type: 'content.part', part: { type: 'text', text: 'Kimi reply' } },
+          time: 1781853559177
+        },
+        { type: 'context.append_loop_event', event: { type: 'step.end' }, time: 1781853559178 },
+        {
+          type: 'usage.record',
+          model: 'kimi-k2.6',
+          usage: { inputOther: 4, output: 6, inputCacheRead: 0, inputCacheCreation: 0 },
+          usageScope: 'turn',
+          time: 1781853559178
+        }
+      ])
+    )
+
+    // Web chat: imported conversations live in a chat-import SQLite DB, one
+    // row per source (chatgpt/claude-web/gemini-web), not on the filesystem.
+    await seedWebChatDb(roots.webchatDbPath, [
+      ['CHATGPT', 'chatgpt-session', 'ChatGPT vault title'],
+      ['CLAUDE', 'claude-web-session', 'Claude web vault title'],
+      ['GEMINI', 'gemini-web-session', 'Gemini web vault title']
+    ])
+
+    const result = await scanAiVaultSessions({
+      ...roots,
+      platform: 'darwin',
+      limit: 20
+    })
+
+    expect(result.issues).toEqual([])
+    expect(new Set(result.sessions.map((session) => session.agent))).toEqual(
+      new Set(AI_VAULT_AGENTS)
+    )
+
+    const commandByAgent = new Map(
+      result.sessions.map((session) => [session.agent, session.resumeCommand])
+    )
+    expect(commandByAgent.get('claude')).toBe(
+      "cd '/tmp/claude' && claude --resume 'claude-session'"
+    )
+    expect(commandByAgent.get('codex')).toBe(
+      `cd '/tmp/codex' && CODEX_HOME='${root}' codex resume 'codex-session'`
+    )
+    expect(commandByAgent.get('gemini')).toBe("gemini --resume 'gemini-session'")
+    expect(commandByAgent.get('antigravity')).toBe(
+      "cd '/tmp/antigravity' && agy --conversation 'a0000000-0000-4000-8000-00000000000a'"
+    )
+    expect(commandByAgent.get('copilot')).toBe(
+      "cd '/tmp/copilot' && copilot --resume='copilot-session'"
+    )
+    expect(commandByAgent.get('cursor')).toBe("cursor-agent --resume 'cursor-session'")
+    expect(commandByAgent.get('opencode')).toBe(
+      "cd '/tmp/opencode' && opencode --session 'opencode-session'"
+    )
+    expect(commandByAgent.get('grok')).toBe("cd '/tmp/grok' && grok --resume 'grok-session'")
+    expect(commandByAgent.get('hermes')).toBe(
+      "cd '/tmp/hermes' && hermes --resume 'hermes-session'"
+    )
+    expect(commandByAgent.get('rovo')).toBe(
+      "cd '/tmp/rovo' && acli rovodev run --restore 'rovo-session'"
+    )
+    expect(commandByAgent.get('openclaw')).toBe(
+      "cd '/tmp/openclaw' && openclaw --resume 'openclaw-session'"
+    )
+    expect(commandByAgent.get('pi')).toBe("cd '/tmp/pi' && pi --session 'pi-session'")
+    // OMP resumes by absolute transcript path, not by internal session id.
+    expect(commandByAgent.get('omp')).toBe(`cd '/tmp/omp' && omp --resume '${ompSessionFile}'`)
+    expect(commandByAgent.get('devin')).toBe("cd '/tmp/devin' && devin --resume 'devin-session'")
+    expect(commandByAgent.get('droid')).toBe("cd '/tmp/droid' && droid --resume 'droid-session'")
+    expect(commandByAgent.get('kimi')).toBe(
+      "cd '/tmp/kimi' && kimi --session 'session_kimi-session'"
+    )
+    // Web chat conversations are read-only imports, not a launchable CLI agent.
+    expect(commandByAgent.get('chatgpt')).toBe('')
+    expect(commandByAgent.get('claude-web')).toBe('')
+    expect(commandByAgent.get('gemini-web')).toBe('')
+
+    const ompSession = result.sessions.find((session) => session.agent === 'omp')
+    expect(ompSession?.model).toBe('gpt-5.4-mini')
+    expect(ompSession?.totalTokens).toBe(160)
+  })
+})
