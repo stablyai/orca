@@ -761,17 +761,16 @@ export class OrchestrationDb {
   // failed / circuit_broken row with an old-or-null last_heartbeat_at would
   // warn every tick (warning storm). Without `dispatched_at < :threshold`,
   // a freshly-dispatched worker would trip the warning during its first
-  // heartbeat interval (false positive). Callers supply the threshold as an
-  // ISO timestamp so the SQLite string-compare ordering works correctly
-  // (ISO-8601 compares lexicographically in time order).
+  // heartbeat interval (false positive). SQLite datetime() and legacy ISO
+  // timestamps use different separators, so parse both before comparing them.
   getStaleDispatches(thresholdIso: string): DispatchContextRow[] {
     return this.db
       .prepare(
         `SELECT * FROM dispatch_contexts
          WHERE status = 'dispatched'
            AND dispatched_at IS NOT NULL
-           AND dispatched_at < ?
-           AND (last_heartbeat_at IS NULL OR last_heartbeat_at < ?)`
+           AND julianday(dispatched_at) < julianday(?)
+           AND (last_heartbeat_at IS NULL OR julianday(last_heartbeat_at) < julianday(?))`
       )
       .all(thresholdIso, thresholdIso) as DispatchContextRow[]
   }

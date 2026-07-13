@@ -650,50 +650,51 @@ describe('OrchestrationDb', () => {
       expect(after?.last_heartbeat_at).toBeNull()
     })
 
-    it('getStaleDispatches returns only dispatched rows past the grace window', () => {
+    it('getStaleDispatches compares SQLite and ISO timestamps chronologically', () => {
       const d = createDb()
-      // Fixture: four rows, SQL-backdated timestamps (no fake clock):
-      //  (a) dispatched, heartbeated 5 min ago → not stale
-      //  (b) dispatched, heartbeated 12 min ago → STALE (expected result)
-      //  (c) dispatched, never heartbeated, dispatched 30s ago → not stale (grace)
-      //  (d) completed, heartbeated 30 min ago → not stale (status filter)
       const taskA = d.createTask({ spec: 'a' })
       const taskB = d.createTask({ spec: 'b' })
       const taskC = d.createTask({ spec: 'c' })
       const taskD = d.createTask({ spec: 'd' })
+      const taskE = d.createTask({ spec: 'e' })
       const ctxA = d.createDispatchContext(taskA.id, 'term_a')
       const ctxB = d.createDispatchContext(taskB.id, 'term_b')
       const ctxC = d.createDispatchContext(taskC.id, 'term_c')
       const ctxD = d.createDispatchContext(taskD.id, 'term_d')
+      const ctxE = d.createDispatchContext(taskE.id, 'term_e')
       d.completeDispatch(ctxD.id)
 
-      const now = Date.now()
-      const iso = (ms: number) => new Date(now - ms).toISOString()
+      const sqlite = (d as unknown as { db: Database.Database }).db
+      const setSqliteTimes = sqlite.prepare(
+        'UPDATE dispatch_contexts SET dispatched_at = datetime(?), last_heartbeat_at = datetime(?) WHERE id = ?'
+      )
+      // Why: datetime() reproduces the production space-separated format;
+      // binding ISO fixtures everywhere would hide mixed-format comparisons.
+      setSqliteTimes.run('2026-05-04 11:00:00', '2026-05-04 11:55:00', ctxA.id)
+      setSqliteTimes.run('2026-05-04 11:00:00', '2026-05-04 11:48:00', ctxB.id)
+      setSqliteTimes.run('2026-05-04 11:59:30', null, ctxC.id)
+      setSqliteTimes.run('2026-05-04 11:00:00', '2026-05-04 11:30:00', ctxD.id)
+      sqlite
+        .prepare(
+          'UPDATE dispatch_contexts SET dispatched_at = ?, last_heartbeat_at = ? WHERE id = ?'
+        )
+        .run('2026-05-04T11:59:30.000Z', null, ctxE.id)
 
-      // Backdate dispatched_at for a, b, d to long ago so the grace doesn't
-      // shield them. c keeps its default (≈now).
+      const stale = d.getStaleDispatches('2026-05-04T11:50:00.000Z')
+      expect(stale.map((s) => s.id)).toEqual([ctxB.id])
+    })
+
+    it('getStaleDispatches handles a UTC midnight boundary', () => {
+      const d = createDb()
+      const task = d.createTask({ spec: 'midnight' })
+      const ctx = d.createDispatchContext(task.id, 'term_midnight')
       const sqlite = (d as unknown as { db: Database.Database }).db
       sqlite
-        .prepare(
-          'UPDATE dispatch_contexts SET dispatched_at = ?, last_heartbeat_at = ? WHERE id = ?'
-        )
-        .run(iso(60 * 60 * 1000), iso(5 * 60 * 1000), ctxA.id)
-      sqlite
-        .prepare(
-          'UPDATE dispatch_contexts SET dispatched_at = ?, last_heartbeat_at = ? WHERE id = ?'
-        )
-        .run(iso(60 * 60 * 1000), iso(12 * 60 * 1000), ctxB.id)
-      sqlite
-        .prepare('UPDATE dispatch_contexts SET dispatched_at = ? WHERE id = ?')
-        .run(iso(30_000), ctxC.id)
-      sqlite
-        .prepare(
-          'UPDATE dispatch_contexts SET dispatched_at = ?, last_heartbeat_at = ? WHERE id = ?'
-        )
-        .run(iso(60 * 60 * 1000), iso(30 * 60 * 1000), ctxD.id)
+        .prepare('UPDATE dispatch_contexts SET dispatched_at = datetime(?) WHERE id = ?')
+        .run('2026-05-04 00:04:00', ctx.id)
 
-      const stale = d.getStaleDispatches(iso(10 * 60 * 1000))
-      expect(stale.map((s) => s.id)).toEqual([ctxB.id])
+      const stale = d.getStaleDispatches('2026-05-03T23:55:00.000Z')
+      expect(stale).toEqual([])
     })
 
     it('getThreadMessagesFor returns only same-thread replies to a handle', () => {
