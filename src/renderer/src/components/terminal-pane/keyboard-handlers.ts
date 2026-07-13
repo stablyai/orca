@@ -8,6 +8,7 @@ import type { PtyTransport } from './pty-transport'
 import { safeFind } from '../terminal-search-safe-find'
 import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
+import { sendTerminalInputAfterComposition } from './terminal-ime-deferred-newline'
 import {
   keybindingMatchesAction,
   type KeybindingOverrides,
@@ -399,24 +400,40 @@ export function useTerminalKeyboardShortcuts({
       }
 
       if (action.type === 'sendInput') {
+        // preventDefault here does not cancel a pending IME commit (the
+        // compositionend still fires and xterm forwards the glyph), so it is safe
+        // to consume the chord even mid-composition — it just stops a stray
+        // browser newline from also reaching the helper textarea.
         e.preventDefault()
         e.stopImmediatePropagation()
         const pane = manager.getActivePane() ?? manager.getPanes()[0]
         if (!pane) {
           return
         }
-        const sent = paneTransportsRef.current.get(pane.id)?.sendInput(action.data) === true
-        if (sent) {
-          recordTerminalUserInputForLeaf(tabId, pane.leafId)
-          if (action.data === '\x1b[13;2u') {
-            // Why: this direct shortcut write does not pass through PTY onData,
-            // so no-OSC shells need an explicit post-write confirmation ladder.
-            const binding = panePtyBindingsRef.current.get(pane.id) as
-              | (IDisposable & { requestDroidReconfirmation?: () => void })
-              | undefined
-            binding?.requestDroidReconfirmation?.()
+        const sendResolvedInput = (): void => {
+          const sent = paneTransportsRef.current.get(pane.id)?.sendInput(action.data) === true
+          if (sent) {
+            recordTerminalUserInputForLeaf(tabId, pane.leafId)
+            if (action.data === '\x1b[13;2u') {
+              // Why: this direct shortcut write does not pass through PTY onData,
+              // so no-OSC shells need an explicit post-write confirmation ladder.
+              const binding = panePtyBindingsRef.current.get(pane.id) as
+                | (IDisposable & { requestDroidReconfirmation?: () => void })
+                | undefined
+              binding?.requestDroidReconfirmation?.()
+            }
           }
         }
+        // Why: Shift+Enter / Ctrl+Enter pressed while an IME composition is open
+        // is the committing keystroke — sending the newline now races ahead of
+        // the pending commit and pushes the composed CJK glyph below it. Forward
+        // the newline once the composition ends so the glyph lands first (the
+        // committed char + newline, matching a non-composing Shift+Enter).
+        if (e.isComposing && e.key === 'Enter') {
+          sendTerminalInputAfterComposition(pane.terminal.element, sendResolvedInput)
+          return
+        }
+        sendResolvedInput()
         return
       }
 
