@@ -424,7 +424,7 @@ if (app.isPackaged && process.platform !== 'win32') {
 configureDevUserDataPath(is.dev)
 configureOrcaUserDataPathEnv()
 
-// Why: just past createMainWindow's win32 10s ready-to-show reveal fallback,
+// Why: just past createMainWindow's 10s ready-to-show reveal fallback,
 // so a window revealed on that path still gets its tray icon.
 const TRAY_CREATE_FALLBACK_MS = 12_000
 
@@ -865,7 +865,7 @@ function openMainWindow(): BrowserWindow {
   // seconds while explorer.exe's notification area is busy (part of issue
   // #7225's pre-paint stall), so create it after first paint. The timer
   // fallback covers windows revealed without ready-to-show ever firing
-  // (createMainWindow's win32 10s reveal fallback) — those can still be
+  // (createMainWindow's 10s reveal fallback) — those can still be
   // hidden to the tray on close, so the icon must exist by then.
   let trayCreated = false
   const createSystemTrayDeferred = (): void => {
