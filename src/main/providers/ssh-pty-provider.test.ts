@@ -7,6 +7,10 @@ import {
 } from './ssh-pty-provider'
 import { POWERLEVEL10K_WIZARD_DISABLE_ENV } from '../pty/powerlevel10k-wizard-env'
 import { JsonRpcErrorCode } from '../ssh/relay-protocol'
+import {
+  POSIX_PTY_SESSION_TEARDOWN_TIMEOUT_MS,
+  RELAY_PTY_IMMEDIATE_SHUTDOWN_TIMEOUT_MS
+} from '../../shared/terminal-teardown-timeouts'
 
 type MockMultiplexer = {
   request: ReturnType<typeof vi.fn>
@@ -432,6 +436,12 @@ describe('SshPtyProvider', () => {
         keepHistory: false
       },
       { timeoutMs: SSH_PTY_IMMEDIATE_SHUTDOWN_TIMEOUT_MS }
+    )
+    expect(SSH_PTY_IMMEDIATE_SHUTDOWN_TIMEOUT_MS).toBeGreaterThan(
+      RELAY_PTY_IMMEDIATE_SHUTDOWN_TIMEOUT_MS
+    )
+    expect(RELAY_PTY_IMMEDIATE_SHUTDOWN_TIMEOUT_MS).toBeGreaterThanOrEqual(
+      POSIX_PTY_SESSION_TEARDOWN_TIMEOUT_MS
     )
   })
 

@@ -10,6 +10,7 @@ import {
   resolveSetupAgentSequenceLaunchCommand,
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
 } from '../shared/setup-agent-sequencing'
+import { RELAY_PTY_IMMEDIATE_SHUTDOWN_TIMEOUT_MS } from '../shared/terminal-teardown-timeouts'
 
 const { mockPtySpawn, mockPtyInstance } = vi.hoisted(() => ({
   mockPtySpawn: vi.fn(),
@@ -1240,6 +1241,35 @@ describe('PtyHandler', () => {
     }
   })
 
+  it('allows a slow Windows ConPTY exit within the shared relay budget', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    let onExitCb: ((evt: { exitCode: number }) => void) | undefined
+    const mockKill = vi.fn()
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      kill: mockKill,
+      onData: vi.fn(),
+      onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+        onExitCb = cb
+      })
+    })
+    try {
+      await dispatcher.callRequest('pty.spawn', {})
+      const shutdown = dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+
+      await vi.advanceTimersByTimeAsync(5_100)
+      expect(handler.activePtyCount).toBe(1)
+      expect(mockKill).toHaveBeenCalledTimes(1)
+
+      onExitCb!({ exitCode: 0 })
+      await expect(shutdown).resolves.toBeUndefined()
+      expect(handler.activePtyCount).toBe(0)
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
   it('retains a Windows ConPTY owner when immediate exit times out', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
@@ -1256,7 +1286,7 @@ describe('PtyHandler', () => {
       const rejection = expect(shutdown).rejects.toThrow(
         'Timed out waiting for Windows PTY teardown: pty-1'
       )
-      await vi.advanceTimersByTimeAsync(3_000)
+      await vi.advanceTimersByTimeAsync(RELAY_PTY_IMMEDIATE_SHUTDOWN_TIMEOUT_MS)
 
       await rejection
       expect(mockKill).toHaveBeenCalledTimes(1)
@@ -1285,7 +1315,7 @@ describe('PtyHandler', () => {
       const firstRejection = expect(first).rejects.toThrow(
         'Timed out waiting for Windows PTY teardown: pty-1'
       )
-      await vi.advanceTimersByTimeAsync(3_000)
+      await vi.advanceTimersByTimeAsync(RELAY_PTY_IMMEDIATE_SHUTDOWN_TIMEOUT_MS)
       await firstRejection
 
       const retry = dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })

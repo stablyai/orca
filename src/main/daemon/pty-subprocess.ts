@@ -42,6 +42,7 @@ import {
 } from '../pty/powerlevel10k-wizard-env'
 import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
+import { WINDOWS_PTY_EXIT_TIMEOUT_MS } from '../../shared/terminal-teardown-timeouts'
 import { resolveAgentForegroundProcessWithAvailability } from '../providers/agent-foreground-process'
 import { readWindowsConptyProcessIds } from '../providers/windows-conpty-process-membership'
 import {
@@ -82,10 +83,6 @@ const PTY_SPAWN_HEALTH_TIMEOUT_MS = 4_000
 // fallback (losing daemon persistence) until a manual restart.
 const PTY_SPAWN_HEALTH_RETRY_ATTEMPTS = 2
 const PENDING_PRE_LISTENER_DATA_MAX_CHARS = 512 * 1024
-// Why: node-pty can spend up to 5s enumerating a Windows console tree before
-// its fallback runs; leave bounded headroom for the native exit event to land.
-const WINDOWS_PTY_EXIT_TIMEOUT_MS = 8_000
-
 export type PtySubprocessOptions = {
   sessionId: string
   cols: number

@@ -18,6 +18,7 @@ import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
 import { buildStartupCommandSubmission } from '../shared/startup-command-submission'
 import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
+import { RELAY_PTY_IMMEDIATE_SHUTDOWN_TIMEOUT_MS } from '../shared/terminal-teardown-timeouts'
 import {
   createShellReadyScanState,
   drainShellReadyHeldBytes,
@@ -132,7 +133,6 @@ function disposeManagedPty(managed: ManagedPty): void {
   }
 }
 const DEFAULT_GRACE_TIME_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
-const WINDOWS_IMMEDIATE_EXIT_TIMEOUT_MS = 3_000
 export const REPLAY_BUFFER_MAX = 100 * 1024
 const PTY_OUTPUT_BATCH_INTERVAL_MS = 8
 const PTY_OUTPUT_DRAIN_CONTINUE_MS = 1
@@ -490,7 +490,7 @@ export class PtyHandler {
         this.exitWaitersByPty.delete(id)
       }
       resolvePromise(false)
-    }, WINDOWS_IMMEDIATE_EXIT_TIMEOUT_MS)
+    }, RELAY_PTY_IMMEDIATE_SHUTDOWN_TIMEOUT_MS)
     const promise = new Promise<boolean>((resolve) => {
       resolvePromise = resolve
     })

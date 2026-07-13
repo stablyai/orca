@@ -1,16 +1,24 @@
 import { execFile as execFileCallback } from 'node:child_process'
 import { setTimeout as wait } from 'node:timers/promises'
 import { promisify } from 'node:util'
+import {
+  PTY_SESSION_COMMAND_TIMEOUT_MS,
+  PTY_SESSION_VERIFY_TIMEOUT_MS
+} from '../shared/terminal-teardown-timeouts'
+
+export {
+  PTY_SESSION_COMMAND_TIMEOUT_MS,
+  PTY_SESSION_VERIFY_TIMEOUT_MS
+} from '../shared/terminal-teardown-timeouts'
 
 type ExecFile = (file: string, args: string[], options: { timeout: number }) => Promise<unknown>
 type KillProcess = (pid: number, signal: NodeJS.Signals) => void
 
 const execFile = promisify(execFileCallback) as ExecFile
-export const PTY_SESSION_COMMAND_TIMEOUT_MS = 2500
-export const PTY_SESSION_VERIFY_TIMEOUT_MS = 500
 export const MAX_PTY_PROCESS_TREE_SIZE = 1024
 const VERIFY_PID_BATCH_SIZE = 64
-const VERIFY_POLL_INTERVAL_MS = 10
+const VERIFY_POLL_INITIAL_MS = 10
+const VERIFY_POLL_MAX_MS = 100
 const PARENT_PID_BATCH_SIZE = 64
 
 export async function killPosixPtySession(
@@ -224,6 +232,7 @@ function resumeProcesses(stopped: Set<number>, killProcess: KillProcess): void {
 async function verifyProcessesStopped(pids: number[], run: ExecFile): Promise<boolean> {
   const verificationDeadline = Date.now() + PTY_SESSION_VERIFY_TIMEOUT_MS
   let pending = pids
+  let pollDelayMs = VERIFY_POLL_INITIAL_MS
   while (pending.length > 0) {
     const nextPending: number[] = []
     for (let index = 0; index < pending.length; index += VERIFY_PID_BATCH_SIZE) {
@@ -255,9 +264,14 @@ async function verifyProcessesStopped(pids: number[], run: ExecFile): Promise<bo
     if (remainingMs <= 0) {
       return false
     }
-    // Why: signal delivery and process reaping are asynchronous; retry the
-    // still-live subset without busy-spawning ps until the bounded deadline.
-    await wait(Math.min(VERIFY_POLL_INTERVAL_MS, remainingMs))
+    // Why: signal delivery and process reaping are asynchronous. Back off the
+    // still-live subset so a stuck tree cannot spawn ps every 10ms at scale.
+    const waitMs = Math.min(pollDelayMs, remainingMs - 1)
+    if (waitMs <= 0) {
+      return false
+    }
+    await wait(waitMs)
+    pollDelayMs = Math.min(pollDelayMs * 2, VERIFY_POLL_MAX_MS)
   }
   return true
 }

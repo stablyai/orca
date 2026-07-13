@@ -3,6 +3,9 @@ import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } fr
 import { toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
 import { SshPtyLiveness } from './ssh-pty-liveness'
 import { seedPowerlevel10kWizardEnv } from '../pty/powerlevel10k-wizard-env'
+import { SSH_PTY_IMMEDIATE_SHUTDOWN_TIMEOUT_MS } from '../../shared/terminal-teardown-timeouts'
+
+export { SSH_PTY_IMMEDIATE_SHUTDOWN_TIMEOUT_MS } from '../../shared/terminal-teardown-timeouts'
 
 type DataCallback = (payload: { id: string; data: string }) => void
 type ReplayCallback = (payload: { id: string; data: string }) => void
@@ -17,9 +20,6 @@ type RemoteCliBridgeEnv = {
 
 export const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
 export const SSH_PTY_IDENTITY_MISMATCH_ERROR = 'SSH_PTY_IDENTITY_MISMATCH'
-// Why: eight bounded workers keep a 50-PTY failure near one 30s batch,
-// while leaving enough time for the relay's targeted 3s kill-and-verify path.
-export const SSH_PTY_IMMEDIATE_SHUTDOWN_TIMEOUT_MS = 3250
 export const SSH_PTY_TEARDOWN_LIVENESS_TIMEOUT_MS = 1000
 export const SSH_PTY_LEGACY_INVENTORY_TIMEOUT_MS = 2000
 

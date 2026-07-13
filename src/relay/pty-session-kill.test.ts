@@ -195,6 +195,7 @@ describe('killPosixPtySession', () => {
   })
 
   it('fails closed when a captured process remains runnable after SIGKILL', async () => {
+    let verificationChecks = 0
     const run = vi.fn(async (file: string, args: string[]) => {
       if (file === 'pgrep') {
         throw emptySelection()
@@ -202,6 +203,7 @@ describe('killPosixPtySession', () => {
       if (file === 'ps' && args.includes('sid=')) {
         return { stdout: '4242 pts/7\n' }
       }
+      verificationChecks += 1
       return { stdout: '4242 D\n' }
     })
     const killProcess = vi.fn()
@@ -209,6 +211,9 @@ describe('killPosixPtySession', () => {
     await expect(killPosixPtySession(4242, '/dev/pts/7', 'linux', run, killProcess)).resolves.toBe(
       false
     )
+    // Initial 10ms backoff doubling to 100ms permits at most nine ps rounds
+    // inside the shared 500ms verification deadline.
+    expect(verificationChecks).toBeLessThanOrEqual(9)
   })
 
   it('waits for a captured process to finish exiting after SIGKILL', async () => {
