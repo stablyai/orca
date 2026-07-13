@@ -6,7 +6,11 @@
 // best-effort and local-only — remote/Windows/locked/dest-taken all degrade to
 // "folder kept" without disturbing the rename that already succeeded.
 import type { GlobalSettings, Repo } from '../../shared/types'
-import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
+import {
+  FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
+  getRepoIdFromWorktreeId,
+  splitWorktreeIdForFilesystem
+} from '../../shared/worktree-id'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { planWorktreeFolderRename } from '../ipc/worktree-folder-rename-target'
 
@@ -46,9 +50,9 @@ export async function renameWorktreeFolderOnFirstWork(
     repoId: repo.id,
     repoPath: repo.path,
     oldWorktreePath: parsed.worktreePath,
-    worktreeIdSuffix: parsed.worktreePath.slice(
-      parsed.worktreePath.replace(/::workspace:[0-9a-f-]{36}$/, '').length
-    ),
+    worktreeIdSuffix: worktreeId.includes(FOLDER_WORKSPACE_INSTANCE_SEPARATOR)
+      ? `${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}${worktreeId.split(FOLDER_WORKSPACE_INSTANCE_SEPARATOR).at(-1)}`
+      : undefined,
     newLeaf,
     settings: deps.getSettings(),
     platform: process.platform,
