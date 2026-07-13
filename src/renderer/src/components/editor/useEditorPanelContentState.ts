@@ -30,6 +30,7 @@ import {
   usePruneClosedEditorContent
 } from './useEditorPanelExternalContentEvents'
 import { useEditorPanelFileLoadRetry } from './useEditorPanelFileLoadRetry'
+import { useLocalLogTail } from './useLocalLogTail'
 
 const inFlightFileReads = new Map<string, Promise<FileContent>>()
 const inFlightDiffReads = new Map<string, Promise<DiffContent>>()
@@ -172,7 +173,9 @@ export function useEditorPanelContentState({
             filePath,
             relativePath: restoredOpenFile?.relativePath ?? relativePath,
             worktreeId,
-            connectionId
+            connectionId,
+            includeLocalLogMetadata:
+              restoredOpenFile?.readOnly === true && restoredOpenFile.liveTail === true
           }) as Promise<FileContent>
           inFlightFileReads.set(key, pending)
           queueMicrotask(() => {
@@ -353,6 +356,8 @@ export function useEditorPanelContentState({
     },
     [loadDiffContent, loadFileContent]
   )
+
+  useLocalLogTail({ openFiles, fileContents, setFileContents, reloadContent })
 
   useEffect(() => {
     if (activeFile?.mode === 'conflict-review' && !selectedConflictReviewFile) {

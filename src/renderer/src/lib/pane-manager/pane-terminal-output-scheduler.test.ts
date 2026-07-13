@@ -5,6 +5,14 @@ vi.mock('@/lib/e2e-config', () => ({
   e2eConfig: { exposeStore: true }
 }))
 
+const mocks = vi.hoisted(() => ({
+  recordRendererCrashBreadcrumb: vi.fn()
+}))
+
+vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
+  recordRendererCrashBreadcrumb: mocks.recordRendererCrashBreadcrumb
+}))
+
 function createTerminal() {
   const classes = new Set<string>()
   return {
@@ -51,6 +59,7 @@ async function loadScheduler() {
 describe('pane terminal output scheduler', () => {
   beforeEach(() => {
     vi.stubGlobal('window', globalThis)
+    mocks.recordRendererCrashBreadcrumb.mockClear()
   })
 
   afterEach(() => {
@@ -58,6 +67,168 @@ describe('pane terminal output scheduler', () => {
     delete (globalThis as { __terminalOutputSchedulerDebug?: unknown })
       .__terminalOutputSchedulerDebug
     vi.unstubAllGlobals()
+  })
+
+  describe('parse-deferred ACK crediting', () => {
+    // Why these tests: the credit invariant is "every delivered chunk credits
+    // exactly once, whether parsed or discarded" — a missed credit permanently
+    // shrinks main's in-flight window and wedges the PTY (rc.7.perf).
+    function makeCredit(): { fire: () => void; count: () => number } {
+      let fired = 0
+      return { fire: () => (fired += 1), count: () => fired }
+    }
+
+    it('credits when a queued chunk finishes parsing', async () => {
+      vi.useFakeTimers()
+      const { writeTerminalOutput } = await loadScheduler()
+      const terminal = createTerminal()
+      let parsed: (() => void) | undefined
+      terminal.write.mockImplementation((_data: string, callback?: () => void) => {
+        parsed = callback
+      })
+      const credit = makeCredit()
+
+      writeTerminalOutput(terminal, 'queued', {
+        foreground: true,
+        latencySensitive: false,
+        ackCredit: credit.fire
+      })
+      expect(credit.count()).toBe(0)
+
+      vi.advanceTimersByTime(0)
+      expect(terminal.write).toHaveBeenCalledWith('queued', expect.any(Function))
+      expect(credit.count()).toBe(0)
+      parsed?.()
+      expect(credit.count()).toBe(1)
+    })
+
+    it('credits exactly once when a chunk is split across drain slices', async () => {
+      vi.useFakeTimers()
+      const { writeTerminalOutput } = await loadScheduler()
+      const terminal = createTerminal()
+      const credit = makeCredit()
+
+      // 40 KB > the 16 KB slice size: consumed across multiple drain writes.
+      writeTerminalOutput(terminal, 'q'.repeat(40 * 1024), {
+        foreground: true,
+        latencySensitive: false,
+        ackCredit: credit.fire
+      })
+      for (let index = 0; index < 24; index += 1) {
+        vi.advanceTimersByTime(4)
+      }
+      const written = terminal.write.mock.calls.map((call) => String(call[0])).join('')
+      expect(written).toContain('q'.repeat(40 * 1024))
+      expect(credit.count()).toBe(1)
+    })
+
+    it('defers split-chunk credit and onParsed until the final slice parses', async () => {
+      vi.useFakeTimers()
+      const { writeTerminalOutput } = await loadScheduler()
+      const terminal = createTerminal()
+      const parseCallbacks: (() => void)[] = []
+      terminal.write.mockImplementation((_data: string, callback?: () => void) => {
+        if (callback) {
+          parseCallbacks.push(callback)
+        }
+      })
+      const credit = makeCredit()
+      const onParsed = vi.fn()
+
+      writeTerminalOutput(terminal, 'q'.repeat(40 * 1024), {
+        foreground: true,
+        latencySensitive: false,
+        ackCredit: credit.fire,
+        onParsed
+      })
+      vi.advanceTimersByTime(0)
+
+      expect(parseCallbacks).toHaveLength(3)
+      parseCallbacks[0]()
+      parseCallbacks[1]()
+      expect(credit.count()).toBe(0)
+      expect(onParsed).not.toHaveBeenCalled()
+      parseCallbacks[2]()
+      expect(credit.count()).toBe(1)
+      expect(onParsed).toHaveBeenCalledTimes(1)
+    })
+
+    it('credits when the foreground backlog is replaced with the overflow warning', async () => {
+      vi.useFakeTimers()
+      const { writeTerminalOutput, configureTerminalOutputBacklogCap } = await loadScheduler()
+      configureTerminalOutputBacklogCap(1_000)
+      const terminal = createTerminal()
+      // Never complete a write so the queue only grows.
+      terminal.write.mockImplementation(() => {})
+      const credits = [makeCredit(), makeCredit(), makeCredit()]
+
+      for (const credit of credits) {
+        writeTerminalOutput(terminal, 'x'.repeat(1024 * 1024), {
+          foreground: true,
+          latencySensitive: false,
+          ackCredit: credit.fire
+        })
+      }
+      // The cap replacement discards queued chunks — their deliveries still
+      // consumed and must credit.
+      for (const credit of credits) {
+        expect(credit.count()).toBe(1)
+      }
+    })
+
+    it('credits when queued output is discarded', async () => {
+      vi.useFakeTimers()
+      const { writeTerminalOutput, discardTerminalOutput } = await loadScheduler()
+      const terminal = createTerminal()
+      terminal.write.mockImplementation(() => {})
+      const credit = makeCredit()
+
+      writeTerminalOutput(terminal, 'doomed', {
+        foreground: true,
+        latencySensitive: false,
+        ackCredit: credit.fire
+      })
+      expect(credit.count()).toBe(0)
+      discardTerminalOutput(terminal)
+      expect(credit.count()).toBe(1)
+    })
+
+    it('credits an empty write immediately', async () => {
+      const { writeTerminalOutput } = await loadScheduler()
+      const terminal = createTerminal()
+      const credit = makeCredit()
+
+      writeTerminalOutput(terminal, '', { foreground: true, ackCredit: credit.fire })
+      expect(credit.count()).toBe(1)
+    })
+
+    it('credits the immediate foreground path after its parse callback', async () => {
+      const { writeTerminalOutput } = await loadScheduler()
+      const terminal = createTerminal()
+      let parsed: (() => void) | undefined
+      terminal.write.mockImplementation((_data: string, callback?: () => void) => {
+        parsed = callback
+      })
+      const credit = makeCredit()
+
+      writeTerminalOutput(terminal, 'now', { foreground: true, ackCredit: credit.fire })
+      expect(terminal.write).toHaveBeenCalledWith('now', expect.any(Function))
+      expect(credit.count()).toBe(0)
+      parsed?.()
+      expect(credit.count()).toBe(1)
+    })
+
+    it('credits submitted but unparsed output when the terminal is discarded', async () => {
+      const { writeTerminalOutput, discardTerminalOutput } = await loadScheduler()
+      const terminal = createTerminal()
+      terminal.write.mockImplementation(() => {})
+      const credit = makeCredit()
+
+      writeTerminalOutput(terminal, 'submitted', { foreground: true, ackCredit: credit.fire })
+      expect(credit.count()).toBe(0)
+      discardTerminalOutput(terminal)
+      expect(credit.count()).toBe(1)
+    })
   })
 
   it('writes foreground output immediately', async () => {
@@ -127,6 +298,93 @@ describe('pane terminal output scheduler', () => {
 
     expect(terminal._core.refresh).toHaveBeenCalledWith(0, 23, true)
     expect(terminal.refresh).not.toHaveBeenCalled()
+  })
+
+  it('coalesces a WebGL foreground refresh through xterm public refresh', async () => {
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createForegroundTerminal()
+
+    writeTerminalOutput(terminal, 'active TUI repaint\r\n', {
+      foreground: true,
+      forceForegroundRefresh: true,
+      shouldRefreshForegroundSynchronously: () => false
+    })
+
+    expect(terminal.refresh).toHaveBeenCalledWith(0, 23)
+    expect(terminal._core.refresh).not.toHaveBeenCalled()
+  })
+
+  it('resolves the live renderer after xterm finishes parsing', async () => {
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createForegroundTerminal()
+    let parseCallback: (() => void) | undefined
+    let webglLive = false
+    terminal.write.mockImplementation((_data: string, callback?: () => void) => {
+      parseCallback = callback
+    })
+
+    writeTerminalOutput(terminal, 'queued renderer transition\r\n', {
+      foreground: true,
+      forceForegroundRefresh: true,
+      shouldRefreshForegroundSynchronously: () => !webglLive
+    })
+    webglLive = true
+    parseCallback?.()
+
+    expect(terminal.refresh).toHaveBeenCalledWith(0, 23)
+    expect(terminal._core.refresh).not.toHaveBeenCalled()
+  })
+
+  it('keeps the WebGL follow-up repair on the debounced path', async () => {
+    const scheduledFrames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      scheduledFrames.push(callback)
+      return scheduledFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createForegroundTerminal()
+
+    writeTerminalOutput(terminal, 'WebGL cursor restore', {
+      foreground: true,
+      forceForegroundRefresh: true,
+      followupForegroundRefresh: true,
+      shouldRefreshForegroundSynchronously: () => false
+    })
+
+    expect(terminal.refresh).toHaveBeenCalledTimes(1)
+    expect(scheduledFrames).toHaveLength(1)
+    scheduledFrames[0]?.(16)
+
+    expect(terminal.refresh).toHaveBeenCalledTimes(2)
+    expect(terminal._core.refresh).not.toHaveBeenCalled()
+  })
+
+  it('resolves WebGL loss again before the follow-up repair', async () => {
+    const scheduledFrames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      scheduledFrames.push(callback)
+      return scheduledFrames.length
+    })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createForegroundTerminal()
+    let webglLive = true
+
+    writeTerminalOutput(terminal, 'renderer transition', {
+      foreground: true,
+      forceForegroundRefresh: true,
+      followupForegroundRefresh: true,
+      shouldRefreshForegroundSynchronously: () => !webglLive
+    })
+
+    expect(terminal.refresh).toHaveBeenCalledTimes(1)
+    webglLive = false
+    scheduledFrames[0]?.(16)
+
+    expect(terminal._core.refresh).toHaveBeenCalledWith(0, 23, true)
   })
 
   it('repaints the viewport again on the next frame when foreground output scrolls', async () => {
@@ -277,7 +535,7 @@ describe('pane terminal output scheduler', () => {
     expect(terminal._core.refresh).not.toHaveBeenCalled()
   })
 
-  it('keeps parsed callbacks on large background chunks split by the scheduler', async () => {
+  it('runs parsed callbacks after the final background slice', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()
     const terminal = createTerminal()
@@ -299,14 +557,12 @@ describe('pane terminal output scheduler', () => {
     vi.advanceTimersByTime(50)
 
     expect(writes.map((data) => data.length)).toEqual([16 * 1024, 4 * 1024])
-    expect(parseCallbacks).toHaveLength(2)
+    expect(parseCallbacks).toHaveLength(1)
     expect(onParsed).not.toHaveBeenCalled()
 
     parseCallbacks[0]?.()
 
     expect(onParsed).toHaveBeenCalledTimes(1)
-    parseCallbacks[1]?.()
-    expect(onParsed).toHaveBeenCalledTimes(2)
   })
 
   it('defers throughput foreground output to the shared high-priority drain', async () => {
@@ -747,6 +1003,41 @@ describe('pane terminal output scheduler', () => {
     expect(terminal.write).toHaveBeenCalledWith('ab')
   })
 
+  it('keeps preparation attached when a later producer omits it', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+    const beforeWrite = vi.fn()
+
+    writeTerminalOutput(terminal, 'مرحبا', { foreground: false, beforeWrite })
+    writeTerminalOutput(terminal, ' fallback notice', { foreground: false })
+    vi.advanceTimersByTime(50)
+
+    expect(beforeWrite).toHaveBeenCalledWith('مرحبا fallback notice')
+    expect(terminal.write).toHaveBeenCalledWith('مرحبا fallback notice')
+  })
+
+  it('ignores unforced chunks when resolving a coalesced forced refresh', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createForegroundTerminal()
+
+    writeTerminalOutput(terminal, 'forced', {
+      foreground: true,
+      latencySensitive: false,
+      forceForegroundRefresh: true,
+      shouldRefreshForegroundSynchronously: () => false
+    })
+    writeTerminalOutput(terminal, ' ordinary', {
+      foreground: true,
+      latencySensitive: false
+    })
+    vi.advanceTimersByTime(0)
+
+    expect(terminal.refresh).toHaveBeenCalledWith(0, 23)
+    expect(terminal._core.refresh).not.toHaveBeenCalled()
+  })
+
   it('runs deferred write preparation before explicit background flushes', async () => {
     vi.useFakeTimers()
     const { flushTerminalOutput, writeTerminalOutput } = await loadScheduler()
@@ -796,6 +1087,31 @@ describe('pane terminal output scheduler', () => {
 
     vi.advanceTimersByTime(16)
     expect(terminals[2].write).toHaveBeenCalledWith('pane-2')
+  })
+
+  it('drains active foreground backlog before older background terminal backlog', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const backgroundA = createTerminal()
+    const backgroundB = createTerminal()
+    const active = createTerminal()
+
+    writeTerminalOutput(backgroundA, 'background-a', { foreground: false })
+    writeTerminalOutput(backgroundB, 'background-b', { foreground: false })
+    writeTerminalOutput(active, 'active', {
+      foreground: true,
+      latencySensitive: false
+    })
+
+    vi.advanceTimersByTime(0)
+
+    expect(active.write).toHaveBeenCalledWith('active', expect.any(Function))
+    expect(active.write.mock.invocationCallOrder[0]).toBeLessThan(
+      backgroundA.write.mock.invocationCallOrder[0]
+    )
+    expect(active.write.mock.invocationCallOrder[0]).toBeLessThan(
+      backgroundB.write.mock.invocationCallOrder[0]
+    )
   })
 
   it('rotates terminals with remaining backlog behind untouched queued terminals', async () => {
@@ -897,11 +1213,14 @@ describe('pane terminal output scheduler', () => {
 
     expect(terminal.write).not.toHaveBeenCalled()
 
+    // Why 8: promoted backlogs use the parse-clocked high-priority budget
+    // (HIGH_PRIORITY_MAX_WRITES_PER_DRAIN) so a visible flood drains at the
+    // parser's pace instead of a fixed 2-write drip.
     vi.advanceTimersByTime(0)
-    expect(terminal.write).toHaveBeenCalledTimes(2)
+    expect(terminal.write).toHaveBeenCalledTimes(8)
 
     vi.advanceTimersByTime(4)
-    expect(terminal.write).toHaveBeenCalledTimes(4)
+    expect(terminal.write).toHaveBeenCalledTimes(16)
   })
 
   it('yields high-priority backlog drains when writes spend the frame budget', async () => {
@@ -977,6 +1296,95 @@ describe('pane terminal output scheduler', () => {
     expect(output).toContain('Orca skipped hidden terminal output')
     expect(output).toContain('after-cap')
     expect(output).not.toContain('x'.repeat(1024))
+  })
+
+  it('caps a visible pane backlog the drain cannot keep up with and writes a warning', async () => {
+    // Why: the foreground path was previously uncapped — a flooding visible
+    // TUI on a starved renderer grew queuedChars without bound (field
+    // reports of ~1.5 GB renderer RSS before terminals froze).
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+    const chunk = 'x'.repeat(512 * 1024)
+
+    for (let i = 0; i < 5; i++) {
+      writeTerminalOutput(terminal, chunk, { foreground: true, latencySensitive: false })
+    }
+    writeTerminalOutput(terminal, 'after-cap\r\n', { foreground: true, latencySensitive: false })
+
+    vi.advanceTimersByTime(0)
+
+    const output = terminal.write.mock.calls.map(([data]) => data).join('')
+    expect(output).toContain('Orca skipped a burst of terminal output')
+    expect(output).toContain('after-cap')
+    expect(output).not.toContain('x'.repeat(1024))
+  })
+
+  it('records a drop breadcrumb with sizes when the cap replaces a backlog', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+    const chunk = 'x'.repeat(512 * 1024)
+
+    for (let i = 0; i < 5; i++) {
+      writeTerminalOutput(terminal, chunk, { foreground: false })
+    }
+
+    expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
+      'terminal_output_backlog_dropped',
+      expect.objectContaining({
+        foreground: false,
+        droppedChars: expect.any(Number),
+        capChars: 2 * 1024 * 1024
+      })
+    )
+  })
+
+  it('scales the backlog cap with the scrollback setting', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput, configureTerminalOutputBacklogCap } = await loadScheduler()
+    const terminal = createTerminal()
+    const chunk = 'x'.repeat(512 * 1024)
+
+    // 50k-row scrollback ⇒ 6 MB cap: a 2.5 MB flood that would trip the
+    // 2 MB floor must survive intact.
+    configureTerminalOutputBacklogCap(50_000)
+    for (let i = 0; i < 5; i++) {
+      writeTerminalOutput(terminal, chunk, { foreground: true, latencySensitive: false })
+    }
+    vi.advanceTimersByTime(0)
+
+    let output = terminal.write.mock.calls.map(([data]) => data).join('')
+    expect(output).not.toContain('Orca skipped')
+    expect(output).toContain('x'.repeat(1024))
+
+    // But the scaled cap still bounds a runaway flood.
+    terminal.write.mockClear()
+    for (let i = 0; i < 13; i++) {
+      writeTerminalOutput(terminal, chunk, { foreground: true, latencySensitive: false })
+    }
+    vi.advanceTimersByTime(0)
+    output = terminal.write.mock.calls.map(([data]) => data).join('')
+    expect(output).toContain('Orca skipped a burst of terminal output')
+  })
+
+  it('caps a held/coalesced foreground backlog as well', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createForegroundTerminal()
+    const chunk = 'y'.repeat(512 * 1024)
+
+    // holdForeground engages the synchronized-output hold — the branch a
+    // flooding TUI in sync mode exercises.
+    for (let i = 0; i < 5; i++) {
+      writeTerminalOutput(terminal, chunk, { foreground: true, holdForeground: true })
+    }
+
+    vi.advanceTimersByTime(1_000)
+
+    const output = terminal.write.mock.calls.map(([data]) => data).join('')
+    expect(output).toContain('Orca skipped a burst of terminal output')
+    expect(output).not.toContain('y'.repeat(1024))
   })
 
   it('caps hidden backlog chunk count even when each chunk is tiny', async () => {

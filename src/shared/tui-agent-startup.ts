@@ -15,9 +15,10 @@ import {
 } from './tui-agent-startup-shell'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from './tui-agent-config'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
+import { buildSleepingAgentLaunchConfig } from './sleeping-agent-launch-config'
+import { planHermesStartupQuery } from './hermes-startup-query'
+import { inlineAgentDraftFitsPlatform } from './agent-draft-platform-limit'
 import type { TuiAgent } from './types'
-
-const WIN32_INLINE_DRAFT_LIMIT_CHARS = 24_000
 
 export type AgentStartupPlan = {
   agent: TuiAgent
@@ -54,20 +55,6 @@ function resolveBaseCommand(args: {
   return { ok: true, command: suffix.suffix ? `${command} ${suffix.suffix}` : command }
 }
 
-function buildSleepingAgentLaunchConfig(args: {
-  agentCommand?: string | null
-  agentArgs?: string | null
-  agentEnv?: Record<string, string> | null
-}): SleepingAgentLaunchConfig {
-  return {
-    ...(args.agentCommand?.trim() ? { agentCommand: args.agentCommand } : {}),
-    agentArgs: args.agentArgs ?? '',
-    // Why: startupPlan.env may include prompt transport or pane identity env; the
-    // durable resume snapshot is limited to Orca-managed agent env inputs.
-    agentEnv: args.agentEnv ? { ...args.agentEnv } : {}
-  }
-}
-
 export function buildAgentStartupPlan(args: {
   agent: TuiAgent
   prompt: string
@@ -85,12 +72,13 @@ export function buildAgentStartupPlan(args: {
   const shell = resolveStartupShell(platform, args.shell)
   const trimmedPrompt = prompt.trim()
   const config = TUI_AGENT_CONFIG[agent]
+  const usesQuery = config.promptInjectionMode === 'hermes-query' && Boolean(trimmedPrompt)
   const baseCommand = resolveBaseCommand({
     agent,
     cmdOverrides,
     platform,
     shell,
-    agentArgs: args.agentArgs,
+    agentArgs: usesQuery ? null : args.agentArgs,
     isRemote: args.isRemote
   })
   if (!baseCommand.ok) {
@@ -138,6 +126,31 @@ export function buildAgentStartupPlan(args: {
       followupPrompt: null,
       launchConfig,
       ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
+    }
+  }
+
+  if (config.promptInjectionMode === 'hermes-query') {
+    const queryPlan = planHermesStartupQuery({
+      baseCommand: baseCommand.command,
+      agentArgs: args.agentArgs,
+      prompt: trimmedPrompt,
+      agentEnv: args.agentEnv,
+      platform,
+      shell,
+      isRemote: args.isRemote
+    })
+    if (!queryPlan) {
+      return null
+    }
+    return {
+      agent,
+      // Why: Hermes owns readiness and submission for `chat --query`; Orca
+      // only bounds and quotes the native invocation before starting the TUI.
+      launchCommand: queryPlan.command,
+      expectedProcess: config.expectedProcess,
+      followupPrompt: null,
+      launchConfig,
+      ...(queryPlan.env ? { env: queryPlan.env } : {})
     }
   }
 
@@ -233,22 +246,6 @@ export type AgentDraftLaunchPlan = {
   startupCommandDelivery?: StartupCommandDelivery
 }
 
-function inlineDraftPlanFitsPlatform(
-  plan: AgentDraftLaunchPlan,
-  platform: NodeJS.Platform
-): boolean {
-  if (platform !== 'win32') {
-    return true
-  }
-  const envChars = Object.entries(plan.env ?? {}).reduce(
-    (total, [key, value]) => total + key.length + value.length,
-    0
-  )
-  // Why: Windows CreateProcess/env blocks have tight length ceilings. Large
-  // generated drafts should use the existing post-ready paste fallback.
-  return plan.launchCommand.length + envChars <= WIN32_INLINE_DRAFT_LIMIT_CHARS
-}
-
 export function buildAgentDraftLaunchPlan(args: {
   agent: TuiAgent
   draft: string
@@ -304,7 +301,10 @@ export function buildAgentDraftLaunchPlan(args: {
       env: { ...args.agentEnv, [config.draftPromptEnvVar]: trimmed }
     }
   }
-  if (!plan || !inlineDraftPlanFitsPlatform(plan, platform)) {
+  if (
+    !plan ||
+    !inlineAgentDraftFitsPlatform({ command: plan.launchCommand, env: plan.env, platform })
+  ) {
     return null
   }
   return plan

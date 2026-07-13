@@ -6,7 +6,9 @@ const { handleMock, networkInterfacesMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({
-  ipcMain: { handle: handleMock }
+  app: { isPackaged: false },
+  ipcMain: { handle: handleMock },
+  shell: { openExternal: vi.fn() }
 }))
 
 vi.mock('qrcode', () => ({
@@ -225,5 +227,56 @@ describe('registerMobileHandlers', () => {
       revoked: true
     })
     expect(revokeRuntimeAccess).toHaveBeenCalledWith('runtime-1')
+  })
+
+  it('inspects and repairs the current packaged Windows websocket port', async () => {
+    const runPowerShell = vi
+      .fn()
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          ruleAllowed: false,
+          privateFirewallEnabled: true,
+          networkCategory: 'Private'
+        })
+      )
+      .mockResolvedValueOnce('{"launched":true,"exitCode":0}')
+    const rpcServer = { getWebSocketEndpoint: () => 'ws://0.0.0.0:6768' }
+    registerMobileHandlers(rpcServer as never, {
+      firewallEnvironment: {
+        platform: 'win32',
+        isPackaged: true,
+        executablePath: 'C:\\Program Files\\Orca\\Orca.exe',
+        runPowerShell
+      }
+    })
+
+    await expect(
+      handlers.get('mobile:getWindowsFirewallStatus')?.(null, { address: '192.168.0.108' })
+    ).resolves.toMatchObject({ supported: true, port: 6768, ruleAllowed: false })
+    await expect(
+      handlers.get('mobile:repairWindowsFirewall')?.({
+        sender: { isDestroyed: () => false, getType: () => 'window' }
+      })
+    ).resolves.toEqual({ ok: true })
+  })
+
+  it('rejects firewall mutation from a non-window renderer', async () => {
+    const runPowerShell = vi.fn()
+    const rpcServer = { getWebSocketEndpoint: () => 'ws://0.0.0.0:6768' }
+    registerMobileHandlers(rpcServer as never, {
+      firewallEnvironment: {
+        platform: 'win32',
+        isPackaged: true,
+        executablePath: 'C:\\Program Files\\Orca\\Orca.exe',
+        runPowerShell
+      }
+    })
+
+    expect(
+      handlers.get('mobile:repairWindowsFirewall')?.({
+        sender: { isDestroyed: () => false, getType: () => 'webview' }
+      })
+    ).toEqual({ ok: false, reason: 'unsupported' })
+    expect(runPowerShell).not.toHaveBeenCalled()
   })
 })

@@ -83,6 +83,7 @@ import {
   type WorkspaceSpaceSortKey
 } from './workspace-space-presentation'
 import { translate } from '@/i18n/i18n'
+import type { WorktreeForceDeleteReason } from '../../../../shared/worktree-removal'
 
 const TREEMAP_FILLS = [
   'color-mix(in srgb, var(--chart-2) 34%, var(--card))',
@@ -97,6 +98,7 @@ type WorkspaceSpaceDeleteState = {
   isDeleting: boolean
   error: string | null
   canForceDelete: boolean
+  forceDeleteReason: WorktreeForceDeleteReason | null
 }
 
 type WorkspaceGitRefreshState = {

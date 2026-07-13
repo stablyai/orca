@@ -76,4 +76,10 @@ export type PtyConnectionDeps = {
   setCacheTimerStartedAt: (key: string, ts: number | null) => void
   syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void
   clearExitedPanePtyLayoutBinding: (paneId: number, exitedPtyId: string) => void
+  /** Records a DECSET 2031 subscription answered from main's
+   *  '2031-subscribe' fact, mirroring the xterm CSI handler's registry write
+   *  (paneMode2031 + last replied theme) so later theme flips push CSI 997.
+   *  The reply itself is sent by the fact handler — query authority stays
+   *  with the view (model/view contract invariant 6). */
+  recordPaneMode2031Subscription?: (paneId: number, repliedMode: 'dark' | 'light') => void
 }

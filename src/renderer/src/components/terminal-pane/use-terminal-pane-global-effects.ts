@@ -21,6 +21,10 @@ import {
   type TerminalHiddenReason
 } from './terminal-visibility-resume'
 import { useTerminalWindowWakeRecovery } from './use-terminal-window-wake-recovery'
+import {
+  releaseRendererPtyVisibilityClaim,
+  setRendererPtyVisibilityClaim
+} from './pty-renderer-delivery-claims'
 
 type UseTerminalPaneGlobalEffectsArgs = {
   tabId: string
@@ -50,7 +54,7 @@ function reportRendererPtyVisibility(
       // renderer-visibility registry, so reporting them here is misleading.
       continue
     }
-    window.api.pty.setRendererPtyVisible?.(ptyId, visible)
+    setRendererPtyVisibilityClaim(transport, ptyId, visible)
   }
 }
 
@@ -122,7 +126,11 @@ export function useTerminalPaneGlobalEffects({
   useEffect(() => {
     const paneTransports = paneTransportsRef.current
     reportRendererPtyVisibility(paneTransports, rendererVisible)
-    return () => reportRendererPtyVisibility(paneTransports, false)
+    return () => {
+      for (const transport of paneTransports.values()) {
+        releaseRendererPtyVisibilityClaim(transport)
+      }
+    }
   }, [rendererVisible, paneTransportsRef])
 
   useEffect(() => {

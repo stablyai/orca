@@ -1,10 +1,3 @@
-// Upstream packaging bug: @xterm/addon-ligatures declares `"main":
-// "lib/addon-ligatures.js"` but ships only the `.mjs` entry, so Vite fails to
-// resolve the bare import. Fixed locally via config/patches/@xterm__addon-ligatures*.
-// Tracking upstream: https://github.com/xtermjs/xterm.js/issues/5822 and
-// https://github.com/xtermjs/xterm.js/pull/5828 — drop the patch once that lands.
-import { LigaturesAddon } from '@xterm/addon-ligatures'
-
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { safeFit } from './pane-tree-ops'
 import {
@@ -17,7 +10,8 @@ import { attachTerminalMouseWheelMultiplier } from './pane-terminal-mouse-wheel'
 import { attachTerminalScrollIntentTracking } from './terminal-scroll-intent'
 import { attachDomRendererFocusClassSync } from './pane-dom-focus-class-sync'
 import { attachWebgl, cancelPendingWebglRefresh, disposeWebgl } from './pane-webgl-renderer'
-import { registerArabicShapingJoiner } from './terminal-arabic-shaping-joiner'
+import { configureLazyArabicShapingJoiner } from './terminal-arabic-shaping-joiner'
+import { TerminalLigaturesAddon } from './terminal-ligatures-addon'
 import { resolveCursorAgentImeAnchor } from './terminal-ime-anchor'
 
 // ---------------------------------------------------------------------------
@@ -73,12 +67,10 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   // so the activation must stay at this position.
   activateOrcaTerminalUnicodeProvider(terminal)
 
-  // Why: without run-joining, Arabic/Hebrew output renders as disconnected
-  // letters in reversed order (#5262). Registered up front so restored
-  // scrollback and reattach replays shape correctly, not just live output.
-  // Joining tracks the live WebGL renderer: the DOM fallback misrenders
-  // joined spans (see registerArabicShapingJoiner), so it stays per-cell.
-  pane.arabicShapingJoinerCleanup = registerArabicShapingJoiner(
+  // Why: any xterm character joiner makes every repaint scan the whole grid.
+  // Defer registration until the first RTL write; replay and live paths both
+  // ensure it before parsing, so restored Arabic still shapes immediately.
+  pane.arabicShapingJoinerCleanup = configureLazyArabicShapingJoiner(
     terminal,
     () => pane.webglAddon != null
   )
@@ -173,7 +165,7 @@ export function attachLigatures(pane: ManagedPaneInternal): void {
     return
   }
   try {
-    const ligaturesAddon = new LigaturesAddon()
+    const ligaturesAddon = new TerminalLigaturesAddon()
     pane.terminal.loadAddon(ligaturesAddon)
     pane.ligaturesAddon = ligaturesAddon
     // Why: ligatures can be enabled after rows already rendered, especially

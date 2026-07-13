@@ -181,7 +181,7 @@ describe('remote terminal frame-drop resync', () => {
     expect(data).toEqual(['aaa'])
     expect(server.droppedFrames).toBe(1)
     // Instead, a fresh authoritative snapshot recovers the terminal.
-    expect(snapshots).toEqual(['INITIAL', 'RECOVERED'])
+    expect(snapshots).toEqual(['INITIAL', '\x1b[2J\x1b[3J\x1b[HRECOVERED'])
   })
 
   it('passes contiguous output straight through without resyncing', async () => {
@@ -208,7 +208,7 @@ describe('remote terminal frame-drop resync', () => {
     await Promise.resolve()
 
     expect(data).toEqual(['é'])
-    expect(snapshots).toEqual(['INITIAL', 'RECOVERED'])
+    expect(snapshots).toEqual(['INITIAL', '\x1b[2J\x1b[3J\x1b[HRECOVERED'])
   })
 
   it('defers recovery until an in-flight manual snapshot finishes', async () => {
@@ -231,6 +231,6 @@ describe('remote terminal frame-drop resync', () => {
 
     await expect(manualSnapshot).resolves.toMatchObject({ data: 'MANUAL' })
     expect(server.snapshotRequests).toHaveLength(2)
-    expect(snapshots).toEqual(['INITIAL', 'RECOVERED'])
+    expect(snapshots).toEqual(['INITIAL', '\x1b[2J\x1b[3J\x1b[HRECOVERED'])
   })
 })

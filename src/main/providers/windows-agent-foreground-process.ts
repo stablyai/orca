@@ -12,6 +12,17 @@ import {
 
 export type AgentForegroundResolutionOptions = {
   contextPaths?: readonly string[]
+  /** Require a Windows process-table scan started after this request. */
+  fresh?: boolean
+  /** Force confirmation scans even when node-pty reports a recognized name. */
+  forceProcessScan?: boolean
+  /** Lazily proves which global descendants still belong to this ConPTY. */
+  readWindowsConptyProcessIds?: () => Promise<ReadonlySet<number> | null>
+}
+
+export type WindowsAgentForegroundResolution = {
+  available: boolean
+  processName: string | null
 }
 
 export function shouldInspectWindowsAgentForeground(fallbackProcess: string): boolean {
@@ -23,21 +34,79 @@ export async function resolveWindowsAgentForegroundProcess(
   fallbackProcess: string,
   options: AgentForegroundResolutionOptions
 ): Promise<string | null> {
-  const candidates = await queryWindowsProcessDescendants(shellPid)
+  return (
+    await resolveWindowsAgentForegroundProcessWithAvailability(shellPid, fallbackProcess, options)
+  ).processName
+}
+
+export async function resolveWindowsAgentForegroundProcessWithAvailability(
+  shellPid: number,
+  fallbackProcess: string,
+  options: AgentForegroundResolutionOptions
+): Promise<WindowsAgentForegroundResolution> {
+  const candidates = await queryWindowsProcessDescendants(
+    shellPid,
+    options.fresh === true ? { fresh: true } : {}
+  )
   if (!candidates) {
-    return null
+    return { available: false, processName: null }
   }
+  // Resolve membership before applying the global ambiguity rule. A detached
+  // agent can otherwise make an attached Droid look ambiguous and suppress
+  // the only identity that is actually able to receive this PTY's input.
+  const hasRecognizedCandidate = windowsCandidatesContainRecognizedAgent(
+    candidates,
+    fallbackProcess,
+    options.contextPaths
+  )
+  let filteredCandidates = candidates
+  if (hasRecognizedCandidate && options.readWindowsConptyProcessIds) {
+    const conptyProcessIds = await options.readWindowsConptyProcessIds()
+    if (!conptyProcessIds) {
+      return { available: false, processName: null }
+    }
+    filteredCandidates = candidates.filter((candidate) => conptyProcessIds.has(candidate.pid))
+  }
+  return {
+    available: true,
+    processName: resolveWindowsProcessName(
+      filteredCandidates,
+      fallbackProcess,
+      options.contextPaths
+    )
+  }
+}
+
+function windowsCandidatesContainRecognizedAgent(
+  candidates: readonly WindowsProcessCandidate[],
+  fallbackProcess: string,
+  contextPaths: readonly string[] | undefined
+): boolean {
   if (isShellProcess(fallbackProcess)) {
-    return resolveShellForegroundProcessFromWindowsCandidates(candidates, options.contextPaths)
+    return createRecognizedWindowsProcessCandidates(candidates, contextPaths).length > 0
+  }
+  return candidates
+    .filter((candidate) => windowsCandidateMatchesFallbackWrapper(candidate, fallbackProcess))
+    .some(
+      (candidate) =>
+        recognizeAgentProcessFromCommandLine(candidate.command) !== null ||
+        recognizeAgentProcessFromCommandLine(candidate.name) !== null
+    )
+}
+
+function resolveWindowsProcessName(
+  candidates: readonly WindowsProcessCandidate[],
+  fallbackProcess: string,
+  contextPaths: readonly string[] | undefined
+): string | null {
+  if (isShellProcess(fallbackProcess)) {
+    return resolveShellForegroundProcessFromWindowsCandidates(candidates, contextPaths)
   }
   const wrapperCandidates = candidates.filter((candidate) =>
     windowsCandidateMatchesFallbackWrapper(candidate, fallbackProcess)
   )
   if (wrapperCandidates.length !== 1) {
-    return resolveWrapperForegroundProcessFromWindowsCandidates(
-      wrapperCandidates,
-      options.contextPaths
-    )
+    return resolveWrapperForegroundProcessFromWindowsCandidates(wrapperCandidates, contextPaths)
   }
   const [candidate] = wrapperCandidates
   const recognized =

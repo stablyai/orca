@@ -9,6 +9,7 @@ import {
   encodeTerminalStreamJson,
   encodeTerminalStreamText
 } from '../../../shared/terminal-stream-protocol'
+import { e2eConfig } from '@/lib/e2e-config'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
 
 type RuntimeEnvironmentSubscriptionHandle = {
@@ -24,7 +25,7 @@ type TerminalMultiplexEvent =
   | {
       type: 'fit-override-changed'
       streamId: number
-      mode: 'mobile-fit' | 'desktop-fit'
+      mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
       cols: number
       rows: number
     }
@@ -42,7 +43,7 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
   onEnd?: () => void
   onError?: (message: string) => void
   onFitOverrideChanged?: (event: {
-    mode: 'mobile-fit' | 'desktop-fit'
+    mode: 'mobile-fit' | 'remote-desktop-fit' | 'desktop-fit'
     cols: number
     rows: number
   }) => void
@@ -56,6 +57,7 @@ export type RemoteRuntimeMultiplexedTerminal = {
   streamId: number
   sendInput: (text: string) => boolean
   resize: (cols: number, rows: number) => boolean
+  claimViewport: (cols: number, rows: number) => boolean
   serializeBuffer: (opts?: { scrollbackRows?: number }) => Promise<{
     data: string
     cols: number
@@ -70,10 +72,12 @@ type RemoteRuntimeMultiplexedTerminalState = {
   streamId: number
   terminal: string
   callbacks: RemoteRuntimeMultiplexedTerminalCallbacks
+  acknowledgeOutput: boolean
+  heldAckBytes: number
   snapshotChunks: Uint8Array<ArrayBufferLike>[]
   snapshotBytes: number
   snapshotOverflowed: boolean
-  snapshotTarget: 'initial' | 'request'
+  snapshotTarget: 'initial' | 'request' | 'recovery'
   snapshotInfo: RemoteRuntimeSnapshotInfo | null
   initialSnapshotReceived: boolean
   pendingSnapshotRequest: RemoteRuntimeSnapshotRequest | null
@@ -123,6 +127,73 @@ const REMOTE_TERMINAL_SNAPSHOT_REQUEST_TIMEOUT_MS = 10_000
 export const REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE =
   'Remote terminal snapshot exceeded the 2 MiB replay limit; live output will continue.'
 
+type E2eRemoteTerminalMultiplexAckGateSnapshot = {
+  heldTerminalCount: number
+  heldStreamCount: number
+  heldAckChars: number
+  releasedAckChars: number
+}
+
+type E2eRemoteTerminalMultiplexAckGateApi = {
+  hold: (terminals: string[]) => void
+  release: () => void
+  snapshot: () => E2eRemoteTerminalMultiplexAckGateSnapshot
+}
+
+type E2eRemoteTerminalMultiplexAckGateWindow = Window & {
+  __remoteTerminalMultiplexAckGate?: E2eRemoteTerminalMultiplexAckGateApi
+}
+
+const e2eHeldRemoteAckTerminals = new Set<string>()
+let e2eReleasedRemoteAckChars = 0
+
+function shouldHoldE2eRemoteTerminalAck(terminal: string): boolean {
+  return e2eConfig.exposeStore && e2eHeldRemoteAckTerminals.has(terminal)
+}
+
+function getE2eRemoteAckSnapshot(): E2eRemoteTerminalMultiplexAckGateSnapshot {
+  let heldStreamCount = 0
+  let heldAckChars = 0
+  for (const multiplexer of multiplexers.values()) {
+    for (const stream of multiplexer.getStreamsForE2e()) {
+      if (stream.heldAckBytes > 0) {
+        heldStreamCount += 1
+        heldAckChars += stream.heldAckBytes
+      }
+    }
+  }
+  return {
+    heldTerminalCount: e2eHeldRemoteAckTerminals.size,
+    heldStreamCount,
+    heldAckChars,
+    releasedAckChars: e2eReleasedRemoteAckChars
+  }
+}
+
+function releaseE2eRemoteTerminalAcks(): void {
+  for (const multiplexer of multiplexers.values()) {
+    e2eReleasedRemoteAckChars += multiplexer.releaseHeldAcksForE2e()
+  }
+  e2eHeldRemoteAckTerminals.clear()
+}
+
+function exposeE2eRemoteTerminalMultiplexAckGate(): void {
+  if (!e2eConfig.exposeStore || typeof window === 'undefined') {
+    return
+  }
+  const target = window as E2eRemoteTerminalMultiplexAckGateWindow
+  target.__remoteTerminalMultiplexAckGate ??= {
+    hold: (terminals) => {
+      releaseE2eRemoteTerminalAcks()
+      for (const terminal of terminals) {
+        e2eHeldRemoteAckTerminals.add(terminal)
+      }
+    },
+    release: releaseE2eRemoteTerminalAcks,
+    snapshot: getE2eRemoteAckSnapshot
+  }
+}
+
 class RemoteRuntimeTerminalMultiplexer {
   private readonly streams = new Map<number, RemoteRuntimeMultiplexedTerminalState>()
   private subscription: RuntimeEnvironmentSubscriptionHandle | null = null
@@ -152,6 +223,8 @@ class RemoteRuntimeTerminalMultiplexer {
       streamId,
       terminal: args.terminal,
       callbacks: args.callbacks,
+      acknowledgeOutput: args.client.type === 'desktop',
+      heldAckBytes: 0,
       snapshotChunks: [],
       snapshotBytes: 0,
       snapshotOverflowed: false,
@@ -175,6 +248,22 @@ class RemoteRuntimeTerminalMultiplexer {
           TerminalStreamOpcode.Resize,
           encodeTerminalStreamJson({ cols, rows })
         ),
+      claimViewport: (cols, rows) => {
+        const claimed = this.sendFrame(
+          streamId,
+          TerminalStreamOpcode.ClaimViewport,
+          encodeTerminalStreamJson({ cols, rows })
+        )
+        // Why: older runtimes ignore the claim opcode but still understand
+        // Resize. Claim first keeps new-runtime ownership precise and leaves a
+        // backwards-compatible resize immediately behind it.
+        const resized = this.sendFrame(
+          streamId,
+          TerminalStreamOpcode.Resize,
+          encodeTerminalStreamJson({ cols, rows })
+        )
+        return claimed && resized
+      },
       serializeBuffer: (opts) => this.requestSnapshot(state, opts),
       close: () => {
         if (this.streams.get(streamId) === state) {
@@ -198,7 +287,9 @@ class RemoteRuntimeTerminalMultiplexer {
           streamId,
           terminal: args.terminal,
           client: args.client,
-          viewport: args.viewport
+          viewport: args.viewport,
+          capabilities:
+            args.client.type === 'desktop' ? { ackOutput: 1, desktopViewportClaims: 1 } : undefined
         })
       )
       if (!sent) {
@@ -316,7 +407,9 @@ class RemoteRuntimeTerminalMultiplexer {
       )
     } else if (event.type === 'fit-override-changed') {
       if (
-        (event.mode !== 'mobile-fit' && event.mode !== 'desktop-fit') ||
+        (event.mode !== 'mobile-fit' &&
+          event.mode !== 'remote-desktop-fit' &&
+          event.mode !== 'desktop-fit') ||
         typeof event.cols !== 'number' ||
         typeof event.rows !== 'number'
       ) {
@@ -346,21 +439,31 @@ class RemoteRuntimeTerminalMultiplexer {
     }
     if (frame.opcode === TerminalStreamOpcode.Output) {
       const data = decodeTerminalStreamText(frame.payload)
-      const rawLength = data.length
-      // Why: a resync snapshot is authoritative; drop live output that arrives
-      // while it is in flight so the corrupt post-gap tail is never rendered.
-      if (stream.resyncInFlight) {
-        return
+      try {
+        const rawLength = data.length
+        // Why: a resync snapshot is authoritative; discard live output while
+        // it is in flight, but still return transport credit in finally.
+        if (stream.resyncInFlight) {
+          return
+        }
+        const seq = typeof frame.seq === 'number' && frame.seq > 0 ? frame.seq : undefined
+        if (this.detectOutputGap(stream, seq, rawLength)) {
+          this.requestResyncSnapshot(stream)
+          return
+        }
+        if (typeof seq === 'number') {
+          stream.expectedSeq = seq
+        }
+        stream.callbacks.onData(data, { seq, rawLength })
+      } finally {
+        if (stream.acknowledgeOutput) {
+          if (shouldHoldE2eRemoteTerminalAck(stream.terminal)) {
+            stream.heldAckBytes += frame.payload.byteLength
+          } else {
+            this.acknowledgeOutput(stream, frame.payload.byteLength)
+          }
+        }
       }
-      const seq = typeof frame.seq === 'number' && frame.seq > 0 ? frame.seq : undefined
-      if (this.detectOutputGap(stream, seq, rawLength)) {
-        this.requestResyncSnapshot(stream)
-        return
-      }
-      if (typeof seq === 'number') {
-        stream.expectedSeq = seq
-      }
-      stream.callbacks.onData(data, { seq, rawLength })
       return
     }
     if (frame.opcode === TerminalStreamOpcode.SnapshotStart) {
@@ -371,7 +474,9 @@ class RemoteRuntimeTerminalMultiplexer {
         typeof requestId === 'number' ||
         (stream.initialSnapshotReceived && stream.pendingSnapshotRequest)
           ? 'request'
-          : 'initial'
+          : stream.initialSnapshotReceived
+            ? 'recovery'
+            : 'initial'
       return
     }
     if (frame.opcode === TerminalStreamOpcode.SnapshotChunk) {
@@ -415,6 +520,14 @@ class RemoteRuntimeTerminalMultiplexer {
           clearPendingSnapshotRequest(stream)
         } else if (target === 'initial') {
           stream.callbacks.onSnapshot(data ?? '', {
+            pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi
+          })
+        } else if (target === 'recovery') {
+          // Why: a server-pushed recovery snapshot replaces terminal state
+          // mid-session; clear the screen and scrollback before applying it.
+          // An empty snapshot is still applied so stale dropped output does
+          // not linger on a terminal the model says is blank.
+          stream.callbacks.onSnapshot(`\x1b[2J\x1b[3J\x1b[H${data ?? ''}`, {
             pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi
           })
         }
@@ -562,6 +675,33 @@ class RemoteRuntimeTerminalMultiplexer {
     return id
   }
 
+  private acknowledgeOutput(stream: RemoteRuntimeMultiplexedTerminalState, bytes: number): boolean {
+    return this.sendFrame(
+      stream.streamId,
+      TerminalStreamOpcode.Ack,
+      encodeTerminalStreamJson({ bytes })
+    )
+  }
+
+  getStreamsForE2e(): Iterable<RemoteRuntimeMultiplexedTerminalState> {
+    return this.streams.values()
+  }
+
+  releaseHeldAcksForE2e(): number {
+    let released = 0
+    for (const stream of this.streams.values()) {
+      if (stream.heldAckBytes <= 0) {
+        continue
+      }
+      const bytes = stream.heldAckBytes
+      stream.heldAckBytes = 0
+      if (this.acknowledgeOutput(stream, bytes)) {
+        released += bytes
+      }
+    }
+    return released
+  }
+
   private sendFrame(
     streamId: number,
     opcode: TerminalStreamOpcode,
@@ -644,6 +784,7 @@ function releaseRemoteRuntimeTerminalMultiplexer(
 export function getRemoteRuntimeTerminalMultiplexer(
   environmentId: string
 ): RemoteRuntimeTerminalMultiplexer {
+  exposeE2eRemoteTerminalMultiplexAckGate()
   let multiplexer = multiplexers.get(environmentId)
   if (!multiplexer) {
     multiplexer = new RemoteRuntimeTerminalMultiplexer(
@@ -661,6 +802,8 @@ export function _getRemoteRuntimeTerminalMultiplexerCountForTest(): number {
 
 export function resetRemoteRuntimeTerminalMultiplexersForTests(): void {
   multiplexers.clear()
+  e2eHeldRemoteAckTerminals.clear()
+  e2eReleasedRemoteAckChars = 0
 }
 
 function concatBytes(chunks: Uint8Array<ArrayBufferLike>[]): Uint8Array<ArrayBufferLike> {

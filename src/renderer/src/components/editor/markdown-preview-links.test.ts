@@ -149,9 +149,10 @@ describe('resolveMarkdownPreviewHttpOpenOptions', () => {
       resolveMarkdownPreviewHttpOpenOptions(
         { metaKey: true, ctrlKey: false, shiftKey: true },
         true,
-        'wt-1'
+        'wt-1',
+        { kind: 'local' }
       )
-    ).toEqual({ forceSystemBrowser: true })
+    ).toEqual({ forceSystemBrowser: true, sourceOwner: { kind: 'local' } })
   })
 
   it('forces the system browser on Ctrl+Shift-click on Linux/Windows', () => {
@@ -159,9 +160,10 @@ describe('resolveMarkdownPreviewHttpOpenOptions', () => {
       resolveMarkdownPreviewHttpOpenOptions(
         { metaKey: false, ctrlKey: true, shiftKey: true },
         false,
-        'wt-1'
+        'wt-1',
+        { kind: 'local' }
       )
-    ).toEqual({ forceSystemBrowser: true })
+    ).toEqual({ forceSystemBrowser: true, sourceOwner: { kind: 'local' } })
   })
 
   it('routes a plain Cmd-click through the worktree so it can open in Orca', () => {
@@ -169,9 +171,10 @@ describe('resolveMarkdownPreviewHttpOpenOptions', () => {
       resolveMarkdownPreviewHttpOpenOptions(
         { metaKey: true, ctrlKey: false, shiftKey: false },
         true,
-        'wt-1'
+        'wt-1',
+        { kind: 'local' }
       )
-    ).toEqual({ worktreeId: 'wt-1' })
+    ).toEqual({ worktreeId: 'wt-1', sourceOwner: { kind: 'local' } })
   })
 
   it('routes a plain click (no modifier) through the worktree', () => {
@@ -179,9 +182,10 @@ describe('resolveMarkdownPreviewHttpOpenOptions', () => {
       resolveMarkdownPreviewHttpOpenOptions(
         { metaKey: false, ctrlKey: false, shiftKey: false },
         true,
-        'wt-1'
+        'wt-1',
+        { kind: 'local' }
       )
-    ).toEqual({ worktreeId: 'wt-1' })
+    ).toEqual({ worktreeId: 'wt-1', sourceOwner: { kind: 'local' } })
   })
 
   it('does not force the system browser for Shift without the platform mod key', () => {
@@ -190,9 +194,10 @@ describe('resolveMarkdownPreviewHttpOpenOptions', () => {
       resolveMarkdownPreviewHttpOpenOptions(
         { metaKey: false, ctrlKey: false, shiftKey: true },
         true,
-        'wt-1'
+        'wt-1',
+        { kind: 'local' }
       )
-    ).toEqual({ worktreeId: 'wt-1' })
+    ).toEqual({ worktreeId: 'wt-1', sourceOwner: { kind: 'local' } })
   })
 
   it('does not treat Mac Ctrl+Shift-click as the escape hatch', () => {
@@ -201,9 +206,10 @@ describe('resolveMarkdownPreviewHttpOpenOptions', () => {
       resolveMarkdownPreviewHttpOpenOptions(
         { metaKey: false, ctrlKey: true, shiftKey: true },
         true,
-        'wt-1'
+        'wt-1',
+        { kind: 'local' }
       )
-    ).toEqual({ worktreeId: 'wt-1' })
+    ).toEqual({ worktreeId: 'wt-1', sourceOwner: { kind: 'local' } })
   })
 
   it('passes through a null worktree (openHttpLink then falls back to system browser)', () => {
@@ -211,9 +217,10 @@ describe('resolveMarkdownPreviewHttpOpenOptions', () => {
       resolveMarkdownPreviewHttpOpenOptions(
         { metaKey: false, ctrlKey: false, shiftKey: false },
         true,
-        null
+        null,
+        { kind: 'local' }
       )
-    ).toEqual({ worktreeId: null })
+    ).toEqual({ worktreeId: null, sourceOwner: { kind: 'local' } })
   })
 })
 

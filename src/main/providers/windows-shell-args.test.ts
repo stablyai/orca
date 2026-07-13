@@ -58,6 +58,20 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(result.startupCommandDeliveredInShellArgs).toBe(true)
   })
 
+  it('keeps quoted cmd.exe startup commands on stdin delivery', () => {
+    // Why: direct queued cmd commands need normal quotes, which node-pty's
+    // C-runtime argv escaping corrupts when delivered through `/K`.
+    const result = resolveWindowsShellLaunchArgs(
+      'cmd.exe',
+      'C:\\Users\\alice\\repo',
+      'C:\\Users\\alice',
+      undefined,
+      'cd /d "C:\\Users\\alice\\repo" && claude "--resume" "session one"'
+    )
+    expect(result.shellArgs).toEqual(['/K', 'chcp 65001 > nul'])
+    expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
+  })
+
   it('keeps large cmd.exe startup commands on stdin delivery', () => {
     const result = resolveWindowsShellLaunchArgs(
       'cmd.exe',

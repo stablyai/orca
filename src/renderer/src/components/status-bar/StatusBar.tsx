@@ -63,6 +63,7 @@ import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
 import { StatusBarUsageEmptyCta } from './StatusBarUsageEmptyCta'
+import { UsagePercentageDisplayChangeNotice } from './UsagePercentageDisplayChangeNotice'
 import { shouldOpenStatusBarContextMenu } from './status-bar-context-menu-policy'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -79,6 +80,11 @@ import {
   selectCodexProviderAccount
 } from '@/runtime/runtime-provider-accounts-client'
 import { translate } from '@/i18n/i18n'
+import {
+  normalizeUsagePercentageDisplay,
+  type UsagePercentageDisplay
+} from '../../../../shared/usage-percentage-display'
+import { formatUsagePercentageLabel } from './usage-percentage-label'
 
 type StatusBarProps = {
   floatingTerminalOpen: boolean
@@ -717,6 +723,11 @@ function ClaudeSwitcherMenu({
   // settings mutations don't re-run the remote snapshot round trip.
   const loadAccounts = useCallback(async () => {
     const snapshot = await fetchProviderAccountsSnapshot({ activeRuntimeEnvironmentId })
+    // Why: a failed Claude half is a substituted empty roster; keep prior state.
+    if (snapshot.failedProviders?.includes('claude')) {
+      console.error('Claude account list failed; keeping previous status bar state.')
+      return
+    }
     if (mountedRef.current) {
       setAccounts(snapshot.claude)
     }
@@ -958,9 +969,11 @@ export function InlineUsageBars({
   limits: ProviderRateLimits
   isFetching: boolean
 }): React.JSX.Element {
-  // Why: show % used (consumption), not remaining — matches harness meters (#7551).
-  // Keep the "used" word in compact labels so bare "32% 5h" is not read as remaining.
-  const usedSuffix = translate('auto.components.status.bar.tooltip.cedb7b99e3', '% used')
+  const display = normalizeUsagePercentageDisplay(
+    useAppStore((state) => state.usagePercentageDisplay)
+  )
+  // Why: the preference changes copy, while bar fill stays consumption-based
+  // so empty/green and full/red keep the meter semantics introduced in #8167.
   const usageWindows = [
     limits.session
       ? {
@@ -1001,8 +1014,7 @@ export function InlineUsageBars({
             />
           </div>
           <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
-            {window.used}
-            {usedSuffix} {window.label}
+            {formatUsagePercentageLabel(window.used, display)} {window.label}
           </span>
         </div>
       ))}
@@ -1075,16 +1087,21 @@ function InlineUsageSkeleton(): React.JSX.Element {
 }
 
 // ---------------------------------------------------------------------------
-// Window label (shows percent used / consumption)
+// Window label
 // ---------------------------------------------------------------------------
 
-function WindowLabel({ w, label }: { w: RateLimitWindow; label: string }): React.JSX.Element {
-  const used = clampUsedPercent(w.usedPercent)
-  // Why: "32% 5h" is ambiguous after the remaining→used flip; keep "used" explicit.
+function WindowLabel({
+  w,
+  label,
+  display
+}: {
+  w: RateLimitWindow
+  label: string
+  display: UsagePercentageDisplay
+}): React.JSX.Element {
   return (
     <span className="tabular-nums">
-      {used}
-      {translate('auto.components.status.bar.tooltip.cedb7b99e3', '% used')} {label}
+      {formatUsagePercentageLabel(w.usedPercent, display)} {label}
     </span>
   )
 }
@@ -1099,10 +1116,12 @@ const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
 
 function ProviderSegment({
   p,
-  compact
+  compact,
+  display
 }: {
   p: ProviderRateLimits | null
   compact: boolean
+  display: UsagePercentageDisplay
 }): React.JSX.Element {
   const provider = p?.provider ?? 'claude'
   const statusLabel = p ? getProviderUsageStatusLabel(p) : ''
@@ -1155,20 +1174,20 @@ function ProviderSegment({
     return (
       <span className="inline-flex items-center gap-1.5">
         <ProviderIcon provider={provider} />
-        {visibleBuckets.map((bucket, i) => {
-          const used = clampUsedPercent(bucket.usedPercent)
-          return (
-            <React.Fragment key={bucket.name}>
-              {i > 0 && <span className="text-muted-foreground">·</span>}
-              <span className="tabular-nums">
-                {bucket.name} {used}
-                {translate('auto.components.status.bar.tooltip.cedb7b99e3', '% used')}
-              </span>
-            </React.Fragment>
-          )
-        })}
+        {visibleBuckets.map((bucket, i) => (
+          <React.Fragment key={bucket.name}>
+            {i > 0 && <span className="text-muted-foreground">·</span>}
+            <span className="tabular-nums">
+              {bucket.name} {formatUsagePercentageLabel(bucket.usedPercent, display)}
+            </span>
+          </React.Fragment>
+        ))}
         {visibleBuckets.length === 0 && p.session && (
-          <WindowLabel w={p.session} label={formatWindowLabel(p.session.windowMinutes)} />
+          <WindowLabel
+            w={p.session}
+            label={formatWindowLabel(p.session.windowMinutes)}
+            display={display}
+          />
         )}
         {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
       </span>
@@ -1206,7 +1225,7 @@ function ProviderSegment({
       {visibleWindows.map((window, index) => (
         <React.Fragment key={window.key}>
           {index > 0 && <span className="text-muted-foreground">·</span>}
-          <WindowLabel w={window.window} label={window.label} />
+          <WindowLabel w={window.window} label={window.label} display={display} />
         </React.Fragment>
       ))}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
@@ -1285,6 +1304,11 @@ function CodexSwitcherMenu({
   // settings mutations don't re-run the remote snapshot round trip.
   const loadAccounts = useCallback(async () => {
     const snapshot = await fetchProviderAccountsSnapshot({ activeRuntimeEnvironmentId })
+    // Why: a failed Codex half is a substituted empty roster; keep prior state.
+    if (snapshot.failedProviders?.includes('codex')) {
+      console.error('Codex account list failed; keeping previous status bar state.')
+      return
+    }
     if (mountedRef.current) {
       setAccounts(snapshot.codex)
     }
@@ -1735,6 +1759,9 @@ export function ProviderDetailsMenu({
   children?: React.ReactNode
 }): React.JSX.Element {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  const usagePercentageDisplay = normalizeUsagePercentageDisplay(
+    useAppStore((s) => s.usagePercentageDisplay)
+  )
   const skipCloseAutoFocusRef = useRef(false)
 
   const handleOpenChange = (nextOpen: boolean): void => {
@@ -1777,7 +1804,7 @@ export function ProviderDetailsMenu({
               </span>
             </span>
           ) : (
-            <ProviderSegment p={provider} compact={compact} />
+            <ProviderSegment p={provider} compact={compact} display={usagePercentageDisplay} />
           )}
         </button>
       </DropdownMenuTrigger>
@@ -1802,7 +1829,11 @@ export function ProviderDetailsMenu({
         {topContent}
         <div className="p-2">
           {/* Why: provider-specific action sections may render richer reset-credit UI. */}
-          <ProviderPanel p={provider} showResetCredits={!hidePanelResetCredits} />
+          <ProviderPanel
+            p={provider}
+            showResetCredits={!hidePanelResetCredits}
+            usagePercentageDisplay={usagePercentageDisplay}
+          />
         </div>
         {children ? (
           <>
@@ -1985,7 +2016,10 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const showPorts = statusBarItems.includes('ports')
   const showFloatingTerminalToggle =
     floatingTerminalEnabled && floatingTerminalTriggerLocation === 'status-bar'
-  const anyVisible =
+  // Why: which usage-meter children actually render — excludes resource-usage
+  // and other non-meter status items so the % display change callout only
+  // opens when there is a real meter cluster to anchor to.
+  const hasVisibleUsageMeters =
     showClaude ||
     showCodex ||
     showGemini ||
@@ -1993,8 +2027,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     showKimi ||
     showAntigravity ||
     showMiniMax ||
-    showGrok ||
-    showResourceUsage
+    showGrok
+  const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: a brand-new user with no provider configured would otherwise see an
   // empty left side of the status bar and wonder what's missing. Settings are
   // included because managed accounts are durable even when live usage
@@ -2052,7 +2086,9 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             <StatusBarUsageEmptyCta />
           ) : null
         ) : (
-          <>
+          // Why: one-time usage-display change callout anchors to this cluster so
+          // it sits next to the meters the user is confused by, not a global toast.
+          <UsagePercentageDisplayChangeNotice hasVisibleUsageMeters={hasVisibleUsageMeters}>
             {showClaude && (
               <ClaudeSwitcherMenu claude={visibleClaude} compact={compact} iconOnly={iconOnly} />
             )}
@@ -2125,7 +2161,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                 )}
               />
             )}
-          </>
+          </UsagePercentageDisplayChangeNotice>
         )}
         {anyVisible && !isEmptyUsageState && (
           <Tooltip>

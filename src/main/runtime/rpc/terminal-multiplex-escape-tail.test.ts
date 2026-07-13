@@ -53,6 +53,7 @@ describe('terminal.multiplex pending-escape-tail threading (#7329)', () => {
         getTerminalSize: vi.fn().mockReturnValue({ cols: 80, rows: 24 }),
         getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
         getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+        registerRemoteTerminalViewSubscriber: vi.fn(() => () => {}),
         subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
         subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),

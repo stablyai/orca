@@ -10,6 +10,11 @@ export type HostedReviewProvider =
 
 export type HostedReviewState = 'open' | 'closed' | 'merged' | 'draft'
 
+/** A linked review is identified by a positive integer PR/MR number. */
+export function isPositiveHostedReviewNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
+}
+
 export type HostedReviewInfo = {
   provider: HostedReviewProvider
   number: number

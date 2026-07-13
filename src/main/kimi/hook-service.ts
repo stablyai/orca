@@ -23,6 +23,7 @@ import {
   writeManagedScriptRemote,
   writeTextFileRemoteAtomic
 } from '../agent-hooks/installer-utils-remote'
+import { buildPosixHookPayloadCapture } from '../agent-hooks/hook-stdin-contract'
 import {
   applyManagedKimiHooks,
   KIMI_HOOK_EVENTS,
@@ -59,6 +60,7 @@ function getManagedCommand(scriptPath: string): string {
 function getManagedScript(): string {
   return [
     '#!/bin/sh',
+    ...buildPosixHookPayloadCapture(),
     // Why: refresh PORT/TOKEN/ENV/VERSION from the current Orca install so a PTY
     // that survived an Orca restart still reaches the live listener. See
     // claude/hook-service.ts for the full rationale.
@@ -66,10 +68,6 @@ function getManagedScript(): string {
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
-    '  exit 0',
-    'fi',
-    'payload=$(cat)',
-    'if [ -z "$payload" ]; then',
     '  exit 0',
     'fi',
     // Why: worktreeId embeds a filesystem path, so hand-building JSON in POSIX

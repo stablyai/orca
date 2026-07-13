@@ -76,6 +76,7 @@ function insertWorkerDone(
     from?: string
     dispatchId?: string
     filesModified?: string[]
+    senderPaneKey?: string
   }
 ): void {
   const dispatch = db.getDispatchContext(params.taskId)
@@ -83,8 +84,9 @@ function insertWorkerDone(
   if (!dispatchId) {
     throw new Error(`No dispatch for task ${params.taskId}`)
   }
+  const from = params.from ?? dispatch?.assignee_handle ?? 'term_unknown'
   db.insertMessage({
-    from: params.from ?? dispatch?.assignee_handle ?? 'term_unknown',
+    from,
     to: params.to ?? 'coord',
     subject: 'Done',
     type: 'worker_done',
@@ -92,7 +94,10 @@ function insertWorkerDone(
       taskId: params.taskId,
       dispatchId,
       ...(params.filesModified ? { filesModified: params.filesModified } : {})
-    })
+    }),
+    senderPaneKey:
+      params.senderPaneKey ??
+      (from === dispatch?.assignee_handle ? (dispatch.assignee_pane_key ?? undefined) : undefined)
   })
 }
 
@@ -142,6 +147,31 @@ describe('Coordinator', () => {
     expect(result.status).toBe('completed')
     expect(result.completedTasks).toContain(task.id)
     expect(runtime.sentMessages.length).toBeGreaterThan(0)
+  })
+
+  it('records the assignee pane key when the runtime can resolve one', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = createMockRuntime()
+    runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
+    const withPaneLookup = Object.assign(runtime, {
+      getTerminalPaneKey: (handle: string) => (handle === 'term_a' ? 'tab_a:leaf_a' : null)
+    })
+
+    const task = db.createTask({ spec: 'implement feature' })
+    const coordinator = new Coordinator(db, withPaneLookup, {
+      spec: 'build it',
+      coordinatorHandle: 'coord',
+      pollIntervalMs: 50
+    })
+    const runPromise = coordinator.run()
+    await new Promise((r) => {
+      setTimeout(r, 100)
+    })
+
+    expect(db.getDispatchContext(task.id)?.assignee_pane_key).toBe('tab_a:leaf_a')
+
+    insertWorkerDone(db, { taskId: task.id })
+    await runPromise
   })
 
   it('records completedTasks when send reconciled worker_done before coordinator read', async () => {
@@ -570,20 +600,22 @@ describe('Coordinator', () => {
     expect(db.getDispatchContextById(activeCtx.id)?.status).toBe('completed')
   })
 
-  it('ignores worker_done sent by a terminal that does not own the dispatch', async () => {
+  it('accepts worker_done pane provenance after an assignee handle changes', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = createMockRuntime()
     const logs: string[] = []
 
     const task = db.createTask({ spec: 'owned work' })
-    const ctx = db.createDispatchContext(task.id, 'term_owner')
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const ctx = db.createDispatchContext(task.id, 'term_owner', `tab_before:${leafId}`)
 
     db.insertMessage({
-      from: 'term_intruder',
+      from: 'term_reminted',
       to: 'coord',
-      subject: 'Spoofed done',
+      subject: 'Done after restart',
       type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: ctx.id })
+      payload: JSON.stringify({ taskId: task.id, dispatchId: ctx.id }),
+      senderPaneKey: `tab_after:${leafId}`
     })
 
     const coordinator = new Coordinator(db, runtime, {
@@ -592,16 +624,12 @@ describe('Coordinator', () => {
       pollIntervalMs: 20,
       onLog: (m) => logs.push(m)
     })
-    const runPromise = coordinator.run()
-    await new Promise((r) => {
-      setTimeout(r, 80)
-    })
-    coordinator.stop()
-    await runPromise
+    const result = await coordinator.run()
 
-    expect(db.getTask(task.id)?.status).toBe('dispatched')
-    expect(db.getDispatchContextById(ctx.id)?.status).toBe('dispatched')
-    expect(logs.some((m) => m.includes('expected term_owner'))).toBe(true)
+    expect(result.status).toBe('completed')
+    expect(db.getTask(task.id)?.status).toBe('completed')
+    expect(db.getDispatchContextById(ctx.id)?.status).toBe('completed')
+    expect(logs.some((m) => m.includes('Task') && m.includes('completed'))).toBe(true)
   })
 
   it('can be stopped', async () => {

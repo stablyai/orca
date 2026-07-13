@@ -109,6 +109,9 @@ describe('OrcaRuntimeService terminal startup cwd', () => {
 
   it('materializes restored headless mobile tabs in the persisted startup cwd', async () => {
     const store = {
+      // wt-1 is a worktree id, not a registered repo, so getRepo returns null;
+      // the selector validator calls it to reject repo ids passed as worktree ids.
+      getRepo: () => null,
       getWorkspaceSession: () => ({
         activeRepoId: null,
         activeWorktreeId: 'wt-1',

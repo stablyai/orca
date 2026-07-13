@@ -14,7 +14,13 @@ export enum TerminalStreamOpcode {
   Subscribe = 9,
   Unsubscribe = 10,
   SnapshotRequest = 11,
-  Metadata = 12
+  Metadata = 12,
+  // Why 13: Metadata=12 shipped to mobile clients in v1.4.120; Ack (branch-only
+  // remote-multiplex flow control) renumbers to stay wire-compatible.
+  Ack = 13,
+  // Why 14: Ack already occupies 13 on current clients; older runtimes ignore
+  // this opcode and still receive the compatibility Resize frame behind it.
+  ClaimViewport = 14
 }
 
 export type TerminalStreamFrame = {
@@ -94,6 +100,8 @@ function isTerminalStreamOpcode(value: number): value is TerminalStreamOpcode {
     value === TerminalStreamOpcode.Subscribe ||
     value === TerminalStreamOpcode.Unsubscribe ||
     value === TerminalStreamOpcode.SnapshotRequest ||
-    value === TerminalStreamOpcode.Metadata
+    value === TerminalStreamOpcode.Metadata ||
+    value === TerminalStreamOpcode.Ack ||
+    value === TerminalStreamOpcode.ClaimViewport
   )
 }

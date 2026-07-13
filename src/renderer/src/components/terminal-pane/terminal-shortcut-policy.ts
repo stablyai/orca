@@ -1,4 +1,5 @@
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../../../shared/keybindings'
+import type { WindowsShiftEnterEncoding } from './terminal-windows-shift-enter'
 
 export type TerminalShortcutEvent = {
   key: string
@@ -75,9 +76,8 @@ export function resolveTerminalShortcutAction(
   isWindows: boolean = false,
   keybindings?: KeybindingOverrides,
   // Why: lazily reports whether the active pane is a local native Windows
-  // ConPTY (PowerShell/cmd via PSReadLine). Only consulted for the Ctrl+Arrow
-  // word-nav rule below, so the execution-host lookup it performs stays off the
-  // hot path for every other keystroke.
+  // ConPTY. Only consulted for Ctrl+Arrow, so execution-host lookup stays off
+  // every other keystroke.
   isLocalWindowsConptyPane?: () => boolean,
   // Why: lazily reports whether the active pane's application has enabled the
   // kitty keyboard protocol (CSI > u). Gates the Option-as-Alt compensation
@@ -87,7 +87,13 @@ export function resolveTerminalShortcutAction(
   // layout; the physical-code table above is US QWERTY and reports the wrong
   // key on Dvorak/Colemak/AZERTY-class layouts. This resolves through
   // Chromium's KeyboardLayoutMap when it is available.
-  layoutBaseCharacterForCode?: (code: string) => string | undefined
+  layoutBaseCharacterForCode?: (code: string) => string | undefined,
+  // Why: lazily resolves the active pane's Windows encoding. Only consulted for
+  // Shift+Enter so agent-state lookup stays off every other keystroke.
+  getWindowsShiftEnterEncoding?: () => WindowsShiftEnterEncoding,
+  // Why: keybindings follow the client OS, but terminal byte protocols follow
+  // the PTY host. They differ for macOS clients attached to Windows runtimes.
+  isWindowsTerminalHost: () => boolean = () => isWindows
 ): TerminalShortcutAction | null {
   const platform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
   if (!event.repeat) {
@@ -147,9 +153,14 @@ export function resolveTerminalShortcutAction(
     event.shiftKey &&
     event.key === 'Enter'
   ) {
-    // Why: Codex on Windows PowerShell treats CSI-u Shift+Enter as inert,
-    // while the Alt+Enter byte path inserts a composer newline.
-    return { type: 'sendInput', data: isWindows ? '\x1b\r' : '\x1b[13;2u' }
+    // Why: negotiated KKP is authoritative on every host; trusted pane
+    // evidence additionally preserves Droid's Windows encoding without KKP.
+    const windowsHost = isWindowsTerminalHost()
+    const hasTrustedWindowsCsiU = windowsHost && getWindowsShiftEnterEncoding?.() === 'csi-u'
+    // Why: CSI-u is application input, not a universal terminal sequence.
+    // Without trusted Windows agent evidence, require active KKP negotiation.
+    const canSendCsiU = hasTrustedWindowsCsiU || isKittyKeyboardActivePane?.() === true
+    return { type: 'sendInput', data: canSendCsiU ? '\x1b[13;2u' : '\x1b\r' }
   }
 
   if (

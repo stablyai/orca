@@ -182,7 +182,65 @@ describe('relay quick open ignored file listing', () => {
     ])
   })
 
-  it('git fallback rejects signal exits instead of returning partial results', async () => {
+  it('git fallback keeps primary results when the ignored pass is killed', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const primaryProc = createMockProcess()
+      const ignoredProc = createMockProcess()
+      let callIndex = 0
+
+      spawnMock.mockImplementation(() => {
+        callIndex++
+        return callIndex === 1 ? primaryProc : ignoredProc
+      })
+
+      const promise = listFilesWithGit('/remote/root')
+
+      setTimeout(() => {
+        ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\0')
+        primaryProc.emit('close', 0, null)
+
+        // Entries streamed before the kill are kept alongside the primary pass.
+        ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\0')
+        ignoredProc.emit('close', null, 'SIGTERM')
+      }, 10)
+
+      await expect(promise).resolves.toEqual(['dist/generated.js', 'src/index.ts'])
+      expect(warnSpy).toHaveBeenCalled()
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('git fallback keeps primary results when the ignored pass exits non-zero', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const primaryProc = createMockProcess()
+      const ignoredProc = createMockProcess()
+      let callIndex = 0
+
+      spawnMock.mockImplementation(() => {
+        callIndex++
+        return callIndex === 1 ? primaryProc : ignoredProc
+      })
+
+      const promise = listFilesWithGit('/remote/root')
+
+      setTimeout(() => {
+        ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\0')
+        primaryProc.emit('close', 0, null)
+
+        ignoredProc.emit('close', 128, null)
+      }, 10)
+
+      await expect(promise).resolves.toEqual(['src/index.ts'])
+      expect(warnSpy).toHaveBeenCalled()
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('git fallback rejects when the primary pass is killed', async () => {
     const primaryProc = createMockProcess()
     const ignoredProc = createMockProcess()
     let callIndex = 0
@@ -196,16 +254,16 @@ describe('relay quick open ignored file listing', () => {
 
     setTimeout(() => {
       ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\0')
-      primaryProc.emit('close', 0, null)
+      primaryProc.emit('close', null, 'SIGTERM')
 
       ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\0')
-      ignoredProc.emit('close', null, 'SIGTERM')
+      ignoredProc.emit('close', 0, null)
     }, 10)
 
     await expect(promise).rejects.toThrow('git ls-files killed by SIGTERM')
   })
 
-  it('git fallback rejects non-zero exits instead of expanding a partial result set', async () => {
+  it('git fallback rejects when the primary pass exits non-zero', async () => {
     const primaryProc = createMockProcess()
     const ignoredProc = createMockProcess()
     let callIndex = 0
@@ -218,10 +276,10 @@ describe('relay quick open ignored file listing', () => {
     const promise = listFilesWithGit('/remote/root')
 
     setTimeout(() => {
-      ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/index.ts\0')
-      primaryProc.emit('close', 0, null)
+      primaryProc.emit('close', 128, null)
 
-      ignoredProc.emit('close', 128, null)
+      ;(ignoredProc.stdout as unknown as EventEmitter).emit('data', 'dist/generated.js\0')
+      ignoredProc.emit('close', 0, null)
     }, 10)
 
     await expect(promise).rejects.toThrow('git ls-files exited with code 128')

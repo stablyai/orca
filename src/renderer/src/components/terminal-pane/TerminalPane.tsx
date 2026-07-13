@@ -88,10 +88,11 @@ import { connectPanePty } from './pty-connection'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { shouldPreserveTerminalScrollbackBuffers } from '../../../../shared/workspace-session-terminal-buffers'
 import {
-  getAllOverrides,
+  getMobileFitOverridePtyIds,
   getFitOverrideForPty,
   onOverrideChange
 } from '@/lib/pane-manager/mobile-fit-overrides'
+import { shouldShowMobileDriverOverlay } from './mobile-driver-overlay-visibility'
 import {
   getAllDrivers,
   getDriverForPty,
@@ -101,7 +102,6 @@ import {
 import { shouldChatTakeOverMobileSurface } from '../native-chat/native-chat-send-eligibility'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import type { AgentType } from '../../../../shared/agent-status-types'
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { captureTerminalShutdownLayout } from './terminal-shutdown-layout-capture'
@@ -148,6 +148,7 @@ import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-atlas-rec
 import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './terminal-fit-restore'
 import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
+import { selectTerminalTabAgentTypesByLeaf } from './terminal-tab-agent-type-index'
 
 const NATIVE_CHAT_ROOT_SELECTOR = '[data-native-chat-root="true"]'
 
@@ -180,7 +181,10 @@ import {
   subscribeTerminalPaneAttention
 } from './terminal-pane-attention-subscriptions'
 import { getCachedTerminalTabForWorktree } from './terminal-tab-lookup'
-import { getCachedTerminalGroupIdForWorktree } from './terminal-unified-tab-lookup'
+import {
+  getCachedTerminalGroupIdForWorktree,
+  getCachedUnifiedTerminalTabForWorktree
+} from './terminal-unified-tab-lookup'
 import { resolveNativeChatLeafTitleAgent } from './native-chat-leaf-title-agent'
 import { useRepoById } from '@/store/selectors'
 import {
@@ -438,7 +442,7 @@ export default function TerminalPane({
           (paneId) => paneTransportsRef.current.get(paneId)?.getPtyId(),
           event.ptyId
         )
-      if (event.mode === 'mobile-fit') {
+      if (event.mode === 'mobile-fit' || event.mode === 'remote-desktop-fit') {
         // Why: when mobile starts driving, the agent re-renders its output at
         // phone width and that phone-wrapped byte stream flows live into this
         // passive watcher's xterm. xterm must shrink to the phone dims now or
@@ -655,23 +659,18 @@ export default function TerminalPane({
   // communicates the presence-lock inside the chat surface instead (U9/R8).
   const unifiedTabId = useAppStore(
     (store) =>
-      (store.unifiedTabsByWorktree[worktreeId] ?? []).find(
-        (t) => t.contentType === 'terminal' && t.entityId === tabId
-      )?.id
+      getCachedUnifiedTerminalTabForWorktree(store.unifiedTabsByWorktree, worktreeId, tabId)?.id
   )
   const isChatViewMode = useAppStore(
     (store) =>
-      (store.unifiedTabsByWorktree[worktreeId] ?? []).find(
-        (t) => t.contentType === 'terminal' && t.entityId === tabId
-      )?.viewMode === 'chat'
+      getCachedUnifiedTerminalTabForWorktree(store.unifiedTabsByWorktree, worktreeId, tabId)
+        ?.viewMode === 'chat'
   )
   const nativeChatEnabled = useAppStore((store) => store.settings?.experimentalNativeChat === true)
   const effectiveChatViewMode = nativeChatEnabled && isChatViewMode
   const unifiedTabLabel = useAppStore(
     (store) =>
-      (store.unifiedTabsByWorktree[worktreeId] ?? []).find(
-        (t) => t.contentType === 'terminal' && t.entityId === tabId
-      )?.label
+      getCachedUnifiedTerminalTabForWorktree(store.unifiedTabsByWorktree, worktreeId, tabId)?.label
   )
   const runtimePaneTitlesByPaneId = useAppStore(
     useShallow((store) => store.runtimePaneTitlesByTabId[tabId] ?? {})
@@ -680,19 +679,10 @@ export default function TerminalPane({
   // when Orca launched a *supported* agent here or one was detected live for the
   // leaf, keyed `${tabId}:${leafId}`. Carry the agent identity, not just "an
   // agent exists", so the gate can reject Grok et al.
-  // Scoped to this tab's panes (leafId → agentType) and shallow-compared so an
-  // unrelated tab's agent status tick doesn't re-render this pane.
-  const tabAgentTypeByLeaf = useAppStore(
-    useShallow((store) => {
-      const prefix = `${tabId}:`
-      const byLeaf: Record<string, AgentType> = {}
-      for (const [paneKey, entry] of Object.entries(store.agentStatusByPaneKey)) {
-        if (paneKey.startsWith(prefix) && entry.agentType) {
-          byLeaf[paneKey.slice(prefix.length)] = entry.agentType
-        }
-      }
-      return byLeaf
-    })
+  // Scope to this tab's panes and reuse the shared map index so hidden tabs do
+  // not each rescan every agent entry on unrelated store writes.
+  const tabAgentTypeByLeaf = useAppStore((store) =>
+    selectTerminalTabAgentTypesByLeaf(store.agentStatusByPaneKey, tabId)
   )
   const toggleTabViewMode = useAppStore((store) => store.toggleTabViewMode)
   const savedLayout = useAppStore((store) => store.terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT)
@@ -795,11 +785,7 @@ export default function TerminalPane({
   const updateSettings = useAppStore((store) => store.updateSettings)
   const requestLinkRoutingPreference = useLinkRoutingPreferenceDialog()
   const keybindings = useAppStore((store) => store.keybindings)
-  // Why: Windows is the only platform where bare right-click is repurposed as
-  // a paste gesture; on macOS/Linux the terminal still owns right-click for the
-  // context menu. The settings default keeps the Windows shortcut feeling native
-  // without changing the other platforms' interaction model.
-  const rightClickToPaste = isWindowsUserAgent() && (settings?.terminalRightClickToPaste ?? true)
+  const rightClickToPaste = settings?.terminalRightClickToPaste ?? isWindowsUserAgent()
   // Why: Windows ConPTY does not forward DECSET 2004 from foreground TUIs, so
   // xterm may not know multi-line text needs bracketed-paste protection.
   const forceBracketedMultilineTextPaste = isWindowsUserAgent()
@@ -1785,6 +1771,7 @@ export default function TerminalPane({
     keyboardScopeRef: containerRef,
     managerRef,
     paneTransportsRef,
+    panePtyBindingsRef,
     paneCwdRef,
     fallbackCwd: cwd ?? '',
     expandedPaneIdRef,
@@ -2669,7 +2656,7 @@ export default function TerminalPane({
   }, [getContextMenuLeafId, toggleNativeChatForLeaf])
 
   const getMobileOwnedTerminalPtyIds = useCallback((): string[] => {
-    const ptyIds = new Set(getAllOverrides().keys())
+    const ptyIds = new Set(getMobileFitOverridePtyIds())
     for (const [ptyId, driver] of getAllDrivers()) {
       if (driver.kind === 'mobile') {
         ptyIds.add(ptyId)
@@ -3193,9 +3180,9 @@ export default function TerminalPane({
         // treatment and collapse-to-chip state; both branches share the
         // same local/remote desktop-restore route.
         const driver = getDriverForPty(ptyId)
-        const isMobileDriving = driver.kind === 'mobile'
-        const hasFitOverride = getFitOverrideForPty(ptyId) !== null
-        if (!isMobileDriving && !hasFitOverride) {
+        const fitMode = getFitOverrideForPty(ptyId)?.mode ?? null
+        const hasFitOverride = fitMode === 'mobile-fit'
+        if (!shouldShowMobileDriverOverlay(driver.kind, fitMode)) {
           return null
         }
         // Why: only the pane replaced by native chat should hide terminal-owned

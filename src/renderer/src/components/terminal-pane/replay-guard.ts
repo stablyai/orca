@@ -1,5 +1,7 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { writeForegroundTerminalChunk } from '@/lib/pane-manager/pane-terminal-foreground-render-settle'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { ensureArabicShapingJoinerForText } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
 
 // Why: xterm.js auto-responds to terminal query sequences (DA1 `CSI c`,
 // DECRQM `CSI ? Ps $ p`, OSC 10/11 color queries, focus events, CPR) by
@@ -27,55 +29,103 @@ import { writeForegroundTerminalChunk } from '@/lib/pane-manager/pane-terminal-f
 
 export type ReplayingPanesRef = React.RefObject<Map<number, number>>
 
-// Why: the guard normally releases in xterm's write-completion callback, but
-// that callback never fires for a pane whose terminal has not been flushed —
-// e.g. a cold-restore reattach that replays into a just-mounted / offscreen
-// pane. Without a ceiling the counter leaks, isPaneReplaying() stays true, and
-// the onData handler silently drops EVERY keystroke (the pane looks alive but
-// ignores input). Release deterministically after this bound so the guard
-// always clears; in the normal path onParsed fires within milliseconds and
-// cancels it first. Tradeoff: if the callback is lost and the pane parses the
-// replayed buffer only after this bound elapses (e.g. rendering resumes long
-// after restore), xterm's auto-replies to any device queries in that buffer can
-// leak to the shell as input. Accepted as strictly preferable to a permanent
-// input lockout, and bounded by the ~100 KB replay cap.
-const REPLAY_GUARD_RELEASE_FALLBACK_MS = 1000
+// Why stall handling exists: the decrement above only runs when xterm
+// completes the write. A wedged WriteBuffer (sync throw escaping a parse
+// handler or a write-completion callback — see
+// xterm-write-buffer-stall.repro.test.ts) or a disposed-terminal race can
+// drop that completion forever, leaving the guard latched on a live pane —
+// which silently eats every keystroke (Discord #performance / issue #2836).
+//
+// Why release is probe-certified, never time-based: a blind timeout release
+// while a slow replay is still parsing would let xterm's auto-replies leak
+// into the shell — and into agent TUIs, where a leaked ESC reads as the user
+// pressing Escape. Instead, when a completion looks overdue we enqueue an
+// empty probe write. xterm parses writes in order, so only three states are
+// possible, and release is provably safe in every state that releases:
+//   1. probe completes, replay callback already ran   → normal release won.
+//   2. probe completes, replay callback never ran     → every replay byte has
+//      parsed (FIFO), so no further auto-replies can exist; the completion
+//      was genuinely lost. Release.
+//   3. probe never completes                          → the pipeline is
+//      wedged; a dead parser can never emit auto-replies, so releasing after
+//      a bounded wait cannot leak anything — and the pane needs recovery,
+//      which the breadcrumb reports.
+// While the probe is pending (slow-but-alive replay), the guard HOLDS.
+const REPLAY_GUARD_STALL_CHECK_MS = 10_000
+
+type ReplayTerminalOptions = {
+  shouldRefreshViewportSynchronously?: () => boolean
+  stallCheckMs?: number
+}
 
 export function isPaneReplaying(ref: ReplayingPanesRef, paneId: number): boolean {
   return (ref.current.get(paneId) ?? 0) > 0
 }
 
-/** Engage the per-pane replay guard and return a `finish` callback that
- *  releases it exactly once. The guard also auto-releases after
- *  REPLAY_GUARD_RELEASE_FALLBACK_MS so a missing xterm parse callback can never
- *  strand it engaged. `onReleased` runs once when the guard actually releases
- *  (via `finish` or the fallback), so async callers can settle either way. */
+type ReplayGuardWriteTarget = Pick<ManagedPane['terminal'], 'write'>
+
+/**
+ * Engage the replay counter for one write and return the release function.
+ * Release runs exactly once — from xterm's write completion or, failing
+ * that, from the probe-certified stall path — so a lost completion cannot
+ * latch the guard.
+ */
 function engageReplayGuard(
-  replayingPanesRef: ReplayingPanesRef,
+  map: Map<number, number>,
   paneId: number,
-  onReleased?: () => void
+  terminal: ReplayGuardWriteTarget,
+  stallCheckMs: number,
+  onRelease?: () => void
 ): () => void {
-  const map = replayingPanesRef.current
   map.set(paneId, (map.get(paneId) ?? 0) + 1)
   let released = false
-  const release = (): void => {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const release = (reason: 'parsed' | 'lost-completion' | 'wedged'): void => {
     if (released) {
       return
     }
     released = true
+    if (timer !== null) {
+      clearTimeout(timer)
+      timer = null
+    }
     const remaining = (map.get(paneId) ?? 1) - 1
     if (remaining <= 0) {
       map.delete(paneId)
     } else {
       map.set(paneId, remaining)
     }
-    onReleased?.()
+    if (reason === 'lost-completion') {
+      console.error(
+        `[terminal] replay guard released for pane ${paneId} — the probe write parsed but the replay completion never arrived (lost write callback)`
+      )
+      recordRendererCrashBreadcrumb('terminal_replay_guard_lost_completion', { paneId })
+    } else if (reason === 'wedged') {
+      console.error(
+        `[terminal] replay guard released for pane ${paneId} — the probe write never parsed (wedged xterm write pipeline; pane likely needs recovery)`
+      )
+      recordRendererCrashBreadcrumb('terminal_replay_guard_wedged_release', { paneId })
+    }
+    onRelease?.()
   }
-  const fallback = setTimeout(release, REPLAY_GUARD_RELEASE_FALLBACK_MS)
-  return () => {
-    clearTimeout(fallback)
-    release()
+  const probeForStall = (): void => {
+    if (released) {
+      return
+    }
+    try {
+      // FIFO certification: this callback can only run after every replay
+      // byte queued before it has parsed (state 2 above).
+      terminal.write('', () => release('lost-completion'))
+    } catch {
+      // write threw (terminal disposed mid-replay): nothing will ever parse,
+      // so no auto-replies can leak.
+      release('wedged')
+      return
+    }
+    timer = setTimeout(() => release('wedged'), stallCheckMs)
   }
+  timer = setTimeout(probeForStall, stallCheckMs)
+  return () => release('parsed')
 }
 
 /** Writes `data` into the pane's terminal with the replay guard engaged,
@@ -85,38 +135,54 @@ function engageReplayGuard(
 export function replayIntoTerminal(
   pane: ManagedPane,
   replayingPanesRef: ReplayingPanesRef,
-  data: string
+  data: string,
+  options: ReplayTerminalOptions = {}
 ): void {
   if (!data) {
     return
   }
-  const finishReplay = engageReplayGuard(replayingPanesRef, pane.id)
+  ensureArabicShapingJoinerForText(pane.terminal, data)
+  const releaseParsed = engageReplayGuard(
+    replayingPanesRef.current,
+    pane.id,
+    pane.terminal,
+    options.stallCheckMs ?? REPLAY_GUARD_STALL_CHECK_MS
+  )
   // Why: hidden/snapshot replay bypasses the live foreground write path, but
   // WebGL/canvas renderers still need a post-parse repaint to drop stale cells.
   writeForegroundTerminalChunk(pane.terminal, data, {
     forceViewportRefresh: true,
     followupViewportRefresh: true,
-    onParsed: finishReplay
+    shouldRefreshViewportSynchronously: options.shouldRefreshViewportSynchronously,
+    onParsed: releaseParsed
   })
 }
 
 export function replayIntoTerminalAsync(
   pane: ManagedPane,
   replayingPanesRef: ReplayingPanesRef,
-  data: string
+  data: string,
+  options: ReplayTerminalOptions = {}
 ): Promise<void> {
   if (!data) {
     return Promise.resolve()
   }
+  ensureArabicShapingJoinerForText(pane.terminal, data)
   return new Promise((resolve) => {
-    // Why: settle the promise when the guard releases — via parse completion or
-    // the fallback — so an awaiting caller never hangs if xterm's callback for a
-    // just-mounted/offscreen pane never arrives.
-    const finishReplay = engageReplayGuard(replayingPanesRef, pane.id, resolve)
+    // Why resolve on either release path: callers await this to sequence
+    // restore steps; a lost write completion must not hang the restore chain.
+    const releaseParsed = engageReplayGuard(
+      replayingPanesRef.current,
+      pane.id,
+      pane.terminal,
+      options.stallCheckMs ?? REPLAY_GUARD_STALL_CHECK_MS,
+      resolve
+    )
     writeForegroundTerminalChunk(pane.terminal, data, {
       forceViewportRefresh: true,
       followupViewportRefresh: true,
-      onParsed: finishReplay
+      shouldRefreshViewportSynchronously: options.shouldRefreshViewportSynchronously,
+      onParsed: releaseParsed
     })
   })
 }

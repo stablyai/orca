@@ -105,6 +105,13 @@ export function LinearAgentSkillSetupPrompt({
   const [localDismissed, setLocalDismissed] = useState(() =>
     readLocalDismissed(localDismissStorageKey)
   )
+  const [previousDismissStorageKey, setPreviousDismissStorageKey] = useState(localDismissStorageKey)
+  // Why: dismissal is scoped to the selected runtime, so read the new key before
+  // paint rather than briefly showing the previous runtime's prompt state.
+  if (localDismissStorageKey !== previousDismissStorageKey) {
+    setPreviousDismissStorageKey(localDismissStorageKey)
+    setLocalDismissed(readLocalDismissed(localDismissStorageKey))
+  }
   const skill = useInstalledAgentSkillNames(LINEAR_AGENT_SKILL_NAMES, {
     enabled: linked,
     discoveryTarget: skillDiscoveryTarget,
@@ -127,10 +134,6 @@ export function LinearAgentSkillSetupPrompt({
     settings,
     agentRuntime
   )
-  useEffect(() => {
-    setLocalDismissed(readLocalDismissed(localDismissStorageKey))
-  }, [localDismissStorageKey])
-
   const writeCliStatusIfCurrent = useCallback(
     (requestIdentity: string, requestGeneration: number, write: () => void): void => {
       if (

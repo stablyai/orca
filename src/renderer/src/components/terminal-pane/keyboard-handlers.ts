@@ -2,6 +2,7 @@
  * precedence in one ordered handler so shell input, pane commands, search, and
  * split actions do not race across separate window listeners. */
 import { useEffect } from 'react'
+import type { IDisposable } from '@xterm/xterm'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { safeFind } from '../terminal-search-safe-find'
@@ -28,11 +29,44 @@ import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-in
 import { useAppStore } from '@/store'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { isLocalWindowsConptyPaneForCtrlArrow } from './terminal-ctrl-arrow-conpty'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
+import { resolveTerminalInputHostPlatform } from './terminal-input-host-platform'
 import {
   markTerminalFollowOutput,
   markTerminalPinnedViewport,
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
+
+export function resolveTerminalKeyboardShortcutAction(
+  event: Parameters<typeof resolveTerminalShortcutAction>[0],
+  isMac: Parameters<typeof resolveTerminalShortcutAction>[1],
+  macOptionAsAlt: Parameters<typeof resolveTerminalShortcutAction>[2],
+  optionKeyLocation: Parameters<typeof resolveTerminalShortcutAction>[3],
+  isWindows: Parameters<typeof resolveTerminalShortcutAction>[4],
+  keybindings: Parameters<typeof resolveTerminalShortcutAction>[5],
+  isLocalWindowsConptyPane: Parameters<typeof resolveTerminalShortcutAction>[6],
+  isKittyKeyboardActivePane: Parameters<typeof resolveTerminalShortcutAction>[7],
+  layoutBaseCharacterForCode: Parameters<typeof resolveTerminalShortcutAction>[8],
+  getWindowsShiftEnterEncoding: Parameters<typeof resolveTerminalShortcutAction>[9],
+  isWindowsTerminalHost: NonNullable<Parameters<typeof resolveTerminalShortcutAction>[10]>
+): ReturnType<typeof resolveTerminalShortcutAction> {
+  // Why: keep the host callback required at the production boundary so a
+  // caller cannot silently fall back to client-OS byte routing.
+  return resolveTerminalShortcutAction(
+    event,
+    isMac,
+    macOptionAsAlt,
+    optionKeyLocation,
+    isWindows,
+    keybindings,
+    isLocalWindowsConptyPane,
+    isKittyKeyboardActivePane,
+    layoutBaseCharacterForCode,
+    getWindowsShiftEnterEncoding,
+    isWindowsTerminalHost
+  )
+}
 
 export function recordKeyboardCreatedTerminalPaneSplit(
   createdPane: unknown,
@@ -148,6 +182,7 @@ type KeyboardHandlersDeps = {
   keyboardScopeRef: React.RefObject<HTMLElement | null>
   managerRef: React.RefObject<PaneManager | null>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
+  panePtyBindingsRef: React.RefObject<Map<number, IDisposable>>
   paneCwdRef: React.RefObject<PaneCwdMap>
   /** Worktree-root cwd used when OSC 7 and pty.getCwd both fail. */
   fallbackCwd: string
@@ -183,6 +218,7 @@ export function useTerminalKeyboardShortcuts({
   keyboardScopeRef,
   managerRef,
   paneTransportsRef,
+  panePtyBindingsRef,
   paneCwdRef,
   fallbackCwd,
   expandedPaneIdRef,
@@ -233,6 +269,34 @@ export function useTerminalKeyboardShortcuts({
       if (e.key === 'Alt') {
         optionKeyLocation = 0
       }
+    }
+
+    // Why: this callback is installed once per active tab and invoked only for
+    // Windows Shift+Enter, keeping store work and allocations off ordinary keys.
+    const getActivePaneWindowsShiftEnterEncoding = () => {
+      const manager = managerRef.current
+      const activePane = manager?.getActivePane() ?? manager?.getPanes()[0]
+      if (!activePane) {
+        return 'alt-enter' as const
+      }
+      const state = useAppStore.getState()
+      const paneKey = makePaneKey(tabId, activePane.leafId)
+      return resolveWindowsShiftEnterEncodingForPane(state, paneKey)
+    }
+
+    // Why: host metadata is live and can hydrate after the terminal mounts;
+    // resolve it only when Shift+Enter needs to choose a byte protocol.
+    const isActivePaneWindowsTerminalHost = (): boolean => {
+      const manager = managerRef.current
+      const activePane = manager?.getActivePane() ?? manager?.getPanes()[0]
+      return (
+        resolveTerminalInputHostPlatform({
+          clientPlatform: shortcutPlatform,
+          state: useAppStore.getState(),
+          worktreeId,
+          transport: activePane ? (paneTransportsRef.current.get(activePane.id) ?? null) : null
+        }) === 'win32'
+      )
     }
 
     const onKeyDown = (e: KeyboardEvent): void => {
@@ -317,7 +381,7 @@ export function useTerminalKeyboardShortcuts({
         return (paneKittyKeyboardModesRef?.current.get(activePane.id)?.flags ?? 0) > 0
       }
 
-      const action = resolveTerminalShortcutAction(
+      const action = resolveTerminalKeyboardShortcutAction(
         e,
         isMac,
         macOptionAsAltRef.current,
@@ -326,7 +390,9 @@ export function useTerminalKeyboardShortcuts({
         keybindings,
         isLocalWindowsConptyPane,
         isKittyKeyboardActivePane,
-        getLayoutBaseCharacterForCode
+        getLayoutBaseCharacterForCode,
+        getActivePaneWindowsShiftEnterEncoding,
+        isActivePaneWindowsTerminalHost
       )
       if (!action) {
         return
@@ -342,6 +408,14 @@ export function useTerminalKeyboardShortcuts({
         const sent = paneTransportsRef.current.get(pane.id)?.sendInput(action.data) === true
         if (sent) {
           recordTerminalUserInputForLeaf(tabId, pane.leafId)
+          if (action.data === '\x1b[13;2u') {
+            // Why: this direct shortcut write does not pass through PTY onData,
+            // so no-OSC shells need an explicit post-write confirmation ladder.
+            const binding = panePtyBindingsRef.current.get(pane.id) as
+              | (IDisposable & { requestDroidReconfirmation?: () => void })
+              | undefined
+            binding?.requestDroidReconfirmation?.()
+          }
         }
         return
       }

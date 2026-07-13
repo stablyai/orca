@@ -277,6 +277,7 @@ export function createAgentCompletionCoordinator(
     title: string,
     optionsOverride: {
       quietedHookDone?: boolean
+      terminalIdleConfirmed?: boolean
       agentStatus?: AgentCompletionStatusSnapshot
       completionIdentity?: LastCompletionIdentity | null
     } = {}
@@ -306,10 +307,16 @@ export function createAgentCompletionCoordinator(
     if (optionsOverride.completionIdentity) {
       lastCompletionIdentityByPaneKey.set(options.paneKey, optionsOverride.completionIdentity)
     }
-    if (optionsOverride.quietedHookDone === true) {
+    if (source === 'hook' && optionsOverride.agentStatus) {
+      options.dispatchHookLifecycle?.(optionsOverride.agentStatus)
+    }
+    if (optionsOverride.quietedHookDone === true || source === 'process-exit') {
+      // Why: confirmed process death is independent completion evidence; keep
+      // its provenance so stale hook rows cannot veto the notification later.
       options.dispatchCompletion(title, {
         source,
-        quietedHookDone: true,
+        quietedHookDone: optionsOverride.quietedHookDone === true,
+        ...(optionsOverride.terminalIdleConfirmed === true ? { terminalIdleConfirmed: true } : {}),
         ...(optionsOverride.agentStatus ? { agentStatus: optionsOverride.agentStatus } : {})
       })
     } else {
@@ -326,6 +333,7 @@ export function createAgentCompletionCoordinator(
       return
     }
     lastAttentionToken = token
+    options.dispatchHookLifecycle?.(payload)
     options.dispatchAttention(payload.agentType ?? options.paneKey, {
       source: 'hook',
       agentStatus: payload
@@ -438,13 +446,18 @@ export function createAgentCompletionCoordinator(
     pendingProcessExitAgent = null
     if (lastForegroundAgent?.agent !== process.agent) {
       if (lastForegroundAgent && hasAgentRunEvidence) {
-        dispatchCompletion('process-exit', lastForegroundAgent.processName, {
-          completionIdentity: {
-            source: 'process-exit',
-            identity: `${lastForegroundAgent.agent}:${lastForegroundAgent.processName}`,
-            agentIdentity: lastForegroundAgent.agent
-          }
-        })
+        if (
+          options.shouldSuppressProcessReplacementCompletion?.(lastForegroundAgent, process) !==
+          true
+        ) {
+          dispatchCompletion('process-exit', lastForegroundAgent.processName, {
+            completionIdentity: {
+              source: 'process-exit',
+              identity: `${lastForegroundAgent.agent}:${lastForegroundAgent.processName}`,
+              agentIdentity: lastForegroundAgent.agent
+            }
+          })
+        }
       }
       processSession += 1
     }
@@ -486,13 +499,16 @@ export function createAgentCompletionCoordinator(
       }
       const exited = lastForegroundAgent
       pendingProcessExitAgent = null
-      dispatchCompletion('process-exit', exited.processName, {
-        completionIdentity: {
-          source: 'process-exit',
-          identity: `${exited.agent}:${exited.processName}`,
-          agentIdentity: exited.agent
-        }
-      })
+      if (options.shouldSuppressConfirmedProcessExitCompletion?.(exited) !== true) {
+        dispatchCompletion('process-exit', exited.processName, {
+          terminalIdleConfirmed: true,
+          completionIdentity: {
+            source: 'process-exit',
+            identity: `${exited.agent}:${exited.processName}`,
+            agentIdentity: exited.agent
+          }
+        })
+      }
       lastForegroundAgent = null
       clearAgentRunEvidence()
     } else {
@@ -787,6 +803,7 @@ export function createAgentCompletionCoordinator(
       lastAttentionToken = null
       currentTurn += 1
       dropPendingTitle()
+      options.dispatchHookLifecycle?.(payload)
       return
     }
     if (isAttentionHookState(payload.state)) {
@@ -842,11 +859,10 @@ export function createAgentCompletionCoordinator(
             agentIdentity: hookCompletionAgentIdentity(payload)
           }
         : null
-      dispatchCompletion(
-        'hook',
-        payload.agentType ?? options.paneKey,
-        lastCompletionIdentity ? { completionIdentity: lastCompletionIdentity } : {}
-      )
+      dispatchCompletion('hook', payload.agentType ?? options.paneKey, {
+        agentStatus: payload,
+        ...(lastCompletionIdentity ? { completionIdentity: lastCompletionIdentity } : {})
+      })
     }
   }
 

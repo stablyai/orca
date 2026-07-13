@@ -12,23 +12,34 @@ export type PtyBufferSnapshot = {
   cols: number
   rows: number
   seq?: number
+  /** Lowest seq main could still deliver when the snapshot was taken (start
+   *  of its pending renderer-delivery queue; equals `seq` when empty). Bytes
+   *  are delivered once and in order, so a post-restore chunk at or below
+   *  this seq can never be a duplicate the snapshot already covers. */
+  pendingDeliveryStartSeq?: number
   source?: 'headless' | 'renderer'
   /** True when the snapshot captures an alternate-screen TUI (Claude Code,
    *  vim). Restore must NOT clear xterm's buffer in that case — the TUI's
    *  scrollback lives in xterm and a clear destroys scroll-up after a tab
    *  return. Mirrors the attach-time guard in pty-transport.ts. */
   alternateScreen?: boolean
-  /** Trailing partial escape sequence the source emulator held mid-parse when
-   *  the snapshot was taken. The restorer writes it LAST (after the reset) so a
-   *  racing live continuation completes it instead of rendering literally
-   *  (#7329). */
+  /** Authoritative normal buffer paired with an alternate-screen frame. */
+  scrollbackAnsi?: string
+  /** Trailing incomplete escape sequence main's emulator ingested (a PTY read
+   *  ended mid-escape). Must be written LAST — after post-replay resets, right
+   *  before post-snapshot live chunks — so the continuation completes it
+   *  exactly as live instead of rendering literal (Bug E / #7329). */
   pendingEscapeTailAnsi?: string
 }
 
-export type LocalPtySessionMetadata = { cwd?: string; shellOverride?: string }
+export type LocalPtySessionMetadata = {
+  cwd?: string
+  shellOverride?: string
+}
 
 export type PtyConnectResult = {
   id: string
+  launchAgent?: TuiAgent
   launchConfig?: SleepingAgentLaunchConfig
   snapshot?: string
   snapshotCols?: number
@@ -63,6 +74,11 @@ export type PtyTransport = {
     cols?: number
     rows?: number
     sessionId?: string
+    /** Hidden-at-spawn declaration (terminal-query-authority.md): no visible
+     *  view will consume this PTY's bytes, so main marks it hidden BEFORE the
+     *  first byte and the gate + model responder own spawn-time queries.
+     *  Ignored by remote-runtime transports (not gate-markable). */
+    initiallyHidden?: boolean
     command?: string
     env?: Record<string, string>
     launchConfig?: SleepingAgentLaunchConfig
@@ -88,15 +104,29 @@ export type PtyTransport = {
   // (preserving order) and sends the reply immediately.
   sendInputImmediate: (data: string) => boolean
   sendInputAccepted?: (data: string) => Promise<boolean>
+  claimViewport?: (cols: number, rows: number) => boolean
   resize: (
     cols: number,
     rows: number,
-    meta?: { widthPx?: number; heightPx?: number; cellW?: number; cellH?: number }
+    meta?: {
+      widthPx?: number
+      heightPx?: number
+      cellW?: number
+      cellH?: number
+      claim?: boolean
+    }
   ) => boolean
   isConnected: () => boolean
   getPtyId: () => string | null
   getConnectionId?: () => string | null | undefined
+  /** The runtime captured by this transport; legacy remote PTY ids do not
+   * encode their owner, and current worktree settings may have changed. */
+  getRuntimeEnvironmentId?: () => string | null
   getLocalSessionMetadata?: () => LocalPtySessionMetadata | null
+  /** Drop cross-chunk parser carries (partial OSC-9999 prefix). Called when a
+   *  model-restore marker reports dropped bytes — a carry spanning the gap
+   *  would corrupt the next live chunk. IPC transports only. */
+  resetCrossChunkParserState?: () => void
   serializeBuffer?: (opts?: { scrollbackRows?: number }) => Promise<PtyBufferSnapshot | null>
   preserve?: () => void
   detach?: () => void

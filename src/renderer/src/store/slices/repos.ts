@@ -5,6 +5,7 @@ auditing and preserving. */
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
+import type { SshRepoReadoption } from '../../../../shared/ssh-types'
 import type {
   GlobalSettings,
   Project,
@@ -48,7 +49,12 @@ import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 import { selectProjectGroupRemovalTargets } from './project-group-removal-targets'
 import { reconcileFetchedRepos } from './repo-identity-reconcile'
-import { pruneSupersededSshRepoRows } from './superseded-ssh-repo-rows'
+import {
+  mergeSshRepoReadoptions,
+  reconcileReadoptedSshRepoRows,
+  type SshRepoReconciliation
+} from './superseded-ssh-repo-rows'
+import { reconcileReadoptedSshWorktreesByRepo } from './readopted-ssh-worktree-rows'
 import { splitRepoReorderByHost } from './repo-reorder-host-split'
 import { omitSparsePresetsForRepos } from './sparse-presets'
 import {
@@ -700,8 +706,19 @@ function mergeFetchedProjectCompatibilityForHost({
   repos: readonly Repo[]
   hostId: string
 }): Pick<RepoSlice, 'projects' | 'projectHostSetups'> {
-  const fetchedSetupsForHost = fetched.projectHostSetups.filter((setup) => setup.hostId === hostId)
-  const preservedSetups = previous.projectHostSetups.filter((setup) => setup.hostId !== hostId)
+  const setupBelongsToFetchedCatalog = (setup: ProjectHostSetup): boolean => {
+    if (hostId !== LOCAL_EXECUTION_HOST_ID) {
+      return setup.hostId === hostId
+    }
+    const owner = parseExecutionHostId(setup.hostId)
+    // Why: desktop persistence owns local and direct-SSH setups; runtime setups
+    // remain authoritative on their remote Orca server.
+    return setup.hostId === LOCAL_EXECUTION_HOST_ID || owner?.kind === 'ssh'
+  }
+  const fetchedSetupsForHost = fetched.projectHostSetups.filter(setupBelongsToFetchedCatalog)
+  const preservedSetups = previous.projectHostSetups.filter(
+    (setup) => !setupBelongsToFetchedCatalog(setup)
+  )
   const projectHostSetups = mergeProjectHostSetupsByOwner(preservedSetups, fetchedSetupsForHost)
   const previousProjectById = new Map(previous.projects.map((project) => [project.id, project]))
   const reposById = getReposById(repos)
@@ -923,15 +940,78 @@ function mergeFetchedRepoCatalog(
   currentRepos: readonly Repo[]
 ): {
   repos: Repo[]
-  projectCompatibility: Pick<RepoSlice, 'projects' | 'projectHostSetups'>
+  projectHostSetupCompatibility: ProjectHostSetupProjection
   hostId: ReturnType<typeof getRuntimeTargetHostId>
 } {
   const repos = mergeFetchedReposForHost(currentRepos, catalog.repos, catalog.hostId)
-  const projectCompatibility = mergeProjectHostSetupCompatibility(
-    projectCompatibilityFromRepos(repos),
-    catalog.projectHostSetupCompatibility
+  return {
+    repos,
+    projectHostSetupCompatibility: catalog.projectHostSetupCompatibility,
+    hostId: catalog.hostId
+  }
+}
+
+function reconcileSupersededSshRepos(
+  repos: readonly Repo[],
+  state: Pick<AppState, 'pendingSshRepoReadoptions'>
+): SshRepoReconciliation {
+  return reconcileReadoptedSshRepoRows(repos, state.pendingSshRepoReadoptions)
+}
+
+function filterSetupsForPrunedRepoRows(
+  setups: readonly ProjectHostSetup[],
+  mergedRepos: readonly Repo[],
+  reconciledRepos: readonly Repo[]
+): ProjectHostSetup[] {
+  const survivingOwners = new Set(
+    reconciledRepos.map((repo) => `${getRepoExecutionHostId(repo)}:${repo.id}`)
   )
-  return { repos, projectCompatibility, hostId: catalog.hostId }
+  const prunedOwners = new Set(
+    mergedRepos
+      .filter((repo) => !survivingOwners.has(`${getRepoExecutionHostId(repo)}:${repo.id}`))
+      .map((repo) => `${getRepoExecutionHostId(repo)}:${repo.id}`)
+  )
+  if (prunedOwners.size === 0) {
+    return [...setups]
+  }
+  return setups.filter(
+    (setup) => !setup.repoId || !prunedOwners.has(`${setup.hostId}:${setup.repoId}`)
+  )
+}
+
+function reconcileReadoptedSshWorktreeState(
+  state: Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'sortEpoch'>,
+  readoptions: readonly SshRepoReadoption[]
+): Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'sortEpoch'> {
+  const worktreesByRepo = reconcileReadoptedSshWorktreesByRepo(state.worktreesByRepo, readoptions)
+  const detectedRows = Object.fromEntries(
+    Object.entries(state.detectedWorktreesByRepo).map(([repoId, result]) => [
+      repoId,
+      result.worktrees
+    ])
+  )
+  const reconciledDetectedRows = reconcileReadoptedSshWorktreesByRepo(detectedRows, readoptions)
+  const detectedWorktreesByRepo =
+    reconciledDetectedRows === detectedRows
+      ? state.detectedWorktreesByRepo
+      : Object.fromEntries(
+          Object.entries(state.detectedWorktreesByRepo).map(([repoId, result]) => [
+            repoId,
+            { ...result, worktrees: reconciledDetectedRows[repoId] }
+          ])
+        )
+  return {
+    worktreesByRepo,
+    detectedWorktreesByRepo,
+    sortEpoch: worktreesByRepo === state.worktreesByRepo ? state.sortEpoch : state.sortEpoch + 1
+  }
+}
+
+function projectCompatibilityForReconciledRepos(
+  repos: readonly Repo[],
+  fetched: ProjectHostSetupProjection
+): Pick<RepoSlice, 'projects' | 'projectHostSetups'> {
+  return mergeProjectHostSetupCompatibility(projectCompatibilityFromRepos(repos), fetched)
 }
 
 function filterTrustedOrcaHooksToValidRepos(
@@ -967,17 +1047,6 @@ function clearRestoredFolderWorkspaceSessionOwners(
     }
   }
   return next
-}
-
-async function fetchReposForTarget(
-  target: ReturnType<typeof getActiveRuntimeTarget>,
-  currentRepos: readonly Repo[]
-): Promise<{
-  repos: Repo[]
-  projectCompatibility: Pick<RepoSlice, 'projects' | 'projectHostSetups'>
-  hostId: ReturnType<typeof getRuntimeTargetHostId>
-}> {
-  return mergeFetchedRepoCatalog(await fetchRepoCatalogForTarget(target), currentRepos)
 }
 
 async function fetchProjectGroupCatalogForTarget(
@@ -1319,6 +1388,8 @@ export type RepoSlice = {
   activeRepoId: string | null
   // Monotonic sequence so an overlapping fetchRepos can drop its own stale result (#7020).
   reposFetchGeneration: number
+  pendingSshRepoReadoptions: SshRepoReadoption[]
+  recordSshRepoReadoptions: (readoptions: SshRepoReadoption[]) => void
   fetchRepos: () => Promise<void>
   fetchReposForAllHosts: (options?: AllHostCatalogFetchOptions) => Promise<void>
   fetchRuntimeEnvironmentRepos: (environmentId: string) => Promise<Repo[]>
@@ -1440,6 +1511,32 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   folderWorkspacePathStatuses: {},
   activeRepoId: null,
   reposFetchGeneration: 0,
+  pendingSshRepoReadoptions: [],
+
+  recordSshRepoReadoptions: (readoptions) =>
+    set((s) => {
+      const pendingSshRepoReadoptions = mergeSshRepoReadoptions(
+        s.pendingSshRepoReadoptions,
+        readoptions
+      )
+      const reconciliation = reconcileReadoptedSshRepoRows(s.repos, pendingSshRepoReadoptions)
+      const repos = reconciliation.repos
+      const worktreeState = reconcileReadoptedSshWorktreeState(s, pendingSshRepoReadoptions)
+      const projectHostSetups = filterSetupsForPrunedRepoRows(s.projectHostSetups, s.repos, repos)
+      const compatibility = mergeProjectHostSetupCompatibility(
+        projectCompatibilityFromRepos(repos),
+        {
+          projects: s.projects,
+          setups: projectHostSetups
+        }
+      )
+      return {
+        repos,
+        pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
+        ...worktreeState,
+        ...compatibility
+      }
+    }),
 
   fetchRepos: async () => {
     // Why: overlapping repos:changed fetches can resolve out of order; an earlier
@@ -1451,36 +1548,45 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     })
     try {
       const target = getActiveRuntimeTarget(get().settings)
-      const {
-        repos: reconciledRepos,
-        projectCompatibility,
-        hostId
-      } = await fetchReposForTarget(target, get().repos)
+      const catalog = await fetchRepoCatalogForTarget(target)
       // A newer fetchRepos superseded us while we awaited — drop this stale result.
       if (get().reposFetchGeneration !== generation) {
         return
       }
+      let finalizedHostRepos: Repo[] = []
       set((s) => {
         // Why: after re-adoption re-points a repo onto a re-added SSH target, the
         // per-host merge leaves the stale row on the old (removed) target id — a
         // ghost a terminal pane can bind to and fail with "SSH target not found".
         // Drop rows on unknown SSH targets that a live-host sibling supersedes.
-        const prunedRepos = pruneSupersededSshRepoRows(
-          reconciledRepos,
-          new Set(s.sshTargetLabels.keys())
-        )
+        const result = mergeFetchedRepoCatalog(catalog, s.repos)
+        const reconciliation = reconcileSupersededSshRepos(result.repos, s)
+        const prunedRepos = reconciliation.repos
         const validRepoIds = new Set(prunedRepos.map((repo) => repo.id))
+        const projectCompatibility = projectCompatibilityForReconciledRepos(
+          prunedRepos,
+          catalog.projectHostSetupCompatibility
+        )
         const mergedProjectCompatibility = mergeFetchedProjectCompatibilityForHost({
           previous: {
             projects: s.projects,
-            projectHostSetups: s.projectHostSetups
+            projectHostSetups: filterSetupsForPrunedRepoRows(
+              s.projectHostSetups,
+              result.repos,
+              prunedRepos
+            )
           },
           fetched: projectCompatibility,
           repos: prunedRepos,
-          hostId
+          hostId: result.hostId
         })
+        finalizedHostRepos = prunedRepos.filter(
+          (repo) => getRepoExecutionHostId(repo) === result.hostId
+        )
         return {
           repos: prunedRepos,
+          pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
+          ...reconcileReadoptedSshWorktreeState(s, s.pendingSshRepoReadoptions),
           ...mergedProjectCompatibility,
           folderWorkspacePathStatuses: {},
           activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
@@ -1491,10 +1597,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           )
         }
       })
-      scheduleSafeAutoForkSync(
-        get,
-        reconciledRepos.filter((repo) => getRepoExecutionHostId(repo) === hostId)
-      )
+      scheduleSafeAutoForkSync(get, finalizedHostRepos)
     } catch (err) {
       console.error('Failed to fetch repos:', err)
     }
@@ -1503,24 +1606,37 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   fetchRuntimeEnvironmentRepos: async (environmentId) => {
     try {
       const target = { kind: 'environment' as const, environmentId }
-      const {
-        repos: reconciledRepos,
-        projectCompatibility,
-        hostId
-      } = await fetchReposForTarget(target, get().repos)
-      const validRepoIds = new Set(reconciledRepos.map((repo) => repo.id))
+      const catalog = await fetchRepoCatalogForTarget(target)
+      let finalizedHostRepos: Repo[] = []
       set((s) => {
+        const result = mergeFetchedRepoCatalog(catalog, s.repos)
+        const reconciliation = reconcileSupersededSshRepos(result.repos, s)
+        const finalizedRepos = reconciliation.repos
+        const validRepoIds = new Set(finalizedRepos.map((repo) => repo.id))
+        const projectCompatibility = projectCompatibilityForReconciledRepos(
+          finalizedRepos,
+          catalog.projectHostSetupCompatibility
+        )
         const mergedProjectCompatibility = mergeFetchedProjectCompatibilityForHost({
           previous: {
             projects: s.projects,
-            projectHostSetups: s.projectHostSetups
+            projectHostSetups: filterSetupsForPrunedRepoRows(
+              s.projectHostSetups,
+              result.repos,
+              finalizedRepos
+            )
           },
           fetched: projectCompatibility,
-          repos: reconciledRepos,
-          hostId
+          repos: finalizedRepos,
+          hostId: result.hostId
         })
+        finalizedHostRepos = finalizedRepos.filter(
+          (repo) => getRepoExecutionHostId(repo) === result.hostId
+        )
         return {
-          repos: reconciledRepos,
+          repos: finalizedRepos,
+          pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
+          ...reconcileReadoptedSshWorktreeState(s, s.pendingSshRepoReadoptions),
           ...mergedProjectCompatibility,
           activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
           filterRepoIds: s.filterRepoIds.filter((projectId) => validRepoIds.has(projectId)),
@@ -1530,11 +1646,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           )
         }
       })
-      const fetchedHostRepos = reconciledRepos.filter(
-        (repo) => getRepoExecutionHostId(repo) === hostId
-      )
-      scheduleSafeAutoForkSync(get, fetchedHostRepos)
-      return fetchedHostRepos
+      scheduleSafeAutoForkSync(get, finalizedHostRepos)
+      return finalizedHostRepos
     } catch (err) {
       console.error(`Failed to fetch repos for runtime environment ${environmentId}:`, err)
       return []
@@ -1542,6 +1655,11 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   },
 
   fetchReposForAllHosts: async (options) => {
+    let generation = 0
+    set((s) => {
+      generation = s.reposFetchGeneration + 1
+      return { reposFetchGeneration: generation }
+    })
     // Why: a cold start that restores a remote workspace re-activates that
     // remote runtime environment, and fetching only the active host hides every
     // other host's repos (notably all local repos), which reads as "my projects
@@ -1550,21 +1668,38 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     // environment is active. Each host fails soft: an unreachable/disconnected
     // host is skipped without blocking the others.
     const applyCatalog = (catalog: FetchedRepoCatalog): void => {
+      // Why: repos:changed can start another all-host refresh while this one is
+      // in flight. Never let the older catalog resurrect a migrated SSH owner.
+      if (get().reposFetchGeneration !== generation) {
+        return
+      }
       let hostRepos: Repo[] = []
       set((s) => {
         const result = mergeFetchedRepoCatalog(catalog, s.repos)
+        const reconciliation = reconcileSupersededSshRepos(result.repos, s)
+        const finalizedRepos = reconciliation.repos
+        const projectCompatibility = projectCompatibilityForReconciledRepos(
+          finalizedRepos,
+          catalog.projectHostSetupCompatibility
+        )
         const mergedProjectCompatibility = mergeFetchedProjectCompatibilityForHost({
           previous: {
             projects: s.projects,
-            projectHostSetups: s.projectHostSetups
+            projectHostSetups: filterSetupsForPrunedRepoRows(
+              s.projectHostSetups,
+              result.repos,
+              finalizedRepos
+            )
           },
-          fetched: result.projectCompatibility,
-          repos: result.repos,
+          fetched: projectCompatibility,
+          repos: finalizedRepos,
           hostId: result.hostId
         })
-        hostRepos = result.repos.filter((repo) => getRepoExecutionHostId(repo) === result.hostId)
+        hostRepos = finalizedRepos.filter((repo) => getRepoExecutionHostId(repo) === result.hostId)
         return {
-          repos: result.repos,
+          repos: finalizedRepos,
+          pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
+          ...reconcileReadoptedSshWorktreeState(s, s.pendingSshRepoReadoptions),
           ...mergedProjectCompatibility,
           folderWorkspacePathStatuses: {},
           activeRepoId: s.activeRepoId,
@@ -1600,6 +1735,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       failed = true
       console.error('Failed to fetch local repos for all-host load:', err)
     }
+    if (get().reposFetchGeneration !== generation) {
+      return
+    }
     if (options?.remoteHosts === 'skip') {
       return
     }
@@ -1625,7 +1763,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     // Why: first-paint startup intentionally loads only local repos before
     // remotes answer. Validate repo-scoped UI only once every configured host has
     // answered; otherwise an offline runtime would erase its saved filters.
-    if (!failed) {
+    if (!failed && get().reposFetchGeneration === generation) {
       validateRepoScopedUi()
     }
   },
@@ -2656,7 +2794,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       // Kill PTYs for all worktrees belonging to this repo
       const worktreeIds = getKnownRepoWorktreeIds(get(), projectId, ownerHostId)
       const killedTabIds = new Set<string>()
-      const killedPtyIds = new Set<string>()
       if (target.kind === 'environment') {
         await Promise.allSettled(
           worktreeIds.map((worktreeId) =>
@@ -2674,7 +2811,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         for (const tab of tabs) {
           killedTabIds.add(tab.id)
           for (const ptyId of get().ptyIdsByTabId[tab.id] ?? []) {
-            killedPtyIds.add(ptyId)
             if (!ptyId.startsWith('remote:')) {
               window.api.pty.kill(ptyId)
             }
@@ -2715,7 +2851,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         const nextLayouts = { ...s.terminalLayoutsByTabId }
         const nextPtyIdsByTabId = { ...s.ptyIdsByTabId }
         const nextRuntimePaneTitlesByTabId = { ...s.runtimePaneTitlesByTabId }
-        const nextSuppressedPtyExitIds = { ...s.suppressedPtyExitIds }
         for (const wId of worktreeIds) {
           delete nextTabs[wId]
         }
@@ -2723,9 +2858,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           delete nextLayouts[tabId]
           delete nextPtyIdsByTabId[tabId]
           delete nextRuntimePaneTitlesByTabId[tabId]
-        }
-        for (const ptyId of killedPtyIds) {
-          nextSuppressedPtyExitIds[ptyId] = true
         }
         // Why: editor state is worktree-scoped. Removing a repo must also
         // remove open editor files and per-worktree active-file tracking for
@@ -2780,7 +2912,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           tabsByWorktree: nextTabs,
           ptyIdsByTabId: nextPtyIdsByTabId,
           runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
-          suppressedPtyExitIds: nextSuppressedPtyExitIds,
           terminalLayoutsByTabId: nextLayouts,
           activeTabId: s.activeTabId && killedTabIds.has(s.activeTabId) ? null : s.activeTabId,
           openFiles: nextOpenFiles,

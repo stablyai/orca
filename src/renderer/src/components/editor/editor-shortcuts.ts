@@ -46,6 +46,39 @@ export function installEditorFindShortcut(target: HTMLElement, onFind: () => voi
   return () => target.removeEventListener('keydown', handleKeyDown, true)
 }
 
+type MonacoDiffNavigationEditor = {
+  getContainerDomNode: () => HTMLElement
+  goToDiff: (target: 'next' | 'previous') => void
+}
+
+export function installMonacoDiffChangeNavigationShortcut(
+  editor: MonacoDiffNavigationEditor
+): () => void {
+  const handleKeyDown = (event: KeyboardEvent): void => {
+    let direction: 'next' | 'previous' | null = null
+    if (editorShortcutMatches('editor.nextChange', event)) {
+      direction = 'next'
+    } else if (editorShortcutMatches('editor.previousChange', event)) {
+      direction = 'previous'
+    }
+    if (!direction) {
+      return
+    }
+    // Why: capture-phase preventDefault/stopPropagation beats Monaco's built-in
+    // F7 accessible-review pane, like the find shortcut does for Cmd+F.
+    event.preventDefault()
+    event.stopPropagation()
+    // Consume matched repeats but navigate once per press (matches find shortcut).
+    if (!event.repeat) {
+      editor.goToDiff(direction)
+    }
+  }
+
+  const target = editor.getContainerDomNode()
+  target.addEventListener('keydown', handleKeyDown, true)
+  return () => target.removeEventListener('keydown', handleKeyDown, true)
+}
+
 type MonacoFindShortcutEditor = {
   getAction: (id: string) => { run: () => void | Promise<void> } | null
   getContainerDomNode: () => HTMLElement

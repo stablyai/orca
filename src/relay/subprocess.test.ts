@@ -10,6 +10,7 @@ import { getEndpointFileName } from '../shared/agent-hook-listener'
 import { relayTestSocketPath } from './relay-test-socket-path'
 
 const RELAY_TS_ENTRY = path.resolve(__dirname, 'relay.ts')
+const WATCHER_TS_ENTRY = path.resolve(__dirname, '../main/ipc/parcel-watcher-process-entry.ts')
 let bundleDir: string
 let relayEntry: string
 const spawnedSocketDirs: string[] = []
@@ -24,7 +25,17 @@ beforeAll(async () => {
     target: 'node18',
     format: 'cjs',
     outfile: relayEntry,
-    external: ['node-pty', '@parcel/watcher'],
+    external: ['node-pty', '@parcel/watcher', 'electron'],
+    sourcemap: false
+  })
+  await build({
+    entryPoints: [WATCHER_TS_ENTRY],
+    bundle: true,
+    platform: 'node',
+    target: 'node18',
+    format: 'cjs',
+    outfile: path.join(bundleDir, 'relay-watcher.js'),
+    external: ['@parcel/watcher'],
     sourcemap: false
   })
 }, 30_000)

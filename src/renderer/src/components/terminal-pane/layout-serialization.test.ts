@@ -440,7 +440,8 @@ describe('restoreScrollbackBuffers', () => {
       }
     }
     const manager = {
-      getPanes: vi.fn(() => [pane])
+      getPanes: vi.fn(() => [pane]),
+      hasWebglRenderer: vi.fn(() => true)
     }
     const replayingPanesRef = { current: new Map<number, number>() }
     const restoredViewportBlankingPanesRef = { current: new Set<number>() }
@@ -454,6 +455,7 @@ describe('restoreScrollbackBuffers', () => {
     )
 
     expect(writes).toEqual(['restored output', '\r\n', POST_REPLAY_MODE_RESET])
+    expect(manager.hasWebglRenderer).toHaveBeenCalledWith(1)
     expect(restoredViewportBlankingPanesRef.current.has(1)).toBe(true)
     expect(replayingPanesRef.current.size).toBe(0)
   })

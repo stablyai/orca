@@ -37,14 +37,9 @@ import { createAgentStatusOscProcessor } from '../../../shared/agent-status-osc'
 import type { RuntimeTerminalCreate } from '../../../shared/runtime-types'
 import { createSshBackgroundStartupDelivery } from '@/lib/ssh-background-startup-delivery'
 import { shouldUseShellReadyStartupDelivery } from '../../../shared/codex-startup-delivery'
-
-function runBestEffortCleanup(action: () => void): void {
-  try {
-    action()
-  } catch {
-    // Preserve the launch/setup error that triggered cleanup.
-  }
-}
+import { isMainTerminalSideEffectAuthorityForPty } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
+import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
+import { runBestEffortAgentBackgroundCleanups } from '@/lib/agent-background-session-cleanup'
 
 export async function launchAgentBackgroundSession(
   args: LaunchAgentBackgroundSessionArgs
@@ -79,6 +74,11 @@ export async function launchAgentBackgroundSession(
   // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
   // `orca-ide` rename must not be applied for remote launches.
   const isRemote = repo ? repoIsRemote(repo) : false
+  const startupShell = resolveLocalWindowsAgentStartupShell({
+    platform: launchPlatform,
+    isRemote,
+    terminalWindowsShell: store.settings?.terminalWindowsShell
+  })
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
   const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
@@ -91,6 +91,7 @@ export async function launchAgentBackgroundSession(
     agentArgs,
     agentEnv,
     platform: launchPlatform,
+    shell: startupShell,
     isRemote,
     allowEmptyPromptLaunch: !hasPrompt || isFollowupPath
   })
@@ -163,6 +164,12 @@ export async function launchAgentBackgroundSession(
     useAppStore.getState().clearAgentLaunchConfig(paneKey)
     onExit?.(exitPtyId, code)
   }
+  // Why: local/SSH status facts already pass through main's authoritative
+  // scanner; remote-runtime bytes still need this renderer-side store write.
+  const mainOwnsAgentStatusWrites = isMainTerminalSideEffectAuthorityForPty({
+    settings: store.settings,
+    runtimeEnvironmentId: runtimeTarget.kind === 'environment' ? runtimeTarget.environmentId : null
+  })
   const processAgentStatus = createAgentStatusOscProcessor()
   const handleData = (data: string): void => {
     data = sshStartupDelivery.handleData(data)
@@ -170,9 +177,11 @@ export async function launchAgentBackgroundSession(
     sshStartupDelivery.schedule(ptyId)
     const processed = processAgentStatus(data)
     for (const payload of processed.payloads) {
-      useAppStore.getState().setAgentStatus(paneKey, payload, undefined, undefined, undefined, {
-        launchToken
-      })
+      if (!mainOwnsAgentStatusWrites) {
+        useAppStore.getState().setAgentStatus(paneKey, payload, undefined, undefined, undefined, {
+          launchToken
+        })
+      }
       onAgentStatus?.(payload)
     }
   }
@@ -302,12 +311,11 @@ export async function launchAgentBackgroundSession(
     // Why: terminal creation and stream subscription are separate remote calls.
     // A failure between them must not strand an invisible runtime terminal.
     exitHandled = true
-    runBestEffortCleanup(unsubscribeExit)
-    runBestEffortCleanup(unsubscribeData)
-    runBestEffortCleanup(() => eagerPtyBuffer?.dispose())
-    runBestEffortCleanup(() => sshStartupDelivery.clear())
-    runBestEffortCleanup(() => store.clearTabPtyId(tab.id, ptyId))
-    runBestEffortCleanup(() => store.clearAgentLaunchConfig(paneKey))
+    runBestEffortAgentBackgroundCleanups(unsubscribeExit, unsubscribeData)
+    runBestEffortAgentBackgroundCleanups(() => eagerPtyBuffer?.dispose())
+    runBestEffortAgentBackgroundCleanups(() => sshStartupDelivery.clear())
+    runBestEffortAgentBackgroundCleanups(() => store.clearTabPtyId(tab.id, ptyId))
+    runBestEffortAgentBackgroundCleanups(() => store.clearAgentLaunchConfig(paneKey))
     if (ptyId) {
       try {
         if (runtimeTarget.kind === 'environment' && runtimeTerminalHandle) {
@@ -321,7 +329,7 @@ export async function launchAgentBackgroundSession(
         // Best-effort close; retiring the invalid hidden tab must still proceed.
       }
     }
-    runBestEffortCleanup(() => store.closeTab(tab.id, { recordInteraction: false }))
+    runBestEffortAgentBackgroundCleanups(() => store.closeTab(tab.id, { recordInteraction: false }))
     throw error
   }
 }

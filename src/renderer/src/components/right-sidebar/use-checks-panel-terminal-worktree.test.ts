@@ -16,6 +16,7 @@ const PARENT_PATH = '/repo1'
 const CHILD_PATH = '/repo1/packages/app'
 const PARENT_ID = `${REPO_ID}::${PARENT_PATH}`
 const CHILD_ID = `${REPO_ID}::${CHILD_PATH}`
+const TERMINAL_CWD_POLL_MS = 4000
 
 const repo: Repo = { ...TEST_REPO, kind: 'git', connectionId: null }
 const parentWorktree: Worktree = makeWorktree({ id: PARENT_ID, repoId: REPO_ID, path: PARENT_PATH })
@@ -55,6 +56,13 @@ async function flushMicrotasks(): Promise<void> {
     await Promise.resolve()
     await Promise.resolve()
   })
+}
+
+async function runNextCwdPoll(): Promise<void> {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(TERMINAL_CWD_POLL_MS)
+  })
+  await flushMicrotasks()
 }
 
 beforeEach(() => {
@@ -127,6 +135,54 @@ describe('useChecksPanelTerminalWorktree', () => {
     await renderHook(parentWorktree)
     await flushMicrotasks()
 
+    expect(latest?.worktree).toBe(parentWorktree)
+  })
+
+  it('retains the last resolved worktree when a later cwd poll returns empty', async () => {
+    getCwdMock.mockResolvedValueOnce(`${CHILD_PATH}/src`).mockResolvedValueOnce('')
+
+    await renderHook(parentWorktree)
+    await flushMicrotasks()
+
+    expect(latest?.worktree).toBe(childWorktree)
+
+    await runNextCwdPoll()
+
+    expect(getCwdMock).toHaveBeenCalledTimes(2)
+    expect(latest?.worktree).toBe(childWorktree)
+  })
+
+  it('retains the last resolved worktree when a later cwd poll rejects', async () => {
+    getCwdMock
+      .mockResolvedValueOnce(`${CHILD_PATH}/src`)
+      .mockRejectedValueOnce(new Error('lsof timed out'))
+
+    await renderHook(parentWorktree)
+    await flushMicrotasks()
+
+    expect(latest?.worktree).toBe(childWorktree)
+
+    await runNextCwdPoll()
+
+    expect(getCwdMock).toHaveBeenCalledTimes(2)
+    expect(latest?.worktree).toBe(childWorktree)
+  })
+
+  it('does not retain a prior terminal cwd when the active terminal changes', async () => {
+    getCwdMock.mockResolvedValueOnce(`${CHILD_PATH}/src`).mockResolvedValueOnce('')
+
+    await renderHook(parentWorktree)
+    await flushMicrotasks()
+
+    expect(latest?.worktree).toBe(childWorktree)
+
+    await act(async () => {
+      useAppStore.setState({ ptyIdsByTabId: { 'tab-1': ['pty-2'] } } as Partial<AppState>)
+    })
+    await flushMicrotasks()
+
+    expect(getCwdMock).toHaveBeenCalledTimes(2)
+    expect(getCwdMock).toHaveBeenLastCalledWith('pty-2')
     expect(latest?.worktree).toBe(parentWorktree)
   })
 

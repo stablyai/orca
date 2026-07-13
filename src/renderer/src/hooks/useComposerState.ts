@@ -22,6 +22,7 @@ import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
+import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -780,6 +781,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
   // `orca-ide` rename must not be applied to remote launch commands.
   const selectedRepoIsRemote = selectedRepo ? repoIsRemote(selectedRepo) : false
+  const selectedRepoStartupShell = resolveLocalWindowsAgentStartupShell({
+    platform: selectedRepoAgentLaunchPlatform,
+    isRemote: selectedRepoIsRemote,
+    terminalWindowsShell: settings?.terminalWindowsShell
+  })
   const selectedRepoProjectId =
     selectedWorkspaceTarget.status === 'ready' ? selectedWorkspaceTarget.target.projectId : null
   const selectedProjectId = selectedProjectGroup
@@ -3344,6 +3350,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             ? resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs)
             : undefined,
           agentEnv: agent ? resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv) : undefined,
+          terminalWindowsShell: settings?.terminalWindowsShell,
           isRemote: folderTargetIsRemote,
           launchSource: telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
           runtimeEnvironmentId: folderTargetRuntimeEnvironmentId,
@@ -3399,6 +3406,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       settings?.agentDefaultArgs,
       settings?.agentDefaultEnv,
       settings?.autoRenameBranchFromWork,
+      settings?.terminalWindowsShell,
       telemetrySource
     ]
   )
@@ -3598,6 +3606,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         agentArgs: resolveTuiAgentLaunchArgs(tuiAgent, settings?.agentDefaultArgs),
         agentEnv: resolveTuiAgentLaunchEnv(tuiAgent, settings?.agentDefaultEnv),
         platform: selectedRepoAgentLaunchPlatform,
+        shell: selectedRepoStartupShell,
         isRemote: selectedRepoIsRemote
       })
       const shouldSeedInitialAgentStatus =
@@ -3769,6 +3778,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     selectedRepo,
     selectedRepoAgentLaunchPlatform,
     selectedRepoIsRemote,
+    selectedRepoStartupShell,
     selectedRepoIsGit,
     selectedRepoRequiresConnection,
     showProjectRequiredError,
@@ -4015,6 +4025,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
                 agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
                 platform: selectedRepoAgentLaunchPlatform,
+                shell: selectedRepoStartupShell,
                 isRemote: selectedRepoIsRemote
               })
 
@@ -4039,6 +4050,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
             agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
             platform: selectedRepoAgentLaunchPlatform,
+            shell: selectedRepoStartupShell,
             isRemote: selectedRepoIsRemote,
             allowEmptyPromptLaunch: true
           })
@@ -4214,6 +4226,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       selectedRepo,
       selectedRepoAgentLaunchPlatform,
       selectedRepoIsRemote,
+      selectedRepoStartupShell,
       selectedRepoIsGit,
       selectedRepoSettings,
       selectedRepoRequiresConnection,

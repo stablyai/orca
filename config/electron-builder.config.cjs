@@ -186,6 +186,10 @@ module.exports = {
         to: 'bin/orca.cmd'
       },
       {
+        from: 'native/windows-cli-launcher/.build/orca.exe',
+        to: 'bin/orca.exe'
+      },
+      {
         from: 'node_modules/agent-browser/bin/agent-browser-win32-x64.exe',
         to: 'agent-browser-win32-x64.exe'
       },

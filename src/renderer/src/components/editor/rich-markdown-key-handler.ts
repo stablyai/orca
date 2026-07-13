@@ -4,7 +4,7 @@ import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { useAppStore } from '@/store'
 import { isMarkdownPreviewFindShortcut } from './markdown-preview-search'
 import { editorShortcutMatches } from './editor-shortcuts'
-import { getLinkBubblePosition, type LinkBubbleState } from './RichMarkdownLinkBubble'
+import type { LinkBubbleState } from './RichMarkdownLinkBubble'
 import { commitRow, type DocLinkMenuRow, type DocLinkMenuState } from './rich-markdown-commands'
 import {
   runSlashCommand,
@@ -18,6 +18,9 @@ import {
   exitTrailingEmptyOrderedListItem
 } from './rich-markdown-list-continuation'
 import { deleteAdjacentEmptyParagraph } from './rich-markdown-empty-paragraph-delete'
+import { handleRichMarkdownCitationKey } from './rich-markdown-citation-keyboard'
+import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
+import { handleRichMarkdownLinkShortcut } from './rich-markdown-link-shortcut'
 
 export type KeyHandlerContext = {
   isMac: boolean
@@ -44,6 +47,9 @@ export type KeyHandlerContext = {
   setSelectedDocLinkIndex: Dispatch<SetStateAction<number>>
   setSlashMenu: Dispatch<SetStateAction<SlashMenuState | null>>
   setDocLinkMenu: (menu: DocLinkMenuState | null) => void
+  openSelectedHtmlSuperscriptLink?: () => boolean
+  linkBubbleOwnerId: string
+  htmlSuperscriptLinkContext: RichMarkdownHtmlSuperscriptLinkContext
 }
 
 function isComposingMarkdownInput(event: KeyboardEvent, editor: Editor | null): boolean {
@@ -101,6 +107,16 @@ export function createRichMarkdownKeyHandler(
   return (_view, event) => {
     const mod = ctx.isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
     if (
+      handleRichMarkdownCitationKey({
+        editor: ctx.editorRef.current,
+        event,
+        linkBubbleOwnerId: ctx.linkBubbleOwnerId,
+        onOpen: ctx.openSelectedHtmlSuperscriptLink
+      })
+    ) {
+      return true
+    }
+    if (
       isMarkdownPreviewFindShortcut(
         event,
         getShortcutPlatform(),
@@ -131,29 +147,18 @@ export function createRichMarkdownKeyHandler(
       return true
     }
 
-    // Link: Cmd/Ctrl+K — insert or edit a hyperlink.
-    if (mod && event.key.toLowerCase() === 'k') {
-      event.preventDefault()
-      const ed = ctx.editorRef.current
-      if (!ed) {
-        return true
-      }
-
-      if (ctx.isEditingLinkRef.current) {
-        ctx.setIsEditingLink(false)
-        if (!ed.isActive('link')) {
-          ctx.setLinkBubble(null)
-        }
-        ed.commands.focus()
-        return true
-      }
-
-      const pos = getLinkBubblePosition(ed, ctx.rootRef.current)
-      if (pos) {
-        const href = ed.isActive('link') ? (ed.getAttributes('link').href as string) || '' : ''
-        ctx.setLinkBubble({ href, ...pos })
-        ctx.setIsEditingLink(true)
-      }
+    if (
+      handleRichMarkdownLinkShortcut({
+        editor: ctx.editorRef.current,
+        event,
+        htmlSuperscriptLinkContext: ctx.htmlSuperscriptLinkContext,
+        isEditing: ctx.isEditingLinkRef.current,
+        isMac: ctx.isMac,
+        root: ctx.rootRef.current,
+        setEditing: ctx.setIsEditingLink,
+        setLinkBubble: ctx.setLinkBubble
+      })
+    ) {
       return true
     }
 

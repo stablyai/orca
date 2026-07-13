@@ -204,7 +204,11 @@ describe('agent completion coordinator', () => {
     // Second idle sample confirms the exit ~2 hidden polls (~6s) after it happened.
     await vi.advanceTimersByTimeAsync(3_000)
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
-    expect(dispatchCompletion).toHaveBeenCalledWith('codex')
+    expect(dispatchCompletion).toHaveBeenCalledWith('codex', {
+      source: 'process-exit',
+      quietedHookDone: false,
+      terminalIdleConfirmed: true
+    })
   })
 
   it('clears process evidence after agent exit so later non-agent spinner titles do not notify', async () => {
@@ -272,7 +276,90 @@ describe('agent completion coordinator', () => {
     await flushAsyncTicks()
 
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
-    expect(dispatchCompletion).toHaveBeenCalledWith('codex')
+    expect(dispatchCompletion).toHaveBeenCalledWith('codex', {
+      source: 'process-exit',
+      quietedHookDone: false,
+      terminalIdleConfirmed: true
+    })
+  })
+
+  it('does not mark an agent-to-agent process replacement as terminal idle', async () => {
+    let foregroundProcess = 'codex'
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(async () => processResult(foregroundProcess)),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.startProcessTracking()
+    coordinator.observeTitle('Codex working')
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    foregroundProcess = 'claude'
+    await vi.advanceTimersByTimeAsync(750)
+
+    expect(dispatchCompletion).toHaveBeenCalledWith('codex', {
+      source: 'process-exit',
+      quietedHookDone: false
+    })
+  })
+
+  it('suppresses replacement completion before coordinator state mutation', async () => {
+    let foregroundProcess = 'codex'
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(async () => processResult(foregroundProcess)),
+      dispatchCompletion,
+      shouldSuppressProcessReplacementCompletion: () => true,
+      isLive: () => true
+    })
+
+    coordinator.startProcessTracking()
+    coordinator.observeTitle('Codex working')
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    foregroundProcess = 'claude'
+    await vi.advanceTimersByTimeAsync(750)
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+
+    coordinator.observeTitle('Claude done')
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+    expect(dispatchCompletion).toHaveBeenCalledWith('Claude done')
+  })
+
+  it('suppresses confirmed process exit when the owner vetoes the exited process', async () => {
+    let foregroundProcess: string | null = 'codex'
+    const dispatchCompletion = vi.fn()
+    const shouldSuppressConfirmedProcessExitCompletion = vi.fn(() => true)
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(async () => processResult(foregroundProcess)),
+      dispatchCompletion,
+      shouldSuppressConfirmedProcessExitCompletion,
+      isLive: () => true
+    })
+
+    coordinator.startProcessTracking()
+    coordinator.observeTitle('Codex working')
+    await vi.advanceTimersByTimeAsync(2_000)
+
+    foregroundProcess = null
+    await vi.advanceTimersByTimeAsync(1_500)
+
+    expect(shouldSuppressConfirmedProcessExitCompletion).toHaveBeenCalledWith({
+      agent: 'codex',
+      processName: 'codex'
+    })
+    expect(dispatchCompletion).not.toHaveBeenCalled()
   })
 
   it('suppresses process-exit backstop after a title completion already notified the turn', async () => {
