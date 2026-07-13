@@ -29,4 +29,13 @@ describe('resolveWebChatCwdByAgent', () => {
       'gemini-web': 'Gemini'
     })
   })
+
+  it('uses the workspaceDir separator (Windows backslash)', () => {
+    const r = resolveWebChatCwdByAgent({}, 'C:\\Users\\u\\orca\\workspaces')
+    expect(r.chatgpt).toBe('C:\\Users\\u\\orca\\workspaces\\ChatGPT')
+  })
+
+  it('trims a trailing separator before joining', () => {
+    expect(resolveWebChatCwdByAgent({}, '/w/').chatgpt).toBe('/w/ChatGPT')
+  })
 })
