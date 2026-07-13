@@ -76,6 +76,9 @@ const aiVaultListResultSchema = z.object({
       queuedMessageCount: z.number().default(0),
       subagentTranscriptCount: z.number().default(0),
       resumeCommand: z.string(),
+      // The default keeps remote hosts running an older build (no readOnly
+      // field) parseable; pre-web-chat-import sessions were never read-only.
+      readOnly: z.boolean().default(false),
       // The default keeps remote hosts running an older build (no subagent
       // field) parseable; scanned top-level sessions carry null anyway.
       subagent: z

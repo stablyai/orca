@@ -104,6 +104,7 @@ export type SessionAccumulator = {
   queuedMessageCount: number
   subagentTranscriptCount: number
   latestTimestampMs: number
+  readOnly: boolean
 }
 
 export type CodexUsageSnapshot = {

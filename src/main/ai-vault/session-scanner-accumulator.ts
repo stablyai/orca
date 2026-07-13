@@ -43,7 +43,8 @@ export function createAccumulator(args: {
     previewMessages: [],
     queuedMessageCount: 0,
     subagentTranscriptCount: 0,
-    latestTimestampMs: 0
+    latestTimestampMs: 0,
+    readOnly: false
   }
 }
 
@@ -122,6 +123,7 @@ export function finalizeSession(
       platform,
       codexHome: options.codexHome
     }),
+    readOnly: accumulator.readOnly,
     subagent: null
   }
 }
