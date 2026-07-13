@@ -311,6 +311,17 @@ async function verifyForwarding(scripts, home, payload) {
   }
 }
 
+// Why: rewrite from the path embedded in the installed command, not a
+// reconstructed join(home, ...). That way missing/failing-script cases cannot
+// silently re-run the real script if the install layout changes.
+function rewriteLauncherScriptPath(command, nextPath) {
+  const match = /if \[ -f '([^']+)'/.exec(command)
+  if (!match) {
+    throw new Error('Installed launcher command did not reference a quoted script path')
+  }
+  return command.replaceAll(match[1], nextPath)
+}
+
 async function verifyInstalledLauncher(home, payload) {
   const settingsPath = join(home, '.claude', 'settings.json')
   const settings = JSON.parse(readFileSync(settingsPath, 'utf8'))
@@ -320,13 +331,11 @@ async function verifyInstalledLauncher(home, payload) {
   if (!command || !command.includes('] && [ -r ') || !command.includes('else cat >/dev/null')) {
     throw new Error('Electron did not install the guarded Claude launcher')
   }
-  const installedPath = join(home, '.orca', 'agent-hooks', 'claude-hook.sh')
   const scratch = mkdtempSync(join(tmpdir(), 'orca-hook-launcher-'))
   try {
     const missingPath = join(scratch, 'missing-hook.sh')
-    const missingCommand = command.replaceAll(installedPath, missingPath)
     const missingResult = await runShell(
-      missingCommand,
+      rewriteLauncherScriptPath(command, missingPath),
       payload,
       withoutOrcaEnvironment({ HOME: home })
     )
@@ -335,9 +344,8 @@ async function verifyInstalledLauncher(home, payload) {
     const failingPath = join(scratch, 'failing-hook.sh')
     writeFileSync(failingPath, '#!/bin/sh\ncat >/dev/null\nexit 7\n', 'utf8')
     chmodSync(failingPath, 0o755)
-    const failingCommand = command.replaceAll(installedPath, failingPath)
     const failingResult = await runShell(
-      failingCommand,
+      rewriteLauncherScriptPath(command, failingPath),
       payload,
       withoutOrcaEnvironment({ HOME: home })
     )
