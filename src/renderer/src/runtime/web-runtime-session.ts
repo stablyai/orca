@@ -265,8 +265,9 @@ async function refreshWebRuntimeSessionTabsSnapshot(
     const snapshot = unwrapRuntimeRpcResult(
       response as RuntimeRpcResponse<RuntimeMobileSessionTabsResult>
     )
-    const { applyFreshWebSessionTabsSnapshot } = await import('./web-session-tabs-sync')
-    useAppStore.setState((state) => {
+    const { applyFreshWebSessionTabsSnapshot, applyWebSessionTabsStorePatch } =
+      await import('./web-session-tabs-sync')
+    applyWebSessionTabsStorePatch((state) => {
       // Why: eager refreshes can resolve after the user has selected another
       // worktree; session parity should update tabs without stealing focus.
       const patch = applyFreshWebSessionTabsSnapshot(state, snapshot, environmentId)

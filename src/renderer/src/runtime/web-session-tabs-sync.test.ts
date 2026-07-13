@@ -1654,6 +1654,57 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.sortEpoch).toBe(1)
   })
 
+  it('bumps aggregate epochs when a mirrored same-state entry gains attribution', () => {
+    const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
+    const snapshot = makeSnapshot([
+      {
+        type: 'terminal',
+        id: HOST_SURFACE_ID,
+        title: 'codex [working]',
+        parentTabId: 'host-tab-1',
+        leafId: LEAF_ID,
+        isActive: true,
+        status: 'ready',
+        terminal: 'terminal-1',
+        agentStatus: {
+          state: 'working',
+          prompt: 'fix web parity',
+          updatedAt: NOW - 100,
+          stateStartedAt: NOW - 1_000,
+          agentType: 'codex',
+          paneKey: hostPaneKey,
+          worktreeId: WT,
+          tabId: 'host-tab-1',
+          stateHistory: []
+        }
+      }
+    ])
+    const initial = applyWebSessionTabsSnapshot(
+      makeState(),
+      snapshot,
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+    const mirroredPaneKey = Object.keys(initial.agentStatusByPaneKey ?? {})[0]!
+    const existing = initial.agentStatusByPaneKey![mirroredPaneKey]!
+    const patch = applyWebSessionTabsSnapshot(
+      makeState({
+        ...initial,
+        agentStatusByPaneKey: {
+          [mirroredPaneKey]: { ...existing, worktreeId: 'stale-worktree', tabId: 'stale-tab' }
+        },
+        agentStatusEpoch: 7,
+        sortEpoch: 11
+      }),
+      { ...snapshot, snapshotVersion: 2 },
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.agentStatusEpoch).toBe(8)
+    expect(patch.sortEpoch).toBe(12)
+  })
+
   it('keeps mirrored OMP tabs from repainting to Pi-compatible titles', () => {
     const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
     const patch = applyWebSessionTabsSnapshot(
