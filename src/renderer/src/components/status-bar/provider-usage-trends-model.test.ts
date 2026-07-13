@@ -28,6 +28,7 @@ function makePoint(
     cacheReadTokens: 10,
     cacheWriteTokens: 5,
     reasoningOutputTokens: 0,
+    toolTokens: 0,
     totalTokens: 135,
     ...overrides
   }

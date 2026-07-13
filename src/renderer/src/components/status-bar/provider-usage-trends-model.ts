@@ -11,6 +11,7 @@ export type UsageHourlyPoint = {
   cacheReadTokens: number
   cacheWriteTokens: number
   reasoningOutputTokens: number
+  toolTokens: number
   totalTokens: number
 }
 
@@ -128,6 +129,7 @@ export type UsageTrendsBucket = {
   cacheReadTokens: number
   cacheWriteTokens: number
   reasoningOutputTokens: number
+  toolTokens: number
   totalTokens: number
 }
 
@@ -147,6 +149,7 @@ function createEmptyBucket(key: string): UsageTrendsBucket {
     cacheReadTokens: 0,
     cacheWriteTokens: 0,
     reasoningOutputTokens: 0,
+    toolTokens: 0,
     totalTokens: 0
   }
 }
@@ -199,6 +202,7 @@ export function buildDayTrend(
     bucket.cacheReadTokens += point.cacheReadTokens
     bucket.cacheWriteTokens += point.cacheWriteTokens
     bucket.reasoningOutputTokens += point.reasoningOutputTokens
+    bucket.toolTokens += point.toolTokens
     bucket.totalTokens += pointTotalTokens(point)
   }
 

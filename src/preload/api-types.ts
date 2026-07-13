@@ -418,6 +418,11 @@ import type {
   OpenCodeUsageSummary
 } from '../shared/opencode-usage-types'
 import type {
+  LocalUsageHistoryHourlyQuery,
+  LocalUsageHistoryHourlyResult,
+  LocalUsageHistoryScanState
+} from '../shared/local-usage-history-types'
+import type {
   AiVaultListArgs,
   AiVaultListResult,
   AiVaultSubagentListArgs,
@@ -811,6 +816,13 @@ export type OpenCodeUsageApi = {
     range: OpenCodeUsageRange
     limit?: number
   }) => Promise<OpenCodeUsageSessionRow[]>
+}
+
+export type LocalUsageHistoryApi = {
+  getScanState: () => Promise<LocalUsageHistoryScanState>
+  setEnabled: (args: { enabled: boolean }) => Promise<LocalUsageHistoryScanState>
+  refresh: (args?: { force?: boolean }) => Promise<LocalUsageHistoryScanState>
+  getHourly: (args: LocalUsageHistoryHourlyQuery) => Promise<LocalUsageHistoryHourlyResult>
 }
 
 export type AiVaultApi = {
@@ -2363,6 +2375,8 @@ export type PreloadApi = {
   claudeUsage: ClaudeUsageApi
   codexUsage: CodexUsageApi
   openCodeUsage: OpenCodeUsageApi
+  geminiUsage: LocalUsageHistoryApi
+  kimiUsage: LocalUsageHistoryApi
   aiVault: AiVaultApi
   nativeChat: NativeChatApi
   fs: {

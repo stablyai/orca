@@ -3837,6 +3837,26 @@ const api = {
       ipcRenderer.invoke('openCodeUsage:getRecentSessions', args)
   },
 
+  geminiUsage: {
+    getScanState: (): Promise<unknown> => ipcRenderer.invoke('geminiUsage:getScanState'),
+    setEnabled: (args: { enabled: boolean }): Promise<unknown> =>
+      ipcRenderer.invoke('geminiUsage:setEnabled', args),
+    refresh: (args?: { force?: boolean }): Promise<unknown> =>
+      ipcRenderer.invoke('geminiUsage:refresh', args),
+    getHourly: (args: { days: number } | { startDay: string; endDay: string }): Promise<unknown> =>
+      ipcRenderer.invoke('geminiUsage:getHourly', args)
+  },
+
+  kimiUsage: {
+    getScanState: (): Promise<unknown> => ipcRenderer.invoke('kimiUsage:getScanState'),
+    setEnabled: (args: { enabled: boolean }): Promise<unknown> =>
+      ipcRenderer.invoke('kimiUsage:setEnabled', args),
+    refresh: (args?: { force?: boolean }): Promise<unknown> =>
+      ipcRenderer.invoke('kimiUsage:refresh', args),
+    getHourly: (args: { days: number } | { startDay: string; endDay: string }): Promise<unknown> =>
+      ipcRenderer.invoke('kimiUsage:getHourly', args)
+  },
+
   aiVault: {
     listSessions: (args?: AiVaultListArgs): Promise<unknown> =>
       ipcRenderer.invoke('aiVault:listSessions', args),

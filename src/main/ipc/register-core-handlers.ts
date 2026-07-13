@@ -11,6 +11,7 @@ import { registerFilesystemWatcherHandlers } from './filesystem-watcher'
 import { registerClaudeUsageHandlers } from './claude-usage'
 import { registerCodexUsageHandlers } from './codex-usage'
 import { registerOpenCodeUsageHandlers } from './opencode-usage'
+import { registerLocalUsageHistoryHandlers } from './local-usage-history'
 import { registerGitHubHandlers } from './github'
 import { registerGitLabHandlers } from './gitlab'
 import { registerHostedReviewHandlers } from './hosted-review'
@@ -65,6 +66,7 @@ import {
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import type { OpenCodeUsageStore } from '../opencode-usage/store'
+import type { LocalUsageHistoryStore } from '../local-usage-history/store'
 import type { RateLimitService } from '../rate-limits/service'
 import type { CodexAccountService } from '../codex-accounts/service'
 import type { ClaudeAccountService } from '../claude-accounts/service'
@@ -82,6 +84,10 @@ let registered = false
 type CoreHandlerLifecycleOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
   getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
+  localUsageHistory?: {
+    geminiUsage: LocalUsageHistoryStore
+    kimiUsage: LocalUsageHistoryStore
+  }
 }
 
 export function registerCoreHandlers(
@@ -121,6 +127,9 @@ export function registerCoreHandlers(
   registerClaudeUsageHandlers(claudeUsage)
   registerCodexUsageHandlers(codexUsage)
   registerOpenCodeUsageHandlers(openCodeUsage)
+  if (lifecycleOptions.localUsageHistory) {
+    registerLocalUsageHistoryHandlers(lifecycleOptions.localUsageHistory)
+  }
   registerCodexAccountHandlers(codexAccounts)
   registerAgentHookHandlers(runtime)
   registerAgentTrustHandlers()

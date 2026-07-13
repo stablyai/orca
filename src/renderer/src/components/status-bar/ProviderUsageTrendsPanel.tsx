@@ -20,6 +20,7 @@ import {
   getTodayDayKey
 } from './provider-usage-trends-date-range'
 import { ProviderUsageTrendsSegmentedControl } from './provider-usage-trends-segmented-control'
+import { getUsageTrendDetailRows } from './provider-usage-trends-detail-rows'
 import {
   buildDayTrend,
   buildHourOfDayModel,
@@ -201,40 +202,7 @@ export function ProviderUsageTrendsPanel({
   ]
   const hasAnyPoints = (points?.length ?? 0) > 0
   const isEnabled = scanState?.enabled ?? false
-  const extraRows =
-    source.extraRows === 'claude'
-      ? [
-          {
-            key: 'cacheReadTokens' as const,
-            label: translate(
-              'auto.components.status.bar.ProviderUsageTrendsChart.cacheRead',
-              'Cache read'
-            )
-          },
-          {
-            key: 'cacheWriteTokens' as const,
-            label: translate(
-              'auto.components.status.bar.ProviderUsageTrendsChart.cacheWrite',
-              'Cache write'
-            )
-          }
-        ]
-      : [
-          {
-            key: 'cacheReadTokens' as const,
-            label: translate(
-              'auto.components.status.bar.ProviderUsageTrendsChart.cachedInput',
-              'Cached input'
-            )
-          },
-          {
-            key: 'reasoningOutputTokens' as const,
-            label: translate(
-              'auto.components.status.bar.ProviderUsageTrendsChart.reasoning',
-              'Reasoning'
-            )
-          }
-        ]
+  const extraRows = getUsageTrendDetailRows(source.extraRows)
 
   let body: React.ReactNode
   if (isLoading && !hasAnyPoints) {

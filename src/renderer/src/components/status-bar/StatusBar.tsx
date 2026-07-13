@@ -2126,6 +2126,13 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                 provider={visibleGemini}
                 compact={compact}
                 iconOnly={iconOnly}
+                // Why: Gemini history is read from this desktop's ~/.gemini,
+                // never from the runtime whose quota bar may be remote.
+                sideContent={
+                  hasActiveRuntimeEnvironment ? undefined : (
+                    <ProviderUsageTrendsPanel provider="gemini" />
+                  )
+                }
                 ariaLabel={translate(
                   'auto.components.status.bar.StatusBar.d2375976eb',
                   'Open Gemini usage details'
@@ -2166,6 +2173,13 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                 provider={visibleKimi}
                 compact={compact}
                 iconOnly={iconOnly}
+                // Why: Kimi wire history is local-only, so never associate it
+                // with a remote runtime account in the same popover.
+                sideContent={
+                  hasActiveRuntimeEnvironment ? undefined : (
+                    <ProviderUsageTrendsPanel provider="kimi" />
+                  )
+                }
                 ariaLabel={translate(
                   'auto.components.status.bar.StatusBar.fda8146810',
                   'Open Kimi usage details'

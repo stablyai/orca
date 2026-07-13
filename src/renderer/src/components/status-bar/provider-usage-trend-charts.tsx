@@ -207,7 +207,7 @@ export function DayTrendsChart({
     label: string
     key: keyof Pick<
       UsageTrendsBucket,
-      'cacheReadTokens' | 'cacheWriteTokens' | 'reasoningOutputTokens'
+      'cacheReadTokens' | 'cacheWriteTokens' | 'reasoningOutputTokens' | 'toolTokens'
     >
   }[]
 }): React.JSX.Element {
