@@ -8,6 +8,10 @@
     "../src/main/agent-hooks/managed-agent-hook-controls.ts",
     "../src/main/amp/hook-service.ts",
     "../src/main/antigravity/hook-service.ts",
+    "../src/main/chat-import/chat-import-store.ts",
+    "../src/main/chat-import/chat-import-schema.ts",
+    "../src/main/chat-import/chat-import-paths.ts",
+    "../src/main/chat-import/chat-import-db-open.ts",
     "../src/main/claude/hook-settings.ts",
     "../src/main/claude/hook-service.ts",
     "../src/main/codex/codex-config-mirror.ts",
@@ -36,6 +40,7 @@
     "../src/main/kimi/kimi-hook-config-toml.ts",
     "../src/main/openclaude/hook-service.ts",
     "../src/main/runtime/runtime-metadata.ts",
+    "../src/main/sqlite/sync-database.ts",
     "../src/main/win32-utils.ts"
   ],
   "compilerOptions": {

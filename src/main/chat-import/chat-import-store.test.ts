@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import SyncDatabase from '../sqlite/sync-database'
 import { initChatImportSchema } from './chat-import-schema'
-import { upsertWebConversation } from './chat-import-store'
+import { listIngestedExternalIds, upsertWebConversation } from './chat-import-store'
 
 let dirs: string[] = []
 afterEach(() => {
@@ -65,6 +65,51 @@ describe('upsertWebConversation', () => {
     )
     const rows = db.prepare('SELECT text FROM messages WHERE conv_id = ?').all('CLAUDE/x')
     expect(rows).toEqual([{ text: 'two' }])
+    db.close()
+  })
+})
+
+describe('listIngestedExternalIds', () => {
+  it('lists ingested external ids for one source only', () => {
+    const db = tempDb()
+    upsertWebConversation(
+      db,
+      {
+        source: 'CHATGPT',
+        externalId: 'c1',
+        title: 't',
+        createdAt: null,
+        updatedAt: null,
+        messages: []
+      },
+      '2026-07-05T00:00:00.000Z'
+    )
+    upsertWebConversation(
+      db,
+      {
+        source: 'CHATGPT',
+        externalId: 'c2',
+        title: 't',
+        createdAt: null,
+        updatedAt: null,
+        messages: []
+      },
+      '2026-07-05T00:00:00.000Z'
+    )
+    upsertWebConversation(
+      db,
+      {
+        source: 'CLAUDE',
+        externalId: 'x1',
+        title: 't',
+        createdAt: null,
+        updatedAt: null,
+        messages: []
+      },
+      '2026-07-05T00:00:00.000Z'
+    )
+    expect(listIngestedExternalIds(db, 'CHATGPT').sort()).toEqual(['c1', 'c2'])
+    expect(listIngestedExternalIds(db, 'GEMINI')).toEqual([])
     db.close()
   })
 })

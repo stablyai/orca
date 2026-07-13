@@ -34,3 +34,12 @@ export function upsertWebConversation(
   }
   return id
 }
+
+// Why: the native host asks which conversations it has already stored so the
+// extension can skip re-fetching them (delta sync).
+export function listIngestedExternalIds(db: SyncDatabase, source: WebChatSource): string[] {
+  const rows = db
+    .prepare('SELECT external_id FROM conversations WHERE source = ? ORDER BY external_id')
+    .all(source) as { external_id: string }[]
+  return rows.map((row) => row.external_id)
+}
