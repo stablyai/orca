@@ -699,7 +699,7 @@ export function connect(
       const message = e?.message ?? null
       // Why: capture the real failure so the connection verdict can show
       // it to the user instead of a canned label (#6784).
-      captureConnectionError(message)
+      lastConnectionError = message
       const errEvent = describeSocketEvent(event)
       console.log('[net] ws.onerror', {
         message: e?.message,

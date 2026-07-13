@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { ConnectionState, HostProfile } from './transport/types'
 import type { RpcClient } from './transport/rpc-client'
 
-export type HostClientEntry = { hostId: string; client: RpcClient }
+export type HostClientEntry = { hostId: string; client: RpcClient; state: ConnectionState }
 
 // Why (#6784 + connection-state mirroring): extracted from HomeScreen so that
 // file stays under its max-lines budget. Mirrors each host's live connection

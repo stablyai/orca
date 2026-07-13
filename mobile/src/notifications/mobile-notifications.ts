@@ -404,7 +404,7 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
   // subsequent reconnect `ready` events fetch missed notifications.
   let watermarkLoaded = false
   void loadLastSeenSeq(hostId).then((seq) => {
-    lastDeliveredSeq = seq
+    lastDeliveredSeq = Math.max(lastDeliveredSeq, seq)
     watermarkLoaded = true
   })
 
