@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeAgentStatusPayload } from '../../../shared/agent-status-types'
 import {
+  getAgentRowDisplayLabel,
   getAgentRowGeneratedTitleText,
   getAgentRowPrimaryText,
+  getAgentRowTabName,
   getOrcaDispatchTaskId,
   isOrcaDispatchPrompt
 } from './agent-row-primary-text'
@@ -282,5 +284,52 @@ Checkout race body`,
         }
       })
     ).toBe('Refactor the auth middleware')
+  })
+})
+
+describe('getAgentRowTabName', () => {
+  it('prefers customTitle over generatedTitle', () => {
+    expect(
+      getAgentRowTabName({ customTitle: 'PROBE-LEFT-NAME', generatedTitle: 'auto from prompt' })
+    ).toBe('PROBE-LEFT-NAME')
+  })
+
+  it('uses generatedTitle when customTitle is absent', () => {
+    expect(getAgentRowTabName({ customTitle: null, generatedTitle: 'auto from prompt' })).toBe(
+      'auto from prompt'
+    )
+  })
+
+  it('treats whitespace-only titles as unset', () => {
+    expect(getAgentRowTabName({ customTitle: '   ', generatedTitle: null })).toBe('')
+  })
+})
+
+describe('getAgentRowDisplayLabel', () => {
+  it('prefers the tab customTitle over the agent-status prompt', () => {
+    expect(
+      getAgentRowDisplayLabel({
+        entry: { prompt: 'ok lets go ahead' },
+        tab: { customTitle: 'PROBE-LEFT-NAME', generatedTitle: null },
+        fallbackStateLabel: 'Done'
+      })
+    ).toBe('PROBE-LEFT-NAME')
+  })
+
+  it('falls back to prompt then state label when the tab is unnamed', () => {
+    expect(
+      getAgentRowDisplayLabel({
+        entry: { prompt: 'ok lets go ahead' },
+        tab: { customTitle: null, generatedTitle: null },
+        fallbackStateLabel: 'Done'
+      })
+    ).toBe('ok lets go ahead')
+    expect(
+      getAgentRowDisplayLabel({
+        entry: { prompt: '' },
+        tab: { customTitle: null, generatedTitle: null },
+        fallbackStateLabel: 'Done'
+      })
+    ).toBe('Done')
   })
 })

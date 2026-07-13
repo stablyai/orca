@@ -45,6 +45,39 @@ export function orchestrationLabelsMatchLiveDispatch(
   return liveTaskId === orchestrationTaskId
 }
 
+export type AgentRowTabNameFields = {
+  customTitle?: string | null
+  generatedTitle?: string | null
+}
+
+/**
+ * Manual/auto tab names that the middle terminal strip already shows.
+ * Why: the left sidebar agent list historically preferred the agent-status
+ * prompt (or a bare "Done"/"Working" state label), so `terminal rename` and
+ * tab double-click renames never appeared on the left. Prefer these when set
+ * so left and middle stay one identity.
+ */
+export function getAgentRowTabName(tab: AgentRowTabNameFields | null | undefined): string {
+  return tab?.customTitle?.trim() || tab?.generatedTitle?.trim() || ''
+}
+
+/**
+ * Sidebar/dashboard primary label for an agent row.
+ * Order: tab custom/generated title → prompt/orchestration preview → state label.
+ */
+export function getAgentRowDisplayLabel(args: {
+  entry: Pick<AgentStatusEntry, 'orchestration' | 'prompt'>
+  tab?: AgentRowTabNameFields | null
+  fallbackStateLabel: string
+}): string {
+  const named = getAgentRowTabName(args.tab)
+  if (named) {
+    return named
+  }
+  const prompt = getAgentRowPrimaryText(args.entry)
+  return prompt || args.fallbackStateLabel
+}
+
 export function getAgentRowPrimaryText(
   entry: Pick<AgentStatusEntry, 'orchestration' | 'prompt'>
 ): string {

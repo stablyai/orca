@@ -7,7 +7,7 @@ import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { cn } from '@/lib/utils'
 import { getAgentDotState } from './worktree-card-agent-summary'
 import { translate } from '@/i18n/i18n'
-import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
+import { getAgentRowDisplayLabel } from '@/lib/agent-row-primary-text'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
 
 function formatShortTimeAgo(ts: number, now: number): string {
@@ -45,8 +45,15 @@ function lastEnteredDoneAt(agent: DashboardAgentRowData): number | null {
 }
 
 function getCompactAgentPrimary(agent: DashboardAgentRowData): string {
-  const prompt = getAgentRowPrimaryText(agent.entry)
-  return prompt || agentStateLabel(getAgentDotState(agent))
+  // Why: prefer the middle-panel tab name (customTitle / generatedTitle) so a
+  // rename in the tab strip (or `orca terminal rename`) shows on the left too.
+  // Falling back to prompt/state is what produced "Done - Claude" while the
+  // tab already had a human name.
+  return getAgentRowDisplayLabel({
+    entry: agent.entry,
+    tab: agent.tab,
+    fallbackStateLabel: agentStateLabel(getAgentDotState(agent))
+  })
 }
 
 function getCompactAgentSecondary(agent: DashboardAgentRowData): string {

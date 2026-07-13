@@ -10,7 +10,7 @@ import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingCo
 import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
-import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
+import { getAgentRowDisplayLabel } from '@/lib/agent-row-primary-text'
 
 // Why: the dashboard tracks its own rollup states (incl. 'idle'); narrow to the
 // shared dot states for rendering, falling back to 'idle' for any unknown
@@ -197,14 +197,14 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   )
   const startedAt = agent.startedAt > 0 ? agent.startedAt : null
   const doneAt = lastEnteredDoneAt(agent)
-  const prompt = getAgentRowPrimaryText(agent.entry)
-  // Why: `agent.entry.prompt` is normalized to '' when the prompt is unknown
-  // (fresh agent, missing telemetry). Rendering the row with an empty primary
-  // slot would collapse the text column and leave the row with no human-
-  // readable label — just a state dot and icon. Fall back to the state label
-  // ("Working", "Done", "Waiting", …) so every row is identifiable at a
-  // glance.
-  const displayLabel = prompt || agentStateLabel(asDotState(agent.state))
+  // Why: prefer the middle-panel tab name when set so left/dashboard agent
+  // rows stay aligned with `terminal rename` / tab customTitle. Fall back to
+  // prompt, then state label ("Working", "Done", …) when the prompt is empty.
+  const displayLabel = getAgentRowDisplayLabel({
+    entry: agent.entry,
+    tab: agent.tab,
+    fallbackStateLabel: agentStateLabel(asDotState(agent.state))
+  })
   // Why: the tool row describes what the agent is *currently* doing; once it
   // leaves working, that line goes stale and misleads (a done row showing
   // "Bash: pnpm test" reads as if the command is still running). Gate tool
