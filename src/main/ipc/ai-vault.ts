@@ -231,7 +231,8 @@ async function scanLocalAiVaultSessions(args?: AiVaultListArgs): Promise<AiVault
   return listCachedLocalAiVaultSessions({
     limit: args?.limit,
     force: args?.force,
-    scopePaths: args?.scopePaths
+    scopePaths: args?.scopePaths,
+    webChatCwdByAgent: args?.webChatCwdByAgent
   })
 }
 

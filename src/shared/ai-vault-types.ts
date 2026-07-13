@@ -179,6 +179,9 @@ export type AiVaultListArgs = {
   // guarantee a scoped view still surfaces its own (possibly older) sessions.
   scopePaths?: readonly string[]
   executionHostScope?: ExecutionHostScope
+  // User-configured cwd per web-chat agent. Web sessions are always host-local,
+  // so this never crosses the remote runtime/SSH scan paths.
+  webChatCwdByAgent?: Partial<Record<WebChatAgent, string>>
 }
 
 export type AiVaultListResult = {

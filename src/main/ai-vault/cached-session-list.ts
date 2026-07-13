@@ -33,10 +33,13 @@ export function configureAiVaultSessionSources(next: AiVaultSessionSources): voi
 }
 
 export async function listAiVaultSessions(args?: AiVaultListArgs): Promise<AiVaultListResult> {
-  // Scope paths change the result set, so they must be part of the cache key.
+  // Scope paths and web-chat cwd overrides change the result set, so both must
+  // be part of the cache key — otherwise a location-settings change would
+  // still serve stale cached sessions until the TTL expires.
   const key = JSON.stringify({
     limit: args?.limit ?? 'default',
-    scopePaths: args?.scopePaths ?? []
+    scopePaths: args?.scopePaths ?? [],
+    webChatCwdByAgent: args?.webChatCwdByAgent ?? {}
   })
   const now = Date.now()
   // Why: opening this panel repeatedly should not re-parse hundreds of JSONL
@@ -55,6 +58,7 @@ export async function listAiVaultSessions(args?: AiVaultListArgs): Promise<AiVau
     scanAiVaultSessions({
       limit: args?.limit,
       scopePaths: args?.scopePaths,
+      webChatCwdByAgent: args?.webChatCwdByAgent,
       additionalCodexSessionsDirs,
       wslHomeDirs: await getAiVaultWslHomeDirs(),
       // Why: this scan is always host-local; callers addressing this host by a
