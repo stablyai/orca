@@ -21,6 +21,7 @@ import { createSequencedSetupAgentCommands } from '../../../shared/setup-agent-s
 import { getSetupRunnerCommandPlatformForPath } from '../../../shared/setup-runner-command'
 import { buildAgentStartupPlan } from './tui-agent-startup'
 import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
+import { getFolderWorkspaceAgentLaunchPlatform } from '@/components/sidebar/folder-workspace-launch-platform'
 import { CLIENT_PLATFORM } from './new-workspace'
 import { tuiAgentToAgentKind } from './telemetry'
 import { agentKindToTuiAgent } from '../../../shared/agent-kind'
@@ -227,7 +228,13 @@ export function activateAndRevealFolderWorkspace(
     state.recordWorktreeVisit(workspaceKey)
   }
   resumeSleepingAgentSessionsForWorktree(workspaceKey)
-  const primaryTabId = ensureFolderWorkspaceInitialTerminal(folderWorkspace, opts?.startup)
+  const primaryTabId = ensureFolderWorkspaceInitialTerminal(
+    folderWorkspace,
+    // Why: mirror the worktree path — when no explicit startup is passed, a
+    // folder workspace created with an agent (mission session, composer
+    // reopen) must relaunch it instead of opening a bare shell.
+    opts?.startup ?? buildFolderWorkspaceAgentReopenStartup(folderWorkspace)
+  )
 
   if (opts?.sidebarRevealBehavior) {
     state.revealWorktreeInSidebar(workspaceKey, { behavior: opts.sidebarRevealBehavior })
@@ -238,21 +245,12 @@ export function activateAndRevealFolderWorkspace(
   return { primaryTabId }
 }
 
-function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayload | undefined {
-  const agent = worktree.createdWithAgent
-  if (!isTuiAgent(agent)) {
-    return undefined
-  }
-
+function buildAgentReopenStartupPayload(
+  agent: TuiAgent,
+  launchPlatform: NodeJS.Platform,
+  isRemote: boolean
+): WorktreeStartupPayload | undefined {
   const state = useAppStore.getState()
-  const repo = state.repos.find((entry) => entry.id === worktree.repoId)
-  const launchPlatform = repo
-    ? getAgentLaunchPlatformForRepo(
-        repo,
-        repo.connectionId ? undefined : getLocalProjectExecutionRuntimeContext(state, worktree.id)
-      )
-    : CLIENT_PLATFORM
-
   const startupPlan = buildAgentStartupPlan({
     agent,
     prompt: '',
@@ -260,7 +258,7 @@ function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayl
     agentArgs: resolveTuiAgentLaunchArgs(agent, state.settings?.agentDefaultArgs),
     agentEnv: resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
     platform: launchPlatform,
-    isRemote: repo ? repoIsRemote(repo) : false,
+    isRemote,
     allowEmptyPromptLaunch: true
   })
   if (!startupPlan) {
@@ -281,6 +279,45 @@ function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayl
       request_kind: 'resume'
     }
   }
+}
+
+function buildCreatedAgentReopenStartup(worktree: Worktree): WorktreeStartupPayload | undefined {
+  const agent = worktree.createdWithAgent
+  if (!isTuiAgent(agent)) {
+    return undefined
+  }
+
+  const state = useAppStore.getState()
+  const repo = state.repos.find((entry) => entry.id === worktree.repoId)
+  const launchPlatform = repo
+    ? getAgentLaunchPlatformForRepo(
+        repo,
+        repo.connectionId ? undefined : getLocalProjectExecutionRuntimeContext(state, worktree.id)
+      )
+    : CLIENT_PLATFORM
+
+  return buildAgentReopenStartupPayload(agent, launchPlatform, repo ? repoIsRemote(repo) : false)
+}
+
+export function buildFolderWorkspaceAgentReopenStartup(
+  folderWorkspace: FolderWorkspace
+): WorktreeStartupPayload | undefined {
+  const agent = folderWorkspace.createdWithAgent
+  if (!isTuiAgent(agent)) {
+    return undefined
+  }
+  // Why: a folder workspace has no repo row — derive the launch platform from
+  // its own host provenance (connectionId + path) so remote/WSL sessions relaunch
+  // on the correct host, not always locally.
+  const launchPlatform = getFolderWorkspaceAgentLaunchPlatform({
+    connectionId: folderWorkspace.connectionId,
+    parentPath: folderWorkspace.folderPath
+  })
+  return buildAgentReopenStartupPayload(
+    agent,
+    launchPlatform,
+    Boolean(folderWorkspace.connectionId)
+  )
 }
 
 export function activateAndRevealWorktree(
