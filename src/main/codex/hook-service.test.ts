@@ -129,6 +129,67 @@ function localManagedCodexEvents(): string[] {
 }
 
 describe('CodexHookService', () => {
+  it('installs system-default hooks into an explicit native CODEX_HOME', () => {
+    const customCodexHome = join(tmpHome, 'custom-codex-home')
+    const customHooksPath = join(customCodexHome, 'hooks.json')
+    mkdirSync(customCodexHome, { recursive: true })
+    writeFileSync(
+      customHooksPath,
+      `${JSON.stringify({ hooks: { Stop: [{ hooks: [{ command: 'printf custom-stop' }] }] } })}\n`,
+      'utf-8'
+    )
+    const customUserTrust = {
+      sourcePath: customHooksPath,
+      eventLabel: 'stop' as const,
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: 'printf custom-stop'
+    }
+    writeFileSync(
+      join(customCodexHome, 'config.toml'),
+      upsertHookTrustEntriesInContent('', [customUserTrust]),
+      'utf-8'
+    )
+
+    const service = new CodexHookService()
+    const status = service.installForLaunchHome(null, { runtime: 'host' }, customCodexHome)
+
+    expect(status.state).toBe('installed')
+    expect(existsSync(join(customCodexHome, 'hooks.json'))).toBe(true)
+    expect(existsSync(join(customCodexHome, 'config.toml'))).toBe(true)
+    expect(existsSync(join(tmpHome, '.codex', 'hooks.json'))).toBe(false)
+    expect(readFileSync(join(customCodexHome, 'config.toml'), 'utf-8')).toContain(
+      hookTrustHeader(`${customHooksPath}:stop:1:0`)
+    )
+
+    expect(
+      service.installForLaunchHome('/orca/managed/codex-home', { runtime: 'host' }, customCodexHome)
+        .state
+    ).toBe('installed')
+    const customHooksAfterManagedSelection = JSON.parse(readFileSync(customHooksPath, 'utf-8')) as {
+      hooks: Record<string, { hooks?: { command?: string }[] }[]>
+    }
+    expect(customHooksAfterManagedSelection.hooks.Stop).toHaveLength(1)
+    expect(customHooksAfterManagedSelection.hooks.Stop?.[0]?.hooks?.[0]?.command).toBe(
+      'printf custom-stop'
+    )
+
+    expect(service.installForLaunchHome(null, { runtime: 'host' }, customCodexHome).state).toBe(
+      'installed'
+    )
+    service.refreshForLaunchHome(null, { runtime: 'host' }, customCodexHome)
+    const customHooksAfterDisabling = JSON.parse(readFileSync(customHooksPath, 'utf-8')) as {
+      hooks: Record<string, { hooks?: { command?: string }[] }[]>
+    }
+    expect(
+      Object.values(customHooksAfterDisabling.hooks).some((definitions) =>
+        definitions.some((definition) =>
+          definition.hooks?.some((hook) => isCodexManagedCommand(hook.command))
+        )
+      )
+    ).toBe(false)
+  })
+
   it('installs guarded status hooks into the native home for system-default launches', () => {
     const systemCodexHome = join(tmpHome, '.codex')
     const systemHooksPath = join(systemCodexHome, 'hooks.json')

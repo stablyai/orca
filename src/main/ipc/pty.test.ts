@@ -903,25 +903,32 @@ describe('registerPtyHandlers', () => {
     })
 
     it('drops an inherited Orca Codex home when the system account is selected', async () => {
+      const getSelectedCodexHomePath = vi.fn(() => null)
       const env = await spawnAndGetEnv(
         { CODEX_HOME: TEST_CODEX_HOME, ORCA_CODEX_HOME: TEST_CODEX_HOME },
         undefined,
-        () => null
+        getSelectedCodexHomePath
       )
 
       expect(env.CODEX_HOME).toBeUndefined()
       expect(env.ORCA_CODEX_HOME).toBeUndefined()
+      expect(getSelectedCodexHomePath).toHaveBeenCalledWith({ runtime: 'host' }, undefined)
     })
 
     it('preserves a user CODEX_HOME when the system account is selected', async () => {
+      const getSelectedCodexHomePath = vi.fn(() => null)
       const env = await spawnAndGetEnv(
         { CODEX_HOME: '/tmp/user-codex-home' },
         undefined,
-        () => null
+        getSelectedCodexHomePath
       )
 
       expect(env.CODEX_HOME).toBe('/tmp/user-codex-home')
       expect(env.ORCA_CODEX_HOME).toBeUndefined()
+      expect(getSelectedCodexHomePath).toHaveBeenCalledWith(
+        { runtime: 'host' },
+        '/tmp/user-codex-home'
+      )
     })
 
     it('injects the OpenCode hook env into Orca terminal PTYs', async () => {

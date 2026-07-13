@@ -3,7 +3,7 @@ main-process module so spawn-time environment scoping, lifecycle cleanup,
 foreground-process inspection, and renderer IPC stay behind a single audited
 boundary. Splitting it by line count would scatter tightly coupled terminal
 process behavior across files without a cleaner ownership seam. */
-import { join, delimiter } from 'node:path'
+import { join, delimiter, isAbsolute } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { statSync } from 'node:fs'
 import {
@@ -612,7 +612,10 @@ function shouldSkipCodexHomeEnvForWindowsShell(
 }
 
 const CODEX_HOME_ENV_KEYS = ['CODEX_HOME', 'ORCA_CODEX_HOME'] as const
-type GetSelectedCodexHomePath = (target?: CodexAccountSelectionTarget) => string | null
+type GetSelectedCodexHomePath = (
+  target?: CodexAccountSelectionTarget,
+  nativeHostHomePath?: string
+) => string | null
 type PrepareClaudeAuth = (
   target?: ClaudeAccountSelectionTarget
 ) => Promise<ClaudeRuntimeAuthPreparation>
@@ -650,6 +653,20 @@ function readEnvWithProcessFallback(
   key: string
 ): string | undefined {
   return baseEnv[key] ?? process.env[key]
+}
+
+function getNativeHostCodexHomePath(
+  baseEnv: Record<string, string>,
+  target: CodexAccountSelectionTarget
+): string | undefined {
+  if (target.runtime === 'wsl') {
+    return undefined
+  }
+  const codexHome = readEnvWithProcessFallback(baseEnv, 'CODEX_HOME')?.trim()
+  const orcaCodexHome = readEnvWithProcessFallback(baseEnv, 'ORCA_CODEX_HOME')?.trim()
+  // Why: only an absolute, user-owned value identifies the same directory the
+  // child Codex will read. Orca-owned inheritance is removed for system default.
+  return codexHome && codexHome !== orcaCodexHome && isAbsolute(codexHome) ? codexHome : undefined
 }
 
 function resolvePiAgentSourceDir(
@@ -1547,7 +1564,10 @@ export function registerPtyHandlers(
             : { runtime: 'host' }
         const selectedCodexHomePath = getCompatibleSelectedCodexHomePath(
           codexSelectionTarget,
-          getSelectedCodexHomePath?.(codexSelectionTarget) ?? null
+          getSelectedCodexHomePath?.(
+            codexSelectionTarget,
+            getNativeHostCodexHomePath(baseEnv, codexSelectionTarget)
+          ) ?? null
         )
         const env = buildPtyHostEnv(id, baseEnv, {
           isPackaged: app.isPackaged,
@@ -3021,7 +3041,10 @@ export function registerPtyHandlers(
       const selectedCodexHomePath = isDaemonHostSpawn
         ? getCompatibleSelectedCodexHomePath(
             codexSelectionTarget,
-            getSelectedCodexHomePath?.(codexSelectionTarget) ?? null
+            getSelectedCodexHomePath?.(
+              codexSelectionTarget,
+              getNativeHostCodexHomePath(env ?? {}, codexSelectionTarget)
+            ) ?? null
           )
         : null
       const skipCodexHomeEnv =
@@ -3863,7 +3886,10 @@ export function registerPtyHandlers(
       const selectedCodexHomePath = isDaemonHostSpawn
         ? getCompatibleSelectedCodexHomePath(
             codexSelectionTarget,
-            getSelectedCodexHomePath?.(codexSelectionTarget) ?? null
+            getSelectedCodexHomePath?.(
+              codexSelectionTarget,
+              getNativeHostCodexHomePath(baseEnv ?? {}, codexSelectionTarget)
+            ) ?? null
           )
         : null
       const skipCodexHomeEnv =

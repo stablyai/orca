@@ -307,12 +307,13 @@ type TrustedSystemHookSignatureState = {
 function getTrustedSystemUserHookSignatures(
   systemConfigPath: string,
   systemHooks: Record<string, HookDefinition[]>,
-  isManagedCommand: (command: string | undefined) => boolean
+  isManagedCommand: (command: string | undefined) => boolean,
+  systemTomlPath = getSystemCodexConfigTomlPath()
 ): Map<string, TrustedSystemHookSignatureState> {
   const signatures = new Map<string, TrustedSystemHookSignatureState>()
   let trustEntries: Map<string, CodexHookTrustState>
   try {
-    trustEntries = readHookTrustEntries(getSystemCodexConfigTomlPath())
+    trustEntries = readHookTrustEntries(systemTomlPath)
   } catch (error) {
     // Why: a hand-broken system config.toml should only disable user-hook
     // trust mirroring; Orca's managed runtime hooks can still be installed.
@@ -532,8 +533,8 @@ function dedupeHookDefinitions(definitions: readonly HookDefinition[]): HookDefi
   })
 }
 
-function cleanupLegacySystemManagedHooks(): void {
-  const legacyConfigPath = getSystemConfigPath()
+function cleanupLegacySystemManagedHooks(systemHomePath = getSystemCodexHomePath()): void {
+  const legacyConfigPath = join(systemHomePath, 'hooks.json')
   const runtimeConfigPath = getConfigPath()
   if (legacyConfigPath === runtimeConfigPath) {
     return
@@ -580,7 +581,7 @@ function cleanupLegacySystemManagedHooks(): void {
     // Remove only stale Orca hook entries and preserve other managers' metadata.
     writeHooksJson(legacyConfigPath, { ...config, hooks: nextHooks })
   }
-  removeMatchingTrustEntries(getSystemCodexConfigTomlPath(), trustEntries)
+  removeMatchingTrustEntries(join(systemHomePath, 'config.toml'), trustEntries)
 }
 
 function stripLegacyManagedProfileBlock(content: string): string {
@@ -1093,7 +1094,8 @@ export class CodexHookService {
 
   installForLaunchHome(
     runtimeHomePath: string | null | undefined,
-    target?: CodexWslRuntimeHookTarget
+    target?: CodexWslRuntimeHookTarget,
+    nativeHostHomePath?: string
   ): AgentHookInstallStatus {
     const runtimeStatus = this.installForRuntimeHome(runtimeHomePath, target)
     if (runtimeStatus) {
@@ -1101,9 +1103,14 @@ export class CodexHookService {
     }
     // Why: a host system-default launch intentionally has no Orca CODEX_HOME.
     // Put the guarded status hook where that native Codex process will read it.
-    return !runtimeHomePath && target?.runtime !== 'wsl'
-      ? this.installForSystemHome()
-      : this.install()
+    if (!runtimeHomePath && target?.runtime !== 'wsl') {
+      return this.installForSystemHome(nativeHostHomePath)
+    }
+    const status = this.install()
+    if (nativeHostHomePath) {
+      cleanupLegacySystemManagedHooks(nativeHostHomePath)
+    }
+    return status
   }
 
   refreshRuntimeUserHooksForRuntimeHome(
@@ -1113,6 +1120,22 @@ export class CodexHookService {
     this.supersedeWslReconciliation(runtimeHomePath)
     const wslPlan = createCodexWslRuntimeHookInstallPlan(runtimeHomePath, target)
     return wslPlan ? refreshWslRuntimeUserHooks(wslPlan) : null
+  }
+
+  refreshForLaunchHome(
+    runtimeHomePath: string | null | undefined,
+    target?: CodexWslRuntimeHookTarget,
+    nativeHostHomePath?: string
+  ): AgentHookInstallStatus {
+    const runtimeStatus = this.refreshRuntimeUserHooksForRuntimeHome(runtimeHomePath, target)
+    if (runtimeStatus) {
+      return runtimeStatus
+    }
+    const status = this.refreshRuntimeUserHooks()
+    if (nativeHostHomePath) {
+      cleanupLegacySystemManagedHooks(nativeHostHomePath)
+    }
+    return status
   }
 
   getStatus(): AgentHookInstallStatus {
@@ -1241,13 +1264,15 @@ export class CodexHookService {
     return this.installIntoHostHome('managed')
   }
 
-  installForSystemHome(): AgentHookInstallStatus {
-    return this.installIntoHostHome('system')
+  installForSystemHome(codexHomePath = getSystemCodexHomePath()): AgentHookInstallStatus {
+    return this.installIntoHostHome('system', codexHomePath)
   }
 
-  private installIntoHostHome(mode: 'managed' | 'system'): AgentHookInstallStatus {
-    const codexHomePath =
-      mode === 'managed' ? getOrcaManagedCodexHomePath() : getSystemCodexHomePath()
+  private installIntoHostHome(
+    mode: 'managed' | 'system',
+    systemHomePath = getSystemCodexHomePath()
+  ): AgentHookInstallStatus {
+    const codexHomePath = mode === 'managed' ? getOrcaManagedCodexHomePath() : systemHomePath
     const configPath = join(codexHomePath, 'hooks.json')
     const scriptPath = getManagedScriptPath()
     // Why: must run before this install rewrites hooks.json/config.toml —
@@ -1344,7 +1369,8 @@ export class CodexHookService {
       const trustedUserHookSignatures = getTrustedSystemUserHookSignatures(
         configPath,
         config.hooks ?? {},
-        isManagedCommand
+        isManagedCommand,
+        join(codexHomePath, 'config.toml')
       )
       mirroredUserTrustEntries = collectMirroredRuntimeUserHookTrustEntries(
         configPath,
