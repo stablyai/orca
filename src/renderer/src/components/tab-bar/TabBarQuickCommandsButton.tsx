@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Play } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -13,6 +13,7 @@ import {
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { runQuickCommandInNewTab } from '@/lib/run-quick-command-in-new-tab'
+import { ensureProjectQuickCommandTrusted } from '@/lib/project-quick-command-trust'
 import type { TerminalQuickCommand } from '../../../../shared/types'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
@@ -61,6 +62,32 @@ export function TabBarQuickCommandsButton({
     return { repoCommands: repoList, globalCommands: globalList }
   }, [allCommands, repoId])
 
+  const cachedProjectCommands = useAppStore((s) =>
+    repoId !== null ? s.projectQuickCommandsByRepo[repoId] : undefined
+  )
+  const loadProjectQuickCommands = useAppStore((s) => s.loadProjectQuickCommands)
+  useEffect(() => {
+    if (repoId !== null) {
+      void loadProjectQuickCommands(repoId)
+    }
+  }, [repoId, loadProjectQuickCommands])
+  // Why: a background refresh on open picks up orca.yaml edits (e.g. after a
+  // git pull) while the cached list renders without flicker.
+  const refreshProjectCommands = useCallback((): void => {
+    if (repoId !== null) {
+      void loadProjectQuickCommands(repoId, { refresh: true })
+    }
+  }, [repoId, loadProjectQuickCommands])
+  const projectCommands = useMemo(() => {
+    if (!cachedProjectCommands || cachedProjectCommands.length === 0) {
+      return []
+    }
+    // Why: personal ids can never legitimately collide with orca.yaml ids, but
+    // hand-edited settings could; personal commands win to keep menu keys unique.
+    const personalIds = new Set([...repoCommands, ...globalCommands].map((c) => c.id))
+    return cachedProjectCommands.filter((command) => !personalIds.has(command.id))
+  }, [cachedProjectCommands, repoCommands, globalCommands])
+
   const recentId = recentByGroup[groupId] ?? null
   // Why: split-button label prefers the most recently used command for this
   // group regardless of scope, then falls back to the first repo command (so
@@ -69,13 +96,15 @@ export function TabBarQuickCommandsButton({
   const mostRecent = useMemo(() => {
     if (recentId) {
       const match =
-        repoCommands.find((c) => c.id === recentId) ?? globalCommands.find((c) => c.id === recentId)
+        repoCommands.find((c) => c.id === recentId) ??
+        projectCommands.find((c) => c.id === recentId) ??
+        globalCommands.find((c) => c.id === recentId)
       if (match) {
         return match
       }
     }
-    return repoCommands[0] ?? globalCommands[0] ?? null
-  }, [repoCommands, globalCommands, recentId])
+    return repoCommands[0] ?? projectCommands[0] ?? globalCommands[0] ?? null
+  }, [repoCommands, projectCommands, globalCommands, recentId])
 
   const [editor, setEditor] = useState<
     | { mode: 'add'; command: TerminalQuickCommand }
@@ -83,7 +112,7 @@ export function TabBarQuickCommandsButton({
     | null
   >(null)
 
-  const totalVisible = repoCommands.length + globalCommands.length
+  const totalVisible = repoCommands.length + projectCommands.length + globalCommands.length
   const hasAnyCommands = totalVisible > 0
 
   const addRepoCommand = (): void => {
@@ -98,6 +127,16 @@ export function TabBarQuickCommandsButton({
     const isEdit = current.some((c) => c.id === next.id)
     const nextList = isEdit ? current.map((c) => (c.id === next.id ? next : c)) : [...current, next]
     void updateSettings({ terminalQuickCommands: nextList })
+  }
+
+  // Why: project commands are read-only; copying opens the editor on a
+  // personal duplicate (fresh id) so the user can tweak and save it.
+  const handleCopyProjectCommand = (command: TerminalQuickCommand): void => {
+    const draft = createTerminalQuickCommandDraft(getTerminalQuickCommandScope(command))
+    setEditor({
+      mode: 'add',
+      command: { ...command, id: draft.id }
+    })
   }
 
   const handleDeleteCommand = async (command: TerminalQuickCommand): Promise<void> => {
@@ -125,7 +164,12 @@ export function TabBarQuickCommandsButton({
   }
 
   const handleRun = (command: TerminalQuickCommand): void => {
-    runQuickCommandInNewTab({ command, worktreeId, groupId })
+    void (async () => {
+      if (!(await ensureProjectQuickCommandTrusted(command))) {
+        return
+      }
+      runQuickCommandInNewTab({ command, worktreeId, groupId })
+    })()
   }
 
   // Why: hidden in folder-mode worktrees (no repoId) and floating terminals.
@@ -183,12 +227,15 @@ export function TabBarQuickCommandsButton({
     <>
       <TabBarQuickCommandsMenu
         repoCommands={repoCommands}
+        projectCommands={projectCommands}
         globalCommands={globalCommands}
         mostRecent={mostRecent}
         onAddCommand={addRepoCommand}
         onEditCommand={(command) => setEditor({ mode: 'edit', command })}
         onDeleteCommand={(command) => void handleDeleteCommand(command)}
         onRunCommand={handleRun}
+        onCopyProjectCommand={handleCopyProjectCommand}
+        onMenuOpen={refreshProjectCommands}
       />
       <TerminalQuickCommandDialog
         open={editor !== null}

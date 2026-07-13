@@ -196,6 +196,60 @@ describe('parseOrcaYaml', () => {
     })
   })
 
+  it('parses project quick commands from orca.yaml', () => {
+    const yaml = [
+      'quickCommands:',
+      '  - label: Dev server',
+      '    command: pnpm dev',
+      '  - label: Unit tests',
+      '    command: pnpm test',
+      '    appendEnter: false',
+      '  - label: Investigate',
+      '    action: agent-prompt',
+      '    agent: claude',
+      '    prompt: Investigate the current branch'
+    ].join('\n')
+
+    expect(parseOrcaYaml(yaml)).toEqual({
+      scripts: {},
+      quickCommands: [
+        { action: 'terminal-command', label: 'Dev server', command: 'pnpm dev' },
+        {
+          action: 'terminal-command',
+          label: 'Unit tests',
+          command: 'pnpm test',
+          appendEnter: false
+        },
+        {
+          action: 'agent-prompt',
+          label: 'Investigate',
+          agent: 'claude',
+          prompt: 'Investigate the current branch'
+        }
+      ]
+    })
+  })
+
+  it('drops invalid quick command entries', () => {
+    const yaml = [
+      'quickCommands:',
+      '  - label: ""',
+      '    command: pnpm dev',
+      '  - label: No body',
+      '  - label: Agent missing prompt',
+      '    action: agent-prompt',
+      '    agent: claude',
+      '  - 42',
+      '  - label: Valid',
+      '    command: pnpm lint'
+    ].join('\n')
+
+    expect(parseOrcaYaml(yaml)).toEqual({
+      scripts: {},
+      quickCommands: [{ action: 'terminal-command', label: 'Valid', command: 'pnpm lint' }]
+    })
+  })
+
   it('parses environmentRecipes from orca.yaml', () => {
     const yaml = [
       'environmentRecipes:',
@@ -408,6 +462,9 @@ describe('hasUnrecognizedOrcaYamlKeys', () => {
         '  claude -p "test"',
         'defaultTabs:',
         '  - title: Claude',
+        'quickCommands:',
+        '  - label: Dev server',
+        '    command: pnpm dev',
         'environmentRecipes:',
         '  - id: cloud-sandbox',
         '    name: Cloud Sandbox',

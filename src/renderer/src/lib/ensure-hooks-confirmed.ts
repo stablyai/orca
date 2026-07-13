@@ -39,6 +39,19 @@ function getSetupTrustContent(yamlHooks: OrcaHooks | null): string {
   return [yamlHooks?.scripts?.setup?.trim(), ...defaultTabCommands].filter(Boolean).join('\n\n')
 }
 
+// Why: one hash covers the whole project quick-command set, so any orca.yaml
+// quick-command change re-prompts once instead of per command.
+function getQuickCommandsTrustContent(yamlHooks: OrcaHooks | null): string {
+  return (yamlHooks?.quickCommands ?? [])
+    .map((command, index) => {
+      const header = `# quickCommands[${index + 1}] ${command.label}`
+      return command.action === 'agent-prompt'
+        ? `${header}\nagent: ${command.agent}\nprompt: ${command.prompt}`
+        : `${header}\n${command.command}`
+    })
+    .join('\n\n')
+}
+
 function getVmRecipeTrustContent(yamlHooks: OrcaHooks | null): string {
   return (yamlHooks?.environmentRecipes ?? [])
     .map((recipe) =>
@@ -124,15 +137,20 @@ export async function ensureHooksConfirmed(
         scriptContent = (result.sharedContent ?? '').trim()
       } else {
         const repo = findHookRepo(state, repoId, hostId)
-        const localScript = repo?.hookSettings?.scripts?.[scriptKind]?.trim()
-        const sourcePolicy = resolveHookCommandSourcePolicy(
-          repo?.hookSettings?.commandSourcePolicy,
-          {
-            hasLocalScript: Boolean(localScript)
+        // Why: commandSourcePolicy governs local overrides of hook scripts;
+        // project quick commands are always shared content, so 'local-only'
+        // must not skip their trust prompt.
+        if (scriptKind !== 'quickCommands') {
+          const localScript = repo?.hookSettings?.scripts?.[scriptKind]?.trim()
+          const sourcePolicy = resolveHookCommandSourcePolicy(
+            repo?.hookSettings?.commandSourcePolicy,
+            {
+              hasLocalScript: Boolean(localScript)
+            }
+          )
+          if (sourcePolicy === 'local-only') {
+            return 'run'
           }
-        )
-        if (sourcePolicy === 'local-only') {
-          return 'run'
         }
         const result = await checkRuntimeHooks(
           settingsForHookRepoOwner(state, repoId, hostId, runtimeOwnerEnvironmentId),
@@ -148,7 +166,9 @@ export async function ensureHooksConfirmed(
             ? getSetupTrustContent(yamlHooks)
             : scriptKind === 'vmRecipe'
               ? getVmRecipeTrustContent(yamlHooks)
-              : (yamlHooks?.scripts?.[scriptKind] ?? '').trim()
+              : scriptKind === 'quickCommands'
+                ? getQuickCommandsTrustContent(yamlHooks)
+                : (yamlHooks?.scripts?.[scriptKind] ?? '').trim()
       }
     } catch {
       // Fail closed: if we cannot inspect the script, we cannot trust it.

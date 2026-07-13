@@ -173,6 +173,80 @@ describe('ensureHooksConfirmed', () => {
     await expect(promise).resolves.toBe('run')
   })
 
+  it('prompts for project quick commands with the serialized command set', async () => {
+    const { state, pending } = createTestState()
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: {
+        scripts: {},
+        quickCommands: [
+          { action: 'terminal-command', label: 'Dev server', command: 'pnpm dev' },
+          { action: 'agent-prompt', label: 'Investigate', agent: 'claude', prompt: 'Look around' }
+        ]
+      },
+      mayNeedUpdate: false
+    })
+
+    const promise = ensureHooksConfirmed(state, 'repo-1', 'quickCommands')
+
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    expect(pending[0].data.scriptKind).toBe('quickCommands')
+    const expectedContent =
+      '# quickCommands[1] Dev server\npnpm dev\n\n' +
+      '# quickCommands[2] Investigate\nagent: claude\nprompt: Look around'
+    expect(pending[0].data.scriptContent).toBe(expectedContent)
+    expect(pending[0].data.contentHash).toBe(await hashOrcaHookScript(expectedContent))
+
+    pending[0].resolve('run')
+    await expect(promise).resolves.toBe('run')
+  })
+
+  it('does not let local-only hook source policy bypass quick command trust', async () => {
+    const { state, pending } = createTestState({
+      repos: [
+        {
+          id: 'repo-1',
+          displayName: 'Repo One',
+          hookSettings: {
+            mode: 'auto',
+            commandSourcePolicy: 'local-only',
+            scripts: { setup: 'echo local', archive: '' }
+          }
+        }
+      ]
+    } as unknown as Partial<AppState>)
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: {
+        scripts: {},
+        quickCommands: [{ action: 'terminal-command', label: 'Build', command: 'make' }]
+      },
+      mayNeedUpdate: false
+    })
+
+    const promise = ensureHooksConfirmed(state, 'repo-1', 'quickCommands')
+
+    // Why: local-only means "run my local hook scripts", but quick commands
+    // have no local variant — shared content still needs the trust prompt.
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    pending[0].resolve('skip')
+    await expect(promise).resolves.toBe('skip')
+  })
+
+  it('returns run without prompting when orca.yaml has no quick commands', async () => {
+    const { state, pending } = createTestState()
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: { scripts: { setup: 'pnpm install' } },
+      mayNeedUpdate: false
+    })
+
+    const decision = await ensureHooksConfirmed(state, 'repo-1', 'quickCommands')
+
+    expect(decision).toBe('run')
+    expect(pending).toHaveLength(0)
+  })
+
   it('returns run without inspecting hooks when the repo is always trusted', async () => {
     const { state, pending } = createTestState()
     state.trustedOrcaHooks['repo-1'] = {

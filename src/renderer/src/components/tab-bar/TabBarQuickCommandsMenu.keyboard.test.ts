@@ -126,12 +126,14 @@ vi.mock('@/components/ui/tooltip', () => ({
 function makeProps() {
   return {
     repoCommands: [] as never[],
+    projectCommands: [] as never[],
     globalCommands: [] as never[],
     mostRecent: null,
     onAddCommand: vi.fn(),
     onDeleteCommand: vi.fn(),
     onEditCommand: vi.fn(),
-    onRunCommand: vi.fn()
+    onRunCommand: vi.fn(),
+    onCopyProjectCommand: vi.fn()
   }
 }
 

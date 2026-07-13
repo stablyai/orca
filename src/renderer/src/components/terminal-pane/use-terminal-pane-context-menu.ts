@@ -30,6 +30,7 @@ import {
 } from '@/constants/terminal'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { runQuickCommandInNewTab } from '@/lib/run-quick-command-in-new-tab'
+import { ensureProjectQuickCommandTrusted } from '@/lib/project-quick-command-trust'
 import {
   copyAgentSessionContextFromPane,
   prepareAgentSessionForkFromPane,
@@ -451,21 +452,27 @@ export function useTerminalPaneContextMenu({
   }
 
   const onQuickCommand = (command: TerminalQuickCommand): void => {
-    if (isTerminalAgentQuickCommand(command)) {
-      runQuickCommandInNewTab({ command, worktreeId, groupId })
-      return
-    }
-
-    const pane = resolveMenuPane()
-    if (!pane) {
-      return
-    }
-    sendTerminalQuickCommandToPane({
-      command,
-      pane,
-      tabId,
-      transport: paneTransportsRef.current.get(pane.id)
-    })
+    // Why: pane resolution must happen before the async trust prompt — the
+    // context menu closes and the "menu pane" reference goes stale.
+    const pane = isTerminalAgentQuickCommand(command) ? null : resolveMenuPane()
+    void (async () => {
+      if (!(await ensureProjectQuickCommandTrusted(command))) {
+        return
+      }
+      if (isTerminalAgentQuickCommand(command)) {
+        runQuickCommandInNewTab({ command, worktreeId, groupId })
+        return
+      }
+      if (!pane) {
+        return
+      }
+      sendTerminalQuickCommandToPane({
+        command,
+        pane,
+        tabId,
+        transport: paneTransportsRef.current.get(pane.id)
+      })
+    })()
   }
 
   const onToggleExpand = (): void => {

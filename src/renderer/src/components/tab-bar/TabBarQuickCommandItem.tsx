@@ -1,6 +1,9 @@
-import { Pencil, Play, Trash2 } from 'lucide-react'
+import { CopyPlus, Pencil, Play, Trash2 } from 'lucide-react'
 import { CommandItem } from '@/components/ui/command'
-import { isTerminalAgentQuickCommand } from '../../../../shared/terminal-quick-commands'
+import {
+  isProjectTerminalQuickCommand,
+  isTerminalAgentQuickCommand
+} from '../../../../shared/terminal-quick-commands'
 import type { TerminalQuickCommand } from '../../../../shared/types'
 import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
@@ -10,14 +13,19 @@ type TabBarQuickCommandItemProps = {
   onRun: () => void
   onEdit: () => void
   onDelete: () => void
+  onCopyToPersonal?: () => void
 }
 
 export function TabBarQuickCommandItem({
   command,
   onRun,
   onEdit,
-  onDelete
+  onDelete,
+  onCopyToPersonal
 }: TabBarQuickCommandItemProps): React.JSX.Element {
+  // Why: orca.yaml commands are owned by the repo, not this client — no
+  // edit/delete; offer a copy into personal settings instead.
+  const isProjectCommand = isProjectTerminalQuickCommand(command)
   return (
     <CommandItem
       value={command.id}
@@ -44,36 +52,58 @@ export function TabBarQuickCommandItem({
         </span>
       </span>
       <span className="flex shrink-0 items-center gap-0.5 can-hover:opacity-0 transition-opacity group-hover/qc:opacity-100 group-data-[selected=true]/qc:opacity-100">
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation()
-            onEdit()
-          }}
-          className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-          aria-label={translate(
-            'auto.components.tab.bar.TabBarQuickCommandsButton.15529ede69',
-            'Edit {{value0}}',
-            { value0: command.label }
-          )}
-        >
-          <Pencil className="size-3" />
-        </button>
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation()
-            onDelete()
-          }}
-          className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-accent hover:text-destructive"
-          aria-label={translate(
-            'auto.components.tab.bar.TabBarQuickCommandsButton.196593b6a9',
-            'Remove {{value0}}',
-            { value0: command.label }
-          )}
-        >
-          <Trash2 className="size-3" />
-        </button>
+        {isProjectCommand ? (
+          onCopyToPersonal ? (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                onCopyToPersonal()
+              }}
+              className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+              aria-label={translate(
+                'auto.components.tab.bar.TabBarQuickCommandsButton.7c41da95e2',
+                'Copy {{value0}} to my commands',
+                { value0: command.label }
+              )}
+            >
+              <CopyPlus className="size-3" />
+            </button>
+          ) : null
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                onEdit()
+              }}
+              className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+              aria-label={translate(
+                'auto.components.tab.bar.TabBarQuickCommandsButton.15529ede69',
+                'Edit {{value0}}',
+                { value0: command.label }
+              )}
+            >
+              <Pencil className="size-3" />
+            </button>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation()
+                onDelete()
+              }}
+              className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-accent hover:text-destructive"
+              aria-label={translate(
+                'auto.components.tab.bar.TabBarQuickCommandsButton.196593b6a9',
+                'Remove {{value0}}',
+                { value0: command.label }
+              )}
+            >
+              <Trash2 className="size-3" />
+            </button>
+          </>
+        )}
       </span>
     </CommandItem>
   )

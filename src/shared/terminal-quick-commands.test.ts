@@ -3,9 +3,11 @@ import {
   applyTerminalQuickCommandMutation,
   buildTerminalQuickCommandInput,
   flattenTerminalQuickCommand,
+  getProjectTerminalQuickCommands,
   getTerminalQuickCommandAction,
   getTerminalQuickCommandBody,
   getDefaultTerminalQuickCommands,
+  isProjectTerminalQuickCommand,
   isTerminalQuickCommandComplete,
   normalizeTerminalQuickCommands,
   parseNormalizedTerminalQuickCommands,
@@ -332,6 +334,110 @@ describe('terminal quick commands', () => {
     expect(supportsTerminalAgentQuickCommand('gemini')).toBe(true)
     expect(supportsTerminalAgentQuickCommand('aider')).toBe(false)
     expect(supportsTerminalAgentQuickCommand('not-real')).toBe(false)
+  })
+})
+
+describe('project quick commands', () => {
+  it('projects orca.yaml templates into repo-scoped commands with stable label-derived ids', () => {
+    const commands = getProjectTerminalQuickCommands(
+      [
+        { action: 'terminal-command', label: 'Dev server', command: 'pnpm dev' },
+        { action: 'terminal-command', label: 'Dev server', command: 'pnpm dev --host' },
+        { action: 'agent-prompt', label: 'Investigate', agent: 'claude', prompt: 'Investigate' }
+      ],
+      'repo-1'
+    )
+    expect(commands).toEqual([
+      {
+        id: 'orca-yaml:dev-server',
+        label: 'Dev server',
+        action: 'terminal-command',
+        command: 'pnpm dev',
+        appendEnter: true,
+        scope: { type: 'repo', repoId: 'repo-1' }
+      },
+      {
+        id: 'orca-yaml:dev-server-2',
+        label: 'Dev server',
+        action: 'terminal-command',
+        command: 'pnpm dev --host',
+        appendEnter: true,
+        scope: { type: 'repo', repoId: 'repo-1' }
+      },
+      {
+        id: 'orca-yaml:investigate',
+        label: 'Investigate',
+        action: 'agent-prompt',
+        agent: 'claude',
+        prompt: 'Investigate',
+        scope: { type: 'repo', repoId: 'repo-1' }
+      }
+    ])
+    expect(commands.every(isProjectTerminalQuickCommand)).toBe(true)
+    expect(commands.every((command) => terminalQuickCommandMatchesRepo(command, 'repo-1'))).toBe(
+      true
+    )
+  })
+
+  it('preserves appendEnter opt-out from the template', () => {
+    expect(
+      getProjectTerminalQuickCommands(
+        [
+          {
+            action: 'terminal-command',
+            label: 'Insert only',
+            command: 'git rebase -i ',
+            appendEnter: false
+          }
+        ],
+        'repo-1'
+      )
+    ).toEqual([
+      {
+        id: 'orca-yaml:insert-only',
+        label: 'Insert only',
+        action: 'terminal-command',
+        command: 'git rebase -i',
+        appendEnter: false,
+        scope: { type: 'repo', repoId: 'repo-1' }
+      }
+    ])
+  })
+
+  it('drops unsupported agents and returns empty for missing inputs', () => {
+    expect(getProjectTerminalQuickCommands(undefined, 'repo-1')).toEqual([])
+    expect(getProjectTerminalQuickCommands([], 'repo-1')).toEqual([])
+    expect(
+      getProjectTerminalQuickCommands(
+        [{ action: 'agent-prompt', label: 'Nope', agent: 'aider', prompt: 'x' }],
+        'repo-1'
+      )
+    ).toEqual([])
+    expect(
+      getProjectTerminalQuickCommands(
+        [{ action: 'terminal-command', label: 'X', command: 'y' }],
+        ''
+      )
+    ).toEqual([])
+  })
+
+  it('identifies project commands by their reserved id prefix', () => {
+    expect(
+      isProjectTerminalQuickCommand({
+        id: 'orca-yaml:build',
+        label: 'Build',
+        command: 'make',
+        appendEnter: true
+      })
+    ).toBe(true)
+    expect(
+      isProjectTerminalQuickCommand({
+        id: 'quick-command-1',
+        label: 'Build',
+        command: 'make',
+        appendEnter: true
+      })
+    ).toBe(false)
   })
 })
 

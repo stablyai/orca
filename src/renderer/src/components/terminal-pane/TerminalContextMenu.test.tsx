@@ -74,6 +74,7 @@ function renderMenu(overrides: Record<string, unknown> = {}): void {
     onToggleNativeChat: vi.fn(),
     onCopyAgentSessionContext: vi.fn(),
     repoQuickCommands: [],
+    projectQuickCommands: [],
     globalQuickCommands: [],
     quickCommandRepoLabel: null,
     onQuickCommand: vi.fn(),

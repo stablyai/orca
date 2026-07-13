@@ -12,8 +12,6 @@ import {
   PanelsTopLeft,
   PanelRightClose,
   Pencil,
-  Play,
-  Plus,
   SquareTerminal,
   X
 } from 'lucide-react'
@@ -21,19 +19,14 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { shouldIgnoreTerminalMenuPointerDownOutside } from './terminal-context-menu-dismiss'
+import { TerminalContextMenuQuickCommands } from './TerminalContextMenuQuickCommands'
 import type { TerminalQuickCommand } from '../../../../shared/types'
-import { isTerminalAgentQuickCommand } from '../../../../shared/terminal-quick-commands'
 import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
-import { AgentIcon } from '@/lib/agent-catalog'
 import type { KeybindingOverrides } from '../../../../shared/keybindings'
 import { translate } from '@/i18n/i18n'
 import { isMacPlatform, nativeChatToggleShortcutLabel } from '../native-chat/native-chat-shortcut'
@@ -64,6 +57,7 @@ type TerminalContextMenuProps = {
   onToggleNativeChat: () => void
   onCopyAgentSessionContext: () => void
   repoQuickCommands: TerminalQuickCommand[]
+  projectQuickCommands: TerminalQuickCommand[]
   globalQuickCommands: TerminalQuickCommand[]
   quickCommandRepoLabel: string | null
   onQuickCommand: (command: TerminalQuickCommand) => void
@@ -101,6 +95,7 @@ export default function TerminalContextMenu({
   onToggleNativeChat,
   onCopyAgentSessionContext,
   repoQuickCommands,
+  projectQuickCommands,
   globalQuickCommands,
   quickCommandRepoLabel,
   onQuickCommand,
@@ -129,31 +124,9 @@ export default function TerminalContextMenu({
     }),
     [keybindings]
   )
-  const hasQuickCommands = repoQuickCommands.length > 0 || globalQuickCommands.length > 0
   const showEqualizeShortcut = shortcuts.equalize !== 'Unassigned'
   const showSetTitleShortcut = shortcuts.setTitle !== 'Unassigned'
   const showClearPaneTitleShortcut = shortcuts.clearPaneTitle !== 'Unassigned'
-  const renderQuickCommandItem = (command: TerminalQuickCommand): React.JSX.Element => (
-    <DropdownMenuItem key={command.id} onSelect={() => onQuickCommand(command)}>
-      {isTerminalAgentQuickCommand(command) ? (
-        <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground">
-          <AgentIcon agent={command.agent} size={14} />
-        </span>
-      ) : (
-        <Play
-          className="size-3.5 shrink-0 text-muted-foreground"
-          fill="currentColor"
-          strokeWidth={0}
-        />
-      )}
-      <span className="min-w-0 flex-1 truncate">{command.label}</span>
-      {!isTerminalAgentQuickCommand(command) && !command.appendEnter ? (
-        <DropdownMenuShortcut className="shrink-0">
-          {translate('auto.components.terminal.pane.TerminalContextMenu.c2f0b72b8d', 'Insert')}
-        </DropdownMenuShortcut>
-      ) : null}
-    </DropdownMenuItem>
-  )
 
   return (
     <DropdownMenu
@@ -209,65 +182,15 @@ export default function TerminalContextMenu({
           {translate('auto.components.terminal.pane.TerminalContextMenu.0a917b591a', 'Paste')}
           <DropdownMenuShortcut>{shortcuts.paste}</DropdownMenuShortcut>
         </DropdownMenuItem>
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <Play fill="currentColor" strokeWidth={0} />
-            {translate(
-              'auto.components.terminal.pane.TerminalContextMenu.ec85df5914',
-              'Quick Commands'
-            )}
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="w-60">
-            {hasQuickCommands ? (
-              <>
-                {quickCommandRepoLabel && repoQuickCommands.length > 0 ? (
-                  <>
-                    <DropdownMenuLabel className="truncate">
-                      {quickCommandRepoLabel}
-                    </DropdownMenuLabel>
-                    {repoQuickCommands.map(renderQuickCommandItem)}
-                  </>
-                ) : null}
-                {globalQuickCommands.length > 0 ? (
-                  <>
-                    {repoQuickCommands.length > 0 ? <DropdownMenuSeparator /> : null}
-                    {repoQuickCommands.length > 0 ? (
-                      <DropdownMenuLabel>
-                        {translate(
-                          'auto.components.terminal.pane.TerminalContextMenu.3ce594a4a0',
-                          'Global'
-                        )}
-                      </DropdownMenuLabel>
-                    ) : null}
-                    {globalQuickCommands.map(renderQuickCommandItem)}
-                  </>
-                ) : null}
-              </>
-            ) : (
-              <DropdownMenuItem disabled className="text-muted-foreground">
-                {translate(
-                  'auto.components.terminal.pane.TerminalContextMenu.9528a65ef8',
-                  'No quick commands'
-                )}
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onSelect={() => {
-                // Why: the dropdown sits above dialogs; force-close before
-                // opening the add modal even during the open-gesture guard.
-                onOpenChange(false)
-                onAddQuickCommand()
-              }}
-            >
-              <Plus />
-              {translate(
-                'auto.components.terminal.pane.TerminalContextMenu.0a82b0608c',
-                'Add Quick Command…'
-              )}
-            </DropdownMenuItem>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
+        <TerminalContextMenuQuickCommands
+          repoQuickCommands={repoQuickCommands}
+          projectQuickCommands={projectQuickCommands}
+          globalQuickCommands={globalQuickCommands}
+          quickCommandRepoLabel={quickCommandRepoLabel}
+          onQuickCommand={onQuickCommand}
+          onAddQuickCommand={onAddQuickCommand}
+          onMenuOpenChange={onOpenChange}
+        />
         {canContinueAgentSessionInNewSession ? (
           <AgentSessionContinuationMenuItem onSelect={onContinueAgentSessionInNewSession} />
         ) : null}

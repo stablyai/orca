@@ -1,4 +1,4 @@
-import { Pencil, Trash2 } from 'lucide-react'
+import { CopyPlus, Pencil, Trash2 } from 'lucide-react'
 import type {
   Repo,
   TerminalQuickCommand,
@@ -7,6 +7,7 @@ import type {
 import {
   getTerminalQuickCommandBody,
   getTerminalQuickCommandScope,
+  isProjectTerminalQuickCommand,
   isTerminalAgentQuickCommand
 } from '../../../../shared/terminal-quick-commands'
 import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
@@ -32,14 +33,19 @@ function QuickCommandRow({
   command,
   repoById,
   onEdit,
-  onRemove
+  onRemove,
+  onCopyToPersonal
 }: {
   command: TerminalQuickCommand
   repoById: Map<string, Pick<Repo, 'displayName' | 'path' | 'badgeColor'>>
   onEdit: (command: TerminalQuickCommand) => void
   onRemove: (command: TerminalQuickCommand) => void
+  onCopyToPersonal?: (command: TerminalQuickCommand) => void
 }): React.JSX.Element {
   const scope = getTerminalQuickCommandScope(command)
+  // Why: orca.yaml commands are owned by the repo, not this client — no
+  // edit/delete; offer a copy into personal settings instead.
+  const isProjectCommand = isProjectTerminalQuickCommand(command)
   return (
     <div className="flex items-center gap-3 rounded-md border border-border/60 bg-background px-3 py-2 shadow-xs">
       <div className="min-w-0 flex-1">
@@ -83,37 +89,59 @@ function QuickCommandRow({
             ? translate('auto.components.settings.QuickCommandsPane.9b3e338d62', 'Enter')
             : translate('auto.components.settings.QuickCommandsPane.9fcfc29519', 'Insert')}
       </div>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label={translate(
-          'auto.components.settings.QuickCommandsPane.7d90fd5299',
-          'Edit {{value0}}',
-          {
-            value0: command.label || 'quick command'
-          }
-        )}
-        onClick={() => onEdit(command)}
-      >
-        <Pencil />
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label={translate(
-          'auto.components.settings.QuickCommandsPane.8764c6e9e4',
-          'Remove {{value0}}',
-          {
-            value0: command.label || 'quick command'
-          }
-        )}
-        onClick={() => onRemove(command)}
-        className="text-muted-foreground hover:text-destructive"
-      >
-        <Trash2 />
-      </Button>
+      {isProjectCommand ? (
+        onCopyToPersonal ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={translate(
+              'auto.components.settings.QuickCommandsPane.b1c85a7f42',
+              'Copy {{value0}} to my commands',
+              {
+                value0: command.label || 'quick command'
+              }
+            )}
+            onClick={() => onCopyToPersonal(command)}
+          >
+            <CopyPlus />
+          </Button>
+        ) : null
+      ) : (
+        <>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={translate(
+              'auto.components.settings.QuickCommandsPane.7d90fd5299',
+              'Edit {{value0}}',
+              {
+                value0: command.label || 'quick command'
+              }
+            )}
+            onClick={() => onEdit(command)}
+          >
+            <Pencil />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={translate(
+              'auto.components.settings.QuickCommandsPane.8764c6e9e4',
+              'Remove {{value0}}',
+              {
+                value0: command.label || 'quick command'
+              }
+            )}
+            onClick={() => onRemove(command)}
+            className="text-muted-foreground hover:text-destructive"
+          >
+            <Trash2 />
+          </Button>
+        </>
+      )}
     </div>
   )
 }
@@ -123,13 +151,15 @@ export function QuickCommandsList({
   visibleCommands,
   repoById,
   onEdit,
-  onRemove
+  onRemove,
+  onCopyToPersonal
 }: {
   commands: TerminalQuickCommand[]
   visibleCommands: TerminalQuickCommand[]
   repoById: Map<string, Pick<Repo, 'displayName' | 'path' | 'badgeColor'>>
   onEdit: (command: TerminalQuickCommand) => void
   onRemove: (command: TerminalQuickCommand) => void
+  onCopyToPersonal?: (command: TerminalQuickCommand) => void
 }): React.JSX.Element {
   return (
     <div className="overflow-hidden rounded-lg border border-border/50 bg-muted/20">
@@ -154,6 +184,7 @@ export function QuickCommandsList({
               repoById={repoById}
               onEdit={onEdit}
               onRemove={onRemove}
+              onCopyToPersonal={onCopyToPersonal}
             />
           ))}
         </div>

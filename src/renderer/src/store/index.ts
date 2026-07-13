@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { AppState } from './types'
 import { createRepoSlice } from './slices/repos'
 import { createSparsePresetsSlice } from './slices/sparse-presets'
+import { createProjectQuickCommandsSlice } from './slices/project-quick-commands'
 import { createWorktreeSlice } from './slices/worktrees'
 import { createTerminalSlice } from './slices/terminals'
 import { createTabsSlice } from './slices/tabs'
@@ -95,7 +96,8 @@ export const useAppStore = create<AppState>()((...a) => {
     ...createOrcaProfilesSlice(...a),
     ...createNewIssueDraftSlice(...a),
     ...createTaskCreationDraftsSlice(...a),
-    ...createRemoteServerUpdatesSlice(...a)
+    ...createRemoteServerUpdatesSlice(...a),
+    ...createProjectQuickCommandsSlice(...a)
   }
 })
 

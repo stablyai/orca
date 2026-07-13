@@ -2683,7 +2683,8 @@
             "c2f0b72b8d": "Insertar",
             "925f49f210": "Expandir panel",
             "df766809e0": "Contraer panel",
-            "cff67afad1": "Copiar contexto"
+            "cff67afad1": "Copiar contexto",
+            "5b2ac41d87": "Proyecto — orca.yaml"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "Reiniciar servicio",
@@ -2972,7 +2973,9 @@
             "c781f992e4": "destructivo",
             "be8f0ff166": "Eliminar",
             "f3a8c2d1e7": "Buscar comandos rápidos...",
-            "b4e7f9a2c1": "No hay comandos coincidentes"
+            "b4e7f9a2c1": "No hay comandos coincidentes",
+            "7c41da95e2": "Copiar {{value0}} a mis comandos",
+            "d5f1c0a9b3": "Proyecto — orca.yaml"
           },
           "shell": {
             "icons": {
@@ -6363,7 +6366,10 @@
           "38d61927e6": "No hay comandos rápidos guardados.",
           "44923dd982": "destructivo",
           "ec1ed99e70": "Eliminar",
-          "d1d0976320": "Ninguno"
+          "d1d0976320": "Ninguno",
+          "a7e5c2f918": "Comandos del proyecto",
+          "b1c85a7f42": "Copiar {{value0}} a mis comandos",
+          "c4d81b6a53": "Compartidos con tu equipo a través del orca.yaml de cada repositorio. Edita el archivo para cambiarlos o copia uno a tus comandos guardados."
         },
         "RecentTabOrderControl": {
           "3b17c81ede": "Orden de la barra de pestañas",

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Plus } from 'lucide-react'
 import type { GlobalSettings, TerminalQuickCommand } from '../../../../shared/types'
 import { getTerminalQuickCommandScope } from '../../../../shared/terminal-quick-commands'
@@ -50,6 +50,16 @@ export function QuickCommandsPane({
   const ownership = getSettingOwnershipSummary('terminalQuickCommands')
   const confirm = useConfirmationDialog()
 
+  const projectQuickCommandsByRepo = useAppStore((s) => s.projectQuickCommandsByRepo)
+  const loadProjectQuickCommands = useAppStore((s) => s.loadProjectQuickCommands)
+  useEffect(() => {
+    // Why: the pane lists commands across every project, so warm the orca.yaml
+    // cache for all repos; the slice coalesces and tolerates offline hosts.
+    for (const repo of repos) {
+      void loadProjectQuickCommands(repo.id)
+    }
+  }, [repos, loadProjectQuickCommands])
+
   const [editor, setEditor] = useState<EditorState>(null)
   const consumedAddIntentSignalRef = useRef(0)
   // Why: `null` means "show all" (sticky-all), independent of the current repo
@@ -76,6 +86,18 @@ export function QuickCommandsPane({
       return effectiveSelection.has(GLOBAL_SCOPE_KEY)
     }
     return effectiveSelection.has(scope.repoId)
+  })
+
+  const projectCommands = useMemo(
+    () => repos.flatMap((repo) => projectQuickCommandsByRepo[repo.id] ?? []),
+    [repos, projectQuickCommandsByRepo]
+  )
+  const visibleProjectCommands = projectCommands.filter((command) => {
+    if (showAll) {
+      return true
+    }
+    const scope = getTerminalQuickCommandScope(command)
+    return scope.type === 'repo' && effectiveSelection.has(scope.repoId)
   })
 
   const createDraftForCurrentFilter = useCallback((): TerminalQuickCommand => {
@@ -146,6 +168,13 @@ export function QuickCommandsPane({
     updateSettings({ terminalQuickCommands: nextList })
   }
 
+  // Why: project commands are read-only; copying opens the editor on a
+  // personal duplicate (fresh id) so the user can tweak and save it.
+  const copyProjectCommand = (command: TerminalQuickCommand): void => {
+    const draft = createTerminalQuickCommandDraft(getTerminalQuickCommandScope(command))
+    setEditor({ mode: 'add', command: { ...command, id: draft.id } })
+  }
+
   const removeCommand = async (command: TerminalQuickCommand): Promise<void> => {
     const confirmed = await confirm({
       title: translate(
@@ -209,6 +238,33 @@ export function QuickCommandsPane({
         onEdit={(command) => setEditor({ mode: 'edit', command })}
         onRemove={(command) => void removeCommand(command)}
       />
+
+      {visibleProjectCommands.length > 0 ? (
+        <>
+          <div className="space-y-1 pt-2">
+            <Label>
+              {translate(
+                'auto.components.settings.QuickCommandsPane.a7e5c2f918',
+                'Project Commands'
+              )}
+            </Label>
+            <p className="text-xs text-muted-foreground">
+              {translate(
+                'auto.components.settings.QuickCommandsPane.c4d81b6a53',
+                "Shared with your team through each repository's orca.yaml. Edit the file to change them, or copy one into your saved commands."
+              )}
+            </p>
+          </div>
+          <QuickCommandsList
+            commands={projectCommands}
+            visibleCommands={visibleProjectCommands}
+            repoById={repoById}
+            onEdit={() => {}}
+            onRemove={() => {}}
+            onCopyToPersonal={copyProjectCommand}
+          />
+        </>
+      ) : null}
 
       {editor !== null ? (
         <TerminalQuickCommandDialog
