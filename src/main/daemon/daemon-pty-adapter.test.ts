@@ -572,20 +572,23 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         ensureConnected: () => Promise<void>
       }
 
-      requestSpy.mockClear()
-      await internals.ensureConnected()
+      try {
+        requestSpy.mockClear()
+        await internals.ensureConnected()
 
-      expect(
-        requestSpy.mock.calls.filter(
-          ([type, payload]) =>
-            type === 'createOrAttach' &&
-            typeof payload === 'object' &&
-            payload !== null &&
-            'sessionId' in payload &&
-            (payload as { sessionId: string }).sessionId === id
-        )
-      ).toHaveLength(0)
-      requestSpy.mockRestore()
+        expect(
+          requestSpy.mock.calls.filter(
+            ([type, payload]) =>
+              type === 'createOrAttach' &&
+              typeof payload === 'object' &&
+              payload !== null &&
+              'sessionId' in payload &&
+              (payload as { sessionId: string }).sessionId === id
+          )
+        ).toHaveLength(0)
+      } finally {
+        requestSpy.mockRestore()
+      }
     })
 
     it('skips tombstoned session ids during reconnect reattach', async () => {
@@ -598,23 +601,78 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         killedSessionTombstones: Map<string, number>
       }
 
-      internals.killedSessionTombstones.set(id, Date.now())
-      internals.activeSessionIds.add(id)
-      requestSpy.mockClear()
-      internals.client.disconnect()
-      await internals.ensureConnected()
+      try {
+        internals.killedSessionTombstones.set(id, Date.now())
+        internals.activeSessionIds.add(id)
+        requestSpy.mockClear()
+        internals.client.disconnect()
+        await internals.ensureConnected()
 
-      expect(
-        requestSpy.mock.calls.filter(
-          ([type, payload]) =>
+        expect(
+          requestSpy.mock.calls.filter(
+            ([type, payload]) =>
+              type === 'createOrAttach' &&
+              typeof payload === 'object' &&
+              payload !== null &&
+              'sessionId' in payload &&
+              (payload as { sessionId: string }).sessionId === id
+          )
+        ).toHaveLength(0)
+      } finally {
+        requestSpy.mockRestore()
+      }
+    })
+
+    it('continues reattaching active sessions after one session fails', async () => {
+      const firstId = 'reconnect-failed-first'
+      const secondId = 'reconnect-succeeds-second'
+      await adapter.spawn({ cols: 80, rows: 24, sessionId: firstId })
+      await adapter.spawn({ cols: 80, rows: 24, sessionId: secondId })
+      const originalRequest = DaemonClient.prototype.request
+      const requestSpy = vi.spyOn(DaemonClient.prototype, 'request')
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const internals = adapter as unknown as {
+        client: DaemonClient
+        ensureConnected: () => Promise<void>
+      }
+      const reattachError = new Error('first reattach failed')
+
+      try {
+        requestSpy.mockImplementation(function (this: DaemonClient, type, payload) {
+          if (
             type === 'createOrAttach' &&
             typeof payload === 'object' &&
             payload !== null &&
             'sessionId' in payload &&
-            (payload as { sessionId: string }).sessionId === id
+            (payload as { sessionId: string }).sessionId === firstId
+          ) {
+            return Promise.reject(reattachError)
+          }
+          return originalRequest.call(this, type, payload)
+        })
+
+        internals.client.disconnect()
+        await expect(internals.ensureConnected()).resolves.toBeUndefined()
+
+        expect(warnSpy).toHaveBeenCalledWith(
+          '[daemon] reconnect reattach failed:',
+          firstId,
+          reattachError
         )
-      ).toHaveLength(0)
-      requestSpy.mockRestore()
+        expect(
+          requestSpy.mock.calls.some(
+            ([type, payload]) =>
+              type === 'createOrAttach' &&
+              typeof payload === 'object' &&
+              payload !== null &&
+              'sessionId' in payload &&
+              (payload as { sessionId: string }).sessionId === secondId
+          )
+        ).toBe(true)
+      } finally {
+        warnSpy.mockRestore()
+        requestSpy.mockRestore()
+      }
     })
   })
 

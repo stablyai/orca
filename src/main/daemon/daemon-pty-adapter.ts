@@ -939,7 +939,11 @@ export class DaemonPtyAdapter implements IPtyProvider {
       if (this.killedSessionTombstones.has(id)) {
         continue
       }
-      await this.requestAttach(id)
+      try {
+        await this.requestAttach(id)
+      } catch (err) {
+        console.warn('[daemon] reconnect reattach failed:', id, err)
+      }
     }
   }
 
