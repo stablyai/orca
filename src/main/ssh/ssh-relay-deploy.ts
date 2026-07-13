@@ -736,9 +736,26 @@ async function launchRelay(
           '[ssh-relay] Socket reconnect failed, launching fresh relay:',
           err instanceof Error ? err.message : String(err)
         )
-        // Why: stale socket from a crashed relay — remove it so the
-        // fresh launch can bind a new socket at the same path.
-        await execCommand(conn, `rm -f ${shellEscape(sockFile)}`).catch(() => {})
+        // Why: unlinking a Unix socket does not stop the detached relay that
+        // owns it, so reap that process before rebinding the path.
+        const pidFile = `${sockFile}.pid`
+        const pidOutput = await execCommand(conn, `cat ${shellEscape(pidFile)} 2>/dev/null`).catch(
+          () => ''
+        )
+        const pid = pidOutput.trim()
+        if (/^[1-9]\d*$/.test(pid)) {
+          const relayCommandMarker = 'ORCA_RELAY_PID_MATCH'
+          const commandLine = await execCommand(
+            conn,
+            `ps -ww -p ${pid} -o command= 2>/dev/null | grep -F -- ${shellEscape('relay.js')} | grep -F -- ${shellEscape(`--sock-path ${sockFile}`)} >/dev/null && echo ${relayCommandMarker} || true`
+          ).catch(() => '')
+          if (commandLine.trim() === relayCommandMarker) {
+            await execCommand(conn, `kill -TERM ${pid}`).catch(() => {})
+          }
+        }
+        await execCommand(conn, `rm -f ${shellEscape(sockFile)} ${shellEscape(pidFile)}`).catch(
+          () => {}
+        )
       }
     }
   } catch {

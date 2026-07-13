@@ -328,6 +328,24 @@ describe('Subprocess: Relay entry point', () => {
   )
 
   it.skipIf(process.platform === 'win32')(
+    'writes and removes the pidfile for a detached relay',
+    async () => {
+      tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-pidfile-'))
+      const sockPath = path.join(tmpDir, 'relay.sock')
+      const pidPath = `${sockPath}.pid`
+      relay = spawn(['--detached', '--grace-time', '10', '--sock-path', sockPath])
+
+      await relay.sentinelReceived
+      expect(readFileSync(pidPath, 'utf8').trim()).toBe(String(relay.proc.pid))
+
+      relay.kill('SIGTERM')
+      await relay.waitForExit(2000)
+      expect(existsSync(pidPath)).toBe(false)
+    },
+    10_000
+  )
+
+  it.skipIf(process.platform === 'win32')(
     'does not unlink a newer relay socket when an older relay exits',
     async () => {
       tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-rebound-'))

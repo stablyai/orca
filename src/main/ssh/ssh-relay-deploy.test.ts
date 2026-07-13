@@ -153,6 +153,88 @@ describe('deployAndLaunchRelay', () => {
     expect(progress).toContain('Starting relay...')
   })
 
+  it('reaps a detached Unix relay before relaunching after reconnect failure', async () => {
+    const conn = makeMockConnection()
+    const mockExecCommand = vi.mocked(execCommand)
+    vi.mocked(waitForSentinel)
+      .mockRejectedValueOnce(new Error('stale daemon handshake failed'))
+      .mockResolvedValueOnce({
+        write: vi.fn(),
+        onData: vi.fn(),
+        onClose: vi.fn()
+      })
+    mockExecCommand
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+      .mockResolvedValueOnce('/home/user')
+      .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK')
+      .mockResolvedValueOnce('ALIVE')
+      .mockResolvedValueOnce('4242\n')
+      .mockResolvedValueOnce('ORCA_RELAY_PID_MATCH')
+      .mockResolvedValueOnce('')
+      .mockResolvedValueOnce('')
+      .mockResolvedValueOnce('READY')
+
+    await deployAndLaunchRelay(conn)
+
+    const cleanupCommands = mockExecCommand.mock.calls
+      .map(([, command]) => command as string)
+      .filter((command) => command.includes('.pid') || command.includes('kill -TERM'))
+    expect(cleanupCommands[0]).toContain('cat ')
+    expect(cleanupCommands[0]).toContain('.pid')
+    expect(cleanupCommands[1]).toBe('kill -TERM 4242')
+    expect(cleanupCommands[2]).toContain('rm -f ')
+    expect(cleanupCommands[2]).toContain('.pid')
+    expect(cleanupCommands[2]).toContain('.sock')
+  })
+
+  it('does not reap a stale pidfile when the pid belongs to another command', async () => {
+    const conn = makeMockConnection()
+    const mockExecCommand = vi.mocked(execCommand)
+    vi.mocked(waitForSentinel)
+      .mockRejectedValueOnce(new Error('stale daemon handshake failed'))
+      .mockResolvedValueOnce({
+        write: vi.fn(),
+        onData: vi.fn(),
+        onClose: vi.fn()
+      })
+    mockExecCommand
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+      .mockResolvedValueOnce('/home/user')
+      .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK')
+      .mockResolvedValueOnce('ALIVE')
+      .mockResolvedValueOnce('4242\n')
+      .mockResolvedValueOnce('')
+      .mockResolvedValueOnce('')
+      .mockResolvedValueOnce('READY')
+
+    await deployAndLaunchRelay(conn)
+
+    const commands = mockExecCommand.mock.calls.map(([, command]) => command as string)
+    expect(commands.some((command) => command.includes('kill -TERM 4242'))).toBe(false)
+    expect(commands.some((command) => command.includes('rm -f '))).toBe(true)
+    expect(commands.some((command) => command.includes('.pid'))).toBe(true)
+  })
+
+  it('does not reap or relaunch after a successful Unix relay reconnect', async () => {
+    const conn = makeMockConnection()
+    const mockExecCommand = vi.mocked(execCommand)
+    mockExecCommand
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+      .mockResolvedValueOnce('/home/user')
+      .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK')
+      .mockResolvedValueOnce('ALIVE')
+
+    await deployAndLaunchRelay(conn)
+
+    expect(vi.mocked(conn.exec)).toHaveBeenCalledTimes(1)
+    expect(mockExecCommand.mock.calls.map(([, command]) => command as string)).not.toEqual(
+      expect.arrayContaining([expect.stringContaining('kill -TERM')])
+    )
+    expect(mockExecCommand.mock.calls.map(([, command]) => command as string)).not.toEqual(
+      expect.arrayContaining([expect.stringContaining('.pid')])
+    )
+  })
+
   it('resolves the remote node path once per deploy', async () => {
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)

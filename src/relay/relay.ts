@@ -22,7 +22,7 @@
 import { createServer, createConnection, type Socket, type Server } from 'node:net'
 import { homedir } from 'node:os'
 import { resolve, join } from 'node:path'
-import { unlinkSync, existsSync, statSync } from 'node:fs'
+import { unlinkSync, existsSync, statSync, writeFileSync } from 'node:fs'
 import {
   RELAY_SENTINEL,
   FrameDecoder,
@@ -347,6 +347,7 @@ async function main(): Promise<void> {
 
   let ownsSocketPath = false
   let ownedSocketIdentity: SocketIdentity | null = null
+  const pidFile = `${sockPath}.pid`
   const ownsCurrentSocketPath = (): boolean => {
     if (isWindowsNamedPipePath(sockPath)) {
       return ownsSocketPath
@@ -362,6 +363,13 @@ async function main(): Promise<void> {
   const cleanupOwnedSocket = (): void => {
     if (ownsCurrentSocketPath()) {
       cleanupSocket(sockPath)
+      if (!isWindowsNamedPipePath(sockPath)) {
+        try {
+          unlinkSync(pidFile)
+        } catch {
+          // Best effort: the pidfile may already be gone after a stale cleanup.
+        }
+      }
     }
     ownsSocketPath = false
     ownedSocketIdentity = null
@@ -831,6 +839,13 @@ async function main(): Promise<void> {
         restoreUmask()
         ownsSocketPath = true
         ownedSocketIdentity = readSocketIdentity(sockPath)
+        if (detached && !isWindowsNamedPipePath(sockPath)) {
+          try {
+            writeFileSync(pidFile, `${process.pid}\n`)
+          } catch {
+            // Best effort: relay operation does not depend on the pidfile.
+          }
+        }
         server.on('error', (err) => {
           relayLogLine(`[relay] Socket server error: ${err.message}`)
         })
