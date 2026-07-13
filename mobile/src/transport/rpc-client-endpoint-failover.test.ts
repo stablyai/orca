@@ -114,6 +114,17 @@ describe('rpc-client ordered endpoint failover (U4)', () => {
     client.close()
   })
 
+  it('fresh connect with persisted lastGoodEndpoint dials sticky first', async () => {
+    const client = connect(TS, 'token', 'server-key', {
+      endpoints: [TS, LAN],
+      lastGoodEndpoint: LAN
+    })
+    expect(mockSockets[0]!.endpoint).toBe(LAN)
+    authenticate(mockSockets[0]!)
+    expect(client.getState()).toBe('connected')
+    client.close()
+  })
+
   it('bumps reconnectAttempt once per full ordered pass, not per endpoint', async () => {
     const client = connect(TS, 'token', 'server-key', { endpoints: [TS, LAN] })
     mockSockets[0]!.emitCloseOnClose = false
