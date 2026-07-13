@@ -104,6 +104,9 @@ function areAgentRowsEqual(
       a.state !== b.state ||
       a.agentType !== b.agentType ||
       a.prompt !== b.prompt ||
+      // Why: a `terminal rename` changes only tabTitle; without this the list
+      // would compare equal and the row would keep its stale label.
+      a.tabTitle !== b.tabTitle ||
       a.lastAssistantMessage !== b.lastAssistantMessage ||
       a.toolName !== b.toolName ||
       a.toolInput !== b.toolInput ||

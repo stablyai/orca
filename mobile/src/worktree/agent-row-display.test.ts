@@ -15,6 +15,7 @@ function row(overrides: Partial<RuntimeWorktreeAgentRow> = {}): RuntimeWorktreeA
     state: 'working',
     agentType: 'claude',
     prompt: '',
+    tabTitle: null,
     lastAssistantMessage: null,
     toolName: null,
     toolInput: null,
@@ -57,6 +58,19 @@ describe('agentDotState', () => {
 })
 
 describe('agentDisplayLabel', () => {
+  it('prefers an explicit tab name over the last message and prompt', () => {
+    expect(
+      agentDisplayLabel(
+        row({ tabTitle: 'PROBE-LEFT-NAME', lastAssistantMessage: 'on it', prompt: 'do the thing' }),
+        0
+      )
+    ).toBe('PROBE-LEFT-NAME')
+    // Whitespace-only tab names are treated as unset and fall through.
+    expect(agentDisplayLabel(row({ tabTitle: '   ', lastAssistantMessage: 'on it' }), 0)).toBe(
+      'on it'
+    )
+  })
+
   it('prefers last message, then prompt, then state label', () => {
     expect(agentDisplayLabel(row({ lastAssistantMessage: 'hello there' }), 0)).toBe('hello there')
     expect(agentDisplayLabel(row({ lastAssistantMessage: '   ', prompt: 'do the thing' }), 0)).toBe(

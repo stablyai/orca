@@ -21945,6 +21945,97 @@ describe('OrcaRuntimeService', () => {
     ])
   })
 
+  it('carries the owning tab explicit name onto the agent row for mobile', async () => {
+    // Why: mobile agent rows prefer a `terminal rename` like the desktop
+    // sidebar; the renderer-resolved explicitTitle rides the synced tab.
+    const leafId = '44444444-4444-4444-8444-444444444444'
+    const paneKey = `tab-1:${leafId}`
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey,
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'tab-1',
+          state: 'working',
+          prompt: 'ship it',
+          agentType: 'claude',
+          lastAssistantMessage: 'on it',
+          connectionId: null,
+          receivedAt: 1000,
+          stateStartedAt: 900
+        }
+      ]
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'PROBE-LEFT-NAME',
+          explicitTitle: 'PROBE-LEFT-NAME',
+          activeLeafId: leafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        }
+      ]
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((w) => w.worktreeId === TEST_WORKTREE_ID)
+    expect(summary?.agents).toEqual([
+      expect.objectContaining({ paneKey, tabTitle: 'PROBE-LEFT-NAME' })
+    ])
+  })
+
+  it('leaves the agent row tabTitle null when the tab has no explicit name', async () => {
+    const leafId = '55555555-5555-4555-8555-555555555555'
+    const paneKey = `tab-1:${leafId}`
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey,
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'tab-1',
+          state: 'working',
+          prompt: 'ship it',
+          agentType: 'claude',
+          lastAssistantMessage: 'on it',
+          connectionId: null,
+          receivedAt: 1000,
+          stateStartedAt: 900
+        }
+      ]
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Claude',
+          activeLeafId: leafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        { tabId: 'tab-1', worktreeId: TEST_WORKTREE_ID, leafId, paneRuntimeId: 1, ptyId: 'pty-1' }
+      ]
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((w) => w.worktreeId === TEST_WORKTREE_ID)
+    expect(summary?.agents).toEqual([expect.objectContaining({ paneKey, tabTitle: null })])
+  })
+
   it('marks the desktop-active worktree as isActive', async () => {
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()

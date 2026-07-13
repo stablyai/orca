@@ -160,6 +160,13 @@ describe('areWorktreeListsEqual', () => {
     expect(areWorktreeListsEqual(first, second)).toBe(false)
   })
 
+  it('detects a tab rename (tabTitle) so the row relabels', () => {
+    const first = [worktree({ agents: [agent({ tabTitle: null })] })]
+    const second = [worktree({ agents: [agent({ tabTitle: 'PROBE-LEFT-NAME' })] })]
+
+    expect(areWorktreeListsEqual(first, second)).toBe(false)
+  })
+
   it('treats missing and empty agent arrays as equivalent for rendering', () => {
     const first = [worktree({ agents: undefined })]
     const second = [worktree({ agents: [] })]

@@ -100,6 +100,11 @@ export type RuntimeSyncedTab = {
   tabId: string
   worktreeId: string
   title: string | null
+  /** Explicit/auto tab name (customTitle → quickCommandLabel → generatedTitle,
+   *  gated by the auto-title setting), excluding the raw live title. Null when
+   *  the tab has no human name. Lets agent surfaces prefer a rename over the
+   *  prompt the way the desktop sidebar does, without adopting the shell title. */
+  explicitTitle?: string | null
   activeLeafId: string | null
   layout: TerminalPaneLayoutNode | null
 }
@@ -570,6 +575,11 @@ export type RuntimeWorktreeAgentRow = {
   agentType: AgentType | null
   /** Raw hook-reported prompt. Display surfaces can prefer displayName. */
   prompt: string
+  /** Owning tab's explicit/auto name (customTitle → quickCommandLabel →
+   *  generatedTitle), or null when unnamed. Mirrors the desktop sidebar so a
+   *  `terminal rename` shows on mobile too; prefer it over prompt/last message.
+   *  Optional for back-compat with older wire payloads that predate the field. */
+  tabTitle?: string | null
   /** Explicit orchestration task title, or null outside dispatch. */
   taskTitle: string | null
   /** Explicit UI label for orchestration task rows, or null outside dispatch. */

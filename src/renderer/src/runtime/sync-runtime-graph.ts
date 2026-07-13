@@ -569,6 +569,10 @@ async function syncRuntimeGraph(): Promise<void> {
       tabId,
       worktreeId: registeredTab.worktreeId,
       title: resolveRuntimeTerminalTitle(tab, generatedTitlesEnabled),
+      // Why: named tiers only (title: '' skips the live shell title) so mobile
+      // agent rows prefer a rename without adopting a generic OSC/shell title.
+      explicitTitle:
+        resolveTerminalTabTitle({ ...tab, title: '' }, generatedTitlesEnabled, '') || null,
       activeLeafId: activePaneId === null ? null : (manager?.getLeafId(activePaneId) ?? null),
       layout: serializePaneTree(root)
     })
