@@ -1,0 +1,48 @@
+import { describe, expect, it } from 'vitest'
+import { mkdtemp, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { SymbolIndexService } from './service'
+
+describe('SymbolIndexService', () => {
+  it('indexes a worktree and answers findDefinitions; unknown symbol is empty', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'orca-svc-'))
+    await writeFile(path.join(root, 'a.ts'), 'export function target() {}')
+    const svc = new SymbolIndexService({ maxFiles: 100 })
+    await svc.ensureIndexed('w1', root)
+
+    const hit = await svc.findDefinitions({
+      worktreeId: 'w1',
+      worktreeRoot: root,
+      symbol: 'target'
+    })
+    expect(hit.status).toBe('ready')
+    expect(hit.definitions.map((d) => d.name)).toEqual(['target'])
+    expect(hit.definitions[0]!.path).toBe(path.join(root, 'a.ts'))
+
+    const miss = await svc.findDefinitions({ worktreeId: 'w1', worktreeRoot: root, symbol: 'nope' })
+    expect(miss).toEqual({ status: 'ready', definitions: [] })
+    svc.dispose()
+  })
+
+  it('reflects file changes incrementally', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'orca-svc-'))
+    const file = path.join(root, 'a.ts')
+    await writeFile(file, 'export function one() {}')
+    const svc = new SymbolIndexService({ maxFiles: 100 })
+    await svc.ensureIndexed('w1', root)
+
+    await writeFile(file, 'export function two() {}')
+    await svc.onFileChanged('w1', root, file)
+
+    expect(
+      (await svc.findDefinitions({ worktreeId: 'w1', worktreeRoot: root, symbol: 'one' }))
+        .definitions
+    ).toEqual([])
+    expect(
+      (await svc.findDefinitions({ worktreeId: 'w1', worktreeRoot: root, symbol: 'two' }))
+        .definitions.length
+    ).toBe(1)
+    svc.dispose()
+  })
+})
