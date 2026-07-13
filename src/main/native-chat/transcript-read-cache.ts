@@ -2,6 +2,7 @@ import { stat } from 'node:fs/promises'
 import type { AgentType } from '../../shared/native-chat-types'
 import { resolveSessionFilePath } from './session-file-resolver'
 import { readNativeChatTranscript, type ReadTranscriptResult } from './transcript-reader'
+import { isWebChatAgentString, readWebChatConversation } from './web-chat-transcript-reader'
 
 // Why: both the desktop IPC handler and the runtime RPC handler read the same
 // host-filesystem transcript, so a single process-global cache keyed by the
@@ -89,6 +90,11 @@ export async function readNativeChatTranscriptCached(
   /** Hook-reported authoritative transcript path, preferred over the id glob. */
   transcriptPath?: string
 ): Promise<ReadTranscriptResult> {
+  // Why: 웹 대화는 JSONL 파일이 아니라 chats.db에 있어 파일 경로 해석 전에 분기한다.
+  // 대화가 작아 캐시 없이 매번 읽어도 저렴하므로 파일 캐시 경로를 타지 않는다.
+  if (isWebChatAgentString(agent)) {
+    return readWebChatConversation(agent, sessionId)
+  }
   const filePath = await resolveSessionFilePath(agent, sessionId, { transcriptPath })
   if (!filePath) {
     return { error: `No transcript found for ${agent} session ${sessionId}` }

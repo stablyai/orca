@@ -18,6 +18,7 @@ import {
   decodeGrokTranscriptLine
 } from './transcript-line-decoders'
 import { decodeTranscriptStream } from './transcript-stream-lines'
+import { isWebChatAgentString } from './web-chat-transcript-reader'
 
 export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
   agent: AgentType
@@ -125,6 +126,10 @@ async function readAppendedMessages(
 export async function subscribeNativeChatTranscript(
   args: SubscribeNativeChatTranscriptArgs
 ): Promise<NativeChatTranscriptSubscription> {
+  // Why: 웹 대화는 읽기전용·라이브 tail 없음 — watcher를 만들지 않는다.
+  if (isWebChatAgentString(args.agent)) {
+    return { unsubscribe: () => {} }
+  }
   const { agent, sessionId, onAppend, debounceMs } = args
   const decode = lineDecoderForAgent(agent)
   const filePath = args.filePath ?? (await resolveSessionFilePath(agent, sessionId, args))
