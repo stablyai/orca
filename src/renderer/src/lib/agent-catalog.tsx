@@ -105,7 +105,7 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
   },
   {
     id: 'qoder',
-    label: translate('auto.lib.agent.catalog.c633d4dd92', 'Qoder'),
+    label: translate('auto.lib.agent.catalog.c633d4dd92', 'Qoder CLI'),
     cmd: 'qodercli',
     faviconDomain: 'qoder.com',
     homepageUrl: 'https://docs.qoder.com/en/cli/quick-start'

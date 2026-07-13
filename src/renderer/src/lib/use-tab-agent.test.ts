@@ -115,43 +115,6 @@ describe('resolveTabAgentFromSignals', () => {
     ).toBe('openclaude')
   })
 
-  it('prefers qodercli process identity over Gemini-style OSC title glyphs', () => {
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: true,
-        isRemote: false,
-        title: '◇ Ready (qoder-verify)',
-        hookAgent: null,
-        processAgent: 'qoder',
-        launchAgent: undefined
-      })
-    ).toBe('qoder')
-  })
-
-  it('resolves qoder from title when Gemini-style glyphs include a qodercli marker', () => {
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: false,
-        isRemote: false,
-        title: '◇ qodercli',
-        hookAgent: null,
-        launchAgent: undefined
-      })
-    ).toBe('qoder')
-  })
-
-  it('keeps bare Gemini OSC glyph titles on Gemini when no qodercli marker is present', () => {
-    expect(
-      resolveTabAgentFromSignals({
-        hasObservedAgentSignal: false,
-        isRemote: false,
-        title: '◇ Ready',
-        hookAgent: null,
-        launchAgent: undefined
-      })
-    ).toBe('gemini')
-  })
-
   it('keeps title fallback for real Gemini, MiMo, and Pi titles', () => {
     expect(
       resolveTabAgentFromSignals({

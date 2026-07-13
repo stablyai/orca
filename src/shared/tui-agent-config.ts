@@ -117,7 +117,10 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     detectCmd: 'qodercli',
     launchCmd: 'qodercli',
     expectedProcess: 'qodercli',
-    promptInjectionMode: 'flag-prompt-interactive'
+    // Why: qodercli's `-p` flag runs in headless mode (exits on completion),
+    // so the bare TUI must be launched and the prompt injected after startup
+    // to keep the hosted session alive — same pattern as aider, devin, goose.
+    promptInjectionMode: 'stdin-after-start'
   },
   opencode: {
     detectCmd: 'opencode',

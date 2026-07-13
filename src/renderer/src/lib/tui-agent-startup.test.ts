@@ -98,6 +98,23 @@ describe('buildAgentStartupPlan', () => {
     })
   })
 
+  it('launches qodercli first and injects the prompt after startup', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'qoder',
+        prompt: 'Fix the flaky test',
+        cmdOverrides: {},
+        platform: 'darwin'
+      })
+    ).toEqual({
+      agent: 'qoder',
+      launchCommand: 'qodercli',
+      expectedProcess: 'qodercli',
+      followupPrompt: 'Fix the flaky test',
+      launchConfig: emptyLaunchConfig('qodercli')
+    })
+  })
+
   it('launches Ante first and injects the draft prompt after startup', () => {
     expect(
       buildAgentStartupPlan({

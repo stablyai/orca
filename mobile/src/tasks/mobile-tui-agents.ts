@@ -51,7 +51,7 @@ export const MOBILE_TUI_AGENT_LABELS: Record<TuiAgent, string> = {
   opencode: 'OpenCode',
   'mimo-code': 'MiMo Code',
   ante: 'Ante',
-  qoder: 'Qoder',
+  qoder: 'Qoder CLI',
   pi: 'Pi',
   omp: 'OMP',
   gemini: 'Gemini',
