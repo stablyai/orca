@@ -205,6 +205,40 @@ describe('resource session cleanup review', () => {
     expect(result).toEqual({ killedCount: 0, protectedCount: 1, goneCount: 0, failedCount: 0 })
   })
 
+  it('includes initial review results alongside inactive-candidate revalidation', async () => {
+    const reviewedIds = [
+      'initial-active',
+      'initial-unknown',
+      'initial-gone',
+      'still-inactive',
+      'became-bound',
+      'became-gone'
+    ]
+    const review = await reviewResourceSessionCleanup({
+      listSessions: async () => reviewedIds.map(session),
+      readBindings: () => bindingsWith(),
+      inspectInactiveCleanup: async () => [
+        { id: 'initial-active', safety: 'active' },
+        { id: 'initial-unknown', safety: 'unknown' },
+        { id: 'initial-gone', safety: 'gone' },
+        { id: 'still-inactive', safety: 'inactive' },
+        { id: 'became-bound', safety: 'inactive' },
+        { id: 'became-gone', safety: 'inactive' }
+      ]
+    })
+    const kill = vi.fn().mockResolvedValue([{ id: 'still-inactive', outcome: 'killed' }])
+
+    const result = await executeResourceSessionCleanup(review, {
+      listSessions: async () =>
+        ['initial-active', 'initial-unknown', 'still-inactive', 'became-bound'].map(session),
+      readBindings: () => bindingsWith('became-bound'),
+      killInactiveSessions: kill
+    })
+
+    expect(kill).toHaveBeenCalledWith(['still-inactive'])
+    expect(result).toEqual({ killedCount: 1, protectedCount: 3, goneCount: 2, failedCount: 0 })
+  })
+
   it('summarizes guarded cleanup outcomes without aborting partial results', async () => {
     const result = await executeResourceSessionCleanup(
       reviewWithInactive('killed', 'active', 'unknown', 'gone', 'failed'),
