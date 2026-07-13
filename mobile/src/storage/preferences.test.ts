@@ -10,11 +10,13 @@ import {
   clampHostSidebarWidth,
   loadDisabledTerminalLiveInputHandles,
   loadHostSidebarWidth,
+  loadTerminalAccessoryWrapMode,
   loadTerminalAutocompleteEnabled,
   loadTerminalLinkOpenMode,
   readDisabledTerminalLiveInputHandlesPreference,
   saveDisabledTerminalLiveInputHandles,
   saveHostSidebarWidth,
+  saveTerminalAccessoryWrapMode,
   saveTerminalAutocompleteEnabled,
   saveTerminalLinkOpenMode
 } from './preferences'
@@ -201,5 +203,39 @@ describe('terminal link open mode preference', () => {
     await saveTerminalLinkOpenMode('phone-browser')
 
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalLinkOpenMode', 'phone-browser')
+  })
+})
+
+describe('terminal accessory wrap mode preference', () => {
+  beforeEach(() => {
+    vi.mocked(AsyncStorage.getItem).mockReset()
+    vi.mocked(AsyncStorage.setItem).mockReset()
+  })
+
+  it('defaults to scroll when unset', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+
+    await expect(loadTerminalAccessoryWrapMode()).resolves.toBe('scroll')
+    expect(AsyncStorage.getItem).toHaveBeenCalledWith('orca:terminalAccessoryWrapMode')
+  })
+
+  it('loads only known modes', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('wrap')
+    await expect(loadTerminalAccessoryWrapMode()).resolves.toBe('wrap')
+
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('sideways')
+    await expect(loadTerminalAccessoryWrapMode()).resolves.toBe('scroll')
+  })
+
+  it('falls back to scroll when storage cannot be read', async () => {
+    vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
+
+    await expect(loadTerminalAccessoryWrapMode()).resolves.toBe('scroll')
+  })
+
+  it('persists the selected mode', async () => {
+    await saveTerminalAccessoryWrapMode('wrap')
+
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:terminalAccessoryWrapMode', 'wrap')
   })
 })
