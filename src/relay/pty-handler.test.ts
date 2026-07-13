@@ -42,6 +42,12 @@ vi.mock('./pty-session-kill', () => ({
 import { PtyHandler, attachIdentityMismatches } from './pty-handler'
 import type { RelayDispatcher } from './dispatcher'
 
+const hostPlatform = process.platform
+
+function setProcessPlatform(platform: NodeJS.Platform): void {
+  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+}
+
 function createMockDispatcher() {
   const requestHandlers = new Map<
     string,
@@ -100,6 +106,9 @@ describe('PtyHandler', () => {
   let handler: PtyHandler
 
   beforeEach(() => {
+    // Why: most relay shutdown cases assert POSIX signal semantics; make that
+    // baseline deterministic and let the explicit ConPTY cases opt into win32.
+    setProcessPlatform('linux')
     vi.useFakeTimers()
     mockPtySpawn.mockReset()
     mockPtyInstance.onData.mockReset()
@@ -118,8 +127,13 @@ describe('PtyHandler', () => {
   })
 
   afterEach(() => {
-    handler.dispose()
-    vi.useRealTimers()
+    try {
+      setProcessPlatform('linux')
+      handler.dispose()
+    } finally {
+      vi.useRealTimers()
+      setProcessPlatform(hostPlatform)
+    }
   })
 
   it('registers all expected handlers', () => {
