@@ -5,7 +5,12 @@ import type {
 } from '../../../../shared/agent-status-types'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { basename } from '@/lib/path'
-import { IDLE, buildAttentionByWorktree, type WorktreeAttention } from './smart-attention'
+import {
+  IDLE,
+  buildAttentionByWorktree,
+  hasFreshAttributedAgentStatus,
+  type WorktreeAttention
+} from './smart-attention'
 
 export type SortBy = 'name' | 'smart' | 'recent' | 'repo' | 'manual'
 
@@ -161,7 +166,8 @@ export function sortWorktreesSmart(
     .flat()
     .some((tab) => tabHasLivePty(ptyIdsByTabId, tab.id))
 
-  if (!hasAnyLivePty) {
+  const now = Date.now()
+  if (!hasAnyLivePty && !hasFreshAttributedAgentStatus(agentStatusByPaneKey, now, tabsByWorktree)) {
     // Cold start: use persisted sortOrder snapshot until the agent-status
     // snapshot lands and a warm sort runs.
     return [...worktrees].sort(
@@ -169,7 +175,6 @@ export function sortWorktreesSmart(
     )
   }
 
-  const now = Date.now()
   const attentionByWorktree = buildAttentionByWorktree(
     worktrees,
     tabsByWorktree,

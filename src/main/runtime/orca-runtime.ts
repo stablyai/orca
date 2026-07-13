@@ -27,6 +27,7 @@ import type {
 import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
+  isFreshNonDoneAgentStatus,
   type AgentStatusIpcPayload,
   type ParsedAgentStatusPayload,
   type AgentStatusOrchestrationContext,
@@ -464,7 +465,9 @@ import {
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions,
-  resolveLocalProjectRuntimeForRepo
+  getLocalProjectWorktreeGitOptionsForRuntime,
+  resolveLocalProjectRuntimeForRepo,
+  resolveLocalProjectRuntimesForRepos
 } from '../project-runtime-git-options'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import {
@@ -688,6 +691,7 @@ import {
   shouldSetDisplayName,
   areWorktreePathsEqual
 } from '../ipc/worktree-logic'
+import { worktreePathComparisonKey } from '../ipc/worktree-path-comparison'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
   canCleanupUnregisteredOrcaLeftoverDirectory,
@@ -2011,14 +2015,18 @@ class WorktreeIdRequiresFullPathError extends Error {
   }
 }
 
-type ResolvedWorktreeCache = {
-  expiresAt: number
+type ResolvedWorktreeSnapshot = {
   worktrees: ResolvedWorktree[]
+  platformByRepoId: ReadonlyMap<string, NodeJS.Platform>
+}
+
+type ResolvedWorktreeCache = ResolvedWorktreeSnapshot & {
+  expiresAt: number
 }
 
 type ResolvedWorktreeInFlight = {
   generation: number
-  promise: Promise<ResolvedWorktree[]>
+  promise: Promise<ResolvedWorktreeSnapshot>
 }
 
 export type MobileNotificationDispatchEvent = {
@@ -10919,13 +10927,15 @@ export class OrcaRuntimeService {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
     }
-    const resolvedWorktrees = (await this.listResolvedWorktrees()).filter((worktree) =>
+    const resolvedWorktreeSnapshot = await this.listResolvedWorktreeSnapshot()
+    const resolvedWorktrees = resolvedWorktreeSnapshot.worktrees.filter((worktree) =>
       this.isRuntimeWorktreeVisible(worktree)
     )
     // Why: worktree.ps backs the mobile sidebar, so it must use the same
     // host-owned imported-worktree visibility gate as worktree.list/desktop.
     await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
     const repoById = new Map((this.store?.getRepos() ?? []).map((repo) => [repo.id, repo]))
+    const platformByRepoId = resolvedWorktreeSnapshot.platformByRepoId
     const summaries = new Map<string, RuntimeWorktreePsSummary>()
 
     // Why: the GitHub cache is keyed by `repoPath::branch` (no refs/heads/ prefix),
@@ -10954,7 +10964,7 @@ export class OrcaRuntimeService {
       if (!linkedPR && meta?.linkedPR != null) {
         linkedPR = { number: meta.linkedPR, state: 'unknown' }
       }
-      const terminalPlatform = repo ? this.getAgentLaunchPlatformForRepo(repo) : process.platform
+      const terminalPlatform = platformByRepoId.get(worktree.repoId) ?? process.platform
       // Why: use the instance-validated lineage from attachLineageToResolvedWorktrees,
       // not the raw store entry — shipped mobile clients trust parentWorktreeId as-is,
       // so a stale same-path entry would nest replacement checkouts under old parents.
@@ -11054,11 +11064,18 @@ export class OrcaRuntimeService {
       })
     }
 
+    const runtimeWorktreeSummaryPathIndex = buildRuntimeWorktreeSummaryPathIndex(
+      summaries,
+      resolvedWorktrees,
+      platformByRepoId
+    )
+    const missingRuntimeWorktreeIds = new Set<string>()
     const countedPtyIds = new Set<string>()
     for (const leaf of this.leaves.values()) {
       const summary = this.getSummaryForRuntimeWorktreeId(
         summaries,
-        resolvedWorktrees,
+        runtimeWorktreeSummaryPathIndex,
+        missingRuntimeWorktreeIds,
         leaf.worktreeId
       )
       if (!summary) {
@@ -11092,7 +11109,8 @@ export class OrcaRuntimeService {
       }
       const summary = this.getSummaryForRuntimeWorktreeId(
         summaries,
-        resolvedWorktrees,
+        runtimeWorktreeSummaryPathIndex,
+        missingRuntimeWorktreeIds,
         pty.worktreeId
       )
       if (!summary) {
@@ -11116,7 +11134,12 @@ export class OrcaRuntimeService {
       if (tabs.length === 0) {
         continue
       }
-      const summary = this.getSummaryForRuntimeWorktreeId(summaries, resolvedWorktrees, worktreeId)
+      const summary = this.getSummaryForRuntimeWorktreeId(
+        summaries,
+        runtimeWorktreeSummaryPathIndex,
+        missingRuntimeWorktreeIds,
+        worktreeId
+      )
       if (!summary) {
         continue
       }
@@ -11142,7 +11165,8 @@ export class OrcaRuntimeService {
     if (session?.activeWorktreeId) {
       const activeSummary = this.getSummaryForRuntimeWorktreeId(
         summaries,
-        resolvedWorktrees,
+        runtimeWorktreeSummaryPathIndex,
+        missingRuntimeWorktreeIds,
         session.activeWorktreeId
       )
       if (activeSummary) {
@@ -11150,7 +11174,26 @@ export class OrcaRuntimeService {
       }
     }
 
-    this.attachAgentRowsToSummaries(summaries)
+    const mirroredWorktreeIdByTabId = new Map<string, string>()
+    for (const [worktreeId, tabs] of Object.entries(session?.tabsByWorktree ?? {})) {
+      for (const tab of tabs) {
+        mirroredWorktreeIdByTabId.set(tab.id, worktreeId)
+      }
+    }
+    // Why: a live renderer graph may precede persistence, but persisted tab
+    // ownership wins when an automatic workspace rename has already rekeyed it.
+    for (const [tabId, tab] of this.tabs) {
+      if (!mirroredWorktreeIdByTabId.has(tabId)) {
+        mirroredWorktreeIdByTabId.set(tabId, tab.worktreeId)
+      }
+    }
+
+    this.attachAgentRowsToSummaries(
+      summaries,
+      runtimeWorktreeSummaryPathIndex,
+      missingRuntimeWorktreeIds,
+      mirroredWorktreeIdByTabId
+    )
 
     const sorted = [...summaries.values()].sort(compareWorktreePs)
     return {
@@ -11164,7 +11207,12 @@ export class OrcaRuntimeService {
   // agent list, mirroring the desktop sidebar. Lineage parent is resolved from
   // the orchestration db (paneKey-keyed), not the OSC payload, since spawn
   // hierarchy is pane-level state tracked separately from terminal output.
-  private attachAgentRowsToSummaries(summaries: Map<string, RuntimeWorktreePsSummary>): void {
+  private attachAgentRowsToSummaries(
+    summaries: Map<string, RuntimeWorktreePsSummary>,
+    runtimeWorktreeSummaryPathIndex: RuntimeWorktreeSummaryPathIndex,
+    missingRuntimeWorktreeIds: Set<string>,
+    mirroredWorktreeIdByTabId: ReadonlyMap<string, string>
+  ): void {
     // Why: most agents report via hooks (agent-hooks/server), not OSC, so the
     // hook snapshot is the primary source — same one the desktop sidebar reads.
     // OSC-only entries (no hook) are merged in as a fallback, keyed by paneKey.
@@ -11172,6 +11220,7 @@ export class OrcaRuntimeService {
       string,
       {
         paneKey: string
+        tabId?: string
         worktreeId?: string
         state: ParsedAgentStatusPayload['state']
         agentType: string | null
@@ -11188,6 +11237,7 @@ export class OrcaRuntimeService {
       const { payload } = snapshot
       rowSources.set(snapshot.paneKey, {
         paneKey: snapshot.paneKey,
+        tabId: snapshot.tabId,
         worktreeId: snapshot.worktreeId,
         state: payload.state,
         agentType: payload.agentType ?? null,
@@ -11201,8 +11251,15 @@ export class OrcaRuntimeService {
       })
     }
     for (const entry of this.getAgentStatusSnapshotFn?.() ?? []) {
+      const existing = rowSources.get(entry.paneKey)
+      // Why: hook rows win ties, but an older cached hook must not replace a
+      // fresh OSC status and make a running mobile workspace look inactive.
+      if (existing && existing.updatedAt > entry.receivedAt) {
+        continue
+      }
       rowSources.set(entry.paneKey, {
         paneKey: entry.paneKey,
+        tabId: entry.tabId,
         worktreeId: entry.worktreeId,
         state: entry.state,
         agentType: entry.agentType ?? null,
@@ -11220,9 +11277,23 @@ export class OrcaRuntimeService {
     }
     const orchestrationByPaneKey = this.buildAgentOrchestrationByPaneKey()
     const rowsByWorktree = new Map<string, RuntimeWorktreeAgentRow[]>()
+    const now = Date.now()
     for (const src of rowSources.values()) {
-      const worktreeId = src.worktreeId
-      if (!worktreeId || !summaries.has(worktreeId)) {
+      // Why: hooks retain launch-time attribution across automatic workspace
+      // renames; the tab's current mirrored owner is authoritative when present.
+      const tabId = src.tabId ?? parsePaneKey(src.paneKey)?.tabId
+      const worktreeId =
+        (tabId ? mirroredWorktreeIdByTabId.get(tabId) : undefined) ?? src.worktreeId
+      if (!worktreeId) {
+        continue
+      }
+      const summary = this.getSummaryForRuntimeWorktreeId(
+        summaries,
+        runtimeWorktreeSummaryPathIndex,
+        missingRuntimeWorktreeIds,
+        worktreeId
+      )
+      if (!summary) {
         continue
       }
       const taskTitle = orchestrationByPaneKey?.[src.paneKey]?.taskTitle ?? null
@@ -11242,11 +11313,13 @@ export class OrcaRuntimeService {
         stateStartedAt: src.stateStartedAt,
         updatedAt: src.updatedAt
       }
-      const rows = rowsByWorktree.get(worktreeId)
+      // Why: SSH/runtime projections can spell an equivalent path differently;
+      // bucket by the canonical summary id so mobile keeps the agent activity.
+      const rows = rowsByWorktree.get(summary.worktreeId)
       if (rows) {
         rows.push(row)
       } else {
-        rowsByWorktree.set(worktreeId, [row])
+        rowsByWorktree.set(summary.worktreeId, [row])
       }
     }
     for (const [worktreeId, rows] of rowsByWorktree) {
@@ -11255,6 +11328,18 @@ export class OrcaRuntimeService {
       const summary = summaries.get(worktreeId)
       if (summary) {
         summary.agents = rows
+        for (const row of rows) {
+          if (!isFreshNonDoneAgentStatus(row, now)) {
+            continue
+          }
+          // Why: worktree.ps is mobile's host-sidebar parity source, so a live
+          // agent must survive the same temporary PTY gaps as desktop.
+          summary.hasHostSidebarActivity = true
+          summary.status = mergeWorktreeStatus(
+            summary.status,
+            row.state === 'working' ? 'working' : 'permission'
+          )
+        }
       }
     }
   }
@@ -19682,12 +19767,16 @@ export class OrcaRuntimeService {
   }
 
   private async listResolvedWorktrees(): Promise<ResolvedWorktree[]> {
+    return (await this.listResolvedWorktreeSnapshot()).worktrees
+  }
+
+  private async listResolvedWorktreeSnapshot(): Promise<ResolvedWorktreeSnapshot> {
     if (!this.store) {
-      return []
+      return { worktrees: [], platformByRepoId: new Map() }
     }
     const now = Date.now()
     if (this.resolvedWorktreeCache && this.resolvedWorktreeCache.expiresAt > now) {
-      return this.resolvedWorktreeCache.worktrees
+      return this.resolvedWorktreeCache
     }
     const generation = this.resolvedWorktreeGeneration
     if (this.resolvedWorktreeInFlight?.generation === generation) {
@@ -19705,14 +19794,22 @@ export class OrcaRuntimeService {
     }
   }
 
-  private async computeResolvedWorktrees(generation: number): Promise<ResolvedWorktree[]> {
+  private async computeResolvedWorktrees(generation: number): Promise<ResolvedWorktreeSnapshot> {
     if (!this.store) {
-      return []
+      return { worktrees: [], platformByRepoId: new Map() }
     }
     const now = Date.now()
     const metaById = this.store.getAllWorktreeMeta() ?? {}
+    const repos = this.store.getRepos()
+    const projectRuntimeByRepoId = resolveLocalProjectRuntimesForRepos(this.requireStore(), repos)
+    const platformByRepoId = new Map(
+      repos.map((repo) => [
+        repo.id,
+        getAgentLaunchPlatformForRepo(repo, projectRuntimeByRepoId.get(repo.id))
+      ])
+    )
     const perRepoWorktrees = await Promise.all(
-      this.store.getRepos().map(async (repo) => {
+      repos.map(async (repo) => {
         if (isFolderRepo(repo)) {
           return listRuntimeFolderWorkspaces(this.requireStore(), repo).map((worktree) => ({
             ...worktree,
@@ -19733,7 +19830,7 @@ export class OrcaRuntimeService {
         // Why: mobile startup RPCs share this path. A slow repo scan should
         // degrade one repo's metadata, not block all terminal/session loading.
         const scan = await withTimeout(
-          this.listRepoWorktreesForResolution(repo),
+          this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId),
           RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
           { ok: false, worktrees: [] }
         )
@@ -19776,10 +19873,11 @@ export class OrcaRuntimeService {
     if (generation === this.resolvedWorktreeGeneration) {
       this.resolvedWorktreeCache = {
         worktrees,
+        platformByRepoId,
         expiresAt: now + RESOLVED_WORKTREE_CACHE_TTL_MS
       }
     }
-    return worktrees
+    return { worktrees, platformByRepoId }
   }
 
   private attachLineageToResolvedWorktrees(worktrees: ResolvedWorktree[]): ResolvedWorktree[] {
@@ -19864,13 +19962,19 @@ export class OrcaRuntimeService {
     }
   }
 
-  private async listRepoWorktreesForResolution(repo: Repo): Promise<RuntimeWorktreeScanResult> {
+  private async listRepoWorktreesForResolution(
+    repo: Repo,
+    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
+  ): Promise<RuntimeWorktreeScanResult> {
     if (!repo.connectionId) {
+      const projectRuntime = projectRuntimeByRepoId
+        ? projectRuntimeByRepoId.get(repo.id)
+        : resolveLocalProjectRuntimeForRepo(this.requireStore(), repo)
       return {
         ok: true,
         worktrees: await listRepoWorktrees(
           repo,
-          getLocalProjectWorktreeGitOptions(this.requireStore(), repo)
+          getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
         )
       }
     }
@@ -20191,23 +20295,34 @@ export class OrcaRuntimeService {
 
   private getSummaryForRuntimeWorktreeId(
     summaries: Map<string, RuntimeWorktreePsSummary>,
-    resolvedWorktrees: ResolvedWorktree[],
+    runtimeWorktreeSummaryPathIndex: RuntimeWorktreeSummaryPathIndex,
+    missingRuntimeWorktreeIds: Set<string>,
     runtimeWorktreeId: string
   ): RuntimeWorktreePsSummary | null {
     const exact = summaries.get(runtimeWorktreeId)
     if (exact) {
       return exact
     }
+    if (missingRuntimeWorktreeIds.has(runtimeWorktreeId)) {
+      return null
+    }
     const parsed = parseRuntimeWorktreeId(runtimeWorktreeId)
     if (!parsed) {
       return null
     }
-    const resolved = resolvedWorktrees.find(
-      (worktree) =>
-        worktree.repoId === parsed.repoId &&
-        areWorktreePathsEqual(worktree.path, parsed.worktreePath)
+    const comparisonPlatform =
+      runtimeWorktreeSummaryPathIndex.platformByRepoId.get(parsed.repoId) ?? process.platform
+    const indexed = findRuntimeWorktreeSummaryByPath(
+      runtimeWorktreeSummaryPathIndex,
+      parsed.repoId,
+      parsed.worktreePath,
+      comparisonPlatform
     )
-    return resolved ? (summaries.get(resolved.id) ?? null) : null
+    if (indexed) {
+      return indexed
+    }
+    missingRuntimeWorktreeIds.add(runtimeWorktreeId)
+    return null
   }
 
   private buildTerminalSummary(
@@ -26389,6 +26504,118 @@ function parseRuntimeWorktreeId(
   return parsed
 }
 
+type RuntimeWorktreeSummaryPathCandidate = {
+  summary: RuntimeWorktreePsSummary
+  order: number
+}
+
+type RuntimeWorktreeSummaryPathIndex = {
+  platformByRepoId: ReadonlyMap<string, NodeJS.Platform>
+  posixAbsolute: Map<string, RuntimeWorktreeSummaryPathCandidate>
+  posixRelative: Map<string, RuntimeWorktreeSummaryPathCandidate>
+  windows: Map<string, RuntimeWorktreeSummaryPathCandidate>
+  windowsAbsolute: Map<string, RuntimeWorktreeSummaryPathCandidate>
+}
+
+function buildRuntimeWorktreeSummaryPathIndex(
+  summaries: ReadonlyMap<string, RuntimeWorktreePsSummary>,
+  resolvedWorktrees: readonly ResolvedWorktree[],
+  platformByRepoId: ReadonlyMap<string, NodeJS.Platform>
+): RuntimeWorktreeSummaryPathIndex {
+  const index: RuntimeWorktreeSummaryPathIndex = {
+    platformByRepoId,
+    posixAbsolute: new Map(),
+    posixRelative: new Map(),
+    windows: new Map(),
+    windowsAbsolute: new Map()
+  }
+  for (const [order, worktree] of resolvedWorktrees.entries()) {
+    const summary = summaries.get(worktree.id)
+    if (!summary) {
+      continue
+    }
+    const platform = platformByRepoId.get(worktree.repoId) ?? process.platform
+    const candidate = { summary, order }
+    if (isPosixAbsoluteRuntimeWorktreePath(worktree.path)) {
+      setFirstRuntimeWorktreePathCandidate(
+        index.posixAbsolute,
+        runtimeWorktreeSummaryPathKey(worktree.repoId, worktree.path, platform),
+        candidate
+      )
+      continue
+    }
+
+    const windowsKey = runtimeWorktreeSummaryPathKey(worktree.repoId, worktree.path, 'win32')
+    setFirstRuntimeWorktreePathCandidate(index.windows, windowsKey, candidate)
+    if (isWindowsAbsolutePathLike(worktree.path)) {
+      setFirstRuntimeWorktreePathCandidate(index.windowsAbsolute, windowsKey, candidate)
+    } else if (platform !== 'win32') {
+      setFirstRuntimeWorktreePathCandidate(
+        index.posixRelative,
+        runtimeWorktreeSummaryPathKey(worktree.repoId, worktree.path, platform),
+        candidate
+      )
+    }
+  }
+  return index
+}
+
+function findRuntimeWorktreeSummaryByPath(
+  index: RuntimeWorktreeSummaryPathIndex,
+  repoId: string,
+  worktreePath: string,
+  platform: NodeJS.Platform
+): RuntimeWorktreePsSummary | null {
+  if (isPosixAbsoluteRuntimeWorktreePath(worktreePath)) {
+    return (
+      index.posixAbsolute.get(runtimeWorktreeSummaryPathKey(repoId, worktreePath, platform))
+        ?.summary ?? null
+    )
+  }
+
+  const windowsKey = runtimeWorktreeSummaryPathKey(repoId, worktreePath, 'win32')
+  if (platform === 'win32' || isWindowsAbsolutePathLike(worktreePath)) {
+    return index.windows.get(windowsKey)?.summary ?? null
+  }
+
+  const posixCandidate = index.posixRelative.get(
+    runtimeWorktreeSummaryPathKey(repoId, worktreePath, platform)
+  )
+  const windowsCandidate = index.windowsAbsolute.get(windowsKey)
+  // Why: a malformed relative path can compare as POSIX against another
+  // relative path or as Windows against an absolute Windows path. Preserve the
+  // old pairwise scan's first-match result without rescanning every worktree.
+  if (!posixCandidate) {
+    return windowsCandidate?.summary ?? null
+  }
+  if (!windowsCandidate || posixCandidate.order < windowsCandidate.order) {
+    return posixCandidate.summary
+  }
+  return windowsCandidate.summary
+}
+
+function setFirstRuntimeWorktreePathCandidate(
+  candidates: Map<string, RuntimeWorktreeSummaryPathCandidate>,
+  key: string,
+  candidate: RuntimeWorktreeSummaryPathCandidate
+): void {
+  if (!candidates.has(key)) {
+    candidates.set(key, candidate)
+  }
+}
+
+function isPosixAbsoluteRuntimeWorktreePath(worktreePath: string): boolean {
+  return worktreePath.startsWith('/') && !worktreePath.startsWith('//')
+}
+
+function runtimeWorktreeSummaryPathKey(
+  repoId: string,
+  worktreePath: string,
+  platform: NodeJS.Platform
+): string {
+  return `${repoId}\0${worktreePathComparisonKey(worktreePath, platform)}`
+}
+
 function includeTargetResolvedWorktree(
   resolvedWorktrees: ResolvedWorktree[],
   targetWorktree: ResolvedWorktree | null
@@ -26668,6 +26895,11 @@ function compareWorktreePs(
   }
   if (left.unread !== right.unread) {
     return left.unread ? -1 : 1
+  }
+  // Why: worktree.ps is truncated for mobile, so host-visible activity must
+  // survive ahead of ordinary inactive rows without displacing pinned/unread.
+  if (left.hasHostSidebarActivity !== right.hasHostSidebarActivity) {
+    return left.hasHostSidebarActivity ? -1 : 1
   }
   const leftLast = left.lastOutputAt ?? -1
   const rightLast = right.lastOutputAt ?? -1

@@ -8,7 +8,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
 import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, win32 } from 'node:path'
 import { ipcMain } from 'electron'
 import type {
   FolderWorkspace,
@@ -75,6 +75,7 @@ import {
   unregisterSshFilesystemProvider
 } from '../providers/ssh-filesystem-dispatch'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
+import * as worktreePathComparison from '../ipc/worktree-path-comparison'
 import * as localWorktreeFilesystem from '../local-worktree-filesystem'
 import {
   DEFAULT_REPO_BADGE_COLOR,
@@ -21693,25 +21694,41 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  it('reports the resolved terminal platform for WSL project mobile summaries', async () => {
+  it('resolves WSL platforms only for repos represented in mobile summaries', async () => {
     await withPlatform('win32', async () => {
+      const primaryRepo = store.getRepos()[0]!
+      let repos = [
+        primaryRepo,
+        ...Array.from({ length: 100 }, (_, index) => ({
+          ...primaryRepo,
+          id: `repo-represented-${index}`,
+          path: `C:\\repo-represented-${index}`,
+          displayName: `repo-represented-${index}`
+        }))
+      ]
+      const getProjects = vi.fn(() =>
+        repos.slice(0, 101).map((repo, index) => ({
+          id: `project-${index}`,
+          displayName: repo.displayName,
+          badgeColor: 'blue',
+          sourceRepoIds: [repo.id],
+          localWindowsRuntimePreference:
+            index === 0
+              ? ({ kind: 'wsl' as const, distro: 'Ubuntu' } as const)
+              : ({ kind: 'windows-host' as const } as const),
+          createdAt: 0,
+          updatedAt: 0
+        }))
+      )
+      const getSettings = vi.fn(() => ({
+        ...store.getSettings(),
+        localWindowsRuntimeDefault: { kind: 'windows-host' as const }
+      }))
       const runtime = new OrcaRuntimeService({
         ...store,
-        getProjects: () => [
-          {
-            id: 'project-1',
-            displayName: 'repo',
-            badgeColor: 'blue',
-            sourceRepoIds: [TEST_REPO_ID],
-            localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' },
-            createdAt: 0,
-            updatedAt: 0
-          }
-        ],
-        getSettings: () => ({
-          ...store.getSettings(),
-          localWindowsRuntimeDefault: { kind: 'windows-host' }
-        })
+        getRepos: () => repos,
+        getProjects,
+        getSettings
       } as never)
 
       const { worktrees } = await runtime.getWorktreePs()
@@ -21720,6 +21737,70 @@ describe('OrcaRuntimeService', () => {
         repoId: TEST_REPO_ID,
         terminalPlatform: 'linux'
       })
+      expect(getProjects).toHaveBeenCalledTimes(1)
+      expect(getSettings).toHaveBeenCalledTimes(2)
+      getProjects.mockClear()
+      getSettings.mockClear()
+      repos = [
+        ...repos,
+        ...Array.from({ length: 2_000 }, (_, index) => ({
+          ...repos[0]!,
+          id: `repo-unresolved-${index}`,
+          path: `C:\\repo-unresolved-${index}`,
+          displayName: `repo-unresolved-${index}`
+        }))
+      ]
+
+      await runtime.getWorktreePs()
+
+      // Why: the cache already owns the batch-resolved platforms for its 101
+      // worktree repos; newly persisted repos must not trigger another scan.
+      expect(getProjects).not.toHaveBeenCalled()
+      expect(getSettings).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('keeps each worktree poll paired with its platform generation', async () => {
+    await withPlatform('win32', async () => {
+      let runtimePreference: { kind: 'wsl'; distro: string } | { kind: 'windows-host' } = {
+        kind: 'wsl',
+        distro: 'Ubuntu'
+      }
+      const runtimeStore = {
+        ...store,
+        getProjects: () => [
+          {
+            id: 'project-generation',
+            displayName: 'generation',
+            badgeColor: 'blue',
+            sourceRepoIds: [TEST_REPO_ID],
+            localWindowsRuntimePreference: runtimePreference,
+            createdAt: 0,
+            updatedAt: 0
+          }
+        ],
+        getSettings: () => ({
+          ...store.getSettings(),
+          localWindowsRuntimeDefault: { kind: 'windows-host' as const }
+        })
+      }
+      const staleScan = deferred<typeof MOCK_GIT_WORKTREES>()
+      vi.mocked(listWorktrees)
+        .mockImplementationOnce(() => staleScan.promise)
+        .mockResolvedValueOnce(MOCK_GIT_WORKTREES)
+      const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+      const stalePoll = runtime.getWorktreePs()
+      runtimePreference = { kind: 'windows-host' }
+      runtime.notifyBranchRenamed(TEST_REPO_ID)
+      const freshPoll = await runtime.getWorktreePs()
+      staleScan.resolve(MOCK_GIT_WORKTREES)
+      const staleResult = await stalePoll
+
+      // Why: invalidation can let a newer scan finish first. Each result must
+      // retain the platform map computed with its own worktree generation.
+      expect(staleResult.worktrees[0]).toMatchObject({ terminalPlatform: 'linux' })
+      expect(freshPoll.worktrees[0]).toMatchObject({ terminalPlatform: 'win32' })
     })
   })
 
@@ -21869,6 +21950,7 @@ describe('OrcaRuntimeService', () => {
     // worktree.ps reads the hook snapshot so mobile surfaces those agents too.
     const leafId = '33333333-3333-4333-8333-333333333333'
     const paneKey = `tab-1:${leafId}`
+    const now = Date.now()
     const runtime = new OrcaRuntimeService(store, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -21880,8 +21962,8 @@ describe('OrcaRuntimeService', () => {
           agentType: 'claude',
           lastAssistantMessage: 'on it',
           connectionId: null,
-          receivedAt: 1000,
-          stateStartedAt: 900
+          receivedAt: now,
+          stateStartedAt: now - 100
         }
       ]
     })
@@ -21939,11 +22021,170 @@ describe('OrcaRuntimeService', () => {
         taskTitle: 'Dispatch prompt work',
         displayName: 'Review dispatch prompts and make worker labels distinct',
         lastAssistantMessage: 'on it',
-        stateStartedAt: 900,
-        updatedAt: 1000
+        stateStartedAt: now - 100,
+        updatedAt: now
       })
     ])
+    expect(summary).toMatchObject({ hasHostSidebarActivity: true, status: 'working' })
   })
+
+  it('uses mirrored tab ownership after a workspace rename instead of stale hook attribution', async () => {
+    const renamedPath = '/tmp/worktree-renamed'
+    const renamedWorktreeId = `${TEST_REPO_ID}::${renamedPath}`
+    vi.mocked(listWorktrees).mockResolvedValue([
+      ...MOCK_GIT_WORKTREES,
+      {
+        path: renamedPath,
+        head: 'def',
+        branch: 'feature/renamed',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    const metaById = {
+      ...store.getAllWorktreeMeta(),
+      [renamedWorktreeId]: makeWorktreeMeta({ displayName: 'renamed' })
+    }
+    const session = makeWorkspaceSessionWithHeadlessTerminal({
+      activeWorktreeId: renamedWorktreeId,
+      activeTabIdByWorktree: { [renamedWorktreeId]: 'host-tab' },
+      tabsByWorktree: {
+        [renamedWorktreeId]: [
+          {
+            id: 'host-tab',
+            ptyId: null,
+            worktreeId: renamedWorktreeId,
+            title: 'Codex',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
+    })
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      getWorkspaceSession: () => session
+    }
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: `host-tab:${HEADLESS_LEAF_ID}`,
+          worktreeId: TEST_WORKTREE_ID,
+          state: 'working',
+          prompt: 'continue after rename',
+          agentType: 'codex',
+          connectionId: null,
+          receivedAt: now,
+          stateStartedAt: now - 100
+        }
+      ]
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const oldSummary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+    const renamedSummary = worktrees.find((worktree) => worktree.worktreeId === renamedWorktreeId)
+
+    expect(oldSummary?.agents).toEqual([])
+    expect(renamedSummary).toMatchObject({
+      hasHostSidebarActivity: true,
+      status: 'working',
+      agents: [expect.objectContaining({ prompt: 'continue after rename' })]
+    })
+  })
+
+  it('keeps a fresh OSC row when the cached hook row for the same pane is older', async () => {
+    const now = Date.now()
+    const leafId = '44444444-4444-4444-8444-444444444444'
+    const paneKey = `tab-1:${leafId}`
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey,
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'tab-1',
+          state: 'working',
+          prompt: 'stale hook row',
+          agentType: 'claude',
+          connectionId: null,
+          receivedAt: now - AGENT_STATUS_STALE_AFTER_MS - 1,
+          stateStartedAt: now - AGENT_STATUS_STALE_AFTER_MS - 100
+        }
+      ]
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Codex',
+          activeLeafId: leafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        }
+      ]
+    })
+    runtime.onPtyData(
+      'pty-1',
+      '\x1b]9999;{"state":"working","prompt":"fresh OSC row","agentType":"codex"}\x07',
+      321
+    )
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary).toMatchObject({ hasHostSidebarActivity: true, status: 'working' })
+    expect(summary?.agents).toEqual([
+      expect.objectContaining({ paneKey, prompt: 'fresh OSC row', agentType: 'codex' })
+    ])
+  })
+
+  it.each([
+    ['blocked', 0, true, 'permission'],
+    ['waiting', 0, true, 'permission'],
+    ['done', 0, false, 'inactive'],
+    ['working', -AGENT_STATUS_STALE_AFTER_MS - 1, false, 'inactive']
+  ] as const)(
+    'projects %s agent activity to mobile at freshness offset %s',
+    async (state, updatedAtOffset, hasHostSidebarActivity, status) => {
+      const now = Date.now()
+      const runtime = new OrcaRuntimeService(store, undefined, {
+        getAgentStatusSnapshot: () => [
+          {
+            paneKey: 'tab-1:33333333-3333-4333-8333-333333333333',
+            worktreeId: TEST_WORKTREE_ID,
+            tabId: 'tab-1',
+            state,
+            prompt: 'mobile parity',
+            agentType: 'codex',
+            connectionId: null,
+            receivedAt: now + updatedAtOffset,
+            stateStartedAt: now - 100
+          }
+        ]
+      })
+
+      const { worktrees } = await runtime.getWorktreePs()
+
+      expect(worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)).toMatchObject({
+        hasHostSidebarActivity,
+        status
+      })
+    }
+  )
 
   it('marks the desktop-active worktree as isActive', async () => {
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
@@ -21978,10 +22219,11 @@ describe('OrcaRuntimeService', () => {
         displayName: 'Remote mobile'
       })
     }
+    const getRepo = vi.fn((id: string) => (id === remoteRepo.id ? remoteRepo : undefined))
     const runtimeStore = {
       ...store,
       getRepos: () => [remoteRepo],
-      getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
+      getRepo,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
@@ -21993,8 +22235,28 @@ describe('OrcaRuntimeService', () => {
       listWorktrees: vi.fn().mockResolvedValue([remoteWorktree])
     } as never)
 
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getAgentStatusSnapshot: () =>
+        Array.from({ length: 100 }, (_, index) => ({
+          paneKey: `remote-tab:${String(index).padStart(8, '0')}-5555-4555-8555-555555555555`,
+          worktreeId: `${remoteRepo.id}::${remoteWorktree.path}/`,
+          tabId: 'remote-tab',
+          state: 'working',
+          prompt: 'remote agent without a PTY',
+          agentType: 'codex',
+          connectionId: 'ssh-1',
+          receivedAt: now,
+          stateStartedAt: now - 100
+        }))
+    })
     const summaries = await runtime.getWorktreePs()
+
+    // Why: worktree.ps is polled; equal keys prove projected rows can share the
+    // per-request index instead of repeating compatibility path scans.
+    expect(worktreePathComparison.worktreePathComparisonKey(remoteWorktree.path, 'linux')).toBe(
+      worktreePathComparison.worktreePathComparisonKey(`${remoteWorktree.path}/`, 'linux')
+    )
 
     expect(summaries.worktrees).toEqual([
       expect.objectContaining({
@@ -22002,9 +22264,430 @@ describe('OrcaRuntimeService', () => {
         repoId: remoteRepo.id,
         repo: 'remote-vm',
         path: remoteWorktree.path,
-        displayName: 'Remote mobile'
+        displayName: 'Remote mobile',
+        hasHostSidebarActivity: true,
+        status: 'working',
+        agents: expect.arrayContaining([
+          expect.objectContaining({
+            prompt: 'remote agent without a PTY',
+            agentType: 'codex'
+          })
+        ])
       })
     ])
+    expect(summaries.worktrees[0]?.agents).toHaveLength(100)
+    expect(getRepo).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['relative', 'project', 'feature\\name', 'feature/name', 'feature\\name', true],
+    [
+      'absolute',
+      'C:\\remote',
+      '/remote/feature\\name',
+      '/remote/feature/name',
+      '/remote/feature\\name',
+      true
+    ],
+    ['Windows SSH alias', 'C:\\remote', 'feature\\name', 'feature/name', 'feature/name', false]
+  ] as const)(
+    'handles %s worktree paths when projecting mobile agents',
+    async (_kind, repoPath, backslashPath, slashPath, projectedPath, includeSlashWorktree) => {
+      setPlatform('win32')
+      const remoteRepo = {
+        id: 'repo-relative-ssh',
+        path: repoPath,
+        displayName: 'relative-vm',
+        badgeColor: 'blue',
+        addedAt: 1,
+        connectionId: 'ssh-relative'
+      }
+      const backslashWorktree = {
+        path: backslashPath,
+        head: 'abc',
+        branch: 'refs/heads/backslash',
+        isBare: false,
+        isMainWorktree: false
+      }
+      const slashWorktree = {
+        ...backslashWorktree,
+        path: slashPath,
+        branch: 'refs/heads/slash'
+      }
+      const runtimeStore = {
+        ...store,
+        getRepos: () => [remoteRepo],
+        getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
+        getAllWorktreeMeta: () => ({}),
+        getWorktreeMeta: () => undefined
+      }
+      registerSshGitProvider('ssh-relative', {
+        listWorktrees: vi
+          .fn()
+          .mockResolvedValue(
+            includeSlashWorktree ? [backslashWorktree, slashWorktree] : [backslashWorktree]
+          )
+      } as never)
+
+      const now = Date.now()
+      const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+        getAgentStatusSnapshot: () =>
+          Array.from({ length: 100 }, (_, index) => ({
+            paneKey: `relative-tab:${String(index).padStart(8, '0')}-5555-4555-8555-555555555555`,
+            worktreeId: `${remoteRepo.id}::${projectedPath}/`,
+            tabId: 'relative-tab',
+            state: 'working',
+            prompt: 'relative path agent',
+            agentType: 'codex',
+            connectionId: 'ssh-relative',
+            receivedAt: now,
+            stateStartedAt: now - 100
+          }))
+      })
+
+      const summaries = await runtime.getWorktreePs()
+      const backslashSummary = summaries.worktrees.find(
+        (worktree) => worktree.path === backslashWorktree.path
+      )
+      const slashSummary = summaries.worktrees.find(
+        (worktree) => worktree.path === slashWorktree.path
+      )
+
+      expect(backslashSummary).toMatchObject({ hasHostSidebarActivity: true, status: 'working' })
+      expect(backslashSummary?.agents).toHaveLength(100)
+      expect(slashSummary?.agents).toEqual(includeSlashWorktree ? [] : undefined)
+      const comparisonPlatform = repoPath.startsWith('C:') ? 'win32' : 'linux'
+      const backslashKey = worktreePathComparison.worktreePathComparisonKey(
+        backslashPath,
+        comparisonPlatform
+      )
+      const slashKey = worktreePathComparison.worktreePathComparisonKey(
+        slashPath,
+        comparisonPlatform
+      )
+      expect(backslashKey === slashKey).toBe(!includeSlashWorktree)
+    }
+  )
+
+  it('projects 100 distinct pair-aware paths without rescanning the worktree list', async () => {
+    const remoteRepo = {
+      id: 'repo-pair-aware-scale',
+      path: '/remote',
+      displayName: 'pair-aware-scale-vm',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-pair-aware-scale'
+    }
+    let pathReadCount = 0
+    const remoteWorktrees = Array.from({ length: 100 }, (_, index) => {
+      const path = `C:relative\\feature-${String(index).padStart(3, '0')}`
+      return {
+        get path() {
+          pathReadCount += 1
+          return path
+        },
+        head: `head-${index}`,
+        branch: `refs/heads/feature-${index}`,
+        isBare: false,
+        isMainWorktree: false
+      }
+    })
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [remoteRepo],
+      getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
+      getAllWorktreeMeta: () => ({}),
+      getWorktreeMeta: () => undefined
+    }
+    registerSshGitProvider('ssh-pair-aware-scale', {
+      listWorktrees: vi.fn().mockResolvedValue(remoteWorktrees)
+    } as never)
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getAgentStatusSnapshot: () =>
+        remoteWorktrees.map((worktree, index) => ({
+          paneKey: `pair-aware-tab:${String(index).padStart(8, '0')}-9999-4999-8999-999999999999`,
+          worktreeId: `${remoteRepo.id}::${win32.resolve(worktree.path)}`,
+          tabId: 'pair-aware-tab',
+          state: 'working' as const,
+          prompt: `pair-aware agent ${index}`,
+          agentType: 'codex',
+          connectionId: 'ssh-pair-aware-scale',
+          receivedAt: now,
+          stateStartedAt: now - 100
+        }))
+    })
+
+    const summaries = await runtime.getWorktreePs()
+
+    expect(summaries.worktrees).toHaveLength(100)
+    expect(summaries.worktrees.every((worktree) => worktree.agents?.length === 1)).toBe(true)
+    // Why: property reads make the scaling assertion mutation-sensitive without
+    // relying on a wall-clock threshold that varies across CI machines.
+    expect(pathReadCount).toBeLessThan(2_000)
+  })
+
+  it('bounds 2000 distinct malformed path misses per mobile poll', async () => {
+    const remoteRepo = {
+      id: 'repo-malformed-scale',
+      path: '/remote',
+      displayName: 'malformed-scale-vm',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-malformed-scale'
+    }
+    let pathReadCount = 0
+    const remoteWorktrees = Array.from({ length: 2_000 }, (_, index) => {
+      const path = `/remote/worktree-${String(index).padStart(4, '0')}`
+      return {
+        get path() {
+          pathReadCount += 1
+          return path
+        },
+        head: `head-${index}`,
+        branch: `refs/heads/worktree-${index}`,
+        isBare: false,
+        isMainWorktree: false
+      }
+    })
+    const getRepo = vi.fn((id: string) => (id === remoteRepo.id ? remoteRepo : undefined))
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [remoteRepo],
+      getRepo,
+      getAllWorktreeMeta: () => ({}),
+      getWorktreeMeta: () => undefined
+    }
+    registerSshGitProvider('ssh-malformed-scale', {
+      listWorktrees: vi.fn().mockResolvedValue(remoteWorktrees)
+    } as never)
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getAgentStatusSnapshot: () =>
+        Array.from({ length: 2_000 }, (_, index) => ({
+          paneKey: `malformed-tab:${String(index).padStart(8, '0')}-aaaa-4aaa-8aaa-aaaaaaaaaaaa`,
+          worktreeId: `${remoteRepo.id}::relative/./missing-${String(index).padStart(4, '0')}\\leaf`,
+          tabId: 'malformed-tab',
+          state: 'working' as const,
+          prompt: `missing agent ${index}`,
+          agentType: 'codex',
+          connectionId: 'ssh-malformed-scale',
+          receivedAt: now,
+          stateStartedAt: now - 100
+        }))
+    })
+
+    const summaries = await runtime.getWorktreePs()
+
+    expect(summaries).toMatchObject({ totalCount: 2_000, truncated: true })
+    expect(summaries.worktrees.every((worktree) => worktree.agents?.length === 0)).toBe(true)
+    expect(getRepo).toHaveBeenCalledTimes(remoteWorktrees.length)
+    // Why: the prior fallback read every worktree path for every distinct miss,
+    // exceeding the three-second worktree.ps polling interval at this scale.
+    expect(pathReadCount).toBeLessThan(40_000)
+  })
+
+  it('caches repeated malformed path misses before normalizing them again', async () => {
+    const remoteRepo = {
+      id: 'repo-repeated-miss',
+      path: '/remote',
+      displayName: 'repeated-miss-vm',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-repeated-miss'
+    }
+    const remoteWorktree = {
+      path: '/remote/existing',
+      head: 'head-existing',
+      branch: 'refs/heads/existing',
+      isBare: false,
+      isMainWorktree: false
+    }
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [remoteRepo],
+      getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
+      getAllWorktreeMeta: () => ({}),
+      getWorktreeMeta: () => undefined
+    }
+    registerSshGitProvider('ssh-repeated-miss', {
+      listWorktrees: vi.fn().mockResolvedValue([remoteWorktree])
+    } as never)
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getAgentStatusSnapshot: () =>
+        Array.from({ length: 2_000 }, (_, index) => ({
+          paneKey: `repeated-miss-tab:${String(index).padStart(8, '0')}-bbbb-4bbb-8bbb-bbbbbbbbbbbb`,
+          worktreeId: `${remoteRepo.id}::relative/./missing\\leaf`,
+          tabId: 'repeated-miss-tab',
+          state: 'working' as const,
+          prompt: `repeated missing agent ${index}`,
+          agentType: 'codex',
+          connectionId: 'ssh-repeated-miss',
+          receivedAt: now,
+          stateStartedAt: now - 100
+        }))
+    })
+    const cwdSpy = vi.spyOn(process, 'cwd')
+
+    try {
+      const summaries = await runtime.getWorktreePs()
+
+      expect(summaries.worktrees[0]?.agents).toEqual([])
+      // Why: resolving a relative comparison key consults cwd. A raw miss must
+      // do that once per poll, not once for every agent row carrying the ID.
+      expect(cwdSpy.mock.calls.length).toBeLessThan(50)
+    } finally {
+      cwdSpy.mockRestore()
+    }
+  })
+
+  it('keeps no-PTY agent worktrees in the truncated mobile summary', async () => {
+    const remoteRepo = {
+      id: 'repo-truncated-ssh',
+      path: '/remote',
+      displayName: 'truncated-vm',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-truncated'
+    }
+    const targetPath = '/remote/zzz-live-agent'
+    const remoteWorktrees = [
+      ...Array.from({ length: 200 }, (_, index) => ({
+        path: `/remote/inactive-${String(index).padStart(3, '0')}`,
+        head: `head-${index}`,
+        branch: `refs/heads/inactive-${index}`,
+        isBare: false,
+        isMainWorktree: false
+      })),
+      {
+        path: targetPath,
+        head: 'live-agent',
+        branch: 'refs/heads/live-agent',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [remoteRepo],
+      getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
+      getAllWorktreeMeta: () => ({}),
+      getWorktreeMeta: () => undefined
+    }
+    registerSshGitProvider('ssh-truncated', {
+      listWorktrees: vi.fn().mockResolvedValue(remoteWorktrees)
+    } as never)
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: 'truncated-tab:77777777-7777-4777-8777-777777777777',
+          worktreeId: `${remoteRepo.id}::${targetPath}/`,
+          tabId: 'truncated-tab',
+          state: 'working',
+          prompt: 'live beyond the default limit',
+          agentType: 'codex',
+          connectionId: 'ssh-truncated',
+          receivedAt: now,
+          stateStartedAt: now - 100
+        }
+      ]
+    })
+
+    const summaries = await runtime.getWorktreePs()
+    const target = summaries.worktrees.find((worktree) => worktree.path === targetPath)
+
+    expect(summaries).toMatchObject({ totalCount: 201, truncated: true })
+    expect(summaries.worktrees).toHaveLength(200)
+    expect(target).toMatchObject({ hasHostSidebarActivity: true, status: 'working' })
+    expect(target?.agents).toHaveLength(1)
+  })
+
+  it('keeps pinned and unread worktrees when active rows fill the mobile summary limit', async () => {
+    setPlatform('win32')
+    const remoteRepo = {
+      id: 'repo-pinned-limit',
+      path: '/remote',
+      displayName: 'pinned-limit-vm',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-pinned-limit'
+    }
+    const activeWorktrees = Array.from({ length: 199 }, (_, index) => ({
+      path: `relative/active-${String(index).padStart(3, '0')}`,
+      head: `head-${index}`,
+      branch: `refs/heads/active-${index}`,
+      isBare: false,
+      isMainWorktree: false
+    }))
+    const pinnedPath = 'relative/zzz-pinned'
+    const pinnedWorktree = {
+      path: pinnedPath,
+      head: 'pinned',
+      branch: 'refs/heads/pinned',
+      isBare: false,
+      isMainWorktree: false
+    }
+    const unreadPath = 'relative/zzz-unread'
+    const unreadWorktree = {
+      ...pinnedWorktree,
+      path: unreadPath,
+      head: 'unread',
+      branch: 'refs/heads/unread'
+    }
+    const pinnedId = `${remoteRepo.id}::${pinnedPath}`
+    const unreadId = `${remoteRepo.id}::${unreadPath}`
+    const metaById: Record<string, WorktreeMeta> = {
+      [pinnedId]: makeWorktreeMeta({ isPinned: true }),
+      [unreadId]: makeWorktreeMeta({ isUnread: true })
+    }
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [remoteRepo],
+      getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId]
+    }
+    registerSshGitProvider('ssh-pinned-limit', {
+      listWorktrees: vi.fn().mockResolvedValue([...activeWorktrees, pinnedWorktree, unreadWorktree])
+    } as never)
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getAgentStatusSnapshot: () =>
+        activeWorktrees.map((worktree, index) => ({
+          paneKey: `active-tab:${String(index).padStart(8, '0')}-8888-4888-8888-888888888888`,
+          worktreeId: `${remoteRepo.id}::${worktree.path.replace('relative/', 'relative/./')}`,
+          tabId: 'active-tab',
+          state: 'working' as const,
+          prompt: 'active row',
+          agentType: 'codex',
+          connectionId: 'ssh-pinned-limit',
+          receivedAt: now,
+          stateStartedAt: now - 100
+        }))
+    })
+
+    const summaries = await runtime.getWorktreePs()
+
+    expect(summaries).toMatchObject({ totalCount: 201, truncated: true })
+    expect(summaries.worktrees).toHaveLength(200)
+    expect(summaries.worktrees.find((worktree) => worktree.worktreeId === pinnedId)).toMatchObject({
+      isPinned: true,
+      hasHostSidebarActivity: false
+    })
+    expect(summaries.worktrees.find((worktree) => worktree.worktreeId === unreadId)).toMatchObject({
+      unread: true,
+      hasHostSidebarActivity: false
+    })
+    expect(
+      worktreePathComparison.worktreePathComparisonKey(activeWorktrees[0]!.path, 'linux')
+    ).toBe(
+      worktreePathComparison.worktreePathComparisonKey(
+        activeWorktrees[0]!.path.replace('relative/', 'relative/./'),
+        'linux'
+      )
+    )
   })
 
   it('clears stale working status after the agent exits and the shell takes over the title', async () => {

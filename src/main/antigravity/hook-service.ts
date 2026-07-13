@@ -14,6 +14,7 @@ import {
   readHooksJson,
   removeManagedCommands,
   wrapPosixHookCommand,
+  wrapWindowsCmdHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition,
@@ -24,6 +25,12 @@ import {
   writeHooksJsonRemote,
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
+import {
+  buildPosixHookPayloadCapture,
+  buildWindowsHookEnvironmentGuardLines,
+  buildWindowsHookStdinDrainEpilogue,
+  WINDOWS_HOOK_STDIN_DRAIN_COMMAND
+} from '../agent-hooks/hook-stdin-contract'
 
 const ANTIGRAVITY_HOOK_BUNDLE_NAME = 'orca-status'
 
@@ -76,7 +83,7 @@ function getWindowsWrapperScriptPath(event: AntigravityEvent): string {
 
 function getManagedCommand(scriptPath: string, event: AntigravityEvent): string {
   if (process.platform === 'win32') {
-    return getWindowsWrapperScriptPath(event)
+    return wrapWindowsCmdHookCommand(getWindowsWrapperScriptPath(event))
   }
   return wrapPosixHookCommand(scriptPath, { ORCA_ANTIGRAVITY_EVENT: event.eventName })
 }
@@ -92,11 +99,10 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       '  echo {}',
       ')',
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
-      'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0',
-      'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0',
-      'if "%ORCA_PANE_KEY%"=="" exit /b 0',
+      ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAntigravityHookPostCommand(),
       'exit /b 0',
+      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }
@@ -114,17 +120,14 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '    printf "{}\\n"',
     '    ;;',
     'esac',
+    // Why: some Antigravity events arrive without stdin but still need a
+    // status post, so the shared capture maps empty input to an object.
+    ...buildPosixHookPayloadCapture('empty-object'),
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
     '  exit 0',
-    'fi',
-    'payload=$(cat)',
-    'if [ -z "$payload" ]; then',
-    // Why: some Antigravity hook events can arrive without stdin. Still post
-    // the event name so Orca shows a status row instead of silently dropping it.
-    "  payload='{}'",
     'fi',
     // Timeout caps best-effort hook posts if the local listener stalls.
     // Why: pipe payload to curl's stdin (`payload@-`) instead of an inline
@@ -162,6 +165,9 @@ function getWindowsWrapperScript(eventName: string): string {
     ') else (',
     '  echo {}',
     ')',
+    // Why: when the shared core script is missing, this wrapper becomes the
+    // stdin owner and must finish the agent's payload write before returning.
+    WINDOWS_HOOK_STDIN_DRAIN_COMMAND,
     'exit /b 0',
     ''
   ].join('\r\n')
