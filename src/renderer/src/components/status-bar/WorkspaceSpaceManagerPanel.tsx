@@ -35,6 +35,7 @@ import type {
   WorkspaceSpaceWorktree
 } from '../../../../shared/workspace-space-types'
 import { cn } from '@/lib/utils'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { toast } from 'sonner'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '../../store'
@@ -321,9 +322,9 @@ function UpdatedMetric({
     if (scannedAt === null) {
       return
     }
-    setNow(Date.now())
-    const timer = window.setInterval(() => setNow(Date.now()), 60_000)
-    return () => window.clearInterval(timer)
+    // Pause while hidden; installWindowVisibilityInterval runs immediately on
+    // (re)start, so it also covers the initial setNow above.
+    return installWindowVisibilityInterval({ run: () => setNow(Date.now()), intervalMs: 60_000 })
   }, [scannedAt])
 
   return (
