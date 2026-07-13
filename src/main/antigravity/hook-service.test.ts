@@ -16,6 +16,7 @@ vi.mock('os', async () => {
 })
 
 import { AntigravityHookService } from './hook-service'
+import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
 
 const ANTIGRAVITY_SCRIPT_FILE_NAME =
   process.platform === 'win32' ? 'antigravity-hook.cmd' : 'antigravity-hook.sh'
@@ -165,10 +166,9 @@ describe('AntigravityHookService', () => {
         const definition = config['orca-status'][eventName][0]
         const command =
           eventName === 'PostToolUse' ? definition.hooks?.[0]?.command : definition.command
-        expect(command).toContain(wrapperFileName)
+        expect(createManagedCommandMatcher(wrapperFileName)(command)).toBe(true)
         expect(command).not.toContain('cmd /d /s /c')
         expect(command).not.toContain('ORCA_ANTIGRAVITY_EVENT')
-        expect(command).not.toContain('"')
 
         const wrapper = readFileSync(join(homeDir, '.orca', 'agent-hooks', wrapperFileName), 'utf8')
         expect(wrapper).toContain(`set "ORCA_ANTIGRAVITY_EVENT=${eventName}"`)

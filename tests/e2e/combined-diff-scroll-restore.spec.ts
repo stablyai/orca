@@ -241,6 +241,33 @@ async function waitForStableViewportAnchor(page: Page): Promise<ViewportAnchor> 
   throw new Error(`combined diff viewport anchor did not settle: ${JSON.stringify(lastAnchor)}`)
 }
 
+// Why: remounting the diff on tab switch restores scroll in several Monaco
+// layout passes, so the first settled anchor can be a mid-restore frame. Poll
+// until the anchor converges near the pre-switch offset before asserting; a
+// genuine restore miss still surfaces because the last anchor is returned on
+// timeout for the caller's assertion to fail on.
+async function waitForRestoredViewportAnchor(
+  page: Page,
+  target: ViewportAnchor,
+  tolerancePx = 80
+): Promise<ViewportAnchor> {
+  // Why: waitForStableViewportAnchor can take up to 15s; start the restoration
+  // poll after it settles so a slow first settle does not skip the 10s window.
+  let lastAnchor = await waitForStableViewportAnchor(page)
+  const startedAt = Date.now()
+  while (Date.now() - startedAt < 10_000) {
+    if (lastAnchor.key === target.key && Math.abs(lastAnchor.top - target.top) < tolerancePx) {
+      return lastAnchor
+    }
+    await page.waitForTimeout(100)
+    const anchor = await readViewportAnchor(page)
+    if (anchor) {
+      lastAnchor = anchor
+    }
+  }
+  return lastAnchor
+}
+
 async function startCombinedDiffScrollProbe(page: Page): Promise<void> {
   await page.evaluate(() => {
     type CombinedDiffScrollProbe = {
@@ -415,7 +442,7 @@ test.describe('Combined diff scroll restore', () => {
 
       await orcaPage.locator(`[data-tab-id="${diffTabId}"]`).click({ force: true })
       await expect(orcaPage.locator('.combined-diff-scroll-container')).toBeVisible()
-      const afterSwitch = await waitForStableViewportAnchor(orcaPage)
+      const afterSwitch = await waitForRestoredViewportAnchor(orcaPage, beforeSwitch)
 
       expect(afterSwitch.key).toBe(beforeSwitch.key)
       expect(Math.abs(afterSwitch.top - beforeSwitch.top)).toBeLessThan(80)

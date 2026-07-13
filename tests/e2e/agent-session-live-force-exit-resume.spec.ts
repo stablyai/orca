@@ -16,6 +16,7 @@ import {
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
+import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 
 const PROVIDER_SESSION_ID = 'e2e-live-force-exit-session'
 
@@ -41,7 +42,8 @@ type PersistedData = {
 }
 
 function dataFilePath(userDataDir: string): string {
-  return path.join(userDataDir, 'orca-data.json')
+  // Fresh sessions migrate the seeded legacy file, then persist only here.
+  return path.join(userDataDir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID, 'orca-data.json')
 }
 
 function readPersistedData(userDataDir: string): PersistedData {
@@ -165,6 +167,15 @@ test('resumes a live agent record after force-exit restart when pane PTY ownersh
     const page = firstLaunch.page
     const worktreeId = await attachRepoAndOpenTerminal(page, repoPath)
     await waitForSessionReady(page)
+    // Why: the session writer persists only once hydrationSucceeded flips (not
+    // just workspaceSessionReady) — see shouldPersistWorkspaceSession — so the
+    // record write below is a silent no-op until hydration completes.
+    await expect
+      .poll(() => page.evaluate(() => window.__store?.getState().hydrationSucceeded === true), {
+        timeout: 30_000,
+        message: 'hydrationSucceeded did not become true before persisting the live record'
+      })
+      .toBe(true)
     await waitForActiveWorktree(page)
     await ensureTerminalVisible(page)
     await waitForActiveTerminalManager(page, 30_000)
@@ -196,17 +207,36 @@ test('resumes a live agent record after force-exit restart when pane PTY ownersh
       }
     )
 
-    // Drive the product's own quit-capture path (what the 60s timer / beforeunload
-    // run) so the live record is flushed deterministically instead of racing the
-    // debounced session writer before the poll below.
+    // Exercise quit capture: origin:'quit' changes the live record, triggering the
+    // hydration-gated writer before polling persisted state.
     await page.evaluate(() => window.__store?.getState().captureAllSleepingAgentSessions())
 
-    await expect
-      .poll(() => persistedLiveRecordExists(session.userDataDir), {
-        timeout: 15_000,
-        message: 'Live sleeping-agent record was not persisted before force exit'
-      })
-      .toBe(true)
+    // Why: the record reaches disk via the debounced session writer (150ms) plus
+    // the main-process scheduleSave (up to 5s). Under CI event-loop starvation —
+    // the same shard drifts renderer timers ~1s — both stages need headroom, so
+    // poll to 30s (this suite's other readiness budget). On a miss, surface store
+    // vs disk state to separate a lost write from a merely slow flush.
+    const persistDeadline = Date.now() + 30_000
+    let persisted = false
+    while (Date.now() < persistDeadline) {
+      if (persistedLiveRecordExists(session.userDataDir)) {
+        persisted = true
+        break
+      }
+      await page.waitForTimeout(250)
+    }
+    if (!persisted) {
+      const storeRecords = await page.evaluate(
+        () => window.__store?.getState().sleepingAgentSessionsByPaneKey
+      )
+      throw new Error(
+        `Live sleeping-agent record was not persisted before force exit. store=${JSON.stringify(
+          storeRecords
+        )} disk=${JSON.stringify(
+          readPersistedData(session.userDataDir).workspaceSession?.sleepingAgentSessionsByPaneKey
+        )}`
+      )
+    }
 
     const daemonPid = readDaemonPid(session.userDataDir)
     await forceKillElectronApp(firstApp)

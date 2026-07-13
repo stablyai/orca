@@ -66,6 +66,10 @@ function getManagedTrustEntry(
   }
 }
 
+function expectedManagedCommand(scriptPath: string): string {
+  return `if [ -f '${scriptPath}' ] && [ -r '${scriptPath}' ]; then /bin/sh '${scriptPath}'; else cat >/dev/null 2>&1 || :; fi`
+}
+
 describe('Codex WSL runtime hook install', () => {
   it('plans WSL hook files with Linux command and trust paths', () => {
     const runtimeHome =
@@ -133,7 +137,7 @@ describe('Codex WSL runtime hook install', () => {
       trustConfigPath: '/old/home/hooks.json'
     }
     expect(_internals.installManagedHooksIntoWslRuntime(oldPlan).state).toBe('installed')
-    const oldCommand = `if [ -r '${oldPlan.commandScriptPath}' ]; then /bin/sh '${oldPlan.commandScriptPath}'; fi`
+    const oldCommand = expectedManagedCommand(oldPlan.commandScriptPath)
     const oldKey = computeTrustKey(getManagedTrustEntry(oldPlan, oldCommand))
 
     const newPlan = {
@@ -142,13 +146,37 @@ describe('Codex WSL runtime hook install', () => {
       trustConfigPath: '/new/home/hooks.json'
     }
     expect(_internals.installManagedHooksIntoWslRuntime(newPlan).state).toBe('installed')
-    const newCommand = `if [ -r '${newPlan.commandScriptPath}' ]; then /bin/sh '${newPlan.commandScriptPath}'; fi`
+    const newCommand = expectedManagedCommand(newPlan.commandScriptPath)
     const newKey = computeTrustKey(getManagedTrustEntry(newPlan, newCommand))
     const trustEntries = readHookTrustEntries(plan.tomlPath)
 
     expect(trustEntries.has(oldKey)).toBe(false)
     expect(trustEntries.has(newKey)).toBe(true)
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'drains stdin when the WSL runtime script is missing',
+    () => {
+      const basePlan = createTestPlan()
+      const plan = {
+        ...basePlan,
+        commandScriptPath: join(dirname(basePlan.configPath), 'missing-codex-hook.sh')
+      }
+      writeFileSync(plan.configPath, '{"hooks":{}}\n', 'utf-8')
+      writeFileSync(plan.tomlPath, '', 'utf-8')
+
+      expect(_internals.installManagedHooksIntoWslRuntime(plan).state).toBe('installed')
+      const installed = JSON.parse(readFileSync(plan.configPath, 'utf-8')) as HooksConfig
+      const command = installed.hooks.UserPromptSubmit[0]?.hooks?.[0]?.command
+      expect(command).toBe(expectedManagedCommand(plan.commandScriptPath))
+
+      const result = spawnSync('/bin/sh', ['-c', command!], {
+        input: Buffer.alloc(1_000_000, 'x')
+      })
+      expect(result.error).toBeUndefined()
+      expect(result.status).toBe(0)
+    }
+  )
 
   it('sweeps all managed WSL trust for disable or confirmed absence', () => {
     // Why: disable and confirmed absence intentionally pass []. Transient
@@ -351,9 +379,7 @@ describe('Codex WSL runtime hook install', () => {
     const installed = JSON.parse(readFileSync(plan.configPath, 'utf-8')) as HooksConfig
     expect(Object.keys(installed.hooks).sort()).toEqual([...managedEvents].sort())
     const managedCommand = installed.hooks.UserPromptSubmit[0]?.hooks?.[0]?.command
-    expect(managedCommand).toBe(
-      `if [ -r '${plan.commandScriptPath}' ]; then /bin/sh '${plan.commandScriptPath}'; fi`
-    )
+    expect(managedCommand).toBe(expectedManagedCommand(plan.commandScriptPath))
     expect(installed.hooks.UserPromptSubmit[1]?.hooks?.[0]?.command).toBe(userCommand)
     expect(readFileSync(plan.scriptPath, 'utf-8')).toContain('command -v curl.exe')
 
