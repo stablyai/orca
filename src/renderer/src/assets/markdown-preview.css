@@ -822,6 +822,36 @@
   color: rgba(0, 0, 0, 0.6);
 }
 
+/* GitHub/Obsidian callout alerts (> [!NOTE] …). Monochrome per the styleguide;
+   the one semantic accent (destructive) is reserved for warning/caution. */
+.markdown-body .md-alert {
+  margin: 0.75em 0;
+  padding: 0.5em 1em;
+  border-left: 4px solid var(--border);
+  border-radius: 0 6px 6px 0;
+  background: color-mix(in srgb, var(--foreground) 4%, transparent);
+}
+
+.markdown-body .md-alert-title {
+  margin: 0 0 0.35em;
+  font-weight: 600;
+}
+
+.markdown-body .md-alert > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body .md-alert-warning,
+.markdown-body .md-alert-caution {
+  border-left-color: var(--destructive);
+  background: color-mix(in srgb, var(--destructive) 8%, transparent);
+}
+
+.markdown-body .md-alert-warning .md-alert-title,
+.markdown-body .md-alert-caution .md-alert-title {
+  color: var(--destructive);
+}
+
 .markdown-body table {
   margin: 1em 0;
   border-collapse: collapse;
