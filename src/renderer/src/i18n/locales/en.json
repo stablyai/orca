@@ -2673,6 +2673,9 @@
             "removedTitle": "SSH host removed",
             "removedBody": "The SSH host for this workspace was removed, so it can no longer connect. Remove the workspace to clear it — remote files are left untouched.",
             "removeWorkspaceButton": "Remove workspace"
+          },
+          "TerminalJumpToBottomButton": {
+            "jumpToBottom": "Jump to bottom"
           }
         }
       },
@@ -4228,7 +4231,11 @@
           "setParentWorkspace": "Set Parent Worktree...",
           "workspaceSection": "Workspace",
           "primaryDeleteDisabled": "Primary worktree — can't be deleted. Remove the project instead.",
-          "deleteWorktree": "Delete Worktree"
+          "deleteWorktree": "Delete Worktree",
+          "enableTerminalAutoScroll": "Enable Auto-scroll",
+          "enableTerminalAutoScrollSelected": "Enable Auto-scroll for Selected Workspaces",
+          "disableTerminalAutoScroll": "Disable Auto-scroll",
+          "disableTerminalAutoScrollSelected": "Disable Auto-scroll for Selected Workspaces"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",

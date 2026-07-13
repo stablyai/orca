@@ -104,6 +104,8 @@ import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { isPaneReplaying, type ReplayingPanesRef } from './replay-guard'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
 import {
+  forgetTerminalScrollIntentStateByKey,
+  forgetTerminalScrollIntentStatesByKey,
   markTerminalPinnedViewport,
   syncTerminalScrollIntentSoon
 } from '@/lib/pane-manager/terminal-scroll-intent'
@@ -1285,6 +1287,7 @@ export function useTerminalPaneLifecycle({
         }
         const leafId = closedPane?.leafId
         if (leafId && !isDetachedToTab) {
+          forgetTerminalScrollIntentStateByKey(leafId)
           // Why: closing a pane is user-initiated teardown of this row — drop
           // (not remove) so any retained `done` snapshot for this pane is also
           // cleared and a same-frame live→gone transition cannot re-snapshot
@@ -1721,6 +1724,7 @@ export function useTerminalPaneLifecycle({
       const tabStillExists = Boolean(
         currentWorktreeTabs?.some((candidate) => candidate.id === tabId)
       )
+      const panesAtCleanup = manager.getPanes()
       unregisterRuntimeTab()
       if (resizeRaf !== null) {
         cancelAnimationFrame(resizeRaf)
@@ -1768,7 +1772,7 @@ export function useTerminalPaneLifecycle({
       captureParkedTerminalPaneCandidates(
         tabId,
         worktreeId,
-        manager.getPanes().map((capturedPane) => ({
+        panesAtCleanup.map((capturedPane) => ({
           ptyId: paneTransports.get(capturedPane.id)?.getPtyId() ?? null,
           paneId: capturedPane.id,
           leafId: capturedPane.leafId,
@@ -1805,6 +1809,11 @@ export function useTerminalPaneLifecycle({
       panePtyBindings.clear()
       paneTransports.clear()
       manager.destroy()
+      if (!tabStillExists) {
+        // Why: parking preserves durable scroll intent, but a deleted tab's
+        // leaf IDs never return and must not remain in the renderer registry.
+        forgetTerminalScrollIntentStatesByKey(panesAtCleanup.map((pane) => pane.leafId))
+      }
       releaseWebviewDragPassthrough?.()
       releaseWebviewDragPassthrough = null
       managerRef.current = null

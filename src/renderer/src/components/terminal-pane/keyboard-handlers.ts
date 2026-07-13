@@ -33,10 +33,10 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
 import { resolveTerminalInputHostPlatform } from './terminal-input-host-platform'
 import {
-  markTerminalFollowOutput,
   markTerminalPinnedViewport,
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
+import { followTerminalOutput } from './terminal-auto-scroll'
 
 export function resolveTerminalKeyboardShortcutAction(
   event: Parameters<typeof resolveTerminalShortcutAction>[0],
@@ -475,9 +475,7 @@ export function useTerminalKeyboardShortcuts({
           pane.terminal.scrollToLine(0)
           syncTerminalScrollIntentFromViewport(pane.terminal)
         } else {
-          markTerminalFollowOutput(pane.terminal)
-          pane.terminal.scrollToBottom()
-          syncTerminalScrollIntentFromViewport(pane.terminal)
+          followTerminalOutput(pane.terminal)
         }
         return
       }

@@ -335,6 +335,73 @@ describe('pane terminal output scheduler', () => {
     expect(terminal._core.refresh).not.toHaveBeenCalled()
   })
 
+  it('does not restore a stale pinned viewport after follow output while parsing', async () => {
+    const { writeTerminalOutput } = await loadScheduler()
+    const {
+      getTerminalScrollIntentKind,
+      markTerminalFollowOutput,
+      markTerminalPinnedViewport,
+      syncTerminalScrollIntentFromViewport
+    } = await import('./terminal-scroll-intent')
+    const terminal = createForegroundTerminal()
+    terminal.buffer.active.baseY = 100
+    terminal.buffer.active.viewportY = 40
+    let parseCallback: (() => void) | undefined
+    const scrollToBottom = vi.fn(() => {
+      terminal.buffer.active.viewportY = terminal.buffer.active.baseY
+    })
+    const scrollToLine = vi.fn((line: number) => {
+      terminal.buffer.active.viewportY = line
+    })
+    Object.assign(terminal, { scrollToBottom, scrollToLine })
+    terminal.write.mockImplementation((_data: string, callback?: () => void) => {
+      parseCallback = callback
+    })
+
+    markTerminalPinnedViewport(terminal)
+    writeTerminalOutput(terminal, 'delayed output', { foreground: true })
+    expect(parseCallback).toBeTypeOf('function')
+
+    markTerminalFollowOutput(terminal)
+    scrollToBottom()
+    syncTerminalScrollIntentFromViewport(terminal)
+    terminal.buffer.active.baseY = 101
+    terminal.buffer.active.viewportY = 101
+    parseCallback?.()
+
+    expect(scrollToLine).not.toHaveBeenCalled()
+    expect(terminal.buffer.active.viewportY).toBe(101)
+    expect(getTerminalScrollIntentKind(terminal)).toBe('followOutput')
+  })
+
+  it('restores the newest pinned viewport when auto-scroll is disabled while parsing', async () => {
+    const { writeTerminalOutput } = await loadScheduler()
+    const { getTerminalScrollIntentKind, markTerminalPinnedViewport } =
+      await import('./terminal-scroll-intent')
+    const terminal = createForegroundTerminal()
+    terminal.buffer.active.baseY = 100
+    terminal.buffer.active.viewportY = 100
+    let parseCallback: (() => void) | undefined
+    const scrollToLine = vi.fn((line: number) => {
+      terminal.buffer.active.viewportY = line
+    })
+    Object.assign(terminal, { scrollToLine })
+    terminal.write.mockImplementation((_data: string, callback?: () => void) => {
+      parseCallback = callback
+    })
+
+    writeTerminalOutput(terminal, 'delayed output', { foreground: true })
+    expect(parseCallback).toBeTypeOf('function')
+    markTerminalPinnedViewport(terminal)
+    terminal.buffer.active.baseY = 101
+    terminal.buffer.active.viewportY = 101
+    parseCallback?.()
+
+    expect(scrollToLine).toHaveBeenCalledWith(100)
+    expect(terminal.buffer.active.viewportY).toBe(100)
+    expect(getTerminalScrollIntentKind(terminal)).toBe('pinnedViewport')
+  })
+
   it('keeps the WebGL follow-up repair on the debounced path', async () => {
     const scheduledFrames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {

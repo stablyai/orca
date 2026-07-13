@@ -2673,6 +2673,9 @@
             "removedTitle": "Host SSH eliminado",
             "removedBody": "El host SSH de este espacio de trabajo fue eliminado, por lo que ya no puede conectarse. Elimina el espacio de trabajo para limpiarlo — los archivos remotos permanecen intactos.",
             "removeWorkspaceButton": "Eliminar espacio de trabajo"
+          },
+          "TerminalJumpToBottomButton": {
+            "jumpToBottom": "Ir al final"
           }
         }
       },
@@ -4205,7 +4208,11 @@
           "setParentWorkspace": "Establecer worktree padre...",
           "workspaceSection": "Espacio de trabajo",
           "primaryDeleteDisabled": "El worktree principal no se puede eliminar. Quita el proyecto en su lugar.",
-          "deleteWorktree": "Eliminar worktree"
+          "deleteWorktree": "Eliminar worktree",
+          "enableTerminalAutoScroll": "Activar desplazamiento automático",
+          "enableTerminalAutoScrollSelected": "Activar desplazamiento automático en los espacios seleccionados",
+          "disableTerminalAutoScroll": "Desactivar desplazamiento automático",
+          "disableTerminalAutoScrollSelected": "Desactivar desplazamiento automático en los espacios seleccionados"
         },
         "WorktreeList": {
           "d880ea0744": "Crea un grupo y mueve este proyecto a él.",

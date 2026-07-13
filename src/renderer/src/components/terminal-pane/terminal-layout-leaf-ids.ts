@@ -85,6 +85,17 @@ export function resolveRootlessTerminalLayoutLeafId(
   return boundLeafIds.length === 1 ? boundLeafIds[0] : null
 }
 
+export function collectDurableTerminalLayoutLeafIds(
+  snapshot: TerminalLayoutSnapshot | null | undefined
+): string[] {
+  const rootedLeafIds = collectLeafIdsInOrder(snapshot?.root).filter(isTerminalLeafId)
+  if (rootedLeafIds.length > 0) {
+    return [...new Set(rootedLeafIds)]
+  }
+  const rootlessLeafId = snapshot ? resolveRootlessTerminalLayoutLeafId(snapshot) : null
+  return rootlessLeafId ? [rootlessLeafId] : []
+}
+
 export function resolveTerminalLayoutActiveLeafId(opts: {
   root: TerminalPaneLayoutNode | null | undefined
   activeLeafId: string | null | undefined

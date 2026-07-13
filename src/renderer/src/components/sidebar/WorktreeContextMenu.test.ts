@@ -9,6 +9,7 @@ import {
   shouldContinueDeleteSiblingPositionRestore,
   getWorktreeParentPickerAnchor,
   getWorktreeParentPickerLabel,
+  getTerminalAutoScrollMenuLabel,
   isWorktreeParentPickerDisabled,
   selectMenuScopedMap
 } from './WorktreeContextMenu'
@@ -168,6 +169,19 @@ describe('parent picker context menu affordance', () => {
     } as HTMLElement
 
     expect(getWorktreeParentPickerAnchor(scope, 'child')).toBe(scope)
+  })
+})
+
+describe('terminal auto-scroll context menu affordance', () => {
+  it('switches between enable and disable labels for one or many workspaces', () => {
+    expect(getTerminalAutoScrollMenuLabel(false, false)).toBe('Enable Auto-scroll')
+    expect(getTerminalAutoScrollMenuLabel(true, false)).toBe('Disable Auto-scroll')
+    expect(getTerminalAutoScrollMenuLabel(false, true)).toBe(
+      'Enable Auto-scroll for Selected Workspaces'
+    )
+    expect(getTerminalAutoScrollMenuLabel(true, true)).toBe(
+      'Disable Auto-scroll for Selected Workspaces'
+    )
   })
 })
 
