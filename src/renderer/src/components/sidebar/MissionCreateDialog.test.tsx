@@ -8,7 +8,10 @@ import type { MissionCreateResult } from '../../../../shared/types'
 const mocks = vi.hoisted(() => ({
   createMission: vi.fn<(args: unknown) => Promise<MissionCreateResult | null>>(),
   closeModal: vi.fn(),
-  setSidebarListMode: vi.fn()
+  setSidebarListMode: vi.fn(),
+  repos: [] as { id: string; displayName: string; projectGroupId?: string }[],
+  projectGroups: [] as { id: string; name: string; parentGroupId: string | null }[],
+  comboboxProps: [] as { groups?: readonly unknown[] }[]
 }))
 
 vi.mock('@/store', () => ({
@@ -16,8 +19,8 @@ vi.mock('@/store', () => ({
     selector({
       activeModal: 'mission-create',
       closeModal: mocks.closeModal,
-      repos: [{ id: 'r1', displayName: 'Dashboard' }],
-      projectGroups: [],
+      repos: mocks.repos,
+      projectGroups: mocks.projectGroups,
       createMission: mocks.createMission,
       setSidebarListMode: mocks.setSidebarListMode,
       settings: null,
@@ -36,13 +39,24 @@ vi.mock('@/components/ui/dialog', () => ({
 }))
 
 // Why: repo selection lives behind a Radix popover + cmdk stack; the dialog
-// only consumes its onChange, so the test drives selection through a stub.
+// only consumes its onChange, so the test drives selection through a stub
+// and records the props the dialog hands to the picker.
 vi.mock('@/components/ui/repo-multi-combobox', () => ({
-  default: ({ onChange }: { onChange: (next: ReadonlySet<string>) => void }) => (
-    <button type="button" data-testid="select-repo" onClick={() => onChange(new Set(['r1']))}>
-      select repo
-    </button>
-  )
+  default: (props: {
+    onChange: (next: ReadonlySet<string>) => void
+    groups?: readonly unknown[]
+  }) => {
+    mocks.comboboxProps.push(props)
+    return (
+      <button
+        type="button"
+        data-testid="select-repo"
+        onClick={() => props.onChange(new Set(['r1']))}
+      >
+        select repo
+      </button>
+    )
+  }
 }))
 
 vi.mock('@/components/agent/AgentCombobox', () => ({
@@ -78,6 +92,9 @@ describe('MissionCreateDialog', () => {
     mocks.createMission.mockReset()
     mocks.closeModal.mockReset()
     mocks.setSidebarListMode.mockReset()
+    mocks.repos = [{ id: 'r1', displayName: 'Dashboard' }]
+    mocks.projectGroups = []
+    mocks.comboboxProps = []
   })
 
   afterEach(() => {
@@ -121,5 +138,25 @@ describe('MissionCreateDialog', () => {
     // the member status list.
     expect(mocks.closeModal).not.toHaveBeenCalled()
     expect(rendered.textContent).toContain('Create Mission')
+  })
+
+  it('hands eligible group bulk-select options to the project picker', () => {
+    mocks.projectGroups = [
+      { id: 'g1', name: 'Platform', parentGroupId: null },
+      { id: 'g2', name: 'Nested', parentGroupId: 'g1' }
+    ]
+    mocks.repos = [
+      { id: 'r1', displayName: 'Dashboard', projectGroupId: 'g1' },
+      { id: 'r2', displayName: 'Docs', projectGroupId: 'g2' },
+      { id: 'r3', displayName: 'Loose' }
+    ]
+    renderDialog()
+
+    const { groups } = mocks.comboboxProps.at(-1) ?? {}
+    // Subtree semantics: the parent group bundles its nested group's repos.
+    expect(groups).toEqual([
+      { id: 'g1', name: 'Platform', repoIds: ['r1', 'r2'] },
+      { id: 'g2', name: 'Nested', repoIds: ['r2'] }
+    ])
   })
 })
