@@ -281,7 +281,11 @@ export type IFilesystemProvider = {
     rootPath: string,
     options?: { signal?: AbortSignal }
   ): Promise<WorkspaceSpaceDirectoryScanResult>
-  watch(rootPath: string, callback: (events: FsChangeEvent[]) => void): Promise<() => void>
+  watch(
+    rootPath: string,
+    callback: (events: FsChangeEvent[]) => void,
+    options?: { signal?: AbortSignal }
+  ): Promise<() => void>
 }
 
 export type FileUploadSession = {

@@ -59,6 +59,7 @@ import {
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import type { LegacyPaneKeyAliasEntry } from '../../shared/types'
 import { normalizeAgentProviderSession } from '../../shared/agent-session-resume'
+import { isCommandCodeNewTurnWhileWorking } from '../../shared/command-code-turn-boundary'
 
 export type { AgentHookSource }
 
@@ -251,6 +252,7 @@ function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentSta
     receivedAt: entry.receivedAt,
     stateStartedAt: entry.stateStartedAt,
     ...(entry.providerSession ? { providerSession: entry.providerSession } : {}),
+    ...(entry.promptInteractionKey ? { promptInteractionKey: entry.promptInteractionKey } : {}),
     ...entry.payload
   }
 }
@@ -653,8 +655,22 @@ export class AgentHookServer {
     const previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
+    const commandCodeNewTurn =
+      previous !== undefined &&
+      isCommandCodeNewTurnWhileWorking({
+        agentType: payload.payload.agentType,
+        previousState: previous.payload.state,
+        incomingState: payload.payload.state,
+        previousPrompt: previous.payload.prompt,
+        incomingPrompt: payload.payload.prompt,
+        hasExplicitPrompt: payload.hasExplicitPrompt,
+        previousPromptInteractionKey: previous.promptInteractionKey,
+        incomingPromptInteractionKey: payload.promptInteractionKey
+      })
     const stateStartedAt =
-      previous && previous.payload.state === payload.payload.state ? previous.stateStartedAt : now
+      previous && previous.payload.state === payload.payload.state && !commandCodeNewTurn
+        ? previous.stateStartedAt
+        : now
     return {
       ...payload,
       receivedAt: now,

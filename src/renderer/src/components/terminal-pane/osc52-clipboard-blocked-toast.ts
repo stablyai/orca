@@ -19,7 +19,7 @@ export function showOsc52ClipboardBlockedToast(): void {
     {
       description: translate(
         'auto.components.terminal.pane.osc52.clipboard.blocked.toast.7cf51f74fd',
-        'Enable TUI clipboard writes in Terminal settings to copy from SSH, tmux, Neovim, or fzf.'
+        'Enable TUI clipboard writes in Terminal settings to copy from SSH, tmux, Neovim, fzf, or Grok.'
       ),
       duration: 12_000,
       action: {

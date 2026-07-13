@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import type { GitHubWorkItemDetails, PRState } from '../../../../src/shared/types'
@@ -102,11 +102,17 @@ export function PRCommentsSection({
   )
   const groups = useMemo(() => groupPRComments(visible), [visible])
 
-  // Bounded render window; reset to the first page whenever the filtered set changes.
+  // Bounded render window; reset to the first page when the user selects another filter.
   const [limit, setLimit] = useState(COMMENT_PAGE)
-  useEffect(() => {
+  const selectFilter = (nextFilter: PRCommentAudienceFilter): void => {
+    if (nextFilter === filter) {
+      return
+    }
+    // Why: paging belongs to the filter-tab event, so reset it in the same batch
+    // instead of briefly rendering the new filter with the previous page size.
     setLimit(COMMENT_PAGE)
-  }, [filter])
+    setFilter(nextFilter)
+  }
   const shownGroups = groups.slice(0, limit)
   const remaining = groups.length - shownGroups.length
 
@@ -154,7 +160,7 @@ export function PRCommentsSection({
                         <Pressable
                           key={tab.value}
                           style={[styles.audienceTab, active && styles.audienceTabActive]}
-                          onPress={() => setFilter(tab.value)}
+                          onPress={() => selectFilter(tab.value)}
                           accessibilityRole="button"
                           accessibilityState={{ selected: active }}
                         >

@@ -91,6 +91,77 @@ describe('Electron runtime package contract', () => {
     )
   })
 
+  it('blocks Linux and macOS release packaging on watcher process fault recovery', () => {
+    const releaseWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
+    )
+    const macWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-mac-build.yml'), 'utf8')
+    )
+    const assertFaultGate = (steps, publishStepName, expectedCondition) => {
+      const names = steps.map((step) => step.name)
+      const gate = steps.find((step) => step.name === 'Gate runtime file-watcher process isolation')
+
+      expect(gate.if).toBe(expectedCondition)
+      expect(gate['continue-on-error']).toBeUndefined()
+      expect(gate.run).toContain('node config/scripts/runtime-file-watcher-fault-harness.mjs')
+      expect(gate.run).toContain('ELECTRON_RUN_AS_NODE=1 pnpm exec electron')
+      expect(names.indexOf('Build app')).toBeLessThan(names.indexOf(gate.name))
+      expect(names.indexOf(gate.name)).toBeLessThan(names.indexOf(publishStepName))
+    }
+
+    assertFaultGate(
+      releaseWorkflow.jobs.build.steps,
+      'Publish release artifacts (Linux)',
+      "runner.os == 'Linux'"
+    )
+    assertFaultGate(
+      macWorkflow.jobs['build-mac'].steps,
+      'Publish release artifacts (macOS)',
+      undefined
+    )
+  })
+
+  it('packages and release-gates the SSH relay watcher child', () => {
+    const relayBuild = readFileSync(join(projectDir, 'config/scripts/build-relay.mjs'), 'utf8')
+    const builderConfig = readFileSync(
+      join(projectDir, 'config/electron-builder.config.cjs'),
+      'utf8'
+    )
+    const remoteCommands = readFileSync(
+      join(projectDir, 'src/main/ssh/ssh-remote-commands.ts'),
+      'utf8'
+    )
+    const releaseWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
+    )
+    const macWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-mac-build.yml'), 'utf8')
+    )
+
+    expect(relayBuild).toContain("'parcel-watcher-process-entry.ts'")
+    expect(relayBuild).toContain("outfile: join(outDir, 'relay-watcher.js')")
+    expect(relayBuild).toContain("readFileSync(join(outDir, 'relay-watcher.js'))")
+    expect(builderConfig).toContain("from: 'out/relay'")
+    expect(remoteCommands).toContain("joinRemotePath(host, remoteRelayDir, 'relay-watcher.js')")
+
+    const assertRelayGate = (steps, publishStepName) => {
+      const names = steps.map((step) => step.name)
+      const gate = steps.find((step) => step.name === 'Gate SSH relay watcher process isolation')
+      expect(gate['continue-on-error']).toBeUndefined()
+      expect(gate.run).toContain('node config/scripts/relay-watcher-fault-harness.mjs')
+      expect(names.indexOf('Build app')).toBeLessThan(names.indexOf(gate.name))
+      expect(names.indexOf(gate.name)).toBeLessThan(names.indexOf(publishStepName))
+    }
+
+    assertRelayGate(releaseWorkflow.jobs.build.steps, 'Publish release artifacts (Linux)')
+    assertRelayGate(macWorkflow.jobs['build-mac'].steps, 'Publish release artifacts (macOS)')
+    const releaseNames = releaseWorkflow.jobs.build.steps.map((step) => step.name)
+    expect(releaseNames.indexOf('Gate SSH relay watcher process isolation')).toBeLessThan(
+      releaseNames.indexOf('Build Windows release artifacts')
+    )
+  })
+
   it('pins the Windows release builder to the VS 2022 runner image', () => {
     const releaseWorkflow = parse(
       readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')

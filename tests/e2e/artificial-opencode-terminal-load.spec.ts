@@ -131,6 +131,11 @@ const MAX_WORST_KEY_LATENCY_MS = 300
 // a catastrophic-hang detector. Mirrors ssh-docker-relay-perf's 2s worst-key
 // tolerance and the hidden-pressure scenario's relaxed worst budget.
 const MAX_WORST_KEY_LATENCY_UNDER_LOAD_MS = 3_000
+// Why: the post-revisit printf is sampled while the background panes are still
+// ACK-gate-held and through a whole-buffer serialize poll, so it inherits the
+// same environment-dominated worst-case as typing under load; the unloaded
+// 300ms budget has no margin for this switch-and-focus moment.
+const MAX_REVISIT_LATENCY_UNDER_LOAD_MS = 3_000
 // Why: GitHub's two-worker Electron shards can briefly starve renderer timers
 // without visible typing lag. Keep this as a smoke gate, not a CPU lottery.
 const MAX_TIMER_DRIFT_MS = 250
@@ -604,6 +609,7 @@ test.describe('Artificial OpenCode terminal load', () => {
       mainRendererPressureTargetChars: MAIN_RENDERER_PRESSURE_TARGET_CHARS,
       maxMedianKeyLatencyMs: MAX_MEDIAN_KEY_LATENCY_MS,
       maxRendererSchedulerQueuedChars: MAX_RENDERER_SCHEDULER_QUEUED_CHARS,
+      maxRevisitLatencyMs: MAX_REVISIT_LATENCY_UNDER_LOAD_MS,
       maxTimerDriftMs: MAX_TIMER_DRIFT_MS,
       maxWorstKeyLatencyMs: MAX_WORST_KEY_LATENCY_MS,
       orcaPage,

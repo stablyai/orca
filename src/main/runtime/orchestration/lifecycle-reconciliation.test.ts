@@ -7,7 +7,7 @@ describe('lifecycle reconciliation', () => {
 
   afterEach(() => db?.close())
 
-  it('completes an active dispatch from payload IDs after its terminal handle is reminted', () => {
+  it('rejects handle churn when neither side has stable pane identity', () => {
     db = new OrchestrationDb(':memory:')
     const task = db.createTask({ spec: 'work' })
     const dispatch = db.createDispatchContext(task.id, 'term_before_restart')
@@ -20,14 +20,13 @@ describe('lifecycle reconciliation', () => {
       payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
     })
 
-    expect(reconcileLifecycleMessage(db, message, (line) => logs.push(line))).toEqual({
-      action: 'completed',
-      taskId: task.id,
-      dispatchId: dispatch.id
+    expect(reconcileLifecycleMessage(db, message, (line) => logs.push(line))).toMatchObject({
+      action: 'rejected',
+      code: 'sender_not_assignee'
     })
-    expect(db.getTask(task.id)?.status).toBe('completed')
-    expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
-    expect(logs.some((line) => line.includes('accepting payload provenance'))).toBe(true)
+    expect(db.getTask(task.id)?.status).toBe('dispatched')
+    expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
+    expect(logs.some((line) => line.includes('expected handle'))).toBe(true)
   })
 
   // Real leaf UUIDs: pane keys are `${tabId}:${leafUuid}` and only the leaf
@@ -71,7 +70,7 @@ describe('lifecycle reconciliation', () => {
     expect(db.getTask(task.id)?.status).toBe('completed')
   })
 
-  it('completes worker_done when a pane key is unparseable (legacy format)', () => {
+  it('rejects mismatched opaque pane keys instead of treating them as legacy', () => {
     db = new OrchestrationDb(':memory:')
     const task = db.createTask({ spec: 'work' })
     const dispatch = db.createDispatchContext(task.id, 'term_owner', `tab_w:${LEAF_A}`)
@@ -84,10 +83,194 @@ describe('lifecycle reconciliation', () => {
       senderPaneKey: 'tab_w:42'
     })
 
-    expect(reconcileLifecycleMessage(db, message).action).toBe('completed')
+    expect(reconcileLifecycleMessage(db, message).action).toBe('rejected')
+    expect(db.getTask(task.id)?.status).toBe('dispatched')
   })
 
-  it('ignores worker_done sent from a different pane', () => {
+  it('rejects worker_done from a foreign pane that claims the assignee handle', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ spec: 'work' })
+    const dispatch = db.createDispatchContext(task.id, 'term_owner', `tab_w1:${LEAF_A}`)
+    const message = db.insertMessage({
+      from: 'term_owner',
+      to: 'term_coordinator',
+      subject: 'Done',
+      type: 'worker_done',
+      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id }),
+      senderPaneKey: `tab_w2:${LEAF_B}`
+    })
+
+    expect(reconcileLifecycleMessage(db, message)).toMatchObject({
+      action: 'rejected',
+      code: 'sender_not_assignee',
+      reason: expect.stringContaining('expected handle term_owner')
+    })
+    expect(db.getTask(task.id)?.status).toBe('dispatched')
+    expect(db.getMessageById(message.id)).toMatchObject({
+      type: 'worker_done',
+      priority: 'high',
+      subject: 'Rejected worker_done: Done',
+      body: expect.stringContaining('Orca rejected this worker_done')
+    })
+    const persisted = db.getMessageById(message.id)
+    expect(JSON.parse(persisted?.payload ?? '{}')).toMatchObject({
+      taskId: task.id,
+      dispatchId: dispatch.id,
+      _orcaLifecycleRejection: { code: 'sender_not_assignee' }
+    })
+    const rereadLogs: string[] = []
+    expect(
+      persisted && reconcileLifecycleMessage(db, persisted, (line) => rereadLogs.push(line))
+    ).toMatchObject({
+      action: 'rejected',
+      code: 'sender_not_assignee'
+    })
+    // Why: the send-path conversion logs nothing (no-op logger), so the
+    // coordinator's re-read must still surface the rejection to its log stream.
+    expect(rereadLogs.some((line) => line.includes('worker_done rejected'))).toBe(true)
+  })
+
+  it('does not let a caller-supplied rejection marker turn completion into success', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ spec: 'work' })
+    const dispatch = db.createDispatchContext(task.id, 'term_worker', `tab_w:${LEAF_A}`)
+    const message = db.insertMessage({
+      from: 'term_worker',
+      to: 'term_coordinator',
+      subject: 'Done',
+      type: 'worker_done',
+      payload: JSON.stringify({
+        taskId: task.id,
+        dispatchId: dispatch.id,
+        _orcaLifecycleRejection: {
+          code: 'sender_not_assignee',
+          reason: 'caller supplied'
+        }
+      }),
+      senderPaneKey: `tab_w:${LEAF_A}`
+    })
+
+    expect(reconcileLifecycleMessage(db, message)).toEqual({
+      action: 'rejected',
+      code: 'sender_not_assignee',
+      reason: 'caller supplied'
+    })
+    expect(db.getTask(task.id)?.status).toBe('dispatched')
+  })
+
+  it('rejects a coordinator completion for a pane-bound dispatch', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ spec: 'work' })
+    const dispatch = db.createDispatchContext(task.id, 'term_worker', `tab_w:${LEAF_A}`)
+    const message = db.insertMessage({
+      from: 'term_coordinator',
+      to: 'term_coordinator',
+      subject: 'Done',
+      type: 'worker_done',
+      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+    })
+
+    expect(reconcileLifecycleMessage(db, message)).toMatchObject({
+      action: 'rejected',
+      code: 'sender_not_assignee'
+    })
+    expect(db.getTask(task.id)?.status).toBe('dispatched')
+  })
+
+  it('uses exact handle equality only for a legacy dispatch without a pane key', () => {
+    db = new OrchestrationDb(':memory:')
+    const acceptedTask = db.createTask({ spec: 'legacy work' })
+    const acceptedDispatch = db.createDispatchContext(acceptedTask.id, 'term_legacy')
+    const accepted = db.insertMessage({
+      from: 'term_legacy',
+      to: 'term_coordinator',
+      subject: 'Done',
+      type: 'worker_done',
+      payload: JSON.stringify({ taskId: acceptedTask.id, dispatchId: acceptedDispatch.id })
+    })
+    expect(reconcileLifecycleMessage(db, accepted).action).toBe('completed')
+
+    const rejectedTask = db.createTask({ spec: 'other legacy work' })
+    const rejectedDispatch = db.createDispatchContext(rejectedTask.id, 'term_other_legacy')
+    const rejected = db.insertMessage({
+      from: 'term_foreign',
+      to: 'term_coordinator',
+      subject: 'Done',
+      type: 'worker_done',
+      payload: JSON.stringify({ taskId: rejectedTask.id, dispatchId: rejectedDispatch.id })
+    })
+    expect(reconcileLifecycleMessage(db, rejected)).toMatchObject({
+      action: 'rejected',
+      code: 'sender_not_assignee'
+    })
+    expect(db.getTask(rejectedTask.id)?.status).toBe('dispatched')
+  })
+
+  it('does not release a dependent when a foreign completion wins the arrival race', () => {
+    db = new OrchestrationDb(':memory:')
+    const parent = db.createTask({ spec: 'parent' })
+    const child = db.createTask({ spec: 'child', deps: [parent.id] })
+    const dispatch = db.createDispatchContext(parent.id, 'term_worker', `tab_w:${LEAF_A}`)
+    const payload = JSON.stringify({ taskId: parent.id, dispatchId: dispatch.id })
+
+    const foreign = db.insertMessage({
+      from: 'term_coordinator',
+      to: 'term_coordinator',
+      subject: 'Done',
+      type: 'worker_done',
+      payload,
+      senderPaneKey: `tab_c:${LEAF_B}`
+    })
+    expect(reconcileLifecycleMessage(db, foreign)).toMatchObject({
+      action: 'rejected',
+      code: 'sender_not_assignee'
+    })
+    expect(db.getTask(child.id)?.status).toBe('pending')
+
+    const owner = db.insertMessage({
+      from: 'term_worker_reminted',
+      to: 'term_coordinator',
+      subject: 'Done',
+      type: 'worker_done',
+      payload,
+      senderPaneKey: `tab_w_after:${LEAF_A}`
+    })
+    expect(reconcileLifecycleMessage(db, owner).action).toBe('completed')
+    expect(db.getTask(child.id)?.status).toBe('ready')
+  })
+
+  it('does not let a foreign replay overwrite an authorized completion', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ spec: 'work' })
+    const dispatch = db.createDispatchContext(task.id, 'term_worker', `tab_w:${LEAF_A}`)
+    const payload = JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+    const owner = db.insertMessage({
+      from: 'term_worker',
+      to: 'term_coordinator',
+      subject: 'Done',
+      type: 'worker_done',
+      payload,
+      senderPaneKey: `tab_w:${LEAF_A}`
+    })
+    expect(reconcileLifecycleMessage(db, owner).action).toBe('completed')
+    const result = db.getTask(task.id)?.result
+
+    const replay = db.insertMessage({
+      from: 'term_foreign',
+      to: 'term_coordinator',
+      subject: 'Forged replay',
+      type: 'worker_done',
+      payload,
+      senderPaneKey: `tab_f:${LEAF_B}`
+    })
+    expect(reconcileLifecycleMessage(db, replay)).toMatchObject({
+      action: 'rejected',
+      code: 'sender_not_assignee'
+    })
+    expect(db.getTask(task.id)?.result).toBe(result)
+  })
+
+  it('surfaces worker_done sent from a different pane as rejected', () => {
     db = new OrchestrationDb(':memory:')
     const task = db.createTask({ spec: 'work' })
     const dispatch = db.createDispatchContext(task.id, 'term_owner', `tab_w1:${LEAF_A}`)
@@ -101,15 +284,16 @@ describe('lifecycle reconciliation', () => {
       senderPaneKey: `tab_w2:${LEAF_B}`
     })
 
-    expect(reconcileLifecycleMessage(db, message, (line) => logs.push(line))).toEqual({
-      action: 'ignored'
+    expect(reconcileLifecycleMessage(db, message, (line) => logs.push(line))).toMatchObject({
+      action: 'rejected',
+      code: 'sender_not_assignee'
     })
     expect(db.getTask(task.id)?.status).toBe('dispatched')
     expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
-    expect(logs.some((line) => line.includes(`expected pane tab_w1:${LEAF_A}`))).toBe(true)
+    expect(logs.some((line) => line.includes('worker_done rejected'))).toBe(true)
   })
 
-  it('ignores a heartbeat sent from a different pane without recording liveness', () => {
+  it('surfaces a heartbeat sent from a different pane without recording liveness', () => {
     db = new OrchestrationDb(':memory:')
     const task = db.createTask({ spec: 'work' })
     const dispatch = db.createDispatchContext(task.id, 'term_owner', `tab_w1:${LEAF_A}`)
@@ -122,7 +306,44 @@ describe('lifecycle reconciliation', () => {
       senderPaneKey: `tab_w2:${LEAF_B}`
     })
 
-    expect(reconcileLifecycleMessage(db, heartbeat)).toEqual({ action: 'ignored' })
+    expect(reconcileLifecycleMessage(db, heartbeat)).toMatchObject({
+      action: 'rejected',
+      code: 'sender_not_assignee'
+    })
+    expect(db.getDispatchContextById(dispatch.id)?.last_heartbeat_at).toBeNull()
+    expect(db.getMessageById(heartbeat.id)).toMatchObject({
+      type: 'heartbeat',
+      subject: 'Rejected heartbeat: alive'
+    })
+    // Why: the coordinator's re-read of the already-converted heartbeat must
+    // still log the rejection, since the send-path conversion logged nothing.
+    const persisted = db.getMessageById(heartbeat.id)
+    const rereadLogs: string[] = []
+    expect(
+      persisted && reconcileLifecycleMessage(db, persisted, (line) => rereadLogs.push(line))
+    ).toMatchObject({
+      action: 'rejected'
+    })
+    expect(rereadLogs.some((line) => line.includes('Heartbeat rejected'))).toBe(true)
+  })
+
+  it('surfaces a foreign heartbeat that claims the assignee handle', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ spec: 'work' })
+    const dispatch = db.createDispatchContext(task.id, 'term_owner', `tab_w1:${LEAF_A}`)
+    const heartbeat = db.insertMessage({
+      from: 'term_owner',
+      to: 'term_coordinator',
+      subject: 'alive',
+      type: 'heartbeat',
+      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id }),
+      senderPaneKey: `tab_w2:${LEAF_B}`
+    })
+
+    expect(reconcileLifecycleMessage(db, heartbeat)).toMatchObject({
+      action: 'rejected',
+      code: 'sender_not_assignee'
+    })
     expect(db.getDispatchContextById(dispatch.id)?.last_heartbeat_at).toBeNull()
   })
 

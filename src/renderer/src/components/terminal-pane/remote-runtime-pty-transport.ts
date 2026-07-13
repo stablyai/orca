@@ -858,6 +858,10 @@ export function createRemoteRuntimePtyTransport(
       return null
     },
 
+    getRuntimeEnvironmentId() {
+      return currentRuntimeEnvironmentId
+    },
+
     async serializeBuffer(opts) {
       if (!connected || !handle) {
         return null

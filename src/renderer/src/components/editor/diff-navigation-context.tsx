@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { editor } from 'monaco-editor'
+import { installMonacoDiffChangeNavigationShortcut } from './editor-shortcuts'
 
 export type DiffEditorRegistrationContextValue = {
   registerDiffEditor: (editor: editor.IStandaloneDiffEditor) => void
@@ -38,6 +39,9 @@ export function DiffNavigationProvider({
 }): React.JSX.Element {
   const editorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
   const updateSubRef = useRef<{ dispose: () => void } | null>(null)
+  // Why: F7/Shift+F7 change navigation shares the registered editor with the
+  // header buttons, so the keyboard listener lives here rather than in DiffViewer.
+  const shortcutCleanupRef = useRef<(() => void) | null>(null)
   // Why: changeCount must be state, not a ref — the header is a sibling consumer
   // and only re-renders (enabling the buttons) when the value object identity
   // changes on the 0 -> N flip once the diff computation lands.
@@ -54,6 +58,9 @@ export function DiffNavigationProvider({
         setChangeCount(countChanges(diffEditor))
       }
     })
+    // Hold at most one keyboard listener; replace any prior editor's.
+    shortcutCleanupRef.current?.()
+    shortcutCleanupRef.current = installMonacoDiffChangeNavigationShortcut(diffEditor)
     setChangeCount(countChanges(diffEditor))
   }, [])
 
@@ -65,6 +72,8 @@ export function DiffNavigationProvider({
     }
     updateSubRef.current?.dispose()
     updateSubRef.current = null
+    shortcutCleanupRef.current?.()
+    shortcutCleanupRef.current = null
     editorRef.current = null
     setChangeCount(0)
   }, [])
@@ -81,6 +90,8 @@ export function DiffNavigationProvider({
     return () => {
       updateSubRef.current?.dispose()
       updateSubRef.current = null
+      shortcutCleanupRef.current?.()
+      shortcutCleanupRef.current = null
     }
   }, [])
 

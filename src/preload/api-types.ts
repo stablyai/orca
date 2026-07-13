@@ -3133,6 +3133,21 @@ export type PreloadApi = {
           deviceId: string
         }
     >
+    getWindowsFirewallStatus: (args?: { address?: string }) => Promise<
+      | { supported: false }
+      | {
+          supported: true
+          port: number
+          ruleAllowed: boolean
+          privateFirewallEnabled: boolean
+          networkCategory: 'private' | 'public' | 'domain' | 'unknown'
+          inspectionAvailable: boolean
+        }
+    >
+    repairWindowsFirewall: () => Promise<
+      { ok: true } | { ok: false; reason: 'cancelled' | 'failed' | 'unsupported' }
+    >
+    openWindowsNetworkSettings: () => Promise<boolean>
     getRuntimePairingUrl: (args?: { address?: string; rotate?: boolean }) => Promise<
       | { available: false }
       | {

@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as childProcess from 'node:child_process'
 
-const { execFileSyncMock } = vi.hoisted(() => ({
+const { execFileMock, execFileSyncMock } = vi.hoisted(() => ({
+  execFileMock: vi.fn(),
   execFileSyncMock: vi.fn()
 }))
 
@@ -9,11 +10,21 @@ vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof childProcess>()
   return {
     ...actual,
+    execFile: execFileMock,
     execFileSync: execFileSyncMock
   }
 })
 
-import { toLinuxPath, toWindowsWslPath, parseWslPath, wslUncDirectoryExists } from './wsl'
+import {
+  _resetWslCachesForTests,
+  getCachedWslDistros,
+  listWslDistros,
+  listWslDistrosAsync,
+  parseWslPath,
+  toLinuxPath,
+  toWindowsWslPath,
+  wslUncDirectoryExists
+} from './wsl'
 
 function withPlatform<T>(value: NodeJS.Platform, fn: () => T): T {
   const original = process.platform
@@ -24,6 +35,70 @@ function withPlatform<T>(value: NodeJS.Platform, fn: () => T): T {
     Object.defineProperty(process, 'platform', { configurable: true, value: original })
   }
 }
+
+async function withPlatformAsync<T>(value: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
+  const original = process.platform
+  Object.defineProperty(process, 'platform', { configurable: true, value })
+  try {
+    return await fn()
+  } finally {
+    Object.defineProperty(process, 'platform', { configurable: true, value: original })
+  }
+}
+
+describe('WSL distro discovery cache', () => {
+  afterEach(() => {
+    execFileMock.mockReset()
+    execFileSyncMock.mockReset()
+    _resetWslCachesForTests()
+  })
+
+  it('retries asynchronous discovery after a transient wsl.exe failure', async () => {
+    vi.useFakeTimers()
+    execFileMock
+      .mockImplementationOnce((_command, _args, _options, callback) => {
+        callback(new Error('transient failure'), '')
+      })
+      .mockImplementationOnce((_command, _args, _options, callback) => {
+        callback(null, 'Ubuntu\n')
+      })
+
+    try {
+      await withPlatformAsync('win32', async () => {
+        await expect(listWslDistrosAsync()).resolves.toEqual([])
+        expect(getCachedWslDistros()).toBeNull()
+        // Brief negative caching bounds the wsl.exe spawn rate between retries.
+        await expect(listWslDistrosAsync()).resolves.toEqual([])
+        expect(execFileMock).toHaveBeenCalledTimes(1)
+        vi.advanceTimersByTime(15_000)
+        await expect(listWslDistrosAsync()).resolves.toEqual(['Ubuntu'])
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('retries synchronous discovery after a transient wsl.exe failure', () => {
+    vi.useFakeTimers()
+    execFileSyncMock.mockImplementationOnce(() => {
+      throw new Error('transient failure')
+    })
+    execFileSyncMock.mockReturnValueOnce('Ubuntu\n')
+
+    try {
+      withPlatform('win32', () => {
+        expect(listWslDistros()).toEqual([])
+        expect(getCachedWslDistros()).toBeNull()
+        expect(listWslDistros()).toEqual([])
+        expect(execFileSyncMock).toHaveBeenCalledTimes(1)
+        vi.advanceTimersByTime(15_000)
+        expect(listWslDistros()).toEqual(['Ubuntu'])
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
 
 describe('wsl path helpers', () => {
   it('parses WSL UNC paths on Windows', () => {

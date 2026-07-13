@@ -423,7 +423,10 @@ test.describe('Combined diff scroll restore', () => {
       await clickVisibleDiffLine(orcaPage)
       const afterLineClick = await waitForStableViewportAnchor(orcaPage)
 
-      expect(afterLineClick.key).toBe(afterSwitch.key)
+      // Assert the viewport barely moved rather than an exact anchor key: sections
+      // are ~viewport-sized, so a sub-pixel focus scroll from the click can flip the
+      // topmost-visible key by one without meaningfully moving the scroll position.
+      expect(Math.abs(afterLineClick.scrollTop - afterSwitch.scrollTop)).toBeLessThan(40)
       expect(Math.abs(afterLineClick.top - afterSwitch.top)).toBeLessThan(80)
     } finally {
       rmSync(fixture.repoPath, { recursive: true, force: true })

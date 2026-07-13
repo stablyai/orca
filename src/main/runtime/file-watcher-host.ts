@@ -1,160 +1,286 @@
-// Why: spawns the file-watcher worker thread and adapts it to the synchronous
-// `watchFileExplorer` contract (a promise that resolves to an unsubscribe fn
-// once the recursive crawl is live). Running @parcel/watcher in the worker
-// keeps its blocking initial crawl off the main process's libuv pool so a huge
-// non-git tree can't wedge the `serve` runtime (issue #5308).
-import { Worker } from 'node:worker_threads'
-import { join } from 'node:path'
-import { app } from 'electron'
 import type { FsChangeEvent } from '../../shared/types'
-import type { FileWatcherHostMessage, FileWatcherWorkerMessage } from './file-watcher-worker'
-// Why: shares the explorer watcher's canonical ignore list, pre-shaped so the
-// macOS daemon-side exclusion-path cap (8) is respected — over the cap ALL
-// exclusions silently fail and fseventsd delivers full node_modules churn.
+import {
+  forgetRuntimeWatcherProcessRoot,
+  resetRuntimeWatcherProcessForTest,
+  subscribeViaRuntimeWatcherProcess,
+  type WatcherProcessEvent,
+  type WatcherProcessSubscription
+} from '../ipc/parcel-watcher-process'
+import { isWatcherProcessFailure } from '../ipc/parcel-watcher-process-failure'
 import {
   WATCHER_IGNORE_DIRS,
   buildParcelWatcherIgnoreOptions
 } from '../ipc/filesystem-watcher-ignore'
 
 const RUNTIME_FILE_WATCH_IGNORE_OPTIONS = buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)
+const RUNTIME_FILE_WATCH_EVENT_LIMIT = 200
+const RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS = 60_000
 
-// Why: clean teardown is async (the worker awaits subscription.unsubscribe()
-// before closing its port and exiting). Wait this long for the worker to exit on
-// its own before force-terminating, so the native watcher thread isn't freed
-// mid-flight.
-const WORKER_TEARDOWN_TIMEOUT_MS = 5000
-type WorkerExitWaitResult = 'exit' | 'timeout'
-
-function getFileWatcherWorkerPath(): string {
-  if (app.isPackaged) {
-    return join(process.resourcesPath, 'app.asar', 'out', 'main', 'file-watcher-worker.js')
-  }
-  return join(__dirname, 'file-watcher-worker.js')
+type RuntimeFileWatchSubscriber = {
+  onEvents: (events: FsChangeEvent[]) => void
+  onTerminalError: (error: Error) => void
 }
 
-function waitForWorkerExit(worker: Worker, timeoutMs: number): Promise<WorkerExitWaitResult> {
-  return new Promise((resolve) => {
+type RuntimeRootWatch = {
+  rootPath: string
+  subscribers: Set<RuntimeFileWatchSubscriber>
+  start: Promise<void>
+  subscription: WatcherProcessSubscription | null
+  abortController: AbortController
+  generation: number
+  closed: boolean
+}
+
+// Why: paired clients watching the same worktree share one native subscription.
+// Different roots are assigned across the bounded crash-isolated child pool.
+const runtimeRootWatches = new Map<string, RuntimeRootWatch>()
+
+function overflowEvent(rootPath: string): FsChangeEvent[] {
+  return [{ kind: 'overflow', absolutePath: rootPath }]
+}
+
+function mapWatcherEvents(events: readonly WatcherProcessEvent[]): FsChangeEvent[] {
+  return events.map((event) => ({
+    kind: event.type,
+    absolutePath: event.path,
+    isDirectory: event.isDirectory
+  }))
+}
+
+function emitToSubscribers(root: RuntimeRootWatch, events: FsChangeEvent[]): void {
+  if (root.closed) {
+    return
+  }
+  for (const subscriber of root.subscribers) {
+    subscriber.onEvents(events)
+  }
+}
+
+function terminateRootWatch(root: RuntimeRootWatch, error: Error): void {
+  if (root.closed) {
+    return
+  }
+  root.closed = true
+  root.generation++
+  root.abortController.abort()
+  if (runtimeRootWatches.get(root.rootPath) === root) {
+    runtimeRootWatches.delete(root.rootPath)
+  }
+  forgetRuntimeWatcherProcessRoot(root.rootPath)
+  const subscribers = Array.from(root.subscribers)
+  root.subscribers.clear()
+  for (const subscriber of subscribers) {
+    subscriber.onTerminalError(error)
+  }
+}
+
+function closeInitialRootWatch(root: RuntimeRootWatch): void {
+  root.closed = true
+  root.generation++
+  root.abortController.abort()
+  if (runtimeRootWatches.get(root.rootPath) === root) {
+    runtimeRootWatches.delete(root.rootPath)
+  }
+  forgetRuntimeWatcherProcessRoot(root.rootPath)
+  root.subscribers.clear()
+}
+
+function shouldRetryInitialWatch(error: unknown): boolean {
+  return (
+    isWatcherProcessFailure(error) &&
+    error.code !== 'entry_missing' &&
+    error.code !== 'subscribe_aborted' &&
+    error.code !== 'supervisor_disposed' &&
+    (error.scope === 'supervisor' || error.code === 'subscribe_timeout')
+  )
+}
+
+function subscribeRuntimeRootWatch(root: RuntimeRootWatch): Promise<void> {
+  const generation = ++root.generation
+  const emitOverflow = (): void => {
+    if (root.generation === generation) {
+      emitToSubscribers(root, overflowEvent(root.rootPath))
+    }
+  }
+  return subscribeViaRuntimeWatcherProcess(
+    root.rootPath,
+    (err, events) => {
+      if (root.generation !== generation || root.closed) {
+        return
+      }
+      if (err) {
+        console.error('[runtime-files.watch] watcher error', {
+          rootPath: root.rootPath,
+          error: err.message
+        })
+        emitOverflow()
+        return
+      }
+      emitToSubscribers(root, mapWatcherEvents(events))
+    },
+    RUNTIME_FILE_WATCH_IGNORE_OPTIONS,
+    {
+      delivery: {
+        includeDirectoryMetadata: true,
+        maxEventsPerBatch: RUNTIME_FILE_WATCH_EVENT_LIMIT
+      },
+      onInterruption: emitOverflow,
+      onOverflow: emitOverflow,
+      onTerminalError: (error) => recoverRuntimeRootWatch(root, generation, error),
+      // Why: the transport bounds initial setup at 15 seconds, but a later
+      // crash-resubscribe has no request deadline and must not freeze its shard forever.
+      subscribeTimeoutMs: RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS,
+      signal: root.abortController.signal
+    }
+  ).then(async (subscription) => {
+    if (root.closed || root.generation !== generation) {
+      await subscription.unsubscribe()
+      return
+    }
+    root.subscription = subscription
+  })
+}
+
+async function startInitialRuntimeRootWatch(root: RuntimeRootWatch): Promise<void> {
+  try {
+    await subscribeRuntimeRootWatch(root)
+  } catch (firstError) {
+    if (root.closed || !shouldRetryInitialWatch(firstError)) {
+      closeInitialRootWatch(root)
+      throw firstError
+    }
+    try {
+      await subscribeRuntimeRootWatch(root)
+      emitToSubscribers(root, overflowEvent(root.rootPath))
+    } catch (isolatedError) {
+      closeInitialRootWatch(root)
+      throw isolatedError
+    }
+  }
+}
+
+function recoverRuntimeRootWatch(
+  root: RuntimeRootWatch,
+  failedGeneration: number,
+  terminalError: Error
+): void {
+  if (root.closed || root.generation !== failedGeneration) {
+    return
+  }
+  root.subscription = null
+  emitToSubscribers(root, overflowEvent(root.rootPath))
+  root.start = subscribeRuntimeRootWatch(root).catch((recoveryError: unknown) => {
+    if (!root.closed) {
+      terminateRootWatch(root, recoveryError instanceof Error ? recoveryError : terminalError)
+    }
+  })
+}
+
+function createRuntimeRootWatch(rootPath: string): RuntimeRootWatch {
+  const root: RuntimeRootWatch = {
+    rootPath,
+    subscribers: new Set(),
+    start: Promise.resolve(),
+    subscription: null,
+    abortController: new AbortController(),
+    generation: 0,
+    closed: false
+  }
+  runtimeRootWatches.set(rootPath, root)
+  root.start = startInitialRuntimeRootWatch(root)
+  return root
+}
+
+async function releaseRuntimeRootWatch(
+  root: RuntimeRootWatch,
+  subscriber: RuntimeFileWatchSubscriber
+): Promise<void> {
+  root.subscribers.delete(subscriber)
+  if (root.closed || root.subscribers.size > 0) {
+    return
+  }
+  root.closed = true
+  root.generation++
+  root.abortController.abort()
+  if (runtimeRootWatches.get(root.rootPath) === root) {
+    runtimeRootWatches.delete(root.rootPath)
+  }
+  await root.subscription?.unsubscribe()
+}
+
+/**
+ * Start a recursive runtime-file watch in the crash-isolated process pool.
+ * The child owns crawl, event collapse, and stat metadata so neither native
+ * faults nor event storms can consume the serve process's libuv pool.
+ */
+export async function watchFileExplorerInWatcherProcess(
+  rootPath: string,
+  callback: (events: FsChangeEvent[]) => void,
+  onTerminalError: (error: Error) => void = () => undefined,
+  signal?: AbortSignal
+): Promise<() => Promise<void>> {
+  const root = runtimeRootWatches.get(rootPath) ?? createRuntimeRootWatch(rootPath)
+  const subscriber: RuntimeFileWatchSubscriber = { onEvents: callback, onTerminalError }
+  root.subscribers.add(subscriber)
+  try {
+    await waitForRuntimeRootStart(root, subscriber, signal)
+  } catch (error) {
+    root.subscribers.delete(subscriber)
+    throw error
+  }
+  if (root.closed) {
+    throw new Error('file watcher closed during setup')
+  }
+
+  let releasePromise: Promise<void> | undefined
+  return (): Promise<void> => {
+    releasePromise ??= releaseRuntimeRootWatch(root, subscriber)
+    return releasePromise
+  }
+}
+
+function waitForRuntimeRootStart(
+  root: RuntimeRootWatch,
+  subscriber: RuntimeFileWatchSubscriber,
+  signal: AbortSignal | undefined
+): Promise<void> {
+  if (!signal) {
+    return root.start
+  }
+  if (signal.aborted) {
+    void releaseRuntimeRootWatch(root, subscriber)
+    return Promise.reject(new Error('file watcher subscription aborted'))
+  }
+  return new Promise((resolve, reject) => {
     let settled = false
-    let timer: ReturnType<typeof setTimeout> | undefined
-    let onExit: (() => void) | undefined
-    const finish = (result: WorkerExitWaitResult): void => {
+    const finish = (callback: () => void): void => {
       if (settled) {
         return
       }
       settled = true
-      if (timer) {
-        clearTimeout(timer)
-      }
-      if (onExit) {
-        worker.off('exit', onExit)
-      }
-      resolve(result)
+      signal.removeEventListener('abort', handleAbort)
+      callback()
     }
-
-    onExit = () => finish('exit')
-    worker.once('exit', onExit)
-    timer = setTimeout(() => finish('timeout'), timeoutMs)
+    const handleAbort = (): void => {
+      void releaseRuntimeRootWatch(root, subscriber)
+      finish(() => reject(new Error('file watcher subscription aborted')))
+    }
+    signal.addEventListener('abort', handleAbort, { once: true })
+    root.start.then(
+      () => finish(resolve),
+      (error: unknown) => finish(() => reject(error))
+    )
   })
 }
 
-/** Start a recursive file watch in a worker thread. Resolves to an unsubscribe
- *  function once the worker reports the crawl is live; rejects if the worker
- *  fails to start the watch. */
-export function watchFileExplorerInWorker(
-  rootPath: string,
-  callback: (events: FsChangeEvent[]) => void
-): Promise<() => Promise<void>> {
-  return new Promise((resolve, reject) => {
-    const worker = new Worker(getFileWatcherWorkerPath(), {
-      workerData: { rootPath, ignoreOptions: RUNTIME_FILE_WATCH_IGNORE_OPTIONS }
-    })
-
-    let ready = false
-    let disposed = false
-    let exited = false
-    let disposePromise: Promise<void> | undefined
-
-    const runDispose = async (): Promise<void> => {
-      if (disposed) {
-        return
-      }
-      disposed = true
-      if (exited) {
-        return
-      }
-      // Ask the worker to unsubscribe its native watcher and exit on its own.
-      // Why: worker.terminate() force-frees the worker's V8 env while
-      // @parcel/watcher's native watch thread / inflight async work is still
-      // live, which faults inside napi (Watcher::findCallback,
-      // PromiseRunner::onWorkComplete). Only terminate as a backstop if the
-      // worker wedges and never exits.
-      try {
-        worker.postMessage({ type: 'unsubscribe' } satisfies FileWatcherHostMessage)
-      } catch {
-        // Worker already gone — the exit wait and timeout backstop cover it.
-      }
-      const exitResult = await waitForWorkerExit(worker, WORKER_TEARDOWN_TIMEOUT_MS)
-      if (exitResult === 'timeout' && !exited) {
-        await worker.terminate().then(
-          () => undefined,
-          () => undefined
-        )
-      }
-    }
-
-    // Why: racing dispose callers must share the same worker-exit drain instead
-    // of letting later calls resolve while teardown is still in flight.
-    const dispose = (): Promise<void> => {
-      disposePromise ??= runDispose()
-      return disposePromise
-    }
-
-    worker.on('message', (message: FileWatcherWorkerMessage) => {
-      if (message.type === 'ready') {
-        ready = true
-        resolve(dispose)
-        return
-      }
-      if (message.type === 'events') {
-        if (!disposed) {
-          callback(message.events)
-        }
-        return
-      }
-      if (message.type === 'error') {
-        if (!ready) {
-          // The crawl never went live — fail the watch so the caller knows.
-          disposed = true
-          void worker.terminate()
-          reject(new Error(message.message))
-          return
-        }
-        // Already live: a mid-stream watcher error. Tell the renderer to
-        // refresh; the worker also emits an overflow event alongside this.
-        console.error('[runtime-files.watch] worker error', { rootPath, error: message.message })
-      }
-    })
-
-    worker.on('error', (err) => {
-      if (!ready) {
-        disposed = true
-        reject(err)
-        return
-      }
-      // A live worker crashed: surface an overflow so the renderer re-reads,
-      // rather than silently going stale.
-      console.error('[runtime-files.watch] worker crashed', { rootPath, err })
-      if (!disposed) {
-        callback([{ kind: 'overflow', absolutePath: rootPath }])
-      }
-    })
-
-    worker.on('exit', (code) => {
-      exited = true
-      if (!ready && !disposed) {
-        disposed = true
-        reject(new Error(`file watcher worker exited before ready (code ${code})`))
-      }
-    })
-  })
+export function resetRuntimeRootWatchersForTest(): void {
+  for (const root of runtimeRootWatches.values()) {
+    root.closed = true
+    root.generation++
+    root.abortController.abort()
+    root.subscribers.clear()
+    void root.subscription?.unsubscribe()
+  }
+  runtimeRootWatches.clear()
+  resetRuntimeWatcherProcessForTest()
 }

@@ -18,7 +18,7 @@ const {
   renameMock,
   resolveAuthorizedPathMock,
   statMock,
-  watchInWorkerMock,
+  watchInWatcherProcessMock,
   checkRgAvailableMock,
   getLocalGitOptionsForRegisteredWorktreeMock,
   wslAwareSpawnMock,
@@ -32,7 +32,7 @@ const {
   renameMock: vi.fn(),
   resolveAuthorizedPathMock: vi.fn(),
   statMock: vi.fn(),
-  watchInWorkerMock: vi.fn(),
+  watchInWatcherProcessMock: vi.fn(),
   wslAwareSpawnMock: vi.fn(),
   watchMock: vi.fn()
 }))
@@ -61,7 +61,7 @@ vi.mock('fs/promises', async () => {
 })
 
 vi.mock('./file-watcher-host', () => ({
-  watchFileExplorerInWorker: watchInWorkerMock
+  watchFileExplorerInWatcherProcess: watchInWatcherProcessMock
 }))
 
 vi.mock('../ipc/filesystem-auth', async () => {
@@ -199,7 +199,7 @@ describe('RuntimeFileCommands', () => {
     renameMock.mockReset()
     resolveAuthorizedPathMock.mockReset()
     statMock.mockReset()
-    watchInWorkerMock.mockReset()
+    watchInWatcherProcessMock.mockReset()
     watchMock.mockReset()
     checkRgAvailableMock.mockReset()
     vi.mocked(getSshFilesystemProvider).mockReset()
@@ -441,7 +441,7 @@ describe('RuntimeFileCommands', () => {
     expect(close).toHaveBeenCalledTimes(1)
   })
 
-  it('delegates local recursive watching to the worker thread', async () => {
+  it('delegates local recursive watching to the watcher process', async () => {
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: 'linux'
@@ -449,11 +449,16 @@ describe('RuntimeFileCommands', () => {
     resolveAuthorizedPathMock.mockResolvedValue('/repo')
     statMock.mockResolvedValue({ isDirectory: () => true })
     const dispose = vi.fn()
-    watchInWorkerMock.mockResolvedValue(dispose)
+    watchInWatcherProcessMock.mockResolvedValue(dispose)
     const { commands } = createRuntimeFileCommands()
 
     const unsubscribe = await commands.watchFileExplorer('id:wt-1', vi.fn())
-    expect(watchInWorkerMock).toHaveBeenCalledWith('/repo', expect.any(Function))
+    expect(watchInWatcherProcessMock).toHaveBeenCalledWith(
+      '/repo',
+      expect.any(Function),
+      expect.any(Function),
+      undefined
+    )
 
     unsubscribe()
     await awaitRuntimeFileWatcherUnsubscribes()

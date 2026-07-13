@@ -488,7 +488,7 @@ export class GitHandler {
     const worktreePath = params.worktreePath as string
     const filePath = params.filePath as string
     try {
-      await this.git(['add', '--', filePath], worktreePath)
+      await this.git(['add', '--', this.literalPathspec(filePath)], worktreePath)
     } finally {
       this.clearGitMutationReadCaches()
     }
@@ -512,7 +512,7 @@ export class GitHandler {
     const worktreePath = params.worktreePath as string
     const filePath = params.filePath as string
     try {
-      await this.git(['restore', '--staged', '--', filePath], worktreePath)
+      await this.git(['restore', '--staged', '--', this.literalPathspec(filePath)], worktreePath)
     } finally {
       this.clearGitMutationReadCaches()
     }
@@ -525,7 +525,10 @@ export class GitHandler {
     try {
       for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
         const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
-        await this.git(['add', '--', ...chunk], worktreePath)
+        await this.git(
+          ['add', '--', ...chunk.map((filePath) => this.literalPathspec(filePath))],
+          worktreePath
+        )
       }
     } finally {
       this.clearGitMutationReadCaches()
@@ -539,7 +542,10 @@ export class GitHandler {
     try {
       for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
         const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
-        await this.git(['restore', '--staged', '--', ...chunk], worktreePath)
+        await this.git(
+          ['restore', '--staged', '--', ...chunk.map((filePath) => this.literalPathspec(filePath))],
+          worktreePath
+        )
       }
     } finally {
       this.clearGitMutationReadCaches()
