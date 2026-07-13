@@ -1078,7 +1078,7 @@ function threadSearchText(thread: AgentPaneThread): string {
   const latestEventText = latest
     ? `${agentTitle(latest)} ${agentSummary(latest)} ${agentMeta(latest)}`
     : ''
-  return `${thread.paneTitle} ${getActivityThreadWorkspaceTitle(thread.worktree)} ${thread.worktree.displayName} ${thread.repo?.displayName ?? ''} ${formatAgentTypeLabel(thread.agentType)} ${stateLabel} ${currentPrompt} ${rawCurrentPrompt} ${currentSummary} ${thread.responsePreview} ${latestEventText}`.toLowerCase()
+  return `${thread.paneTitle} ${getActivityThreadWorkspaceTitle(thread.worktree)} ${thread.worktree.branch ?? ''} ${thread.repo?.displayName ?? ''} ${formatAgentTypeLabel(thread.agentType)} ${stateLabel} ${currentPrompt} ${rawCurrentPrompt} ${currentSummary} ${thread.responsePreview} ${latestEventText}`.toLowerCase()
 }
 
 export const ACTIVITY_SEARCH_QUERY_MAX_BYTES = 2 * 1024

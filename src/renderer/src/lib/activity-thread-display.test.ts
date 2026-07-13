@@ -78,20 +78,57 @@ describe('getActivityThreadTaskTitle', () => {
     ).toBe('Skill creator codex port')
   })
 
-  it('picks the longest substantive prompt from history', () => {
+  it('picks the most recent substantive prompt from history, not the longest', () => {
     expect(
       getActivityThreadTaskTitle({
         entry: {
           prompt: 'yes',
           stateHistory: [
-            { state: 'done', prompt: 'Short', startedAt: 1 },
-            { state: 'working', prompt: 'Skill creator codex port', startedAt: 2 }
+            {
+              state: 'done',
+              prompt: 'Refactor the entire authentication middleware layer',
+              startedAt: 1
+            },
+            { state: 'working', prompt: 'Fix logout', startedAt: 2 }
           ]
         },
         tab: { ...tab, generatedTitle: undefined },
         generatedTitlesEnabled: false
       })
-    ).toBe('Skill creator codex port')
+    ).toBe('Fix logout')
+  })
+
+  it('ignores the generated title when generated titles are disabled', () => {
+    expect(
+      getActivityThreadTaskTitle({
+        entry: {
+          prompt: 'yes',
+          stateHistory: [{ state: 'working', prompt: 'Wire up the export button', startedAt: 1 }]
+        },
+        tab,
+        generatedTitlesEnabled: false
+      })
+    ).toBe('Wire up the export button')
+  })
+
+  it('keeps orchestration labels across terse follow-ups but yields to new work', () => {
+    const orchestration = { taskId: 'task-1', dispatchId: 'ctx-1', displayName: 'Fix checkout race' }
+    // Terse follow-up → still the same orchestration task.
+    expect(
+      getActivityThreadTaskTitle({
+        entry: { prompt: 'yes', stateHistory: [], orchestration },
+        tab: { ...tab, generatedTitle: undefined },
+        generatedTitlesEnabled: false
+      })
+    ).toBe('Fix checkout race')
+    // Substantive non-dispatch prompt → pane moved on; stale label must not pin.
+    expect(
+      getActivityThreadTaskTitle({
+        entry: { prompt: 'Investigate the flaky login test', stateHistory: [], orchestration },
+        tab: { ...tab, generatedTitle: undefined },
+        generatedTitlesEnabled: false
+      })
+    ).toBe('Investigate the flaky login test')
   })
 
   it('parses dispatch task bodies from history when the live prompt is a follow-up', () => {

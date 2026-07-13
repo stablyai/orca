@@ -4,7 +4,11 @@ import type {
   AgentStatusState
 } from '../../../shared/agent-status-types'
 import type { TerminalTab, Worktree } from '../../../shared/types'
-import { getAgentRowPrimaryText, isOrcaDispatchPrompt } from './agent-row-primary-text'
+import {
+  getAgentRowPrimaryText,
+  isOrcaDispatchPrompt,
+  orchestrationLabelsMatchLiveDispatch
+} from './agent-row-primary-text'
 
 // Why: follow-up replies ("yes", "ok proceed") are valid hook prompts but are
 // terrible scan labels for a cross-worktree agent list — treat them as non-titles.
@@ -35,17 +39,44 @@ function taskTitleFromPrompt(prompt: string): string | null {
 }
 
 function bestTaskPromptFromHistory(history: readonly AgentStateHistoryEntry[]): string | null {
+  // Why: the most recent substantive turn is the current task — older prompts
+  // (even longer ones) must not shadow newer work. Compare startedAt rather
+  // than array position so out-of-order history still resolves the latest turn.
   let best: string | null = null
+  let bestStartedAt = Number.NEGATIVE_INFINITY
   for (const historyEntry of history) {
     const candidate = taskTitleFromPrompt(historyEntry.prompt)
     if (!candidate) {
       continue
     }
-    if (!best || candidate.length > best.length) {
+    if (historyEntry.startedAt >= bestStartedAt) {
       best = candidate
+      bestStartedAt = historyEntry.startedAt
     }
   }
   return best
+}
+
+// Why: orchestration labels are the stable identity across follow-up turns, but
+// sticky metadata can outlive the task. Trust the label only when it still
+// describes the live work: a dispatch turn must share the task id (mirrors
+// getAgentRowPrimaryText), and a substantive non-dispatch prompt means the pane
+// moved on to new work — a terse follow-up ("yes") is still the same task.
+function orchestrationLabelForEntry(
+  entry: Pick<AgentStatusEntry, 'orchestration' | 'prompt'>
+): string | null {
+  const label =
+    entry.orchestration?.displayName?.trim() || entry.orchestration?.taskTitle?.trim() || ''
+  if (!label) {
+    return null
+  }
+  if (isOrcaDispatchPrompt(entry.prompt)) {
+    return orchestrationLabelsMatchLiveDispatch(entry) ? label : null
+  }
+  if (taskTitleFromPrompt(entry.prompt)) {
+    return null
+  }
+  return label
 }
 
 /** Friendly workspace label — matches the sidebar worktree card's primary name. */
@@ -71,25 +102,29 @@ export function getActivityThreadTaskTitle(args: {
     return customTitle
   }
 
-  const orchestrationLabel =
-    args.entry.orchestration?.displayName?.trim() || args.entry.orchestration?.taskTitle?.trim()
+  const orchestrationLabel = orchestrationLabelForEntry(args.entry)
   if (orchestrationLabel) {
     return orchestrationLabel
   }
 
-  const generatedTitle = args.tab.generatedTitle?.trim()
+  // Why: respect the user's tabAutoGenerateTitle setting — a disabled generated
+  // title must not resurface here (mirrors resolveTerminalTabTitle's gate).
+  const generatedTitle = args.generatedTitlesEnabled ? args.tab.generatedTitle?.trim() : ''
   if (generatedTitle) {
     return generatedTitle
+  }
+
+  // Why: a substantive live prompt is genuine new work and must win — the row
+  // title follows the active turn (see buildAgentPaneThreads). Only a terse
+  // follow-up ("yes") falls through to the prior task recorded in history.
+  const liveTitle = taskTitleFromPrompt(args.entry.prompt)
+  if (liveTitle) {
+    return liveTitle
   }
 
   const historical = bestTaskPromptFromHistory(args.entry.stateHistory)
   if (historical) {
     return historical
-  }
-
-  const liveTitle = taskTitleFromPrompt(args.entry.prompt)
-  if (liveTitle) {
-    return liveTitle
   }
 
   const liveTabTitle = args.tab.title?.trim()
@@ -157,6 +192,12 @@ export function resolveActivityThreadStatusPreview(
   const next = getActivityThreadStatusPreview(entry, agentState)
   if (next) {
     return next
+  }
+  // Why: only bridge a transient empty/mislabeled ping within the SAME turn. A
+  // substantive live prompt marks a new turn, so the prior turn's reply must not
+  // linger as the current status (a fresh working turn shows no stale preview).
+  if (!isTerseAgentFollowUpPrompt(entry.prompt)) {
+    return ''
   }
   const previous = previousPreview?.trim() ?? ''
   if (previous && !isMislabeledUserPrompt(previous, entry)) {
