@@ -1100,6 +1100,96 @@ describe('PtyHandler', () => {
     expect(mockKill).not.toHaveBeenCalledWith('SIGKILL')
   })
 
+  it('awaits Windows ConPTY exit after immediate shutdown without a signal argument', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    let onExitCb: ((evt: { exitCode: number }) => void) | undefined
+    const mockKill = vi.fn()
+    const mockDestroy = vi.fn()
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      kill: mockKill,
+      destroy: mockDestroy,
+      onData: vi.fn(),
+      onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+        onExitCb = cb
+      })
+    })
+    try {
+      await dispatcher.callRequest('pty.spawn', {})
+      const shutdown = dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+
+      expect(mockKill).toHaveBeenCalledWith()
+      expect(handler.activePtyCount).toBe(1)
+      onExitCb!({ exitCode: 0 })
+      await expect(shutdown).resolves.toBeUndefined()
+
+      expect(mockKill).toHaveBeenCalledTimes(1)
+      expect(mockDestroy).not.toHaveBeenCalled()
+      expect(handler.activePtyCount).toBe(0)
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
+  it('retains a Windows ConPTY owner when immediate exit times out', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const mockKill = vi.fn()
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      kill: mockKill,
+      onData: vi.fn(),
+      onExit: vi.fn()
+    })
+    try {
+      await dispatcher.callRequest('pty.spawn', {})
+      const shutdown = dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+      const rejection = expect(shutdown).rejects.toThrow(
+        'Timed out waiting for Windows PTY teardown: pty-1'
+      )
+      await vi.advanceTimersByTimeAsync(3_000)
+
+      await rejection
+      expect(mockKill).toHaveBeenCalledTimes(1)
+      expect(handler.activePtyCount).toBe(1)
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
+  it('waits on retry without killing a Windows ConPTY twice', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    let onExitCb: ((evt: { exitCode: number }) => void) | undefined
+    const mockKill = vi.fn()
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      kill: mockKill,
+      onData: vi.fn(),
+      onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+        onExitCb = cb
+      })
+    })
+    try {
+      await dispatcher.callRequest('pty.spawn', {})
+      const first = dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+      const firstRejection = expect(first).rejects.toThrow(
+        'Timed out waiting for Windows PTY teardown: pty-1'
+      )
+      await vi.advanceTimersByTimeAsync(3_000)
+      await firstRejection
+
+      const retry = dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+      expect(mockKill).toHaveBeenCalledTimes(1)
+      onExitCb!({ exitCode: 0 })
+      await expect(retry).resolves.toBeUndefined()
+      expect(mockKill).toHaveBeenCalledTimes(1)
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
   it('fails closed when full POSIX PTY session teardown cannot be verified', async () => {
     const mockKill = vi.fn()
     mockKillPosixPtySession.mockResolvedValue(false)

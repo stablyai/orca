@@ -3354,7 +3354,23 @@ export function registerPtyHandlers(
       // provider emitted its own exit during shutdown, the exit listener already
       // delivered runtime + renderer exits — synthesizing again would double-fire.
       void shutdownProviderAndDetectExit(provider, ptyId, { immediate: false })
-        .then((providerExitObserved) => {
+        .then(async (providerExitObserved) => {
+          if (!providerExitObserved) {
+            try {
+              if (await isProviderPtyLive(provider, ptyId)) {
+                // Why: graceful shutdown only acknowledges signal delivery.
+                // Keep ownership until the provider's real exit event arrives.
+                return
+              }
+            } catch (err) {
+              console.warn(
+                `[pty] Failed to verify graceful PTY stop ${ptyId}: ${
+                  err instanceof Error ? err.message : String(err)
+                }`
+              )
+              return
+            }
+          }
           finishPtyShutdown(ptyId, connectionId, store)
           if (!providerExitObserved) {
             runtime?.onPtyExit(ptyId, -1)
@@ -3373,11 +3389,8 @@ export function registerPtyHandlers(
           console.warn(
             `[pty] Failed to stop PTY ${ptyId}: ${err instanceof Error ? err.message : String(err)}`
           )
-          // Why: callers of controller.kill must observe a kill→exit pair so
-          // runtime tail buffers close and agents stop treating the pane as
-          // live. Preserve provider/lease state so a retry can still target
-          // the remote PTY if it survived the transient failure.
-          runtime?.onPtyExit(ptyId, -1)
+          // Why: preserve runtime/provider ownership so deletion can still
+          // target a PTY whose graceful close failed or remains unverified.
         })
       return true
     },
@@ -3390,13 +3403,9 @@ export function registerPtyHandlers(
         provider = connectionId ? getProvider(connectionId) : getProviderForPty(ptyId)
       } catch {
         if (connectionId) {
-          // Why: an absent SSH provider means there is no live target left to
-          // await, but the relay lease must still be tombstoned.
-          finishPtyShutdown(ptyId, connectionId, store)
-          runtime?.onPtyExit(ptyId, -1)
-          rememberSyntheticKillExit(ptyId)
-          sendPtyExitToRenderer({ id: ptyId, code: -1 })
-          return true
+          // Why: disconnect unregisters the provider while the relay PTY and
+          // durable lease intentionally survive. Deletion must fail closed.
+          return false
         }
         return false
       }

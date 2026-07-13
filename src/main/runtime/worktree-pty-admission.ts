@@ -4,6 +4,8 @@ type WorktreePtyAdmissionState = {
   drainWaiters: Set<() => void>
 }
 
+export const WORKTREE_PTY_SPAWN_DRAIN_TIMEOUT_MS = 30_000
+
 export class WorktreePtyAdmission {
   private readonly states = new Map<string, WorktreePtyAdmissionState>()
 
@@ -50,7 +52,32 @@ export class WorktreePtyAdmission {
     }
     state.teardownOwners += 1
     if (state.activeSpawns > 0) {
-      await new Promise<void>((resolve) => state.drainWaiters.add(resolve))
+      let resolveDrain = (): void => {}
+      let timer: NodeJS.Timeout | undefined
+      const drain = new Promise<void>((resolve) => {
+        resolveDrain = resolve
+        state.drainWaiters.add(resolve)
+      })
+      const timeout = new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`Timed out draining PTY spawns: ${worktreeId}`)),
+          WORKTREE_PTY_SPAWN_DRAIN_TIMEOUT_MS
+        )
+      })
+      try {
+        await Promise.race([drain, timeout])
+      } catch (error) {
+        // Why: deletion failed before touching Git. Reopen admission so the
+        // still-running spawn can finish in the worktree that remains.
+        state.drainWaiters.delete(resolveDrain)
+        state.teardownOwners -= 1
+        this.deleteIfIdle(worktreeId, state)
+        throw error
+      } finally {
+        if (timer) {
+          clearTimeout(timer)
+        }
+      }
     }
     let released = false
     return () => {

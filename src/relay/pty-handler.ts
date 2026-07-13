@@ -50,6 +50,8 @@ type ManagedPty = {
   buffered: string
   /** Timer for SIGKILL fallback after a graceful SIGTERM shutdown. */
   killTimer?: ReturnType<typeof setTimeout>
+  /** Windows ConPTY kill has no signal argument and completes asynchronously. */
+  windowsImmediateKillIssued?: boolean
   /** True once disposeManagedPty has run. Prevents double-dispose (onExit + an
    *  explicit shutdown can both fire for the same PTY) and converts post-dispose
    *  entry-point calls into a clean "not found" error instead of a silent no-op
@@ -109,13 +111,16 @@ function disposeManagedPty(managed: ManagedPty): void {
   if (process.platform !== 'win32') {
     ;(managed.pty as unknown as { kill: (sig?: string) => void }).kill = () => {}
   }
-  try {
-    ;(managed.pty as unknown as { destroy?: () => void }).destroy?.()
-  } catch {
-    /* swallow */
+  if (!managed.windowsImmediateKillIssued) {
+    try {
+      ;(managed.pty as unknown as { destroy?: () => void }).destroy?.()
+    } catch {
+      /* swallow */
+    }
   }
 }
 const DEFAULT_GRACE_TIME_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
+const WINDOWS_IMMEDIATE_EXIT_TIMEOUT_MS = 3_000
 export const REPLAY_BUFFER_MAX = 100 * 1024
 const PTY_OUTPUT_BATCH_INTERVAL_MS = 8
 const PTY_OUTPUT_DRAIN_CONTINUE_MS = 1
@@ -238,6 +243,7 @@ export class PtyHandler {
   private pendingOutputByPty = new Map<string, PendingPtyOutput>()
   private lastInputAtByPty = new Map<string, number>()
   private interactiveOutputCharsByPty = new Map<string, number>()
+  private exitWaitersByPty = new Map<string, Set<() => void>>()
   // Why: external observers need to drop per-pane state when a PTY exits.
   // Today the relay composes multiple consumers (hook-server cache eviction
   // and plugin-overlay dir cleanup) into a single callback at the call site
@@ -414,6 +420,7 @@ export class PtyHandler {
       this.enqueuePtyOutput(managed.id, data)
     })
     managed.pty.onExit(({ exitCode }: { exitCode: number }) => {
+      this.resolveExitWaiters(managed.id)
       if (managed.disposed) {
         return
       }
@@ -445,6 +452,61 @@ export class PtyHandler {
       // leaks (see docs/fix-pty-fd-leak.md).
       disposeManagedPty(managed)
     })
+  }
+
+  private waitForExit(id: string): { promise: Promise<boolean>; cancel: () => void } {
+    let settled = false
+    let resolvePromise = (_exited: boolean): void => {}
+    const waiter = (): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      resolvePromise(true)
+    }
+    const waiters = this.exitWaitersByPty.get(id) ?? new Set<() => void>()
+    waiters.add(waiter)
+    this.exitWaitersByPty.set(id, waiters)
+    const timer = setTimeout(() => {
+      if (settled) {
+        return
+      }
+      settled = true
+      waiters.delete(waiter)
+      if (waiters.size === 0) {
+        this.exitWaitersByPty.delete(id)
+      }
+      resolvePromise(false)
+    }, WINDOWS_IMMEDIATE_EXIT_TIMEOUT_MS)
+    const promise = new Promise<boolean>((resolve) => {
+      resolvePromise = resolve
+    })
+    return {
+      promise,
+      cancel: () => {
+        if (settled) {
+          return
+        }
+        settled = true
+        clearTimeout(timer)
+        waiters.delete(waiter)
+        if (waiters.size === 0) {
+          this.exitWaitersByPty.delete(id)
+        }
+      }
+    }
+  }
+
+  private resolveExitWaiters(id: string): void {
+    const waiters = this.exitWaitersByPty.get(id)
+    if (!waiters) {
+      return
+    }
+    this.exitWaitersByPty.delete(id)
+    for (const resolve of waiters) {
+      resolve()
+    }
   }
 
   private notifyExitListener(managed: ManagedPty): void {
@@ -841,17 +903,33 @@ export class PtyHandler {
     if (immediate) {
       this.releaseStartupCommand(managed)
       this.flushPtyOutput(id)
+      if (process.platform === 'win32') {
+        // Why: WindowsTerminal rejects signal arguments and ConPTY teardown is
+        // asynchronous. Git removal must wait for the native exit event.
+        const exit = this.waitForExit(id)
+        if (!managed.windowsImmediateKillIssued) {
+          managed.windowsImmediateKillIssued = true
+          try {
+            managed.pty.kill()
+          } catch (error) {
+            managed.windowsImmediateKillIssued = false
+            exit.cancel()
+            throw error
+          }
+        }
+        if (!(await exit.promise)) {
+          throw new Error(`Timed out waiting for Windows PTY teardown: ${id}`)
+        }
+        return
+      }
       const killedSession = await killPosixPtySession(
         managed.pty.pid,
         (managed.pty as unknown as { ptsName?: unknown }).ptsName
       )
-      if (!killedSession && process.platform !== 'win32' && !managed.disposed) {
+      if (!killedSession && !managed.disposed) {
         // Why: killing only the forkpty leader can strand HUP-resistant job
         // groups in a deleted cwd. Fail closed so worktree removal is aborted.
         throw new Error(`Unable to verify full PTY session teardown: ${id}`)
-      }
-      if (!killedSession && !managed.disposed) {
-        managed.pty.kill('SIGKILL')
       }
       if (managed.disposed) {
         return
@@ -1148,6 +1226,7 @@ export class PtyHandler {
     this.lastInputAtByPty.clear()
     this.interactiveOutputCharsByPty.clear()
     for (const [, managed] of this.ptys) {
+      this.resolveExitWaiters(managed.id)
       if (managed.killTimer) {
         clearTimeout(managed.killTimer)
         managed.killTimer = undefined

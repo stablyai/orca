@@ -2736,6 +2736,59 @@ describe('registerPtyHandlers', () => {
         expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1)
       })
 
+      it('keeps graceful SSH ownership while the provider still reports the PTY live', async () => {
+        const shutdown = vi.fn(async () => undefined)
+        const store = { markSshRemotePtyLease: vi.fn() }
+        const runtime = { setPtyController: vi.fn(), onPtyExit: vi.fn() }
+        registerSshPtyProvider('ssh-1', {
+          spawn: vi.fn(),
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown,
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          hasPtyAsync: vi.fn(async () => true),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        setPtyOwnership('remote-pty', 'ssh-1')
+        handlers.clear()
+        registerPtyHandlers(
+          mainWindow as never,
+          runtime as never,
+          undefined,
+          undefined,
+          undefined,
+          store as never
+        )
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+          kill: (ptyId: string) => boolean
+        }
+
+        try {
+          expect(controller.kill('remote-pty')).toBe(true)
+          await new Promise((resolve) => setImmediate(resolve))
+        } finally {
+          deletePtyOwnership('remote-pty')
+        }
+
+        expect(shutdown).toHaveBeenCalledWith('remote-pty', { immediate: false })
+        expect(store.markSshRemotePtyLease).not.toHaveBeenCalled()
+        expect(runtime.onPtyExit).not.toHaveBeenCalled()
+      })
+
       it('controller kill does not duplicate exits when the provider emits exit during shutdown', async () => {
         const exitListeners = new Set<(payload: { id: string; code: number }) => void>()
         const shutdown = vi.fn(async (id: string) => {
@@ -3318,6 +3371,33 @@ describe('registerPtyHandlers', () => {
         expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1)
       })
 
+      it('fails deletion-only stop closed when a detached SSH provider is absent', async () => {
+        const store = { markSshRemotePtyLease: vi.fn() }
+        const runtime = { setPtyController: vi.fn(), onPtyExit: vi.fn() }
+        setPtyOwnership('remote-pty', 'ssh-1')
+        handlers.clear()
+        registerPtyHandlers(
+          mainWindow as never,
+          runtime as never,
+          undefined,
+          undefined,
+          undefined,
+          store as never
+        )
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+          stopAndWait: (ptyId: string) => Promise<boolean>
+        }
+
+        try {
+          await expect(controller.stopAndWait('remote-pty')).resolves.toBe(false)
+        } finally {
+          deletePtyOwnership('remote-pty')
+        }
+
+        expect(store.markSshRemotePtyLease).not.toHaveBeenCalled()
+        expect(runtime.onPtyExit).not.toHaveBeenCalled()
+      })
+
       it('preserves an SSH lease when runtime controller kill shutdown fails transiently', async () => {
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
         const store = {
@@ -3376,7 +3456,7 @@ describe('registerPtyHandlers', () => {
           'remote-pty',
           'terminated'
         )
-        expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1)
+        expect(runtime.onPtyExit).not.toHaveBeenCalled()
       })
 
       it('strips ORCA_PANE_KEY/TAB_ID/WORKTREE_ID from SSH spawn env when remote agent hooks are disabled', async () => {

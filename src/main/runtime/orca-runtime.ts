@@ -203,7 +203,7 @@ import {
 import { TASK_PROVIDERS } from '../../shared/task-providers'
 import { FIRST_PANE_ID } from '../../shared/pane-key'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
-import { parseAppSshPtyId } from '../../shared/ssh-pty-id'
+import { parseAppSshPtyId, toAppSshPtyId } from '../../shared/ssh-pty-id'
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../shared/terminal-tab-id'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '../../shared/tui-agent-startup'
 import { repoIsRemote } from '../../shared/agent-launch-remote'
@@ -823,6 +823,7 @@ type RuntimeStore = {
   getWorkspaceSession?: Store['getWorkspaceSession']
   setWorkspaceSession?: Store['setWorkspaceSession']
   persistPtyBinding?: Store['persistPtyBinding']
+  getSshRemotePtyLeases?: Store['getSshRemotePtyLeases']
   getUI?: Store['getUI']
   updateUI?: Store['updateUI']
   recordFeatureInteraction?: Store['recordFeatureInteraction']
@@ -18911,6 +18912,19 @@ export class OrcaRuntimeService {
     for (const pty of this.ptysById.values()) {
       if (pty.worktreeId === worktreeId && pty.connected) {
         ptyIds.add(pty.ptyId)
+      }
+    }
+    if (opts.worktreeTeardown) {
+      for (const lease of this.store?.getSshRemotePtyLeases?.() ?? []) {
+        if (
+          lease.worktreeId === worktreeId &&
+          lease.state !== 'terminated' &&
+          lease.state !== 'expired'
+        ) {
+          // Why: durable leases are the only authoritative owner after a
+          // restart or disconnect has removed renderer/runtime PTY records.
+          ptyIds.add(toAppSshPtyId(lease.targetId, lease.ptyId))
+        }
       }
     }
 

@@ -5,11 +5,14 @@ type SshPtyLivenessOptions = {
   listIds: () => Promise<string[]>
 }
 
+const MAX_LEGACY_MEMBERSHIP_OVERRIDES = 256
+
 export class SshPtyLiveness {
   private supportsTargetedProbe: boolean | undefined
   private targetedProbeInFlight: Promise<boolean> | undefined
   private legacyIds: Set<string> | undefined
   private legacyInventoryInFlight: Promise<Set<string>> | undefined
+  private legacyInventoryAcceptsOverrides = false
   private legacyInventoryGeneration = 0
   private legacyMembershipOverrides = new Map<string, boolean>()
 
@@ -20,6 +23,7 @@ export class SshPtyLiveness {
     this.legacyInventoryGeneration += 1
     this.legacyIds = undefined
     this.legacyInventoryInFlight = undefined
+    this.legacyInventoryAcceptsOverrides = false
     this.legacyMembershipOverrides.clear()
   }
 
@@ -81,9 +85,24 @@ export class SshPtyLiveness {
       } else {
         this.legacyIds.delete(id)
       }
-    } else if (this.supportsTargetedProbe === false) {
+    } else if (
+      this.supportsTargetedProbe === false &&
+      this.legacyInventoryInFlight &&
+      this.legacyInventoryAcceptsOverrides
+    ) {
       // Why: lifecycle changes can settle while the legacy inventory RPC is
       // in flight; replay them onto its result before any liveness read.
+      if (
+        !this.legacyMembershipOverrides.has(id) &&
+        this.legacyMembershipOverrides.size >= MAX_LEGACY_MEMBERSHIP_OVERRIDES
+      ) {
+        // Why: a corrupt/hostile relay must not grow this transient map without
+        // bound. Invalidate the snapshot so no caller trusts dropped updates.
+        this.legacyInventoryGeneration += 1
+        this.legacyMembershipOverrides.clear()
+        this.legacyInventoryAcceptsOverrides = false
+        return
+      }
       this.legacyMembershipOverrides.set(id, live)
     }
   }
@@ -96,9 +115,14 @@ export class SshPtyLiveness {
       return this.legacyInventoryInFlight
     }
     const generation = this.legacyInventoryGeneration
-    const inventory = this.options.listIds().then((ids) => {
-      const liveIds = new Set(ids)
-      if (this.legacyInventoryGeneration === generation) {
+    this.legacyInventoryAcceptsOverrides = true
+    const inventory = this.options
+      .listIds()
+      .then((ids) => {
+        if (this.legacyInventoryGeneration !== generation) {
+          throw new Error('SSH legacy PTY inventory invalidated during liveness updates')
+        }
+        const liveIds = new Set(ids)
         for (const [id, live] of this.legacyMembershipOverrides) {
           if (live) {
             liveIds.add(id)
@@ -108,15 +132,22 @@ export class SshPtyLiveness {
         }
         this.legacyMembershipOverrides.clear()
         this.legacyIds = liveIds
-      }
-      return liveIds
-    })
+        return liveIds
+      })
+      .catch((error) => {
+        // Why: a failed/invalidated inventory is not a reusable baseline. Its
+        // transient overrides would otherwise accumulate forever across retries.
+        this.legacyMembershipOverrides.clear()
+        throw error
+      })
     this.legacyInventoryInFlight = inventory
     try {
       return await inventory
     } finally {
       if (this.legacyInventoryInFlight === inventory) {
         this.legacyInventoryInFlight = undefined
+        this.legacyInventoryAcceptsOverrides = false
+        this.legacyMembershipOverrides.clear()
       }
     }
   }

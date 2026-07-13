@@ -435,6 +435,35 @@ describe('SshPtyProvider', () => {
     )
   })
 
+  it('keeps graceful legacy liveness authoritative until the relay exit event', async () => {
+    let notification: ((method: string, params: Record<string, unknown>) => void) | undefined
+    mux.onNotification.mockImplementation((callback) => {
+      notification = callback
+      return () => {}
+    })
+    mux.request.mockImplementation(async (method: string) => {
+      if (method === 'pty.shutdown') {
+        return undefined
+      }
+      if (method === 'pty.hasPty') {
+        throw Object.assign(new Error('Method not found'), {
+          code: JsonRpcErrorCode.MethodNotFound
+        })
+      }
+      if (method === 'pty.listProcesses') {
+        return [{ id: 'pty-1', cwd: '/work/demo', title: 'shell' }]
+      }
+      throw new Error(`Unexpected request: ${method}`)
+    })
+    provider = new SshPtyProvider('conn-1', mux as never)
+
+    await provider.shutdown(scopedPty1, { immediate: false })
+    await expect(provider.hasPtyAsync(scopedPty1)).resolves.toBe(true)
+
+    notification?.('pty.exit', { id: 'pty-1', code: 0 })
+    await expect(provider.hasPtyAsync(scopedPty1)).resolves.toBe(false)
+  })
+
   it('shutdown forwards keepHistory: true over the relay', async () => {
     await provider.shutdown(scopedPty1, { immediate: true, keepHistory: true })
     expect(mux.request).toHaveBeenCalledWith(

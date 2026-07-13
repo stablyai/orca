@@ -271,7 +271,11 @@ export class SshPtyProvider implements IPtyProvider {
       },
       opts.immediate ? { timeoutMs: SSH_PTY_IMMEDIATE_SHUTDOWN_TIMEOUT_MS } : undefined
     )
-    this.ptyLiveness.markStopped(id)
+    // Why: graceful shutdown only acknowledges SIGTERM delivery; the relay
+    // can remain alive until its exit event or 5s fallback proves death.
+    if (opts.immediate) {
+      this.ptyLiveness.markStopped(id)
+    }
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {
