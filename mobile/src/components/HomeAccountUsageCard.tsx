@@ -54,10 +54,15 @@ export function HomeAccountUsageCard({
             : descriptor.id === 'codex'
               ? snapshot.codex.accounts
               : []
-        // Hide a provider with neither a managed account nor live usage; a
-        // managed provider still shows a "System default" row when the active
-        // target has data.
-        if (managedAccounts.length === 0 && !hasActiveProviderUsage(limits)) {
+        // Hide a provider with no managed account and no usage — but keep a
+        // display-only one visible while fetching/error, matching the accounts screen.
+        const displayOnlyPending =
+          !descriptor.managed && (limits?.status === 'fetching' || limits?.status === 'error')
+        if (
+          managedAccounts.length === 0 &&
+          !hasActiveProviderUsage(limits) &&
+          !displayOnlyPending
+        ) {
           return null
         }
         const active =

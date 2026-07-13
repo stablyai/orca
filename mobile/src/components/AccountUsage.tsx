@@ -47,8 +47,12 @@ export function UsageBar({
   loading?: boolean
   labelWidth?: number
 }) {
-  // Why: round then clamp so bar width, color, and label share one value (desktop parity).
-  const used = usedPercent == null ? null : Math.max(0, Math.min(100, Math.round(usedPercent)))
+  // Round+clamp so width/color/label share one value (desktop parity); a
+  // non-finite value counts as no data so the bar never renders `width: "NaN%"`.
+  const used =
+    usedPercent == null || !Number.isFinite(usedPercent)
+      ? null
+      : Math.max(0, Math.min(100, Math.round(usedPercent)))
   // Why: same consumption bands as desktop barColor (green <60, amber <80, red ≥80).
   const barColor =
     used == null
