@@ -13,6 +13,7 @@ type Row = {
   external_id: string
   updated_at: string | null
   created_at: string | null
+  synced_at: string | null
 }
 
 /**
@@ -38,7 +39,7 @@ export function listWebChatCandidates(args: {
     }
     const rows = db
       .prepare(
-        `SELECT id, source, external_id, updated_at, created_at FROM conversations
+        `SELECT id, source, external_id, updated_at, created_at, synced_at FROM conversations
          WHERE source IN ('CHATGPT','CLAUDE','GEMINI')
          ORDER BY COALESCE(updated_at, created_at, synced_at) DESC`
       )
@@ -48,7 +49,9 @@ export function listWebChatCandidates(args: {
         (r): r is Row & { source: keyof typeof SOURCE_TO_AGENT } => r.source in SOURCE_TO_AGENT
       )
       .map((r) => {
-        const mtimeMs = Date.parse(r.updated_at ?? r.created_at ?? '') || 0
+        // Why: SQL ORDER BY 폴백(updated_at→created_at→synced_at)과 mtimeMs를 일치시켜
+        // 둘 다 null인 대화가 최하위(mtimeMs=0)로 밀려 파싱 전 드롭되지 않게 한다.
+        const mtimeMs = Date.parse(r.updated_at ?? r.created_at ?? r.synced_at ?? '') || 0
         return {
           agent: SOURCE_TO_AGENT[r.source],
           file: {
