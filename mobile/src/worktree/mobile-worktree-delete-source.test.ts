@@ -18,8 +18,10 @@ describe('mobile worktree deletion', () => {
       'const handleRemoveHost = useCallback'
     )
 
-    expect(handleDelete).toContain("sendRequest('worktree.rm'")
     // Runtime RPC skips the archive hook unless runHooks is set (parity with web).
-    expect(handleDelete).toContain('runHooks: true')
+    // Bind the flag to the worktree.rm payload so it can't pass on an unrelated match.
+    expect(handleDelete).toMatch(
+      /sendRequest\('worktree\.rm',\s*\{[\s\S]*?runHooks:\s*true[\s\S]*?\}\)/
+    )
   })
 })
