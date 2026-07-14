@@ -695,7 +695,10 @@ export function HostScreen({
       try {
         const response = await client.sendRequest('worktree.rm', {
           worktree: `id:${item.worktreeId}`,
-          force: true
+          force: true,
+          // Runtime RPC gates the orca.yaml archive hook behind runHooks; paired
+          // clients opt in so the teardown script runs on delete (matches web).
+          runHooks: true
         })
         if (!response.ok) {
           setWorktrees((prev) => [...prev, item])
