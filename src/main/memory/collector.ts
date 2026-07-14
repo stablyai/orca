@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: the collector's platform-specific
-   enumeration paths (`ps` on Unix, `wmic` on Windows) plus the history
+   enumeration paths (`ps` on Unix, `typeperf`/CIM on Windows) plus the history
    ring buffer plus the Electron bucketing live together to keep one
    snapshot's worth of code in one place. Splitting them produces extra
    modules whose only consumer is this file. */
@@ -10,7 +10,7 @@
  *   - Orca's own Electron processes, via `app.getAppMetrics()`, bucketed
  *     into main / renderer / other.
  *   - Each registered PTY's process subtree, enumerated once from a host-
- *     wide `ps` sweep (`wmic` on Windows).
+ *     wide process sweep (`typeperf` with a PowerShell CIM fallback on Windows).
  *
  * Memory samples are held in a per-key ring (one key per worktree, plus
  * a reserved app-total key) so the UI can draw a trend sparkline.
@@ -20,7 +20,7 @@
  */
 
 import { basename } from 'node:path'
-import { exec } from 'node:child_process'
+import { exec, execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import os from 'node:os'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
@@ -45,6 +45,7 @@ export type MemorySnapshotStore = Pick<Store, 'getRepo' | 'getWorktreeMeta'>
 // ─── Module state ───────────────────────────────────────────────────
 
 let inflight: Promise<MemorySnapshot> | null = null
+let windowsProcessBackend: 'typeperf' | 'cim' = 'typeperf'
 
 // ─── Public API ─────────────────────────────────────────────────────
 
@@ -72,6 +73,13 @@ export async function collectMemorySnapshot(store: MemorySnapshotStore): Promise
 const execAsync = promisify(exec)
 const PS_EXEC_TIMEOUT_MS = 5_000
 const PS_MAX_BUFFER = 10 * 1024 * 1024
+const TYPEPERF_COUNTERS = [
+  '\\Process(*)\\ID Process',
+  '\\Process(*)\\Creating Process ID',
+  '\\Process(*)\\Working Set'
+] as const
+const TYPEPERF_MAX_FIELDS = 8_192
+const TYPEPERF_MAX_LINE_CHARS = 1024 * 1024
 
 /** One row from the host-wide process listing. */
 type ProcRow = {
@@ -83,7 +91,7 @@ type ProcRow = {
   memory: number
 }
 
-/** Indexed view of a single `ps`/`wmic` sweep. */
+/** Indexed view of a single host process sweep. */
 type ProcIndex = {
   byPid: Map<number, ProcRow>
   childrenOf: Map<number, number[]>
@@ -226,69 +234,212 @@ export function parsePsOutput(stdout: string): ProcRow[] {
 }
 
 async function enumerateWindows(): Promise<ProcRow[]> {
-  // Why: `wmic` ships with stock Windows and emits a plain, tab-separated
-  // table without the CSV-quoting edge cases PowerShell's ConvertTo-Csv
-  // introduces. CPU% would require delta sampling between two queries; for
-  // v1 we report 0% on Windows — memory attribution is the primary signal.
+  // Why: WMIC is removed from current Windows releases, while WMI/CIM can be
+  // slow or unavailable on otherwise healthy machines. typeperf reads the
+  // built-in process counters without WMI and includes the PID, parent PID,
+  // and working set needed for subtree attribution. CIM remains a locale-
+  // independent fallback when localized counter names make typeperf fail.
+  if (windowsProcessBackend === 'typeperf') {
+    const typeperfRows = await enumerateWindowsWithTypeperf()
+    if (typeperfRows.length > 0) {
+      return typeperfRows
+    }
+    // Counter names are localized on some Windows installations. Once the
+    // probe fails, avoid spawning and warning about it on every two-second
+    // Resource Manager poll; CIM remains the backend until app restart.
+    windowsProcessBackend = 'cim'
+  }
+  return enumerateWindowsWithCim()
+}
+
+async function enumerateWindowsWithTypeperf(): Promise<ProcRow[]> {
   try {
-    const { stdout } = await execAsync(
-      'wmic process get ProcessId,ParentProcessId,WorkingSetSize /format:value',
-      { maxBuffer: PS_MAX_BUFFER, timeout: PS_EXEC_TIMEOUT_MS }
-    )
-    return parseWmicOutput(stdout)
+    // `-si 0` asks for the first sample immediately; the default one-second
+    // interval would consume half of Resource Manager's two-second poll cycle.
+    const stdout = await execFileText('typeperf.exe', [
+      ...TYPEPERF_COUNTERS,
+      '-sc',
+      '1',
+      '-si',
+      '0'
+    ])
+    return parseTypeperfProcessOutput(stdout)
   } catch (err) {
-    console.warn('[memory] wmic enumeration failed', err)
+    console.warn('[memory] typeperf process enumeration failed; falling back to CIM', err)
     return []
   }
 }
 
-/** Exported for tests: parses `wmic /format:value` stanza output. */
-export function parseWmicOutput(stdout: string): ProcRow[] {
-  // wmic /format:value emits stanzas of `Key=Value` lines separated by blank
-  // lines. We accumulate a record until a blank line, then flush.
+async function enumerateWindowsWithCim(): Promise<ProcRow[]> {
+  const args = [
+    '-NoLogo',
+    '-NoProfile',
+    '-NonInteractive',
+    '-Command',
+    'Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,WorkingSetSize | ForEach-Object { [string]::Join([char]9, @($_.ProcessId, $_.ParentProcessId, $_.WorkingSetSize)) }'
+  ]
+  try {
+    const stdout = await execFileText('powershell.exe', args)
+    return parseWindowsProcessOutput(stdout)
+  } catch (err) {
+    console.warn('[memory] PowerShell process enumeration failed', err)
+    return []
+  }
+}
+
+function execFileText(file: string, args: string[]): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    execFile(
+      file,
+      args,
+      {
+        encoding: 'utf8',
+        maxBuffer: PS_MAX_BUFFER,
+        timeout: PS_EXEC_TIMEOUT_MS,
+        windowsHide: true
+      },
+      (err, output) => {
+        if (err) {
+          reject(err)
+          return
+        }
+        resolve(String(output))
+      }
+    )
+  })
+}
+
+type TypeperfProcessFields = {
+  pid?: number
+  ppid?: number
+  memory?: number
+}
+
+/** Exported for tests: parses one CSV sample from Windows `typeperf`. */
+export function parseTypeperfProcessOutput(stdout: string): ProcRow[] {
+  let headers: string[] | null = null
+  let values: string[] | null = null
+
+  for (const line of iterateProcessOutputLines(stdout)) {
+    if (!line || line.length > TYPEPERF_MAX_LINE_CHARS) {
+      continue
+    }
+    const fields = parseTypeperfCsvLine(line)
+    if (!headers && fields[0]?.startsWith('(PDH-CSV')) {
+      headers = fields
+      continue
+    }
+    if (headers && fields.length === headers.length) {
+      values = fields
+      break
+    }
+  }
+
+  if (!headers || !values) {
+    return []
+  }
+
+  const byInstance = new Map<string, TypeperfProcessFields>()
+  for (let index = 1; index < headers.length; index += 1) {
+    const path = parseTypeperfCounterPath(headers[index])
+    if (!path || path.instance === '_Total') {
+      continue
+    }
+    const value = Number.parseFloat(values[index])
+    if (!Number.isFinite(value)) {
+      continue
+    }
+    const row = byInstance.get(path.instance) ?? {}
+    if (path.counter === 'ID Process') {
+      row.pid = Math.trunc(value)
+    } else if (path.counter === 'Creating Process ID') {
+      row.ppid = Math.trunc(value)
+    } else if (path.counter === 'Working Set') {
+      row.memory = value
+    }
+    byInstance.set(path.instance, row)
+  }
+
   const rows: ProcRow[] = []
-  let pid = Number.NaN
-  let ppid = Number.NaN
-  let ws = Number.NaN
-
-  const flush = (): void => {
-    if (!Number.isNaN(pid) && !Number.isNaN(ppid)) {
-      rows.push({
-        pid,
-        ppid,
-        cpu: 0,
-        memory: Number.isFinite(ws) && ws > 0 ? ws : 0
-      })
-    }
-    pid = Number.NaN
-    ppid = Number.NaN
-    ws = Number.NaN
-  }
-
-  for (const raw of stdout.split(/\r?\n/)) {
-    const line = raw.trim()
-    if (line.length === 0) {
-      flush()
+  for (const row of byInstance.values()) {
+    if (row.pid === undefined || row.pid <= 0 || row.ppid === undefined || row.ppid < 0) {
       continue
     }
-    const eq = line.indexOf('=')
-    if (eq < 0) {
-      continue
-    }
-    const key = line.slice(0, eq)
-    const value = line.slice(eq + 1)
-    if (key === 'ProcessId') {
-      pid = Number.parseInt(value, 10)
-    } else if (key === 'ParentProcessId') {
-      ppid = Number.parseInt(value, 10)
-    } else if (key === 'WorkingSetSize') {
-      ws = Number.parseInt(value, 10)
-    }
+    rows.push({
+      pid: row.pid,
+      ppid: row.ppid,
+      cpu: 0,
+      memory: row.memory !== undefined && row.memory > 0 ? row.memory : 0
+    })
   }
-  flush()
   return rows
 }
 
+function parseTypeperfCounterPath(path: string): { instance: string; counter: string } | null {
+  const processStart = path.lastIndexOf('\\Process(')
+  const counterStart = path.lastIndexOf(')\\')
+  if (processStart < 0 || counterStart <= processStart + 9) {
+    return null
+  }
+  return {
+    instance: path.slice(processStart + 9, counterStart),
+    counter: path.slice(counterStart + 2)
+  }
+}
+
+function parseTypeperfCsvLine(line: string): string[] {
+  const fields: string[] = []
+  let value = ''
+  let quoted = false
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index]
+    if (char === '"') {
+      if (quoted && line[index + 1] === '"') {
+        value += '"'
+        index += 1
+      } else {
+        quoted = !quoted
+      }
+      continue
+    }
+    if (char === ',' && !quoted) {
+      fields.push(value)
+      value = ''
+      if (fields.length >= TYPEPERF_MAX_FIELDS) {
+        return []
+      }
+      continue
+    }
+    value += char
+  }
+  fields.push(value)
+  return fields
+}
+
+/** Exported for tests: parses tab-delimited PowerShell CIM process rows. */
+export function parseWindowsProcessOutput(stdout: string): ProcRow[] {
+  const rows: ProcRow[] = []
+  for (const line of iterateProcessOutputLines(stdout)) {
+    const fields = getProcessOutputFields(line, 3)
+    if (fields.length < 3) {
+      continue
+    }
+    const pid = Number.parseInt(fields[0], 10)
+    const ppid = Number.parseInt(fields[1], 10)
+    const memory = Number.parseInt(fields[2], 10)
+    if (Number.isNaN(pid) || pid <= 0 || Number.isNaN(ppid) || ppid < 0) {
+      continue
+    }
+    rows.push({
+      pid,
+      ppid,
+      cpu: 0,
+      memory: Number.isFinite(memory) && memory > 0 ? memory : 0
+    })
+  }
+  return rows
+}
 /** Walk every descendant PID of `root`, inclusive. Exported for tests. */
 export function collectSubtree(index: ProcIndex, root: number): number[] {
   const result: number[] = []
