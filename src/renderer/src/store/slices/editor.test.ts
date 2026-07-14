@@ -456,7 +456,7 @@ describe('createEditorSlice openDiff', () => {
     expect(store.getState().openFiles).toEqual([
       expect.objectContaining({
         id: 'wt-1::diff::unstaged::file.ts',
-        runtimeEnvironmentId: undefined
+        runtimeEnvironmentId: null
       }),
       expect.objectContaining({
         id: 'editor-diff:wt-1:env-1:unstaged:file.ts',
@@ -501,7 +501,8 @@ describe('createEditorSlice openDiff', () => {
   it('keeps a diff for an owner-less worktree off the focused global runtime', () => {
     const store = createEditorStore()
     // A remote runtime is globally focused, but wt-1's repo names no explicit
-    // owner, so its diff must read locally rather than through that runtime.
+    // owner. The diff must stamp null (not undefined): null forces a LOCAL read
+    // in settingsForRuntimeOwner, while undefined would inherit 'focused-env'.
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'focused-env' } as AppState['settings']
     })
@@ -511,7 +512,7 @@ describe('createEditorSlice openDiff', () => {
     expect(store.getState().openFiles[0]).toEqual(
       expect.objectContaining({
         id: 'wt-1::diff::unstaged::file.ts',
-        runtimeEnvironmentId: undefined
+        runtimeEnvironmentId: null
       })
     )
   })
@@ -532,6 +533,28 @@ describe('createEditorSlice openDiff', () => {
 
     expect(store.getState().openFiles[0]).toEqual(
       expect.objectContaining({ runtimeEnvironmentId: 'owner-env' })
+    )
+  })
+
+  it('keeps an SSH-owned worktree diff off the focused runtime so it routes via its connection', () => {
+    const store = createEditorStore()
+    // An SSH worktree is owned by its connection, not the focused runtime. Its
+    // diff stamps null (not the focused env), so the read targets local IPC and
+    // flows over connectionId rather than the focused runtime's RPC.
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' } as AppState['settings'],
+      repos: [{ id: 'repo-ssh', connectionId: 'conn-1' }] as unknown as AppState['repos'],
+      worktreesByRepo: {
+        'repo-ssh': [{ id: 'repo-ssh::/srv/wt', repoId: 'repo-ssh', hostId: 'ssh:conn-1' }]
+      } as unknown as AppState['worktreesByRepo']
+    })
+
+    store
+      .getState()
+      .openDiff('repo-ssh::/srv/wt', '/srv/wt/file.ts', 'file.ts', 'typescript', false)
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({ runtimeEnvironmentId: null })
     )
   })
 

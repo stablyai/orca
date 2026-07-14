@@ -335,10 +335,11 @@ function resolveDiffRuntimeEnvironmentId(
   if (explicitRuntimeEnvironmentId !== undefined) {
     return explicitRuntimeEnvironmentId
   }
-  // Why: route diffs by the worktree's EXPLICIT owner (#6957). A merely focused
-  // global runtime must not read an owner-less worktree's diff from the wrong
-  // host; unknown owner reads locally (undefined), never the focused runtime.
-  return getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId) ?? undefined
+  // Why: route diffs by the worktree's EXPLICIT owner (#6957); owner-less/local
+  // resolves to null so the read is forced LOCAL. undefined would instead
+  // inherit the focused runtime in settingsForRuntimeOwner and read the diff
+  // from the wrong host — the exact bug in #8484.
+  return getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId) ?? null
 }
 
 export type PendingEditorReveal = {
