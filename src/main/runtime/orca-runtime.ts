@@ -4651,7 +4651,8 @@ export class OrcaRuntimeService {
   private closeHeadlessMobileTerminalTab(
     worktreeId: string,
     snapshot: RuntimeMobileSessionTabsSnapshot,
-    tab: RuntimeMobileSessionTerminalTab
+    tab: RuntimeMobileSessionTerminalTab,
+    alreadyKilledPtyIds: ReadonlySet<string> = new Set()
   ): void {
     const closedParentTabId = tab.parentTabId
     const nextTabs = snapshot.tabs.filter((candidate) => {
@@ -4659,11 +4660,11 @@ export class OrcaRuntimeService {
         return true
       }
       const pty = this.findPtyForMobileTerminalTab(worktreeId, candidate)
-      if (pty?.connected) {
+      if (pty?.connected && !alreadyKilledPtyIds.has(pty.ptyId)) {
         this.ptyController?.kill(pty.ptyId)
       } else {
         const persistedSshPtyId = this.getPersistedSshPtyIdForMobileTerminalTab(candidate)
-        if (persistedSshPtyId) {
+        if (persistedSshPtyId && !alreadyKilledPtyIds.has(persistedSshPtyId)) {
           // Why: close is an explicit deletion. Hydrated SSH PTYs can be known
           // only by durable id before reconnect repopulates pane metadata.
           this.ptyController?.kill(persistedSshPtyId)
@@ -18685,11 +18686,18 @@ export class OrcaRuntimeService {
     return { handle, tabId: leaf.tabId, closeMode, tabCloseRequested: false, ptyKilled }
   }
 
-  private closeTerminalTab(handle: string): RuntimeTerminalClose {
+  private async closeTerminalTab(handle: string): Promise<RuntimeTerminalClose> {
     if (!this.notifier?.closeTerminal) {
       throw new Error('terminal_tab_close_unavailable')
     }
     const tabId = this.resolveTabIdForTerminalClose(handle)
+    const livePty = this.getLivePtyForHandle(handle)
+    if (livePty && !this.tabs.has(tabId) && this.store?.getWorkspaceSession) {
+      if (this.graphStatus !== 'ready') {
+        throw new Error('terminal_tab_close_unavailable')
+      }
+      return this.closeDormantTerminalTab(handle, tabId, livePty.pty)
+    }
     this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
     // Why: renderer tab teardown owns PTY cleanup; killing first lets the exit
     // path spawn a replacement under the still-live tab before this close lands.
@@ -18700,6 +18708,77 @@ export class OrcaRuntimeService {
       closeMode: 'tab',
       tabCloseRequested: true,
       ptyKilled: false
+    }
+  }
+
+  private async closeDormantTerminalTab(
+    handle: string,
+    tabId: string,
+    pty: RuntimePtyWorktreeRecord
+  ): Promise<RuntimeTerminalClose> {
+    const session = this.store?.getWorkspaceSession?.()
+    const persistedTabs = session?.tabsByWorktree[pty.worktreeId] ?? []
+    const persistedMatches = persistedTabs.filter((tab) => tab.id === tabId)
+    const layout = session?.terminalLayoutsByTabId?.[tabId]
+    const leafId = parsePaneKey(pty.paneKey ?? '')?.leafId
+    if (!session || persistedMatches.length === 0 || !layout || !leafId) {
+      throw new Error('terminal_tab_identity_missing')
+    }
+    const persistedTab = persistedMatches[0]!
+    const ptyBindings = Object.entries(layout.ptyIdsByLeafId ?? {})
+    const exactBinding = ptyBindings.filter(
+      ([candidateLeafId, candidatePtyId]) =>
+        candidateLeafId === leafId && candidatePtyId === pty.ptyId
+    )
+    if (
+      persistedMatches.length !== 1 ||
+      persistedTab.isPinned === true ||
+      persistedTab.ptyId !== pty.ptyId ||
+      ptyBindings.length !== 1 ||
+      exactBinding.length !== 1
+    ) {
+      throw new Error('terminal_tab_identity_ambiguous')
+    }
+
+    // Why: a restart-dormant tab is absent from the renderer graph, so only an
+    // exact persisted PTY/tab/leaf match is safe to tear down main-side.
+    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(pty.worktreeId, {
+      allowAttachedWindow: true,
+      force: true
+    })
+    const snapshot = this.mobileSessionTabsByWorktree.get(pty.worktreeId)
+    const snapshotMatches = snapshot?.tabs.filter(
+      (candidate): candidate is RuntimeMobileSessionTerminalTab =>
+        candidate.type === 'terminal' &&
+        candidate.parentTabId === tabId &&
+        candidate.leafId === leafId &&
+        candidate.ptyId === pty.ptyId
+    )
+    if (!snapshot || snapshotMatches?.length !== 1 || snapshotMatches[0]!.isPinned === true) {
+      throw new Error('terminal_tab_identity_ambiguous')
+    }
+    if (this.ptysById.get(pty.ptyId) !== pty || this.handleByPtyId.get(pty.ptyId) !== handle) {
+      throw new Error('terminal_handle_stale')
+    }
+
+    const ptyKilled = (await this.ptyController?.stopAndWait?.(pty.ptyId)) ?? false
+    if (!ptyKilled) {
+      throw new Error('terminal_tab_close_unavailable')
+    }
+    this.closeHeadlessMobileTerminalTab(
+      pty.worktreeId,
+      snapshot,
+      snapshotMatches[0]!,
+      new Set([pty.ptyId])
+    )
+    this.dropDisconnectedPtyRecord(pty.ptyId)
+    this.notifier!.closeTerminal(tabId)
+    return {
+      handle,
+      tabId,
+      closeMode: 'tab',
+      tabCloseRequested: true,
+      ptyKilled: true
     }
   }
 
