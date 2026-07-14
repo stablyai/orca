@@ -20,6 +20,18 @@ export function initChatImportSchema(db: SyncDatabase): void {
       idx INTEGER NOT NULL,
       text TEXT,
       created_at TEXT);
-    PRAGMA user_version = 1;
+    CREATE TABLE IF NOT EXISTS attachments(
+      conv_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      msg_idx INTEGER NOT NULL,
+      att_idx INTEGER NOT NULL,
+      kind TEXT NOT NULL,
+      mime TEXT,
+      file_name TEXT,
+      size INTEGER,
+      hash TEXT NOT NULL,
+      width INTEGER,
+      height INTEGER,
+      PRIMARY KEY(conv_id, msg_idx, att_idx));
+    PRAGMA user_version = 2;
   `)
 }

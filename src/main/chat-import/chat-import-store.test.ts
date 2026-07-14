@@ -4,7 +4,11 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import SyncDatabase from '../sqlite/sync-database'
 import { initChatImportSchema } from './chat-import-schema'
-import { listIngestedExternalIds, upsertWebConversation } from './chat-import-store'
+import {
+  listIngestedExternalIds,
+  listMessageAttachments,
+  upsertWebConversation
+} from './chat-import-store'
 
 let dirs: string[] = []
 afterEach(() => {
@@ -110,6 +114,185 @@ describe('listIngestedExternalIds', () => {
     )
     expect(listIngestedExternalIds(db, 'CHATGPT').sort()).toEqual(['c1', 'c2'])
     expect(listIngestedExternalIds(db, 'GEMINI')).toEqual([])
+    db.close()
+  })
+})
+
+describe('upsertWebConversation attachments', () => {
+  it('round-trips message attachments via listMessageAttachments', () => {
+    const db = tempDb()
+    const id = upsertWebConversation(
+      db,
+      {
+        source: 'CHATGPT',
+        externalId: 'att1',
+        title: 't',
+        createdAt: null,
+        updatedAt: null,
+        messages: [
+          {
+            role: 'USER',
+            idx: 0,
+            text: 'here is a photo',
+            createdAt: null,
+            attachments: [
+              {
+                kind: 'image',
+                mimeType: 'image/png',
+                fileName: 'photo.png',
+                size: 1234,
+                width: 100,
+                height: 200,
+                hash: 'a'.repeat(64)
+              },
+              {
+                kind: 'file',
+                mimeType: 'application/pdf',
+                fileName: 'doc.pdf',
+                size: 5678,
+                width: null,
+                height: null,
+                hash: 'b'.repeat(64)
+              }
+            ]
+          }
+        ]
+      },
+      '2026-07-13T00:00:00.000Z'
+    )
+    expect(listMessageAttachments(db, id, 0)).toEqual([
+      {
+        kind: 'image',
+        mimeType: 'image/png',
+        fileName: 'photo.png',
+        size: 1234,
+        width: 100,
+        height: 200,
+        hash: 'a'.repeat(64)
+      },
+      {
+        kind: 'file',
+        mimeType: 'application/pdf',
+        fileName: 'doc.pdf',
+        size: 5678,
+        width: null,
+        height: null,
+        hash: 'b'.repeat(64)
+      }
+    ])
+    db.close()
+  })
+
+  it('skips attachments with an empty hash', () => {
+    const db = tempDb()
+    const id = upsertWebConversation(
+      db,
+      {
+        source: 'CLAUDE',
+        externalId: 'att2',
+        title: 't',
+        createdAt: null,
+        updatedAt: null,
+        messages: [
+          {
+            role: 'USER',
+            idx: 0,
+            text: 'x',
+            createdAt: null,
+            attachments: [
+              {
+                kind: 'file',
+                mimeType: 'text/plain',
+                fileName: 'a.txt',
+                size: 1,
+                width: null,
+                height: null,
+                hash: ''
+              }
+            ]
+          }
+        ]
+      },
+      '2026-07-13T00:00:00.000Z'
+    )
+    expect(listMessageAttachments(db, id, 0)).toEqual([])
+    db.close()
+  })
+
+  it('replaces attachments on re-upsert (idempotent)', () => {
+    const db = tempDb()
+    const conv = {
+      source: 'GEMINI' as const,
+      externalId: 'att3',
+      title: 't',
+      createdAt: null,
+      updatedAt: null,
+      messages: [
+        {
+          role: 'USER' as const,
+          idx: 0,
+          text: 'x',
+          createdAt: null,
+          attachments: [
+            {
+              kind: 'image' as const,
+              mimeType: 'image/png',
+              fileName: 'one.png',
+              size: 1,
+              width: 1,
+              height: 1,
+              hash: '1'.repeat(64)
+            }
+          ]
+        }
+      ]
+    }
+    const id = upsertWebConversation(db, conv, '2026-07-13T00:00:00.000Z')
+    upsertWebConversation(
+      db,
+      {
+        ...conv,
+        messages: [
+          {
+            role: 'USER',
+            idx: 0,
+            text: 'x',
+            createdAt: null,
+            attachments: [
+              {
+                kind: 'image',
+                mimeType: 'image/png',
+                fileName: 'two.png',
+                size: 2,
+                width: 2,
+                height: 2,
+                hash: '2'.repeat(64)
+              }
+            ]
+          }
+        ]
+      },
+      '2026-07-13T00:01:00.000Z'
+    )
+    expect(listMessageAttachments(db, id, 0)).toEqual([
+      {
+        kind: 'image',
+        mimeType: 'image/png',
+        fileName: 'two.png',
+        size: 2,
+        width: 2,
+        height: 2,
+        hash: '2'.repeat(64)
+      }
+    ])
+    db.close()
+  })
+})
+
+describe('initChatImportSchema', () => {
+  it('sets user_version to 2', () => {
+    const db = tempDb()
+    expect(db.pragma('user_version', { simple: true })).toBe(2)
     db.close()
   })
 })

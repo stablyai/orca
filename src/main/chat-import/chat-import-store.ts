@@ -2,13 +2,29 @@ import type SyncDatabase from '../sqlite/sync-database'
 
 export type WebChatSource = 'CHATGPT' | 'CLAUDE' | 'GEMINI'
 
+export type WebAttachment = {
+  kind: 'image' | 'file'
+  mimeType: string
+  fileName: string
+  size: number
+  width: number | null
+  height: number | null
+  hash: string
+}
+
 export type WebConversation = {
   source: WebChatSource
   externalId: string
   title: string | null
   createdAt: string | null
   updatedAt: string | null
-  messages: { role: 'USER' | 'AI'; idx: number; text: string | null; createdAt: string | null }[]
+  messages: {
+    role: 'USER' | 'AI'
+    idx: number
+    text: string | null
+    createdAt: string | null
+    attachments?: WebAttachment[]
+  }[]
 }
 
 export function upsertWebConversation(
@@ -32,7 +48,64 @@ export function upsertWebConversation(
   for (const m of conv.messages) {
     insert.run(`${id}#${m.idx}`, id, m.role, m.idx, m.text, m.createdAt)
   }
+  // Why: same delete-all-then-reinsert as messages above — keeps re-sync idempotent.
+  db.prepare('DELETE FROM attachments WHERE conv_id = ?').run(id)
+  const insertAttachment = db.prepare(
+    `INSERT INTO attachments (conv_id, msg_idx, att_idx, kind, mime, file_name, size, hash, width, height)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  )
+  for (const m of conv.messages) {
+    m.attachments?.forEach((att, attIdx) => {
+      if (!att.hash) {
+        return // Why: 해시 없는 첨부는 blob store에서 조회 불가 — 저장해도 못 씀.
+      }
+      insertAttachment.run(
+        id,
+        m.idx,
+        attIdx,
+        att.kind,
+        att.mimeType,
+        att.fileName,
+        att.size,
+        att.hash,
+        att.width,
+        att.height
+      )
+    })
+  }
   return id
+}
+
+// Why: reader-side lookup (AI Vault parser) resolves a message's attachments
+// by (convId, msgIdx) to fetch bytes from the blob store via hash.
+export function listMessageAttachments(
+  db: SyncDatabase,
+  convId: string,
+  msgIdx: number
+): WebAttachment[] {
+  const rows = db
+    .prepare(
+      `SELECT kind, mime, file_name, size, hash, width, height FROM attachments
+       WHERE conv_id = ? AND msg_idx = ? ORDER BY att_idx`
+    )
+    .all(convId, msgIdx) as {
+    kind: string
+    mime: string | null
+    file_name: string | null
+    size: number | null
+    hash: string
+    width: number | null
+    height: number | null
+  }[]
+  return rows.map((r) => ({
+    kind: r.kind as WebAttachment['kind'],
+    mimeType: r.mime ?? '',
+    fileName: r.file_name ?? '',
+    size: r.size ?? 0,
+    width: r.width,
+    height: r.height,
+    hash: r.hash
+  }))
 }
 
 // Why: the native host asks which conversations it has already stored so the
