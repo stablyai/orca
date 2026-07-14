@@ -282,13 +282,6 @@ export default function Landing(): React.JSX.Element {
     // Why: some users complete `gh auth login` without ever leaving the Orca
     // window. Poll only while a warning is visible so the banner self-clears.
     const intervalId = window.setInterval(() => {
-      // Why: skip the forced preflight probe (an IPC round-trip plus a `gh`
-      // subprocess spawn) while the window is hidden. The visibilitychange/focus
-      // handler above re-checks the instant the window returns, so a backgrounded
-      // Landing stops spawning probes without ever showing a stale banner.
-      if (document.visibilityState !== 'visible') {
-        return
-      }
       void window.api.preflight.check({ force: true }).then((status) => {
         if (cancelled) {
           return
