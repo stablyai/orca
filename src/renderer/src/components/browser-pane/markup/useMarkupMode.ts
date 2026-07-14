@@ -1,7 +1,10 @@
 import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../../../shared/clipboard-image'
+import {
+  CLIPBOARD_IMAGE_MAX_PIXELS,
+  CLIPBOARD_IMAGE_MAX_SOURCE_BYTES
+} from '../../../../../shared/clipboard-image'
 import {
   captureMarkupBaseImage,
   type MarkupBaseImage,
@@ -10,7 +13,7 @@ import {
 import { composeMarkupDataUrl, type MarkupComposeResult } from './markup-screenshot-compose'
 import type { MarkupShape } from './markup-drawing-model'
 
-export type MarkupModeState = 'idle' | 'capturing' | 'drawing' | 'composing' | 'error'
+export type MarkupModeState = 'idle' | 'capturing' | 'drawing' | 'composing'
 
 // Where to capture the base image from, plus the on-screen geometry used to
 // size and scale the composite. Resolved lazily at start() time by the owner
@@ -36,7 +39,6 @@ export type MarkupModeController = {
   state: MarkupModeState
   isActive: boolean
   baseImage: MarkupBaseImage | null
-  error: string | null
   start: () => Promise<void>
   cancel: () => void
   complete: (input: MarkupCompleteInput) => Promise<void>
@@ -48,7 +50,6 @@ export function useMarkupMode({
 }: UseMarkupModeParams): MarkupModeController {
   const [state, setState] = useState<MarkupModeState>('idle')
   const [baseImage, setBaseImage] = useState<MarkupBaseImage | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const contextRef = useRef<MarkupCaptureContext | null>(null)
   // Why: a token invalidates an in-flight capture if the user cancels before it
   // resolves, so the stale promise can't flip state back to 'drawing'.
@@ -58,23 +59,17 @@ export function useMarkupMode({
     captureTokenRef.current += 1
     contextRef.current = null
     setBaseImage(null)
-    setError(null)
     setState('idle')
   }, [])
 
-  // Why: surface failures (the controller's `error` is otherwise never rendered)
-  // and localize the message — mirroring the translated success toast.
-  const fail = useCallback((key: string, fallback: string) => {
-    const message = translate(key, fallback)
-    setError(message)
-    setState('error')
-    toast.error(message)
+  const reportError = useCallback((key: string, fallback: string) => {
+    toast.error(translate(key, fallback))
   }, [])
 
   const start = useCallback(async () => {
     const context = getCaptureContext()
     if (!context) {
-      fail(
+      reportError(
         'auto.components.browser-pane.markup.errorUnavailable',
         'Screenshot markup is not available on this page.'
       )
@@ -82,7 +77,6 @@ export function useMarkupMode({
     }
     const token = (captureTokenRef.current += 1)
     contextRef.current = context
-    setError(null)
     setState('capturing')
     try {
       const image = await captureMarkupBaseImage(context.source)
@@ -95,12 +89,15 @@ export function useMarkupMode({
       if (captureTokenRef.current !== token) {
         return
       }
-      fail(
+      // Why: a capture failure has no overlay to fall back to, so return to idle
+      // (not a stuck 'active' state with no surface and an inert Escape).
+      reportError(
         'auto.components.browser-pane.markup.errorCapture',
         'Could not capture the page to draw on.'
       )
+      reset()
     }
-  }, [getCaptureContext, fail])
+  }, [getCaptureContext, reportError, reset])
 
   const cancel = useCallback(() => {
     reset()
@@ -124,10 +121,11 @@ export function useMarkupMode({
           displayCssHeight: context.cssHeight,
           outputScale: context.outputScale,
           shapes,
-          // Why: target the clipboard handler's own ceiling (≈18 MB) — well above a
-          // normal viewport PNG — so the composite stays full-resolution PNG and is
-          // never downscaled or rejected on copy.
-          maxBytes: CLIPBOARD_IMAGE_MAX_SOURCE_BYTES
+          // Why: target the clipboard handler's own ceilings — the byte limit
+          // (≈18 MB, well above a normal viewport PNG) and the pixel limit, which
+          // the handler otherwise enforces by silently dropping oversize images.
+          maxBytes: CLIPBOARD_IMAGE_MAX_SOURCE_BYTES,
+          maxPixels: CLIPBOARD_IMAGE_MAX_PIXELS
         })
         await onDeliver(result)
         if (captureTokenRef.current !== token) {
@@ -138,20 +136,22 @@ export function useMarkupMode({
         if (captureTokenRef.current !== token) {
           return
         }
-        fail(
+        // Why: the frozen backdrop is still valid, so return to drawing (not a
+        // dead-end error state) — the user can retry Copy or Cancel out.
+        reportError(
           'auto.components.browser-pane.markup.errorAttach',
           'Could not attach the markup screenshot.'
         )
+        setState('drawing')
       }
     },
-    [onDeliver, reset, fail]
+    [onDeliver, reset, reportError]
   )
 
   return {
     state,
     isActive: state !== 'idle',
     baseImage,
-    error,
     start,
     cancel,
     complete

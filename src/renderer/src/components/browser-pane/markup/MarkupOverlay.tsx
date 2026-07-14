@@ -60,24 +60,18 @@ export function MarkupOverlay({
         ref={editor.canvasRef}
         className={cn(
           'absolute inset-0 h-full w-full touch-none',
-          busy
-            ? 'cursor-progress'
-            : editor.tool === 'select'
-              ? 'cursor-default'
-              : 'cursor-crosshair'
+          busy ? 'cursor-progress' : 'cursor-crosshair'
         )}
         onPointerDown={editor.onPointerDown}
         onPointerMove={editor.onPointerMove}
         onPointerUp={editor.onPointerUp}
         onPointerCancel={editor.onPointerUp}
-        onDoubleClick={editor.onDoubleClick}
       />
 
       {pendingText ? (
         <input
           ref={editor.textInputRef}
-          // Why: re-mount per placement (keyed by position) so defaultValue
-          // re-applies when re-editing an existing text shape.
+          // Why: key by position so each placement re-mounts a fresh input.
           key={`${pendingText.x},${pendingText.y}`}
           defaultValue={pendingText.initial}
           aria-label={translate('auto.components.browser-pane.markup.textInput', 'Annotation text')}

@@ -122,20 +122,19 @@ describe('drawShape dispatch', () => {
     expect(methods('ellipse')[0].args.slice(0, 4)).toEqual([10, 5, 10, 5])
   })
 
-  it('renders text with a halo (stroke + fill) per line', () => {
+  it('renders single-line text with a halo (stroke behind fill)', () => {
     const { ctx, methods } = makeRecordingCtx()
     drawShape(ctx, {
       id: 't',
       kind: 'text',
       color: '#fff',
       at: { x: 5, y: 5 },
-      text: 'fix\nthis',
+      text: 'fix this',
       fontSize: 18
     })
-    expect(methods('fillText')).toHaveLength(2)
-    expect(methods('strokeText')).toHaveLength(2)
-    expect(methods('fillText')[0].args[0]).toBe('fix')
-    expect(methods('fillText')[1].args[0]).toBe('this')
+    expect(methods('strokeText')).toHaveLength(1)
+    expect(methods('fillText')).toHaveLength(1)
+    expect(methods('fillText')[0].args[0]).toBe('fix this')
   })
 
   it('save/restore brackets every shape so state never leaks', () => {

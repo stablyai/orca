@@ -5,8 +5,9 @@
 
 export type MarkupToolKind = 'pen' | 'highlight' | 'arrow' | 'rect' | 'ellipse' | 'text'
 
-// Toolbar selection: a drawing tool, or the select/edit cursor.
-export type MarkupTool = MarkupToolKind | 'select'
+// Toolbar selection. Draw-only: markup is a throwaway scribble the user copies
+// once, so there is no select/move/restyle cursor.
+export type MarkupTool = MarkupToolKind
 
 export type MarkupPoint = { x: number; y: number }
 
@@ -209,99 +210,4 @@ export function arrowHeadGeometry(
 
 export function highlightWidth(width: number): number {
   return width * HIGHLIGHT_WIDTH_MULTIPLIER
-}
-
-// ─── Editing existing shapes (select / move / restyle) ──────────────────────
-
-export function translateShape(shape: MarkupShape, dx: number, dy: number): MarkupShape {
-  const move = (point: MarkupPoint): MarkupPoint => ({ x: point.x + dx, y: point.y + dy })
-  switch (shape.kind) {
-    case 'pen':
-    case 'highlight':
-      return { ...shape, points: shape.points.map(move) }
-    case 'arrow':
-    case 'rect':
-    case 'ellipse':
-      return { ...shape, from: move(shape.from), to: move(shape.to) }
-    case 'text':
-      return { ...shape, at: move(shape.at) }
-  }
-}
-
-export type MarkupStylePatch = { color?: string; width?: number; fontSize?: number }
-
-export function restyleShape(shape: MarkupShape, patch: MarkupStylePatch): MarkupShape {
-  switch (shape.kind) {
-    case 'pen':
-    case 'highlight':
-    case 'arrow':
-    case 'rect':
-    case 'ellipse':
-      return {
-        ...shape,
-        color: patch.color ?? shape.color,
-        width: patch.width ?? shape.width
-      }
-    case 'text':
-      return {
-        ...shape,
-        color: patch.color ?? shape.color,
-        fontSize: patch.fontSize ?? shape.fontSize
-      }
-  }
-}
-
-// Approximate glyph advance: full-width (CJK / fullwidth) chars ≈ 1em, others
-// ≈ 0.55em. A heuristic (not canvas-measured) so the model stays pure/testable;
-// good enough that the selection box and hit bounds track Japanese text instead
-// of clipping it at a fixed 0.6em.
-function isWideCodePoint(code: number): boolean {
-  return (
-    (code >= 0x1100 && code <= 0x115f) ||
-    (code >= 0x2e80 && code <= 0xa4cf) ||
-    (code >= 0xac00 && code <= 0xd7a3) ||
-    (code >= 0xf900 && code <= 0xfaff) ||
-    (code >= 0xfe30 && code <= 0xfe4f) ||
-    (code >= 0xff00 && code <= 0xff60) ||
-    (code >= 0xffe0 && code <= 0xffe6) ||
-    (code >= 0x20000 && code <= 0x3fffd)
-  )
-}
-
-export function estimateTextWidth(text: string, fontSize: number): number {
-  let width = 0
-  for (const char of text) {
-    width += isWideCodePoint(char.codePointAt(0) ?? 0) ? fontSize : fontSize * 0.55
-  }
-  return width
-}
-
-export function boundingBox(shape: MarkupShape): NormalizedRect {
-  switch (shape.kind) {
-    case 'pen':
-    case 'highlight': {
-      const xs = shape.points.map((point) => point.x)
-      const ys = shape.points.map((point) => point.y)
-      const x = Math.min(...xs)
-      const y = Math.min(...ys)
-      return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y }
-    }
-    case 'arrow':
-    case 'rect':
-    case 'ellipse':
-      return normalizeRect(shape.from, shape.to)
-    case 'text': {
-      const lines = shape.text.split('\n')
-      const width = lines.reduce(
-        (max, line) => Math.max(max, estimateTextWidth(line, shape.fontSize)),
-        0
-      )
-      return {
-        x: shape.at.x,
-        y: shape.at.y,
-        width,
-        height: lines.length * shape.fontSize * 1.25
-      }
-    }
-  }
 }

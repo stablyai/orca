@@ -133,13 +133,9 @@ function drawText(ctx: CanvasRenderingContext2D, shape: TextShape): void {
   ctx.lineWidth = Math.max(shape.fontSize / 6, 2)
   ctx.strokeStyle = haloColor(shape.color)
   ctx.lineJoin = 'round'
-  const lines = shape.text.split('\n')
-  const lineHeight = shape.fontSize * 1.25
-  lines.forEach((line, index) => {
-    const y = shape.at.y + index * lineHeight
-    ctx.strokeText(line, shape.at.x, y)
-    ctx.fillText(line, shape.at.x, y)
-  })
+  // Text comes from a single-line input, so there are no newlines to lay out.
+  ctx.strokeText(shape.text, shape.at.x, shape.at.y)
+  ctx.fillText(shape.text, shape.at.x, shape.at.y)
 }
 
 // White text gets a dark halo, everything else a light halo.

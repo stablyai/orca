@@ -3,7 +3,6 @@ import {
   ArrowUpRight,
   Circle,
   Highlighter,
-  MousePointer2,
   Pencil,
   Redo2,
   Square,
@@ -31,11 +30,6 @@ type ToolItem = {
 
 function toolItems(): ToolItem[] {
   return [
-    {
-      kind: 'select',
-      icon: MousePointer2,
-      label: translate('auto.components.browser-pane.markup.tool.select', 'Select / move')
-    },
     {
       kind: 'pen',
       icon: Pencil,

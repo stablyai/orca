@@ -1,37 +1,16 @@
-// Renders the live markup scene (committed shapes + in-progress shape + drag
-// preview + selection box) into the overlay canvas at device resolution. Kept
-// separate from the editor hook so the draw composition stays focused.
+// Renders the live markup scene (committed shapes + the in-progress shape) into
+// the overlay canvas at device resolution. Kept separate from the editor hook so
+// the draw composition stays focused.
 
 import { clampMarkupScale } from './markup-screenshot-compose'
 import { drawShapes } from './markup-shape-render'
-import {
-  boundingBox,
-  translateShape,
-  type MarkupShape,
-  type NormalizedRect
-} from './markup-drawing-model'
+import type { MarkupShape } from './markup-drawing-model'
 
 export type MarkupScene = {
   shapes: readonly MarkupShape[]
   inProgress: MarkupShape | null
-  dragId: string | null
-  dragOffset: { dx: number; dy: number } | null
-  selectedId: string | null
-  /** Shape currently being re-edited via the text input — hidden so the live
-   *  input isn't doubled by its committed render. */
-  hiddenId: string | null
   cssWidth: number
   cssHeight: number
-}
-
-function drawSelectionBox(ctx: CanvasRenderingContext2D, rect: NormalizedRect): void {
-  const pad = 6
-  ctx.save()
-  ctx.strokeStyle = '#3b82f6'
-  ctx.lineWidth = 1.5
-  ctx.setLineDash([5, 4])
-  ctx.strokeRect(rect.x - pad, rect.y - pad, rect.width + pad * 2, rect.height + pad * 2)
-  ctx.restore()
 }
 
 export function renderMarkupScene(canvas: HTMLCanvasElement, scene: MarkupScene): void {
@@ -51,31 +30,8 @@ export function renderMarkupScene(canvas: HTMLCanvasElement, scene: MarkupScene)
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   ctx.clearRect(0, 0, scene.cssWidth, scene.cssHeight)
 
-  const offset = scene.dragOffset
-  const visibleShapes = scene.hiddenId
-    ? scene.shapes.filter((shape) => shape.id !== scene.hiddenId)
-    : scene.shapes
-  const displayShapes =
-    scene.dragId && offset
-      ? visibleShapes.map((shape) =>
-          shape.id === scene.dragId ? translateShape(shape, offset.dx, offset.dy) : shape
-        )
-      : visibleShapes
-  drawShapes(ctx, displayShapes)
+  drawShapes(ctx, scene.shapes)
   if (scene.inProgress) {
     drawShapes(ctx, [scene.inProgress])
-  }
-  if (scene.selectedId) {
-    // Why: draw the frame from the full shape list — even while a text shape is
-    // being re-edited (and hidden) — so the box is identical whether the user is
-    // selecting or editing. The text input renders only the editable glyphs.
-    const base = scene.shapes.find((shape) => shape.id === scene.selectedId)
-    if (base) {
-      const framed =
-        scene.dragId === scene.selectedId && offset
-          ? translateShape(base, offset.dx, offset.dy)
-          : base
-      drawSelectionBox(ctx, boundingBox(framed))
-    }
   }
 }

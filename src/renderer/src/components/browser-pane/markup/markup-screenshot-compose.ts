@@ -31,6 +31,9 @@ export type MarkupComposeInput = {
   shapes: readonly MarkupShape[]
   /** Hard byte ceiling for the encoded data URL payload. */
   maxBytes: number
+  /** Hard pixel (width×height) ceiling — the clipboard handler silently drops
+   *  images over its own dimension limit, so the composite must fit it too. */
+  maxPixels: number
 }
 
 // ─── Pure helpers (unit-tested) ─────────────────────────────────────────────
@@ -44,15 +47,35 @@ export function clampMarkupScale(scale: number): number {
   return Math.min(Math.max(scale, 1), 4)
 }
 
+// The single uniform scale actually applied to the base image and every shape:
+// the clamped output scale, reduced further if needed so the composite's pixel
+// area stays within `maxPixels`. Reducing one uniform factor keeps strokes aligned.
+export function effectiveMarkupScale(
+  displayCssWidth: number,
+  displayCssHeight: number,
+  outputScale: number,
+  maxPixels: number = Number.POSITIVE_INFINITY
+): number {
+  const scale = clampMarkupScale(outputScale)
+  const area = displayCssWidth * displayCssHeight
+  if (area <= 0 || !Number.isFinite(maxPixels) || maxPixels <= 0) {
+    return scale
+  }
+  return Math.min(scale, Math.sqrt(maxPixels / area))
+}
+
 export function markupCanvasSize(
   displayCssWidth: number,
   displayCssHeight: number,
-  outputScale: number
+  outputScale: number,
+  maxPixels: number = Number.POSITIVE_INFINITY
 ): { width: number; height: number } {
-  const scale = clampMarkupScale(outputScale)
+  const scale = effectiveMarkupScale(displayCssWidth, displayCssHeight, outputScale, maxPixels)
+  // Why: floor (not round) so a rounded-up dimension can't nudge the area back
+  // over maxPixels at the budget boundary.
   return {
-    width: Math.max(1, Math.round(displayCssWidth * scale)),
-    height: Math.max(1, Math.round(displayCssHeight * scale))
+    width: Math.max(1, Math.floor(displayCssWidth * scale)),
+    height: Math.max(1, Math.floor(displayCssHeight * scale))
   }
 }
 
@@ -81,8 +104,18 @@ function createCanvas(width: number, height: number): HTMLCanvasElement {
 }
 
 function renderComposite(input: MarkupComposeInput): HTMLCanvasElement {
-  const scale = clampMarkupScale(input.outputScale)
-  const size = markupCanvasSize(input.displayCssWidth, input.displayCssHeight, scale)
+  const scale = effectiveMarkupScale(
+    input.displayCssWidth,
+    input.displayCssHeight,
+    input.outputScale,
+    input.maxPixels
+  )
+  const size = markupCanvasSize(
+    input.displayCssWidth,
+    input.displayCssHeight,
+    input.outputScale,
+    input.maxPixels
+  )
   const canvas = createCanvas(size.width, size.height)
   const ctx = canvas.getContext('2d')
   if (!ctx) {
@@ -132,15 +165,12 @@ export function composeMarkupDataUrl(input: MarkupComposeInput): MarkupComposeRe
     smallest = result
   }
 
-  // Why: still over budget at the smallest step — return it anyway (PNG), since a
-  // slightly large attachment beats dropping the user's markup entirely.
-  return (
-    smallest ?? {
-      dataUrl: composite.toDataURL('image/png'),
-      mimeType: 'image/png',
-      width: composite.width,
-      height: composite.height,
-      byteLength: 0
-    }
-  )
+  // Why: still over the byte budget at the smallest step — return it anyway. It's
+  // a PNG within the pixel budget (every step is), so the clipboard handler
+  // accepts it; a slightly large attachment beats dropping the user's markup.
+  if (!smallest) {
+    // Unreachable: MARKUP_DOWNSCALE_STEPS is non-empty, so the loop always sets it.
+    throw new Error('markup compose: no downscale step produced output')
+  }
+  return smallest
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   clampMarkupScale,
   dataUrlByteLength,
+  effectiveMarkupScale,
   markupCanvasSize,
   MARKUP_DOWNSCALE_STEPS
 } from './markup-screenshot-compose'
@@ -24,6 +25,31 @@ describe('markupCanvasSize', () => {
   it('sizes the output to the content box times the (clamped) scale', () => {
     expect(markupCanvasSize(800, 600, 2)).toEqual({ width: 1600, height: 1200 })
     expect(markupCanvasSize(800, 600, 0.5)).toEqual({ width: 800, height: 600 })
+  })
+
+  it('keeps the composite within the pixel budget (never over)', () => {
+    // A large HiDPI pane: 3840×2160 CSS × dpr 2 = 33.2M px > the 32M ceiling.
+    const maxPixels = 32 * 1024 * 1024
+    const size = markupCanvasSize(3840, 2160, 2, maxPixels)
+    expect(size.width * size.height).toBeLessThanOrEqual(maxPixels)
+    // Aspect ratio is preserved (one uniform scale).
+    expect(size.width / size.height).toBeCloseTo(3840 / 2160, 3)
+  })
+})
+
+describe('effectiveMarkupScale', () => {
+  it('returns the clamped scale when the composite fits the pixel budget', () => {
+    expect(effectiveMarkupScale(800, 600, 2, 32 * 1024 * 1024)).toBe(2)
+  })
+
+  it('reduces the scale so area stays within the pixel budget', () => {
+    const scale = effectiveMarkupScale(3840, 2160, 2, 32 * 1024 * 1024)
+    expect(scale).toBeLessThan(2)
+    expect(3840 * scale * (2160 * scale)).toBeLessThanOrEqual(32 * 1024 * 1024 + 1)
+  })
+
+  it('defaults to the clamped scale with no pixel budget', () => {
+    expect(effectiveMarkupScale(3840, 2160, 2)).toBe(2)
   })
 })
 

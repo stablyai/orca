@@ -12976,8 +12976,7 @@
             "highlight": "ハイライト",
             "pen": "ペン",
             "rect": "四角形",
-            "text": "テキスト",
-            "select": "選択 / 移動"
+            "text": "テキスト"
           },
           "widthOption": "{{value0}} px",
           "fontSize": "文字サイズ",
