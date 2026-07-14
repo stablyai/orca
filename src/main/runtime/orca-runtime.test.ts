@@ -32,7 +32,10 @@ import {
 const ORIGIN_REMOTE_URL = 'git@example.com:group/repo.git'
 const ORIGIN_HEAD_COMPONENT = reviewHeadRemoteRefComponent('origin', ORIGIN_REMOTE_URL)
 import { detectAgentStatusFromTitle, MAX_OSC_TITLE_CHARS } from '../../shared/agent-detection'
-import { addOrchestrationTerminalGridLeaf } from '../../shared/orchestration-terminal-grid'
+import {
+  addOrchestrationTerminalGridLeaf,
+  reflowOrchestrationTerminalGrid
+} from '../../shared/orchestration-terminal-grid'
 import {
   addWorktree,
   assertWorktreeCleanForRemoval,
@@ -13050,6 +13053,276 @@ describe('OrcaRuntimeService', () => {
     )
     for (const tab of gridTabs) {
       expect(tab.parentLayout).toEqual(parentLayout)
+    }
+  })
+
+  it('keeps six immediate rendered-grid creates discoverable with exact identities', async () => {
+    const testDir = await mkdtemp(join(tmpdir(), 'orca-runtime-grid-sequential-'))
+    vi.useFakeTimers()
+    const { Store } = await import('../persistence')
+    const dataFile = join(testDir, 'orca-data.json')
+    const runtimeStore = new Store({ dataFile })
+    runtimeStore.addRepo({
+      id: TEST_REPO_ID,
+      path: TEST_REPO_PATH,
+      displayName: 'repo',
+      badgeColor: 'blue',
+      addedAt: 1
+    })
+    runtimeStore.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: TEST_REPO_ID,
+      activeWorktreeId: TEST_WORKTREE_ID,
+      tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
+    })
+    runtimeStore.flush()
+
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    const livePtyIds = new Set<string>()
+    const abortedPtyIds: string[] = []
+    let spawnIndex = 0
+    const spawn = vi.fn(
+      async (args: {
+        command?: string
+        deferRuntimeRegistration?: boolean
+        leafId?: string
+        preAllocatedHandle?: string
+        worktreeId?: string
+      }) => {
+        const ptyId = `pty-grid-sequential-${++spawnIndex}`
+        livePtyIds.add(ptyId)
+        if (!args.deferRuntimeRegistration) {
+          return { id: ptyId }
+        }
+        const staged = runtime.beginStagedPtyRuntimeRegistration()
+        staged.claim(ptyId)
+        runtime.registerPreAllocatedHandleForPty(ptyId, args.preAllocatedHandle!)
+        runtime.registerPty(ptyId, args.worktreeId ?? TEST_WORKTREE_ID)
+        runtime.noteTerminalSpawnCommand(ptyId, args.command)
+        return {
+          id: ptyId,
+          runtimeRegistration: {
+            commit: () => staged.commit(),
+            complete: vi.fn(),
+            abort: async () => {
+              staged.abort()
+              livePtyIds.delete(ptyId)
+              abortedPtyIds.push(ptyId)
+            }
+          }
+        }
+      }
+    )
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: (ptyId) => livePtyIds.delete(ptyId),
+      getForegroundProcess: async () => null
+    })
+
+    let rendererLayout: TerminalLayoutSnapshot | null = null
+    const readRendererLayout = (): TerminalLayoutSnapshot | null => rendererLayout
+    const revealTerminalSession = vi.fn(
+      async (
+        _worktreeId: string,
+        args: { leafId?: string; ptyId: string; tabId?: string; title?: string | null }
+      ) => {
+        if (args.title === 'GRID-07') {
+          throw new Error('renderer rejected GRID-07')
+        }
+        if (args.title === 'GRID-03' && rendererLayout) {
+          const currentLeafIds = collectTestTerminalLayoutLeafIds(rendererLayout.root)
+          // Why: a graph publish may lag a live renderer reorder; the ack remains
+          // the geometry/focus authority for the transaction being committed.
+          rendererLayout = reflowOrchestrationTerminalGrid(
+            rendererLayout,
+            currentLeafIds.toReversed(),
+            currentLeafIds.at(-1)
+          )
+        }
+        rendererLayout = addOrchestrationTerminalGridLeaf(rendererLayout, {
+          leafId: args.leafId!,
+          ptyId: args.ptyId,
+          title: args.title,
+          activate: args.title !== 'GRID-03' && args.title !== 'GRID-06'
+        })
+        const acknowledgedLayout = structuredClone(rendererLayout)
+        if (args.title === 'GRID-03') {
+          const firstLeafId = revealTerminalSession.mock.calls[0]?.[1].leafId
+          if (firstLeafId) {
+            acknowledgedLayout.ptyIdsByLeafId = {
+              ...acknowledgedLayout.ptyIdsByLeafId,
+              [firstLeafId]: 'stale-renderer-pty'
+            }
+            acknowledgedLayout.titlesByLeafId = {
+              ...acknowledgedLayout.titlesByLeafId,
+              [firstLeafId]: 'stale renderer title'
+            }
+          }
+        }
+        return {
+          tabId: args.tabId!,
+          leafId: args.leafId,
+          layout: acknowledgedLayout
+        }
+      }
+    )
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession,
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
+    try {
+      const created = [
+        await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+          title: 'GRID-01',
+          placement: 'orchestration-grid',
+          focus: true,
+          presentation: 'focused'
+        })
+      ]
+      const firstReveal = revealTerminalSession.mock.calls[0]?.[1]
+      const initialRendererLayout = readRendererLayout()
+      if (!firstReveal?.leafId || !initialRendererLayout) {
+        throw new Error('Expected GRID-01 to materialize the renderer grid')
+      }
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: created[0]!.tabId!,
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'GRID-01',
+            activeLeafId: firstReveal.leafId,
+            layoutMode: 'orchestration-grid',
+            layout: initialRendererLayout.root
+          }
+        ],
+        leaves: [
+          {
+            tabId: created[0]!.tabId!,
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: firstReveal.leafId,
+            paneRuntimeId: 1,
+            ptyId: firstReveal.ptyId,
+            paneTitle: null
+          }
+        ]
+      })
+
+      for (let index = 2; index <= 6; index += 1) {
+        const background = index === 3 || index === 6
+        created.push(
+          await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+            title: `GRID-0${index}`,
+            placement: 'orchestration-grid',
+            ...(background
+              ? { presentation: 'background' as const }
+              : { focus: true, presentation: 'focused' as const })
+          })
+        )
+      }
+      const finalRendererLayout = readRendererLayout()
+      if (!finalRendererLayout) {
+        throw new Error('Expected the renderer to acknowledge the completed grid')
+      }
+      const revealArgs = revealTerminalSession.mock.calls.map(([, args]) => args)
+      const finalLeafIds = collectTestTerminalLayoutLeafIds(finalRendererLayout.root)
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: created[0]!.tabId!,
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'GRID-01',
+            activeLeafId: finalRendererLayout.activeLeafId,
+            layoutMode: 'orchestration-grid',
+            layout: finalRendererLayout.root
+          }
+        ],
+        leaves: finalLeafIds.map((leafId, index) => {
+          const revealed = revealArgs.find((args) => args.leafId === leafId)!
+          return {
+            tabId: created[0]!.tabId!,
+            worktreeId: TEST_WORKTREE_ID,
+            leafId,
+            paneRuntimeId: index + 1,
+            ptyId: revealed.ptyId,
+            paneTitle: null
+          }
+        })
+      })
+
+      const listed = await runtime.listTerminals(`path:${TEST_WORKTREE_PATH}`)
+      const sortedActual = listed.terminals
+        .map(({ handle, ptyId, title }) => ({ handle, ptyId, title }))
+        .sort((left, right) => (left.ptyId ?? '').localeCompare(right.ptyId ?? ''))
+      const sortedExpected = created
+        .map(({ handle, ptyId, title }) => ({ handle, ptyId, title }))
+        .sort((left, right) => (left.ptyId ?? '').localeCompare(right.ptyId ?? ''))
+      const durableLayout =
+        runtimeStore.getWorkspaceSession().terminalLayoutsByTabId[created[0]!.tabId!]!
+
+      expect(new Set(created.map((terminal) => terminal.tabId))).toHaveProperty('size', 1)
+      expect(created.map((terminal) => terminal.surface)).toEqual([
+        'visible',
+        'visible',
+        'background',
+        'visible',
+        'visible',
+        'background'
+      ])
+      expect(created.map((terminal) => terminal.warning)).toEqual([
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined
+      ])
+      expect(finalLeafIds).toEqual([
+        revealArgs[1]!.leafId,
+        revealArgs[0]!.leafId,
+        ...revealArgs.slice(2).map((args) => args.leafId)
+      ])
+      expect(sortedActual).toEqual(sortedExpected)
+      expect(durableLayout.root).toEqual(finalRendererLayout.root)
+      expect(durableLayout.activeLeafId).toBe(finalRendererLayout.activeLeafId)
+      expect(durableLayout.ptyIdsByLeafId).toEqual(
+        Object.fromEntries(revealArgs.map((args) => [args.leafId, args.ptyId]))
+      )
+      expect(durableLayout.titlesByLeafId).toEqual(
+        Object.fromEntries(revealArgs.map((args) => [args.leafId, args.title]))
+      )
+
+      const durableBeforeRejection = structuredClone(durableLayout)
+      await expect(
+        runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+          title: 'GRID-07',
+          placement: 'orchestration-grid',
+          focus: true,
+          presentation: 'focused'
+        })
+      ).rejects.toThrow('renderer rejected GRID-07')
+      expect(abortedPtyIds).toEqual(['pty-grid-sequential-7'])
+      expect([...livePtyIds].sort()).toEqual(created.map(({ ptyId }) => ptyId).sort())
+      expect(runtimeStore.getWorkspaceSession().terminalLayoutsByTabId[created[0]!.tabId!]).toEqual(
+        durableBeforeRejection
+      )
+      expect((await runtime.listTerminals(`path:${TEST_WORKTREE_PATH}`)).terminals).toHaveLength(6)
+    } finally {
+      vi.useRealTimers()
+      await rm(testDir, { recursive: true, force: true })
     }
   })
 

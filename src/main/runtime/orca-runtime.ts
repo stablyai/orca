@@ -7555,50 +7555,69 @@ export class OrcaRuntimeService {
   ): TerminalLayoutSnapshot {
     const stagedLeafIds = collectTerminalLayoutLeafIds(staged.root)
     const acknowledgedLeafIds = collectTerminalLayoutLeafIds(acknowledged.root)
+    const acknowledgedLeafIdSet = new Set(acknowledgedLeafIds)
+    const stagedExistingLeafIds = stagedLeafIds.filter((candidate) => candidate !== leafId)
     if (
       acknowledged.layoutMode !== 'orchestration-grid' ||
       acknowledged.ptyIdsByLeafId?.[leafId] !== ptyId ||
-      stagedLeafIds.length !== acknowledgedLeafIds.length ||
-      stagedLeafIds.some((candidate, index) => candidate !== acknowledgedLeafIds[index])
+      acknowledgedLeafIdSet.size !== acknowledgedLeafIds.length ||
+      !acknowledgedLeafIdSet.has(leafId) ||
+      (stagedExistingLeafIds.length > 0 &&
+        !stagedExistingLeafIds.some((candidate) => acknowledgedLeafIdSet.has(candidate)))
     ) {
       throw new Error('Terminal renderer acknowledged an unexpected grid layout')
     }
     const stagedClone = this.cloneTerminalLayoutSnapshot(staged)
     const acknowledgedClone = this.cloneTerminalLayoutSnapshot(acknowledged)
     // Why: renderer acknowledgement owns live geometry/focus, while main's
-    // staged snapshot can carry durable buffers omitted from graph-derived state.
-    return {
+    // staged leaf records remain authoritative for identities already committed.
+    const mergeDurableLeafRecords = <T>(
+      acknowledgedRecords: Record<string, T> | undefined,
+      stagedRecords: Record<string, T> | undefined
+    ): Record<string, T> | undefined => {
+      const records = Object.fromEntries(
+        Object.entries({ ...acknowledgedRecords, ...stagedRecords }).filter(([candidate]) =>
+          acknowledgedLeafIdSet.has(candidate)
+        )
+      ) as Record<string, T>
+      return Object.keys(records).length > 0 ? records : undefined
+    }
+    const merged: TerminalLayoutSnapshot = {
       ...stagedClone,
       ...acknowledgedClone,
       ptyIdsByLeafId: {
-        ...stagedClone.ptyIdsByLeafId,
-        ...acknowledgedClone.ptyIdsByLeafId
-      },
-      ...(stagedClone.buffersByLeafId || acknowledgedClone.buffersByLeafId
-        ? {
-            buffersByLeafId: {
-              ...stagedClone.buffersByLeafId,
-              ...acknowledgedClone.buffersByLeafId
-            }
-          }
-        : {}),
-      ...(stagedClone.scrollbackRefsByLeafId || acknowledgedClone.scrollbackRefsByLeafId
-        ? {
-            scrollbackRefsByLeafId: {
-              ...stagedClone.scrollbackRefsByLeafId,
-              ...acknowledgedClone.scrollbackRefsByLeafId
-            }
-          }
-        : {}),
-      ...(stagedClone.titlesByLeafId || acknowledgedClone.titlesByLeafId
-        ? {
-            titlesByLeafId: {
-              ...stagedClone.titlesByLeafId,
-              ...acknowledgedClone.titlesByLeafId
-            }
-          }
-        : {})
+        ...mergeDurableLeafRecords(acknowledgedClone.ptyIdsByLeafId, stagedClone.ptyIdsByLeafId),
+        [leafId]: ptyId
+      }
     }
+    const buffersByLeafId = mergeDurableLeafRecords(
+      acknowledgedClone.buffersByLeafId,
+      stagedClone.buffersByLeafId
+    )
+    const scrollbackRefsByLeafId = mergeDurableLeafRecords(
+      acknowledgedClone.scrollbackRefsByLeafId,
+      stagedClone.scrollbackRefsByLeafId
+    )
+    const titlesByLeafId = mergeDurableLeafRecords(
+      acknowledgedClone.titlesByLeafId,
+      stagedClone.titlesByLeafId
+    )
+    if (buffersByLeafId) {
+      merged.buffersByLeafId = buffersByLeafId
+    } else {
+      delete merged.buffersByLeafId
+    }
+    if (scrollbackRefsByLeafId) {
+      merged.scrollbackRefsByLeafId = scrollbackRefsByLeafId
+    } else {
+      delete merged.scrollbackRefsByLeafId
+    }
+    if (titlesByLeafId) {
+      merged.titlesByLeafId = titlesByLeafId
+    } else {
+      delete merged.titlesByLeafId
+    }
+    return merged
   }
 
   private persistMaterializedOrchestrationGridLayout(
@@ -25406,12 +25425,26 @@ export class OrcaRuntimeService {
         return null
       }
       const canonical = session?.terminalLayoutsByTabId[tabId]
+      const publishedLayout = this.cloneTerminalLayoutSnapshot(layout)
+      const canonicalLayout = canonical ? this.cloneTerminalLayoutSnapshot(canonical) : undefined
+      const publishedLeafIds = collectTerminalLayoutLeafIds(publishedLayout.root)
+      const canonicalLeafIds = collectTerminalLayoutLeafIds(canonicalLayout?.root)
+      const canonicalLeafIdSet = new Set(canonicalLeafIds)
+      const publishedIsStaleSubset =
+        canonicalLayout !== undefined &&
+        publishedLeafIds.length < canonicalLeafIds.length &&
+        publishedLeafIds.every((leafId) => canonicalLeafIdSet.has(leafId))
+      // Why: the graph publish trails renderer acknowledgements by a frame; it
+      // may update focus without yet containing every committed grid leaf.
+      const publishedGeometry = publishedIsStaleSubset
+        ? { ...publishedLayout, root: canonicalLayout.root }
+        : publishedLayout
       // Why: renderer graph sync owns current geometry/selection but omits
       // buffers, scrollback refs, and titles needed for a durable grid append.
       const mergedLayout: TerminalLayoutSnapshot = canonical
         ? {
-            ...this.cloneTerminalLayoutSnapshot(canonical),
-            ...this.cloneTerminalLayoutSnapshot(layout),
+            ...canonicalLayout,
+            ...publishedGeometry,
             ...(canonical.ptyIdsByLeafId || layout.ptyIdsByLeafId
               ? {
                   ptyIdsByLeafId: {
@@ -30180,6 +30213,15 @@ export class OrcaRuntimeService {
   ): RuntimeTerminalSummary {
     const worktree = worktreesById.get(leaf.worktreeId)
     const tab = this.tabs.get(leaf.tabId) ?? null
+    const layout = this.store?.getWorkspaceSession?.(
+      this.getWorkspaceExecutionHostId(leaf.worktreeId)
+    ).terminalLayoutsByTabId[leaf.tabId]
+    // Why: every grid leaf shares one tab title, so its durable leaf title is
+    // the fallback when no newer pane/OSC title has been observed.
+    const fallbackTitle =
+      layout?.layoutMode === 'orchestration-grid'
+        ? (layout.titlesByLeafId?.[leaf.leafId] ?? tab?.title ?? null)
+        : (tab?.title ?? null)
 
     const pty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
     // Why: leaf.connected mirrors the renderer graph (`ptyId !== null`), so a
