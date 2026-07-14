@@ -122,6 +122,28 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     modelingUnit: 'cjkchar'
   },
   {
+    id: 'zipformer-korean',
+    label: 'Zipformer Korean',
+    description: 'Korean only. Offline transducer trained on the KsponSpeech corpus.',
+    type: 'transducer',
+    provider: 'local',
+    language: 'ko',
+    sizeBytes: 329_740_690,
+    downloadUrl:
+      'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-zipformer-korean-2024-06-24.tar.bz2',
+    archiveSha256: '24bd409318f389cd2de0e295eb1acf91f4e8dfcc0d650490dd2a01f5b50d2c77',
+    archiveFormat: 'tar.bz2',
+    files: [
+      'encoder-epoch-99-avg-1.int8.onnx',
+      'decoder-epoch-99-avg-1.onnx',
+      'joiner-epoch-99-avg-1.int8.onnx',
+      'tokens.txt'
+    ],
+    sampleRate: 16000,
+    streaming: false,
+    modelingUnit: 'bpe'
+  },
+  {
     id: 'whisper-tiny',
     label: 'Whisper Tiny',
     description: '90+ languages. Lower accuracy than Parakeet but broadest language coverage.',
