@@ -100,6 +100,7 @@ import {
   prepareWorktreePushTargetWithExec
 } from './worktree-push-target-setup'
 import { isENOENT, registerWorktreeRootsForRepo } from './filesystem-auth'
+import { canonicalizeLocalWorktreeCreationPath } from './worktree-creation-path'
 import { createWorktreeLinkedPaths } from './worktree-symlinks'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
@@ -2279,6 +2280,9 @@ export async function createLocalWorktree(
       computeWorktreePath(effectiveSanitizedName, repo.path, worktreePathSettings),
       workspaceRoot
     )
+    // Why: Git resolves symlinked ancestors before recording a linked worktree.
+    // Keep Orca's create path aligned with the path returned by `git worktree list`.
+    worktreePath = canonicalizeLocalWorktreeCreationPath(worktreePath)
     if (existsSync(worktreePath)) {
       continue
     }

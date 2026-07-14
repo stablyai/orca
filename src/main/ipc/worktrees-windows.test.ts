@@ -135,6 +135,13 @@ vi.mock('./worktree-logic', async (importOriginal) => {
   }
 })
 
+vi.mock('./worktree-creation-path', () => ({
+  // Why: these Linux-hosted tests exercise Windows string normalization with
+  // paths the host filesystem cannot resolve; canonicalization has focused
+  // real-filesystem coverage in worktree-creation-path.test.ts.
+  canonicalizeLocalWorktreeCreationPath: (targetPath: string) => targetPath
+}))
+
 import { registerWorktreeHandlers } from './worktrees'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>

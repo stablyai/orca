@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GitUsernameModule from '../git/git-username'
-import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { CreateWorktreeResult, GitWorktreeInfo, Worktree } from '../../shared/types'
@@ -887,9 +887,12 @@ describe('registerWorktreeHandlers', () => {
       worktreeBaseRef: null,
       worktreeBasePath: '../worktrees'
     })
+    // Why: use an absolute path so canonicalizeLocalWorktreeCreationPath
+    // does not rebase it against the real filesystem.
+    computeWorktreePathMock.mockReturnValue('/workspace/worktrees/feature')
     listWorktreesMock.mockResolvedValue([
       {
-        path: '../worktrees/feature',
+        path: '/workspace/worktrees/feature',
         head: 'abc123',
         branch: 'feature',
         isBare: false,
@@ -908,17 +911,78 @@ describe('registerWorktreeHandlers', () => {
     })
     expect(addWorktreeMock).toHaveBeenCalledWith(
       '/workspace/repo',
-      '../worktrees/feature',
+      '/workspace/worktrees/feature',
       'feature',
       'origin/main',
       false
     )
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
-      'repo-1::../worktrees/feature',
+      'repo-1::/workspace/worktrees/feature',
       expect.objectContaining({
         orcaCreationWorkspaceLayout: { path: '../worktrees', nestWorkspaces: false }
       })
     )
+  })
+
+  it('canonicalizes symlinked local paths before Git creation and setup preparation', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-create-realpath-'))
+    const canonicalWorkspace = join(root, 'canonical-workspace')
+    const linkedWorkspace = join(root, 'linked-workspace')
+
+    try {
+      await mkdir(canonicalWorkspace)
+      await symlink(
+        canonicalWorkspace,
+        linkedWorkspace,
+        process.platform === 'win32' ? 'junction' : 'dir'
+      )
+      const requestedWorktreePath = join(linkedWorkspace, 'feature')
+      const canonicalWorktreePath = join(await realpath(canonicalWorkspace), 'feature')
+      computeWorktreePathMock.mockReturnValue(requestedWorktreePath)
+      listWorktreesMock.mockResolvedValue([
+        {
+          path: canonicalWorktreePath,
+          head: 'abc123',
+          branch: 'feature',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+      loadHooksMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+      getEffectiveHooksMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+      getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
+      shouldRunSetupForCreateMock.mockReturnValue(true)
+      createSetupRunnerScriptMock.mockReturnValueOnce({
+        runnerScriptPath: '/workspace/repo/.git/orca/setup-runner.sh',
+        envVars: {
+          ORCA_ROOT_PATH: '/workspace/repo',
+          ORCA_WORKTREE_PATH: canonicalWorktreePath
+        }
+      })
+
+      const result = (await handlers['worktrees:create'](null, {
+        repoId: 'repo-1',
+        name: 'feature',
+        setupDecision: 'run'
+      })) as CreateWorktreeResult
+
+      expect(addWorktreeMock).toHaveBeenCalledWith(
+        '/workspace/repo', canonicalWorktreePath, 'feature', 'origin/main', false
+      )
+      expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+        `repo-1::${canonicalWorktreePath}`, expect.any(Object)
+      )
+      expect(loadHooksMock).toHaveBeenCalledWith(canonicalWorktreePath)
+      expect(createSetupRunnerScriptMock).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'repo-1' }), canonicalWorktreePath, 'pnpm install'
+      )
+      expect(result).toMatchObject({
+        worktree: { id: `repo-1::${canonicalWorktreePath}`, path: canonicalWorktreePath },
+        setup: { envVars: { ORCA_ROOT_PATH: '/workspace/repo', ORCA_WORKTREE_PATH: canonicalWorktreePath } }
+      })
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
   })
 
   it('registers local worktree roots immediately after create', async () => {
