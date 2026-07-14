@@ -19,3 +19,7 @@ function orcaUserDataPath(): string {
 export function chatImportDbPath(overrideUserDataPath?: string): string {
   return join(overrideUserDataPath ?? orcaUserDataPath(), 'chat-import', 'chats.db')
 }
+
+export function chatImportBlobDir(): string {
+  return join(orcaUserDataPath(), 'chat-import', 'blobs')
+}
