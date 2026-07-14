@@ -2172,6 +2172,7 @@ describe('useIpcEvents updater integration', () => {
             launchConfig?: SleepingAgentLaunchConfig
             launchAgent?: TuiAgent
             viewMode?: 'terminal' | 'chat'
+            terminalHandle?: string
             title?: string
             activate?: boolean
             presentation?: 'background' | 'focused'
@@ -2294,6 +2295,7 @@ describe('useIpcEvents updater integration', () => {
               launchConfig?: SleepingAgentLaunchConfig
               launchAgent?: TuiAgent
               viewMode?: 'terminal' | 'chat'
+              terminalHandle?: string
               title?: string
               ptyId?: string
               activate?: boolean
@@ -2327,6 +2329,7 @@ describe('useIpcEvents updater integration', () => {
               launchConfig?: SleepingAgentLaunchConfig
               launchAgent?: TuiAgent
               viewMode?: 'terminal' | 'chat'
+              terminalHandle?: string
               title?: string
               activate?: boolean
               presentation?: 'background' | 'focused'
@@ -2703,7 +2706,7 @@ describe('useIpcEvents updater integration', () => {
       requestId: 'req-grid-first',
       worktreeId: 'wt-grid',
       title: 'Worker 1',
-      command: 'codex',
+      terminalHandle: 'term-grid-first',
       placement: 'orchestration-grid'
     })
 
@@ -2719,6 +2722,13 @@ describe('useIpcEvents updater integration', () => {
       recordInteraction: false
     })
     expect(queueTabStartupCommand).toHaveBeenCalledOnce()
+    expect(queueTabStartupCommand).toHaveBeenCalledWith(
+      'tab-new',
+      expect.objectContaining({
+        command: '',
+        env: { ORCA_TERMINAL_HANDLE: 'term-grid-first' }
+      })
+    )
     expect(replyTerminalCreate).toHaveBeenCalledWith({
       requestId: 'req-grid-first',
       tabId: 'tab-new',

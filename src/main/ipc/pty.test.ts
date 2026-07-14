@@ -11841,6 +11841,39 @@ describe('registerPtyHandlers', () => {
     expect(runtime.preAllocateHandleForPty).toHaveBeenCalledWith(expect.any(String))
   })
 
+  it('claims a runtime-reserved renderer handle for the exact local PTY', async () => {
+    const runtime = {
+      setPtyController: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      claimRendererTerminalHandle: vi.fn((handle: unknown) =>
+        handle === 'term_renderer_reserved' ? handle : null
+      ),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_wrong'),
+      preAllocateHandleForPty: vi.fn(() => 'term_wrong'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const result = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      env: { ORCA_TERMINAL_HANDLE: 'term_renderer_reserved' }
+    })) as { id: string }
+
+    const spawnCall = spawnMock.mock.calls.at(-1)!
+    const env = spawnCall[2].env as Record<string, string>
+    expect(env.ORCA_TERMINAL_HANDLE).toBe('term_renderer_reserved')
+    expect(runtime.createPreAllocatedTerminalHandle).not.toHaveBeenCalled()
+    expect(runtime.preAllocateHandleForPty).not.toHaveBeenCalled()
+    expect(runtime.registerPreAllocatedHandleForPty).toHaveBeenCalledWith(
+      result.id,
+      'term_renderer_reserved'
+    )
+  })
+
   it('forwards the trusted Orca terminal handle into managed WSL terminals', async () => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', {

@@ -16383,52 +16383,173 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
-  it('lets the renderer spawn the first renderer-backed orchestration-grid pane', async () => {
-    const leafId = '11111111-1111-4111-8111-111111111111'
-    const webContents = { send: vi.fn() }
-    const send = vi.fn((_channel: string, payload: { requestId: string }) => {
-      runtime.syncWindowGraph(1, {
-        tabs: [
-          {
-            tabId: 'tab-grid-renderer',
-            worktreeId: TEST_WORKTREE_ID,
-            title: 'Renderer Grid',
-            activeLeafId: leafId,
-            layoutMode: 'orchestration-grid',
-            layout: { type: 'leaf', leafId }
-          }
-        ],
-        leaves: [
-          {
-            tabId: 'tab-grid-renderer',
-            worktreeId: TEST_WORKTREE_ID,
-            leafId,
-            paneRuntimeId: 1,
-            ptyId: 'pty-grid-renderer',
-            paneTitle: null
-          }
-        ]
-      })
-      ipcMain.emit(
-        'terminal:tabCreateReply',
-        { sender: webContents },
-        {
-          requestId: payload.requestId,
-          tabId: 'tab-grid-renderer',
-          leafId,
-          title: 'Renderer Grid'
-        }
-      )
+  it('keeps the first renderer-backed grid handle through append and listing', async () => {
+    const firstLeafId = '11111111-1111-4111-8111-111111111111'
+    const firstPtyId = 'pty-grid-renderer'
+    const appendedPtyId = 'pty-grid-appended'
+    const firstLayout = addOrchestrationTerminalGridLeaf(null, {
+      leafId: firstLeafId,
+      ptyId: firstPtyId,
+      title: 'Renderer Grid',
+      activate: true
     })
+    const webContents = { send: vi.fn() }
+    const send = vi.fn(
+      (_channel: string, payload: { requestId: string; terminalHandle?: string }) => {
+        const terminalHandle = runtime.claimRendererTerminalHandle(payload.terminalHandle)
+        if (!terminalHandle) {
+          throw new Error('Expected a reserved renderer terminal handle')
+        }
+        runtime.registerPreAllocatedHandleForPty(firstPtyId, terminalHandle)
+        runtime.syncWindowGraph(1, {
+          tabs: [
+            {
+              tabId: 'tab-grid-renderer',
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Renderer Grid',
+              activeLeafId: firstLeafId,
+              layoutMode: 'orchestration-grid',
+              layout: firstLayout.root
+            }
+          ],
+          leaves: [
+            {
+              tabId: 'tab-grid-renderer',
+              worktreeId: TEST_WORKTREE_ID,
+              leafId: firstLeafId,
+              paneRuntimeId: 1,
+              ptyId: firstPtyId,
+              paneTitle: null
+            }
+          ]
+        })
+        ipcMain.emit(
+          'terminal:tabCreateReply',
+          { sender: webContents },
+          {
+            requestId: payload.requestId,
+            tabId: 'tab-grid-renderer',
+            leafId: firstLeafId,
+            title: 'Renderer Grid'
+          }
+        )
+      }
+    )
     webContents.send = send
-    const spawn = vi.fn()
     const runtime = new OrcaRuntimeService(store)
+    const spawn = vi.fn(async (args) => {
+      const staged = runtime.beginStagedPtyRuntimeRegistration()
+      staged.claim(appendedPtyId)
+      runtime.registerPreAllocatedHandleForPty(appendedPtyId, args.preAllocatedHandle)
+      runtime.registerPty(appendedPtyId, args.worktreeId)
+      return {
+        id: appendedPtyId,
+        runtimeRegistration: {
+          commit: () => staged.commit(),
+          complete: vi.fn(),
+          abort: async () => staged.abort()
+        }
+      }
+    })
+    const revealTerminalSession = vi.fn(
+      async (
+        _worktreeId: string,
+        args: { tabId?: string; leafId?: string; ptyId: string; title?: string | null }
+      ) => {
+        const appendedLayout = addOrchestrationTerminalGridLeaf(firstLayout, {
+          leafId: args.leafId!,
+          ptyId: args.ptyId,
+          title: args.title,
+          activate: false
+        })
+        runtime.syncWindowGraph(1, {
+          tabs: [
+            {
+              tabId: 'tab-grid-renderer',
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Renderer Grid',
+              activeLeafId: firstLeafId,
+              layoutMode: 'orchestration-grid',
+              layout: appendedLayout.root
+            }
+          ],
+          leaves: [
+            {
+              tabId: 'tab-grid-renderer',
+              worktreeId: TEST_WORKTREE_ID,
+              leafId: firstLeafId,
+              paneRuntimeId: 1,
+              ptyId: firstPtyId,
+              paneTitle: null
+            },
+            {
+              tabId: 'tab-grid-renderer',
+              worktreeId: TEST_WORKTREE_ID,
+              leafId: args.leafId!,
+              paneRuntimeId: 2,
+              ptyId: args.ptyId,
+              paneTitle: null
+            }
+          ],
+          mobileSessionTabs: [
+            {
+              worktree: TEST_WORKTREE_ID,
+              publicationEpoch: 'renderer-grid',
+              snapshotVersion: 2,
+              activeGroupId: 'group-grid',
+              activeTabId: `tab-grid-renderer::${firstLeafId}`,
+              activeTabType: 'terminal',
+              tabs: [
+                {
+                  type: 'terminal',
+                  id: `tab-grid-renderer::${firstLeafId}`,
+                  parentTabId: 'tab-grid-renderer',
+                  leafId: firstLeafId,
+                  ptyId: firstPtyId,
+                  title: 'Renderer Grid',
+                  parentLayout: appendedLayout,
+                  isActive: true
+                },
+                {
+                  type: 'terminal',
+                  id: `tab-grid-renderer::${args.leafId!}`,
+                  parentTabId: 'tab-grid-renderer',
+                  leafId: args.leafId!,
+                  ptyId: args.ptyId,
+                  title: args.title ?? 'Appended Grid',
+                  parentLayout: appendedLayout,
+                  isActive: false
+                }
+              ]
+            }
+          ]
+        })
+        return { tabId: args.tabId!, leafId: args.leafId, layout: appendedLayout }
+      }
+    )
+    const write = vi.fn(() => true)
+    const kill = vi.fn(() => true)
     runtime.setPtyController({
       spawn,
-      write: () => true,
-      kill: () => true,
+      write,
+      kill,
       getForegroundProcess: async () => null
     })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession,
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.onMobileSessionTabsChanged(vi.fn())
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     electronMocks.BrowserWindow.fromId.mockReturnValue({
@@ -16436,28 +16557,62 @@ describe('OrcaRuntimeService', () => {
       webContents
     })
 
-    await expect(
-      runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
-        command: 'codex',
-        rendererBacked: true,
-        placement: 'orchestration-grid',
-        title: 'Renderer Grid'
-      })
-    ).resolves.toMatchObject({
+    const first = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      command: 'codex',
+      rendererBacked: true,
+      placement: 'orchestration-grid',
+      title: 'Renderer Grid'
+    })
+    expect(first).toMatchObject({
       handle: expect.stringMatching(/^term_/),
       tabId: 'tab-grid-renderer',
       title: 'Renderer Grid',
       worktreeId: TEST_WORKTREE_ID,
       surface: 'visible'
     })
+    const appended = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      command: 'codex',
+      rendererBacked: true,
+      placement: 'orchestration-grid',
+      title: 'Appended Grid'
+    })
+    const listed = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
+    const listedFirst = listed.terminals.find((terminal) => terminal.ptyId === firstPtyId)
+
+    expect(appended.tabId).toBe(first.tabId)
+    expect(listedFirst).toMatchObject({
+      handle: first.handle,
+      ptyId: firstPtyId,
+      tabId: first.tabId,
+      leafId: firstLeafId
+    })
+    expect(listed.terminals.filter((terminal) => terminal.ptyId === firstPtyId)).toHaveLength(1)
+    expect(
+      [...runtime['handles'].values()].filter((record) => record.ptyId === firstPtyId)
+    ).toHaveLength(1)
+    await expect(runtime.readTerminal(first.handle)).resolves.toMatchObject({
+      handle: first.handle,
+      status: 'running'
+    })
+    await expect(runtime.sendTerminal(first.handle, { text: 'status' })).resolves.toMatchObject({
+      handle: first.handle,
+      accepted: true
+    })
+    expect(write).toHaveBeenCalledWith(firstPtyId, 'status')
+    await expect(runtime.closeTerminal(first.handle)).resolves.toMatchObject({
+      handle: first.handle,
+      ptyKilled: true
+    })
+    expect(kill).toHaveBeenCalledWith(firstPtyId)
     expect(send).toHaveBeenCalledWith(
       'terminal:requestTabCreate',
       expect.objectContaining({
         worktreeId: TEST_WORKTREE_ID,
+        terminalHandle: first.handle,
         placement: 'orchestration-grid'
       })
     )
-    expect(spawn).not.toHaveBeenCalled()
+    expect(spawn).toHaveBeenCalledOnce()
   })
 
   it('splits visible pty-backed terminal sessions through the parent renderer tab', async () => {

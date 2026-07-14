@@ -2853,6 +2853,7 @@ export class OrcaRuntimeService {
   // Why: pointer state is process-local; one harmless replay after restart avoids a wire or schema change.
   private readonly lastPointedMessageSequenceByHandle = new Map<string, number>()
   private syntheticTerminalHandles = new Set<string>()
+  private pendingRendererTerminalHandles = new Set<string>()
   private detachedPreAllocatedLeaves = new Map<string, RuntimeLeafRecord>()
   private graphSyncCallbacks: (() => void)[] = []
   private waitersByHandle = new Map<string, Set<TerminalWaiter>>()
@@ -9534,6 +9535,23 @@ export class OrcaRuntimeService {
 
   createPreAllocatedTerminalHandle(): string {
     return `term_${randomUUID()}`
+  }
+
+  reserveRendererTerminalHandle(): string {
+    const handle = this.createPreAllocatedTerminalHandle()
+    this.pendingRendererTerminalHandles.add(handle)
+    return handle
+  }
+
+  claimRendererTerminalHandle(handle: unknown): string | null {
+    if (typeof handle !== 'string' || !this.pendingRendererTerminalHandles.delete(handle)) {
+      return null
+    }
+    return handle
+  }
+
+  releaseRendererTerminalHandle(handle: string): void {
+    this.pendingRendererTerminalHandles.delete(handle)
   }
 
   registerPreAllocatedHandleForPty(ptyId: string, handle: string): void {
@@ -26077,63 +26095,81 @@ export class OrcaRuntimeService {
     // Why: terminal creation is a renderer-side Zustand store operation (like
     // browser tab creation). The main process sends a request, the renderer
     // creates the tab and replies with the tabId so we can resolve the handle.
-    const reply = await new Promise<{ tabId: string; leafId?: string; title: string }>(
-      (resolve, reject) => {
-        const timer = setTimeout(() => {
-          ipcMain.removeListener('terminal:tabCreateReply', handler)
-          reject(new Error('Terminal creation timed out'))
-        }, 10_000)
+    const rendererTerminalHandle = shouldRendererCreateInitialGrid
+      ? this.reserveRendererTerminalHandle()
+      : null
+    try {
+      const reply = await new Promise<{ tabId: string; leafId?: string; title: string }>(
+        (resolve, reject) => {
+          const timer = setTimeout(() => {
+            ipcMain.removeListener('terminal:tabCreateReply', handler)
+            reject(new Error('Terminal creation timed out'))
+          }, 10_000)
 
-        const handler = (
-          event: Electron.IpcMainEvent,
-          r: { requestId: string; tabId?: string; leafId?: string; title?: string; error?: string }
-        ): void => {
-          if (event.sender !== win.webContents || r.requestId !== requestId) {
-            return
+          const handler = (
+            event: Electron.IpcMainEvent,
+            r: {
+              requestId: string
+              tabId?: string
+              leafId?: string
+              title?: string
+              error?: string
+            }
+          ): void => {
+            if (event.sender !== win.webContents || r.requestId !== requestId) {
+              return
+            }
+            clearTimeout(timer)
+            ipcMain.removeListener('terminal:tabCreateReply', handler)
+            if (r.error) {
+              reject(new Error(r.error))
+            } else {
+              resolve({
+                tabId: r.tabId!,
+                ...(r.leafId ? { leafId: r.leafId } : {}),
+                title: r.title ?? launchOpts.title ?? ''
+              })
+            }
           }
-          clearTimeout(timer)
-          ipcMain.removeListener('terminal:tabCreateReply', handler)
-          if (r.error) {
-            reject(new Error(r.error))
-          } else {
-            resolve({
-              tabId: r.tabId!,
-              ...(r.leafId ? { leafId: r.leafId } : {}),
-              title: r.title ?? launchOpts.title ?? ''
-            })
-          }
+          ipcMain.on('terminal:tabCreateReply', handler)
+          win.webContents.send('terminal:requestTabCreate', {
+            requestId,
+            worktreeId,
+            command: launchOpts.command,
+            cwd,
+            ...(launchOpts.env ? { env: launchOpts.env } : {}),
+            ...(launchOpts.launchConfig ? { launchConfig: launchOpts.launchConfig } : {}),
+            ...(launchOpts.launchToken ? { launchToken: launchOpts.launchToken } : {}),
+            ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
+            ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
+            ...(rendererTerminalHandle ? { terminalHandle: rendererTerminalHandle } : {}),
+            startupCommandDelivery: launchOpts.startupCommandDelivery,
+            title: launchOpts.title,
+            activate: presentation === 'focused',
+            ...(presentation ? { presentation } : {}),
+            ...(launchOpts.placement ? { placement: launchOpts.placement } : {})
+          })
         }
-        ipcMain.on('terminal:tabCreateReply', handler)
-        win.webContents.send('terminal:requestTabCreate', {
-          requestId,
-          worktreeId,
-          command: launchOpts.command,
-          cwd,
-          ...(launchOpts.env ? { env: launchOpts.env } : {}),
-          ...(launchOpts.launchConfig ? { launchConfig: launchOpts.launchConfig } : {}),
-          ...(launchOpts.launchToken ? { launchToken: launchOpts.launchToken } : {}),
-          ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
-          ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
-          startupCommandDelivery: launchOpts.startupCommandDelivery,
-          title: launchOpts.title,
-          activate: presentation === 'focused',
-          ...(presentation ? { presentation } : {}),
-          ...(launchOpts.placement ? { placement: launchOpts.placement } : {})
-        })
-      }
-    )
+      )
 
-    // Why: the renderer created the tab immediately, but the graph sync that
-    // populates this.leaves may not have arrived yet. Wait for the leaf to
-    // appear so we can return a valid handle the caller can use right away.
-    const handle = await this.waitForTerminalHandle(reply.tabId, reply.leafId)
-    return {
-      handle,
-      tabId: reply.tabId,
-      worktreeId: worktreeId ?? '',
-      title: reply.title,
-      ...this.getPtyExecutionHostMetadata(this.handles.get(handle)?.ptyId ?? null),
-      surface: 'visible'
+      // Why: the renderer created the tab immediately, but the graph sync that
+      // populates this.leaves may not have arrived yet. Wait for the leaf to
+      // appear so we can return a valid handle the caller can use right away.
+      const handle = await this.waitForTerminalHandle(reply.tabId, reply.leafId)
+      if (rendererTerminalHandle && handle !== rendererTerminalHandle) {
+        throw new Error('Terminal renderer registered an unexpected handle')
+      }
+      return {
+        handle,
+        tabId: reply.tabId,
+        worktreeId: worktreeId ?? '',
+        title: reply.title,
+        surface: 'visible'
+      }
+    } finally {
+      if (rendererTerminalHandle) {
+        this.releaseRendererTerminalHandle(rendererTerminalHandle)
+      }
     }
   }
 

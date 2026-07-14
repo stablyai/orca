@@ -5788,6 +5788,41 @@ export function registerPtyHandlers(
       try {
         if (!earlyStablePaneOwner) {
           await assertFolderWorkspacePtyPathUsable(args.worktreeId)
+      const stablePaneKey = verifiedPaneKey ?? migrationUnsupportedPaneKey
+      let baseEnv = baseEnvWithAuth ? { ...baseEnvWithAuth } : undefined
+      const shouldRefreshAgentTeamsEnv =
+        !args.connectionId &&
+        runtime !== undefined &&
+        stablePaneKey !== null &&
+        shouldRefreshNativeClaudeAgentTeamsEnv({
+          command: args.command,
+          launchConfig: args.launchConfig
+        })
+      let effectiveLaunchConfig = args.launchConfig
+      const rendererTerminalHandle =
+        runtime?.claimRendererTerminalHandle(baseEnv?.ORCA_TERMINAL_HANDLE) ?? null
+      const shouldPreAllocateTerminalHandle =
+        rendererTerminalHandle !== null ||
+        (runtime !== undefined &&
+          ((!(provider instanceof LocalPtyProvider) &&
+            !routesFreshSpawnsToLocalProvider(provider)) ||
+            shouldRefreshAgentTeamsEnv))
+      const preAllocatedHandle =
+        rendererTerminalHandle ??
+        (runtime && shouldPreAllocateTerminalHandle
+          ? runtime.createPreAllocatedTerminalHandle()
+          : null)
+      if (shouldRefreshAgentTeamsEnv && preAllocatedHandle) {
+        // Why: native Agent Teams team ids/tokens are process-local. A sleeping
+        // record preserves the user's native launch shape, but the team env
+        // itself must be regenerated for the new leader PTY.
+        const prepared = await runtime.prepareClaudeAgentTeamsLeaderForHandle({
+          handle: preAllocatedHandle,
+          baseEnv: baseEnv ?? {}
+        })
+        baseEnv = {
+          ...baseEnv,
+          ...prepared.env
         }
         const provider = getProvider(args.connectionId)
         spawnTiming.mark('stable_adoption_setup')
