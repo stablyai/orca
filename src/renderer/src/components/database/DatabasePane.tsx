@@ -101,6 +101,7 @@ export default function DatabasePane({ tab }: { tab: Tab }): React.JSX.Element {
     const nextSchema = await introspectDatabase(tab.worktreeId, selectedRequest)
     setCatalog(nextCatalog)
     setSchema(nextSchema)
+    setResult(null)
     setConnected(true)
     setShowConnection(false)
   }
@@ -156,6 +157,7 @@ export default function DatabasePane({ tab }: { tab: Tab }): React.JSX.Element {
         createConnectionRequest(saved.connection, saved.id, password)
       )
       setSchema(nextSchema)
+      setResult(null)
     } catch (caught) {
       setError(errorMessage(caught))
     } finally {

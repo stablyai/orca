@@ -54,6 +54,23 @@ describe('getNextTabWithinActiveType', () => {
     ).toEqual({ type: 'browser', id: 'browser-2' })
   })
 
+  it('cycles from the active database tab instead of falling back to the list start', () => {
+    expect(
+      getNextTabWithinActiveType({
+        tabs: [
+          { type: 'database', id: 'database-1' },
+          { type: 'database', id: 'database-2' },
+          { type: 'database', id: 'database-3' }
+        ],
+        activeTabType: 'database',
+        activeTabId: 'database-2',
+        activeFileId: null,
+        activeBrowserTabId: null,
+        direction: 1
+      })
+    ).toEqual({ type: 'database', id: 'database-3' })
+  })
+
   it('returns null when the active type has a single tab', () => {
     expect(
       getNextTabWithinActiveType({

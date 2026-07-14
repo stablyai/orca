@@ -1288,9 +1288,11 @@ function TabBarInner({
                     tab={item.data}
                     isActive={activeTabType === 'database' && activeDatabaseTabId === item.id}
                     isPinned={item.isPinned}
+                    hasOtherTabs={orderedItems.length > 1}
                     hasTabsToRight={index < orderedItems.length - 1}
                     onActivate={() => onActivateDatabaseTab?.(item.id)}
                     onClose={() => onCloseFile?.(item.id)}
+                    onCloseOthers={() => onCloseOthers(item.id)}
                     onCloseToRight={() => onCloseToRight(item.id)}
                     onTogglePin={() => togglePinned(item)}
                     dragData={dragData}

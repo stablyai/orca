@@ -1,10 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import type {
-  DatabaseConnectionConfig,
-  DatabaseExecutionContext,
-  DatabaseProfileSummary
+import {
+  toPersistedDatabaseConnection,
+  type DatabaseExecutionContext,
+  type DatabaseProfileSummary
 } from '../../shared/database-types'
 import { writeSecureJsonFile } from '../../shared/secure-file'
 
@@ -80,7 +80,7 @@ export class DatabaseProfileStore {
     const stored: StoredProfile = {
       ...profile,
       nodeKey,
-      connection: persistedConnection(profile.connection)
+      connection: toPersistedDatabaseConnection(profile.connection)
     }
     const profiles = [...state.profiles]
     if (existingIndex >= 0) {
@@ -121,18 +121,6 @@ export class DatabaseProfileStore {
 
   private write(value: StoredProfileFile): void {
     writeSecureJsonFile(this.path, value)
-  }
-}
-
-function persistedConnection(connection: DatabaseConnectionConfig): DatabaseConnectionConfig {
-  return {
-    providerId: connection.providerId,
-    host: connection.host,
-    port: connection.port,
-    database: connection.database,
-    ...(connection.schema ? { schema: connection.schema } : {}),
-    user: connection.user,
-    sslMode: connection.sslMode
   }
 }
 

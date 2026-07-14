@@ -14,6 +14,22 @@ export type DatabaseConnectionConfig = {
   tlsServerName?: string
 }
 
+// Why: saved profiles must normalize user-entered text and must never retain
+// the tunnel-only TLS name that is injected after profile resolution.
+export function toPersistedDatabaseConnection(
+  connection: DatabaseConnectionConfig
+): DatabaseConnectionConfig {
+  return {
+    providerId: connection.providerId,
+    host: connection.host.trim(),
+    port: connection.port,
+    database: connection.database.trim(),
+    ...(connection.schema?.trim() ? { schema: connection.schema.trim() } : {}),
+    user: connection.user.trim(),
+    sslMode: connection.sslMode
+  }
+}
+
 export type DatabaseExecutionContext = {
   kind: 'ssh'
   connectionId: string

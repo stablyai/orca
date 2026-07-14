@@ -133,4 +133,25 @@ describe('DatabaseService', () => {
     await expect(service.execute(request)).rejects.toThrow('query failed')
     expect(close).toHaveBeenCalledTimes(1)
   })
+
+  it('does not replace a successful operation when SSH tunnel cleanup fails', async () => {
+    const provider = createProvider()
+    const closeError = new Error('tunnel cleanup failed')
+    const close = vi.fn().mockRejectedValue(closeError)
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const service = new DatabaseService([provider], {
+      open: vi.fn().mockResolvedValue({ connection: connectionRequest.connection, close })
+    } as never)
+
+    await expect(service.testConnection(connectionRequest)).resolves.toEqual({
+      database: 'app',
+      serverVersion: '17.1'
+    })
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(errorSpy).toHaveBeenCalledWith(
+      '[database] Failed to close the project SSH tunnel',
+      closeError
+    )
+    errorSpy.mockRestore()
+  })
 })

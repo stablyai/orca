@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Database, PanelRightClose, Pin, PinOff, X } from 'lucide-react'
+import { Database, ListX, PanelRightClose, Pin, PinOff, X } from 'lucide-react'
 import { useSortable } from '@dnd-kit/sortable'
 import type { Tab } from '../../../../shared/types'
 import {
@@ -29,9 +29,11 @@ export default function DatabaseTab({
   tab,
   isActive,
   isPinned,
+  hasOtherTabs,
   hasTabsToRight,
   onActivate,
   onClose,
+  onCloseOthers,
   onCloseToRight,
   onTogglePin,
   dragData,
@@ -41,9 +43,11 @@ export default function DatabaseTab({
   tab: Tab
   isActive: boolean
   isPinned: boolean
+  hasOtherTabs: boolean
   hasTabsToRight: boolean
   onActivate: () => void
   onClose: () => void
+  onCloseOthers: () => void
   onCloseToRight: () => void
   onTogglePin: () => void
   dragData: TabDragItemData
@@ -168,6 +172,10 @@ export default function DatabaseTab({
           <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
             <X />
             {translate('auto.components.database.tab.close', 'Close')}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={onCloseOthers} disabled={!hasOtherTabs}>
+            <ListX />
+            {translate('auto.components.tab.bar.SortableTabContextMenu.8d16f9cd30', 'Close Others')}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={onCloseToRight} disabled={!hasTabsToRight}>
             <PanelRightClose />

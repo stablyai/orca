@@ -29,7 +29,11 @@ vi.mock('./runtime-rpc-client', () => ({
   callRuntimeRpc: (...args: unknown[]) => mocks.callRuntimeRpc(...args)
 }))
 
-import { listDatabaseProfiles, testDatabaseConnection } from './runtime-database-client'
+import {
+  listDatabaseProfiles,
+  loadDatabaseCatalog,
+  testDatabaseConnection
+} from './runtime-database-client'
 
 const request = {
   connection: {
@@ -105,6 +109,30 @@ describe('runtime database client project routing', () => {
       'database.profiles.list',
       { execution: { kind: 'ssh', connectionId: 'ssh-p8' } },
       { timeoutMs: 10_000 }
+    )
+  })
+
+  it('requires the profile capability for catalog RPCs introduced with profiles', async () => {
+    mocks.callRuntimeRpc.mockResolvedValueOnce({
+      databases: ['app'],
+      schemas: ['public'],
+      currentDatabase: 'app',
+      currentSchema: 'public'
+    })
+
+    await loadDatabaseCatalog('aps::worktree', request)
+
+    expect(mocks.assertCapability).toHaveBeenCalledWith(
+      'linux-jae',
+      'database.profile.v1',
+      expect.any(String),
+      35_000
+    )
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'linux-jae' },
+      'database.catalog',
+      { ...request, execution: { kind: 'ssh', connectionId: 'ssh-p8' } },
+      { timeoutMs: 35_000 }
     )
   })
 })

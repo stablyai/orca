@@ -77,6 +77,20 @@ describe('DatabaseProfileService', () => {
     ).toThrow('Save the edited connection')
   })
 
+  it('honors an explicitly cleared schema while resolving a saved password', () => {
+    const saved = service.save(saveRequest('save', 'secret-password'))
+    const connectionWithoutSchema = { ...connection, schema: undefined }
+
+    const resolved = service.resolveRequest({
+      profileId: saved.id,
+      connection: connectionWithoutSchema,
+      credential: {}
+    })
+
+    expect(resolved.connection).toEqual(connectionWithoutSchema)
+    expect(resolved.credential.password).toBe('secret-password')
+  })
+
   it('isolates profiles by project node and deletes the credential with the profile', () => {
     const execution = { kind: 'ssh' as const, connectionId: 'ssh-p8' }
     const saved = service.save({ ...saveRequest('save', 'secret-password'), execution })

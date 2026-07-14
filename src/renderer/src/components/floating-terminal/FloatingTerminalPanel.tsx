@@ -8,6 +8,7 @@ import { FileText, Globe, Minus, TerminalSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import EmulatorPane from '@/components/emulator-pane/EmulatorPane'
 import DatabasePane from '@/components/database/DatabasePane'
+import { openDatabaseTab } from '@/components/database/database-tab-actions'
 import { clearDatabaseTabPassword } from '@/components/database/database-tab-credentials'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
@@ -51,7 +52,6 @@ import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { destroyWorkspaceWebviews } from '@/store/slices/browser-webview-cleanup'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { DEFAULT_DATABASE_TAB_STATE } from '../../../../shared/database-types'
 import {
   keybindingMatchesAction,
   matchKeybindingDigitIndex,
@@ -168,7 +168,6 @@ export function FloatingTerminalPanel({
   const { tabs, browserTabs, groups, unifiedTabs, floatingFiles, expandedPaneByTabId } =
     useAppStore(selectFloatingTerminalPanelInputs)
   const createTab = useAppStore((s) => s.createTab)
-  const createUnifiedTab = useAppStore((s) => s.createUnifiedTab)
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const closeTab = useAppStore((s) => s.closeTab)
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
@@ -707,18 +706,8 @@ export function FloatingTerminalPanel({
   }, [activeGroup, browserDefaultUrl, createBrowserTab])
 
   const createFloatingDatabaseTab = useCallback(() => {
-    const tab = createUnifiedTab(FLOATING_TERMINAL_WORKTREE_ID, 'database', {
-      label: translate('auto.components.database.tab.title', 'Database Query'),
-      database: {
-        connection: { ...DEFAULT_DATABASE_TAB_STATE.connection },
-        queryDraft: DEFAULT_DATABASE_TAB_STATE.queryDraft,
-        readOnly: DEFAULT_DATABASE_TAB_STATE.readOnly
-      },
-      targetGroupId: activeGroup?.id,
-      activate: true
-    })
-    activateTab(tab.id)
-  }, [activateTab, activeGroup, createUnifiedTab])
+    openDatabaseTab(FLOATING_TERMINAL_WORKTREE_ID, activeGroup?.id)
+  }, [activeGroup])
 
   const createFloatingMarkdownTab = useCallback(() => {
     if (!markdownCwd) {

@@ -32,7 +32,7 @@ export function getActiveEntityIdForTabType(
     return activeTabId
   }
   if (activeTabType === 'database') {
-    return null
+    return activeTabId
   }
   return activeTabId
 }

@@ -30,15 +30,22 @@ type DatabaseContextToolbarProps = {
 
 export function DatabaseContextToolbar(props: DatabaseContextToolbarProps): React.JSX.Element {
   const { connection, catalog, ownerLabel, readOnly, pending } = props
+  const databases = (catalog?.databases ?? [connection.database]).filter(
+    (database) => database.trim().length > 0
+  )
   return (
     <div className="flex min-h-9 shrink-0 flex-wrap items-center gap-2 border-b border-border bg-card px-2 py-1 text-xs">
       <Database className="size-3.5" />
-      <Select value={connection.database} onValueChange={props.onDatabaseChange} disabled={pending}>
+      <Select
+        value={connection.database.trim() ? connection.database : undefined}
+        onValueChange={props.onDatabaseChange}
+        disabled={pending}
+      >
         <SelectTrigger className="h-7 w-40 font-mono text-xs">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {(catalog?.databases ?? [connection.database]).map((database) => (
+          {databases.map((database) => (
             <SelectItem key={database} value={database}>
               {database}
             </SelectItem>
@@ -69,11 +76,12 @@ export function DatabaseContextToolbar(props: DatabaseContextToolbarProps): Reac
         <label className="flex items-center gap-1.5 text-muted-foreground">
           <Checkbox
             checked={readOnly}
+            disabled={pending}
             onCheckedChange={(checked) => props.onReadOnlyChange(checked === true)}
           />
           {translate('auto.components.database.toolbar.readOnly', 'Read only')}
         </label>
-        <Button variant="ghost" size="xs" onClick={props.onEditConnection}>
+        <Button variant="ghost" size="xs" disabled={pending} onClick={props.onEditConnection}>
           {translate('auto.components.database.toolbar.editConnection', 'Edit connection')}
         </Button>
       </div>

@@ -42,17 +42,14 @@ export function useDatabaseProfiles(options: UseDatabaseProfilesOptions): {
 
   useEffect(() => {
     let active = true
+    setProfileError(null)
     void listDatabaseProfiles(worktreeId)
       .then(({ profiles: loaded }) => {
         if (!active) {
           return
         }
         setProfiles(loaded)
-        const selected = loaded.find((profile) => profile.id === database.profileId)
-        if (selected) {
-          setProfileName(selected.name)
-          setRememberPassword(selected.hasSavedPassword)
-        }
+        setProfileError(null)
       })
       .catch((error: unknown) => {
         if (active) {
@@ -63,7 +60,15 @@ export function useDatabaseProfiles(options: UseDatabaseProfilesOptions): {
       active = false
     }
     // nodeIdentity changes when a tab moves between local/runtime/SSH owners.
-  }, [worktreeId, nodeIdentity, database.profileId])
+  }, [worktreeId, nodeIdentity])
+
+  useEffect(() => {
+    const selected = profiles.find((profile) => profile.id === database.profileId)
+    if (selected) {
+      setProfileName(selected.name)
+      setRememberPassword(selected.hasSavedPassword)
+    }
+  }, [database.profileId, profiles])
 
   const selectedProfile = useMemo(
     () => profiles.find((profile) => profile.id === database.profileId),

@@ -1,6 +1,9 @@
 import type { Client } from 'pg'
 import type { DatabaseCatalogResult } from '../../shared/database-types'
 
+const MAX_CATALOG_DATABASES = 1_000
+const MAX_CATALOG_SCHEMAS = 5_000
+
 export async function loadPostgresCatalog(
   client: Client,
   fallbackDatabase: string
@@ -12,7 +15,8 @@ export async function loadPostgresCatalog(
         WHERE datallowconn
           AND NOT datistemplate
           AND has_database_privilege(datname, 'CONNECT')
-        ORDER BY datname`
+        ORDER BY datname
+        LIMIT ${MAX_CATALOG_DATABASES}`
     ),
     client.query<{ schema_name: string }>(
       `SELECT schema_name
@@ -20,7 +24,8 @@ export async function loadPostgresCatalog(
         WHERE schema_name <> 'information_schema'
           AND schema_name NOT LIKE 'pg\\_%' ESCAPE '\\'
           AND has_schema_privilege(schema_name, 'USAGE')
-        ORDER BY schema_name`
+        ORDER BY schema_name
+        LIMIT ${MAX_CATALOG_SCHEMAS}`
     ),
     client.query<{ database: string; schema: string | null }>(
       'SELECT current_database() AS database, current_schema() AS schema'

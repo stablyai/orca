@@ -156,6 +156,7 @@ describe('PostgresProvider', () => {
       truncated: true
     })
     expect(postgres.cursorReadSizes).toEqual([3])
+    expect(postgres.clientConfigs[0]).toMatchObject({ query_timeout: 10_000 })
     expect(postgres.clients[0]?.queries).toEqual(
       expect.arrayContaining(['BEGIN READ ONLY', 'SET LOCAL statement_timeout = 5000', 'COMMIT'])
     )
@@ -184,6 +185,12 @@ describe('PostgresProvider', () => {
       currentDatabase: 'app',
       currentSchema: 'public'
     })
+    expect(postgres.clients[0]?.queries).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/FROM pg_database[\s\S]*LIMIT 1000/),
+        expect.stringMatching(/FROM information_schema\.schemata[\s\S]*LIMIT 5000/)
+      ])
+    )
   })
 
   it('limits schema introspection to the selected schema', async () => {
@@ -224,6 +231,7 @@ describe('PostgresProvider', () => {
       'SELECT pg_cancel_backend($1) AS canceled',
       [1000]
     )
+    expect(postgres.clients[1]?.end).toHaveBeenCalledTimes(1)
 
     postgres.cursorReadCallback?.(new Error('canceling statement'), [], {})
     await expect(execution).rejects.toThrow('canceling statement')

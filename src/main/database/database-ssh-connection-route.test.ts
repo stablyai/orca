@@ -5,7 +5,7 @@ import { DatabaseSshConnectionRoute } from './database-ssh-connection-route'
 const request: DatabaseConnectionRequest = {
   connection: {
     providerId: 'postgres',
-    host: '127.0.0.1',
+    host: 'db.internal.example.com',
     port: 5432,
     database: 'app',
     user: 'developer',
@@ -22,7 +22,7 @@ describe('DatabaseSshConnectionRoute', () => {
       id: 'pf-db',
       connectionId: 'ssh-p8',
       localPort: 45_678,
-      remoteHost: '127.0.0.1',
+      remoteHost: 'db.internal.example.com',
       remotePort: 5432
     })
     const removeForwardAndWait = vi.fn().mockResolvedValue(null)
@@ -39,7 +39,7 @@ describe('DatabaseSshConnectionRoute', () => {
       'ssh-p8',
       sshConnection,
       45_678,
-      '127.0.0.1',
+      'db.internal.example.com',
       5432,
       'Orca Database Query'
     )
@@ -47,7 +47,7 @@ describe('DatabaseSshConnectionRoute', () => {
       ...request.connection,
       host: '127.0.0.1',
       port: 45_678,
-      tlsServerName: '127.0.0.1'
+      tlsServerName: 'db.internal.example.com'
     })
     await routed.close()
     await routed.close()

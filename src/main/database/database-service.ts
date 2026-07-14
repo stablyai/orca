@@ -108,7 +108,13 @@ export class DatabaseService {
     try {
       return await operation({ ...request, connection: routed.connection })
     } finally {
-      await routed.close()
+      try {
+        await routed.close()
+      } catch (error) {
+        // Why: tunnel cleanup is best-effort after the operation has settled;
+        // replacing its result/error would make a successful query look failed.
+        console.error('[database] Failed to close the project SSH tunnel', error)
+      }
     }
   }
 }

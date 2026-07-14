@@ -33,7 +33,8 @@ const MAX_SCHEMA_COLUMNS = 50_000
 
 function toClientConfig(
   connection: DatabaseConnectionConfig,
-  password: string | undefined
+  password: string | undefined,
+  queryTimeoutMs = MAX_CONNECTION_TIMEOUT_MS + 5_000
 ): ClientConfig {
   const ssl =
     connection.sslMode === 'disable'
@@ -51,7 +52,7 @@ function toClientConfig(
     ssl,
     connectionTimeoutMillis: MAX_CONNECTION_TIMEOUT_MS,
     statement_timeout: MAX_CONNECTION_TIMEOUT_MS,
-    query_timeout: MAX_CONNECTION_TIMEOUT_MS + 5_000,
+    query_timeout: queryTimeoutMs,
     application_name: 'orca-database-tab'
   }
 }
@@ -205,9 +206,15 @@ export class PostgresProvider implements DatabaseProvider {
     if (this.activeQueries.has(request.queryId)) {
       throw new Error('A query with this id is already running')
     }
+    // Why: RPC validation already bounds these values, but the provider is also
+    // callable in-process and must not turn a malformed internal call into an
+    // unbounded cursor read or statement timeout.
+    const maxRows = Math.max(1, Math.min(MAX_QUERY_ROWS, Math.trunc(request.maxRows)))
+    const timeoutMs = Math.max(100, Math.min(MAX_QUERY_TIMEOUT_MS, Math.trunc(request.timeoutMs)))
     const clientConfig = toClientConfig(
       request.connection,
-      request.credential.password || undefined
+      request.credential.password || undefined,
+      timeoutMs + 5_000
     )
     const client = new Client(clientConfig)
     const active: ActiveQuery = {
@@ -220,11 +227,6 @@ export class PostgresProvider implements DatabaseProvider {
     this.activeQueries.set(request.queryId, active)
     const removeAbort = addAbortHandler(signal, () => void this.cancel(request.queryId))
     const startedAt = performance.now()
-    // Why: RPC validation already bounds these values, but the provider is also
-    // callable in-process and must not turn a malformed internal call into an
-    // unbounded cursor read or statement timeout.
-    const maxRows = Math.max(1, Math.min(MAX_QUERY_ROWS, Math.trunc(request.maxRows)))
-    const timeoutMs = Math.max(100, Math.min(MAX_QUERY_TIMEOUT_MS, Math.trunc(request.timeoutMs)))
     let transactionOpen = false
     try {
       await client.connect()

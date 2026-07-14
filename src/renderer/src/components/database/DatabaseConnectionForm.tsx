@@ -85,6 +85,7 @@ export function DatabaseConnectionForm(props: DatabaseConnectionFormProps): Reac
           <div className="flex gap-2">
             <Select
               value={selectedProfileId ?? NEW_PROFILE_VALUE}
+              disabled={pending}
               onValueChange={(value) =>
                 onProfileSelect(value === NEW_PROFILE_VALUE ? undefined : value)
               }
@@ -125,6 +126,7 @@ export function DatabaseConnectionForm(props: DatabaseConnectionFormProps): Reac
           <Input
             id={profileNameId}
             value={profileName}
+            disabled={pending}
             onChange={(event) => onProfileNameChange(event.target.value)}
             autoComplete="off"
           />
@@ -137,6 +139,7 @@ export function DatabaseConnectionForm(props: DatabaseConnectionFormProps): Reac
             <Input
               id={hostId}
               value={connection.host}
+              disabled={pending}
               onChange={(event) => patch({ host: event.target.value })}
               autoComplete="off"
               spellCheck={false}
@@ -145,6 +148,7 @@ export function DatabaseConnectionForm(props: DatabaseConnectionFormProps): Reac
             <Input
               aria-label={translate('auto.components.database.connection.port', 'Port')}
               value={String(connection.port)}
+              disabled={pending}
               onChange={(event) => {
                 const port = Number(event.target.value)
                 if (Number.isInteger(port) && port > 0 && port <= 65_535) {
@@ -163,6 +167,7 @@ export function DatabaseConnectionForm(props: DatabaseConnectionFormProps): Reac
           <Input
             id={databaseId}
             value={connection.database}
+            disabled={pending}
             onChange={(event) => patch({ database: event.target.value })}
             autoComplete="off"
             className="font-mono"
@@ -175,6 +180,7 @@ export function DatabaseConnectionForm(props: DatabaseConnectionFormProps): Reac
           <Input
             id={userId}
             value={connection.user}
+            disabled={pending}
             onChange={(event) => patch({ user: event.target.value })}
             autoComplete="username"
             className="font-mono"
@@ -188,6 +194,7 @@ export function DatabaseConnectionForm(props: DatabaseConnectionFormProps): Reac
             id={passwordId}
             type="password"
             value={password}
+            disabled={pending}
             placeholder={
               selectedProfileHasPassword
                 ? translate(
@@ -204,6 +211,7 @@ export function DatabaseConnectionForm(props: DatabaseConnectionFormProps): Reac
           <Label>{translate('auto.components.database.connection.tls', 'TLS')}</Label>
           <Select
             value={connection.sslMode}
+            disabled={pending}
             onValueChange={(value) => patch({ sslMode: value as DatabaseSslMode })}
           >
             <SelectTrigger className="w-full">
@@ -226,6 +234,7 @@ export function DatabaseConnectionForm(props: DatabaseConnectionFormProps): Reac
       <label className="flex items-start gap-2 text-xs text-muted-foreground">
         <Checkbox
           checked={rememberPassword}
+          disabled={pending}
           onCheckedChange={(checked) => onRememberPasswordChange(checked === true)}
         />
         <span>

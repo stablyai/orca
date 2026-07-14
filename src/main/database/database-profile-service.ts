@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import type {
-  DatabaseConnectionConfig,
-  DatabaseConnectionRequest,
-  DatabaseExecutionContext,
-  DatabaseProfileSaveRequest,
-  DatabaseProfileSummary
+import {
+  toPersistedDatabaseConnection,
+  type DatabaseConnectionConfig,
+  type DatabaseConnectionRequest,
+  type DatabaseExecutionContext,
+  type DatabaseProfileSaveRequest,
+  type DatabaseProfileSummary
 } from '../../shared/database-types'
 import type { DatabaseCredentialVault } from './database-credential-vault'
 import type { DatabaseProfileRecord, DatabaseProfileStore } from './database-profile-store'
@@ -39,7 +40,7 @@ export class DatabaseProfileService {
     if (request.profile.id && !existing) {
       throw new Error('Database profile was not found on this project node')
     }
-    const connection = persistedConnection(request.profile.connection)
+    const connection = toPersistedDatabaseConnection(request.profile.connection)
     const endpointChanged = existing
       ? !credentialEndpointsMatch(existing.connection, connection)
       : false
@@ -99,29 +100,13 @@ export class DatabaseProfileService {
     const password = request.credential.password ?? this.vault.get(profile.id) ?? undefined
     return {
       ...request,
-      connection: {
-        ...profile.connection,
-        database: request.connection.database,
-        ...(request.connection.schema ? { schema: request.connection.schema } : {})
-      },
+      connection: request.connection,
       credential: { password }
     }
   }
 
   private withCredentialState(profile: DatabaseProfileRecord): DatabaseProfileSummary {
     return { ...profile, hasSavedPassword: this.vault.has(profile.id) }
-  }
-}
-
-function persistedConnection(connection: DatabaseConnectionConfig): DatabaseConnectionConfig {
-  return {
-    providerId: connection.providerId,
-    host: connection.host.trim(),
-    port: connection.port,
-    database: connection.database.trim(),
-    ...(connection.schema?.trim() ? { schema: connection.schema.trim() } : {}),
-    user: connection.user.trim(),
-    sslMode: connection.sslMode
   }
 }
 

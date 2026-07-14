@@ -133,6 +133,8 @@ export function loadDatabaseCatalog(
   worktreeId: string,
   request: DatabaseConnectionRequest
 ): Promise<DatabaseCatalogResult> {
+  // Why: catalog RPCs were introduced with database.profile.v1; runtimes that
+  // only advertise database.query.v1 do not expose database.catalog yet.
   return callDatabaseRuntimeRpc(
     worktreeId,
     'database.catalog',
