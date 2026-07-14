@@ -5,8 +5,24 @@ import { useAppStore } from '@/store'
 // per install — the first time the button is usable — so users notice the new
 // tool. Gated on its own localStorage flag (not a contextual tour), so it fires
 // for everyone, including users who already finished the capped browser tour.
+// It stays open until the user acts (clicks Draw) or the button stops being
+// usable; there is no auto-timeout.
 const MARKUP_DRAW_HINT_SEEN_KEY = 'orca.browser.markup-draw-hint-seen'
-const MARKUP_DRAW_HINT_DURATION_MS = 6000
+
+// Records the first-ever view and returns whether this call is that first view.
+// Returns false when storage is unavailable so a private-mode session never
+// risks nagging on every open.
+function claimFirstView(): boolean {
+  try {
+    if (window.localStorage.getItem(MARKUP_DRAW_HINT_SEEN_KEY) === 'true') {
+      return false
+    }
+    window.localStorage.setItem(MARKUP_DRAW_HINT_SEEN_KEY, 'true')
+    return true
+  } catch {
+    return false
+  }
+}
 
 export type MarkupDrawHint = { hintOpen: boolean; dismissHint: () => void }
 
@@ -15,27 +31,16 @@ export function useMarkupDrawHint(eligible: boolean): MarkupDrawHint {
   const [hintOpen, setHintOpen] = useState(false)
 
   useEffect(() => {
-    // Why: wait for persisted UI state so the hint can't flash before the app is
-    // ready, and only nudge when the button is actually usable.
+    // Why: only nudge once the app is ready and the button is usable. If it stops
+    // being usable while showing (grab started, markup open, blank tab), close it
+    // so the forced-open tooltip can't get stuck over a now-disabled button.
     if (!persistedUIReady || !eligible) {
-      return undefined
+      setHintOpen(false)
+      return
     }
-    let alreadySeen = false
-    try {
-      alreadySeen = window.localStorage.getItem(MARKUP_DRAW_HINT_SEEN_KEY) === 'true'
-      if (!alreadySeen) {
-        window.localStorage.setItem(MARKUP_DRAW_HINT_SEEN_KEY, 'true')
-      }
-    } catch {
-      // Why: private-mode / disabled storage — skip the hint rather than throw.
-      return undefined
+    if (claimFirstView()) {
+      setHintOpen(true)
     }
-    if (alreadySeen) {
-      return undefined
-    }
-    setHintOpen(true)
-    const timeoutId = window.setTimeout(() => setHintOpen(false), MARKUP_DRAW_HINT_DURATION_MS)
-    return () => window.clearTimeout(timeoutId)
   }, [eligible, persistedUIReady])
 
   const dismissHint = useCallback(() => setHintOpen(false), [])
