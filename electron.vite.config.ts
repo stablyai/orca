@@ -189,7 +189,17 @@ export default defineConfig({
           // this path for `orca agent hooks ...`, so it must survive rebuilds.
           'agent-hooks/managed-agent-hook-controls': resolve(
             'src/main/agent-hooks/managed-agent-hook-controls.ts'
-          )
+          ),
+          // Why: same reason — the dev CLI's `chat-import-host` (native
+          // messaging host for web-chat import) requires these out/main modules
+          // directly. Without them as inputs, `pnpm dev` wipes out/main and the
+          // host crashes on launch (MODULE_NOT_FOUND) until `build:cli` reruns.
+          'chat-import/chat-import-paths': resolve('src/main/chat-import/chat-import-paths.ts'),
+          'chat-import/chat-import-store': resolve('src/main/chat-import/chat-import-store.ts'),
+          'chat-import/chat-import-blobstore': resolve(
+            'src/main/chat-import/chat-import-blobstore.ts'
+          ),
+          'chat-import/chat-import-db-open': resolve('src/main/chat-import/chat-import-db-open.ts')
         },
         plugins: [createStartupDiagnosticsBootstrapPlugin(), createPlainNodeEntryGuardPlugin()]
       }
