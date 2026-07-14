@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { QUICK_OPEN_QUERY_MAX_BYTES } from '../quick-open-search'
+import { QUICK_OPEN_QUERY_MAX_BYTES, prepareQuickOpenFiles } from '../quick-open-search'
 import {
   classifyTabEntryQuery,
   getTabEntryOptions,
@@ -397,6 +397,24 @@ describe('tab create entry classification', () => {
     expect(classifyTabEntryQuery(' '.repeat(QUICK_OPEN_QUERY_MAX_BYTES + 1), fileList)).toEqual({
       kind: 'blocked',
       message: 'Search text is too large.'
+    })
+  })
+
+  it('uses a prepared file index without rereading the file list', () => {
+    const indexedFiles = prepareQuickOpenFiles(['lib/product_detail.dart'])
+    const fileList = {
+      get files(): string[] {
+        throw new Error('prepared searches must not rebuild the file index')
+      },
+      loading: false,
+      loadError: null
+    }
+
+    expect(getTabEntryOptions('product detail', fileList, { indexedFiles })[0]).toMatchObject({
+      classification: {
+        kind: 'existing-file',
+        relativePath: 'lib/product_detail.dart'
+      }
     })
   })
 

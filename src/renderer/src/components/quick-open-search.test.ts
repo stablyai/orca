@@ -112,7 +112,8 @@ describe('quick-open-search', () => {
       'single-file.ts'
     ]
 
-    expect(prepareQuickOpenFiles(files)).toEqual([
+    const indexed = prepareQuickOpenFiles(files)
+    expect(indexed).toMatchObject([
       {
         path: 'src/renderer/src/components/QuickOpen.tsx',
         lowerPath: 'src/renderer/src/components/quickopen.tsx',
@@ -138,6 +139,17 @@ describe('quick-open-search', () => {
         inputIndex: 3
       }
     ])
+
+    // Why: camelCase "QuickOpen" / "App" must keep word starts after lowercasing.
+    const quickOpen = 'src/renderer/src/components/QuickOpen.tsx'
+    const quickOpenStarts = Array.from(indexed[0].wordStarts)
+    expect(quickOpenStarts[0]).toBe(1)
+    expect(quickOpenStarts[quickOpen.indexOf('Q')]).toBe(1)
+    expect(quickOpenStarts[quickOpen.indexOf('O')]).toBe(1)
+    expect(quickOpenStarts[quickOpen.indexOf('u')]).toBe(0)
+
+    const appPath = 'packages/windows-origin/src/App.tsx'
+    expect(indexed[1].wordStarts[appPath.indexOf('A')]).toBe(1)
   })
 
   it('returns no results for non-positive limits', () => {
@@ -157,6 +169,9 @@ describe('quick-open-search', () => {
       },
       get lowerFilename(): string {
         throw new Error('oversized queries must not scan indexed filenames')
+      },
+      get wordStarts(): Uint8Array {
+        throw new Error('oversized queries must not scan word starts')
       }
     } as QuickOpenIndexedFile
 
@@ -183,6 +198,129 @@ describe('quick-open-search', () => {
     expect(rankQuickOpenFiles('src\\components\\button', files).map((item) => item.path)).toEqual([
       'src/components/Button.tsx',
       'src/components/ButtonGroup.tsx'
+    ])
+  })
+
+  it('matches spaced human queries to snake_case basenames like VS Code', () => {
+    const files = prepareQuickOpenFiles([
+      'lib/screens/product_detail.dart',
+      'lib/screens/product_list.dart',
+      'lib/models/order_summary.dart',
+      'docs/unrelated.txt'
+    ])
+
+    const paths = rankQuickOpenFiles('Product Detail', files).map((item) => item.path)
+    expect(paths).toContain('lib/screens/product_detail.dart')
+    expect(paths[0]).toBe('lib/screens/product_detail.dart')
+  })
+
+  it('matches spaced queries across kebab-case, snake_case, and camelCase names', () => {
+    const files = prepareQuickOpenFiles([
+      'ui/product-detail.tsx',
+      'ui/product_detail.tsx',
+      'ui/ProductDetail.tsx',
+      'ui/cart.tsx'
+    ])
+
+    const paths = rankQuickOpenFiles('product detail', files).map((item) => item.path)
+    expect(paths).toEqual([
+      'ui/product-detail.tsx',
+      'ui/product_detail.tsx',
+      'ui/ProductDetail.tsx'
+    ])
+  })
+
+  it('treats hyphens and underscores as interchangeable identifier separators', () => {
+    const variants = prepareQuickOpenFiles([
+      'lib/product-detail.dart',
+      'lib/product_detail.dart',
+      'lib/order_detail.dart'
+    ])
+
+    expect(rankQuickOpenFiles('product-detail', variants).map((item) => item.path)).toEqual([
+      'lib/product-detail.dart',
+      'lib/product_detail.dart'
+    ])
+    expect(rankQuickOpenFiles('product_detail', variants).map((item) => item.path)).toEqual([
+      'lib/product_detail.dart',
+      'lib/product-detail.dart'
+    ])
+  })
+
+  it('keeps path and extension separators distinct from identifier separators', () => {
+    const files = prepareQuickOpenFiles([
+      'lib/product/detail.dart',
+      'lib/product.detail.dart',
+      'lib/product_detail.dart'
+    ])
+
+    expect(rankQuickOpenFiles('product-detail', files).map((item) => item.path)).toEqual([
+      'lib/product_detail.dart'
+    ])
+  })
+
+  it('recognizes capitalized words after uppercase acronym runs', () => {
+    const files = prepareQuickOpenFiles(['src/APIClient.ts', 'src/HTTPServer.ts'])
+
+    expect(rankQuickOpenFiles('api client', files).map((item) => item.path)).toEqual([
+      'src/APIClient.ts'
+    ])
+    expect(rankQuickOpenFiles('http server', files).map((item) => item.path)).toEqual([
+      'src/HTTPServer.ts'
+    ])
+  })
+
+  it('keeps word starts aligned when Unicode lowercasing expands a character', () => {
+    const files = prepareQuickOpenFiles(['İ/FooBar.ts'])
+
+    expect(files[0].lowerPath).toBe('i̇/foobar.ts')
+    expect(files[0].wordStarts[files[0].lowerPath.indexOf('b')]).toBe(1)
+    expect(rankQuickOpenFiles('foo bar', files).map((item) => item.path)).toEqual(['İ/FooBar.ts'])
+  })
+
+  it('matches spaced path segments to directory separators', () => {
+    const files = prepareQuickOpenFiles([
+      'src/components/Button.tsx',
+      'src/routes/About.tsx',
+      'packages/other/Button.tsx'
+    ])
+
+    expect(rankQuickOpenFiles('src components button', files).map((item) => item.path)).toEqual([
+      'src/components/Button.tsx'
+    ])
+  })
+
+  it('matches partial tokens with spaces (prod det → product_detail)', () => {
+    const files = prepareQuickOpenFiles([
+      'lib/product_detail.dart',
+      'lib/production_settings.dart',
+      'lib/profile.dart'
+    ])
+
+    const paths = rankQuickOpenFiles('prod det', files).map((item) => item.path)
+    expect(paths).toContain('lib/product_detail.dart')
+    expect(paths[0]).toBe('lib/product_detail.dart')
+  })
+
+  it('collapses internal whitespace in queries', () => {
+    const files = prepareQuickOpenFiles(['lib/product_detail.dart'])
+
+    expect(rankQuickOpenFiles('Product   Detail', files).map((item) => item.path)).toEqual([
+      'lib/product_detail.dart'
+    ])
+  })
+
+  it('still matches continuous snake_case queries without spaces', () => {
+    const files = prepareQuickOpenFiles(['lib/product_detail.dart', 'lib/product_list.dart'])
+
+    expect(rankQuickOpenFiles('product_detail', files).map((item) => item.path)).toEqual([
+      'lib/product_detail.dart'
+    ])
+  })
+
+  it('does not confuse a valid negative-one score with no match', () => {
+    expect(rankQuickOpenFiles('ab', prepareQuickOpenFiles(['axxx_b/file.txt']))).toEqual([
+      { path: 'axxx_b/file.txt', score: -1 }
     ])
   })
 })
