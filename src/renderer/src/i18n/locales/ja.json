@@ -6577,7 +6577,10 @@
           "8a349e3fac": "{{value0}} のパスフレーズ",
           "cab3d5f5a5": "{{value0}} のパスワード",
           "1f3dde805d": "SSH キーのパスフレーズ",
-          "106bd57f4a": "SSH パスワード"
+          "106bd57f4a": "SSH パスワード",
+          "6d2b7b77b7": "SSH Verification",
+          "baf23a0fcf": "Respond to the verification prompt from",
+          "7effa48279": "Enter response"
         },
         "SshTargetCard": {
           "ec6543cee9": "接続",

@@ -3072,8 +3072,9 @@ export type PreloadApi = {
       callback: (data: {
         requestId: string
         targetId: string
-        kind: 'passphrase' | 'password'
+        kind: 'passphrase' | 'password' | 'keyboard-interactive'
         detail: string
+        echo?: boolean
       }) => void
     ) => () => void
     onCredentialResolved: (callback: (data: { requestId: string }) => void) => () => void

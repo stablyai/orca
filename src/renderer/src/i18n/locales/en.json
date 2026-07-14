@@ -6592,7 +6592,10 @@
           "8a349e3fac": "Passphrase for {{value0}}",
           "cab3d5f5a5": "Password for {{value0}}",
           "1f3dde805d": "SSH Key Passphrase",
-          "106bd57f4a": "SSH Password"
+          "106bd57f4a": "SSH Password",
+          "6d2b7b77b7": "SSH Verification",
+          "baf23a0fcf": "Respond to the verification prompt from",
+          "7effa48279": "Enter response"
         },
         "SshTargetCard": {
           "a883f5a00f": "terminal timeout: {{value0}}",

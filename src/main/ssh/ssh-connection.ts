@@ -2,7 +2,7 @@
 import * as net from 'node:net'
 import { Client as SshClient } from 'ssh2'
 import type { ChildProcess } from 'node:child_process'
-import type { ClientChannel, ConnectConfig, SFTPWrapper } from 'ssh2'
+import type { ClientChannel, ConnectConfig, Prompt, SFTPWrapper } from 'ssh2'
 import type { SshTarget, SshConnectionState, SshConnectionStatus } from '../../shared/ssh-types'
 import {
   getOrcaControlSocketPath,
@@ -37,6 +37,7 @@ import {
   type SshExecOptions,
   type SshConnectionCallbacks
 } from './ssh-connection-utils'
+import { collectKeyboardInteractiveResponses } from './ssh-keyboard-interactive'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import type { FileUploadSession } from '../providers/types'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
@@ -81,6 +82,7 @@ export class SshConnection {
   private disposed = false
   private cachedPassphrase: string | null = null
   private cachedPassword: string | null = null
+  private keyboardInteractiveCancelled = false
   private connectGeneration = 0
 
   constructor(target: SshTarget, callbacks: SshConnectionCallbacks) {
@@ -516,6 +518,7 @@ export class SshConnection {
     this.setState('connecting')
     this.proxyProcess?.kill()
     this.proxyProcess = null
+    this.keyboardInteractiveCancelled = false
     const connectGeneration = ++this.connectGeneration
 
     const resolved = await resolveWithSshG(this.target.configHost || this.target.label).catch(
@@ -625,6 +628,15 @@ export class SshConnection {
       }
 
       if (!this.callbacks.onCredentialRequest) {
+        this.proxyProcess?.kill()
+        this.proxyProcess = null
+        throw authError
+      }
+
+      // Why: a cancelled keyboard-interactive prompt is an explicit user
+      // decision; falling through to the password prompt would ask again for
+      // the same login.
+      if (this.keyboardInteractiveCancelled) {
         this.proxyProcess?.kill()
         this.proxyProcess = null
         throw authError
@@ -963,6 +975,57 @@ export class SshConnection {
       const cleanupStartupListeners = (): void => {
         client.off('ready', onReady)
         client.off('error', onStartupError)
+        client.off('keyboard-interactive', onKeyboardInteractive)
+      }
+
+      // Why: MFA servers deliver their challenges via keyboard-interactive
+      // (RFC 4256), typically after password auth partially succeeds. Without
+      // a handler ssh2 skips the method and the whole auth fails with "All
+      // configured authentication methods failed".
+      const kiState = { passwordAutoAnswered: false }
+      const onKeyboardInteractive = (
+        _name: string,
+        instructions: string,
+        _lang: string,
+        prompts: Prompt[],
+        finish: (responses: string[]) => void
+      ): void => {
+        // Why: readyTimeout budgets the network handshake, but these prompts
+        // wait on a human (push approval, OTP entry). A prompt proves the
+        // server is alive; from here the server's LoginGraceTime and the
+        // credential dialog timeout bound the wait.
+        clearTimeout((client as unknown as { _readyTimeout?: NodeJS.Timeout })._readyTimeout)
+        collectKeyboardInteractiveResponses(
+          {
+            targetId: this.target.id,
+            hostDetail: config.host || this.target.label,
+            requestCredential: this.callbacks.onCredentialRequest,
+            getCachedPassword: () => this.cachedPassword,
+            setCachedPassword: (value) => {
+              this.cachedPassword = value
+            },
+            markCancelled: () => {
+              this.keyboardInteractiveCancelled = true
+            },
+            isCancelled: () => this.keyboardInteractiveCancelled,
+            state: kiState
+          },
+          instructions,
+          prompts
+        ).then(
+          (responses) => {
+            // Why: a late answer must not write to a client that already
+            // timed out or was torn down by disconnect/reconnect.
+            if (!settled) {
+              finish(responses ?? [])
+            }
+          },
+          () => {
+            if (!settled) {
+              finish([])
+            }
+          }
+        )
       }
       const swallowLateStartupError = (): void => {
         // Why: ssh2 can emit another socket error while a failed or cancelled
@@ -1026,6 +1089,7 @@ export class SshConnection {
 
       client.on('ready', onReady)
       client.on('error', onStartupError)
+      client.on('keyboard-interactive', onKeyboardInteractive)
       client.connect(config)
     })
   }

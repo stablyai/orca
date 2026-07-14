@@ -11,7 +11,9 @@ let connectBehavior: 'ready' | 'error' = 'ready'
 let connectErrorMessage = ''
 let connectErrorCode = ''
 let destroyErrorMessage = ''
-let connectSequence: ('ready' | Error)[] = []
+// Why: 'silent' leaves the connect attempt pending so a test can drive auth
+// events (e.g. keyboard-interactive prompts) through emitSshEvent itself.
+let connectSequence: ('ready' | 'silent' | Error)[] = []
 let execBehavior: 'callback' | 'pending' = 'callback'
 let pendingExecCallback: ((err: Error | undefined, channel: unknown) => void) | null = null
 let sftpBehavior: 'callback' | 'pending' = 'callback'
@@ -67,6 +69,9 @@ vi.mock('ssh2', () => {
         }
         if (next === 'ready') {
           emitSshEvent('ready')
+          return
+        }
+        if (next === 'silent') {
           return
         }
         if (connectBehavior === 'error') {
@@ -655,6 +660,131 @@ describe('SshConnection', () => {
     } finally {
       rmSync(tempDir, { recursive: true, force: true })
     }
+  })
+
+  it('completes password + keyboard-interactive MFA auth and forwards the prompt', async () => {
+    vi.stubEnv('SSH_AUTH_SOCK', '')
+    connectSequence = [new Error('All configured authentication methods failed'), 'silent']
+    const onCredentialRequest = vi.fn(async (_targetId: string, kind: string) =>
+      kind === 'password' ? 'password-123' : '1'
+    )
+    const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
+
+    const connectPromise = conn.connect()
+    await vi.waitFor(() => {
+      expect(eventHandlers.get('keyboard-interactive')?.size ?? 0).toBeGreaterThan(0)
+      expect(clientInstances).toHaveLength(2)
+    })
+    const finish = vi.fn()
+    emitSshEvent(
+      'keyboard-interactive',
+      '',
+      'Choose a verification method:',
+      '',
+      [{ prompt: 'Passcode or option (1-2):', echo: true }],
+      finish
+    )
+    await vi.waitFor(() => expect(finish).toHaveBeenCalledWith(['1']))
+    emitSshEvent('ready')
+    await connectPromise
+
+    expect(conn.getState().status).toBe('connected')
+    const retryConfig = clientInstances[1].lastConnectConfig as {
+      password?: string
+      tryKeyboard?: boolean
+    }
+    expect(retryConfig.tryKeyboard).toBe(true)
+    expect(retryConfig.password).toBe('password-123')
+    expect(onCredentialRequest).toHaveBeenCalledWith('target-1', 'password', 'example.com')
+    expect(onCredentialRequest).toHaveBeenCalledWith(
+      'target-1',
+      'keyboard-interactive',
+      'Choose a verification method:\nPasscode or option (1-2):',
+      true
+    )
+  })
+
+  it('auto-answers a keyboard-interactive password prompt with the cached password', async () => {
+    vi.stubEnv('SSH_AUTH_SOCK', '')
+    connectSequence = [new Error('All configured authentication methods failed'), 'silent']
+    const onCredentialRequest = vi.fn(async () => 'password-123')
+    const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
+
+    const connectPromise = conn.connect()
+    await vi.waitFor(() => {
+      expect(eventHandlers.get('keyboard-interactive')?.size ?? 0).toBeGreaterThan(0)
+      expect(clientInstances).toHaveLength(2)
+    })
+    const finish = vi.fn()
+    emitSshEvent(
+      'keyboard-interactive',
+      '',
+      '',
+      '',
+      [{ prompt: 'Password: ', echo: false }],
+      finish
+    )
+    await vi.waitFor(() => expect(finish).toHaveBeenCalledWith(['password-123']))
+    emitSshEvent('ready')
+    await connectPromise
+
+    expect(conn.getState().status).toBe('connected')
+    expect(onCredentialRequest).toHaveBeenCalledTimes(1)
+  })
+
+  it('caches a password collected through a keyboard-interactive prompt', async () => {
+    vi.stubEnv('SSH_AUTH_SOCK', '')
+    connectSequence = ['silent']
+    const onCredentialRequest = vi.fn(async () => 'password-123')
+    const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
+
+    const connectPromise = conn.connect()
+    await vi.waitFor(() =>
+      expect(eventHandlers.get('keyboard-interactive')?.size ?? 0).toBeGreaterThan(0)
+    )
+    const finish = vi.fn()
+    emitSshEvent(
+      'keyboard-interactive',
+      '',
+      '',
+      '',
+      [{ prompt: 'Password: ', echo: false }],
+      finish
+    )
+    await vi.waitFor(() => expect(finish).toHaveBeenCalledWith(['password-123']))
+    emitSshEvent('ready')
+    await connectPromise
+
+    expect(onCredentialRequest).toHaveBeenCalledWith('target-1', 'password', 'example.com')
+    expect(conn.hasCachedCredential()).toBe(true)
+  })
+
+  it('does not fall back to the password prompt after a cancelled keyboard-interactive prompt', async () => {
+    vi.stubEnv('SSH_AUTH_SOCK', '')
+    connectSequence = ['silent']
+    const onCredentialRequest = vi.fn(async () => null)
+    const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
+
+    const connectPromise = conn.connect()
+    connectPromise.catch(() => {})
+    await vi.waitFor(() =>
+      expect(eventHandlers.get('keyboard-interactive')?.size ?? 0).toBeGreaterThan(0)
+    )
+    const finish = vi.fn()
+    emitSshEvent(
+      'keyboard-interactive',
+      '',
+      '',
+      '',
+      [{ prompt: 'Duo passcode:', echo: false }],
+      finish
+    )
+    await vi.waitFor(() => expect(finish).toHaveBeenCalledWith([]))
+    emitSshEvent('error', new Error('All configured authentication methods failed'))
+
+    await expect(connectPromise).rejects.toThrow('All configured authentication methods failed')
+    expect(onCredentialRequest).toHaveBeenCalledTimes(1)
+    expect(conn.getState().status).toBe('auth-failed')
   })
 
   it('wraps exec commands in /bin/sh so non-POSIX login shells do not parse relay snippets', async () => {

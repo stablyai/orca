@@ -19,7 +19,8 @@ export function requestCredential(
   getMainWindow: () => BrowserWindow | null,
   targetId: string,
   kind: SshCredentialKind,
-  detail: string
+  detail: string,
+  echo?: boolean
 ): Promise<string | null> {
   const requestId = randomUUID()
   return new Promise((resolve) => {
@@ -39,7 +40,7 @@ export function requestCredential(
 
     const win = getMainWindow()
     if (win && !win.isDestroyed()) {
-      win.webContents.send('ssh:credential-request', { requestId, targetId, kind, detail })
+      win.webContents.send('ssh:credential-request', { requestId, targetId, kind, detail, echo })
     } else {
       pendingRequests.delete(requestId)
       clearTimeout(timer)
