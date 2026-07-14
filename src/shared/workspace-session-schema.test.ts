@@ -72,11 +72,13 @@ describe('parseWorkspaceSession', () => {
             sortOrder: 0,
             createdAt: 1,
             database: {
+              profileId: 'profile-p8-app',
               connection: {
                 providerId: 'postgres',
                 host: 'db.internal',
                 port: 5432,
                 database: 'app',
+                schema: 'reporting',
                 user: 'developer',
                 sslMode: 'require',
                 password: 'must-not-survive'
@@ -105,6 +107,8 @@ describe('parseWorkspaceSession', () => {
     }
     const database = result.value.unifiedTabs?.wt?.[0]?.database
     expect(database?.queryDraft).toBe('SELECT 1')
+    expect(database?.profileId).toBe('profile-p8-app')
+    expect(database?.connection.schema).toBe('reporting')
     expect(JSON.stringify(database)).not.toContain('must-not-survive')
   })
 

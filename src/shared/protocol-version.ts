@@ -44,6 +44,7 @@ export const BROWSER_HEADLESS_RUNTIME_CAPABILITY = 'browser.headless.v1' as cons
 export const TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY =
   'terminal.query-reply-input.v1' as const
 export const DATABASE_QUERY_RUNTIME_CAPABILITY = 'database.query.v1' as const
+export const DATABASE_PROFILE_RUNTIME_CAPABILITY = 'database.profile.v1' as const
 
 export const RUNTIME_CAPABILITIES = [
   'runtime.status.compat.v1',
@@ -61,6 +62,7 @@ export const RUNTIME_CAPABILITIES = [
   LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY,
   AI_VAULT_RUNTIME_CAPABILITY,
   DATABASE_QUERY_RUNTIME_CAPABILITY,
+  DATABASE_PROFILE_RUNTIME_CAPABILITY,
   TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY
 ] as const
 

@@ -1,12 +1,21 @@
 import type {
+  DatabaseCatalogResult,
   DatabaseConnectionRequest,
   DatabaseConnectionTestResult,
+  DatabaseNodeRequest,
+  DatabaseProfileDeleteRequest,
+  DatabaseProfileListResult,
+  DatabaseProfileSaveRequest,
+  DatabaseProfileSummary,
   DatabaseProviderId,
   DatabaseQueryRequest,
   DatabaseQueryResult,
   DatabaseSchemaResult
 } from '../../../shared/database-types'
-import { DATABASE_QUERY_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  DATABASE_PROFILE_RUNTIME_CAPABILITY,
+  DATABASE_QUERY_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
 import {
   getRuntimeEnvironmentIdForWorktree,
   getSshConnectionIdForWorktree
@@ -26,7 +35,7 @@ function getDatabaseTarget(worktreeId: string): RuntimeClientTarget {
   })
 }
 
-function withProjectExecution<TRequest extends DatabaseConnectionRequest>(
+function withProjectExecution<TRequest extends DatabaseNodeRequest>(
   worktreeId: string,
   request: TRequest
 ): TRequest {
@@ -44,18 +53,56 @@ async function callDatabaseRuntimeRpc<TResult>(
   worktreeId: string,
   method: string,
   params: unknown,
-  timeoutMs: number
+  timeoutMs: number,
+  capability: string = DATABASE_QUERY_RUNTIME_CAPABILITY
 ): Promise<TResult> {
   const target = getDatabaseTarget(worktreeId)
   if (target.kind === 'environment') {
     await assertRuntimeEnvironmentCapability(
       target.environmentId,
-      DATABASE_QUERY_RUNTIME_CAPABILITY,
-      'Database Query requires a newer Orca runtime on the project host.',
+      capability,
+      'Database features require a newer Orca runtime on the project host.',
       timeoutMs
     )
   }
   return callRuntimeRpc<TResult>(target, method, params, { timeoutMs })
+}
+
+export function listDatabaseProfiles(worktreeId: string): Promise<DatabaseProfileListResult> {
+  return callDatabaseRuntimeRpc(
+    worktreeId,
+    'database.profiles.list',
+    withProjectExecution(worktreeId, {}),
+    10_000,
+    DATABASE_PROFILE_RUNTIME_CAPABILITY
+  )
+}
+
+export function saveDatabaseProfile(
+  worktreeId: string,
+  request: DatabaseProfileSaveRequest
+): Promise<DatabaseProfileSummary> {
+  return callDatabaseRuntimeRpc(
+    worktreeId,
+    'database.profiles.save',
+    withProjectExecution(worktreeId, request),
+    10_000,
+    DATABASE_PROFILE_RUNTIME_CAPABILITY
+  )
+}
+
+export async function deleteDatabaseProfile(
+  worktreeId: string,
+  request: DatabaseProfileDeleteRequest
+): Promise<boolean> {
+  const result = await callDatabaseRuntimeRpc<{ deleted: boolean }>(
+    worktreeId,
+    'database.profiles.delete',
+    withProjectExecution(worktreeId, request),
+    10_000,
+    DATABASE_PROFILE_RUNTIME_CAPABILITY
+  )
+  return result.deleted
 }
 
 export function testDatabaseConnection(
@@ -79,6 +126,19 @@ export function introspectDatabase(
     'database.introspect',
     withProjectExecution(worktreeId, request),
     35_000
+  )
+}
+
+export function loadDatabaseCatalog(
+  worktreeId: string,
+  request: DatabaseConnectionRequest
+): Promise<DatabaseCatalogResult> {
+  return callDatabaseRuntimeRpc(
+    worktreeId,
+    'database.catalog',
+    withProjectExecution(worktreeId, request),
+    35_000,
+    DATABASE_PROFILE_RUNTIME_CAPABILITY
   )
 }
 

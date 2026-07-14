@@ -20,6 +20,12 @@ function createProvider(): DatabaseProvider {
     id: 'postgres',
     testConnection: vi.fn().mockResolvedValue({ database: 'app', serverVersion: '17.1' }),
     introspect: vi.fn().mockResolvedValue({ tables: [] }),
+    catalog: vi.fn().mockResolvedValue({
+      databases: ['app'],
+      schemas: ['public'],
+      currentDatabase: 'app',
+      currentSchema: 'public'
+    }),
     execute: vi.fn().mockResolvedValue({
       columns: [],
       rows: [],
@@ -43,8 +49,13 @@ describe('DatabaseService', () => {
       serverVersion: '17.1'
     })
     await expect(service.introspect(connectionRequest, signal)).resolves.toEqual({ tables: [] })
+    await expect(service.catalog(connectionRequest, signal)).resolves.toMatchObject({
+      currentDatabase: 'app',
+      currentSchema: 'public'
+    })
     expect(provider.testConnection).toHaveBeenCalledWith(connectionRequest, signal)
     expect(provider.introspect).toHaveBeenCalledWith(connectionRequest, signal)
+    expect(provider.catalog).toHaveBeenCalledWith(connectionRequest, signal)
   })
 
   it('routes execute and cancel to the selected provider', async () => {

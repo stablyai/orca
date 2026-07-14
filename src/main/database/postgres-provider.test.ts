@@ -25,10 +25,19 @@ vi.mock('pg', () => ({
     readonly connect = vi.fn(async () => {})
     readonly end = vi.fn(async () => {})
     readonly queries: unknown[] = []
-    readonly query = vi.fn((query: unknown) => {
+    readonly query = vi.fn((query: unknown, _parameters?: unknown[]) => {
       this.queries.push(query)
       if (typeof query !== 'string') {
         return query
+      }
+      if (query.includes('FROM pg_database')) {
+        return Promise.resolve({ rows: [{ datname: 'app' }, { datname: 'postgres' }] })
+      }
+      if (query.includes('FROM information_schema.schemata')) {
+        return Promise.resolve({ rows: [{ schema_name: 'public' }, { schema_name: 'reporting' }] })
+      }
+      if (query.includes('current_schema()')) {
+        return Promise.resolve({ rows: [{ database: 'app', schema: 'public' }] })
       }
       if (query.startsWith('SELECT current_database()')) {
         return Promise.resolve({ rows: [{ database: 'app', server_version: '17.2' }] })
@@ -149,6 +158,45 @@ describe('PostgresProvider', () => {
     expect(postgres.cursorReadSizes).toEqual([3])
     expect(postgres.clients[0]?.queries).toEqual(
       expect.arrayContaining(['BEGIN READ ONLY', 'SET LOCAL statement_timeout = 5000', 'COMMIT'])
+    )
+  })
+
+  it('applies a quoted schema search path inside the query transaction', async () => {
+    const provider = new PostgresProvider()
+
+    await provider.execute({
+      ...request,
+      connection: { ...request.connection, schema: 'team "alpha"' }
+    })
+
+    expect(postgres.clients[0]?.query).toHaveBeenCalledWith(
+      "SELECT set_config('search_path', $1, true)",
+      ['"team ""alpha"""']
+    )
+  })
+
+  it('loads databases and schemas available to the connected user', async () => {
+    const provider = new PostgresProvider()
+
+    await expect(provider.catalog(request)).resolves.toEqual({
+      databases: ['app', 'postgres'],
+      schemas: ['public', 'reporting'],
+      currentDatabase: 'app',
+      currentSchema: 'public'
+    })
+  })
+
+  it('limits schema introspection to the selected schema', async () => {
+    const provider = new PostgresProvider()
+
+    await provider.introspect({
+      ...request,
+      connection: { ...request.connection, schema: 'reporting' }
+    })
+
+    expect(postgres.clients[0]?.query).toHaveBeenCalledWith(
+      expect.stringContaining('table_schema = $1'),
+      ['reporting']
     )
   })
 

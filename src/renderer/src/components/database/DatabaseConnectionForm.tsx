@@ -1,6 +1,11 @@
-import { Database, Loader2, Plug } from 'lucide-react'
-import type { DatabaseConnectionConfig, DatabaseSslMode } from '../../../../shared/database-types'
+import { Database, Loader2, Plug, Trash2 } from 'lucide-react'
+import type {
+  DatabaseConnectionConfig,
+  DatabaseProfileSummary,
+  DatabaseSslMode
+} from '../../../../shared/database-types'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -12,27 +17,51 @@ import {
 } from '@/components/ui/select'
 import { translate } from '@/i18n/i18n'
 
-export function DatabaseConnectionForm({
-  connection,
-  idPrefix,
-  password,
-  pending,
-  onChange,
-  onPasswordChange,
-  onConnect
-}: {
+const NEW_PROFILE_VALUE = '__new_database_profile__'
+
+type DatabaseConnectionFormProps = {
   connection: DatabaseConnectionConfig
   idPrefix: string
   password: string
   pending: boolean
+  profiles: DatabaseProfileSummary[]
+  selectedProfileId?: string
+  profileName: string
+  rememberPassword: boolean
+  selectedProfileHasPassword: boolean
   onChange: (connection: DatabaseConnectionConfig) => void
   onPasswordChange: (password: string) => void
+  onProfileSelect: (profileId?: string) => void
+  onProfileNameChange: (name: string) => void
+  onRememberPasswordChange: (remember: boolean) => void
+  onDeleteProfile: () => void
   onConnect: () => void
-}): React.JSX.Element {
+}
+
+export function DatabaseConnectionForm(props: DatabaseConnectionFormProps): React.JSX.Element {
+  const {
+    connection,
+    idPrefix,
+    password,
+    pending,
+    profiles,
+    selectedProfileId,
+    profileName,
+    rememberPassword,
+    selectedProfileHasPassword,
+    onChange,
+    onPasswordChange,
+    onProfileSelect,
+    onProfileNameChange,
+    onRememberPasswordChange,
+    onDeleteProfile,
+    onConnect
+  } = props
   const patch = (next: Partial<DatabaseConnectionConfig>): void =>
     onChange({ ...connection, ...next })
   const hostId = `${idPrefix}-host`
   const databaseId = `${idPrefix}-name`
+  const profileNameId = `${idPrefix}-profile-name`
   const userId = `${idPrefix}-user`
   const passwordId = `${idPrefix}-password`
 
@@ -46,11 +75,60 @@ export function DatabaseConnectionForm({
         <p className="text-xs text-muted-foreground">
           {translate(
             'auto.components.database.connection.description',
-            'The query runs on the runtime that owns this project. The password stays in memory and is never saved with the tab.'
+            'Profiles and saved passwords belong to this project node. Passwords stay in its encrypted vault and are never returned to clients.'
           )}
         </p>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="space-y-2 sm:col-span-2">
+          <Label>{translate('auto.components.database.connection.savedProfile', 'Profile')}</Label>
+          <div className="flex gap-2">
+            <Select
+              value={selectedProfileId ?? NEW_PROFILE_VALUE}
+              onValueChange={(value) =>
+                onProfileSelect(value === NEW_PROFILE_VALUE ? undefined : value)
+              }
+            >
+              <SelectTrigger className="min-w-0 flex-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NEW_PROFILE_VALUE}>
+                  {translate('auto.components.database.connection.newProfile', 'New profile')}
+                </SelectItem>
+                {profiles.map((profile) => (
+                  <SelectItem key={profile.id} value={profile.id}>
+                    {profile.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              disabled={!selectedProfileId || pending}
+              aria-label={translate(
+                'auto.components.database.connection.deleteProfile',
+                'Delete profile'
+              )}
+              onClick={onDeleteProfile}
+            >
+              <Trash2 />
+            </Button>
+          </div>
+        </div>
+        <div className="space-y-2 sm:col-span-2">
+          <Label htmlFor={profileNameId}>
+            {translate('auto.components.database.connection.profileName', 'Profile name')}
+          </Label>
+          <Input
+            id={profileNameId}
+            value={profileName}
+            onChange={(event) => onProfileNameChange(event.target.value)}
+            autoComplete="off"
+          />
+        </div>
         <div className="space-y-2 sm:col-span-2">
           <Label htmlFor={hostId}>
             {translate('auto.components.database.connection.host', 'Host')}
@@ -110,8 +188,16 @@ export function DatabaseConnectionForm({
             id={passwordId}
             type="password"
             value={password}
+            placeholder={
+              selectedProfileHasPassword
+                ? translate(
+                    'auto.components.database.connection.passwordSaved',
+                    'Saved in node vault'
+                  )
+                : undefined
+            }
             onChange={(event) => onPasswordChange(event.target.value)}
-            autoComplete="off"
+            autoComplete="new-password"
           />
         </div>
         <div className="space-y-2">
@@ -137,9 +223,26 @@ export function DatabaseConnectionForm({
           </Select>
         </div>
       </div>
-      <Button type="button" onClick={onConnect} disabled={pending} className="w-full sm:w-auto">
+      <label className="flex items-start gap-2 text-xs text-muted-foreground">
+        <Checkbox
+          checked={rememberPassword}
+          onCheckedChange={(checked) => onRememberPasswordChange(checked === true)}
+        />
+        <span>
+          {translate(
+            'auto.components.database.connection.rememberPassword',
+            'Remember password on this node so every client paired to it can use this profile.'
+          )}
+        </span>
+      </label>
+      <Button
+        type="button"
+        onClick={onConnect}
+        disabled={pending || !profileName.trim()}
+        className="w-full sm:w-auto"
+      >
         {pending ? <Loader2 className="animate-spin" /> : <Plug />}
-        {translate('auto.components.database.connection.connect', 'Test and connect')}
+        {translate('auto.components.database.connection.saveAndConnect', 'Save and connect')}
       </Button>
     </div>
   )

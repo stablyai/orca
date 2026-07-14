@@ -1,4 +1,5 @@
 import type {
+  DatabaseCatalogResult,
   DatabaseConnectionRequest,
   DatabaseConnectionTestResult,
   DatabaseProviderId,
@@ -17,6 +18,7 @@ export type DatabaseProvider = {
     request: DatabaseConnectionRequest,
     signal?: AbortSignal
   ): Promise<DatabaseSchemaResult>
+  catalog(request: DatabaseConnectionRequest, signal?: AbortSignal): Promise<DatabaseCatalogResult>
   execute(request: DatabaseQueryRequest, signal?: AbortSignal): Promise<DatabaseQueryResult>
   cancel(queryId: string): Promise<boolean>
 }

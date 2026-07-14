@@ -7,6 +7,7 @@ export type DatabaseConnectionConfig = {
   host: string
   port: number
   database: string
+  schema?: string
   user: string
   sslMode: DatabaseSslMode
   /** Internal TLS identity retained when an SSH tunnel rewrites host to loopback. */
@@ -19,6 +20,7 @@ export type DatabaseExecutionContext = {
 }
 
 export type DatabaseTabState = {
+  profileId?: string
   connection: DatabaseConnectionConfig
   queryDraft: string
   readOnly: boolean
@@ -61,15 +63,56 @@ export type DatabaseSchemaResult = {
   tables: DatabaseSchemaTable[]
 }
 
+export type DatabaseCatalogResult = {
+  databases: string[]
+  schemas: string[]
+  currentDatabase: string
+  currentSchema: string | null
+}
+
 export type DatabaseConnectionTestResult = {
   database: string
   serverVersion: string
 }
 
 export type DatabaseConnectionRequest = {
+  profileId?: string
   connection: DatabaseConnectionConfig
   credential: DatabaseCredential
   execution?: DatabaseExecutionContext
+}
+
+export type DatabaseNodeRequest = {
+  execution?: DatabaseExecutionContext
+}
+
+export type DatabaseProfileSummary = {
+  id: string
+  name: string
+  connection: DatabaseConnectionConfig
+  hasSavedPassword: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+export type DatabaseProfileListResult = {
+  profiles: DatabaseProfileSummary[]
+}
+
+export type DatabaseProfileCredentialAction = 'preserve' | 'save' | 'delete'
+
+export type DatabaseProfileSaveRequest = DatabaseNodeRequest & {
+  profile: {
+    id?: string
+    name: string
+    connection: DatabaseConnectionConfig
+  }
+  credential: DatabaseCredential
+  credentialAction: DatabaseProfileCredentialAction
+}
+
+export type DatabaseProfileDeleteRequest = DatabaseNodeRequest & {
+  profileId: string
 }
 
 export type DatabaseQueryRequest = DatabaseConnectionRequest & {

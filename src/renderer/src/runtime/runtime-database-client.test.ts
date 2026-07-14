@@ -29,7 +29,7 @@ vi.mock('./runtime-rpc-client', () => ({
   callRuntimeRpc: (...args: unknown[]) => mocks.callRuntimeRpc(...args)
 }))
 
-import { testDatabaseConnection } from './runtime-database-client'
+import { listDatabaseProfiles, testDatabaseConnection } from './runtime-database-client'
 
 const request = {
   connection: {
@@ -86,6 +86,25 @@ describe('runtime database client project routing', () => {
       'database.testConnection',
       request,
       { timeoutMs: 35_000 }
+    )
+  })
+
+  it('scopes saved profiles to the project SSH node on the owning runtime', async () => {
+    mocks.callRuntimeRpc.mockResolvedValueOnce({ profiles: [] })
+
+    await listDatabaseProfiles('aps::worktree')
+
+    expect(mocks.assertCapability).toHaveBeenCalledWith(
+      'linux-jae',
+      'database.profile.v1',
+      expect.any(String),
+      10_000
+    )
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'linux-jae' },
+      'database.profiles.list',
+      { execution: { kind: 'ssh', connectionId: 'ssh-p8' } },
+      { timeoutMs: 10_000 }
     )
   })
 })

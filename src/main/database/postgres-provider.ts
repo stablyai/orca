@@ -2,6 +2,7 @@ import { Client, type ClientConfig, type FieldDef, type QueryResult } from 'pg'
 import Cursor from 'pg-cursor'
 import type {
   DatabaseCellValue,
+  DatabaseCatalogResult,
   DatabaseConnectionConfig,
   DatabaseConnectionRequest,
   DatabaseConnectionTestResult,
@@ -10,6 +11,7 @@ import type {
   DatabaseSchemaResult
 } from '../../shared/database-types'
 import type { DatabaseProvider } from './database-provider'
+import { loadPostgresCatalog } from './postgres-catalog'
 
 type ActiveQuery = {
   client: Client
@@ -143,6 +145,7 @@ export class PostgresProvider implements DatabaseProvider {
     const removeAbort = addAbortHandler(signal, () => void client.end())
     try {
       await client.connect()
+      const schema = request.connection.schema?.trim()
       const result = await client.query<{
         table_schema: string
         table_name: string
@@ -154,8 +157,10 @@ export class PostgresProvider implements DatabaseProvider {
         `SELECT table_schema, table_name, column_name, data_type, is_nullable, column_default
            FROM information_schema.columns
           WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+            AND ($1::text IS NULL OR table_schema = $1)
           ORDER BY table_schema, table_name, ordinal_position
-          LIMIT ${MAX_SCHEMA_COLUMNS}`
+          LIMIT ${MAX_SCHEMA_COLUMNS}`,
+        [schema || null]
       )
       const tables = new Map<string, DatabaseSchemaResult['tables'][number]>()
       for (const row of result.rows) {
@@ -173,6 +178,23 @@ export class PostgresProvider implements DatabaseProvider {
         })
       }
       return { tables: [...tables.values()] }
+    } finally {
+      removeAbort()
+      await client.end().catch(() => {})
+    }
+  }
+
+  async catalog(
+    request: DatabaseConnectionRequest,
+    signal?: AbortSignal
+  ): Promise<DatabaseCatalogResult> {
+    const client = new Client(
+      toClientConfig(request.connection, request.credential.password || undefined)
+    )
+    const removeAbort = addAbortHandler(signal, () => void client.end())
+    try {
+      await client.connect()
+      return await loadPostgresCatalog(client, request.connection.database)
     } finally {
       removeAbort()
       await client.end().catch(() => {})
@@ -210,6 +232,11 @@ export class PostgresProvider implements DatabaseProvider {
       await client.query(request.readOnly ? 'BEGIN READ ONLY' : 'BEGIN')
       transactionOpen = true
       await client.query(`SET LOCAL statement_timeout = ${timeoutMs}`)
+      if (request.connection.schema) {
+        await client.query("SELECT set_config('search_path', $1, true)", [
+          quoteSearchPath(request.connection.schema)
+        ])
+      }
 
       const cursor = client.query(
         new Cursor<unknown[]>(request.sql, [], {
@@ -281,4 +308,8 @@ export class PostgresProvider implements DatabaseProvider {
       await cancelClient.end().catch(() => {})
     }
   }
+}
+
+function quoteSearchPath(schema: string): string {
+  return `"${schema.replaceAll('"', '""')}"`
 }

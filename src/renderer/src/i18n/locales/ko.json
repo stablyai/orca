@@ -12981,7 +12981,14 @@
           "tlsDisabled": "Disabled",
           "tlsRequired": "Required",
           "tlsVerify": "Verify certificate",
-          "connect": "Test and connect"
+          "connect": "Test and connect",
+          "savedProfile": "Profile",
+          "newProfile": "New profile",
+          "deleteProfile": "Delete profile",
+          "profileName": "Profile name",
+          "passwordSaved": "Saved in node vault",
+          "rememberPassword": "Remember password on this node so every client paired to it can use this profile.",
+          "saveAndConnect": "Save and connect"
         },
         "owner": {
           "runtime": "Runtime: {{value0}}",
@@ -12995,7 +13002,8 @@
           "cancel": "Cancel",
           "run": "Run",
           "shortcut": "{{value0}}Enter · {{value1}} row limit",
-          "resultSummary": "{{value0}} rows{{value1}} · {{value2}} ms"
+          "resultSummary": "{{value0}} rows{{value1}} · {{value2}} ms",
+          "allSchemas": "All schemas"
         },
         "editor": {
           "label": "SQL query"
