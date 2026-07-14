@@ -78,7 +78,7 @@ Terminals:
   terminal split            Split an existing terminal pane
   terminal switch           Bring a terminal tab to the foreground
   terminal focus            Alias for terminal switch
-  terminal close            Close a terminal pane (or tab if last pane)
+  terminal close            Close a terminal pane/session, or its whole tab with --tab
 
 Orchestration:
   orchestration send        Send an inter-agent message
@@ -220,7 +220,7 @@ Common Commands:
   orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--focus] [--json]
   orca terminal split [--terminal <handle>] [--direction horizontal|vertical] [--json]
   orca terminal switch [--terminal <handle>] [--json]
-  orca terminal close [--terminal <handle>] [--json]
+  orca terminal close [--terminal <handle>] [--tab] [--json]
   orca project list [--json]
   orca project setups [--project <id>] [--host <host-id>] [--json]
   orca project setup-existing-folder --project <id> --host <host-id> --path <path> [--kind git|folder] [--display-name <name>] [--json]
@@ -397,6 +397,9 @@ export function formatGroupHelp(specs: CommandSpec[], group: string): string {
 
 function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   const command = commandPath.join(' ')
+  if (command === 'terminal close' && flag === 'tab') {
+    return '--tab                  Request one whole renderer tab close'
+  }
   if (command === 'linear issue' && flag === 'id') {
     return '--id <id>             Linear issue key, id, or URL'
   }

@@ -44,7 +44,13 @@ function createServiceWithLeader(): {
       bytesWritten: action.text?.length ?? 0
     })),
     focusTerminal: vi.fn(async (handle) => ({ handle, tabId: 'tab-1', worktreeId: 'wt-1' })),
-    closeTerminal: vi.fn(async (handle) => ({ handle, tabId: 'tab-1', ptyKilled: true })),
+    closeTerminal: vi.fn(async (handle) => ({
+      handle,
+      tabId: 'tab-1',
+      closeMode: 'terminal' as const,
+      tabCloseRequested: false,
+      ptyKilled: true
+    })),
     showTerminal: vi.fn(async (handle) => ({
       handle,
       worktreeId: 'wt-1',

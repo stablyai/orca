@@ -539,6 +539,8 @@ export type RuntimeTerminalFocus = {
 export type RuntimeTerminalClose = {
   handle: string
   tabId: string
+  closeMode: 'terminal' | 'tab'
+  tabCloseRequested: boolean
   ptyKilled: boolean
 }
 

@@ -1369,6 +1369,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     })
   }),
   defineMethod({
+    name: 'terminal.closeTab',
+    params: TerminalHandle,
+    handler: async (params, { runtime }) => ({
+      close: await runtime.closeTerminal(params.terminal, 'tab')
+    })
+  }),
+  defineMethod({
     name: 'agentTeams.tmuxCompat',
     params: AgentTeamsTmuxCompat,
     handler: async (params, { runtime }) => ({

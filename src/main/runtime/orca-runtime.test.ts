@@ -17734,6 +17734,8 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.closeTerminal(laptopTerminal.handle)).resolves.toEqual({
       handle: laptopTerminal.handle,
       tabId: 'laptop-tab',
+      closeMode: 'terminal',
+      tabCloseRequested: false,
       ptyKilled: true
     })
     expect(kill).toHaveBeenCalledWith('laptop-created-pty')

@@ -18646,12 +18646,24 @@ export class OrcaRuntimeService {
     return { handle, tabId: leaf.tabId, worktreeId: leaf.worktreeId }
   }
 
-  async closeTerminal(handle: string): Promise<RuntimeTerminalClose> {
+  async closeTerminal(
+    handle: string,
+    closeMode: RuntimeTerminalClose['closeMode'] = 'terminal'
+  ): Promise<RuntimeTerminalClose> {
+    if (closeMode === 'tab') {
+      return this.closeTerminalTab(handle)
+    }
     const pty = this.getLivePtyForHandle(handle)
     this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
     if (pty) {
       const ptyKilled = this.ptyController?.kill(pty.pty.ptyId) ?? false
-      return { handle, tabId: pty.pty.tabId ?? pty.record.tabId, ptyKilled }
+      return {
+        handle,
+        tabId: pty.pty.tabId ?? pty.record.tabId,
+        closeMode,
+        tabCloseRequested: false,
+        ptyKilled
+      }
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
@@ -18670,7 +18682,63 @@ export class OrcaRuntimeService {
     if (!ptyKilled || siblingCount <= 1) {
       this.notifier?.closeTerminal(leaf.tabId, leaf.paneRuntimeId)
     }
-    return { handle, tabId: leaf.tabId, ptyKilled }
+    return { handle, tabId: leaf.tabId, closeMode, tabCloseRequested: false, ptyKilled }
+  }
+
+  private closeTerminalTab(handle: string): RuntimeTerminalClose {
+    if (!this.notifier?.closeTerminal) {
+      throw new Error('terminal_tab_close_unavailable')
+    }
+    const tabId = this.resolveTabIdForTerminalClose(handle)
+    this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
+    // Why: renderer tab teardown owns PTY cleanup; killing first lets the exit
+    // path spawn a replacement under the still-live tab before this close lands.
+    this.notifier.closeTerminal(tabId)
+    return {
+      handle,
+      tabId,
+      closeMode: 'tab',
+      tabCloseRequested: true,
+      ptyKilled: false
+    }
+  }
+
+  private resolveTabIdForTerminalClose(handle: string): string {
+    const livePty = this.getLivePtyForHandle(handle)
+    if (livePty) {
+      const candidates = new Set<string>()
+      const addCandidate = (tabId: string | null | undefined): void => {
+        const normalized = tabId?.trim()
+        if (normalized && !normalized.startsWith('pty:')) {
+          candidates.add(normalized)
+        }
+      }
+      addCandidate(livePty.pty.tabId)
+      addCandidate(parsePaneKey(livePty.pty.paneKey ?? '')?.tabId)
+      for (const leaf of this.getLeavesForPty(livePty.pty.ptyId)) {
+        addCandidate(leaf.tabId)
+      }
+      if (candidates.size === 0) {
+        throw new Error('terminal_tab_identity_missing')
+      }
+      if (candidates.size > 1) {
+        throw new Error('terminal_tab_identity_ambiguous')
+      }
+      return candidates.values().next().value as string
+    }
+
+    // Why: tab close accepts only runtime-issued handles; checking the sealed
+    // record first keeps a malformed token from degrading into graph readiness.
+    const record = this.handles.get(handle)
+    if (!record || record.runtimeId !== this.runtimeId) {
+      throw new Error('terminal_handle_stale')
+    }
+    const { leaf } = this.getLiveLeafForHandle(handle)
+    const tabId = leaf.tabId.trim()
+    if (!tabId) {
+      throw new Error('terminal_tab_identity_missing')
+    }
+    return tabId
   }
 
   async splitTerminal(
