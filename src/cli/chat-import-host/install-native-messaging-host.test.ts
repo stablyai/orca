@@ -59,6 +59,10 @@ describe('installNativeMessagingHost (darwin)', () => {
     // ELECTRON_RUN_AS_NODE makes a packaged Electron binary behave like
     // node; real node ignores the env var, so it's always safe to set.
     expect(launcher).toContain('ELECTRON_RUN_AS_NODE=1')
+    // The Chrome-spawned host has no ORCA_USER_DATA_PATH in its environment, so
+    // it would default to the release userData dir. Pin it to the installing
+    // app's userData so the host writes where THIS app (dev or release) reads.
+    expect(launcher).toContain(`ORCA_USER_DATA_PATH="${userData}"`)
   })
 })
 
@@ -83,6 +87,7 @@ describe('installNativeMessagingHost (linux)', () => {
     const launcher = readFileSync(result.launcherPath, 'utf8')
     expect(launcher).toContain('chat-import-host')
     expect(launcher).toContain('ELECTRON_RUN_AS_NODE=1')
+    expect(launcher).toContain(`ORCA_USER_DATA_PATH="${userData}"`)
   })
 })
 
@@ -90,10 +95,11 @@ describe('installNativeMessagingHost (win32)', () => {
   it('writes a .cmd launcher and registers the manifest via reg add', () => {
     const home = tempHome()
     const runRegistry = vi.fn()
+    const userData = join(home, 'AppData', 'Roaming', 'orca')
     const result = installNativeMessagingHost({
       platform: 'win32',
       homeDir: home,
-      userDataPath: join(home, 'AppData', 'Roaming', 'orca'),
+      userDataPath: userData,
       browser: 'chrome',
       extensionId: 'abcd',
       execCommand: { command: 'C:\\app\\orca.exe', args: [] },
@@ -102,6 +108,7 @@ describe('installNativeMessagingHost (win32)', () => {
     expect(result.launcherPath.endsWith('.cmd')).toBe(true)
     const launcher = readFileSync(result.launcherPath, 'utf8')
     expect(launcher).toContain('set ELECTRON_RUN_AS_NODE=1')
+    expect(launcher).toContain(`set "ORCA_USER_DATA_PATH=${userData}"`)
     expect(runRegistry).toHaveBeenCalledWith(
       expect.stringContaining(
         `Software\\Google\\Chrome\\NativeMessagingHosts\\${NATIVE_MESSAGING_HOST_NAME}`
