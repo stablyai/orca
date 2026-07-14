@@ -28,7 +28,9 @@
         "minimaxToggleDescription": "Show MiniMax subscription usage for the active workspace.",
         "sshToggleDescription": "Show configured SSH and remote Orca hosts when any are available.",
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
-        "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners."
+        "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
+        "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
+        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI."
       }
     }
   },
@@ -71,6 +73,7 @@
     "matchLabel": {
       "comment": "Comment",
       "issue": "Issue",
+      "mr": "MR",
       "port": "Port",
       "pr": "PR"
     }
@@ -136,6 +139,9 @@
         "3affe7de3a": "Paste a pairing URL from an Orca server that this browser can reach.",
         "e3bcd082ac": "Connect to Orca",
         "mobileScopeRejected": "This QR code grants limited (mobile) access. To use the full web app, open the browser access link from Settings → Runtime Environments → Share this Orca server → New Link."
+      },
+      "webPreloadApi": {
+        "aiVaultUnavailableForHost": "Agent Session History is not available for this execution host."
       },
       "web": {
         "preload": {
@@ -207,7 +213,8 @@
         },
         "workspace": {
           "cleanup": {
-            "9d6e531da6": "Workspace no longer exists."
+            "9d6e531da6": "Workspace no longer exists.",
+            "changedSinceConfirmation": "Workspace changed after confirmation. Refresh to review it before removing."
           }
         },
         "worktrees": {
@@ -244,7 +251,9 @@
           "a8e4b3af5b": "Project already added",
           "6d3318e813": "Failed to import repositories",
           "3be0f7df04": "Cannot open folder on selected runtime",
-          "15cf5319ec": "{{path}} was checked on {{hostName}}, but that host did not report a usable folder."
+          "15cf5319ec": "{{path}} was checked on {{hostName}}, but that host did not report a usable folder.",
+          "2dcd706774": "Project also exists in another profile",
+          "presenceProfileOverflow": "{{names}} +{{count}} more"
         },
         "settings": {
           "e12dab333b": "Failed to switch servers",
@@ -259,6 +268,24 @@
         },
         "linear": {
           "37d36984d0": "Linear connection was superseded by a newer request."
+        },
+        "orca": {
+          "profiles": {
+            "612f7f6861": "Failed to create profile",
+            "319d7cf39b": "Cloud profile created",
+            "d6e764e7db": "Reconnect this profile",
+            "f0c9e11a6d": "Failed to create cloud profile",
+            "8b8fa73174": "Orca Cloud sign-in is not configured",
+            "33290e88ed": "Failed to connect profile",
+            "9fcb07a796": "Profile connected",
+            "2f6c78a039": "Failed to refresh profile auth",
+            "a37b5e6d37": "Signed out of profile",
+            "83600521e7": "Failed to sign out",
+            "76deec8f58": "Failed to switch organization",
+            "7d4bc516ee": "Failed to switch profile",
+            "f518e89aa5": "Project already exists in that profile",
+            "f03ae7f27b": "Failed to transfer project"
+          }
         }
       }
     },
@@ -432,6 +459,13 @@
               "all": "No comments yet."
             }
           }
+        },
+        "bot": {
+          "author": {
+            "overrides": {
+              "6d5d52b53f": "Bot author override limit reached"
+            }
+          }
         }
       },
       "resume": {
@@ -542,6 +576,13 @@
       },
       "ephemeralVmWorkspaceTarget": {
         "projectRootRegistrationFailed": "Failed to register the recipe-created project root on the runtime."
+      },
+      "blocked": {
+        "notification": {
+          "fallback": {
+            "de50bef680": "macOS is blocking Orca notifications"
+          }
+        }
       }
     },
     "hooks": {
@@ -604,7 +645,7 @@
         "94a5afe910": "SSH Hosts",
         "40d80bad8a": "Beta",
         "de0c2907a1": "Remote Orca Servers",
-        "b351014180": "Orca stats plus Claude, Codex, and OpenCode usage analytics.",
+        "b351014180": "Orca stats plus Claude, Codex, OpenCode token analytics and Grok subscription usage.",
         "d72a58b5b9": "Stats & Usage",
         "dcd0d9b74f": "Keyboard shortcuts for common actions.",
         "94295ebfb3": "Shortcuts",
@@ -645,7 +686,7 @@
         "cd50cec5d7": "Coordinate multiple coding agents through Orca.",
         "58a868e8e4": "Orchestration",
         "7c79d3b7bf": "Optional",
-        "b1c2f8b0ac": "Optional account switching for Claude, Codex, Gemini, and OpenCode Go.",
+        "b1c2f8b0ac": "Optional account switching and usage setup for Claude, Codex, Gemini, OpenCode Go, MiniMax, and Grok.",
         "f70ac54d38": "AI Provider Accounts",
         "4121f7a0a2": "Manage AI agents, set a default, and customize commands.",
         "b49abbd2f7": "Agents",
@@ -689,6 +730,8 @@
       "GitHubItemDialog": {
         "3ab6ac0fc8": "Preview and edit the selected GitHub issue or pull request.",
         "3cd5ae5b7b": "No files changed.",
+        "filesUnavailable": "Couldn't load changed files.",
+        "filesRetry": "Retry",
         "999b5ad7d9": "Files",
         "4bd1f5b055": "Checks",
         "e30a5470c9": "Conversation",
@@ -1184,6 +1227,8 @@
         "2560588245": "Failed to request reviewer",
         "3450247584": "Comment",
         "6ad2c1ab9c": "No files changed.",
+        "filesUnavailable": "Couldn't load changed files.",
+        "filesRetry": "Retry",
         "4d18310d55": "Files changed",
         "94d95cf1f7": "Checks",
         "9e8d45700e": "Conversation",
@@ -1700,7 +1745,14 @@
         "searchIssues": "Search issues",
         "useIssueNumber": "Use issue #{{value0}}",
         "noMatchingIssuesLoaded": "No matching issues loaded.",
-        "editReviewersWithCurrent": "Edit reviewers: {{value0}}"
+        "editReviewersWithCurrent": "Edit reviewers: {{value0}}",
+        "linearEmptyAttributeFilter": "No issues match the selected filters. Clear a filter or try different criteria.",
+        "linearEmptyUnfilteredScope": "No issues in this workspace scope. Try searching or adjusting teams.",
+        "linearFetchMore": "Fetch more",
+        "jiraSortAscending": "ascending",
+        "jiraSortDescending": "descending",
+        "jiraSortBy": "Sort by",
+        "jiraToggleSortDirection": "Sort {{value0}}"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -2309,7 +2361,63 @@
             "gitFilter": "Git",
             "contextFilter": "Context",
             "sortBy": "Sort by",
-            "sortDirection": "Direction"
+            "sortDirection": "Direction",
+            "1d3503357d": "You can close this and come back while deletion continues.",
+            "4c2990886e": "{{value0}}/{{value1}} deleted",
+            "86ba852118": "{{value0}}, {{value1}} failed",
+            "7b7bde5181": "Checked workspaces so far: {{value0}}",
+            "deletingCount": "Deleting workspaces: {{value0}}",
+            "deleteCount": "Delete workspaces: {{value0}}?",
+            "selectedForDeletionCount": "Selected for deletion: {{value0}}",
+            "deleteButtonCount": "Delete {{value0}}",
+            "archivedStatus": "Archived",
+            "readyStatus": "Ready"
+          },
+          "backgroundRemoval": {
+            "removed": "Removed workspaces: {{value0}}",
+            "failed": "Workspaces not removed: {{value0}}",
+            "error": "Workspace cleanup failed",
+            "skippedAncestor": "Skipped because a nested workspace could not be removed.",
+            "timedOut": "Removing {{value0}} is taking longer than expected. It will keep running in the background.",
+            "stillRemoving": "Still removing workspaces: {{value0}}",
+            "skippedPendingAncestor": "Skipped because a nested workspace has not finished removing."
+          },
+          "candidateRow": {
+            "gitLabel": "Git",
+            "commitsLabel": "Commits",
+            "contextLabel": "Context",
+            "flagsLabel": "Flags",
+            "collapseDetails": "Collapse details",
+            "expandDetails": "Expand details",
+            "cleanGit": "Clean git",
+            "dirtyGit": "Dirty git",
+            "unpushedCommits": "Unpushed commits",
+            "gitUnknown": "Git unknown",
+            "gitStatusUnknown": "Git status unknown",
+            "noUnpushedCommits": "No unpushed commits",
+            "unpushedCommitsCount": "Unpushed commits: {{value0}}",
+            "uncommittedChanges": "Uncommitted changes",
+            "terminalTabsCount": "Terminal tabs: {{value0}}",
+            "editorTabsCount": "Editor tabs: {{value0}}",
+            "browserTabsCount": "Browser tabs: {{value0}}",
+            "diffNotesCount": "Diff notes: {{value0}}",
+            "completedAgentsCount": "Completed agents: {{value0}}",
+            "contextCount": "Context: {{value0}}",
+            "mainWorkspaceBlocker": "Main workspace",
+            "folderProjectBlocker": "Folder project",
+            "pinnedBlocker": "Pinned",
+            "activeWorkspaceBlocker": "Active workspace",
+            "runningTerminalBlocker": "Running terminal process",
+            "terminalLivenessUnknownBlocker": "Terminal liveness unknown",
+            "dirtyEditorBufferBlocker": "Unsaved editor buffer",
+            "volatileLocalContextBlocker": "Volatile local context",
+            "recentVisibleContextBlocker": "Recently visited tabs",
+            "liveAgentBlocker": "Active agent",
+            "sshDisconnectedBlocker": "Remote unavailable",
+            "gitStatusErrorBlocker": "Git status unavailable",
+            "dirtyFilesBlocker": "Changed files",
+            "unknownBaseBlocker": "Could not verify unpushed commits",
+            "dismissedBlocker": "Ignored"
           }
         }
       },
@@ -2481,7 +2589,7 @@
               "blocked": {
                 "toast": {
                   "97c98f1afe": "Open Setting",
-                  "7cf51f74fd": "Enable TUI clipboard writes in Terminal settings to copy from SSH, tmux, Neovim, or fzf.",
+                  "7cf51f74fd": "Enable TUI clipboard writes in Terminal settings to copy from SSH, tmux, Neovim, fzf, or Grok.",
                   "89eaa3e80b": "Terminal clipboard write blocked"
                 }
               }
@@ -2562,7 +2670,10 @@
             "connectFailed": "SSH connection failed",
             "title": "SSH connection required",
             "connectingButton": "Connecting...",
-            "connectButton": "Connect"
+            "connectButton": "Connect",
+            "removedTitle": "SSH host removed",
+            "removedBody": "The SSH host for this workspace was removed, so it can no longer connect. Remove the workspace to clear it — remote files are left untouched.",
+            "removeWorkspaceButton": "Remove workspace"
           }
         }
       },
@@ -2588,8 +2699,7 @@
             "localWorkspacesOnly": "Resume from history is only available in local workspaces.",
             "openLocalWorkspace": "Open a local workspace before resuming a session.",
             "sessionQueued": "Session queued",
-            "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "openSupportedWorkspace": "Open a workspace before resuming a session.",
             "sessionHostMismatchUnsupported": "This session belongs to a different host. Drop it onto a workspace on the same host.",
             "localSessionSshWorkspaceUnsupported": "This session's history is stored on this machine, so it can't resume in an SSH workspace. Drop it onto a local workspace instead."
           },
@@ -2774,6 +2884,9 @@
           },
           "TerminalTabSplitMenuSection": {
             "splitTerminal": "Split terminal"
+          },
+          "TerminalTabLeadingIcon": {
+            "7ab2964bea": "Unread agent completion"
           }
         }
       },
@@ -2907,9 +3020,9 @@
             "2483c60695": "···",
             "c35af53b73": "Sign in",
             "f19a63e7cd": "Sign in to see usage",
-            "5c938d39ac": "% wk",
-            "54e8d6bb2d": "% Fable",
-            "d79c3362c4": "% 5h",
+            "5c938d39ac": "wk",
+            "54e8d6bb2d": "Fable",
+            "d79c3362c4": "5h",
             "a79c64f87e": "Fable",
             "8295903d17": "Restart live Claude terminals before continuing old conversations after switching.",
             "c98ea88392": "No other accounts",
@@ -2941,7 +3054,12 @@
             "f077f586db": "Don't ask again",
             "c0e972d726": "Cancel",
             "06741a2f3d": "Open MiniMax usage details",
-            "3bbf140864": "MiniMax Usage"
+            "3bbf140864": "MiniMax Usage",
+            "remoteServerLabel": "Remote server",
+            "antigravityUsage": "Antigravity Usage",
+            "antigravityUsageDetails": "Open Antigravity usage details",
+            "grokUsageAria": "Open Grok usage details",
+            "grokUsageMenu": "Grok Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -3072,7 +3190,7 @@
             }
           },
           "tooltip": {
-            "cedb7b99e3": "% left",
+            "cedb7b99e3": "% used",
             "6d6df77f41": "No data available",
             "7f7f208060": "Monthly",
             "252c096536": "Weekly",
@@ -3104,6 +3222,17 @@
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
+          },
+          "usagePercentageLabel": {
+            "used": "{{value0}}% used",
+            "remaining": "{{value0}}% left"
+          },
+          "UsagePercentageDisplayChangeNotice": {
+            "title": "Usage now shows % used",
+            "body": "Prefer remaining? Change it in Settings.",
+            "dismiss": "Dismiss",
+            "openSettings": "Open Settings",
+            "gotIt": "Got it"
           }
         }
       },
@@ -3289,7 +3418,8 @@
           "b2cf4310ce": "Overview",
           "908c470587": "codex",
           "eb6a066185": "claude",
-          "eee19cfade": "overview"
+          "eee19cfade": "overview",
+          "grokUsageTab": "Grok"
         },
         "UsageOverviewPane": {
           "22ed1b7669": "sessions",
@@ -3340,8 +3470,13 @@
             "0bba8ca244": "statistics",
             "0e2a0b6431": "usage",
             "372debfac0": "stats",
-            "26bb901fcd": "Orca stats plus combined Claude, Codex, and OpenCode usage analytics, tokens, cache, models, and sessions.",
-            "cb2430ae6a": "Stats & Usage"
+            "26bb901fcd": "Orca stats plus Claude, Codex, OpenCode token analytics and Grok subscription usage.",
+            "cb2430ae6a": "Stats & Usage",
+            "f8a1b2c3d4": "grok",
+            "e7f0a1b2c3": "subscription",
+            "d6e9f0a1b2": "credits",
+            "a3b6c7d8e9": "grok usage",
+            "9f2a3b4c5d": "xai"
           }
         },
         "usage": {
@@ -3391,6 +3526,17 @@
           "faf3444859": "Input",
           "a8b7487ff7": "Output",
           "cfe2282ffa": "Unknown"
+        },
+        "GrokUsagePane": {
+          "g8h9i0j1k2": "Grok usage",
+          "b2d3e4f5c6": "Weekly subscription credits from Grok CLI OAuth (~/.grok/auth.json). Same source as the status bar.",
+          "c3e4f5a6b7": "Set up in Accounts",
+          "h9i0j1k2l3": " • {{value0}}",
+          "i0j1k2l3m4": "Refresh Grok usage",
+          "d4f5a6b7c8": "Refresh",
+          "e5a6b7c8d9": "Weekly credits used",
+          "f6b7c8d9e0": "Billing period reset",
+          "a7b8c9d0e1": "Grok account settings"
         }
       },
       "sparse": {
@@ -3718,7 +3864,8 @@
           "d36883e046": "Cancel",
           "8c097ef04e": "from Orca. It is still on your disk.",
           "e62415c3d0": "This only removes",
-          "b79b39d865": "Remove Project"
+          "b79b39d865": "Remove Project",
+          "fromOrcaSsh": "from Orca. Its files stay on {{value0}} — re-add that SSH host to recover it."
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "Reveal active workspace"
@@ -3994,7 +4141,8 @@
           "runtimeHostProject": "Project on Orca server",
           "automationCreated": "Created by automation",
           "branchIdentity": "Branch",
-          "branchFolderPathIdentity": "Branch or folder path"
+          "branchFolderPathIdentity": "Branch or folder path",
+          "ef18787206": "Queued for deletion"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents"
@@ -4211,7 +4359,9 @@
               "1d0fa5c0a5": "Failed to delete workspace {{value0}}",
               "ead7b8ee15": "It has changed files. Use Force Delete to delete it anyway.",
               "905fc8efac": "Git already removed this workspace. Use Force Delete to clear it from Orca.",
-              "0899ebdb28": "Git already forgot this workspace, but its directory is still on disk. Use Force Delete to remove the orphaned directory."
+              "0899ebdb28": "Git already forgot this workspace, but its directory is still on disk. Use Force Delete to remove the orphaned directory.",
+              "locked": "This workspace is locked by Git. Run git worktree unlock <worktree-path> from its repository, then retry deletion.",
+              "lockedReason": "This workspace is locked by Git. Git reported: {{value0}}. Run git worktree unlock <worktree-path> from its repository, then retry deletion."
             }
           }
         },
@@ -4347,7 +4497,16 @@
           "5e6f7a8b9c": "This removes the saved SSH host and its credentials from this computer. Remote files are not deleted.",
           "6f7a8b9c0d": "Cancel",
           "7a8b9c0d1e": "Open settings",
-          "8b9c0d1e2f": "Remove host"
+          "8b9c0d1e2f": "Remove host",
+          "workspacesFailed": "Could not remove {{count}} of this host’s workspaces. The host was kept so you can retry.",
+          "oneWorkspace": "1 workspace",
+          "manyWorkspaces": "{{count}} workspaces",
+          "hostHasWorkspacesDefault": "Removes {{value0}} and its credentials from this computer. Its {{value1}} stay in Orca — remote files are not touched.",
+          "alsoDeleteRemote": "Also delete these {{value0}} on {{value1}}",
+          "alsoForgetLocal": "Also remove these {{value0}} from Orca",
+          "advanced": "Advanced",
+          "alsoDeleteRemoteHint": "Permanently deletes the remote Git worktrees and their branches. Cannot be undone.",
+          "alsoForgetLocalHint": "Clears them from Orca only. Remote files, worktrees, and branches are left untouched."
         },
         "HostRenameDialog": {
           "1a2b3c4d5e": "Rename host",
@@ -4513,6 +4672,16 @@
           "sshImportFailed": "Failed to import SSH config.",
           "importing": "Importing...",
           "importSshConfig": "Import ~/.ssh/config"
+        },
+        "ForgetSshWorkspaceDialog": {
+          "reconnectFailed": "Reconnection failed",
+          "forgetBody": "Removes this workspace from Orca only. Files, the Git worktree, and branches on {{host}} are left untouched.",
+          "title": "Delete “{{name}}”?",
+          "disconnectedBody": "The SSH host for this workspace is not connected. Reconnect to delete it on the remote too, or remove it from Orca only.",
+          "ghostBody": "{{host}} is no longer a saved SSH host, so this workspace is no longer connected to a live host. It can only be removed from Orca — files and branches on the remote are left untouched.",
+          "cancel": "Cancel",
+          "forget": "Remove from Orca",
+          "reconnectAndDelete": "Reconnect & Delete"
         }
       },
       "shared": {
@@ -4533,7 +4702,17 @@
           "87412c2a68": "Killed {{value0}} session.",
           "a2f040ac1c": "Killed {{value0}} sessions.",
           "63520148e2": "{{value0}} session refused to exit.",
-          "cc0a26cb14": "{{value0}} sessions refused to exit."
+          "cc0a26cb14": "{{value0}} sessions refused to exit.",
+          "71a8d342b0": "Terminal tabs absent: {{value0}}/{{value1}}. Failed close attempts: {{value2}}. Exact PTY shutdown requests accepted: {{value3}}; failed: {{value4}}.",
+          "2e57c1a940": "The daemon shutdown result is unverified because its management request failed.",
+          "993af6052c": "Daemon management reported exited: {{value0}}/{{value1}}; still present before exact cleanup: {{value2}}.",
+          "1f0d8ac762": "Terminal cleanup finished with errors.",
+          "80b6ea14cf": "Terminal cleanup finished with warnings.",
+          "47cd2a50e9": "No sessions or terminal tabs were reported.",
+          "c34fb1098d": "Terminal tabs closed and shutdown requested.",
+          "d9657ac204": "Terminal session shutdown requested.",
+          "e8f25bd903": "Couldn’t finish terminal cleanup.",
+          "a702d4196e": "This closes every terminal tab across all workspaces and requests shutdown for its current terminal sessions. Any unsaved terminal work is lost. The daemon itself keeps running, and new terminals can be opened immediately. This can't be undone."
         }
       },
       "setup": {
@@ -4681,7 +4860,13 @@
           "435df0ee51": "Under Request Headers, copy the Cookie value.",
           "7492fb3bba": "Paste it here and click Save.",
           "9fec52de4b": "How to copy the cookie",
-          "4e32e030b2": "Stored locally. Orca sends it only to platform.minimax.io for usage refreshes."
+          "4e32e030b2": "Stored locally. Orca sends it only to platform.minimax.io for usage refreshes.",
+          "remoteServerFallback": "the remote server",
+          "loadAccountsFailed": "Could not load provider accounts.",
+          "remoteScopeAccounts": "Showing accounts managed by {{value0}}. Add or re-authenticate accounts on that server.",
+          "remoteScopeAuthContext": "Each account keeps its own sign-in context on {{value0}}.",
+          "remoteEmptyClaudeAccounts": "No managed Claude accounts on {{value0}}. It uses its system default Claude login; add accounts on that server.",
+          "remoteEmptyCodexAccounts": "No managed Codex accounts on {{value0}}. It uses its system default Codex login; add accounts on that server."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",
@@ -5157,11 +5342,11 @@
           "0e89a574ae": "Floating animated pet in the bottom-right corner.",
           "nativeChat": {
             "title": "Native chat",
-            "description": "Preview the desktop chat surface for Claude and Codex terminal sessions.",
-            "copy": "Adds a native chat view you can switch to from supported Claude and Codex terminal panes. Experimental while we tune transcript fidelity, streaming, and terminal parity.",
+            "description": "Preview the desktop chat surface for supported agent terminal sessions.",
+            "copy": "Adds a native chat view you can switch to from supported agent terminal panes. Experimental while we tune transcript fidelity, streaming, and terminal parity.",
             "toggleLabel": "Toggle native chat",
             "defaultTitle": "Default view",
-            "defaultCopy": "Choose how new Claude and Codex terminal tabs open.",
+            "defaultCopy": "Choose how new supported agent terminal tabs open.",
             "defaultViewLabel": "Default native chat view",
             "defaultViewTerminal": "Terminal chat",
             "defaultViewNative": "Native chat"
@@ -5220,7 +5405,9 @@
           "bf16ef0af2": "Off",
           "3f6892f307": "On",
           "b82f86d7d2": "Rich Markdown Spellcheck",
-          "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown."
+          "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown.",
+          "7ddd66fede": "Editor Word Wrap",
+          "9b18de6eea": "Wrap long lines in file editors instead of requiring horizontal scrolling."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -6184,7 +6371,7 @@
           "b5ee17826b": "Pair remote Orca runtimes for persistent sessions, richer remote state, and web or mobile handoff.",
           "7686cb5c36": "Connect this browser to a saved Orca server.",
           "bd0181eeca": "Remote Orca Servers",
-          "8acf3f22e0": "Orca stats plus Claude, Codex, and OpenCode usage analytics.",
+          "8acf3f22e0": "Orca stats plus Claude, Codex, OpenCode token analytics and Grok subscription usage.",
           "954a8f5aef": "Stats & Usage",
           "a737a4bb22": "Keyboard shortcuts for common actions.",
           "23bf7a1ad4": "Shortcuts",
@@ -6572,9 +6759,9 @@
           "d23b43c5be": "Setup Script Location",
           "34a0dfa06e": "Where the repository setup script runs when a new workspace is created.",
           "21f8da2078": "Workspace Setup Script",
-          "6e6480a7df": "Let programs in the terminal (tmux, Neovim, fzf, SSH) copy to your system clipboard.",
+          "6e6480a7df": "Let programs in the terminal (Grok, tmux, Neovim, fzf, SSH) copy to your system clipboard.",
           "3338dcf8c1": "Allow TUI Clipboard Writes (OSC 52)",
-          "69c64a479c": "Let tmux, Neovim, and fzf copy to the system clipboard over the PTY (including over SSH).",
+          "69c64a479c": "Let Grok, tmux, Neovim, and fzf copy to the system clipboard over the PTY (including over SSH).",
           "4729c645fc": "Automatically copy terminal selections to the clipboard.",
           "902f5dee1f": "Copy on Select",
           "9129b7e805": "Hovering a terminal pane activates it without needing to click.",
@@ -6607,9 +6794,9 @@
           "348246b06f": "false",
           "5936387ddd": "auto",
           "adbafefe56": "custom",
-          "16753eea48": "On Windows, right-click pastes the clipboard. Ctrl+right-click opens the context menu.",
+          "16753eea48": "Right-click pastes the clipboard. Ctrl+right-click opens the context menu.",
           "9c178cf8aa": "Right-click to paste",
-          "af0c3b6e39": "On Windows, right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.",
+          "af0c3b6e39": "Right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.",
           "29154326bb": "on",
           "ab20575a8a": "off",
           "ab3a1f9068": "wsl.exe",
@@ -6854,7 +7041,13 @@
             "b84a5b0c8a": "Choose whether provider accounts are inspected and added on this device or in WSL.",
             "d09fb5ca92": "Account Location",
             "733f9e2a93": "MiniMax Usage",
-            "f8374c3151": "Paste your platform.minimax.io session cookie for local rate-limit fetching."
+            "f8374c3151": "Paste your platform.minimax.io session cookie for local rate-limit fetching.",
+            "f4a8c2e1b7": "Grok (xAI) Usage",
+            "e3b7d1f9a2": "OAuth sign-in via Grok CLI (grok login) for weekly credit usage.",
+            "d2c6a0e8f1": "grok",
+            "c1b5f9d7e0": "xai",
+            "b0a4e8c6d9": "oauth",
+            "a9f3d7b5c8": "login"
           }
         },
         "advanced": {
@@ -7068,7 +7261,16 @@
               "cardLayout": "card layout",
               "workspaceOptions": "workspace options",
               "detailed": "detailed"
-            }
+            },
+            "antigravityUsageTitle": "Antigravity Usage",
+            "antigravityUsageDescription": "Show Antigravity subscription usage in the status bar.",
+            "antigravityKeyword": "antigravity",
+            "f8e2a1c4b6": "Grok Usage",
+            "e7d1b0f3a5": "Show Grok weekly credit usage from Grok CLI OAuth.",
+            "d6c0a9e2f4": "grok",
+            "c5b9f8d1e3": "xai",
+            "usagePercentageDisplayTitle": "Usage percentages",
+            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining."
           }
         },
         "auto": {
@@ -7353,7 +7555,8 @@
             "87d99e634b": "Pet",
             "nativeChat": {
               "title": "Native chat",
-              "description": "Preview the desktop chat surface for Claude and Codex terminal sessions."
+              "description": "Preview the desktop chat surface for supported agent terminal sessions.",
+              "grok": "grok"
             }
           }
         },
@@ -7519,7 +7722,9 @@
             "defaultProjectRuntime": "Default Project Runtime",
             "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects.",
             "d2d2d929c0": "Rich Markdown Spellcheck",
-            "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown."
+            "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown.",
+            "e61157e926": "Editor Word Wrap",
+            "005be5c699": "Wrap long lines in file editors instead of requiring horizontal scrolling."
           }
         },
         "git": {
@@ -8319,7 +8524,7 @@
               "e55186fe2b": "right click",
               "28ff08ed35": "windows",
               "e7d2793b03": "terminal",
-              "8ba875c132": "On Windows, right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.",
+              "8ba875c132": "Right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.",
               "f0b8448570": "Right-click to paste",
               "04994f6929": "default",
               "fc564eadaf": "debian",
@@ -8392,7 +8597,8 @@
                   "customCommand": "Custom command",
                   "supportedAgents": "Supported agents for this recipe: {{value0}}.",
                   "unsupportedSavedAgent": "{{value0}} cannot run this text-generation recipe. Pick one of the supported agents below.",
-                  "resolveComments": "Start an agent from selected unresolved PR or MR comments."
+                  "resolveComments": "Start an agent from selected unresolved PR or MR comments.",
+                  "fixPushFailure": "Start an agent when a pre-push hook or git push fails."
                 }
               }
             }
@@ -8714,7 +8920,14 @@
           "behindBaseRefToastDescription": "Persistent prompt with an inline Settings link and footer action.",
           "notificationPlayground": "Notification playground",
           "notificationPlaygroundDescription": "Dev-only triggers for checking toast layout, recovery actions, and long-copy wrapping.",
-          "devOnly": "Dev only"
+          "devOnly": "Dev only",
+          "orcaCloud": "Orca Cloud",
+          "orcaCloudDescription": "Dev-only preview of first-party cloud sign-in. Hidden in production; in dev it also appears in the sidebar account switcher once ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID are set.",
+          "orcaCloudStatus": "Status",
+          "orcaCloudSignOut": "Sign out",
+          "orcaCloudConnect": "Connect profile",
+          "orcaCloudRefresh": "Refresh status",
+          "orcaCloudNotConfigured": "Set ORCA_CLOUD_API_URL and ORCA_CLOUD_CLIENT_ID to preview Orca Cloud sign-in in this dev build."
         },
         "EphemeralVmRecipeRow": {
           "useInWorkspace": "Use in workspace"
@@ -8780,6 +8993,49 @@
           "reviewFirst": "Review first",
           "singular": "Global saves won't change 1 repository with its own recipe.",
           "tooltipTitle": "Repository overrides"
+        },
+        "linear": {
+          "agent": {
+            "skill": {
+              "install": {
+                "cta": {
+                  "copiedCommand": "Copied command.",
+                  "copyFailed": "Failed to copy command.",
+                  "skillLabel": "Agent skill:",
+                  "checking": "Checking...",
+                  "installed": "Installed",
+                  "notInstalled": "Not installed",
+                  "recheck": "Re-check",
+                  "installedDescription": "Agent skill installed. To update it, run:",
+                  "description": "Let your agents read and edit Linear tasks.",
+                  "copyCommand": "Copy command"
+                }
+              }
+            }
+          }
+        },
+        "GrokAccountsSection": {
+          "a1b2c3d4e5": "Grok (xAI)",
+          "f6e5d4c3b2": "Shows weekly credit usage from your Grok CLI sign-in (session file ~/.grok/auth.json).",
+          "0d8e77bc40": "Grok CLI docs",
+          "ad47a33f72": "Loading…",
+          "b2c3d4e5f6": "Signed in",
+          "c3d4e5f6a7": "Signed in. Orca only reads that file on disk — run grok login again if usage fails.",
+          "d4e5f6a7b8": "Session expired — run grok login in a terminal to refresh.",
+          "e5f6a7b8c9": "Not signed in to Grok CLI",
+          "f6a7b8c9d0": "In a terminal, run grok login, then click Refresh usage here.",
+          "3325d996cb": "Refresh usage",
+          "a8f3e2c1b4": "Weekly credits",
+          "b7e2d9f0a3": "Same weekly credit % as the grok /usage screen in the terminal.",
+          "c6d1a8f4e2": "Resets {{when}}"
+        },
+        "AppearanceWindowSidebarSection": {
+          "usagePercentageDisplayUsed": "Used",
+          "usagePercentageDisplayRemaining": "Remaining"
+        },
+        "TerminalInteractionSection": {
+          "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
+          "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
         }
       },
       "right": {
@@ -9249,7 +9505,22 @@
             "d2b9g4f315": "{{value0}} commits behind {{value1}}",
             "e9c2a5d416": "Even with {{value0}}",
             "4b4a7de138": "Open review page in browser",
-            "createPrIntentCommitBlockedSummary": "Commit blocked: {{value0}} Fix the issue, then retry Create PR."
+            "createPrIntentCommitBlockedSummary": "Commit blocked: {{value0}} Fix the issue, then retry Create PR.",
+            "pushRecovery": {
+              "4b37ae99b0": "Start the default AI agent to fix this push failure",
+              "30b8d4f181": "Fix push failure with AI",
+              "dd43c47089": "Choose an agent for this push failure",
+              "ec7bfced55": "Choose agent to fix push failure",
+              "9e5ccd00aa": "Push failure context unavailable",
+              "054ead86b1": "Fix Push Failure With AI",
+              "15b7f210d7": "Choose the agent and edit the full command input before launch.",
+              "011f9713fc": "Push blocked",
+              "60bd988f0b": "AI Fix",
+              "03d238218c": "Details",
+              "a9bf7c171a": "Push Failed",
+              "834cb3f23d": "Fix with AI",
+              "783a808870": "Close"
+            }
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -9399,7 +9670,9 @@
                 "b13f85d75c": "Timeline",
                 "f5cf324efa": "Comment display options",
                 "5e6e5a13fa": "View",
-                "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
+                "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
+                "b3195cba33": "Unmark author as bot",
+                "f588b46a6c": "Mark author as bot"
               },
               "empty": {
                 "state": {
@@ -9498,6 +9771,35 @@
                       "216f762bd7": "Unable to resolve the workspace connection."
                     }
                   }
+                },
+                "push": {
+                  "failure": {
+                    "launch": {
+                      "216f762bd7": "Unable to resolve the workspace connection.",
+                      "4f4e0418a0": "Could not build the agent prompt.",
+                      "f2b47026e8": "Push failure prompt is empty. Update Source Control AI settings.",
+                      "d481ab22f9": "Saved AI agent is unavailable. Use Customize launch to choose another agent.",
+                      "9bbd9077a2": "No enabled AI agents. Configure agents in Settings.",
+                      "5540ff50cc": "Could not build the agent launch command.",
+                      "a8b97d2318": "Started an AI agent for the push failure."
+                    }
+                  }
+                },
+                "recovery": {
+                  "launch": {
+                    "4f4e0418a0": "Could not build the agent prompt.",
+                    "push": {
+                      "empty": "Push failure prompt is empty. Update Source Control AI settings."
+                    },
+                    "commit": {
+                      "empty": "Commit failure prompt is empty. Update Source Control AI settings."
+                    },
+                    "d481ab22f9": "Saved AI agent is unavailable. Use Customize launch to choose another agent.",
+                    "9bbd9077a2": "No enabled AI agents. Configure agents in Settings.",
+                    "5540ff50cc": "Could not build the agent launch command.",
+                    "216f762bd7": "Unable to resolve the workspace connection.",
+                    "success": "Started an AI agent for the {{value0}} failure."
+                  }
                 }
               },
               "discard": {
@@ -9591,6 +9893,9 @@
               }
             }
           },
+          "fileExplorerOperationOwner": {
+            "unresolved": "Couldn't determine which host owns this workspace. Check the connection and try again."
+          },
           "useFileDeletion": {
             "72691dfebc": "Failed to {{value0}} '{{value1}}'.",
             "96affe1302": "'{{value0}}' moved to {{value1}}",
@@ -9599,7 +9904,12 @@
             "a76c74f105": "destructive",
             "92276aceb7": "Delete",
             "7fb9435c86": "This permanently deletes the directory and its contents on the remote host. This cannot be undone.",
-            "23e98f192f": "This permanently deletes the file on the remote host. This cannot be undone."
+            "23e98f192f": "This permanently deletes the file on the remote host. This cannot be undone.",
+            "8b8ee9d22f": "Couldn't determine which host owns this file. Check the workspace connection and try again.",
+            "af1270b90d": "Permanently delete {{count}} items?",
+            "dd029aa5cd": "This permanently deletes the selected items and any directory contents on the remote host. This cannot be undone.",
+            "77fdc36183": "Delete {{count}} items?",
+            "fca915a67a": "Remote items are permanently deleted and cannot be undone. Local items move to the {{value0}}."
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "Cannot open symlink target"
@@ -9648,9 +9958,7 @@
             "logPath": "Log path",
             "originalPaneUnavailable": "Original pane is no longer available.",
             "worktreeUnavailable": "Worktree is no longer available.",
-            "runtimeBrowseLocalHistory": "Runtime-hosted workspaces can browse local history. Resume actions are available in local and SSH workspaces.",
-            "runtimeWorkspacesUnsupported": "Resume from history is not available in runtime-hosted workspaces.",
-            "openSupportedWorkspace": "Open a local or SSH workspace before resuming a session.",
+            "openSupportedWorkspace": "Open a workspace before resuming a session.",
             "sessionHostMismatchUnsupported": "This session belongs to a different host. Open a workspace on the same host to resume it.",
             "localSessionSshWorkspaceUnsupported": "This session's history is stored on this machine, so it can't resume in an SSH workspace. Open a local workspace instead."
           },
@@ -9689,6 +9997,12 @@
             "originalAsk": "Original ask",
             "latestTurns": "Latest turns",
             "noPreviewAvailable": "No conversation preview available",
+            "conversationNotSaved": "Conversation not saved",
+            "recoverableEmptyDetail": "This session has no saved conversation, but {{value0}} recoverable item(s) survive.",
+            "recoverableEmptyOpenLogHint": "Open the log to recover them.",
+            "emptyConversationDetail": "This session has no saved conversation and cannot be resumed.",
+            "queuedMessages": "{{value0}} queued message(s)",
+            "subagentTranscripts": "{{value0}} subagent transcript(s)",
             "messageCount": "{{value0}} msgs",
             "updated": "Updated",
             "created": "Created",
@@ -9739,6 +10053,7 @@
           },
           "AiVaultSessionRow": {
             "noPreviewAvailable": "No conversation preview available",
+            "recoverableBadge": "Not saved",
             "dragToResume": "Drag to resume in a new tab",
             "resumeAgentSession": "Resume {{value0}} session",
             "resumeInNewTab": "Resume in New Tab",
@@ -9761,7 +10076,9 @@
             "systemRole": "System",
             "sessionRole": "Session",
             "jumpToOriginalPane": "Jump to Original Pane",
-            "jumpToWorktree": "Jump to Worktree"
+            "jumpToWorktree": "Jump to Worktree",
+            "subagentCountSingular": "1 subagent",
+            "subagentCountPlural": "{{value0}} subagents"
           },
           "FileExplorerNameFilter": {
             "26fb73c6e3": "Find files",
@@ -9816,6 +10133,16 @@
             "archivedJumpUnavailable": "This session is in an archived worktree.",
             "noActiveWorktreeMatch": "No active worktree matches this session.",
             "noActiveWorktreeTarget": "No active worktree is available."
+          },
+          "AiVaultSessionSubagents": {
+            "subagentsCount": "Subagents ({{value0}})",
+            "messageCount": "{{value0}} msgs",
+            "viewLog": "View Log"
+          },
+          "aiVaultSessionLogOpen": {
+            "workspaceGone": "Couldn't open log — workspace is no longer available.",
+            "notAuthorized": "Couldn't open log — path not authorized.",
+            "alreadyEditable": "Log is already open for editing."
           }
         }
       },
@@ -9940,7 +10267,15 @@
           "3cd5374e22": "Notification settings are still loading",
           "b6a994e36e": "Notification sound could not be played",
           "c0692baa52": "Choose Custom File",
-          "ac80d97e02": "Change Custom File"
+          "ac80d97e02": "Change Custom File",
+          "56b836215c": "Checking notification permission…",
+          "fd84d3e9b8": "Notifications are enabled",
+          "4f7bce5644": "macOS will alert you when agents finish or terminals need attention.",
+          "95d99b52fa": "Allow notifications for Orca",
+          "94562ba367": "macOS is asking for permission. Click Allow in the dialog and this step updates automatically.",
+          "4f6a1da718": "Open System Settings",
+          "90b5d2e363": "macOS is not delivering Orca notifications",
+          "2c47f5465f": "Turn on Allow notifications for Orca in System Settings. This step updates automatically once enabled."
         },
         "OnboardingFlow": {
           "1b5e182e9f": "Welcome to Orca",
@@ -10066,6 +10401,17 @@
           "windowsDefault": "Windows default",
           "rightClickBehavior": "Right-click behavior",
           "rightClickBehaviorDescription": "Pick the terminal mouse behavior that matches your Windows muscle memory."
+        },
+        "mac": {
+          "notification": {
+            "permission": {
+              "card": {
+                "f696515944": "Click Allow in the macOS dialog.",
+                "3d18cf71f9": "Updates automatically.",
+                "721d2bedb6": "Turn on Allow notifications for Orca in System Settings."
+              }
+            }
+          }
         }
       },
       "new": {
@@ -10301,6 +10647,17 @@
           "trigger-label": "Network address to advertise",
           "custom-option": "{{address}} (custom)",
           "add-custom": "Add custom address…"
+        },
+        "WindowsFirewallNotice": {
+          "repair-success": "Windows Firewall now allows Orca Mobile on private networks",
+          "repair-failed": "Could not add the Windows Firewall rule",
+          "public-title": "Windows marks this network as public",
+          "missing-title": "Allow phone connections through Windows Firewall",
+          "public-description": "Change this trusted Wi-Fi network to Private before allowing Orca Mobile connections.",
+          "missing-description": "Windows may block the pairing server. Add a rule for this Orca app and TCP port {{port}} on Private networks.",
+          "open-settings": "Open network settings",
+          "waiting": "Waiting for Windows…",
+          "allow": "Allow phone connections"
         }
       },
       "gitlab": {
@@ -10361,6 +10718,7 @@
           },
           "FloatingTerminalToggleButton": {
             "3b04b065b5": "Show floating workspace",
+            "4cb418b991": "Show floating workspace, new activity",
             "5785dd9148": "Minimize floating workspace",
             "bfe7809a70": "{{value0}} floating workspace ({{value1}})"
           },
@@ -10712,11 +11070,11 @@
                 "945865332e": "Signing in"
               },
               "UsagePage": {
-                "64265cb295": "71% 5h",
+                "64265cb295": "29% used 5h",
                 "be5a165875": "Switch to",
                 "277a9c65a9": "Codex Account",
                 "4dce5ca3aa": "Resets in 4d 3h",
-                "05ce4ecdd3": "62% left",
+                "05ce4ecdd3": "38% used",
                 "0470aaed99": "Weekly",
                 "f421abf962": "Session",
                 "5e45fb1238": "Updated 1m ago",
@@ -11097,7 +11455,9 @@
           "c98ce191da": "This diff has no modified-side file to open",
           "9b80bbe1de": "Open file tab",
           "f0fd4174b5": "Open file tab to use rich markdown editing",
-          "a10d9b8337": "Open file"
+          "a10d9b8337": "Open file",
+          "2076ecfc9c": "Previous change",
+          "631dab0df3": "Next change"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "Export as PDF",
@@ -11296,7 +11656,8 @@
           "1c99b726e0": "Remove link",
           "cdfe166f6f": "Edit link",
           "bfc813e909": "Open link",
-          "7b0b945fdc": "Paste or type a link…"
+          "7b0b945fdc": "Paste or type a link…",
+          "copyLink": "Copy link"
         },
         "RichMarkdownReviewNoteLayer": {
           "f3ef92952b": "This note",
@@ -11323,7 +11684,8 @@
           "68d090241d": "Match whole word",
           "fd97c7e585": "Replace",
           "44682b4159": "Replace in rich markdown editor",
-          "c2884f5e95": "Replace all"
+          "c2884f5e95": "Replace all",
+          "preservedRichContentReadOnly": "Preserved rich content is read-only in rich mode."
         },
         "RichMarkdownSlashMenu": {
           "82c6816ff8": "No blocks found",
@@ -11540,6 +11902,24 @@
           "3fa2b8d417": "Reload from Disk",
           "a95d02c644": "Keep My Edits",
           "2c8f1e07b9": "Loading comparison..."
+        },
+        "RichMarkdownEditor": {
+          "citationLinkAvailable": "{{value0}}, link to {{value1}}. Press Enter to open or Tab for link actions.",
+          "citationFallbackLabel": "Citation",
+          "citationLinkUnavailable": "{{value0}}, citation link unavailable. {{value1}}",
+          "tabForCitationActions": "Tab for available actions.",
+          "noCitationActions": "No link actions are available."
+        },
+        "richMarkdownHtmlSuperscriptLink": {
+          "availableAriaLabel": "{{value0}}, link to {{value1}}",
+          "unavailableAriaLabel": "{{value0}}, citation link unavailable"
+        },
+        "richMarkdownLinkClipboard": {
+          "copiedLink": "Copied link",
+          "copyLinkFailed": "Failed to copy link"
+        },
+        "richMarkdownSourceOwningCutFeedback": {
+          "selectLessContent": "Select less content or use code mode to cut preserved HTML citations."
         }
       },
       "diff": {
@@ -11610,6 +11990,21 @@
             "ead6fc0510": "No automatic crash report was captured. You can still send details and include recent diagnostic logs when available.",
             "b082f27490": "Attach recent diagnostic logs",
             "e59f0b9427": "Sends a capped redacted log bundle with the report."
+          },
+          "submit": {
+            "notice": {
+              "unknownError": "The crash report request failed before it returned a reason.",
+              "ticketUploaded": "Diagnostic ticket {{value0}} was uploaded but not linked.",
+              "uncheckDiagnostics": "Uncheck \"Attach recent diagnostic logs\" and try again, or copy the details.",
+              "checkConnection": "Check your connection and try again, or copy the details.",
+              "notSent": "Crash report wasn't sent",
+              "copyDetails": "Copy Details",
+              "sentWithoutDiagnostics": "Crash report sent without diagnostic logs",
+              "diagnosticsReason": "Diagnostic logs were not attached: {{value0}}"
+            }
+          },
+          "copy": {
+            "copyFailed": "Crash report details could not be copied."
           }
         }
       },
@@ -11729,7 +12124,7 @@
             "f2d0c22d67": "Delete annotation {{value0}}",
             "11c5084aa2": "Clear annotations",
             "734e4343ec": "Clear browser annotations",
-            "95af781091": "Send feedback to a new agent",
+            "95af781091": "Send feedback to an agent",
             "ac39b9366b": "Send",
             "a3508d7e6e": "{{value0}} annotation{{value1}} ready. Select another element or copy all feedback.",
             "f796c774a4": "Type a URL above to start browsing.",
@@ -12390,6 +12785,181 @@
         "contextMenu": {
           "copy": "Copy"
         }
+      },
+      "orca": {
+        "profiles": {
+          "switcher": {
+            "cloud": {
+              "unavailable": "Cloud sign-in unavailable"
+            },
+            "account": "Account",
+            "reconnect": "Reconnect profile",
+            "connect": "Connect profile",
+            "organization": "Organization",
+            "create": {
+              "profile": {
+                "for": {
+                  "org": "Create profile for org"
+                }
+              }
+            },
+            "signout": "Sign out",
+            "16e3681072": "New local profile",
+            "e3b91a3d90": "Create an empty profile for separate projects and worktrees.",
+            "f322e1f4d6": "Profile name",
+            "cfa59f8ad1": "Create and Switch",
+            "b4f9d1125d": "Local",
+            "4815f7d163": "Switch profile",
+            "d00d853e2a": "Manage profiles",
+            "c106c674fe": "New local profile",
+            "org": {
+              "members": "Organization members"
+            }
+          },
+          "management": {
+            "04e7bd2a23": "Transfer",
+            "128c7dfe64": "Copy to",
+            "df8b7d876b": "Move to",
+            "9aa26347b3": "Project moved",
+            "816ce624b6": "Project copied",
+            "2c45bda8d3": "Manage profiles",
+            "2db945e4a0": "Copy or move projects from the active profile to another local profile.",
+            "8668cb2946": "No projects in this profile.",
+            "93034915ab": "Create another profile before copying projects.",
+            "projectCountSingular": "{{count}} project",
+            "projectCountPlural": "{{count}} projects"
+          },
+          "project": {
+            "transfer": {
+              "confirm": {
+                "move": {
+                  "title": "Move project?",
+                  "description": "Move {{repoName}} to {{targetName}}. Orca removes it from {{activeProfileName}}, keeps files in place, and relaunches into {{targetName}}.",
+                  "action": "Move project"
+                },
+                "copy": {
+                  "title": "Copy project?",
+                  "description": "Copy {{repoName}} to {{targetName}}. Both profiles will point at the same files with separate Orca metadata.",
+                  "action": "Copy project"
+                },
+                "live": {
+                  "work": "Live work in this project"
+                },
+                "cancel": "Cancel",
+                "terminalSingular": "{{count}} live terminal tab",
+                "terminalPlural": "{{count}} live terminal tabs",
+                "agentSingular": "{{count}} active agent",
+                "agentPlural": "{{count}} active agents",
+                "browserSingular": "{{count}} browser workspace",
+                "browserPlural": "{{count}} browser workspaces"
+              }
+            }
+          },
+          "signout": {
+            "confirm": {
+              "title": "Sign out?",
+              "description": "Sign out of {{profileName}} and keep its projects, worktrees, and local metadata on this device.",
+              "cancel": "Cancel",
+              "action": "Sign out"
+            }
+          },
+          "switch": {
+            "confirm": {
+              "target": "the selected profile",
+              "title": "Switch profiles?",
+              "description": "Switching to {{targetName}} will relaunch Orca and reload the workspace for {{activeProfileName}}.",
+              "live": {
+                "work": "Live work in this profile"
+              },
+              "cancel": "Cancel",
+              "switch": "Switch profile",
+              "terminalSingular": "{{count}} live terminal tab",
+              "terminalPlural": "{{count}} live terminal tabs",
+              "agentSingular": "{{count}} active agent",
+              "agentPlural": "{{count}} active agents",
+              "browserSingular": "{{count}} browser workspace",
+              "browserPlural": "{{count}} browser workspaces"
+            }
+          },
+          "org": {
+            "members": {
+              "role": {
+                "label": "Role",
+                "owner": "Owner",
+                "admin": "Admin",
+                "member": "Member"
+              },
+              "not": {
+                "signed": {
+                  "in": "They haven't signed in to Orca yet."
+                }
+              },
+              "remove": {
+                "confirm": "Remove",
+                "cancel": "Cancel",
+                "label": "Remove teammate"
+              },
+              "title": "Organization members",
+              "load": {
+                "error": "Couldn't load organization members."
+              },
+              "retry": "Try again",
+              "pending": {
+                "title": "Pending invites",
+                "revoke": "Revoke"
+              },
+              "invite": {
+                "title": "Invite",
+                "placeholder": "teammate@example.com",
+                "role": "Invite role",
+                "submit": "Send"
+              },
+              "error": {
+                "forbidden": "Your role can't do that.",
+                "conflict": "Already a member or invited.",
+                "remove": {
+                  "self": "You can't remove yourself."
+                },
+                "own": {
+                  "role": "You can't change your own role."
+                },
+                "not": {
+                  "found": "That teammate is no longer in this organization."
+                },
+                "reconnect": "Reconnect your profile to manage members.",
+                "unconfigured": "Organization management is unavailable in this build.",
+                "failed": "Something went wrong. Please try again."
+              },
+              "subtitle": {
+                "named": "People in {{orgName}} who can collaborate on Orca.",
+                "default": "People in your organization who can collaborate on Orca."
+              }
+            }
+          }
+        }
+      },
+      "linear-issue-attribute-filter-dropdowns": {
+        "removeFilter": "Remove {{value0}} filter",
+        "teamRequired": "Select a team to load status, assignees, and labels for this workspace.",
+        "filters": "Filters",
+        "allWorkspacesTitle": "Select one workspace",
+        "allWorkspacesBody": "Status, assignee, and label filters use ids from a single Linear workspace. Choose one workspace to filter by those attributes.",
+        "optionsFromTeam": "Options from {{team}}",
+        "clearAll": "Clear all filters"
+      },
+      "linear-issue-attribute-filter-sections": {
+        "status": "Status",
+        "priority": "Priority",
+        "assignee": "Assignee",
+        "unassigned": "Unassigned",
+        "labels": "Labels",
+        "countSelected": "{{count}} selected",
+        "selected": "selected",
+        "searchPriority": "Filter priority…",
+        "searchStatus": "Filter status…",
+        "searchLabels": "Filter labels…",
+        "searchAssignee": "Filter assignee…",
+        "back": "Back"
       }
     },
     "i18n": {
@@ -12422,7 +12992,10 @@
         "noSkills": "No matching skills",
         "localAttachmentUnsupported": "Local attachments are not available for remote sessions.",
         "removeAttachment": "Remove attachment",
-        "pastedImageLabel": "Pasted image"
+        "pastedImageLabel": "Pasted image",
+        "imagePasteFailed": "Image paste failed.",
+        "worktreeNotReady": "Worktree not ready — try again in a moment.",
+        "uploadingAttachments": "Uploading {{value0}} file(s) to remote…"
       },
       "tool": {
         "running": "Running…",
@@ -12468,7 +13041,8 @@
         "otherPlaceholder": "Type your answer",
         "cancel": "Cancel",
         "send": "Send answer",
-        "next": "Next"
+        "next": "Next",
+        "skip": "Skip"
       },
       "approval": {
         "title": "Allow {{value0}}?",

@@ -17,6 +17,7 @@ import type {
   GitStatusEntry,
   Tab
 } from '../../../../shared/types'
+import { isSyncPushStageError } from '@/lib/source-control-remote-error'
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -48,6 +49,10 @@ function createEditorStore(): StoreApi<AppState> {
     browserTabsByWorktree: {},
     activeBrowserTabId: null,
     activeBrowserTabIdByWorktree: {},
+    repos: [{ id: 'repo-1', path: '/repo' }],
+    worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }] },
+    folderWorkspaces: [],
+    projectGroups: [],
     recordFeatureInteraction: vi.fn(),
     ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
   })) as unknown as StoreApi<AppState>
@@ -61,6 +66,10 @@ function createEditorTabsStore(): StoreApi<AppState> {
     browserTabsByWorktree: {},
     activeBrowserTabId: null,
     activeBrowserTabIdByWorktree: {},
+    repos: [{ id: 'repo-1', path: '/repo' }],
+    worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }] },
+    folderWorkspaces: [],
+    projectGroups: [],
     recordFeatureInteraction: vi.fn(),
     ...createTabsSlice(...(args as Parameters<typeof createTabsSlice>)),
     ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
@@ -447,7 +456,7 @@ describe('createEditorSlice openDiff', () => {
     expect(store.getState().openFiles).toEqual([
       expect.objectContaining({
         id: 'wt-1::diff::unstaged::file.ts',
-        runtimeEnvironmentId: undefined
+        runtimeEnvironmentId: null
       }),
       expect.objectContaining({
         id: 'editor-diff:wt-1:env-1:unstaged:file.ts',
@@ -486,6 +495,66 @@ describe('createEditorSlice openDiff', () => {
         id: 'editor-diff:repo-1%3A%3A%2Fsrv%2Frepo%2Fworktree:env-1:unstaged:src%2Ffile.ts',
         runtimeEnvironmentId: 'env-1'
       })
+    )
+  })
+
+  it('keeps a diff for an owner-less worktree off the focused global runtime', () => {
+    const store = createEditorStore()
+    // A remote runtime is globally focused, but wt-1's repo names no explicit
+    // owner. The diff must stamp null (not undefined): null forces a LOCAL read
+    // in settingsForRuntimeOwner, while undefined would inherit 'focused-env'.
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' } as AppState['settings']
+    })
+
+    store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({
+        id: 'wt-1::diff::unstaged::file.ts',
+        runtimeEnvironmentId: null
+      })
+    )
+  })
+
+  it('routes an explicitly runtime-owned worktree diff to its owner over the focused runtime', () => {
+    const store = createEditorStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' } as AppState['settings'],
+      repos: [
+        { id: 'repo-1', executionHostId: 'runtime:owner-env' }
+      ] as unknown as AppState['repos'],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'repo-1::/srv/wt', repoId: 'repo-1', hostId: 'runtime:owner-env' }]
+      } as unknown as AppState['worktreesByRepo']
+    })
+
+    store.getState().openDiff('repo-1::/srv/wt', '/srv/wt/file.ts', 'file.ts', 'typescript', false)
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({ runtimeEnvironmentId: 'owner-env' })
+    )
+  })
+
+  it('keeps an SSH-owned worktree diff off the focused runtime so it routes via its connection', () => {
+    const store = createEditorStore()
+    // An SSH worktree is owned by its connection, not the focused runtime. Its
+    // diff stamps null (not the focused env), so the read targets local IPC and
+    // flows over connectionId rather than the focused runtime's RPC.
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' } as AppState['settings'],
+      repos: [{ id: 'repo-ssh', connectionId: 'conn-1' }] as unknown as AppState['repos'],
+      worktreesByRepo: {
+        'repo-ssh': [{ id: 'repo-ssh::/srv/wt', repoId: 'repo-ssh', hostId: 'ssh:conn-1' }]
+      } as unknown as AppState['worktreesByRepo']
+    })
+
+    store
+      .getState()
+      .openDiff('repo-ssh::/srv/wt', '/srv/wt/file.ts', 'file.ts', 'typescript', false)
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({ runtimeEnvironmentId: null })
     )
   })
 
@@ -1473,7 +1542,7 @@ describe('createEditorSlice markdown view state', () => {
       },
       { preview: true }
     )
-    store.getState().setMarkdownFrontmatterVisible('/repo/docs/README.md', true)
+    store.getState().setMarkdownFrontmatterVisible('/repo/docs/README.md', false)
     store.getState().setMarkdownTableOfContentsVisible('/repo/docs/README.md', true)
 
     store.getState().openDiff('wt-1', '/repo/docs/guide.md', 'docs/guide.md', 'markdown', false, {
@@ -1503,7 +1572,7 @@ describe('createEditorSlice markdown view state', () => {
       worktreeId: 'wt-1',
       language: 'markdown'
     })
-    store.getState().setMarkdownFrontmatterVisible('/repo/docs/README.md', true)
+    store.getState().setMarkdownFrontmatterVisible('/repo/docs/README.md', false)
     store.getState().setMarkdownTableOfContentsVisible('/repo/docs/README.md', true)
 
     store.getState().openDiff('wt-1', '/repo/docs/guide.md', 'docs/guide.md', 'markdown', false, {
@@ -1511,7 +1580,7 @@ describe('createEditorSlice markdown view state', () => {
     })
 
     expect(store.getState().markdownFrontmatterVisible).toEqual({
-      '/repo/docs/README.md': true
+      '/repo/docs/README.md': false
     })
     expect(store.getState().markdownTableOfContentsVisible).toEqual({
       '/repo/docs/README.md': true
@@ -1564,28 +1633,28 @@ describe('createEditorSlice editor view mode', () => {
 })
 
 describe('createEditorSlice markdown frontmatter visibility (#4468)', () => {
-  it('stores visible=true as an explicit entry keyed by fileId', () => {
+  it('stores hidden=false as an explicit entry keyed by fileId', () => {
     const store = createEditorStore()
-
-    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
-
-    expect(store.getState().markdownFrontmatterVisible).toEqual({ '/repo/notes.md': true })
-  })
-
-  it('deletes the entry when visibility resets to hidden', () => {
-    const store = createEditorStore()
-    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
 
     store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', false)
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({ '/repo/notes.md': false })
+  })
+
+  it('deletes the entry when visibility resets to visible', () => {
+    const store = createEditorStore()
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', false)
+
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
 
     expect(store.getState().markdownFrontmatterVisible).toEqual({})
   })
 
-  it('is a no-op when hiding a file that was never shown', () => {
+  it('is a no-op when showing a file that was never hidden', () => {
     const store = createEditorStore()
     const before = store.getState().markdownFrontmatterVisible
 
-    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', false)
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
 
     expect(store.getState().markdownFrontmatterVisible).toBe(before)
   })
@@ -1599,7 +1668,7 @@ describe('createEditorSlice markdown frontmatter visibility (#4468)', () => {
       language: 'markdown',
       mode: 'edit'
     })
-    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', false)
 
     store.getState().closeFile('/repo/notes.md')
 
@@ -1621,11 +1690,11 @@ describe('createEditorSlice markdown frontmatter visibility (#4468)', () => {
       worktreeId: 'wt-1',
       language: 'markdown'
     })
-    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', false)
 
     store.getState().closeFile('/repo/notes.md')
 
-    expect(store.getState().markdownFrontmatterVisible).toEqual({ '/repo/notes.md': true })
+    expect(store.getState().markdownFrontmatterVisible).toEqual({ '/repo/notes.md': false })
 
     store.getState().closeFile('markdown-preview::/repo/notes.md')
 
@@ -1653,7 +1722,7 @@ describe('createEditorSlice markdown frontmatter visibility (#4468)', () => {
       },
       { sourceFileId: '/repo/notes.md' }
     )
-    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', false)
 
     store.getState().openFile(
       {
@@ -1666,7 +1735,7 @@ describe('createEditorSlice markdown frontmatter visibility (#4468)', () => {
       { preview: true }
     )
 
-    expect(store.getState().markdownFrontmatterVisible).toEqual({ '/repo/notes.md': true })
+    expect(store.getState().markdownFrontmatterVisible).toEqual({ '/repo/notes.md': false })
   })
 
   it('drops the visibility flag when all files are closed', () => {
@@ -1678,7 +1747,7 @@ describe('createEditorSlice markdown frontmatter visibility (#4468)', () => {
       language: 'markdown',
       mode: 'edit'
     })
-    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', false)
 
     store.getState().closeAllFiles()
 
@@ -3498,6 +3567,20 @@ describe('createEditorSlice remote branch actions', () => {
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
+  it('maps pre-push hook failures to hook-specific guidance instead of remote access', async () => {
+    const store = createEditorStore()
+    const pushError = new Error(
+      "git push failed: Command failed: git push origin main\nerror: failed to push some refs to 'origin'\nhusky - pre-push hook exited with code 1\neslint found 2 errors"
+    )
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toThrow(
+      pushError.message
+    )
+
+    expect(toastErrorMock).toHaveBeenCalledWith('Push blocked — lint failed during push.')
+  })
+
   it('uses a fallback message for generic push errors', async () => {
     const store = createEditorStore()
     const pushError = new Error('network timeout')
@@ -3772,6 +3855,52 @@ describe('createEditorSlice remote branch actions', () => {
     )
   })
 
+  it('marks syncBranch inner push hook failures as sync push-stage failures', async () => {
+    const store = createEditorStore()
+    const pushError = new Error(
+      "git push failed: Command failed: git push origin feature\nerror: failed to push some refs to 'origin'\nhusky - pre-push hook exited with code 1"
+    )
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    let thrown: unknown
+    try {
+      await store.getState().syncBranch('wt-1', '/repo')
+    } catch (error) {
+      thrown = error
+    }
+
+    expect(thrown).toBe(pushError)
+    expect(isSyncPushStageError(thrown)).toBe(true)
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastErrorMock).toHaveBeenCalledWith('Sync blocked — pre-push hook failed.')
+  })
+
+  it('does not classify syncBranch fetch-stage hook-looking failures as push blocked', async () => {
+    const store = createEditorStore()
+    gitFetchMock.mockRejectedValueOnce(
+      new Error('fetch failed before push\npre-push hook docs mention eslint')
+    )
+
+    await expect(store.getState().syncBranch('wt-1', '/repo')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastErrorMock).toHaveBeenCalledWith('Sync failed. Check your connection and try again.')
+    expect(gitPushMock).not.toHaveBeenCalled()
+  })
+
+  it('does not classify syncBranch upstream-status hook-looking failures as push blocked', async () => {
+    const store = createEditorStore()
+    gitUpstreamStatusMock.mockRejectedValueOnce(
+      new Error('upstream status failed before push\npre-push hook docs mention eslint')
+    )
+
+    await expect(store.getState().syncBranch('wt-1', '/repo')).rejects.toThrow()
+
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+    expect(toastErrorMock).toHaveBeenCalledWith('Sync failed. Check your connection and try again.')
+    expect(gitPushMock).not.toHaveBeenCalled()
+  })
+
   it('surfaces the pull-blocked toast when syncBranch pull stage fails', async () => {
     // Why: failures in sync's fetch/pull/status stages flow through the
     // outer catch's generic path; push-specific framing only applies to
@@ -3940,6 +4069,47 @@ describe('createEditorSlice activateMarkdownLink', () => {
         isPreview: true
       })
     ])
+  })
+
+  it('rejects ambiguous same-path owner fallback and honors an explicit source owner', async () => {
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/docs/note.md',
+      relativePath: 'docs/note.md',
+      worktreeId: 'wt-1',
+      runtimeEnvironmentId: 'env-source',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().openFile(
+      {
+        filePath: '/repo/docs/note.md',
+        relativePath: 'docs/note.md',
+        worktreeId: 'wt-1',
+        runtimeEnvironmentId: null,
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { suppressActiveRuntimeFallback: true }
+    )
+
+    await store.getState().activateMarkdownLink('https://example.com', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo'
+    })
+    expect(openHttpLinkMock).not.toHaveBeenCalled()
+
+    await store.getState().activateMarkdownLink('https://example.com', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo',
+      sourceOwner: { kind: 'local' }
+    })
+    expect(openHttpLinkMock).toHaveBeenCalledWith('https://example.com/', {
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'local' }
+    })
   })
 
   it('stats SSH markdown links through the source worktree connection before opening', async () => {
@@ -4207,9 +4377,36 @@ describe('createEditorSlice activateMarkdownLink', () => {
       worktreeId: 'wt-1',
       worktreeRoot: '/repo'
     })
-    expect(openHttpLinkMock).toHaveBeenCalledWith('https://example.com/', { worktreeId: 'wt-1' })
+    expect(openHttpLinkMock).toHaveBeenCalledWith('https://example.com/', {
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'local' }
+    })
     expect(openUrlMock).not.toHaveBeenCalled()
     expect(store.getState().openFiles).toEqual([])
+  })
+
+  it('does not rescan legacy owner state when the source owner is explicit', async () => {
+    const store = createEditorStore()
+    for (const key of ['openFiles', 'repos', 'worktreesByRepo', 'folderWorkspaces'] as const) {
+      Object.defineProperty(store.getState(), key, {
+        configurable: true,
+        get: () => {
+          throw new Error(`explicit owner must not read ${key}`)
+        }
+      })
+    }
+
+    await store.getState().activateMarkdownLink('https://example.com', {
+      sourceFilePath: '/repo/docs/note.md',
+      worktreeId: 'wt-1',
+      worktreeRoot: '/repo',
+      sourceOwner: { kind: 'local' }
+    })
+
+    expect(openHttpLinkMock).toHaveBeenCalledWith('https://example.com/', {
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'local' }
+    })
   })
 
   it('opens in-worktree file links in Orca', async () => {
@@ -4485,5 +4682,128 @@ describe('closeFile host mirroring', () => {
       '/other/b.ts'
     )
     expect(store.getState().openFiles).toHaveLength(0)
+  })
+})
+
+describe('read-only editor tabs (AI Vault View Log)', () => {
+  const LOG_PATH = '/home/user/.claude/sessions/log.jsonl'
+
+  const openReadOnlyLog = (store: StoreApi<AppState>): void =>
+    store.getState().openFile(
+      {
+        filePath: LOG_PATH,
+        relativePath: LOG_PATH,
+        worktreeId: 'wt-1',
+        language: 'jsonl',
+        mode: 'edit',
+        readOnly: true,
+        liveTail: true,
+        runtimeEnvironmentId: null
+      },
+      { preview: false, forceContentReload: true, suppressActiveRuntimeFallback: true }
+    )
+
+  it('creates a permanent read-only edit tab', () => {
+    const store = createEditorStore()
+    openReadOnlyLog(store)
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({
+        filePath: LOG_PATH,
+        mode: 'edit',
+        readOnly: true,
+        liveTail: true,
+        isPreview: undefined,
+        runtimeEnvironmentId: null
+      })
+    )
+  })
+
+  it('bumps the reload nonce on repeated View Log of a clean read-only tab', () => {
+    const store = createEditorStore()
+    openReadOnlyLog(store)
+    expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBeUndefined()
+
+    openReadOnlyLog(store)
+    expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBe(1)
+  })
+
+  it('keeps read-only sticky when the same path is opened writable (no silent upgrade)', () => {
+    const store = createEditorStore()
+    openReadOnlyLog(store)
+
+    store.getState().openFile({
+      filePath: LOG_PATH,
+      relativePath: LOG_PATH,
+      worktreeId: 'wt-1',
+      language: 'jsonl',
+      mode: 'edit',
+      runtimeEnvironmentId: null
+    })
+
+    expect(store.getState().openFiles).toHaveLength(1)
+    expect(store.getState().openFiles[0]?.readOnly).toBe(true)
+  })
+
+  it('never flips an existing writable tab to read-only on View Log', () => {
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: LOG_PATH,
+      relativePath: LOG_PATH,
+      worktreeId: 'wt-1',
+      language: 'jsonl',
+      mode: 'edit',
+      runtimeEnvironmentId: null
+    })
+
+    openReadOnlyLog(store)
+
+    expect(store.getState().openFiles).toHaveLength(1)
+    expect(store.getState().openFiles[0]?.readOnly).toBeUndefined()
+  })
+
+  it('markFileDirty and setEditorDraft hard no-op for read-only tabs', () => {
+    const store = createEditorStore()
+    openReadOnlyLog(store)
+
+    store.getState().markFileDirty(LOG_PATH, true)
+    store.getState().setEditorDraft(LOG_PATH, 'stray edit')
+
+    expect(store.getState().openFiles[0]?.isDirty).toBe(false)
+    expect(store.getState().editorDrafts[LOG_PATH]).toBeUndefined()
+  })
+
+  it('hydrates a persisted read-only tab clean and ignores any persisted dirty draft', () => {
+    const store = createEditorStore()
+    store.setState({
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1' }] },
+      folderWorkspaces: []
+    } as never)
+
+    store.getState().hydrateEditorSession({
+      openFilesByWorktree: {
+        'wt-1': [
+          {
+            filePath: LOG_PATH,
+            relativePath: LOG_PATH,
+            worktreeId: 'wt-1',
+            language: 'jsonl',
+            readOnly: true,
+            liveTail: true,
+            // Why: a corrupt/legacy session could carry a draft; hydrate must
+            // hard-strip it so the restored log can never come back writable.
+            dirtyDraftContent: 'should be ignored',
+            lastKnownDiskSignature: 'sig'
+          }
+        ]
+      }
+    } as never)
+
+    const restored = store.getState().openFiles.find((f) => f.filePath === LOG_PATH)
+    expect(restored).toEqual(
+      expect.objectContaining({ readOnly: true, liveTail: true, isDirty: false, mode: 'edit' })
+    )
+    expect(restored?.pendingDiskBaselineVerification).toBeUndefined()
+    expect(store.getState().editorDrafts[LOG_PATH]).toBeUndefined()
   })
 })

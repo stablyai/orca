@@ -305,6 +305,100 @@ describe('SshChannelMultiplexer', () => {
       expect(() => vi.advanceTimersByTime(5_000)).not.toThrow()
       expect(mux.isDisposed()).toBe(true)
     })
+
+    it('drives keepalive sends AND dead-link detection from a single interval', () => {
+      // The keepalive send and the liveness/timeout check were merged from two
+      // 5s intervals into one; there must be exactly one recurring timer.
+      expect(vi.getTimerCount()).toBe(1)
+
+      // Send half: a keepalive is written on the tick.
+      const before = transport.written.length
+      vi.advanceTimersByTime(5_000)
+      expect(transport.written.length).toBeGreaterThan(before)
+      expect(transport.written.at(-1)![0]).toBe(MessageType.KeepAlive)
+      expect(vi.getTimerCount()).toBe(1)
+
+      // Check half: with no inbound frames or acks, the same interval declares
+      // the link dead (no-data + oldest-unacked both exceed the 20s window).
+      expect(mux.isDisposed()).toBe(false)
+      vi.advanceTimersByTime(25_000)
+      expect(mux.isDisposed()).toBe(true)
+    })
+  })
+
+  describe('wake guard (timer pause across system sleep, #7773)', () => {
+    it('does not kill a healthy link on the first tick after a long timer pause', () => {
+      // Reach steady state with pending unacked keepalives (<5s old at pause).
+      vi.advanceTimersByTime(5_000)
+      expect(mux.isDisposed()).toBe(false)
+
+      // Simulate sleep/App Nap: wall clock jumps far ahead with no ticks.
+      // Without the guard, the first post-wake tick sees lastReceivedAt and
+      // the pre-pause keepalive both >20s stale and disposes the mux.
+      vi.setSystemTime(Date.now() + 60 * 60 * 1000)
+      const writesBefore = transport.written.length
+      vi.advanceTimersByTime(5_000)
+
+      expect(mux.isDisposed()).toBe(false)
+      // The guard probes immediately with a fresh keepalive.
+      expect(transport.written.length).toBeGreaterThan(writesBefore)
+      expect(transport.written.at(-1)![0]).toBe(MessageType.KeepAlive)
+    })
+
+    it('keeps the link alive after wake when frames resume', () => {
+      vi.advanceTimersByTime(5_000)
+      vi.setSystemTime(Date.now() + 60 * 60 * 1000)
+      vi.advanceTimersByTime(5_000) // guard tick
+
+      // The relay answers the post-wake probe; the link must stay up.
+      let seq = 1
+      for (let i = 0; i < 8; i++) {
+        vi.advanceTimersByTime(5_000)
+        transport.dataCallbacks[0](encodeKeepAliveFrame(seq++, 0))
+      }
+      expect(mux.isDisposed()).toBe(false)
+    })
+
+    it('still detects a genuinely dead link within the next window after wake', () => {
+      vi.advanceTimersByTime(5_000)
+      vi.setSystemTime(Date.now() + 60 * 60 * 1000)
+      vi.advanceTimersByTime(5_000) // guard tick: reset + probe, no kill
+
+      expect(mux.isDisposed()).toBe(false)
+      // No frames arrive after the guard reset; the honest window expires.
+      vi.advanceTimersByTime(25_000)
+      expect(mux.isDisposed()).toBe(true)
+    })
+  })
+
+  describe('probeLiveness', () => {
+    it('sends a keepalive and resolves true when any frame arrives', async () => {
+      const writesBefore = transport.written.length
+      const probe = mux.probeLiveness(5_000)
+
+      expect(transport.written.length).toBe(writesBefore + 1)
+      expect(transport.written.at(-1)![0]).toBe(MessageType.KeepAlive)
+
+      transport.dataCallbacks[0](encodeKeepAliveFrame(1, 0))
+      await expect(probe).resolves.toBe(true)
+    })
+
+    it('resolves false when no frame arrives before the timeout', async () => {
+      const probe = mux.probeLiveness(5_000)
+      vi.advanceTimersByTime(5_000)
+      await expect(probe).resolves.toBe(false)
+    })
+
+    it('resolves false when the mux is disposed while probing', async () => {
+      const probe = mux.probeLiveness(5_000)
+      mux.dispose()
+      await expect(probe).resolves.toBe(false)
+    })
+
+    it('resolves false immediately on a disposed mux', async () => {
+      mux.dispose()
+      await expect(mux.probeLiveness(5_000)).resolves.toBe(false)
+    })
   })
 
   describe('dispose', () => {

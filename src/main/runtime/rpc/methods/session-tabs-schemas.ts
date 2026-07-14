@@ -130,6 +130,7 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
       message: 'Unknown launch agent'
     })
     .optional(),
+  viewMode: z.enum(['terminal', 'chat']).optional(),
   activate: z.boolean().optional(),
   // Why: idempotency key so a retried create (double-tap, reconnect replay)
   // returns the in-flight operation instead of spawning a duplicate terminal.

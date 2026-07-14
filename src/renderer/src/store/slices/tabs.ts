@@ -108,7 +108,7 @@ export type TabsSlice = {
   activateTab: (tabId: string, opts?: { preservePreview?: boolean }) => void
   closeUnifiedTab: (
     tabId: string,
-    opts?: { recordInteraction?: boolean }
+    opts?: { recordInteraction?: boolean; terminalRetirementHandled?: boolean }
   ) => { closedTabId: string; wasLastTab: boolean; worktreeId: string } | null
   reorderUnifiedTabs: (
     groupId: string,
@@ -897,6 +897,15 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     const group = findGroupForTab(state.groupsByWorktree, worktreeId, tab.groupId)
     if (!group) {
       return null
+    }
+
+    if (tab.contentType === 'terminal' && !opts?.terminalRetirementHandled) {
+      const dedupedGroupOrder = dedupeTabOrder(group.tabOrder)
+      const wasLastTab = dedupeTabOrder(dedupedGroupOrder.filter((id) => id !== tabId)).length === 0
+      // Why: unified-only hydrated tabs still own provider sessions even when
+      // their legacy terminal row is missing, so every terminal close retires by entity id.
+      get().closeTab(tab.entityId, { recordInteraction: opts?.recordInteraction })
+      return { closedTabId: tabId, wasLastTab, worktreeId }
     }
 
     const dedupedGroupOrder = dedupeTabOrder(group.tabOrder)

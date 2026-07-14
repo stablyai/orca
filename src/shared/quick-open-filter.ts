@@ -104,8 +104,8 @@ function pathFlavor(rootPath: string): typeof posix | typeof win32 {
   if (/^[a-zA-Z]:[\\/]/.test(rootPath)) {
     return win32
   }
-  // UNC \\server\share
-  if (rootPath.startsWith('\\\\')) {
+  // UNC \\server\share or //server/share
+  if (rootPath.startsWith('\\\\') || rootPath.startsWith('//')) {
     return win32
   }
   return posix
@@ -376,16 +376,28 @@ export function buildGitLsFilesArgsForQuickOpen(
     excludeSpecs.push(`:(exclude,glob)${escapeGlobPath(prefix)}/**`)
   }
   const trailingPathspecs = excludeSpecs.length > 0 ? ['--', '.', ...excludeSpecs] : []
+  // Why: collapse untracked trees before Git traverses them; callers expand
+  // only allowed directory placeholders with the shared bounded walker.
+  const directoryCollapseArgs = ['--directory', '--no-empty-directory']
 
   // Why: NUL preserves real Git paths; stage mode identifies gitlinks without
   // lstat probes for ordinary tracked files.
-  const primary = ['-z', '-s', '--cached', '--others', '--exclude-standard', ...trailingPathspecs]
+  const primary = [
+    '-z',
+    '-s',
+    '--cached',
+    '--others',
+    '--exclude-standard',
+    ...directoryCollapseArgs,
+    ...trailingPathspecs
+  ]
   const ignoredPass = [
     '-z',
     '-s',
     '--others',
     '--ignored',
     '--exclude-standard',
+    ...directoryCollapseArgs,
     ...trailingPathspecs
   ]
   return { primary, ignoredPass }

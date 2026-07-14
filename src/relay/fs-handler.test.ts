@@ -7,6 +7,7 @@ import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
+import { subscribeWithInProcessWatcher } from '../main/ipc/parcel-watcher-in-process-fallback'
 
 const { mockSubscribe } = vi.hoisted(() => ({
   mockSubscribe: vi.fn()
@@ -121,7 +122,11 @@ describe('FsHandler', () => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-fs-'))
     dispatcher = createMockDispatcher()
     const ctx = new RelayContext()
-    handler = new FsHandler(dispatcher as unknown as RelayDispatcher, ctx)
+    handler = new FsHandler(dispatcher as unknown as RelayDispatcher, ctx, {
+      dispose: vi.fn(),
+      forgetRoot: vi.fn(),
+      subscribe: subscribeWithInProcessWatcher
+    })
   })
 
   afterEach(async () => {

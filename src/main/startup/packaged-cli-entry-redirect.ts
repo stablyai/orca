@@ -27,7 +27,7 @@ type RedirectOptions = {
 const REDIRECT_ATTEMPT_ENV = 'ORCA_PACKAGED_CLI_ENTRY_REDIRECTED'
 
 /**
- * Why: on Windows the bundled `orca.cmd` runs `Orca.exe <unpacked CLI entry>`
+ * Why: on Windows the bundled native launcher runs `Orca.exe <unpacked CLI entry>`
  * with ELECTRON_RUN_AS_NODE=1. When that env var is dropped (e.g. a wrapper or
  * shell that resets it), Orca boots as a GUI, loses the single-instance lock to
  * an already-running window, and exits silently with no stdout. This detects the

@@ -173,20 +173,11 @@ export default function AiVaultSessionDropLayer({
       const state = useAppStore.getState()
       const targetStatus = getAiVaultResumeWorkspaceTargetStatus(state, worktreeId)
       const targetExecutionHostId = getAiVaultResumeWorkspaceExecutionHostId(state, worktreeId)
-      if (targetStatus === 'runtime') {
-        toast.error(
-          translate(
-            'auto.components.tab.group.AiVaultSessionDropLayer.runtimeWorkspacesUnsupported',
-            'Resume from history is not available in runtime-hosted workspaces.'
-          )
-        )
-        return true
-      }
       if (targetStatus === 'unknown') {
         toast.error(
           translate(
             'auto.components.tab.group.AiVaultSessionDropLayer.openSupportedWorkspace',
-            'Open a local or SSH workspace before resuming a session.'
+            'Open a workspace before resuming a session.'
           )
         )
         return true
@@ -208,7 +199,7 @@ export default function AiVaultSessionDropLayer({
         return true
       }
 
-      launchAiVaultSessionInNewTab({
+      const launchResult = launchAiVaultSessionInNewTab({
         agent: payload.agent,
         worktreeId,
         command: payload.command,
@@ -217,12 +208,31 @@ export default function AiVaultSessionDropLayer({
         targetGroupId: dropTarget.groupId,
         splitDirection: dropTarget.zone === 'center' ? undefined : dropTarget.zone
       })
-      toast.success(
-        translate(
-          'auto.components.tab.group.AiVaultSessionDropLayer.sessionQueued',
-          'Session queued'
+      const showQueuedToast = (): void => {
+        toast.success(
+          translate(
+            'auto.components.tab.group.AiVaultSessionDropLayer.sessionQueued',
+            'Session queued'
+          )
         )
-      )
+      }
+      if (launchResult.tabId === null) {
+        void launchResult.runtimeLaunch.then((created) => {
+          if (!created) {
+            toast.error(
+              translate(
+                'auto.lib.launch.agent.in.new.tab.11cce5cc77',
+                'Could not launch {{value0}} in a new terminal.',
+                { value0: payload.agent }
+              )
+            )
+            return
+          }
+          showQueuedToast()
+        })
+        return true
+      }
+      showQueuedToast()
       return true
     },
     [clearDragState, target, updateTarget, worktreeId]

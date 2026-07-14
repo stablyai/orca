@@ -1,12 +1,12 @@
 import type { WebContents } from 'electron'
 import type { Store } from '../persistence'
-import type {
-  Automation,
-  AutomationDispatchRequest,
-  AutomationDispatchResult,
-  AutomationPrecheckResult,
-  AutomationRun,
-  AutomationRunStatus
+import {
+  isFinalAutomationRunStatus,
+  type Automation,
+  type AutomationDispatchRequest,
+  type AutomationDispatchResult,
+  type AutomationPrecheckResult,
+  type AutomationRun
 } from '../../shared/automations-types'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
@@ -135,7 +135,7 @@ export class AutomationService {
   async markDispatchResult(result: AutomationDispatchResult): Promise<AutomationRun> {
     const run = this.store.updateAutomationRun(result)
     clearAutomationDispatchTokens(run.automationId, run.id)
-    if (!isFinalRunStatus(run.status)) {
+    if (!isFinalAutomationRunStatus(run.status)) {
       return run
     }
     // Why: the renderer's mark-completed effect can re-fire for the same run
@@ -151,6 +151,11 @@ export class AutomationService {
       claudeUsage: this.claudeUsage,
       codexUsage: this.codexUsage
     })
+    // Why: the run is final during the await above, so a concurrent create-time
+    // retention prune may have evicted it — the usage write must not throw then.
+    if (!this.store.listAutomationRuns(run.automationId).some((entry) => entry.id === run.id)) {
+      return run
+    }
     return this.store.updateAutomationRun({
       runId: run.id,
       status: run.status,
@@ -308,15 +313,4 @@ export class AutomationService {
       })
     }
   }
-}
-
-function isFinalRunStatus(status: AutomationRunStatus): boolean {
-  return (
-    status === 'completed' ||
-    status === 'dispatch_failed' ||
-    status === 'skipped_precheck' ||
-    status === 'skipped_missed' ||
-    status === 'skipped_unavailable' ||
-    status === 'skipped_needs_interactive_auth'
-  )
 }

@@ -35,6 +35,7 @@ import type {
   WorkspaceSpaceWorktree
 } from '../../../../shared/workspace-space-types'
 import { cn } from '@/lib/utils'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { toast } from 'sonner'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '../../store'
@@ -83,6 +84,7 @@ import {
   type WorkspaceSpaceSortKey
 } from './workspace-space-presentation'
 import { translate } from '@/i18n/i18n'
+import type { WorktreeForceDeleteReason } from '../../../../shared/worktree-removal'
 
 const TREEMAP_FILLS = [
   'color-mix(in srgb, var(--chart-2) 34%, var(--card))',
@@ -97,6 +99,7 @@ type WorkspaceSpaceDeleteState = {
   isDeleting: boolean
   error: string | null
   canForceDelete: boolean
+  forceDeleteReason: WorktreeForceDeleteReason | null
 }
 
 type WorkspaceGitRefreshState = {
@@ -319,9 +322,11 @@ function UpdatedMetric({
     if (scannedAt === null) {
       return
     }
+    // Refresh once immediately (unconditional, as before) so a rescan that lands
+    // while hidden isn't shown stale, then pause the ongoing 60s tick while the
+    // window is hidden — same visibility-gated pattern as useNow.
     setNow(Date.now())
-    const timer = window.setInterval(() => setNow(Date.now()), 60_000)
-    return () => window.clearInterval(timer)
+    return installWindowVisibilityInterval({ run: () => setNow(Date.now()), intervalMs: 60_000 })
   }, [scannedAt])
 
   return (

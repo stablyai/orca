@@ -9,6 +9,8 @@ const {
   menuPopupMock,
   notificationMock,
   notificationShowMock,
+  powerMonitorOnMock,
+  powerMonitorRemoveListenerMock,
   isMock
 } = vi.hoisted(() => {
   const menuPopupMock = vi.fn()
@@ -23,6 +25,8 @@ const {
       return { show: notificationShowMock }
     }),
     notificationShowMock,
+    powerMonitorOnMock: vi.fn(),
+    powerMonitorRemoveListenerMock: vi.fn(),
     isMock: { dev: false }
   }
 })
@@ -34,6 +38,7 @@ vi.mock('electron', () => ({
   Menu: { buildFromTemplate: buildFromTemplateMock },
   Notification: notificationMock,
   nativeTheme: { shouldUseDarkColors: false },
+  powerMonitor: { on: powerMonitorOnMock, removeListener: powerMonitorRemoveListenerMock },
   screen: {
     getPrimaryDisplay: () => ({ workAreaSize: { width: 1440, height: 900 } })
   },
@@ -57,6 +62,7 @@ vi.mock('../browser/browser-manager', () => ({
 
 import { createMainWindow, loadMainWindow } from './createMainWindow'
 import { ipcMain } from 'electron'
+import { shouldRecoverRendererAfterProcessGone } from '../crash-reporting/process-gone-classification'
 
 function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   const original = process.platform
@@ -77,6 +83,8 @@ describe('createMainWindow', () => {
     menuPopupMock.mockClear()
     notificationMock.mockClear()
     notificationShowMock.mockClear()
+    powerMonitorOnMock.mockReset()
+    powerMonitorRemoveListenerMock.mockReset()
     isMock.dev = false
     vi.mocked(ipcMain.on).mockReset()
     vi.mocked(ipcMain.removeListener).mockReset()
@@ -2382,7 +2390,7 @@ describe('createMainWindow', () => {
     expect(onRendererProcessGone).toHaveBeenCalledWith(details, 142)
   })
 
-  it('passes the renderer webContents id through crash classification callbacks', () => {
+  it('passes the renderer webContents id through crash recording and recovery callbacks', () => {
     vi.useFakeTimers()
 
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
@@ -2415,13 +2423,11 @@ describe('createMainWindow', () => {
       return browserWindowInstance
     })
     const onRendererProcessGone = vi.fn()
-    const shouldRecordRendererCrash = vi.fn(() => true)
     const shouldRecoverRenderer = vi.fn(() => true)
 
     try {
       createMainWindow(null, {
         onRendererProcessGone,
-        shouldRecordRendererCrash,
         shouldRecoverRenderer
       })
 
@@ -2429,7 +2435,6 @@ describe('createMainWindow', () => {
       windowHandlers['render-process-gone']?.({} as never, details)
       vi.advanceTimersByTime(250)
 
-      expect(shouldRecordRendererCrash).toHaveBeenCalledWith(details, 424)
       expect(onRendererProcessGone).toHaveBeenCalledWith(details, 424)
       expect(shouldRecoverRenderer).toHaveBeenCalledWith(details, 424)
     } finally {
@@ -2437,9 +2442,10 @@ describe('createMainWindow', () => {
     }
   })
 
-  it('does not notify the crash recorder for an expected renderer teardown', () => {
+  it('forwards expected renderer teardowns so the recorder can diagnose suppression', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
+      id: 142,
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
       }),
@@ -2468,10 +2474,7 @@ describe('createMainWindow', () => {
     })
     const onRendererProcessGone = vi.fn()
 
-    createMainWindow(null, {
-      onRendererProcessGone,
-      shouldRecordRendererCrash: () => false
-    })
+    createMainWindow(null, { onRendererProcessGone })
 
     windowHandlers['render-process-gone']?.(
       {} as never,
@@ -2481,7 +2484,10 @@ describe('createMainWindow', () => {
       } as Electron.RenderProcessGoneDetails
     )
 
-    expect(onRendererProcessGone).not.toHaveBeenCalled()
+    expect(onRendererProcessGone).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'killed', exitCode: 15 }),
+      expect.any(Number)
+    )
 
     consoleError.mockRestore()
   })
@@ -2696,6 +2702,48 @@ describe('createMainWindow', () => {
     consoleError.mockRestore()
   })
 
+  it('bounds renderer launch-failed recovery with the crash-loop breaker', () => {
+    vi.useFakeTimers()
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const onRendererRecoveryExhausted = vi.fn()
+    const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
+
+    try {
+      createMainWindow(null, {
+        onRendererRecoveryExhausted,
+        shouldRecoverRenderer: (details) =>
+          shouldRecoverRendererAfterProcessGone({
+            reason: details.reason,
+            expectedTeardown: 'none'
+          })
+      })
+
+      const details = {
+        reason: 'launch-failed',
+        exitCode: 18
+      } as Electron.RenderProcessGoneDetails
+      const driveLaunchFailure = (): void => {
+        windowHandlers['render-process-gone']?.({} as never, details)
+        vi.advanceTimersByTime(250)
+      }
+
+      driveLaunchFailure()
+      driveLaunchFailure()
+      driveLaunchFailure()
+      expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
+
+      driveLaunchFailure()
+      expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(4)
+      expect(onRendererRecoveryExhausted).toHaveBeenCalledOnce()
+      expect(onRendererRecoveryExhausted).toHaveBeenCalledWith(
+        expect.objectContaining({ details, recentRecoveryCount: 3 })
+      )
+    } finally {
+      consoleError.mockRestore()
+    }
+  })
+
   function createStartupRevealWindowFixture() {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
@@ -2789,11 +2837,39 @@ describe('createMainWindow', () => {
     })
   })
 
-  it('does not install the startup reveal fallback off Windows', () => {
+  it('reveals the startup window on Linux when ready-to-show never fires', () => {
     vi.useFakeTimers()
     const { browserWindowInstance } = createStartupRevealWindowFixture()
 
     withPlatform('linux', () => {
+      createMainWindow(null)
+      vi.advanceTimersByTime(9_999)
+      expect(browserWindowInstance.show).not.toHaveBeenCalled()
+
+      vi.advanceTimersByTime(1)
+
+      expect(browserWindowInstance.show).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('cancels the Linux startup reveal fallback after ready-to-show', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+
+    withPlatform('linux', () => {
+      createMainWindow(null)
+      windowHandlers['ready-to-show']()
+      vi.advanceTimersByTime(10_000)
+
+      expect(browserWindowInstance.show).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('does not install the startup reveal fallback on macOS', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance } = createStartupRevealWindowFixture()
+
+    withPlatform('darwin', () => {
       createMainWindow(null)
       vi.advanceTimersByTime(10_000)
 
@@ -2850,6 +2926,154 @@ describe('createMainWindow', () => {
 
       expect(browserWindowInstance.show).not.toHaveBeenCalled()
       expect(browserWindowInstance.maximize).not.toHaveBeenCalled()
+    })
+  })
+
+  it('keeps the headless E2E window hidden when the Linux fallback fires', () => {
+    vi.useFakeTimers()
+    const previousHeadless = process.env.ORCA_E2E_HEADLESS
+    process.env.ORCA_E2E_HEADLESS = '1'
+    const { browserWindowInstance } = createStartupRevealWindowFixture()
+
+    try {
+      withPlatform('linux', () => {
+        createMainWindow(createStartupRevealStore(true) as never)
+        vi.advanceTimersByTime(10_000)
+
+        expect(browserWindowInstance.show).not.toHaveBeenCalled()
+        expect(browserWindowInstance.maximize).not.toHaveBeenCalled()
+      })
+    } finally {
+      if (previousHeadless === undefined) {
+        delete process.env.ORCA_E2E_HEADLESS
+      } else {
+        process.env.ORCA_E2E_HEADLESS = previousHeadless
+      }
+    }
+  })
+
+  it('clears the Linux startup reveal fallback when the window is closed', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+
+    withPlatform('linux', () => {
+      createMainWindow(createStartupRevealStore(true) as never)
+      windowHandlers.closed()
+      vi.advanceTimersByTime(10_000)
+
+      expect(browserWindowInstance.show).not.toHaveBeenCalled()
+      expect(browserWindowInstance.maximize).not.toHaveBeenCalled()
+    })
+  })
+
+  it('does not show or maximize a destroyed window when the Linux fallback fires', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance } = createStartupRevealWindowFixture()
+
+    withPlatform('linux', () => {
+      createMainWindow(createStartupRevealStore(true) as never)
+      browserWindowInstance.isDestroyed.mockReturnValue(true)
+      vi.advanceTimersByTime(10_000)
+
+      expect(browserWindowInstance.show).not.toHaveBeenCalled()
+      expect(browserWindowInstance.maximize).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('system resume relay', () => {
+    function setupResumeWindow() {
+      const windowHandlers: Record<string, (...args: any[]) => void> = {}
+      const webContents = {
+        on: vi.fn(),
+        setZoomLevel: vi.fn(),
+        setBackgroundThrottling: vi.fn(),
+        invalidate: vi.fn(),
+        setWindowOpenHandler: vi.fn(),
+        send: vi.fn(),
+        isDestroyed: vi.fn(() => false),
+        id: 1
+      }
+      const instance = {
+        webContents,
+        on: vi.fn((event: string, handler: (...args: any[]) => void) => {
+          windowHandlers[event] = handler
+        }),
+        isDestroyed: vi.fn(() => false),
+        // Why: maximized keeps forceRepaint from scheduling its size-nudge timer.
+        isMaximized: vi.fn(() => true),
+        isFullScreen: vi.fn(() => false),
+        getSize: vi.fn(() => [1200, 800]),
+        setSize: vi.fn(),
+        maximize: vi.fn(),
+        show: vi.fn(),
+        loadFile: vi.fn(),
+        loadURL: vi.fn()
+      }
+      browserWindowMock.mockImplementation(function () {
+        return instance
+      })
+      return { windowHandlers, webContents, instance }
+    }
+
+    function getPowerResumeListener(): () => void {
+      const resumeCall = powerMonitorOnMock.mock.calls.find(
+        (call: unknown[]) => call[0] === 'resume'
+      )
+      if (!resumeCall) {
+        throw new Error('missing powerMonitor resume listener')
+      }
+      return resumeCall[1] as () => void
+    }
+
+    it('relays powerMonitor resume to the live window and forces a repaint', () => {
+      const { webContents } = setupResumeWindow()
+      createMainWindow(null)
+      const onResume = getPowerResumeListener()
+      webContents.send.mockClear()
+      webContents.invalidate.mockClear()
+
+      onResume()
+
+      expect(webContents.send).toHaveBeenCalledWith('system:resumed')
+      expect(webContents.invalidate).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not send the resume event once the window is destroyed', () => {
+      const { webContents, instance } = setupResumeWindow()
+      createMainWindow(null)
+      const onResume = getPowerResumeListener()
+      instance.isDestroyed.mockReturnValue(true)
+      webContents.send.mockClear()
+      webContents.invalidate.mockClear()
+
+      onResume()
+
+      expect(webContents.send).not.toHaveBeenCalled()
+      expect(webContents.invalidate).not.toHaveBeenCalled()
+    })
+
+    it('does not send the resume event once webContents is destroyed', () => {
+      const { webContents } = setupResumeWindow()
+      createMainWindow(null)
+      const onResume = getPowerResumeListener()
+      webContents.isDestroyed.mockReturnValue(true)
+      webContents.send.mockClear()
+      webContents.invalidate.mockClear()
+
+      onResume()
+
+      expect(webContents.send).not.toHaveBeenCalled()
+      expect(webContents.invalidate).not.toHaveBeenCalled()
+    })
+
+    it('removes the powerMonitor resume listener when the window closes', () => {
+      const { windowHandlers } = setupResumeWindow()
+      createMainWindow(null)
+      const onResume = getPowerResumeListener()
+
+      windowHandlers.closed()
+
+      expect(powerMonitorRemoveListenerMock).toHaveBeenCalledWith('resume', onResume)
     })
   })
 

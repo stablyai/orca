@@ -89,10 +89,12 @@ describe('CliSection project runtime defaults', () => {
         sourceKinds: ['global']
       })
     )
-    expect(capturedPanel.props?.command).toContain("wsl.exe -d 'Ubuntu' -- sh -c")
-    expect(capturedPanel.props?.command).toContain('npx skills add')
-    expect(capturedPanel.props?.installedCommand).toContain("wsl.exe -d 'Ubuntu' -- sh -c")
-    expect(capturedPanel.props?.installedCommand).toContain('npx skills update orca-cli --global')
+    expect(capturedPanel.props?.command).toMatch(
+      /^& \{ \$PSNativeCommandArgumentPassing = 'Legacy'; wsl\.exe -d 'Ubuntu' -- sh -c 'eval \\"`printf %s [A-Za-z0-9+/=]+ \| base64 -d`\\"'/
+    )
+    expect(capturedPanel.props?.installedCommand).toMatch(
+      /^& \{ \$PSNativeCommandArgumentPassing = 'Legacy'; wsl\.exe -d 'Ubuntu' -- sh -c 'eval \\"`printf %s [A-Za-z0-9+/=]+ \| base64 -d`\\"'/
+    )
     expect(getWslInstallStatus).toHaveBeenCalledWith({ distro: 'Ubuntu' })
     expect(getWslInstallStatus).toHaveBeenCalledTimes(2)
   })

@@ -18,6 +18,19 @@ vi.mock('./settings-search-keywords', () => ({
 import { getStatusBarToggles } from './appearance-status-bar-search'
 
 describe('getStatusBarToggles', () => {
+  it('includes Antigravity usage so Appearance can toggle the default-on status item', () => {
+    const antigravityToggle = getStatusBarToggles().find((entry) => entry.id === 'antigravity')
+
+    expect(antigravityToggle).toMatchObject({
+      title: 'Antigravity Usage',
+      description: 'Show Antigravity subscription usage in the status bar.',
+      toggleDescription: 'Show Antigravity subscription usage for the active workspace.'
+    })
+    expect(antigravityToggle?.keywords).toEqual(
+      expect.arrayContaining(['status bar', 'antigravity', 'usage', 'subscription', 'google'])
+    )
+  })
+
   it('includes MiniMax usage so Appearance can toggle the default-on status item', () => {
     const miniMaxToggle = getStatusBarToggles().find((entry) => entry.id === 'minimax')
 

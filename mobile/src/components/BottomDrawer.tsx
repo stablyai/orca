@@ -7,7 +7,8 @@ import {
   useWindowDimensions,
   ScrollView,
   Keyboard,
-  BackHandler
+  BackHandler,
+  Modal
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -23,6 +24,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import { colors, spacing } from '../theme/mobile-theme'
 import { resolveBottomDrawerMounted } from './bottom-drawer-mount-state'
+import { useInsideBottomDrawerModalHost } from './bottom-drawer-modal-host'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 
 const DISMISS_THRESHOLD = 80
@@ -106,6 +108,7 @@ function MountedBottomDrawer({
   // center it horizontally. Vertical bottom-anchoring (and all the drag/keyboard
   // transforms below) is unchanged, so phone behavior stays identical.
   const { isWideLayout, modalMaxWidth } = useResponsiveLayout()
+  const insideModalHost = useInsideBottomDrawerModalHost()
 
   useEffect(() => {
     if (visible) {
@@ -264,7 +267,13 @@ function MountedBottomDrawer({
     return { opacity: progress.value * dragFade }
   })
 
-  return (
+  // Why: the sheet renders through a full-screen native window (its own Modal
+  // below, or the shared BottomDrawerModalHost) so it always covers the viewport
+  // — even when mounted deep inside a ScrollView, where a plain absolute overlay
+  // anchors to the scrolled content and clips the sheet. Show/hide is driven by
+  // `progress` (animationType "none") so the reanimated exit animation runs before
+  // the parent unmounts us.
+  const overlay = (
     <Animated.View
       pointerEvents={visible ? 'auto' : 'none'}
       style={[styles.overlay, { zIndex, elevation: zIndex }]}
@@ -354,6 +363,19 @@ function MountedBottomDrawer({
         </View>
       </GestureHandlerRootView>
     </Animated.View>
+  )
+
+  // Why: inside a BottomDrawerModalHost the host owns the single native Modal;
+  // rendering our own would stack modals and reintroduce the iOS present/dismiss
+  // race the host exists to avoid. The host handles the Android back button.
+  if (insideModalHost) {
+    return overlay
+  }
+
+  return (
+    <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={dismiss}>
+      {overlay}
+    </Modal>
   )
 }
 

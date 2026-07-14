@@ -133,14 +133,16 @@ describe('useComposerState host-context boundaries', () => {
       'const handleRepoChange',
       'const handleFolderSourceRepoChange'
     )
-    expect(repoChangeSection).toContain('isRepoScopedLinkedWorkItem(linkedWorkItem)')
+    expect(repoChangeSection).toContain(
+      '!shouldPreserveWorkspaceSourceOnRepoChange(linkedWorkItem)'
+    )
 
     const folderSourceSection = sourceBetween(
       HOOK_SOURCE,
       'const handleFolderSourceRepoChange',
       'const handleProjectHostSetupChange'
     )
-    expect(folderSourceSection).toContain('isRepoScopedLinkedWorkItem(current)')
+    expect(folderSourceSection).toContain('!shouldPreserveWorkspaceSourceOnRepoChange(current)')
 
     // No path may special-case a single workspace-scoped provider again.
     expect(HOOK_SOURCE).not.toContain('isLinearLinkedWorkItem')
@@ -556,7 +558,7 @@ describe('useComposerState host-context boundaries', () => {
       'const handleProjectChange = useCallback',
       'const handleSmartGitHubItemSelect'
     )
-    expect(section).toContain('isRepoScopedLinkedWorkItem(linkedWorkItem)')
+    expect(section).toContain('!shouldPreserveWorkspaceSourceOnRepoChange(linkedWorkItem)')
   })
 
   it('resolves quick-create base refs through the worktree-create precedence helper', () => {

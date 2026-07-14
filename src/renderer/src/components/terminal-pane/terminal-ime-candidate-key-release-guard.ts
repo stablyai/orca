@@ -22,6 +22,7 @@ const TERMINAL_IME_CANDIDATE_SELECTION_KEYS = new Set([
   '8',
   '9'
 ])
+const TERMINAL_IME_CANDIDATE_DIGITS = new Set(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'])
 
 function isTerminalImeCandidateSelectionKey(key: string): boolean {
   return TERMINAL_IME_CANDIDATE_SELECTION_KEYS.has(key)
@@ -34,6 +35,13 @@ export function isTerminalImeCandidateSelectionKeyEvent(event: XtermBypassEvent)
     return false
   }
   return isTerminalImeCandidateSelectionKey(event.key)
+}
+
+/** Returns whether an event is an unmodified IME candidate digit selector. */
+export function isTerminalImeCandidateDigitKeyEvent(event: XtermBypassEvent): boolean {
+  return (
+    isTerminalImeCandidateSelectionKeyEvent(event) && TERMINAL_IME_CANDIDATE_DIGITS.has(event.key)
+  )
 }
 
 export function createTerminalImePendingCandidateKeyReleases(): TerminalImePendingCandidateKeyReleases {

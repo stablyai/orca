@@ -2,7 +2,7 @@
 the repo-path validation, preference-threading, and stats wiring patterns are
 reviewable as one surface. Splitting by feature area would risk drifting
 validation/gate conventions across handler files. */
-import { ipcMain, webContents } from 'electron'
+import { ipcMain } from 'electron'
 import { resolve } from 'node:path'
 import type {
   Repo,
@@ -108,15 +108,12 @@ import type {
 import { appStarSourceSchema } from '../../shared/gh-star-source'
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
+import { sendToTrustedUIRenderer } from './ui'
 
 const prRefreshVisibilityCleanupRegistered = new Set<number>()
 
-// Why: notify every renderer (each window has its own SWR cache instance)
-// that a work item was mutated locally so they can drop their cached entry
-// and refetch on the next open. Only emitted after a successful mutation.
-// We skip the originating webContents because that renderer already updated
-// its cache optimistically — re-broadcasting would race the optimistic write
-// and erase it.
+// Why: the app renderer owns the SWR cache; browser guests cannot consume this
+// event. Skip the origin because it already updated its cache optimistically.
 function broadcastWorkItemMutated(
   payload: {
     repoPath: string
@@ -126,15 +123,7 @@ function broadcastWorkItemMutated(
   },
   senderId?: number
 ): void {
-  for (const wc of webContents.getAllWebContents()) {
-    if (wc.isDestroyed()) {
-      continue
-    }
-    if (senderId !== undefined && wc.id === senderId) {
-      continue
-    }
-    wc.send('gh:workItemMutated', payload)
-  }
+  sendToTrustedUIRenderer('gh:workItemMutated', payload, senderId)
 }
 
 // Why: returns the full Repo object instead of just the path string so that

@@ -9,14 +9,17 @@ import { isLegacyPiCompatibleTitle } from './pi-compatible-synthetic-title'
 
 type TitleProfileMatch = {
   profile: SyntheticAgentTitleProfile
+  sourceTitle: string
 }
+
+type TitleLabelProfileMatch = Pick<TitleProfileMatch, 'profile'>
 
 const COMPATIBLE_IDLE_TITLE_RE = /(?<![\w./\\-])(?:ready|idle|done)(?![\w-])/i
 
 /**
  * Resolves the synthetic title profile matching a given agent label.
  */
-function getProfileForTitleLabel(label: string | null): TitleProfileMatch | null {
+function getProfileForTitleLabel(label: string | null): TitleLabelProfileMatch | null {
   if (!label) {
     return null
   }
@@ -33,14 +36,35 @@ function getProfileForTitleLabel(label: string | null): TitleProfileMatch | null
  * Resolves the synthetic title profile matching a given terminal title.
  */
 function getProfileForTitle(title: string): TitleProfileMatch | null {
-  const labelProfile = getProfileForTitleLabel(getAgentLabel(title))
-  if (labelProfile) {
-    return labelProfile
+  // Multiplexers/session wrappers prefix dynamic titles with ` | `, so inspect
+  // each suffix to preserve the inner compatible agent identity.
+  const candidates = [title]
+  let wrapperSeparatorIndex = title.indexOf(' | ')
+  while (wrapperSeparatorIndex >= 0) {
+    const wrappedPaneTitle = title.slice(wrapperSeparatorIndex + 3).trim()
+    if (wrappedPaneTitle && !candidates.includes(wrappedPaneTitle)) {
+      candidates.push(wrappedPaneTitle)
+    }
+    wrapperSeparatorIndex = title.indexOf(' | ', wrapperSeparatorIndex + 3)
   }
-  if (isLegacyPiCompatibleTitle(title)) {
-    return getProfileForTitleLabel('Pi')
+
+  let fallback: TitleProfileMatch | null = null
+  for (const candidate of candidates) {
+    const labelProfile = getProfileForTitleLabel(getAgentLabel(candidate))
+    const legacyProfile = isLegacyPiCompatibleTitle(candidate)
+      ? getProfileForTitleLabel('Pi')
+      : null
+    const candidateProfile = labelProfile ?? legacyProfile
+    if (!candidateProfile) {
+      continue
+    }
+    const match = { ...candidateProfile, sourceTitle: candidate }
+    if (candidateProfile.profile.titleIdentityGroup) {
+      return match
+    }
+    fallback ??= match
   }
-  return null
+  return fallback
 }
 
 /**
@@ -132,7 +156,7 @@ export function normalizeCompatibleAgentTitleForOwner(
   ) {
     return title
   }
-  const sourceStatus = getSourceTitleStatus(title)
+  const sourceStatus = getSourceTitleStatus(source.sourceTitle)
   if (sourceStatus === 'working') {
     return `\u280b ${ownerProfile.workingLabel}`
   }
@@ -142,10 +166,10 @@ export function normalizeCompatibleAgentTitleForOwner(
   if (sourceStatus === 'idle') {
     return ownerProfile.idleLabel
   }
-  if (hasPermissionSuffix(title, source.profile)) {
+  if (hasPermissionSuffix(source.sourceTitle, source.profile)) {
     return ownerProfile.permissionLabel
   }
-  if (hasIdleSuffix(title, source.profile)) {
+  if (hasIdleSuffix(source.sourceTitle, source.profile)) {
     return ownerProfile.idleLabel
   }
   return ownerProfile.workingLabel

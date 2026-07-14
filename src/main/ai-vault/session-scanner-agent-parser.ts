@@ -6,7 +6,8 @@ import { parseMessageGraphSessionFile, parseRovoSessionFile } from './session-sc
 import { parseKimiSessionFile } from './session-scanner-kimi-parser'
 import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
 import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
-import { parseClaudeSessionFile, parseGeminiSessionFile } from './session-scanner-primary-parsers'
+import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
+import { parseGeminiSessionFile } from './session-scanner-gemini-parsers'
 import { parseCodexSessionFile } from './session-scanner-codex-parser'
 import {
   parseCopilotSessionFile,

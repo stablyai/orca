@@ -17,8 +17,14 @@ export function getProviderDisplayName(provider: ProviderRateLimits['provider'])
   if (provider === 'kimi') {
     return 'Kimi'
   }
+  if (provider === 'antigravity') {
+    return 'Antigravity'
+  }
   if (provider === 'minimax') {
     return 'MiniMax'
+  }
+  if (provider === 'grok') {
+    return 'Grok'
   }
   return provider
 }

@@ -3,7 +3,6 @@ export type PiCompatibleSyntheticAgentStatus = 'working' | 'permission' | 'idle'
 
 const PI_COMPATIBLE_SYNTHETIC_TITLE_RE =
   /^\s*(?:[\u2800-\u28ff]\s+)?(pi|omp)(?:\s+-\s+action required|\s+(?:ready|idle|done))?\s*$/i
-const PI_COMPATIBLE_IDLE_RE = /(?<![\w./\\-])(?:ready|idle|done)(?![\w-])/i
 // Why: legacy Pi/OMP-compatible shells can emit the delimiter before cwd text exists.
 const LEGACY_PI_COMPATIBLE_TITLE_RE = /^\s*(?:[\u2800-\u28ff]\s+)?π(?:\s*[-:]|\s)\s*.*$/u
 
@@ -44,10 +43,11 @@ export function getPiCompatibleSyntheticAgentStatus(
   ) {
     return 'permission'
   }
-  if (PI_COMPATIBLE_IDLE_RE.test(title)) {
-    return 'idle'
-  }
-  return null
+  // Why: bare "Pi"/"OMP" and ready/idle/done labels are all idle. Bare labels
+  // come from normalizeTerminalTitle collapsing π frames; they must re-detect
+  // as idle or stored lastOscTitle values classify as neutral after main-side
+  // normalization.
+  return 'idle'
 }
 
 export function isLegacyPiCompatibleTitle(title: string): boolean {

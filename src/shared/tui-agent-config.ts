@@ -6,6 +6,7 @@ export type AgentPromptInjectionMode =
   | 'flag-prompt'
   | 'flag-prompt-interactive'
   | 'flag-interactive'
+  | 'hermes-query'
   | 'stdin-after-start'
 
 export type DraftPasteReadySignal =
@@ -13,15 +14,23 @@ export type DraftPasteReadySignal =
   | 'codex-composer-prompt'
   | 'render-cursor-after-bracketed-paste'
 
+export type TuiAgentDetectionRuntime = NodeJS.Platform | 'wsl'
+
 export type TuiAgentConfig = {
   detectCmd: string
   /** Additional executable names that identify the same agent on PATH. */
   detectCmdAliases?: readonly string[]
+  /** Other commands that must also be present before this agent counts as installed. */
+  detectRequiredCommands?: readonly string[]
+  /** Detection runtimes where this launch mode is not available as a detected agent. */
+  detectUnsupportedRuntimes?: readonly TuiAgentDetectionRuntime[]
   launchCmd: string
   /** Platform-specific launch command when the public binary name differs. */
   launchCmdByPlatform?: Partial<Record<NodeJS.Platform, string>>
   expectedProcess: string
   promptInjectionMode: AgentPromptInjectionMode
+  /** Option terminator required before positional prompts that may look like CLI syntax. */
+  argvPromptSeparator?: '--'
   /** Why: flag that launches the TUI with the given text already in the
    * input box but NOT submitted, so the user still gets a reviewable draft.
    * Only set when the CLI documents native support — e.g. Claude's
@@ -55,6 +64,9 @@ export type TuiAgentConfig = {
    * `›` prompt only when the composer row exists, so Orca can paste as soon
    * as that prompt appears after bracketed paste is enabled. */
   draftPasteReadySignal?: DraftPasteReadySignal
+  /** Windows Shift+Enter override. Omitted agents keep the legacy Esc+CR path
+   * because the renderer cannot infer every local or remote TUI's decoder. */
+  windowsShiftEnterEncoding?: 'csi-u'
 }
 
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
@@ -71,10 +83,15 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
   },
   'claude-agent-teams': {
     // Why: this is an Orca-provided launch mode, not a separate upstream
-    // binary. Detection follows the Orca CLI, while the wrapper validates the
-    // real Claude binary when it starts.
+    // binary. Detection follows the Orca CLI and requires Claude below.
     detectCmd: 'orca',
     detectCmdAliases: ['orca-dev', 'orca-ide'],
+    // Why: the Orca shim alone exists on fresh installs. Require Claude too so
+    // onboarding does not report Agent Teams when no agent CLI is installed.
+    detectRequiredCommands: ['claude'],
+    // Why: native Windows and WSL use Claude's in-process Agent Teams fallback,
+    // not the Orca native-pane/tmux-shim wrapper exposed by this agent entry.
+    detectUnsupportedRuntimes: ['win32', 'wsl'],
     launchCmd: 'orca claude-teams',
     launchCmdByPlatform: {
       linux: `${getOrcaCliCommandNameForPlatform('linux')} claude-teams`,
@@ -268,7 +285,10 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     detectCmd: 'droid',
     launchCmd: 'droid',
     expectedProcess: 'droid',
-    promptInjectionMode: 'argv'
+    promptInjectionMode: 'argv',
+    // Why: Droid decodes CSI-u on Windows and treats Orca's legacy Esc+CR
+    // fallback as plain Enter, which submits instead of inserting a newline.
+    windowsShiftEnterEncoding: 'csi-u'
   },
   kimi: {
     detectCmd: 'kimi',
@@ -306,7 +326,9 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // `--tui` starts the full-screen agent UI Orca is designed to host.
     launchCmd: 'hermes --tui',
     expectedProcess: 'hermes',
-    promptInjectionMode: 'stdin-after-start'
+    // Why: Hermes owns prompt delivery through its startup-query contract,
+    // which submits only after the TUI composer and session are ready.
+    promptInjectionMode: 'hermes-query'
   },
   openclaw: {
     detectCmd: 'openclaw',
@@ -334,7 +356,14 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     detectCmd: 'grok',
     launchCmd: 'grok',
     expectedProcess: 'grok',
-    promptInjectionMode: 'stdin-after-start'
+    // Why: Grok CLI accepts an initial prompt as a positional argv
+    // (`grok "fix the bug"`). Prefer argv over stdin-after-start so multi-line
+    // / special-character prompts are not typed as raw PTY keystrokes, and so
+    // clipboard-derived launch text is not mangled by line-edit shortcuts.
+    promptInjectionMode: 'argv',
+    // Why: prompts such as `help` or `--version` otherwise select Grok CLI
+    // syntax instead of starting an interactive turn with that literal text.
+    argvPromptSeparator: '--'
   },
   devin: {
     detectCmd: 'devin',

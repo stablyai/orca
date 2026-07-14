@@ -85,4 +85,55 @@ describe('parseCodexSessionFile', () => {
 
     expect(session?.totalTokens).toBe(150)
   })
+
+  it('extracts the model from turn context, latest turn winning', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codex-model-'))
+    tempRoots.push(root)
+    const sessionPath = join(root, 'sessions', '2026', '07', '05', 'rollout-model.jsonl')
+    await mkdir(dirname(sessionPath), { recursive: true })
+
+    await writeFile(
+      sessionPath,
+      jsonLines([
+        {
+          timestamp: '2026-07-05T10:00:00.000Z',
+          type: 'session_meta',
+          payload: { id: 'model-session', cwd: '/repo/app' }
+        },
+        {
+          timestamp: '2026-07-05T10:00:01.000Z',
+          type: 'turn_context',
+          payload: { cwd: '/repo/app', model: 'gpt-5.1' }
+        },
+        {
+          timestamp: '2026-07-05T10:00:02.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'text', text: 'Switch the model' }]
+          }
+        },
+        {
+          // A /model switch mid-session writes a later turn_context.
+          timestamp: '2026-07-05T10:00:03.000Z',
+          type: 'turn_context',
+          payload: { cwd: '/repo/app', model: 'gpt-5.5' }
+        }
+      ])
+    )
+
+    const sessionStat = await stat(sessionPath)
+    const session = await parseCodexSessionFile(
+      {
+        path: sessionPath,
+        mtimeMs: sessionStat.mtimeMs,
+        modifiedAt: sessionStat.mtime.toISOString()
+      },
+      'darwin',
+      root
+    )
+
+    expect(session?.model).toBe('gpt-5.5')
+  })
 })

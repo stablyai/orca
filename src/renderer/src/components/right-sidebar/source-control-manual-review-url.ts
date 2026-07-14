@@ -162,6 +162,8 @@ export function buildSourceControlManualReviewUrl(input: ManualReviewUrlInput): 
       : localBranch)
 
   switch (provider) {
+    case null:
+      return null
     case 'github':
       return `${baseRepo.webBaseUrl}/compare/${encodeCompareRef(baseBranch)}...${encodeCompareRef(
         githubHeadRef(baseRepo, headRepo, headBranch)
@@ -183,7 +185,5 @@ export function buildSourceControlManualReviewUrl(input: ManualReviewUrlInput): 
       })
     case 'gitea':
       return `${baseRepo.webBaseUrl}/compare/${encodeCompareRef(baseBranch)}...${encodeCompareRef(headBranch)}`
-    default:
-      return null
   }
 }

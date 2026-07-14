@@ -79,6 +79,7 @@ import {
   rememberGhCwdResolutionFailure
 } from './gh-cwd-repo-negative-cache'
 import type { GitHubRepoContext } from './github-repository-identity'
+import { getEnterpriseGitHubRepoSlug } from './github-enterprise-repository'
 export { _resetOwnerRepoCache } from './gh-utils'
 export {
   getIssue,
@@ -453,6 +454,12 @@ export async function getAuthenticatedViewer(): Promise<GitHubViewer | null> {
 type MainWorkItem = Omit<GitHubWorkItem, 'repoId'>
 
 const WORK_ITEM_ISSUE_LIST_JSON_FIELDS = 'number,title,state,url,labels,updatedAt,author,assignees'
+
+// Why: the Tasks pager slices pages on updatedAt, so every list/search fetch
+// must return rows newest-updated-first for the cursor to advance correctly.
+// This is the search-qualifier spelling of the same contract the REST list
+// paths express as `sort=updated&direction=desc`; keep the two in sync (#8649).
+const WORK_ITEM_LIST_SORT_QUALIFIER = 'sort:updated-desc'
 
 const WORK_ITEM_PR_LIST_JSON_FIELDS =
   'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,reviewRequests'
@@ -848,6 +855,43 @@ async function fetchIssueWorkItem(
   return mapIssueWorkItem(JSON.parse(stdout) as Record<string, unknown>)
 }
 
+// REST /pulls/{n} has requested_reviewers but not latestReviews. When the JSON
+// `gh pr view` path fails, still pull review fields from gh so mobile/desktop
+// reviewer lists (CodeRabbit COMMENTED, etc.) are not silently empty.
+const WORK_ITEM_PR_REVIEW_JSON_FIELDS = 'reviewRequests,latestReviews'
+
+async function fetchPullRequestReviewFields(
+  number: number,
+  ownerRepo: OwnerRepo | null,
+  ghOptions: GhExecOptions
+): Promise<Pick<MainWorkItem, 'reviewRequests' | 'latestReviews'>> {
+  try {
+    const args = ownerRepo
+      ? [
+          'pr',
+          'view',
+          String(number),
+          '--repo',
+          `${ownerRepo.owner}/${ownerRepo.repo}`,
+          '--json',
+          WORK_ITEM_PR_REVIEW_JSON_FIELDS
+        ]
+      : ['pr', 'view', String(number), '--json', WORK_ITEM_PR_REVIEW_JSON_FIELDS]
+    const { stdout } = await ghExecFileAsync(args, ghOptions)
+    const item = JSON.parse(stdout) as Record<string, unknown>
+    return {
+      ...(item.reviewRequests !== undefined
+        ? { reviewRequests: usersFromUnknown(item.reviewRequests) }
+        : {}),
+      ...(item.latestReviews !== undefined
+        ? { latestReviews: latestReviewsFromUnknown(item.latestReviews) }
+        : {})
+    }
+  } catch {
+    return {}
+  }
+}
+
 async function fetchPullRequestWorkItem(
   repoPath: string,
   ownerRepo: OwnerRepo | null,
@@ -872,24 +916,36 @@ async function fetchPullRequestWorkItem(
       )
       const item = JSON.parse(stdout) as Record<string, unknown>
       const mapped = mapPullRequestWorkItem(item, ownerRepo)
+      // Why: merge-metadata GraphQL is best-effort. A failure here must not fall
+      // through to the REST path below — that path drops latestReviews and blanks
+      // the mobile/desktop reviewer list for bots that only left a review.
       const baseRefName = typeof item.baseRefName === 'string' ? item.baseRefName : undefined
-      const mergeMetadata = await detectRepositoryMergeMetadata(ownerRepo, baseRefName, ghOptions)
-      return {
-        ...mapped,
-        mergeQueueRequired: mergeMetadata.mergeQueueRequired,
-        ...(mergeMetadata.autoMergeAllowed !== null
-          ? { autoMergeAllowed: mergeMetadata.autoMergeAllowed }
-          : {}),
-        ...(mergeMetadata.mergeMethodSettings
-          ? { mergeMethodSettings: mergeMetadata.mergeMethodSettings }
-          : {})
+      try {
+        const mergeMetadata = await detectRepositoryMergeMetadata(ownerRepo, baseRefName, ghOptions)
+        return {
+          ...mapped,
+          mergeQueueRequired: mergeMetadata.mergeQueueRequired,
+          ...(mergeMetadata.autoMergeAllowed !== null
+            ? { autoMergeAllowed: mergeMetadata.autoMergeAllowed }
+            : {}),
+          ...(mergeMetadata.mergeMethodSettings
+            ? { mergeMethodSettings: mergeMetadata.mergeMethodSettings }
+            : {})
+        }
+      } catch {
+        return mapped
       }
     } catch {
       const { stdout } = await ghExecFileAsync(
         ['api', `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${number}`],
         ghOptions
       )
-      return mapPullRequestWorkItem(JSON.parse(stdout) as Record<string, unknown>, ownerRepo)
+      const mapped = mapPullRequestWorkItem(
+        JSON.parse(stdout) as Record<string, unknown>,
+        ownerRepo
+      )
+      const reviewFields = await fetchPullRequestReviewFields(number, ownerRepo, ghOptions)
+      return { ...mapped, ...reviewFields }
     }
   }
 
@@ -946,11 +1002,13 @@ function buildWorkItemListArgs(args: {
   if (excludeMergedFromClosed) {
     searchParts.push('-is:merged')
   }
-  // Why: cursor-based pagination. GitHub search supports updated:<DATE to
-  // fetch items older than the cursor. We use the oldest item's updatedAt
-  // from the previous page as the cursor.
+  // Why: cursor-based pagination. GitHub search supports updated:<=DATE to
+  // fetch items at or older than the cursor. We use the oldest item's updatedAt
+  // from the previous page as the cursor. The bound is inclusive (`<=`) so items
+  // sharing the boundary row's exact updatedAt aren't skipped between pages; the
+  // renderer dedupes the re-fetched boundary rows by id (#8649).
   if (before) {
-    searchParts.push(`updated:<${before}`)
+    searchParts.push(`updated:<=${before}`)
   }
   if (kind === 'pr' && query.reviewRequested) {
     searchParts.push(`review-requested:${query.reviewRequested}`)
@@ -961,9 +1019,14 @@ function buildWorkItemListArgs(args: {
   if (query.freeText) {
     searchParts.push(query.freeText)
   }
-  if (searchParts.length > 0) {
-    out.push('--search', searchParts.join(' '))
-  }
+  // Why: pagination cursors slice on updatedAt, but `gh issue list` defaults
+  // to created-desc and `--search` defaults to best-match. `gh issue/pr list`
+  // has no --sort flag, so the only lever is the search query — which forces us
+  // to always emit --search. Without pinning the sort, recently-updated old
+  // items never appear on any page, so the pager advertises pages the fetch
+  // chain can never reach (#8649).
+  searchParts.push(WORK_ITEM_LIST_SORT_QUALIFIER)
+  out.push('--search', searchParts.join(' '))
   return out
 }
 
@@ -1701,16 +1764,29 @@ function parseCreatePRPayload(stdout: string): { number: number; url: string } |
   } catch {
     // Fall through to URL parsing for older gh versions without --json support.
   }
-  const urlMatch = trimmed.match(/https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/(\d+)/)
+  // Why: gh prints the PR URL (not JSON) here; match any host, not just
+  // github.com, so a GitHub Enterprise Server URL still parses directly (#8312).
+  const urlMatch = trimmed.match(/https?:\/\/[^\s/]+\/[^\s/]+\/[^\s/]+\/pull\/(\d+)/)
   if (!urlMatch) {
     return null
   }
   return { number: Number(urlMatch[1]), url: urlMatch[0] }
 }
 
+// Why: `gh --repo OWNER/REPO` resolves the shorthand against gh's default host
+// (usually github.com), not the repo's remote — so a GHES repo would target a
+// same-named github.com repo, or fail. Qualify with the host for GHES so gh hits
+// the Enterprise server; this is the only host signal for SSH repos, which run
+// gh with no cwd context (#8312). github.com keeps the bare shorthand.
+function ghRepoArg(slug: { owner: string; repo: string; host?: string }): string {
+  return slug.host && slug.host.toLowerCase() !== 'github.com'
+    ? `${slug.host}/${slug.owner}/${slug.repo}`
+    : `${slug.owner}/${slug.repo}`
+}
+
 async function findOpenPRByHeadBase(args: {
   repoPath: string
-  ownerRepo: OwnerRepo
+  repoArg: string
   head: string
   base: string
   connectionId?: string | null
@@ -1722,7 +1798,7 @@ async function findOpenPRByHeadBase(args: {
       'pr',
       'list',
       '--repo',
-      `${args.ownerRepo.owner}/${args.ownerRepo.repo}`,
+      args.repoArg,
       '--head',
       args.head,
       '--base',
@@ -1795,11 +1871,11 @@ export async function createGitHubPullRequest(
     }
   }
 
-  const ownerRepo = await getOwnerRepo(
-    repoPath,
-    connectionId,
-    ...hostedReviewLocalGitOptionArgs(options)
-  )
+  // Why: github.com-only slug parsing returns null for GHES, so fall back to the
+  // enterprise resolver (gh-authenticated custom host) before giving up (#8312).
+  const ownerRepo =
+    (await getOwnerRepo(repoPath, connectionId, ...hostedReviewLocalGitOptionArgs(options))) ??
+    (await getEnterpriseGitHubRepoSlug(repoPath, connectionId, options))
   if (!ownerRepo) {
     return {
       ok: false,
@@ -1807,6 +1883,8 @@ export async function createGitHubPullRequest(
       error: 'Creating pull requests requires a GitHub remote.'
     }
   }
+  // Host-qualified for GHES so gh targets the Enterprise server, not github.com.
+  const repoArg = ghRepoArg(ownerRepo)
 
   const base = normalizeHostedReviewBaseRef(input.base)
   const head = input.head ? normalizeHostedReviewHeadRef(input.head) || undefined : undefined
@@ -1839,7 +1917,7 @@ export async function createGitHubPullRequest(
       'pr',
       'create',
       '--repo',
-      `${ownerRepo.owner}/${ownerRepo.repo}`,
+      repoArg,
       '--base',
       base,
       '--title',
@@ -1868,7 +1946,7 @@ export async function createGitHubPullRequest(
       const found = head
         ? await findOpenPRByHeadBase({
             repoPath,
-            ownerRepo,
+            repoArg,
             head,
             base,
             connectionId,
@@ -1892,7 +1970,7 @@ export async function createGitHubPullRequest(
       ) {
         const existing = await findOpenPRByHeadBase({
           repoPath,
-          ownerRepo,
+          repoArg,
           head,
           base,
           connectionId,
@@ -2343,6 +2421,7 @@ type TrackedUpstreamBranch = {
 }
 
 const TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS = 30_000
+const TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_ENTRIES = 512
 
 type TrackedUpstreamSnapshotCacheEntry = {
   expiresAt: number
@@ -2362,12 +2441,49 @@ const trackedUpstreamSnapshotInFlight = new Map<
   string,
   Promise<TrackedUpstreamSnapshotProbeResult>
 >()
-const trackedUpstreamSnapshotGenerations = new Map<string, number>()
+const trackedUpstreamSnapshotGenerations = new Map<string, symbol>()
 
-function beginTrackedUpstreamSnapshotProbe(cacheKey: string): number {
-  const nextGeneration = (trackedUpstreamSnapshotGenerations.get(cacheKey) ?? 0) + 1
-  trackedUpstreamSnapshotGenerations.set(cacheKey, nextGeneration)
-  return nextGeneration
+function beginTrackedUpstreamSnapshotProbe(cacheKey: string): symbol {
+  const generation = Symbol()
+  trackedUpstreamSnapshotGenerations.set(cacheKey, generation)
+  return generation
+}
+
+function finishTrackedUpstreamSnapshotProbe(cacheKey: string, generation: symbol): void {
+  // Why: generations only guard an active probe; retaining completed repo keys
+  // leaks worktree/runtime identities after the short-lived snapshot TTL expires.
+  if (trackedUpstreamSnapshotGenerations.get(cacheKey) === generation) {
+    trackedUpstreamSnapshotGenerations.delete(cacheKey)
+  }
+}
+
+function pruneTrackedUpstreamSnapshotCache(now: number): void {
+  for (const [cacheKey, cached] of trackedUpstreamSnapshotCache) {
+    if (cached.expiresAt <= now) {
+      trackedUpstreamSnapshotCache.delete(cacheKey)
+    }
+  }
+  // Why: workspace/runtime churn can create unbounded unique keys within one
+  // TTL window, so expiry sweeping alone is not a memory bound.
+  while (trackedUpstreamSnapshotCache.size > TRACKED_UPSTREAM_SNAPSHOT_CACHE_MAX_ENTRIES) {
+    const oldestKey = trackedUpstreamSnapshotCache.keys().next().value
+    if (oldestKey === undefined) {
+      break
+    }
+    trackedUpstreamSnapshotCache.delete(oldestKey)
+  }
+}
+
+export function _getTrackedUpstreamBranchCacheSizesForTests(): {
+  snapshots: number
+  inFlight: number
+  generations: number
+} {
+  return {
+    snapshots: trackedUpstreamSnapshotCache.size,
+    inFlight: trackedUpstreamSnapshotInFlight.size,
+    generations: trackedUpstreamSnapshotGenerations.size
+  }
 }
 
 export function __resetTrackedUpstreamBranchCacheForTests(): void {
@@ -2461,6 +2577,7 @@ async function getTrackedUpstreamBranch(
         upstreamsByBranchName: getCacheableTrackedUpstreamSnapshot(result.upstreamsByBranchName),
         expiresAt: Date.now() + TRACKED_UPSTREAM_SNAPSHOT_CACHE_TTL_MS
       })
+      pruneTrackedUpstreamSnapshotCache(Date.now())
     }
     if (trackedUpstreamSnapshotGenerations.get(cacheKey) !== probeGeneration) {
       const fresherCached = trackedUpstreamSnapshotCache.get(cacheKey)
@@ -2473,6 +2590,7 @@ async function getTrackedUpstreamBranch(
     if (trackedUpstreamSnapshotInFlight.get(cacheKey) === probe) {
       trackedUpstreamSnapshotInFlight.delete(cacheKey)
     }
+    finishTrackedUpstreamSnapshotProbe(cacheKey, probeGeneration)
   }
 }
 

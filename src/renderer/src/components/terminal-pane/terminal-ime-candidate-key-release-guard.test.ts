@@ -3,6 +3,7 @@ import {
   armTerminalImePendingCandidateKeyRelease,
   clearTerminalImePendingCandidateKeyRelease,
   createTerminalImePendingCandidateKeyReleases,
+  isTerminalImeCandidateDigitKeyEvent,
   isTerminalImeCandidateSelectionKeyEvent,
   shouldApplyTerminalImePendingCandidateKeyRelease
 } from './terminal-ime-candidate-key-release-guard'
@@ -17,6 +18,12 @@ describe('terminal IME candidate key release guard', () => {
     expect(isTerminalImeCandidateSelectionKeyEvent(event({ key: ' ', ctrlKey: true }))).toBe(false)
     // Shift+Space is fcitx's full-/half-width toggle, not a candidate selector.
     expect(isTerminalImeCandidateSelectionKeyEvent(event({ key: ' ', shiftKey: true }))).toBe(false)
+  })
+
+  it('recognizes unmodified digits but not Space as digit candidate selectors', () => {
+    expect(isTerminalImeCandidateDigitKeyEvent(event({ key: '2' }))).toBe(true)
+    expect(isTerminalImeCandidateDigitKeyEvent(event({ key: ' ' }))).toBe(false)
+    expect(isTerminalImeCandidateDigitKeyEvent(event({ key: '2', ctrlKey: true }))).toBe(false)
   })
 
   it('arms a pending release guard from a suppressed candidate keydown', () => {
@@ -55,11 +62,15 @@ describe('terminal IME candidate key release guard', () => {
   it('does not guard fresh keydowns, other keys, modified keypresses, or expired keypresses', () => {
     const releases = createTerminalImePendingCandidateKeyReleases()
     armTerminalImePendingCandidateKeyRelease(releases, event({ key: '2' }), 10)
-    expect(shouldApplyTerminalImePendingCandidateKeyRelease(event({ key: '2' }), releases, 20)).toBe(
-      false
-    )
     expect(
-      shouldApplyTerminalImePendingCandidateKeyRelease(event({ type: 'keyup', key: '3' }), releases, 20)
+      shouldApplyTerminalImePendingCandidateKeyRelease(event({ key: '2' }), releases, 20)
+    ).toBe(false)
+    expect(
+      shouldApplyTerminalImePendingCandidateKeyRelease(
+        event({ type: 'keyup', key: '3' }),
+        releases,
+        20
+      )
     ).toBe(false)
     expect(
       shouldApplyTerminalImePendingCandidateKeyRelease(
@@ -157,10 +168,18 @@ describe('terminal IME candidate key release guard', () => {
     armTerminalImePendingCandidateKeyRelease(releases, event({ key: '2' }), 10)
     armTerminalImePendingCandidateKeyRelease(releases, event({ key: '3' }), 12)
     expect(
-      shouldApplyTerminalImePendingCandidateKeyRelease(event({ type: 'keyup', key: '2' }), releases, 20)
+      shouldApplyTerminalImePendingCandidateKeyRelease(
+        event({ type: 'keyup', key: '2' }),
+        releases,
+        20
+      )
     ).toBe(true)
     expect(
-      shouldApplyTerminalImePendingCandidateKeyRelease(event({ type: 'keyup', key: '3' }), releases, 20)
+      shouldApplyTerminalImePendingCandidateKeyRelease(
+        event({ type: 'keyup', key: '3' }),
+        releases,
+        20
+      )
     ).toBe(true)
     // The first key's keyup no longer strands the second key's pending release.
     clearTerminalImePendingCandidateKeyRelease(releases, event({ type: 'keyup', key: '2' }))

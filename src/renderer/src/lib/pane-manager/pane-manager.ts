@@ -245,6 +245,10 @@ export class PaneManager {
     }))
   }
 
+  hasWebglRenderer(paneId: number): boolean {
+    return this.panes.get(paneId)?.webglAddon != null
+  }
+
   getLeafId(numericPaneId: number): TerminalLeafId | null {
     return this.identities.getLeafId(numericPaneId)
   }

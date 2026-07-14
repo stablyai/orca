@@ -13,8 +13,9 @@ import { HeadlessEmulator } from './headless-emulator'
 
 const RESET_TERMINAL_CURSOR_STYLE = '\x1b[0 q'
 const RESET_KITTY_KEYBOARD_PROTOCOL = '\x1b[<99u\x1b[=0u'
+const RESET_MOUSE_REPORTING = '\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l'
 // Verbatim from layout-serialization.ts (the reattach path the remote onSnapshot uses).
-const POST_REPLAY_REATTACH_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h\x1b[?1004l`
+const POST_REPLAY_REATTACH_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h${RESET_MOUSE_REPORTING}\x1b[?1004l`
 
 function writeXterm(term: Terminal, data: string): Promise<void> {
   return new Promise((resolve) => term.write(data, resolve))
@@ -51,12 +52,12 @@ function renderVisible(term: Terminal): string {
 }
 
 describe('#7329 remote-server snapshot corruption', () => {
-  it('leaves bracketed-paste + mouse modes armed after a reattach snapshot', async () => {
+  it('disarms rehydrated mouse modes but keeps bracketed paste after a reattach snapshot', async () => {
     const emu = new HeadlessEmulator({ cols: 80, rows: 24 })
     const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
     try {
       // A live remote shell that armed bracketed paste (bash 4.4+/readline
-      // default) and vt200+SGR mouse (a TUI the user just exited).
+      // default) and vt200+SGR mouse (a TUI the user just exited uncleanly).
       await emulatorWrite(emu, '\x1b[?2004h\x1b[?1000h\x1b[?1006h')
       await emulatorWrite(emu, 'user@host:~$ ')
 
@@ -68,11 +69,35 @@ describe('#7329 remote-server snapshot corruption', () => {
 
       await replayRemoteSnapshot(term, snapshot)
 
-      // After the remote reattach reset, the renderer xterm is STILL in
-      // bracketed-paste + mouse mode — even though POST_REPLAY_REATTACH_RESET
-      // ran. Cold restore's POST_REPLAY_MODE_RESET would have cleared these.
-      expect(term.modes.bracketedPasteMode).toBe(true) // leak
-      expect(term.modes.mouseTrackingMode).not.toBe('none') // leak
+      // Bracketed paste survives — the live shell armed it and won't re-arm
+      // until the next prompt. Mouse reporting must NOT survive: with a plain
+      // shell in the foreground, xterm would emit `35;x;yM` motion reports the
+      // shell echoes as literal input on every pointer move. (Live agent panes
+      // preserve mouse via POST_REPLAY_LIVE_AGENT_REATTACH_RESET instead.)
+      expect(term.modes.bracketedPasteMode).toBe(true)
+      expect(term.modes.mouseTrackingMode).toBe('none')
+    } finally {
+      emu.dispose()
+      term.dispose()
+    }
+  })
+
+  it('disarms any-motion (?1003) and pixel-encoded (?1016) mouse modes left by a killed TUI', async () => {
+    const emu = new HeadlessEmulator({ cols: 80, rows: 24 })
+    const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+    try {
+      // An agent TUI armed any-motion tracking, then was SIGKILLed — no
+      // disarm bytes ever reach the daemon, so its tracker keeps the mode.
+      await emulatorWrite(emu, '\x1b[?1003h\x1b[?1016h')
+      await emulatorWrite(emu, 'user@host:~$ ')
+
+      const snapshot = emu.getSnapshot({ scrollbackRows: 0 })
+      expect(snapshot.rehydrateSequences).toContain('\x1b[?1003h')
+      expect(snapshot.rehydrateSequences).toContain('\x1b[?1016h')
+
+      await replayRemoteSnapshot(term, snapshot)
+
+      expect(term.modes.mouseTrackingMode).toBe('none')
     } finally {
       emu.dispose()
       term.dispose()

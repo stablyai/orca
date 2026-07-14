@@ -3,6 +3,7 @@ preload API plus remote fallbacks; keeping route coverage together makes local
 versus environment behavior easy to audit. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  cancelRuntimeFileList,
   copyRuntimePath,
   createRuntimePath,
   deleteRuntimePath,
@@ -37,6 +38,8 @@ const fsDeletePath = vi.fn()
 const fsStat = vi.fn()
 const fsPathExists = vi.fn()
 const fsSearch = vi.fn()
+const fsListFiles = vi.fn()
+const fsCancelListFiles = vi.fn()
 const fsDownloadFile = vi.fn()
 const fsSaveDownloadedFile = vi.fn()
 const fsStartDownloadedFile = vi.fn()
@@ -63,6 +66,9 @@ beforeEach(() => {
   fsStat.mockReset()
   fsPathExists.mockReset()
   fsSearch.mockReset()
+  fsListFiles.mockReset()
+  fsCancelListFiles.mockReset()
+  fsCancelListFiles.mockResolvedValue(undefined)
   fsDownloadFile.mockReset()
   fsSaveDownloadedFile.mockReset()
   fsStartDownloadedFile.mockReset()
@@ -102,6 +108,8 @@ beforeEach(() => {
         stat: fsStat,
         pathExists: fsPathExists,
         search: fsSearch,
+        listFiles: fsListFiles,
+        cancelListFiles: fsCancelListFiles,
         downloadFile: fsDownloadFile,
         saveDownloadedFile: fsSaveDownloadedFile,
         startDownloadedFile: fsStartDownloadedFile,
@@ -515,6 +523,12 @@ describe('runtime file client', () => {
     })
     runtimeEnvironmentCall
       .mockResolvedValueOnce({
+        id: 'preflight',
+        ok: true,
+        result: { contentBase64: 'YWJj', bytesRead: 3, eof: false },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+      .mockResolvedValueOnce({
         id: 'chunk-1',
         ok: true,
         result: { contentBase64: 'YWJj', bytesRead: 3, eof: false },
@@ -547,11 +561,22 @@ describe('runtime file client', () => {
         worktree: 'id:wt-1',
         relativePath: 'archive.zip',
         offset: 0,
-        length: 384 * 1024
+        length: 1
       },
       timeoutMs: 60_000
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
+      selector: 'env-1',
+      method: 'files.readChunk',
+      params: {
+        worktree: 'id:wt-1',
+        relativePath: 'archive.zip',
+        offset: 0,
+        length: 384 * 1024
+      },
+      timeoutMs: 60_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(3, {
       selector: 'env-1',
       method: 'files.readChunk',
       params: {
@@ -567,6 +592,150 @@ describe('runtime file client', () => {
     expect(fsCancelDownloadedFile).not.toHaveBeenCalled()
   })
 
+  it('does not open the save dialog when the remote chunk probe fails for transport reasons', async () => {
+    runtimeEnvironmentCall.mockRejectedValueOnce(new Error('connection dropped'))
+
+    await expect(
+      downloadRuntimeFile(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          worktreeId: 'wt-1',
+          worktreePath: '/remote/repo'
+        },
+        '/remote/repo/archive.zip',
+        'archive.zip'
+      )
+    ).rejects.toThrow('connection dropped')
+
+    expect(fsStartDownloadedFile).not.toHaveBeenCalled()
+    expect(fsSaveDownloadedFile).not.toHaveBeenCalled()
+  })
+
+  it('falls back to preview content when older remote runtimes lack chunked download', async () => {
+    fsSaveDownloadedFile.mockResolvedValue({
+      canceled: false,
+      destinationPath: '/downloads/report.txt'
+    })
+    runtimeEnvironmentCall
+      .mockResolvedValueOnce({
+        id: 'chunk-1',
+        ok: false,
+        error: {
+          code: 'method_not_found',
+          message: 'Unknown method: files.readChunk'
+        },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+      .mockResolvedValueOnce({
+        id: 'preview-1',
+        ok: true,
+        result: { content: 'hello\n', isBinary: false },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+
+    await expect(
+      downloadRuntimeFile(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          worktreeId: 'wt-1',
+          worktreePath: '/remote/repo'
+        },
+        '/remote/repo/report.txt',
+        'report.txt'
+      )
+    ).resolves.toEqual({ canceled: false, destinationPath: '/downloads/report.txt' })
+
+    expect(fsStartDownloadedFile).not.toHaveBeenCalled()
+    expect(fsSaveDownloadedFile).toHaveBeenCalledWith({
+      suggestedName: 'report.txt',
+      content: 'hello\n',
+      encoding: 'utf8'
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
+      selector: 'env-1',
+      method: 'files.readPreview',
+      params: { worktree: 'id:wt-1', relativePath: 'report.txt' },
+      timeoutMs: 15_000
+    })
+    expect(fsCancelDownloadedFile).not.toHaveBeenCalled()
+  })
+
+  it('downloads a complete zero-byte recognized binary from an older remote runtime', async () => {
+    fsSaveDownloadedFile.mockResolvedValue({
+      canceled: false,
+      destinationPath: '/downloads/empty.png'
+    })
+    runtimeEnvironmentCall
+      .mockResolvedValueOnce({
+        id: 'chunk-1',
+        ok: false,
+        error: {
+          code: 'method_not_found',
+          message: 'Unknown method: files.readChunk'
+        },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+      .mockResolvedValueOnce({
+        id: 'preview-1',
+        ok: true,
+        result: { content: '', isBinary: true, isImage: true, mimeType: 'image/png' },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+
+    await expect(
+      downloadRuntimeFile(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          worktreeId: 'wt-1',
+          worktreePath: '/remote/repo'
+        },
+        '/remote/repo/empty.png',
+        'empty.png'
+      )
+    ).resolves.toEqual({ canceled: false, destinationPath: '/downloads/empty.png' })
+
+    expect(fsStartDownloadedFile).not.toHaveBeenCalled()
+    expect(fsSaveDownloadedFile).toHaveBeenCalledWith({
+      suggestedName: 'empty.png',
+      content: '',
+      encoding: 'base64'
+    })
+  })
+
+  it('asks users to update older remote runtimes when preview fallback cannot download the file', async () => {
+    runtimeEnvironmentCall
+      .mockResolvedValueOnce({
+        id: 'chunk-1',
+        ok: false,
+        error: {
+          code: 'method_not_found',
+          message: 'Unknown method: files.readChunk'
+        },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+      .mockResolvedValueOnce({
+        id: 'preview-1',
+        ok: false,
+        error: { code: 'runtime_error', message: 'file_too_large' },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+
+    await expect(
+      downloadRuntimeFile(
+        {
+          settings: { activeRuntimeEnvironmentId: 'env-1' },
+          worktreeId: 'wt-1',
+          worktreePath: '/remote/repo'
+        },
+        '/remote/repo/archive.zip',
+        'archive.zip'
+      )
+    ).rejects.toThrow('Remote file download requires a newer Orca server')
+
+    expect(fsStartDownloadedFile).not.toHaveBeenCalled()
+    expect(fsSaveDownloadedFile).not.toHaveBeenCalled()
+  })
+
   it('cancels the local temp download when a remote chunk fails', async () => {
     fsStartDownloadedFile.mockResolvedValue({
       canceled: false,
@@ -574,7 +743,20 @@ describe('runtime file client', () => {
       destinationPath: '/downloads/archive.zip'
     })
     fsCancelDownloadedFile.mockResolvedValue({ ok: true })
-    runtimeEnvironmentCall.mockRejectedValueOnce(new Error('connection dropped'))
+    runtimeEnvironmentCall
+      .mockResolvedValueOnce({
+        id: 'preflight',
+        ok: true,
+        result: { contentBase64: 'YWJj', bytesRead: 3, eof: false },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+      .mockResolvedValueOnce({
+        id: 'chunk-1',
+        ok: true,
+        result: { contentBase64: 'YWJj', bytesRead: 3, eof: false },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+      .mockRejectedValueOnce(new Error('connection dropped'))
 
     await expect(
       downloadRuntimeFile(
@@ -1357,6 +1539,56 @@ describe('runtime file client', () => {
     })
   })
 
+  it('passes the cancellation token through the IPC file listing path (#7721)', async () => {
+    fsListFiles.mockResolvedValue(['src/index.ts'])
+
+    await expect(
+      listRuntimeFiles(
+        {
+          settings: {},
+          worktreeId: 'wt-1',
+          worktreePath: '/remote/repo',
+          connectionId: 'ssh-1'
+        },
+        {
+          rootPath: '/remote/repo',
+          requestToken: 'token-1'
+        }
+      )
+    ).resolves.toEqual(['src/index.ts'])
+
+    expect(fsListFiles).toHaveBeenCalledWith({
+      rootPath: '/remote/repo',
+      connectionId: 'ssh-1',
+      excludePaths: undefined,
+      requestToken: 'token-1'
+    })
+  })
+
+  it('cancelRuntimeFileList aborts the IPC listing but not environment listings (#7721)', () => {
+    cancelRuntimeFileList(
+      {
+        settings: {},
+        worktreeId: 'wt-1',
+        worktreePath: '/remote/repo',
+        connectionId: 'ssh-1'
+      },
+      'token-1'
+    )
+    expect(fsCancelListFiles).toHaveBeenCalledWith({ requestToken: 'token-1' })
+
+    fsCancelListFiles.mockClear()
+    cancelRuntimeFileList(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/remote/repo'
+      },
+      'token-2'
+    )
+    expect(fsCancelListFiles).not.toHaveBeenCalled()
+  })
+
   it('routes markdown document listing and stat through the selected runtime', async () => {
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-1',
@@ -1502,6 +1734,115 @@ describe('runtime file client', () => {
 
     stop()
     expect(unsubscribe).toHaveBeenCalled()
+  })
+
+  it('surfaces terminal watcher errors and allows a fresh subscription after stream end', async () => {
+    const onError = vi.fn()
+    const unsubscribe = vi.fn()
+    let callbacks: { onResponse: (response: unknown) => void; onClose: () => void } | undefined
+    runtimeEnvironmentSubscribe.mockImplementation((_args, nextCallbacks) => {
+      callbacks = nextCallbacks
+      return Promise.resolve({ unsubscribe, sendBinary: vi.fn() })
+    })
+
+    await subscribeRuntimeFileChanges(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/remote/repo'
+      },
+      vi.fn(),
+      onError
+    )
+    callbacks?.onResponse({
+      id: 'rpc-error',
+      ok: true,
+      result: { type: 'error', message: 'file watcher process crashed repeatedly' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    callbacks?.onResponse({
+      id: 'rpc-end',
+      ok: true,
+      result: { type: 'end' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'file watcher process crashed repeatedly' })
+    )
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+
+    await subscribeRuntimeFileChanges(
+      {
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/remote/repo'
+      },
+      vi.fn(),
+      vi.fn()
+    )
+    expect(runtimeEnvironmentSubscribe).toHaveBeenCalledTimes(2)
+    callbacks?.onResponse({
+      id: 'rpc-second-end',
+      ok: true,
+      result: { type: 'end' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+  })
+
+  it('evicts a terminal watch before notifying error listeners that retry', async () => {
+    const callbacks: {
+      onResponse: (response: unknown) => void
+      onClose: () => void
+    }[] = []
+    runtimeEnvironmentSubscribe.mockImplementation((_args, nextCallbacks) => {
+      callbacks.push(nextCallbacks)
+      return Promise.resolve({ unsubscribe: vi.fn(), sendBinary: vi.fn() })
+    })
+    const retryPayload = vi.fn()
+    let retryPromise: Promise<() => void> | undefined
+    const context = {
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      worktreeId: 'wt-1',
+      worktreePath: '/remote/repo'
+    }
+    await subscribeRuntimeFileChanges(context, vi.fn(), () => {
+      retryPromise = subscribeRuntimeFileChanges(context, retryPayload, vi.fn())
+    })
+
+    callbacks[0].onResponse({
+      id: 'rpc-error',
+      ok: true,
+      result: { type: 'error', message: 'terminal watcher failure' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    await retryPromise
+    const subscribeCallCount = runtimeEnvironmentSubscribe.mock.calls.length
+    callbacks[0].onResponse({
+      id: 'rpc-end',
+      ok: true,
+      result: { type: 'end' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    callbacks[1]?.onResponse({
+      id: 'rpc-changed',
+      ok: true,
+      result: {
+        type: 'changed',
+        worktree: 'id:wt-1',
+        events: [{ kind: 'update', absolutePath: '/remote/repo/retry.txt' }]
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    callbacks[1]?.onResponse({
+      id: 'rpc-retry-end',
+      ok: true,
+      result: { type: 'end' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    expect(subscribeCallCount).toBe(2)
+    expect(retryPayload).toHaveBeenCalledTimes(1)
   })
 
   it('shares one remote file watch subscription across listeners for the same worktree', async () => {

@@ -186,6 +186,8 @@ describe('removeProject cascade', () => {
         tab1: ['pty1'],
         tab2: ['pty2']
       },
+      suppressedPtyExitIds: { pty1: true, pty2: true },
+      pendingCodexPaneRestartIds: { pty1: true, pty2: true },
       terminalLayoutsByTabId: {
         tab1: makeLayout(),
         tab2: makeLayout()
@@ -212,9 +214,20 @@ describe('removeProject cascade', () => {
     expect(mockApi.pty.kill).toHaveBeenCalledWith('pty1')
     expect(mockApi.pty.kill).toHaveBeenCalledWith('pty2')
 
-    // Killed PTY IDs are suppressed
-    expect(s.suppressedPtyExitIds['pty1']).toBe(true)
-    expect(s.suppressedPtyExitIds['pty2']).toBe(true)
+    // The tabs are gone before async exit events can close them, so retaining
+    // their one-shot guards would leak ephemeral PTY ids for the renderer session.
+    expect(s.suppressedPtyExitIds['pty1']).toBeUndefined()
+    expect(s.suppressedPtyExitIds['pty2']).toBeUndefined()
+    expect(s.pendingCodexPaneRestartIds['pty1']).toBeUndefined()
+    expect(s.pendingCodexPaneRestartIds['pty2']).toBeUndefined()
+
+    store.getState().clearTabPtyId('tab1', 'pty1')
+    store.getState().clearTabPtyId('tab2', 'pty2')
+
+    // Why: exit IPC can arrive after repo purge but before the mounted pane
+    // unmounts. A late exit must not recreate an index for a tab with no owner.
+    expect(store.getState().ptyIdsByTabId['tab1']).toBeUndefined()
+    expect(store.getState().ptyIdsByTabId['tab2']).toBeUndefined()
   })
 })
 
@@ -1659,6 +1672,7 @@ describe('reconnectPersistedTerminals', () => {
         tabsByWorktree: s.tabsByWorktree,
         ptyIdsByTabId: s.ptyIdsByTabId,
         browserTabsByWorktree: s.browserTabsByWorktree,
+        worktreeIdsWithLiveAgent: new Set(),
         hideDefaultBranchWorkspace: false,
         hideAutomationGeneratedWorkspaces: false,
         repoMap: new Map(s.repos.map((repo) => [repo.id, repo])),
@@ -2007,6 +2021,7 @@ describe('reconnectPersistedTerminals', () => {
         tabsByWorktree: s.tabsByWorktree,
         ptyIdsByTabId: s.ptyIdsByTabId,
         browserTabsByWorktree: s.browserTabsByWorktree,
+        worktreeIdsWithLiveAgent: new Set(),
         hideDefaultBranchWorkspace: false,
         hideAutomationGeneratedWorkspaces: false,
         repoMap: new Map(s.repos.map((repo) => [repo.id, repo])),
@@ -2064,7 +2079,7 @@ describe('hydrateEditorSession', () => {
       },
       activeFileIdByWorktree: { [wt]: '/path/wt1/src/index.ts' },
       activeTabTypeByWorktree: { [wt]: 'editor' },
-      markdownFrontmatterVisible: { '/path/wt1/README.md': true }
+      markdownFrontmatterVisible: { '/path/wt1/README.md': false }
     })
 
     const s = store.getState()
@@ -2073,7 +2088,7 @@ describe('hydrateEditorSession', () => {
     expect(s.openFiles[0].mode).toBe('edit')
     expect(s.openFiles[0].isDirty).toBe(false)
     expect(s.openFiles[1].isPreview).toBe(true)
-    expect(s.markdownFrontmatterVisible).toEqual({ '/path/wt1/README.md': true })
+    expect(s.markdownFrontmatterVisible).toEqual({ '/path/wt1/README.md': false })
     expect(s.activeFileId).toBe('/path/wt1/src/index.ts')
     expect(s.activeTabType).toBe('editor')
   })
@@ -2152,10 +2167,46 @@ describe('hydrateEditorSession', () => {
         [FLOATING_TERMINAL_WORKTREE_ID]: filePath
       },
       activeTabTypeByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'editor' },
+      markdownFrontmatterVisible: { [filePath]: false }
+    })
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({ [fileId]: false })
+  })
+
+  it('drops legacy visible=true front-matter entries so upgraded sessions fall back to the visible default', () => {
+    const store = createTestStore()
+    const filePath = '/orca/userData/floating-workspace/note.md'
+    const fileId = ownedEditorFileId(filePath, FLOATING_TERMINAL_WORKTREE_ID, null)
+
+    store.setState({ activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+
+    store.getState().hydrateEditorSession({
+      activeRepoId: null,
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            filePath,
+            relativePath: 'note.md',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            language: 'markdown',
+            runtimeEnvironmentId: null
+          }
+        ]
+      },
+      activeFileIdByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: filePath
+      },
+      activeTabTypeByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'editor' },
+      // Pre-flip sessions stored `true` for the (then non-default) visible state.
       markdownFrontmatterVisible: { [filePath]: true }
     })
 
-    expect(store.getState().markdownFrontmatterVisible).toEqual({ [fileId]: true })
+    expect(store.getState().markdownFrontmatterVisible).toEqual({})
+    expect(fileId in store.getState().markdownFrontmatterVisible).toBe(false)
   })
 
   it('falls back to the floating workspace file id when duplicate paths are owner-qualified', () => {

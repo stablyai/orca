@@ -15,7 +15,7 @@ vi.mock('os', async () => {
   }
 })
 
-import { GrokHookService } from './hook-service'
+import { getGrokToolEventMatcherForTests, GrokHookService } from './hook-service'
 
 const GROK_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'grok-hook.cmd' : 'grok-hook.sh'
 const WINDOWS_POWERSHELL_LAUNCHER =
@@ -55,12 +55,25 @@ describe('GrokHookService', () => {
         'SessionEnd',
         'SessionStart',
         'Stop',
+        'StopFailure',
         'UserPromptSubmit'
       ].sort()
     )
-    expect(config.hooks.PreToolUse[0].matcher).toBe('*')
-    expect(config.hooks.PostToolUseFailure[0].matcher).toBe('*')
+    // Why: Grok matchers are real regexes; bare `*` does not match-all.
+    expect(config.hooks.PreToolUse[0].matcher).toBe('.*')
+    expect(config.hooks.PostToolUseFailure[0].matcher).toBe('.*')
+    expect(config.hooks.PostToolUse[0].matcher).toBe('.*')
+    // Why: StopFailure must not carry a tool matcher — lifecycle-only event.
+    expect(config.hooks.StopFailure[0].matcher).toBeUndefined()
     expect(config.hooks.Notification[0].matcher).toBeUndefined()
+    // Why: assert the shipped helper still matches what install wrote (regression
+    // guard if GROK_TOOL_EVENT_MATCHER drifts from install).
+    expect(getGrokToolEventMatcherForTests()).toBe('.*')
+    expect(getGrokToolEventMatcherForTests()).not.toBe('*')
+    expect(new RegExp(getGrokToolEventMatcherForTests()).test('run_terminal_command')).toBe(true)
+    // Why: build the invalid pattern at runtime so static lint does not flag it.
+    const bareStar = ['*', ''].join('')
+    expect(() => new RegExp(bareStar)).toThrow()
     expect(config.hooks.PreToolUse[0].hooks[0].command).toMatch(
       process.platform === 'win32' ? WINDOWS_POWERSHELL_LAUNCHER : /grok-hook/
     )
@@ -75,12 +88,20 @@ describe('GrokHookService', () => {
     expect(script).toContain('/hook/grok')
     if (process.platform === 'win32') {
       expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
+      expect(script).toContain('set "ORCA_GROK_HOME=%GROK_HOME%"')
+      expect(script).toContain('%GROK_HOME:~4096,1%')
+      expect(script).toContain(
+        'if "%ORCA_GROK_HOME:~-1%"=="\\" set "ORCA_GROK_HOME=%ORCA_GROK_HOME%."'
+      )
+      expect(script).toContain('--data-urlencode "grokHome=%ORCA_GROK_HOME%"')
     } else {
       // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
       // on the curl command line (EDR oversized-command-line false positive).
       expect(script).toContain('payload=$(cat)')
       expect(script).toContain('printf \'%s\' "$payload" | curl')
       expect(script).toContain('--data-urlencode "payload@-"')
+      expect(script).toContain('${#GROK_HOME}" -le 4096')
+      expect(script).toContain('--data-urlencode "grokHome=${grok_home}"')
       expect(script).not.toContain('--data-urlencode "payload=${payload}"')
     }
   })
@@ -111,6 +132,31 @@ describe('GrokHookService', () => {
       }
     }
   )
+
+  it('installs hooks under GROK_HOME when set', () => {
+    const grokHome = mkdtempSync(join(tmpdir(), 'orca-grok-home-env-'))
+    const previous = process.env.GROK_HOME
+    process.env.GROK_HOME = grokHome
+    try {
+      const status = new GrokHookService().install()
+      expect(status.state).toBe('installed')
+      expect(status.configPath).toBe(join(grokHome, 'hooks', 'orca-status.json'))
+      expect(readFileSync(join(grokHome, 'hooks', 'orca-status.json'), 'utf8')).toContain(
+        'SessionStart'
+      )
+      // Why: must not also write into the mocked ~/.grok when GROK_HOME wins.
+      expect(() =>
+        readFileSync(join(homeDir, '.grok', 'hooks', 'orca-status.json'), 'utf8')
+      ).toThrow()
+    } finally {
+      if (previous === undefined) {
+        delete process.env.GROK_HOME
+      } else {
+        process.env.GROK_HOME = previous
+      }
+      rmSync(grokHome, { recursive: true, force: true })
+    }
+  })
 
   it('preserves user-authored hook entries in the Orca Grok config file', () => {
     const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')

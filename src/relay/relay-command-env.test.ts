@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { homedir } from 'node:os'
-import { buildRelayCommandEnv } from './relay-command-env'
+import { buildRelayCommandEnv, buildRelayGitEnv } from './relay-command-env'
 
 // homedir() is the fallback when the relay env carries no HOME; mock it so the
 // fallback path is deterministic and the "no resolvable home" branch is reachable.
@@ -226,5 +226,22 @@ describe('buildRelayCommandEnv', () => {
     const env = buildRelayCommandEnv({ HOME: '', PATH: '/usr/bin' }, 'linux')
 
     expect(env.PATH?.split(':')).toContain('/home/fallback/.local/bin')
+  })
+})
+
+describe('buildRelayGitEnv', () => {
+  it('pins an untranslated locale on top of the command env (issue #7808)', () => {
+    // Relay git stderr/progress is machine-parsed; a non-English host locale
+    // with a gettext git would translate it and break the parsers.
+    const env = buildRelayGitEnv(
+      { HOME: '/home/me', PATH: '/usr/bin', LC_ALL: 'de_DE.UTF-8' },
+      'linux'
+    )
+
+    expect(env.LC_ALL).toBe('en_US.UTF-8')
+    expect(env.LANG).toBe('en_US.UTF-8')
+    expect(env.LANGUAGE).toBe('en')
+    // PATH fallback behavior is unchanged.
+    expect(env.PATH?.split(':')).toEqual(expect.arrayContaining(['/usr/bin', '/usr/local/bin']))
   })
 })

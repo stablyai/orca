@@ -56,6 +56,7 @@ export async function createWebRuntimeSessionTerminal(args: {
   launchConfig?: SleepingAgentLaunchConfig
   agent?: TuiAgent
   launchAgent?: TuiAgent
+  viewMode?: 'terminal' | 'chat'
   activate?: boolean
   selectWorktree?: boolean
 }): Promise<boolean> {
@@ -85,6 +86,7 @@ export async function createWebRuntimeSessionTerminal(args: {
         ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
         agent: args.agent,
         ...(args.launchAgent ? { launchAgent: args.launchAgent } : {}),
+        ...(args.viewMode ? { viewMode: args.viewMode } : {}),
         activate: args.activate !== false
       },
       timeoutMs: 15_000
@@ -265,8 +267,9 @@ async function refreshWebRuntimeSessionTabsSnapshot(
     const snapshot = unwrapRuntimeRpcResult(
       response as RuntimeRpcResponse<RuntimeMobileSessionTabsResult>
     )
-    const { applyFreshWebSessionTabsSnapshot } = await import('./web-session-tabs-sync')
-    useAppStore.setState((state) => {
+    const { applyFreshWebSessionTabsSnapshot, applyWebSessionTabsStorePatch } =
+      await import('./web-session-tabs-sync')
+    applyWebSessionTabsStorePatch((state) => {
       // Why: eager refreshes can resolve after the user has selected another
       // worktree; session parity should update tabs without stealing focus.
       const patch = applyFreshWebSessionTabsSnapshot(state, snapshot, environmentId)

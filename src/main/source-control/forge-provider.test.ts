@@ -11,7 +11,8 @@ const {
   getMergeRequestForBranchMock,
   getProjectSlugMock,
   getPRForBranchOutcomeMock,
-  getRepoSlugMock
+  getRepoSlugMock,
+  getEnterpriseGitHubRepoSlugMock
 } = vi.hoisted(() => ({
   createGitHubPullRequestMock: vi.fn(),
   createGitLabMergeRequestMock: vi.fn(),
@@ -23,7 +24,8 @@ const {
   getMergeRequestForBranchMock: vi.fn(),
   getProjectSlugMock: vi.fn(),
   getPRForBranchOutcomeMock: vi.fn(),
-  getRepoSlugMock: vi.fn()
+  getRepoSlugMock: vi.fn(),
+  getEnterpriseGitHubRepoSlugMock: vi.fn()
 }))
 
 vi.mock('../gitlab/client', () => ({
@@ -40,6 +42,10 @@ vi.mock('../github/client', () => ({
   createGitHubPullRequest: createGitHubPullRequestMock,
   getRepoSlug: getRepoSlugMock,
   getPRForBranchOutcome: getPRForBranchOutcomeMock
+}))
+
+vi.mock('../github/github-enterprise-repository', () => ({
+  getEnterpriseGitHubRepoSlug: getEnterpriseGitHubRepoSlugMock
 }))
 
 vi.mock('../bitbucket/client', () => ({
@@ -88,6 +94,7 @@ describe('forge provider interface', () => {
     getProjectSlugMock.mockReset()
     getPRForBranchOutcomeMock.mockReset()
     getRepoSlugMock.mockReset()
+    getEnterpriseGitHubRepoSlugMock.mockReset()
   })
 
   it('preserves the existing hosted provider detection order', async () => {
@@ -99,6 +106,45 @@ describe('forge provider interface', () => {
       id: 'gitlab'
     })
     expect(getRepoSlugMock).not.toHaveBeenCalled()
+  })
+
+  it('detects a GitHub Enterprise Server remote as the GitHub provider, not Gitea', async () => {
+    // Regression for #8312: a GHES host is not github.com, so github.com-only
+    // slug parsing returns null. Detection must claim it via the enterprise
+    // resolver instead of falling through to Gitea's demand for ORCA_GITEA_TOKEN.
+    getProjectSlugMock.mockResolvedValue(null)
+    getRepoSlugMock.mockResolvedValue(null)
+    getEnterpriseGitHubRepoSlugMock.mockResolvedValue({
+      owner: 'team',
+      repo: 'orca',
+      host: 'github.acme-corp.com'
+    })
+
+    await expect(detectHostedReviewProvider({ repoPath: '/repo' })).resolves.toBe('github')
+    await expect(getForgeProviderForRepository({ repoPath: '/repo' })).resolves.toMatchObject({
+      id: 'github'
+    })
+    // Gitea must never be consulted once GitHub claims the enterprise host.
+    expect(getGiteaRepoSlugMock).not.toHaveBeenCalled()
+  })
+
+  it('leaves a genuinely non-GitHub remote for later providers when gh is not authenticated', async () => {
+    getProjectSlugMock.mockResolvedValue(null)
+    getRepoSlugMock.mockResolvedValue(null)
+    // gh is not logged in to this host, so the enterprise resolver declines and
+    // the Gitea provider is free to claim its own self-hosted remote.
+    getEnterpriseGitHubRepoSlugMock.mockResolvedValue(null)
+    getBitbucketRepoSlugMock.mockResolvedValue(null)
+    getAzureDevOpsRepoSlugMock.mockResolvedValue(null)
+    getGiteaRepoSlugMock.mockResolvedValue({
+      host: 'gitea.example.com',
+      owner: 'team',
+      repo: 'orca',
+      apiBaseUrl: 'https://gitea.example.com/api/v1',
+      webBaseUrl: 'https://gitea.example.com'
+    })
+
+    await expect(detectHostedReviewProvider({ repoPath: '/repo' })).resolves.toBe('gitea')
   })
 
   it('keeps review creation capability scoped to providers with creation support', async () => {

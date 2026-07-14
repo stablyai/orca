@@ -8,6 +8,13 @@ export const REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT = 'orca-request-active-ter
 export const CLOSE_TERMINAL_PANE_EVENT = 'orca-close-terminal-pane'
 export const BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT = 'orca-background-mount-terminal-worktree'
 
+// Why: mobile wake (experimental agent sleep) must fire the cold-restore
+// --resume of a worktree's mounted hidden hibernated panes without a desktop
+// hidden→visible reveal. Each mounted TerminalPane self-selects on this event
+// by worktreeId and invokes its own armed hibernation wake — a fanout, since
+// pane bindings are per-instance with no global registry.
+export const WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT = 'orca-wake-hibernated-agents-worktree'
+
 // Why: sidebar open/close is an instantaneous width change. If we wait for
 // the ResizeObserver rAF (and the 150ms debounced global fit) to catch up,
 // the user sees the terminal in a wrongly-fit state for ~16ms+ then a snap
@@ -67,4 +74,19 @@ export type CloseTerminalPaneDetail = {
 
 export type BackgroundMountTerminalWorktreeDetail = {
   worktreeId: string
+  /** When set, only these terminal tabs mount for the background worktree.
+   *  Why: a worktree-wide background mount instantiates a TerminalPane (and
+   *  its PTY connect work) for every saved tab; wake/resume flows know exactly
+   *  which tabs they need. Omitted → whole-worktree mount (legacy dispatch
+   *  sites); a real activation always lifts the restriction. */
+  tabIds?: readonly string[]
+}
+
+export type WakeHibernatedAgentsWorktreeDetail = {
+  worktreeId: string
+  /** Mutable collector: mounted panes that consume (or latch) the in-place
+   *  hibernation wake add their provider-session claim keys here so the
+   *  dispatcher's follow-up generic resume skips those sessions instead of
+   *  launching them a second time. */
+  wokenClaimKeys?: Set<string>
 }

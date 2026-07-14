@@ -81,6 +81,10 @@ export type JiraStatus = {
   colorName?: string
 }
 
+export type JiraProjectStatusOrder = {
+  statusIdsByColumn: string[][]
+}
+
 export type JiraTransition = {
   id: string
   name: string

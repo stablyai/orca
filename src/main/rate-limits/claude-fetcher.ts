@@ -300,12 +300,21 @@ type OAuthUsageWindow = {
   resets_at?: string | number
 }
 
+type OAuthUsageLimit = {
+  kind?: string
+  percent?: number
+  resets_at?: string | number
+  is_active?: boolean
+  scope?: { model?: { display_name?: string } | null } | null
+}
+
 type OAuthUsageResponse = {
   five_hour?: OAuthUsageWindow
   seven_day?: OAuthUsageWindow
   fable_weekly?: OAuthUsageWindow
   fable_seven_day?: OAuthUsageWindow
   seven_day_fable?: OAuthUsageWindow
+  limits?: OAuthUsageLimit[] | null
 }
 
 type ClaudeUsageAttemptState = {
@@ -391,9 +400,22 @@ function mapWindow(
 }
 
 function mapFableWeeklyWindow(data: OAuthUsageResponse): RateLimitWindow | null {
-  // Why: a bare "fable" field does not prove the window length. Only accept
-  // explicit weekly/seven-day names for the distinct Fable meter.
+  // Why: model quotas moved into structured scoped limits; prefer that current
+  // contract while retaining explicit legacy weekly fields for older responses.
+  const scoped = Array.isArray(data.limits)
+    ? data.limits.find(
+        (limit) =>
+          limit?.kind === 'weekly_scoped' &&
+          limit.is_active !== false &&
+          Number.isFinite(limit.percent) &&
+          limit.scope?.model?.display_name?.trim().toLowerCase() === 'fable'
+      )
+    : undefined
   return (
+    mapWindow(
+      scoped ? { used_percentage: scoped.percent, resets_at: scoped.resets_at } : undefined,
+      10080
+    ) ??
     mapWindow(data.fable_weekly, 10080) ??
     mapWindow(data.fable_seven_day, 10080) ??
     mapWindow(data.seven_day_fable, 10080)

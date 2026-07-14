@@ -90,7 +90,9 @@ function wrapChildProcess(proc: ChildProcess): SystemSshProcess {
 
 function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
   const duplex = new Duplex({
-    read() {},
+    read() {
+      proc.stdout?.resume()
+    },
     write(chunk, encoding, cb) {
       proc.stdin!.write(chunk, encoding, cb)
     }
@@ -128,7 +130,11 @@ function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
     duplex.destroy(err)
   }
   const onStdoutData = (data: Buffer): void => {
-    duplex.push(data)
+    // Why: file downloads can outpace the local destination; pause OpenSSH
+    // instead of buffering the producer-consumer lag in the main process.
+    if (!duplex.push(data)) {
+      proc.stdout!.pause()
+    }
   }
   const onStdoutEnd = (): void => {
     duplex.push(null)
