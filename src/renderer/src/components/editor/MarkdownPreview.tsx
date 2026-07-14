@@ -493,6 +493,9 @@ export default function MarkdownPreview({
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [matchCount, setMatchCount] = useState(0)
+  // Bumps whenever the match ranges are recomputed, so the active-highlight
+  // effect re-runs even when a streamed rerender yields the same count/index.
+  const [searchRevision, setSearchRevision] = useState(0)
   const [activeMatchIndex, setActiveMatchIndex] = useState(-1)
   const isMac = navigator.userAgent.includes('Mac')
   const openFile = useAppStore((s) => s.openFile)
@@ -853,6 +856,7 @@ export default function MarkdownPreview({
     const matches = applyMarkdownPreviewSearchHighlights(instanceId, body, query)
     matchesRef.current = matches
     setMatchCount(matches.length)
+    setSearchRevision((v) => v + 1)
     setActiveMatchIndex((cur) =>
       matches.length === 0 ? -1 : cur >= 0 && cur < matches.length ? cur : 0
     )
@@ -866,7 +870,7 @@ export default function MarkdownPreview({
       matchesRef.current,
       activeMatchIndex
     )
-  }, [activeMatchIndex, matchCount])
+  }, [activeMatchIndex, matchCount, searchRevision])
 
   useLayoutEffect(() => {
     if (!initialAnchor || initialAnchor === lastAppliedInitialAnchorRef.current) {

@@ -222,9 +222,9 @@ function getHighlightApi(): {
 const searchRangesByInstance = new Map<object, readonly Range[]>()
 const activeRangeByInstance = new Map<object, Range>()
 
-function paintHighlight(api: NonNullable<ReturnType<typeof getHighlightApi>>): void {
-  // Avoid array spread here — a large doc can produce 100k+ ranges and
-  // create()/registry writes must not build variadic argument lists.
+// Avoid array spread when collecting union ranges — a large doc can produce
+// 100k+ ranges and create()/registry writes must not build variadic arg lists.
+function paintMatchHighlight(api: NonNullable<ReturnType<typeof getHighlightApi>>): void {
   const matchRanges: Range[] = []
   for (const ranges of searchRangesByInstance.values()) {
     for (const range of ranges) {
@@ -236,7 +236,9 @@ function paintHighlight(api: NonNullable<ReturnType<typeof getHighlightApi>>): v
   } else {
     api.registry.delete(SEARCH_HIGHLIGHT_NAME)
   }
+}
 
+function paintActiveHighlight(api: NonNullable<ReturnType<typeof getHighlightApi>>): void {
   const activeRanges: Range[] = []
   for (const range of activeRangeByInstance.values()) {
     activeRanges.push(range)
@@ -253,7 +255,8 @@ export function clearMarkdownPreviewSearchHighlights(instanceId: object): void {
   activeRangeByInstance.delete(instanceId)
   const api = getHighlightApi()
   if (api) {
-    paintHighlight(api)
+    paintMatchHighlight(api)
+    paintActiveHighlight(api)
   }
 }
 
@@ -298,7 +301,8 @@ export function applyMarkdownPreviewSearchHighlights(
   activeRangeByInstance.delete(instanceId)
   const api = getHighlightApi()
   if (api) {
-    paintHighlight(api)
+    paintMatchHighlight(api)
+    paintActiveHighlight(api)
   }
 
   return ranges
@@ -319,7 +323,9 @@ export function setActiveMarkdownPreviewSearchMatch(
 
   const api = getHighlightApi()
   if (api) {
-    paintHighlight(api)
+    // Only the active range changed — don't rebuild the (potentially 100k-range)
+    // match highlight on every Next/Prev navigation.
+    paintActiveHighlight(api)
   }
 
   if (active) {

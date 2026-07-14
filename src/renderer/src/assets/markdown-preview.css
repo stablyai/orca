@@ -241,12 +241,12 @@
    DOM mutation) instead of injected <mark> elements — see markdown-preview-search.ts.
    ::highlight() supports color/background only, not border-radius/padding. */
 ::highlight(markdown-preview-search-match) {
-  background-color: color-mix(in srgb, #facc15 50%, transparent);
+  background-color: color-mix(in srgb, var(--markdown-search-match) 50%, transparent);
   color: inherit;
 }
 
 ::highlight(markdown-preview-search-active-match) {
-  background-color: color-mix(in srgb, #fb923c 60%, transparent);
+  background-color: color-mix(in srgb, var(--markdown-search-match-active) 60%, transparent);
   color: inherit;
 }
 
