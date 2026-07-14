@@ -3,6 +3,12 @@ import { Platform } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
 import { loadPushNotificationsEnabled } from '../storage/preferences'
 import { buildLocalNotificationData, type DesktopNotificationSource } from './notification-routing'
+import {
+  createSeenNotificationGuard,
+  loadLastSeenSeq,
+  saveLastSeenSeq,
+  seenKeyForEvent
+} from './notification-reconnect-catchup'
 
 type NotificationEvent = {
   type: 'notification'
@@ -11,11 +17,16 @@ type NotificationEvent = {
   body: string
   worktreeId?: string
   notificationId?: string
+  // Mirrors the desktop-assigned MobileNotificationEvent.notificationSeq used
+  // for reconnect catch-up (#8129). Optional because older runtimes / non-
+  // replay events may omit it.
+  notificationSeq?: number
 }
 
 type DismissNotificationEvent = {
   type: 'dismiss'
   notificationId: string
+  notificationSeq?: number
 }
 
 type SubscribeResult = {
@@ -223,18 +234,105 @@ async function dismissLocalNotification(
 
 // Why: each host connection gets its own notification subscription. When the
 // connection drops, the unsubscribe function cleans up the streaming RPC.
+// On reconnect the same subscribe stream is re-established by the RPC client;
+// we use its `ready` event to trigger catch-up (#8129): fetch notifications
+// dispatched while the socket was reaped, watermarked by the last seq we
+// already delivered so the desktop never re-sends an already-pushed one.
 // Returns an unsubscribe function.
 export function subscribeToDesktopNotifications(client: RpcClient, hostId: string): () => void {
   configureNotificationChannel()
 
   let subscriptionId: string | null = null
   let disposed = false
+  // Highest seq delivered on the live stream or replay for this connection.
+  // Persisted per-host so a cold app start still resumes from the right cut.
+  let lastDeliveredSeq = 0
+  // Why: per-connection dedup guard applied ONLY to the replay path
+  // (fetchMissed), never the live stream. The desktop already guarantees the
+  // replay cannot contain an event with seq <= lastDeliveredSeq (both live and
+  // replay advance the same watermark), so live + replay never overlap there.
+  // This set is defense-in-depth: if the desktop's bounded buffer evicted an
+  // old entry and a reconnect re-fetches across a boundary, an id delivered in
+  // the same connection isn't pushed twice. Bounded (RECENTLY_SEEN_CAP) so a
+  // long-lived session can't grow without limit.
+  const seenReplay = createSeenNotificationGuard()
+
+  function deliverLive(
+    type: 'notification' | 'dismiss',
+    event: NotificationEvent | DismissNotificationEvent
+  ): Promise<void> {
+    if (event.notificationSeq != null && event.notificationSeq > lastDeliveredSeq) {
+      lastDeliveredSeq = event.notificationSeq
+      void saveLastSeenSeq(hostId, lastDeliveredSeq)
+    }
+    // Why (#8129 dedup): mark the event seen on EVERY delivery path (live AND
+    // replay) so a replay that re-includes an id already pushed live in this
+    // connection is dropped instead of double-pushed. fetchMissed also
+    // pre-checks seenReplay, but without this the live path never populated it.
+    const key = seenKeyForEvent(event)
+    if (key) {
+      seenReplay.add(key)
+    }
+    if (type === 'notification') {
+      return showLocalNotification(event as NotificationEvent, hostId)
+    }
+    return dismissLocalNotification(event as DismissNotificationEvent, hostId)
+  }
+
+  // Why: on a reconnect `ready` the desktop has already dispatched whatever we
+  // missed; ask for it from our persisted watermark. Because the desktop cuts
+  // by seq > lastSeenSeq this is idempotent — we only ever get events we have
+  // not delivered before. The seenReplay guard is a second layer so a replay
+  // that somehow re-includes an id already delivered this connection is
+  // dropped instead of double-pushed.
+  async function fetchMissed(): Promise<void> {
+    if (disposed) {
+      return
+    }
+    const missed = await client
+      .sendRequest('notifications.getMissedSince', { lastSeenSeq: lastDeliveredSeq })
+      .then((response) => {
+        if (!response.ok) {
+          return []
+        }
+        const result = response.result as { notifications?: unknown[] } | undefined
+        return Array.isArray(result?.notifications) ? result.notifications : []
+      })
+      .catch(() => [])
+    for (const raw of missed) {
+      const event = raw as NotificationEvent | DismissNotificationEvent
+      const key = seenKeyForEvent(event)
+      if (key && seenReplay.has(key)) {
+        continue
+      }
+      if (key) {
+        seenReplay.add(key)
+      }
+      if (event.type === 'notification') {
+        await deliverLive('notification', event)
+      } else if (event.type === 'dismiss') {
+        await deliverLive('dismiss', event)
+      }
+    }
+  }
+
+  // Why: lazily seed the watermark from durable storage on first use so we
+  // don't block subscribe() on an AsyncStorage read. The first `ready` (cold
+  // open) does NOT need catch-up — the live stream starts fresh; only
+  // subsequent reconnect `ready` events fetch missed notifications.
+  let watermarkLoaded = false
+  void loadLastSeenSeq(hostId).then((seq) => {
+    lastDeliveredSeq = Math.max(lastDeliveredSeq, seq)
+    watermarkLoaded = true
+  })
+
   function unsubscribeServer(id: string) {
     if (client.getState() === 'connected') {
       client.sendRequest('notifications.unsubscribe', { subscriptionId: id }).catch(() => {})
     }
   }
 
+  let reconnectReadyCount = 0
   const unsubscribeStream = client.subscribe('notifications.subscribe', {}, (data: unknown) => {
     const event = data as
       | NotificationEvent
@@ -243,9 +341,18 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
       | { type: 'end' }
     if (event.type === 'ready') {
       subscriptionId = (event as SubscribeResult).subscriptionId
+      reconnectReadyCount += 1
       if (disposed) {
         unsubscribeServer(subscriptionId)
         unsubscribeStream()
+        return
+      }
+      // Why: first ready is the cold-open live stream — no catch-up needed.
+      // Every later ready is a reconnect; fetch what we missed from the
+      // watermark. Guard on watermarkLoaded so a fast reconnect doesn't
+      // fetch from a stale 0 watermark (which would re-push everything).
+      if (reconnectReadyCount > 1 && watermarkLoaded) {
+        void fetchMissed()
       }
       return
     }
@@ -259,9 +366,9 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
       return
     }
     if (event.type === 'notification') {
-      void showLocalNotification(event as NotificationEvent, hostId)
+      void deliverLive('notification', event as NotificationEvent)
     } else if (event.type === 'dismiss') {
-      void dismissLocalNotification(event as DismissNotificationEvent, hostId)
+      void deliverLive('dismiss', event as DismissNotificationEvent)
     }
   })
 

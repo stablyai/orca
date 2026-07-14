@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-12",
+  "updatedAt": "2026-07-13",
   "policy": {
     "maturityLevels": [
       "experimental",
@@ -161,6 +161,165 @@
       "demotionRule": "Keep experimental or demote if the focused gate flakes without a product or harness bug, if index-only churn can emit worktrees:changed, or if structural add/remove/HEAD/lock changes fail to converge."
     },
     {
+      "id": "runtime.headless-desktop-promotion-continuity",
+      "title": "Headless serve opens its desktop without replacing live terminal sessions",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime-platform",
+      "layer": "electron-runtime-contract",
+      "surfaces": [
+        "headless orca serve",
+        "single-instance desktop activation",
+        "CLI open",
+        "persistent terminal reattach"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local",
+        "daemon",
+        "ssh"
+      ],
+      "coverageNotes": "Deterministic unit coverage exercises activation gating, single-instance ownership, quit policy, local/remote CLI status, headless binding persistence, local daemon identity, and SSH identity transfer. A macOS Electron journey starts one headless owner in an isolated profile, creates and writes to a daemon PTY, activates the GUI through a second process, and verifies the original owner/runtime/daemon/PTY identities plus pre- and post-promotion I/O. Live packaged, Linux, and Windows journeys remain uncollected.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/8457"
+      ],
+      "invariant": "A safely promotable headless serve process is the single app owner. Desktop activation opens a window in that same process only after the persistent PTY provider and runtime RPC are ready; every live persisted local or SSH terminal remains bound to the same PTY/session, and a committed Cmd+Q still exits the promoted app.",
+      "oracle": "Unit tests coalesce early activation, fail closed on a fallback local provider, preserve the production single-instance path for serve, expose explicit desktop window state to local and remote clients, persist headless tab/leaf bindings, transfer local and SSH reattach metadata, and retain quit intent. The Electron journey asserts one main-process PID, runtime id, daemon PID, and PTY id across activation; confirms output written before promotion is visible afterward; confirms new terminal input still works; and requires the activating second process to exit.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/serve-desktop-activation.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts src/main/startup/single-instance-lock.test.ts src/main/startup/window-all-closed-quit-policy.test.ts src/cli/runtime-client.test.ts src/cli/runtime/websocket-transport.test.ts src/main/runtime/orca-runtime.test.ts",
+        "pnpm exec electron-vite build --mode e2e",
+        "pnpm run test:e2e -- tests/e2e/headless-serve-desktop-activation.spec.ts --workers=1"
+      ],
+      "testFiles": [
+        "src/main/startup/serve-desktop-activation.test.ts",
+        "src/main/startup/serve-desktop-activation-wiring.test.ts",
+        "src/main/startup/single-instance-lock.test.ts",
+        "src/main/startup/window-all-closed-quit-policy.test.ts",
+        "src/cli/runtime-client.test.ts",
+        "src/cli/runtime/websocket-transport.test.ts",
+        "src/main/runtime/orca-runtime.test.ts",
+        "tests/e2e/headless-serve-desktop-activation.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/startup/serve-desktop-activation.test.ts",
+          "assertions": [
+            "early activation requests coalesce until the persistent provider is ready",
+            "a blocked provider drops pending activation and never opens a window"
+          ]
+        },
+        {
+          "file": "src/main/startup/serve-desktop-activation-wiring.test.ts",
+          "assertions": [
+            "second-instance and macOS app activation use the same safety gate",
+            "headless PTY registration waits for provider settlement and promotion waits for RPC startup"
+          ]
+        },
+        {
+          "file": "src/main/startup/single-instance-lock.test.ts",
+          "assertions": [
+            "serve never skips the single-instance lock even in development",
+            "the isolated E2E profile can opt into the production ownership path"
+          ]
+        },
+        {
+          "file": "src/main/startup/window-all-closed-quit-policy.test.ts",
+          "assertions": [
+            "a promoted serve owner remains alive after an ordinary window close but exits after a committed quit"
+          ]
+        },
+        {
+          "file": "src/cli/runtime-client.test.ts",
+          "assertions": [
+            "local open activates a reachable headless owner and waits for a desktop window",
+            "unsafe promotion returns an explicit blocked error instead of launching a second owner"
+          ]
+        },
+        {
+          "file": "src/cli/runtime/websocket-transport.test.ts",
+          "assertions": [
+            "remote-paired open reports remote desktop state without launching a local app"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime.test.ts",
+          "assertions": [
+            "the headless sentinel transfers authority to the first real window",
+            "headless local and SSH PTY bindings are persisted on first promotion and later windowless reattach without changing ordinary desktop spawn persistence",
+            "status distinguishes available, openable, initializing, and blocked desktop states",
+            "desktop-only bell, command, and link scanners remain disabled until a real renderer graph is ready"
+          ]
+        },
+        {
+          "file": "tests/e2e/headless-serve-desktop-activation.spec.ts",
+          "assertions": [
+            "desktop activation keeps the same main owner PID, runtime id, daemon PID, and PTY id",
+            "terminal output written before promotion remains visible and post-promotion input/output still works",
+            "the activating second process exits instead of becoming another owner"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/serve-desktop-activation.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts src/main/startup/single-instance-lock.test.ts src/main/startup/window-all-closed-quit-policy.test.ts src/cli/runtime-client.test.ts src/cli/runtime/websocket-transport.test.ts src/main/runtime/orca-runtime.test.ts",
+          "result": "passed",
+          "durationSeconds": 13,
+          "summary": "Seven activation, ownership, quit, local/remote CLI, and runtime contract files passed with 704 tests, including first and repeated windowless reattach, local/SSH identity transfer, ordinary desktop persistence isolation, and dynamic side-effect scanner gating."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run test:e2e -- tests/e2e/headless-serve-desktop-activation.spec.ts --workers=1",
+          "result": "passed",
+          "durationSeconds": 52,
+          "summary": "The isolated Electron journey passed repeatedly on the final source; the latest 51.6-second run retained the same main owner, runtime, daemon, and PTY, restored pre-promotion output, accepted post-promotion input, and observed the activating process exit."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 120,
+        "scope": "focused unit contracts plus one isolated Electron headless-to-desktop journey"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "New deterministic contracts and two consecutive local macOS Electron passes; CI and cross-platform soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The first Electron red run proved that bypassing the dev single-instance lock created a second owner. After enforcing one owner, the next red run retained owner/runtime/daemon identity but exposed a new PTY because the headless tab/leaf binding was not persisted. The final implementation persists that binding before renderer hydration and both subsequent Electron runs kept the original PTY and transcript. Focused unit tests were also observed red before the activation gate, promotion metadata transfer, and headless spawn-persistence changes were added."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "Activation adds no polling in the app owner and performs one bounded pass over live PTY records plus persisted terminal bindings only when a headless owner opens its first window. Desktop-only bell, command, PR-link, and mode scanners are rebuilt only while a real renderer graph is ready, preserving the prior pure-headless output path. CLI open keeps its existing 250ms bounded startup poll."
+      },
+      "promotionCriteria": [
+        "Collect at least 100 consecutive CI or soak passes or 14 days without an unexplained flake.",
+        "Add live packaged activation coverage on macOS plus representative Linux and Windows single-instance journeys.",
+        "Add an Electron SSH promotion journey in addition to the deterministic identity-transfer unit contract."
+      ],
+      "knownGaps": [
+        "The Electron journey uses an isolated development bundle rather than the installed application so it cannot disturb a real user session.",
+        "Linux and Windows single-instance activation have unit coverage but no live Electron evidence yet.",
+        "SSH identity transfer is deterministic unit coverage only; the live Electron journey currently exercises the local daemon provider."
+      ],
+      "demotionRule": "Quarantine the Electron journey only with a linked product or harness defect; demote if activation changes the owner/runtime/daemon/PTY identity, loses prior output, opens before provider readiness, or fails to honor a committed quit."
+    },
+    {
       "id": "editor.live-log-append-stability",
       "title": "Long live session logs retain their Monaco viewport while appending",
       "maturity": "experimental",
@@ -172,20 +331,24 @@
       "providers": ["local"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local"],
-      "coverageNotes": "Focused tests and real-Monaco 9/50 MiB benchmarks are platform-independent. Local macOS Electron evidence opens a synthetic 9 MiB transcript through Agent Session History at fixed 900x720 viewport, 13px font, 1x zoom, and asserts the full 9 MiB model length loaded as a font-metric-independent containment check (word-wrap pixel geometry varies ~10% across runners, so a generous content-height floor is only a collapsed/truncated-render smoke check), then verifies three five-second-cadence watcher appends with Find open and closed. Live Windows/Linux evidence remains uncollected.",
+      "coverageNotes": "Focused tests and real-Monaco 9/50 MiB performance and undo-retention benchmarks are platform-independent. Local macOS Electron evidence opens a synthetic 9 MiB transcript through Agent Session History at fixed 900x720 viewport, 13px font, 1x zoom, and asserts the full 9 MiB model length loaded as a font-metric-independent containment check (word-wrap pixel geometry varies ~10% across runners, so a generous content-height floor is only a collapsed/truncated-render smoke check), then verifies three five-second-cadence watcher appends with Find open and closed. Live Windows/Linux evidence remains uncollected.",
       "motivatingLinks": ["https://github.com/stablyai/orca/pull/8432"],
-      "invariant": "Append-only external file growth changes only Monaco's model suffix, retaining the viewport, selection, Find state, and renderer liveness above the append point; arbitrary rewrites continue to replace the model content.",
-      "oracle": "Focused tests assert one post-mount content owner, actual outer lifecycle remount ordering across retained path models, exact end-of-model suffix edits with one model read, no-op equality, and full replacement for non-appends. With Node forced GC, real-Monaco benchmarks alternate 30 suffix and 30 replacement samples after five warmups on fresh equivalent models at 9 and 50 MiB, forcing GC and event-loop settlement between every arm. The Electron scenario alternates an e2e-only legacy setValue red control and the fixed watcher append from restored equivalent model/geometry at the measured legacy-failure cadence, asserting that the control disrupts anchor state while the fixed path preserves visible ranges, selection, complete Find state, scroll offset, renderer survival, and forced-GC heap/native-memory budgets.",
+      "invariant": "Append-only external file growth changes only Monaco's model suffix, retaining the viewport, selection, Find state, and renderer liveness above the append point; read-only live tails do not create undo history, while editable external updates remain undoable and arbitrary rewrites continue to replace the model content.",
+      "oracle": "Focused tests assert one post-mount content owner, actual outer lifecycle remount ordering across retained path models, exact end-of-model suffix edits with one model read, no-op equality, full replacement for non-appends, and real-Monaco undo behavior for read-only live tails versus editable files. With Node forced GC, real-Monaco benchmarks alternate 30 suffix and 30 replacement samples after five warmups on fresh equivalent models at 9 and 50 MiB, then compare exact Monaco undo-service and ArrayBuffer retention after five 10 MiB appends. The Electron scenario alternates an e2e-only legacy setValue red control and the fixed watcher append from restored equivalent model/geometry at the measured legacy-failure cadence, asserting that the control disrupts anchor state while the fixed path preserves visible ranges, selection, complete Find state, scroll offset, non-undoability, renderer survival, and forced-GC heap/native-memory budgets.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/editor/monaco-content-sync.test.ts src/renderer/src/components/editor/MonacoEditor.content-owner.test.tsx src/renderer/src/components/editor/EditorContent.monaco-lifecycle.test.tsx",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/editor/monaco-content-sync.undo-history.test.ts",
         "node --expose-gc ./node_modules/vitest/vitest.mjs bench src/renderer/src/components/editor/monaco-content-sync.bench.ts --pool=threads",
+        "node --expose-gc ./node_modules/vitest/vitest.mjs bench src/renderer/src/components/editor/monaco-content-sync.undo-retention.bench.ts --pool=threads",
         "pnpm run test:e2e -- tests/e2e/agent-session-log-tail-stability.spec.ts --workers=1"
       ],
       "testFiles": [
         "src/renderer/src/components/editor/monaco-content-sync.test.ts",
+        "src/renderer/src/components/editor/monaco-content-sync.undo-history.test.ts",
         "src/renderer/src/components/editor/MonacoEditor.content-owner.test.tsx",
         "src/renderer/src/components/editor/EditorContent.monaco-lifecycle.test.tsx",
         "src/renderer/src/components/editor/monaco-content-sync.bench.ts",
+        "src/renderer/src/components/editor/monaco-content-sync.undo-retention.bench.ts",
         "tests/e2e/agent-session-log-tail-stability.spec.ts"
       ],
       "assertionRefs": [
@@ -194,8 +357,13 @@
           "assertions": [
             "append-only drift reads the current model once and inserts only at the previous model end",
             "identical content emits no edit and non-append drift retains full replacement plus undo stops",
+            "read-only live-tail appends, replacements, truncations, and stale retained-model remounts use non-undoing edits",
             "a stale retained target model reconciles on mount without explicit undo stops while prior-path content and undo history remain isolated"
           ]
+        },
+        {
+          "file": "src/renderer/src/components/editor/monaco-content-sync.undo-history.test.ts",
+          "assertions": ["a real Monaco read-only live-tail append leaves canUndo false while an ordinary external update remains undoable"]
         },
         {
           "file": "src/renderer/src/components/editor/MonacoEditor.content-owner.test.tsx",
@@ -210,11 +378,16 @@
           "assertions": ["with forced GC and deterministic settlement between every arm, fresh real-Monaco 9 MiB and 50 MiB models alternate 30 append and 30 replacement samples after five warmups; append p95 stays below 50/100ms and at least 2x faster"]
         },
         {
+          "file": "src/renderer/src/components/editor/monaco-content-sync.undo-retention.bench.ts",
+          "assertions": ["five 10 MiB read-only live-tail appends retain zero Monaco undo-service and ArrayBuffer bytes while the undoable control retains at least 50 MiB"]
+        },
+        {
           "file": "tests/e2e/agent-session-log-tail-stability.spec.ts",
           "assertions": [
             "production Agent Session History opens a synthetic 9 MiB View Log and confirms the full model length loaded as font-metric-independent containment, with a generous content-height floor as a collapsed/truncated-render smoke check",
             "an executable e2e-only legacy setValue control disrupts selection/Find/anchor state at each fixed-geometry five-second sample, then restores the equivalent model state before the fixed arm",
             "three alternating watcher suffix appends preserve visible ranges, selection, scroll offset, Find open/query/active-match state, and exact suffix content",
+            "the production read-only live-tail model remains non-undoable before and after every watcher append",
             "the renderer remains responsive with no render-process-gone event and forced-GC JS-heap/working-set/private-memory peak and retained budgets hold against paired legacy controls"
           ]
         }
@@ -246,12 +419,39 @@
           "result": "passed",
           "durationSeconds": 78,
           "summary": "The production View Log journey alternated retained e2e-only legacy-red controls with fixed appends from restored equivalent state; every control detected instability while the fixed path retained viewport, selection, complete Find state, renderer liveness, and normalized forced-GC/native memory budgets."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/editor/monaco-content-sync.undo-history.test.ts",
+          "result": "passed",
+          "durationSeconds": 4,
+          "summary": "The real-Monaco undo-history test confirmed a read-only live-tail append leaves canUndo false while an ordinary external update remains undoable."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "node --expose-gc ./node_modules/vitest/vitest.mjs bench src/renderer/src/components/editor/monaco-content-sync.undo-retention.bench.ts --pool=threads",
+          "result": "passed",
+          "durationSeconds": 5,
+          "summary": "The undoable 50 MiB control retained 104,858,630 undo-service bytes and 104,857,790 ArrayBuffer bytes; the read-only live-tail arm retained zero of both and remained non-undoable."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run test:e2e -- tests/e2e/agent-session-log-tail-stability.spec.ts --workers=1",
+          "result": "passed",
+          "durationSeconds": 78,
+          "summary": "The production View Log journey preserved viewport, selection, Find state, renderer liveness, and forced-GC/native budgets across three watcher appends while canUndo remained false."
         }
       ],
       "runtimeBudget": { "p95Seconds": 600, "scope": "local focused renderer tests plus one Electron production-journey scenario" },
       "flakeHistory": { "status": "unknown", "evidence": "New deterministic gate with local macOS passes; CI soak history is not yet available." },
-      "redGreenEvidence": { "status": "complete", "evidence": "The retained Electron gate itself executes the former read-only wrapper setValue behavior behind MODE=e2e at fixed 900x720, 13px, 1x zoom, the full 9 MiB model length loaded (with a generous content-height floor, since word-wrap pixel geometry is runner-dependent), and five-second cadence. The control retains a flat incoming value like the former controlled IPC prop. Each legacy arm must disrupt selection, Find active-match state, visible range, or scroll anchor, then restore identical model length/tail/geometry and anchor state before the fixed watcher arm; every fixed arm must preserve them. Production builds never install the control. The original exact-file dev repro also recorded renderer exit code 5." },
-      "performanceBudget": { "required": true, "evidence": "Every update retrieves the model value once and performs at most one equality-or-prefix comparison; a matching append submits only the suffix. The registered Node command requires --expose-gc and --pool=threads so worker GC is available; alternating fresh real-Monaco arms force GC and deterministic event-loop settlement after every operation. Observed p95 ranges: 9 MiB append 4.02-5.51ms versus replacement 81.42-83.76ms; 50 MiB append 22.72-26.60ms versus replacement 445.11-449.21ms. Electron alternates each legacy replacement control and fixed watcher suffix from equivalent restored model state/geometry, samples forced-GC JS heap plus app.getAppMetrics renderer working set and OS private memory before/after/settled, asserts retained memory within max(20MiB,10%), and requires suffix peak deltas for jsHeapMb, workingSetMb, and privateMb not exceed the paired legacy controls." },
+      "redGreenEvidence": { "status": "complete", "evidence": "A fail-first real-Monaco test observed canUndo=true after one read-only live-tail append, and the forced-GC 50 MiB control retained 104,858,630 bytes in Monaco's undo service. After the fix the read-only arm retained zero undo-service bytes while the editable control stayed undoable. The retained Electron gate also proves each fixed watcher arm preserves viewport, selection, Find state, and non-undoability. Production builds never install its legacy setValue control." },
+      "performanceBudget": { "required": true, "evidence": "Every update retrieves the model value once and performs at most one equality-or-prefix comparison; a matching append submits only the suffix. The registered Node commands require --expose-gc and --pool=threads so worker GC is available. Current p95: 9 MiB append 5.93-7.12ms versus replacement 114.09-145.89ms; 50 MiB append 26.84-34.91ms versus replacement 602.36-699.21ms. The new 50 MiB retention arm measured 104,858,630 undo-service bytes and 104,857,790 ArrayBuffer bytes for the undoable control versus zero for read-only live-tail sync. Electron forced-GC JS-heap, renderer working-set, and OS-private-memory budgets also pass." },
       "promotionCriteria": [
         "Collect stable soak history on macOS, Linux, and Windows.",
         "Accumulate 100 consecutive deterministic gate passes or 14 days without unexplained flakes."
@@ -390,7 +590,7 @@
         "https://github.com/stablyai/orca/issues/8001"
       ],
       "invariant": "Every terminal surface confirmed in the invoking renderer is force-closed exactly once after daemon management settles, later-created surfaces and non-terminal tabs survive, and exact shutdown requests are limited to deduplicated current non-runtime PTY bindings of the confirmed surfaces.",
-      "oracle": "Snapshot terminal entity IDs before the first await; mutate ownership, active selection, bindings, and tab presence while daemon management is pending; then assert only the immutable targets disappear from both terminal stores, active targets close last with valid editor/browser/deactivated post-state, every captured exact PTY promise settles before callbacks, and no provider inventory sweep or late-tab kill occurs.",
+      "oracle": "Snapshot terminal entity IDs before the first await; mutate ownership, active selection, bindings, and tab presence while daemon management is pending and between bounded close batches; then assert only the immutable targets disappear from both terminal stores, active targets close last with valid editor/browser/deactivated post-state, every captured exact PTY promise settles before callbacks, and no provider inventory sweep or late-tab kill occurs.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts src/renderer/src/components/shared/useDaemonActions.test.tsx src/renderer/src/components/terminal/terminal-tab-actions-kill-all.test.ts src/main/ipc/pty-management.test.ts"
       ],
@@ -409,7 +609,7 @@
             "current exact PTY bindings are deduplicated, remote runtime IDs and stale/late bindings are excluded, and all per-PTY settlements finish before completion",
             "the production dependency path calls daemon management exactly once and never invokes listSessions for a post-kill sweep",
             "management rejection and per-close/provider failures do not stop remaining cleanup and produce bounded count/latency diagnostics",
-            "a real 100-tab Zustand fixture records 100 close attempts and exact kills, at least 100 writes, 49 event-loop yields, and no close batch over 50 ms"
+            "a real 100-tab Zustand fixture records 100 close attempts and exact kills, at least 100 writes, and 49 event-loop yields; ownership is revalidated at most once after each yield when the store changed"
           ]
         },
         {
@@ -458,11 +658,11 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "The initial 100-tab implementation exposed a 145.82 ms close batch and failed the 50 ms budget; two-close event-loop batching reduced the focused run below the budget. Saved CI artifacts and intentional-break evidence for the confirmation-boundary assertions are still needed."
+        "evidence": "The initial 100-tab implementation exposed an oversized close batch; two-close event-loop batching fixed the structural issue. The gate now uses deterministic batch instrumentation because full-suite CPU saturation made wall-clock assertions flaky; saved CI artifacts and intentional-break evidence are still needed."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "The coordinator performs one existing management call, zero provider inventory sweeps, one close per present unique target, and at most one exact kill per unique current non-runtime PTY binding. A real 100-tab Zustand fixture asserts 100 close attempts, 100 exact kill calls, at least 100 store writes, 49 event-loop yields, and a maximum two-close batch at or below 50 ms."
+        "evidence": "The coordinator performs one management sweep, builds an initial live-owner index, and revalidates at most once after each two-close yield when the Zustand state changed (at most 49 replans for the 100-tab fixture). It closes each present unique target once and sends at most one exact kill per unique current non-runtime PTY not already settled by daemon management. The fixture asserts 100 close attempts, 100 local kill calls, at least 100 store writes, and 49 yields; planner-level tests prove each individual plan build scans terminal and unified ownership stores once. Production diagnostics report measured close-batch duration, while the deterministic gate makes no machine-load-sensitive latency claim."
       },
       "promotionCriteria": [
         "Run the focused gate for at least 100 consecutive passes or 14 days across required CI platforms.",
@@ -476,7 +676,124 @@
         "Runtime-host terminal close is best-effort because closeTerminalTab still discards the existing async host result and its close-intent lifetime is shorter than the possible RPC flow.",
         "Daemon adapter listing failures remain suppressed by the existing management API, so reported daemon counts are not authoritative verification of every process."
       ],
-      "demotionRule": "Keep experimental or demote to protection none if the gate flakes, permits a late-created tab or unrelated PTY to close, or exceeds the 50 ms maximum close-batch budget without a tracked product or harness bug."
+      "demotionRule": "Keep experimental or demote to protection none if the gate flakes, permits a late-created tab or unrelated PTY to close, duplicates provider shutdown, or performs more than one ownership replan per bounded yield."
+    },
+    {
+      "id": "terminal-session.explicit-close-retirement",
+      "title": "Explicit terminal close retires parked PTYs and agent authority exactly once",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "main-preload-renderer-electron-contract",
+      "surfaces": [
+        "terminal tab close",
+        "split pane close and detach",
+        "hidden terminal parking",
+        "agent resume authority"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local",
+        "daemon",
+        "ssh",
+        "runtime"
+      ],
+      "coverageNotes": "A live macOS Electron test proves exact local PTY disappearance after a parked-tab close. Deterministic unit/store tests cover daemon and SSH routing, ordinary runtime close ownership, unified-only hydration, split ownership, pane detach transfer, restart alias hydration, and late-hook suppression; live Linux, Windows, WSL, SSH, and remote-runtime process evidence remains pending.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/8628"
+      ],
+      "invariant": "Close permanently removes the owned provider session and resume authority even when no TerminalPane is mounted; detach and park preserve both; aliases prevent a detached agent's immutable physical pane key from being retired with its former tab.",
+      "oracle": "Capture the exact PTY before parking, prove it remains listed while the view is absent, close through the product state boundary, and poll the provider inventory until that exact ID disappears; unit tests assert canonical owner dedupe, one teardown owner, exact pane tombstones, chained detach transfer, and restart alias restoration.",
+      "commands": [
+        "pnpm dlx node@24 ./node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server-pane-authority.test.ts src/main/ipc/agent-hooks.test.ts src/main/ipc/agent-pane-authority-ownership.test.ts src/main/ipc/pty-management.test.ts src/main/persistence.test.ts src/renderer/src/store/slices/agent-pane-authority.test.ts src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts src/renderer/src/store/slices/terminal-tab-retirement.test.ts src/renderer/src/store/slices/terminal-tab-retirement-store.test.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
+        "pnpm run test:e2e -- tests/e2e/terminal-parked-close-retirement.spec.ts --workers=1"
+      ],
+      "testFiles": [
+        "src/main/agent-hooks/server-pane-authority.test.ts",
+        "src/main/ipc/agent-hooks.test.ts",
+        "src/main/ipc/agent-pane-authority-ownership.test.ts",
+        "src/main/ipc/pty-management.test.ts",
+        "src/main/persistence.test.ts",
+        "src/renderer/src/store/slices/agent-pane-authority.test.ts",
+        "src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts",
+        "src/renderer/src/store/slices/terminal-tab-retirement.test.ts",
+        "src/renderer/src/store/slices/terminal-tab-retirement-store.test.ts",
+        "src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
+        "tests/e2e/terminal-parked-close-retirement.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/terminal-parked-close-retirement.spec.ts",
+          "assertions": [
+            "a long-lived exact PTY remains alive after its terminal view is parked",
+            "closing the parked tab removes the exact PTY from the provider inventory and the visible tab model"
+          ]
+        },
+        {
+          "file": "src/main/ipc/agent-pane-authority-ownership.test.ts",
+          "assertions": [
+            "pane authority transfer accepts only the PTY bound to the physical local pane or the canonical legacy/scoped runtime handle"
+          ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/agent-pane-authority.test.ts",
+          "assertions": [
+            "exact pane retirement removes resume and launch authority while preserving siblings",
+            "chained detach keeps physical hooks and resume authority routed to the current owner until that owner closes"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run test:e2e -- tests/e2e/terminal-parked-close-retirement.spec.ts --workers=1",
+          "result": "passed",
+          "durationSeconds": 40.3,
+          "summary": "A fresh E2E build launched an isolated Electron profile, parked a live terminal, closed it through closeTab, and observed its exact PTY disappear."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 60,
+        "scope": "fresh E2E build plus one isolated local Electron parked-close test"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The Electron gate passed three times locally, including the final review-fix head through the registered fresh-build command; CI and soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The test exercises the original parked-view failure shape and passed with the retirement boundary; an archived intentional-break run is not yet attached."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "The close path is user-triggered and bounded by canonical live-owner indexing; kill-all scale remains covered by terminal-session.kill-all-surface-cleanup."
+      },
+      "promotionCriteria": [
+        "Accumulate 100 clean runs or 14 days on required CI platforms.",
+        "Add live Windows/ConPTY, Linux, WSL, SSH, and ordinary runtime process-absence evidence.",
+        "Add restart/no-resurrection and repeated park-close soak coverage."
+      ],
+      "knownGaps": [
+        "The live Electron proof currently covers macOS local PTYs only.",
+        "Disconnected SSH relay death still requires reconnect-aware provider ownership.",
+        "Daemon owner leases and durable retry inventory remain follow-up hardening."
+      ],
+      "demotionRule": "Keep experimental or demote to protection none if exact PTY disappearance flakes, a sibling/detached pane is retired, or late hooks can recreate closed authority."
     },
     {
       "id": "terminal-session.startup-cwd-missing-dir-recovery",
@@ -1792,7 +2109,7 @@
       "id": "terminal-provider.ssh-remote-reattach-contract",
       "title": "SSH and remote terminal restore never turn unknown liveness into destructive cleanup",
       "maturity": "experimental",
-      "protection": "none",
+      "protection": "partial",
       "owner": "terminal-provider",
       "layer": "provider-contract",
       "surfaces": [
@@ -1812,28 +2129,79 @@
         "remote-runtime",
         "wsl"
       ],
-      "coveredPlatforms": [],
-      "coveredProviders": [],
-      "coverageNotes": "Registered gap on main. The SSH unknown-liveness hardening and deferred-reattach contracts exist only on the pending reliability stack. It registers here with its owning split PR.",
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "ssh"
+      ],
+      "coverageNotes": "Deterministic renderer coverage proves startup publishes the state returned by ssh.connect, remote or unresolved hosts cannot enter local-daemon cold activation deferral, and stale cleanup cannot unregister a replacement runtime terminal. A macOS Electron journey connects to a real Linux SSH relay in Docker, persists six terminals, reloads the renderer, and verifies all six original relay PTYs remount eagerly and still execute remote input. Linux and Windows desktop clients, WSL, and remote-runtime restore remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6951",
         "https://github.com/stablyai/orca/pull/6955",
         "https://github.com/stablyai/orca/pull/6979",
-        "https://github.com/stablyai/orca/pull/7009"
+        "https://github.com/stablyai/orca/pull/7009",
+        "https://github.com/stablyai/orca/pull/8597"
       ],
-      "invariant": "SSH, WSL, and remote-runtime restore paths must treat provider listing failures and unknown liveness as unknown, not dead, while still avoiding duplicate spawn and clearing expired relay leases exactly once.",
-      "oracle": "The current executable slice asserts saved SSH sessions use relay attach, expired relay attach does not silently fresh-spawn inside the provider, provider listing and targeted-liveness failures are unknown rather than dead, deferred passphrase cancellation does not auto-reconnect, deferred SSH attach uses saved leaf/tab session ids once connected, transient deferred reattach failure preserves the saved restore id without fresh-spawning, deferred SSH no-result cleanup clears the pending serializer without consuming the saved restore id, disconnected SSH relay ids are retained as deferred reconnect metadata and sidebar wake hints rather than attached PTY proof, and expired deferred relay state clears stale pane/tab bindings before one fresh replacement spawn. WSL and remote-runtime mirror polling require separate follow-up contracts.",
-      "commands": [],
-      "testFiles": [],
-      "assertionRefs": [],
-      "evidenceRuns": [],
+      "invariant": "SSH, WSL, and remote-runtime restore paths must treat provider listing failures and unknown liveness as unknown, not dead, while still avoiding duplicate spawn and clearing expired relay leases exactly once. Snapshot-backed cold activation deferral is local-daemon-only; every restored remote terminal must mount a manager eagerly and preserve its provider PTY identity.",
+      "oracle": "Deterministic tests assert startup publishes ssh.connect's authoritative state before terminal reconnect, only an explicit local execution host can defer cold activation, host ownership changes clear old restrictions, and replacement runtime registrations survive stale cleanup. The live Docker SSH journey commits six terminal records to the relay, reloads Electron, requires the exact six manager ids with no parked tabs, compares all restored PTY ids to their pre-reload identities, and sends a marker through the restored terminal to a proof file on the Linux host.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/startup/ssh-startup-reconnect.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts src/renderer/src/runtime/sync-runtime-graph-scheduling.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+        "pnpm exec electron-vite build --mode e2e",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-cold-activation-deferral.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-cold-activation-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": [
+        "src/renderer/src/startup/ssh-startup-reconnect.test.ts",
+        "src/renderer/src/lib/resolved-worktree-execution-host.test.ts",
+        "src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts",
+        "src/renderer/src/runtime/sync-runtime-graph-scheduling.test.ts",
+        "src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+        "tests/e2e/terminal-cold-activation-deferral.spec.ts",
+        "tests/e2e/ssh-cold-activation-restore.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/startup/ssh-startup-reconnect.test.ts",
+          "assertions": [
+            "the state returned by ssh.connect is published before persisted terminals reconnect"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts",
+          "assertions": [
+            "only an explicit local execution host can defer cold activation",
+            "SSH, remote-runtime, and unresolved owners remain eager"
+          ]
+        },
+        {
+          "file": "tests/e2e/ssh-cold-activation-restore.spec.ts",
+          "assertions": [
+            "six relay-backed tabs retain the same six PTY ids across renderer reload",
+            "all six SSH managers mount eagerly and none is parked",
+            "restored terminal input reaches a proof file on the Linux SSH host"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-cold-activation-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 128,
+          "summary": "Six focused files and 475 tests passed; the local cold-activation journey passed; the Docker/Linux SSH journey restored six of six original relay PTYs, mounted six of six managers without parking, and executed remote input through the restored terminal."
+        }
+      ],
       "runtimeBudget": {
         "p95Seconds": 45,
         "scope": "provider contract plus optional SSH soak"
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "Focused provider/main/renderer SSH contract tests now run locally; needs soak history before promotion."
+        "evidence": "Focused renderer contracts and one clean Docker/Linux SSH Electron run pass locally; the live journey needs CI soak history before promotion."
       },
       "redGreenEvidence": {
         "status": "partial",
@@ -1841,7 +2209,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Provider listing and polling must be bounded, targeted where possible, and absent from typing/focus hot paths."
+        "evidence": "Host eligibility is resolved from existing store metadata during activation and adds no provider listing or polling. The local journey preserves cold deferral, while SSH eagerly mounts six managers as required; no work is added to typing or terminal-output hot paths."
       },
       "promotionCriteria": [
         "Use deterministic fake providers for failure and unknown-liveness cases.",
@@ -1849,12 +2217,10 @@
         "Include reconnect/polling artifacts that identify provider, connection id, and lease state."
       ],
       "knownGaps": [
-        "No executable coverage on main yet; the slice lives on the pending fix-terminal-reliability stack.",
         "Current command covers store wake-hint metadata, main-process SSH provider failure semantics, provider attach/expired-attach behavior, and renderer deferred SSH reconnect/transient-failure/expired-relay fallback with mocked transports.",
-        "The store coverage asserts recoverability metadata, not a live attached PTY or user-visible connected state.",
-        "Live SSH/remote coverage remains environment-dependent.",
+        "The live SSH journey is environment-dependent and currently runs from a macOS Electron client against a Linux Docker host.",
         "WSL and remote-runtime mirror polling contracts are not wired yet.",
-        "The deferred SSH coverage does not boot Electron against a real SSH relay or exercise real network reconnect timing."
+        "Linux and Windows desktop-client journeys are not yet collected."
       ],
       "demotionRule": "Cannot promote if provider failure can close panes or if the oracle is screenshot-only."
     },

@@ -5,12 +5,10 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
 import { resolvePairConfirmRouteState } from '../src/transport/pair-confirm-state'
 import {
-  startPairingConnectionAttempt,
-  type PairingConnectionAttempt
-} from '../src/transport/pairing-connection-attempt'
-import { connect } from '../src/transport/rpc-client'
-import { saveHost, getNextHostName } from '../src/transport/host-store'
-import type { ConnectionLogEntry, RpcResponse } from '../src/transport/types'
+  startPreProfilePairing,
+  type PreProfilePairingAttempt
+} from '../src/transport/pre-profile-pairing-coordinator'
+import type { ConnectionLogEntry } from '../src/transport/types'
 import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
 import { ConnectionLog } from '../src/components/ConnectionLog'
 
@@ -35,7 +33,7 @@ export default function PairConfirmScreen() {
   // batch fewer setState calls when entries arrive in bursts.
   const logsRef = useRef<ConnectionLogEntry[]>([])
   const mountedRef = useRef(true)
-  const activePairingAttemptRef = useRef<PairingConnectionAttempt | null>(null)
+  const activePairingAttemptRef = useRef<PreProfilePairingAttempt | null>(null)
 
   const routeState = resolvePairConfirmRouteState(params.code)
   const offer = routeState.offer
@@ -79,20 +77,12 @@ export default function PairConfirmScreen() {
     setStatus('connecting')
     logsRef.current = []
     setLogs([])
-    let client: ReturnType<typeof connect> | null = null
     activePairingAttemptRef.current?.dispose()
 
-    // Why: split the try/catch around the network call vs the local save
-    // so a Keychain or AsyncStorage failure doesn't masquerade as a
-    // "Cannot connect" error.
-    let response: RpcResponse
-    const attempt = startPairingConnectionAttempt({
+    const attempt = startPreProfilePairing({
+      offer,
       timeoutMs: PAIRING_OVERALL_TIMEOUT_MS,
-      closeClient: () => client?.close()
-    })
-    activePairingAttemptRef.current = attempt
-    try {
-      client = connect(offer.endpoint, offer.deviceToken, offer.publicKeyB64, {
+      connectOptions: {
         onLog: (entry) => {
           if (!mountedRef.current || activePairingAttemptRef.current !== attempt) {
             return
@@ -100,8 +90,11 @@ export default function PairConfirmScreen() {
           logsRef.current = [...logsRef.current, entry]
           setLogs(logsRef.current)
         }
-      })
-      response = await client.sendRequest('status.get')
+      }
+    })
+    activePairingAttemptRef.current = attempt
+    try {
+      const { hostId } = await attempt.result
       const attemptIsCurrent = activePairingAttemptRef.current === attempt
       attempt.dispose()
       if (activePairingAttemptRef.current === attempt) {
@@ -110,6 +103,7 @@ export default function PairConfirmScreen() {
       if (!mountedRef.current || !attemptIsCurrent) {
         return
       }
+      router.replace(`/h/${hostId}`)
     } catch (err) {
       const timedOut = attempt.timedOut
       const attemptIsCurrent = activePairingAttemptRef.current === attempt
@@ -125,47 +119,7 @@ export default function PairConfirmScreen() {
       setErrorMessage(
         timedOut
           ? `Couldn't connect within ${PAIRING_OVERALL_TIMEOUT_MS / 1000}s — see log below for where it stalled`
-          : 'Cannot connect — check that your computer is on the same network'
-      )
-      return
-    }
-
-    if (!response.ok) {
-      if (!mountedRef.current) {
-        return
-      }
-      setStatus('error')
-      setErrorMessage(
-        response.error.code === 'unauthorized'
-          ? 'Authentication failed — token may be expired'
-          : `Server error: ${response.error.message}`
-      )
-      return
-    }
-
-    try {
-      const hostId = `host-${Date.now()}`
-      const hostName = await getNextHostName()
-      await saveHost({
-        id: hostId,
-        name: hostName,
-        endpoint: offer.endpoint,
-        deviceToken: offer.deviceToken,
-        publicKeyB64: offer.publicKeyB64,
-        lastConnected: Date.now()
-      })
-      if (!mountedRef.current) {
-        return
-      }
-      router.replace(`/h/${hostId}`)
-    } catch (err) {
-      if (!mountedRef.current) {
-        return
-      }
-      console.warn('[pair-confirm] save failed', err)
-      setStatus('error')
-      setErrorMessage(
-        `Pairing succeeded but couldn't save the host: ${err instanceof Error ? err.message : String(err)}`
+          : `Pairing failed: ${err instanceof Error ? err.message : String(err)}`
       )
     }
   }

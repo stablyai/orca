@@ -3,7 +3,7 @@ import { resolveWindowsShiftEnterEncodingForPane } from '@/components/terminal-p
 import { createTestStore, makeTab, makeWorktree, seedStore } from './store-test-helpers'
 
 describe('syncPaneDetachPtyOwnership agent identity', () => {
-  it('moves process and launch identity to the detached leaf without forging hook identity', () => {
+  it('moves process, hook, launch, and resume authority to the detached leaf', () => {
     const store = createTestStore()
     const worktreeId = 'repo::/repo/worktree'
     const sourceTabId = 'tab-source'
@@ -49,6 +49,21 @@ describe('syncPaneDetachPtyOwnership agent identity', () => {
       prompt: '',
       agentType: 'droid'
     })
+    store.setState({
+      sleepingAgentSessionsByPaneKey: {
+        [sourcePaneKey]: {
+          paneKey: sourcePaneKey,
+          tabId: sourceTabId,
+          worktreeId,
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'session-1' },
+          prompt: 'continue',
+          state: 'working',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      }
+    })
 
     store.getState().syncPaneDetachPtyOwnership({
       detachedLeafId,
@@ -76,11 +91,19 @@ describe('syncPaneDetachPtyOwnership agent identity', () => {
       tabId: targetTabId,
       leafId: detachedLeafId
     })
-    // Why: the PTY keeps emitting its immutable source ORCA_PANE_KEY. A copied
-    // target hook row would look live but could never receive later updates.
     expect(state.agentStatusByPaneKey[sourcePaneKey]).toBeUndefined()
-    expect(state.agentStatusByPaneKey[targetPaneKey]).toBeUndefined()
-    expect(state.retentionSuppressedPaneKeys[sourcePaneKey]).toBe(true)
+    expect(state.agentStatusByPaneKey[targetPaneKey]).toMatchObject({
+      paneKey: targetPaneKey,
+      tabId: targetTabId,
+      state: 'working'
+    })
+    expect(state.sleepingAgentSessionsByPaneKey[sourcePaneKey]).toBeUndefined()
+    expect(state.sleepingAgentSessionsByPaneKey[targetPaneKey]).toMatchObject({
+      paneKey: targetPaneKey,
+      tabId: targetTabId,
+      providerSession: { key: 'session_id', id: 'session-1' }
+    })
+    expect(state.retentionSuppressedPaneKeys[sourcePaneKey]).toBeUndefined()
     expect(state.paneForegroundAgentByPaneKey[siblingPaneKey]).toEqual({
       agent: 'antigravity',
       shellForeground: false

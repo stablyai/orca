@@ -456,7 +456,7 @@ describe('createEditorSlice openDiff', () => {
     expect(store.getState().openFiles).toEqual([
       expect.objectContaining({
         id: 'wt-1::diff::unstaged::file.ts',
-        runtimeEnvironmentId: undefined
+        runtimeEnvironmentId: null
       }),
       expect.objectContaining({
         id: 'editor-diff:wt-1:env-1:unstaged:file.ts',
@@ -495,6 +495,66 @@ describe('createEditorSlice openDiff', () => {
         id: 'editor-diff:repo-1%3A%3A%2Fsrv%2Frepo%2Fworktree:env-1:unstaged:src%2Ffile.ts',
         runtimeEnvironmentId: 'env-1'
       })
+    )
+  })
+
+  it('keeps a diff for an owner-less worktree off the focused global runtime', () => {
+    const store = createEditorStore()
+    // A remote runtime is globally focused, but wt-1's repo names no explicit
+    // owner. The diff must stamp null (not undefined): null forces a LOCAL read
+    // in settingsForRuntimeOwner, while undefined would inherit 'focused-env'.
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' } as AppState['settings']
+    })
+
+    store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({
+        id: 'wt-1::diff::unstaged::file.ts',
+        runtimeEnvironmentId: null
+      })
+    )
+  })
+
+  it('routes an explicitly runtime-owned worktree diff to its owner over the focused runtime', () => {
+    const store = createEditorStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' } as AppState['settings'],
+      repos: [
+        { id: 'repo-1', executionHostId: 'runtime:owner-env' }
+      ] as unknown as AppState['repos'],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'repo-1::/srv/wt', repoId: 'repo-1', hostId: 'runtime:owner-env' }]
+      } as unknown as AppState['worktreesByRepo']
+    })
+
+    store.getState().openDiff('repo-1::/srv/wt', '/srv/wt/file.ts', 'file.ts', 'typescript', false)
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({ runtimeEnvironmentId: 'owner-env' })
+    )
+  })
+
+  it('keeps an SSH-owned worktree diff off the focused runtime so it routes via its connection', () => {
+    const store = createEditorStore()
+    // An SSH worktree is owned by its connection, not the focused runtime. Its
+    // diff stamps null (not the focused env), so the read targets local IPC and
+    // flows over connectionId rather than the focused runtime's RPC.
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' } as AppState['settings'],
+      repos: [{ id: 'repo-ssh', connectionId: 'conn-1' }] as unknown as AppState['repos'],
+      worktreesByRepo: {
+        'repo-ssh': [{ id: 'repo-ssh::/srv/wt', repoId: 'repo-ssh', hostId: 'ssh:conn-1' }]
+      } as unknown as AppState['worktreesByRepo']
+    })
+
+    store
+      .getState()
+      .openDiff('repo-ssh::/srv/wt', '/srv/wt/file.ts', 'file.ts', 'typescript', false)
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({ runtimeEnvironmentId: null })
     )
   })
 

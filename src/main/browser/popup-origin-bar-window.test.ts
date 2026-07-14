@@ -53,6 +53,11 @@ const { fakeElectron } = vi.hoisted(() => {
     webContents: FakeWebContents
     setBounds = vi.fn()
     constructor(options: { webContents?: FakeWebContents; webPreferences?: unknown }) {
+      // Why: Electron rejects explicit undefined instead of treating it as
+      // omitted, which the popup fallback path depends on.
+      if (Object.hasOwn(options, 'webContents') && options.webContents === undefined) {
+        throw new TypeError('options.webContents must be a WebContents')
+      }
       this.options = options
       this.webContents = options.webContents ?? createFakeWebContents()
       FakeWebContentsView.instances.push(this)
@@ -186,6 +191,7 @@ describe('openPopupWithOriginBar', () => {
 
   it('loads the target itself only when no pre-created contents were provided', () => {
     const popup = openPopupWithOriginBar({}, 'https://example.com/login')
+    expect(lastViews().content.options).not.toHaveProperty('webContents')
     expect(popup.contentWebContents.loadURL).toHaveBeenCalledWith('https://example.com/login')
   })
 

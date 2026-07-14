@@ -56,7 +56,10 @@ import {
   type RuntimeTerminalAgentStatusEvent
 } from './orca-runtime'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
-import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
+import {
+  HEADLESS_RUNTIME_WINDOW_ID,
+  type RuntimeMobileSessionTabsResult
+} from '../../shared/runtime-types'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import {
   TERMINAL_INPUT_CHUNK_MAX_BYTES,
@@ -1454,6 +1457,7 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.getStatus()).toMatchObject({
       graphStatus: 'unavailable',
       authoritativeWindowId: null,
+      desktopWindowStatus: 'openable',
       rendererGraphEpoch: 0
     })
     expect(runtime.getRuntimeId()).toBeTruthy()
@@ -1546,6 +1550,118 @@ describe('OrcaRuntimeService', () => {
     runtime.attachWindow(2)
 
     expect(runtime.getStatus().authoritativeWindowId).toBe(TEST_WINDOW_ID)
+  })
+
+  it('transfers authority from the headless sentinel to the first real window', () => {
+    const runtime = createRuntime()
+    electronMocks.BrowserWindow.fromId.mockImplementation((windowId: number) =>
+      windowId === TEST_WINDOW_ID ? ({ isDestroyed: () => false } as never) : null
+    )
+    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.attachWindow(2)
+
+    expect(runtime.getStatus()).toMatchObject({
+      authoritativeWindowId: TEST_WINDOW_ID,
+      desktopWindowStatus: 'available',
+      graphStatus: 'reloading',
+      rendererGraphEpoch: 1
+    })
+  })
+
+  it('marks live headless PTYs for renderer reattach before desktop promotion', () => {
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        activeWorktreeIdsOnShutdown: []
+      })
+    )
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+    runtime.registerPty('persisted-pty', TEST_WORKTREE_ID, null, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+
+    runtime.attachWindow(TEST_WINDOW_ID)
+
+    expect(getSession().activeWorktreeIdsOnShutdown).toEqual([TEST_WORKTREE_ID])
+  })
+
+  it('marks live bindings again when reopening after a promoted window closes', () => {
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        activeWorktreeIdsOnShutdown: []
+      })
+    )
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+    runtime.registerPty('persisted-pty', TEST_WORKTREE_ID, null, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+    runtime.attachWindow(TEST_WINDOW_ID)
+    ;(runtimeStore.setWorkspaceSession as unknown as (next: WorkspaceSessionState) => void)({
+      ...getSession(),
+      activeWorktreeIdsOnShutdown: []
+    })
+    runtime.markGraphUnavailable(TEST_WINDOW_ID)
+
+    runtime.attachWindow(2)
+
+    expect(getSession().activeWorktreeIdsOnShutdown).toEqual([TEST_WORKTREE_ID])
+  })
+
+  it('preserves live SSH session identities when promoting a headless runtime', () => {
+    const remotePtyId = 'ssh:ssh-1@@persisted-pty'
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        activeWorktreeIdsOnShutdown: [],
+        activeConnectionIdsAtShutdown: [],
+        remoteSessionIdsByTabId: {},
+        tabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'host-tab',
+              ptyId: remotePtyId,
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Remote Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: remotePtyId })
+        }
+      })
+    )
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+    runtime.registerPty(remotePtyId, TEST_WORKTREE_ID, 'ssh-1', {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+
+    runtime.attachWindow(TEST_WINDOW_ID)
+
+    expect(getSession()).toMatchObject({
+      activeWorktreeIdsOnShutdown: [TEST_WORKTREE_ID],
+      activeConnectionIdsAtShutdown: ['ssh-1'],
+      remoteSessionIdsByTabId: { 'host-tab': remotePtyId }
+    })
+  })
+
+  it('reports the activation gate state while no desktop window is available', () => {
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getDesktopWindowStatus: () => 'blocked'
+    })
+
+    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+
+    expect(runtime.getStatus().desktopWindowStatus).toBe('blocked')
   })
 
   it('bumps the epoch and enters reloading when the authoritative window reloads', () => {
@@ -6875,6 +6991,34 @@ describe('OrcaRuntimeService', () => {
       return { runtime, batches }
     }
 
+    it('defers desktop-only output scanners until a headless runtime is promoted', () => {
+      const { runtime, batches } = createSideEffectRuntime()
+      const trackerEntries = (
+        runtime as unknown as {
+          ptyTitleTrackersByPtyId: Map<string, { commandCodeDetector: unknown }>
+        }
+      ).ptyTitleTrackersByPtyId
+      runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+
+      runtime.onPtyData('pty-1', '\x07', 100)
+
+      expect(batches).toEqual([])
+      expect(trackerEntries.get('pty-1')?.commandCodeDetector).toBeNull()
+
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      runtime.onPtyData('pty-1', '\x07', 101)
+
+      expect(batches.flatMap((batch) => batch.facts)).toEqual([{ kind: 'bell' }])
+      expect(trackerEntries.get('pty-1')?.commandCodeDetector).not.toBeNull()
+
+      runtime.markGraphUnavailable(1)
+      runtime.onPtyData('pty-1', '\x07', 102)
+
+      expect(batches).toHaveLength(1)
+      expect(trackerEntries.get('pty-1')?.commandCodeDetector).toBeNull()
+    })
+
     it('emits one batched event per chunk with facts in byte order and attribution', () => {
       const { runtime, batches } = createSideEffectRuntime()
       syncSinglePty(runtime)
@@ -9932,9 +10076,35 @@ describe('OrcaRuntimeService', () => {
     })
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
-        worktreeId: TEST_WORKTREE_ID
+        worktreeId: TEST_WORKTREE_ID,
+        persistHostSessionBinding: true
       })
     )
+  })
+
+  it('keeps ordinary desktop background terminal persistence opt-in', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
+    const runtime = new OrcaRuntimeService(store)
+    const webContents = { send: vi.fn() }
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents
+    } as never)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+
+    const spawnOptions = spawn.mock.calls[0]?.[0] as
+      | { persistHostSessionBinding?: boolean }
+      | undefined
+    expect(spawnOptions?.persistHostSessionBinding).toBeUndefined()
   })
 
   it('falls back to background terminal creation for renderer-backed requests without a renderer window', async () => {

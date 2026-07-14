@@ -29,6 +29,7 @@ import { findRepoForHost } from './repo-host-identity'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { disposeRemovedWorktreeParkedTerminalWatchers } from '../../components/terminal-pane/terminal-parked-watcher-registry'
 import {
   callRuntimeRpc,
   getActiveRuntimeTarget,
@@ -3257,6 +3258,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const worktreeBeforeRemoval = get()
         .allWorktrees()
         .find((entry) => entry.id === worktreeId)
+      const terminalPtyIdsBeforeRemoval = (get().tabsByWorktree[worktreeId] ?? []).flatMap(
+        (tab) => get().ptyIdsByTabId[tab.id] ?? []
+      )
       const currentOwner = resolveWorktreeRemovalHost(get(), worktreeId)
       if (
         currentOwner.ambiguous ||
@@ -3344,6 +3348,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // batch) rather than only the context menu.
       requestVirtualizedScrollAnchorRecord('[data-worktree-sidebar]')
 
+      // Why: explicit deletion provenance is available here before child
+      // unmount cleanup; identity migration and recoverable remounts are not
+      // destructive and must keep their buffered live PTY state.
+      disposeRemovedWorktreeParkedTerminalWatchers(worktreeId, terminalPtyIdsBeforeRemoval)
       set((s) => {
         const next = { ...s.worktreesByRepo }
         for (const repoId of Object.keys(next)) {
@@ -4382,6 +4390,41 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     set({
       renamingWorktreeId: typeof request === 'string' ? { worktreeId: request } : request
     })
+  },
+
+  remountTerminalTabForRecovery: (tabId) => {
+    let remounted = false
+    set((s) => {
+      for (const [worktreeId, tabs] of Object.entries(s.tabsByWorktree)) {
+        const index = tabs.findIndex((tab) => tab.id === tabId)
+        if (index < 0) {
+          continue
+        }
+        const tab = tabs[index]
+        const nextTabs = tabs.slice()
+        nextTabs[index] = {
+          ...tab,
+          // Why: TerminalPane keys on `${tab.id}-${generation}` — the bump is
+          // the remount. Same mechanism as the dead-transport activation bump
+          // above; here it is health-driven for a pane whose renderer died
+          // while its PTY stayed alive (wedged/disposed xterm, unbound
+          // transport), so the remounted pane reattaches instead of spawning.
+          generation: (tab.generation ?? 0) + 1,
+          // Why: recovery is not a user interaction — suppress the resulting
+          // PTY updates from reshuffling Recent, like activation remounts do.
+          pendingActivationSpawn: getActivationSpawnSuppression(s.terminalLayoutsByTabId[tab.id])
+        }
+        remounted = true
+        return {
+          tabsByWorktree: {
+            ...s.tabsByWorktree,
+            [worktreeId]: nextTabs
+          }
+        }
+      }
+      return {}
+    })
+    return remounted
   },
 
   setActiveWorktree: (worktreeId) => {

@@ -20,7 +20,24 @@ import { readWsFallbackPort, writeWsFallbackPort } from './rpc/ws-fallback-port-
 import type { WebSocket } from 'ws'
 import { DeviceRegistry, type DeviceScope } from './device-registry'
 import { loadOrCreateE2EEKeypair, type E2EEKeypair } from './e2ee-keypair'
-import { E2EEChannel } from './rpc/e2ee-channel'
+import {
+  MobileSocketWiring,
+  type AuthenticatedMobileSocket,
+  type MobileSocketTransportMetadata
+} from './rpc/mobile-socket-wiring'
+import type { PairingRelay } from '../../shared/mobile-relay-pairing-offer'
+import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
+import {
+  RelayRevokeOutbox,
+  type RelayDeviceBinding,
+  type RelayRevokeOutboxItem
+} from './relay/relay-revoke-outbox'
+import type {
+  DeviceCredentialInstalled,
+  PairingGetEndpointsParams,
+  PairingGetEndpointsResult,
+  PairingProvisionRelayParams
+} from '../../shared/mobile-relay-credential-contract'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import {
   decodeTerminalStreamFrame,
@@ -44,6 +61,28 @@ type OrcaRuntimeRpcServerOptions = {
   keepaliveIntervalMs?: number
   longPollCap?: number
 }
+
+type MobileRelayPairingProvider = {
+  createPairingRelay(
+    relayDeviceId: string
+  ): Promise<{ relay: PairingRelay; binding: RelayDeviceBinding }>
+  onDeviceRevokeQueued(item: RelayRevokeOutboxItem): void
+  onDemandStateChanged?(): void
+  getEndpoints(
+    context: MobilePairingConnectionContext,
+    params: PairingGetEndpointsParams
+  ): Promise<PairingGetEndpointsResult>
+  provisionRelay(
+    context: MobilePairingConnectionContext,
+    params: PairingProvisionRelayParams
+  ): Promise<DeviceCredentialInstalled>
+}
+
+export type MobilePairingConnectionContext = Readonly<{
+  deviceId: string
+  connectionId: string
+  transport: MobileSocketTransportMetadata
+}>
 
 // Why: after 10 s of a pending dispatch we emit a tiny `{"_keepalive":true}`
 // frame every 10 s until the handler resolves. Each write resets both the
@@ -285,8 +324,11 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'linear.updateIssue',
   'markdown.readTab',
   'markdown.saveTab',
+  'notifications.getMissedSince',
   'notifications.subscribe',
   'notifications.unsubscribe',
+  'pairing.getEndpoints',
+  'pairing.provisionRelay',
   'preflight.check',
   'preflight.detectAgents',
   'preflight.detectRemoteAgents',
@@ -410,19 +452,14 @@ export class OrcaRuntimeRpcServer {
   private readonly authToken = randomBytes(24).toString('hex')
   private readonly keepaliveIntervalMs: number
   private readonly longPollCap: number
+  private readonly relayRevokeOutbox: RelayRevokeOutbox
   private deviceRegistry: DeviceRegistry | null = null
   private e2eeKeypair: E2EEKeypair | null = null
   private tlsFingerprint: string | null = null
-  private wsTransport: WebSocketTransport | null = null
   private activeTransports: RpcTransport[] = []
   private transports: RuntimeTransportMetadata[] = []
-  // Why: each WebSocket connection has its own E2EE channel that manages the
-  // handshake and encrypt/decrypt lifecycle. Keyed by WebSocket instance.
-  private e2eeChannels = new Map<WebSocket, E2EEChannel>()
-  // Why: stable per-WebSocket id used as the cleanup key for streaming
-  // subscriptions, so the server can reap a closing socket's subscriptions
-  // without affecting other live sockets that share the same deviceToken.
-  private wsConnectionIds = new Map<WebSocket, string>()
+  private mobileSocketWiring: MobileSocketWiring | null = null
+  private mobileRelayPairingProvider: MobileRelayPairingProvider | null = null
   private readonly binaryStreamHandlers = new Map<
     string,
     Map<number, (frame: TerminalStreamFrame) => void>
@@ -457,6 +494,7 @@ export class OrcaRuntimeRpcServer {
     this.webClientRoot = webClientRoot
     this.keepaliveIntervalMs = keepaliveIntervalMs
     this.longPollCap = longPollCap
+    this.relayRevokeOutbox = new RelayRevokeOutbox(userDataPath)
   }
 
   getDeviceRegistry(): DeviceRegistry | null {
@@ -475,12 +513,55 @@ export class OrcaRuntimeRpcServer {
     return this.e2eeKeypair
   }
 
-  revokeMobileDevice(deviceId: string): boolean {
-    const device = this.deviceRegistry?.getDevice(deviceId)
-    if (device?.scope !== 'mobile' || !this.deviceRegistry?.removeDevice(deviceId)) {
+  getMobileSocketWiring(): MobileSocketWiring | null {
+    return this.mobileSocketWiring
+  }
+
+  getRelayRevokeOutbox(): RelayRevokeOutbox {
+    return this.relayRevokeOutbox
+  }
+
+  setMobileRelayBinding(deviceId: string, binding: RelayDeviceBinding): boolean {
+    const current = this.deviceRegistry?.getDevice(deviceId)
+    if (
+      current?.scope !== 'mobile' ||
+      this.deviceRegistry?.getMobilePairingConnectionMode(deviceId) === 'local-only'
+    ) {
       return false
     }
-    this.wsTransport?.terminateClientConnections(device.token)
+    if (
+      current.relayBinding &&
+      (current.relayBinding.relayHostId !== binding.relayHostId ||
+        current.relayBinding.ownerIdentityKey !== binding.ownerIdentityKey)
+    ) {
+      // Why: switching the account/host that owns this local pairing cannot
+      // strand the old cloud credential family even if that account is offline.
+      this.queueRelayDeviceRevoke(current.relayBinding)
+    }
+    const updated = this.deviceRegistry?.setRelayBinding(deviceId, binding) ?? false
+    if (updated) {
+      this.mobileRelayPairingProvider?.onDemandStateChanged?.()
+    }
+    return updated
+  }
+
+  setMobileRelayPairingProvider(provider: MobileRelayPairingProvider | null): void {
+    this.mobileRelayPairingProvider = provider
+  }
+
+  async revokeMobileDevice(deviceId: string): Promise<boolean> {
+    const device = this.deviceRegistry?.getDevice(deviceId)
+    if (device?.scope !== 'mobile') {
+      return false
+    }
+    if (device.relayBinding) {
+      this.queueRelayDeviceRevoke(device.relayBinding)
+    }
+    if (!this.deviceRegistry?.removeDevice(deviceId)) {
+      return false
+    }
+    this.mobileRelayPairingProvider?.onDemandStateChanged?.()
+    this.mobileSocketWiring?.terminateDeviceConnections(device.token)
     return true
   }
 
@@ -489,7 +570,7 @@ export class OrcaRuntimeRpcServer {
     if (device?.scope !== 'runtime' || !this.deviceRegistry?.removeDevice(deviceId)) {
       return false
     }
-    this.wsTransport?.terminateClientConnections(device.token)
+    this.mobileSocketWiring?.terminateDeviceConnections(device.token)
     return true
   }
 
@@ -541,6 +622,71 @@ export class OrcaRuntimeRpcServer {
     }
   }
 
+  async createMobilePairingOffer(args: {
+    address?: string | null
+    connectionMode?: MobilePairingConnectionMode
+    name?: string
+    rotate?: boolean
+  }): Promise<ReturnType<OrcaRuntimeRpcServer['createPairingOffer']>> {
+    // Why: the renderer is outside the trust boundary; only the explicit
+    // local-only value may suppress Relay provisioning.
+    const connectionMode = args.connectionMode === 'local-only' ? 'local-only' : 'automatic'
+    const pending = this.deviceRegistry?.getPendingDevice('mobile')
+    const switchingPendingToLocal =
+      connectionMode === 'local-only' && pending?.relayBinding !== undefined
+    if (args.rotate || switchingPendingToLocal) {
+      if (pending?.relayBinding) {
+        // Why: the durable cloud revoke is recorded before rotating the local
+        // token, so a previously displayed relay invite cannot outlive the QR.
+        this.queueRelayDeviceRevoke(pending.relayBinding)
+      }
+    }
+    const direct = this.createPairingOffer({
+      ...args,
+      rotate: args.rotate || switchingPendingToLocal,
+      scope: 'mobile'
+    })
+    if (!direct.available) {
+      return direct
+    }
+    this.deviceRegistry?.setMobilePairingConnectionMode(direct.deviceId, connectionMode)
+    if (connectionMode === 'local-only' || !this.mobileRelayPairingProvider) {
+      return direct
+    }
+    const device = this.deviceRegistry?.getDevice(direct.deviceId)
+    const publicKeyB64 = this.getE2EEPublicKey()
+    if (!device || !publicKeyB64) {
+      return direct
+    }
+    try {
+      const relayPairing = await this.mobileRelayPairingProvider.createPairingRelay(device.deviceId)
+      if (!this.deviceRegistry?.setRelayBinding(device.deviceId, relayPairing.binding)) {
+        return direct
+      }
+      this.mobileRelayPairingProvider.onDemandStateChanged?.()
+      return {
+        ...direct,
+        pairingUrl: encodePairingOffer({
+          v: PAIRING_OFFER_VERSION,
+          endpoint: direct.endpoint,
+          deviceToken: device.token,
+          publicKeyB64,
+          scope: 'mobile',
+          relay: relayPairing.relay
+        })
+      }
+    } catch {
+      // Why: relay is additive. A transient auth/director/control outage must
+      // still yield the valid LAN/Tailscale pairing offer.
+      return direct
+    }
+  }
+
+  private queueRelayDeviceRevoke(binding: RelayDeviceBinding): void {
+    const item = this.relayRevokeOutbox.enqueue(binding)
+    this.mobileRelayPairingProvider?.onDeviceRevokeQueued(item)
+  }
+
   private registerBinaryStreamHandler(
     connectionId: string | undefined,
     streamId: number,
@@ -568,7 +714,7 @@ export class OrcaRuntimeRpcServer {
   }
 
   private handleWebSocketBinaryMessage(bytes: Uint8Array<ArrayBufferLike>, ws: WebSocket): void {
-    const connectionId = this.wsConnectionIds.get(ws)
+    const connectionId = this.mobileSocketWiring?.getConnectionId(ws)
     if (!connectionId) {
       return
     }
@@ -720,85 +866,39 @@ export class OrcaRuntimeRpcServer {
           // pin it.
           ...(this.wsPort !== 0 ? { fallbackPort: readWsFallbackPort(this.userDataPath) } : {})
         })
-        this.wsTransport = wsTransport
-
-        // Why: each WebSocket connection gets an E2EE channel that handles the
-        // handshake before any RPC messages are processed. The channel decrypts
-        // inbound messages and encrypts outbound replies transparently.
-        wsTransport.onMessage((msg, _reply, ws) => {
-          let channel = this.e2eeChannels.get(ws)
-          if (!channel) {
-            // Why: stable per-ws id used as the cleanup-index key for
-            // streaming subscriptions, so the server can reap them exactly
-            // when this socket closes (without affecting other live sockets
-            // that share the same deviceToken).
-            this.wsConnectionIds.set(ws, randomBytes(8).toString('hex'))
-            channel = new E2EEChannel(ws, {
-              serverSecretKey: this.e2eeKeypair!.secretKey,
-              validateToken: (token) => this.deviceRegistry?.validateToken(token) != null,
-              onReady: (ch) => {
-                if (ch.deviceToken) {
-                  wsTransport.setClientId(ws, ch.deviceToken)
-                  // Why: mark the device as actually connected so it appears
-                  // in the "Paired Devices" list. Devices that were only
-                  // generated as QR codes but never scanned stay hidden.
-                  const device = this.deviceRegistry?.validateToken(ch.deviceToken)
-                  if (device) {
-                    this.deviceRegistry?.updateLastSeen(device.deviceId)
-                  }
-                }
-              },
-              onError: (code, reason) => {
-                this.e2eeChannels.get(ws)?.destroy()
-                this.e2eeChannels.delete(ws)
-                ws.close(code, reason)
-              }
-            })
-            channel.onMessage((plaintext, encryptedReply, encryptedBinaryReply) => {
-              const authenticatedDeviceToken = this.e2eeChannels.get(ws)?.deviceToken ?? null
-              void this.handleWebSocketMessage(
-                plaintext,
-                encryptedReply,
-                encryptedBinaryReply,
-                wsTransport,
-                ws,
-                authenticatedDeviceToken
-              )
-            })
-            channel.onBinaryMessage((bytes) => this.handleWebSocketBinaryMessage(bytes, ws))
-            this.e2eeChannels.set(ws, channel)
-          }
-          channel.handleRawMessage(msg)
-        })
-
-        // Why: when a mobile client disconnects, the runtime must clean up
-        // connection-scoped state like mobile-fit overrides and the E2EE
-        // channel to prevent orphaned state. A single paired device can hold
-        // multiple concurrent sockets (host screen + accounts screen, etc.),
-        // so destroy the channel for THIS exact ws and skip the per-client
-        // teardown when other sockets for the same token are still alive.
-        wsTransport.onConnectionClose((clientId, ws, hasOtherConnections) => {
-          this.abortWebSocketDispatches(ws)
-          // Why: sweep streaming subscriptions for THIS ws regardless of
-          // hasOtherConnections, so per-ws listeners (notifications,
-          // accounts, terminal) don't leak across reconnects. This is
-          // independent of the deviceToken-scoped onClientDisconnected.
-          const connectionId = this.wsConnectionIds.get(ws)
-          if (connectionId) {
-            this.runtime.cleanupSubscriptionsForConnection(connectionId)
-            this.runtime.cancelMobileDictationForConnection(connectionId)
-            this.binaryStreamHandlers.delete(connectionId)
-            this.wsConnectionIds.delete(ws)
-          }
-          const channel = this.e2eeChannels.get(ws)
-          if (channel) {
-            channel.destroy()
-            this.e2eeChannels.delete(ws)
-          }
-          if (clientId && !hasOtherConnections) {
-            this.runtime.onClientDisconnected(clientId)
+        const mobileSocketWiring = new MobileSocketWiring({
+          deviceRegistry: this.deviceRegistry,
+          e2eeKeypair: this.e2eeKeypair,
+          onText: (socket, plaintext, reply, sendBinary) => {
+            void this.handleWebSocketMessage(
+              plaintext,
+              reply,
+              sendBinary,
+              undefined,
+              socket.ws,
+              socket.device.deviceToken,
+              socket
+            )
+          },
+          onBinary: (socket, bytes) => this.handleWebSocketBinaryMessage(bytes, socket.ws),
+          onReady: () => this.mobileRelayPairingProvider?.onDemandStateChanged?.(),
+          onClose: (socket, hasOtherConnections) => {
+            if (!socket) {
+              return
+            }
+            this.abortWebSocketDispatches(socket.ws)
+            // Why: subscriptions and binary streams are socket-scoped, while
+            // client disconnect state is device-scoped across both transports.
+            this.runtime.cleanupSubscriptionsForConnection(socket.connectionId)
+            this.runtime.cancelMobileDictationForConnection(socket.connectionId)
+            this.binaryStreamHandlers.delete(socket.connectionId)
+            if (!hasOtherConnections) {
+              this.runtime.onClientDisconnected(socket.device.deviceToken)
+            }
           }
         })
+        mobileSocketWiring.attachTransport(wsTransport)
+        this.mobileSocketWiring = mobileSocketWiring
 
         await wsTransport.start()
         if (this.wsPort !== 0 && wsTransport.resolvedPort !== this.wsPort) {
@@ -814,7 +914,7 @@ export class OrcaRuntimeRpcServer {
         // function if it fails to start (e.g., port in use). Log and continue
         // with Unix socket only.
         console.error('[runtime] Failed to start WebSocket transport:', error)
-        this.wsTransport = null
+        this.mobileSocketWiring = null
       }
     }
 
@@ -841,7 +941,7 @@ export class OrcaRuntimeRpcServer {
     const transports = this.activeTransports
     this.activeTransports = []
     this.transports = []
-    this.wsTransport = null
+    this.mobileSocketWiring = null
     if (transports.length === 0) {
       return
     }
@@ -935,7 +1035,8 @@ export class OrcaRuntimeRpcServer {
     sendBinary: (response: Uint8Array<ArrayBufferLike>) => boolean | void,
     wsTransport?: WebSocketTransport,
     ws?: WebSocket,
-    authenticatedDeviceToken?: string | null
+    authenticatedDeviceToken?: string | null,
+    authenticatedSocket?: AuthenticatedMobileSocket
   ): Promise<void> {
     let request: RpcRequest
     try {
@@ -1019,7 +1120,31 @@ export class OrcaRuntimeRpcServer {
         ? (response: string): void => reply(injectDeviceScope(response, device.scope))
         : reply
 
-    const connectionId = ws ? this.wsConnectionIds.get(ws) : undefined
+    const connectionId = ws ? this.mobileSocketWiring?.getConnectionId(ws) : undefined
+    const pairingProvider = this.mobileRelayPairingProvider
+    const pairingContext =
+      pairingProvider && authenticatedSocket
+        ? {
+            getEndpoints: (params: PairingGetEndpointsParams) =>
+              pairingProvider.getEndpoints(
+                {
+                  deviceId: authenticatedSocket.device.deviceId,
+                  connectionId: authenticatedSocket.connectionId,
+                  transport: authenticatedSocket.transport
+                },
+                params
+              ),
+            provisionRelay: (params: PairingProvisionRelayParams) =>
+              pairingProvider.provisionRelay(
+                {
+                  deviceId: authenticatedSocket.device.deviceId,
+                  connectionId: authenticatedSocket.connectionId,
+                  transport: authenticatedSocket.transport
+                },
+                params
+              )
+          }
+        : undefined
     try {
       await this.dispatcher.dispatchStreaming(request, replyForRequest, {
         connectionId,
@@ -1027,6 +1152,7 @@ export class OrcaRuntimeRpcServer {
         // Why: gates the mobile-only payload diet (native-chat char clipping) so
         // full-screen web/desktop runtime clients aren't truncated.
         clientKind: device.scope,
+        pairing: pairingContext,
         signal: abortRegistration?.signal,
         sendBinary,
         registerBinaryStreamHandler: (streamId, handler) =>

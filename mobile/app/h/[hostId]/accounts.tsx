@@ -23,6 +23,7 @@ import {
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
   getUsageBarState,
+  getWindowResetLabel,
   hasActiveProviderUsage,
   UsageBar
 } from '../../../src/components/AccountUsage'
@@ -39,6 +40,14 @@ export default function AccountsScreen() {
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null)
+
+  // Why: the reset countdown must stay fresh while the screen sits open —
+  // snapshot pushes only arrive when the desktop's rate-limit poll completes.
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(id)
+  }, [])
 
   useEffect(() => {
     if (!hostId) {
@@ -163,12 +172,14 @@ export default function AccountsScreen() {
                     usedPercent={activeSessionBar.usedPercent}
                     unavailable={activeSessionBar.unavailable}
                     loading={activeSessionBar.loading}
+                    resetText={getWindowResetLabel(activeUsage, 'session', now)}
                   />
                   <UsageBar
                     label="7d"
                     usedPercent={activeWeeklyBar.usedPercent}
                     unavailable={activeWeeklyBar.unavailable}
                     loading={activeWeeklyBar.loading}
+                    resetText={getWindowResetLabel(activeUsage, 'weekly', now)}
                   />
                 </View>
               ) : null}
@@ -211,12 +222,14 @@ export default function AccountsScreen() {
                         usedPercent={sessionBar.usedPercent}
                         unavailable={sessionBar.unavailable}
                         loading={sessionBar.loading}
+                        resetText={getWindowResetLabel(usage, 'session', now)}
                       />
                       <UsageBar
                         label="7d"
                         usedPercent={weeklyBar.usedPercent}
                         unavailable={weeklyBar.unavailable}
                         loading={weeklyBar.loading}
+                        resetText={getWindowResetLabel(usage, 'weekly', now)}
                       />
                     </View>
                     {usage?.error ? (

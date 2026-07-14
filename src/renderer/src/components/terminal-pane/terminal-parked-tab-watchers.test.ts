@@ -28,20 +28,34 @@ vi.mock('./parked-terminal-byte-watcher', () => ({
 
 type ExitSubscription = {
   ptyId: string
-  callback: (code: number) => void
+  callback: (code: number, context: { hadPrimary: boolean }) => void
   unsubscribe: ReturnType<typeof vi.fn>
 }
 
 const exitSubscriptions: ExitSubscription[] = []
-const subscribeToPtyExit = vi.fn((ptyId: string, callback: (code: number) => void) => {
-  const unsubscribe = vi.fn()
-  exitSubscriptions.push({ ptyId, callback, unsubscribe })
-  return unsubscribe
-})
+const subscribeToPtyExit = vi.fn(
+  (ptyId: string, callback: (code: number, context: { hadPrimary: boolean }) => void) => {
+    const unsubscribe = vi.fn()
+    exitSubscriptions.push({ ptyId, callback, unsubscribe })
+    return unsubscribe
+  }
+)
 
 vi.mock('./pty-dispatcher', () => ({
   subscribeToPtyExit: (ptyId: string, callback: (code: number) => void) =>
     subscribeToPtyExit(ptyId, callback)
+}))
+
+const consumePreHandlerPtyState = vi.fn()
+vi.mock('./pty-pre-handler-buffer', () => ({
+  discardPreHandlerPtyState: (ptyId: string) => consumePreHandlerPtyState(ptyId)
+}))
+
+type CloseTerminalTabOptions = { onClosed?: () => void; onCancel?: () => void }
+const closeTerminalTab = vi.fn()
+vi.mock('../terminal/terminal-tab-actions', () => ({
+  closeTerminalTab: (tabId: string, options?: CloseTerminalTabOptions) =>
+    closeTerminalTab(tabId, options)
 }))
 
 type MockStoreState = {
@@ -97,11 +111,15 @@ function syncParked(args?: {
   worktreeId?: string
   tabs?: { id: string; ptyId: string | null }[]
   parkedTabIds?: Iterable<string>
+  restoreTitleOnStartTabIds?: Iterable<string>
 }): void {
   syncParkedTerminalTabWatchers({
     worktreeId: args?.worktreeId ?? WORKTREE_ID,
     tabs: args?.tabs ?? [{ id: TAB_ID, ptyId: PTY_ID }],
-    parkedTabIds: new Set(args?.parkedTabIds ?? [TAB_ID])
+    parkedTabIds: new Set(args?.parkedTabIds ?? [TAB_ID]),
+    ...(args?.restoreTitleOnStartTabIds
+      ? { restoreTitleOnStartTabIds: new Set(args.restoreTitleOnStartTabIds) }
+      : {})
   })
 }
 
@@ -150,7 +168,15 @@ describe('terminal-parked-tab-watchers', () => {
       paneId: 2,
       drivesTabTitle: false
     })
+    expect(startedWatchers[0].options.restoreTitleOnRegister).toBeUndefined()
     expect(getParkedTerminalWatcherTabIds()).toEqual([TAB_ID])
+  })
+
+  it('requests a title snapshot when a mount-restricted tab starts its watcher', () => {
+    capturePanes([{ ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
+    syncParked({ restoreTitleOnStartTabIds: [TAB_ID] })
+
+    expect(startedWatchers[0].options.restoreTitleOnRegister).toBe(true)
   })
 
   it('routes watcher sendInput to window.api.pty.write for the watched PTY', () => {
@@ -221,7 +247,7 @@ describe('terminal-parked-tab-watchers', () => {
     syncParked()
 
     const exited = exitSubscriptions.find((entry) => entry.ptyId === PTY_ID)
-    exited?.callback(0)
+    exited?.callback(0, { hadPrimary: false })
 
     expect(startedWatchers[0].dispose).toHaveBeenCalledTimes(1)
     expect(startedWatchers[1].dispose).not.toHaveBeenCalled()
@@ -241,14 +267,62 @@ describe('terminal-parked-tab-watchers', () => {
     expect(startedWatchers[1].options.initialTitle).toBeUndefined()
   })
 
-  it('drops the parked tab entry when the pty-exit sidecar disposes the last watcher', () => {
+  it('consumes the exit and drops the parked entry after the last-watcher close resolves', () => {
     capturePanes([{ ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
     syncParked()
 
-    exitSubscriptions.find((entry) => entry.ptyId === PTY_ID)?.callback(0)
+    exitSubscriptions.find((entry) => entry.ptyId === PTY_ID)?.callback(0, { hadPrimary: false })
 
+    expect(consumePreHandlerPtyState).not.toHaveBeenCalled()
+    expect(getParkedTerminalWatcherTabIds()).toEqual([TAB_ID])
+    const options = closeTerminalTab.mock.calls[0]?.[1] as CloseTerminalTabOptions
+    options.onClosed?.()
+
+    expect(consumePreHandlerPtyState).toHaveBeenCalledWith(PTY_ID)
     expect(startedWatchers[0].dispose).toHaveBeenCalledTimes(1)
     expect(getParkedTerminalWatcherTabIds()).toEqual([])
+  })
+
+  it('retains the buffered exit and empty registry entry when pinned close is cancelled', () => {
+    capturePanes([{ ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
+    syncParked()
+
+    exitSubscriptions.find((entry) => entry.ptyId === PTY_ID)?.callback(0, { hadPrimary: false })
+    const options = closeTerminalTab.mock.calls[0]?.[1] as CloseTerminalTabOptions
+    options.onCancel?.()
+    syncParked({ parkedTabIds: [] })
+
+    expect(consumePreHandlerPtyState).not.toHaveBeenCalled()
+    expect(startParkedTerminalByteWatcher).toHaveBeenCalledTimes(1)
+    expect(getParkedTerminalWatcherTabIds()).toEqual([TAB_ID])
+
+    expect(shouldDeferParkedPtyExitTabClose(TAB_ID, PTY_ID)).toBe(true)
+    expect(getParkedTerminalWatcherTabIds()).toEqual([])
+    expect(shouldDeferParkedPtyExitTabClose(TAB_ID, PTY_ID)).toBe(false)
+  })
+
+  it('consumes a queued parked exit when another confirmation closes the tab first', () => {
+    capturePanes([{ ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
+    syncParked()
+    exitSubscriptions.find((entry) => entry.ptyId === PTY_ID)?.callback(0, { hadPrimary: false })
+
+    // Why: a manual pinned close can be ahead of this autonomous exit request
+    // in the confirmation queue and remove the tab before the exit resolves.
+    syncParked({ tabs: [] })
+
+    expect(consumePreHandlerPtyState).toHaveBeenCalledWith(PTY_ID)
+    expect(getParkedTerminalWatcherTabIds()).toEqual([])
+  })
+
+  it('does not queue a second close when a retained primary handled the parked exit', () => {
+    capturePanes([{ ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
+    syncParked()
+
+    exitSubscriptions.find((entry) => entry.ptyId === PTY_ID)?.callback(0, { hadPrimary: true })
+
+    expect(closeTerminalTab).not.toHaveBeenCalled()
+    expect(startedWatchers[0].dispose).toHaveBeenCalledTimes(1)
+    expect(getParkedTerminalWatcherTabIds()).toEqual([TAB_ID])
   })
 
   it('synchronously disposes watchers for the given PTY ids without unparking the tab', () => {
@@ -319,6 +393,18 @@ describe('terminal-parked-tab-watchers', () => {
     capturePanes([{ ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
     syncParked()
     pruneParkedTerminalWatchers(new Set([OTHER_WORKTREE_ID]))
+    expect(getParkedTerminalWatcherTabIds()).toEqual([])
+  })
+
+  it('consumes parked state when child cleanup observes a removed worktree', () => {
+    capturePanes([{ ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
+    syncParked()
+
+    disposeParkedTerminalWatchersForWorktree(WORKTREE_ID, {
+      consumePreHandlerState: true
+    })
+
+    expect(consumePreHandlerPtyState).toHaveBeenCalledWith(PTY_ID)
     expect(getParkedTerminalWatcherTabIds()).toEqual([])
   })
 
@@ -452,7 +538,7 @@ describe('terminal-parked-tab-watchers', () => {
       expect(closeTab).toHaveBeenCalledWith(TAB_ID)
     })
 
-    it('collapses the exited leaf via the watcher exit sidecar (no host handler while parked)', () => {
+    it('collapses a dead leaf then closes when the last parked split leaf exits', () => {
       // Why: hosts' onPtyExit runs from a mounted TerminalPane, so an exit
       // that lands while parked reaches ONLY the watcher sidecar — it must run
       // the layout collapse itself or the leaf resurrects on reveal.
@@ -473,8 +559,11 @@ describe('terminal-parked-tab-watchers', () => {
         ptyIdsByLeafId: { [LEAF_ID]: PTY_ID, [SECOND_LEAF_ID]: SECOND_PTY_ID }
       }
 
-      exitSubscriptions.find((entry) => entry.ptyId === SECOND_PTY_ID)?.callback(0)
+      exitSubscriptions
+        .find((entry) => entry.ptyId === SECOND_PTY_ID)
+        ?.callback(0, { hadPrimary: false })
 
+      expect(consumePreHandlerPtyState).toHaveBeenCalledWith(SECOND_PTY_ID)
       expect(mockStoreState.clearRuntimePaneTitle).toHaveBeenCalledWith(TAB_ID, 2)
       expect(mockStoreState.setTabLayout).toHaveBeenCalledWith(TAB_ID, {
         root: { type: 'leaf', leafId: LEAF_ID },
@@ -482,6 +571,11 @@ describe('terminal-parked-tab-watchers', () => {
         expandedLeafId: null,
         ptyIdsByLeafId: { [LEAF_ID]: PTY_ID }
       })
+
+      exitSubscriptions.find((entry) => entry.ptyId === PTY_ID)?.callback(0, { hadPrimary: false })
+      const options = closeTerminalTab.mock.calls[0]?.[1] as CloseTerminalTabOptions
+      options.onClosed?.()
+      expect(consumePreHandlerPtyState).toHaveBeenCalledWith(PTY_ID)
     })
 
     it('does not touch the layout when the last parked watcher exits (tab-level close owns it)', () => {
@@ -494,7 +588,7 @@ describe('terminal-parked-tab-watchers', () => {
         ptyIdsByLeafId: { [LEAF_ID]: PTY_ID }
       }
 
-      exitSubscriptions.find((entry) => entry.ptyId === PTY_ID)?.callback(0)
+      exitSubscriptions.find((entry) => entry.ptyId === PTY_ID)?.callback(0, { hadPrimary: false })
 
       expect(mockStoreState.setTabLayout).not.toHaveBeenCalled()
     })
@@ -508,7 +602,7 @@ describe('terminal-parked-tab-watchers', () => {
 
       // First leaf dies: deferred, then its exit sidecar drops the watcher.
       hostOnPtyExit(TAB_ID, PTY_ID)
-      exitSubscriptions.find((entry) => entry.ptyId === PTY_ID)?.callback(0)
+      exitSubscriptions.find((entry) => entry.ptyId === PTY_ID)?.callback(0, { hadPrimary: false })
       expect(closeTab).not.toHaveBeenCalled()
 
       hostOnPtyExit(TAB_ID, SECOND_PTY_ID)

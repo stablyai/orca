@@ -6,6 +6,7 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
+import { retireUnownedTerminal } from '@/lib/retire-unowned-background-terminal'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
@@ -180,6 +181,15 @@ async function createBackgroundTab(args: {
     store.closeTab(tab.id, { recordInteraction: false })
     throw error
   }
+  if (
+    await retireUnownedTerminal({
+      tabId: tab.id,
+      ptyId,
+      runtimeTarget: { kind: 'local' }
+    })
+  ) {
+    throw new Error('The terminal tab was closed before its session finished starting.')
+  }
   store.updateTabPtyId(tab.id, ptyId)
   store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId))
   registerBackgroundPaneBuffer(tab.id, leafId, ptyId)
@@ -203,6 +213,15 @@ async function addSetupSplit(args: {
     command: buildSetupCommand(args.setup),
     env: args.setup.envVars
   })
+  if (
+    await retireUnownedTerminal({
+      tabId: args.tab.tabId,
+      ptyId: setupPtyId,
+      runtimeTarget: { kind: 'local' }
+    })
+  ) {
+    return
+  }
   store.updateTabPtyId(args.tab.tabId, setupPtyId)
   store.setTabLayout(
     args.tab.tabId,

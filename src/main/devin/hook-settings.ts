@@ -52,8 +52,9 @@ export function getDevinRemoteConfigPath(remoteHome: string): string {
 
 export function getDevinManagedCommand(scriptPath: string): string {
   if (process.platform === 'win32') {
-    // Why: keep safe paths on cmd.exe's fast path; the fallback protects spaced
-    // paths, and both forms drain stdin for a stale missing-script entry.
+    // Why: Devin spawns this command as argv[0], so the safe path stays a bare
+    // directly-spawnable .cmd; the encoded fallback protects spaced paths and
+    // drains stdin for a stale missing-script entry.
     return wrapWindowsCmdHookCommand(scriptPath)
   }
   return wrapPosixHookCommand(scriptPath)

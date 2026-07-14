@@ -1519,7 +1519,7 @@ export function FloatingTerminalPanel({
                       // atlas to corrupt) while hidden, and the resume on
                       // reopen rebuilds the renderer from scratch.
                       isVisible={isActive && open}
-                      onPtyExit={() => closeTab(tab.id)}
+                      onPtyExit={() => closeTab(tab.id, { reason: 'pty-exit' })}
                       onCloseTab={() => closeFloatingItem(tab.id)}
                     />
                   </div>

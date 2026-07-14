@@ -3569,7 +3569,10 @@ export type PersistedTrustedOrcaHooks = Record<string, PersistedTrustedOrcaHookR
 
 export type LegacyPaneKeyAliasEntry = {
   ptyId: string
+  /** Physical pane key retained by the live process. Field name is persisted
+   *  for compatibility; UUID keys are used after pane-to-tab detach. */
   legacyPaneKey: string
+  /** Current logical owner pane key. May belong to another tab after detach. */
   stablePaneKey: string
   updatedAt: number
 }

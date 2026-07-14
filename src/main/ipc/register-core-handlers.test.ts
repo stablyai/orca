@@ -466,7 +466,9 @@ describe('registerCoreHandlers', () => {
     expect(registerOpenCodeUsageHandlersMock).toHaveBeenCalledWith(openCodeUsage)
     expect(registerAppHandlersMock).toHaveBeenCalledWith(store, { onBeforeRelaunch })
     expect(registerCodexAccountHandlersMock).toHaveBeenCalledWith(codexAccounts)
-    expect(registerAgentHookHandlersMock).toHaveBeenCalledWith(runtime)
+    expect(registerAgentHookHandlersMock).toHaveBeenCalledWith(runtime, {
+      getPtyIdForPaneKey: expect.any(Function)
+    })
     expect(registerPetHandlersMock).toHaveBeenCalled()
     expect(registerClaudeAccountHandlersMock).toHaveBeenCalledWith(claudeAccounts)
     expect(registerMiniMaxCredentialsHandlersMock).toHaveBeenCalledWith(rateLimits)
