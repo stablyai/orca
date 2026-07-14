@@ -93,9 +93,23 @@ export function shellEscape(s: string): string {
 }
 
 export function wrapRemoteCommandForPosixShell(command: string): string {
-  // Why: sshd asks the user's login shell to parse exec commands. Orca emits
-  // POSIX sh snippets; `exec` avoids leaving that shell around for relay bridges.
-  return `exec /bin/sh -c ${shellEscape(command)}`
+  // Why: sshd hands the wrapped string to the user's LOGIN shell, not to
+  // /bin/sh. On csh/tcsh login shells a single-quoted argument spanning raw
+  // newlines is re-parsed line by line as csh and errors out ("Unmatched '",
+  // "Undefined variable"), so the inner /bin/sh never runs (issue #8701).
+  // csh only keeps single-line quoted arguments intact, so we base64-encode the
+  // POSIX snippet and emit ONE physical line: the login shell sees no raw
+  // newline, and /bin/sh decodes and runs the original script unchanged.
+  //
+  // The decoded script is passed via `-c "$(... | base64 -d)"` command
+  // substitution rather than piped into `/bin/sh` on stdin: the relay and other
+  // callers read their own protocol from stdin (the ssh channel), so stdin must
+  // stay untouched. `base64 -d` is portable across GNU coreutils and BusyBox
+  // (the remote is always POSIX; macOS-only `-D` never reaches this path).
+  // Node emits newline-free base64, so the whole payload stays on one line.
+  // `exec` still replaces the shell so no login shell lingers for relay bridges.
+  const encoded = Buffer.from(command, 'utf8').toString('base64')
+  return `exec /bin/sh -c ${shellEscape(`exec /bin/sh -c "$(echo ${encoded} | base64 -d)"`)}`
 }
 
 export type SshExecOptions = {

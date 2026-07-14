@@ -175,7 +175,15 @@ function buildCommandInShell(shell: string, command: string): string {
   const shellName = shell.split('/').at(-1)
   // Why: dash and POSIX sh do not require `-l`; when $SHELL falls back to
   // /bin/sh, prefer a portable command over login-shell semantics.
-  const mode = shellName === 'sh' || shellName === 'dash' ? '-c' : '-lc'
+  //
+  // csh/tcsh reject the combined `-lc` form and mis-handle `-l` here (`Bad :
+  // modifier`, issue #8701), so drop to plain `-c` — the login-shell semantics
+  // csh actually supports — instead of `-lc`. bash/zsh/fish keep `-lc` so their
+  // profile PATH hooks still load.
+  const mode =
+    shellName === 'sh' || shellName === 'dash' || shellName === 'csh' || shellName === 'tcsh'
+      ? '-c'
+      : '-lc'
   return `${shellEscape(shell)} ${mode} ${shellEscape(command)}`
 }
 

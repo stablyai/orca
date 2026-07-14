@@ -642,15 +642,24 @@ describe('SshConnection', () => {
     }
   })
 
-  it('wraps exec commands in /bin/sh so non-POSIX login shells do not parse relay snippets', async () => {
+  it('wraps exec commands as a single base64 line that csh/tcsh login shells cannot break', async () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()
 
-    await conn.exec("cd '/tmp' && ('/usr/bin/node' -e 'console.log(1)' || echo MISSING)")
+    const original = "cd '/tmp' && ('/usr/bin/node' -e 'console.log(1)' || echo MISSING)"
+    await conn.exec(original)
 
-    expect(clientInstances[0].lastExecCommand).toBe(
-      "exec /bin/sh -c 'cd '\\''/tmp'\\'' && ('\\''/usr/bin/node'\\'' -e '\\''console.log(1)'\\'' || echo MISSING)'"
-    )
+    const wrapped = clientInstances[0].lastExecCommand!
+    // Why: sshd runs this via the user's LOGIN shell. csh/tcsh only keep a
+    // single-line single-quoted argument intact, so the wrapper must never emit
+    // a raw newline (issue #8701).
+    expect(wrapped).not.toContain('\n')
+    // The login shell still runs an outer `exec /bin/sh -c`, and the payload is
+    // reconstructed via `base64 -d` command substitution so stdin stays free.
+    expect(wrapped).toMatch(/^exec \/bin\/sh -c '.*base64 -d.*'$/)
+    const encoded = wrapped.match(/echo ([A-Za-z0-9+/=]+) \| base64 -d/)?.[1]
+    expect(encoded).toBeDefined()
+    expect(Buffer.from(encoded!, 'base64').toString('utf8')).toBe(original)
   })
 
   it('can execute native remote commands without the POSIX shell wrapper', async () => {

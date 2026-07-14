@@ -386,9 +386,19 @@ describe('spawnSystemSsh', () => {
   it('spawns a remote command through the system ssh target', () => {
     spawnSystemSshCommand(createTarget({ configHost: 'fdpass-host' }), 'echo hello')
 
+    // Why: the remote command is base64-wrapped on a single line so csh/tcsh
+    // login shells cannot re-parse it (issue #8701). Assert the destination and
+    // that the payload decodes back to the original command.
+    const args = spawnMock.mock.calls[0][1] as string[]
+    expect(args).toContain('--')
+    expect(args).toContain('deploy@fdpass-host')
+    const wrapped = args.at(-1)!
+    expect(wrapped).not.toContain('\n')
+    const encoded = wrapped.match(/echo ([A-Za-z0-9+/=]+) \| base64 -d/)?.[1]
+    expect(Buffer.from(encoded!, 'base64').toString('utf8')).toBe('echo hello')
     expect(spawnMock).toHaveBeenCalledWith(
       SYSTEM_SSH_PATH,
-      expect.arrayContaining(['--', 'deploy@fdpass-host', "exec /bin/sh -c 'echo hello'"]),
+      expect.any(Array),
       expect.objectContaining({ stdio: ['pipe', 'pipe', 'pipe'] })
     )
   })
