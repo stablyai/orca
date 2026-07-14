@@ -6,6 +6,7 @@ import {
   OptionalBoolean,
   OptionalFiniteNumber,
   OptionalPlainString,
+  OptionalPositiveNumber,
   OptionalString,
   TriStateLinkedIssue
 } from '../schemas'
@@ -127,7 +128,9 @@ export const WorktreeCreate = z
     createdWithAgent: z
       .unknown()
       .transform((value) => (isTuiAgent(value) ? value : undefined))
-      .optional()
+      .optional(),
+    // Why: CLI --timeout (seconds→ms) overrides the setup hook's default budget.
+    hookTimeoutMs: OptionalPositiveNumber
   })
   .superRefine((params, ctx) => {
     if ((params.parentWorkspace || params.parentWorktree) && params.noParent === true) {
@@ -207,7 +210,8 @@ export const WorktreeSet = WorktreeSelector.extend({
 
 export const WorktreeRemove = WorktreeSelector.extend({
   force: OptionalBoolean,
-  runHooks: OptionalBoolean
+  runHooks: OptionalBoolean,
+  hookTimeoutMs: OptionalPositiveNumber
 })
 
 export const WorktreeForceDeleteBranch = WorktreeSelector.extend({

@@ -82,6 +82,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         sparseCheckout: params.sparseCheckout,
         pushTarget: params.pushTarget,
         runHooks: params.runHooks === true,
+        ...(params.hookTimeoutMs !== undefined ? { hookTimeoutMs: params.hookTimeoutMs } : {}),
         activate: params.activate === true,
         setupDecision: params.setupDecision,
         createdWithAgent: params.createdWithAgent ?? params.startupAgent,
@@ -193,7 +194,8 @@ export const WORKTREE_METHODS: RpcMethod[] = [
       const result = await runtime.removeManagedWorktree(
         params.worktree,
         params.force === true,
-        params.runHooks === true
+        params.runHooks === true,
+        params.hookTimeoutMs
       )
       return { removed: true, ...result }
     }

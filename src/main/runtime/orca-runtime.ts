@@ -9567,6 +9567,7 @@ export class OrcaRuntimeService {
     sparseCheckout?: { directories: string[]; presetId?: string }
     pushTarget?: GitPushTarget
     runHooks?: boolean
+    hookTimeoutMs?: number
     activate?: boolean
     setupDecision?: 'run' | 'skip' | 'inherit'
     createdWithAgent?: TuiAgent
@@ -10134,11 +10135,13 @@ export class OrcaRuntimeService {
           console.error(`[hooks] Failed to prepare setup runner for ${worktreePath}:`, error)
         }
       } else {
-        void runHook('setup', worktreePath, repo, worktreePath).then((result) => {
-          if (!result.success) {
-            console.error(`[hooks] setup hook failed for ${worktreePath}:`, result.output)
+        void runHook('setup', worktreePath, repo, worktreePath, args.hookTimeoutMs).then(
+          (result) => {
+            if (!result.success) {
+              console.error(`[hooks] setup hook failed for ${worktreePath}:`, result.output)
+            }
           }
-        })
+        )
       }
     } else if (hooks?.scripts.setup && effectiveDecision !== 'skip') {
       // Runtime RPC calls have no renderer trust prompt, so hooks require explicit CLI opt-in.
@@ -11449,7 +11452,8 @@ export class OrcaRuntimeService {
   async removeManagedWorktree(
     worktreeSelector: string,
     force = false,
-    runHooks = false
+    runHooks = false,
+    hookTimeoutMs?: number
   ): Promise<RemoveWorktreeResult & { warning?: string }> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
@@ -11637,7 +11641,13 @@ export class OrcaRuntimeService {
       const hooks = getEffectiveHooks(repo)
       let warning: string | undefined
       if (hooks?.scripts.archive && runHooks) {
-        const result = await runHook('archive', canonicalWorktreePath, repo)
+        const result = await runHook(
+          'archive',
+          canonicalWorktreePath,
+          repo,
+          undefined,
+          hookTimeoutMs
+        )
         if (!result.success) {
           console.error(`[hooks] archive hook failed for ${canonicalWorktreePath}:`, result.output)
         }

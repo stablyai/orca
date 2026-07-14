@@ -24,6 +24,17 @@ export const OptionalPositiveInt = z
   .pipe(z.union([z.number(), z.undefined()]))
   .optional()
 
+// Why: hook timeout overrides are milliseconds and must be strictly positive;
+// non-positive or non-numeric values fall back to undefined so the runtime
+// applies its default rather than a zero (== "no timeout") or negative budget.
+export const OptionalPositiveNumber = z
+  .unknown()
+  .transform((value) =>
+    typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
+  )
+  .pipe(z.union([z.number(), z.undefined()]))
+  .optional()
+
 export const OptionalString = z
   .unknown()
   .transform((value) => (typeof value === 'string' && value.length > 0 ? value : undefined))

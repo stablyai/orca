@@ -71,6 +71,45 @@ describe('worktree RPC methods', () => {
     })
   })
 
+  it('forwards hookTimeoutMs to worktree creation', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('worktree.create', {
+        repo: 'repo-1',
+        name: 'feature',
+        runHooks: true,
+        hookTimeoutMs: 300_000
+      })
+    )
+
+    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ hookTimeoutMs: 300_000 })
+    )
+  })
+
+  it('forwards hookTimeoutMs to worktree removal', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      removeManagedWorktree: vi.fn().mockResolvedValue({})
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('worktree.rm', {
+        worktree: 'active',
+        runHooks: true,
+        hookTimeoutMs: 300_000
+      })
+    )
+
+    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith('active', false, true, 300_000)
+  })
+
   it('forwards startup command and env to runtime worktree creation', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

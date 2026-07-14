@@ -324,8 +324,8 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
 
 // Why: a long-poll request is one whose handler blocks waiting for an external
 // event. This function is the single place that classifies it — the long-poll
-// counter, abort wiring, keepalives, and runtime_busy admission check all
-// share this decision. See §3.1.
+// counter, abort wiring, and runtime_busy admission check all share this
+// decision. See §3.1.
 function isLongPollRequest(request: RpcRequest): boolean {
   if (request.method === 'terminal.wait') {
     return true
@@ -335,6 +335,18 @@ function isLongPollRequest(request: RpcRequest): boolean {
     return params?.wait === true
   }
   return false
+}
+
+// Why: worktree.rm can block for minutes while a repo archive hook runs (the
+// hook's own timeout is flag- or orca.yaml-driven), so its socket needs
+// keepalives to keep the client from timing out. But it is not a long-poll
+// waiter — it must NOT consume a long-poll admission slot or be abortable.
+const KEEPALIVE_ONLY_METHODS = new Set(['worktree.rm'])
+
+// Why: keepalives are armed for long-polls plus any method that can block long
+// enough to trip the client's idle timer, decoupled from admission control.
+function shouldEmitKeepalives(request: RpcRequest): boolean {
+  return isLongPollRequest(request) || KEEPALIVE_ONLY_METHODS.has(request.method)
 }
 
 export class OrcaRuntimeRpcServer {
@@ -816,8 +828,11 @@ export class OrcaRuntimeRpcServer {
     }
     if (longPoll) {
       this.activeLongPolls += 1
-      // Why: arm the keepalive timer only for long-polls. Short RPCs never
-      // touch it so the `setInterval` is never created. See §3.1.
+    }
+    // Why: arm the keepalive timer for long-polls and other long-running
+    // methods (e.g. worktree.rm archive hooks). Short RPCs never touch it so the
+    // `setInterval` is never created. See §3.1.
+    if (shouldEmitKeepalives(request)) {
       context?.startKeepalive()
     }
 

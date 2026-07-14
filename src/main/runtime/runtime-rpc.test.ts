@@ -2647,6 +2647,55 @@ describe('OrcaRuntimeRpcServer', () => {
       }
     })
 
+    it('emits keepalive frames for worktree.rm without consuming a long-poll slot', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      let releaseRemoval: () => void = () => {}
+      const removalGate = new Promise<void>((resolve) => {
+        releaseRemoval = resolve
+      })
+      const runtime = {
+        getRuntimeId: () => 'test-runtime',
+        getStartedAt: () => 0,
+        removeManagedWorktree: vi.fn(async () => {
+          await removalGate
+          return { removed: true }
+        })
+      } as unknown as OrcaRuntimeService
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        keepaliveIntervalMs: 50
+      })
+      await server.start()
+
+      try {
+        const metadata = readRuntimeMetadata(userDataPath)
+        const session = openFramedSession(metadata!.transports[0]!.endpoint, {
+          id: 'req_rm',
+          authToken: metadata!.authToken,
+          method: 'worktree.rm',
+          params: { worktree: 'id:repo::/tmp/wt', runHooks: true }
+        })
+
+        await waitFor(() => session.frames.filter((f) => f._keepalive === true).length >= 2)
+        // Why: worktree.rm must not consume a long-poll admission slot even
+        // though it emits keepalives during a slow archive hook.
+        expect(server['activeLongPolls']).toBe(0)
+
+        releaseRemoval()
+        await session.done
+
+        const keepalives = session.frames.filter((f) => f._keepalive === true)
+        const terminals = session.frames.filter((f) => f.ok !== undefined)
+        expect(keepalives.length).toBeGreaterThanOrEqual(2)
+        expect(terminals).toHaveLength(1)
+        expect(terminals[0]).toMatchObject({ id: 'req_rm', ok: true })
+      } finally {
+        releaseRemoval()
+        await server.stop()
+      }
+    })
+
     it('emits keepalive frames while terminal.wait blocks and returns its structured timeout', async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
       const runtime = new OrcaRuntimeService()

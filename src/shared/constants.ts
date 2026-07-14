@@ -103,6 +103,11 @@ export const DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS = 1000
 export const MIN_EDITOR_AUTO_SAVE_DELAY_MS = 250
 export const MAX_EDITOR_AUTO_SAVE_DELAY_MS = 10_000
 
+// Why: default wall-clock budget for a single orca.yaml setup/archive hook
+// before it is killed. Repos with slower hooks raise it via orca.yaml
+// `hookTimeoutSeconds` or the `--timeout` CLI flag on worktree create/rm.
+export const DEFAULT_HOOK_TIMEOUT_MS = 120_000
+
 // Why: initial threshold of agents spawned (since last update) before we show
 // the star-on-GitHub notification. Doubles each time the user dismisses
 // without starring — e.g. 35 → 70 → 140 → 280. Past dismissals are encoded

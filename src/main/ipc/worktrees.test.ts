@@ -165,6 +165,9 @@ vi.mock('../hooks', () => ({
   getSetupRunnerEnvVars: getSetupRunnerEnvVarsMock,
   loadHooks: loadHooksMock,
   parseOrcaYaml: parseOrcaYamlMock,
+  resolveHookTimeoutMs: (hooks: { hookTimeoutSeconds?: number } | null, explicitMs?: number) =>
+    explicitMs ??
+    (hooks?.hookTimeoutSeconds !== undefined ? hooks.hookTimeoutSeconds * 1000 : 120_000),
   runHook: runHookMock,
   hasHooksFile: hasHooksFileMock,
   shouldRunSetupForCreate: shouldRunSetupForCreateMock
@@ -4602,6 +4605,71 @@ describe('registerWorktreeHandlers', () => {
     expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined)
     expect(callOrder).toEqual(['archive', 'preflight', 'remove'])
     expect(runHookMock).not.toHaveBeenCalled()
+  })
+
+  it('honors orca.yaml hookTimeoutSeconds for the SSH archive hook', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: null
+    }
+    const provider = {
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/repo',
+          head: 'main',
+          branch: 'main',
+          isBare: false,
+          isMainWorktree: true
+        },
+        {
+          path: '/remote/feature-wt',
+          head: 'feature',
+          branch: 'feature',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      removeWorktree: vi.fn().mockResolvedValue(undefined),
+      worktreeIsClean: vi.fn().mockResolvedValue({ clean: true }),
+      execNonInteractive: vi
+        .fn()
+        .mockResolvedValue({ stdout: '', stderr: '', exitCode: 0, timedOut: false })
+    }
+    const fsProvider = {
+      readFile: vi.fn().mockResolvedValue({
+        content: 'scripts:\n  archive: echo archived\nhookTimeoutSeconds: 300\n',
+        isBinary: false
+      })
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getSshFilesystemProviderMock.mockReturnValue(fsProvider)
+    getEffectiveHooksFromConfigMock.mockReturnValue({
+      scripts: { archive: 'echo archived' },
+      hookTimeoutSeconds: 300
+    })
+
+    await handlers['worktrees:remove'](null, {
+      worktreeId: 'repo-ssh::/remote/feature-wt'
+    })
+
+    expect(provider.execNonInteractive).toHaveBeenCalledWith(
+      '/bin/bash',
+      ['-lc', 'echo archived'],
+      '/remote/feature-wt',
+      300_000,
+      undefined,
+      expect.objectContaining({
+        ORCA_ROOT_PATH: '/remote/repo',
+        ORCA_WORKTREE_PATH: '/remote/feature-wt'
+      })
+    )
   })
 
   it('runs SSH archive hooks before failing dirty non-force removal', async () => {

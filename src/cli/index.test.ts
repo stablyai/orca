@@ -1013,6 +1013,86 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it('passes --timeout as hookTimeoutMs through worktree.create', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),
+      okFixture('req_create', {
+        worktree: buildWorktree('/tmp/repo/feature', 'feature', 'abc', 'repo-1')
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'feature',
+        '--run-hooks',
+        '--timeout',
+        '300',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'worktree.create',
+      expect.objectContaining({ hookTimeoutMs: 300_000 })
+    )
+  })
+
+  it('passes --timeout as hookTimeoutMs through worktree.rm', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([
+        buildWorktree('/tmp/repo', 'main', 'aaa'),
+        buildWorktree('/tmp/repo/feature', 'feature/foo')
+      ]),
+      okFixture('req_rm', { removed: true })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'rm', '--worktree', 'active', '--run-hooks', '--timeout', '300', '--json'],
+      '/tmp/repo/feature/src'
+    )
+
+    // Why: the runtime emits keepalives for worktree.rm, so the CLI passes no
+    // client-side timeout override (2-arg call) — only the hook budget travels.
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'worktree.rm',
+      expect.objectContaining({ runHooks: true, hookTimeoutMs: 300_000 })
+    )
+  })
+
+  it('omits hookTimeoutMs for worktree.rm --run-hooks without --timeout', async () => {
+    queueFixtures(
+      callMock,
+      worktreeListFixture([
+        buildWorktree('/tmp/repo', 'main', 'aaa'),
+        buildWorktree('/tmp/repo/feature', 'feature/foo')
+      ]),
+      okFixture('req_rm', { removed: true })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'rm', '--worktree', 'active', '--run-hooks', '--json'],
+      '/tmp/repo/feature/src'
+    )
+
+    const rmCall = callMock.mock.calls.find((c) => c[0] === 'worktree.rm')
+    expect(rmCall?.[1]).toMatchObject({ runHooks: true })
+    expect(rmCall?.[1]).not.toHaveProperty('hookTimeoutMs')
+    expect(rmCall).toHaveLength(2)
+  })
+
   it('resolves project and host flags to the matching repo for worktree.create', async () => {
     queueFixtures(
       callMock,

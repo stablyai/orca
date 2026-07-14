@@ -15,6 +15,7 @@ import {
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../flags'
+import { getHookTimeoutMs } from './worktree-hook-timeout'
 import {
   getOptionalWorktreeSelector,
   getRequiredWorktreeSelector,
@@ -29,30 +30,7 @@ import {
   resolveProjectCreateRepoSelector
 } from '../worktree-project-target'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
-
-type HookWarningResult = {
-  warning?: string
-}
-
-type PreservedBranchResult = {
-  preservedBranch?: {
-    branchName: string
-  }
-}
-
-function printHookWarning(result: HookWarningResult, json: boolean): void {
-  if (!json && result.warning) {
-    console.error(`warning: ${result.warning}`)
-  }
-}
-
-function printPreservedBranchWarning(result: PreservedBranchResult, json: boolean): void {
-  if (!json && result.preservedBranch) {
-    console.error(
-      `warning: local branch "${result.preservedBranch.branchName}" was kept because Git could not safely delete it`
-    )
-  }
-}
+import { printHookWarning, printPreservedBranchWarning } from './worktree-hook-warnings'
 
 function assertParentFlagsCompatible(flags: Map<string, string | boolean>): void {
   if (flags.has('parent-worktree') && flags.get('no-parent') === true) {
@@ -248,6 +226,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       }
     }
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
+    const hookTimeoutMs = getHookTimeoutMs(flags)
     const result = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
       repo: await getCreateRepoSelector(flags, cwdParentWorktree, client),
       name: getRequiredStringFlag(flags, 'name'),
@@ -256,6 +235,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
       runHooks: flags.get('run-hooks') === true,
+      ...(hookTimeoutMs !== undefined ? { hookTimeoutMs } : {}),
       activate:
         flags.get('activate') === true || flags.get('run-hooks') === true || Boolean(startupAgent),
       ...(setupDecision ? { setupDecision } : {}),
@@ -294,10 +274,15 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatWorktreeShow)
   },
   'worktree rm': async ({ flags, client, cwd, json }) => {
+    const hookTimeoutMs = getHookTimeoutMs(flags)
+    // Why: no client-side timeout override is needed — the runtime emits
+    // keepalives for worktree.rm, so the socket survives a long archive hook
+    // regardless of the (flag- or orca.yaml-driven) hook budget.
     const result = await client.call<RuntimeWorktreeRemoveResult>('worktree.rm', {
       worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client),
       force: flags.get('force') === true,
-      runHooks: flags.get('run-hooks') === true
+      runHooks: flags.get('run-hooks') === true,
+      ...(hookTimeoutMs !== undefined ? { hookTimeoutMs } : {})
     })
     printHookWarning(result.result, json)
     printPreservedBranchWarning(result.result, json)

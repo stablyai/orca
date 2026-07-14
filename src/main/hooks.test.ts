@@ -2,7 +2,12 @@
 import type { Repo } from '../shared/types'
 
 import { describe, expect, it, vi } from 'vitest'
-import { getDefaultTabsLaunch, parseOrcaYaml } from './hooks'
+import {
+  getDefaultTabsLaunch,
+  getEffectiveHooksFromConfig,
+  parseOrcaYaml,
+  resolveHookTimeoutMs
+} from './hooks'
 
 // Mock fs and path used by loadHooks
 vi.mock('fs', () => ({
@@ -180,6 +185,31 @@ describe('parseOrcaYaml', () => {
       defaultTabs: [{ title: 'Server', command: 'pnpm dev' }]
     })
   })
+
+  it('parses a top-level hookTimeoutSeconds alongside scripts', () => {
+    const yaml = ['scripts:', '  archive: echo bye', 'hookTimeoutSeconds: 300'].join('\n')
+    expect(parseOrcaYaml(yaml)).toEqual({
+      scripts: { archive: 'echo bye' },
+      hookTimeoutSeconds: 300
+    })
+  })
+
+  it('returns hookTimeoutSeconds even when no scripts are present', () => {
+    expect(parseOrcaYaml('hookTimeoutSeconds: 600\n')).toEqual({
+      scripts: {},
+      hookTimeoutSeconds: 600
+    })
+  })
+
+  it('drops a non-positive or non-numeric hookTimeoutSeconds but keeps valid scripts', () => {
+    const yaml = ['scripts:', '  archive: echo bye', 'hookTimeoutSeconds: -5'].join('\n')
+    expect(parseOrcaYaml(yaml)).toEqual({ scripts: { archive: 'echo bye' } })
+  })
+
+  it('returns null when hookTimeoutSeconds is the only key and is invalid', () => {
+    expect(parseOrcaYaml('hookTimeoutSeconds: 0\n')).toBeNull()
+    expect(parseOrcaYaml('hookTimeoutSeconds: not-a-number\n')).toBeNull()
+  })
 })
 
 describe('hasUnrecognizedOrcaYamlKeys', () => {
@@ -218,6 +248,7 @@ describe('hasUnrecognizedOrcaYamlKeys', () => {
         '    pnpm install',
         'issueCommand: |',
         '  claude -p "test"',
+        'hookTimeoutSeconds: 300',
         'defaultTabs:',
         '  - title: Claude'
       ].join('\n')
@@ -329,6 +360,51 @@ describe('writeIssueCommand', () => {
     expect(vi.mocked(fs.rmSync)).toHaveBeenCalledWith('/test/repo/.orca/issue-command', {
       force: true
     })
+  })
+})
+
+describe('resolveHookTimeoutMs', () => {
+  it('returns the default when no config or explicit override is set', () => {
+    expect(resolveHookTimeoutMs(null)).toBe(120_000)
+    expect(resolveHookTimeoutMs({ scripts: {} })).toBe(120_000)
+  })
+
+  it('converts orca.yaml hookTimeoutSeconds to milliseconds', () => {
+    expect(resolveHookTimeoutMs({ scripts: {}, hookTimeoutSeconds: 200 })).toBe(200_000)
+  })
+
+  it('prefers an explicit override over the config value', () => {
+    expect(resolveHookTimeoutMs({ scripts: {}, hookTimeoutSeconds: 200 }, 500_000)).toBe(500_000)
+    expect(resolveHookTimeoutMs(null, 500_000)).toBe(500_000)
+  })
+})
+
+describe('getEffectiveHooksFromConfig', () => {
+  const makeRepo = () =>
+    ({
+      id: 'test-id',
+      path: '/test/repo',
+      displayName: 'Test Repo',
+      badgeColor: '#000',
+      addedAt: 0
+    }) as unknown as Repo
+
+  it('forwards hookTimeoutSeconds from orca.yaml', () => {
+    const result = getEffectiveHooksFromConfig(makeRepo(), {
+      scripts: { archive: 'echo bye' },
+      hookTimeoutSeconds: 300
+    })
+    expect(result).toEqual({
+      scripts: { archive: 'echo bye' },
+      hookTimeoutSeconds: 300
+    })
+  })
+
+  it('omits hookTimeoutSeconds when the orca.yaml does not set it', () => {
+    const result = getEffectiveHooksFromConfig(makeRepo(), {
+      scripts: { archive: 'echo bye' }
+    })
+    expect(result).toEqual({ scripts: { archive: 'echo bye' } })
   })
 })
 
@@ -840,6 +916,69 @@ describe('runHook', () => {
         value: originalPlatform
       })
     }
+  })
+
+  const stubExecSuccess = async (yaml: string): Promise<void> => {
+    execMock.mockReset()
+    execMock.mockImplementation((_script, _options, callback) => {
+      callback?.(null, '', '')
+      return {} as never
+    })
+    const fs = await import('fs')
+    vi.mocked(fs.existsSync).mockReturnValue(true)
+    vi.mocked(fs.readFileSync).mockReturnValue(yaml)
+  }
+
+  it('applies an explicit timeout override to the hook exec', async () => {
+    await stubExecSuccess('scripts:\n  archive: echo bye\n')
+
+    const { runHook } = await import('./hooks')
+    await runHook('archive', '/repo/worktree', makeRepo(), undefined, 300_000)
+
+    expect(execMock).toHaveBeenCalledWith(
+      'echo bye',
+      expect.objectContaining({ timeout: 300_000 }),
+      expect.any(Function)
+    )
+  })
+
+  it('uses orca.yaml hookTimeoutSeconds when no explicit timeout is given', async () => {
+    await stubExecSuccess('scripts:\n  archive: echo bye\nhookTimeoutSeconds: 200\n')
+
+    const { runHook } = await import('./hooks')
+    await runHook('archive', '/repo/worktree', makeRepo())
+
+    expect(execMock).toHaveBeenCalledWith(
+      'echo bye',
+      expect.objectContaining({ timeout: 200_000 }),
+      expect.any(Function)
+    )
+  })
+
+  it('prefers an explicit timeout over orca.yaml hookTimeoutSeconds', async () => {
+    await stubExecSuccess('scripts:\n  archive: echo bye\nhookTimeoutSeconds: 200\n')
+
+    const { runHook } = await import('./hooks')
+    await runHook('archive', '/repo/worktree', makeRepo(), undefined, 500_000)
+
+    expect(execMock).toHaveBeenCalledWith(
+      'echo bye',
+      expect.objectContaining({ timeout: 500_000 }),
+      expect.any(Function)
+    )
+  })
+
+  it('falls back to the default hook timeout when nothing overrides it', async () => {
+    await stubExecSuccess('scripts:\n  archive: echo bye\n')
+
+    const { runHook } = await import('./hooks')
+    await runHook('archive', '/repo/worktree', makeRepo())
+
+    expect(execMock).toHaveBeenCalledWith(
+      'echo bye',
+      expect.objectContaining({ timeout: 120_000 }),
+      expect.any(Function)
+    )
   })
 })
 

@@ -55,6 +55,7 @@ import {
   loadHooks,
   parseOrcaYaml,
   readIssueCommand,
+  resolveHookTimeoutMs,
   runHook,
   hasHooksFile,
   hasUnrecognizedOrcaYamlKeys,
@@ -104,8 +105,8 @@ import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree-id'
 import { prefetchWorktreeCreateBase } from '../worktree-create-base-prefetch'
+import { DEFAULT_HOOK_TIMEOUT_MS } from '../../shared/constants'
 
-const WORKTREE_ARCHIVE_HOOK_TIMEOUT_MS = 120_000
 const WORKTREE_LIST_ALL_CONCURRENCY = 8
 
 async function mapWithConcurrency<T, R>(
@@ -229,7 +230,8 @@ async function getArchiveHooksForRemoval(repo: Repo): Promise<OrcaHooks | null> 
 async function runRemoteArchiveHook(
   repo: Repo,
   worktreePath: string,
-  script: string
+  script: string,
+  timeoutMs: number = DEFAULT_HOOK_TIMEOUT_MS
 ): Promise<{ success: boolean; output: string }> {
   if (!repo.connectionId) {
     return { success: true, output: '' }
@@ -243,7 +245,7 @@ async function runRemoteArchiveHook(
       isWindowsRemote ? 'cmd.exe' : '/bin/bash',
       isWindowsRemote ? ['/d', '/s', '/c', script] : ['-lc', script],
       worktreePath,
-      WORKTREE_ARCHIVE_HOOK_TIMEOUT_MS,
+      timeoutMs,
       undefined,
       env
     )
@@ -1274,7 +1276,12 @@ export function registerWorktreeHandlers(
         const hooks = await getArchiveHooksForRemoval(repo)
         if (hooks?.scripts.archive && !args.skipArchive) {
           const result = repo.connectionId
-            ? await runRemoteArchiveHook(repo, canonicalWorktreePath, hooks.scripts.archive)
+            ? await runRemoteArchiveHook(
+                repo,
+                canonicalWorktreePath,
+                hooks.scripts.archive,
+                resolveHookTimeoutMs(hooks)
+              )
             : await runHook('archive', canonicalWorktreePath, repo)
           if (!result.success) {
             console.error(

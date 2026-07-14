@@ -14956,9 +14956,68 @@ describe('OrcaRuntimeService', () => {
     expect(runHook).toHaveBeenCalledWith(
       'archive',
       TEST_WORKTREE_PATH,
-      expect.objectContaining({ id: TEST_REPO_ID, path: TEST_REPO_PATH })
+      expect.objectContaining({ id: TEST_REPO_ID, path: TEST_REPO_PATH }),
+      undefined,
+      undefined
     )
     expect(removeWorktree).toHaveBeenCalledWith(TEST_REPO_PATH, TEST_WORKTREE_PATH, false)
+  })
+
+  it('threads an explicit hook timeout into the CLI archive hook', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    vi.mocked(getEffectiveHooks).mockReturnValue({
+      scripts: {
+        archive: 'pnpm worktree:archive'
+      }
+    })
+    vi.mocked(runHook).mockResolvedValue({ success: true, output: '' })
+    vi.mocked(removeWorktree).mockResolvedValue({})
+
+    await runtime.removeManagedWorktree(TEST_WORKTREE_ID, false, true, 300_000)
+
+    expect(runHook).toHaveBeenCalledWith(
+      'archive',
+      TEST_WORKTREE_PATH,
+      expect.objectContaining({ id: TEST_REPO_ID, path: TEST_REPO_PATH }),
+      undefined,
+      300_000
+    )
+  })
+
+  it('threads an explicit hook timeout into the CLI setup hook', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/timeout-setup')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/timeout-setup')
+    vi.mocked(runHook).mockResolvedValue({ success: true, output: '' })
+    vi.mocked(getEffectiveHooks).mockReturnValue({
+      scripts: {
+        setup: 'pnpm worktree:setup'
+      }
+    })
+    vi.mocked(listWorktrees).mockResolvedValueOnce([
+      {
+        path: '/tmp/workspaces/timeout-setup',
+        head: 'def',
+        branch: 'timeout-setup',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'timeout-setup',
+      setupDecision: 'run',
+      hookTimeoutMs: 300_000
+    })
+
+    expect(runHook).toHaveBeenCalledWith(
+      'setup',
+      '/tmp/workspaces/timeout-setup',
+      expect.objectContaining({ id: 'repo-1' }),
+      '/tmp/workspaces/timeout-setup',
+      300_000
+    )
   })
 
   it('clears optimistic reconcile tokens when a CLI worktree removal succeeds', async () => {

@@ -3,7 +3,7 @@ import { readFileSync, existsSync, mkdirSync, writeFileSync, chmodSync, rmSync }
 import { dirname, join } from 'path'
 import { exec, execFile } from 'child_process'
 import { parse } from 'yaml'
-import { getDefaultRepoHookSettings } from '../shared/constants'
+import { DEFAULT_HOOK_TIMEOUT_MS, getDefaultRepoHookSettings } from '../shared/constants'
 import { getRuntimePathBasename } from '../shared/cross-platform-path'
 import { resolveHookCommandSourcePolicy } from '../shared/hook-command-source-policy'
 import { gitExecFileSync } from './git/runner'
@@ -18,8 +18,6 @@ import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
 } from '../shared/types'
-
-const HOOK_TIMEOUT = 120_000 // 2 minutes
 
 function getHookShell(): string | undefined {
   if (process.platform === 'win32') {
@@ -37,6 +35,24 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function asTrimmedString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function asPositiveNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
+}
+
+/**
+ * Resolve the effective per-hook timeout in milliseconds. An explicit override
+ * (e.g. the CLI --timeout flag) wins over the repo's committed orca.yaml
+ * hookTimeoutSeconds, which in turn overrides the built-in default.
+ */
+export function resolveHookTimeoutMs(hooks: OrcaHooks | null, explicitMs?: number): number {
+  if (explicitMs !== undefined) {
+    return explicitMs
+  }
+  return hooks?.hookTimeoutSeconds !== undefined
+    ? hooks.hookTimeoutSeconds * 1000
+    : DEFAULT_HOOK_TIMEOUT_MS
 }
 
 const DEFAULT_TAB_COLOR_RE = /^#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?$/
@@ -89,8 +105,15 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
   const archive = scriptsRecord ? asTrimmedString(scriptsRecord.archive) : undefined
   const issueCommand = asTrimmedString(record.issueCommand)
   const defaultTabs = normalizeDefaultTabs(record.defaultTabs)
+  const hookTimeoutSeconds = asPositiveNumber(record.hookTimeoutSeconds)
 
-  if (!setup && !archive && !issueCommand && defaultTabs.length === 0) {
+  if (
+    !setup &&
+    !archive &&
+    !issueCommand &&
+    defaultTabs.length === 0 &&
+    hookTimeoutSeconds === undefined
+  ) {
     return null
   }
 
@@ -100,7 +123,8 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
       ...(archive ? { archive } : {})
     },
     ...(issueCommand ? { issueCommand } : {}),
-    ...(defaultTabs.length > 0 ? { defaultTabs } : {})
+    ...(defaultTabs.length > 0 ? { defaultTabs } : {}),
+    ...(hookTimeoutSeconds !== undefined ? { hookTimeoutSeconds } : {})
   }
 }
 
@@ -133,7 +157,12 @@ export function hasHooksFile(repoPath: string): boolean {
 // return `null` from `parseOrcaYaml` and show a confusing "could not be parsed"
 // error.  Detecting well-formed but unrecognised keys lets the UI suggest an
 // update instead of implying the file is broken.
-const RECOGNIZED_ORCA_YAML_KEYS = new Set(['scripts', 'issueCommand', 'defaultTabs'])
+const RECOGNIZED_ORCA_YAML_KEYS = new Set([
+  'scripts',
+  'issueCommand',
+  'defaultTabs',
+  'hookTimeoutSeconds'
+])
 
 /**
  * Return true when `orca.yaml` contains at least one top-level key that this
@@ -304,7 +333,12 @@ export function getEffectiveHooksFromConfig(
     scripts: {
       ...(setup ? { setup } : {}),
       ...(archive ? { archive } : {})
-    }
+    },
+    // Why: the hook timeout is a committed-config concern only (local Settings
+    // has no timeout field), so it always flows straight from orca.yaml.
+    ...(yamlHooks?.hookTimeoutSeconds !== undefined
+      ? { hookTimeoutSeconds: yamlHooks.hookTimeoutSeconds }
+      : {})
   }
 }
 
@@ -528,7 +562,8 @@ export function runHook(
   hookName: 'setup' | 'archive',
   cwd: string,
   repo: Repo,
-  hooksPath?: string
+  hooksPath?: string,
+  timeoutMs?: number
 ): Promise<{ success: boolean; output: string }> {
   const hooks = getEffectiveHooks(repo, hooksPath)
   const script = hooks?.scripts[hookName]
@@ -536,6 +571,8 @@ export function runHook(
   if (!script) {
     return Promise.resolve({ success: true, output: '' })
   }
+
+  const effectiveTimeoutMs = resolveHookTimeoutMs(hooks, timeoutMs)
 
   const wslInfo = parseWslPath(cwd)
 
@@ -582,18 +619,18 @@ export function runHook(
       }
 
       // Why: Node's execFile timeout only signals wsl.exe; if no callback
-      // arrives, hook setup/archive must still unblock after HOOK_TIMEOUT.
+      // arrives, hook setup/archive must still unblock after the effective timeout.
       const timeout = setTimeout(() => {
         child?.kill()
-        finish(new Error(`Hook timed out after ${HOOK_TIMEOUT}ms.`))
-      }, HOOK_TIMEOUT)
+        finish(new Error(`Hook timed out after ${effectiveTimeoutMs}ms.`))
+      }, effectiveTimeoutMs)
 
       try {
         child = execFile(
           'wsl.exe',
           ['-d', wslInfo.distro, '--', 'bash', '-c', bashCmd],
           {
-            timeout: HOOK_TIMEOUT,
+            timeout: effectiveTimeoutMs,
             encoding: 'utf-8',
             env: { ...process.env, ...wslEnv }
           },
@@ -612,7 +649,7 @@ export function runHook(
       script,
       {
         cwd,
-        timeout: HOOK_TIMEOUT,
+        timeout: effectiveTimeoutMs,
         shell: getHookShell(),
         env: {
           ...process.env,

@@ -1804,6 +1804,7 @@ export type OrcaHooks = {
   }
   issueCommand?: string // Shared default command for linked GitHub issues
   defaultTabs?: OrcaDefaultTabTemplate[] // Terminal tabs to create once for a new worktree
+  hookTimeoutSeconds?: number // Overrides the default per-hook execution timeout for setup/archive
 }
 
 export type OrcaDefaultTabTemplate = {
