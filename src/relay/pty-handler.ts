@@ -995,7 +995,12 @@ export class PtyHandler {
       managed.killTimer = setTimeout(() => {
         const still = this.ptys.get(id)
         if (still && !still.disposed) {
-          killPtyProcess(still.pty, 'SIGKILL')
+          // Why: on Windows the graceful path already closed ConPTY, which is
+          // force-capable; a second close can tear down an unrelated conout
+          // pipe pairing. Keep the cleanup guarantee, skip the redundant kill.
+          if (!still.windowsImmediateKillIssued) {
+            killPtyProcess(still.pty, 'SIGKILL')
+          }
           this.flushPtyOutput(id)
           // Why: emit pty.exit BEFORE disposeManagedPty sets disposed=true.
           // The natural onExit short-circuits on `managed.disposed`, so
