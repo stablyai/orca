@@ -116,6 +116,11 @@ describe('orchestration skill agent coverage', () => {
         directoryPath: '/Users/test/.pi/agent/skills/orchestration'
       },
       {
+        agent: 'gemini',
+        rootPath: '/Users/test/.gemini/skills',
+        directoryPath: '/Users/test/.gemini/skills/orchestration'
+      },
+      {
         agent: 'antigravity',
         rootPath: '/Users/test/.gemini/antigravity/skills',
         directoryPath: '/Users/test/.gemini/antigravity/skills/orchestration'
@@ -147,6 +152,32 @@ describe('orchestration skill agent coverage', () => {
         })
       ])
     ).toBe(true)
+  })
+
+  it('keeps Gemini and Antigravity distinct despite sharing the ~/.gemini root', () => {
+    const geminiInstall = [
+      skill({
+        providers: ['agent-skills'],
+        sourceKind: 'home',
+        rootPath: '/Users/test/.gemini/skills',
+        directoryPath: '/Users/test/.gemini/skills/orchestration'
+      })
+    ]
+    const antigravityInstall = [
+      skill({
+        providers: ['agent-skills'],
+        sourceKind: 'home',
+        rootPath: '/Users/test/.gemini/antigravity/skills',
+        directoryPath: '/Users/test/.gemini/antigravity/skills/orchestration'
+      })
+    ]
+
+    // Why: `.gemini/skills` and `.gemini/antigravity/skills` are siblings, so a
+    // segment matcher must not let one provider's install mark the other.
+    expect(agentHasOrchestrationSkill('gemini', geminiInstall)).toBe(true)
+    expect(agentHasOrchestrationSkill('antigravity', geminiInstall)).toBe(false)
+    expect(agentHasOrchestrationSkill('antigravity', antigravityInstall)).toBe(true)
+    expect(agentHasOrchestrationSkill('gemini', antigravityInstall)).toBe(false)
   })
 
   it('marks Claude Agent Teams from ~/.claude/skills like Claude Code', () => {

@@ -12,6 +12,7 @@ export type OrchestrationSkillLocationId =
   | 'grok-home'
   | 'opencode-home'
   | 'pi-home'
+  | 'gemini-home'
   | 'antigravity-home'
   | 'cursor-home'
 
@@ -69,6 +70,14 @@ const ORCHESTRATION_SKILL_LOCATIONS: readonly OrchestrationSkillLocationDefiniti
       pathContainsSegments(skill.rootPath, ['.pi', 'agent', 'skills'])
   },
   {
+    // Why: segment matching keeps `.gemini/skills` (Gemini CLI) distinct from the
+    // sibling `.gemini/antigravity/skills`, so the two never cross-mark each other.
+    id: 'gemini-home',
+    matchesSkill: (skill) =>
+      isGlobalOrchestrationSkill(skill) &&
+      pathContainsSegments(skill.rootPath, ['.gemini', 'skills'])
+  },
+  {
     id: 'antigravity-home',
     matchesSkill: (skill) =>
       isGlobalOrchestrationSkill(skill) &&
@@ -93,6 +102,7 @@ const ORCHESTRATION_SKILL_LOCATION_IDS_BY_AGENT: Partial<
   grok: ['grok-home', 'agents-home'],
   opencode: ['opencode-home', 'agents-home'],
   pi: ['pi-home', 'agents-home'],
+  gemini: ['gemini-home', 'agents-home'],
   antigravity: ['antigravity-home', 'agents-home'],
   cursor: ['cursor-home', 'agents-home']
 }

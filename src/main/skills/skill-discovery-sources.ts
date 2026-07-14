@@ -49,6 +49,7 @@ export function buildSkillDiscoverySources(
       'agent-skills'
     ]),
     source('home-pi', 'Pi home', join(home, '.pi', 'agent', 'skills'), 'home', ['agent-skills']),
+    source('home-gemini', 'Gemini home', join(home, '.gemini', 'skills'), 'home', ['agent-skills']),
     source(
       'home-antigravity',
       'Antigravity home',
