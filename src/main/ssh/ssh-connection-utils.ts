@@ -95,7 +95,14 @@ export function shellEscape(s: string): string {
 export function wrapRemoteCommandForPosixShell(command: string): string {
   // Why: sshd asks the user's login shell to parse exec commands. Orca emits
   // POSIX sh snippets; `exec` avoids leaving that shell around for relay bridges.
-  return `exec /bin/sh -c ${shellEscape(command)}`
+  if (!command.includes('\n')) {
+    return `exec /bin/sh -c ${shellEscape(command)}`
+  }
+  // Why: csh/tcsh login shells re-parse each line of a quoted multiline
+  // argument and never reach /bin/sh (#8701). Collapse to one line and let
+  // /bin/sh rebuild the script; eval keeps stdin free for streaming commands.
+  const encoded = command.replace(/\\/g, '\\\\').replace(/\n/g, '\\n')
+  return `exec /bin/sh -c ${shellEscape(`eval "$(printf %b ${shellEscape(encoded)})"`)}`
 }
 
 export type SshExecOptions = {

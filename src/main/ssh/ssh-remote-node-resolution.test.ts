@@ -258,6 +258,37 @@ describe('resolveRemoteNodePath', () => {
     )
   })
 
+  it('uses -c and the csh which builtin for tcsh login shells', async () => {
+    execCommandMock
+      .mockResolvedValueOnce('\n') // path probe: empty
+      .mockResolvedValueOnce('/bin/tcsh') // $SHELL
+      .mockResolvedValueOnce('/home/u/.local/bin/node\n') // which node
+      .mockResolvedValueOnce('v20.20.2\n')
+
+    await expect(resolveRemoteNodePath(conn)).resolves.toBe('/home/u/.local/bin/node')
+
+    // Why: csh/tcsh reject the combined `-lc` flag and have no `command` builtin.
+    expect(execCommandMock).toHaveBeenNthCalledWith(3, conn, `'/bin/tcsh' -c 'which node'`, {
+      wrapCommand: false,
+      timeoutMs: 8_000
+    })
+  })
+
+  it('uses -c and the csh which builtin for csh login shells', async () => {
+    execCommandMock
+      .mockResolvedValueOnce('\n') // path probe: empty
+      .mockResolvedValueOnce('/bin/csh') // $SHELL
+      .mockResolvedValueOnce('/usr/local/bin/node\n') // which node
+      .mockResolvedValueOnce('v20.20.2\n')
+
+    await expect(resolveRemoteNodePath(conn)).resolves.toBe('/usr/local/bin/node')
+
+    expect(execCommandMock).toHaveBeenNthCalledWith(3, conn, `'/bin/csh' -c 'which node'`, {
+      wrapCommand: false,
+      timeoutMs: 8_000
+    })
+  })
+
   it('uses /bin/sh when the remote shell expansion falls back to it', async () => {
     execCommandMock
       .mockResolvedValueOnce('\n') // path probe: empty

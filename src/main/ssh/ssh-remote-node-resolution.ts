@@ -148,9 +148,11 @@ async function tryResolveViaLoginShell(
       return null
     }
 
+    // Why: csh/tcsh have no `command` builtin; `which` is their PATH resolver.
+    const probe = isCshFamilyShell(shell) ? 'which node' : 'command -v node'
     const nodePath = await execCommand(
       conn,
-      buildCommandInShell(shell, 'command -v node'),
+      buildCommandInShell(shell, probe),
       commandOptions({ wrapCommand: false, timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS }, options)
     )
     const candidate = nodePath.trim().split('\n')[0]
@@ -171,11 +173,18 @@ async function tryResolveViaLoginShell(
   return null
 }
 
+function isCshFamilyShell(shell: string): boolean {
+  const shellName = shell.split('/').at(-1)
+  return shellName === 'csh' || shellName === 'tcsh'
+}
+
 function buildCommandInShell(shell: string, command: string): string {
   const shellName = shell.split('/').at(-1)
   // Why: dash and POSIX sh do not require `-l`; when $SHELL falls back to
-  // /bin/sh, prefer a portable command over login-shell semantics.
-  const mode = shellName === 'sh' || shellName === 'dash' ? '-c' : '-lc'
+  // /bin/sh, prefer a portable command over login-shell semantics. csh/tcsh
+  // reject the combined `-lc` flag outright (#8701); their non-login shells
+  // still read .cshrc, where EDA/HPC farms set PATH.
+  const mode = shellName === 'sh' || shellName === 'dash' || isCshFamilyShell(shell) ? '-c' : '-lc'
   return `${shellEscape(shell)} ${mode} ${shellEscape(command)}`
 }
 
