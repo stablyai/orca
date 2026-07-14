@@ -16383,7 +16383,7 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
-  it('keeps the first renderer-backed grid handle when local spawn claims it later', async () => {
+  it('keeps the reserved grid handle when staged post-spawn registration finalizes', async () => {
     const firstLeafId = '11111111-1111-4111-8111-111111111111'
     const firstPtyId = 'pty-grid-renderer'
     const appendedPtyId = 'pty-grid-appended'
@@ -16577,6 +16577,36 @@ describe('OrcaRuntimeService', () => {
     const claimedHandle = runtime.claimRendererTerminalHandle(rendererTerminalHandle)
     expect(claimedHandle).toBe(first.handle)
     runtime.registerPreAllocatedHandleForPty(firstPtyId, claimedHandle!)
+    const postSpawnRegistration = runtime.beginStagedPtyRuntimeRegistration()
+    postSpawnRegistration.claim(firstPtyId)
+    const postSpawnHandle = runtime.createPreAllocatedTerminalHandle()
+    runtime.registerPreAllocatedHandleForPty(firstPtyId, postSpawnHandle)
+    runtime.registerPty(firstPtyId, TEST_WORKTREE_ID)
+    runtime.onPtySpawned(firstPtyId)
+    runtime.onPtyData(firstPtyId, 'renderer ready\n', 1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-grid-renderer',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Renderer Grid',
+          activeLeafId: firstLeafId,
+          layoutMode: 'orchestration-grid',
+          layout: firstLayout.root
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-grid-renderer',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: firstLeafId,
+          paneRuntimeId: 1,
+          ptyId: firstPtyId,
+          paneTitle: null
+        }
+      ]
+    })
+    postSpawnRegistration.commit()
     const appended = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
       command: 'codex',
       rendererBacked: true,
@@ -16597,9 +16627,18 @@ describe('OrcaRuntimeService', () => {
     expect(
       [...runtime['handles'].values()].filter((record) => record.ptyId === firstPtyId)
     ).toHaveLength(1)
+    expect(runtime['handles'].has(postSpawnHandle)).toBe(false)
+    await expect(runtime.showTerminal(first.handle)).resolves.toMatchObject({
+      handle: first.handle,
+      tabId: first.tabId,
+      leafId: firstLeafId,
+      paneRuntimeId: 1,
+      ptyId: firstPtyId
+    })
     await expect(runtime.readTerminal(first.handle)).resolves.toMatchObject({
       handle: first.handle,
-      status: 'running'
+      status: 'running',
+      tail: ['renderer ready']
     })
     await expect(runtime.sendTerminal(first.handle, { text: 'status' })).resolves.toMatchObject({
       handle: first.handle,

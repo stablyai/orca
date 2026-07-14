@@ -9596,7 +9596,10 @@ export class OrcaRuntimeService {
     ) {
       return
     }
-    this.handleByPtyId.set(ptyId, handle)
+    // Why: a renderer-reserved handle may already be public before a delayed
+    // staged registration finalizes; that later registration must not re-key it.
+    const authoritativeHandle = this.handleByPtyId.get(ptyId) ?? handle
+    this.handleByPtyId.set(ptyId, authoritativeHandle)
     for (const leaf of this.getLeavesForPty(ptyId)) {
       this.adoptPreAllocatedHandle(leaf)
     }
@@ -32343,6 +32346,13 @@ export class OrcaRuntimeService {
       return null
     }
     const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
+    const displacedHandle = this.handleByLeafKey.get(leafKey)
+    if (displacedHandle && displacedHandle !== preAllocated) {
+      // Why: graph reconciliation can mint a temporary handle while the real
+      // PTY registration is staged; keep exactly one public identity afterward.
+      this.handles.delete(displacedHandle)
+      this.rejectWaitersForHandle(displacedHandle, 'terminal_handle_stale')
+    }
     this.handles.set(preAllocated, {
       handle: preAllocated,
       runtimeId: this.runtimeId,

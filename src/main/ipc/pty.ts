@@ -5800,7 +5800,7 @@ export function registerPtyHandlers(
         })
       let effectiveLaunchConfig = args.launchConfig
       const rendererTerminalHandle =
-        runtime?.claimRendererTerminalHandle(baseEnv?.ORCA_TERMINAL_HANDLE) ?? null
+        runtime?.claimRendererTerminalHandle?.(baseEnv?.ORCA_TERMINAL_HANDLE) ?? null
       const shouldPreAllocateTerminalHandle =
         rendererTerminalHandle !== null ||
         (runtime !== undefined &&
