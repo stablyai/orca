@@ -1075,6 +1075,12 @@ function createWebKeybindingsApi(): WebKeybindingsApi {
 // undefined on web and the chat view showed no messages.
 function createNativeChatApi(): NativeChatApi {
   return {
+    // Why: writing a resumable Claude session touches ~/.claude on the desktop;
+    // the web client has no local filesystem, so surface an error instead.
+    writeWebChatClaudeSession: () =>
+      Promise.resolve({
+        error: 'Web chat conversion is only available in the Orca desktop app.'
+      }),
     readSession: (agent, sessionId, limit, transcriptPath) =>
       callRuntimeResult<NativeChatReadSessionResult>('nativeChat.readSession', {
         agent,
