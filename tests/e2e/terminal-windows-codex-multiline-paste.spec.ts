@@ -142,6 +142,12 @@ async function waitForCodexComposerReady(
   await expect
     .poll(async () => await getTerminalContent(page, 12_000), { timeout: 60_000 })
     .not.toMatch(/Booting MCP server|tab to queue message/i)
+  // Why: absence of boot states alone can pass on an empty screen; the idle
+  // composer placeholder is the positive ready marker (mirrors the product's
+  // codex-composer-prompt draft-paste signal).
+  await expect
+    .poll(async () => await getTerminalContent(page, 12_000), { timeout: 60_000 })
+    .toMatch(/Ask Codex/i)
 }
 
 test.describe('Windows Codex multiline paste', () => {
@@ -205,9 +211,12 @@ test.describe('Windows Codex multiline paste', () => {
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
     const ptyId = await waitForActivePanePtyId(orcaPage)
-    const payload = pastePayload(100)
+    const payload = pastePayload(110)
     const expectedText = payload.replace(/\r?\n/g, '\r')
-    expect(Buffer.byteLength(payload, 'utf8')).toBeGreaterThan(64 * 1024)
+    // Why: assert on the normalized size so the payload keeps exercising the
+    // chunked (>64 KiB direct-max) lane even if planning ever measures
+    // post-normalization bytes.
+    expect(Buffer.byteLength(expectedText, 'utf8')).toBeGreaterThan(64 * 1024)
     const expectedHash = createHash('sha256').update(expectedText).digest('hex')
     const marker = `ORCA_LARGE_PASTE_${randomUUID().replaceAll('-', '')}`
     const scriptPath = path.join(testRepoPath, `.${marker}.mjs`)
