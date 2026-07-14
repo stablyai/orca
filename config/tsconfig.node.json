@@ -13,7 +13,8 @@
     // whitelist in tsconfig.cli.json for src/main files the CLI needs).
     "../src/cli/chat-import-host/native-messaging-host-paths.ts",
     "../src/cli/chat-import-host/install-native-messaging-host.ts",
-    "../src/cli/chat-import-host/native-messaging-manifest.ts"
+    "../src/cli/chat-import-host/native-messaging-manifest.ts",
+    "../src/cli/chat-import-host/resolve-host-exec-command.ts"
   ],
   "compilerOptions": {
     "composite": true,

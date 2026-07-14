@@ -865,6 +865,32 @@ export type NativeChatApi = {
   ) => Promise<NativeChatWriteWebChatClaudeSessionResult>
 }
 
+export type ChatImportBrowserId = 'chrome' | 'edge' | 'brave' | 'chromium'
+
+export type ChatImportBrowserStatus = {
+  id: ChatImportBrowserId
+  label: string
+  detected: boolean
+  hostInstalled: boolean
+}
+
+export type ChatImportSetupStatus = {
+  browsers: ChatImportBrowserStatus[]
+  lastSyncedBySource: Record<'CHATGPT' | 'CLAUDE' | 'GEMINI', string | null>
+  extensionDir: string
+}
+
+export type ChatImportInstallResult = { ok: true } | { ok: false; error: string }
+
+export type ChatImportSetupApi = {
+  /** Detected browsers, per-browser native-messaging host install state, and
+   *  the last sync time per web-chat source. Backs the extension setup pane. */
+  getStatus: () => Promise<ChatImportSetupStatus>
+  /** Installs the native-messaging host launcher + manifest for one browser,
+   *  using the fixed extension id — no manual chrome://extensions ID entry. */
+  install: (browser: ChatImportBrowserId) => Promise<ChatImportInstallResult>
+}
+
 export type AppApi = {
   /** Returns the app identity currently exposed to native chrome and the titlebar. */
   getIdentity: () => Promise<AppIdentity>
@@ -2373,6 +2399,7 @@ export type PreloadApi = {
   openCodeUsage: OpenCodeUsageApi
   aiVault: AiVaultApi
   nativeChat: NativeChatApi
+  chatImportSetup: ChatImportSetupApi
   fs: {
     readDir: (args: { dirPath: string; connectionId?: string }) => Promise<DirEntry[]>
     readFile: (args: {
