@@ -687,24 +687,35 @@ export default function HomeScreen() {
     </Pressable>
   )
 
+  // Why: report success/failure of the mutation itself, not the follow-up reload.
+  // A committed rename/remove that only fails to refresh must not look like a
+  // failure (which would strand an already-removed host in the confirm step).
+  async function reloadHosts(): Promise<void> {
+    try {
+      setHosts(await loadHosts())
+    } catch {
+      // Best-effort; the next focus/refresh reconciles the list.
+    }
+  }
+
   async function handleRename(hostId: string, newName: string): Promise<boolean> {
     try {
       await renameHost(hostId, newName)
-      setHosts(await loadHosts())
-      return true
     } catch {
       return false
     }
+    await reloadHosts()
+    return true
   }
 
   async function handleRemove(hostId: string): Promise<boolean> {
     try {
       await removeHostAndCloseClient(hostId, closeHostClient)
-      setHosts(await loadHosts())
-      return true
     } catch {
       return false
     }
+    await reloadHosts()
+    return true
   }
 
   return (

@@ -38,6 +38,9 @@ export function HostActionsSheet({
 }: Props) {
   const [view, setView] = useState<HostActionView>('actions')
   const [renameValue, setRenameValue] = useState('')
+  // Why: guard the async rename/remove so a rapid double-tap can't fire the
+  // mutation twice (the second call races an already-removed host).
+  const [submitting, setSubmitting] = useState(false)
   // Why: keep rendering the last host while the drawer animates closed (the `host`
   // prop drops to null the instant the flow closes).
   const [displayHost, setDisplayHost] = useState<HostProfile | null>(null)
@@ -52,6 +55,7 @@ export function HostActionsSheet({
       setDisplayHost(host)
       setView('actions')
       setRenameValue(host.name)
+      setSubmitting(false)
     }
   }
 
@@ -94,15 +98,28 @@ export function HostActionsSheet({
 
   async function submitRename(target: HostProfile): Promise<void> {
     const trimmed = renameValue.trim()
-    if (!trimmed) {
+    if (!trimmed || submitting) {
       return
     }
-    await onRename(target.id, trimmed)
-    onClose()
+    setSubmitting(true)
+    const renamed = await onRename(target.id, trimmed)
+    setSubmitting(false)
+    if (renamed) {
+      onClose()
+    } else {
+      // Why: keep the rename step up so the user can retry rather than closing as
+      // if it succeeded.
+      Alert.alert('Could not rename host', 'Please try again.')
+    }
   }
 
   async function removeHost(target: HostProfile): Promise<void> {
+    if (submitting) {
+      return
+    }
+    setSubmitting(true)
     const removed = await onRemove(target.id)
+    setSubmitting(false)
     if (removed) {
       onClose()
     } else {
@@ -112,7 +129,7 @@ export function HostActionsSheet({
     }
   }
 
-  const canSaveRename = renameValue.trim().length > 0
+  const canSaveRename = renameValue.trim().length > 0 && !submitting
 
   return (
     <BottomDrawer visible={host != null} onClose={onClose}>
@@ -178,8 +195,10 @@ export function HostActionsSheet({
               style={({ pressed }) => [
                 styles.button,
                 styles.destructiveButton,
-                pressed && styles.pressed
+                pressed && styles.pressed,
+                submitting && styles.buttonDisabled
               ]}
+              disabled={submitting}
               onPress={() => void removeHost(displayHost)}
             >
               <Text style={styles.destructiveText}>Remove</Text>
@@ -259,6 +278,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 2,
     borderRadius: radii.button,
     alignItems: 'center'
+  },
+  buttonDisabled: {
+    opacity: 0.4
   },
   cancelButton: {
     backgroundColor: colors.bgPanel
