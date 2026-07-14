@@ -2147,6 +2147,36 @@ describe('connectPanePty', () => {
   })
 
   // Why: hidden panes (orchestration workers, CLI terminal create) legitimately connect at 0×0 and refit when shown, so the zero-dimensions diagnostic must stay silent.
+  it('retains a failed listener cleanup for retry while completed cleanup stays idempotent', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+    const failingDataDispose = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error('data listener cleanup failed')
+      })
+      .mockImplementationOnce(() => undefined)
+    const resizeDispose = vi.fn()
+    pane.terminal.onData.mockReturnValueOnce({ dispose: failingDataDispose })
+    pane.terminal.onResize.mockReturnValueOnce({ dispose: resizeDispose })
+
+    const binding = connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    await flushAsyncTicks()
+
+    expect(() => binding.dispose()).toThrow('data listener cleanup failed')
+    expect(resizeDispose).toHaveBeenCalledOnce()
+    expect(() => binding.dispose()).not.toThrow()
+    expect(failingDataDispose).toHaveBeenCalledTimes(2)
+    expect(resizeDispose).toHaveBeenCalledOnce()
+    expect(() => binding.dispose()).not.toThrow()
+    expect(failingDataDispose).toHaveBeenCalledTimes(2)
+  })
+
+  // Why: orchestration workers and CLI `terminal create` (no --focus) mount
+  // hidden panes that legitimately connect at 0×0 and refit when shown, so the
+  // zero-dimensions diagnostic must stay silent while the pane is not visible.
   it('does not surface the zero-dimensions diagnostic for a hidden pane', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
@@ -8142,6 +8172,162 @@ describe('connectPanePty', () => {
       expect.objectContaining({ sessionId: 'ssh:conn-1@@pty-7' })
     )
     expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
+  })
+
+  it('adopts an acknowledged split SSH PTY without reconnecting or spawning a replacement', async () => {
+    const splitPtyId = 'ssh:conn-1@@pty-split'
+    const launchConfig = { agentArgs: '--split-worker', agentEnv: { ORCA_ROLE: 'worker' } }
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'ssh:conn-1@@pty-source' }] },
+      ptyIdsByTabId: { 'tab-1': ['ssh:conn-1@@pty-source'] },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: LEAF_1 },
+          activeLeafId: LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [LEAF_1]: 'ssh:conn-1@@pty-source' }
+        }
+      },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      sshConnectionStates: new Map([['conn-1', { status: 'connected' }]])
+    } as StoreState
+    const pane = createPane(2)
+    const deps = createDeps({
+      startup: { command: 'codex --split-worker', launchConfig },
+      restoredLeafId: LEAF_2,
+      restoredPtyIdByLeafId: { [LEAF_2]: splitPtyId },
+      trustedAdoptPtyId: splitPtyId
+    })
+
+    connectPanePty(pane as never, createManager(2) as never, deps as never)
+
+    expect(transport.attach).toHaveBeenCalledOnce()
+    expect(transport.attach).toHaveBeenCalledWith(
+      expect.objectContaining({ existingPtyId: splitPtyId })
+    )
+    expect(transport.connect).not.toHaveBeenCalled()
+    expect(deps.syncPanePtyLayoutBinding).not.toHaveBeenCalled()
+    expect(deps.updateTabPtyId).not.toHaveBeenCalled()
+    expect(transport.sendInput).not.toHaveBeenCalled()
+    expect(scheduleRuntimeGraphSync).not.toHaveBeenCalled()
+    expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenCalledOnce()
+    expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenCalledWith(
+      makePaneKey('tab-1', LEAF_2),
+      launchConfig,
+      expect.objectContaining({ tabId: 'tab-1', leafId: LEAF_2 })
+    )
+  })
+
+  it('adopts an acknowledged split local PTY synchronously without publishing staged ownership', async () => {
+    const splitPtyId = 'pty-local-split'
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    const pane = createPane(2)
+    const deps = createDeps({
+      restoredLeafId: LEAF_2,
+      restoredPtyIdByLeafId: { [LEAF_2]: splitPtyId },
+      trustedAdoptPtyId: splitPtyId
+    })
+
+    connectPanePty(pane as never, createManager(2) as never, deps as never)
+
+    expect(transport.attach).toHaveBeenCalledOnce()
+    expect(transport.attach).toHaveBeenCalledWith(
+      expect.objectContaining({ existingPtyId: splitPtyId })
+    )
+    expect(transport.connect).not.toHaveBeenCalled()
+    expect(deps.syncPanePtyLayoutBinding).not.toHaveBeenCalled()
+    expect(deps.updateTabPtyId).not.toHaveBeenCalled()
+    expect(scheduleRuntimeGraphSync).not.toHaveBeenCalled()
+  })
+
+  it('throws a trusted split SSH attach failure synchronously to the split acknowledgement', async () => {
+    const splitPtyId = 'ssh:conn-1@@pty-rejected'
+    const launchConfig = { agentArgs: '--rejected-worker', agentEnv: { ORCA_ROLE: 'worker' } }
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.attach.mockImplementation(() => {
+      throw new Error('trusted split attach failed')
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'ssh:conn-1@@pty-source' }] },
+      ptyIdsByTabId: { 'tab-1': ['ssh:conn-1@@pty-source'] },
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      sshConnectionStates: new Map([['conn-1', { status: 'connected' }]])
+    } as StoreState
+    const pane = createPane(2)
+    const deps = createDeps({
+      startup: { command: 'codex --split-worker', launchConfig },
+      restoredLeafId: LEAF_2,
+      restoredPtyIdByLeafId: { [LEAF_2]: splitPtyId },
+      trustedAdoptPtyId: splitPtyId
+    })
+
+    expect(() => connectPanePty(pane as never, createManager(2) as never, deps as never)).toThrow(
+      'trusted split attach failed'
+    )
+    expect(transport.attach).toHaveBeenCalledOnce()
+    expect(transport.connect).not.toHaveBeenCalled()
+    expect(transport.sendInput).not.toHaveBeenCalled()
+    expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenCalledOnce()
+    expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledExactlyOnceWith(
+      makePaneKey('tab-1', LEAF_2)
+    )
+  })
+
+  it('retains a trusted attach binding whose first failure cleanup does not finish', async () => {
+    const splitPtyId = 'ssh:conn-1@@pty-cleanup-retry'
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.attach.mockImplementation(() => {
+      throw new Error('trusted split attach failed')
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      sshConnectionStates: new Map([['conn-1', { status: 'connected' }]])
+    } as StoreState
+    const pane = createPane(2)
+    const dataDispose = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error('data listener cleanup failed')
+      })
+      .mockImplementationOnce(() => undefined)
+    pane.terminal.onData.mockReturnValueOnce({ dispose: dataDispose })
+    const retainedBindings: { dispose: () => void }[] = []
+    const deps = createDeps({
+      startup: {
+        command: 'codex --split-worker',
+        launchConfig: { agentArgs: '--worker', agentEnv: {} }
+      },
+      restoredLeafId: LEAF_2,
+      restoredPtyIdByLeafId: { [LEAF_2]: splitPtyId },
+      trustedAdoptPtyId: splitPtyId,
+      retainFailedBinding: (binding: { dispose: () => void }) => retainedBindings.push(binding)
+    })
+
+    expect(() => connectPanePty(pane as never, createManager(2) as never, deps as never)).toThrow(
+      'Trusted PTY attach failed and its connection resources could not be cleaned'
+    )
+    expect(retainedBindings).toHaveLength(1)
+    expect(dataDispose).toHaveBeenCalledOnce()
+    expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledExactlyOnceWith(
+      makePaneKey('tab-1', LEAF_2)
+    )
+
+    expect(() => retainedBindings[0]!.dispose()).not.toThrow()
+    expect(dataDispose).toHaveBeenCalledTimes(2)
+    expect(() => retainedBindings[0]!.dispose()).not.toThrow()
+    expect(dataDispose).toHaveBeenCalledTimes(2)
   })
 
   it('connects a disconnected SSH target before fresh-spawning instead of erroring', async () => {

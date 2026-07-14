@@ -75,6 +75,148 @@ function createPane(): ManagedPaneInternal {
   }
 }
 
+function createDisposablePaneHarness(): {
+  pane: ManagedPaneInternal
+  panes: Map<number, ManagedPaneInternal>
+  terminalDispose: ReturnType<typeof vi.fn>
+} {
+  const pane = createPane()
+  const terminalDispose = vi.fn()
+  pane.container = { removeEventListener: vi.fn() } as never
+  Object.assign(pane.terminal, {
+    element: { removeEventListener: vi.fn() },
+    dispose: terminalDispose
+  })
+  pane.fitAddon = { dispose: vi.fn() } as never
+  pane.searchAddon = { dispose: vi.fn() } as never
+  pane.serializeAddon = { dispose: vi.fn() } as never
+  pane.unicode11Addon = { dispose: vi.fn() } as never
+  pane.webLinksAddon = { dispose: vi.fn() } as never
+  pane.pendingInitialFitRafId = null
+  pane.panePointerDownHandler = null
+  pane.paneMouseEnterHandler = null
+  pane.paneDragCleanup = null
+  pane.focusClassSyncCleanup = null
+  pane.terminalScrollIntentDisposable = null
+  pane.arabicShapingJoinerCleanup = null
+  return { pane, panes: new Map([[pane.id, pane]]), terminalDispose }
+}
+
+describe('disposePane fault isolation', () => {
+  it.each([
+    'initial-fit-frame',
+    'resize-observer',
+    'container-listener',
+    'drag-listener',
+    'focus-listener',
+    'scroll-listener',
+    'composition-listener',
+    'ligature-addon',
+    'search-addon',
+    'serialize-addon',
+    'unicode-addon',
+    'web-links-addon',
+    'fit-addon',
+    'terminal'
+  ] as const)('continues teardown and retries only a throwing %s cleanup', (failurePoint) => {
+    const { pane, panes, terminalDispose } = createDisposablePaneHarness()
+    const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
+    if (failurePoint === 'initial-fit-frame') {
+      pane.pendingInitialFitRafId = 7
+      globalThis.cancelAnimationFrame = vi.fn().mockImplementationOnce(() => {
+        throw new Error('initial fit cleanup failed')
+      })
+    } else if (failurePoint === 'resize-observer') {
+      pane.fitResizeObserver = {
+        disconnect: vi.fn().mockImplementationOnce(() => {
+          throw new Error('resize observer cleanup failed')
+        })
+      } as never
+    } else if (failurePoint === 'container-listener') {
+      pane.panePointerDownHandler = vi.fn()
+      pane.container.removeEventListener = vi.fn().mockImplementationOnce(() => {
+        throw new Error('container listener cleanup failed')
+      })
+    } else if (failurePoint === 'drag-listener') {
+      pane.paneDragCleanup = vi.fn().mockImplementationOnce(() => {
+        throw new Error('drag listener cleanup failed')
+      })
+    } else if (failurePoint === 'focus-listener') {
+      pane.focusClassSyncCleanup = vi.fn().mockImplementationOnce(() => {
+        throw new Error('focus listener cleanup failed')
+      })
+    } else if (failurePoint === 'scroll-listener') {
+      pane.terminalScrollIntentDisposable = {
+        dispose: vi.fn().mockImplementationOnce(() => {
+          throw new Error('scroll listener cleanup failed')
+        })
+      }
+    } else if (failurePoint === 'composition-listener') {
+      pane.compositionHandler = vi.fn()
+      pane.terminal.element!.removeEventListener = vi.fn().mockImplementationOnce(() => {
+        throw new Error('composition listener cleanup failed')
+      })
+    } else if (failurePoint === 'ligature-addon') {
+      pane.ligaturesAddon = {
+        dispose: vi.fn().mockImplementationOnce(() => {
+          throw new Error('ligature addon cleanup failed')
+        })
+      } as never
+    } else if (failurePoint === 'terminal') {
+      terminalDispose.mockImplementationOnce(() => {
+        throw new Error('terminal cleanup failed')
+      })
+    } else {
+      const addon =
+        failurePoint === 'search-addon'
+          ? pane.searchAddon
+          : failurePoint === 'serialize-addon'
+            ? pane.serializeAddon
+            : failurePoint === 'unicode-addon'
+              ? pane.unicode11Addon
+              : failurePoint === 'web-links-addon'
+                ? pane.webLinksAddon
+                : pane.fitAddon
+      addon.dispose = vi.fn().mockImplementationOnce(() => {
+        throw new Error(`${failurePoint} cleanup failed`)
+      })
+    }
+
+    try {
+      expect(() => disposePane(pane, panes)).toThrow()
+      expect(terminalDispose).toHaveBeenCalledOnce()
+      expect(panes.has(pane.id)).toBe(true)
+
+      expect(() => disposePane(pane, panes)).not.toThrow()
+      expect(terminalDispose).toHaveBeenCalledTimes(failurePoint === 'terminal' ? 2 : 1)
+      expect(panes.has(pane.id)).toBe(false)
+    } finally {
+      if (originalCancelAnimationFrame) {
+        globalThis.cancelAnimationFrame = originalCancelAnimationFrame
+      } else {
+        delete (globalThis as { cancelAnimationFrame?: typeof cancelAnimationFrame })
+          .cancelAnimationFrame
+      }
+    }
+  })
+
+  it('does not dispose fixed addons twice when a retained teardown takes over', () => {
+    const { pane, panes, terminalDispose } = createDisposablePaneHarness()
+
+    disposePane(pane, panes, { releaseOwnership: false })
+    disposePane(pane, panes, { releaseOwnership: false })
+
+    expect(terminalDispose).toHaveBeenCalledOnce()
+    expect(pane.searchAddon.dispose).toHaveBeenCalledOnce()
+    expect(pane.fitAddon.dispose).toHaveBeenCalledOnce()
+    expect(panes.has(pane.id)).toBe(true)
+
+    disposePane(pane, panes)
+    expect(panes.has(pane.id)).toBe(false)
+    expect(terminalDispose).toHaveBeenCalledOnce()
+  })
+})
+
 describe('buildDefaultTerminalOptions', () => {
   it('leaves macOS Option available for keyboard layout characters', () => {
     expect(buildDefaultTerminalOptions().macOptionIsMeta).toBe(false)
@@ -464,12 +606,13 @@ describe('openTerminal — addon and provider wiring', () => {
     let registeredJoinHandler: ((text: string) => [number, number][]) | null = null
 
     const fitAddon = {
-      fit: vi.fn()
+      fit: vi.fn(),
+      dispose: vi.fn()
     } as unknown as ManagedPaneInternal['fitAddon']
-    const searchAddon = {} as unknown as ManagedPaneInternal['searchAddon']
-    const serializeAddon = {} as unknown as ManagedPaneInternal['serializeAddon']
-    const unicode11Addon = {} as unknown as ManagedPaneInternal['unicode11Addon']
-    const webLinksAddon = {} as unknown as ManagedPaneInternal['webLinksAddon']
+    const searchAddon = { dispose: vi.fn() } as unknown as ManagedPaneInternal['searchAddon']
+    const serializeAddon = { dispose: vi.fn() } as unknown as ManagedPaneInternal['serializeAddon']
+    const unicode11Addon = { dispose: vi.fn() } as unknown as ManagedPaneInternal['unicode11Addon']
+    const webLinksAddon = { dispose: vi.fn() } as unknown as ManagedPaneInternal['webLinksAddon']
 
     const unicodeProxy = {
       _version: '6' as '6' | '11',
@@ -529,6 +672,7 @@ describe('openTerminal — addon and provider wiring', () => {
       }),
       attachCustomWheelEventHandler: vi.fn(),
       onWriteParsed: vi.fn(() => ({ dispose: vi.fn() })),
+      dispose: vi.fn(),
       write: vi.fn(() => {
         events.push('write')
       }),

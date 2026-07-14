@@ -101,6 +101,8 @@ import type {
   FloatingTerminalCwdRequest,
   MarkdownDocument,
   SearchResult,
+  RuntimeTerminalPlacement,
+  TerminalLayoutSnapshot,
   TuiAgent,
   UpdateStatus,
   WorktreeBaseStatusEvent,
@@ -3897,8 +3899,10 @@ const api = {
           tabId?: string
           leafId?: string
           splitFromLeafId?: string
+          splitSourceLeafIds?: string[]
           splitDirection?: 'horizontal' | 'vertical'
           splitTelemetrySource?: TerminalPaneSplitSource
+          placement?: RuntimeTerminalPlacement
         }
       ) => callback(data)
       ipcRenderer.on('ui:createTerminal', listener)
@@ -3925,6 +3929,14 @@ const api = {
       return () => ipcRenderer.removeListener('terminal:requestTabMount', listener)
     },
     replyTerminalCreate: (reply: TerminalTabCreateReply): void => {
+    replyTerminalCreate: (reply: {
+      requestId: string
+      tabId?: string
+      leafId?: string
+      layout?: TerminalLayoutSnapshot
+      title?: string
+      error?: string
+    }): void => {
       ipcRenderer.send('terminal:tabCreateReply', reply)
     },
     onSplitTerminal: (

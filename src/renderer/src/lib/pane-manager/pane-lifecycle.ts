@@ -1,5 +1,5 @@
 import type { ManagedPaneInternal } from './pane-manager-types'
-import { safeFit } from './pane-tree-ops'
+import { captureScrollState, safeFit } from './pane-tree-ops'
 import {
   attachPaneFitResizeObserver,
   detachPaneFitResizeObserver
@@ -166,101 +166,177 @@ export function setLigaturesEnabled(pane: ManagedPaneInternal, enabled: boolean)
   }
 }
 
+export type MovedPaneSplitState = {
+  pane: ManagedPaneInternal
+  scrollState: ReturnType<typeof captureScrollState>
+  shouldReattachWebgl: boolean
+}
+
+export function runPaneCleanupStep(cleanupErrors: unknown[], cleanup: () => void): void {
+  try {
+    cleanup()
+  } catch (error) {
+    cleanupErrors.push(error)
+  }
+}
+
+export function throwPaneCleanupErrors(cleanupErrors: unknown[], message: string): void {
+  if (cleanupErrors.length === 1) {
+    throw cleanupErrors[0]
+  }
+  if (cleanupErrors.length > 1) {
+    throw new AggregateError(cleanupErrors, message)
+  }
+}
+
+export function preparePanesForSplitMove(
+  sourceContainer: HTMLElement,
+  fallbackPane: ManagedPaneInternal,
+  panes: Map<number, ManagedPaneInternal>
+): MovedPaneSplitState[] {
+  const movedPanes: ManagedPaneInternal[] = []
+  const appendPaneById = (paneIdValue: string | undefined): void => {
+    const paneId = Number(paneIdValue)
+    const pane = Number.isFinite(paneId) ? panes.get(paneId) : undefined
+    if (pane && !movedPanes.includes(pane)) {
+      movedPanes.push(pane)
+    }
+  }
+  if (sourceContainer.classList.contains('pane')) {
+    appendPaneById(sourceContainer.dataset.paneId)
+  }
+  for (const paneElement of sourceContainer.querySelectorAll<HTMLElement>('.pane[data-pane-id]')) {
+    appendPaneById(paneElement.dataset.paneId)
+  }
+  if (movedPanes.length === 0) {
+    movedPanes.push(fallbackPane)
+  }
+
+  return movedPanes.map((pane) => {
+    // Why: chained reparenting can replace a pending WebGL reattach intent.
+    const shouldReattachWebgl = !!pane.webglAddon || pane.pendingSplitWebglReattach === true
+    clearPendingSplitScrollRestore(pane)
+    const scrollState = captureScrollState(pane.terminal)
+    // Why: this lock prevents fits from restoring scroll before split settling.
+    pane.pendingSplitScrollState = scrollState
+    // Why: DOM reparenting can invalidate WebGL without a contextlost event.
+    disposeWebgl(pane)
+    return { pane, scrollState, shouldReattachWebgl }
+  })
+}
+
+type PaneCleanupLedger = { pending: (() => void)[]; releases: (() => void)[] }
+type PaneCleanupField =
+  | 'arabicShapingJoinerCleanup'
+  | 'compositionHandler'
+  | 'focusClassSyncCleanup'
+  | 'ligaturesAddon'
+  | 'paneDragCleanup'
+  | 'paneMouseEnterHandler'
+  | 'panePointerDownHandler'
+  | 'pendingInitialFitRafId'
+  | 'terminalScrollIntentDisposable'
+
+const paneCleanupLedgers = new WeakMap<ManagedPaneInternal, PaneCleanupLedger>()
+const disposedPanes = new WeakSet<ManagedPaneInternal>()
+
+function trackPaneCleanupField<K extends PaneCleanupField>(
+  ledger: PaneCleanupLedger,
+  pane: ManagedPaneInternal,
+  key: K,
+  dispose: (resource: NonNullable<ManagedPaneInternal[K]>) => void
+): void {
+  const resource = pane[key]
+  if (resource == null) {
+    return
+  }
+  ledger.pending.push(() => dispose(resource))
+  ledger.releases.push(() => {
+    if (pane[key] === resource) {
+      ;(pane as unknown as Record<PaneCleanupField, unknown>)[key] = null
+    }
+  })
+}
+
+export function runPaneCleanupLedger(cleanups: (() => void)[], message: string): void {
+  const cleanupErrors: unknown[] = []
+  const failedCleanups: (() => void)[] = []
+  for (const cleanup of cleanups) {
+    try {
+      cleanup()
+    } catch (error) {
+      cleanupErrors.push(error)
+      failedCleanups.push(cleanup)
+    }
+  }
+  cleanups.splice(0, cleanups.length, ...failedCleanups)
+  throwPaneCleanupErrors(cleanupErrors, message)
+}
+
+function createPaneResourceCleanupLedger(pane: ManagedPaneInternal): PaneCleanupLedger {
+  const ledger: PaneCleanupLedger = { pending: [], releases: [] }
+  trackPaneCleanupField(ledger, pane, 'pendingInitialFitRafId', (frameId) =>
+    cancelAnimationFrame(frameId)
+  )
+  trackPaneCleanupField(ledger, pane, 'panePointerDownHandler', (handler) =>
+    pane.container.removeEventListener('pointerdown', handler)
+  )
+  trackPaneCleanupField(ledger, pane, 'paneMouseEnterHandler', (handler) =>
+    pane.container.removeEventListener('mouseenter', handler)
+  )
+  trackPaneCleanupField(ledger, pane, 'paneDragCleanup', (cleanup) => cleanup())
+  trackPaneCleanupField(ledger, pane, 'focusClassSyncCleanup', (cleanup) => cleanup())
+  trackPaneCleanupField(ledger, pane, 'terminalScrollIntentDisposable', (item) => item.dispose())
+  trackPaneCleanupField(ledger, pane, 'arabicShapingJoinerCleanup', (cleanup) => cleanup())
+  trackPaneCleanupField(ledger, pane, 'compositionHandler', (handler) => {
+    pane.terminal.element?.removeEventListener('compositionstart', handler)
+    pane.terminal.element?.removeEventListener('compositionupdate', handler)
+  })
+  trackPaneCleanupField(ledger, pane, 'ligaturesAddon', (addon) => addon.dispose())
+  ledger.pending.push(
+    () => cancelPendingWebglRefresh(pane),
+    () => detachPaneFitResizeObserver(pane),
+    () => clearPendingSplitScrollRestore(pane),
+    () => disposeWebgl(pane),
+    () => pane.searchAddon.dispose(),
+    () => pane.serializeAddon.dispose(),
+    () => pane.unicode11Addon.dispose(),
+    () => pane.webLinksAddon.dispose(),
+    () => pane.fitAddon.dispose(),
+    () => pane.terminal.dispose()
+  )
+  ledger.releases.push(() => {
+    pane.pendingWebglRefreshRafId = null
+    pane.fitResizeObserver = null
+    pane.pendingObservedFitRafId = null
+    pane.webglAddon = null
+  })
+  return ledger
+}
+
 export function disposePane(
   pane: ManagedPaneInternal,
-  panes: Map<number, ManagedPaneInternal>
+  panes: Map<number, ManagedPaneInternal>,
+  options: { releaseOwnership?: boolean } = {}
 ): void {
-  if (pane.pendingInitialFitRafId != null) {
-    cancelAnimationFrame(pane.pendingInitialFitRafId)
-    pane.pendingInitialFitRafId = null
+  if (disposedPanes.has(pane)) {
+    if (options.releaseOwnership !== false && panes.get(pane.id) === pane) {
+      panes.delete(pane.id)
+    }
+    return
   }
-  cancelPendingWebglRefresh(pane)
-  detachPaneFitResizeObserver(pane)
-  if (pane.panePointerDownHandler) {
-    pane.container.removeEventListener('pointerdown', pane.panePointerDownHandler)
-    pane.panePointerDownHandler = null
+  const ledger = paneCleanupLedgers.get(pane) ?? createPaneResourceCleanupLedger(pane)
+  paneCleanupLedgers.set(pane, ledger)
+  runPaneCleanupLedger(ledger.pending, `Pane ${pane.id} cleanup failed`)
+  for (const release of ledger.releases) {
+    release()
   }
-  if (pane.paneMouseEnterHandler) {
-    pane.container.removeEventListener('mouseenter', pane.paneMouseEnterHandler)
-    pane.paneMouseEnterHandler = null
+  paneCleanupLedgers.delete(pane)
+  // Why: a failed split can hand an already-disposed pane to the retained close
+  // transaction; fixed xterm addons must not receive a second disposal.
+  disposedPanes.add(pane)
+  if (options.releaseOwnership !== false && panes.get(pane.id) === pane) {
+    panes.delete(pane.id)
   }
-  pane.paneDragCleanup?.()
-  pane.paneDragCleanup = null
-  pane.focusClassSyncCleanup?.()
-  pane.focusClassSyncCleanup = null
-  pane.terminalScrollIntentDisposable?.dispose()
-  pane.terminalScrollIntentDisposable = null
-  pane.linkifierHoverResetDisposable?.dispose()
-  pane.linkifierHoverResetDisposable = null
-  pane.linkifierMouseLeaveResetDisposable?.dispose()
-  pane.linkifierMouseLeaveResetDisposable = null
-  pane.linkifierWindowBlurResetDisposable?.dispose()
-  pane.linkifierWindowBlurResetDisposable = null
-  // Deregister the RTL shaping joiner: terminal.dispose() below does not.
-  try {
-    pane.arabicShapingJoinerCleanup?.()
-  } catch {
-    /* ignore */
-  }
-  pane.arabicShapingJoinerCleanup = null
-  if (pane.compositionHandler) {
-    pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler)
-    pane.terminal.element?.removeEventListener('compositionupdate', pane.compositionHandler)
-    pane.compositionHandler = null
-  }
-  try {
-    clearPendingSplitScrollRestore(pane)
-  } catch {
-    /* ignore */
-  }
-  try {
-    // Why: fit retries own xterm markers and frame callbacks independently of
-    // split restoration; both must be released before terminal disposal.
-    cancelDeferredScrollRestore(pane.terminal)
-  } catch {
-    /* ignore */
-  }
-  try {
-    pane.ligaturesAddon?.dispose()
-  } catch {
-    /* ignore */
-  }
-  disposeWebgl(pane)
-  try {
-    pane.searchAddon.dispose()
-  } catch {
-    /* ignore */
-  }
-  try {
-    pane.serializeAddon.dispose()
-  } catch {
-    /* ignore */
-  }
-  try {
-    pane.unicode11Addon.dispose()
-  } catch {
-    /* ignore */
-  }
-  try {
-    pane.webLinksAddon.dispose()
-  } catch {
-    /* ignore */
-  }
-  try {
-    pane.fitAddon.dispose()
-  } catch {
-    /* ignore */
-  }
-  try {
-    // Drop renderer selection state before a recovery remount replaces the surface.
-    pane.terminal.clearSelection()
-  } catch {
-    /* ignore */
-  }
-  try {
-    pane.terminal.dispose()
-  } catch {
-    /* ignore */
-  }
-  panes.delete(pane.id)
+
 }

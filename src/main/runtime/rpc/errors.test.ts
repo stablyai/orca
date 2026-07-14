@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { createTerminalSessionStateSaveFailureMessage } from '../../../shared/terminal-session-state-save-failure'
 import { mapRuntimeError } from './errors'
 import {
   ARTIFACT_SHARING_DISABLED_CODE,
@@ -46,6 +47,33 @@ describe('mapRuntimeError', () => {
       })
     }
   )
+  it('preserves the terminal session state save failure code', () => {
+    const message = createTerminalSessionStateSaveFailureMessage()
+    const response = mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, new Error(message))
+
+    expect(response.error).toEqual({
+      code: 'ORCA_TERMINAL_SESSION_STATE_SAVE_FAILED',
+      message
+    })
+  })
+
+  it('preserves the orchestration grid manual-split policy code', () => {
+    const response = mapRuntimeError(
+      'req_1',
+      { runtimeId: 'runtime-1' },
+      new Error('orchestration_grid_manual_split_unsupported')
+    )
+
+    expect(response).toEqual({
+      id: 'req_1',
+      ok: false,
+      error: {
+        code: 'orchestration_grid_manual_split_unsupported',
+        message: 'orchestration_grid_manual_split_unsupported'
+      },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+  })
 
   it.each([
     ['window_not_focused', 'keyboard input requires focus', 'restore-window'],

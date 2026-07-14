@@ -3850,6 +3850,81 @@ describe('orca cli worktree awareness', () => {
     })
   })
 
+  it.each([
+    { placement: 'orchestration-grid' as const, rendererBacked: false },
+    { placement: 'tab' as const, rendererBacked: true }
+  ])(
+    'passes terminal placement $placement through the public runtime primitive',
+    async ({ placement, rendererBacked }) => {
+      queueFixtures(
+        callMock,
+        okFixture('req_terminal_create', {
+          terminal: { handle: 'term_1', worktreeId: 'repo::/tmp/repo', title: 'Worker' }
+        })
+      )
+      vi.spyOn(console, 'log').mockImplementation(() => {})
+
+      await main(
+        [
+          'terminal',
+          'create',
+          '--worktree',
+          'path:/tmp/repo',
+          '--command',
+          'codex',
+          '--placement',
+          placement,
+          '--json'
+        ],
+        '/tmp/repo'
+      )
+
+      expect(callMock).toHaveBeenLastCalledWith('terminal.create', {
+        worktree: 'path:/tmp/repo',
+        command: 'codex',
+        title: undefined,
+        placement,
+        focus: false,
+        ...(rendererBacked ? { rendererBacked: true, activate: false } : {})
+      })
+    }
+  )
+
+  it('keeps focused orchestration-grid creates focused on the main-owned path', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_terminal_create', {
+        terminal: { handle: 'term_1', worktreeId: 'repo::/tmp/repo', title: 'Worker' }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'terminal',
+        'create',
+        '--worktree',
+        'path:/tmp/repo',
+        '--command',
+        'claude',
+        '--placement',
+        'orchestration-grid',
+        '--focus',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenLastCalledWith('terminal.create', {
+      worktree: 'path:/tmp/repo',
+      command: 'claude',
+      title: undefined,
+      placement: 'orchestration-grid',
+      focus: true,
+      presentation: 'focused'
+    })
+  })
+
   it('collects and formats memory diagnostics', async () => {
     queueFixtures(
       callMock,

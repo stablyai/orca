@@ -13,8 +13,10 @@ import { ipcMain } from 'electron'
 import type {
   FolderWorkspace,
   ProjectGroup,
+  Repo,
   Tab,
   TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode,
   WorktreeLineage,
   WorktreeMeta,
   WorkspaceLineage,
@@ -30,6 +32,7 @@ import {
 const ORIGIN_REMOTE_URL = 'git@example.com:group/repo.git'
 const ORIGIN_HEAD_COMPONENT = reviewHeadRemoteRefComponent('origin', ORIGIN_REMOTE_URL)
 import { detectAgentStatusFromTitle, MAX_OSC_TITLE_CHARS } from '../../shared/agent-detection'
+import { addOrchestrationTerminalGridLeaf } from '../../shared/orchestration-terminal-grid'
 import {
   addWorktree,
   assertWorktreeCleanForRemoval,
@@ -78,6 +81,7 @@ import {
   type RuntimeMobileSessionTabsResult,
   type RuntimeSyncWindowGraph,
   type RuntimeTerminalCreate
+  type RuntimeMobileSessionTerminalClientTab
 } from '../../shared/runtime-types'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
@@ -195,6 +199,18 @@ const electronMocks = vi.hoisted(() => {
     webContents: { fromId: vi.fn((_id: number): unknown => null) },
     ipcMain,
     app: { getPath: vi.fn(() => '/tmp'), isPackaged: false }
+    app: { getPath: vi.fn(() => '/tmp') },
+    safeStorage: {
+      isEncryptionAvailable: vi.fn(() => true),
+      encryptString: vi.fn((plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8')),
+      decryptString: vi.fn((ciphertext: Buffer) => {
+        const decoded = ciphertext.toString('utf-8')
+        if (!decoded.startsWith('encrypted:')) {
+          throw new Error('invalid ciphertext')
+        }
+        return decoded.slice('encrypted:'.length)
+      })
+    }
   }
 })
 
@@ -1481,11 +1497,22 @@ function makeRuntimeStoreWithWorkspaceSession(
   // Why: sessions are partitioned by execution host, so the stub must answer for
   // one partition only — a loose stub lets a hardcoded host id pass unnoticed.
   ownerHostId = 'local'
+type PersistPtyBindingTestArgs = {
+  worktreeId: string
+  tabId: string
+  leafId: string
+  ptyId: string
+  startupCwd?: string
+}
+
+function makeRuntimeStoreWithWorkspaceSession(
+  initialSession: WorkspaceSessionState,
+  options: { materializeMissingPtyTab?: boolean } = {}
 ): {
   runtimeStore: typeof store & {
     getWorkspaceSession: (hostId?: string) => WorkspaceSessionState
     setWorkspaceSession: ReturnType<typeof vi.fn>
-    persistPtyBinding: ReturnType<typeof vi.fn>
+    persistPtyBinding: ReturnType<typeof vi.fn> & ((args: PersistPtyBindingTestArgs) => void)
   }
   getSession: () => WorkspaceSessionState
   setSession: (next: WorkspaceSessionState) => void
@@ -1521,13 +1548,58 @@ function makeRuntimeStoreWithWorkspaceSession(
               ptyIdsByLeafId: {
                 ...session.terminalLayoutsByTabId[args.tabId]?.ptyIdsByLeafId,
                 [args.leafId]: args.ptyId
+    getWorkspaceSession: () => session,
+    setWorkspaceSession: vi.fn((next: WorkspaceSessionState) => {
+      session = next
+    }),
+    persistPtyBinding: vi.fn((args: PersistPtyBindingTestArgs) => {
+      const tabs = session.tabsByWorktree[args.worktreeId] ?? []
+      const existingTab = tabs.find((tab) => tab.id === args.tabId)
+      const nextTabs = existingTab
+        ? tabs.map((tab) => (tab.id === args.tabId ? { ...tab, ptyId: args.ptyId } : tab))
+        : options.materializeMissingPtyTab
+          ? [
+              ...tabs,
+              {
+                id: args.tabId,
+                ptyId: args.ptyId,
+                worktreeId: args.worktreeId,
+                title: `Terminal ${tabs.length + 1}`,
+                defaultTitle: `Terminal ${tabs.length + 1}`,
+                customTitle: null,
+                color: null,
+                sortOrder: tabs.length,
+                createdAt: 1,
+                ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
+                pendingActivationSpawn: true
               }
+            ]
+          : tabs
+      session = {
+        ...session,
+        tabsByWorktree: {
+          ...session.tabsByWorktree,
+          // Why: cold-restart tests mirror Store.persistPtyBinding's crash-safe
+          // parent creation instead of relying on runtime-only tab maps.
+          [args.worktreeId]: nextTabs
+        },
+        terminalLayoutsByTabId: {
+          ...session.terminalLayoutsByTabId,
+          [args.tabId]: {
+            ...(session.terminalLayoutsByTabId[args.tabId] ?? {
+              root: { type: 'leaf', leafId: args.leafId },
+              activeLeafId: args.leafId,
+              expandedLeafId: null
+            }),
+            ptyIdsByLeafId: {
+              ...session.terminalLayoutsByTabId[args.tabId]?.ptyIdsByLeafId,
+              [args.leafId]: args.ptyId
             }
           }
         }
         return true
       }
-    )
+    })
   }
   return { runtimeStore, getSession: () => session, setSession }
 }
@@ -1559,6 +1631,75 @@ function makeWorkspaceSessionWithHeadlessTerminal(
     terminalLayoutsByTabId: { 'host-tab': layout },
     ...overrides
   }
+}
+
+function makePersistedOrchestrationGridSession(args: {
+  tabId: string
+  leafIds: readonly string[]
+  activeLeafId: string
+  expandedLeafId: string | null
+  statePrefix: string
+}): WorkspaceSessionState {
+  const root = args.leafIds.slice(0, -1).reduceRight<TerminalPaneLayoutNode>(
+    (second, leafId) => ({
+      type: 'split',
+      direction: 'vertical',
+      first: { type: 'leaf', leafId },
+      second
+    }),
+    { type: 'leaf', leafId: args.leafIds.at(-1)! }
+  )
+  const leafState = (kind: string): Record<string, string> =>
+    Object.fromEntries(
+      args.leafIds.map((leafId, index) => [leafId, `${args.statePrefix}-${kind}-${index + 1}`])
+    )
+  const ptyIdsByLeafId = leafState('pty')
+  return {
+    ...getDefaultWorkspaceSession(),
+    activeRepoId: TEST_REPO_ID,
+    activeWorktreeId: TEST_WORKTREE_ID,
+    activeTabId: args.tabId,
+    activeTabIdByWorktree: { [TEST_WORKTREE_ID]: args.tabId },
+    tabsByWorktree: {
+      [TEST_WORKTREE_ID]: [
+        {
+          id: args.tabId,
+          ptyId: ptyIdsByLeafId[args.activeLeafId] ?? null,
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Persisted workers',
+          customTitle: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 1
+        }
+      ]
+    },
+    terminalLayoutsByTabId: {
+      [args.tabId]: {
+        root,
+        activeLeafId: args.activeLeafId,
+        expandedLeafId: args.expandedLeafId,
+        layoutMode: 'orchestration-grid',
+        ptyIdsByLeafId,
+        buffersByLeafId: leafState('buffer'),
+        scrollbackRefsByLeafId: leafState('scrollback'),
+        titlesByLeafId: leafState('title')
+      }
+    }
+  }
+}
+
+function collectTestTerminalLayoutLeafIds(root: TerminalPaneLayoutNode | null): string[] {
+  if (!root) {
+    return []
+  }
+  if (root.type === 'leaf') {
+    return [root.leafId]
+  }
+  return [
+    ...collectTestTerminalLayoutLeafIds(root.first),
+    ...collectTestTerminalLayoutLeafIds(root.second)
+  ]
 }
 
 computeWorktreePathMock.mockImplementation(
@@ -12637,6 +12778,44 @@ describe('OrcaRuntimeService', () => {
       }),
       retireAgentHookCompatibilityAuthority: retireAuthority
     })
+  it('reuses one runtime-backed tab for orchestration-grid terminal creates', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const spawn = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'pty-grid-1' })
+      .mockImplementationOnce(async (args) => {
+        const staged = runtime.beginStagedPtyRuntimeRegistration()
+        staged.claim('pty-grid-2')
+        runtime.registerPreAllocatedHandleForPty('pty-grid-2', args.preAllocatedHandle)
+        runtime.registerPty('pty-grid-2', args.worktreeId)
+        return {
+          id: 'pty-grid-2',
+          runtimeRegistration: {
+            commit: () => staged.commit(),
+            complete: vi.fn(),
+            abort: async () => staged.abort()
+          }
+        }
+      })
+    let revealedGridLayout: TerminalLayoutSnapshot | null = null
+    const revealTerminalSession = vi.fn(
+      async (
+        _worktreeId: string,
+        args: { tabId?: string; leafId?: string; ptyId: string; title?: string | null }
+      ) => {
+        revealedGridLayout = addOrchestrationTerminalGridLeaf(revealedGridLayout, {
+          leafId: args.leafId!,
+          ptyId: args.ptyId,
+          title: args.title,
+          activate: false
+        })
+        return {
+          tabId: args.tabId!,
+          leafId: args.leafId,
+          layout: revealedGridLayout
+        }
+      }
+    )
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -12649,6 +12828,7 @@ describe('OrcaRuntimeService', () => {
       activateWorktree: vi.fn(),
       createTerminal: vi.fn(),
       revealTerminalSession: vi.fn().mockResolvedValue({ tabId: 'tab-authority' }),
+      revealTerminalSession,
       splitTerminal: vi.fn(),
       renameTerminal: vi.fn(),
       focusTerminal: vi.fn(),
@@ -12796,6 +12976,381 @@ describe('OrcaRuntimeService', () => {
           title: 'Coordinator',
           activeLeafId: HEADLESS_LEAF_ID,
           layout: null
+    const first = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'codex',
+      placement: 'orchestration-grid'
+    })
+    const second = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'codex',
+      placement: 'orchestration-grid'
+    })
+
+    expect(first.tabId).toBe(second.tabId)
+    const firstReveal = revealTerminalSession.mock.calls[0]?.[1]
+    const secondReveal = revealTerminalSession.mock.calls[1]?.[1]
+    expect(firstReveal).toMatchObject({
+      placement: 'orchestration-grid',
+      tabId: first.tabId,
+      leafId: expect.any(String)
+    })
+    expect(firstReveal).not.toHaveProperty('splitFromLeafId')
+    expect(secondReveal).toMatchObject({
+      placement: 'orchestration-grid',
+      tabId: first.tabId,
+      leafId: expect.any(String),
+      splitFromLeafId: firstReveal.leafId,
+      splitSourceLeafIds: [firstReveal.leafId],
+      splitDirection: 'vertical'
+    })
+    const secondSpawn = spawn.mock.calls[1]?.[0]
+    expect(secondSpawn).toMatchObject({
+      tabId: first.tabId
+    })
+  })
+
+  it('serializes concurrent equivalent workspace selectors into one ordered orchestration grid', async () => {
+    let ptyIndex = 0
+    const spawn = vi.fn(async () => {
+      await Promise.resolve()
+      return { id: `pty-grid-concurrent-${++ptyIndex}` }
+    })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const requests = [
+      { selector: `path:${TEST_WORKTREE_PATH}`, title: 'Path worker' },
+      { selector: `id:${TEST_WORKTREE_ID}`, title: 'ID worker' },
+      // Why: active/current CLI targeting resolves to the same canonical id.
+      { selector: TEST_WORKTREE_ID, title: 'Active worker' }
+    ]
+
+    const created = await Promise.all(
+      requests.map(({ selector, title }) =>
+        runtime.createTerminal(selector, {
+          title,
+          placement: 'orchestration-grid'
+        })
+      )
+    )
+    const published = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    const gridTabs = published.tabs.filter(
+      (tab): tab is RuntimeMobileSessionTerminalClientTab => tab.type === 'terminal'
+    )
+    const parentLayout = gridTabs[0]?.parentLayout
+
+    expect(new Set(created.map((terminal) => terminal.tabId))).toHaveProperty('size', 1)
+    expect(gridTabs).toHaveLength(requests.length)
+    expect(gridTabs.map((tab) => tab.title)).toEqual(requests.map(({ title }) => title))
+    expect(collectTestTerminalLayoutLeafIds(parentLayout?.root ?? null)).toEqual(
+      gridTabs.map((tab) => tab.leafId)
+    )
+    for (const tab of gridTabs) {
+      expect(tab.parentLayout).toEqual(parentLayout)
+    }
+  })
+
+  it.each([
+    { presentation: 'background', activate: false },
+    { presentation: 'focused', activate: true }
+  ] as const)(
+    'restores every cold persisted grid leaf before a $presentation append',
+    async ({ presentation, activate }) => {
+      const persistedLeafIds = [
+        '10000000-0000-4000-8000-000000000001',
+        '10000000-0000-4000-8000-000000000002',
+        '10000000-0000-4000-8000-000000000003',
+        '10000000-0000-4000-8000-000000000004',
+        '10000000-0000-4000-8000-000000000005',
+        '10000000-0000-4000-8000-000000000006'
+      ] as const
+      const activeLeafId = persistedLeafIds[2]
+      const expandedLeafId = persistedLeafIds[4]
+      const session = makePersistedOrchestrationGridSession({
+        tabId: 'persisted-grid',
+        leafIds: persistedLeafIds,
+        activeLeafId,
+        expandedLeafId,
+        statePrefix: 'cold'
+      })
+      const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
+      const newPtyId = `pty-grid-cold-${presentation}`
+      const runtime = new OrcaRuntimeService(runtimeStore as never)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: newPtyId }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+
+      // Why: listing first would hydrate the mobile snapshot and miss the cold
+      // publication path where persisted grid siblings were previously discarded.
+      const created = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        placement: 'orchestration-grid',
+        activate,
+        presentation,
+        // Why: without a renderer, focused creation needs the PTY publication path.
+        ...(presentation === 'focused' ? { rendererBacked: true } : {})
+      })
+      const published = await runtime.listMobileSessionTabs(`path:${TEST_WORKTREE_PATH}`)
+      const gridTabs = published.tabs.filter(
+        (tab): tab is RuntimeMobileSessionTerminalClientTab =>
+          tab.type === 'terminal' && tab.parentTabId === 'persisted-grid'
+      )
+      const appendedTab = gridTabs.find(
+        (tab) => tab.type === 'terminal' && tab.terminal === created.handle
+      )
+      if (appendedTab?.type !== 'terminal' || !appendedTab.parentLayout) {
+        throw new Error('Expected the cold grid append to publish a materialized terminal')
+      }
+      const expectedLeafIds = [...persistedLeafIds, appendedTab.leafId]
+      const expectedActiveLeafId = activate ? appendedTab.leafId : activeLeafId
+
+      expect(created.tabId).toBe('persisted-grid')
+      expect(gridTabs.map((tab) => tab.leafId)).toEqual(expectedLeafIds)
+      expect(new Set(gridTabs.map((tab) => tab.leafId))).toHaveProperty('size', 7)
+      expect(collectTestTerminalLayoutLeafIds(appendedTab.parentLayout.root)).toEqual(
+        expectedLeafIds
+      )
+      if (appendedTab.parentLayout.root?.type !== 'split') {
+        throw new Error('Expected the seventh grid leaf to start a second row')
+      }
+      expect(appendedTab.parentLayout.root.direction).toBe('horizontal')
+      expect(collectTestTerminalLayoutLeafIds(appendedTab.parentLayout.root.first)).toEqual(
+        persistedLeafIds
+      )
+      expect(collectTestTerminalLayoutLeafIds(appendedTab.parentLayout.root.second)).toEqual([
+        appendedTab.leafId
+      ])
+      expect(appendedTab.parentLayout).toMatchObject({
+        activeLeafId: expectedActiveLeafId,
+        expandedLeafId: null,
+        layoutMode: 'orchestration-grid',
+        ptyIdsByLeafId: {
+          ...session.terminalLayoutsByTabId['persisted-grid']!.ptyIdsByLeafId,
+          [appendedTab.leafId]: newPtyId
+        },
+        buffersByLeafId: session.terminalLayoutsByTabId['persisted-grid']!.buffersByLeafId,
+        scrollbackRefsByLeafId:
+          session.terminalLayoutsByTabId['persisted-grid']!.scrollbackRefsByLeafId,
+        titlesByLeafId: session.terminalLayoutsByTabId['persisted-grid']!.titlesByLeafId
+      })
+      for (const tab of gridTabs) {
+        expect(tab.parentLayout).toEqual(appendedTab.parentLayout)
+      }
+      expect(published.activeTabId).toBe(`persisted-grid::${expectedActiveLeafId}`)
+      expect(appendedTab.isActive).toBe(activate)
+    }
+  )
+
+  it('keeps an already hydrated grid authoritative over stale persisted state', async () => {
+    const hydratedLeafIds = [
+      '20000000-0000-4000-8000-000000000001',
+      '20000000-0000-4000-8000-000000000002',
+      '20000000-0000-4000-8000-000000000003'
+    ] as const
+    const hydratedSession = makePersistedOrchestrationGridSession({
+      tabId: 'hydrated-grid',
+      leafIds: hydratedLeafIds,
+      activeLeafId: hydratedLeafIds[1],
+      expandedLeafId: hydratedLeafIds[2],
+      statePrefix: 'hydrated'
+    })
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(hydratedSession)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-grid-hydrated-new' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const beforeAppend = await runtime.listMobileSessionTabs(`path:${TEST_WORKTREE_PATH}`)
+    ;(runtimeStore.setWorkspaceSession as unknown as (next: WorkspaceSessionState) => void)(
+      makePersistedOrchestrationGridSession({
+        tabId: 'hydrated-grid',
+        leafIds: ['30000000-0000-4000-8000-000000000001'],
+        activeLeafId: '30000000-0000-4000-8000-000000000001',
+        expandedLeafId: null,
+        statePrefix: 'stale'
+      })
+    )
+
+    const created = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      placement: 'orchestration-grid',
+      activate: false,
+      presentation: 'background'
+    })
+    const published = await runtime.listMobileSessionTabs(`path:${TEST_WORKTREE_PATH}`)
+    const gridTabs = published.tabs.filter(
+      (tab): tab is RuntimeMobileSessionTerminalClientTab =>
+        tab.type === 'terminal' && tab.parentTabId === 'hydrated-grid'
+    )
+    const appendedTab = gridTabs.find(
+      (tab) => tab.type === 'terminal' && tab.terminal === created.handle
+    )
+    if (appendedTab?.type !== 'terminal' || !appendedTab.parentLayout) {
+      throw new Error('Expected the hydrated grid append to publish a materialized terminal')
+    }
+
+    expect(published.publicationEpoch).toBe(beforeAppend.publicationEpoch)
+    expect(published.snapshotVersion).toBe(beforeAppend.snapshotVersion + 1)
+    expect(gridTabs.map((tab) => tab.leafId)).toEqual([...hydratedLeafIds, appendedTab.leafId])
+    expect(new Set(gridTabs.map((tab) => tab.leafId))).toHaveProperty('size', 4)
+    expect(gridTabs.map((tab) => tab.leafId)).not.toContain('30000000-0000-4000-8000-000000000001')
+    expect(appendedTab.parentLayout).toMatchObject({
+      activeLeafId: hydratedLeafIds[1],
+      expandedLeafId: null,
+      layoutMode: 'orchestration-grid',
+      ptyIdsByLeafId: {
+        ...hydratedSession.terminalLayoutsByTabId['hydrated-grid']!.ptyIdsByLeafId,
+        [appendedTab.leafId]: 'pty-grid-hydrated-new'
+      },
+      buffersByLeafId: hydratedSession.terminalLayoutsByTabId['hydrated-grid']!.buffersByLeafId,
+      scrollbackRefsByLeafId:
+        hydratedSession.terminalLayoutsByTabId['hydrated-grid']!.scrollbackRefsByLeafId,
+      titlesByLeafId: hydratedSession.terminalLayoutsByTabId['hydrated-grid']!.titlesByLeafId
+    })
+    for (const tab of gridTabs) {
+      expect(tab.parentLayout).toEqual(appendedTab.parentLayout)
+    }
+    expect(published.activeTabId).toBe(`hydrated-grid::${hydratedLeafIds[1]}`)
+    expect(appendedTab.isActive).toBe(false)
+  })
+
+  it('persists live grid geometry without dropping canonical leaf metadata', async () => {
+    const testDir = await mkdtemp(join(tmpdir(), 'orca-runtime-live-grid-'))
+    vi.useFakeTimers()
+    const { Store } = await import('../persistence')
+    const dataFile = join(testDir, 'orca-data.json')
+    const firstLeafId = '21000000-0000-4000-8000-000000000001'
+    const secondLeafId = '21000000-0000-4000-8000-000000000002'
+    const initialSession = makePersistedOrchestrationGridSession({
+      tabId: 'live-grid',
+      leafIds: [firstLeafId, secondLeafId],
+      activeLeafId: firstLeafId,
+      expandedLeafId: null,
+      statePrefix: 'canonical'
+    })
+    const runtimeStore = new Store({ dataFile })
+    runtimeStore.addRepo({
+      id: TEST_REPO_ID,
+      path: TEST_REPO_PATH,
+      displayName: 'repo',
+      badgeColor: 'blue',
+      addedAt: 1,
+      executionHostId: 'runtime:grid-live'
+    })
+    runtimeStore.setWorkspaceSession(initialSession, 'runtime:grid-live')
+    runtimeStore.flush()
+    const write = vi.spyOn(
+      runtimeStore as unknown as { writeToDiskSync: (opts?: { force?: boolean }) => void },
+      'writeToDiskSync'
+    )
+    const legacyPersist = vi.spyOn(runtimeStore, 'persistPtyBinding')
+    const atomicPersist = vi.spyOn(runtimeStore, 'persistOrchestrationGridPtyBinding')
+    const deferredSessionPersist = vi.spyOn(runtimeStore, 'setWorkspaceSession')
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    const spawn = vi.fn(
+      async (args: {
+        command?: string
+        preAllocatedHandle?: string
+        worktreeId?: string
+        leafId?: string
+      }) => {
+        const staged = runtime.beginStagedPtyRuntimeRegistration()
+        staged.claim('pty-live-grid-new')
+        if (args.preAllocatedHandle) {
+          runtime.registerPreAllocatedHandleForPty('pty-live-grid-new', args.preAllocatedHandle)
+        }
+        runtime.registerPty('pty-live-grid-new', args.worktreeId ?? TEST_WORKTREE_ID)
+        runtime.noteTerminalSpawnCommand('pty-live-grid-new', args.command)
+        return {
+          id: 'pty-live-grid-new',
+          runtimeRegistration: {
+            commit: () => staged.commit(),
+            complete: vi.fn(),
+            abort: async () => staged.abort()
+          }
+        }
+      }
+    )
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const revealTerminalSession = vi.fn(
+      async (
+        _worktreeId: string,
+        opts: { leafId?: string; ptyId: string; title?: string | null }
+      ) => ({
+        tabId: 'live-grid',
+        leafId: opts.leafId,
+        layout: addOrchestrationTerminalGridLeaf(
+          {
+            ...structuredClone(initialSession.terminalLayoutsByTabId['live-grid']!),
+            root: {
+              type: 'split',
+              direction: 'vertical',
+              first: { type: 'leaf', leafId: secondLeafId },
+              second: { type: 'leaf', leafId: firstLeafId }
+            },
+            // Why: focus can change after main stages the append; renderer ack
+            // is the transaction's final live-layout authority.
+            activeLeafId: firstLeafId
+          },
+          {
+            leafId: opts.leafId!,
+            ptyId: opts.ptyId,
+            title: opts.title,
+            activate: false
+          }
+        )
+      })
+    )
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession,
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    const webContents = {
+      send: vi.fn(() => {
+        throw new Error('renderer create route invoked')
+      })
+    }
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'live-grid',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Workers',
+          activeLeafId: secondLeafId,
+          layoutMode: 'orchestration-grid',
+          // Why: the renderer reordered the leaves after the last durable snapshot.
+          layout: {
+            type: 'split',
+            direction: 'vertical',
+            first: { type: 'leaf', leafId: secondLeafId },
+            second: { type: 'leaf', leafId: firstLeafId }
+          }
         }
       ],
       leaves: [
@@ -13311,6 +13866,402 @@ describe('OrcaRuntimeService', () => {
         agentDefaultEnv: { claude: { HOST_PROFILE: 'true' } }
       })
     })
+          tabId: 'live-grid',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: firstLeafId,
+          paneRuntimeId: 1,
+          ptyId: 'canonical-pty-1'
+        },
+        {
+          tabId: 'live-grid',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: secondLeafId,
+          paneRuntimeId: 2,
+          ptyId: 'canonical-pty-2'
+        }
+      ]
+    })
+
+    try {
+      const created = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        command: 'codex',
+        rendererBacked: true,
+        placement: 'orchestration-grid',
+        title: 'Appended worker'
+      })
+      const newLeafId = spawn.mock.calls[0]?.[0].leafId as string
+      const reloaded = new Store({ dataFile })
+      const layout =
+        reloaded.getWorkspaceSession('runtime:grid-live').terminalLayoutsByTabId['live-grid']
+
+      expect(created.surface).toBe('visible')
+      expect(collectTestTerminalLayoutLeafIds(layout.root)).toEqual([
+        secondLeafId,
+        firstLeafId,
+        newLeafId
+      ])
+      expect(layout.activeLeafId).toBe(firstLeafId)
+      expect(layout.titlesByLeafId).toEqual({
+        [firstLeafId]: 'canonical-title-1',
+        [secondLeafId]: 'canonical-title-2',
+        [newLeafId]: 'Appended worker'
+      })
+      expect(layout.buffersByLeafId).toEqual(
+        initialSession.terminalLayoutsByTabId['live-grid']!.buffersByLeafId
+      )
+      expect(layout.scrollbackRefsByLeafId).toEqual(
+        initialSession.terminalLayoutsByTabId['live-grid']!.scrollbackRefsByLeafId
+      )
+      expect(layout.ptyIdsByLeafId).toEqual({
+        [firstLeafId]: 'canonical-pty-1',
+        [secondLeafId]: 'canonical-pty-2',
+        [newLeafId]: 'pty-live-grid-new'
+      })
+      expect(atomicPersist).toHaveBeenCalledTimes(1)
+      expect(legacyPersist).not.toHaveBeenCalled()
+      expect(deferredSessionPersist).not.toHaveBeenCalled()
+      expect(write).toHaveBeenCalledTimes(1)
+      expect(webContents.send).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+      await rm(testDir, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
+    { activate: false, expectedActiveLeaf: 'existing' },
+    { activate: true, expectedActiveLeaf: 'appended' }
+  ] as const)(
+    'keeps the $expectedActiveLeaf orchestration-grid leaf active when append activation is $activate',
+    async ({ activate, expectedActiveLeaf }) => {
+      let ptyIndex = 0
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn(async () => ({ id: `pty-grid-activation-${++ptyIndex}` })),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+
+      const first = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        placement: 'orchestration-grid'
+      })
+      const beforeAppend = await runtime.listMobileSessionTabs(`path:${TEST_WORKTREE_PATH}`)
+      const existingTab = beforeAppend.tabs.find(
+        (tab) => tab.type === 'terminal' && tab.terminal === first.handle
+      )
+      if (existingTab?.type !== 'terminal') {
+        throw new Error('Expected the original orchestration-grid terminal publication')
+      }
+      expect(existingTab.parentLayout?.activeLeafId).toBe(existingTab.leafId)
+
+      const appended = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        placement: 'orchestration-grid',
+        activate,
+        // Why: without a renderer, this keeps focused creation on the PTY publication path.
+        ...(activate ? { rendererBacked: true } : {})
+      })
+      const afterAppend = await runtime.listMobileSessionTabs(`path:${TEST_WORKTREE_PATH}`)
+      const appendedTab = afterAppend.tabs.find(
+        (tab) => tab.type === 'terminal' && tab.terminal === appended.handle
+      )
+      expect(appended.tabId).toBe(first.tabId)
+      if (appendedTab?.type !== 'terminal') {
+        throw new Error('Expected the appended orchestration-grid terminal publication')
+      }
+      expect(appendedTab.parentLayout?.activeLeafId).toBe(
+        expectedActiveLeaf === 'appended' ? appendedTab.leafId : existingTab.leafId
+      )
+    }
+  )
+
+  it.each([
+    {
+      host: 'local',
+      path: TEST_WORKTREE_PATH,
+      worktreeId: TEST_WORKTREE_ID,
+      connectionId: null,
+      hostId: 'local'
+    },
+    {
+      host: 'SSH',
+      path: '/remote/cold-grid',
+      worktreeId: `${TEST_REPO_ID}::/remote/cold-grid`,
+      connectionId: 'ssh-cold-grid',
+      hostId: 'ssh:ssh-cold-grid'
+    }
+  ] as const)(
+    'cold-restores the exact durable $host orchestration grid before debounce',
+    async (scenario) => {
+      const testDir = await mkdtemp(join(tmpdir(), 'orca-runtime-grid-reload-'))
+      vi.useFakeTimers()
+      const { Store } = await import('../persistence')
+      const dataFile = join(testDir, 'orca-data.json')
+      const firstTitle = `First ${scenario.host} worker`
+      const secondTitle = `Appended ${scenario.host} worker`
+      const thirdTitle = `Restarted ${scenario.host} worker`
+      const initialSession: WorkspaceSessionState = {
+        ...getDefaultWorkspaceSession(),
+        activeRepoId: TEST_REPO_ID,
+        activeWorktreeId: scenario.worktreeId,
+        tabsByWorktree: { [scenario.worktreeId]: [] }
+      }
+      const repo: Repo = {
+        id: TEST_REPO_ID,
+        path: scenario.connectionId ? scenario.path : TEST_REPO_PATH,
+        displayName: `${scenario.host} repo`,
+        badgeColor: 'blue',
+        addedAt: 1,
+        ...(scenario.connectionId ? { connectionId: scenario.connectionId } : {})
+      }
+      const provider = {
+        exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+        listWorktrees: vi.fn().mockResolvedValue([
+          {
+            path: scenario.path,
+            head: 'abc',
+            branch: 'main',
+            isBare: false,
+            isMainWorktree: true
+          }
+        ])
+      }
+      let activeStore = new Store({ dataFile })
+      activeStore.addRepo(repo)
+      activeStore.setWorkspaceSession(initialSession, scenario.hostId)
+      let ptyIndex = 0
+      const spawn = vi.fn(
+        async (_args: {
+          cwd?: string
+          worktreeId?: string
+          tabId?: string
+          leafId?: string
+          persistHostSessionBinding?: boolean
+          deferHostSessionPersistence?: boolean
+        }) => {
+          const ptyId = scenario.connectionId
+            ? `ssh:${scenario.connectionId}@@cold-grid-${++ptyIndex}`
+            : `cold-grid-${++ptyIndex}`
+          return { id: ptyId }
+        }
+      )
+      const makeRuntime = (): OrcaRuntimeService => {
+        const runtime = new OrcaRuntimeService(activeStore)
+        runtime.setPtyController({
+          spawn,
+          write: () => true,
+          kill: () => true,
+          getForegroundProcess: async () => null
+        })
+        return runtime
+      }
+      if (scenario.connectionId) {
+        registerSshGitProvider(scenario.connectionId, provider as never)
+      }
+
+      try {
+        const firstRuntime = makeRuntime()
+        const first = await firstRuntime.createTerminal(`path:${scenario.path}`, {
+          title: firstTitle,
+          placement: 'orchestration-grid'
+        })
+        if (!first.tabId) {
+          throw new Error('Expected a durable orchestration grid parent tab')
+        }
+        const parentTabId = first.tabId
+        const firstSnapshot = await firstRuntime.listMobileSessionTabs(`id:${scenario.worktreeId}`)
+        const firstGridTab = firstSnapshot.tabs.find(
+          (tab): tab is RuntimeMobileSessionTerminalClientTab =>
+            tab.type === 'terminal' && tab.parentTabId === parentTabId
+        )
+        const firstLayout = structuredClone(firstGridTab?.parentLayout)
+        expect(firstLayout).toMatchObject({
+          layoutMode: 'orchestration-grid',
+          titlesByLeafId: { [firstGridTab!.leafId]: firstTitle }
+        })
+
+        // No timer advancement: this process restart reads only sync-durable bytes.
+        activeStore = new Store({ dataFile })
+        const firstReload = activeStore.getWorkspaceSession(scenario.hostId)
+        expect(firstReload.tabsByWorktree[scenario.worktreeId]).toHaveLength(1)
+        expect(firstReload.tabsByWorktree[scenario.worktreeId]?.[0]?.id).toBe(parentTabId)
+        expect(firstReload.terminalLayoutsByTabId[parentTabId]).toEqual(firstLayout)
+
+        const appendRuntime = makeRuntime()
+        const second = await appendRuntime.createTerminal(`id:${scenario.worktreeId}`, {
+          title: secondTitle,
+          placement: 'orchestration-grid'
+        })
+        const appendedSnapshot = await appendRuntime.listMobileSessionTabs(
+          `id:${scenario.worktreeId}`
+        )
+        const appendedGridTabs = appendedSnapshot.tabs.filter(
+          (tab): tab is RuntimeMobileSessionTerminalClientTab =>
+            tab.type === 'terminal' && tab.parentTabId === parentTabId
+        )
+        const appendedLayout = structuredClone(appendedGridTabs[0]?.parentLayout)
+        expect(second.tabId).toBe(parentTabId)
+        expect(appendedGridTabs.map((tab) => tab.title)).toEqual([firstTitle, secondTitle])
+        expect(collectTestTerminalLayoutLeafIds(appendedLayout?.root ?? null)).toEqual(
+          appendedGridTabs.map((tab) => tab.leafId)
+        )
+
+        activeStore = new Store({ dataFile })
+        const appendReload = activeStore.getWorkspaceSession(scenario.hostId)
+        expect(appendReload.tabsByWorktree[scenario.worktreeId]).toHaveLength(1)
+        expect(appendReload.terminalLayoutsByTabId[parentTabId]).toEqual(appendedLayout)
+
+        const restartedRuntime = makeRuntime()
+        const restored = await restartedRuntime.listMobileSessionTabs(`id:${scenario.worktreeId}`)
+        const restoredGridTabs = restored.tabs.filter(
+          (tab): tab is RuntimeMobileSessionTerminalClientTab =>
+            tab.type === 'terminal' && tab.parentTabId === parentTabId
+        )
+        expect(restoredGridTabs.map((tab) => tab.title)).toEqual([firstTitle, secondTitle])
+        expect(restoredGridTabs[0]?.parentLayout).toEqual(appendedLayout)
+
+        const third = await restartedRuntime.createTerminal(`path:${scenario.path}`, {
+          title: thirdTitle,
+          placement: 'orchestration-grid'
+        })
+        const finalSnapshot = await restartedRuntime.listMobileSessionTabs(
+          `id:${scenario.worktreeId}`
+        )
+        const finalGridTabs = finalSnapshot.tabs.filter(
+          (tab): tab is RuntimeMobileSessionTerminalClientTab =>
+            tab.type === 'terminal' && tab.parentTabId === parentTabId
+        )
+        expect(third.tabId).toBe(parentTabId)
+        expect(finalGridTabs.map((tab) => tab.title)).toEqual([firstTitle, secondTitle, thirdTitle])
+        expect(spawn.mock.calls.map(([args]) => args.persistHostSessionBinding)).toEqual([
+          true,
+          true,
+          true
+        ])
+        expect(spawn.mock.calls.map(([args]) => args.deferHostSessionPersistence)).toEqual([
+          true,
+          true,
+          true
+        ])
+        if (scenario.connectionId) {
+          expect(activeStore.getSshRemotePtyLeases(scenario.connectionId)).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({
+                targetId: scenario.connectionId,
+                worktreeId: scenario.worktreeId,
+                tabId: parentTabId,
+                state: 'attached'
+              })
+            ])
+          )
+        }
+      } finally {
+        if (scenario.connectionId) {
+          unregisterSshGitProvider(scenario.connectionId)
+        }
+        vi.useRealTimers()
+        await rm(testDir, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it('rolls a staged grid create back and kills its PTY when the durable flush fails', async () => {
+    const testDir = await mkdtemp(join(tmpdir(), 'orca-runtime-grid-flush-failure-'))
+    vi.useFakeTimers()
+    const { Store } = await import('../persistence')
+    const runtimeStore = new Store({ dataFile: join(testDir, 'orca-data.json') })
+    runtimeStore.addRepo({
+      id: TEST_REPO_ID,
+      path: TEST_REPO_PATH,
+      displayName: 'repo',
+      badgeColor: 'blue',
+      addedAt: 1
+    })
+    runtimeStore.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: TEST_REPO_ID,
+      activeWorktreeId: TEST_WORKTREE_ID,
+      tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
+    })
+    runtimeStore.flush()
+    const sessionBeforeCreate = structuredClone(runtimeStore.getWorkspaceSession())
+    const write = vi
+      .spyOn(
+        runtimeStore as unknown as { writeToDiskSync: (opts?: { force?: boolean }) => void },
+        'writeToDiskSync'
+      )
+      .mockImplementation(() => {
+        throw new Error('simulated grid flush failure')
+      })
+    const kill = vi.fn((_ptyId: string) => true)
+    const runtime = new OrcaRuntimeService(runtimeStore)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'failed-grid-pty' }),
+      write: () => true,
+      kill,
+      getForegroundProcess: async () => null
+    })
+
+    try {
+      await expect(
+        runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+          title: 'Never durable',
+          placement: 'orchestration-grid'
+        })
+      ).rejects.toThrow(/ORCA_TERMINAL_SESSION_STATE_SAVE_FAILED/)
+      expect(kill).toHaveBeenCalledTimes(1)
+      expect(kill).toHaveBeenCalledWith('failed-grid-pty')
+      expect(runtimeStore.getWorkspaceSession()).toEqual(sessionBeforeCreate)
+      const reloaded = new Store({ dataFile: join(testDir, 'orca-data.json') })
+      expect(reloaded.getWorkspaceSession()).toEqual(sessionBeforeCreate)
+    } finally {
+      write.mockRestore()
+      vi.useRealTimers()
+      await rm(testDir, { recursive: true, force: true })
+    }
+  })
+
+  it('publishes and persists first and appended SSH grid worker titles', async () => {
+    const remotePath = '/remote/repo'
+    const remoteWorktreeId = `${TEST_REPO_ID}::${remotePath}`
+    const remoteRepo = {
+      id: TEST_REPO_ID,
+      path: remotePath,
+      displayName: 'remote repo',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-1'
+    }
+    const initialSession: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: TEST_REPO_ID,
+      activeWorktreeId: remoteWorktreeId,
+      tabsByWorktree: { [remoteWorktreeId]: [] }
+    }
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(initialSession)
+    const remoteStore = {
+      ...runtimeStore,
+      getRepos: () => [remoteRepo],
+      getRepo: (id: string) => (id === TEST_REPO_ID ? remoteRepo : undefined)
+    }
+    const provider = {
+      exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: remotePath,
+          head: 'abc',
+          branch: 'main',
+          isBare: false,
+          isMainWorktree: true
+        }
+      ])
+    }
+    const spawn = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'ssh:ssh-1@@grid-title-1' })
+      .mockResolvedValueOnce({ id: 'ssh:ssh-1@@grid-title-2' })
+    registerSshGitProvider('ssh-1', provider as never)
+    const runtime = new OrcaRuntimeService(remoteStore as never)
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -13340,6 +14291,63 @@ describe('OrcaRuntimeService', () => {
       })
     )
     expect(spawn.mock.calls[0]?.[0]?.command).not.toContain('--host-default')
+    try {
+      const first = await runtime.createTerminal(`path:${remotePath}`, {
+        title: 'Remote worker 1',
+        placement: 'orchestration-grid'
+      })
+      if (!first.tabId) {
+        throw new Error('Expected the SSH grid parent tab id')
+      }
+      const parentTabId = first.tabId
+      const firstSnapshot = await runtime.listMobileSessionTabs(`id:${remoteWorktreeId}`)
+      const firstTab = firstSnapshot.tabs.find(
+        (tab) => tab.type === 'terminal' && tab.terminal === first.handle
+      )
+      if (firstTab?.type !== 'terminal') {
+        throw new Error('Expected the first SSH grid worker publication')
+      }
+
+      expect(firstTab.parentLayout?.titlesByLeafId).toEqual({
+        [firstTab.leafId]: 'Remote worker 1'
+      })
+      expect(getSession().terminalLayoutsByTabId[parentTabId]?.titlesByLeafId).toEqual({
+        [firstTab.leafId]: 'Remote worker 1'
+      })
+
+      const second = await runtime.createTerminal(`id:${remoteWorktreeId}`, {
+        title: 'Remote worker 2',
+        placement: 'orchestration-grid'
+      })
+      const secondSnapshot = await runtime.listMobileSessionTabs(`id:${remoteWorktreeId}`)
+      const gridTabs = secondSnapshot.tabs.filter(
+        (tab): tab is RuntimeMobileSessionTerminalClientTab =>
+          tab.type === 'terminal' && tab.parentTabId === parentTabId
+      )
+      const secondTab = gridTabs.find((tab) => tab.terminal === second.handle)
+      if (!secondTab?.parentLayout) {
+        throw new Error('Expected the appended SSH grid worker publication')
+      }
+      const expectedTitles = {
+        [firstTab.leafId]: 'Remote worker 1',
+        [secondTab.leafId]: 'Remote worker 2'
+      }
+
+      expect(second.tabId).toBe(parentTabId)
+      expect(gridTabs).toHaveLength(2)
+      for (const tab of gridTabs) {
+        expect(tab.parentLayout).toEqual(secondTab.parentLayout)
+      }
+      expect(secondTab.parentLayout.titlesByLeafId).toEqual(expectedTitles)
+      expect(getSession().terminalLayoutsByTabId[parentTabId]?.titlesByLeafId).toEqual(
+        expectedTitles
+      )
+      expect(spawn).toHaveBeenCalledWith(
+        expect.objectContaining({ connectionId: 'ssh-1', worktreeId: remoteWorktreeId })
+      )
+    } finally {
+      unregisterSshGitProvider('ssh-1')
+    }
   })
 
   it('applies Settings agent defaults to bare agent command terminal creates', async () => {
@@ -13707,15 +14715,19 @@ describe('OrcaRuntimeService', () => {
     try {
       const terminal = await runtime.createTerminal('path:C:/remote/repo', {
         command: 'claude',
-        title: 'worker'
+        title: 'worker',
+        placement: 'orchestration-grid'
       })
 
-      const spawnCall = spawn.mock.calls[0]?.[0] as { command?: string } | undefined
+      const spawnCall = spawn.mock.calls[0]?.[0] as
+        | { command?: string; connectionId?: string }
+        | undefined
       expect(spawnCall?.command).toBe("claude '--dangerously-skip-permissions'")
       expect(terminal).toMatchObject({
         executionHostId: 'ssh:ssh-1',
         hostPlatform: 'linux'
       })
+      expect(spawnCall?.connectionId).toBe('ssh-1')
     } finally {
       unregisterSshGitProvider('ssh-1')
     }
@@ -13877,6 +14889,334 @@ describe('OrcaRuntimeService', () => {
     expect(markCodexProjectTrustedMock.mock.invocationCallOrder[0]).toBeLessThan(
       webContents.send.mock.invocationCallOrder[0]!
     )
+  })
+
+  it('buffers staged runtime registration, command, and data until commit', () => {
+    const runtime = new OrcaRuntimeService(store)
+    const transaction = runtime.beginStagedPtyRuntimeRegistration()
+
+    runtime.onPtySpawned('pty-staged-events')
+    expect(runtime.onPtyData('pty-staged-events', 'hello', 1)).toBe(0)
+    transaction.claim('pty-staged-events')
+    runtime.registerPreAllocatedHandleForPty('pty-staged-events', 'term_staged_events')
+    runtime.registerPty('pty-staged-events', TEST_WORKTREE_ID)
+    runtime.noteTerminalSpawnCommand('pty-staged-events', 'codex')
+
+    expect(runtime['ptysById'].has('pty-staged-events')).toBe(false)
+    expect(runtime['handleByPtyId'].has('pty-staged-events')).toBe(false)
+    expect(runtime['ptyOutputSequenceById'].has('pty-staged-events')).toBe(false)
+    expect(runtime['terminalSpawnCommandsByPtyId'].has('pty-staged-events')).toBe(false)
+
+    transaction.commit()
+
+    expect(runtime['ptysById'].get('pty-staged-events')).toMatchObject({
+      worktreeId: TEST_WORKTREE_ID,
+      connected: true
+    })
+    expect(runtime['handleByPtyId'].get('pty-staged-events')).toBe('term_staged_events')
+    expect(runtime['ptyOutputSequenceById'].get('pty-staged-events')).toBe(5)
+    expect(runtime['terminalSpawnCommandsByPtyId'].get('pty-staged-events')).toBe('codex')
+
+    transaction.abort(false)
+    expect(runtime['ptysById'].has('pty-staged-events')).toBe(false)
+    expect(runtime['handleByPtyId'].has('pty-staged-events')).toBe(false)
+  })
+
+  it.each([
+    { rendererBacked: true, presentation: undefined, expectedSurface: 'visible' },
+    { rendererBacked: false, presentation: undefined, expectedSurface: 'visible' },
+    { rendererBacked: false, presentation: 'background' as const, expectedSurface: 'background' }
+  ] as const)(
+    'commits $expectedSurface grid creates only after renderer attachment (rendererBacked=$rendererBacked)',
+    async ({ rendererBacked, presentation, expectedSurface }) => {
+      const oldLeafId = '11111111-1111-4111-8111-111111111111'
+      const persistOrchestrationGridPtyBinding = vi.fn()
+      const writes: { ptyId: string; data: string }[] = []
+      const runtime = new OrcaRuntimeService({
+        ...store,
+        persistOrchestrationGridPtyBinding
+      } as never)
+      const kill = vi.fn((_ptyId: string) => true)
+      const registrationCommit = vi.fn()
+      const registrationComplete = vi.fn()
+      const registrationAbort = vi.fn()
+      const spawn = vi.fn(
+        async (args: { worktreeId?: string; command?: string; leafId?: string }) => {
+          const staged = runtime.beginStagedPtyRuntimeRegistration()
+          staged.claim('pty-new')
+          runtime.registerPreAllocatedHandleForPty('pty-new', 'term_staged')
+          runtime.registerPty('pty-new', args.worktreeId ?? TEST_WORKTREE_ID)
+          runtime.noteTerminalSpawnCommand('pty-new', args.command)
+          return {
+            id: 'pty-new',
+            runtimeRegistration: {
+              commit: () => {
+                staged.commit()
+                registrationCommit()
+              },
+              complete: registrationComplete,
+              abort: async () => {
+                registrationAbort()
+                staged.abort()
+                kill('pty-new')
+              }
+            }
+          }
+        }
+      )
+      runtime.setPtyController({
+        spawn,
+        write: (ptyId, data) => {
+          writes.push({ ptyId, data })
+          return true
+        },
+        kill,
+        getForegroundProcess: async () => null
+      })
+      const rendererAttachment = deferred<{
+        tabId: string
+        leafId: string
+        layout: TerminalLayoutSnapshot
+      }>()
+      const revealTerminalSession = vi.fn(() => rendererAttachment.promise)
+      runtime.setNotifier({
+        worktreesChanged: vi.fn(),
+        reposChanged: vi.fn(),
+        activateWorktree: vi.fn(),
+        createTerminal: vi.fn(),
+        revealTerminalSession,
+        splitTerminal: vi.fn(),
+        renameTerminal: vi.fn(),
+        focusTerminal: vi.fn(),
+        closeTerminal: vi.fn(),
+        sleepWorktree: vi.fn(),
+        terminalFitOverrideChanged: vi.fn(),
+        terminalDriverChanged: vi.fn()
+      })
+      const webContents = {
+        send: vi.fn(() => {
+          throw new Error('renderer create route invoked')
+        })
+      }
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: 'tab-grid',
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Workers',
+            activeLeafId: oldLeafId,
+            layoutMode: 'orchestration-grid',
+            layout: { type: 'leaf', leafId: oldLeafId }
+          }
+        ],
+        leaves: [
+          {
+            tabId: 'tab-grid',
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: oldLeafId,
+            paneRuntimeId: 1,
+            ptyId: 'pty-old'
+          }
+        ]
+      })
+      electronMocks.BrowserWindow.fromId.mockReturnValue({
+        isDestroyed: () => false,
+        webContents
+      })
+
+      const pendingCreate = runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        command: 'codex',
+        launchConfig: {
+          agentCommand: 'codex',
+          agentArgs: '--profile worker',
+          agentEnv: { CODEX_PROFILE: 'worker' }
+        },
+        ...(rendererBacked ? { rendererBacked: true } : {}),
+        ...(presentation ? { presentation } : {}),
+        placement: 'orchestration-grid',
+        title: 'Worker 2'
+      })
+      await vi.waitFor(() => expect(revealTerminalSession).toHaveBeenCalledOnce())
+
+      const newLeafId = spawn.mock.calls[0]![0].leafId!
+      expect(persistOrchestrationGridPtyBinding).not.toHaveBeenCalled()
+      expect(runtime['ptysById'].has('pty-new')).toBe(false)
+      expect(runtime['mobileSessionTabsByWorktree'].has(TEST_WORKTREE_ID)).toBe(false)
+      expect(kill).not.toHaveBeenCalled()
+
+      rendererAttachment.resolve({
+        tabId: 'tab-grid',
+        leafId: newLeafId,
+        layout: addOrchestrationTerminalGridLeaf(
+          {
+            root: { type: 'leaf', leafId: oldLeafId },
+            activeLeafId: oldLeafId,
+            expandedLeafId: null,
+            layoutMode: 'orchestration-grid',
+            ptyIdsByLeafId: { [oldLeafId]: 'pty-old' }
+          },
+          {
+            leafId: newLeafId,
+            ptyId: 'pty-new',
+            title: 'Worker 2',
+            activate: false
+          }
+        )
+      })
+      const created = await pendingCreate
+      await runtime.sendTerminal(created.handle, { text: 'hello' })
+
+      expect(created.tabId).toBe('tab-grid')
+      expect(created.surface).toBe(expectedSurface)
+      expect(spawn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tabId: 'tab-grid',
+          persistHostSessionBinding: true,
+          deferHostSessionPersistence: true,
+          deferRuntimeRegistration: true
+        })
+      )
+      expect(persistOrchestrationGridPtyBinding).toHaveBeenCalledWith(
+        expect.objectContaining({
+          hostId: 'local',
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'tab-grid',
+          leafId: newLeafId,
+          ptyId: 'pty-new',
+          title: 'Worker 2',
+          layout: expect.objectContaining({
+            layoutMode: 'orchestration-grid',
+            titlesByLeafId: { [newLeafId]: 'Worker 2' }
+          })
+        })
+      )
+      expect(revealTerminalSession).toHaveBeenCalledWith(
+        TEST_WORKTREE_ID,
+        expect.objectContaining({
+          ptyId: 'pty-new',
+          tabId: 'tab-grid',
+          leafId: newLeafId,
+          activate: false,
+          placement: 'orchestration-grid',
+          command: 'codex',
+          launchConfig: {
+            agentCommand: 'codex',
+            agentArgs: '--profile worker',
+            agentEnv: { CODEX_PROFILE: 'worker' }
+          }
+        })
+      )
+      expect(revealTerminalSession.mock.invocationCallOrder[0]).toBeLessThan(
+        persistOrchestrationGridPtyBinding.mock.invocationCallOrder[0]!
+      )
+      expect(revealTerminalSession.mock.invocationCallOrder[0]).toBeLessThan(
+        registrationCommit.mock.invocationCallOrder[0]!
+      )
+      expect(registrationCommit.mock.invocationCallOrder[0]).toBeLessThan(
+        persistOrchestrationGridPtyBinding.mock.invocationCallOrder[0]!
+      )
+      expect(persistOrchestrationGridPtyBinding.mock.invocationCallOrder[0]).toBeLessThan(
+        registrationComplete.mock.invocationCallOrder[0]!
+      )
+      expect(registrationAbort).not.toHaveBeenCalled()
+      expect(webContents.send).not.toHaveBeenCalled()
+      expect(writes).toEqual([{ ptyId: 'pty-new', data: 'hello' }])
+    }
+  )
+
+  it('kills a staged renderer-backed grid PTY when renderer attachment is rejected', async () => {
+    const oldLeafId = '11111111-1111-4111-8111-111111111111'
+    const persistOrchestrationGridPtyBinding = vi.fn()
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      persistOrchestrationGridPtyBinding
+    } as never)
+    const kill = vi.fn((_ptyId: string) => true)
+    const registrationCommit = vi.fn()
+    const registrationComplete = vi.fn()
+    const registrationAbort = vi.fn()
+    runtime.setPtyController({
+      spawn: vi.fn(async (args) => {
+        const staged = runtime.beginStagedPtyRuntimeRegistration()
+        staged.claim('pty-rejected')
+        runtime.registerPreAllocatedHandleForPty('pty-rejected', 'term_rejected')
+        runtime.registerPty('pty-rejected', args.worktreeId ?? TEST_WORKTREE_ID)
+        runtime.noteTerminalSpawnCommand('pty-rejected', args.command)
+        return {
+          id: 'pty-rejected',
+          runtimeRegistration: {
+            commit: () => {
+              staged.commit()
+              registrationCommit()
+            },
+            complete: registrationComplete,
+            abort: async () => {
+              registrationAbort()
+              staged.abort()
+              kill('pty-rejected')
+            }
+          }
+        }
+      }),
+      write: () => true,
+      kill,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn().mockRejectedValue(new Error('trusted attach failed')),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-grid',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Workers',
+          activeLeafId: oldLeafId,
+          layoutMode: 'orchestration-grid',
+          layout: { type: 'leaf', leafId: oldLeafId }
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-grid',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: oldLeafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-old'
+        }
+      ]
+    })
+
+    await expect(
+      runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        command: 'codex',
+        rendererBacked: true,
+        placement: 'orchestration-grid',
+        title: 'Rejected worker'
+      })
+    ).rejects.toThrow('trusted attach failed')
+
+    expect(kill).toHaveBeenCalledOnce()
+    expect(kill).toHaveBeenCalledWith('pty-rejected')
+    expect(persistOrchestrationGridPtyBinding).not.toHaveBeenCalled()
+    expect(runtime['ptysById'].has('pty-rejected')).toBe(false)
+    expect(runtime['mobileSessionTabsByWorktree'].has(TEST_WORKTREE_ID)).toBe(false)
+    expect(registrationCommit).not.toHaveBeenCalled()
+    expect(registrationComplete).not.toHaveBeenCalled()
+    expect(registrationAbort).toHaveBeenCalledOnce()
   })
 
   it('injects runtime hook receiver env into terminal sessions', async () => {
@@ -14770,12 +16110,96 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('lets the renderer spawn the first renderer-backed orchestration-grid pane', async () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const webContents = { send: vi.fn() }
+    const send = vi.fn((_channel: string, payload: { requestId: string }) => {
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: 'tab-grid-renderer',
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Renderer Grid',
+            activeLeafId: leafId,
+            layoutMode: 'orchestration-grid',
+            layout: { type: 'leaf', leafId }
+          }
+        ],
+        leaves: [
+          {
+            tabId: 'tab-grid-renderer',
+            worktreeId: TEST_WORKTREE_ID,
+            leafId,
+            paneRuntimeId: 1,
+            ptyId: 'pty-grid-renderer',
+            paneTitle: null
+          }
+        ]
+      })
+      ipcMain.emit(
+        'terminal:tabCreateReply',
+        { sender: webContents },
+        {
+          requestId: payload.requestId,
+          tabId: 'tab-grid-renderer',
+          leafId,
+          title: 'Renderer Grid'
+        }
+      )
+    })
+    webContents.send = send
+    const spawn = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents
+    })
+
+    await expect(
+      runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+        command: 'codex',
+        rendererBacked: true,
+        placement: 'orchestration-grid',
+        title: 'Renderer Grid'
+      })
+    ).resolves.toMatchObject({
+      handle: expect.stringMatching(/^term_/),
+      tabId: 'tab-grid-renderer',
+      title: 'Renderer Grid',
+      worktreeId: TEST_WORKTREE_ID,
+      surface: 'visible'
+    })
+    expect(send).toHaveBeenCalledWith(
+      'terminal:requestTabCreate',
+      expect.objectContaining({
+        worktreeId: TEST_WORKTREE_ID,
+        placement: 'orchestration-grid'
+      })
+    )
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
   it('splits visible pty-backed terminal sessions through the parent renderer tab', async () => {
     const spawn = vi
       .fn()
       .mockResolvedValueOnce({ id: 'pty-source' })
       .mockResolvedValueOnce({ id: 'pty-split' })
-    const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-bg' })
+    let acknowledgeSplitReveal: (value: { tabId: string }) => void = () => undefined
+    const splitRevealAcknowledgement = new Promise<{ tabId: string }>((resolve) => {
+      acknowledgeSplitReveal = resolve
+    })
+    const revealTerminalSession = vi
+      .fn()
+      .mockResolvedValueOnce({ tabId: 'tab-bg' })
+      .mockImplementationOnce(() => splitRevealAcknowledgement)
     const splitTerminal = vi.fn()
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -14806,7 +16230,14 @@ describe('OrcaRuntimeService', () => {
       (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
     const sourceLeafId = sourceEnv.ORCA_PANE_KEY.slice(`${sourceEnv.ORCA_TAB_ID}:`.length)
 
-    await expect(runtime.splitTerminal(handle, { direction: 'vertical' })).resolves.toMatchObject({
+    const pendingSplit = runtime.splitTerminal(handle, { direction: 'vertical' })
+    await vi.waitFor(() => expect(revealTerminalSession).toHaveBeenCalledTimes(2))
+    const pendingSplitRecord = runtime['ptysById'].get('pty-split')
+    expect(pendingSplitRecord?.tabId).toBeNull()
+    expect(pendingSplitRecord?.paneKey).toBeNull()
+    acknowledgeSplitReveal({ tabId: 'tab-bg' })
+
+    await expect(pendingSplit).resolves.toMatchObject({
       handle: expect.stringMatching(/^term_/),
       tabId: sourceEnv.ORCA_TAB_ID,
       paneRuntimeId: -1
@@ -14815,6 +16246,10 @@ describe('OrcaRuntimeService', () => {
     const splitEnv =
       (spawn.mock.calls[1]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
     const splitLeafId = splitEnv.ORCA_PANE_KEY.slice(`${sourceEnv.ORCA_TAB_ID}:`.length)
+    expect(runtime['ptysById'].get('pty-split')).toMatchObject({
+      tabId: sourceEnv.ORCA_TAB_ID,
+      paneKey: makePaneKey(sourceEnv.ORCA_TAB_ID, splitLeafId)
+    })
     expect(splitTerminal).not.toHaveBeenCalled()
     expect(splitEnv.ORCA_TAB_ID).toBe(sourceEnv.ORCA_TAB_ID)
     expect(splitEnv.ORCA_WORKTREE_ID).toBe(TEST_WORKTREE_ID)
@@ -14874,6 +16309,16 @@ describe('OrcaRuntimeService', () => {
           resolveSpawn = resolve
         })
     )
+  it('rejects a manual split in a maintained PTY grid but still appends sanctioned workers', async () => {
+    let ptyIndex = 0
+    const spawn = vi.fn(async () => ({ id: `pty-grid-split-policy-${++ptyIndex}` }))
+    const initialSession: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: TEST_REPO_ID,
+      activeWorktreeId: TEST_WORKTREE_ID,
+      tabsByWorktree: { [TEST_WORKTREE_ID]: [] }
+    }
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(initialSession)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.setPtyController({
       spawn,
@@ -14908,6 +16353,102 @@ describe('OrcaRuntimeService', () => {
           title: 'Persisted terminal',
           activeLeafId: HEADLESS_LEAF_ID,
           layout: { type: 'leaf', leafId: HEADLESS_LEAF_ID }
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+
+    const first = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      title: 'Grid worker 1',
+      placement: 'orchestration-grid'
+    })
+    if (!first.tabId) {
+      throw new Error('Expected an orchestration grid parent tab')
+    }
+    const parentTabId = first.tabId
+    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      title: 'Grid worker 2',
+      placement: 'orchestration-grid'
+    })
+    const canonicalBeforeSplit = structuredClone(getSession().terminalLayoutsByTabId[parentTabId])
+
+    await expect(runtime.splitTerminal(first.handle, { direction: 'horizontal' })).rejects.toThrow(
+      'orchestration_grid_manual_split_unsupported'
+    )
+    expect(spawn).toHaveBeenCalledTimes(2)
+    expect(getSession().terminalLayoutsByTabId[parentTabId]).toEqual(canonicalBeforeSplit)
+
+    const sanctioned = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      title: 'Grid worker 3',
+      placement: 'orchestration-grid'
+    })
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    const gridTabs = listed.tabs.filter(
+      (tab): tab is RuntimeMobileSessionTerminalClientTab =>
+        tab.type === 'terminal' && tab.parentTabId === parentTabId
+    )
+    const finalLayout = gridTabs[0]?.parentLayout
+
+    expect(sanctioned.tabId).toBe(parentTabId)
+    expect(spawn).toHaveBeenCalledTimes(3)
+    expect(finalLayout?.layoutMode).toBe('orchestration-grid')
+    expect(collectTestTerminalLayoutLeafIds(finalLayout?.root ?? null)).toEqual(
+      gridTabs.map((tab) => tab.leafId)
+    )
+    expect(getSession().terminalLayoutsByTabId[parentTabId]).toEqual(finalLayout)
+  })
+
+  it('rejects renderer-backed grid splits through RPC without blocking ordinary renderer splits', async () => {
+    const gridLeafId = '41000000-0000-4000-8000-000000000001'
+    const illicitLeafId = '41000000-0000-4000-8000-000000000002'
+    const ordinaryLeafId = '42000000-0000-4000-8000-000000000001'
+    const ordinarySplitLeafId = '42000000-0000-4000-8000-000000000002'
+    const runtime = new OrcaRuntimeService(store)
+    const splitTerminal = vi.fn(() => {
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: 'renderer-grid',
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Workers',
+            activeLeafId: illicitLeafId,
+            layoutMode: 'orchestration-grid',
+            layout: {
+              type: 'split',
+              direction: 'horizontal',
+              first: { type: 'leaf', leafId: gridLeafId },
+              second: { type: 'leaf', leafId: illicitLeafId }
+            }
+          }
+        ],
+        leaves: [
+          {
+            tabId: 'renderer-grid',
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: gridLeafId,
+            paneRuntimeId: 1,
+            ptyId: 'pty-renderer-grid'
+          },
+          {
+            tabId: 'renderer-grid',
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: illicitLeafId,
+            paneRuntimeId: 2,
+            ptyId: 'pty-illicit-grid-split'
+          }
+        ]
+      })
+    })
+    runtime.setNotifier({ splitTerminal } as never)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'renderer-grid',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Workers',
+          activeLeafId: gridLeafId,
+          layoutMode: 'orchestration-grid',
+          layout: { type: 'leaf', leafId: gridLeafId }
         }
       ],
       leaves: [
@@ -15037,6 +16578,95 @@ describe('OrcaRuntimeService', () => {
     await expect(split).rejects.toThrow('terminal_split_source_not_found')
     expect(kill).toHaveBeenCalledWith('retired-projected-split-pty')
     expect(runtime['mobileSessionTabsByWorktree'].has(TEST_WORKTREE_ID)).toBe(false)
+          tabId: 'renderer-grid',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: gridLeafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-renderer-grid'
+        }
+      ]
+    })
+    const gridHandle = (await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)).terminals[0]!.handle
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRpcRequest('terminal.split', { terminal: gridHandle, direction: 'vertical' })
+    )
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: {
+        code: 'orchestration_grid_manual_split_unsupported',
+        message: 'orchestration_grid_manual_split_unsupported'
+      }
+    })
+    expect(splitTerminal).not.toHaveBeenCalled()
+
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'ordinary-renderer-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Shell',
+          activeLeafId: ordinaryLeafId,
+          layout: { type: 'leaf', leafId: ordinaryLeafId }
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'ordinary-renderer-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: ordinaryLeafId,
+          paneRuntimeId: 3,
+          ptyId: 'pty-ordinary-renderer'
+        }
+      ]
+    })
+    splitTerminal.mockImplementationOnce(() => {
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: 'ordinary-renderer-tab',
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Shell',
+            activeLeafId: ordinarySplitLeafId,
+            layout: {
+              type: 'split',
+              direction: 'vertical',
+              first: { type: 'leaf', leafId: ordinaryLeafId },
+              second: { type: 'leaf', leafId: ordinarySplitLeafId }
+            }
+          }
+        ],
+        leaves: [
+          {
+            tabId: 'ordinary-renderer-tab',
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: ordinaryLeafId,
+            paneRuntimeId: 3,
+            ptyId: 'pty-ordinary-renderer'
+          },
+          {
+            tabId: 'ordinary-renderer-tab',
+            worktreeId: TEST_WORKTREE_ID,
+            leafId: ordinarySplitLeafId,
+            paneRuntimeId: 4,
+            ptyId: 'pty-ordinary-renderer-split'
+          }
+        ]
+      })
+    })
+    const ordinaryHandle = (await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)).terminals[0]!
+      .handle
+
+    await expect(runtime.splitTerminal(ordinaryHandle, { direction: 'vertical' })).resolves.toEqual(
+      {
+        handle: expect.stringMatching(/^term_/),
+        tabId: 'ordinary-renderer-tab',
+        paneRuntimeId: 3
+      }
+    )
+    expect(splitTerminal).toHaveBeenCalledTimes(1)
   })
 
   it('splits folder workspace pty-backed terminal sessions with folder cwd and env', async () => {
@@ -31644,6 +33274,82 @@ describe('OrcaRuntimeService', () => {
     expect(closeTerminal).toHaveBeenCalledWith('host-tab')
   })
 
+  it('removes a headless SSH terminal only from its execution-host session bucket', async () => {
+    const localSession = makeWorkspaceSessionWithHeadlessTerminal({
+      tabsByWorktree: {
+        [TEST_WORKTREE_ID]: [
+          {
+            id: 'local-sentinel-tab',
+            ptyId: 'local-sentinel-pty',
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Local sentinel',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'local-sentinel-tab': makeHeadlessTerminalLayout({
+          [HEADLESS_LEAF_ID]: 'local-sentinel-pty'
+        })
+      }
+    })
+    const remoteSession = makeWorkspaceSessionWithHeadlessTerminal({
+      tabsByWorktree: {
+        [TEST_WORKTREE_ID]: [
+          {
+            id: 'host-tab',
+            ptyId: 'ssh:ssh-1@@remote-pending-pty',
+            worktreeId: TEST_WORKTREE_ID,
+            title: 'Remote terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'host-tab': makeHeadlessTerminalLayout({
+          [HEADLESS_LEAF_ID]: 'ssh:ssh-1@@remote-pending-pty'
+        })
+      }
+    })
+    const localBefore = structuredClone(localSession)
+    const sessions = new Map<string, WorkspaceSessionState>([
+      ['local', localSession],
+      ['ssh:ssh-1', remoteSession]
+    ])
+    const remoteRepo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'ssh-1' }
+    const setWorkspaceSession = vi.fn((next: WorkspaceSessionState, hostId: string = 'local') => {
+      sessions.set(hostId, next)
+    })
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getRepo: () => remoteRepo,
+      getRepos: () => [remoteRepo],
+      getWorkspaceSession: (hostId: string = 'local') => sessions.get(hostId)!,
+      setWorkspaceSession
+    } as never)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => []
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+    await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
+
+    expect(sessions.get('ssh:ssh-1')?.tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
+    expect(sessions.get('ssh:ssh-1')?.terminalLayoutsByTabId['host-tab']).toBeUndefined()
+    expect(sessions.get('local')).toEqual(localBefore)
+    expect(setWorkspaceSession).toHaveBeenCalled()
+    expect(setWorkspaceSession.mock.calls.every((call) => call[1] === 'ssh:ssh-1')).toBe(true)
+  })
+
   it('closes only the addressed serve-owned split leaf so siblings survive even with a renderer attached', async () => {
     const layout = makeHeadlessTerminalLayout({
       [HEADLESS_LEAF_ID]: 'serve-left',
@@ -32294,6 +34000,100 @@ describe('OrcaRuntimeService', () => {
       expect(getSession().terminalLayoutsByTabId['host-tab']).toBeDefined()
       expect(kill).not.toHaveBeenCalled()
     })
+  it('reflows and persists six surviving orchestration-grid leaves after one headless close', async () => {
+    const leafIds = [
+      '71000000-0000-4000-8000-000000000001',
+      '71000000-0000-4000-8000-000000000002',
+      '71000000-0000-4000-8000-000000000003',
+      '71000000-0000-4000-8000-000000000004',
+      '71000000-0000-4000-8000-000000000005',
+      '71000000-0000-4000-8000-000000000006',
+      '71000000-0000-4000-8000-000000000007'
+    ] as const
+    const closedLeafId = leafIds[1]
+    const activeLeafId = leafIds[3]
+    const session = makePersistedOrchestrationGridSession({
+      tabId: 'host-grid',
+      leafIds,
+      activeLeafId,
+      expandedLeafId: leafIds[5],
+      statePrefix: 'close-grid'
+    })
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
+    const kill = vi.fn(() => true)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      write: () => true,
+      kill,
+      getForegroundProcess: async () => null,
+      listProcesses: async () =>
+        leafIds.map((leafId) => ({
+          id: session.terminalLayoutsByTabId['host-grid']!.ptyIdsByLeafId![leafId]!,
+          cwd: TEST_WORKTREE_PATH,
+          title: 'Grid worker'
+        }))
+    })
+    for (const leafId of leafIds) {
+      runtime.registerPty(
+        session.terminalLayoutsByTabId['host-grid']!.ptyIdsByLeafId![leafId]!,
+        TEST_WORKTREE_ID,
+        null,
+        { tabId: 'host-grid', leafId }
+      )
+    }
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+    await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, `host-grid::${closedLeafId}`)
+
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    const survivingTabs = listed.tabs.filter(
+      (tab): tab is RuntimeMobileSessionTerminalClientTab =>
+        tab.type === 'terminal' && tab.parentTabId === 'host-grid'
+    )
+    const survivingLeafIds = leafIds.filter((leafId) => leafId !== closedLeafId)
+    const layout = survivingTabs[0]?.parentLayout
+    if (!layout?.root) {
+      throw new Error('Expected the surviving orchestration grid layout')
+    }
+    const widths = new Map<string, number>()
+    const measureWidths = (node: TerminalPaneLayoutNode, width: number): void => {
+      if (node.type === 'leaf') {
+        widths.set(node.leafId, width)
+        return
+      }
+      const ratio = node.ratio ?? 0.5
+      if (node.direction === 'vertical') {
+        measureWidths(node.first, width * ratio)
+        measureWidths(node.second, width * (1 - ratio))
+        return
+      }
+      measureWidths(node.first, width)
+      measureWidths(node.second, width)
+    }
+    measureWidths(layout.root, 1)
+
+    expect(kill).toHaveBeenCalledTimes(1)
+    expect(kill).toHaveBeenCalledWith('close-grid-pty-2')
+    expect(survivingTabs.map((tab) => tab.leafId)).toEqual(survivingLeafIds)
+    expect(collectTestTerminalLayoutLeafIds(layout.root)).toEqual(survivingLeafIds)
+    expect([...widths.values()]).toHaveLength(6)
+    for (const width of widths.values()) {
+      expect(width).toBeCloseTo(1 / 6)
+    }
+    expect(layout.activeLeafId).toBe(activeLeafId)
+    expect(layout.expandedLeafId).toBeNull()
+    for (const records of [
+      layout.ptyIdsByLeafId,
+      layout.buffersByLeafId,
+      layout.scrollbackRefsByLeafId,
+      layout.titlesByLeafId
+    ]) {
+      expect(Object.keys(records ?? {})).toEqual(survivingLeafIds)
+    }
+    for (const tab of survivingTabs) {
+      expect(tab.parentLayout).toEqual(layout)
+    }
+    expect(getSession().terminalLayoutsByTabId['host-grid']).toEqual(layout)
   })
 
   it('builds mobile session agent launch commands on the runtime host', async () => {

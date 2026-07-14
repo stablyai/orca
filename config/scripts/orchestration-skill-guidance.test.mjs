@@ -205,6 +205,15 @@ describe('orchestration skill guidance', () => {
     expect(workerTerminals).toContain('use `--no-parent` when it is not stacked')
   })
 
+  it('uses the native worker grid for supervised same-worktree terminals', () => {
+    const workerTerminals = getSection(readSkill(), 'Worker Terminals')
+
+    expect(workerTerminals).toContain('--placement orchestration-grid')
+    expect(workerTerminals).toContain('reuses one visible terminal tab')
+    expect(workerTerminals).toContain('rows of at most six')
+    expect(workerTerminals).toContain('Use `--placement tab`')
+  })
+
   it('keeps review-only completions and named next-owner fixes in their lanes', () => {
     const skill = readSkill()
 

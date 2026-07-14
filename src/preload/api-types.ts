@@ -289,6 +289,8 @@ import type {
   WorktreeMeta,
   WorktreeRemoteBranchConflictEvent,
   RemoveWorktreeResult,
+  RuntimeTerminalPlacement,
+  TerminalLayoutSnapshot,
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch,
   WorktreeStartupLaunch,
@@ -3224,8 +3226,10 @@ export type PreloadApi = {
         tabId?: string
         leafId?: string
         splitFromLeafId?: string
+        splitSourceLeafIds?: string[]
         splitDirection?: 'horizontal' | 'vertical'
         splitTelemetrySource?: TerminalPaneSplitSource
+        placement?: RuntimeTerminalPlacement
       }) => void
     ) => () => void
     onRequestTerminalCreate: (
@@ -3235,6 +3239,14 @@ export type PreloadApi = {
       callback: (data: { worktreeId: string; tabId?: string; ptyId?: string }) => void
     ) => () => void
     replyTerminalCreate: (reply: TerminalTabCreateReply) => void
+    replyTerminalCreate: (reply: {
+      requestId: string
+      tabId?: string
+      leafId?: string
+      layout?: TerminalLayoutSnapshot
+      title?: string
+      error?: string
+    }) => void
     onSplitTerminal: (
       callback: (data: {
         tabId: string

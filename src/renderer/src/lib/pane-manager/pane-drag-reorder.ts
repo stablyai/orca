@@ -26,6 +26,8 @@ export type DragReorderCallbacks = {
   getRoot: () => HTMLElement
   getStyleOptions: () => PaneStyleOptions
   isDestroyed: () => boolean
+  /** Why: maintained grids reject pane/title reorders before pointer capture mutates UI state. */
+  allowsUserStructuralMutation?: () => boolean
   safeFit: (pane: ManagedPane) => void
   applyPaneOpacity: () => void
   applyDividerStyles: () => void
@@ -107,7 +109,7 @@ export function handlePaneDrop(
   _state: DragReorderState,
   callbacks: DragReorderCallbacks
 ): void {
-  if (sourcePaneId === targetPaneId) {
+  if (callbacks.allowsUserStructuralMutation?.() === false || sourcePaneId === targetPaneId) {
     return
   }
   const panes = callbacks.getPanes()

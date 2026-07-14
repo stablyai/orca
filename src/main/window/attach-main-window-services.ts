@@ -7,6 +7,7 @@ import type { Store } from '../persistence'
 import type {
   CreateWorktreeResult,
   ReleaseBuildListResult,
+  TerminalLayoutSnapshot,
   UpdateCheckOptions,
   WorktreeStartupLaunch
 } from '../../shared/types'
@@ -375,8 +376,19 @@ function registerRuntimeWindowLifecycle(
           ipcMain.removeListener('terminal:tabCreateReply', handler)
           reject(new Error('Terminal reveal timed out'))
         }, 10_000)
-        const handler = (event: Electron.IpcMainEvent, reply: TerminalTabCreateReply): void => {
-          // Why: requestId is renderer-supplied, so only the targeted main window may satisfy the reveal.
+        const handler = (
+          event: Electron.IpcMainEvent,
+          reply: {
+            requestId: string
+            tabId?: string
+            leafId?: string
+            layout?: TerminalLayoutSnapshot
+            title?: string
+            error?: string
+          }
+        ): void => {
+          // Why: requestId is renderer-supplied; only the targeted main window
+          // may satisfy the reveal and provide the tab handle.
           if (event.sender !== mainWindow.webContents || reply.requestId !== requestId) {
             return
           }
@@ -386,47 +398,52 @@ function registerRuntimeWindowLifecycle(
             reject(new Error(reply.error))
             return
           }
-          if (
-            expectedIdentity &&
-            (!reply.identity ||
-              reply.identity.worktreeId !== expectedIdentity.worktreeId ||
-              reply.identity.tabId !== expectedIdentity.tabId ||
-              reply.identity.leafId !== expectedIdentity.leafId ||
-              reply.identity.ptyId !== expectedIdentity.ptyId)
-          ) {
-            reject(new Error('terminal_reveal_identity_mismatch'))
-            return
-          }
           resolve({
             tabId: reply.tabId!,
-            title: reply.title,
-            ...(reply.identity ? { identity: reply.identity } : {})
+            leafId: reply.leafId,
+            layout: reply.layout,
+            title: reply.title
           })
         }
         ipcMain.on('terminal:tabCreateReply', handler)
-        send('ui:createTerminal', {
-          requestId,
-          worktreeId,
-          ptyId: opts.ptyId,
-          title: opts.title ?? undefined,
-          ...(opts.cwd ? { cwd: opts.cwd } : {}),
-          ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
-          ...(opts.launchToken ? { launchToken: opts.launchToken } : {}),
-          ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
-          ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
-          activate: opts.activate !== false,
-          ...(opts.presentation ? { presentation: opts.presentation } : {}),
-          ...(opts.surfaceOwner === false ? { surfaceOwner: false } : {}),
-          // Why: pre-minted tabId aligns the renderer tab id with the paneKey baked into the PTY env, so hook events route right.
-          ...(opts.tabId !== undefined ? { tabId: opts.tabId } : {}),
-          ...(opts.leafId !== undefined ? { leafId: opts.leafId } : {}),
-          ...(opts.splitFromLeafId !== undefined ? { splitFromLeafId: opts.splitFromLeafId } : {}),
-          ...(opts.splitDirection !== undefined ? { splitDirection: opts.splitDirection } : {}),
-          ...(opts.splitTelemetrySource !== undefined
-            ? { splitTelemetrySource: opts.splitTelemetrySource }
-            : {}),
-          ...(opts.focus !== undefined ? { focus: opts.focus } : {})
-        })
+        try {
+          send('ui:createTerminal', {
+            requestId,
+            worktreeId,
+            ptyId: opts.ptyId,
+            ...(opts.command ? { command: opts.command } : {}),
+            title: opts.title ?? undefined,
+            ...(opts.cwd ? { cwd: opts.cwd } : {}),
+            ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
+            ...(opts.launchToken ? { launchToken: opts.launchToken } : {}),
+            ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
+            ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
+            activate: opts.activate !== false,
+            ...(opts.presentation ? { presentation: opts.presentation } : {}),
+            // Why: pre-minted tabId from main keeps the renderer's tab id aligned
+            // with the paneKey baked into the PTY env at spawn time, so hook
+            // events route to the right slot.
+            ...(opts.tabId !== undefined ? { tabId: opts.tabId } : {}),
+            ...(opts.leafId !== undefined ? { leafId: opts.leafId } : {}),
+            ...(opts.splitFromLeafId !== undefined
+              ? { splitFromLeafId: opts.splitFromLeafId }
+              : {}),
+            ...(opts.splitSourceLeafIds !== undefined
+              ? { splitSourceLeafIds: opts.splitSourceLeafIds }
+              : {}),
+            ...(opts.splitDirection !== undefined ? { splitDirection: opts.splitDirection } : {}),
+            ...(opts.splitTelemetrySource !== undefined
+              ? { splitTelemetrySource: opts.splitTelemetrySource }
+              : {}),
+            ...(opts.placement ? { placement: opts.placement } : {})
+          })
+        } catch (error) {
+          // Why: a synchronous webContents failure must not leave the transaction
+          // listener/timer alive after the staged PTY owner receives rejection.
+          clearTimeout(timer)
+          ipcMain.removeListener('terminal:tabCreateReply', handler)
+          reject(error)
+        }
       }),
     resolveLegacyWorkerTerminalRecovery: (paneKey, resolution, ptyId) =>
       send('agentStatus:legacyWorkerTerminalRecovery', {

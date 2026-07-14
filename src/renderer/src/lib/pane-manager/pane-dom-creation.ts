@@ -145,6 +145,7 @@ export function createPaneDOM(
     pendingSplitScrollState: null,
     pendingSplitScrollRafIds: [],
     pendingSplitScrollTimerId: null,
+    pendingSplitWebglReattach: false,
     pendingSplitScrollBufferDisposable: null,
     debugLabel: options.debugLabel ?? null
   }

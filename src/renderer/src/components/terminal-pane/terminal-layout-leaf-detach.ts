@@ -91,6 +91,7 @@ export function detachTerminalLayoutLeaf(
       ptyIdsByLeafId
     }),
     expandedLeafId: layout.expandedLeafId === leafId ? null : layout.expandedLeafId,
+    ...(layout.layoutMode ? { layoutMode: layout.layoutMode } : {}),
     ...(ptyIdsByLeafId ? { ptyIdsByLeafId } : {}),
     ...(buffersByLeafId ? { buffersByLeafId } : {}),
     ...(scrollbackRefsByLeafId ? { scrollbackRefsByLeafId } : {}),

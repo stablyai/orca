@@ -21,7 +21,14 @@ export function beginPaneDragFromPointerDown(
   let startY = 0
   let activePointerId: number | null = null
 
-  if ((e.button ?? 0) !== 0 || e.ctrlKey || callbacks.getPanes().size < 2) {
+  const canDetachToExternalTarget =
+    callbacks.resolveExternalDropTarget !== undefined && callbacks.onExternalPaneDrop !== undefined
+  if (
+    (callbacks.allowsUserStructuralMutation?.() === false && !canDetachToExternalTarget) ||
+    (e.button ?? 0) !== 0 ||
+    e.ctrlKey ||
+    callbacks.getPanes().size < 2
+  ) {
     return null
   }
   e.preventDefault()
@@ -185,6 +192,15 @@ function updateDropTarget(
     state.currentDropTarget = null
     state.currentExternalDropTarget = externalTarget
     positionExternalDropOverlay(overlay, externalTarget)
+    return
+  }
+
+  if (callbacks.allowsUserStructuralMutation?.() === false) {
+    // Why: maintained grids may detach a leaf to another tab, but dropping on
+    // a sibling must not create user-owned noncanonical grid geometry.
+    overlay.style.display = 'none'
+    state.currentDropTarget = null
+    state.currentExternalDropTarget = null
     return
   }
 

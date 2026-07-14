@@ -1,6 +1,10 @@
 import type { PaneExternalDropTarget } from '@/lib/pane-manager/pane-manager'
 import type { AppState } from '@/store'
 import type { TerminalTab } from '../../../../shared/types'
+import {
+  collectTerminalLayoutLeafIds,
+  reflowOrchestrationTerminalGrid
+} from '../../../../shared/orchestration-terminal-grid'
 import { detachTerminalLayoutLeaf } from './terminal-layout-leaf-detach'
 
 const TAB_GROUP_STRIP_SELECTOR = '[data-tab-group-strip-id][data-worktree-id]'
@@ -271,6 +275,15 @@ export function detachTerminalPaneToTab(args: {
     ptyId,
     detachedLayout: detached.detachedLayout
   })
+  // Why: binary sibling promotion preserves arbitrary split ratios; a
+  // maintained source must match the canonical grid arranged in the DOM.
+  const sourceLayout =
+    detached.sourceLayout.layoutMode === 'orchestration-grid'
+      ? reflowOrchestrationTerminalGrid(
+          detached.sourceLayout,
+          collectTerminalLayoutLeafIds(detached.sourceLayout.root)
+        )
+      : detached.sourceLayout
 
   // Why: remove the renderer pane only after the layout/PTY handoff has been
   // computed; the close callback detaches listeners but must not kill the PTY.
@@ -296,12 +309,12 @@ export function detachTerminalPaneToTab(args: {
     targetIndex: args.targetIndex,
     worktreeId: args.worktreeId
   })
-  afterCreateStore.setTabLayout(args.sourceTabId, detached.sourceLayout)
+  afterCreateStore.setTabLayout(args.sourceTabId, sourceLayout)
   afterCreateStore.setTabLayout(tab.id, detachedLayout)
   afterCreateStore.syncPaneDetachPtyOwnership({
     detachedLeafId: sourceLeafId,
     detachedPtyId: ptyId,
-    sourceLayout: detached.sourceLayout,
+    sourceLayout,
     sourceTabId: args.sourceTabId,
     targetTabId: tab.id
   })

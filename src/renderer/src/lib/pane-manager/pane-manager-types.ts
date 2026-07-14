@@ -23,6 +23,19 @@ export type PaneSpawnHints = {
   ptyId?: string
 }
 
+export type PaneSplitOptions = {
+  ratio?: number
+  cwd?: string
+  leafId?: string
+  ptyId?: string
+  /** Why: background/grid insertions must not steal the user's active terminal. */
+  activate?: boolean
+  /** Why: callers may batch structural edits into one canonical layout commit. */
+  notifyLayoutChanged?: boolean
+  /** Why: only host/runtime grid reconciliation may bypass maintained-grid user guards. */
+  allowOrchestrationGridMutation?: boolean
+}
+
 export type ClosedPaneInfo = {
   paneId: number
   leafId: TerminalLeafId
@@ -70,6 +83,8 @@ export type PaneManagerOptions = {
     openLinkHint: string
   ) => string | null | undefined | Promise<string | null | undefined>
   initialRenderingSuspended?: boolean
+  /** Keeps supervised worker panes packed into equal rows after structural changes. */
+  maintainOrchestrationGrid?: boolean
   terminalGpuAcceleration?: GlobalSettings['terminalGpuAcceleration']
   // Why: diagnostic label for log correlation. safeFit and other internal
   // helpers log warnings that are hard to correlate without knowing which
@@ -196,6 +211,9 @@ export type ManagedPaneInternal = {
   // restore handles instead of leaving stale pane closures alive.
   pendingSplitScrollRafIds?: number[]
   pendingSplitScrollTimerId?: ReturnType<typeof setTimeout> | null
+  // Why: chained reparents may replace the settle timer while WebGL is
+  // temporarily detached, so the replacement must retain reattach intent.
+  pendingSplitWebglReattach?: boolean
   // Stored so repeated split restores and disposePane() can remove the
   // deferred alt-screen buffer listener instead of stacking callbacks.
   pendingSplitScrollBufferDisposable?: IDisposable | null

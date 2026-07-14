@@ -2487,18 +2487,20 @@ function makeProjectHostSetupId(
 function createMinimalPersistedTerminalTab(args: {
   worktreeId: string
   tabId: string
-  ptyId: string
+  ptyId?: string
   existingTabCount: number
   startupCwd?: string
+  title?: string | null
 }): TerminalTab {
   const ordinal = args.existingTabCount + 1
   const defaultTitle = `Terminal ${ordinal}`
+  const title = args.title?.trim() || defaultTitle
   return {
     id: args.tabId,
-    ptyId: args.ptyId,
+    ptyId: args.ptyId ?? null,
     worktreeId: args.worktreeId,
-    title: defaultTitle,
-    defaultTitle,
+    title,
+    defaultTitle: title,
     customTitle: null,
     color: null,
     sortOrder: args.existingTabCount,
@@ -6298,6 +6300,55 @@ export class Store {
     return normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
   }
 
+  private setWorkspaceSessionInMemory(
+    hostId: ExecutionHostId,
+    session: WorkspaceSessionState
+  ): void {
+    if (hostId === LOCAL_EXECUTION_HOST_ID) {
+      this.state.workspaceSession = session
+      return
+    }
+    this.state.workspaceSessionsByHostId = {
+      ...this.state.workspaceSessionsByHostId,
+      [hostId]: session
+    }
+  }
+
+  private removeWorkspaceSessionPartitionInMemory(hostId: ExecutionHostId): void {
+    if (hostId === LOCAL_EXECUTION_HOST_ID) {
+      return
+    }
+    const next = { ...this.state.workspaceSessionsByHostId }
+    delete next[hostId]
+    this.state.workspaceSessionsByHostId = next
+  }
+
+  private resolvePtyBindingHostId(args: {
+    hostId?: string | null
+    worktreeId: string
+    tabId: string
+  }): ExecutionHostId {
+    const explicitHostId = normalizeExecutionHostId(args.hostId)
+    if (explicitHostId) {
+      return explicitHostId
+    }
+    const containsParent = (session: WorkspaceSessionState | undefined): boolean =>
+      session?.tabsByWorktree?.[args.worktreeId]?.some((tab) => tab.id === args.tabId) === true ||
+      session?.terminalLayoutsByTabId?.[args.tabId] !== undefined
+    // Why: legacy callers wrote SSH bindings to the local blob. Prefer an
+    // existing local parent, then an existing host partition, so old tabs stay put.
+    if (containsParent(this.state.workspaceSession)) {
+      return LOCAL_EXECUTION_HOST_ID
+    }
+    for (const [rawHostId, session] of Object.entries(this.state.workspaceSessionsByHostId ?? {})) {
+      const hostId = normalizeExecutionHostId(rawHostId)
+      if (hostId && containsParent(session)) {
+        return hostId
+      }
+    }
+    return LOCAL_EXECUTION_HOST_ID
+  }
+
   getWorkspaceSession(hostId?: string | null): PersistedState['workspaceSession'] {
     const resolved = this.resolveHostId(hostId)
     if (resolved === LOCAL_EXECUTION_HOST_ID) {
@@ -6768,107 +6819,122 @@ export class Store {
     return this.state.repos.find((repo) => repo.id === repoId)?.connectionId ?? null
   }
 
-  // Why: sync-flush the pty binding before pty:spawn returns to close the spawn/persist SIGKILL race (Issue #217).
-  persistPtyBinding(
-    args: {
-      worktreeId: string
-      tabId: string
-      leafId: string
-      ptyId: string
-      incarnationId?: string
-      startupCwd?: string
-      expectedBinding?: { ptyId: string; incarnationId?: string }
-      expectedSourceBinding?: PtyBindingSourceExpectation
-    },
-    hostId?: string | null
-  ): boolean {
-    const resolvedHostId = this.resolveHostId(hostId)
-    const session = this.getWorkspaceSession(resolvedHostId)
-    const paneKey = `${args.tabId}:${args.leafId}`
-    const bindingWorktreeId = args.expectedSourceBinding?.worktreeId ?? args.worktreeId
-    if (args.expectedSourceBinding) {
-      const expected = args.expectedSourceBinding
-      if (expected.tabId !== args.tabId) {
-        return false
-      }
-      const sourceTab = session.tabsByWorktree?.[bindingWorktreeId]?.find(
-        (candidate) => candidate.id === expected.tabId && candidate.worktreeId === bindingWorktreeId
-      )
-      const sourceLayout = session.terminalLayoutsByTabId?.[expected.tabId]
-      const sourcePaneKey = `${expected.tabId}:${expected.leafId}`
-      if (
-        !sourceTab ||
-        sourceLayout?.ptyIdsByLeafId?.[expected.leafId] !== expected.ptyId ||
-        !layoutContainsLeafId(sourceLayout.root, expected.leafId) ||
-        (expected.incarnationId !== undefined &&
-          session.terminalPtyIncarnationsByPaneKey?.[sourcePaneKey] !== expected.incarnationId)
-      ) {
-        return false
-      }
+  persistOrchestrationGridPtyBinding(args: {
+    hostId: ExecutionHostId
+    sshTargetId?: string | null
+    worktreeId: string
+    tabId: string
+    leafId: string
+    ptyId: string
+    layout: TerminalLayoutSnapshot
+    title?: string | null
+    startupCwd?: string
+    activate?: boolean
+  }): void {
+    if (
+      args.layout.layoutMode !== 'orchestration-grid' ||
+      !layoutContainsLeafId(args.layout.root, args.leafId)
+    ) {
+      throw new Error('Invalid orchestration grid layout transaction')
     }
-    if (args.expectedBinding) {
-      const tab = session.tabsByWorktree?.[bindingWorktreeId]?.find(
-        (candidate) => candidate.id === args.tabId && candidate.worktreeId === bindingWorktreeId
-      )
-      const boundPtyId = session.terminalLayoutsByTabId?.[args.tabId]?.ptyIdsByLeafId?.[args.leafId]
-      if (
-        !tab ||
-        boundPtyId !== args.expectedBinding.ptyId ||
-        session.terminalPtyIncarnationsByPaneKey?.[paneKey] !== args.expectedBinding.incarnationId
-      ) {
-        return false
-      }
+    const hostId = normalizeExecutionHostId(args.hostId)
+    if (!hostId) {
+      throw new Error('Invalid orchestration grid execution host')
     }
-    if (resolvedHostId !== LOCAL_EXECUTION_HOST_ID) {
-      this.state.workspaceSessionsByHostId = {
-        ...this.state.workspaceSessionsByHostId,
-        [resolvedHostId]: session
-      }
-    }
-    const sessionBeforeBinding = cloneWorkspaceSessionState(session)
-    const reconciledIncarnation =
-      args.expectedBinding !== undefined &&
-      args.incarnationId !== args.expectedBinding.incarnationId
-    let terminalMembershipChanged = false
-    const advanceTopologyFence = (): void => {
-      const repoId = getRepoIdFromWorktreeId(bindingWorktreeId)
-      const currentRevision = session.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
-      const establishesSplitAuthority = args.expectedSourceBinding !== undefined
-      if (
-        !reconciledIncarnation &&
-        (!terminalMembershipChanged || (currentRevision <= 0 && !establishesSplitAuthority))
-      ) {
-        return
-      }
-      // Why: host-admitted membership or incarnation changes must outrank a stale renderer replay.
-      session.terminalTopologyRevisionByRepoId = {
-        ...session.terminalTopologyRevisionByRepoId,
-        [repoId]: currentRevision + 1
-      }
-    }
-    const restoreSession = (): void => {
-      if (resolvedHostId === LOCAL_EXECUTION_HOST_ID) {
-        this.state.workspaceSession = sessionBeforeBinding
+    const hadPartition =
+      hostId === LOCAL_EXECUTION_HOST_ID ||
+      this.state.workspaceSessionsByHostId?.[hostId] !== undefined
+    const previous = cloneWorkspaceSessionState(this.getWorkspaceSession(hostId))
+    const previousLeases = structuredClone(this.state.sshRemotePtyLeases ?? [])
+    try {
+      const next = cloneWorkspaceSessionState(previous)
+      const tabs = [...(next.tabsByWorktree?.[args.worktreeId] ?? [])]
+      const tab = tabs.find((candidate) => candidate.id === args.tabId)
+      if (tab) {
+        tab.ptyId = args.ptyId
       } else {
-        this.state.workspaceSessionsByHostId = {
-          ...this.state.workspaceSessionsByHostId,
-          [resolvedHostId]: sessionBeforeBinding
+        // Why: the single flush must contain the parent and canonical grid;
+        // there is no renderer debounce to repair a crash between the two.
+        tabs.push(
+          createMinimalPersistedTerminalTab({
+            worktreeId: args.worktreeId,
+            tabId: args.tabId,
+            ptyId: args.ptyId,
+            existingTabCount: tabs.length,
+            ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
+            ...(args.title ? { title: args.title } : {})
+          })
+        )
+      }
+      next.tabsByWorktree = {
+        ...next.tabsByWorktree,
+        [args.worktreeId]: tabs
+      }
+      next.terminalLayoutsByTabId = {
+        ...next.terminalLayoutsByTabId,
+        [args.tabId]: {
+          ...structuredClone(args.layout),
+          ptyIdsByLeafId: {
+            ...args.layout.ptyIdsByLeafId,
+            [args.leafId]: args.ptyId
+          }
         }
       }
-    }
-    if (args.incarnationId) {
-      session.terminalPtyIncarnationsByPaneKey = {
-        ...session.terminalPtyIncarnationsByPaneKey,
-        [paneKey]: args.incarnationId
+      if (args.activate) {
+        next.activeWorktreeId = args.worktreeId
+        next.activeTabId = args.tabId
+      } else {
+        next.activeWorktreeId ??= args.worktreeId
+        next.activeTabId ??= args.tabId
       }
-      if (session.terminalSurfaceTombstonesByPaneKey?.[paneKey]) {
-        session.terminalSurfaceTombstonesByPaneKey = {
-          ...session.terminalSurfaceTombstonesByPaneKey
-        }
-        delete session.terminalSurfaceTombstonesByPaneKey[paneKey]
+      next.activeTabIdByWorktree = {
+        ...next.activeTabIdByWorktree,
+        [args.worktreeId]: args.activate
+          ? args.tabId
+          : (next.activeTabIdByWorktree?.[args.worktreeId] ?? args.tabId)
       }
+      this.setWorkspaceSessionInMemory(hostId, next)
+      if (args.sshTargetId) {
+        this.upsertSshRemotePtyLeaseInMemory({
+          targetId: args.sshTargetId,
+          ptyId: args.ptyId,
+          worktreeId: args.worktreeId,
+          tabId: args.tabId,
+          leafId: args.leafId,
+          state: 'attached',
+          lastAttachedAt: Date.now()
+        })
+      }
+      this.flushOrThrow()
+    } catch (error) {
+      if (hadPartition) {
+        this.setWorkspaceSessionInMemory(hostId, previous)
+      } else {
+        this.removeWorkspaceSessionPartitionInMemory(hostId)
+      }
+      this.state.sshRemotePtyLeases = previousLeases
+      throw error
     }
-    const tabs = session.tabsByWorktree?.[bindingWorktreeId]
+  }
+
+  // Why: closes the SIGKILL-between-spawn-and-persist race (Issue #217). The
+  // renderer's debounced session writer (~450 ms total) is normally the only
+  // path that writes tab.ptyId / ptyIdsByLeafId; a force-quit inside that
+  // window orphans the daemon's history dir. Patching + sync flushing here
+  // before pty:spawn returns guarantees the renderer cannot observe a
+  // spawn-success without the binding already being durable on disk.
+  persistPtyBinding(args: {
+    worktreeId: string
+    tabId: string
+    leafId: string
+    ptyId: string
+    startupCwd?: string
+    hostId?: string | null
+  }): void {
+    const hostId = this.resolvePtyBindingHostId(args)
+    const sessionBeforeBinding = cloneWorkspaceSessionState(this.getWorkspaceSession(hostId))
+    const session = cloneWorkspaceSessionState(sessionBeforeBinding)
+    const tabs = session.tabsByWorktree?.[args.worktreeId]
     const tab = tabs?.find((t) => t.id === args.tabId)
     if (tab) {
       tab.ptyId = args.ptyId
@@ -7239,7 +7305,7 @@ export class Store {
     return leases.filter((lease) => targetId === undefined || lease.targetId === targetId)
   }
 
-  upsertSshRemotePtyLease(
+  private upsertSshRemotePtyLeaseInMemory(
     lease: Omit<SshRemotePtyLease, 'createdAt' | 'updatedAt'> &
       Partial<Pick<SshRemotePtyLease, 'createdAt' | 'updatedAt'>>
   ): void {
@@ -7270,6 +7336,13 @@ export class Store {
     } else {
       this.state.sshRemotePtyLeases.push(next)
     }
+  }
+
+  upsertSshRemotePtyLease(
+    lease: Omit<SshRemotePtyLease, 'createdAt' | 'updatedAt'> &
+      Partial<Pick<SshRemotePtyLease, 'createdAt' | 'updatedAt'>>
+  ): void {
+    this.upsertSshRemotePtyLeaseInMemory(lease)
     this.flush()
   }
 

@@ -31,6 +31,7 @@ function cancelPendingSplitScrollHandles(pane: ManagedPaneInternal): void {
 
 export function clearPendingSplitScrollRestore(pane: ManagedPaneInternal): void {
   cancelPendingSplitScrollHandles(pane)
+  pane.pendingSplitWebglReattach = false
   if (pane.pendingSplitScrollState) {
     releaseScrollStateMarker(pane.pendingSplitScrollState)
     pane.pendingSplitScrollState = null
@@ -73,6 +74,7 @@ function restoreCapturedScrollState(
 ): void {
   clearPendingSplitScrollBufferDisposable(pane)
   pane.pendingSplitScrollState = null
+  pane.pendingSplitWebglReattach = false
   if (reattachWebgl) {
     reattachWebgl(pane)
   }
@@ -101,6 +103,7 @@ export function scheduleSplitScrollRestore(
   const scheduledPane = getPaneById(paneId)
   if (scheduledPane) {
     cancelPendingSplitScrollHandles(scheduledPane)
+    scheduledPane.pendingSplitWebglReattach = !!reattachWebgl
   }
 
   const firstRafId = requestAnimationFrame(() => {
@@ -162,9 +165,13 @@ export function scheduleSplitScrollRestore(
       clearPendingSplitScrollBufferDisposable(live)
       live.pendingSplitScrollState = null
       if (live.terminal.buffer.active.type === 'alternate' && reattachWebgl) {
-        runAfterNormalBuffer(live, getPaneById, paneId, isDestroyed, reattachWebgl)
+        runAfterNormalBuffer(live, getPaneById, paneId, isDestroyed, (normalPane) => {
+          normalPane.pendingSplitWebglReattach = false
+          reattachWebgl(normalPane)
+        })
         return
       }
+      live.pendingSplitWebglReattach = false
       if (reattachWebgl) {
         reattachWebgl(live)
       }

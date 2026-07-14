@@ -127,6 +127,25 @@ function makeSnapshot(
   }
 }
 
+function makeLayoutModeTerminalSurface(layoutMode?: 'orchestration-grid') {
+  return {
+    type: 'terminal' as const,
+    id: HOST_SURFACE_ID,
+    title: 'Codex',
+    parentTabId: 'host-tab-1',
+    leafId: LEAF_ID,
+    parentLayout: {
+      root: { type: 'leaf' as const, leafId: LEAF_ID },
+      activeLeafId: LEAF_ID,
+      expandedLeafId: null,
+      ...(layoutMode ? { layoutMode } : {})
+    },
+    isActive: true,
+    status: 'ready' as const,
+    terminal: 'ssh-terminal-1'
+  }
+}
+
 describe('applyWebSessionTabsSnapshot', () => {
   beforeEach(() => {
     resetWebSessionTabsSnapshotFreshnessForTests()
@@ -1911,6 +1930,84 @@ describe('applyWebSessionTabsSnapshot', () => {
       [LEAF_ID]: 'user title'
     })
   })
+
+  it('preserves orchestration-grid mode from remote host layout snapshots', () => {
+    const patch = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'Codex',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          parentLayout: {
+            root: { type: 'leaf', leafId: LEAF_ID },
+            activeLeafId: LEAF_ID,
+            expandedLeafId: null,
+            layoutMode: 'orchestration-grid'
+          },
+          isActive: true,
+          status: 'ready',
+          terminal: 'ssh-terminal-1'
+        }
+      ]),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    const mirroredId = patch.tabsByWorktree?.[WT]?.[0]?.id
+    // Why: paired-web and SSH clients rebuild layouts from the same host
+    // projection; losing this marker disables equal-grid reflow after restore.
+    expect(patch.terminalLayoutsByTabId?.[mirroredId!]?.layoutMode).toBe('orchestration-grid')
+  })
+
+  it.each([
+    ['ordinary', 'orchestration-grid', undefined, 'orchestration-grid'],
+    ['orchestration-grid', 'ordinary', 'orchestration-grid', undefined]
+  ] as const)(
+    'applies a remote host layout transition from %s to %s exactly once',
+    (_fromLabel, _toLabel, initialMode, nextMode) => {
+      const initialSnapshot = makeSnapshot([makeLayoutModeTerminalSurface(initialMode)])
+      const nextSnapshot = makeSnapshot([makeLayoutModeTerminalSurface(nextMode)])
+      const initialState = makeState()
+      const initialPatch = applyWebSessionTabsSnapshot(
+        initialState,
+        initialSnapshot,
+        ENV,
+        NOW
+      ) as Partial<WebSessionTabsSyncState>
+      const mirroredId = initialPatch.tabsByWorktree?.[WT]?.[0]?.id
+      const synchronizedState = { ...initialState, ...initialPatch }
+      const initialLayouts = synchronizedState.terminalLayoutsByTabId
+      const initialLayout = initialLayouts[mirroredId!]
+
+      const transitionPatch = applyWebSessionTabsSnapshot(
+        synchronizedState,
+        nextSnapshot,
+        ENV,
+        NOW + 1
+      ) as Partial<WebSessionTabsSyncState>
+      const transitionedState = { ...synchronizedState, ...transitionPatch }
+      const transitionedLayouts = transitionedState.terminalLayoutsByTabId
+      const transitionedLayout = transitionedLayouts[mirroredId!]
+
+      expect(transitionedLayouts).not.toBe(initialLayouts)
+      expect(transitionedLayout).not.toBe(initialLayout)
+      expect(transitionedLayout?.layoutMode).toBe(nextMode)
+
+      const repeatedPatch = applyWebSessionTabsSnapshot(
+        transitionedState,
+        nextSnapshot,
+        ENV,
+        NOW + 2
+      ) as Partial<WebSessionTabsSyncState>
+      const repeatedState = { ...transitionedState, ...repeatedPatch }
+
+      expect(repeatedState.terminalLayoutsByTabId).toBe(transitionedLayouts)
+      expect(repeatedState.terminalLayoutsByTabId[mirroredId!]).toBe(transitionedLayout)
+    }
+  )
 
   it('drops stale single-pane parent titles that duplicate the host tab title', () => {
     const patch = applyWebSessionTabsSnapshot(
@@ -3883,6 +3980,9 @@ describe('applyWebSessionTabsSnapshot', () => {
       ENV,
       NOW + 10
     ) as Partial<WebSessionTabsSyncState>
+    // Why: semantically unchanged layouts are omitted from patches to preserve
+    // identity, so focus must be asserted on the reconciled state.
+    const reconciledState = { ...state, ...patch }
 
     expect(patch.tabsByWorktree?.[WT]?.[0]).toMatchObject({
       id: mirroredTabId,
@@ -3894,6 +3994,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect({ ...state, ...patch }.terminalLayoutsByTabId[mirroredTabId]?.activeLeafId).toBe(
       SECOND_LEAF_ID
     )
+    expect(reconciledState.terminalLayoutsByTabId[mirroredTabId]?.activeLeafId).toBe(SECOND_LEAF_ID)
   })
 
   it('removes a null-pty pending activation tab when the host publishes the initial terminal', () => {

@@ -9773,6 +9773,167 @@ describe('Store', () => {
     expect(store.getWorkspaceSession('runtime:env-b').tabsByWorktree[worktreeId]?.[0]?.id).toBe(
       'remote-b-tab'
     )
+  it('persists an SSH grid parent, binding, and lease to the exact host in one flush', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: 'local-repo',
+      activeWorktreeId: 'shared-worktree',
+      tabsByWorktree: {
+        'shared-worktree': [
+          {
+            id: 'shared-grid',
+            ptyId: 'local-pty',
+            worktreeId: 'shared-worktree',
+            title: 'Local parent',
+            defaultTitle: 'Local parent',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'shared-grid': {
+          root: { type: 'leaf', leafId: TEST_LEAF_2 },
+          activeLeafId: TEST_LEAF_2,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_2]: 'local-pty' }
+        }
+      }
+    })
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        activeRepoId: 'remote-repo',
+        activeWorktreeId: 'shared-worktree',
+        tabsByWorktree: { 'shared-worktree': [] }
+      },
+      'ssh:ssh-grid'
+    )
+    store.flush()
+    const write = vi.spyOn(
+      store as unknown as { writeToDiskSync: (opts?: { force?: boolean }) => void },
+      'writeToDiskSync'
+    )
+
+    store.persistOrchestrationGridPtyBinding({
+      hostId: 'ssh:ssh-grid',
+      sshTargetId: 'ssh-grid',
+      worktreeId: 'shared-worktree',
+      tabId: 'shared-grid',
+      leafId: TEST_LEAF_1,
+      ptyId: 'ssh:ssh-grid@@relay-pty',
+      title: 'Remote worker',
+      layout: {
+        root: { type: 'leaf', leafId: TEST_LEAF_1 },
+        activeLeafId: TEST_LEAF_1,
+        expandedLeafId: null,
+        layoutMode: 'orchestration-grid',
+        titlesByLeafId: { [TEST_LEAF_1]: 'Remote worker' }
+      }
+    })
+    expect(write).toHaveBeenCalledTimes(1)
+    expect(store.getWorkspaceSession('local').tabsByWorktree['shared-worktree']?.[0]?.ptyId).toBe(
+      'local-pty'
+    )
+    expect(
+      store.getWorkspaceSession('ssh:ssh-grid').tabsByWorktree['shared-worktree']?.[0]
+    ).toMatchObject({
+      id: 'shared-grid',
+      ptyId: 'ssh:ssh-grid@@relay-pty',
+      title: 'Remote worker'
+    })
+    expect(
+      store.getWorkspaceSession('ssh:ssh-grid').terminalLayoutsByTabId['shared-grid']
+    ).toMatchObject({
+      layoutMode: 'orchestration-grid',
+      titlesByLeafId: { [TEST_LEAF_1]: 'Remote worker' },
+      ptyIdsByLeafId: { [TEST_LEAF_1]: 'ssh:ssh-grid@@relay-pty' }
+    })
+    expect(store.getSshRemotePtyLeases('ssh-grid')).toEqual([
+      expect.objectContaining({
+        targetId: 'ssh-grid',
+        ptyId: 'relay-pty',
+        worktreeId: 'shared-worktree',
+        tabId: 'shared-grid',
+        leafId: TEST_LEAF_1,
+        state: 'attached'
+      })
+    ])
+    write.mockRestore()
+
+    const reloaded = await createStore()
+    expect(
+      reloaded.getWorkspaceSession('ssh:ssh-grid').terminalLayoutsByTabId['shared-grid']
+        .ptyIdsByLeafId
+    ).toEqual({ [TEST_LEAF_1]: 'ssh:ssh-grid@@relay-pty' })
+    expect(
+      reloaded.getWorkspaceSession('local').tabsByWorktree['shared-worktree']?.[0]?.ptyId
+    ).toBe('local-pty')
+    expect(reloaded.getSshRemotePtyLeases('ssh-grid')).toHaveLength(1)
+  })
+
+  it('rolls session and lease memory back without changing disk when a grid flush fails', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        activeRepoId: 'remote-repo',
+        activeWorktreeId: 'remote-worktree',
+        tabsByWorktree: { 'remote-worktree': [] }
+      },
+      'ssh:ssh-grid'
+    )
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-grid',
+      ptyId: 'existing-pty',
+      worktreeId: 'other-worktree',
+      tabId: 'other-tab',
+      leafId: TEST_LEAF_2,
+      state: 'detached'
+    })
+    const sessionBeforeCreate = structuredClone(store.getWorkspaceSession('ssh:ssh-grid'))
+    const leasesBeforeCreate = structuredClone(store.getSshRemotePtyLeases())
+    const diskBeforeCreate = readFileSync(dataFile(), 'utf-8')
+    const write = vi
+      .spyOn(
+        store as unknown as { writeToDiskSync: (opts?: { force?: boolean }) => void },
+        'writeToDiskSync'
+      )
+      .mockImplementation(() => {
+        throw new Error('simulated disk failure')
+      })
+
+    expect(() => {
+      store.persistOrchestrationGridPtyBinding({
+        hostId: 'ssh:ssh-grid',
+        sshTargetId: 'ssh-grid',
+        worktreeId: 'remote-worktree',
+        tabId: 'grid-tab',
+        leafId: TEST_LEAF_1,
+        ptyId: 'ssh:ssh-grid@@new-pty',
+        title: 'Grid worker 1',
+        layout: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          layoutMode: 'orchestration-grid',
+          titlesByLeafId: { [TEST_LEAF_1]: 'Grid worker 1' }
+        }
+      })
+    }).toThrow('simulated disk failure')
+    expect(write).toHaveBeenCalledTimes(1)
+    write.mockRestore()
+
+    expect(store.getWorkspaceSession('ssh:ssh-grid')).toEqual(sessionBeforeCreate)
+    expect(store.getSshRemotePtyLeases()).toEqual(leasesBeforeCreate)
+    expect(readFileSync(dataFile(), 'utf-8')).toBe(diskBeforeCreate)
+
+    const reloaded = await createStore()
+    expect(reloaded.getWorkspaceSession('ssh:ssh-grid')).toEqual(sessionBeforeCreate)
+    expect(reloaded.getSshRemotePtyLeases()).toEqual(leasesBeforeCreate)
   })
 
   it('preserves a sync-persisted UUID root when a stale empty layout write arrives', async () => {

@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: this test file keeps the hook wiring mocks close to the assertions so IPC event behavior stays understandable and maintainable. */
 import type * as ReactModule from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as IpcEventsModule from './useIpcEvents'
 import {
   buildRuntimeClientEventEnvironmentKey,
   buildNewWorkspaceShortcutModalData,
@@ -26,6 +27,11 @@ import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-re
 import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status-types'
 import type { TuiAgent } from '../../../shared/types'
 import type * as CmdJRowIndexJump from '@/lib/cmd-j-row-index-jump'
+import type { TerminalLayoutSnapshot, TuiAgent } from '../../../shared/types'
+import {
+  buildOrchestrationTerminalGridRoot,
+  collectTerminalLayoutLeafIds
+} from '../../../shared/orchestration-terminal-grid'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { YOLO_TUI_AGENT_ARGS } from '../../../shared/tui-agent-permissions'
 import {
@@ -49,6 +55,147 @@ const FUTURE_PANE_KEY = makePaneKey('tab-future', FUTURE_LEAF_ID)
 const STALE_PANE_KEY = makePaneKey('tab-future', STALE_LEAF_ID)
 const ORPHAN_PANE_KEY = makePaneKey('tab-orphan', ORPHAN_LEAF_ID)
 const TAB_1_PANE_KEY = makePaneKey('tab-1', TAB_1_LEAF_ID)
+
+type TerminalSurfaceQueueTestApi = {
+  queueTerminalSurfaceAction: (
+    tabId: string,
+    action: () => void,
+    callbacks?: { onConsumed?: () => void; onCancelled?: (reason: string) => void }
+  ) => () => void
+  registerTerminalSurfaceActionConsumer: (tabId: string) => () => void
+  cancelPendingTerminalSurfaceActions: (
+    tabId: string,
+    reason: 'cancelled' | 'surface-unmounted'
+  ) => void
+  cancelTerminalSurfaceActionsForRemovedTabs: (state: {
+    tabsByWorktree: Record<string, { id: string }[]>
+  }) => void
+}
+
+describe('terminal surface action queue', () => {
+  const queueApi = IpcEventsModule as typeof IpcEventsModule & TerminalSurfaceQueueTestApi
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('retains a split beyond five seconds and acknowledges only after its surface consumes it', () => {
+    const action = vi.fn()
+    const onConsumed = vi.fn()
+
+    queueApi.queueTerminalSurfaceAction('tab-delayed', action, { onConsumed })
+    vi.advanceTimersByTime(6_000)
+
+    expect(action).not.toHaveBeenCalled()
+    expect(onConsumed).not.toHaveBeenCalled()
+
+    const unregister = queueApi.registerTerminalSurfaceActionConsumer('tab-delayed')
+
+    expect(action).toHaveBeenCalledOnce()
+    expect(onConsumed).toHaveBeenCalledOnce()
+    unregister()
+  })
+
+  it('cancels a removed tab without a late split callback', () => {
+    const action = vi.fn()
+    const onCancelled = vi.fn()
+
+    queueApi.queueTerminalSurfaceAction('tab-removed', action, { onCancelled })
+    queueApi.cancelTerminalSurfaceActionsForRemovedTabs({ tabsByWorktree: {} })
+    vi.runAllTimers()
+    const unregister = queueApi.registerTerminalSurfaceActionConsumer('tab-removed')
+
+    expect(action).not.toHaveBeenCalled()
+    expect(onCancelled).toHaveBeenCalledOnce()
+    expect(onCancelled).toHaveBeenCalledWith('tab-removed')
+    expect(vi.getTimerCount()).toBe(0)
+    unregister()
+  })
+
+  it('returns a bounded timeout failure instead of reporting an unconsumed split as successful', () => {
+    const action = vi.fn()
+    const onConsumed = vi.fn()
+    const onCancelled = vi.fn()
+
+    queueApi.queueTerminalSurfaceAction('tab-timeout', action, { onConsumed, onCancelled })
+    vi.advanceTimersByTime(9_000)
+    const unregister = queueApi.registerTerminalSurfaceActionConsumer('tab-timeout')
+
+    expect(action).not.toHaveBeenCalled()
+    expect(onConsumed).not.toHaveBeenCalled()
+    expect(onCancelled).toHaveBeenCalledOnce()
+    expect(onCancelled).toHaveBeenCalledWith('timeout')
+    vi.runAllTimers()
+    expect(onCancelled).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
+    unregister()
+  })
+
+  it('settles cancellation once and never replays it for a late consumer', () => {
+    const action = vi.fn()
+    const onCancelled = vi.fn()
+
+    queueApi.queueTerminalSurfaceAction('tab-cancelled', action, { onCancelled })
+    queueApi.cancelPendingTerminalSurfaceActions('tab-cancelled', 'cancelled')
+    queueApi.cancelPendingTerminalSurfaceActions('tab-cancelled', 'surface-unmounted')
+    vi.runAllTimers()
+    const unregister = queueApi.registerTerminalSurfaceActionConsumer('tab-cancelled')
+
+    expect(action).not.toHaveBeenCalled()
+    expect(onCancelled).toHaveBeenCalledOnce()
+    expect(onCancelled).toHaveBeenCalledWith('cancelled')
+    expect(vi.getTimerCount()).toBe(0)
+    unregister()
+  })
+
+  it('consumes and acknowledges immediately when the matching surface is already registered', () => {
+    const action = vi.fn()
+    const onConsumed = vi.fn()
+    const unregister = queueApi.registerTerminalSurfaceActionConsumer('tab-mounted')
+
+    queueApi.queueTerminalSurfaceAction('tab-mounted', action, { onConsumed })
+
+    expect(action).toHaveBeenCalledOnce()
+    expect(onConsumed).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
+    unregister()
+  })
+
+  it.each([
+    ['mounted', true],
+    ['delayed', false]
+  ] as const)(
+    'does not turn a throwing success callback into cancellation for a %s surface',
+    (_surfaceState, registerBeforeQueue) => {
+      const action = vi.fn()
+      const onConsumed = vi.fn(() => {
+        throw new Error('reply failed')
+      })
+      const onCancelled = vi.fn()
+      let unregister: (() => void) | undefined
+
+      expect(() => {
+        if (registerBeforeQueue) {
+          unregister = queueApi.registerTerminalSurfaceActionConsumer('tab-callback')
+        }
+        queueApi.queueTerminalSurfaceAction('tab-callback', action, { onConsumed, onCancelled })
+        if (!registerBeforeQueue) {
+          unregister = queueApi.registerTerminalSurfaceActionConsumer('tab-callback')
+        }
+      }).not.toThrow()
+
+      expect(action).toHaveBeenCalledOnce()
+      expect(onConsumed).toHaveBeenCalledOnce()
+      expect(onCancelled).not.toHaveBeenCalled()
+      expect(vi.getTimerCount()).toBe(0)
+      unregister?.()
+    }
+  )
+})
 
 describe('buildRuntimeClientEventEnvironmentKey', () => {
   it('treats runtime environment ids as a stable set', () => {
@@ -1865,7 +2012,19 @@ describe('useIpcEvents updater integration', () => {
     const setTabLayout = vi.fn()
     const setTabBarOrder = vi.fn()
     const replyTerminalCreate = vi.fn()
-    const dispatchEvent = vi.fn()
+    const dispatchEvent = vi.fn((event: Event) => {
+      if (event.type === 'orca-split-terminal-pane') {
+        const detail = (
+          event as CustomEvent<{
+            acknowledge?: (result: { status: 'success'; rollback: () => void }) => void
+          }>
+        ).detail
+        detail.acknowledge?.({ status: 'success', rollback: vi.fn() })
+      }
+      return true
+    })
+    const unsubscribeCreateTerminal = vi.fn()
+    const unsubscribeStore = vi.fn()
     const createFloatingWorkspaceTerminalTab = vi.fn()
     const createWebRuntimeSessionTerminal = vi.fn().mockResolvedValue({
       status: 'failed',
@@ -1873,6 +2032,27 @@ describe('useIpcEvents updater integration', () => {
     })
     const focusRuntimeTerminalSurface = vi.fn(() => false)
     const focusTerminalTabSurface = vi.fn()
+    const splitSurfacingMocks = [
+      setActiveView,
+      setActiveWorktree,
+      markWorktreeVisited,
+      recordWorktreeVisit,
+      setActiveTabType,
+      setActiveTab,
+      revealWorktreeInSidebar,
+      focusRuntimeTerminalSurface,
+      focusTerminalTabSurface
+    ]
+    const resetSplitSurfacingMocks = (): void => {
+      for (const mock of splitSurfacingMocks) {
+        mock.mockClear()
+      }
+    }
+    const expectNoSplitSurfacing = (): void => {
+      for (const mock of splitSurfacingMocks) {
+        expect(mock).not.toHaveBeenCalled()
+      }
+    }
     let floatingPanelFocused = false
     const storeState = {
       setUpdateStatus: vi.fn(),
@@ -1956,6 +2136,7 @@ describe('useIpcEvents updater integration', () => {
             requestId?: string
             worktreeId: string
             command?: string
+            env?: Record<string, string>
             launchConfig?: SleepingAgentLaunchConfig
             launchAgent?: TuiAgent
             viewMode?: 'terminal' | 'chat'
@@ -1967,6 +2148,7 @@ describe('useIpcEvents updater integration', () => {
             tabId?: string
             leafId?: string
             splitFromLeafId?: string
+            splitSourceLeafIds?: string[]
             splitDirection?: 'horizontal' | 'vertical'
             splitTelemetrySource?:
               | 'contextual_tour'
@@ -1974,6 +2156,7 @@ describe('useIpcEvents updater integration', () => {
               | 'context_menu'
               | 'command'
               | 'unknown'
+            placement?: 'tab' | 'orchestration-grid'
           }) => void)
         | null
     } = { current: null }
@@ -1992,6 +2175,7 @@ describe('useIpcEvents updater integration', () => {
             title?: string
             activate?: boolean
             presentation?: 'background' | 'focused'
+            placement?: 'tab' | 'orchestration-grid'
             source?: 'runtime-session'
           }) => void)
         | null
@@ -2009,6 +2193,7 @@ describe('useIpcEvents updater integration', () => {
         | null
     } = { current: null }
     const newTerminalTabListenerRef: { current: (() => void) | null } = { current: null }
+    let disposeIpcEvents: (() => void) | null = null
 
     vi.resetModules()
     vi.unstubAllGlobals()
@@ -2018,14 +2203,14 @@ describe('useIpcEvents updater integration', () => {
       return {
         ...actual,
         useEffect: (effect: () => void | (() => void)) => {
-          effect()
+          disposeIpcEvents = effect() ?? null
         }
       }
     })
 
     vi.doMock('../store', () => ({
       useAppStore: {
-        subscribe: vi.fn(() => () => {}),
+        subscribe: vi.fn(() => unsubscribeStore),
         getState: () => storeState
       }
     }))
@@ -2105,6 +2290,7 @@ describe('useIpcEvents updater integration', () => {
               requestId?: string
               worktreeId: string
               command?: string
+              env?: Record<string, string>
               launchConfig?: SleepingAgentLaunchConfig
               launchAgent?: TuiAgent
               viewMode?: 'terminal' | 'chat'
@@ -2116,6 +2302,7 @@ describe('useIpcEvents updater integration', () => {
               tabId?: string
               leafId?: string
               splitFromLeafId?: string
+              splitSourceLeafIds?: string[]
               splitDirection?: 'horizontal' | 'vertical'
               splitTelemetrySource?:
                 | 'contextual_tour'
@@ -2123,10 +2310,11 @@ describe('useIpcEvents updater integration', () => {
                 | 'context_menu'
                 | 'command'
                 | 'unknown'
+              placement?: 'tab' | 'orchestration-grid'
             }) => void
           ) => {
             createTerminalListenerRef.current = listener
-            return () => {}
+            return unsubscribeCreateTerminal
           },
           onRequestTerminalCreate: (
             listener: (data: {
@@ -2142,6 +2330,7 @@ describe('useIpcEvents updater integration', () => {
               title?: string
               activate?: boolean
               presentation?: 'background' | 'focused'
+              placement?: 'tab' | 'orchestration-grid'
             }) => void
           ) => {
             requestTerminalCreateListenerRef.current = listener
@@ -2239,8 +2428,15 @@ describe('useIpcEvents updater integration', () => {
       }
     })
 
-    const { useIpcEvents } = await import('./useIpcEvents')
+    const {
+      cancelPendingTerminalSurfaceActions,
+      cancelTerminalSurfaceActionsForRemovedTabs,
+      registerTerminalSurfaceActionConsumer,
+      useIpcEvents
+    } = await import('./useIpcEvents')
     useIpcEvents()
+    const unregisterTabNewSurface = registerTerminalSurfaceActionConsumer('tab-new')
+    const unregisterTabExistingSurface = registerTerminalSurfaceActionConsumer('tab-existing')
     await Promise.resolve()
 
     if (typeof createTerminalListenerRef.current !== 'function') {
@@ -2494,6 +2690,293 @@ describe('useIpcEvents updater integration', () => {
       tabId: 'tab-new',
       title: 'Codex'
     })
+
+    createTab.mockClear()
+    setTabLayout.mockClear()
+    setTabCustomTitle.mockClear()
+    queueTabStartupCommand.mockClear()
+    replyTerminalCreate.mockClear()
+    dispatchEvent.mockClear()
+    focusRuntimeTerminalSurface.mockClear()
+    focusTerminalTabSurface.mockClear()
+    requestTerminalCreateListenerRef.current({
+      requestId: 'req-grid-first',
+      worktreeId: 'wt-grid',
+      title: 'Worker 1',
+      command: 'codex',
+      placement: 'orchestration-grid'
+    })
+
+    expect(createTab).toHaveBeenCalledOnce()
+    const firstGridLayout = setTabLayout.mock.calls.at(-1)?.[1] as TerminalLayoutSnapshot
+    expect(firstGridLayout).toMatchObject({
+      layoutMode: 'orchestration-grid',
+      root: { type: 'leaf' }
+    })
+    expect(Object.values(firstGridLayout.titlesByLeafId ?? {})).toEqual(['Worker 1'])
+    expect(setTabCustomTitle).toHaveBeenCalledOnce()
+    expect(setTabCustomTitle).toHaveBeenCalledWith('tab-new', 'Worker 1', {
+      recordInteraction: false
+    })
+    expect(queueTabStartupCommand).toHaveBeenCalledOnce()
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-grid-first',
+      tabId: 'tab-new',
+      leafId: expect.any(String),
+      title: 'Worker 1'
+    })
+
+    storeState.tabsByWorktree['wt-grid'] = [{ id: 'tab-new', title: 'Worker grid' }]
+    storeState.terminalLayoutsByTabId = { 'tab-new': firstGridLayout }
+    resetSplitSurfacingMocks()
+    createTab.mockClear()
+    setTabLayout.mockClear()
+    setTabCustomTitle.mockClear()
+    queueTabStartupCommand.mockClear()
+    replyTerminalCreate.mockClear()
+    dispatchEvent.mockClear()
+    focusRuntimeTerminalSurface.mockClear()
+    focusTerminalTabSurface.mockClear()
+    unregisterTabNewSurface()
+    vi.useFakeTimers()
+    requestTerminalCreateListenerRef.current({
+      requestId: 'req-grid-second',
+      worktreeId: 'wt-grid',
+      title: 'Worker 2',
+      command: 'codex',
+      placement: 'orchestration-grid'
+    })
+
+    expect(createTab).not.toHaveBeenCalled()
+    expect(queueTabStartupCommand).not.toHaveBeenCalled()
+    expect(setTabLayout).not.toHaveBeenCalled()
+    expect(dispatchEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'orca-split-terminal-pane' })
+    )
+    expect(replyTerminalCreate).not.toHaveBeenCalled()
+    expectNoSplitSurfacing()
+
+    vi.advanceTimersByTime(6_000)
+
+    expect(setTabLayout).not.toHaveBeenCalled()
+    expect(dispatchEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'orca-split-terminal-pane' })
+    )
+    expect(replyTerminalCreate).not.toHaveBeenCalled()
+    expectNoSplitSurfacing()
+    expect(dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'orca-background-mount-terminal-worktree',
+        detail: { worktreeId: 'wt-grid', tabIds: ['tab-new'] }
+      })
+    )
+    dispatchEvent.mockClear()
+
+    const unregisterRemountedTabNewSurface = registerTerminalSurfaceActionConsumer('tab-new')
+    vi.useRealTimers()
+
+    expect(setTabLayout).toHaveBeenCalledWith(
+      'tab-new',
+      expect.objectContaining({ layoutMode: 'orchestration-grid' })
+    )
+    const backgroundGridLayout = setTabLayout.mock.calls.at(-1)?.[1] as TerminalLayoutSnapshot
+    expect(Object.values(backgroundGridLayout.titlesByLeafId ?? {})).toEqual([
+      'Worker 1',
+      'Worker 2'
+    ])
+    expect(setTabCustomTitle).not.toHaveBeenCalled()
+    expect(dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'orca-split-terminal-pane',
+        detail: expect.objectContaining({
+          tabId: 'tab-new',
+          direction: 'vertical',
+          activate: false,
+          orchestrationGrid: true,
+          sourceLeafIds: [expect.any(String)],
+          startup: expect.objectContaining({ command: 'codex' })
+        })
+      })
+    )
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-grid-second',
+      tabId: 'tab-new',
+      leafId: expect.any(String),
+      layout: backgroundGridLayout,
+      title: 'Worker 2'
+    })
+    expect(setActiveView).not.toHaveBeenCalled()
+    expect(setActiveWorktree).not.toHaveBeenCalled()
+    expect(setActiveTabType).not.toHaveBeenCalled()
+    expect(setActiveTab).not.toHaveBeenCalled()
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-grid')
+    expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith(
+      'tab-new',
+      firstGridLayout.activeLeafId
+    )
+    expect(focusTerminalTabSurface).toHaveBeenCalledWith('tab-new', firstGridLayout.activeLeafId)
+    expect(dispatchEvent.mock.invocationCallOrder[0]).toBeLessThan(
+      setTabLayout.mock.invocationCallOrder[0] ?? 0
+    )
+    expect(setTabLayout.mock.invocationCallOrder[0]).toBeLessThan(
+      revealWorktreeInSidebar.mock.invocationCallOrder[0] ?? 0
+    )
+    expect(revealWorktreeInSidebar.mock.invocationCallOrder[0]).toBeLessThan(
+      focusRuntimeTerminalSurface.mock.invocationCallOrder[0] ?? 0
+    )
+    expect(focusRuntimeTerminalSurface.mock.invocationCallOrder[0]).toBeLessThan(
+      replyTerminalCreate.mock.invocationCallOrder[0] ?? 0
+    )
+
+    storeState.terminalLayoutsByTabId = { 'tab-new': backgroundGridLayout }
+    setTabLayout.mockClear()
+    setTabCustomTitle.mockClear()
+    replyTerminalCreate.mockClear()
+    dispatchEvent.mockClear()
+    focusRuntimeTerminalSurface.mockClear()
+    focusTerminalTabSurface.mockClear()
+    requestTerminalCreateListenerRef.current({
+      requestId: 'req-grid-third-focused',
+      worktreeId: 'wt-grid',
+      title: 'Worker 3',
+      command: 'codex',
+      activate: true,
+      placement: 'orchestration-grid'
+    })
+
+    expect(dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'orca-split-terminal-pane',
+        detail: expect.objectContaining({
+          tabId: 'tab-new',
+          activate: true,
+          orchestrationGrid: true
+        })
+      })
+    )
+    const focusedGridLayout = setTabLayout.mock.calls.at(-1)?.[1] as TerminalLayoutSnapshot
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-grid-third-focused',
+      tabId: 'tab-new',
+      leafId: expect.any(String),
+      layout: focusedGridLayout,
+      title: 'Worker 3'
+    })
+    expect(Object.values(focusedGridLayout.titlesByLeafId ?? {})).toEqual([
+      'Worker 1',
+      'Worker 2',
+      'Worker 3'
+    ])
+    expect(setTabCustomTitle).not.toHaveBeenCalled()
+    const focusedGridDetail = (
+      dispatchEvent.mock.calls
+        .map(([event]) => event)
+        .find((event) => event.type === 'orca-split-terminal-pane') as
+        | CustomEvent<{ newLeafId?: string }>
+        | undefined
+    )?.detail
+    expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith(
+      'tab-new',
+      focusedGridDetail?.newLeafId
+    )
+    expect(focusTerminalTabSurface).toHaveBeenCalledWith('tab-new', focusedGridDetail?.newLeafId)
+    unregisterRemountedTabNewSurface()
+
+    storeState.terminalLayoutsByTabId = { 'tab-new': focusedGridLayout }
+    resetSplitSurfacingMocks()
+    setTabLayout.mockClear()
+    replyTerminalCreate.mockClear()
+    dispatchEvent.mockClear()
+    vi.useFakeTimers()
+    requestTerminalCreateListenerRef.current({
+      requestId: 'req-grid-focused-timeout',
+      worktreeId: 'wt-grid',
+      title: 'Worker timeout',
+      command: 'codex',
+      activate: true,
+      placement: 'orchestration-grid'
+    })
+
+    expect(setTabLayout).not.toHaveBeenCalled()
+    expect(replyTerminalCreate).not.toHaveBeenCalled()
+    expectNoSplitSurfacing()
+    expect(dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'orca-background-mount-terminal-worktree',
+        detail: { worktreeId: 'wt-grid', tabIds: ['tab-new'] }
+      })
+    )
+    vi.advanceTimersByTime(9_000)
+    const unregisterTimedOutGridSurface = registerTerminalSurfaceActionConsumer('tab-new')
+    vi.runAllTimers()
+
+    expect(setTabLayout).not.toHaveBeenCalled()
+    expect(
+      dispatchEvent.mock.calls.filter(([event]) => event.type === 'orca-split-terminal-pane')
+    ).toHaveLength(0)
+    expectNoSplitSurfacing()
+    expect(replyTerminalCreate).toHaveBeenCalledOnce()
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-grid-focused-timeout',
+      error: 'Terminal surface tab-new did not mount before the split deadline'
+    })
+    expect(vi.getTimerCount()).toBe(0)
+    unregisterTimedOutGridSurface()
+    vi.useRealTimers()
+
+    const requestGridCancellationCases = [
+      {
+        requestId: 'req-grid-focused-cancelled',
+        cancel: () => cancelPendingTerminalSurfaceActions('tab-new', 'cancelled'),
+        error: 'Terminal split was cancelled for tab-new'
+      },
+      {
+        requestId: 'req-grid-focused-unmounted',
+        cancel: () => cancelPendingTerminalSurfaceActions('tab-new', 'surface-unmounted'),
+        error: 'Terminal surface tab-new was torn down before the split was applied'
+      },
+      {
+        requestId: 'req-grid-focused-removed',
+        cancel: () => cancelTerminalSurfaceActionsForRemovedTabs({ tabsByWorktree: {} }),
+        error: 'Terminal tab tab-new was removed before the split was applied'
+      }
+    ]
+    for (const cancellationCase of requestGridCancellationCases) {
+      resetSplitSurfacingMocks()
+      setTabLayout.mockClear()
+      replyTerminalCreate.mockClear()
+      dispatchEvent.mockClear()
+      vi.useFakeTimers()
+      requestTerminalCreateListenerRef.current({
+        requestId: cancellationCase.requestId,
+        worktreeId: 'wt-grid',
+        title: 'Worker cancelled',
+        command: 'codex',
+        activate: true,
+        placement: 'orchestration-grid'
+      })
+
+      expectNoSplitSurfacing()
+      cancellationCase.cancel()
+      cancellationCase.cancel()
+      vi.runAllTimers()
+      const unregisterCancelledGridSurface = registerTerminalSurfaceActionConsumer('tab-new')
+
+      expect(storeState.terminalLayoutsByTabId['tab-new']).toBe(focusedGridLayout)
+      expect(setTabLayout).not.toHaveBeenCalled()
+      expect(
+        dispatchEvent.mock.calls.filter(([event]) => event.type === 'orca-split-terminal-pane')
+      ).toHaveLength(0)
+      expectNoSplitSurfacing()
+      expect(replyTerminalCreate).toHaveBeenCalledOnce()
+      expect(replyTerminalCreate).toHaveBeenCalledWith({
+        requestId: cancellationCase.requestId,
+        error: cancellationCase.error
+      })
+      expect(vi.getTimerCount()).toBe(0)
+      unregisterCancelledGridSurface()
+      vi.useRealTimers()
+    }
 
     createTab.mockClear()
     replyTerminalCreate.mockClear()
@@ -2956,12 +3439,26 @@ describe('useIpcEvents updater integration', () => {
       }
     }
     createTab.mockClear()
+    setActiveView.mockClear()
+    setActiveWorktree.mockClear()
+    markWorktreeVisited.mockClear()
+    recordWorktreeVisit.mockClear()
+    setActiveTabType.mockClear()
+    setActiveTab.mockClear()
+    revealWorktreeInSidebar.mockClear()
     updateTabPtyId.mockClear()
     setTabLayout.mockClear()
+    queueTabStartupCommand.mockClear()
     replyTerminalCreate.mockClear()
+    dispatchEvent.mockClear()
+    focusRuntimeTerminalSurface.mockClear()
+    focusTerminalTabSurface.mockClear()
     createTerminalListenerRef.current({
       requestId: 'req-split',
       worktreeId: 'wt-2',
+      command: 'codex --resume',
+      env: { ORCA_WORKER: 'ordinary' },
+      title: 'Split worker',
       ptyId: 'pty-split',
       tabId: 'tab-existing',
       leafId: 'leaf-split',
@@ -2972,7 +3469,9 @@ describe('useIpcEvents updater integration', () => {
     })
 
     expect(createTab).not.toHaveBeenCalled()
+    expect(updateTabPtyId).toHaveBeenCalledOnce()
     expect(updateTabPtyId).toHaveBeenCalledWith('tab-existing', 'pty-split')
+    expect(setTabLayout).toHaveBeenCalledOnce()
     expect(setTabLayout).toHaveBeenCalledWith('tab-existing', {
       root: {
         type: 'split',
@@ -2986,12 +3485,17 @@ describe('useIpcEvents updater integration', () => {
       ptyIdsByLeafId: {
         'leaf-source': 'pty-bg',
         'leaf-split': 'pty-split'
+      },
+      titlesByLeafId: {
+        'leaf-split': 'Split worker'
       }
     })
+    expect(queueTabStartupCommand).not.toHaveBeenCalled()
+    expect(dispatchEvent).toHaveBeenCalledOnce()
     expect(dispatchEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'orca-split-terminal-pane',
-        detail: {
+        detail: expect.objectContaining({
           tabId: 'tab-existing',
           paneRuntimeId: -1,
           direction: 'vertical',
@@ -2999,10 +3503,16 @@ describe('useIpcEvents updater integration', () => {
           sourcePtyId: 'pty-bg',
           telemetrySource: 'contextual_tour',
           newLeafId: 'leaf-split',
-          ptyId: 'pty-split'
-        }
+          ptyId: 'pty-split',
+          startup: {
+            command: 'codex --resume',
+            env: { ORCA_WORKER: 'ordinary' }
+          },
+          activate: true
+        })
       })
     )
+    expect(replyTerminalCreate).toHaveBeenCalledOnce()
     expect(replyTerminalCreate).toHaveBeenCalledWith({
       requestId: 'req-split',
       tabId: 'tab-existing',
@@ -3013,7 +3523,35 @@ describe('useIpcEvents updater integration', () => {
         leafId: 'leaf-split',
         ptyId: 'pty-split'
       }
+      leafId: 'leaf-split',
+      layout: setTabLayout.mock.calls.at(-1)?.[1],
+      title: 'Split worker'
     })
+    expect(setActiveView).toHaveBeenCalledWith('terminal')
+    expect(setActiveWorktree).toHaveBeenCalledWith('wt-2')
+    expect(markWorktreeVisited).toHaveBeenCalledWith('wt-2')
+    expect(recordWorktreeVisit).toHaveBeenCalledWith('wt-2')
+    expect(setActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(setActiveTab).toHaveBeenCalledWith('tab-existing')
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
+    expect(dispatchEvent.mock.invocationCallOrder[0]).toBeLessThan(
+      setTabLayout.mock.invocationCallOrder[0] ?? 0
+    )
+    expect(setTabLayout.mock.invocationCallOrder[0]).toBeLessThan(
+      updateTabPtyId.mock.invocationCallOrder[0] ?? 0
+    )
+    expect(updateTabPtyId.mock.invocationCallOrder[0]).toBeLessThan(
+      setActiveTab.mock.invocationCallOrder[0] ?? 0
+    )
+    expect(setActiveTab.mock.invocationCallOrder[0]).toBeLessThan(
+      revealWorktreeInSidebar.mock.invocationCallOrder[0] ?? 0
+    )
+    expect(revealWorktreeInSidebar.mock.invocationCallOrder[0]).toBeLessThan(
+      focusRuntimeTerminalSurface.mock.invocationCallOrder[0] ?? 0
+    )
+    expect(focusRuntimeTerminalSurface.mock.invocationCallOrder[0]).toBeLessThan(
+      replyTerminalCreate.mock.invocationCallOrder[0] ?? 0
+    )
 
     storeState.terminalLayoutsByTabId = {
       'tab-existing': {
@@ -3035,6 +3573,7 @@ describe('useIpcEvents updater integration', () => {
       activate: false
     })
 
+    expect(updateTabPtyId).toHaveBeenCalledOnce()
     expect(updateTabPtyId).toHaveBeenCalledWith('tab-existing', 'pty-split-background')
     expect(setTabLayout).toHaveBeenCalledWith('tab-existing', {
       root: {
@@ -3080,6 +3619,430 @@ describe('useIpcEvents updater integration', () => {
 
     expect(updateTabPtyId).toHaveBeenCalledWith('tab-existing', 'pty-split')
     expect(setTabLayout).toHaveBeenCalledWith('tab-existing', splitLayout)
+
+    const delayedGridLayout: TerminalLayoutSnapshot = {
+      root: {
+        type: 'split',
+        direction: 'vertical',
+        first: { type: 'leaf', leafId: 'leaf-grid-a' },
+        second: { type: 'leaf', leafId: 'leaf-grid-b' },
+        ratio: 0.5
+      },
+      activeLeafId: 'leaf-grid-a',
+      expandedLeafId: null,
+      layoutMode: 'orchestration-grid',
+      ptyIdsByLeafId: { 'leaf-grid-a': 'pty-grid-a', 'leaf-grid-b': 'pty-grid-b' },
+      titlesByLeafId: { 'leaf-grid-a': 'Worker A', 'leaf-grid-b': 'Worker B' }
+    }
+    const delayedGridLeafId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+    const delayedGridLaunchConfig = {
+      agentArgs: '--resume',
+      agentEnv: { ORCA_WORKER: 'c' }
+    }
+    storeState.ptyIdsByTabId = { 'tab-existing': ['pty-grid-a', 'pty-grid-b'] }
+    storeState.terminalLayoutsByTabId = { 'tab-existing': delayedGridLayout }
+    setTabLayout.mockImplementation((targetTabId: string, layout: TerminalLayoutSnapshot) => {
+      storeState.terminalLayoutsByTabId[targetTabId] = layout
+    })
+    unregisterTabExistingSurface()
+    setActiveView.mockClear()
+    setActiveWorktree.mockClear()
+    markWorktreeVisited.mockClear()
+    recordWorktreeVisit.mockClear()
+    setActiveTabType.mockClear()
+    setActiveTab.mockClear()
+    revealWorktreeInSidebar.mockClear()
+    updateTabPtyId.mockClear()
+    setTabLayout.mockClear()
+    queueTabStartupCommand.mockClear()
+    registerAgentLaunchConfig.mockClear()
+    replyTerminalCreate.mockClear()
+    dispatchEvent.mockClear()
+    focusRuntimeTerminalSurface.mockClear()
+    focusTerminalTabSurface.mockClear()
+    vi.useFakeTimers()
+
+    createTerminalListenerRef.current({
+      requestId: 'req-grid-delayed',
+      worktreeId: 'wt-2',
+      command: 'codex --resume',
+      env: { ORCA_WORKER: 'c' },
+      launchConfig: delayedGridLaunchConfig,
+      launchAgent: 'codex',
+      title: 'Worker C',
+      ptyId: 'pty-grid-c',
+      tabId: 'tab-existing',
+      leafId: delayedGridLeafId,
+      splitFromLeafId: 'leaf-grid-b',
+      splitSourceLeafIds: ['leaf-grid-a', 'leaf-grid-b'],
+      splitDirection: 'vertical',
+      placement: 'orchestration-grid',
+      activate: false
+    })
+
+    const layoutBeforeDelayedMount = storeState.terminalLayoutsByTabId['tab-existing']
+    const layoutWritesBeforeDelayedMount = setTabLayout.mock.calls.length
+    const splitEventsBeforeDelayedMount = dispatchEvent.mock.calls.filter(
+      ([event]) => event.type === 'orca-split-terminal-pane'
+    ).length
+    const repliesBeforeDelayedMount = replyTerminalCreate.mock.calls.length
+    vi.advanceTimersByTime(6_000)
+    const repliesAfterSixSeconds = replyTerminalCreate.mock.calls.length
+
+    expect(layoutBeforeDelayedMount).toBe(delayedGridLayout)
+    expect(layoutWritesBeforeDelayedMount).toBe(0)
+    expect(splitEventsBeforeDelayedMount).toBe(0)
+    expect(repliesBeforeDelayedMount).toBe(0)
+    expect(repliesAfterSixSeconds).toBe(0)
+    expect(updateTabPtyId).not.toHaveBeenCalled()
+    expect(queueTabStartupCommand).not.toHaveBeenCalled()
+    expect(registerAgentLaunchConfig).not.toHaveBeenCalled()
+    expect(setActiveView).not.toHaveBeenCalled()
+    expect(setActiveWorktree).not.toHaveBeenCalled()
+    expect(markWorktreeVisited).not.toHaveBeenCalled()
+    expect(recordWorktreeVisit).not.toHaveBeenCalled()
+    expect(setActiveTabType).not.toHaveBeenCalled()
+    expect(setActiveTab).not.toHaveBeenCalled()
+    expect(revealWorktreeInSidebar).not.toHaveBeenCalled()
+    expect(focusRuntimeTerminalSurface).not.toHaveBeenCalled()
+    expect(focusTerminalTabSurface).not.toHaveBeenCalled()
+
+    const unregisterDelayedGridSurface = registerTerminalSurfaceActionConsumer('tab-existing')
+    vi.useRealTimers()
+
+    expect(updateTabPtyId).toHaveBeenCalledOnce()
+    expect(updateTabPtyId).toHaveBeenCalledWith('tab-existing', 'pty-grid-c')
+    expect(queueTabStartupCommand).not.toHaveBeenCalled()
+    expect(registerAgentLaunchConfig).not.toHaveBeenCalled()
+    expect(setTabLayout).toHaveBeenCalledOnce()
+    expect(storeState.terminalLayoutsByTabId['tab-existing']).toEqual({
+      root: {
+        type: 'split',
+        direction: 'vertical',
+        first: {
+          type: 'split',
+          direction: 'vertical',
+          first: { type: 'leaf', leafId: 'leaf-grid-a' },
+          second: { type: 'leaf', leafId: 'leaf-grid-b' },
+          ratio: 0.5
+        },
+        second: { type: 'leaf', leafId: delayedGridLeafId },
+        ratio: 2 / 3
+      },
+      activeLeafId: 'leaf-grid-a',
+      expandedLeafId: null,
+      layoutMode: 'orchestration-grid',
+      ptyIdsByLeafId: {
+        'leaf-grid-a': 'pty-grid-a',
+        'leaf-grid-b': 'pty-grid-b',
+        [delayedGridLeafId]: 'pty-grid-c'
+      },
+      titlesByLeafId: {
+        'leaf-grid-a': 'Worker A',
+        'leaf-grid-b': 'Worker B',
+        [delayedGridLeafId]: 'Worker C'
+      }
+    })
+    expect(dispatchEvent).toHaveBeenCalledOnce()
+    expect(dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'orca-split-terminal-pane',
+        detail: expect.objectContaining({
+          tabId: 'tab-existing',
+          sourceLeafId: 'leaf-grid-b',
+          sourceLeafIds: ['leaf-grid-a', 'leaf-grid-b'],
+          sourcePtyId: 'pty-grid-b',
+          newLeafId: delayedGridLeafId,
+          ptyId: 'pty-grid-c',
+          startup: {
+            command: 'codex --resume',
+            env: { ORCA_WORKER: 'c' },
+            launchConfig: delayedGridLaunchConfig,
+            launchAgent: 'codex'
+          },
+          activate: false,
+          orchestrationGrid: true
+        })
+      })
+    )
+    expect(replyTerminalCreate).toHaveBeenCalledOnce()
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-grid-delayed',
+      tabId: 'tab-existing',
+      leafId: delayedGridLeafId,
+      layout: setTabLayout.mock.calls.at(-1)?.[1],
+      title: 'Worker C'
+    })
+    expect(setActiveView).not.toHaveBeenCalled()
+    expect(setActiveWorktree).not.toHaveBeenCalled()
+    expect(setActiveTabType).not.toHaveBeenCalled()
+    expect(setActiveTab).not.toHaveBeenCalled()
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith('wt-2')
+    expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith('tab-existing', 'leaf-grid-a')
+    expect(focusTerminalTabSurface).toHaveBeenCalledWith('tab-existing', 'leaf-grid-a')
+    expect(dispatchEvent.mock.invocationCallOrder[0]).toBeLessThan(
+      setTabLayout.mock.invocationCallOrder[0] ?? 0
+    )
+    expect(setTabLayout.mock.invocationCallOrder[0]).toBeLessThan(
+      updateTabPtyId.mock.invocationCallOrder[0] ?? 0
+    )
+    expect(updateTabPtyId.mock.invocationCallOrder[0]).toBeLessThan(
+      revealWorktreeInSidebar.mock.invocationCallOrder[0] ?? 0
+    )
+    expect(revealWorktreeInSidebar.mock.invocationCallOrder[0]).toBeLessThan(
+      focusRuntimeTerminalSurface.mock.invocationCallOrder[0] ?? 0
+    )
+    expect(focusRuntimeTerminalSurface.mock.invocationCallOrder[0]).toBeLessThan(
+      replyTerminalCreate.mock.invocationCallOrder[0] ?? 0
+    )
+
+    setActiveTab.mockClear()
+    setTabLayout.mockClear()
+    replyTerminalCreate.mockClear()
+    dispatchEvent.mockClear()
+    focusRuntimeTerminalSurface.mockClear()
+    focusTerminalTabSurface.mockClear()
+    createTerminalListenerRef.current({
+      requestId: 'req-grid-mounted',
+      worktreeId: 'wt-2',
+      title: 'Worker D',
+      ptyId: 'pty-grid-d',
+      tabId: 'tab-existing',
+      leafId: 'leaf-grid-d',
+      splitFromLeafId: delayedGridLeafId,
+      splitSourceLeafIds: ['leaf-grid-a', 'leaf-grid-b', delayedGridLeafId],
+      splitDirection: 'vertical',
+      placement: 'orchestration-grid',
+      activate: true
+    })
+
+    expect(setTabLayout).toHaveBeenCalledOnce()
+    expect(dispatchEvent).toHaveBeenCalledOnce()
+    expect(replyTerminalCreate).toHaveBeenCalledOnce()
+    expect(storeState.terminalLayoutsByTabId['tab-existing']).toMatchObject({
+      root: {
+        type: 'split',
+        direction: 'vertical',
+        first: {
+          type: 'split',
+          direction: 'vertical',
+          first: { type: 'leaf', leafId: 'leaf-grid-a' },
+          second: { type: 'leaf', leafId: 'leaf-grid-b' },
+          ratio: 0.5
+        },
+        second: {
+          type: 'split',
+          direction: 'vertical',
+          first: { type: 'leaf', leafId: delayedGridLeafId },
+          second: { type: 'leaf', leafId: 'leaf-grid-d' },
+          ratio: 0.5
+        },
+        ratio: 0.5
+      },
+      activeLeafId: 'leaf-grid-d',
+      ptyIdsByLeafId: { 'leaf-grid-d': 'pty-grid-d' },
+      titlesByLeafId: { 'leaf-grid-d': 'Worker D' }
+    })
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-grid-mounted',
+      tabId: 'tab-existing',
+      leafId: 'leaf-grid-d',
+      layout: setTabLayout.mock.calls.at(-1)?.[1],
+      title: 'Worker D'
+    })
+    expect(setActiveTab).toHaveBeenCalledWith('tab-existing')
+    expect(focusRuntimeTerminalSurface).toHaveBeenCalledWith('tab-existing', 'leaf-grid-d')
+    expect(focusTerminalTabSurface).toHaveBeenCalledWith('tab-existing', 'leaf-grid-d')
+    unregisterDelayedGridSurface()
+
+    const layoutBeforeCancelledAppends = storeState.terminalLayoutsByTabId['tab-existing']
+    resetSplitSurfacingMocks()
+    updateTabPtyId.mockClear()
+    setTabLayout.mockClear()
+    queueTabStartupCommand.mockClear()
+    registerAgentLaunchConfig.mockClear()
+    replyTerminalCreate.mockClear()
+    dispatchEvent.mockClear()
+    focusRuntimeTerminalSurface.mockClear()
+    focusTerminalTabSurface.mockClear()
+    vi.useFakeTimers()
+    createTerminalListenerRef.current({
+      requestId: 'req-grid-timeout',
+      worktreeId: 'wt-2',
+      command: 'codex --timeout',
+      env: { ORCA_WORKER: 'timeout' },
+      launchConfig: { agentArgs: '--resume', agentEnv: { ORCA_WORKER: 'timeout' } },
+      launchAgent: 'codex',
+      ptyId: 'pty-grid-timeout',
+      tabId: 'tab-existing',
+      leafId: '66666666-6666-4666-8666-666666666666',
+      splitFromLeafId: 'leaf-grid-d',
+      splitDirection: 'vertical',
+      placement: 'orchestration-grid',
+      activate: true
+    })
+    vi.advanceTimersByTime(9_000)
+    const unregisterAfterTimeout = registerTerminalSurfaceActionConsumer('tab-existing')
+    vi.runAllTimers()
+
+    expect(storeState.terminalLayoutsByTabId['tab-existing']).toBe(layoutBeforeCancelledAppends)
+    expect(updateTabPtyId).not.toHaveBeenCalled()
+    expect(setTabLayout).not.toHaveBeenCalled()
+    expect(queueTabStartupCommand).not.toHaveBeenCalled()
+    expect(registerAgentLaunchConfig).not.toHaveBeenCalled()
+    expect(dispatchEvent).not.toHaveBeenCalled()
+    expectNoSplitSurfacing()
+    expect(replyTerminalCreate).toHaveBeenCalledOnce()
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-grid-timeout',
+      error: 'Terminal surface tab-existing did not mount before the split deadline'
+    })
+    expect(vi.getTimerCount()).toBe(0)
+    unregisterAfterTimeout()
+    vi.useRealTimers()
+
+    const cancellationCases = [
+      {
+        requestId: 'req-grid-cancelled',
+        leafId: '77777777-7777-4777-8777-777777777777',
+        cancel: () => cancelPendingTerminalSurfaceActions('tab-existing', 'cancelled'),
+        error: 'Terminal split was cancelled for tab-existing'
+      },
+      {
+        requestId: 'req-grid-unmounted',
+        leafId: '88888888-8888-4888-8888-888888888888',
+        cancel: () => cancelPendingTerminalSurfaceActions('tab-existing', 'surface-unmounted'),
+        error: 'Terminal surface tab-existing was torn down before the split was applied'
+      },
+      {
+        requestId: 'req-grid-removed',
+        leafId: '99999999-9999-4999-8999-999999999999',
+        cancel: () => cancelTerminalSurfaceActionsForRemovedTabs({ tabsByWorktree: {} }),
+        error: 'Terminal tab tab-existing was removed before the split was applied'
+      }
+    ]
+    for (const cancellationCase of cancellationCases) {
+      resetSplitSurfacingMocks()
+      updateTabPtyId.mockClear()
+      setTabLayout.mockClear()
+      queueTabStartupCommand.mockClear()
+      registerAgentLaunchConfig.mockClear()
+      replyTerminalCreate.mockClear()
+      dispatchEvent.mockClear()
+      focusRuntimeTerminalSurface.mockClear()
+      focusTerminalTabSurface.mockClear()
+      vi.useFakeTimers()
+      createTerminalListenerRef.current({
+        requestId: cancellationCase.requestId,
+        worktreeId: 'wt-2',
+        command: 'codex --cancelled',
+        env: { ORCA_WORKER: 'cancelled' },
+        launchConfig: { agentArgs: '--resume', agentEnv: { ORCA_WORKER: 'cancelled' } },
+        launchAgent: 'codex',
+        ptyId: `pty-${cancellationCase.leafId}`,
+        tabId: 'tab-existing',
+        leafId: cancellationCase.leafId,
+        splitFromLeafId: 'leaf-grid-d',
+        splitDirection: 'vertical',
+        placement: 'orchestration-grid',
+        activate: true
+      })
+      cancellationCase.cancel()
+      cancellationCase.cancel()
+      vi.runAllTimers()
+      const unregisterAfterCancellation = registerTerminalSurfaceActionConsumer('tab-existing')
+
+      expect(storeState.terminalLayoutsByTabId['tab-existing']).toBe(layoutBeforeCancelledAppends)
+      expect(updateTabPtyId).not.toHaveBeenCalled()
+      expect(setTabLayout).not.toHaveBeenCalled()
+      expect(queueTabStartupCommand).not.toHaveBeenCalled()
+      expect(registerAgentLaunchConfig).not.toHaveBeenCalled()
+      expect(dispatchEvent).not.toHaveBeenCalled()
+      expectNoSplitSurfacing()
+      expect(replyTerminalCreate).toHaveBeenCalledOnce()
+      expect(replyTerminalCreate).toHaveBeenCalledWith({
+        requestId: cancellationCase.requestId,
+        error: cancellationCase.error
+      })
+      expect(vi.getTimerCount()).toBe(0)
+      unregisterAfterCancellation()
+      vi.useRealTimers()
+    }
+
+    resetSplitSurfacingMocks()
+    updateTabPtyId.mockClear()
+    setTabLayout.mockClear()
+    queueTabStartupCommand.mockClear()
+    registerAgentLaunchConfig.mockClear()
+    replyTerminalCreate.mockClear()
+    dispatchEvent.mockClear()
+    focusRuntimeTerminalSurface.mockClear()
+    focusTerminalTabSurface.mockClear()
+    storeState.tabsByWorktree['wt-grid'] = [{ id: 'tab-new', title: 'Worker grid' }]
+    storeState.terminalLayoutsByTabId['tab-new'] = focusedGridLayout
+    vi.useFakeTimers()
+    createTerminalListenerRef.current({
+      requestId: 'req-grid-disposed',
+      worktreeId: 'wt-2',
+      command: 'codex --disposed',
+      env: { ORCA_WORKER: 'disposed' },
+      launchConfig: { agentArgs: '--resume', agentEnv: { ORCA_WORKER: 'disposed' } },
+      launchAgent: 'codex',
+      ptyId: 'pty-grid-disposed',
+      tabId: 'tab-existing',
+      leafId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      splitFromLeafId: 'leaf-grid-d',
+      splitDirection: 'vertical',
+      placement: 'orchestration-grid',
+      activate: true
+    })
+    requestTerminalCreateListenerRef.current({
+      requestId: 'req-request-grid-disposed',
+      worktreeId: 'wt-grid',
+      title: 'Worker disposed',
+      command: 'codex',
+      activate: true,
+      placement: 'orchestration-grid'
+    })
+    const dispose = disposeIpcEvents as (() => void) | null
+    if (!dispose) {
+      throw new Error('Expected useIpcEvents cleanup to be registered')
+    }
+    dispose()
+    vi.runAllTimers()
+    const unregisterAfterDisposal = registerTerminalSurfaceActionConsumer('tab-existing')
+    const unregisterRequestGridAfterDisposal = registerTerminalSurfaceActionConsumer('tab-new')
+
+    expect(storeState.terminalLayoutsByTabId['tab-existing']).toBe(layoutBeforeCancelledAppends)
+    expect(updateTabPtyId).not.toHaveBeenCalled()
+    expect(setTabLayout).not.toHaveBeenCalled()
+    expect(queueTabStartupCommand).not.toHaveBeenCalled()
+    expect(registerAgentLaunchConfig).not.toHaveBeenCalled()
+    expect(
+      dispatchEvent.mock.calls.filter(([event]) => event.type === 'orca-split-terminal-pane')
+    ).toHaveLength(0)
+    expect(dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'orca-background-mount-terminal-worktree',
+        detail: { worktreeId: 'wt-grid', tabIds: ['tab-new'] }
+      })
+    )
+    expectNoSplitSurfacing()
+    expect(replyTerminalCreate).toHaveBeenCalledTimes(2)
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-grid-disposed',
+      error: 'Terminal creation was cancelled while the renderer was shutting down'
+    })
+    expect(replyTerminalCreate).toHaveBeenCalledWith({
+      requestId: 'req-request-grid-disposed',
+      error: 'Terminal creation was cancelled while the renderer was shutting down'
+    })
+    expect(unsubscribeCreateTerminal).toHaveBeenCalledOnce()
+    expect(unsubscribeStore).toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+    unregisterAfterDisposal()
+    unregisterRequestGridAfterDisposal()
+    vi.useRealTimers()
   })
 })
 
@@ -5898,6 +6861,1094 @@ describe('useIpcEvents agent status snapshot integration', () => {
         )
       ).toEqual([[secondTargetId, [secondDetectedPort]]])
     })
+  describe('delayed orchestration-grid split lifecycle', () => {
+    const GRID_TAB_ID = 'tab-grid-lifecycle'
+    const GRID_WORKTREE_ID = 'wt-grid-lifecycle'
+    const GRID_LEAF_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
+    const GRID_LEAF_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2'
+    const GRID_LEAF_C = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc3'
+    const GRID_LEAF_D = 'dddddddd-dddd-4ddd-8ddd-ddddddddddd4'
+    const GRID_LEAF_E = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee5'
+    const GRID_LEAF_F = 'ffffffff-ffff-4fff-8fff-fffffffffff6'
+    const GRID_LEAF_G = '11111111-2222-4333-8444-555555555557'
+    const GRID_LEAF_H = '22222222-3333-4444-8555-666666666668'
+
+    type GridCreateTerminalData = {
+      requestId: string
+      worktreeId: string
+      command?: string
+      env?: Record<string, string>
+      launchConfig?: SleepingAgentLaunchConfig
+      launchAgent?: TuiAgent
+      title: string
+      ptyId: string
+      presentation: 'background' | 'focused'
+      tabId: string
+      leafId: string
+      splitFromLeafId: string
+      splitSourceLeafIds: string[]
+      splitDirection: 'horizontal' | 'vertical'
+      placement: 'orchestration-grid'
+    }
+
+    type GridRequestTerminalCreateData = {
+      requestId: string
+      worktreeId: string
+      command?: string
+      env?: Record<string, string>
+      launchConfig?: SleepingAgentLaunchConfig
+      launchAgent?: TuiAgent
+      title: string
+      presentation: 'background' | 'focused'
+      placement: 'orchestration-grid'
+    }
+
+    type GridFailureStep =
+      | 'activation'
+      | 'sidebar'
+      | 'binding'
+      | 'layout'
+      | 'dispatch'
+      | 'duplicate-leaf'
+      | 'invalid-source'
+      | 'listener-absent'
+      | 'listener-throw'
+      | 'manager-absent'
+      | 'partial-create'
+      | 'rollback-cleanup'
+      | 'split-null'
+      | 'wrong-tab'
+      | 'runtime-focus'
+      | 'tab-focus'
+
+    type SplitEvent = CustomEvent<{
+      tabId: string
+      direction: 'horizontal' | 'vertical'
+      sourceLeafId?: string
+      sourceLeafIds?: string[]
+      sourcePtyId?: string
+      newLeafId?: string
+      ptyId?: string
+      startup?: { command: string; launchConfig?: SleepingAgentLaunchConfig }
+      activate?: boolean
+      acknowledge?: (result: {
+        status: 'success'
+        rollback: () => void
+        afterCommit?: () => void
+      }) => void
+    }>
+
+    type GridLifecycleHarness = {
+      createTerminal: (data: GridCreateTerminalData) => void
+      requestTerminalCreate: (data: GridRequestTerminalCreateData) => void
+      registerConsumer: () => () => void
+      replyTerminalCreate: ReturnType<typeof vi.fn>
+      dispatchEvent: ReturnType<typeof vi.fn>
+      focusRuntimeTerminalSurface: ReturnType<typeof vi.fn>
+      focusTerminalTabSurface: ReturnType<typeof vi.fn>
+      getState: () => StoreLike
+      setActiveGridLeaf: (leafId: string) => void
+      setGridLayout: (layout: TerminalLayoutSnapshot) => void
+      setFailureStep: (step: GridFailureStep | null) => void
+      getOrphanResourceCount: () => number
+      getRollbackCount: () => number
+      setActiveWorktree: ReturnType<typeof vi.fn>
+      markWorktreeVisited: ReturnType<typeof vi.fn>
+      revealWorktreeInSidebar: ReturnType<typeof vi.fn>
+      updateTabPtyId: ReturnType<typeof vi.fn>
+      dispose: () => void
+    }
+
+    function initialGridLayout(): TerminalLayoutSnapshot {
+      return {
+        root: {
+          type: 'split',
+          direction: 'vertical',
+          first: { type: 'leaf', leafId: GRID_LEAF_A },
+          second: { type: 'leaf', leafId: GRID_LEAF_B },
+          ratio: 0.5
+        },
+        activeLeafId: GRID_LEAF_A,
+        expandedLeafId: null,
+        layoutMode: 'orchestration-grid',
+        ptyIdsByLeafId: { [GRID_LEAF_A]: 'pty-grid-a', [GRID_LEAF_B]: 'pty-grid-b' },
+        titlesByLeafId: { [GRID_LEAF_A]: 'Worker A', [GRID_LEAF_B]: 'Worker B' }
+      }
+    }
+
+    function fullGridRowLayout(): TerminalLayoutSnapshot {
+      const leaves: readonly (readonly [string, string, string])[] = [
+        [GRID_LEAF_A, 'pty-grid-a', 'Worker A'],
+        [GRID_LEAF_B, 'pty-grid-b', 'Worker B'],
+        [GRID_LEAF_E, 'pty-grid-e', 'Worker E'],
+        [GRID_LEAF_F, 'pty-grid-f', 'Worker F'],
+        [GRID_LEAF_G, 'pty-grid-g', 'Worker G'],
+        [GRID_LEAF_H, 'pty-grid-h', 'Worker H']
+      ]
+      const leafIds = leaves.map(([leafId]) => leafId)
+      return {
+        root: buildOrchestrationTerminalGridRoot(leafIds),
+        activeLeafId: GRID_LEAF_A,
+        expandedLeafId: null,
+        layoutMode: 'orchestration-grid',
+        ptyIdsByLeafId: Object.fromEntries(leaves.map(([leafId, ptyId]) => [leafId, ptyId])),
+        titlesByLeafId: Object.fromEntries(leaves.map(([leafId, , title]) => [leafId, title]))
+      }
+    }
+
+    async function setupGridLifecycleHarness(): Promise<GridLifecycleHarness> {
+      let state: StoreLike
+      let failureStep: GridFailureStep | null = null
+      let disposeEffect = (): void => undefined
+      const createTerminalListenerRef: {
+        current: ((data: GridCreateTerminalData) => void) | null
+      } = { current: null }
+      const requestTerminalCreateListenerRef: {
+        current: ((data: GridRequestTerminalCreateData) => void) | null
+      } = { current: null }
+      const replyTerminalCreate = vi.fn()
+      const splitEventTarget = new EventTarget()
+      const emptySplitEventTarget = new EventTarget()
+      const splitStartupDeps: {
+        startup?: {
+          command: string
+          launchConfig?: SleepingAgentLaunchConfig
+        } | null
+      } = { startup: null }
+      type GridManagerPane = { id: number; leafId: string }
+      type GridManagerResource = {
+        pane: GridManagerPane
+        domNodes: number
+        listeners: number
+        parsers: number
+        ptys: number
+        timers: number
+      }
+      const managerPanes = new Map<number, GridManagerPane>()
+      const managerPaneIdByLeafId = new Map<string, number>()
+      const createdResources = new Map<number, GridManagerResource>()
+      let nextManagerPaneId = 1
+      let activeManagerPaneId: number | null = null
+      let rollbackCount = 0
+
+      const replaceState = (patch: StoreLike): void => {
+        state = { ...state, ...patch }
+      }
+      const failAfterMutation = (step: GridFailureStep): void => {
+        if (failureStep === step || (failureStep === 'rollback-cleanup' && step === 'layout')) {
+          throw new Error(`${step} failed`)
+        }
+      }
+      const setActiveView = vi.fn((activeView: string) => replaceState({ activeView }))
+      const setActiveWorktree = vi.fn((activeWorktreeId: string) =>
+        replaceState({ activeWorktreeId })
+      )
+      const markWorktreeVisited = vi.fn((worktreeId: string) => {
+        replaceState({
+          lastVisitedAtByWorktreeId: {
+            ...(state.lastVisitedAtByWorktreeId as Record<string, number>),
+            [worktreeId]: 2
+          }
+        })
+        failAfterMutation('activation')
+      })
+      const recordWorktreeVisit = vi.fn((worktreeId: string) => {
+        replaceState({
+          worktreeNavHistory: [...((state.worktreeNavHistory as string[]) ?? []), worktreeId]
+        })
+      })
+      const setActiveTabType = vi.fn((activeTabType: string) => replaceState({ activeTabType }))
+      const setActiveTab = vi.fn((activeTabId: string) => replaceState({ activeTabId }))
+      const revealWorktreeInSidebar = vi.fn((worktreeId: string) => {
+        replaceState({ pendingRevealWorktree: { worktreeId, behavior: 'smooth' } })
+        failAfterMutation('sidebar')
+      })
+      const updateTabPtyId = vi.fn((tabId: string, ptyId: string) => {
+        const ptyIdsByTabId = state.ptyIdsByTabId as Record<string, string[]>
+        const tabsByWorktree = state.tabsByWorktree as Record<
+          string,
+          { id: string; ptyId: string | null; title: string }[]
+        >
+        replaceState({
+          ptyIdsByTabId: {
+            ...ptyIdsByTabId,
+            [tabId]: [...(ptyIdsByTabId[tabId] ?? []), ptyId]
+          },
+          tabsByWorktree: {
+            ...tabsByWorktree,
+            [GRID_WORKTREE_ID]: tabsByWorktree[GRID_WORKTREE_ID]!.map((tab) =>
+              tab.id === tabId && tab.ptyId === null ? { ...tab, ptyId } : tab
+            )
+          }
+        })
+        failAfterMutation('binding')
+      })
+      const setTabLayout = vi.fn((tabId: string, layout: TerminalLayoutSnapshot) => {
+        replaceState({
+          terminalLayoutsByTabId: {
+            ...(state.terminalLayoutsByTabId as Record<string, TerminalLayoutSnapshot>),
+            [tabId]: layout
+          }
+        })
+        failAfterMutation('layout')
+      })
+      const registerAgentLaunchConfig = vi.fn(
+        (paneKey: string, launchConfig: SleepingAgentLaunchConfig) => {
+          replaceState({
+            agentLaunchConfigByPaneKey: {
+              ...(state.agentLaunchConfigByPaneKey as Record<string, unknown>),
+              [paneKey]: { launchConfig }
+            }
+          })
+        }
+      )
+      const clearAgentLaunchConfig = vi.fn((paneKey: string) => {
+        const next = { ...(state.agentLaunchConfigByPaneKey as Record<string, unknown>) }
+        delete next[paneKey]
+        replaceState({ agentLaunchConfigByPaneKey: next })
+      })
+      const seedManagerFromLayout = (layout: TerminalLayoutSnapshot): void => {
+        managerPanes.clear()
+        managerPaneIdByLeafId.clear()
+        createdResources.clear()
+        nextManagerPaneId = 1
+        for (const leafId of collectTerminalLayoutLeafIds(layout.root)) {
+          const pane = { id: nextManagerPaneId, leafId }
+          nextManagerPaneId += 1
+          managerPanes.set(pane.id, pane)
+          managerPaneIdByLeafId.set(leafId, pane.id)
+        }
+        activeManagerPaneId = layout.activeLeafId
+          ? (managerPaneIdByLeafId.get(layout.activeLeafId) ?? null)
+          : null
+      }
+      const disposeCreatedResource = (paneId: number): void => {
+        const resource = createdResources.get(paneId)
+        if (!resource) {
+          return
+        }
+        managerPanes.delete(paneId)
+        managerPaneIdByLeafId.delete(resource.pane.leafId)
+        createdResources.delete(paneId)
+        clearAgentLaunchConfig(makePaneKey(GRID_TAB_ID, resource.pane.leafId))
+      }
+      const createManagerPane = (opts?: {
+        activate?: boolean
+        leafId?: string
+        ptyId?: string
+      }): GridManagerPane | null => {
+        if (failureStep === 'split-null') {
+          return null
+        }
+        const leafId = opts?.leafId
+        if (!leafId) {
+          throw new Error('manager received no leaf id')
+        }
+        const pane = { id: nextManagerPaneId, leafId }
+        nextManagerPaneId += 1
+        managerPanes.set(pane.id, pane)
+        managerPaneIdByLeafId.set(leafId, pane.id)
+        createdResources.set(pane.id, {
+          pane,
+          domNodes: 1,
+          listeners: 1,
+          parsers: 1,
+          ptys: 1,
+          timers: 1
+        })
+        if (splitStartupDeps.startup?.launchConfig) {
+          registerAgentLaunchConfig(
+            makePaneKey(GRID_TAB_ID, leafId),
+            splitStartupDeps.startup.launchConfig
+          )
+        }
+        if (opts.activate !== false) {
+          activeManagerPaneId = pane.id
+        }
+        if (failureStep === 'partial-create') {
+          // Mirrors PaneManager's low-level compensation before the listener
+          // receives the thrown partial-creation failure.
+          rollbackCount += 1
+          disposeCreatedResource(pane.id)
+          throw new Error('partial create failed')
+        }
+        return pane
+      }
+      const gridPaneManager = {
+        getNumericIdForLeaf: vi.fn((leafId: string) => {
+          if (failureStep === 'invalid-source' && leafId !== GRID_LEAF_C) {
+            return null
+          }
+          if (failureStep === 'duplicate-leaf' && !managerPaneIdByLeafId.has(leafId)) {
+            return managerPanes.keys().next().value ?? null
+          }
+          return managerPaneIdByLeafId.get(leafId) ?? null
+        }),
+        getPanes: vi.fn(() => [...managerPanes.values()]),
+        getActivePane: vi.fn(() =>
+          activeManagerPaneId === null ? null : (managerPanes.get(activeManagerPaneId) ?? null)
+        ),
+        splitPane: vi.fn(
+          (
+            _paneId: number,
+            _direction: 'horizontal' | 'vertical',
+            opts?: { activate?: boolean; leafId?: string; ptyId?: string }
+          ) => createManagerPane(opts)
+        ),
+        splitPaneAroundLeafIds: vi.fn(
+          (
+            _sourceLeafIds: readonly string[],
+            _paneId: number,
+            _direction: 'horizontal' | 'vertical',
+            opts?: { activate?: boolean; leafId?: string; ptyId?: string }
+          ) => createManagerPane(opts)
+        ),
+        arrangeOrchestrationGrid: vi.fn(() => {
+          if (failureStep === 'listener-throw') {
+            throw new Error('listener failed')
+          }
+        }),
+        setActivePane: vi.fn((paneId: number) => {
+          if (managerPanes.has(paneId)) {
+            activeManagerPaneId = paneId
+          }
+        }),
+        closePane: vi.fn((paneId: number) => {
+          rollbackCount += 1
+          if (failureStep === 'rollback-cleanup' && rollbackCount === 1) {
+            throw new Error('transient rollback cleanup failed')
+          }
+          disposeCreatedResource(paneId)
+          if (activeManagerPaneId === paneId) {
+            activeManagerPaneId = managerPanes.keys().next().value ?? null
+          }
+        })
+      }
+      const focusRuntimeTerminalSurface = vi.fn(() => {
+        failAfterMutation('runtime-focus')
+        return false
+      })
+      const focusTerminalTabSurface = vi.fn(() => {
+        failAfterMutation('tab-focus')
+      })
+      const dispatchEvent = vi.fn((event: Event) => {
+        if (event.type === 'orca-split-terminal-pane') {
+          if (failureStep === 'listener-absent') {
+            return emptySplitEventTarget.dispatchEvent(event)
+          }
+          if (failureStep === 'wrong-tab') {
+            const detail = (event as SplitEvent).detail
+            return splitEventTarget.dispatchEvent(
+              new CustomEvent(event.type, {
+                detail: { ...detail, tabId: 'tab-wrong-listener' }
+              })
+            )
+          }
+          failAfterMutation('dispatch')
+          return splitEventTarget.dispatchEvent(event)
+        }
+        return true
+      })
+
+      state = buildStoreState({
+        activeView: 'editor',
+        activeWorktreeId: 'wt-before-grid',
+        activeTabType: 'editor',
+        activeTabId: 'tab-before-grid',
+        activeTabIdByWorktree: { 'wt-before-grid': 'tab-before-grid' },
+        isNavigatingHistory: false,
+        lastVisitedAtByWorktreeId: { 'wt-before-grid': 1 },
+        worktreeNavHistory: ['wt-before-grid'],
+        pendingRevealWorktree: null,
+        setActiveView,
+        setActiveWorktree,
+        markWorktreeVisited,
+        recordWorktreeVisit,
+        setActiveTabType,
+        setActiveTab,
+        revealWorktreeInSidebar,
+        updateTabPtyId,
+        setTabLayout,
+        registerAgentLaunchConfig,
+        clearAgentLaunchConfig,
+        setTabCustomTitle: vi.fn(),
+        queueTabStartupCommand: vi.fn(),
+        createTab: vi.fn(() => {
+          throw new Error('existing grid append must not create a tab')
+        }),
+        tabsByWorktree: {
+          [GRID_WORKTREE_ID]: [{ id: GRID_TAB_ID, ptyId: null, title: 'Orchestration workers' }]
+        },
+        ptyIdsByTabId: { [GRID_TAB_ID]: ['pty-grid-a', 'pty-grid-b'] },
+        terminalLayoutsByTabId: { [GRID_TAB_ID]: initialGridLayout() },
+        agentLaunchConfigByPaneKey: {},
+        folderWorkspaces: [],
+        projectGroups: [],
+        openFiles: [],
+        browserTabsByWorktree: {},
+        tabBarOrderByWorktree: {},
+        unifiedTabsByWorktree: {},
+        groupsByWorktree: {},
+        settings: {
+          terminalFontSize: 13,
+          experimentalNativeChat: false,
+          openAgentTabsInChatByDefault: false,
+          activeRuntimeEnvironmentId: undefined
+        }
+      })
+      seedManagerFromLayout(initialGridLayout())
+
+      vi.doMock('react', async () => {
+        const actual = await vi.importActual<typeof ReactModule>('react')
+        return {
+          ...actual,
+          useEffect: (effect: () => void | (() => void)) => {
+            disposeEffect = effect() ?? (() => undefined)
+          }
+        }
+      })
+      vi.doMock('../store', () => ({
+        useAppStore: {
+          subscribe: vi.fn(() => () => undefined),
+          getState: () => state,
+          setState: (next: StoreLike | ((current: StoreLike) => StoreLike), replace?: boolean) => {
+            const nextState = typeof next === 'function' ? next(state) : next
+            state = replace ? nextState : { ...state, ...nextState }
+          }
+        }
+      }))
+      stubAuxiliaryModules()
+      vi.doMock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface }))
+      vi.doMock('@/runtime/sync-runtime-graph', () => ({
+        focusRuntimeTerminalSurface
+      }))
+      vi.doMock('@/lib/activate-tab-and-focus-pane', () => ({
+        activateTabAndFocusPane: vi.fn()
+      }))
+      vi.stubGlobal('window', {
+        ...buildWindowApi({
+          onSet: () => () => undefined,
+          ui: {
+            onCreateTerminal: (listener: (data: GridCreateTerminalData) => void) => {
+              createTerminalListenerRef.current = listener
+              return () => undefined
+            },
+            onRequestTerminalCreate: (listener: (data: GridRequestTerminalCreateData) => void) => {
+              requestTerminalCreateListenerRef.current = listener
+              return () => undefined
+            },
+            replyTerminalCreate
+          }
+        }),
+        dispatchEvent
+      })
+
+      const { createTerminalPaneSplitEventHandler } =
+        await import('../components/terminal-pane/use-terminal-pane-lifecycle')
+      splitEventTarget.addEventListener(
+        'orca-split-terminal-pane',
+        createTerminalPaneSplitEventHandler({
+          tabId: GRID_TAB_ID,
+          getManager: () => (failureStep === 'manager-absent' ? null : (gridPaneManager as never)),
+          startupDeps: splitStartupDeps,
+          recordSplit: () => true,
+          consumeMirrorTelemetry: vi.fn(() => false)
+        })
+      )
+      const { registerTerminalSurfaceActionConsumer, useIpcEvents: initializeIpcEvents } =
+        await import('./useIpcEvents')
+      initializeIpcEvents()
+      await Promise.resolve()
+
+      if (!createTerminalListenerRef.current || !requestTerminalCreateListenerRef.current) {
+        throw new Error('Expected terminal lifecycle listeners to be registered')
+      }
+      const createTerminal = createTerminalListenerRef.current
+      const requestTerminalCreate = requestTerminalCreateListenerRef.current
+
+      return {
+        createTerminal,
+        requestTerminalCreate,
+        registerConsumer: () => registerTerminalSurfaceActionConsumer(GRID_TAB_ID),
+        replyTerminalCreate,
+        dispatchEvent,
+        focusRuntimeTerminalSurface,
+        focusTerminalTabSurface,
+        getState: () => state,
+        setActiveGridLeaf: (leafId) => {
+          const layouts = state.terminalLayoutsByTabId as Record<string, TerminalLayoutSnapshot>
+          replaceState({
+            terminalLayoutsByTabId: {
+              ...layouts,
+              [GRID_TAB_ID]: { ...layouts[GRID_TAB_ID]!, activeLeafId: leafId }
+            }
+          })
+          activeManagerPaneId = managerPaneIdByLeafId.get(leafId) ?? activeManagerPaneId
+        },
+        setGridLayout: (layout) => {
+          replaceState({
+            terminalLayoutsByTabId: { [GRID_TAB_ID]: layout },
+            ptyIdsByTabId: { [GRID_TAB_ID]: Object.values(layout.ptyIdsByLeafId ?? {}) }
+          })
+          seedManagerFromLayout(layout)
+        },
+        setFailureStep: (step) => {
+          failureStep = step
+        },
+        getOrphanResourceCount: () =>
+          [...createdResources.values()].reduce(
+            (count, resource) =>
+              count +
+              resource.domNodes +
+              resource.listeners +
+              resource.parsers +
+              resource.ptys +
+              resource.timers,
+            0
+          ),
+        getRollbackCount: () => rollbackCount,
+        setActiveWorktree,
+        markWorktreeVisited,
+        revealWorktreeInSidebar,
+        updateTabPtyId,
+        dispose: () => disposeEffect()
+      }
+    }
+
+    function splitEvents(harness: GridLifecycleHarness): SplitEvent[] {
+      return harness.dispatchEvent.mock.calls
+        .map(([event]) => event as Event)
+        .filter((event) => event.type === 'orca-split-terminal-pane') as SplitEvent[]
+    }
+
+    function rendererStateSnapshot(harness: GridLifecycleHarness): unknown {
+      const state = harness.getState()
+      return structuredClone({
+        activeView: state.activeView,
+        activeWorktreeId: state.activeWorktreeId,
+        activeTabType: state.activeTabType,
+        activeTabId: state.activeTabId,
+        lastVisitedAtByWorktreeId: state.lastVisitedAtByWorktreeId,
+        worktreeNavHistory: state.worktreeNavHistory,
+        pendingRevealWorktree: state.pendingRevealWorktree,
+        tabsByWorktree: state.tabsByWorktree,
+        ptyIdsByTabId: state.ptyIdsByTabId,
+        terminalLayoutsByTabId: state.terminalLayoutsByTabId,
+        agentLaunchConfigByPaneKey: state.agentLaunchConfigByPaneKey
+      })
+    }
+
+    function queueFocusedPtyAppend(
+      harness: GridLifecycleHarness,
+      requestId = 'pty-transaction'
+    ): void {
+      harness.createTerminal({
+        requestId,
+        worktreeId: GRID_WORKTREE_ID,
+        command: 'codex --transaction',
+        launchConfig: { agentArgs: '--transaction', agentEnv: {} },
+        launchAgent: 'codex',
+        title: 'Worker C',
+        ptyId: 'pty-grid-c',
+        presentation: 'focused',
+        tabId: GRID_TAB_ID,
+        leafId: GRID_LEAF_C,
+        splitFromLeafId: GRID_LEAF_B,
+        splitSourceLeafIds: [GRID_LEAF_A, GRID_LEAF_B],
+        splitDirection: 'vertical',
+        placement: 'orchestration-grid'
+      })
+    }
+
+    function queueFocusedRendererAppend(
+      harness: GridLifecycleHarness,
+      requestId = 'renderer-transaction'
+    ): void {
+      harness.requestTerminalCreate({
+        requestId,
+        worktreeId: GRID_WORKTREE_ID,
+        command: 'codex --transaction',
+        launchConfig: { agentArgs: '--transaction', agentEnv: {} },
+        launchAgent: 'codex',
+        title: 'Worker C',
+        presentation: 'focused',
+        placement: 'orchestration-grid'
+      })
+    }
+
+    function expectActionRemovedAfterSettlement(harness: GridLifecycleHarness): void {
+      const replyCount = harness.replyTerminalCreate.mock.calls.length
+      const unregisterLateConsumer = harness.registerConsumer()
+      expect(harness.replyTerminalCreate).toHaveBeenCalledTimes(replyCount)
+      unregisterLateConsumer()
+    }
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('consumes two queued PTY-backed appends from the freshest grid state', async () => {
+      vi.useFakeTimers()
+      const harness = await setupGridLifecycleHarness()
+      harness.setGridLayout(fullGridRowLayout())
+
+      harness.createTerminal({
+        requestId: 'pty-append-c',
+        worktreeId: GRID_WORKTREE_ID,
+        command: 'codex --worker-c',
+        launchConfig: { agentArgs: '--worker-c', agentEnv: {} },
+        launchAgent: 'codex',
+        title: 'Worker C',
+        ptyId: 'pty-grid-c',
+        presentation: 'focused',
+        tabId: GRID_TAB_ID,
+        leafId: GRID_LEAF_C,
+        splitFromLeafId: GRID_LEAF_B,
+        splitSourceLeafIds: [GRID_LEAF_A, GRID_LEAF_B],
+        splitDirection: 'vertical',
+        placement: 'orchestration-grid'
+      })
+      harness.createTerminal({
+        requestId: 'pty-append-d',
+        worktreeId: GRID_WORKTREE_ID,
+        command: 'codex --worker-d',
+        title: 'Worker D',
+        ptyId: 'pty-grid-d',
+        presentation: 'background',
+        tabId: GRID_TAB_ID,
+        leafId: GRID_LEAF_D,
+        splitFromLeafId: GRID_LEAF_B,
+        splitSourceLeafIds: [GRID_LEAF_A, GRID_LEAF_B],
+        splitDirection: 'vertical',
+        placement: 'orchestration-grid'
+      })
+      harness.setActiveGridLeaf(GRID_LEAF_B)
+
+      const unregister = harness.registerConsumer()
+      const layout = (
+        harness.getState().terminalLayoutsByTabId as Record<string, TerminalLayoutSnapshot>
+      )[GRID_TAB_ID]!
+      const events = splitEvents(harness)
+
+      expect(collectTerminalLayoutLeafIds(layout.root)).toEqual([
+        GRID_LEAF_A,
+        GRID_LEAF_B,
+        GRID_LEAF_E,
+        GRID_LEAF_F,
+        GRID_LEAF_G,
+        GRID_LEAF_H,
+        GRID_LEAF_C,
+        GRID_LEAF_D
+      ])
+      expect(layout.activeLeafId).toBe(GRID_LEAF_C)
+      expect(layout.ptyIdsByLeafId).toEqual({
+        [GRID_LEAF_A]: 'pty-grid-a',
+        [GRID_LEAF_B]: 'pty-grid-b',
+        [GRID_LEAF_E]: 'pty-grid-e',
+        [GRID_LEAF_F]: 'pty-grid-f',
+        [GRID_LEAF_G]: 'pty-grid-g',
+        [GRID_LEAF_H]: 'pty-grid-h',
+        [GRID_LEAF_C]: 'pty-grid-c',
+        [GRID_LEAF_D]: 'pty-grid-d'
+      })
+      expect(layout.titlesByLeafId).toEqual({
+        [GRID_LEAF_A]: 'Worker A',
+        [GRID_LEAF_B]: 'Worker B',
+        [GRID_LEAF_E]: 'Worker E',
+        [GRID_LEAF_F]: 'Worker F',
+        [GRID_LEAF_G]: 'Worker G',
+        [GRID_LEAF_H]: 'Worker H',
+        [GRID_LEAF_C]: 'Worker C',
+        [GRID_LEAF_D]: 'Worker D'
+      })
+      expect(events.map((event) => event.detail)).toMatchObject([
+        {
+          direction: 'horizontal',
+          sourceLeafId: GRID_LEAF_H,
+          sourceLeafIds: [
+            GRID_LEAF_A,
+            GRID_LEAF_B,
+            GRID_LEAF_E,
+            GRID_LEAF_F,
+            GRID_LEAF_G,
+            GRID_LEAF_H
+          ],
+          sourcePtyId: 'pty-grid-h',
+          newLeafId: GRID_LEAF_C,
+          ptyId: 'pty-grid-c',
+          activate: true
+        },
+        {
+          direction: 'vertical',
+          sourceLeafId: GRID_LEAF_C,
+          sourceLeafIds: [GRID_LEAF_C],
+          sourcePtyId: 'pty-grid-c',
+          newLeafId: GRID_LEAF_D,
+          ptyId: 'pty-grid-d',
+          activate: false
+        }
+      ])
+      expect(harness.replyTerminalCreate.mock.calls.map(([reply]) => reply.requestId)).toEqual([
+        'pty-append-c',
+        'pty-append-d'
+      ])
+      expect(harness.focusRuntimeTerminalSurface).toHaveBeenCalledTimes(1)
+      expect(harness.focusRuntimeTerminalSurface).toHaveBeenCalledWith(GRID_TAB_ID, GRID_LEAF_C)
+      expect(harness.updateTabPtyId.mock.calls).toEqual([
+        [GRID_TAB_ID, 'pty-grid-c'],
+        [GRID_TAB_ID, 'pty-grid-d']
+      ])
+      expect(harness.dispatchEvent.mock.invocationCallOrder[0]).toBeLessThan(
+        harness.updateTabPtyId.mock.invocationCallOrder[0] ?? 0
+      )
+      expect(harness.dispatchEvent.mock.invocationCallOrder[1]).toBeLessThan(
+        harness.updateTabPtyId.mock.invocationCallOrder[1] ?? 0
+      )
+      expect(vi.getTimerCount()).toBe(0)
+
+      unregister()
+      harness.dispose()
+      vi.useRealTimers()
+    })
+
+    it('consumes two queued renderer-backed appends in canonical grid order', async () => {
+      vi.useFakeTimers()
+      const harness = await setupGridLifecycleHarness()
+      harness.setGridLayout(fullGridRowLayout())
+
+      harness.requestTerminalCreate({
+        requestId: 'request-append-c',
+        worktreeId: GRID_WORKTREE_ID,
+        command: 'codex --worker-c',
+        launchConfig: { agentArgs: '--worker-c', agentEnv: {} },
+        launchAgent: 'codex',
+        title: 'Worker C',
+        presentation: 'focused',
+        placement: 'orchestration-grid'
+      })
+      harness.requestTerminalCreate({
+        requestId: 'request-append-d',
+        worktreeId: GRID_WORKTREE_ID,
+        command: 'codex --worker-d',
+        title: 'Worker D',
+        presentation: 'background',
+        placement: 'orchestration-grid'
+      })
+      harness.setActiveGridLeaf(GRID_LEAF_B)
+
+      const unregister = harness.registerConsumer()
+      const layout = (
+        harness.getState().terminalLayoutsByTabId as Record<string, TerminalLayoutSnapshot>
+      )[GRID_TAB_ID]!
+      const events = splitEvents(harness)
+      const appendedLeafIds = events.map((event) => event.detail.newLeafId!)
+
+      expect(collectTerminalLayoutLeafIds(layout.root)).toEqual([
+        GRID_LEAF_A,
+        GRID_LEAF_B,
+        GRID_LEAF_E,
+        GRID_LEAF_F,
+        GRID_LEAF_G,
+        GRID_LEAF_H,
+        ...appendedLeafIds
+      ])
+      expect(layout.activeLeafId).toBe(appendedLeafIds[0])
+      expect(Object.values(layout.titlesByLeafId ?? {})).toEqual([
+        'Worker A',
+        'Worker B',
+        'Worker E',
+        'Worker F',
+        'Worker G',
+        'Worker H',
+        'Worker C',
+        'Worker D'
+      ])
+      expect(events.map((event) => event.detail)).toMatchObject([
+        {
+          direction: 'horizontal',
+          sourceLeafId: GRID_LEAF_H,
+          sourceLeafIds: [
+            GRID_LEAF_A,
+            GRID_LEAF_B,
+            GRID_LEAF_E,
+            GRID_LEAF_F,
+            GRID_LEAF_G,
+            GRID_LEAF_H
+          ],
+          newLeafId: appendedLeafIds[0],
+          startup: { command: 'codex --worker-c' },
+          activate: true
+        },
+        {
+          direction: 'vertical',
+          sourceLeafId: appendedLeafIds[0],
+          sourceLeafIds: [appendedLeafIds[0]],
+          newLeafId: appendedLeafIds[1],
+          startup: { command: 'codex --worker-d' },
+          activate: false
+        }
+      ])
+      expect(harness.replyTerminalCreate.mock.calls.map(([reply]) => reply)).toMatchObject([
+        { requestId: 'request-append-c', leafId: appendedLeafIds[0] },
+        { requestId: 'request-append-d', leafId: appendedLeafIds[1] }
+      ])
+      expect(harness.focusRuntimeTerminalSurface).toHaveBeenCalledTimes(1)
+      expect(harness.focusRuntimeTerminalSurface).toHaveBeenCalledWith(
+        GRID_TAB_ID,
+        appendedLeafIds[0]
+      )
+      expect(vi.getTimerCount()).toBe(0)
+
+      unregister()
+      harness.dispose()
+      vi.useRealTimers()
+    })
+
+    it.each(['binding', 'layout', 'dispatch'] as const)(
+      'rolls back a PTY-backed append when %s throws before commit',
+      async (failureStep) => {
+        vi.useFakeTimers()
+        const harness = await setupGridLifecycleHarness()
+        queueFocusedPtyAppend(harness)
+        harness.setActiveGridLeaf(GRID_LEAF_B)
+        const stateBeforeConsumption = rendererStateSnapshot(harness)
+        harness.setFailureStep(failureStep)
+
+        const unregister = harness.registerConsumer()
+
+        expect(rendererStateSnapshot(harness)).toEqual(stateBeforeConsumption)
+        expect(harness.replyTerminalCreate).toHaveBeenCalledOnce()
+        expect(harness.replyTerminalCreate).toHaveBeenCalledWith({
+          requestId: 'pty-transaction',
+          error: `${failureStep} failed`
+        })
+        expect(harness.getOrphanResourceCount()).toBe(0)
+        expect(harness.getRollbackCount()).toBe(failureStep === 'dispatch' ? 0 : 1)
+        if (failureStep === 'binding') {
+          expect(harness.updateTabPtyId).toHaveBeenCalledOnce()
+        } else {
+          expect(harness.updateTabPtyId).not.toHaveBeenCalled()
+        }
+        expect(harness.getState().agentLaunchConfigByPaneKey).toEqual({})
+        expect(vi.getTimerCount()).toBe(0)
+        unregister()
+        expectActionRemovedAfterSettlement(harness)
+        harness.dispose()
+      }
+    )
+
+    it('rejects a PTY-backed append when the split event has no listener', async () => {
+      vi.useFakeTimers()
+      const harness = await setupGridLifecycleHarness()
+      queueFocusedPtyAppend(harness)
+      harness.setActiveGridLeaf(GRID_LEAF_B)
+      const stateBeforeConsumption = rendererStateSnapshot(harness)
+      harness.setFailureStep('listener-absent')
+
+      const unregister = harness.registerConsumer()
+
+      expect(rendererStateSnapshot(harness)).toEqual(stateBeforeConsumption)
+      expect(harness.replyTerminalCreate).toHaveBeenCalledOnce()
+      expect(harness.replyTerminalCreate).toHaveBeenCalledWith({
+        requestId: 'pty-transaction',
+        error: `Terminal split event for ${GRID_TAB_ID} was not acknowledged`
+      })
+      expect(harness.setActiveWorktree).not.toHaveBeenCalled()
+      expect(harness.markWorktreeVisited).not.toHaveBeenCalled()
+      expect(harness.revealWorktreeInSidebar).not.toHaveBeenCalled()
+      expect(harness.updateTabPtyId).not.toHaveBeenCalled()
+      expect(vi.getTimerCount()).toBe(0)
+      unregister()
+      expectActionRemovedAfterSettlement(harness)
+      harness.dispose()
+    })
+
+    it('retries a transient rollback cleanup before discarding the acknowledgement', async () => {
+      vi.useFakeTimers()
+      const harness = await setupGridLifecycleHarness()
+      queueFocusedPtyAppend(harness, 'rollback-cleanup')
+      harness.setFailureStep('rollback-cleanup')
+
+      const unregister = harness.registerConsumer()
+
+      expect(harness.getRollbackCount()).toBe(2)
+      expect(harness.getOrphanResourceCount()).toBe(0)
+      expect(harness.replyTerminalCreate).toHaveBeenCalledWith({
+        requestId: 'rollback-cleanup',
+        error: 'layout failed'
+      })
+      unregister()
+      expectActionRemovedAfterSettlement(harness)
+      harness.dispose()
+    })
+
+    it.each([
+      {
+        path: 'renderer-backed',
+        failureStep: 'listener-absent' as const,
+        expectedError: 'was not acknowledged',
+        expectedRollbacks: 0
+      },
+      ...(
+        [
+          ['split-null', 'did not create a pane', 0],
+          ['listener-throw', 'listener failed', 1],
+          ['partial-create', 'partial create failed', 1],
+          ['wrong-tab', 'was not acknowledged', 0],
+          ['manager-absent', 'manager', 0],
+          ['invalid-source', 'source', 0],
+          ['duplicate-leaf', 'already exists', 0]
+        ] as const
+      ).flatMap(([failureStep, expectedError, expectedRollbacks]) =>
+        (['PTY-backed', 'renderer-backed'] as const).map((path) => ({
+          path,
+          failureStep,
+          expectedError,
+          expectedRollbacks
+        }))
+      )
+    ])(
+      'compensates a $path append after $failureStep and settles it once',
+      async ({ path, failureStep, expectedError, expectedRollbacks }) => {
+        vi.useFakeTimers()
+        const harness = await setupGridLifecycleHarness()
+        const requestId = `${path}-${failureStep}`
+        if (path === 'PTY-backed') {
+          queueFocusedPtyAppend(harness, requestId)
+        } else {
+          queueFocusedRendererAppend(harness, requestId)
+        }
+        harness.setActiveGridLeaf(GRID_LEAF_B)
+        const stateBeforeConsumption = rendererStateSnapshot(harness)
+        harness.setFailureStep(failureStep)
+
+        const unregister = harness.registerConsumer()
+
+        expect(rendererStateSnapshot(harness)).toEqual(stateBeforeConsumption)
+        expect(harness.getOrphanResourceCount()).toBe(0)
+        expect(harness.getRollbackCount()).toBe(expectedRollbacks)
+        expect(harness.updateTabPtyId).not.toHaveBeenCalled()
+        expect(harness.replyTerminalCreate).toHaveBeenCalledOnce()
+        expect(harness.replyTerminalCreate).toHaveBeenCalledWith({
+          requestId,
+          error: expect.stringContaining(expectedError)
+        })
+        expect(vi.getTimerCount()).toBe(0)
+        unregister()
+        expectActionRemovedAfterSettlement(harness)
+        harness.dispose()
+      }
+    )
+
+    it.each(['layout', 'dispatch'] as const)(
+      'rolls back a renderer-backed append when %s throws before commit',
+      async (failureStep) => {
+        vi.useFakeTimers()
+        const harness = await setupGridLifecycleHarness()
+        queueFocusedRendererAppend(harness)
+        harness.setActiveGridLeaf(GRID_LEAF_B)
+        const stateBeforeConsumption = rendererStateSnapshot(harness)
+        harness.setFailureStep(failureStep)
+
+        const unregister = harness.registerConsumer()
+
+        expect(rendererStateSnapshot(harness)).toEqual(stateBeforeConsumption)
+        expect(harness.replyTerminalCreate).toHaveBeenCalledOnce()
+        expect(harness.replyTerminalCreate).toHaveBeenCalledWith({
+          requestId: 'renderer-transaction',
+          error: `${failureStep} failed`
+        })
+        expect(harness.getOrphanResourceCount()).toBe(0)
+        expect(harness.getRollbackCount()).toBe(failureStep === 'layout' ? 1 : 0)
+        expect(harness.updateTabPtyId).not.toHaveBeenCalled()
+        expect(harness.getState().agentLaunchConfigByPaneKey).toEqual({})
+        expect(vi.getTimerCount()).toBe(0)
+        unregister()
+        expectActionRemovedAfterSettlement(harness)
+        harness.dispose()
+      }
+    )
+
+    it.each(['activation', 'sidebar', 'runtime-focus', 'tab-focus'] as const)(
+      'keeps a committed PTY-backed append consumed when post-commit %s throws',
+      async (failureStep) => {
+        vi.useFakeTimers()
+        const harness = await setupGridLifecycleHarness()
+        queueFocusedPtyAppend(harness, `pty-${failureStep}`)
+        harness.setFailureStep(failureStep)
+
+        const unregister = harness.registerConsumer()
+        const state = harness.getState()
+        const layout = (state.terminalLayoutsByTabId as Record<string, TerminalLayoutSnapshot>)[
+          GRID_TAB_ID
+        ]!
+
+        expect(collectTerminalLayoutLeafIds(layout.root)).toEqual([
+          GRID_LEAF_A,
+          GRID_LEAF_B,
+          GRID_LEAF_C
+        ])
+        expect(layout.activeLeafId).toBe(GRID_LEAF_C)
+        expect(layout.ptyIdsByLeafId?.[GRID_LEAF_C]).toBe('pty-grid-c')
+        expect(state.agentLaunchConfigByPaneKey).toHaveProperty(
+          makePaneKey(GRID_TAB_ID, GRID_LEAF_C)
+        )
+        expect(splitEvents(harness)).toHaveLength(1)
+        expect(harness.replyTerminalCreate).toHaveBeenCalledOnce()
+        expect(harness.replyTerminalCreate).toHaveBeenCalledWith({
+          requestId: `pty-${failureStep}`,
+          tabId: GRID_TAB_ID,
+          leafId: GRID_LEAF_C,
+          layout,
+          title: 'Worker C'
+        })
+        expect(vi.getTimerCount()).toBe(0)
+        unregister()
+        expectActionRemovedAfterSettlement(harness)
+        harness.dispose()
+      }
+    )
+
+    it.each(['activation', 'sidebar', 'runtime-focus', 'tab-focus'] as const)(
+      'keeps a committed renderer-backed append consumed when post-commit %s throws',
+      async (failureStep) => {
+        vi.useFakeTimers()
+        const harness = await setupGridLifecycleHarness()
+        queueFocusedRendererAppend(harness, `renderer-${failureStep}`)
+        harness.setFailureStep(failureStep)
+
+        const unregister = harness.registerConsumer()
+        const event = splitEvents(harness)[0]!
+        const appendedLeafId = event.detail.newLeafId!
+        const state = harness.getState()
+        const layout = (state.terminalLayoutsByTabId as Record<string, TerminalLayoutSnapshot>)[
+          GRID_TAB_ID
+        ]!
+
+        expect(collectTerminalLayoutLeafIds(layout.root)).toEqual([
+          GRID_LEAF_A,
+          GRID_LEAF_B,
+          appendedLeafId
+        ])
+        expect(layout.activeLeafId).toBe(appendedLeafId)
+        expect(layout.titlesByLeafId?.[appendedLeafId]).toBe('Worker C')
+        expect(state.agentLaunchConfigByPaneKey).toHaveProperty(
+          makePaneKey(GRID_TAB_ID, appendedLeafId)
+        )
+        expect(harness.replyTerminalCreate).toHaveBeenCalledOnce()
+        expect(harness.replyTerminalCreate).toHaveBeenCalledWith({
+          requestId: `renderer-${failureStep}`,
+          tabId: GRID_TAB_ID,
+          leafId: appendedLeafId,
+          layout,
+          title: 'Worker C'
+        })
+        expect(vi.getTimerCount()).toBe(0)
+        unregister()
+        expectActionRemovedAfterSettlement(harness)
+        harness.dispose()
+      }
+    )
   })
 
   it('caps pending mobile state events while startup hydration is unresolved', async () => {

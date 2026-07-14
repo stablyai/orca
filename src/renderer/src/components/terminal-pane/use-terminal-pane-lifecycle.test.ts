@@ -3,6 +3,10 @@ import {
   applyTerminalPaneCloseRequest,
   applyTerminalScrollbackRowsToMountedPanes,
   clearQueuedInitialCwdAfterFirstPane,
+  createRetryableTerminalTransportDestroyCleanup,
+  createTerminalPaneSplitEventHandler,
+  disposeTrackedTerminalPaneResource,
+  disposeTerminalPaneResources,
   getPreviousVisibleForTerminalPane,
   isTerminalPaneVisibilityResume,
   mapRestoredPaneTitlesByPaneId,
@@ -15,6 +19,11 @@ import {
   splitPaneWithOneShotStartup,
   suppressIntentionalPaneCloseExit
 } from './use-terminal-pane-lifecycle'
+import {
+  SPLIT_TERMINAL_PANE_EVENT,
+  type SplitTerminalPaneAcknowledgement,
+  type SplitTerminalPaneDetail
+} from '@/constants/terminal'
 
 describe('applyTerminalPaneCloseRequest', () => {
   it('detaches a rolled-back split surface without closing its PTY', () => {
@@ -245,6 +254,382 @@ describe('splitPaneWithOneShotStartup', () => {
 
     expect(splitPane).toHaveBeenCalledTimes(1)
     expect(deps.startup).toBeNull()
+  })
+})
+
+describe('disposeTerminalPaneResources', () => {
+  it('runs every cleanup step and preserves multiple cleanup failures', () => {
+    const cleanupOrder: string[] = []
+
+    expect(() =>
+      disposeTerminalPaneResources([
+        () => {
+          cleanupOrder.push('parser')
+          throw new Error('parser cleanup failed')
+        },
+        () => cleanupOrder.push('listener'),
+        () => {
+          cleanupOrder.push('transport')
+          throw new Error('transport cleanup failed')
+        },
+        () => cleanupOrder.push('timer')
+      ])
+    ).toThrow(AggregateError)
+
+    expect(cleanupOrder).toEqual(['parser', 'listener', 'transport', 'timer'])
+  })
+
+  it('retries only failed cleanup steps and releases their tracked handle after success', () => {
+    const cleanupOrder: string[] = []
+    const parserCleanup = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        cleanupOrder.push('parser-failed')
+        throw new Error('parser cleanup failed')
+      })
+      .mockImplementationOnce(() => cleanupOrder.push('parser-retried'))
+    const listenerCleanup = vi.fn(() => cleanupOrder.push('listener'))
+    const cleanups = [parserCleanup, listenerCleanup]
+
+    expect(() => disposeTerminalPaneResources(cleanups)).toThrow('parser cleanup failed')
+    expect(cleanups).toHaveLength(1)
+    expect(() => disposeTerminalPaneResources(cleanups)).not.toThrow()
+    expect(cleanups).toHaveLength(0)
+    expect(cleanupOrder).toEqual(['parser-failed', 'listener', 'parser-retried'])
+
+    const tracked = new Map([[7, { dispose: parserCleanup }]])
+    parserCleanup.mockImplementationOnce(() => {
+      throw new Error('tracked cleanup failed')
+    })
+    expect(() => disposeTrackedTerminalPaneResource(tracked, 7)).toThrow('tracked cleanup failed')
+    expect(tracked.has(7)).toBe(true)
+    expect(() => disposeTrackedTerminalPaneResource(tracked, 7)).not.toThrow()
+    expect(tracked.has(7)).toBe(false)
+  })
+
+  it('retains async transport ownership across rejection until a later destroy succeeds', async () => {
+    let rejectFirstDestroy!: (error: Error) => void
+    let resolveSecondDestroy!: () => void
+    const firstDestroy = new Promise<void>((_resolve, reject) => {
+      rejectFirstDestroy = reject
+    })
+    const secondDestroy = new Promise<void>((resolve) => {
+      resolveSecondDestroy = resolve
+    })
+    const destroy = vi.fn().mockReturnValueOnce(firstDestroy).mockReturnValueOnce(secondDestroy)
+    let owned = true
+    const settled: ('fulfilled' | 'rejected')[] = []
+    const cleanup = createRetryableTerminalTransportDestroyCleanup({
+      destroy,
+      releaseOwnership: () => {
+        owned = false
+      },
+      onAsyncSettled: (status) => settled.push(status)
+    })
+
+    expect(() => cleanup()).toThrow('PTY destroy is still pending')
+    expect(owned).toBe(true)
+    rejectFirstDestroy(new Error('transient async destroy failure'))
+    await firstDestroy.catch(() => undefined)
+    await Promise.resolve()
+    expect(settled).toEqual(['rejected'])
+    expect(owned).toBe(true)
+
+    expect(() => cleanup()).toThrow('PTY destroy is still pending')
+    expect(destroy).toHaveBeenCalledTimes(2)
+    expect(owned).toBe(true)
+    resolveSecondDestroy()
+    await secondDestroy
+    await Promise.resolve()
+    expect(settled).toEqual(['rejected', 'fulfilled'])
+    expect(owned).toBe(true)
+
+    expect(() => cleanup()).not.toThrow()
+    expect(owned).toBe(false)
+    expect(() => cleanup()).not.toThrow()
+    expect(destroy).toHaveBeenCalledTimes(2)
+  })
+
+  it('retries only ownership release after synchronous transport destruction succeeds', () => {
+    const destroy = vi.fn()
+    const releaseOwnership = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error('ownership release failed')
+      })
+      .mockImplementationOnce(() => undefined)
+    const cleanup = createRetryableTerminalTransportDestroyCleanup({
+      destroy,
+      releaseOwnership,
+      onAsyncSettled: vi.fn()
+    })
+
+    expect(() => cleanup()).toThrow('ownership release failed')
+    expect(() => cleanup()).not.toThrow()
+    expect(destroy).toHaveBeenCalledOnce()
+    expect(releaseOwnership).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('transactional terminal split event listener', () => {
+  const tabId = 'tab-grid'
+  const sourceLeafId = '11111111-1111-4111-8111-111111111111'
+  const newLeafId = '22222222-2222-4222-8222-222222222222'
+
+  function createManager(overrides: Record<string, unknown> = {}) {
+    return {
+      getNumericIdForLeaf: vi.fn((leafId: string) => (leafId === sourceLeafId ? 1 : null)),
+      getPanes: vi.fn(() => [{ id: 1 }]),
+      getActivePane: vi.fn(() => ({ id: 1 })),
+      splitPane: vi.fn(() => ({ id: 2, leafId: newLeafId })),
+      splitPaneAroundLeafIds: vi.fn(() => ({ id: 2, leafId: newLeafId })),
+      arrangeOrchestrationGrid: vi.fn(),
+      setActivePane: vi.fn(),
+      closePane: vi.fn(),
+      ...overrides
+    }
+  }
+
+  function dispatchSplit(args: {
+    manager: ReturnType<typeof createManager> | null
+    detail?: Partial<SplitTerminalPaneDetail>
+    startupDeps?: { startup?: { command: string } | null }
+    recordSplit?: (createdPane: unknown, splitArgs: unknown) => unknown
+    publishCommittedSplit?: () => void
+  }): ReturnType<typeof vi.fn> {
+    const acknowledge = vi.fn<(result: SplitTerminalPaneAcknowledgement) => void>()
+    const target = new EventTarget()
+    target.addEventListener(
+      SPLIT_TERMINAL_PANE_EVENT,
+      createTerminalPaneSplitEventHandler({
+        tabId,
+        getManager: () => args.manager as never,
+        startupDeps: args.startupDeps ?? { startup: null },
+        recordSplit: (createdPane, splitArgs) => {
+          args.recordSplit?.(createdPane, splitArgs)
+          return true
+        },
+        consumeMirrorTelemetry: vi.fn(() => false),
+        publishCommittedSplit: args.publishCommittedSplit
+      })
+    )
+    target.dispatchEvent(
+      new CustomEvent<SplitTerminalPaneDetail>(SPLIT_TERMINAL_PANE_EVENT, {
+        detail: {
+          tabId,
+          paneRuntimeId: -1,
+          direction: 'vertical',
+          sourceLeafId,
+          sourceLeafIds: [sourceLeafId],
+          newLeafId,
+          orchestrationGrid: true,
+          activate: true,
+          acknowledge,
+          ...args.detail
+        }
+      })
+    )
+    return acknowledge
+  }
+
+  it('acknowledges one PTY-backed pane and exposes idempotent rollback before telemetry commit', () => {
+    const manager = createManager()
+    const recordSplit = vi.fn()
+    const publishCommittedSplit = vi.fn()
+
+    const acknowledge = dispatchSplit({
+      manager,
+      detail: { ptyId: 'pty-worker' },
+      recordSplit,
+      publishCommittedSplit
+    })
+
+    expect(acknowledge).toHaveBeenCalledOnce()
+    const result = acknowledge.mock.calls[0]![0]
+    expect(result.status).toBe('success')
+    expect(manager.splitPaneAroundLeafIds).toHaveBeenCalledWith(
+      [sourceLeafId],
+      1,
+      'vertical',
+      expect.objectContaining({
+        leafId: newLeafId,
+        ptyId: 'pty-worker',
+        allowOrchestrationGridMutation: true,
+        notifyLayoutChanged: false
+      })
+    )
+    expect(recordSplit).not.toHaveBeenCalled()
+    expect(publishCommittedSplit).not.toHaveBeenCalled()
+    expect(manager.setActivePane).not.toHaveBeenCalled()
+    if (result.status !== 'success') {
+      throw new Error('Expected a successful split acknowledgement')
+    }
+    result.afterCommit?.()
+    expect(recordSplit).toHaveBeenCalledOnce()
+    expect(publishCommittedSplit).toHaveBeenCalledOnce()
+    expect(manager.setActivePane).toHaveBeenCalledOnce()
+    expect(manager.setActivePane).toHaveBeenCalledWith(2)
+    manager.setActivePane.mockClear()
+    result.rollback()
+    result.rollback()
+    expect(manager.closePane).toHaveBeenCalledOnce()
+    expect(manager.closePane).toHaveBeenCalledWith(2, { notifyLayoutChanged: false })
+    expect(manager.setActivePane).toHaveBeenCalledOnce()
+    expect(manager.setActivePane).toHaveBeenCalledWith(1, {
+      focus: false,
+      notifyActiveChange: false
+    })
+  })
+
+  it('keeps acknowledged rollback retryable when the first close cleanup throws', () => {
+    const manager = createManager({
+      closePane: vi
+        .fn()
+        .mockImplementationOnce(() => {
+          throw new Error('transient pane cleanup failure')
+        })
+        .mockImplementationOnce(() => undefined)
+    })
+    const acknowledge = dispatchSplit({ manager, detail: { ptyId: 'pty-worker' } })
+    const result = acknowledge.mock.calls[0]![0]
+    if (result.status !== 'success') {
+      throw new Error('Expected a successful split acknowledgement')
+    }
+    manager.setActivePane.mockClear()
+
+    expect(() => result.rollback()).toThrow('transient pane cleanup failure')
+    expect(() => result.rollback()).not.toThrow()
+    result.rollback()
+
+    expect(manager.closePane).toHaveBeenCalledTimes(2)
+    expect(manager.setActivePane).toHaveBeenCalledTimes(2)
+  })
+
+  it('scopes a renderer-backed startup to pane creation and clears it after acknowledgement', () => {
+    const startupDeps: { startup?: { command: string } | null } = { startup: null }
+    const observedStartup: unknown[] = []
+    const manager = createManager({
+      splitPaneAroundLeafIds: vi.fn(() => {
+        observedStartup.push(startupDeps.startup)
+        return { id: 2, leafId: newLeafId }
+      })
+    })
+
+    const acknowledge = dispatchSplit({
+      manager,
+      detail: { startup: { command: 'codex --worker' } },
+      startupDeps
+    })
+
+    expect(acknowledge).toHaveBeenCalledOnce()
+    expect(acknowledge.mock.calls[0]![0]).toMatchObject({ status: 'success' })
+    expect(observedStartup).toEqual([{ command: 'codex --worker' }])
+    expect(startupDeps.startup).toBeNull()
+  })
+
+  it.each([
+    {
+      name: 'manager absence',
+      manager: null,
+      expected: 'manager'
+    },
+    {
+      name: 'duplicate leaf',
+      manager: createManager({
+        getNumericIdForLeaf: vi.fn((leafId: string) =>
+          leafId === sourceLeafId ? 1 : leafId === newLeafId ? 2 : null
+        )
+      }),
+      expected: 'already exists'
+    },
+    {
+      name: 'invalid source',
+      manager: createManager({ getNumericIdForLeaf: vi.fn(() => null) }),
+      expected: 'source'
+    },
+    {
+      name: 'null split',
+      manager: createManager({ splitPaneAroundLeafIds: vi.fn(() => null) }),
+      expected: 'did not create'
+    }
+  ])('acknowledges $name as one action failure', ({ manager, expected }) => {
+    const acknowledge = dispatchSplit({ manager })
+
+    expect(acknowledge).toHaveBeenCalledOnce()
+    const result = acknowledge.mock.calls[0]![0]
+    expect(result.status).toBe('failure')
+    if (result.status === 'failure') {
+      expect(result.error).toEqual(
+        expect.objectContaining({ message: expect.stringContaining(expected) })
+      )
+    }
+  })
+
+  it('acknowledges an exception raised during listener preflight', () => {
+    const manager = createManager({
+      getNumericIdForLeaf: vi.fn(() => {
+        throw new Error('listener preflight failed')
+      })
+    })
+
+    const acknowledge = dispatchSplit({ manager })
+
+    expect(acknowledge).toHaveBeenCalledOnce()
+    expect(acknowledge.mock.calls[0]![0]).toMatchObject({
+      status: 'failure',
+      error: expect.objectContaining({ message: 'listener preflight failed' })
+    })
+  })
+
+  it('rolls back a created pane when the listener throws before acknowledgement', () => {
+    const manager = createManager({
+      arrangeOrchestrationGrid: vi.fn(() => {
+        throw new Error('arrange failed')
+      })
+    })
+
+    const acknowledge = dispatchSplit({ manager })
+
+    expect(acknowledge).toHaveBeenCalledOnce()
+    expect(acknowledge.mock.calls[0]![0]).toMatchObject({
+      status: 'failure',
+      error: expect.objectContaining({ message: 'arrange failed' })
+    })
+    expect(manager.closePane).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the listener operation error primary when rollback cleanup also fails', () => {
+    const manager = createManager({
+      arrangeOrchestrationGrid: vi.fn(() => {
+        throw new Error('arrange failed')
+      }),
+      closePane: vi.fn(() => {
+        throw new Error('pane cleanup failed')
+      })
+    })
+
+    const acknowledge = dispatchSplit({ manager })
+
+    expect(acknowledge).toHaveBeenCalledOnce()
+    const result = acknowledge.mock.calls[0]![0]
+    expect(result.status).toBe('failure')
+    if (result.status === 'failure') {
+      expect(result.error).toBeInstanceOf(AggregateError)
+      expect((result.error as Error).message).toContain('arrange failed')
+      expect((result.error as Error).message).toContain('pane cleanup failed')
+      expect((result.error as AggregateError).errors[0]).toEqual(
+        expect.objectContaining({ message: 'arrange failed' })
+      )
+    }
+  })
+
+  it('does not acknowledge a listener registered for another tab', () => {
+    const acknowledge = dispatchSplit({
+      manager: createManager(),
+      detail: { tabId: 'tab-other' }
+    })
+
+    expect(acknowledge).not.toHaveBeenCalled()
   })
 })
 

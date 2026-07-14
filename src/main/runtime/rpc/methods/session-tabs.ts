@@ -118,6 +118,7 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
         tabId: params.tabId,
         root: params.root,
         expandedLeafId: params.expandedLeafId ?? null,
+        layoutMode: params.layoutMode,
         titlesByLeafId: params.titlesByLeafId
       })
   }),

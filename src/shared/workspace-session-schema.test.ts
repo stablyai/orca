@@ -95,12 +95,16 @@ describe('parseWorkspaceSession', () => {
           },
           activeLeafId: 'pane:1',
           expandedLeafId: null,
+          layoutMode: 'orchestration-grid',
           ptyIdsByLeafId: { 'pane:1': 'daemon-session-A' }
         }
       },
       activeWorktreeIdsOnShutdown: ['repo1::/path/wt1']
     })
     expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.terminalLayoutsByTabId.tab1.layoutMode).toBe('orchestration-grid')
+    }
   })
 
   it('preserves an isolated browser tab session partition across hydration', () => {

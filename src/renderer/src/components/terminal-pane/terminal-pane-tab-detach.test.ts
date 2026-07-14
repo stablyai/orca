@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/types'
+import { buildOrchestrationTerminalGridRoot } from '../../../../shared/orchestration-terminal-grid'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode,
+  TerminalTab
+} from '../../../../shared/types'
 import {
   detachTerminalPaneToTab,
   resolveTerminalTabStripDropTarget,
@@ -14,6 +19,44 @@ const EXISTING_TAB_1 = 'tab-existing-1'
 const EXISTING_TAB_2 = 'tab-existing-2'
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
 const LEAF_2 = '22222222-2222-4222-8222-222222222222'
+const GRID_LEAF_IDS = [
+  LEAF_1,
+  LEAF_2,
+  '33333333-3333-4333-8333-333333333333',
+  '44444444-4444-4444-8444-444444444444',
+  '55555555-5555-4555-8555-555555555555',
+  '66666666-6666-4666-8666-666666666666',
+  '77777777-7777-4777-8777-777777777777'
+] as const
+
+type LayoutGeometry = { width: number; height: number }
+
+function measureLayoutGeometry(
+  node: TerminalPaneLayoutNode,
+  geometry: LayoutGeometry,
+  result = new Map<string, LayoutGeometry>()
+): Map<string, LayoutGeometry> {
+  if (node.type === 'leaf') {
+    result.set(node.leafId, geometry)
+    return result
+  }
+  const ratio = node.ratio ?? 0.5
+  measureLayoutGeometry(
+    node.first,
+    node.direction === 'vertical'
+      ? { ...geometry, width: geometry.width * ratio }
+      : { ...geometry, height: geometry.height * ratio },
+    result
+  )
+  measureLayoutGeometry(
+    node.second,
+    node.direction === 'vertical'
+      ? { ...geometry, width: geometry.width * (1 - ratio) }
+      : { ...geometry, height: geometry.height * (1 - ratio) },
+    result
+  )
+  return result
+}
 
 function rect(args: { left: number; top: number; width: number; height: number }): DOMRect {
   return {
@@ -435,6 +478,27 @@ describe('detachTerminalPaneToTab', () => {
     }
 
     const result = detachTerminalPaneToTab({
+  it('commits canonical source geometry after detaching from a maintained grid', () => {
+    const layout: TerminalLayoutSnapshot = {
+      root: buildOrchestrationTerminalGridRoot(GRID_LEAF_IDS),
+      activeLeafId: LEAF_2,
+      expandedLeafId: null,
+      layoutMode: 'orchestration-grid',
+      ptyIdsByLeafId: Object.fromEntries(
+        GRID_LEAF_IDS.map((leafId, index) => [leafId, `pty-${index + 1}`])
+      ),
+      titlesByLeafId: Object.fromEntries(
+        GRID_LEAF_IDS.map((leafId, index) => [leafId, `Worker ${index + 1}`])
+      )
+    }
+    const store = createStore(layout)
+    const manager = {
+      getPanes: vi.fn(() => GRID_LEAF_IDS.map((_, index) => ({ id: index + 1 }))),
+      getLeafId: vi.fn((paneId: number) => GRID_LEAF_IDS[paneId - 1] ?? null),
+      detachPaneForExternalMove: vi.fn(() => true)
+    }
+
+    detachTerminalPaneToTab({
       getStore: () => store,
       manager,
       persistLayoutSnapshot: vi.fn(),
@@ -450,5 +514,22 @@ describe('detachTerminalPaneToTab', () => {
       pendingActivationSpawn: true,
       recordInteraction: true
     })
+    const sourceLayout = store.terminalLayoutsByTabId[SOURCE_TAB_ID]!
+    const geometry = measureLayoutGeometry(sourceLayout.root!, { width: 1, height: 1 })
+    expect([...geometry.keys()]).toEqual(GRID_LEAF_IDS.filter((leafId) => leafId !== LEAF_2))
+    for (const pane of geometry.values()) {
+      expect(pane.width).toBeCloseTo(1 / 6)
+      expect(pane.height).toBe(1)
+    }
+    expect(sourceLayout).toMatchObject({
+      activeLeafId: LEAF_1,
+      expandedLeafId: null,
+      layoutMode: 'orchestration-grid'
+    })
+    expect(sourceLayout.ptyIdsByLeafId).not.toHaveProperty(LEAF_2)
+    expect(sourceLayout.titlesByLeafId).not.toHaveProperty(LEAF_2)
+    expect(store.syncPaneDetachPtyOwnership).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceLayout })
+    )
   })
 })

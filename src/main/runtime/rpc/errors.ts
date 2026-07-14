@@ -8,6 +8,10 @@ import { COMPUTER_ERROR_CODES } from '../../../shared/runtime-types'
 import { LINEAR_ERROR_CODES } from '../../../shared/linear-agent-access'
 import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../shared/agent-session-host-authority'
 import { ARTIFACT_SHARING_DISABLED_CODE } from '../../../shared/artifact-sharing-gate'
+import {
+  TERMINAL_SESSION_STATE_SAVE_FAILED_CODE,
+  isTerminalSessionStateSaveFailure
+} from '../../../shared/terminal-session-state-save-failure'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
   return {
@@ -48,6 +52,7 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'terminal_tab_close_timeout',
   'terminal_tab_not_found',
   'terminal_tab_pinned',
+  'orchestration_grid_manual_split_unsupported',
   'no_active_terminal',
   'repo_not_found',
   'timeout',
@@ -156,6 +161,9 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
   }
   if (RUNTIME_PASSTHROUGH_CODES.has(message)) {
     return errorResponse(id, meta, message, message)
+  }
+  if (isTerminalSessionStateSaveFailure(message)) {
+    return errorResponse(id, meta, TERMINAL_SESSION_STATE_SAVE_FAILED_CODE, message)
   }
   if (message === 'invalid_terminal_send') {
     return errorResponse(id, meta, 'invalid_argument', 'Missing terminal send payload')

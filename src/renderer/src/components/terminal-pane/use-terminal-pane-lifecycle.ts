@@ -58,7 +58,8 @@ import type {
   SetupSplitDirection,
   TerminalTab,
   TerminalLayoutSnapshot,
-  TuiAgent
+  TuiAgent,
+  WorktreeStartupLaunch
 } from '../../../../shared/types'
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
 import type { EventProps } from '../../../../shared/telemetry-events'
@@ -151,6 +152,9 @@ import {
   resolveTabTitleAfterPaneClose,
   shouldClearLaunchAgentForClosedPane
 } from './terminal-pane-close-identity'
+import { registerTerminalSurfaceActionConsumer } from '@/hooks/useIpcEvents'
+import { seedStartupSessionRestoredBanner } from './session-restored-banner-pane-state'
+import { shouldClearLaunchAgentForClosedPane } from './terminal-pane-close-identity'
 
 export function resetTerminalKeyboardProtocolAfterInterrupt(terminal: Terminal): void {
   // Guarded output path so a throwing xterm can't escape the key handler.
@@ -344,6 +348,99 @@ export function suppressIntentionalPaneCloseExit(
   return ptyId
 }
 
+export function disposeTerminalPaneResources(cleanups: (() => void)[]): void {
+  const cleanupErrors: unknown[] = []
+  const failedCleanups: (() => void)[] = []
+  for (const cleanup of cleanups) {
+    try {
+      cleanup()
+    } catch (error) {
+      cleanupErrors.push(error)
+      failedCleanups.push(cleanup)
+    }
+  }
+  cleanups.splice(0, cleanups.length, ...failedCleanups)
+  if (cleanupErrors.length === 1) {
+    throw cleanupErrors[0]
+  }
+  if (cleanupErrors.length > 1) {
+    throw new AggregateError(cleanupErrors, 'Terminal pane resource cleanup failed')
+  }
+}
+
+export function disposeTrackedTerminalPaneResource<T extends { dispose: () => void }>(
+  resources: Pick<Map<number, T>, 'delete' | 'get'>,
+  paneId: number
+): void {
+  const resource = resources.get(paneId)
+  if (!resource) {
+    return
+  }
+  resource.dispose()
+  if (resources.get(paneId) === resource) {
+    resources.delete(paneId)
+  }
+}
+
+type TerminalTransportDestroyStatus = 'fulfilled' | 'rejected'
+
+export function createRetryableTerminalTransportDestroyCleanup(args: {
+  destroy: () => void | Promise<void>
+  releaseOwnership: () => void
+  onAsyncSettled: (status: TerminalTransportDestroyStatus, error?: unknown) => void
+}): () => void {
+  let state:
+    | { status: 'ready' }
+    | { status: 'pending'; receipt: Promise<void> }
+    | { status: 'fulfilled' }
+    | { status: 'rejected'; error: unknown }
+    | { status: 'released' } = { status: 'ready' }
+
+  return () => {
+    if (state.status === 'released') {
+      return
+    }
+    if (state.status === 'fulfilled') {
+      args.releaseOwnership()
+      state = { status: 'released' }
+      return
+    }
+    if (state.status === 'pending') {
+      throw new Error('PTY destroy is still pending')
+    }
+    // Why: a rejected async disposer remains owned, but a later close attempt
+    // must be able to invoke it again instead of replaying a terminal receipt.
+    state = { status: 'ready' }
+    const destroyed = args.destroy()
+    if (!destroyed || typeof (destroyed as PromiseLike<void>).then !== 'function') {
+      state = { status: 'fulfilled' }
+      args.releaseOwnership()
+      state = { status: 'released' }
+      return
+    }
+
+    const receipt = Promise.resolve(destroyed)
+    state = { status: 'pending', receipt }
+    void receipt.then(
+      () => {
+        if (state.status !== 'pending' || state.receipt !== receipt) {
+          return
+        }
+        state = { status: 'fulfilled' }
+        args.onAsyncSettled('fulfilled')
+      },
+      (error) => {
+        if (state.status !== 'pending' || state.receipt !== receipt) {
+          return
+        }
+        state = { status: 'rejected', error }
+        args.onAsyncSettled('rejected', error)
+      }
+    )
+    throw new Error('PTY destroy is still pending')
+  }
+}
+
 export function mapRestoredPaneTitlesByPaneId(
   savedTitles: Record<string, string> | undefined,
   restoredPaneByLeafId: ReadonlyMap<string, number>
@@ -444,7 +541,7 @@ export function resolvePaneSeedCwd(splitPaneCwd: string | undefined, fallbackCwd
   return splitPaneCwd ?? fallbackCwd
 }
 
-type SplitStartupPayload = { command: string; env?: Record<string, string> }
+type SplitStartupPayload = WorktreeStartupLaunch
 
 type SplitWithStartupDeps = {
   startup?: SplitStartupPayload | null
@@ -476,6 +573,207 @@ export function splitPaneWithOneShotStartup<TPane>(
     return splitPane()
   } finally {
     deps.startup = null
+  }
+}
+
+type TerminalPaneSplitManager = Pick<
+  PaneManager,
+  | 'arrangeOrchestrationGrid'
+  | 'closePane'
+  | 'getActivePane'
+  | 'getNumericIdForLeaf'
+  | 'getPanes'
+  | 'setActivePane'
+  | 'splitPane'
+  | 'splitPaneAroundLeafIds'
+>
+
+export function createTerminalPaneSplitEventHandler(args: {
+  tabId: string
+  getManager: () => TerminalPaneSplitManager | null
+  startupDeps: SplitWithStartupDeps
+  recordSplit?: typeof recordRuntimeCreatedTerminalPaneSplit
+  consumeMirrorTelemetry?: typeof consumePendingWebRuntimeSplitMirrorTelemetry
+  publishCommittedSplit?: () => void
+}): (event: Event) => void {
+  const recordSplit = args.recordSplit ?? recordRuntimeCreatedTerminalPaneSplit
+  const consumeMirrorTelemetry =
+    args.consumeMirrorTelemetry ?? consumePendingWebRuntimeSplitMirrorTelemetry
+
+  return (event) => {
+    const detail = (event as CustomEvent<SplitTerminalPaneDetail>).detail
+    if (!detail?.tabId || detail.tabId !== args.tabId) {
+      return
+    }
+    let acknowledged = false
+    const acknowledge = (
+      result: Parameters<NonNullable<SplitTerminalPaneDetail['acknowledge']>>[0]
+    ): void => {
+      if (!acknowledged && detail.acknowledge) {
+        acknowledged = true
+        detail.acknowledge(result)
+      }
+    }
+    const reject = (message: string): void => {
+      acknowledge({ status: 'failure', error: new Error(message) })
+    }
+    let rollback = (): void => undefined
+    try {
+      // Why: DOM dispatch reports listener exceptions out-of-band, so every
+      // matching listener step must translate its own exception into an ack.
+      const manager = args.getManager()
+      if (!manager) {
+        reject(`Terminal pane manager for ${detail.tabId} is unavailable`)
+        return
+      }
+      if (detail.newLeafId && manager.getNumericIdForLeaf(detail.newLeafId) !== null) {
+        reject(`Terminal pane ${detail.newLeafId} already exists`)
+        return
+      }
+      if (
+        detail.acknowledge &&
+        detail.sourceLeafIds &&
+        (detail.sourceLeafIds.length === 0 ||
+          new Set(detail.sourceLeafIds).size !== detail.sourceLeafIds.length ||
+          detail.sourceLeafIds.some((leafId) => manager.getNumericIdForLeaf(leafId) === null))
+      ) {
+        reject(`Terminal split source for ${detail.tabId} is unavailable`)
+        return
+      }
+      const sourceLeafPaneId = detail.sourceLeafId
+        ? manager.getNumericIdForLeaf(detail.sourceLeafId)
+        : null
+      const sourcePaneId = detail.sourceLeafId
+        ? (sourceLeafPaneId ?? (detail.acknowledge ? null : detail.paneRuntimeId))
+        : detail.paneRuntimeId
+      if (
+        sourcePaneId === null ||
+        sourcePaneId < 0 ||
+        !manager.getPanes().some((pane) => pane.id === sourcePaneId)
+      ) {
+        reject(`Terminal split source for ${detail.tabId} is unavailable`)
+        return
+      }
+      if (detail.acknowledge && !detail.newLeafId) {
+        reject(`Terminal split for ${detail.tabId} is missing its new leaf`)
+        return
+      }
+
+      const previousActivePaneId = manager.getActivePane()?.id ?? null
+      let createdPane: ReturnType<TerminalPaneSplitManager['splitPane']> = null
+      let rolledBack = false
+      rollback = (): void => {
+        if (rolledBack || !createdPane) {
+          return
+        }
+        const cleanupErrors: unknown[] = []
+        try {
+          manager.closePane(createdPane.id, { notifyLayoutChanged: false })
+        } catch (error) {
+          cleanupErrors.push(error)
+        }
+        try {
+          if (previousActivePaneId !== null) {
+            manager.setActivePane(previousActivePaneId, {
+              focus: false,
+              notifyActiveChange: false
+            })
+          }
+        } catch (error) {
+          cleanupErrors.push(error)
+        }
+        if (cleanupErrors.length > 0) {
+          // Why: a transient teardown exception must leave rollback callable so
+          // a retry can finish cleanup instead of stranding a published leaf.
+          if (cleanupErrors.length === 1) {
+            throw cleanupErrors[0]
+          }
+          throw new AggregateError(cleanupErrors, 'Terminal split rollback failed')
+        }
+        rolledBack = true
+      }
+      const splitOptions = {
+        ...(detail.newLeafId ? { leafId: detail.newLeafId } : {}),
+        ...(detail.ptyId ? { ptyId: detail.ptyId } : {}),
+        ...(detail.acknowledge
+          ? { activate: false }
+          : detail.activate !== undefined
+            ? { activate: detail.activate }
+            : {}),
+        ...(detail.orchestrationGrid
+          ? {
+              notifyLayoutChanged: false,
+              allowOrchestrationGridMutation: true
+            }
+          : {})
+      }
+      const createSplitPane = (): ReturnType<TerminalPaneSplitManager['splitPane']> =>
+        detail.sourceLeafIds
+          ? manager.splitPaneAroundLeafIds(
+              detail.sourceLeafIds,
+              sourcePaneId,
+              detail.direction,
+              splitOptions
+            )
+          : manager.splitPane(sourcePaneId, detail.direction, splitOptions)
+      const startup = detail.startup ?? (detail.command ? { command: detail.command } : null)
+      createdPane = startup
+        ? splitPaneWithOneShotStartup(args.startupDeps, startup, createSplitPane)
+        : createSplitPane()
+      if (!createdPane) {
+        reject(`Terminal split for ${detail.tabId} did not create a pane`)
+        return
+      }
+      if (detail.orchestrationGrid) {
+        manager.arrangeOrchestrationGrid(undefined, { notifyLayoutChanged: false })
+        if (!detail.acknowledge && detail.activate !== false) {
+          manager.setActivePane(createdPane.id, {
+            notifyActiveChange: false
+          })
+        }
+      }
+      const recordCommittedSplit = (): void => {
+        if (detail.acknowledge && detail.activate !== false) {
+          // Why: acknowledged splits are externally transactional; foreground
+          // focus is visible activation and belongs after the store commit.
+          manager.setActivePane(createdPane.id)
+        }
+        const telemetrySuppressed = startup
+          ? false
+          : consumeMirrorTelemetry(detail.sourcePtyId, detail.direction)
+        recordSplit(createdPane, {
+          source: detail.telemetrySource ?? 'command',
+          direction: detail.direction,
+          ...(telemetrySuppressed ? { telemetrySuppressed } : {})
+        })
+        if (detail.ptyId) {
+          args.publishCommittedSplit?.()
+        }
+      }
+      if (detail.acknowledge) {
+        acknowledge({ status: 'success', rollback, afterCommit: recordCommittedSplit })
+      } else {
+        recordCommittedSplit()
+      }
+    } catch (error) {
+      let failure = error
+      try {
+        rollback()
+      } catch (rollbackError) {
+        const operationMessage = error instanceof Error ? error.message : String(error)
+        const rollbackMessage =
+          rollbackError instanceof Error ? rollbackError.message : String(rollbackError)
+        failure = new AggregateError(
+          [error, rollbackError],
+          `${operationMessage}; terminal split rollback failed: ${rollbackMessage}`
+        )
+      }
+      if (detail.acknowledge) {
+        acknowledge({ status: 'failure', error: failure })
+        return
+      }
+      throw failure
+    }
   }
 }
 
@@ -708,6 +1006,7 @@ export function useTerminalPaneLifecycle({
     const expandedStyleSnapshots = expandedStyleSnapshotRef.current
     const paneTransports = paneTransportsRef.current
     const panePtyBindings = panePtyBindingsRef.current
+    const paneCloseCleanupTransactions = new Map<number, { cleanupSteps: (() => void)[] }>()
     const linkDisposables = linkProviderDisposablesRef.current
     const terminalHandleLinkDisposables = terminalHandleLinkDisposablesRef.current
     const linkifierClickPrimingDisposables = linkifierClickPrimingDisposablesRef.current
@@ -911,6 +1210,10 @@ export function useTerminalPaneLifecycle({
 
     const manager = new PaneManager(container, {
       // `spawnHints.cwd` (from Split actions) lets the new PTY inherit the source pane's cwd — see docs/ssh-split-pane-inherit-cwd.md.
+      maintainOrchestrationGrid: initialLayoutRef.current.layoutMode === 'orchestration-grid',
+      // Why: `spawnHints` carries the resolved cwd from Cmd+D / context-menu
+      // Split actions so the new PTY inherits the source pane's live cwd.
+      // Split-pane CWD inheritance — see docs/ssh-split-pane-inherit-cwd.md.
       onPaneCreated: (pane, spawnHints) => {
         // OSC 52 — TUI-initiated clipboard writes (Zellij/tmux/nvim/fzf/ssh).
         // Why: read settingsRef at fire time so mid-session gate toggles apply; return true in both paths so xterm doesn't fall through.
@@ -1242,7 +1545,11 @@ export function useTerminalPaneLifecycle({
                 [pane.leafId]: spawnHints.ptyId
               }
             : ptyDeps.restoredPtyIdByLeafId,
-          restoredLeafId: pane.leafId
+          // Why: a PTY carried by pane-creation hints already survived the
+          // synchronous split acknowledgement; the pane must adopt that exact process.
+          ...(spawnHints?.ptyId ? { trustedAdoptPtyId: spawnHints.ptyId } : {}),
+          restoredLeafId: pane.leafId,
+          retainFailedBinding: (binding) => panePtyBindings.set(pane.id, binding)
         })
         // Why: connectPanePty clears only its spread copy; clear outer ptyDeps.startup so the initial prompt runs once and later user splits don't replay it.
         ptyDeps.startup = null
@@ -1255,164 +1562,214 @@ export function useTerminalPaneLifecycle({
         ptyDeps.cwd = nextInitialCwdState.ptyCwd
         panePtyBindings.set(pane.id, panePtyBinding)
         syncPaneCount()
-        scheduleRuntimeGraphSync()
+        if (!spawnHints?.ptyId) {
+          scheduleRuntimeGraphSync()
+        }
         queueResizeAll(true)
       },
       onPaneClosed: (paneId, closedPane) => {
-        onPtyRecoveryStateRef?.current?.(paneId, null)
+        const pendingCleanup = paneCloseCleanupTransactions.get(paneId)
+        if (pendingCleanup) {
+          disposeTerminalPaneResources(pendingCleanup.cleanupSteps)
+          paneCloseCleanupTransactions.delete(paneId)
+          return
+        }
         const isDetachedToTab = closedPane?.reason === 'detach'
-        const isRetiredSurface = closedPane?.reason === 'retire'
-        const linkProviderDisposable = linkProviderDisposablesRef.current.get(paneId)
-        if (linkProviderDisposable) {
-          linkProviderDisposable.dispose()
-          linkProviderDisposablesRef.current.delete(paneId)
-        }
-        const terminalHandleLinkDisposable = terminalHandleLinkDisposablesRef.current.get(paneId)
-        if (terminalHandleLinkDisposable) {
-          terminalHandleLinkDisposable.dispose()
-          terminalHandleLinkDisposablesRef.current.delete(paneId)
-        }
-        const linkifierClickPrimingDisposable =
-          linkifierClickPrimingDisposablesRef.current.get(paneId)
-        if (linkifierClickPrimingDisposable) {
-          linkifierClickPrimingDisposable.dispose()
-          linkifierClickPrimingDisposablesRef.current.delete(paneId)
-        }
-        const linkPointerGesture = linkPointerGestures.get(paneId)
-        if (linkPointerGesture) {
-          linkPointerGesture.dispose()
-          linkPointerGestures.delete(paneId)
-        }
-        const fileLinkClickFallbackDisposable =
-          fileLinkClickFallbackDisposablesRef.current.get(paneId)
-        if (fileLinkClickFallbackDisposable) {
-          fileLinkClickFallbackDisposable.dispose()
-          fileLinkClickFallbackDisposablesRef.current.delete(paneId)
-        }
-        const httpLinkClickFallbackDisposable = httpLinkClickFallbackDisposables.get(paneId)
-        if (httpLinkClickFallbackDisposable) {
-          httpLinkClickFallbackDisposable.dispose()
-          httpLinkClickFallbackDisposables.delete(paneId)
-        }
-        const selectionDisposable = selectionDisposablesRef.current.get(paneId)
-        if (selectionDisposable) {
-          selectionDisposable.dispose()
-          selectionDisposablesRef.current.delete(paneId)
-        }
-        const imeCompositionDisposable = imeCompositionDisposablesRef.current.get(paneId)
-        if (imeCompositionDisposable) {
-          imeCompositionDisposable.dispose()
-          imeCompositionDisposablesRef.current.delete(paneId)
-        }
-        const imeNativeTextForwarderDisposable =
-          imeNativeTextForwarderDisposablesRef.current.get(paneId)
-        if (imeNativeTextForwarderDisposable) {
-          imeNativeTextForwarderDisposable.dispose()
-          imeNativeTextForwarderDisposablesRef.current.delete(paneId)
-        }
-        const selectionCaptureTimer = selectionCaptureTimersRef.current.get(paneId)
-        if (selectionCaptureTimer !== undefined) {
-          window.clearTimeout(selectionCaptureTimer)
-          selectionCaptureTimersRef.current.delete(paneId)
-        }
-        paneMode2031Ref.current.delete(paneId)
-        paneKittyKeyboardModesRef.current.delete(paneId)
-        paneLastThemeModeRef.current.delete(paneId)
-        const osc52Disposable = osc52DisposablesRef.current.get(paneId)
-        if (osc52Disposable) {
-          osc52Disposable.dispose()
-          osc52DisposablesRef.current.delete(paneId)
-        }
-        const osc7Disposable = osc7DisposablesRef.current.get(paneId)
-        if (osc7Disposable) {
-          osc7Disposable.dispose()
-          osc7DisposablesRef.current.delete(paneId)
-        }
-        // Why: drop the tracked cwd so the map doesn't accumulate dead entries over long sessions.
-        paneCwdRef.current.delete(paneId)
-        const mouseHideDisposable = mouseHideDisposablesRef.current.get(paneId)
-        if (mouseHideDisposable) {
-          mouseHideDisposable.dispose()
-          mouseHideDisposablesRef.current.delete(paneId)
-        }
         const transport = paneTransportsRef.current.get(paneId)
-        const closedPtyId = transport?.getPtyId() ?? null
-        const terminalTab = useAppStore
-          .getState()
-          .tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)
-        if (!isDetachedToTab && shouldClearLaunchAgentForClosedPane(terminalTab, closedPtyId)) {
-          useAppStore.getState().clearTabLaunchAgent(tabId)
-        }
         const panePtyBinding = panePtyBindings.get(paneId)
-        if (panePtyBinding) {
-          panePtyBinding.dispose()
-          panePtyBindings.delete(paneId)
-        }
         const leafId = closedPane?.leafId
-        if (leafId && isRetiredSurface) {
-          retireMountedTerminalPaneSurface({
-            paneKey: makePaneKey(tabId, leafId),
-            paneId,
-            tabId,
-            ptyId: closedPtyId,
-            retireAgentPaneAuthority: useAppStore.getState().retireAgentPaneAuthority,
-            syncPanePtyLayoutBinding,
-            clearTabPtyId,
-            ...(transport ? { transport } : {})
-          })
-        } else if (leafId && !isDetachedToTab) {
-          // Why: revoke only this pane's authority; an exact tombstone blocks queued hooks without suppressing siblings.
-          const paneKey = makePaneKey(tabId, leafId)
-          useAppStore.getState().retireAgentPaneAuthority(paneKey)
-        }
-        if (transport && !isRetiredSurface) {
-          if (isDetachedToTab) {
-            // Why: detach hands the PTY to a new tab, so drop renderer listeners without process teardown.
-            transport.detach?.()
-          } else {
-            const ptyId = suppressIntentionalPaneCloseExit(
-              transport,
-              useAppStore.getState().suppressPtyExit
-            )
-            if (ptyId) {
-              // Why: PaneManager already promoted the sibling; suppress this exit so the survivor isn't mistaken for an exited tab.
-              syncPanePtyLayoutBinding(paneId, null)
-              clearTabPtyId(tabId, ptyId)
+        const paneKey = leafId && !isDetachedToTab ? makePaneKey(tabId, leafId) : null
+        let closedPtyId: string | null = null
+        let intentionalClosePtyId: string | null = null
+        let terminalTab: TerminalTab | undefined
+        let retriedRejectedAsyncDestroy = false
+        const mode2031CleanupSteps = (mode2031DisposablesRef.current.get(paneId) ?? []).map(
+          (disposable) => () => disposable.dispose()
+        )
+        const destroyTransportCleanup =
+          transport && !isDetachedToTab
+            ? createRetryableTerminalTransportDestroyCleanup({
+                destroy: () => transport.destroy?.(),
+                releaseOwnership: () => {
+                  if (paneTransportsRef.current.get(paneId) === transport) {
+                    paneTransportsRef.current.delete(paneId)
+                  }
+                },
+                onAsyncSettled: (status, error) => {
+                  if (status === 'rejected') {
+                    if (retriedRejectedAsyncDestroy) {
+                      console.warn(
+                        '[terminal-pane] PTY destroy failed after its retained cleanup retry',
+                        error
+                      )
+                      return
+                    }
+                    retriedRejectedAsyncDestroy = true
+                  }
+                  // Why: closePane still owns the DOM/map identity while an async
+                  // destroy is pending; resume that same teardown after its receipt settles.
+                  queueMicrotask(() => {
+                    try {
+                      managerRef.current?.closePane(paneId, { notifyLayoutChanged: false })
+                    } catch (retryError) {
+                      if (
+                        !(retryError instanceof Error) ||
+                        retryError.message !== 'PTY destroy is still pending'
+                      ) {
+                        console.warn(
+                          '[terminal-pane] retained pane close retry did not complete',
+                          retryError
+                        )
+                      }
+                    }
+                  })
+                }
+              })
+            : null
+
+        // Why: a single faulty parser/listener must not strand the remaining
+        // pane resources; failed handles stay in this pane-scoped ledger.
+        const cleanupSteps: (() => void)[] = [
+          () => disposeTrackedTerminalPaneResource(linkProviderDisposablesRef.current, paneId),
+          () =>
+            disposeTrackedTerminalPaneResource(terminalHandleLinkDisposablesRef.current, paneId),
+          () =>
+            disposeTrackedTerminalPaneResource(fileLinkClickFallbackDisposablesRef.current, paneId),
+          () => disposeTrackedTerminalPaneResource(httpLinkClickFallbackDisposables, paneId),
+          () => disposeTrackedTerminalPaneResource(selectionDisposablesRef.current, paneId),
+          () => disposeTrackedTerminalPaneResource(imeCompositionDisposablesRef.current, paneId),
+          () =>
+            disposeTrackedTerminalPaneResource(
+              imeNativeTextForwarderDisposablesRef.current,
+              paneId
+            ),
+          () => {
+            const timer = selectionCaptureTimersRef.current.get(paneId)
+            if (timer !== undefined) {
+              window.clearTimeout(timer)
+              if (selectionCaptureTimersRef.current.get(paneId) === timer) {
+                selectionCaptureTimersRef.current.delete(paneId)
+              }
             }
-            transport.destroy?.()
-          }
-          paneTransportsRef.current.delete(paneId)
-        }
-        clearRuntimePaneTitle(tabId, paneId)
-        paneFontSizesRef.current.delete(paneId)
-        replayingPanesRef.current.delete(paneId)
-        restoredViewportBlankingPanesRef.current.delete(paneId)
-        // Clean up pane title state so closed panes don't leave stale entries.
-        setPaneTitles((prev) => {
-          if (!(paneId in prev)) {
-            return prev
-          }
-          const next = { ...prev }
-          delete next[paneId]
-          return next
-        })
-        // Eagerly update the ref so persistLayoutSnapshot (fires right after onPaneClosed) reads correct titles before React's async flush.
-        if (paneId in paneTitlesRef.current) {
-          const next = { ...paneTitlesRef.current }
-          delete next[paneId]
-          paneTitlesRef.current = next
-        }
-        // Dismiss the rename dialog if open for the closed pane, else it submits against a non-existent pane.
-        setRenamingPaneId((prev) => (prev === paneId ? null : prev))
-        syncPaneCount()
-        // Why: closePane() reassigns activePaneId without firing onActivePaneChange, so sync the tab title to the survivor here.
-        const newActivePane = managerRef.current?.getActivePane()
-        if (newActivePane) {
-          reportActiveRendererPtyForPane(paneTransportsRef.current, newActivePane.id)
-          const paneTitles = useAppStore.getState().runtimePaneTitlesByTabId[tabId] ?? {}
-          updateTabTitle(tabId, resolveTabTitleAfterPaneClose(paneTitles, newActivePane.id))
-        }
-        scheduleRuntimeGraphSync()
+          },
+          () => {
+            disposeTerminalPaneResources(mode2031CleanupSteps)
+            if (mode2031CleanupSteps.length === 0) {
+              mode2031DisposablesRef.current.delete(paneId)
+            }
+          },
+          () => paneMode2031Ref.current.delete(paneId),
+          () => mode2031SeedAttemptTokensRef.current.delete(paneId),
+          () => paneKittyKeyboardModesRef.current.delete(paneId),
+          () => paneLastThemeModeRef.current.delete(paneId),
+          () => disposeTrackedTerminalPaneResource(osc52DisposablesRef.current, paneId),
+          () => disposeTrackedTerminalPaneResource(osc7DisposablesRef.current, paneId),
+          // Why: drop the tracked cwd so the map doesn't accumulate dead entries.
+          () => paneCwdRef.current.delete(paneId),
+          () => disposeTrackedTerminalPaneResource(mouseHideDisposablesRef.current, paneId),
+          () => {
+            closedPtyId = transport?.getPtyId() ?? null
+          },
+          () => {
+            terminalTab = useAppStore
+              .getState()
+              .tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)
+          },
+          () => {
+            if (!isDetachedToTab && shouldClearLaunchAgentForClosedPane(terminalTab, closedPtyId)) {
+              useAppStore.getState().clearTabLaunchAgent(tabId)
+            }
+          },
+          () => {
+            panePtyBinding?.dispose()
+            if (panePtyBindings.get(paneId) === panePtyBinding) {
+              panePtyBindings.delete(paneId)
+            }
+          },
+          () => {
+            if (paneKey) {
+              // Why: an exact tombstone blocks queued hooks without suppressing siblings.
+              useAppStore.getState().retireAgentPaneAuthority(paneKey)
+            }
+          },
+          () => {
+            if (paneKey) {
+              useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
+            }
+          },
+          () => {
+            if (paneKey) {
+              clearTerminalPaneUnread(paneKey)
+            }
+          },
+          () => {
+            if (paneKey) {
+              useAppStore.getState().dropAgentStatus(paneKey)
+            }
+          },
+          () => {
+            if (paneKey) {
+              useAppStore.getState().clearPaneForegroundAgent(paneKey)
+            }
+          },
+          () => {
+            if (transport && isDetachedToTab) {
+              transport.detach?.()
+              if (paneTransportsRef.current.get(paneId) === transport) {
+                paneTransportsRef.current.delete(paneId)
+              }
+            }
+          },
+          () => {
+            if (transport && !isDetachedToTab) {
+              intentionalClosePtyId = suppressIntentionalPaneCloseExit(
+                transport,
+                useAppStore.getState().suppressPtyExit
+              )
+            }
+          },
+          () => {
+            if (intentionalClosePtyId) {
+              syncPanePtyLayoutBinding(paneId, null)
+            }
+          },
+          () => {
+            if (intentionalClosePtyId) {
+              clearTabPtyId(tabId, intentionalClosePtyId)
+            }
+          },
+          () => {
+            destroyTransportCleanup?.()
+          },
+          () => clearRuntimePaneTitle(tabId, paneId),
+          () => paneFontSizesRef.current.delete(paneId),
+          () => replayingPanesRef.current.delete(paneId),
+          () => restoredViewportBlankingPanesRef.current.delete(paneId),
+          () =>
+            setPaneTitles((prev) => {
+              if (!(paneId in prev)) {
+                return prev
+              }
+              const next = { ...prev }
+              delete next[paneId]
+              return next
+            }),
+          // Why: layout persistence runs immediately after close and cannot wait for React.
+          () => {
+            if (paneId in paneTitlesRef.current) {
+              const next = { ...paneTitlesRef.current }
+              delete next[paneId]
+              paneTitlesRef.current = next
+            }
+          },
+          () => setRenamingPaneId((prev) => (prev === paneId ? null : prev))
+        ]
+        // Why: active/layout publication must run only after PaneManager has
+        // removed the pane; its normal callbacks own that post-structure commit.
+        const cleanupTransaction = { cleanupSteps }
+        paneCloseCleanupTransactions.set(paneId, cleanupTransaction)
+        disposeTerminalPaneResources(cleanupTransaction.cleanupSteps)
+        paneCloseCleanupTransactions.delete(paneId)
       },
       onActivePaneChange: (pane) => {
         const layout = useAppStore.getState().terminalLayoutsByTabId[tabId]
@@ -1675,50 +2032,20 @@ export function useTerminalPaneLifecycle({
     persistLayoutSnapshot()
     scheduleRuntimeGraphSync()
 
-    // Why: deliver the startup command via the PTY connection path (waits for shell readiness), not terminal.paste() which can lose input before the shell reads stdin.
-    function onCliSplitPane(event: Event): void {
-      const detail = (event as CustomEvent<SplitTerminalPaneDetail>).detail
-      if (!detail?.tabId || detail.tabId !== tabId) {
-        return
-      }
-      const mgr = managerRef.current
-      if (!mgr) {
-        return
-      }
-      if (detail.newLeafId && mgr.getNumericIdForLeaf(detail.newLeafId) !== null) {
-        return
-      }
-      const sourcePaneId = detail.sourceLeafId
-        ? (mgr.getNumericIdForLeaf(detail.sourceLeafId) ?? detail.paneRuntimeId)
-        : detail.paneRuntimeId
-      if (sourcePaneId < 0) {
-        return
-      }
-      const splitOptions = {
-        ...(detail.newLeafId ? { leafId: detail.newLeafId } : {}),
-        ...(detail.ptyId ? { ptyId: detail.ptyId } : {})
-      }
-      if (detail.command) {
-        const createdPane = splitPaneWithOneShotStartup(ptyDeps, { command: detail.command }, () =>
-          mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
-        )
-        recordRuntimeCreatedTerminalPaneSplit(createdPane, {
-          source: detail.telemetrySource ?? 'command',
-          direction: detail.direction
-        })
-      } else {
-        const createdPane = mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
-        const telemetrySuppressed = createdPane
-          ? consumePendingWebRuntimeSplitMirrorTelemetry(detail.sourcePtyId, detail.direction)
-          : false
-        recordRuntimeCreatedTerminalPaneSplit(createdPane, {
-          source: detail.telemetrySource ?? 'command',
-          direction: detail.direction,
-          telemetrySuppressed
-        })
-      }
-    }
+    // Why: CLI-driven splits go through splitPaneWithOneShotStartup so the
+    // startup command is delivered via the PTY connection path (which waits
+    // for shell readiness) instead of terminal.paste() which can lose input
+    // if the shell hasn't started reading stdin yet.
+    const onCliSplitPane = createTerminalPaneSplitEventHandler({
+      tabId,
+      getManager: () => managerRef.current,
+      startupDeps: ptyDeps,
+      publishCommittedSplit: scheduleRuntimeGraphSync
+    })
     window.addEventListener(SPLIT_TERMINAL_PANE_EVENT, onCliSplitPane)
+    // Why: queued runtime splits may drain only after this tab-specific listener
+    // exists; registering earlier can acknowledge an event nobody consumed.
+    const unregisterTerminalSurfaceActionConsumer = registerTerminalSurfaceActionConsumer(tabId)
 
     // Why: CLI-driven pane close goes via CustomEvent so PaneManager promotes a sibling; the last pane falls back to closing the tab.
     function onCliClosePane(event: Event): void {
@@ -1762,6 +2089,7 @@ export function useTerminalPaneLifecycle({
 
     return () => {
       window.removeEventListener(SPLIT_TERMINAL_PANE_EVENT, onCliSplitPane)
+      unregisterTerminalSurfaceActionConsumer()
       window.removeEventListener(CLOSE_TERMINAL_PANE_EVENT, onCliClosePane)
       const currentWorktreeTabs = useAppStore.getState().tabsByWorktree[worktreeId]
       const tabStillExists = Boolean(
@@ -1840,8 +2168,7 @@ export function useTerminalPaneLifecycle({
           // Why: tab-move rehome and web-mirror remount unmount a still-live tab; detach preserves the running PTY so the remount reattaches without restarting the shell.
           transport.detach?.()
         } else {
-          // Why: un-attached transports have no PTY ID; destroy so an in-flight spawn resolves to a killed PTY, not a revived stale binding after unmount.
-          transport.destroy?.()
+          void transport.destroy?.()
         }
       }
       for (const panePtyBinding of panePtyBindings.values()) {

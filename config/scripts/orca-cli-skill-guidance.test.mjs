@@ -75,6 +75,19 @@ describe('orca CLI skill guidance', () => {
     )
   })
 
+  it('documents orchestration-grid placement without changing ordinary terminal tabs', () => {
+    const skill = readSkill()
+
+    expect(skill).toContain('--placement orchestration-grid')
+    expect(skill).toContain('rows of at most six')
+    expect(skill).toContain('Ordinary creates keep their one-tab behavior')
+    expect(skill).toContain('`--placement tab` is the explicit opt-out')
+    expect(skill).toContain(
+      '`--direction vertical` creates a side-by-side left/right split (row flex). `--direction horizontal` creates a top/bottom split (column flex).'
+    )
+    expect(skill).not.toContain('`--direction horizontal` splits left/right')
+  })
+
   it('requires full worktree ids across bundled agent guidance', () => {
     const cliSkill = readSkill()
     const orchestrationSkill = readSkill(orchestrationSkillPath)

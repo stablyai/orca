@@ -48,6 +48,45 @@ describe('createDividerFlexFrameScheduler', () => {
 })
 
 describe('disposeDivider', () => {
+  it('keeps ordinary terminal dividers double-click equalization interactive', () => {
+    const listeners = new Map<string, EventListener>()
+    const previousPane = createSizedPaneElement({ width: 100, height: 200 })
+    const nextPane = createSizedPaneElement({ width: 300, height: 200 })
+    previousPane.style.flex = '1 1 100px'
+    nextPane.style.flex = '1 1 300px'
+    const divider = {
+      style: {
+        setProperty: vi.fn()
+      },
+      classList: {
+        add: vi.fn(),
+        remove: vi.fn()
+      },
+      addEventListener: vi.fn((event: string, listener: EventListener) => {
+        listeners.set(event, listener)
+      }),
+      removeEventListener: vi.fn(),
+      previousElementSibling: previousPane,
+      nextElementSibling: nextPane
+    } as unknown as HTMLElement
+    const refitPanesUnder = vi.fn()
+    const onLayoutChanged = vi.fn()
+    vi.stubGlobal('document', {
+      createElement: vi.fn(() => divider)
+    })
+    vi.stubGlobal('requestAnimationFrame', vi.fn())
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    createDivider(true, {}, { refitPanesUnder, onLayoutChanged })
+    listeners.get('dblclick')?.(new Event('dblclick'))
+
+    expect(previousPane.style.flex).toBe('1 1 0%')
+    expect(nextPane.style.flex).toBe('1 1 0%')
+    expect(refitPanesUnder).toHaveBeenCalledWith(previousPane)
+    expect(refitPanesUnder).toHaveBeenCalledWith(nextPane)
+    expect(onLayoutChanged).toHaveBeenCalledOnce()
+  })
+
   it('does not start divider drag state without resizeable pane siblings', () => {
     const dividerListeners = new Map<string, EventListener>()
     const onDragActiveChange = vi.fn()

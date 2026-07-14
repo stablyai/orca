@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeAll, vi } from 'vitest'
-import type { TerminalPaneLayoutNode } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalPaneLayoutNode } from '../../../../shared/types'
+import { buildOrchestrationTerminalGridRoot } from '../../../../shared/orchestration-terminal-grid'
 
 // ---------------------------------------------------------------------------
 // Provide a minimal HTMLElement so `instanceof HTMLElement` passes in Node env
@@ -68,6 +69,10 @@ const LEAF_1 = '11111111-1111-4111-8111-111111111111'
 const LEAF_2 = '22222222-2222-4222-8222-222222222222'
 const LEAF_3 = '33333333-3333-4333-8333-333333333333'
 const LEAF_4 = '44444444-4444-4444-8444-444444444444'
+const LEAF_5 = '55555555-5555-4555-8555-555555555555'
+const LEAF_6 = '66666666-6666-4666-8666-666666666666'
+const LEAF_7 = '77777777-7777-4777-8777-777777777777'
+const GRID_LEAF_IDS = [LEAF_1, LEAF_2, LEAF_3, LEAF_4, LEAF_5, LEAF_6, LEAF_7]
 
 // ---------------------------------------------------------------------------
 // buildFontFamily
@@ -339,15 +344,81 @@ describe('serializeTerminalLayout', () => {
 
 describe('replayTerminalLayout', () => {
   function createReplayManager() {
+    let nextPaneId = 1
     const createInitialPane = vi.fn((opts?: { leafId?: string }) => ({
       id: 1,
       leafId: opts?.leafId ?? LEAF_4
     }))
     return {
       createInitialPane,
-      splitPane: vi.fn()
+      splitPane: vi.fn(
+        (_paneId: number, _direction: 'vertical' | 'horizontal', opts?: { leafId?: string }) => ({
+          id: (nextPaneId += 1),
+          leafId: opts?.leafId ?? LEAF_4
+        })
+      ),
+      arrangeOrchestrationGrid: vi.fn()
     }
   }
+
+  it('re-arranges a restored orchestration grid once after every split exists', () => {
+    const manager = createReplayManager()
+    const root = buildOrchestrationTerminalGridRoot(GRID_LEAF_IDS)!
+
+    const restored = replayTerminalLayout(
+      manager as unknown as Parameters<typeof replayTerminalLayout>[0],
+      {
+        root,
+        activeLeafId: LEAF_4,
+        expandedLeafId: LEAF_5,
+        layoutMode: 'orchestration-grid'
+      },
+      false
+    )
+
+    expect(manager.splitPane).toHaveBeenCalledTimes(6)
+    expect(manager.arrangeOrchestrationGrid).toHaveBeenCalledOnce()
+    expect(manager.arrangeOrchestrationGrid).toHaveBeenCalledWith(GRID_LEAF_IDS)
+    expect(manager.arrangeOrchestrationGrid.mock.invocationCallOrder[0]).toBeGreaterThan(
+      manager.splitPane.mock.invocationCallOrder.at(-1)!
+    )
+    expect([...restored.keys()].sort()).toEqual([...GRID_LEAF_IDS].sort())
+  })
+
+  it.each([
+    {
+      name: 'an ordinary split layout',
+      snapshot: {
+        root: {
+          type: 'split',
+          direction: 'vertical',
+          first: { type: 'leaf', leafId: LEAF_1 },
+          second: { type: 'leaf', leafId: LEAF_2 }
+        },
+        activeLeafId: LEAF_1,
+        expandedLeafId: null
+      } satisfies TerminalLayoutSnapshot
+    },
+    {
+      name: 'a rootless grid-marked layout',
+      snapshot: {
+        root: null,
+        activeLeafId: LEAF_1,
+        expandedLeafId: null,
+        layoutMode: 'orchestration-grid'
+      } satisfies TerminalLayoutSnapshot
+    }
+  ])('does not canonicalize $name during replay', ({ snapshot }) => {
+    const manager = createReplayManager()
+
+    replayTerminalLayout(
+      manager as unknown as Parameters<typeof replayTerminalLayout>[0],
+      snapshot,
+      false
+    )
+
+    expect(manager.arrangeOrchestrationGrid).not.toHaveBeenCalled()
+  })
 
   it('preserves the active leaf when replaying a single-pane snapshot without a root', () => {
     const manager = createReplayManager()

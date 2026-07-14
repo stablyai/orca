@@ -809,17 +809,29 @@ describe('attachMainWindowServices', () => {
         worktreeId: string,
         opts: {
           ptyId: string
+          command?: string
           title?: string
           cwd?: string
+          launchConfig?: {
+            agentCommand: string
+            agentArgs: string
+            agentEnv: Record<string, string>
+          }
           viewMode?: 'terminal' | 'chat'
           activate?: boolean
         }
-      ) => Promise<{ tabId: string; title?: string }>
+      ) => Promise<{ tabId: string; leafId?: string; title?: string }>
     }
     const revealPromise = notifier.revealTerminalSession('wt-1', {
       ptyId: 'pty-1',
+      command: 'codex --profile worker',
       title: 'SSH tmux',
       cwd: '/repo/packages/web',
+      launchConfig: {
+        agentCommand: 'codex',
+        agentArgs: '--profile worker',
+        agentEnv: { CODEX_PROFILE: 'worker' }
+      },
       viewMode: 'chat'
     })
     const sentPayload = sendMock.mock.calls.find(
@@ -828,7 +840,16 @@ describe('attachMainWindowServices', () => {
     const handler = onMock.mock.calls.find(
       ([channel]) => channel === 'terminal:tabCreateReply'
     )?.[1]
-    expect(sentPayload).toMatchObject({ cwd: '/repo/packages/web', viewMode: 'chat' })
+    expect(sentPayload).toMatchObject({
+      command: 'codex --profile worker',
+      cwd: '/repo/packages/web',
+      launchConfig: {
+        agentCommand: 'codex',
+        agentArgs: '--profile worker',
+        agentEnv: { CODEX_PROFILE: 'worker' }
+      },
+      viewMode: 'chat'
+    })
 
     handler?.(
       { sender: { send: vi.fn() } },
@@ -838,10 +859,19 @@ describe('attachMainWindowServices', () => {
 
     handler?.(
       { sender: mainWindow.webContents },
-      { requestId: sentPayload.requestId, tabId: 'tab-1', title: 'SSH tmux' }
+      {
+        requestId: sentPayload.requestId,
+        tabId: 'tab-1',
+        leafId: 'leaf-1',
+        title: 'SSH tmux'
+      }
     )
 
-    await expect(revealPromise).resolves.toEqual({ tabId: 'tab-1', title: 'SSH tmux' })
+    await expect(revealPromise).resolves.toEqual({
+      tabId: 'tab-1',
+      leafId: 'leaf-1',
+      title: 'SSH tmux'
+    })
     expect(removeListenerMock).toHaveBeenCalledWith('terminal:tabCreateReply', handler)
   })
 
@@ -912,5 +942,36 @@ describe('attachMainWindowServices', () => {
       title: undefined,
       identity
     })
+  it('removes the reveal listener and timeout when renderer dispatch throws', async () => {
+    vi.useFakeTimers()
+    try {
+      const sendFailure = new Error('renderer dispatch failed')
+      const mainWindow = createMainWindow({
+        send: vi.fn(() => {
+          throw sendFailure
+        })
+      })
+      const runtime = createRuntime()
+      attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
+      const baselineTimerCount = vi.getTimerCount()
+      const notifier = runtime.setNotifier.mock.calls[0][0] as {
+        revealTerminalSession: (
+          worktreeId: string,
+          opts: { ptyId: string }
+        ) => Promise<{ tabId: string }>
+      }
+
+      await expect(
+        notifier.revealTerminalSession('wt-1', { ptyId: 'ssh:conn-1@@pty-staged' })
+      ).rejects.toBe(sendFailure)
+
+      const handler = onMock.mock.calls.find(
+        ([channel]) => channel === 'terminal:tabCreateReply'
+      )?.[1]
+      expect(removeListenerMock).toHaveBeenCalledWith('terminal:tabCreateReply', handler)
+      expect(vi.getTimerCount()).toBe(baselineTimerCount)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

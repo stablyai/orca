@@ -137,6 +137,11 @@ export function captureTerminalShutdownLayout({
     expandedPaneId,
     new Map(panes.map((pane) => [pane.id, pane.leafId]))
   )
+  if (existingLayout?.layoutMode) {
+    // Why: shutdown serialization rebuilds geometry from the DOM but must keep
+    // the orchestration owner so restore and later closes continue to reflow.
+    layout.layoutMode = existingLayout.layoutMode
+  }
   const currentLeafIds = new Set(panes.map((p) => p.leafId))
   const livePtyIdsByLeafId: Record<string, string> = {}
   const preservedPtyIdsByLeafId: Record<string, string> = {}

@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: PaneManager keeps live pane lifecycle, drag, rendering, and identity callbacks under one owner. */
 import type {
   PaneManagerOptions,
+  PaneSplitOptions,
   PaneStyleOptions,
   ManagedPane,
   ManagedPaneInternal,
@@ -53,6 +54,7 @@ import {
 } from './pane-split-close'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
 import { splitPaneAroundMountedSubtree } from './pane-subtree-split'
+import { arrangeMountedPanesAsOrchestrationGrid } from './pane-orchestration-grid'
 
 export type {
   PaneManagerOptions,
@@ -114,25 +116,35 @@ export class PaneManager {
   splitPane(
     paneId: number,
     direction: 'vertical' | 'horizontal',
-    opts?: { ratio?: number; cwd?: string; leafId?: string; ptyId?: string }
+    opts?: PaneSplitOptions
   ): ManagedPane | null {
-    return splitManagedPane({
-      paneId,
-      direction,
-      opts,
-      panes: this.panes,
-      root: this.root,
-      styleOptions: this.styleOptions,
-      managerOptions: this.options,
-      createPaneInternal: (leafIdHint) => this.createPaneInternal(leafIdHint),
-      createDivider: (isVertical) => this.createDividerWrapped(isVertical),
-      publishPaneCreated: (pane, spawnHints) => this.publishPaneCreated(pane, spawnHints),
-      getDragCallbacks: () => this.getDragCallbacks(),
-      setActivePaneId: (id) => {
-        this.activePaneId = id
-      },
-      isDestroyed: () => this.destroyed
-    })
+    if (this.options.maintainOrchestrationGrid && !opts?.allowOrchestrationGridMutation) {
+      return null
+    }
+    const firstCreatedPaneId = this.nextPaneId
+    try {
+      return splitManagedPane({
+        paneId,
+        direction,
+        opts,
+        panes: this.panes,
+        root: this.root,
+        styleOptions: this.styleOptions,
+        managerOptions: this.options,
+        createPaneInternal: (leafIdHint) => this.createPaneInternal(leafIdHint),
+        createDivider: (isVertical) => this.createDividerWrapped(isVertical),
+        publishPaneCreated: (pane, spawnHints) => this.publishPaneCreated(pane, spawnHints),
+        getDragCallbacks: () => this.getDragCallbacks(),
+        getActivePaneId: () => this.activePaneId,
+        setActivePaneId: (id) => {
+          this.activePaneId = id
+        },
+        isDestroyed: () => this.destroyed
+      })
+    } catch (error) {
+      this.releaseFailedSplitIdentities(firstCreatedPaneId)
+      throw error
+    }
   }
 
   splitPaneAroundLeafIds(
@@ -141,57 +153,85 @@ export class PaneManager {
     direction: 'vertical' | 'horizontal',
     opts?: SplitPaneAroundLeafIdsOptions
   ): ManagedPane | null {
-    return splitPaneAroundMountedSubtree({
-      sourceLeafIds,
-      fallbackPaneId,
-      direction,
-      opts,
-      panes: this.panes,
-      root: this.root,
-      styleOptions: this.styleOptions,
-      managerOptions: this.options,
-      getNumericIdForLeaf: (leafId) => this.identities.getNumericIdForLeaf(leafId),
-      createPaneInternal: (leafIdHint) => this.createPaneInternal(leafIdHint),
-      createDivider: (isVertical) => this.createDividerWrapped(isVertical),
-      publishPaneCreated: (pane, spawnHints) => this.publishPaneCreated(pane, spawnHints),
-      getDragCallbacks: () => this.getDragCallbacks(),
-      setActivePaneId: (id) => {
-        this.activePaneId = id
-      },
-      isDestroyed: () => this.destroyed
-    })
+    if (this.options.maintainOrchestrationGrid && !opts?.allowOrchestrationGridMutation) {
+      return null
+    }
+    const firstCreatedPaneId = this.nextPaneId
+    try {
+      return splitPaneAroundMountedSubtree({
+        sourceLeafIds,
+        fallbackPaneId,
+        direction,
+        opts,
+        panes: this.panes,
+        root: this.root,
+        styleOptions: this.styleOptions,
+        managerOptions: this.options,
+        getNumericIdForLeaf: (leafId) => this.identities.getNumericIdForLeaf(leafId),
+        createPaneInternal: (leafIdHint) => this.createPaneInternal(leafIdHint),
+        createDivider: (isVertical) => this.createDividerWrapped(isVertical),
+        publishPaneCreated: (pane, spawnHints) => this.publishPaneCreated(pane, spawnHints),
+        getDragCallbacks: () => this.getDragCallbacks(),
+        getActivePaneId: () => this.activePaneId,
+        setActivePaneId: (id) => {
+          this.activePaneId = id
+        },
+        isDestroyed: () => this.destroyed
+      })
+    } catch (error) {
+      this.releaseFailedSplitIdentities(firstCreatedPaneId)
+      throw error
+    }
   }
 
-  closePane(paneId: number): void {
-    closeManagedPane({
-      paneId,
-      activePaneId: this.activePaneId,
-      panes: this.panes,
-      root: this.root,
-      styleOptions: this.styleOptions,
-      managerOptions: this.options,
-      getDragCallbacks: () => this.getDragCallbacks(),
-      releasePaneIdentity: (numericPaneId) => this.identities.release(numericPaneId),
-      setActivePaneId: (id) => {
-        this.activePaneId = id
+  closePane(paneId: number, options?: { notifyLayoutChanged?: boolean }): void {
+    let teardownReturned = false
+    try {
+      closeManagedPane({
+        paneId,
+        activePaneId: this.activePaneId,
+        panes: this.panes,
+        root: this.root,
+        styleOptions: this.styleOptions,
+        managerOptions: this.options,
+        getDragCallbacks: () => this.getDragCallbacks(),
+        releasePaneIdentity: (numericPaneId) => this.identities.release(numericPaneId),
+        setActivePaneId: (id) => this.setActivePaneAfterTeardown(id)
+      })
+      teardownReturned = true
+    } finally {
+      if (this.options.maintainOrchestrationGrid && (teardownReturned || !this.panes.has(paneId))) {
+        // Why: async resource cleanup retains a partially disposed pane for retry;
+        // canonicalize only after teardown actually releases its structure.
+        this.arrangeOrchestrationGrid(undefined, options)
       }
-    })
+    }
   }
 
   detachPaneForExternalMove(paneId: number): boolean {
-    return detachManagedPaneForExternalMove({
-      paneId,
-      activePaneId: this.activePaneId,
-      panes: this.panes,
-      root: this.root,
-      styleOptions: this.styleOptions,
-      managerOptions: this.options,
-      getDragCallbacks: () => this.getDragCallbacks(),
-      releasePaneIdentity: (numericPaneId) => this.identities.release(numericPaneId),
-      setActivePaneId: (id) => {
-        this.activePaneId = id
+    const wasOwned = this.panes.has(paneId)
+    let detached = false
+    try {
+      detached = detachManagedPaneForExternalMove({
+        paneId,
+        activePaneId: this.activePaneId,
+        panes: this.panes,
+        root: this.root,
+        styleOptions: this.styleOptions,
+        managerOptions: this.options,
+        getDragCallbacks: () => this.getDragCallbacks(),
+        releasePaneIdentity: (numericPaneId) => this.identities.release(numericPaneId),
+        setActivePaneId: (id) => this.setActivePaneAfterTeardown(id)
+      })
+      return detached
+    } finally {
+      if (
+        this.options.maintainOrchestrationGrid &&
+        (detached || (wasOwned && !this.panes.has(paneId)))
+      ) {
+        this.arrangeOrchestrationGrid()
       }
-    })
+    }
   }
 
   retirePanePreservingPty(paneId: number): boolean {
@@ -252,7 +292,7 @@ export class PaneManager {
   }
 
   equalizePaneSizes(): void {
-    if (this.panes.size < 2) {
+    if (this.options.maintainOrchestrationGrid || this.panes.size < 2) {
       return
     }
 
@@ -264,6 +304,36 @@ export class PaneManager {
     }
 
     this.options.onLayoutChanged?.()
+  }
+
+  arrangeOrchestrationGrid(
+    leafIds?: readonly string[],
+    options?: { notifyLayoutChanged?: boolean }
+  ): void {
+    arrangeMountedPanesAsOrchestrationGrid({
+      root: this.root,
+      panes: this.panes,
+      leafIds,
+      styleOptions: this.styleOptions,
+      isDestroyed: () => this.destroyed,
+      onLayoutChanged:
+        options?.notifyLayoutChanged === false ? undefined : this.options.onLayoutChanged
+    })
+  }
+
+  setMaintainOrchestrationGrid(enabled: boolean): boolean {
+    if ((this.options.maintainOrchestrationGrid === true) === enabled) {
+      return false
+    }
+    // Why: remote layout mode can change without remounting this manager;
+    // teardown and user-structure policy must follow the live owner.
+    this.options.maintainOrchestrationGrid = enabled
+    if (enabled) {
+      cancelActivePaneDrag(this.dragState)
+    } else {
+      this.restoreInteractiveDividers()
+    }
+    return true
   }
 
   getActivePane(): ManagedPane | null {
@@ -312,7 +382,7 @@ export class PaneManager {
     return this.identities.adoptPaneLeafId(numericPaneId, pane, leafId)
   }
 
-  setActivePane(paneId: number, opts?: { focus?: boolean }): void {
+  setActivePane(paneId: number, opts?: { focus?: boolean; notifyActiveChange?: boolean }): void {
     const pane = this.panes.get(paneId)
     if (!pane) {
       return
@@ -325,7 +395,7 @@ export class PaneManager {
       pane.terminal.focus()
     }
 
-    if (changed) {
+    if (changed && opts?.notifyActiveChange !== false) {
       this.options.onActivePaneChange?.(toPublicPane(pane))
     }
   }
@@ -404,10 +474,19 @@ export class PaneManager {
   }
 
   movePane(sourcePaneId: number, targetPaneId: number, zone: DropZone): void {
+    if (this.options.maintainOrchestrationGrid) {
+      return
+    }
     handlePaneDrop(sourcePaneId, targetPaneId, zone, this.dragState, this.getDragCallbacks())
   }
 
   beginPaneDragFromPointerDown(paneId: number, handle: HTMLElement, event: PointerEvent): void {
+    if (
+      this.options.maintainOrchestrationGrid &&
+      (!this.options.resolveExternalPaneDropTarget || !this.options.onExternalPaneDrop)
+    ) {
+      return
+    }
     beginPaneDragFromPointerDown(handle, paneId, this.dragState, this.getDragCallbacks(), event)
   }
 
@@ -417,13 +496,33 @@ export class PaneManager {
     releaseHiddenWebglRetention(this)
     cancelActivePaneDrag(this.dragState)
     this.cancelPendingPaneReparentFrames()
+    const cleanupErrors: unknown[] = []
     for (const pane of this.panes.values()) {
-      disposePane(pane, this.panes)
+      let disposed = false
+      for (let attempt = 0; attempt < 2 && !disposed; attempt += 1) {
+        try {
+          disposePane(pane, this.panes)
+          disposed = true
+        } catch (error) {
+          if (attempt === 1) {
+            cleanupErrors.push(error)
+          }
+        }
+      }
     }
+    // Why: teardown must release every other pane even when one third-party
+    // addon keeps throwing; the manager cannot be retried after unmount.
+    this.panes.clear()
     this.identities.clear()
     disposeDividersIn(this.root)
     this.root.innerHTML = ''
     this.activePaneId = null
+    if (cleanupErrors.length > 0) {
+      console.warn(
+        '[pane-manager] pane cleanup remained incomplete after retry',
+        new AggregateError(cleanupErrors, 'Pane manager teardown failed')
+      )
+    }
   }
 
   private createPaneInternal(leafIdHint?: string): ManagedPaneInternal {
@@ -450,6 +549,26 @@ export class PaneManager {
     this.panes.set(id, pane)
     this.identities.register(id, leafId)
     return pane
+  }
+
+  private releaseFailedSplitIdentities(firstCreatedPaneId: number): void {
+    // Why: a failed cleanup can intentionally retain its pane for retry; only
+    // structurally released panes may surrender durable leaf ownership.
+    for (let paneId = firstCreatedPaneId; paneId < this.nextPaneId; paneId += 1) {
+      if (!this.panes.has(paneId)) {
+        this.identities.release(paneId)
+      }
+    }
+  }
+
+  private setActivePaneAfterTeardown(paneId: number | null): void {
+    if (paneId === null) {
+      this.activePaneId = null
+      return
+    }
+    // Why: teardown selects the replacement after structural removal, so the
+    // normal active-pane callback may now publish its title and PTY safely.
+    this.setActivePane(paneId, { focus: false })
   }
 
   private publishPaneCreated(
@@ -485,12 +604,29 @@ export class PaneManager {
     })
   }
 
+  private restoreInteractiveDividers(): void {
+    // Why: grid dividers intentionally have no pointer handlers; a live mode-only
+    // transition back to ordinary layout must restore normal resize affordances.
+    disposeDividersIn(this.root)
+    for (const split of this.root.querySelectorAll<HTMLElement>('.pane-split')) {
+      const divider = [...split.children].find(
+        (child): child is HTMLElement =>
+          child instanceof HTMLElement && child.classList.contains('pane-divider')
+      )
+      if (divider) {
+        divider.replaceWith(this.createDividerWrapped(split.classList.contains('is-vertical')))
+      }
+    }
+    applyDividerStyles(this.root, this.styleOptions)
+  }
+
   private getDragCallbacks() {
     return {
       getPanes: () => this.panes,
       getRoot: () => this.root,
       getStyleOptions: () => this.styleOptions,
       isDestroyed: () => this.destroyed,
+      allowsUserStructuralMutation: () => !this.options.maintainOrchestrationGrid,
       safeFit,
       applyPaneOpacity: () =>
         applyPaneOpacity(this.panes.values(), this.activePaneId, this.styleOptions),

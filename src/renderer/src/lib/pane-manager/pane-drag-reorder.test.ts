@@ -173,6 +173,38 @@ describe('attachPaneDrag', () => {
     vi.unstubAllGlobals()
   })
 
+  it('does not start a pane-handle reorder while maintained grid ownership is active', () => {
+    const handle = new FakeElement()
+    const root = new FakeElement(['pane-manager-root'])
+    const sourcePane = createPane(1, new FakeElement(['pane']))
+    const targetPane = createPane(2, new FakeElement(['pane']))
+    const panes = new Map<number, ManagedPaneInternal>([
+      [sourcePane.id, sourcePane],
+      [targetPane.id, targetPane]
+    ])
+    const state = createDragReorderState()
+    const preventDefault = vi.fn()
+    const event = pointerEvent({ pointerId: 7, preventDefault })
+
+    attachPaneDrag(handle as unknown as HTMLElement, sourcePane.id, state, {
+      getPanes: () => panes,
+      getRoot: () => root as unknown as HTMLElement,
+      getStyleOptions: () => ({}),
+      isDestroyed: () => false,
+      allowsUserStructuralMutation: () => false,
+      safeFit: vi.fn(),
+      applyPaneOpacity: vi.fn(),
+      applyDividerStyles: vi.fn(),
+      refitPanesUnder: vi.fn()
+    })
+
+    handle.dispatchPointer('pointerdown', event)
+
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(handle.hasPointerCapture(7)).toBe(false)
+    expect(state.cleanupActiveDrag).toBeNull()
+  })
+
   it('cleans pane drag state when pointer capture is cancelled', () => {
     const handle = new FakeElement()
     const root = new FakeElement(['pane-manager-root'])
@@ -364,6 +396,72 @@ describe('attachPaneDrag', () => {
     expect(detachPaneFromTree).not.toHaveBeenCalled()
     expect(insertPaneNextTo).not.toHaveBeenCalled()
     expect(state.currentExternalDropTarget).toBeNull()
+  })
+
+  it('lets a maintained grid detach externally without allowing an internal reorder', () => {
+    const handle = new FakeElement()
+    const root = new FakeElement(['pane-manager-root'])
+    const sourcePane = createPane(
+      1,
+      new FakeElement(['pane'], {
+        left: 0,
+        top: 80,
+        right: 100,
+        bottom: 180,
+        width: 100,
+        height: 100
+      })
+    )
+    const siblingPane = createPane(
+      2,
+      new FakeElement(['pane'], {
+        left: 120,
+        top: 80,
+        right: 220,
+        bottom: 180,
+        width: 100,
+        height: 100
+      })
+    )
+    const panes = new Map<number, ManagedPaneInternal>([
+      [sourcePane.id, sourcePane],
+      [siblingPane.id, siblingPane]
+    ])
+    const externalTarget = {
+      id: 'group-1',
+      overlayKind: 'insertion' as const,
+      rect: { left: 0, top: 0, right: 300, bottom: 32, width: 300, height: 32 } as DOMRect
+    }
+    const onExternalPaneDrop = vi.fn(() => true)
+    const state = createDragReorderState()
+
+    attachPaneDrag(handle as unknown as HTMLElement, sourcePane.id, state, {
+      getPanes: () => panes,
+      getRoot: () => root as unknown as HTMLElement,
+      getStyleOptions: () => ({}),
+      isDestroyed: () => false,
+      allowsUserStructuralMutation: () => false,
+      safeFit: vi.fn(),
+      applyPaneOpacity: vi.fn(),
+      applyDividerStyles: vi.fn(),
+      refitPanesUnder: vi.fn(),
+      resolveExternalDropTarget: ({ clientX, clientY }) =>
+        clientX === 10 && clientY === 10 ? externalTarget : null,
+      onExternalPaneDrop
+    })
+
+    handle.dispatchPointer('pointerdown', pointerEvent({ clientX: 10, clientY: 90 }))
+    handle.dispatchPointer('pointermove', pointerEvent({ clientX: 150, clientY: 100 }))
+    expect(state.currentDropTarget).toBeNull()
+    expect(state.currentExternalDropTarget).toBeNull()
+
+    handle.dispatchPointer('pointermove', pointerEvent({ clientX: 10, clientY: 10 }))
+    expect(state.currentExternalDropTarget).toBe(externalTarget)
+    handle.dispatchPointer('pointerup', pointerEvent({ pointerId: 1 }))
+
+    expect(onExternalPaneDrop).toHaveBeenCalledWith(sourcePane.id, externalTarget)
+    expect(detachPaneFromTree).not.toHaveBeenCalled()
+    expect(insertPaneNextTo).not.toHaveBeenCalled()
   })
 
   it('returns cleanup that removes handle listeners and cancels active drag capture', () => {

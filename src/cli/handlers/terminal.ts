@@ -134,16 +134,25 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       )
     }
     const command = getOptionalStringFlag(flags, 'command')
+    const placement = getOptionalStringFlag(flags, 'placement')
+    if (placement !== undefined && placement !== 'tab' && placement !== 'orchestration-grid') {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--placement must be tab or orchestration-grid'
+      )
+    }
     const useRendererBackedInteractiveTerminal =
-      !client.isRemote && shouldUseRendererBackedInteractiveTerminal(command)
+      !client.isRemote &&
+      placement !== 'orchestration-grid' &&
+      shouldUseRendererBackedInteractiveTerminal(command)
     const focus = flags.get('focus') === true
     const result = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
       worktree: await getBrowserWorktreeSelector(flags, cwd, client),
       command,
       title: getOptionalStringFlag(flags, 'title'),
-      // Why: interactive local agent TUIs need the renderer-backed terminal
-      // path for browser-side features, but CLI creates must stay backgrounded
-      // unless the caller explicitly asks for focus.
+      ...(placement ? { placement } : {}),
+      // Why: ordinary interactive agents need renderer-backed terminal features;
+      // shared grids must use main's durable materialization transaction instead.
       focus,
       ...(focus ? { presentation: 'focused' } : {}),
       ...(useRendererBackedInteractiveTerminal ? { rendererBacked: true, activate: focus } : {})

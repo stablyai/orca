@@ -973,6 +973,7 @@ const TerminalCreateParams = z.object({
   rendererBacked: z.unknown().optional(),
   activate: z.unknown().optional(),
   presentation: z.enum(['background', 'focused']).optional(),
+  placement: z.enum(['tab', 'orchestration-grid']).optional(),
   tabId: OptionalString,
   leafId: OptionalString
 })
@@ -1431,37 +1432,23 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.create',
     params: TerminalCreateParams,
-    handler: async (params, { runtime, pairedDeviceId, clientId }) => ({
-      terminal: await runtime.dedupeTerminalCreate(
-        pairedDeviceId ?? clientId ?? 'local',
-        params.worktree,
-        params.clientMutationId,
-        params.reconcileExisting === true,
-        (canonicalWorktreeSelector, preAllocatedHandle) =>
-          runtime.createTerminal(canonicalWorktreeSelector, {
-            command: params.command,
-            startupCommandDelivery: params.startupCommandDelivery,
-            env: params.env,
-            envToDelete: params.envToDelete,
-            ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
-            ...(params.resumeProviderSession
-              ? { resumeProviderSession: params.resumeProviderSession }
-              : {}),
-            ...(params.launchToken ? { launchToken: params.launchToken } : {}),
-            ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
-            ...(params.terminalColorQueryReplies
-              ? { terminalColorQueryReplies: params.terminalColorQueryReplies }
-              : {}),
-            title: params.title,
-            focus: params.focus === true,
-            rendererBacked: params.rendererBacked === true,
-            activate: params.activate === true,
-            presentation: params.presentation,
-            tabId: params.tabId,
-            leafId: params.leafId,
-            ...(preAllocatedHandle ? { preAllocatedHandle } : {})
-          })
-      )
+    handler: async (params, { runtime }) => ({
+      terminal: await runtime.createTerminal(params.worktree, {
+        command: params.command,
+        startupCommandDelivery: params.startupCommandDelivery,
+        env: params.env,
+        ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
+        ...(params.launchToken ? { launchToken: params.launchToken } : {}),
+        ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
+        title: params.title,
+        focus: params.focus === true,
+        rendererBacked: params.rendererBacked === true,
+        activate: params.activate === true,
+        presentation: params.presentation,
+        placement: params.placement,
+        tabId: params.tabId,
+        leafId: params.leafId
+      })
     })
   }),
   defineMethod({

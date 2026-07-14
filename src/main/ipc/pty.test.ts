@@ -10842,6 +10842,145 @@ describe('registerPtyHandlers', () => {
     unregisterSshPtyProvider('ssh-1')
   })
 
+  it('defers both runtime binding and SSH lease persistence for an atomic caller', async () => {
+    type RuntimeRegistrationReceipt = {
+      commit: () => void
+      abort: () => Promise<void>
+    }
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        command?: string
+        worktreeId?: string
+        connectionId?: string
+        tabId?: string
+        leafId?: string
+        preAllocatedHandle?: string
+        persistHostSessionBinding?: boolean
+        deferHostSessionPersistence?: boolean
+        deferRuntimeRegistration?: boolean
+      }): Promise<{ id: string; runtimeRegistration?: RuntimeRegistrationReceipt }>
+    }
+    const remoteSpawn = vi.fn(async () => ({ id: 'ssh:ssh-grid-atomic@@relay-pty' }))
+    const remoteShutdown = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('transient staged shutdown failure'))
+      .mockResolvedValue(undefined)
+    registerSshPtyProvider('ssh-grid-atomic', {
+      spawn: remoteSpawn,
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: remoteShutdown,
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    const store = {
+      upsertSshRemotePtyLease: vi.fn(),
+      persistPtyBinding: vi.fn(),
+      removeSshRemotePtyLease: vi.fn(),
+      markSshRemotePtyLease: vi.fn()
+    }
+    let controller: RuntimeSpawnController | null = null
+    const stagedRuntimeRegistration = {
+      claim: vi.fn(),
+      commit: vi.fn(),
+      abort: vi.fn()
+    }
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      beginStagedPtyRuntimeRegistration: vi.fn(() => stagedRuntimeRegistration),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      getDriver: vi.fn(() => ({ kind: 'host' })),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    try {
+      registerPtyHandlers(
+        mainWindow as never,
+        runtime as never,
+        undefined,
+        undefined,
+        undefined,
+        store as never
+      )
+      const spawnController = controller as unknown as RuntimeSpawnController
+      const leafId = '12111111-1111-4111-8111-111111111111'
+
+      const result = await spawnController.spawn({
+        cols: 80,
+        rows: 24,
+        command: 'codex',
+        connectionId: 'ssh-grid-atomic',
+        worktreeId: 'wt-remote',
+        tabId: 'tab-grid',
+        leafId,
+        preAllocatedHandle: 'term_grid',
+        persistHostSessionBinding: true,
+        deferHostSessionPersistence: true,
+        deferRuntimeRegistration: true
+      })
+
+      expect(remoteSpawn).toHaveBeenCalledTimes(1)
+      expect(store.persistPtyBinding).not.toHaveBeenCalled()
+      expect(store.upsertSshRemotePtyLease).not.toHaveBeenCalled()
+      expect(runtime.registerPreAllocatedHandleForPty).not.toHaveBeenCalled()
+      expect(runtime.registerPty).not.toHaveBeenCalled()
+      expect(runtime.noteTerminalSpawnCommand).not.toHaveBeenCalled()
+      expect(stagedRuntimeRegistration.claim).toHaveBeenCalledWith('ssh:ssh-grid-atomic@@relay-pty')
+
+      result.runtimeRegistration?.commit()
+
+      expect(stagedRuntimeRegistration.commit).toHaveBeenCalledOnce()
+      expect(runtime.registerPreAllocatedHandleForPty).toHaveBeenCalledOnce()
+      expect(runtime.registerPty).toHaveBeenCalledOnce()
+      expect(runtime.noteTerminalSpawnCommand).toHaveBeenCalledOnce()
+
+      await expect(result.runtimeRegistration?.abort()).rejects.toThrow(
+        'transient staged shutdown failure'
+      )
+      expect(stagedRuntimeRegistration.abort).not.toHaveBeenCalled()
+      await expect(result.runtimeRegistration?.abort()).resolves.toBeUndefined()
+      expect(remoteShutdown).toHaveBeenCalledTimes(2)
+      expect(stagedRuntimeRegistration.abort).toHaveBeenCalledOnce()
+
+      remoteSpawn.mockRejectedValueOnce(new Error('staged spawn failed'))
+      await expect(
+        spawnController.spawn({
+          cols: 80,
+          rows: 24,
+          connectionId: 'ssh-grid-atomic',
+          worktreeId: 'wt-remote',
+          deferRuntimeRegistration: true
+        })
+      ).rejects.toThrow('staged spawn failed')
+      expect(runtime.beginStagedPtyRuntimeRegistration).toHaveBeenCalledTimes(2)
+      expect(stagedRuntimeRegistration.abort).toHaveBeenCalledTimes(2)
+    } finally {
+      unregisterSshPtyProvider('ssh-grid-atomic')
+    }
+  })
+
   it('rejects runtime-owned binding persistence without complete stable identity', async () => {
     type RuntimeSpawnController = {
       spawn(args: {

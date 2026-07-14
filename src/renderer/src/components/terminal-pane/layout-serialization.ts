@@ -11,6 +11,7 @@ import type { RestoredViewportBlankingPanesRef } from './terminal-restored-viewp
 import { isXtermInstanceDisposed } from '@/lib/pane-manager/xterm-instance-disposed'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import {
+  collectLeafIdsInOrder,
   getLeftmostLeafId,
   normalizeTerminalLayoutSnapshot,
   resolveRootlessTerminalLayoutLeafId
@@ -224,7 +225,10 @@ export function replayTerminalLayout(
 
     const createdPane = manager.splitPane(paneId, node.direction as TerminalPaneSplitDirection, {
       ratio: node.ratio,
-      leafId: getLeftmostLeafId(node.second)
+      leafId: getLeftmostLeafId(node.second),
+      ...(snapshot.layoutMode === 'orchestration-grid'
+        ? { allowOrchestrationGridMutation: true }
+        : {})
     })
     if (!createdPane) {
       restoreNode(node.first, paneId)
@@ -236,5 +240,10 @@ export function replayTerminalLayout(
   }
 
   restoreNode(snapshot.root, initialPane.id)
+  if (snapshot.layoutMode === 'orchestration-grid') {
+    // Why: wait for the complete binary replay before one canonical grid
+    // rebuild; lifecycle persistence remains gated until restore finishes.
+    manager.arrangeOrchestrationGrid(collectLeafIdsInOrder(snapshot.root))
+  }
   return paneByLeafId
 }
