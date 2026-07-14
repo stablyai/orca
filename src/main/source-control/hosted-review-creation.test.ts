@@ -115,7 +115,7 @@ vi.mock('./hosted-review', () => ({
   getHostedReviewForBranch: getHostedReviewForBranchMock
 }))
 
-import { createHostedReview, getHostedReviewCreationEligibility } from './hosted-review-creation'
+import { createHostedReview } from './hosted-review-creation'
 
 function resetMocks(): void {
   for (const mock of [
@@ -223,6 +223,11 @@ describe('createHostedReview', () => {
       if (args[0] === 'status') {
         return { stdout: '', stderr: '' }
       }
+      // Why: base-on-remote probe (Change 2 enforcement) — the default base
+      // resolves to a remote-tracking branch so create-time validation passes.
+      if (args[0] === 'for-each-ref') {
+        return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
+      }
       if (args[0] === 'log' && args.includes('--pretty=%s')) {
         return { stdout: 'Feature title\n', stderr: '' }
       }
@@ -297,6 +302,32 @@ describe('createHostedReview', () => {
       ok: false,
       code: 'validation',
       error: 'Create PR failed: switch back to the selected branch before creating a pull request.'
+    })
+    expect(createGitHubPullRequestMock).not.toHaveBeenCalled()
+  })
+
+  it('blocks creation with actionable copy when the submitted base is local-only', async () => {
+    // for-each-ref falls through to '' → the submitted stacked parent is not on
+    // the remote, so create-time enforcement blocks with actionable copy.
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'rev-parse') {
+        return { stdout: 'feature\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      createHostedReview('/repo', {
+        provider: 'github',
+        base: 'stacked-parent',
+        head: 'feature',
+        title: 'Feature'
+      })
+    ).resolves.toEqual({
+      ok: false,
+      code: 'validation',
+      error:
+        'Create PR failed: the base branch "stacked-parent" hasn\'t been pushed to the remote. Choose a pushed base or push it first.'
     })
     expect(createGitHubPullRequestMock).not.toHaveBeenCalled()
   })
@@ -501,6 +532,10 @@ describe('createHostedReview', () => {
         if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref' && args[2] === 'HEAD') {
           return { stdout: 'feature\n', stderr: '' }
         }
+        if (args[0] === 'for-each-ref') {
+          // Base-on-remote probe (Change 2) runs on the SSH host; base is pushed.
+          return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
+        }
         if (args[0] === 'log' && args.includes('--pretty=%s')) {
           return { stdout: 'Feature title\n', stderr: '' }
         }
@@ -586,250 +621,5 @@ describe('createHostedReview', () => {
       }
     })
     expect(createGitHubPullRequestMock).not.toHaveBeenCalled()
-  })
-})
-
-describe('getHostedReviewCreationEligibility', () => {
-  beforeEach(() => {
-    resetMocks()
-
-    mockGitHubProvider()
-    getHostedReviewForBranchMock.mockResolvedValue(null)
-    ghExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'Feature title\n', stderr: '' })
-    isAzureDevOpsReviewCreationAuthenticatedMock.mockReturnValue(true)
-    isGiteaReviewCreationAuthenticatedMock.mockReturnValue(true)
-  })
-
-  it('treats short remote base refs as the default branch name', async () => {
-    await expect(
-      getHostedReviewCreationEligibility({
-        repoPath: '/repo',
-        branch: 'main',
-        base: 'origin/main',
-        hasUncommittedChanges: false,
-        hasUpstream: true,
-        ahead: 0,
-        behind: 0
-      })
-    ).resolves.toMatchObject({
-      canCreate: false,
-      blockedReason: 'default_branch',
-      defaultBaseRef: 'origin/main'
-    })
-  })
-
-  it('blocks dirty tracked GitHub branches before PR creation', async () => {
-    await expect(
-      getHostedReviewCreationEligibility({
-        repoPath: '/repo',
-        branch: 'feature/create-pr',
-        base: 'main',
-        hasUncommittedChanges: true,
-        hasUpstream: true,
-        ahead: 0,
-        behind: 0
-      })
-    ).resolves.toMatchObject({
-      provider: 'github',
-      canCreate: false,
-      blockedReason: 'dirty',
-      nextAction: 'commit',
-      head: 'feature/create-pr'
-    })
-  })
-
-  it('keeps dirty feature branches eligible for PR preparation when review lookup fails', async () => {
-    getHostedReviewForBranchMock.mockRejectedValueOnce(new Error('gh lookup failed'))
-
-    await expect(
-      getHostedReviewCreationEligibility({
-        repoPath: '/repo',
-        branch: 'feature/create-pr',
-        base: 'main',
-        hasUncommittedChanges: true,
-        hasUpstream: false,
-        ahead: 0,
-        behind: 0
-      })
-    ).resolves.toMatchObject({
-      provider: 'github',
-      canCreate: false,
-      blockedReason: 'dirty',
-      nextAction: 'commit',
-      head: 'feature/create-pr'
-    })
-  })
-
-  it('enables creation for clean, in-sync, authenticated GitHub feature branches', async () => {
-    await expect(
-      getHostedReviewCreationEligibility({
-        repoPath: '/repo',
-        branch: 'refs/heads/feature/create-pr',
-        base: 'origin/main',
-        hasUncommittedChanges: false,
-        hasUpstream: true,
-        ahead: 0,
-        behind: 0
-      })
-    ).resolves.toMatchObject({
-      provider: 'github',
-      canCreate: true,
-      blockedReason: null,
-      nextAction: null,
-      defaultBaseRef: 'origin/main',
-      head: 'feature/create-pr'
-    })
-  })
-
-  it('detects a GitHub Enterprise Server branch as the GitHub provider (#8312)', async () => {
-    mockGitHubEnterpriseProvider()
-
-    await expect(
-      getHostedReviewCreationEligibility({
-        repoPath: '/repo',
-        branch: 'feature/create-pr',
-        base: 'origin/main',
-        hasUncommittedChanges: false,
-        hasUpstream: true,
-        ahead: 0,
-        behind: 0
-      })
-    ).resolves.toMatchObject({
-      provider: 'github',
-      canCreate: true,
-      blockedReason: null,
-      nextAction: null
-    })
-
-    // Enterprise auth was already confirmed during detection; the gate must not
-    // fire a redundant gh probe.
-    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('resolves remote eligibility through SSH repo metadata without generating PR copy', async () => {
-    const remoteGit = {
-      exec: vi.fn(async () => ({ stdout: '', stderr: '' }))
-    }
-    getSshGitProviderMock.mockReturnValue(remoteGit)
-
-    await expect(
-      getHostedReviewCreationEligibility({
-        repoPath: '/remote/repo',
-        connectionId: 'ssh-1',
-        branch: 'feature/create-pr',
-        base: 'origin/main',
-        hasUncommittedChanges: false,
-        hasUpstream: true,
-        ahead: 0,
-        behind: 0
-      })
-    ).resolves.toMatchObject({
-      provider: 'github',
-      canCreate: true,
-      head: 'feature/create-pr'
-    })
-
-    expect(getProjectSlugMock).toHaveBeenCalledWith('/remote/repo', 'ssh-1')
-    expect(getRepoSlugMock).toHaveBeenCalledWith('/remote/repo', 'ssh-1')
-    expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
-      expect.objectContaining({ repoPath: '/remote/repo', connectionId: 'ssh-1' })
-    )
-    expect(remoteGit.exec).not.toHaveBeenCalled()
-  })
-
-  it('offers push as the next action for authenticated branches with local-only commits', async () => {
-    await expect(
-      getHostedReviewCreationEligibility({
-        repoPath: '/repo',
-        branch: 'feature/create-pr',
-        base: 'main',
-        hasUncommittedChanges: false,
-        hasUpstream: true,
-        ahead: 2,
-        behind: 0
-      })
-    ).resolves.toMatchObject({
-      canCreate: false,
-      blockedReason: 'needs_push',
-      nextAction: 'push'
-    })
-  })
-
-  it('enables creation for clean, in-sync, authenticated GitLab feature branches', async () => {
-    mockGitLabProvider()
-
-    await expect(
-      getHostedReviewCreationEligibility({
-        repoPath: '/repo',
-        branch: 'feature/gitlab',
-        base: 'main',
-        hasUncommittedChanges: false,
-        hasUpstream: true,
-        ahead: 0,
-        behind: 0
-      })
-    ).resolves.toMatchObject({
-      provider: 'gitlab',
-      canCreate: true,
-      blockedReason: null,
-      nextAction: null,
-      head: 'feature/gitlab'
-    })
-    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
-    expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
-      ['auth', 'status', '--hostname', 'gitlab.com'],
-      { cwd: '/repo' }
-    )
-  })
-
-  it('enables creation for clean, in-sync, token-configured Azure DevOps feature branches', async () => {
-    mockAzureDevOpsProvider()
-
-    await expect(
-      getHostedReviewCreationEligibility({
-        repoPath: '/repo',
-        branch: 'feature/azure',
-        base: 'main',
-        hasUncommittedChanges: false,
-        hasUpstream: true,
-        ahead: 0,
-        behind: 0
-      })
-    ).resolves.toMatchObject({
-      provider: 'azure-devops',
-      canCreate: true,
-      blockedReason: null,
-      nextAction: null,
-      head: 'feature/azure'
-    })
-    expect(isAzureDevOpsReviewCreationAuthenticatedMock).toHaveBeenCalledOnce()
-    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
-    expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('enables creation for clean, in-sync, token-configured Gitea feature branches', async () => {
-    mockGiteaProvider()
-
-    await expect(
-      getHostedReviewCreationEligibility({
-        repoPath: '/repo',
-        branch: 'feature/gitea',
-        base: 'main',
-        hasUncommittedChanges: false,
-        hasUpstream: true,
-        ahead: 0,
-        behind: 0
-      })
-    ).resolves.toMatchObject({
-      provider: 'gitea',
-      canCreate: true,
-      blockedReason: null,
-      nextAction: null,
-      head: 'feature/gitea'
-    })
-    expect(isGiteaReviewCreationAuthenticatedMock).toHaveBeenCalledOnce()
-    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
-    expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
   })
 })

@@ -455,6 +455,12 @@ type MainWorkItem = Omit<GitHubWorkItem, 'repoId'>
 
 const WORK_ITEM_ISSUE_LIST_JSON_FIELDS = 'number,title,state,url,labels,updatedAt,author,assignees'
 
+// Why: the Tasks pager slices pages on updatedAt, so every list/search fetch
+// must return rows newest-updated-first for the cursor to advance correctly.
+// This is the search-qualifier spelling of the same contract the REST list
+// paths express as `sort=updated&direction=desc`; keep the two in sync (#8649).
+const WORK_ITEM_LIST_SORT_QUALIFIER = 'sort:updated-desc'
+
 const WORK_ITEM_PR_LIST_JSON_FIELDS =
   'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,reviewRequests'
 
@@ -996,11 +1002,13 @@ function buildWorkItemListArgs(args: {
   if (excludeMergedFromClosed) {
     searchParts.push('-is:merged')
   }
-  // Why: cursor-based pagination. GitHub search supports updated:<DATE to
-  // fetch items older than the cursor. We use the oldest item's updatedAt
-  // from the previous page as the cursor.
+  // Why: cursor-based pagination. GitHub search supports updated:<=DATE to
+  // fetch items at or older than the cursor. We use the oldest item's updatedAt
+  // from the previous page as the cursor. The bound is inclusive (`<=`) so items
+  // sharing the boundary row's exact updatedAt aren't skipped between pages; the
+  // renderer dedupes the re-fetched boundary rows by id (#8649).
   if (before) {
-    searchParts.push(`updated:<${before}`)
+    searchParts.push(`updated:<=${before}`)
   }
   if (kind === 'pr' && query.reviewRequested) {
     searchParts.push(`review-requested:${query.reviewRequested}`)
@@ -1011,9 +1019,14 @@ function buildWorkItemListArgs(args: {
   if (query.freeText) {
     searchParts.push(query.freeText)
   }
-  if (searchParts.length > 0) {
-    out.push('--search', searchParts.join(' '))
-  }
+  // Why: pagination cursors slice on updatedAt, but `gh issue list` defaults
+  // to created-desc and `--search` defaults to best-match. `gh issue/pr list`
+  // has no --sort flag, so the only lever is the search query — which forces us
+  // to always emit --search. Without pinning the sort, recently-updated old
+  // items never appear on any page, so the pager advertises pages the fetch
+  // chain can never reach (#8649).
+  searchParts.push(WORK_ITEM_LIST_SORT_QUALIFIER)
+  out.push('--search', searchParts.join(' '))
   return out
 }
 

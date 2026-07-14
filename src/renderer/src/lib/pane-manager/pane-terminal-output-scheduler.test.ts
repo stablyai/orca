@@ -499,7 +499,7 @@ describe('pane terminal output scheduler', () => {
     vi.advanceTimersByTime(50)
 
     expect(terminal.write).toHaveBeenCalledTimes(1)
-    expect(terminal.write).toHaveBeenCalledWith('ab')
+    expect(terminal.write).toHaveBeenCalledWith('ab', expect.any(Function))
   })
 
   it('runs parsed callbacks after background output parses without foreground refresh', async () => {
@@ -557,10 +557,15 @@ describe('pane terminal output scheduler', () => {
     vi.advanceTimersByTime(50)
 
     expect(writes.map((data) => data.length)).toEqual([16 * 1024, 4 * 1024])
-    expect(parseCallbacks).toHaveLength(1)
+    // Why 2: every slice now carries a completion callback (it settles the
+    // write-pipeline stall watch); onParsed still fires only with the final one.
+    expect(parseCallbacks).toHaveLength(2)
     expect(onParsed).not.toHaveBeenCalled()
 
     parseCallbacks[0]?.()
+    expect(onParsed).not.toHaveBeenCalled()
+
+    parseCallbacks[1]?.()
 
     expect(onParsed).toHaveBeenCalledTimes(1)
   })
@@ -1000,7 +1005,7 @@ describe('pane terminal output scheduler', () => {
 
     expect(beforeWrite).toHaveBeenCalledTimes(1)
     expect(beforeWrite).toHaveBeenCalledWith('ab')
-    expect(terminal.write).toHaveBeenCalledWith('ab')
+    expect(terminal.write).toHaveBeenCalledWith('ab', expect.any(Function))
   })
 
   it('keeps preparation attached when a later producer omits it', async () => {
@@ -1014,7 +1019,7 @@ describe('pane terminal output scheduler', () => {
     vi.advanceTimersByTime(50)
 
     expect(beforeWrite).toHaveBeenCalledWith('مرحبا fallback notice')
-    expect(terminal.write).toHaveBeenCalledWith('مرحبا fallback notice')
+    expect(terminal.write).toHaveBeenCalledWith('مرحبا fallback notice', expect.any(Function))
   })
 
   it('ignores unforced chunks when resolving a coalesced forced refresh', async () => {
@@ -1051,7 +1056,7 @@ describe('pane terminal output scheduler', () => {
 
     expect(beforeWrite).toHaveBeenCalledTimes(1)
     expect(beforeWrite).toHaveBeenCalledWith('hidden')
-    expect(terminal.write).toHaveBeenCalledWith('hidden')
+    expect(terminal.write).toHaveBeenCalledWith('hidden', expect.any(Function))
   })
 
   it('supports bounded explicit flushes for visibility resume', async () => {
@@ -1081,12 +1086,12 @@ describe('pane terminal output scheduler', () => {
     })
 
     vi.advanceTimersByTime(50)
-    expect(terminals[0].write).toHaveBeenCalledWith('pane-0')
-    expect(terminals[1].write).toHaveBeenCalledWith('pane-1')
+    expect(terminals[0].write).toHaveBeenCalledWith('pane-0', expect.any(Function))
+    expect(terminals[1].write).toHaveBeenCalledWith('pane-1', expect.any(Function))
     expect(terminals[2].write).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(16)
-    expect(terminals[2].write).toHaveBeenCalledWith('pane-2')
+    expect(terminals[2].write).toHaveBeenCalledWith('pane-2', expect.any(Function))
   })
 
   it('drains active foreground backlog before older background terminal backlog', async () => {
@@ -1126,14 +1131,14 @@ describe('pane terminal output scheduler', () => {
 
     vi.advanceTimersByTime(50)
     expect(terminals[0].write).toHaveBeenCalledTimes(1)
-    expect(terminals[1].write).toHaveBeenCalledWith('pane-1')
+    expect(terminals[1].write).toHaveBeenCalledWith('pane-1', expect.any(Function))
     expect(terminals[2].write).not.toHaveBeenCalled()
 
     // Why: a terminal with leftover bytes is deleted/re-set after each drain
     // chunk, moving it to the back of the Map so a big burst cannot starve
     // other queued panes.
     vi.advanceTimersByTime(16)
-    expect(terminals[2].write).toHaveBeenCalledWith('pane-2')
+    expect(terminals[2].write).toHaveBeenCalledWith('pane-2', expect.any(Function))
     expect(terminals[0].write).toHaveBeenCalledTimes(2)
   })
 

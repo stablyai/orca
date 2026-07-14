@@ -2893,7 +2893,7 @@
             "splitTerminal": "Dividir terminal"
           },
           "TerminalTabLeadingIcon": {
-            "unread": "Unread agent completion"
+            "7ab2964bea": "Finalización de agente sin leer"
           }
         }
       },
@@ -13107,7 +13107,8 @@
         "otherPlaceholder": "Escribe tu respuesta",
         "cancel": "Cancelar",
         "send": "Enviar respuesta",
-        "next": "Siguiente"
+        "next": "Siguiente",
+        "skip": "Omitir"
       },
       "approval": {
         "title": "¿Permitir {{value0}}?",

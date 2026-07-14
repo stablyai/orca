@@ -1832,14 +1832,29 @@ describe('agent completion coordinator', () => {
 
     const turn = { prompt: 'fix the bug', agentType: 'codex' as const }
     coordinator.observeHookStatus({ state: 'working', ...turn })
-    coordinator.observeHookStatus({ state: 'waiting', ...turn, toolName: 'exec_command', toolInput: 'ls' })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      ...turn,
+      toolName: 'exec_command',
+      toolInput: 'ls'
+    })
     // First pause auto-resolves before the window elapses.
-    coordinator.observeHookStatus({ state: 'working', ...turn, toolName: 'exec_command', toolInput: 'ls' })
+    coordinator.observeHookStatus({
+      state: 'working',
+      ...turn,
+      toolName: 'exec_command',
+      toolInput: 'ls'
+    })
     vi.advanceTimersByTime(CODEX_ATTENTION_QUIET_MS)
     expect(dispatchAttention).not.toHaveBeenCalled()
 
     // A later, genuinely-distinct pause must re-arm the debounce and fire.
-    coordinator.observeHookStatus({ state: 'waiting', ...turn, toolName: 'apply_patch', toolInput: 'diff' })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      ...turn,
+      toolName: 'apply_patch',
+      toolInput: 'diff'
+    })
     expect(dispatchAttention).not.toHaveBeenCalled()
     vi.advanceTimersByTime(CODEX_ATTENTION_QUIET_MS)
     expect(dispatchAttention).toHaveBeenCalledTimes(1)

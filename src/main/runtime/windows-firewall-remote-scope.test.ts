@@ -126,16 +126,18 @@ describe('Windows firewall remote-address scope', () => {
     // A /32 subnet is just the desktop itself, so an explicit range cannot prove
     // the phone (a different host) is allowed — only the keywords can.
     expect(hasSufficientWindowsFirewallRemoteScope([rule(['Any'])], '100.64.1.20', 32)).toBe(true)
-    expect(hasSufficientWindowsFirewallRemoteScope([rule(['LocalSubnet'])], '100.64.1.20', 32)).toBe(
-      true
-    )
+    expect(
+      hasSufficientWindowsFirewallRemoteScope([rule(['LocalSubnet'])], '100.64.1.20', 32)
+    ).toBe(true)
     expect(
       hasSufficientWindowsFirewallRemoteScope([rule(['100.64.0.0/10'])], '100.64.1.20', 32)
     ).toBe(false)
   })
 
   it('fails address-family keywords closed when the interface family is unknown', () => {
-    expect(hasSufficientWindowsFirewallRemoteScope([rule(['Any'])], undefined, undefined)).toBe(true)
+    expect(hasSufficientWindowsFirewallRemoteScope([rule(['Any'])], undefined, undefined)).toBe(
+      true
+    )
     expect(hasSufficientWindowsFirewallRemoteScope([rule(['Any4'])], undefined, undefined)).toBe(
       false
     )

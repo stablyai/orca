@@ -64,7 +64,9 @@ describe('orca claude-teams CLI handler', () => {
     spawnMock.mockImplementation(() => mockClaudeChild())
     callMock.mockReset()
     callMock.mockResolvedValue({
-      result: { launch: { env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1', PATH: '/shim:/usr/bin' } } }
+      result: {
+        launch: { env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1', PATH: '/shim:/usr/bin' } }
+      }
     })
     previousRunAsNode = process.env.ELECTRON_RUN_AS_NODE
     previousPaneKey = process.env.ORCA_PANE_KEY

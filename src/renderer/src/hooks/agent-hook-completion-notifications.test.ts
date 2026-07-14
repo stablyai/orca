@@ -112,9 +112,8 @@ describe('agent hook completion notifications', () => {
   // Why: the Codex permission-pause tests share a working→pause→quiet-window
   // sequence; centralizing it keeps the debounce advance (issue #8387) in one spot.
   async function observeCodexPermissionPause(state: 'waiting' | 'blocked'): Promise<void> {
-    const { observeAgentHookCompletionForNotification } = await import(
-      './agent-hook-completion-notifications'
-    )
+    const { observeAgentHookCompletionForNotification } =
+      await import('./agent-hook-completion-notifications')
     observeAgentHookCompletionForNotification({
       paneKey,
       worktreeId: 'wt-1',

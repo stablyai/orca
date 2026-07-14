@@ -27,8 +27,10 @@ export const NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS = 300
 // render the next question before writing its body, or that body lands on the
 // wrong (or no) active question. This buffer is added ON TOP of the body→Enter
 // gap; a previous attempt that spaced Enters only ~350ms apart fired them faster
-// than the next question rendered, leaking answers as fresh prompts.
-export const NATIVE_CHAT_ADVANCE_BUFFER_MS = 300
+// than the next question rendered, leaking answers as fresh prompts. Kept
+// generous so the next step still renders in time on slower machines / under SSH
+// round-trip latency, where a tighter cadence misfires the answer.
+export const NATIVE_CHAT_ADVANCE_BUFFER_MS = 500
 
 /** Per-question wall-clock cadence: body→Enter gap plus the advance buffer that
  *  lets the next AskUserQuestion step render before its body is written. */

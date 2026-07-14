@@ -72,7 +72,7 @@ export function TerminalTabLeadingIcon({
       <span
         data-testid="tab-activity-bell"
         aria-label={translate(
-          'auto.components.tab.bar.TerminalTabLeadingIcon.unread',
+          'auto.components.tab.bar.TerminalTabLeadingIcon.7ab2964bea',
           'Unread agent completion'
         )}
         className="mr-1 inline-flex shrink-0 items-center gap-1"

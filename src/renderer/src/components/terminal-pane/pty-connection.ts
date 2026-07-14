@@ -51,6 +51,11 @@ import { getAppliedSizeReadE2eDelayMs } from './pty-applied-size-read-e2e-delay'
 import { createPtySizeReassertion } from './pty-size-reassertion'
 import { isPaneReplaying, replayIntoTerminal, replayIntoTerminalAsync } from './replay-guard'
 import {
+  isTerminalWritePipelineCertifiedDead,
+  registerUndeliverableWriteHandler
+} from '@/lib/pane-manager/terminal-write-pipeline-health'
+import { requestTerminalPaneRecovery } from './terminal-pane-recovery'
+import {
   isDocumentVisibilityProvenStale,
   registerStaleDocumentVisibilityRecovery
 } from './stale-document-visibility'
@@ -3326,6 +3331,66 @@ export function connectPanePty(
     }
   }
 
+  // Why: an unbound transport (detached during a remount/move and never
+  // rebound) silently rejects every keystroke while the PTY stays alive and
+  // the last frame stays painted — the pane looks healthy and eats input
+  // (issue #8104 class). None of the dead-session reconciles cover it because
+  // the PTY is live; recover by remounting the tab over the live PTY.
+  let transportConnectInFlightSince: number | null = null
+  // Why a grace window instead of a plain flag: a connect that never settles
+  // (SSH RPC timeout class, wedged daemon call) would otherwise suppress
+  // input-triggered recovery FOREVER — and such a pane has no output flowing,
+  // so no other detector can fire. Past the grace, undeliverable input may
+  // recover again; the transport's destroyed-check no longer kills a
+  // pre-existing session when a late reattach resolves, so a remount racing
+  // a slow-but-alive connect costs a wasted view rebuild, not a shell.
+  const TRANSPORT_CONNECT_SETTLE_GRACE_MS = 60_000
+  const requestRecoveryForUndeliverableInput = (): void => {
+    if (transport.isConnected?.() && transport.getPtyId() !== null) {
+      return
+    }
+    // Why: input rejected while a connect/reattach is still settling is "not
+    // deliverable YET", not a dead binding. Remounting here destroys the
+    // unbound transport, and pty-transport's destroyed check then kills the
+    // PTY the in-flight reattach resolves to — the live shell recovery exists
+    // to preserve. The fossil case this detector targets has no pending
+    // connect, so it still recovers. Same for a late async reject landing
+    // after dispose: the successor pane owns the tab now.
+    const connectStillSettling =
+      transportConnectInFlightSince !== null &&
+      Date.now() - transportConnectInFlightSince < TRANSPORT_CONNECT_SETTLE_GRACE_MS
+    if (connectStillSettling || disposed) {
+      return
+    }
+    const storePtyId = useAppStore.getState().ptyIdsByTabId?.[deps.tabId]?.[0] ?? null
+    const undeliverablePtyId = transport.getPtyId() ?? storePtyId
+    void requestTerminalPaneRecovery({
+      tabId: deps.tabId,
+      ptyId: undeliverablePtyId,
+      reason: 'input-undeliverable',
+      // Why: pty:hasPty answers null for ids the local registry doesn't own,
+      // and a disconnected remote pane would otherwise remount-churn on every
+      // cooldown window while typing. Local panes keep the lenient gate.
+      requireAuthoritativeLiveness:
+        Boolean(transport.getConnectionId?.()) || isRemoteRuntimePtyId(undeliverablePtyId)
+    })
+  }
+  // Why: the write-pipeline health watch (scheduler stall probe, replay-guard
+  // wedge certification) detects a dead xterm pipeline; route its verdict to
+  // the same tab remount. Registered per xterm instance — recovery replaces
+  // the instance, which resets certification naturally.
+  const unregisterUndeliverableWriteHandler = registerUndeliverableWriteHandler(
+    pane.terminal,
+    (reason) => {
+      const storePtyId = useAppStore.getState().ptyIdsByTabId?.[deps.tabId]?.[0] ?? null
+      void requestTerminalPaneRecovery({
+        tabId: deps.tabId,
+        ptyId: transport.getPtyId() ?? storePtyId,
+        reason
+      })
+    }
+  )
+
   const onDataDisposable = pane.terminal.onData((data) => {
     // Why: xterm auto-replies to embedded query sequences (DA1, DECRQM,
     // OSC 10/11, focus, CPR) via onData. When we replay recorded PTY bytes
@@ -3398,6 +3463,10 @@ export function connectPanePty(
             observeAcceptedTerminalInput(data, acknowledgedIntent)
             interruptInference.observeInputIntent(acknowledgedIntent)
             observeTitleOnlyInterrupt()
+          } else {
+            // Why: Esc/Ctrl+C are the first keys users press on a frozen pane;
+            // an unbound-transport reject here must arm recovery too.
+            requestRecoveryForUndeliverableInput()
           }
         })
         .catch((err) => {
@@ -3412,6 +3481,8 @@ export function connectPanePty(
         markAcceptedTerminalInputSent()
         observeAcceptedShellCommandInput(data)
         observeAcceptedTerminalInput(data, intent)
+      } else {
+        requestRecoveryForUndeliverableInput()
       }
       clearPendingTerminalInputIntent()
       return
@@ -3424,6 +3495,7 @@ export function connectPanePty(
       observeSentTerminalInputIntent(data)
     } else {
       clearPendingTerminalInputIntent()
+      requestRecoveryForUndeliverableInput()
     }
   })
 
@@ -4309,6 +4381,7 @@ export function connectPanePty(
         ? Promise.resolve(null)
         : window.api.pty.declarePendingPaneSerializer(cacheKey).catch(() => null)
 
+      transportConnectInFlightSince = Date.now()
       const spawnedRaw = transport.connect({
         url: '',
         cols,
@@ -4328,6 +4401,11 @@ export function connectPanePty(
         }
       })
 
+      void Promise.resolve(spawnedRaw)
+        .catch(() => null)
+        .finally(() => {
+          transportConnectInFlightSince = null
+        })
       const trackedPromise: Promise<string | null> = Promise.resolve(spawnedRaw)
         .then(async (spawnedPtyId) => {
           const resolvedPtyId =
@@ -6070,6 +6148,14 @@ export function connectPanePty(
     }
 
     function requestHiddenOutputRestoreIfNeeded(opts?: { bypassScheduler?: boolean }): boolean {
+      // Why: once the write pipeline is probe-certified dead, a restore can
+      // never parse — replaying just re-arms the wedged breadcrumb drip and
+      // wastes a snapshot fetch each time the delivery watchdog heals stuck
+      // in-flight bytes (~60s while idle). Recovery owns the pane now; the
+      // remounted pane gets a fresh xterm and a fresh restore.
+      if (isTerminalWritePipelineCertifiedDead(pane.terminal)) {
+        return false
+      }
       resetHiddenOutputRestoreIfPtyChanged()
       const ptyId = hiddenOutputRestorePtyId ?? transport.getPtyId()
       if (!hiddenOutputRestoreNeeded && hiddenOutputRestorePendingChunks.length === 0) {
@@ -6878,6 +6964,7 @@ export function connectPanePty(
             const coldRestoreStartup = buildColdRestoreAgentResumeStartup()
             clearPaneMode2031State()
             clearHiddenOutputRestoreState()
+            transportConnectInFlightSince = Date.now()
             const reattachPromise = transport.connect({
               url: '',
               cols,
@@ -6907,6 +6994,11 @@ export function connectPanePty(
                 }
               }
             })
+            void Promise.resolve(reattachPromise)
+              .catch(() => null)
+              .finally(() => {
+                transportConnectInFlightSince = null
+              })
             void Promise.resolve(reattachPromise)
               .then(async (result) => {
                 console.warn(
@@ -7064,6 +7156,7 @@ export function connectPanePty(
 
       let expiredReattachError = false
       const coldRestoreStartup = buildColdRestoreAgentResumeStartup()
+      transportConnectInFlightSince = Date.now()
       const reattachPromise = transport.connect({
         url: '',
         cols,
@@ -7092,6 +7185,11 @@ export function connectPanePty(
         }
       })
 
+      void Promise.resolve(reattachPromise)
+        .catch(() => null)
+        .finally(() => {
+          transportConnectInFlightSince = null
+        })
       void Promise.resolve(reattachPromise)
         .then(async (result) => {
           if (!result && expiredReattachError) {
@@ -7418,6 +7516,7 @@ export function connectPanePty(
     reconcileIfSessionMissing,
     dispose() {
       disposed = true
+      unregisterUndeliverableWriteHandler()
       // Why: the post-spawn reconcile polls across frames; cancel its pending
       // rAF so a torn-down pane cannot keep fitting/resizing after disposal.
       ptySizeReconcileHandle?.cancel()
