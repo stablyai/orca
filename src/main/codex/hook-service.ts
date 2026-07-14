@@ -13,7 +13,7 @@ import {
   readHooksJson,
   removeManagedCommands,
   wrapPosixHookCommand,
-  wrapWindowsCmdHookCommand,
+  wrapWindowsHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition
@@ -132,7 +132,7 @@ function getManagedScriptPath(): string {
 
 function getManagedCommand(scriptPath: string): string {
   return process.platform === 'win32'
-    ? wrapWindowsCmdHookCommand(scriptPath)
+    ? wrapWindowsHookCommand(scriptPath)
     : wrapPosixHookCommand(scriptPath)
 }
 
@@ -1563,6 +1563,7 @@ export class CodexHookService {
 export const codexHookService = new CodexHookService()
 
 export const _internals = {
+  getManagedCommand,
   getManagedScript,
   installManagedHooksIntoWslRuntime,
   refreshWslRuntimeUserHooks,

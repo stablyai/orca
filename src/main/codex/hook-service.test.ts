@@ -38,7 +38,7 @@ vi.mock('os', async (importOriginal) => {
   }
 })
 
-import { CodexHookService } from './hook-service'
+import { CodexHookService, _internals } from './hook-service'
 
 const WINDOWS_POWERSHELL_LAUNCHER =
   /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
@@ -246,30 +246,16 @@ describe('CodexHookService', () => {
     }
   )
 
-  // Why: the common case — a profile path with no spaces or cmd metacharacters
-  // — must launch the .cmd directly with no PowerShell, restoring the pre-#6078
-  // speed that Codex 0.140's synchronous "Running <event> hook" rows expose.
+  // Why: Codex runs Windows hook command strings through PowerShell. Even a
+  // cmd-safe script path must avoid cmd.exe-only `if exist (...)` syntax.
   it.skipIf(process.platform !== 'win32')(
-    'launches the managed .cmd directly when the profile path is cmd-safe',
+    'uses a PowerShell-safe launcher when the profile path is cmd-safe',
     () => {
-      const status = new CodexHookService().install()
-      expect(status.state).toBe('installed')
-
-      const managedCodexHome = join(userDataDir, 'codex-runtime-home', 'home')
-      const hooksConfig = JSON.parse(
-        readFileSync(join(managedCodexHome, 'hooks.json'), 'utf-8')
-      ) as { hooks: Record<string, { hooks?: { command?: string }[] }[]> }
-
-      // Why: the temp home is normally cmd-safe; guard so a runner whose tmpdir
-      // holds an exotic character still asserts the correct (fallback) branch.
-      const command = hooksConfig.hooks.Stop?.[0]?.hooks?.[0]?.command ?? ''
-      const cmdSafe = /^[A-Za-z0-9_.:\\~-]+$/.test(join(tmpHome, '.orca', 'agent-hooks'))
-      if (cmdSafe) {
-        expect(command).not.toMatch(/powershell/i)
-        expect(command).toMatch(/\\agent-hooks\\codex-hook\.cmd$/)
-      } else {
-        expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
-      }
+      const command = _internals.getManagedCommand(
+        'C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd'
+      )
+      expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
+      expect(command).not.toMatch(/^if exist\b/i)
     }
   )
 
