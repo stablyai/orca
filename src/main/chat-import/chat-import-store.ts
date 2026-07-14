@@ -124,6 +124,13 @@ export function listMessageAttachments(
   }))
 }
 
+// Why: storage GC needs the set of blob hashes still referenced by an
+// attachment row so it can reclaim the rest as orphans.
+export function listReferencedBlobHashes(db: SyncDatabase): Set<string> {
+  const rows = db.prepare('SELECT DISTINCT hash FROM attachments').all() as { hash: string }[]
+  return new Set(rows.map((r) => r.hash))
+}
+
 // Why: the native host asks which conversations it has already stored so the
 // extension can skip re-fetching them (delta sync).
 export function listIngestedExternalIds(db: SyncDatabase, source: WebChatSource): string[] {

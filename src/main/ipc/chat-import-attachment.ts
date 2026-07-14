@@ -93,6 +93,14 @@ export async function openStoredAttachment(
   }
 }
 
+// Shared so storage GC (chat-import-storage-gc) can reclaim old files from the
+// same temp dir the handler writes into.
+export const ORCA_ATTACHMENTS_TMP_SUBDIR = 'orca-attachments'
+
+export function chatImportTempAttachmentsDir(): string {
+  return join(app.getPath('temp'), ORCA_ATTACHMENTS_TMP_SUBDIR)
+}
+
 export function registerChatImportAttachmentHandlers(): void {
   ipcMain.handle(
     'chatImportAttachment:open',
@@ -101,7 +109,7 @@ export function registerChatImportAttachmentHandlers(): void {
         {
           readBlob: (hash) => readBlob(chatImportBlobDir(), hash),
           openPath: (path) => shell.openPath(path),
-          tmpDir: join(app.getPath('temp'), 'orca-attachments')
+          tmpDir: chatImportTempAttachmentsDir()
         },
         args
       )

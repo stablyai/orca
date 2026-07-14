@@ -28,7 +28,12 @@ import { registerEphemeralVmHandlers } from './ephemeral-vm'
 import { registerAiVaultHandlers } from './ai-vault'
 import { registerNativeChatHandlers } from './native-chat'
 import { registerChatImportSetupHandlers } from './chat-import-setup'
-import { registerChatImportAttachmentHandlers } from './chat-import-attachment'
+import {
+  registerChatImportAttachmentHandlers,
+  chatImportTempAttachmentsDir
+} from './chat-import-attachment'
+import { chatImportBlobDir, chatImportDbPath } from '../chat-import/chat-import-paths'
+import { runChatImportStorageGc } from '../chat-import/chat-import-storage-gc'
 import { registerNotificationHandlers } from './notifications'
 import { registerNotebookHandlers } from './notebook'
 import { registerOnboardingHandlers } from './onboarding'
@@ -193,7 +198,32 @@ export function registerCoreHandlers(
   registerNativeChatHandlers()
   registerChatImportSetupHandlers()
   registerChatImportAttachmentHandlers()
+  scheduleChatImportStorageGc()
   registerClipboardHandlers(store)
   registerUpdaterHandlers(store)
   registerSpeechHandlers(store)
+}
+
+// 1h grace spares blobs a still-running sync just wrote (STORE_BLOB precedes the
+// INGEST that references them); 1d keeps opened temp attachments around briefly.
+const CHAT_IMPORT_BLOB_GRACE_MS = 60 * 60 * 1000
+const CHAT_IMPORT_TEMP_MAX_AGE_MS = 24 * 60 * 60 * 1000
+
+// Fire-and-forget storage sweep once the app is ready. Fully guarded: a GC
+// failure must never affect startup or handler registration.
+function scheduleChatImportStorageGc(): void {
+  void app.whenReady().then(() => {
+    try {
+      runChatImportStorageGc({
+        dbPath: chatImportDbPath(),
+        blobDir: chatImportBlobDir(),
+        tempAttachmentsDir: chatImportTempAttachmentsDir(),
+        now: Date.now(),
+        blobGraceMs: CHAT_IMPORT_BLOB_GRACE_MS,
+        tempMaxAgeMs: CHAT_IMPORT_TEMP_MAX_AGE_MS
+      })
+    } catch {
+      // best-effort maintenance; ignore.
+    }
+  })
 }
