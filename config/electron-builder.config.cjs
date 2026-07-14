@@ -112,6 +112,10 @@ module.exports = {
     'out/shared/**',
     'out/main/agent-hooks/**',
     'out/main/antigravity/**',
+    // Why: the web-chat-import native messaging host (orca chat-import-host)
+    // requires these out/main modules; without unpacking, require() can't see
+    // them inside the asar and the host crashes on launch in packaged builds.
+    'out/main/chat-import/**',
     'out/main/claude/**',
     'out/main/codex/**',
     'out/main/copilot/**',
