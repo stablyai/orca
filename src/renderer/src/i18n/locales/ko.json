@@ -10024,8 +10024,6 @@
             "resumeInNewTab": "새 탭에서 재개",
             "resumeInWorktree": "워크트리에서 재개",
             "viewLog": "로그 보기",
-            "resumeWebChat": "재개",
-            "setDefaultAgentToResume": "재개하려면 기본 에이전트를 설정하세요.",
             "copyResumeCommand": "재개 명령 복사",
             "openLog": "로그 열기",
             "revealLog": "로그 위치 열기",
@@ -10063,7 +10061,8 @@
             "recoverableEmptyOpenLogHint": "로그를 열어 복구하세요.",
             "emptyConversationDetail": "이 세션에는 저장된 대화가 없어 재개할 수 없습니다.",
             "queuedMessages": "대기 중인 메시지 {{value0}}개",
-            "subagentTranscripts": "서브에이전트 대화 기록 {{value0}}개"
+            "subagentTranscripts": "서브에이전트 대화 기록 {{value0}}개",
+            "resumeWithAgent": "Resume with {{value0}}"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "{{value0}} 세션 재개",

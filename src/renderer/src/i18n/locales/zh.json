@@ -10024,8 +10024,6 @@
             "resumeInNewTab": "在新标签页中恢复",
             "resumeInWorktree": "在工作树中恢复",
             "viewLog": "查看日志",
-            "resumeWebChat": "继续",
-            "setDefaultAgentToResume": "继续之前请先设置默认代理。",
             "copyResumeCommand": "复制恢复命令",
             "openLog": "打开日志",
             "revealLog": "显示日志",
@@ -10063,7 +10061,8 @@
             "recoverableEmptyOpenLogHint": "打开日志以恢复它们。",
             "emptyConversationDetail": "此会话没有已保存的对话，无法恢复。",
             "queuedMessages": "{{value0}} 条排队消息",
-            "subagentTranscripts": "{{value0}} 个子智能体记录"
+            "subagentTranscripts": "{{value0}} 个子智能体记录",
+            "resumeWithAgent": "Resume with {{value0}}"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "恢复 {{value0}} 会话",

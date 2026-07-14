@@ -11,7 +11,7 @@ import {
 } from '../../../../shared/ai-vault-types'
 import type { TuiAgent } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
-import { AiVaultWebChatResumeButton } from './AiVaultWebChatResumeButton'
+import { AiVaultWebChatResumeActions } from './AiVaultWebChatResumeActions'
 import { sessionDetailConversationTurns } from './ai-vault-session-display'
 import { SessionSubagentsSection } from './AiVaultSessionSubagents'
 import { SessionUnsavedConversationNotice } from './AiVaultSessionUnsavedNotice'
@@ -56,8 +56,9 @@ export function SessionInlineDetails({
   const hasResumableContent = isAiVaultSessionResumableContent(session)
   // Why: 읽기전용 웹 대화는 트랜스크립트만 보여주고 CLI 이어하기 어포던스는 전부 숨긴다.
   const canResume = hasResumableContent && !session.readOnly
-  // Why: web chat is read-only, but it can be *resumed* by seeding a local agent —
-  // offered only for readOnly web sessions (never a non-web session).
+  // Why: web chat is read-only, but it can be *continued* with a supported agent
+  // (Claude converts to a native session, Codex seeds) — offered only for readOnly
+  // web sessions (never a non-web session).
   const showWebChatResume = session.readOnly && isWebChatAgent(session.agent)
   const showResumeInWorktree = canResume && Boolean(resumeActions.worktree.worktreeId)
   const showResumeInNewTab =
@@ -131,9 +132,9 @@ export function SessionInlineDetails({
       {showResumeInWorktree || showResumeInNewTab || showWebChatResume || onOpenLog ? (
         <div className="flex flex-wrap items-center gap-1.5 border-t border-sidebar-border/80 bg-sidebar-accent/15 px-3 py-2">
           {showWebChatResume ? (
-            <AiVaultWebChatResumeButton
+            <AiVaultWebChatResumeActions
               session={session}
-              resumeAgent={webResumeAgent ?? null}
+              defaultAgent={webResumeAgent ?? null}
               activeWorktreeId={activeWorktreeId ?? null}
             />
           ) : null}

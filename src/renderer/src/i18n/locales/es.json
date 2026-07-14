@@ -10024,8 +10024,6 @@
             "resumeInNewTab": "Reanudar en nueva pestaña",
             "resumeInWorktree": "Reanudar en worktree",
             "viewLog": "Ver log",
-            "resumeWebChat": "Reanudar",
-            "setDefaultAgentToResume": "Configura un agente predeterminado antes de reanudar.",
             "copyResumeCommand": "Copiar comando para reanudar",
             "openLog": "Abrir registro",
             "revealLog": "Mostrar registro",
@@ -10063,7 +10061,8 @@
             "recoverableEmptyOpenLogHint": "Abre el registro para recuperarlos.",
             "emptyConversationDetail": "Esta sesión no tiene conversación guardada y no se puede reanudar.",
             "queuedMessages": "{{value0}} mensaje(s) en cola",
-            "subagentTranscripts": "{{value0}} transcripción(es) de subagente"
+            "subagentTranscripts": "{{value0}} transcripción(es) de subagente",
+            "resumeWithAgent": "Resume with {{value0}}"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "Reanudar sesión de {{value0}}",

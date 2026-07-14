@@ -10024,8 +10024,6 @@
             "resumeInNewTab": "新しいタブで再開",
             "resumeInWorktree": "ワークツリーで再開",
             "viewLog": "ログを表示",
-            "resumeWebChat": "再開",
-            "setDefaultAgentToResume": "再開する前にデフォルトエージェントを設定してください。",
             "copyResumeCommand": "再開コマンドをコピー",
             "openLog": "ログを開く",
             "revealLog": "ログを表示",
@@ -10063,7 +10061,8 @@
             "recoverableEmptyOpenLogHint": "ログを開いて復元できます。",
             "emptyConversationDetail": "このセッションには保存された会話がなく、再開できません。",
             "queuedMessages": "キュー内のメッセージ {{value0}} 件",
-            "subagentTranscripts": "サブエージェントの履歴 {{value0}} 件"
+            "subagentTranscripts": "サブエージェントの履歴 {{value0}} 件",
+            "resumeWithAgent": "Resume with {{value0}}"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "{{value0}} セッションを再開",

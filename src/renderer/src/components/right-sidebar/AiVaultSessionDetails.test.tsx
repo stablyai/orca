@@ -7,8 +7,16 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { SessionInlineDetails } from './AiVaultSessionDetails'
 
 const resumeWebChatSpy = vi.fn()
+// The new per-agent actions component consumes both exports; provide stable refs.
 vi.mock('./ai-vault-web-chat-resume', () => ({
-  resumeWebChatAsLocalAgent: (args: unknown) => resumeWebChatSpy(args)
+  WEB_CHAT_RESUME_AGENTS: ['claude', 'codex'],
+  resumeWebChatWithAgent: (args: unknown) => resumeWebChatSpy(args)
+}))
+
+// Stable worktree reference so useWorktreeById never returns a fresh object per render.
+const WT1 = { path: '/repo', branch: 'main' }
+vi.mock('@/store/selectors', () => ({
+  useWorktreeById: (id: string | null) => (id === 'wt-1' ? WT1 : undefined)
 }))
 
 const listSubagentSessions = vi.fn<(args: unknown) => Promise<AiVaultSubagentListResult>>()
@@ -125,7 +133,27 @@ describe('SessionInlineDetails web-chat resume', () => {
     resumeWebChatSpy.mockClear()
   })
 
-  it('resumes a web-chat session with the resolved agent and active worktree', async () => {
+  it('renders a resume button for every supported agent on a web-chat session', async () => {
+    const { getByTestId } = render(
+      <SessionInlineDetails
+        id="session-web-1"
+        session={makeSession({ readOnly: true, agent: 'gemini-web', sessionId: 'c_1' })}
+        worktreeInfo={null}
+        vaultScope="workspace"
+        resumeActions={resumeActions}
+        onResumeInWorktree={vi.fn()}
+        onResumeInNewTab={vi.fn()}
+        webResumeAgent="claude"
+        activeWorktreeId="wt-1"
+      />
+    )
+    await act(async () => {})
+
+    expect(getByTestId('ai-vault-web-chat-resume-claude')).not.toBeNull()
+    expect(getByTestId('ai-vault-web-chat-resume-codex')).not.toBeNull()
+  })
+
+  it('resumes with claude carrying the worktree cwd and branch', async () => {
     const session = makeSession({
       readOnly: true,
       agent: 'gemini-web',
@@ -134,7 +162,7 @@ describe('SessionInlineDetails web-chat resume', () => {
     })
     const { getByTestId } = render(
       <SessionInlineDetails
-        id="session-web-1"
+        id="session-web-claude"
         session={session}
         worktreeInfo={null}
         vaultScope="workspace"
@@ -147,17 +175,52 @@ describe('SessionInlineDetails web-chat resume', () => {
     )
     await act(async () => {})
 
-    fireEvent.click(getByTestId('ai-vault-web-chat-resume'))
+    fireEvent.click(getByTestId('ai-vault-web-chat-resume-claude'))
 
     expect(resumeWebChatSpy).toHaveBeenCalledWith({
       session,
       agent: 'claude',
-      worktreeId: 'wt-1'
+      worktreeId: 'wt-1',
+      cwd: '/repo',
+      gitBranch: 'main'
     })
   })
 
-  it('disables web-chat resume and shows a hint when no default agent is set', async () => {
-    // Why: the hint now rides a Radix Tooltip (STYLEGUIDE.md forbids `title`), so the
+  it('resumes with codex when the codex option is chosen', async () => {
+    const session = makeSession({
+      readOnly: true,
+      agent: 'gemini-web',
+      sessionId: 'c_1',
+      title: 'Web chat'
+    })
+    const { getByTestId } = render(
+      <SessionInlineDetails
+        id="session-web-codex"
+        session={session}
+        worktreeInfo={null}
+        vaultScope="workspace"
+        resumeActions={resumeActions}
+        onResumeInWorktree={vi.fn()}
+        onResumeInNewTab={vi.fn()}
+        webResumeAgent="claude"
+        activeWorktreeId="wt-1"
+      />
+    )
+    await act(async () => {})
+
+    fireEvent.click(getByTestId('ai-vault-web-chat-resume-codex'))
+
+    expect(resumeWebChatSpy).toHaveBeenCalledWith({
+      session,
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      cwd: '/repo',
+      gitBranch: 'main'
+    })
+  })
+
+  it('disables every resume option and shows a hint when no workspace is active', async () => {
+    // Why: the hint rides a Radix Tooltip (STYLEGUIDE.md forbids `title`), so the
     // trigger needs a TooltipProvider ancestor the way the app root supplies one.
     const { getByTestId, getAllByText, queryByText } = render(
       <TooltipProvider>
@@ -169,33 +232,36 @@ describe('SessionInlineDetails web-chat resume', () => {
           resumeActions={resumeActions}
           onResumeInWorktree={vi.fn()}
           onResumeInNewTab={vi.fn()}
-          webResumeAgent={null}
-          activeWorktreeId="wt-1"
+          webResumeAgent="claude"
+          activeWorktreeId={null}
         />
       </TooltipProvider>
     )
     await act(async () => {})
 
-    const button = getByTestId('ai-vault-web-chat-resume') as HTMLButtonElement
-    expect(button.disabled).toBe(true)
-    expect(button.closest('[title]')).toBeNull()
+    const claudeButton = getByTestId('ai-vault-web-chat-resume-claude') as HTMLButtonElement
+    const codexButton = getByTestId('ai-vault-web-chat-resume-codex') as HTMLButtonElement
+    expect(claudeButton.disabled).toBe(true)
+    expect(codexButton.disabled).toBe(true)
+    expect(claudeButton.closest('[title]')).toBeNull()
 
-    const hint = 'Set a default agent before resuming.'
+    const hint = 'Open a workspace before resuming a session.'
     expect(queryByText(hint)).toBeNull()
 
     // Focusing the tooltip trigger (the span wrapping the disabled button) opens
     // the tooltip synchronously, the same way keyboard focus does in the app.
-    const trigger = button.parentElement as HTMLElement
+    const trigger = claudeButton.parentElement as HTMLElement
     await act(async () => {
       fireEvent.focus(trigger)
     })
     expect(getAllByText(hint).length).toBeGreaterThan(0)
 
-    fireEvent.click(button)
+    fireEvent.click(claudeButton)
+    fireEvent.click(codexButton)
     expect(resumeWebChatSpy).not.toHaveBeenCalled()
   })
 
-  it('does not render web-chat resume for a non-web read-only session', async () => {
+  it('does not render web-chat resume options for a non-web read-only session', async () => {
     const { queryByTestId } = render(
       <SessionInlineDetails
         id="session-web-3"
@@ -211,6 +277,7 @@ describe('SessionInlineDetails web-chat resume', () => {
     )
     await act(async () => {})
 
-    expect(queryByTestId('ai-vault-web-chat-resume')).toBeNull()
+    expect(queryByTestId('ai-vault-web-chat-resume-claude')).toBeNull()
+    expect(queryByTestId('ai-vault-web-chat-resume-codex')).toBeNull()
   })
 })

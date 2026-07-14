@@ -74,8 +74,9 @@ export default function AiVaultPanel(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const agentCmdOverrides = settings?.agentCmdOverrides
-  // Read-only web-chat sessions resume by seeding Orca's default local agent;
-  // null disables the affordance (no valid default) and drives the detail hint.
+  // Read-only web-chat sessions are continued with a supported agent — Claude
+  // converts to a native `claude --resume` session, others (Codex) seed a new tab.
+  // This resolves the default agent to *emphasize*; null just means none is preset.
   const webResumeAgent = resolveWebChatResumeAgent(
     settings?.defaultTuiAgent ?? null,
     settings?.disabledTuiAgents ?? []
