@@ -45,8 +45,9 @@ function refreshSyncButton() {
     btn.title = '지원 사이트(ChatGPT·Claude·Gemini) 탭에서만 동기화할 수 있어요'
   } else if (!connected) {
     btn.disabled = true
-    btn.textContent = connected === null ? '확인 중…' : '앱 실행 필요'
-    btn.title = connected === null ? '' : '데스크톱 앱을 실행하면 동기화할 수 있어요'
+    btn.textContent = connected === null ? '확인 중…' : 'Orca 연동 필요'
+    btn.title =
+      connected === null ? '' : 'Orca 설정 → Web Chat Import → 브라우저 연동에서 설치하세요'
   } else {
     btn.disabled = false
     btn.textContent = '이 사이트 동기화'
@@ -101,7 +102,7 @@ chrome.runtime.sendNativeMessage('com.orca.chatimport', { type: 'PING' }, (resp)
     el.textContent = '연결됨'
     el.className = 'conn ok'
   } else {
-    el.textContent = '앱 실행 필요'
+    el.textContent = '연동 필요'
     el.className = 'conn bad'
   }
   refreshSyncButton()

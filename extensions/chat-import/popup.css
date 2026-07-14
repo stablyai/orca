@@ -35,11 +35,11 @@ body {
   gap: 9px;
   padding: 14px 15px;
 }
-.dot {
+.brand {
   width: 22px;
   height: 22px;
-  border-radius: 7px;
-  background: linear-gradient(135deg, #5b7cfa, #8a6bf0);
+  border-radius: 6px;
+  object-fit: contain;
 }
 .nm {
   font-weight: 700;
