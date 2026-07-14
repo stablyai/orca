@@ -8,6 +8,7 @@
     "../src/main/agent-hooks/managed-agent-hook-controls.ts",
     "../src/main/amp/hook-service.ts",
     "../src/main/antigravity/hook-service.ts",
+    "../src/main/chat-import/chat-import-blobstore.ts",
     "../src/main/chat-import/chat-import-store.ts",
     "../src/main/chat-import/chat-import-schema.ts",
     "../src/main/chat-import/chat-import-paths.ts",

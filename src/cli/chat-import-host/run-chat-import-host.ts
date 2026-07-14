@@ -1,5 +1,7 @@
+import { putBlob } from '../../main/chat-import/chat-import-blobstore'
 import { openChatImportDbForWrite } from '../../main/chat-import/chat-import-db-open'
-import { processChatImportHostMessage } from './chat-import-host-protocol'
+import { chatImportBlobDir } from '../../main/chat-import/chat-import-paths'
+import { processChatImportHostMessage, type ChatImportBlobCtx } from './chat-import-host-protocol'
 import {
   encodeNativeMessage,
   NativeMessageDecoder,
@@ -17,6 +19,11 @@ export function runChatImportHost(options: {
   const db = openChatImportDbForWrite(options.dbPath)
   const decoder = new NativeMessageDecoder()
   const now = options.now ?? (() => new Date().toISOString())
+  // Why: upload chunks accumulate per-CONNECTION across STORE_BLOB messages.
+  const blobCtx: ChatImportBlobCtx = {
+    uploads: new Map(),
+    putBlob: (b) => putBlob(chatImportBlobDir(), b)
+  }
 
   return new Promise<void>((resolve, reject) => {
     // Why: 'data' (framing-error branch), 'end', and 'error' can each fire finish()
@@ -56,7 +63,9 @@ export function runChatImportHost(options: {
         return
       }
       for (const raw of frames) {
-        options.output.write(encodeNativeMessage(processChatImportHostMessage(db, raw, now())))
+        options.output.write(
+          encodeNativeMessage(processChatImportHostMessage(db, raw, now(), blobCtx))
+        )
       }
     })
     options.input.on('end', () => finish())
