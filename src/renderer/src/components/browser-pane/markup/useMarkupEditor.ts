@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { renderMarkupScene } from './markup-canvas-render'
+import { blitMarkupScene, renderCommittedLayer } from './markup-canvas-render'
 import { useMarkupKeyboardShortcuts, type PendingText } from './useMarkupKeyboardShortcuts'
 import { useMarkupPointerHandlers } from './useMarkupPointerHandlers'
 import {
@@ -18,7 +18,7 @@ import {
   type MarkupTool
 } from './markup-drawing-model'
 
-type Size = { width: number; height: number }
+type Size = { width: number; height: number; dpr: number }
 
 // Owns the markup surface: document, active tool/style, the pending text box, and
 // the canvas paint effect. Draw-only — committed shapes are not re-editable.
@@ -26,8 +26,14 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const textInputRef = useRef<HTMLInputElement | null>(null)
+  // Why: committed shapes are rasterized once into this offscreen layer; the live
+  // paint blits it instead of re-stroking every committed shape each pointermove.
+  const committedLayerRef = useRef<HTMLCanvasElement | null>(null)
+  if (committedLayerRef.current === null) {
+    committedLayerRef.current = document.createElement('canvas')
+  }
 
-  const [size, setSize] = useState<Size>({ width: 0, height: 0 })
+  const [size, setSize] = useState<Size>({ width: 0, height: 0, dpr: 1 })
   const [doc, setDoc] = useState<MarkupDocument>(() => createMarkupDocument())
   const [inProgress, setInProgress] = useState<MarkupShape | null>(null)
   const [tool, setTool] = useState<MarkupTool>('pen')
@@ -44,27 +50,51 @@ export function useMarkupEditor(busy: boolean, onCancel: () => void) {
     }
     const measure = () => {
       const rect = root.getBoundingClientRect()
-      setSize({ width: rect.width, height: rect.height })
+      const dpr = window.devicePixelRatio || 1
+      // Why: bail on an unchanged measurement so an identical ResizeObserver/resize
+      // tick can't schedule a redundant repaint.
+      setSize((prev) =>
+        prev.width === rect.width && prev.height === rect.height && prev.dpr === dpr
+          ? prev
+          : { width: rect.width, height: rect.height, dpr }
+      )
     }
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(root)
-    return () => observer.disconnect()
+    // Why: a monitor move changes devicePixelRatio without changing the element's
+    // CSS box, so ResizeObserver won't fire — window resize (which Chromium emits
+    // on dpr changes) re-measures the dpr so the canvas repaints at the new scale.
+    window.addEventListener('resize', measure)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', measure)
+    }
   }, [])
 
-  // Repaint committed + in-progress shapes on any change.
+  // Rasterize committed shapes into the offscreen layer only when they (or the
+  // size) change — not on every in-progress pointermove.
   useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) {
+    const layer = committedLayerRef.current
+    if (!layer) {
       return
     }
-    renderMarkupScene(canvas, {
-      shapes: doc.shapes,
-      inProgress,
-      cssWidth: size.width,
-      cssHeight: size.height
+    renderCommittedLayer(layer, doc.shapes, size.width, size.height, size.dpr)
+  }, [doc.shapes, size])
+
+  // Blit the cached layer + the in-progress shape, coalesced to one paint per
+  // frame so a burst of pointermove events can't queue redundant full repaints.
+  useEffect(() => {
+    const canvas = canvasRef.current
+    const layer = committedLayerRef.current
+    if (!canvas || !layer) {
+      return undefined
+    }
+    const handle = requestAnimationFrame(() => {
+      blitMarkupScene(canvas, layer, inProgress, size.width, size.height, size.dpr)
     })
-  }, [doc, inProgress, size])
+    return () => cancelAnimationFrame(handle)
+  }, [doc.shapes, inProgress, size])
 
   // Why: focus the text input on mount — a placement click can beat autoFocus.
   useEffect(() => {

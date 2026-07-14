@@ -1,5 +1,5 @@
-// Composites the frozen base screenshot + markup shapes into a single PNG (or
-// JPEG fallback) under the delivery byte budget.
+// Composites the frozen base screenshot + markup shapes into a single PNG under
+// the delivery byte and pixel budgets (PNG only — see MarkupComposeResult).
 //
 // WYSIWYG: the output canvas matches the on-screen content box (its CSS width ×
 // height) times an output scale for crispness. The base image is stretched to
@@ -141,16 +141,41 @@ function downscaleCanvas(source: HTMLCanvasElement, factor: number): HTMLCanvasE
   return next
 }
 
+// Encodes a canvas to a PNG data URL. Prefers toBlob because Chromium encodes it
+// off the main thread — a multi-megapixel toData('image/png') is synchronous and
+// freezes the renderer. Falls back to the sync encode if toBlob yields no blob.
+function canvasToPngDataUrl(canvas: HTMLCanvasElement): Promise<string> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        try {
+          resolve(canvas.toDataURL('image/png'))
+        } catch (error) {
+          reject(error instanceof Error ? error : new Error('markup compose: toDataURL failed'))
+        }
+        return
+      }
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = () => reject(reader.error ?? new Error('markup compose: blob read failed'))
+      reader.readAsDataURL(blob)
+    }, 'image/png')
+  })
+}
+
 // Encodes a PNG within budget: full size, then progressively smaller. Always
 // returns a PNG (best effort at the smallest step) so the clipboard handler
-// accepts it and delivery never silently drops.
-export function composeMarkupDataUrl(input: MarkupComposeInput): MarkupComposeResult {
+// accepts it and delivery never silently drops. Async so the per-step PNG encode
+// runs off the main thread instead of blocking the renderer.
+export async function composeMarkupDataUrl(
+  input: MarkupComposeInput
+): Promise<MarkupComposeResult> {
   const composite = renderComposite(input)
 
   let smallest: MarkupComposeResult | null = null
   for (const step of MARKUP_DOWNSCALE_STEPS) {
     const canvas = downscaleCanvas(composite, step)
-    const dataUrl = canvas.toDataURL('image/png')
+    const dataUrl = await canvasToPngDataUrl(canvas)
     const byteLength = dataUrlByteLength(dataUrl)
     const result: MarkupComposeResult = {
       dataUrl,

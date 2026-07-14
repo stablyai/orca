@@ -114,8 +114,15 @@ export function useMarkupMode({
       // onDeliver is pending, so a stale callback can't reset/error the new session.
       const token = captureTokenRef.current
       setState('composing')
+      // Why: yield a frame so the busy 'composing' UI (disabled buttons, progress
+      // cursor) paints before the synchronous composite raster runs — otherwise
+      // Copy freezes with no visible feedback. Skip the work if cancelled meanwhile.
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+      if (captureTokenRef.current !== token) {
+        return
+      }
       try {
-        const result = composeMarkupDataUrl({
+        const result = await composeMarkupDataUrl({
           image: imageElement,
           displayCssWidth: context.cssWidth,
           displayCssHeight: context.cssHeight,
@@ -127,6 +134,12 @@ export function useMarkupMode({
           maxBytes: CLIPBOARD_IMAGE_MAX_SOURCE_BYTES,
           maxPixels: CLIPBOARD_IMAGE_MAX_PIXELS
         })
+        // Why: re-check before delivering — the async compose is a wide window in
+        // which the user can Escape/cancel, and onDeliver writes the clipboard
+        // irreversibly. Without this, a cancelled session still overwrites it.
+        if (captureTokenRef.current !== token) {
+          return
+        }
         await onDeliver(result)
         if (captureTokenRef.current !== token) {
           return
