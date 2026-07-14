@@ -55,7 +55,6 @@ export class SshChannelMultiplexer {
   private methodNotificationHandlers = new Map<string, Set<MethodNotificationHandler>>()
   private disposeHandlers: ((reason: 'shutdown' | 'connection_lost') => void)[] = []
   private keepaliveTimer: ReturnType<typeof setInterval> | null = null
-  private timeoutTimer: ReturnType<typeof setInterval> | null = null
   private disposed = false
 
   // Track the oldest unacked outgoing message timestamp
@@ -89,7 +88,6 @@ export class SshChannelMultiplexer {
       return
     }
     this.startKeepalive()
-    this.startTimeoutCheck()
   }
 
   onNotification(handler: NotificationHandler): () => void {
@@ -279,10 +277,6 @@ export class SshChannelMultiplexer {
     if (this.keepaliveTimer) {
       clearInterval(this.keepaliveTimer)
       this.keepaliveTimer = null
-    }
-    if (this.timeoutTimer) {
-      clearInterval(this.timeoutTimer)
-      this.timeoutTimer = null
     }
 
     // Why: the renderer uses the error code to distinguish temporary disconnects
@@ -489,14 +483,15 @@ export class SshChannelMultiplexer {
   }
 
   private startKeepalive(): void {
+    // Why: the periodic keepalive send and the liveness/timeout check ran as two
+    // separate 5s intervals that always fired back-to-back (keepalive created
+    // first). Fold them into one 5s tick — send first (as the keepalive timer
+    // did), then run the check (as the timeout timer did) — to halve the
+    // per-connection timer count with identical behavior.
+    let lastTickAt = Date.now()
     this.keepaliveTimer = setInterval(() => {
       this.sendKeepAlive()
-    }, KEEPALIVE_SEND_MS)
-  }
 
-  private startTimeoutCheck(): void {
-    let lastTickAt = Date.now()
-    this.timeoutTimer = setInterval(() => {
       if (this.disposed) {
         return
       }
