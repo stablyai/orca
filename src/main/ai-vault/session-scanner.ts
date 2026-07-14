@@ -13,10 +13,7 @@ import {
   type SessionParseStats
 } from './session-scanner-parse-cache'
 import { discoverInScopeClaudeFiles } from './session-scanner-scope-discovery'
-import {
-  DEFAULT_CODEX_HOME_DIR,
-  discoverAiVaultSessionSources
-} from './session-scanner-source-discovery'
+import { discoverAiVaultSessionSources } from './session-scanner-source-discovery'
 import type {
   AiVaultScanOptions,
   SessionFileCandidate,
@@ -63,9 +60,7 @@ export async function scanAiVaultSessions(
             agent: discovery.agent,
             file,
             codexHome:
-              discovery.agent === 'codex'
-                ? codexHomeForSessionsDir(discovery.rootDir, DEFAULT_CODEX_HOME_DIR)
-                : null
+              discovery.agent === 'codex' ? codexHomeForSessionsDir(discovery.rootDir) : null
           })
         )
       )

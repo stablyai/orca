@@ -980,7 +980,7 @@ function openMainWindow(): BrowserWindow {
     keybindings,
     {
       getAdditionalAiVaultCodexHomePaths: () =>
-        codexRuntimeHome ? [codexRuntimeHome.getHostRuntimeHomePath()] : [],
+        codexRuntimeHome ? codexRuntimeHome.getAiVaultCodexHomePaths() : [],
       onBeforeRelaunch: async () => {
         isQuitting = true
         desktopRelayService?.fenceAndCloseNow()
@@ -1837,7 +1837,7 @@ app.whenReady().then(async () => {
     // aiVault.listSessions RPC includes managed-Codex sessions on remote/SSH
     // hosts; the window-only registerCoreHandlers path never runs under serve.
     getAdditionalAiVaultCodexHomePaths: () =>
-      codexRuntimeHome ? [codexRuntimeHome.getHostRuntimeHomePath()] : [],
+      codexRuntimeHome ? codexRuntimeHome.getAiVaultCodexHomePaths() : [],
     buildAgentHookPtyEnv: () =>
       isAgentStatusHooksEnabled(store?.getSettings()) ? agentHookServer.buildPtyEnv() : {}
   })

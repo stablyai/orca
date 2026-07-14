@@ -3,11 +3,9 @@ import type { GlobalSettings } from '../../shared/types'
 /**
  * Resolves the user-configured Codex *session history* source home, if any.
  *
- * Why: Orca relocates CODEX_HOME to a managed home, then bridges history from
- * the user's real Codex home so /resume finds it. That source defaults to
- * ~/.codex, but users who run Codex with a custom CODEX_HOME need to point
- * history discovery at that folder. This override affects history only; auth,
- * config, and hooks continue to read from ~/.codex.
+ * Why: session discovery and resume must use the rollout's authoritative
+ * CODEX_HOME. This override identifies that home without mirroring writable
+ * session files into Orca's managed runtime home.
  */
 
 /** Host override; returns undefined to keep the default ~/.codex source. */

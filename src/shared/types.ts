@@ -2843,10 +2843,9 @@ export type GlobalSettings = {
   geminiCliOAuthEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
-  /** Why: Orca bridges Codex session history from the user's real Codex home into
-   *  its managed home so /resume finds it, but defaults to ~/.codex. Users who run
-   *  Codex with a custom CODEX_HOME can point history discovery at that folder here.
-   *  History-only: this does not change which account/config/hooks Orca uses. */
+  /** Why: historical Codex sessions remain in their original authoritative home.
+   *  Users with a custom CODEX_HOME can point discovery and resume at that home
+   *  without mirroring writable rollout files into Orca's managed home. */
   codexSessionSourceHome?: {
     /** Absolute host path; empty/undefined falls back to ~/.codex. */
     host?: string

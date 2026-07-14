@@ -3,13 +3,11 @@ import type { Dirent, Stats } from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
 import { join } from 'node:path'
 
-const { getLegacyCopiedCodexSessionBridgeScanPreferenceMock, readdirMock, statMock } = vi.hoisted(
-  () => ({
-    getLegacyCopiedCodexSessionBridgeScanPreferenceMock: vi.fn(),
-    readdirMock: vi.fn<(dirPath: string) => Promise<Dirent[]>>(),
-    statMock: vi.fn<(filePath: string) => Promise<Stats>>()
-  })
-)
+const { getLegacyCopiedCodexSessionScanPreferenceMock, readdirMock, statMock } = vi.hoisted(() => ({
+  getLegacyCopiedCodexSessionScanPreferenceMock: vi.fn(),
+  readdirMock: vi.fn<(dirPath: string) => Promise<Dirent[]>>(),
+  statMock: vi.fn<(filePath: string) => Promise<Stats>>()
+}))
 
 vi.mock('fs/promises', async () => {
   const actual = await vi.importActual<typeof FsPromises>('fs/promises')
@@ -31,9 +29,8 @@ vi.mock('../codex/codex-home-paths', () => ({
   getSystemCodexHomePath: () => join(FAKE_ROOT, 'system')
 }))
 
-vi.mock('../codex/codex-session-bridge', () => ({
-  getLegacyCopiedCodexSessionBridgeScanPreference:
-    getLegacyCopiedCodexSessionBridgeScanPreferenceMock
+vi.mock('../codex/codex-legacy-session-copy', () => ({
+  getLegacyCopiedCodexSessionScanPreference: getLegacyCopiedCodexSessionScanPreferenceMock
 }))
 
 function dirent(name: string, kind: 'directory' | 'file'): Dirent {
@@ -50,8 +47,8 @@ const largeSessionEntries = Array.from({ length: FILE_COUNT }, (_, index) =>
 
 describe('listCodexSessionFiles large directories', () => {
   beforeEach(() => {
-    getLegacyCopiedCodexSessionBridgeScanPreferenceMock.mockReset()
-    getLegacyCopiedCodexSessionBridgeScanPreferenceMock.mockReturnValue(null)
+    getLegacyCopiedCodexSessionScanPreferenceMock.mockReset()
+    getLegacyCopiedCodexSessionScanPreferenceMock.mockReturnValue(null)
     readdirMock.mockReset()
     statMock.mockReset()
   })
@@ -80,6 +77,6 @@ describe('listCodexSessionFiles large directories', () => {
     const { listCodexSessionFiles } = await import('./scanner')
 
     await expect(listCodexSessionFiles()).resolves.toHaveLength(FILE_COUNT)
-    expect(getLegacyCopiedCodexSessionBridgeScanPreferenceMock).not.toHaveBeenCalled()
+    expect(getLegacyCopiedCodexSessionScanPreferenceMock).not.toHaveBeenCalled()
   })
 })

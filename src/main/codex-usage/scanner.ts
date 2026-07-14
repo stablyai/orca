@@ -6,7 +6,7 @@ import { createInterface } from 'node:readline'
 import type { Repo } from '../../shared/types'
 import { areWorktreePathsEqual } from '../ipc/worktree-logic'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
-import { getLegacyCopiedCodexSessionBridgeScanPreference } from '../codex/codex-session-bridge'
+import { getLegacyCopiedCodexSessionScanPreference } from '../codex/codex-legacy-session-copy'
 import { canonicalizeUsageWorktreePaths } from '../usage-worktree-canonicalizer'
 import type {
   CodexUsageAttributedEvent,
@@ -163,7 +163,7 @@ async function dedupeCodexSessionFileAliases(
   const excludedAliases = new Set<string>()
   if (hasLegacyBridgeMarkers) {
     for (const [index, filePath] of files.entries()) {
-      const legacyCopyBridge = getLegacyCopiedCodexSessionBridgeScanPreference(filePath)
+      const legacyCopyBridge = getLegacyCopiedCodexSessionScanPreference(filePath)
       if ((index + 1) % YIELD_EVERY_DISCOVERY_ENTRIES === 0) {
         await yieldToEventLoop()
       }
@@ -223,7 +223,7 @@ function getLegacySourceSkipBytesByPath(
     return sourceSkipBytesByPath
   }
   for (const filePath of files) {
-    const legacyCopyBridge = getLegacyCopiedCodexSessionBridgeScanPreference(filePath)
+    const legacyCopyBridge = getLegacyCopiedCodexSessionScanPreference(filePath)
     if (!legacyCopyBridge || legacyCopyBridge.sourceSkipBytes === null) {
       continue
     }

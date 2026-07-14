@@ -3,12 +3,8 @@ import { basename, dirname, resolve } from 'node:path'
 /** Extensions accepted by Codex session discovery (plain + cold zstd). */
 export const CODEX_SESSION_ROLLOUT_EXTENSIONS = ['.jsonl', '.zst'] as const
 
-export function codexHomeForSessionsDir(
-  sessionsDir: string,
-  defaultCodexHomeDir: string
-): string | null {
-  const codexHome = dirname(sessionsDir)
-  return codexHome === defaultCodexHomeDir ? null : codexHome
+export function codexHomeForSessionsDir(sessionsDir: string): string {
+  return dirname(sessionsDir)
 }
 
 export function uniqueCodexSessionsDirs(paths: readonly string[]): string[] {
