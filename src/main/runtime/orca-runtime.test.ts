@@ -16383,7 +16383,7 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
-  it('keeps the first renderer-backed grid handle through append and listing', async () => {
+  it('keeps the first renderer-backed grid handle when local spawn claims it later', async () => {
     const firstLeafId = '11111111-1111-4111-8111-111111111111'
     const firstPtyId = 'pty-grid-renderer'
     const appendedPtyId = 'pty-grid-appended'
@@ -16394,13 +16394,16 @@ describe('OrcaRuntimeService', () => {
       activate: true
     })
     const webContents = { send: vi.fn() }
+    let rendererTerminalHandle = ''
     const send = vi.fn(
       (_channel: string, payload: { requestId: string; terminalHandle?: string }) => {
-        const terminalHandle = runtime.claimRendererTerminalHandle(payload.terminalHandle)
-        if (!terminalHandle) {
+        if (!payload.terminalHandle) {
           throw new Error('Expected a reserved renderer terminal handle')
         }
-        runtime.registerPreAllocatedHandleForPty(firstPtyId, terminalHandle)
+        rendererTerminalHandle = payload.terminalHandle
+        // Why: graph publication can make create resolve before the queued
+        // renderer PTY spawn reaches main and consumes its trust reservation.
+        runtime.registerPreAllocatedHandleForPty(firstPtyId, rendererTerminalHandle)
         runtime.syncWindowGraph(1, {
           tabs: [
             {
@@ -16570,6 +16573,10 @@ describe('OrcaRuntimeService', () => {
       worktreeId: TEST_WORKTREE_ID,
       surface: 'visible'
     })
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    const claimedHandle = runtime.claimRendererTerminalHandle(rendererTerminalHandle)
+    expect(claimedHandle).toBe(first.handle)
+    runtime.registerPreAllocatedHandleForPty(firstPtyId, claimedHandle!)
     const appended = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
       command: 'codex',
       rendererBacked: true,
@@ -16613,6 +16620,120 @@ describe('OrcaRuntimeService', () => {
       })
     )
     expect(spawn).toHaveBeenCalledOnce()
+  })
+
+  it('bounds successful renderer handle reservations and promptly releases failed creates', async () => {
+    vi.useFakeTimers()
+    try {
+      type CreatePayload = { requestId: string; terminalHandle?: string }
+      const prepareRuntime = (
+        onSend: (
+          payload: CreatePayload,
+          runtime: OrcaRuntimeService,
+          webContents: { send: ReturnType<typeof vi.fn> }
+        ) => void
+      ): { runtime: OrcaRuntimeService; handles: string[] } => {
+        const handles: string[] = []
+        const webContents = { send: vi.fn() }
+        const runtime = new OrcaRuntimeService(store)
+        webContents.send.mockImplementation((_channel: string, payload: CreatePayload) => {
+          handles.push(payload.terminalHandle ?? '')
+          onSend(payload, runtime, webContents)
+        })
+        runtime.attachWindow(1)
+        runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+        electronMocks.BrowserWindow.fromId.mockReturnValue({
+          isDestroyed: () => false,
+          webContents
+        })
+        return { runtime, handles }
+      }
+      const createGrid = (runtime: OrcaRuntimeService) =>
+        runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+          rendererBacked: true,
+          placement: 'orchestration-grid',
+          title: 'Renderer Grid'
+        })
+
+      const cancelled = prepareRuntime((payload, _runtime, webContents) => {
+        ipcMain.emit(
+          'terminal:tabCreateReply',
+          { sender: webContents },
+          { requestId: payload.requestId, error: 'Renderer create cancelled' }
+        )
+      })
+      await expect(createGrid(cancelled.runtime)).rejects.toThrow('Renderer create cancelled')
+      expect(cancelled.runtime.claimRendererTerminalHandle(cancelled.handles[0])).toBeNull()
+
+      const failed = prepareRuntime(() => {
+        throw new Error('Renderer send failed')
+      })
+      await expect(createGrid(failed.runtime)).rejects.toThrow('Renderer send failed')
+      expect(failed.runtime.claimRendererTerminalHandle(failed.handles[0])).toBeNull()
+
+      const timedOut = prepareRuntime(() => undefined)
+      const timedOutCreate = createGrid(timedOut.runtime)
+      const timedOutResult = timedOutCreate.then(
+        () => ({ error: null }),
+        (error: Error) => ({ error })
+      )
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect((await timedOutResult).error).toEqual(new Error('Terminal creation timed out'))
+      expect(timedOut.runtime.claimRendererTerminalHandle(timedOut.handles[0])).toBeNull()
+
+      const unclaimed = prepareRuntime((payload, runtime, webContents) => {
+        const handle = payload.terminalHandle!
+        runtime.registerPreAllocatedHandleForPty('pty-unclaimed-grid', handle)
+        runtime.syncWindowGraph(1, {
+          tabs: [
+            {
+              tabId: 'tab-unclaimed-grid',
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Renderer Grid',
+              activeLeafId: '11111111-1111-4111-8111-111111111111',
+              layoutMode: 'orchestration-grid',
+              layout: {
+                type: 'leaf',
+                leafId: '11111111-1111-4111-8111-111111111111'
+              }
+            }
+          ],
+          leaves: [
+            {
+              tabId: 'tab-unclaimed-grid',
+              worktreeId: TEST_WORKTREE_ID,
+              leafId: '11111111-1111-4111-8111-111111111111',
+              paneRuntimeId: 1,
+              ptyId: 'pty-unclaimed-grid',
+              paneTitle: null
+            }
+          ]
+        })
+        ipcMain.emit(
+          'terminal:tabCreateReply',
+          { sender: webContents },
+          {
+            requestId: payload.requestId,
+            tabId: 'tab-unclaimed-grid',
+            leafId: '11111111-1111-4111-8111-111111111111',
+            title: 'Renderer Grid'
+          }
+        )
+      })
+      const created = await createGrid(unclaimed.runtime)
+      expect(unclaimed.runtime['pendingRendererTerminalHandles']).toContain(created.handle)
+
+      await vi.advanceTimersByTimeAsync(29_999)
+      expect(unclaimed.runtime['pendingRendererTerminalHandles']).toContain(created.handle)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(unclaimed.runtime['pendingRendererTerminalHandles']).not.toContain(created.handle)
+      expect(unclaimed.runtime.claimRendererTerminalHandle(created.handle)).toBeNull()
+      await expect(unclaimed.runtime.readTerminal(created.handle)).resolves.toMatchObject({
+        handle: created.handle
+      })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('splits visible pty-backed terminal sessions through the parent renderer tab', async () => {
