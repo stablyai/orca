@@ -1,6 +1,22 @@
 import type SyncDatabase from '../sqlite/sync-database'
+import type { WebChatAgent } from '../../shared/ai-vault-types'
 
 export type WebChatSource = 'CHATGPT' | 'CLAUDE' | 'GEMINI'
+
+// Why: single source of truth for the stored-source ↔ vault-agent correspondence
+// (was copy-pasted across the two web-chat scanners and the transcript reader).
+// A new web-chat source now needs editing one map, type-checked in both directions.
+export const SOURCE_TO_AGENT: Record<WebChatSource, WebChatAgent> = {
+  CHATGPT: 'chatgpt',
+  CLAUDE: 'claude-web',
+  GEMINI: 'gemini-web'
+}
+
+export const AGENT_TO_SOURCE: Record<WebChatAgent, WebChatSource> = {
+  chatgpt: 'CHATGPT',
+  'claude-web': 'CLAUDE',
+  'gemini-web': 'GEMINI'
+}
 
 export type WebAttachment = {
   kind: 'image' | 'file'

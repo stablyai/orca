@@ -1,5 +1,5 @@
 import type { AiVaultSession } from '../../shared/ai-vault-types'
-import type { WebChatSource } from '../chat-import/chat-import-store'
+import { SOURCE_TO_AGENT, type WebChatSource } from '../chat-import/chat-import-store'
 import {
   addPreviewMessage,
   createAccumulator,
@@ -10,12 +10,6 @@ import { normalizeTitleText } from './session-scanner-values'
 import SyncDatabase from '../sqlite/sync-database'
 import { tableExists } from '../opencode-usage/schema-helpers'
 import { statSync } from 'node:fs'
-
-const SOURCE_TO_AGENT = {
-  CHATGPT: 'chatgpt',
-  CLAUDE: 'claude-web',
-  GEMINI: 'gemini-web'
-} as const
 
 type ConvRow = { title: string | null; created_at: string | null; updated_at: string | null }
 type MsgRow = { role: string; text: string | null; created_at: string | null }

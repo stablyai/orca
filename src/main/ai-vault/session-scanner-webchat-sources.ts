@@ -4,8 +4,7 @@ import type { SessionFileCandidate } from './session-scanner-types'
 import SyncDatabase from '../sqlite/sync-database'
 import { tableExists } from '../opencode-usage/schema-helpers'
 import { errorMessage } from './session-scanner-values'
-
-const SOURCE_TO_AGENT = { CHATGPT: 'chatgpt', CLAUDE: 'claude-web', GEMINI: 'gemini-web' } as const
+import { SOURCE_TO_AGENT } from '../chat-import/chat-import-store'
 
 type Row = {
   id: string

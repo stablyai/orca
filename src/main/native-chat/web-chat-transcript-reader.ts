@@ -6,18 +6,12 @@ import { tableExists } from '../opencode-usage/schema-helpers'
 import { chatImportDbPath } from '../chat-import/chat-import-paths'
 import { errorMessage } from '../ai-vault/session-scanner-values'
 import { WEB_CHAT_AGENTS, type WebChatAgent } from '../../shared/ai-vault-types'
-import { listMessageAttachments } from '../chat-import/chat-import-store'
+import { AGENT_TO_SOURCE, listMessageAttachments } from '../chat-import/chat-import-store'
 
 // Why: agent 파라미터는 AgentType(열린 문자열 유니온)이라, 웹 3종만 이 리더로
 // 라우팅하기 위한 문자열 기반 가드. isWebChatAgent(AiVaultAgent)와 달리 임의 문자열을 받는다.
 export function isWebChatAgentString(agent: string): agent is WebChatAgent {
   return (WEB_CHAT_AGENTS as readonly string[]).includes(agent)
-}
-
-const AGENT_TO_SOURCE: Record<WebChatAgent, string> = {
-  chatgpt: 'CHATGPT',
-  'claude-web': 'CLAUDE',
-  'gemini-web': 'GEMINI'
 }
 
 type MsgRow = { role: string; idx: number; text: string | null; created_at: string | null }
