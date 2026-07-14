@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
-import { selectPetAnimationName } from './pet-agent-state'
+import { nextPetDragAnimation, selectPetAnimationName } from './pet-agent-state'
 
 const NOW = 1_000
 const STALE_AFTER_MS = 500
@@ -28,6 +28,8 @@ function select(
     entries,
     retainedCount: 0,
     dragging: false,
+    dragAnimation: null,
+    hovering: false,
     now: NOW,
     staleAfterMs: STALE_AFTER_MS,
     ...options
@@ -63,7 +65,54 @@ describe('selectPetAnimationName', () => {
     expect(select([entry('working'), entry('done', { interrupted: true })])).toBe('running')
   })
 
-  it('uses jumping while the pet is being dragged', () => {
-    expect(select([entry('blocked')], { dragging: true })).toBe('jumping')
+  it('keeps the live agent state while grabbed and held still (no drag direction)', () => {
+    expect(select([entry('blocked')], { dragging: true })).toBe('waiting')
+    expect(select([entry('working')], { dragging: true })).toBe('running')
+    expect(select([], { dragging: true })).toBe('idle')
+  })
+
+  it('runs toward the drag direction while the pet is dragged horizontally', () => {
+    expect(select([entry('blocked')], { dragging: true, dragAnimation: 'running-right' })).toBe(
+      'running-right'
+    )
+    expect(select([], { dragging: true, dragAnimation: 'running-left' })).toBe('running-left')
+  })
+
+  it('uses jumping while hovered but not dragging', () => {
+    expect(select([], { hovering: true })).toBe('jumping')
+    expect(select([entry('working')], { hovering: true })).toBe('jumping')
+  })
+
+  it('prefers the live state over hover while grabbed (drag suppresses the hover jump)', () => {
+    expect(select([entry('working')], { dragging: true, hovering: true })).toBe('running')
+  })
+})
+
+describe('nextPetDragAnimation', () => {
+  it('ignores sub-threshold jitter without advancing the sample', () => {
+    expect(nextPetDragAnimation(null, 3, -3)).toEqual({ animation: null, accepted: false })
+    expect(nextPetDragAnimation('running-right', -3, 2)).toEqual({
+      animation: 'running-right',
+      accepted: false
+    })
+  })
+
+  it('picks the horizontal direction at the 4px threshold', () => {
+    expect(nextPetDragAnimation(null, 4, 0)).toEqual({
+      animation: 'running-right',
+      accepted: true
+    })
+    expect(nextPetDragAnimation(null, -4, 0)).toEqual({
+      animation: 'running-left',
+      accepted: true
+    })
+  })
+
+  it('keeps the last direction on a mostly-vertical move', () => {
+    expect(nextPetDragAnimation('running-left', 0, 10)).toEqual({
+      animation: 'running-left',
+      accepted: true
+    })
+    expect(nextPetDragAnimation(null, 0, 10)).toEqual({ animation: null, accepted: true })
   })
 })
