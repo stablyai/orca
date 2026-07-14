@@ -8,7 +8,11 @@ import {
   isTerminalUpdateViewportApplied,
   isTerminalUpdateViewportUpdated,
   isTerminalViewportRefitTargetCurrent,
-  shouldRefitOnFrameHeightChange
+  reduceTerminalFrameHeightRefit,
+  resolveTerminalUpdateViewportCapability,
+  type TerminalFrameHeightRefitEvent,
+  type TerminalFrameHeightRefitState,
+  type TerminalUpdateViewportCapability
 } from './terminal-viewport-refit-state'
 
 export type TerminalViewportDims = { cols: number; rows: number }
@@ -33,14 +37,13 @@ type TerminalViewportRefitOptions = {
   // tab-strip change. Carries that measured width so those resizes re-fit the PTY;
   // the 150ms debounce coalesces the stream of drag widths into one settle-time refit.
   terminalFrameWidth: number
-  // Why: the frame height settles when the accessory/live-input dock lays out
-  // after a new agent terminal's first fit; carrying it re-fits the PTY so its
-  // rows stop overflowing behind the dock. See shouldRefitOnFrameHeightChange.
-  terminalFrameHeight: number
-  // Why: gate the height refit so a keyboard-driven resize never reflows the PTY.
-  keyboardVisibleRef: RefObject<boolean>
   unsubscribeTerminal: (handle: string) => void
   subscribeToTerminal: (handle: string) => void
+}
+
+type TerminalViewportRefitNotifications = {
+  notifyTerminalFrameHeight: (height: number) => void
+  notifyKeyboardVisibility: (visible: boolean) => void
 }
 
 // Why: re-measure the phone viewport when layout-affecting state changes
@@ -49,7 +52,9 @@ type TerminalViewportRefitOptions = {
 // split-screen). Without the resize trigger, a PTY fitted on the folded
 // cover screen stays at cover-screen cols after unfolding and the terminal
 // renders in only part of the display (#4579's "cut in half" symptom).
-export function useTerminalViewportRefit(options: TerminalViewportRefitOptions): void {
+export function useTerminalViewportRefit(
+  options: TerminalViewportRefitOptions
+): TerminalViewportRefitNotifications {
   const {
     activeHandleRef,
     terminalRefs,
@@ -63,8 +68,6 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
     tabStripVisible,
     textScale,
     terminalFrameWidth,
-    terminalFrameHeight,
-    keyboardVisibleRef,
     unsubscribeTerminal,
     subscribeToTerminal
   } = options
@@ -73,6 +76,12 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
   const refitRunSeqRef = useRef(0)
   const forceNextRefitRef = useRef(false)
   const disposedRef = useRef(false)
+  const updateViewportCapabilityRef = useRef<TerminalUpdateViewportCapability>('unknown')
+  const frameHeightRefitStateRef = useRef<TerminalFrameHeightRefitState>({
+    frameHeight: 0,
+    keyboardVisible: false,
+    pending: false
+  })
   const scheduleViewportRefit = useCallback(() => {
     if (refitTimerRef.current) {
       clearTimeout(refitTimerRef.current)
@@ -122,7 +131,7 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
         // re-subscribe). See docs/mobile-presence-lock.md.
         const rpc = clientRef.current
         const deviceToken = deviceTokenRef.current
-        if (rpc && deviceToken) {
+        if (rpc && deviceToken && updateViewportCapabilityRef.current !== 'unsupported') {
           try {
             const response = await rpc.sendRequest('terminal.updateViewport', {
               terminal: handle,
@@ -132,6 +141,7 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
             if (!isCurrentTarget()) {
               return
             }
+            updateViewportCapabilityRef.current = resolveTerminalUpdateViewportCapability(response)
             if (isTerminalUpdateViewportUpdated(response)) {
               rpc.updateTerminalSubscriptionViewport(handle, dims)
               if (isTerminalUpdateViewportApplied(response)) {
@@ -203,6 +213,11 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
       return
     }
     prevWindowDimsRef.current = { width: windowWidth, height: windowHeight }
+    // Why: adjustResize can change only window height while the IME is open;
+    // the frame-height notifier schedules one correction after it closes.
+    if (prev.width === windowWidth && frameHeightRefitStateRef.current.keyboardVisible) {
+      return
+    }
     viewportMeasuredRef.current = false
     scheduleViewportRefit()
   }, [windowWidth, windowHeight, viewportMeasuredRef, scheduleViewportRefit])
@@ -235,26 +250,28 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
     scheduleViewportRefit()
   }, [terminalFrameWidth, viewportMeasuredRef, scheduleViewportRefit])
 
-  // Why: re-fit when the frame height settles after a new agent terminal's
-  // first fit so its rows stop overflowing behind the dock; the keyboard guard
-  // keeps an IME resize from reflowing the PTY. The refit's row-count guard
-  // makes a same-row height change a no-op.
-  const prevFrameHeightRef = useRef(terminalFrameHeight)
-  useEffect(() => {
-    const previousHeight = prevFrameHeightRef.current
-    prevFrameHeightRef.current = terminalFrameHeight
-    if (
-      !shouldRefitOnFrameHeightChange({
-        previousHeight,
-        nextHeight: terminalFrameHeight,
-        keyboardVisible: keyboardVisibleRef.current
-      })
-    ) {
-      return
-    }
-    viewportMeasuredRef.current = false
-    scheduleViewportRefit()
-  }, [terminalFrameHeight, keyboardVisibleRef, viewportMeasuredRef, scheduleViewportRefit])
+  const notifyFrameHeightRefitEvent = useCallback(
+    (event: TerminalFrameHeightRefitEvent) => {
+      const transition = reduceTerminalFrameHeightRefit(frameHeightRefitStateRef.current, event)
+      frameHeightRefitStateRef.current = transition.state
+      if (!transition.shouldRefit) {
+        return
+      }
+      viewportMeasuredRef.current = false
+      scheduleViewportRefit()
+    },
+    [viewportMeasuredRef, scheduleViewportRefit]
+  )
+  // Why: notify imperatively so layout churn does not rerender the full session;
+  // a height change during typing is coalesced into one refit after keyboard close.
+  const notifyTerminalFrameHeight = useCallback(
+    (height: number) => notifyFrameHeightRefitEvent({ type: 'frame-height', height }),
+    [notifyFrameHeightRefitEvent]
+  )
+  const notifyKeyboardVisibility = useCallback(
+    (visible: boolean) => notifyFrameHeightRefitEvent({ type: 'keyboard-visibility', visible }),
+    [notifyFrameHeightRefitEvent]
+  )
 
   useEffect(() => {
     if (Platform.OS !== 'ios') {
@@ -286,6 +303,9 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
     if (previous === 'connected' || connState !== 'connected') {
       return
     }
+    // Why: an in-place desktop upgrade may add updateViewport; reconnect is the
+    // narrow boundary where an old-host method_not_found cache becomes stale.
+    updateViewportCapabilityRef.current = 'unknown'
     // Why: reconnect can restore a PTY whose host-side size changed while the
     // socket was down, so equal cached dimensions still need reassertion.
     viewportMeasuredRef.current = false
@@ -302,4 +322,6 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
       }
     }
   }, [])
+
+  return { notifyTerminalFrameHeight, notifyKeyboardVisibility }
 }
