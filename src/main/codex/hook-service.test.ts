@@ -246,10 +246,11 @@ describe('CodexHookService', () => {
     }
   )
 
-  // Why: Codex can execute Windows hooks through PowerShell. A raw cmd.exe
-  // `if exist` guard fails to parse there before the managed script can run.
+  // Why: Codex executes hooks through the active turn shell, which is
+  // PowerShell for Orca's native Windows sessions, and falls back to cmd.exe
+  // when no turn shell is available. The managed command must survive both.
   it.skipIf(process.platform !== 'win32')(
-    'runs the managed command through PowerShell when the profile path is cmd-safe',
+    'runs the managed command from both Codex Windows shells',
     () => {
       const status = new CodexHookService().install()
       expect(status.state).toBe('installed')
@@ -276,13 +277,20 @@ describe('CodexHookService', () => {
         'v1.0',
         'powershell.exe'
       )
-      const result = spawnSync(powershellPath, ['-NoProfile', '-Command', command], {
-        env: cleanEnv,
-        input: Buffer.from('{}')
-      })
+      const cmdPath = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'cmd.exe')
+      const shellCases = [
+        { name: 'PowerShell', executable: powershellPath, args: ['-NoProfile', '-Command'] },
+        { name: 'cmd.exe', executable: cmdPath, args: ['/d', '/c'] }
+      ]
+      for (const shellCase of shellCases) {
+        const result = spawnSync(shellCase.executable, [...shellCase.args, command], {
+          env: cleanEnv,
+          input: Buffer.from('{}')
+        })
 
-      expect(result.error).toBeUndefined()
-      expect(result.status).toBe(0)
+        expect(result.error, `${shellCase.name} spawn error`).toBeUndefined()
+        expect(result.status, `${shellCase.name} exit code`).toBe(0)
+      }
     }
   )
 
