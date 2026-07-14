@@ -68,29 +68,70 @@ function planAdditionalAgentArgs(
   return { ok: true, args: tokenized.tokens }
 }
 
+// Why: `--model`/`-m` is a singleton flag — Codex rejects a repeated one with
+// "cannot be used multiple times". When a recipe's CLI arguments set the model,
+// it must override Orca's generated model in place instead of appending a second
+// occurrence.
+const MODEL_FLAGS = new Set(['--model', '-m'])
+
+function readModelOverride(
+  agentArgs: string[]
+): { value: string; index: number; consumed: number } | null {
+  for (let i = 0; i < agentArgs.length; i++) {
+    const token = agentArgs[i]
+    const equalsMatch = /^(?:--model|-m)=(.*)$/s.exec(token)
+    if (equalsMatch) {
+      return { value: equalsMatch[1], index: i, consumed: 1 }
+    }
+    if (MODEL_FLAGS.has(token) && i + 1 < agentArgs.length && !agentArgs[i + 1].startsWith('-')) {
+      return { value: agentArgs[i + 1], index: i, consumed: 2 }
+    }
+  }
+  return null
+}
+
+function applyModelFlagOverride(
+  baseArgs: string[],
+  agentArgs: string[]
+): { baseArgs: string[]; agentArgs: string[] } {
+  const override = readModelOverride(agentArgs)
+  if (!override) {
+    return { baseArgs, agentArgs }
+  }
+  const baseIndex = baseArgs.findIndex(
+    (token, i) =>
+      MODEL_FLAGS.has(token) && i + 1 < baseArgs.length && !baseArgs[i + 1].startsWith('-')
+  )
+  if (baseIndex === -1) {
+    return { baseArgs, agentArgs }
+  }
+  const nextBase = [...baseArgs]
+  nextBase[baseIndex + 1] = override.value
+  const nextAgent = [...agentArgs]
+  nextAgent.splice(override.index, override.consumed)
+  return { baseArgs: nextBase, agentArgs: nextAgent }
+}
+
 function insertAdditionalAgentArgs(args: {
   baseArgs: string[]
   agentArgs: string[]
   promptDelivery: 'argv' | 'stdin'
   prompt: string
 }): string[] {
-  if (!args.agentArgs.length) {
-    return args.baseArgs
+  const { baseArgs, agentArgs } = applyModelFlagOverride(args.baseArgs, args.agentArgs)
+  if (!agentArgs.length) {
+    return baseArgs
   }
-  const promptPlaceholderIndex = args.baseArgs.lastIndexOf('{prompt}')
+  const promptPlaceholderIndex = baseArgs.lastIndexOf('{prompt}')
   if (promptPlaceholderIndex !== -1) {
-    const merged = [...args.baseArgs]
-    merged.splice(promptPlaceholderIndex, 0, ...args.agentArgs)
+    const merged = [...baseArgs]
+    merged.splice(promptPlaceholderIndex, 0, ...agentArgs)
     return merged
   }
-  if (
-    args.promptDelivery === 'argv' &&
-    args.prompt.length > 0 &&
-    args.baseArgs.at(-1) === args.prompt
-  ) {
-    return [...args.baseArgs.slice(0, -1), ...args.agentArgs, args.prompt]
+  if (args.promptDelivery === 'argv' && args.prompt.length > 0 && baseArgs.at(-1) === args.prompt) {
+    return [...baseArgs.slice(0, -1), ...agentArgs, args.prompt]
   }
-  return [...args.baseArgs, ...args.agentArgs]
+  return [...baseArgs, ...agentArgs]
 }
 
 export function planCommitMessageGeneration(

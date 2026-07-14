@@ -215,7 +215,36 @@ describe('planCommitMessageGeneration', () => {
     })
   })
 
-  it('appends per-action CLI arguments after the built-in model args for stdin agents', () => {
+  it('appends non-singleton per-action CLI arguments after the built-in args for stdin agents', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'codex',
+        model: 'gpt-5.4-mini',
+        agentArgs: '--sandbox read-only'
+      },
+      'PROMPT'
+    )
+
+    expect(result).toMatchObject({
+      ok: true,
+      plan: {
+        args: [
+          'exec',
+          '--ephemeral',
+          '--skip-git-repo-check',
+          '-s',
+          'read-only',
+          '--model',
+          'gpt-5.4-mini',
+          '--sandbox',
+          'read-only'
+        ],
+        stdinPayload: 'PROMPT'
+      }
+    })
+  })
+
+  it('overrides the built-in model in place when a stdin recipe sets --model alongside other args', () => {
     const result = planCommitMessageGeneration(
       {
         agentId: 'codex',
@@ -235,8 +264,6 @@ describe('planCommitMessageGeneration', () => {
           '-s',
           'read-only',
           '--model',
-          'gpt-5.4-mini',
-          '--model',
           'gpt-5.5',
           '--sandbox',
           'read-only'
@@ -246,7 +273,40 @@ describe('planCommitMessageGeneration', () => {
     })
   })
 
-  it('appends per-action CLI arguments for stdin agents', () => {
+  it('overrides the built-in Codex model in place when the recipe sets --model', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'codex',
+        model: 'gpt-5.4-mini',
+        thinkingLevel: 'medium',
+        agentArgs: '--model gpt-5.6-luna'
+      },
+      'PROMPT'
+    )
+
+    // Why: Codex rejects a repeated `--model` ("cannot be used multiple
+    // times"), so the recipe model replaces Orca's generated one in place
+    // and the trailing reasoning-effort override is preserved.
+    expect(result).toMatchObject({
+      ok: true,
+      plan: {
+        args: [
+          'exec',
+          '--ephemeral',
+          '--skip-git-repo-check',
+          '-s',
+          'read-only',
+          '--model',
+          'gpt-5.6-luna',
+          '-c',
+          'model_reasoning_effort=medium'
+        ],
+        stdinPayload: 'PROMPT'
+      }
+    })
+  })
+
+  it('overrides the built-in model for stdin agents when the recipe sets --model', () => {
     const result = planCommitMessageGeneration(
       {
         agentId: 'opencode',
@@ -262,13 +322,42 @@ describe('planCommitMessageGeneration', () => {
         args: [
           'run',
           '--model',
-          'opencode/gpt-5.4-mini',
+          'opencode/gpt-5.5',
           '--agent',
           'build',
           '--format',
-          'default',
+          'default'
+        ],
+        stdinPayload: 'PROMPT'
+      }
+    })
+  })
+
+  it('keeps a non-overriding repeatable per-action flag appended without dropping the model', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'codex',
+        model: 'gpt-5.4-mini',
+        agentArgs: '-c model_reasoning_effort=high'
+      },
+      'PROMPT'
+    )
+
+    // Why: `-c` is repeatable, not a singleton, so it must append rather than
+    // override — the built-in `--model` stays intact.
+    expect(result).toMatchObject({
+      ok: true,
+      plan: {
+        args: [
+          'exec',
+          '--ephemeral',
+          '--skip-git-repo-check',
+          '-s',
+          'read-only',
           '--model',
-          'opencode/gpt-5.5'
+          'gpt-5.4-mini',
+          '-c',
+          'model_reasoning_effort=high'
         ],
         stdinPayload: 'PROMPT'
       }
