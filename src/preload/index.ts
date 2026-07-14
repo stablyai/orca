@@ -180,7 +180,9 @@ import type {
   NativeChatWriteWebChatClaudeSessionResult,
   ChatImportBrowserId,
   ChatImportInstallResult,
-  ChatImportSetupStatus
+  ChatImportSetupStatus,
+  ChatImportAttachmentOpenArgs,
+  ChatImportAttachmentOpenResult
 } from './api-types'
 import {
   ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
@@ -3897,6 +3899,11 @@ const api = {
       ipcRenderer.invoke('chatImportSetup:getStatus'),
     install: (browser: ChatImportBrowserId): Promise<ChatImportInstallResult> =>
       ipcRenderer.invoke('chatImportSetup:install', browser)
+  },
+
+  chatImportAttachment: {
+    open: (args: ChatImportAttachmentOpenArgs): Promise<ChatImportAttachmentOpenResult> =>
+      ipcRenderer.invoke('chatImportAttachment:open', args)
   },
 
   runtime: {

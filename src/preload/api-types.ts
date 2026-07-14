@@ -891,6 +891,20 @@ export type ChatImportSetupApi = {
   install: (browser: ChatImportBrowserId) => Promise<ChatImportInstallResult>
 }
 
+export type ChatImportAttachmentOpenArgs = {
+  hash: string
+  fileName: string
+  mime: string
+}
+
+export type ChatImportAttachmentOpenResult = { ok: true } | { ok: false; error: string }
+
+export type ChatImportAttachmentApi = {
+  /** Writes the stored blob for `hash` to a temp file under a sanitized,
+   *  reconstructed filename, then opens it with the OS default handler. */
+  open: (args: ChatImportAttachmentOpenArgs) => Promise<ChatImportAttachmentOpenResult>
+}
+
 export type AppApi = {
   /** Returns the app identity currently exposed to native chrome and the titlebar. */
   getIdentity: () => Promise<AppIdentity>
@@ -2400,6 +2414,7 @@ export type PreloadApi = {
   aiVault: AiVaultApi
   nativeChat: NativeChatApi
   chatImportSetup: ChatImportSetupApi
+  chatImportAttachment: ChatImportAttachmentApi
   fs: {
     readDir: (args: { dirPath: string; connectionId?: string }) => Promise<DirEntry[]>
     readFile: (args: {

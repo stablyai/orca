@@ -28,6 +28,7 @@ import { registerEphemeralVmHandlers } from './ephemeral-vm'
 import { registerAiVaultHandlers } from './ai-vault'
 import { registerNativeChatHandlers } from './native-chat'
 import { registerChatImportSetupHandlers } from './chat-import-setup'
+import { registerChatImportAttachmentHandlers } from './chat-import-attachment'
 import { registerNotificationHandlers } from './notifications'
 import { registerNotebookHandlers } from './notebook'
 import { registerOnboardingHandlers } from './onboarding'
@@ -191,6 +192,7 @@ export function registerCoreHandlers(
   })
   registerNativeChatHandlers()
   registerChatImportSetupHandlers()
+  registerChatImportAttachmentHandlers()
   registerClipboardHandlers(store)
   registerUpdaterHandlers(store)
   registerSpeechHandlers(store)
