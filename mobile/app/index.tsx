@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, Pressable, FlatList, Alert } from 'react-native
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useFocusEffect } from 'expo-router'
 import {
-  Monitor,
   QrCode,
   Settings,
   ChevronRight,
@@ -35,12 +34,12 @@ import {
   useForceReconnect,
   usePrimeHosts
 } from '../src/transport/client-context'
-import { classifyConnection, verdictDisplayLabel } from '../src/transport/connection-health'
+import { classifyConnection } from '../src/transport/connection-health'
 import { subscribeToDesktopNotifications } from '../src/notifications/mobile-notifications'
 import type { ConnectionState, HostProfile } from '../src/transport/types'
 import { triggerMediumImpact } from '../src/platform/haptics'
 import { OrcaLogo } from '../src/components/OrcaLogo'
-import { StatusDot } from '../src/components/StatusDot'
+import { MobileHostCard } from '../src/components/MobileHostCard'
 import { TaskProviderLogo } from '../src/components/TaskProviderLogo'
 import { TextInputModal } from '../src/components/TextInputModal'
 import { ActionSheetModal, type ActionSheetAction } from '../src/components/ActionSheetModal'
@@ -324,6 +323,10 @@ export default function HomeScreen() {
   // docs/mobile-shared-client-per-host.md.
   const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
   const allClients = useAllHostClients(hostIds)
+  const hostPaths = useMemo(
+    () => Object.fromEntries(allClients.map(({ hostId, path }) => [hostId, path])),
+    [allClients]
+  )
   const closeHostClient = useCloseHost()
   const forceReconnectHost = useForceReconnect()
   const primeHosts = usePrimeHosts()
@@ -824,7 +827,6 @@ export default function HomeScreen() {
             const state = hostStates[item.id] ?? 'connecting'
             const attempts = hostAttempts[item.id] ?? 0
             const lastConnectedAt = hostLastConnected[item.id] ?? null
-            const connected = state === 'connected'
             const info = worktreeInfo[item.id]
             const verdict = classifyConnection({
               state,
@@ -832,45 +834,21 @@ export default function HomeScreen() {
               lastConnectedAt,
               endpoint: item.endpoint
             })
-            const isError =
-              verdict.kind === 'warning' ||
-              verdict.kind === 'unreachable' ||
-              verdict.kind === 'auth-failed'
             return (
-              <Pressable
-                style={({ pressed }) => [styles.hostCard, pressed && styles.hostCardPressed]}
+              <MobileHostCard
+                host={item}
+                state={state}
+                verdict={verdict}
+                path={hostPaths[item.id] ?? 'lan'}
+                worktreeCounts={
+                  info ? { total: info.totalWorktrees, active: info.activeCount } : undefined
+                }
                 onPress={() => router.push(`/h/${item.id}`)}
                 onLongPress={() => {
                   triggerMediumImpact()
                   setActionTarget(item)
                 }}
-                delayLongPress={400}
-              >
-                <View style={styles.hostIcon}>
-                  <Monitor
-                    size={20}
-                    color={connected ? colors.textPrimary : colors.textSecondary}
-                  />
-                </View>
-                <View style={styles.hostMain}>
-                  <Text
-                    style={[styles.hostName, !connected && { color: colors.textSecondary }]}
-                    numberOfLines={1}
-                  >
-                    {item.name}
-                  </Text>
-                  <View style={styles.hostMeta}>
-                    <StatusDot state={state} verdict={verdict} />
-                    <Text style={[styles.hostMetaItem, isError && { color: colors.statusRed }]}>
-                      {verdictDisplayLabel(verdict)}
-                      {connected && info
-                        ? ` · ${info.totalWorktrees} worktree${info.totalWorktrees !== 1 ? 's' : ''}${info.activeCount > 0 ? ` · ${info.activeCount} active` : ''}`
-                        : ''}
-                    </Text>
-                  </View>
-                </View>
-                <ChevronRight size={16} color={colors.textMuted} />
-              </Pressable>
+              />
             )
           }}
           ListFooterComponent={
@@ -1081,16 +1059,16 @@ export default function HomeScreen() {
           items.push({
             label: 'Rename',
             icon: Edit3,
+            closeBeforePress: true,
             onPress: () => {
-              setActionTarget(null)
               setRenameTarget(host)
             }
           })
           items.push({
             label: 'Remove',
             destructive: true,
+            closeBeforePress: true,
             onPress: () => {
-              setActionTarget(null)
               setConfirmRemove(host)
             }
           })
@@ -1244,62 +1222,8 @@ const styles = StyleSheet.create({
   },
 
   /* ─── Host cards ─── */
-  hostCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingLeft: spacing.md,
-    paddingRight: spacing.md,
-    paddingVertical: 12,
-    borderRadius: radii.card,
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
   hostCardPressed: {
     backgroundColor: colors.bgRaised
-  },
-  hostIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgRaised,
-    marginRight: 14,
-    position: 'relative'
-  },
-  hostMain: {
-    flex: 1,
-    minWidth: 0,
-    marginRight: spacing.sm
-  },
-  hostName: {
-    color: colors.textPrimary,
-    fontSize: 15,
-    fontWeight: '600',
-    lineHeight: 20
-  },
-  hostMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 3
-  },
-  hostMetaItem: {
-    fontSize: 12,
-    color: colors.textSecondary
-  },
-  hostMetaDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: colors.textMuted,
-    marginHorizontal: 8
-  },
-  statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5
   },
 
   /* ─── Resume card ─── */

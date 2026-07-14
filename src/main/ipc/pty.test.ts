@@ -1783,13 +1783,18 @@ describe('registerPtyHandlers', () => {
           value: 'linux'
         })
         try {
-          const env = await daemonSpawnAndGetEnv({ PATH: '/usr/local/bin:/usr/bin' })
+          // Why: overriding process.platform does not change the already-loaded
+          // node:path dialect; keep this synthetic PATH internally consistent.
+          const env = await daemonSpawnAndGetEnv({
+            PATH: ['/usr/local/bin', '/usr/bin'].join(delimiter)
+          })
           const entries = env.PATH.split(delimiter)
           const shimDir = join('/tmp/orca-user-data', 'linux-orca-cli-shim')
           // Why: bare `orca` must resolve to the Orca CLI before /usr/bin/orca
           // (the GNOME screen reader) inside Orca-managed terminals (#7904).
           expect(entries.indexOf(shimDir)).toBeGreaterThanOrEqual(0)
           expect(entries.indexOf(shimDir)).toBeLessThan(entries.indexOf('/usr/bin'))
+          expect(env.ORCA_CLI_COMMAND).toBeUndefined()
         } finally {
           Object.defineProperty(process, 'platform', {
             configurable: true,
@@ -1893,10 +1898,13 @@ describe('registerPtyHandlers', () => {
         // Why: runtime-created spawns (e.g. the mobile-create materialize path)
         // must thread the same {tabId, leafId} so the catch-path rescue can find
         // and keep their live PTY (#7587).
-        expect(runtime.registerPty).toHaveBeenCalledWith(expect.any(String), 'wt-runtime', null, {
-          tabId: 'tab-1',
-          leafId
-        })
+        expect(runtime.registerPty).toHaveBeenCalledWith(
+          expect.any(String),
+          'wt-runtime',
+          null,
+          { tabId: 'tab-1', leafId },
+          false
+        )
       })
 
       it('uses the owning project WSL runtime for runtime-created daemon PTYs', async () => {
@@ -1951,6 +1959,13 @@ describe('registerPtyHandlers', () => {
           expect(spawnOptions.shellOverride).toBe('wsl.exe')
           expect(spawnOptions.terminalWindowsWslDistro).toBe('Ubuntu')
           expect(spawnOptions.terminalWindowsPowerShellImplementation).toBe('auto')
+          expect(runtime.registerPty).toHaveBeenCalledWith(
+            expect.any(String),
+            'repo-1::C:\\repo',
+            null,
+            undefined,
+            true
+          )
         })
       })
 
@@ -3650,6 +3665,17 @@ describe('registerPtyHandlers', () => {
     )
   })
 
+  it('rejects runtime terminal IDs before unowned local provider routing', async () => {
+    const shutdown = vi.spyOn(getLocalPtyProvider(), 'shutdown')
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never)
+
+    await expect(
+      handlers.get('pty:kill')!(null, { id: 'remote:env-1@@terminal-1' })
+    ).rejects.toThrow('Invalid PTY provider id')
+    expect(shutdown).not.toHaveBeenCalled()
+  })
+
   it('synthesizes runtime exit after ordinary daemon-backed pty kill', async () => {
     const shutdown = vi.fn(async () => undefined)
     const runtime = {
@@ -4893,10 +4919,13 @@ describe('registerPtyHandlers', () => {
 
     // Why: this is the load-bearing wiring for #7587 — the runtime can only back a
     // stalled mobile create from a live spawn if the spawn threads {tabId, leafId}.
-    expect(runtime.registerPty).toHaveBeenCalledWith(expect.any(String), 'wt-1', null, {
-      tabId: 'tab-1',
-      leafId
-    })
+    expect(runtime.registerPty).toHaveBeenCalledWith(
+      expect.any(String),
+      'wt-1',
+      null,
+      { tabId: 'tab-1', leafId },
+      false
+    )
   })
 
   it('omits the pane identity from registerPty when the leafId is not a terminal leaf (#7587)', async () => {
@@ -4925,7 +4954,13 @@ describe('registerPtyHandlers', () => {
     // Why: legacy numeric pane ids (`pane:N`) are not terminal leaf ids, so the
     // spawn seam must not fabricate a binding for them (registerPty would ignore
     // it anyway); this pins that the seam passes a clean `undefined`.
-    expect(runtime.registerPty).toHaveBeenCalledWith(expect.any(String), 'wt-1', null, undefined)
+    expect(runtime.registerPty).toHaveBeenCalledWith(
+      expect.any(String),
+      'wt-1',
+      null,
+      undefined,
+      false
+    )
   })
 
   it('refreshes native Agent Teams env when captured teammate mode lives in launch args', async () => {
@@ -6404,10 +6439,12 @@ describe('registerPtyHandlers', () => {
     expect(spawnCall[0]).toBe('wsl.exe')
     expect(env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
     expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
+    expect(env.ORCA_CLI_COMMAND).toBe('orca-ide')
     expect(env.WSLENV?.split(':')).toEqual(
       expect.arrayContaining([
         'ORCA_TERMINAL_HANDLE/u',
         'ORCA_USER_DATA_PATH/p',
+        'ORCA_CLI_COMMAND/u',
         'ORCA_AGENT_HOOK_PORT/u',
         'ORCA_AGENT_HOOK_TOKEN/u',
         'ORCA_OMP_SOURCE_AGENT_DIR/p',
@@ -7037,6 +7074,8 @@ describe('registerPtyHandlers', () => {
 
   it('spawns a plain POSIX login shell and queues startup commands for the live session', async () => {
     const originalPlatform = process.platform
+    const originalHome = process.env.HOME
+    const originalOrcaOrigZdotdir = process.env.ORCA_ORIG_ZDOTDIR
     const originalShell = process.env.SHELL
     const originalZdotdir = process.env.ZDOTDIR
 
@@ -7044,6 +7083,9 @@ describe('registerPtyHandlers', () => {
       configurable: true,
       value: 'darwin'
     })
+    // Why: this test simulates macOS even when Vitest runs on a Windows host.
+    process.env.HOME = '/Users/test'
+    delete process.env.ORCA_ORIG_ZDOTDIR
     process.env.SHELL = '/bin/zsh'
     delete process.env.ZDOTDIR
 
@@ -7061,6 +7103,16 @@ describe('registerPtyHandlers', () => {
         configurable: true,
         value: originalPlatform
       })
+      if (originalHome === undefined) {
+        delete process.env.HOME
+      } else {
+        process.env.HOME = originalHome
+      }
+      if (originalOrcaOrigZdotdir === undefined) {
+        delete process.env.ORCA_ORIG_ZDOTDIR
+      } else {
+        process.env.ORCA_ORIG_ZDOTDIR = originalOrcaOrigZdotdir
+      }
       if (originalShell === undefined) {
         delete process.env.SHELL
       } else {
@@ -10782,7 +10834,9 @@ describe('registerPtyHandlers', () => {
     expect(registerPaneKeyAliasMock).toHaveBeenCalledWith(
       'tab-1:0',
       stablePaneKey,
-      expect.any(String)
+      expect.any(String),
+      expect.any(Number),
+      { authorityVerified: true }
     )
     expect(clearMigrationUnsupportedPtysForPaneKeyMock).toHaveBeenCalledWith(stablePaneKey)
     expect(setMigrationUnsupportedPtyMock).not.toHaveBeenCalled()

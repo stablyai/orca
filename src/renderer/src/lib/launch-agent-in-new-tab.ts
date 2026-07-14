@@ -201,6 +201,18 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     return null
   }
 
+  // Why: host-owned paired tabs must receive the same initial-view decision as
+  // local tabs; the remote host cannot infer this client's draft/default choice.
+  const viewModePromptDelivery =
+    hasPrompt && isFollowupPath && promptDelivery === 'auto-submit' ? 'draft' : promptDelivery
+  const initialViewModeProps = initialAgentTabViewModeProps(store.settings, {
+    agent,
+    promptDelivery: viewModePromptDelivery,
+    nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
+      getConnectionIdFromState(store, worktreeId)
+    )
+  })
+
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId) && pasteDraftAfterLaunch === null) {
     launchAgentInWebHostTab({
@@ -210,6 +222,9 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       groupId,
       hasPrompt,
       startupPlan,
+      // Why: omission means terminal locally, but would let a paired host apply
+      // its own default; send the client's resolved terminal choice explicitly.
+      viewMode: initialViewModeProps.viewMode ?? 'terminal',
       onPromptDelivered
     })
     return { tabId: null, startupPlan, pasteDraftAfterLaunch: false }
@@ -224,18 +239,10 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   // stays false), so gate the initial chat view like a `draft` launch —
   // otherwise a default `auto-submit` followup would open native chat with no
   // submitted turn to render.
-  const viewModePromptDelivery =
-    hasPrompt && isFollowupPath && promptDelivery === 'auto-submit' ? 'draft' : promptDelivery
   const tab = store.createTab(worktreeId, groupId, undefined, {
     launchAgent: agent,
     quickCommandLabel,
-    ...initialAgentTabViewModeProps(store.settings, {
-      agent,
-      promptDelivery: viewModePromptDelivery,
-      nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-        getConnectionIdFromState(store, worktreeId)
-      )
-    })
+    ...initialViewModeProps
   })
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,

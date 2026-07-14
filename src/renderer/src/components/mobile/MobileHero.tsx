@@ -1,10 +1,13 @@
+import { useLayoutEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, Copy, RefreshCw } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
 import { AndroidLogo, IosBrandIcon } from './MobileBrandIcons'
 import { NetworkInterfacePicker } from './NetworkInterfacePicker'
+import { MobilePairingConnectionOptions } from '../settings/MobilePairingConnectionOptions'
 import { getChannelTagline, type InstallCopy, type IosChannel } from './mobile-platform-copy'
 import { WindowsFirewallNotice } from './WindowsFirewallNotice'
+import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
 export { HeroIntro } from './MobileHeroIntro'
 export { HeroPaired, type PairedDevice } from './MobileHeroPairedDevices'
 import { translate } from '@/i18n/i18n'
@@ -37,6 +40,8 @@ type HeroFlowProps = {
   pairQrDataUrl: string | null
   pairingUrl: string | null
   pairLoading: boolean
+  connectionMode: MobilePairingConnectionMode
+  onConnectionModeChange: (mode: MobilePairingConnectionMode) => void
   onRegeneratePairing: () => void
   onCopyPairingCode: () => void
   networkInterfaces: readonly MobileNetworkInterface[]
@@ -62,6 +67,8 @@ export function HeroFlow({
   pairQrDataUrl,
   pairingUrl,
   pairLoading,
+  connectionMode,
+  onConnectionModeChange,
   onRegeneratePairing,
   onCopyPairingCode,
   networkInterfaces,
@@ -74,11 +81,40 @@ export function HeroFlow({
   onDone
 }: HeroFlowProps): React.JSX.Element {
   const isLast = stepIdx === 1
+  const screenRefs = useRef<(HTMLDivElement | null)[]>([])
+  const [viewportHeight, setViewportHeight] = useState<number>()
+
+  useLayoutEffect(() => {
+    const activeScreen = screenRefs.current[stepIdx]
+    if (!activeScreen) {
+      return
+    }
+
+    const measure = (): void => setViewportHeight(activeScreen.scrollHeight)
+    measure()
+
+    if (typeof ResizeObserver === 'undefined') {
+      return
+    }
+    const observer = new ResizeObserver(measure)
+    observer.observe(activeScreen)
+    return () => observer.disconnect()
+  }, [stepIdx])
 
   return (
     <div className="mp-flow-card">
-      <div className="mp-flow-viewport">
-        <div className={cn('mp-flow-screen', stepIdx === 0 ? 'is-active' : 'is-past')}>
+      <div
+        className="mp-flow-viewport"
+        style={viewportHeight === undefined ? undefined : { height: viewportHeight }}
+      >
+        <div
+          ref={(element) => {
+            screenRefs.current[0] = element
+          }}
+          className={cn('mp-flow-screen', stepIdx === 0 ? 'is-active' : 'is-past')}
+          aria-hidden={stepIdx !== 0}
+          inert={stepIdx !== 0}
+        >
           <div className="mp-step2-layout">
             <div className="mp-step2-copy">
               <div className="mp-eyebrow-row">
@@ -173,9 +209,16 @@ export function HeroFlow({
           </div>
         </div>
 
-        <div className={cn('mp-flow-screen', stepIdx === 1 && 'is-active')}>
-          <div className="mp-step2-layout">
-            <div className="mp-step2-copy">
+        <div
+          ref={(element) => {
+            screenRefs.current[1] = element
+          }}
+          className={cn('mp-flow-screen', stepIdx === 1 && 'is-active')}
+          aria-hidden={stepIdx !== 1}
+          inert={stepIdx !== 1}
+        >
+          <div className="mp-pairing-layout">
+            <div className="mp-step2-copy mp-pairing-copy">
               <div className="mp-eyebrow-row">
                 <div className="mp-step-num">2</div>
                 <span className="mp-eyebrow">
@@ -193,7 +236,50 @@ export function HeroFlow({
                 </strong>
                 {translate('auto.components.mobile.MobileHero.2f077ef4eb', ', and scan the code.')}
               </p>
-
+            </div>
+            <div className="mp-pairing-relay">
+              <MobilePairingConnectionOptions
+                value={connectionMode}
+                onChange={onConnectionModeChange}
+                compact
+              />
+            </div>
+            <div className="mp-qr-stack mp-pairing-qr">
+              <div
+                className="mp-qr mp-qr-large"
+                aria-label={translate(
+                  'auto.components.mobile.MobileHero.bb0074ce11',
+                  'Pairing QR code'
+                )}
+                aria-busy={pairLoading}
+              >
+                {pairQrDataUrl ? (
+                  <img
+                    src={pairQrDataUrl}
+                    alt={translate('auto.components.mobile.MobileHero.27735e5f4e', 'Pairing QR')}
+                    className={cn(pairLoading && 'mp-qr-refreshing')}
+                  />
+                ) : null}
+                {pairLoading ? (
+                  <span className="mp-qr-loading">
+                    {translate('auto.components.mobile.MobileHero.65b3f2e8bc', 'Generating…')}
+                  </span>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                className="mp-link-under"
+                onClick={onRegeneratePairing}
+                disabled={pairLoading}
+              >
+                {pairLoading
+                  ? translate('auto.components.mobile.MobileHero.65b3f2e8bc', 'Generating…')
+                  : pairQrDataUrl
+                    ? translate('auto.components.mobile.MobileHero.e59a252eca', 'Regenerate code')
+                    : translate('auto.components.mobile.MobileHero.a6cffbbb0b', 'Generate code')}
+              </button>
+            </div>
+            <div className="mp-pairing-controls">
               <div className="mp-network-row">
                 <span className="mp-network-label">
                   {translate('auto.components.mobile.MobileHero.dfd2aa9d5d', 'Network')}
@@ -202,9 +288,8 @@ export function HeroFlow({
                   networkInterfaces={networkInterfaces}
                   selectedAddress={selectedAddress}
                   onSelectedAddressChange={onSelectedAddressChange}
-                  // Why: keep the picker reachable when interface discovery is
-                  // empty — "Add custom address…" is the only path to enter a
-                  // manual Tailscale hostname / static IP.
+                  // Why: direct-first and local-only pairing both advertise a
+                  // local route; keeping it visible also prevents mode shifts.
                   disabled={false}
                   className="mp-network-select"
                 />
@@ -245,39 +330,6 @@ export function HeroFlow({
                 address={selectedAddress}
                 className="mt-3"
               />
-            </div>
-            <div className="mp-qr-stack">
-              <div
-                className="mp-qr mp-qr-large"
-                aria-label={translate(
-                  'auto.components.mobile.MobileHero.bb0074ce11',
-                  'Pairing QR code'
-                )}
-                aria-busy={pairLoading && !pairQrDataUrl}
-              >
-                {pairQrDataUrl ? (
-                  <img
-                    src={pairQrDataUrl}
-                    alt={translate('auto.components.mobile.MobileHero.27735e5f4e', 'Pairing QR')}
-                  />
-                ) : pairLoading ? (
-                  <span className="mp-qr-loading">
-                    {translate('auto.components.mobile.MobileHero.65b3f2e8bc', 'Generating…')}
-                  </span>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                className="mp-link-under"
-                onClick={onRegeneratePairing}
-                disabled={pairLoading}
-              >
-                {pairLoading
-                  ? translate('auto.components.mobile.MobileHero.65b3f2e8bc', 'Generating…')
-                  : pairQrDataUrl
-                    ? translate('auto.components.mobile.MobileHero.e59a252eca', 'Regenerate code')
-                    : translate('auto.components.mobile.MobileHero.a6cffbbb0b', 'Generate code')}
-              </button>
             </div>
           </div>
         </div>

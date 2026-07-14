@@ -200,6 +200,7 @@ type StoreState = {
   setAgentStatus: ReturnType<typeof vi.fn>
   removeAgentStatus: ReturnType<typeof vi.fn>
   dropAgentStatus: ReturnType<typeof vi.fn>
+  retireAgentPaneAuthority: ReturnType<typeof vi.fn>
   setPaneForegroundAgent: ReturnType<typeof vi.fn>
   clearPaneForegroundAgent: ReturnType<typeof vi.fn>
   markTerminalTabUnread: ReturnType<typeof vi.fn>
@@ -828,6 +829,7 @@ describe('connectPanePty', () => {
       ),
       removeAgentStatus: vi.fn(),
       dropAgentStatus: vi.fn(),
+      retireAgentPaneAuthority: vi.fn(),
       setPaneForegroundAgent: vi.fn((paneKey: string, entry: PaneForegroundAgentEntry) => {
         mockStoreState.paneForegroundAgentByPaneKey[paneKey] = entry
       }),
@@ -4957,6 +4959,7 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
 
     capturedDataCallback.current?.('\x1b]133;D;130\x07thebr ~/repo $ ')
+    await flushAsyncTicks(1)
 
     expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
     expect(mockStoreState.removeAgentStatus).not.toHaveBeenCalled()
@@ -4998,6 +5001,7 @@ describe('connectPanePty', () => {
       expect.objectContaining({ agentType: 'codex' })
     )
     capturedDataCallback.current?.('\x1b]133;D;130\x07thebr ~/repo $ ')
+    await flushAsyncTicks(1)
 
     expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledWith(paneKey)
     expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
@@ -7834,6 +7838,65 @@ describe('connectPanePty', () => {
 
     expect(pane.terminal.write).toHaveBeenCalledWith('live-snapshot', expect.any(Function))
     expect(transport.sendInput).not.toHaveBeenCalled()
+  })
+
+  it('renders the reattach snapshot before live bytes delivered during the spawn reply', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('tab-pty')
+    transport.connect.mockImplementation(
+      async ({ sessionId, callbacks }: { sessionId?: string; callbacks?: ConnectCallbacks }) => {
+        if (!sessionId) {
+          return null
+        }
+        // Why: the real dispatcher drains bytes emitted after snapshot capture
+        // as soon as the spawn IPC resolves, before connect() returns.
+        callbacks?.onData?.('post-snapshot-live')
+        return { id: sessionId, snapshot: 'authoritative-snapshot' }
+      }
+    )
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+    const { writes } = captureCallbackTerminalWrites(pane)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+    })
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+
+    const snapshotIndex = writes.indexOf('authoritative-snapshot')
+    const liveIndex = writes.indexOf('post-snapshot-live')
+    expect(snapshotIndex).toBeGreaterThanOrEqual(0)
+    expect(liveIndex).toBeGreaterThan(snapshotIndex)
+  })
+
+  it('does not fresh-spawn after a dead deferred session delivers its buffered exit', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('tab-pty')
+    transport.connect.mockImplementation(
+      async ({ sessionId, callbacks }: { sessionId?: string; callbacks?: ConnectCallbacks }) => {
+        if (!sessionId) {
+          return 'unexpected-fresh-pty'
+        }
+        callbacks?.onData?.('dead-session-final-frame')
+        return { id: sessionId, exitedBeforeAttach: true }
+      }
+    )
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+    const { writes } = captureCallbackTerminalWrites(pane)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+    })
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+    expect(writes).toContain('dead-session-final-frame')
+    expect(deps.updateTabPtyId).not.toHaveBeenCalled()
   })
 
   // Why: Phase 6 deleted the hidden-skip eligibility grammar. With the kill

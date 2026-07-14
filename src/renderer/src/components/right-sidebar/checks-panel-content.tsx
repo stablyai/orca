@@ -65,12 +65,7 @@ import {
   type PRCommentAudienceFilter
 } from '@/lib/pr-comment-audience'
 import { setPRBotAuthorOverride, usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
-import {
-  getPRCommentGroupId,
-  getPRCommentGroupRoot,
-  groupPRComments,
-  type PRCommentGroup
-} from '@/lib/pr-comment-groups'
+import { getPRCommentGroupId, groupPRComments, type PRCommentGroup } from '@/lib/pr-comment-groups'
 import {
   getPRCommentGroupActionState,
   isPRCommentGroupQueueableForAI,
@@ -1959,7 +1954,7 @@ function CommentRow({
 function PRCommentGroupView({
   group,
   botAuthorOverrides,
-  replyingGroupId,
+  replyingCommentId,
   selectionControl,
   actionState,
   isQueued,
@@ -1976,7 +1971,7 @@ function PRCommentGroupView({
 }: {
   group: PRCommentGroup
   botAuthorOverrides: ReadonlySet<string>
-  replyingGroupId: string | null
+  replyingCommentId: number | null
   selectionControl?: React.ReactNode
   actionState: PRCommentGroupActionState
   isQueued: boolean
@@ -1984,34 +1979,34 @@ function PRCommentGroupView({
   replyDisabledReason?: string
   presentation: PRCommentPresentationClasses
   onResolve?: (threadId: string, resolve: boolean) => boolean | Promise<boolean>
-  onStartReply?: (groupId: string) => void
-  onCancelReply?: () => void
+  onStartReply?: (commentId: number) => void
+  onCancelReply?: (commentId: number) => void
   onReply?: (comment: PRComment, body: string) => Promise<RightPanelCommentSubmitResult>
   onEditComment?: (comment: PRComment, body: string) => Promise<boolean>
   onDeleteComment?: (comment: PRComment) => void | Promise<void>
   onQueueForAgent?: () => void
 }): React.JSX.Element {
-  const groupId = getPRCommentGroupId(group)
-  const root = getPRCommentGroupRoot(group)
-  const replyComposer =
-    replyingGroupId === groupId && onReply ? (
+  // Reply targets a specific comment id so any comment in a thread — root or
+  // nested reply — can be replied to, not just the thread root.
+  const renderReplyComposer = (comment: PRComment): React.ReactNode =>
+    replyingCommentId === comment.id && onReply ? (
       <div className={cn('px-3 pb-2', group.kind === 'thread' && 'pl-6')}>
         <RightPanelCommentComposer
           placeholder={translate(
             'auto.components.right.sidebar.checks.panel.content.ba20d1a896',
             'Reply to {{value0}}',
-            { value0: root.author }
+            { value0: comment.author }
           )}
           submitLabel="Reply"
           autoFocus
           disabled={replyDisabled}
           disabledReason={replyDisabledReason}
-          onCancel={onCancelReply}
-          onSubmit={(body) => onReply(root, body)}
+          onCancel={() => onCancelReply?.(comment.id)}
+          onSubmit={(body) => onReply(comment, body)}
         />
       </div>
     ) : null
-  const startReply = onStartReply ? () => onStartReply(groupId) : undefined
+  const startReply = onStartReply ? (comment: PRComment) => onStartReply(comment.id) : undefined
   const surfaceClassName = cn(
     getPRCommentGroupSurfaceClasses(presentation, actionState, { queued: isQueued }),
     group.kind === 'standalone' ? presentation.groupStandalone : presentation.groupThread
@@ -2038,10 +2033,10 @@ function PRCommentGroupView({
           showResolve={false}
           showReply={Boolean(onReply)}
           selectionControl={selectionControl}
-          onReply={startReply ? () => startReply() : undefined}
+          onReply={startReply}
           {...sharedRowProps}
         />
-        {replyComposer}
+        {renderReplyComposer(group.comment)}
       </div>
     ) : (
       <div className={surfaceClassName} data-testid="pr-comment-group">
@@ -2051,25 +2046,28 @@ function PRCommentGroupView({
           showResolve={true}
           showReply={Boolean(onReply)}
           selectionControl={selectionControl}
-          onReply={startReply ? () => startReply() : undefined}
+          onReply={startReply}
           {...sharedRowProps}
         />
+        {renderReplyComposer(group.root)}
         {group.replies.length > 0 && (
           <div className={presentation.repliesContainer}>
             {group.replies.map((reply) => (
-              <CommentRow
-                key={reply.id}
-                {...sharedRowProps}
-                comment={reply}
-                isReply={true}
-                showResolve={false}
-                showReply={false}
-                isQueued={false}
-              />
+              <React.Fragment key={reply.id}>
+                <CommentRow
+                  {...sharedRowProps}
+                  comment={reply}
+                  isReply={true}
+                  showResolve={false}
+                  showReply={Boolean(onReply)}
+                  isQueued={false}
+                  onReply={startReply}
+                />
+                {renderReplyComposer(reply)}
+              </React.Fragment>
             ))}
           </div>
         )}
-        {replyComposer}
       </div>
     )
 
@@ -2096,7 +2094,7 @@ function PRCommentGroupView({
 function ResolvedCommentGroupsSection({
   groups,
   botAuthorOverrides,
-  replyingGroupId,
+  replyingCommentId,
   replyDisabled,
   replyDisabledReason,
   presentation,
@@ -2109,13 +2107,13 @@ function ResolvedCommentGroupsSection({
 }: {
   groups: PRCommentGroup[]
   botAuthorOverrides: ReadonlySet<string>
-  replyingGroupId: string | null
+  replyingCommentId: number | null
   replyDisabled?: boolean
   replyDisabledReason?: string
   presentation: PRCommentPresentationClasses
   onResolve?: (threadId: string, resolve: boolean) => boolean | Promise<boolean>
-  onStartReply?: (groupId: string) => void
-  onCancelReply?: () => void
+  onStartReply?: (commentId: number) => void
+  onCancelReply?: (commentId: number) => void
   onReply?: (comment: PRComment, body: string) => Promise<RightPanelCommentSubmitResult>
   onEditComment?: (comment: PRComment, body: string) => Promise<boolean>
   onDeleteComment?: (comment: PRComment) => void | Promise<void>
@@ -2142,7 +2140,7 @@ function ResolvedCommentGroupsSection({
                 key={getPRCommentGroupId(group)}
                 group={group}
                 botAuthorOverrides={botAuthorOverrides}
-                replyingGroupId={replyingGroupId}
+                replyingCommentId={replyingCommentId}
                 actionState="resolved"
                 isQueued={false}
                 replyDisabled={replyDisabled}
@@ -2241,7 +2239,7 @@ export function PRCommentsList({
   const presentation = React.useMemo(() => getPRCommentPresentationClasses(), [])
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
   const [displayMode, setDisplayMode] = useState<PRCommentsListDisplayMode>('triage')
-  const [replyingGroupId, setReplyingGroupId] = useState<string | null>(null)
+  const [replyingCommentId, setReplyingCommentId] = useState<number | null>(null)
   const [isAddingComment, setIsAddingComment] = useState(false)
   const addCommentSurfaceRef = useRef<HTMLDivElement>(null)
   const shouldScrollAddCommentRef = useRef(false)
@@ -2344,7 +2342,7 @@ export function PRCommentsList({
         key={groupId}
         group={group}
         botAuthorOverrides={botAuthorOverrides}
-        replyingGroupId={replyingGroupId}
+        replyingCommentId={replyingCommentId}
         selectionControl={renderSelectionControl(group)}
         actionState={actionState}
         isQueued={isQueued}
@@ -2352,8 +2350,10 @@ export function PRCommentsList({
         replyDisabledReason={commentsDisabledReason}
         presentation={presentation}
         onResolve={onResolve}
-        onStartReply={setReplyingGroupId}
-        onCancelReply={() => setReplyingGroupId(null)}
+        onStartReply={setReplyingCommentId}
+        onCancelReply={(commentId) =>
+          setReplyingCommentId((current) => (current === commentId ? null : current))
+        }
         onReply={onReply}
         onEditComment={onEditComment}
         onDeleteComment={onDeleteComment}
@@ -2675,13 +2675,15 @@ export function PRCommentsList({
               <ResolvedCommentGroupsSection
                 groups={triageGroups.resolved}
                 botAuthorOverrides={botAuthorOverrides}
-                replyingGroupId={replyingGroupId}
+                replyingCommentId={replyingCommentId}
                 replyDisabled={commentsDisabled}
                 replyDisabledReason={commentsDisabledReason}
                 presentation={presentation}
                 onResolve={onResolve}
-                onStartReply={setReplyingGroupId}
-                onCancelReply={() => setReplyingGroupId(null)}
+                onStartReply={setReplyingCommentId}
+                onCancelReply={(commentId) =>
+                  setReplyingCommentId((current) => (current === commentId ? null : current))
+                }
                 onReply={onReply}
                 onEditComment={onEditComment}
                 onDeleteComment={onDeleteComment}

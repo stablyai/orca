@@ -2,6 +2,10 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { writeForegroundTerminalChunk } from '@/lib/pane-manager/pane-terminal-foreground-render-settle'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { ensureArabicShapingJoinerForText } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
+import {
+  isTerminalWritePipelineCertifiedDead,
+  notifyUndeliverableWrite
+} from '@/lib/pane-manager/terminal-write-pipeline-health'
 
 // Why: xterm.js auto-responds to terminal query sequences (DA1 `CSI c`,
 // DECRQM `CSI ? Ps $ p`, OSC 10/11 color queries, focus events, CPR) by
@@ -105,6 +109,9 @@ function engageReplayGuard(
         `[terminal] replay guard released for pane ${paneId} — the probe write never parsed (wedged xterm write pipeline; pane likely needs recovery)`
       )
       recordRendererCrashBreadcrumb('terminal_replay_guard_wedged_release', { paneId })
+      // Why: the probe already certified the pipeline dead — hand the pane to
+      // recovery instead of leaving a fossil frame that eats keystrokes.
+      notifyUndeliverableWrite(terminal, 'replay-wedged')
     }
     onRelease?.()
   }
@@ -141,6 +148,13 @@ export function replayIntoTerminal(
   if (!data) {
     return
   }
+  // Why: a probe-certified dead pipeline can never parse this replay — each
+  // attempt only re-arms a guard destined for another wedged release (the
+  // production "zombie drip": restore retries every watchdog heal, forever).
+  // Recovery owns the pane once certified; skip the futile write.
+  if (isTerminalWritePipelineCertifiedDead(pane.terminal)) {
+    return
+  }
   ensureArabicShapingJoinerForText(pane.terminal, data)
   const releaseParsed = engageReplayGuard(
     replayingPanesRef.current,
@@ -165,6 +179,11 @@ export function replayIntoTerminalAsync(
   options: ReplayTerminalOptions = {}
 ): Promise<void> {
   if (!data) {
+    return Promise.resolve()
+  }
+  // Why: same certified-dead short-circuit as replayIntoTerminal; resolve so
+  // awaited restore chains complete instead of hanging on a dead parser.
+  if (isTerminalWritePipelineCertifiedDead(pane.terminal)) {
     return Promise.resolve()
   }
   ensureArabicShapingJoinerForText(pane.terminal, data)

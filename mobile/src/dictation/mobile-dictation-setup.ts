@@ -1,5 +1,6 @@
 import type { RuntimeSpeechSetupState } from '../../../src/shared/runtime-types'
 import type { RpcClient } from '../transport/rpc-client'
+import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import type { RpcSuccess } from '../transport/types'
 
 export type MobileSpeechSetup = RuntimeSpeechSetupState
@@ -31,7 +32,7 @@ export function isDictationSetupRequiredError(message: string): boolean {
 export async function fetchDictationSetup(
   client: Pick<RpcClient, 'sendRequest'>
 ): Promise<MobileSpeechSetup> {
-  const response = await client.sendRequest('speech.models.list', null)
+  const response = await fetchDictationSetupResponse(client)
   if (!response.ok) {
     if (isLegacyDesktopSpeechSetupError(response.error)) {
       throw new Error(LEGACY_DESKTOP_SPEECH_SETUP_MESSAGE)
@@ -39,6 +40,19 @@ export async function fetchDictationSetup(
     throw new Error(response.error?.message || 'Failed to load dictation models')
   }
   return (response as RpcSuccess).result as MobileSpeechSetup
+}
+
+async function fetchDictationSetupResponse(client: Pick<RpcClient, 'sendRequest'>) {
+  try {
+    return await client.sendRequest('speech.models.list', null)
+  } catch (error) {
+    if (!(error instanceof LogicalClientCutoverError)) {
+      throw error
+    }
+    // Why: this read can safely repeat on the authenticated replacement; mutation
+    // RPCs must still surface cutover so callers never replay unknown commits.
+    return client.sendRequest('speech.models.list', null)
+  }
 }
 
 export async function downloadDictationModel(

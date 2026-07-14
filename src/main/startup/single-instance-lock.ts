@@ -4,6 +4,7 @@ import { writeStartupDiagnosticLine, type StartupDiagnosticSink } from './startu
 export const SINGLE_INSTANCE_LOCK_FAILURE_MESSAGE =
   '[single-instance] Another Orca instance is already running for this userData profile; exiting this launch after requesting the existing window. If no Orca process is running, this may be an Electron/macOS single-instance lock failure.'
 export const SINGLE_INSTANCE_LOCK_BYPASS_ENV = 'ORCA_BYPASS_SINGLE_INSTANCE_LOCK'
+export const SINGLE_INSTANCE_LOCK_E2E_ENFORCE_ENV = 'ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK'
 export const SINGLE_INSTANCE_LOCK_BYPASS_MESSAGE =
   '[single-instance] ORCA_BYPASS_SINGLE_INSTANCE_LOCK=1 is set; bypassing the packaged macOS single-instance lock for diagnostics. Do not use this with another Orca instance running for the same profile.'
 
@@ -47,6 +48,15 @@ export function shouldBypassSingleInstanceLock(options: {
     !options.isServeMode &&
     env[SINGLE_INSTANCE_LOCK_BYPASS_ENV] === '1'
   )
+}
+
+export function shouldSkipSingleInstanceLock(options: {
+  env?: NodeJS.ProcessEnv
+  isDev: boolean
+  isServeMode: boolean
+}): boolean {
+  const env = options.env ?? process.env
+  return options.isDev && !options.isServeMode && env[SINGLE_INSTANCE_LOCK_E2E_ENFORCE_ENV] !== '1'
 }
 
 export function logSingleInstanceLockFailure(write?: StartupDiagnosticSink): void {

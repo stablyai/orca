@@ -61,6 +61,12 @@ const PENDING_TITLE_TTL_MS = Math.max(2_000, INSPECTION_TIMEOUT_MS + 500)
 const PENDING_TITLE_MAX_TTL_MS = Math.max(30_000, PENDING_TITLE_TTL_MS)
 const COMPLETION_REPLAY_GUARD_MS = 1_000
 const HOOK_DONE_QUIET_MS = 1_500
+// Why: Codex fires its PermissionRequest hook at the human-input boundary before
+// the approval decision, so under "Approve for me" the review agent approves and
+// Codex resumes almost immediately. Debounce the OS attention notification behind
+// this quiet window so a self-resolving pause never raises a false "approval
+// required" banner (issue #8387). The visual status still updates immediately.
+const CODEX_ATTENTION_QUIET_MS = 1_500
 
 const POLL_TIER_INTERVAL_MS: Record<PollCadenceTier, number> = {
   active: ACTIVE_POLL_INTERVAL_MS,
@@ -106,6 +112,7 @@ export function createAgentCompletionCoordinator(
   let pendingHookDoneTimer: ReturnType<typeof setTimeout> | null = null
   let pendingHookDoneTitle: string | null = null
   let pendingHookDonePayload: AgentCompletionStatusSnapshot | null = null
+  let pendingCodexAttentionTimer: ReturnType<typeof setTimeout> | null = null
   let pendingProcessExitAgent: RecognizedAgentProcess | null = null
   let pendingTitleSequence = 0
   let pendingTitle: {
@@ -153,6 +160,13 @@ export function createAgentCompletionCoordinator(
     }
     pendingHookDoneTitle = null
     pendingHookDonePayload = null
+  }
+
+  function clearPendingCodexAttention(): void {
+    if (pendingCodexAttentionTimer !== null) {
+      clearTimeout(pendingCodexAttentionTimer)
+      pendingCodexAttentionTimer = null
+    }
   }
 
   function establishAgentEvidence(): void {
@@ -304,6 +318,9 @@ export function createAgentCompletionCoordinator(
     lastCompletedTurn = currentTurn
     lastCompletionSource = source
     workingStatusObserved = false
+    // Why: any committed completion (hook/title/process-exit) ends the turn, so a
+    // debounced Codex attention from an earlier pause must never fire after it.
+    clearPendingCodexAttention()
     if (optionsOverride.completionIdentity) {
       lastCompletionIdentityByPaneKey.set(options.paneKey, optionsOverride.completionIdentity)
     }
@@ -324,6 +341,13 @@ export function createAgentCompletionCoordinator(
     }
   }
 
+  function dispatchAttentionNotification(payload: AgentCompletionStatusSnapshot): void {
+    options.dispatchAttention?.(payload.agentType ?? options.paneKey, {
+      source: 'hook',
+      agentStatus: payload
+    })
+  }
+
   function dispatchAttention(payload: AgentCompletionStatusSnapshot): void {
     if (!options.dispatchAttention || !options.isLive() || !hasAgentRunEvidence) {
       return
@@ -333,11 +357,25 @@ export function createAgentCompletionCoordinator(
       return
     }
     lastAttentionToken = token
+    // Why: the visual "needs input" status must update immediately for every
+    // agent; only the OS attention notification is debounced (Codex, below).
     options.dispatchHookLifecycle?.(payload)
-    options.dispatchAttention(payload.agentType ?? options.paneKey, {
-      source: 'hook',
-      agentStatus: payload
-    })
+    if (payload.agentType === 'codex') {
+      // Why: a Codex PermissionRequest that "Approve for me" auto-resolves fires a
+      // working/completion hook inside this window, which cancels the pending
+      // notification (see CODEX_ATTENTION_QUIET_MS). Scoped to Codex so every other
+      // agent's genuine pause still notifies immediately.
+      clearPendingCodexAttention()
+      pendingCodexAttentionTimer = setTimeout(() => {
+        pendingCodexAttentionTimer = null
+        if (!options.isLive() || !hasAgentRunEvidence) {
+          return
+        }
+        dispatchAttentionNotification(payload)
+      }, CODEX_ATTENTION_QUIET_MS)
+      return
+    }
+    dispatchAttentionNotification(payload)
   }
 
   function scheduleHookDoneCompletion(title: string, payload: AgentCompletionStatusSnapshot): void {
@@ -472,9 +510,12 @@ export function createAgentCompletionCoordinator(
       handleRecognizedProcess(recognized)
       return true
     }
-    if (pendingHookDoneTimer !== null) {
-      // Why: a pending quiet-window 'done' is the authoritative completion;
-      // tearing down agent evidence here would make the timer drop it.
+    if (pendingHookDoneTimer !== null || pendingCodexAttentionTimer !== null) {
+      // Why: a pending quiet-window 'done' or debounced Codex attention is the
+      // authoritative signal for this turn; tearing down agent evidence here (a
+      // transient null/shell foreground blip before the agent process is
+      // recognized) would make the timer's hasAgentRunEvidence guard silently
+      // drop it. Keep the fail-open contract for #8387 as for the done timer.
       scheduleNextPoll()
       return false
     }
@@ -696,6 +737,12 @@ export function createAgentCompletionCoordinator(
     ) {
       return false
     }
+    // Why: a genuine Codex resume can surface as a working-spinner title before
+    // (or instead of) the resume 'working' hook, so cancel the debounced
+    // attention here or the self-resolving pause still fires a false banner
+    // (#8387). Placed after the replay guard so only an authoritative resume —
+    // not a stale post-completion title replay — drops a still-pending banner.
+    clearPendingCodexAttention()
     workingStatusObserved = true
     requiresFreshWorking = false
     lastCompletionIdentityByPaneKey.delete(options.paneKey)
@@ -789,6 +836,7 @@ export function createAgentCompletionCoordinator(
       // so the quiet-window timer never fires a false completion notification.
       if (isAttentionHookState(payload.state)) {
         clearPendingHookDone()
+        clearPendingCodexAttention()
       }
       return
     }
@@ -797,6 +845,9 @@ export function createAgentCompletionCoordinator(
     }
     if (payload.state === 'working') {
       clearPendingHookDone()
+      // Why: resumed work (e.g. Codex after "Approve for me") cancels the debounced
+      // attention notification so the self-resolving pause never notifies.
+      clearPendingCodexAttention()
       workingStatusObserved = true
       requiresFreshWorking = false
       lastCompletionIdentity = null
@@ -814,6 +865,9 @@ export function createAgentCompletionCoordinator(
       return
     }
     if (isCompletionHookState(payload.state)) {
+      // Why: the turn is ending, so a debounced attention from an earlier pause in
+      // this turn must not fire after the completion notification.
+      clearPendingCodexAttention()
       if (isRecognizedAgentType(payload.agentType)) {
         establishAgentEvidence()
       }
@@ -885,6 +939,7 @@ export function createAgentCompletionCoordinator(
 
   function resetCompletionState(options: { requireFreshWorking?: boolean } = {}): void {
     clearPendingHookDone()
+    clearPendingCodexAttention()
     dropPendingTitle()
     agentIdentityEstablished = false
     hasAgentRunEvidence = false
@@ -905,6 +960,7 @@ export function createAgentCompletionCoordinator(
     disposed = true
     clearPollTimer()
     clearPendingHookDone()
+    clearPendingCodexAttention()
     dropPendingTitle()
     // Why: the dedup identity is module-scoped so it survives a live-stream remount
     // (dispose-then-recreate with the same paneKey while isLive() stays true). Only

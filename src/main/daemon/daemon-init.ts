@@ -65,6 +65,24 @@ function logDaemonMilestone(event: string, details: Record<string, unknown> = {}
   }
 }
 
+// Why: how many extra hello+listSessions probes to make against a wedged-but-
+// connectable daemon before replacing it. Each probe waits out the client's 5s
+// hello timeout, so this spaces re-checks ~5s apart: 1 initial + 11 retries ≈
+// 60s of grace for a transiently wedged daemon (Windows update-relaunch drain)
+// to answer and be preserved WITH its live sessions, before a permanent wedge
+// (#8689) is replaced. Deliberately generous to keep live-session loss on the
+// transient path as close to zero as possible.
+//
+// A transient wedge drains early (well under the 60s local-PTY fail-open cap),
+// so its startup is short. Only a *permanent* wedge runs the full window; it can
+// then approach/exceed the fail-open cap, at which point restored panes fail
+// open to the in-process provider for the session and adopt the freshly forked
+// daemon on the next launch — a rare path that still recovers, versus the old
+// forever-broken behavior. Trade-off: a transient wedge owning live sessions
+// that takes longer than ~60s to drain is replaced (live processes lost, though
+// scrollback cold-restores). Raise this only alongside the fail-open cap.
+export const WEDGED_DAEMON_GRACE_RETRIES = 11
+
 let spawner: DaemonSpawner | null = null
 type DaemonProvider = DaemonPtyRouter | DaemonPtyAdapter | DegradedDaemonPtyProvider
 
@@ -257,7 +275,28 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
       // health check while the daemon is alive and owning terminals. Killing
       // it would destroy every live session, so re-verify with a session list
       // first.
-      const liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+      let liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+      // Why: on a Windows update relaunch the daemon can be transiently wedged
+      // past every RPC budget (final checkpoint flush + installer/AV disk
+      // pressure) while its sessions are still alive — replacing it here is what
+      // killed those sessions. A pipe that still accepts connections proves a
+      // live daemon, so give a wedged-but-connectable daemon a bounded grace to
+      // drain and answer before deciding. A PERMANENTLY wedged daemon (accepts
+      // connections but its event loop never answers hello — #8689) exhausts the
+      // grace and falls through to replacement below, instead of being preserved
+      // forever, which strands the app with zero working terminals. 'rejected'
+      // means the daemon answered and refused the handshake — it can never be
+      // adopted, so it skips the grace and replacement stays the only recovery.
+      let graceRetry = 0
+      while (
+        liveSessionCount === null &&
+        health !== 'rejected' &&
+        graceRetry < WEDGED_DAEMON_GRACE_RETRIES &&
+        (await probeSocket(socketPath))
+      ) {
+        liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+        graceRetry++
+      }
       if (liveSessionCount !== null && liveSessionCount > 0) {
         if (health === 'pty-spawn-unhealthy') {
           console.warn(
@@ -271,20 +310,6 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
         }
         console.warn(
           `[daemon] Preserving daemon that failed the health check because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
-        )
-        return createPreservedDaemonHandle(runtimeDir)
-      }
-      // Why: on a Windows update relaunch the daemon can be wedged past every
-      // RPC budget (final checkpoint flush + installer/AV disk pressure), so
-      // both the health check AND the session list time out while sessions
-      // are still alive — failing closed here is what killed those sessions.
-      // A pipe that still accepts connections proves a live daemon: adopt it
-      // and let the adapter reconnect once the daemon drains. 'rejected'
-      // means the daemon answered and refused the handshake — it can never be
-      // adopted, so replacement stays the only recovery.
-      if (liveSessionCount === null && health !== 'rejected' && (await probeSocket(socketPath))) {
-        console.warn(
-          '[daemon] Preserving unresponsive daemon because its socket still accepts connections'
         )
         return createPreservedDaemonHandle(runtimeDir)
       }

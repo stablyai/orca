@@ -25,6 +25,7 @@ import {
   appendCommandMarkerCache,
   launchPromptAsMessage,
   pendingSendsAsMessages,
+  nextNativeChatPendingSendId,
   prunePendingSends,
   readCommandMarkerCache,
   readPendingSendCache,
@@ -42,7 +43,10 @@ import {
   shouldFocusNativeChatPaneFromPointerTarget,
   shouldRedirectNativeChatTyping
 } from './native-chat-typing-redirect'
-import { useNativeChatContextMenu } from './use-native-chat-context-menu'
+import {
+  emptyNativeChatContextMenuActions,
+  useNativeChatContextMenu
+} from './use-native-chat-context-menu'
 import type { NativeChatContextMenuActions } from './use-native-chat-context-menu'
 import {
   resolveNativeChatFileLink,
@@ -52,22 +56,6 @@ import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owne
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { openDetectedFilePath } from '@/components/terminal-pane/terminal-file-open-routing'
-
-const emptyNativeChatContextMenuActions: Omit<NativeChatContextMenuActions, 'onPaste'> = {
-  onSplitRight: () => {},
-  onSplitDown: () => {},
-  canEqualizePaneSizes: false,
-  onEqualizePaneSizes: () => {},
-  canExpandPane: false,
-  isPaneExpanded: false,
-  onToggleExpand: () => {},
-  onForkAgentSession: () => {},
-  onSetTitle: () => {},
-  onCopyTerminalId: () => {},
-  onCopyPaneId: () => {},
-  canClosePane: false,
-  onClosePane: () => {}
-}
 
 export type NativeChatViewProps = {
   /** The terminal tab hosting the agent. paneKey is `${tabId}:${leafId}`. */
@@ -185,12 +173,21 @@ function NativeChatResolvedView({
   // stop (Stop sends ESC, the agent-TUI interrupt key).
   const interactiveSend = useNativeChatInteractiveSend(terminalTabId, targetPtyId, agent)
   const [workingInterrupted, setWorkingInterrupted] = useState(false)
+  // True while a question card owns the input region, so the composer is hidden.
+  const [questionActive, setQuestionActive] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<NativeChatComposerHandle>(null)
+  // The question card's free-text row; keeps Paste working while the card
+  // replaces the composer.
+  const questionAnswerInputRef = useRef<HTMLInputElement>(null)
   const fileLinkContext = useAppStore(
     useShallow((s) => resolveNativeChatFileLinkContext(s, terminalTabId))
   )
-  const pasteClipboardIntoComposer = useNativeChatPasteBridge({ rootRef, composerRef })
+  const pasteClipboardIntoComposer = useNativeChatPasteBridge({
+    rootRef,
+    composerRef,
+    questionAnswerInputRef
+  })
   const contextMenu = useNativeChatContextMenu({
     rootRef,
     onSwitchToTerminal,
@@ -211,7 +208,6 @@ function NativeChatResolvedView({
   const [pending, setPending] = useState<NativeChatPendingSend[]>(() =>
     readPendingSendCache(pendingScope)
   )
-  const pendingCounter = useRef(0)
   // Slash commands aren't chat turns, so they get a small local "Ran /clear"
   // system line instead of a user bubble. Capped + cached per conversation.
   const [commandMarkers, setCommandMarkers] = useState<NativeChatCommandMarker[]>(() =>
@@ -246,14 +242,27 @@ function NativeChatResolvedView({
   const onOptimisticSend = useCallback(
     (text: string, imagePaths?: string[]) => {
       setWorkingInterrupted(false)
-      pendingCounter.current += 1
+      const sentAt = Date.now()
+      const boundary = session.messages.at(-1)
       const entry: NativeChatPendingSend = {
-        id: `${pendingCounter.current}`,
+        id: nextNativeChatPendingSendId(sentAt),
         text,
-        sentAt: Date.now(),
+        sentAt,
+        afterMessageId: boundary?.id ?? null,
+        afterMessageTimestamp: boundary?.timestamp ?? null,
         ...(imagePaths ? { imagePaths } : {})
       }
       setPending(appendPendingSendCache(pendingScope, entry))
+      return entry.id
+    },
+    [pendingScope, session.messages]
+  )
+  const onOptimisticSendCanceled = useCallback(
+    (pendingId: string) => {
+      // Why: detach/interrupt cancels the delayed Enter, so its optimistic echo
+      // must not come back from the pane cache as a prompt that was delivered.
+      const next = readPendingSendCache(pendingScope).filter((entry) => entry.id !== pendingId)
+      setPending(writePendingSendCache(pendingScope, next))
     },
     [pendingScope]
   )
@@ -293,15 +302,20 @@ function NativeChatResolvedView({
 
   // The streaming preview bubble (if any) sits after the transcript but before
   // the optimistic user echoes — same order mobile uses.
-  const streamingText = useMemo(
-    () =>
-      deriveNativeChatStreamingText({
-        messages: sessionAfterCommandBoundaries.messages,
-        previewText: hookPreview,
-        working: hookWorking
-      }),
-    [sessionAfterCommandBoundaries.messages, hookPreview, hookWorking]
+  const pendingMessages = useMemo(
+    () => pendingSendsAsMessages(pending, sessionAfterCommandBoundaries.messages),
+    [pending, sessionAfterCommandBoundaries.messages]
   )
+  const streamingText = useMemo(() => {
+    return deriveNativeChatStreamingText({
+      messages:
+        pendingMessages.length > 0
+          ? [...sessionAfterCommandBoundaries.messages, ...pendingMessages]
+          : sessionAfterCommandBoundaries.messages,
+      previewText: hookPreview,
+      working: hookWorking
+    })
+  }, [sessionAfterCommandBoundaries.messages, pendingMessages, hookPreview, hookWorking])
   const sessionWithPending = useMemo<typeof session>(() => {
     if (pending.length === 0 && commandMarkers.length === 0 && !streamingText) {
       return sessionAfterCommandBoundaries
@@ -312,10 +326,10 @@ function NativeChatResolvedView({
         ...sessionAfterCommandBoundaries.messages,
         ...commandMarkersAsMessages(commandMarkers),
         ...(streamingText ? [nativeChatStreamingMessage(streamingText)] : []),
-        ...pendingSendsAsMessages(pending, sessionAfterCommandBoundaries.messages)
+        ...pendingMessages
       ]
     }
-  }, [sessionAfterCommandBoundaries, pending, commandMarkers, streamingText])
+  }, [sessionAfterCommandBoundaries, pending, pendingMessages, commandMarkers, streamingText])
   // Derive the view state from the pending-augmented session so a send into an
   // otherwise-empty conversation flips to the list (showing the queued bubble)
   // instead of staying on the empty state.
@@ -421,23 +435,33 @@ function NativeChatResolvedView({
           />
         )}
       </div>
-      {/* Live interactive cards (question / approval) render just above the
-          composer while the agent's interactivePrompt is present (mobile parity). */}
-      <NativeChatInteractiveCard paneKey={paneKey} send={interactiveSend} canSend={canSend} />
+      {/* Live interactive prompt (question / approval) is the bottom input region
+          (mobile parity). A question card supplies its own answer input, so it
+          fully replaces the composer while active — no stray "Send a message". */}
+      <NativeChatInteractiveCard
+        paneKey={paneKey}
+        send={interactiveSend}
+        canSend={canSend}
+        onShowingQuestionChange={setQuestionActive}
+        answerInputRef={questionAnswerInputRef}
+      />
       {/* canSend reflects the mobile presence-lock: when a mobile client holds
           the pty, the composer shows its guarded state instead of racing the
           mobile driver (R8). */}
-      <NativeChatComposer
-        ref={composerRef}
-        terminalTabId={terminalTabId}
-        targetPtyId={targetPtyId}
-        agent={agent}
-        canSend={canSend}
-        isWorking={isWorking}
-        onStop={stopAgent}
-        onOptimisticSend={onOptimisticSend}
-        onSlashCommand={onSlashCommand}
-      />
+      {questionActive ? null : (
+        <NativeChatComposer
+          ref={composerRef}
+          terminalTabId={terminalTabId}
+          targetPtyId={targetPtyId}
+          agent={agent}
+          canSend={canSend}
+          isWorking={isWorking}
+          onStop={stopAgent}
+          onOptimisticSend={onOptimisticSend}
+          onOptimisticSendCanceled={onOptimisticSendCanceled}
+          onSlashCommand={onSlashCommand}
+        />
+      )}
       {contextMenu.menu}
     </div>
   )

@@ -77,6 +77,11 @@ jobs:
       - name: Enforce max-lines ratchet (no new bypasses)
         run: pnpm run check:max-lines-ratchet
 
+      # Why: the CLI embeds guide content while the skills CLI installs generated
+      # projections from the repository, so stale output would split those two truths.
+      - name: Verify bundled skill guides
+        run: pnpm run verify:bundled-skill-guides
+
       # Why: project-owned type declarations must live in .ts so tsc
       # actually checks them. TypeScript's skipLibCheck: true (inherited
       # from @electron-toolkit/tsconfig) silently widens unresolved names

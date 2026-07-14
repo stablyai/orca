@@ -162,6 +162,30 @@ describe('RuntimeWatcherProcessPool', () => {
     expect(supervisors[1].subscriptions.map(({ dir }) => dir)).toEqual(['/slow'])
   })
 
+  it('allows only one quarantine generation when isolated setup also times out', async () => {
+    const timeout = new WatcherProcessFailure(
+      'file watcher subscription timed out',
+      'subscription',
+      'subscribe_timeout'
+    )
+    pool = new RuntimeWatcherProcessPool({
+      maxSharedSupervisors: 1,
+      createSupervisor: () => {
+        const supervisor = new FakeSupervisor()
+        supervisor.subscribeError = timeout
+        supervisors.push(supervisor)
+        return supervisor
+      }
+    })
+
+    await expect(pool.subscribe('/slow', vi.fn(), {}, {})).rejects.toBe(timeout)
+    await expect(pool.subscribe('/slow', vi.fn(), {}, {})).rejects.toBe(timeout)
+    await expect(pool.subscribe('/slow', vi.fn(), {}, {})).rejects.toMatchObject({
+      code: 'supervisor_crash_fuse'
+    })
+    expect(supervisors).toHaveLength(2)
+  })
+
   it('moves a live root into quarantine when crash resubscription times out', async () => {
     const timeout = new WatcherProcessFailure(
       'file watcher resubscription timed out',
@@ -177,6 +201,37 @@ describe('RuntimeWatcherProcessPool', () => {
     expect(onTerminalError).toHaveBeenCalledWith(timeout)
     expect(supervisors).toHaveLength(2)
     expect(supervisors[1].subscriptions.map(({ dir }) => dir)).toEqual(['/slow-recovery'])
+  })
+
+  it('does not replace an isolated live root after its resubscription times out', async () => {
+    pool = new RuntimeWatcherProcessPool({
+      maxSharedSupervisors: 1,
+      createSupervisor: () => {
+        const supervisor = new FakeSupervisor()
+        supervisors.push(supervisor)
+        return supervisor
+      }
+    })
+    const fused = new WatcherProcessFailure(
+      'file watcher process crashed repeatedly',
+      'supervisor',
+      'supervisor_crash_fuse'
+    )
+    const timeout = new WatcherProcessFailure(
+      'file watcher resubscription timed out',
+      'subscription',
+      'subscribe_timeout'
+    )
+    await pool.subscribe('/slow-recovery', vi.fn(), {}, {})
+    supervisors[0].subscriptions[0].hooks.onTerminalError?.(fused)
+    await pool.subscribe('/slow-recovery', vi.fn(), {}, {})
+
+    supervisors[1].subscriptions[0].hooks.onTerminalError?.(timeout)
+
+    await expect(pool.subscribe('/slow-recovery', vi.fn(), {}, {})).rejects.toMatchObject({
+      code: 'supervisor_crash_fuse'
+    })
+    expect(supervisors).toHaveLength(2)
   })
 
   it('keeps healthy shard assignments after a root-specific failure', async () => {

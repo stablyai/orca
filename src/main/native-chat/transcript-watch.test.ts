@@ -24,6 +24,14 @@ async function tempFile(initial: string): Promise<string> {
   return filePath
 }
 
+// A path inside a fresh temp dir with nothing written yet — simulates a
+// just-created session whose agent hasn't flushed its first JSONL line (#8401).
+async function pendingFilePath(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-watch-pending-'))
+  tempRoots.push(root)
+  return join(root, 'rollout.jsonl')
+}
+
 function claudeLine(uuid: string, role: 'user' | 'assistant', text: string): string {
   return `${JSON.stringify({
     type: role,
@@ -235,5 +243,79 @@ describe('subscribeNativeChatTranscript', () => {
     expect(getActiveNativeChatWatcherCount()).toBe(before)
     // Must not throw.
     sub.unsubscribe()
+  })
+})
+
+// Regression for #8401: Claude Code (and other agents) can take from ~3s to
+// minutes to flush a brand-new session's first JSONL line, so the file
+// genuinely doesn't exist when native chat subscribes. Before this fix,
+// subscribeNativeChatTranscript returned a permanent no-op the instant the
+// file was missing and never recovered once it appeared.
+describe('subscribeNativeChatTranscript (resolve-poll for a not-yet-created file, #8401)', () => {
+  it('keeps retrying resolve+install and tails the file once it is created', async () => {
+    const filePath = await pendingFilePath()
+    const seen: NativeChatMessage[] = []
+
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'ignored',
+      filePath,
+      onAppend: (messages) => seen.push(...messages),
+      debounceMs: 5,
+      resolvePollIntervalMs: 20
+    })
+
+    // Nothing installed yet — the file doesn't exist on disk.
+    expect(getActiveNativeChatWatcherCount()).toBe(0)
+
+    // The agent flushes its first turn well after subscribe.
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    await writeFile(filePath, claudeLine('u-1', 'user', 'hello'))
+
+    await waitFor(() => seen.some((m) => m.id === 'u-1'))
+    expect(getActiveNativeChatWatcherCount()).toBe(1)
+
+    sub.unsubscribe()
+    expect(getActiveNativeChatWatcherCount()).toBe(0)
+  })
+
+  it('returns a no-op (no resolve poll) for a blank session id with no explicit file', async () => {
+    const before = getActiveNativeChatWatcherCount()
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: '   ',
+      onAppend: () => {},
+      debounceMs: 5,
+      resolvePollIntervalMs: 10
+    })
+
+    // An unresolvable target must not spin the resolve poll forever.
+    await new Promise((resolve) => setTimeout(resolve, 60))
+    expect(getActiveNativeChatWatcherCount()).toBe(before)
+    sub.unsubscribe()
+    sub.unsubscribe()
+    expect(getActiveNativeChatWatcherCount()).toBe(before)
+  })
+
+  it('unsubscribing during the poll phase leaves no watcher or timer alive', async () => {
+    const filePath = await pendingFilePath()
+    const before = getActiveNativeChatWatcherCount()
+
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'ignored',
+      filePath,
+      onAppend: () => {},
+      debounceMs: 5,
+      resolvePollIntervalMs: 20
+    })
+
+    // Unsubscribe while still polling — the file is never created in this test.
+    sub.unsubscribe()
+    expect(getActiveNativeChatWatcherCount()).toBe(before)
+
+    // Give any stray timer a chance to fire; it must not install a watcher.
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(getActiveNativeChatWatcherCount()).toBe(before)
   })
 })

@@ -7355,6 +7355,44 @@ describe('Store', () => {
     }
   })
 
+  it('restores cross-tab pane authority aliases before hook ingestion', async () => {
+    const physicalPaneKey = makePaneKey('tab-source', TEST_LEAF_1)
+    const ownerPaneKey = makePaneKey('tab-target', TEST_LEAF_2)
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      legacyPaneKeyAliasEntries: [
+        {
+          ptyId: 'pty-detached',
+          legacyPaneKey: physicalPaneKey,
+          stablePaneKey: ownerPaneKey,
+          updatedAt: 10
+        }
+      ]
+    })
+
+    await createStore()
+    const { agentHookServer } = await import('./agent-hooks/server')
+    agentHookServer.ingestTerminalStatus({
+      paneKey: physicalPaneKey,
+      tabId: 'tab-source',
+      worktreeId: 'wt1',
+      payload: { state: 'working', prompt: 'detached after restart' }
+    })
+
+    expect(agentHookServer.getStatusSnapshot()).toEqual([
+      expect.objectContaining({
+        paneKey: ownerPaneKey,
+        tabId: 'tab-target',
+        prompt: 'detached after restart'
+      })
+    ])
+  })
+
   it('persists fallback aliases when a legacy split layout has no PTY leaf bindings', async () => {
     writeDataFile({
       schemaVersion: 1,

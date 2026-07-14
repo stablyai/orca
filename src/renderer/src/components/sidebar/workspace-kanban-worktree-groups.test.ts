@@ -68,6 +68,57 @@ describe('groupWorkspaceKanbanWorktrees', () => {
     expect(grouped.get('doing')?.map((item) => item.id)).toEqual(['b', 'c', 'a'])
   })
 
+  it('does not crash when a worktree is missing its displayName under Manual sort', () => {
+    // Repro for crash 99657ab1: a worktree reached the sidebar with an
+    // undefined displayName, so `a.displayName.localeCompare(...)` threw
+    // `Cannot read properties of undefined (reading 'localeCompare')`.
+    expect(() =>
+      groupWorkspaceKanbanWorktrees({
+        worktrees: [
+          worktree({
+            id: 'a',
+            displayName: undefined as unknown as string,
+            workspaceStatus: 'doing',
+            manualOrder: 100
+          }),
+          worktree({
+            id: 'b',
+            displayName: undefined as unknown as string,
+            workspaceStatus: 'doing',
+            manualOrder: 100
+          })
+        ],
+        visibleWorktreeIds: new Set(['a', 'b']),
+        workspaceStatuses: statuses,
+        sortBy: 'manual'
+      })
+    ).not.toThrow()
+  })
+
+  it('does not crash when a worktree is missing its displayName outside Manual sort', () => {
+    expect(() =>
+      groupWorkspaceKanbanWorktrees({
+        worktrees: [
+          worktree({
+            id: 'a',
+            displayName: undefined as unknown as string,
+            workspaceStatus: 'doing',
+            lastActivityAt: 10
+          }),
+          worktree({
+            id: 'b',
+            displayName: undefined as unknown as string,
+            workspaceStatus: 'doing',
+            lastActivityAt: 10
+          })
+        ],
+        visibleWorktreeIds: new Set(['a', 'b']),
+        workspaceStatuses: statuses,
+        sortBy: 'recent'
+      })
+    ).not.toThrow()
+  })
+
   it('keeps pinned then recent ordering outside Manual sort', () => {
     const grouped = groupWorkspaceKanbanWorktrees({
       worktrees: [

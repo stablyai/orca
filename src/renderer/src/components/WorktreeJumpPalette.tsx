@@ -104,6 +104,9 @@ import {
   getCmdJQuickActions,
   CREATE_WORKSPACE_QUICK_ACTION_ID
 } from '@/components/cmd-j/quick-actions'
+import { buildWorktreeChecksReviewIndex } from '@/components/cmd-j/worktree-checks-review-index'
+import { selectWorktreePaletteCacheInputs } from '@/components/cmd-j/worktree-palette-cache-inputs'
+import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 import {
   getComposerEligibleRepos,
   resolveComposerGitRepoId
@@ -382,8 +385,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const agentStatusEpoch = useAppStore((s) =>
     visible || statusInputsLingering ? s.agentStatusEpoch : 0
   )
-  const prCache = useAppStore((s) => s.prCache)
-  const issueCache = useAppStore((s) => s.issueCache)
+  const { prCache, issueCache, hostedReviewCache } = useAppStore(
+    useShallow((s) => selectWorktreePaletteCacheInputs(s, visible || statusInputsLingering))
+  )
   const migrationUnsupportedByPtyId = useAppStore((s) => s.migrationUnsupportedByPtyId)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeTabType = useAppStore((s) => s.activeTabType)
@@ -439,6 +443,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const preserveCreateLookupOnCloseRef = useRef(false)
 
   const repoMap = useMemo(() => new Map(repos.map((r) => [r.id, r])), [repos])
+  const repoByHostIdentity = useMemo(
+    () => new Map(repos.map((repo) => [getRepoHostIdentity(repo), repo])),
+    [repos]
+  )
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
   // Why: host badges only appear when more than one execution host exists; reuse
   // the same registry the sidebar host-scope strip builds so labels stay in sync.
@@ -622,6 +630,18 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     [browserSortedWorktrees]
   )
 
+  const checksReviewByWorktree = useMemo(
+    () =>
+      buildWorktreeChecksReviewIndex({
+        worktrees: allWorktrees,
+        repoByHostIdentity,
+        prCache,
+        hostedReviewCache,
+        settings
+      }),
+    [allWorktrees, hostedReviewCache, prCache, repoByHostIdentity, settings]
+  )
+
   const worktreeMatches = useMemo(
     () =>
       searchWorktrees(
@@ -630,9 +650,18 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         repoMap,
         prCache,
         issueCache,
-        getWorkspacePortsByWorktreeId(workspacePortScan)
+        getWorkspacePortsByWorktreeId(workspacePortScan),
+        checksReviewByWorktree
       ),
-    [sortedWorktrees, deferredQuery, repoMap, prCache, issueCache, workspacePortScan]
+    [
+      sortedWorktrees,
+      deferredQuery,
+      repoMap,
+      prCache,
+      issueCache,
+      workspacePortScan,
+      checksReviewByWorktree
+    ]
   )
 
   const browserPageEntries = useMemo<SearchableBrowserPage[]>(() => {
@@ -2364,5 +2393,7 @@ function getPaletteSupportingTextLabel(
       return translate('worktreeJumpPalette.matchLabel.port', 'Port')
     case 'pr':
       return translate('worktreeJumpPalette.matchLabel.pr', 'PR')
+    case 'mr':
+      return translate('worktreeJumpPalette.matchLabel.mr', 'MR')
   }
 }

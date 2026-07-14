@@ -5,7 +5,7 @@ import {
   createWebRuntimeSessionTerminal,
   isWebTerminalSurfaceTabId
 } from '@/runtime/web-runtime-session'
-import type { TuiAgent } from '../../../shared/types'
+import type { Tab, TuiAgent } from '../../../shared/types'
 import { translate } from '@/i18n/i18n'
 
 function removeStaleLocalAgentTabsForWebHostLaunch(worktreeId: string): void {
@@ -32,16 +32,26 @@ export function launchAgentInWebHostTab(args: {
   groupId?: string
   hasPrompt: boolean
   startupPlan: AgentStartupPlan
+  viewMode?: Tab['viewMode']
   onPromptDelivered?: () => void
 }): void {
-  const { agent, worktreeId, environmentId, groupId, hasPrompt, startupPlan, onPromptDelivered } =
-    args
+  const {
+    agent,
+    worktreeId,
+    environmentId,
+    groupId,
+    hasPrompt,
+    startupPlan,
+    viewMode,
+    onPromptDelivered
+  } = args
   removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
   void createWebRuntimeSessionTerminal({
     worktreeId,
     environmentId,
     targetGroupId: groupId,
     activate: true,
+    ...(viewMode ? { viewMode } : {}),
     ...(hasPrompt
       ? {
           command: startupPlan.launchCommand,

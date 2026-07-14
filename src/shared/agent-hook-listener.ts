@@ -38,8 +38,9 @@ import {
   claudeRosterHasWorkingSubagent,
   claudeRosterToSnapshots,
   claudeTeammateIdMatchesName,
+  finishClaudeSubagent,
   foldClaudeBackgroundTasksIntoRoster,
-  markClaudeSubagentIdle,
+  isClaudeTeammateLifecycleId,
   markClaudeTeammateIdleByName,
   readClaudeBackgroundAgentTasks,
   upsertWorkingClaudeSubagent,
@@ -152,6 +153,47 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   deletePaneScopedSetEntry(state.ampCompletedCacheKeys, paneKey)
   state.claudeSubagentRosterByPaneKey.delete(paneKey)
   state.claudeLeadStateByPaneKey.delete(paneKey)
+}
+
+function movePaneScopedMapEntries<T>(
+  map: Map<string, T>,
+  fromPaneKey: string,
+  toPaneKey: string
+): void {
+  for (const [key, value] of Array.from(map.entries())) {
+    if (key !== fromPaneKey && !key.startsWith(`${fromPaneKey}\0`)) {
+      continue
+    }
+    map.delete(key)
+    map.set(`${toPaneKey}${key.slice(fromPaneKey.length)}`, value)
+  }
+}
+
+function movePaneScopedSetEntries(set: Set<string>, fromPaneKey: string, toPaneKey: string): void {
+  for (const key of Array.from(set)) {
+    if (key !== fromPaneKey && !key.startsWith(`${fromPaneKey}\0`)) {
+      continue
+    }
+    set.delete(key)
+    set.add(`${toPaneKey}${key.slice(fromPaneKey.length)}`)
+  }
+}
+
+export function movePaneCacheState(
+  state: HookListenerState,
+  fromPaneKey: string,
+  toPaneKey: string
+): void {
+  if (fromPaneKey === toPaneKey) {
+    return
+  }
+  movePaneScopedMapEntries(state.lastPromptByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.lastToolByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.lastStatusByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.antigravityCompletedTranscriptByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedSetEntries(state.ampCompletedCacheKeys, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.claudeSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.claudeLeadStateByPaneKey, fromPaneKey, toPaneKey)
 }
 
 function clearPaneTurnCacheState(state: HookListenerState, paneKey: string): void {
@@ -2411,7 +2453,14 @@ function normalizeClaudeSubagentLifecycleEvent(
         Date.now()
       )
     } else {
-      markClaudeSubagentIdle(roster, agentId)
+      // Why: SubagentStop carries the session's task inventory; a stopping
+      // agent listed id-exact as a subagent task is a workflow/named one-shot
+      // (teammate lifecycle ids never appear there), not a resumable teammate.
+      const stopTasks = readClaudeBackgroundAgentTasks(hookPayload)
+      finishClaudeSubagent(roster, agentId, {
+        listedAsSubagentTask:
+          stopTasks.present && stopTasks.tasks.some((task) => !task.teammate && task.id === agentId)
+      })
       // Why: a blocked child that dies (killed, errored) without another tool
       // event would otherwise pin its permission/question wait on the pane
       // forever — nothing else references that agent again.
@@ -2449,9 +2498,13 @@ export function seedClaudeSubagentRosterFromSnapshots(
       startedAt: snapshot.startedAt,
       agentType: snapshot.agentType,
       description: snapshot.description,
+      // Why: teammate name and agent type can differ, but the provider id
+      // shape survives persistence and keeps the row across restart folds.
+      ...(isClaudeTeammateLifecycleId(snapshot.id) ? { teammate: true as const } : {}),
       // Why: the seed can be a phantom (child finished while Orca was down,
       // its SubagentStop lost). Let a PRESENT background_tasks list that
-      // omits the id demote it instead of gating the pane 'working' forever.
+      // omits the id remove it (or demote a teammate) instead of gating the
+      // pane 'working' forever.
       backgroundTasksAuthoritative: true
     })
   }
@@ -2609,7 +2662,8 @@ function normalizeClaudeEvent(
       foldClaudeBackgroundTasksIntoRoster(
         getOrCreateClaudeSubagentRoster(state, paneKey),
         backgroundTasks.tasks,
-        Date.now()
+        Date.now(),
+        { inventoryComplete: !backgroundTasks.truncated }
       )
     }
   }

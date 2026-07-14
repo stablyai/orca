@@ -127,6 +127,10 @@ import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { seedStartupSessionRestoredBanner } from './session-restored-banner-pane-state'
+import {
+  resolveTabTitleAfterPaneClose,
+  shouldClearLaunchAgentForClosedPane
+} from './terminal-pane-close-identity'
 
 export function recordRuntimeCreatedTerminalPaneSplit(
   createdPane: unknown,
@@ -455,15 +459,9 @@ export function shouldDetachPaneTransportOnUnmount(args: {
   ptyId: string | null
   worktreeTabs: readonly TerminalTab[] | undefined
 }): boolean {
-  if (!args.ptyId) {
-    return false
-  }
-  if (args.tabStillExists) {
-    return true
-  }
-  return Boolean(
-    args.worktreeTabs?.some((tab) => tab.id !== args.tabId && tab.ptyId === args.ptyId)
-  )
+  // Why: mounted transport teardown is renderer-only; closeTab or the pane-close
+  // action already owns provider shutdown. Destroy only pending, ID-less spawns.
+  return Boolean(args.ptyId)
 }
 
 /**
@@ -1278,6 +1276,13 @@ export function useTerminalPaneLifecycle({
           mouseHideDisposablesRef.current.delete(paneId)
         }
         const transport = paneTransportsRef.current.get(paneId)
+        const closedPtyId = transport?.getPtyId() ?? null
+        const terminalTab = useAppStore
+          .getState()
+          .tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)
+        if (!isDetachedToTab && shouldClearLaunchAgentForClosedPane(terminalTab, closedPtyId)) {
+          useAppStore.getState().clearTabLaunchAgent(tabId)
+        }
         const panePtyBinding = panePtyBindings.get(paneId)
         if (panePtyBinding) {
           panePtyBinding.dispose()
@@ -1285,16 +1290,10 @@ export function useTerminalPaneLifecycle({
         }
         const leafId = closedPane?.leafId
         if (leafId && !isDetachedToTab) {
-          // Why: closing a pane is user-initiated teardown of this row — drop
-          // (not remove) so any retained `done` snapshot for this pane is also
-          // cleared and a same-frame live→gone transition cannot re-snapshot
-          // it via the retention sync. This is pane-keyed state, so it must
-          // clear even if the PTY transport was already removed.
+          // Why: pane close permanently revokes only this pane's authority;
+          // an exact tombstone blocks queued hooks without suppressing siblings.
           const paneKey = makePaneKey(tabId, leafId)
-          useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
-          clearTerminalPaneUnread(paneKey)
-          useAppStore.getState().dropAgentStatus(paneKey)
-          useAppStore.getState().clearPaneForegroundAgent(paneKey)
+          useAppStore.getState().retireAgentPaneAuthority(paneKey)
         }
         if (transport) {
           if (isDetachedToTab) {
@@ -1350,10 +1349,7 @@ export function useTerminalPaneLifecycle({
         if (newActivePane) {
           reportActiveRendererPtyForPane(paneTransportsRef.current, newActivePane.id)
           const paneTitles = useAppStore.getState().runtimePaneTitlesByTabId[tabId] ?? {}
-          const activeTitle = paneTitles[newActivePane.id]
-          if (activeTitle) {
-            updateTabTitle(tabId, activeTitle)
-          }
+          updateTabTitle(tabId, resolveTabTitleAfterPaneClose(paneTitles, newActivePane.id))
         }
         scheduleRuntimeGraphSync()
       },
@@ -1809,7 +1805,11 @@ export function useTerminalPaneLifecycle({
       releaseWebviewDragPassthrough = null
       managerRef.current = null
       if (e2eConfig.exposeStore) {
-        window.__paneManagers?.delete(tabId)
+        // Why: a replacement mount can register before this effect cleans up.
+        // Preserve the successor so E2E and recovery probes see the live pane.
+        if (window.__paneManagers?.get(tabId) === manager) {
+          window.__paneManagers.delete(tabId)
+        }
       }
       setTabPaneExpanded(tabId, false)
       setTabCanExpandPane(tabId, false)

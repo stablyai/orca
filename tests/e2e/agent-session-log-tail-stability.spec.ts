@@ -66,6 +66,7 @@ test.describe('Agent Session History live log', () => {
     // metrics (macOS baseline 2,775,880px; Linux CI ~2,498,292px), so keep only a
     // generous content-height floor as a collapsed/truncated-render smoke check.
     expect(baseline.valueLength).toBe(fixture.initialLength)
+    expect(baseline.canUndo).toBe(false)
     expect(baseline.contentHeight).toBeGreaterThanOrEqual(2_000_000)
     expect(baseline.visibleRanges.length).toBeGreaterThan(0)
     expect(baseline.find).toMatchObject({ open: true, query: ANCHOR_TOKEN })
@@ -105,6 +106,7 @@ test.describe('Agent Session History live log', () => {
       const current = await readProbe(orcaPage)
       console.log(`[live-log-stability] anchor ${JSON.stringify({ batch, baseline, current })}`)
       expect(current.visibleRanges).toEqual(baseline.visibleRanges)
+      expect(current.canUndo).toBe(false)
       expect(current.valueTail).toBe(suffix.trimEnd())
       expect(current.selection).toEqual(baseline.selection)
       expect(current.find).toEqual(baseline.find)
@@ -173,14 +175,9 @@ async function seedSyntheticSession(
 }
 
 async function openSessionHistory(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('Store unavailable')
-    }
-    store.getState().setRightSidebarOpen(true)
-    store.getState().setRightSidebarTab('vault')
-  })
+  // Why: startup hydration can overwrite a direct store route; use the same
+  // activity-bar action a user takes so the Agents panel wins that race.
+  await page.getByRole('button', { name: 'Agents', exact: true }).click()
   await page.evaluate(async () => window.api.aiVault.listSessions({ force: true }))
   await page.getByRole('button', { name: 'Refresh Session History' }).click()
 }
@@ -233,6 +230,7 @@ async function restoreAnchorState(
 }
 
 async function readProbe(page: Page): Promise<{
+  canUndo: boolean
   contentHeight: number
   filePath: string
   scrollTop: number

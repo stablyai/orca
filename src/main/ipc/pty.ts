@@ -992,8 +992,14 @@ export function buildPtyHostEnv(
   // Why: WSL shells need the managed userData root for shell-ready wrappers; dev-mode terminals need the same export so `orca` targets the live dev instance.
   if (opts.isWsl) {
     baseEnv.ORCA_USER_DATA_PATH = opts.userDataPath
-  } else if (!opts.isPackaged) {
-    baseEnv.ORCA_USER_DATA_PATH ??= opts.userDataPath
+    // Why: managed WSL registration deliberately uses `orca-ide`; exposing
+    // that literal keeps agent guidance scoped to WSL without a bare-orca shim.
+    baseEnv.ORCA_CLI_COMMAND = opts.isPackaged ? 'orca-ide' : 'orca-dev'
+  } else {
+    if (!opts.isPackaged) {
+      baseEnv.ORCA_USER_DATA_PATH ??= opts.userDataPath
+    }
+    delete baseEnv.ORCA_CLI_COMMAND
   }
   // Why: dev mode needs the launcher PATH override so `orca` resolves to the dev build instead of the production binary at /usr/local/bin/orca.
   if (!opts.isPackaged) {
@@ -3256,6 +3262,9 @@ export function registerPtyHandlers(
               args.tabId.length <= 512 &&
               metadataLeafId !== null
               ? { tabId: args.tabId, leafId: metadataLeafId }
+              : undefined,
+            !args.connectionId
+              ? shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd)
               : undefined
           )
         }
@@ -4348,6 +4357,9 @@ export function registerPtyHandlers(
               args.tabId.length <= 512 &&
               metadataLeafId !== null
               ? { tabId: args.tabId, leafId: metadataLeafId }
+              : undefined,
+            !args.connectionId
+              ? shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, cwd)
               : undefined
           )
         }
@@ -4376,7 +4388,9 @@ export function registerPtyHandlers(
           agentHookServer.registerPaneKeyAlias(
             legacySpawnPaneKey.paneKey,
             migrationUnsupportedPaneKey,
-            result.id
+            result.id,
+            Date.now(),
+            { authorityVerified: true }
           )
           clearMigrationUnsupportedPtysForPaneKey(migrationUnsupportedPaneKey)
         } else if (validatedPaneKey) {
@@ -5005,6 +5019,11 @@ export function registerPtyHandlers(
   })
 
   ipcMain.handle('pty:kill', async (_event, args: { id: string; keepHistory?: boolean }) => {
+    if (typeof args?.id !== 'string' || !args.id || args.id.startsWith('remote:')) {
+      // Why: runtime terminal handles belong to terminal.close; allowing them
+      // to fall through unowned PTY routing could target the local provider.
+      throw new Error('Invalid PTY provider id')
+    }
     const ownedConnectionId = ptyOwnership.get(args.id)
     const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
     const connectionId = ownedConnectionId ?? parsedSshId?.connectionId

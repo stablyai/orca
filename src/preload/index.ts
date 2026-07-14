@@ -12,6 +12,8 @@ import type { TerminalPaneSplitSource } from '../shared/feature-education-teleme
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
 import type { SleepingAgentLaunchConfig } from '../shared/agent-session-resume'
+import type { MobileRelayStatus } from '../shared/mobile-relay-status'
+import type { MobilePairingConnectionMode } from '../shared/mobile-pairing-connection-mode'
 import type {
   BaseRefSearchResult,
   BaseRefDefaultResult,
@@ -3445,6 +3447,7 @@ const api = {
         launchConfig?: SleepingAgentLaunchConfig
         launchToken?: string
         launchAgent?: TuiAgent
+        viewMode?: 'terminal' | 'chat'
         title?: string
         ptyId?: string
         activate?: boolean
@@ -3467,6 +3470,7 @@ const api = {
           launchConfig?: SleepingAgentLaunchConfig
           launchToken?: string
           launchAgent?: TuiAgent
+          viewMode?: 'terminal' | 'chat'
           title?: string
           ptyId?: string
           activate?: boolean
@@ -4249,6 +4253,7 @@ const api = {
 
     getPairingQR: (args?: {
       address?: string
+      connectionMode?: MobilePairingConnectionMode
       rotate?: boolean
     }): Promise<
       | { available: false }
@@ -4295,7 +4300,17 @@ const api = {
       ipcRenderer.invoke('mobile:revokeRuntimeAccess', args),
 
     isWebSocketReady: (): Promise<{ ready: boolean; endpoint: string | null }> =>
-      ipcRenderer.invoke('mobile:isWebSocketReady')
+      ipcRenderer.invoke('mobile:isWebSocketReady'),
+
+    getRelayStatus: (): Promise<{ status: MobileRelayStatus }> =>
+      ipcRenderer.invoke('mobile:getRelayStatus'),
+
+    onRelayStatusChanged: (callback: (status: MobileRelayStatus) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, status: MobileRelayStatus) =>
+        callback(status)
+      ipcRenderer.on('mobile:relayStatusChanged', listener)
+      return () => ipcRenderer.removeListener('mobile:relayStatusChanged', listener)
+    }
   },
 
   agentStatus: {
@@ -4346,6 +4361,16 @@ const api = {
      *  explicit tab close even when the renderer has no matching local row. */
     dropByTabPrefix: (tabId: string): void => {
       ipcRenderer.send('agentStatus:dropByTabPrefix', tabId)
+    },
+    retirePaneAuthority: (paneKey: string): void => {
+      ipcRenderer.send('agentStatus:retirePaneAuthority', paneKey)
+    },
+    transferPaneAuthority: (args: {
+      fromPaneKey: string
+      toPaneKey: string
+      ptyId?: string
+    }): void => {
+      ipcRenderer.send('agentStatus:transferPaneAuthority', args)
     }
   },
 

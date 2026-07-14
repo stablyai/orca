@@ -23,6 +23,10 @@ export type ServeSimStateDetectedEvent = {
 }
 
 const DEFAULT_STATE_DIR = join(tmpdir(), 'serve-sim')
+// Why: this only waits for a rarely-created dir to appear; sub-second detection
+// of a detached emulator is not user-perceptible, so a coarse interval avoids
+// waking the daemon 4x/sec for the whole session on machines that never use it.
+export const SERVE_SIM_STATE_DIR_EXISTENCE_POLL_MS = 2_000
 const STATE_FILE_RE = /^server-([0-9A-F-]{36})\.json$/i
 const PTY_JSON_RE = /\{[^{}]*"streamUrl"\s*:\s*"[^"]+"[^{}]*"wsUrl"\s*:\s*"[^"]+"[^{}]*\}/g
 
@@ -73,6 +77,8 @@ function trailingIncompletePtyJsonObject(data: string): string {
 
 export class ServeSimStateWatcher {
   private readonly stateDir: string
+  private readonly platform: NodeJS.Platform
+  private readonly existencePollMs: number
   private readonly ptyToWorktree = new Map<string, string>()
   private readonly ptyBuffers = new Map<string, string>()
   private readonly seenExternalKeys = new Set<string>()
@@ -81,8 +87,12 @@ export class ServeSimStateWatcher {
   private stateWatcher: FSWatcher | null = null
   private stateDirPoll: ReturnType<typeof setInterval> | null = null
 
-  constructor(options: { stateDir?: string } = {}) {
+  constructor(
+    options: { stateDir?: string; platform?: NodeJS.Platform; existencePollMs?: number } = {}
+  ) {
     this.stateDir = options.stateDir ?? DEFAULT_STATE_DIR
+    this.platform = options.platform ?? process.platform
+    this.existencePollMs = options.existencePollMs ?? SERVE_SIM_STATE_DIR_EXISTENCE_POLL_MS
   }
 
   onDetected(listener: (event: ServeSimStateDetectedEvent) => void): () => void {
@@ -171,6 +181,13 @@ export class ServeSimStateWatcher {
     if (this.stateDirPoll || this.stateWatcher) {
       return
     }
+    // Why: serve-sim (the iOS Simulator bridge) only ever writes state on macOS,
+    // so $TMPDIR/serve-sim never appears on Windows/Linux. Skip arming the
+    // existence poll there instead of waking the daemon every interval for a
+    // directory that can never exist.
+    if (this.platform !== 'darwin') {
+      return
+    }
     try {
       // Why: $TMPDIR/serve-sim/ may not exist until the first terminal `serve-sim --detach`.
       // Poll for it instead of fs.watch on the parent tmpdir: watching $TMPDIR
@@ -182,13 +199,16 @@ export class ServeSimStateWatcher {
         return
       }
 
+      // attachStateDirWatch() clears this poll once the dir appears and the
+      // native watcher takes over, so it only ticks while waiting for a
+      // rarely-created dir — a coarse interval keeps that wait off the idle floor.
       this.stateDirPoll = setInterval(() => {
         this.attachStateDirWatch()
         this.scanExistingStateFiles()
-      }, 250)
+      }, this.existencePollMs)
       this.stateDirPoll.unref?.()
     } catch {
-      // Non-mac or permission issues: watcher is best-effort.
+      // Permission issues: watcher is best-effort.
     }
   }
 

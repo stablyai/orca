@@ -73,6 +73,7 @@
     "matchLabel": {
       "comment": "Comment",
       "issue": "Issue",
+      "mr": "MR",
       "port": "Port",
       "pr": "PR"
     }
@@ -2883,6 +2884,9 @@
           },
           "TerminalTabSplitMenuSection": {
             "splitTerminal": "Split terminal"
+          },
+          "TerminalTabLeadingIcon": {
+            "7ab2964bea": "Unread agent completion"
           }
         }
       },
@@ -9032,6 +9036,56 @@
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
           "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
+        },
+        "MobileRelayStatusSection": {
+          "registered": "Registered",
+          "connecting": "Connecting",
+          "reconnecting": "Reconnecting",
+          "offline": "Offline",
+          "title": "Orca Relay",
+          "automatic": "Connect from anywhere when a phone is paired",
+          "signInPrompt": "Sign in on this desktop to connect from anywhere",
+          "directStillAvailable": "LAN and Tailscale connections remain available.",
+          "directNeedsNoAccount": "LAN and Tailscale pairing still work without an account.",
+          "signIn": "Sign in",
+          "unavailable": "Unavailable",
+          "standby": "Standby — no relay devices"
+        },
+        "MobilePairingConnectionOptions": {
+          "ready": "Ready",
+          "connecting": "Connecting",
+          "available": "Available",
+          "reconnecting": "Reconnecting",
+          "unavailable": "Unavailable",
+          "title": "How should the new phone connect?",
+          "anywhere": "Connect with Orca Relay",
+          "recommended": "Recommended",
+          "automaticDescription": "Orca uses a direct connection when available and Relay otherwise.",
+          "signInDescription": "Sign in on this desktop to use Orca Relay.",
+          "signIn": "Sign in",
+          "localOnly": "Local network only",
+          "localShort": "LAN or Tailscale",
+          "localDescription": "Uses LAN or Tailscale without connecting this phone through Orca Relay."
+        },
+        "MobilePairingSetupSection": {
+          "title": "Pair a phone",
+          "automaticDescription": "The pairing code includes direct access and encrypted Orca Relay fallback.",
+          "localDescription": "The pairing code connects only through the local network address below.",
+          "regenerate": "Regenerate",
+          "generate": "Generate QR Code",
+          "localSettings": "Local connection settings",
+          "localAddressDescription": "Choose the LAN or private-network address that Orca Mobile can use to reach this computer directly.",
+          "refresh": "Refresh network interfaces",
+          "tailnet": "Connect with your own tailnet",
+          "tailnetDescription": "Install Tailscale on this computer and your phone, sign in to the same tailnet, then select its 100.x.y.z address above.",
+          "getTailscale": "Get Tailscale"
+        },
+        "MobileRelayBetaAvailability": {
+          "about": "About the Orca Relay beta",
+          "beta": "Beta",
+          "availability": "Available on",
+          "testFlight": "TestFlight",
+          "androidApk": "Android APK"
         }
       },
       "right": {
@@ -12786,7 +12840,7 @@
         "profiles": {
           "switcher": {
             "cloud": {
-              "unavailable": "Cloud sign-in unavailable"
+              "unavailable": "Orca sign-in unavailable"
             },
             "account": "Account",
             "reconnect": "Reconnect profile",
@@ -12810,7 +12864,14 @@
             "c106c674fe": "New local profile",
             "org": {
               "members": "Organization members"
-            }
+            },
+            "signInWaiting": "Waiting for sign-in…",
+            "signInAgain": "Sign in again",
+            "signIn": "Sign in to Orca",
+            "accountTitle": "Orca account",
+            "accountSignedIn": "Signed in",
+            "accountSignInRequired": "Sign-in required",
+            "accountSignedOut": "Signed out"
           },
           "management": {
             "04e7bd2a23": "Transfer",
@@ -12853,8 +12914,8 @@
           },
           "signout": {
             "confirm": {
-              "title": "Sign out?",
-              "description": "Sign out of {{profileName}} and keep its projects, worktrees, and local metadata on this device.",
+              "title": "Sign out of Orca?",
+              "description": "You'll be signed out of Orca on this device. Your local projects and worktrees won't be affected.",
               "cancel": "Cancel",
               "action": "Sign out"
             }
@@ -13037,7 +13098,8 @@
         "otherPlaceholder": "Type your answer",
         "cancel": "Cancel",
         "send": "Send answer",
-        "next": "Next"
+        "next": "Next",
+        "skip": "Skip"
       },
       "approval": {
         "title": "Allow {{value0}}?",

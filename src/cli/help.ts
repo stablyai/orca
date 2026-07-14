@@ -18,6 +18,10 @@ Diagnostics:
 Agent Discovery:
   agent-context             Print the machine-readable command schema for agents
 
+Skills:
+  skills list               List version-matched skill guides bundled with this Orca CLI
+  skills get                Print a version-matched skill guide as Markdown
+
 Environments:
   environment add           Save a remote Orca runtime from a pairing code
   environment list          List saved remote Orca runtimes

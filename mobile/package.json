@@ -9,6 +9,7 @@
     "ios": "expo run:ios",
     "postinstall": "node scripts/build-terminal-webview-engine.mjs",
     "test": "vitest run",
+    "typecheck": "tsc --noEmit",
     "lint": "oxlint",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
@@ -17,6 +18,7 @@
     "start:emulator": "node scripts/start-emulator.mjs"
   },
   "dependencies": {
+    "@noble/hashes": "1.8.0",
     "@orca/expo-two-way-audio": "file:./packages/expo-two-way-audio",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@xterm/addon-unicode11": "0.10.0-beta.285",

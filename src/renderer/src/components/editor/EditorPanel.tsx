@@ -346,8 +346,9 @@ function EditorPanelInner({
     activeMarkdownContent &&
     extractFrontMatter(activeMarkdownContent)
   )
+  // Why: front-matter shows by default; the map only carries per-file hide overrides.
   const isMarkdownFrontmatterVisible =
-    markdownFrontmatterVisible[markdownDocumentStateFileId] ?? false
+    markdownFrontmatterVisible[markdownDocumentStateFileId] ?? true
   const isMarkdownTableOfContentsVisible =
     markdownTableOfContentsVisible[markdownDocumentStateFileId] ?? false
 
