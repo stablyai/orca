@@ -273,8 +273,8 @@ async function pushWithRetry(conv) {
   let resp = await bg({ type: 'PUSH', conv })
   if (resp && resp.ok) return resp
   if (!resp) return { error: 'no response from background' }
-  // one retry; back off longer on 429
-  await Util.sleep(resp.status === 429 ? 2000 : 700)
+  // one retry with a short backoff (background PUSH responses carry no status)
+  await Util.sleep(700)
   resp = await bg({ type: 'PUSH', conv })
   return resp || { error: 'no response from background' }
 }
