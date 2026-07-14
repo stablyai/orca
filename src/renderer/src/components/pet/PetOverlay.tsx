@@ -64,10 +64,33 @@ function SpriteFrame({
   const startX = 0
   const startY = -(row * sprite.frameHeight * scale)
   const endX = -(frames * sprite.frameWidth * scale)
-  const duration = Math.max(0.1, frames / Math.max(0.1, sprite.fps))
+  const frameDurationsMs =
+    anim?.frameDurationsMs &&
+    anim.frameDurationsMs.length === frames &&
+    anim.frameDurationsMs.every((ms) => Number.isFinite(ms) && ms > 0)
+      ? anim.frameDurationsMs
+      : null
   // Why: sprite keyframes are runtime CSS, not user-visible copy; translated
   // CSS keywords make the browser discard the animation.
-  const keyframesCss = `@keyframes pet-${animKeyframesId} { from { background-position: ${startX}px ${startY}px; } to { background-position: ${endX}px ${startY}px; } }`
+  let keyframesCss: string
+  let animationCss: string
+  if (frameDurationsMs) {
+    // Why: Codex pets hold frames unevenly (idle rests ~1.9s on its last frame).
+    // steps() can't express that, so emit one step-end stop per frame.
+    const totalMs = frameDurationsMs.reduce((sum, ms) => sum + ms, 0)
+    let elapsedMs = 0
+    const stops = frameDurationsMs.map((ms, index) => {
+      const pct = +((elapsedMs / totalMs) * 100).toFixed(4)
+      elapsedMs += ms
+      return `${pct}% { background-position: ${-(index * sprite.frameWidth * scale)}px ${startY}px; }`
+    })
+    keyframesCss = `@keyframes pet-${animKeyframesId} { ${stops.join(' ')} }`
+    animationCss = `pet-${animKeyframesId} ${totalMs / 1000}s step-end infinite`
+  } else {
+    const duration = Math.max(0.1, frames / Math.max(0.1, sprite.fps))
+    keyframesCss = `@keyframes pet-${animKeyframesId} { from { background-position: ${startX}px ${startY}px; } to { background-position: ${endX}px ${startY}px; } }`
+    animationCss = `pet-${animKeyframesId} ${duration}s steps(${frames}) infinite`
+  }
   return (
     <>
       <style>{keyframesCss}</style>
@@ -80,7 +103,7 @@ function SpriteFrame({
           backgroundSize: `${bgW}px ${bgH}px`,
           backgroundPosition: `${startX}px ${startY}px`,
           imageRendering: 'pixelated',
-          animation: `pet-${animKeyframesId} ${duration}s steps(${frames}) infinite`,
+          animation: animationCss,
           animationPlayState: animate ? 'running' : 'paused'
         }}
       />

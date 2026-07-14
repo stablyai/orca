@@ -1,4 +1,21 @@
 import type { SpriteAnimation } from '../../shared/types'
+import {
+  CODEX_PET_ANIMATIONS,
+  CODEX_PET_DEFAULT_ANIMATION,
+  CODEX_PET_DEFAULT_FPS,
+  CODEX_PET_FRAME,
+  CODEX_PET_SPRITESHEET_PATH
+} from '../../shared/codex-pet-sprite-defaults'
+
+// Re-exported so main-side consumers keep their import path. The tables live
+// in shared/ so the renderer can reuse the same fingerprint for upgrades.
+export {
+  CODEX_PET_ANIMATIONS,
+  CODEX_PET_DEFAULT_ANIMATION,
+  CODEX_PET_DEFAULT_FPS,
+  CODEX_PET_FRAME,
+  CODEX_PET_SPRITESHEET_PATH
+}
 
 export type PetManifestLike = {
   id?: string
@@ -18,23 +35,6 @@ export type ResolvedPetManifest<T extends PetManifestLike = PetManifestLike> = T
   PetManifestLike & {
     spritesheetPath: string
   }
-
-export const CODEX_PET_SPRITESHEET_PATH = 'spritesheet.webp'
-export const CODEX_PET_FRAME = { width: 192, height: 208 } as const
-export const CODEX_PET_DEFAULT_ANIMATION = 'idle'
-export const CODEX_PET_DEFAULT_FPS = 8
-
-export const CODEX_PET_ANIMATIONS: Record<string, SpriteAnimation> = {
-  idle: { row: 0, frames: 6 },
-  'running-right': { row: 1, frames: 8 },
-  'running-left': { row: 2, frames: 8 },
-  waving: { row: 3, frames: 4 },
-  jumping: { row: 4, frames: 5 },
-  failed: { row: 5, frames: 8 },
-  waiting: { row: 6, frames: 6 },
-  running: { row: 7, frames: 6 },
-  review: { row: 8, frames: 6 }
-}
 
 function isCodexPetSpritePath(spritesheetPath: string | undefined): boolean {
   return spritesheetPath === undefined || /(^|[/\\])spritesheet\.webp$/i.test(spritesheetPath)
