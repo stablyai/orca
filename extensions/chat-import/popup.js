@@ -68,7 +68,10 @@ function startSync() {
   refreshSyncButton()
   startProg()
   const force = !!($('force') && $('force').checked)
-  chrome.tabs.sendMessage(site.tab.id, { action: 'SYNC', source: site.code, force }, (r) => {
+  const includeImages = !!($('optImages') && $('optImages').checked)
+  const includeFiles = !!($('optFiles') && $('optFiles').checked)
+  const payload = { action: 'SYNC', source: site.code, force, includeImages, includeFiles }
+  chrome.tabs.sendMessage(site.tab.id, payload, (r) => {
     syncing = false
     canceling = false
     if (chrome.runtime.lastError || !r) {
@@ -134,17 +137,36 @@ chrome.runtime.sendNativeMessage('com.orca.chatimport', { type: 'PING' }, (resp)
   const FRESH_MS = 90 * 1000
   const now = Date.now()
   const relevant = (s) => !!(s && s.ts && now - s.ts < FRESH_MS && site && s.source === site.code)
-  const { syncProgress, syncResult, forceResync } = await chrome.storage.local.get([
-    'syncProgress',
-    'syncResult',
-    'forceResync'
-  ])
+  const { syncProgress, syncResult, forceResync, attImages, attFiles } =
+    await chrome.storage.local.get([
+      'syncProgress',
+      'syncResult',
+      'forceResync',
+      'attImages',
+      'attFiles'
+    ])
   // force 체크박스는 팝업 재실행에도 유지되도록 저장/복원(동기화 완료 시 해제됨).
   const forceEl = $('force')
   if (forceEl) {
     forceEl.checked = !!forceResync
     forceEl.addEventListener('change', () =>
       chrome.storage.local.set({ forceResync: forceEl.checked })
+    )
+  }
+  // 사진/파일 포함 체크박스도 팝업 재실행에도 유지되도록 저장/복원(force와 달리
+  // 동기화 완료로 해제되지 않는다 — 매번 첨부를 켜고 끄는 게 아니라 지속 설정이므로).
+  const optImagesEl = $('optImages')
+  if (optImagesEl) {
+    optImagesEl.checked = !!attImages
+    optImagesEl.addEventListener('change', () =>
+      chrome.storage.local.set({ attImages: optImagesEl.checked })
+    )
+  }
+  const optFilesEl = $('optFiles')
+  if (optFilesEl) {
+    optFilesEl.checked = !!attFiles
+    optFilesEl.addEventListener('change', () =>
+      chrome.storage.local.set({ attFiles: optFilesEl.checked })
     )
   }
   if (relevant(syncResult) && (!relevant(syncProgress) || syncResult.ts >= syncProgress.ts))

@@ -81,6 +81,18 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       .catch((e) => sendResponse({ error: e.message }))
     return true
   }
+  if (msg.type === 'STORE_BLOB') {
+    native({
+      type: 'STORE_BLOB',
+      uploadId: msg.uploadId,
+      seq: msg.seq,
+      total: msg.total,
+      data: msg.data
+    })
+      .then((r) => sendResponse(r && r.error ? { error: r.error } : r))
+      .catch((e) => sendResponse({ error: e.message }))
+    return true
+  }
   if (msg.type === 'PROGRESS') {
     chrome.storage.local.set({
       syncProgress: { source: msg.source, done: msg.done, total: msg.total, ts: Date.now() }
