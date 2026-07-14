@@ -49,6 +49,7 @@ import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { destroyWorkspaceWebviews } from '@/store/slices/browser-webview-cleanup'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import type { BuiltInWindowsTerminalShell } from '../../../../shared/windows-terminal-shell'
 import {
   keybindingMatchesAction,
   matchKeybindingDigitIndex,
@@ -652,7 +653,7 @@ export function FloatingTerminalPanel({
   )
 
   const createFloatingTerminalTab = useCallback(
-    (shellOverride?: string) => {
+    (shellOverride?: BuiltInWindowsTerminalShell) => {
       // Why: the floating workspace is a local scratchpad; a focused remote
       // runtime must not own tabs users keep there for manual SSH/tmux work.
       const tab = createTab(FLOATING_TERMINAL_WORKTREE_ID, activeGroup?.id, shellOverride, {

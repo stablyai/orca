@@ -64,7 +64,15 @@ export function buildWindowsPowerShellSpawnAttempts(args: {
   if (basename !== 'pwsh.exe' && basename !== 'powershell.exe') {
     return []
   }
-  const chain = resolveWindowsPowerShellSpawnChain(basename, args.resolveOptions)
+  let chain = resolveWindowsPowerShellSpawnChain(basename, args.resolveOptions)
+  if (args.startupCommand) {
+    // Why: startup commands are rendered for PowerShell; cmd.exe would reinterpret
+    // PowerShell quoting and can reactivate separators contained in user text.
+    chain = chain.filter((candidate) => pathWin32.basename(candidate).toLowerCase() !== 'cmd.exe')
+    if (chain.length === 0) {
+      throw new Error(`No safe PowerShell executable is available for ${basename}`)
+    }
+  }
   return chain.map((candidate) =>
     toAttempt(candidate, args.cwd, args.defaultCwd, args.wslContext, args.startupCommand)
   )

@@ -12,6 +12,7 @@ import { ShellIcon } from '../tab-bar/shell-icons'
 type TerminalWindowsShellSectionProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
   windowsShell: string
+  pwshAvailable: boolean
   gitBashAvailable: boolean
 }
 
@@ -27,8 +28,10 @@ function windowsShellLabel(shell: string, label: string): React.JSX.Element {
 export function TerminalWindowsShellSection({
   updateSettings,
   windowsShell,
+  pwshAvailable,
   gitBashAvailable
 }: TerminalWindowsShellSectionProps): React.JSX.Element {
+  const showPwshOption = pwshAvailable || windowsShell === 'pwsh.exe'
   const showGitBashOption = gitBashAvailable || windowsShell === WINDOWS_GIT_BASH_SHELL
 
   return (
@@ -53,6 +56,8 @@ export function TerminalWindowsShellSection({
             'windows',
             'shell',
             'powershell',
+            'pwsh',
+            'powershell 7',
             'cmd',
             'command prompt',
             'git bash',
@@ -86,6 +91,25 @@ export function TerminalWindowsShellSection({
                       'PowerShell'
                     )
                   },
+                  ...(showPwshOption
+                    ? [
+                        {
+                          value: 'pwsh.exe',
+                          label: windowsShellLabel(
+                            'pwsh.exe',
+                            translate(
+                              'auto.components.settings.TerminalPane.96be03b8eb',
+                              'PowerShell 7+'
+                            )
+                          ),
+                          ariaLabel: translate(
+                            'auto.components.settings.TerminalPane.96be03b8eb',
+                            'PowerShell 7+'
+                          ),
+                          disabled: !pwshAvailable
+                        }
+                      ]
+                    : []),
                   {
                     value: 'cmd.exe',
                     label: windowsShellLabel(

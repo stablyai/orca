@@ -619,9 +619,16 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
           ? normalizedShellFamily
           : undefined
+    // Why: shellOverride is the concrete profile chosen by the user (and inherited
+    // by splits), so the legacy version preference must not replace its executable.
+    const powerShellImplementation =
+      opts.shellOverride &&
+      (resolvedShellFamily === 'powershell.exe' || resolvedShellFamily === 'pwsh.exe')
+        ? resolvedShellFamily
+        : opts.terminalWindowsPowerShellImplementation
     const shouldProbePwsh = shouldProbeWindowsPowerShellAvailability({
       shellFamily: resolvedShellFamily,
-      implementation: opts.terminalWindowsPowerShellImplementation
+      implementation: powerShellImplementation
     })
     const shouldResolvePowerShellFamily =
       opts.terminalWindowsPowerShellImplementation !== undefined ||
@@ -634,7 +641,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       shellPath = shouldResolvePowerShellFamily
         ? (resolveEffectiveWindowsPowerShell({
             shellFamily: resolvedShellFamily,
-            implementation: opts.terminalWindowsPowerShellImplementation,
+            implementation: powerShellImplementation,
             pwshAvailable: shouldProbePwsh ? isPwshAvailable() : false
           }) ?? shellPath)
         : shellPath

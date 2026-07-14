@@ -23,6 +23,7 @@ import type {
   WorkspaceLineage,
   WorktreeLineageWarning
 } from './types'
+import type { BuiltInWindowsTerminalShell } from './windows-terminal-shell'
 import type { TerminalPaneLayoutNode } from './types'
 import type {
   RuntimeMarkdownReadTabResult,
@@ -493,6 +494,7 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   afterTabId?: string
   targetGroupId?: string
   command?: string
+  shellOverride?: BuiltInWindowsTerminalShell
   cwd?: string
   env?: Record<string, string>
   launchConfig?: SleepingAgentLaunchConfig

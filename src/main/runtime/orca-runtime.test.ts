@@ -10238,7 +10238,9 @@ describe('OrcaRuntimeService', () => {
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
 
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      shellOverride: 'pwsh.exe'
+    })
     const sourceEnv =
       (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
     const sourceLeafId = sourceEnv.ORCA_PANE_KEY.slice(`${sourceEnv.ORCA_TAB_ID}:`.length)
@@ -10255,6 +10257,8 @@ describe('OrcaRuntimeService', () => {
     expect(splitTerminal).not.toHaveBeenCalled()
     expect(splitEnv.ORCA_TAB_ID).toBe(sourceEnv.ORCA_TAB_ID)
     expect(splitEnv.ORCA_WORKTREE_ID).toBe(TEST_WORKTREE_ID)
+    expect(spawn.mock.calls[0]?.[0]).toMatchObject({ shellOverride: 'pwsh.exe' })
+    expect(spawn.mock.calls[1]?.[0]).toMatchObject({ shellOverride: 'pwsh.exe' })
     expect(revealTerminalSession).toHaveBeenLastCalledWith(TEST_WORKTREE_ID, {
       ptyId: 'pty-split',
       title: null,

@@ -39,6 +39,7 @@ const DEFAULT_WSL_DISTRO_VALUE = '__default__'
 function normalizeWindowsShell(value: string | null | undefined): BuiltInWindowsTerminalShell {
   if (
     value === 'powershell.exe' ||
+    value === 'pwsh.exe' ||
     value === 'cmd.exe' ||
     value === 'wsl.exe' ||
     value === WINDOWS_GIT_BASH_SHELL
@@ -62,6 +63,7 @@ export function WindowsTerminalStep({
       ? [selectedWslDistroName, ...capabilities.wslDistros]
       : capabilities.wslDistros
   const showGitBashOption = capabilities.gitBashAvailable || windowsShell === WINDOWS_GIT_BASH_SHELL
+  const showPwshOption = capabilities.pwshAvailable || windowsShell === 'pwsh.exe'
   const showWslOption = capabilities.wslAvailable || windowsShell === 'wsl.exe'
 
   const setSelectPortalHost = useCallback((node: HTMLDivElement | null) => {
@@ -84,6 +86,27 @@ export function WindowsTerminalStep({
             'Uses the Windows PowerShell available on every supported Windows install.'
           )
     },
+    ...(showPwshOption
+      ? [
+          {
+            value: 'pwsh.exe',
+            label: translate(
+              'auto.components.onboarding.WindowsTerminalStep.powerShell7',
+              'PowerShell 7+'
+            ),
+            description: capabilities.pwshAvailable
+              ? translate(
+                  'auto.components.onboarding.WindowsTerminalStep.powerShell7Description',
+                  'Opens new terminal panes with the installed PowerShell 7+ executable.'
+                )
+              : translate(
+                  'auto.components.onboarding.WindowsTerminalStep.powerShell7Unavailable',
+                  'Selected, but PowerShell 7+ was not detected on this machine.'
+                ),
+            disabled: !capabilities.pwshAvailable
+          } satisfies ShellOption
+        ]
+      : []),
     {
       value: 'cmd.exe',
       label: translate(

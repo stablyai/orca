@@ -319,6 +319,25 @@ describe('TerminalPane PowerShell version setting', () => {
     expect(text).not.toContain('WSL')
   })
 
+  it('shows PowerShell 7+ as a default shell option when pwsh is available', () => {
+    const element = TerminalPane({
+      settings: {
+        terminalScrollbackRows: 5_000,
+        terminalWindowsShell: 'pwsh.exe',
+        terminalWindowsPowerShellImplementation: 'pwsh.exe',
+        terminalWordSeparator: ''
+      } as never,
+      updateSettings: () => {},
+      scrollbackMode: 'preset',
+      setScrollbackMode: () => {},
+      pwshAvailable: true,
+      gitBashAvailable: false
+    })
+
+    expect(collectText(element)).toContain('PowerShell 7+')
+    expect(hasShellIconFor(element, 'pwsh.exe')).toBe(true)
+  })
+
   it('shows Windows shell controls for a remote Windows host on a non-Windows client', () => {
     const element = TerminalPane({
       settings: {

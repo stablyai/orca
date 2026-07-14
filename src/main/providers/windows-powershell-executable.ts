@@ -1,13 +1,30 @@
 import { existsSync, statSync } from 'node:fs'
 import { win32 as pathWin32 } from 'node:path'
 
+export type PwshSupport = 'supported' | 'unsupported' | 'unknown'
+const pwshSupportCache = new Map<string, Exclude<PwshSupport, 'unknown'>>()
+
 /** Dependency seams so the resolver can be unit-tested without a real Windows
  *  filesystem. Production callers omit these and get process.env / fs. */
 export type WindowsPowerShellResolveOptions = {
   env?: NodeJS.ProcessEnv
   /** Returns true when the candidate path is a real, non-empty executable. */
   isRealExecutable?: (path: string) => boolean
+  pwshSupport?: (path: string) => PwshSupport
   platform?: NodeJS.Platform
+}
+
+export function getCachedWindowsPwshSupport(candidate: string): PwshSupport {
+  const cacheKey = pathWin32.normalize(candidate).toLowerCase()
+  return pwshSupportCache.get(cacheKey) ?? 'unknown'
+}
+
+export function cacheWindowsPwshSupport(
+  candidate: string,
+  support: Exclude<PwshSupport, 'unknown'>
+): void {
+  const cacheKey = pathWin32.normalize(candidate).toLowerCase()
+  pwshSupportCache.set(cacheKey, support)
 }
 
 /** Why: the Microsoft Store ships `pwsh.exe`/`powershell.exe` App Execution
@@ -97,16 +114,16 @@ function getPwshCandidatePaths(env: NodeJS.ProcessEnv): string[] {
     if (!root) {
       continue
     }
-    // PowerShell 7 MSI installs land in `PowerShell\7\pwsh.exe`. Glob the major
-    // version conservatively (6/7/8) so future majors keep resolving.
-    for (const major of ['7', '8', '6']) {
+    // PowerShell 7 MSI installs land in `PowerShell\7\pwsh.exe`; keep the
+    // next major discoverable without letting legacy PowerShell 6 mask it.
+    for (const major of ['7', '8']) {
       pushUniqueCandidate(candidates, seen, pathWin32.join(root, 'PowerShell', major, 'pwsh.exe'))
     }
   }
   // Per-user dotnet-tool / winget install location.
   const localAppData = readEnv(env, ['LOCALAPPDATA', 'LocalAppData'])
   if (localAppData) {
-    for (const major of ['7', '8', '6']) {
+    for (const major of ['7', '8']) {
       pushUniqueCandidate(
         candidates,
         seen,
@@ -118,6 +135,20 @@ function getPwshCandidatePaths(env: NodeJS.ProcessEnv): string[] {
     pushUniqueCandidate(candidates, seen, candidate)
   }
   return candidates
+}
+
+export function resolveWindowsPwshExecutablePaths(
+  options: WindowsPowerShellResolveOptions = {}
+): string[] {
+  const platform = options.platform ?? process.platform
+  if (platform !== 'win32') {
+    return []
+  }
+  const env = options.env ?? process.env
+  const isRealExecutable = options.isRealExecutable ?? defaultIsRealExecutable
+  return getPwshCandidatePaths(env).filter(
+    (candidate) => !isWindowsAppExecutionAliasPath(candidate) && isRealExecutable(candidate)
+  )
 }
 
 /** Absolute path to inbox Windows PowerShell (`powershell.exe`), which always
@@ -154,14 +185,15 @@ export function resolveWindowsPowerShellExecutablePath(
   }
   const env = options.env ?? process.env
   const isRealExecutable = options.isRealExecutable ?? defaultIsRealExecutable
+  const pwshSupport = options.pwshSupport ?? getCachedWindowsPwshSupport
 
   if (family === 'powershell.exe') {
     const windowsPowerShell = getWindowsPowerShellPath(env)
     return isRealExecutable(windowsPowerShell) ? windowsPowerShell : null
   }
 
-  for (const candidate of getPwshCandidatePaths(env)) {
-    if (!isWindowsAppExecutionAliasPath(candidate) && isRealExecutable(candidate)) {
+  for (const candidate of resolveWindowsPwshExecutablePaths(options)) {
+    if (pwshSupport(candidate) !== 'unsupported') {
       return candidate
     }
   }

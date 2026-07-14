@@ -12,6 +12,7 @@ import {
 import { resolveHostSessionTabIdForWebSessionTab } from '@/runtime/web-session-tabs-sync'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { guardPinnedTabClose, resolvePinnedTabLabel } from '@/store/pinned-tab-close-guard'
+import type { BuiltInWindowsTerminalShell } from '../../../../shared/windows-terminal-shell'
 
 const EDITOR_TAB_CONTENT_TYPES = new Set<TabContentType>([
   'editor',
@@ -101,7 +102,7 @@ function isPinnedVisibleTab(
 
 export function createNewTerminalTab(
   activeWorktreeId: string | null,
-  shellOverride?: string,
+  shellOverride?: BuiltInWindowsTerminalShell,
   options?: { startupCwd?: string }
 ): void {
   if (!activeWorktreeId) {
@@ -116,7 +117,7 @@ export function createNewTerminalTab(
     void createWebRuntimeSessionTerminal({
       worktreeId: activeWorktreeId,
       environmentId: runtimeEnvironmentId,
-      command: shellOverride,
+      shellOverride,
       ...(options?.startupCwd ? { cwd: options.startupCwd } : {}),
       activate: true
     })

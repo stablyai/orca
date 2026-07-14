@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   closeWebRuntimeSessionTab: vi.fn(),
   createBrowserTab: vi.fn(),
   createEmptySplitGroup: vi.fn(),
+  createWebRuntimeSessionTerminal: vi.fn(),
   createTab: vi.fn(),
   destroyWorkspaceWebviews: vi.fn(),
   dispatchEvent: vi.fn(),
@@ -71,7 +72,7 @@ vi.mock('../../runtime/web-runtime-session', () => ({
   activateWebRuntimeSessionTab: mocks.activateWebRuntimeSessionTab,
   closeWebRuntimeSessionTab: mocks.closeWebRuntimeSessionTab,
   createWebRuntimeSessionBrowserTab: vi.fn(),
-  createWebRuntimeSessionTerminal: vi.fn(),
+  createWebRuntimeSessionTerminal: mocks.createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive: mocks.isWebRuntimeSessionActive
 }))
 
@@ -188,6 +189,29 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     expect(mocks.setActiveTab).toHaveBeenCalledWith('terminal-1')
     expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal')
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1', null)
+  })
+
+  it('routes an explicit PowerShell profile to the paired runtime as a shell override', async () => {
+    mocks.isWebRuntimeSessionActive.mockReturnValue(true)
+    mocks.createWebRuntimeSessionTerminal.mockResolvedValue(true)
+    storeBox.state = {
+      ...storeBox.state,
+      settings: { activeRuntimeEnvironmentId: 'remote-runtime' }
+    }
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    model.commands.newTerminalWithShell('pwsh.exe')
+
+    await vi.waitFor(() => {
+      expect(mocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith({
+        worktreeId: 'wt-1',
+        environmentId: 'remote-runtime',
+        targetGroupId: 'group-1',
+        shellOverride: 'pwsh.exe',
+        activate: true
+      })
+    })
   })
 
   it('returns keyboard focus to the active split pane leaf when a terminal tab is activated', async () => {

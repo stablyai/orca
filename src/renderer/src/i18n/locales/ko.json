@@ -2796,7 +2796,8 @@
             "2148f65e04": "PowerShell",
             "ab589350e5": "{{value0}}에 대한 실행 명령을 작성할 수 없습니다.",
             "7a9b4af2af": "탭을 왼쪽으로 스크롤",
-            "232e075b07": "탭을 오른쪽으로 스크롤"
+            "232e075b07": "탭을 오른쪽으로 스크롤",
+            "23fc4463de": "PowerShell 7+"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "파일 생성",
@@ -10397,7 +10398,10 @@
           "loadingDistros": "배포판을 불러오는 중",
           "windowsDefault": "Windows 기본값",
           "rightClickBehavior": "오른쪽 클릭 동작",
-          "rightClickBehaviorDescription": "Windows에서 익숙한 terminal 마우스 동작을 선택하세요."
+          "rightClickBehaviorDescription": "Windows에서 익숙한 terminal 마우스 동작을 선택하세요.",
+          "powerShell7": "PowerShell 7+",
+          "powerShell7Description": "설치된 PowerShell 7+ 실행 파일로 새 터미널 창을 엽니다.",
+          "powerShell7Unavailable": "선택되어 있지만 이 컴퓨터에서 PowerShell 7+를 찾지 못했습니다."
         },
         "mac": {
           "notification": {

@@ -47,6 +47,20 @@ describe('WindowsTerminalStep', () => {
     expect(html).toContain('WSL Distribution')
   })
 
+  it('preserves a saved PowerShell 7+ selection while capabilities load', () => {
+    const html = renderToStaticMarkup(
+      <WindowsTerminalStep
+        settings={createSettings({ terminalWindowsShell: 'pwsh.exe' })}
+        updateSettings={vi.fn()}
+      />
+    )
+
+    expect(html).toContain('PowerShell 7+')
+    expect(html).toMatch(
+      /<button[^>]*aria-pressed="true"[^>]*disabled=""[^>]*>[\s\S]*?PowerShell 7\+/
+    )
+  })
+
   it('renders Git Bash with the Git Bash mark instead of a text badge', () => {
     const html = renderToStaticMarkup(
       <WindowsTerminalStep

@@ -399,13 +399,21 @@ export class LocalPtyProvider implements IPtyProvider {
       // one-off override. Normalize both forms back to the PowerShell family so
       // the shared resolver can still fall back to inbox powershell.exe when
       // pwsh.exe was requested but is unavailable.
-      const powerShellImplementation = this.opts.getWindowsPowerShellImplementation?.()
+      const configuredPowerShellImplementation = this.opts.getWindowsPowerShellImplementation?.()
       const resolvedShellFamily: WindowsPowerShellShellFamily =
         normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
           ? normalizedShellFamily
           : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
             ? normalizedShellFamily
             : undefined
+      // Why: a concrete tab/default-shell selection must win over the legacy
+      // PowerShell implementation preference so PowerShell and pwsh stay distinct.
+      const powerShellImplementation =
+        args.terminalWindowsPowerShellImplementation ??
+        (args.shellOverride &&
+        (resolvedShellFamily === 'powershell.exe' || resolvedShellFamily === 'pwsh.exe')
+          ? resolvedShellFamily
+          : configuredPowerShellImplementation)
       const shouldProbePwsh = shouldProbeWindowsPowerShellAvailability({
         shellFamily: resolvedShellFamily,
         implementation: powerShellImplementation
