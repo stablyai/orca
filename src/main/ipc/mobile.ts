@@ -4,6 +4,7 @@ import QRCode from 'qrcode'
 import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
 import { isTailnetIPv4Address } from '../../shared/tailnet-address'
 import type { DeviceEntry } from '../runtime/device-registry'
+import type { RelayBrokerStatus } from '../runtime/relay/relay-session-broker'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import {
   getWebSocketPort,
@@ -60,6 +61,7 @@ function toRuntimeAccessGrant(device: DeviceEntry): RuntimeAccessGrant {
 export type MobileHandlerDependencies = {
   firewallEnvironment?: WindowsMobileFirewallEnvironment
   openWindowsNetworkSettings?: () => Promise<void>
+  getRelayStatus?: () => RelayBrokerStatus
 }
 
 export function registerMobileHandlers(
@@ -94,11 +96,10 @@ export function registerMobileHandlers(
       // `rotate: true` (explicit "Regenerate" intent because the prior token
       // may have been exposed), we discard any pending token and mint a fresh
       // one so the new QR carries a different credential.
-      const offer = rpcServer.createPairingOffer({
+      const offer = await rpcServer.createMobilePairingOffer({
         address: ip,
         rotate: args?.rotate,
-        name: `Mobile ${new Date().toLocaleDateString()}`,
-        scope: 'mobile'
+        name: `Mobile ${new Date().toLocaleDateString()}`
       })
       if (!offer.available) {
         return { available: false as const }
@@ -187,12 +188,12 @@ export function registerMobileHandlers(
     }
   })
 
-  ipcMain.handle('mobile:revokeDevice', (_event, args: { deviceId: string }) => {
+  ipcMain.handle('mobile:revokeDevice', async (_event, args: { deviceId: string }) => {
     const registry = rpcServer.getDeviceRegistry()
     if (!registry) {
       return { revoked: false }
     }
-    return { revoked: rpcServer.revokeMobileDevice(args.deviceId) }
+    return { revoked: await rpcServer.revokeMobileDevice(args.deviceId) }
   })
 
   ipcMain.handle('mobile:revokeRuntimeAccess', (_event, args: { deviceId: string }) => {
@@ -234,6 +235,10 @@ export function registerMobileHandlers(
     await openSettings()
     return true
   })
+
+  ipcMain.handle('mobile:getRelayStatus', () => ({
+    status: dependencies.getRelayStatus?.() ?? 'offline'
+  }))
 }
 
 function isWindowRenderer(event: IpcMainInvokeEvent): boolean {

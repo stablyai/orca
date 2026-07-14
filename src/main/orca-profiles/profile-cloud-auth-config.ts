@@ -9,6 +9,8 @@ export type OrcaCloudAuthConfig = {
   profileEndpoint: string
   orgEndpoint: string
   logoutEndpoint: string
+  relayTokenEndpoint: string
+  relayDirectorUrl: string
   clientId: string
   scope: string
 }
@@ -47,6 +49,15 @@ function cleanUrl(value: string | undefined, allowLoopbackHttp: boolean): string
 
 function endpoint(baseUrl: string, path: string): string {
   return new URL(path, `${baseUrl}/`).toString()
+}
+
+function cleanOrigin(value: string | undefined, allowLoopbackHttp: boolean): string | null {
+  const cleaned = cleanUrl(value, allowLoopbackHttp)
+  if (!cleaned) {
+    return null
+  }
+  const parsed = new URL(cleaned)
+  return parsed.pathname === '/' && !parsed.search && !parsed.hash ? parsed.origin : null
 }
 
 export function getOrcaCloudAuthConfig(
@@ -92,6 +103,11 @@ export function getOrcaCloudAuthConfig(
       logoutEndpoint:
         cleanEndpointUrl(env.ORCA_CLOUD_LOGOUT_URL) ??
         endpoint(apiBaseUrl, '/v1/desktop/auth/logout'),
+      relayTokenEndpoint:
+        cleanEndpointUrl(env.ORCA_CLOUD_RELAY_TOKEN_URL) ??
+        endpoint(apiBaseUrl, '/v1/desktop/auth/relay-token'),
+      relayDirectorUrl:
+        cleanOrigin(env.ORCA_RELAY_URL, allowLoopbackHttp) ?? 'https://relay.onorca.dev',
       clientId,
       scope: env.ORCA_CLOUD_AUTH_SCOPE?.trim() || DEFAULT_SCOPE
     }

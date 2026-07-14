@@ -1,4 +1,11 @@
 import { z } from 'zod'
+import {
+  PairingOfferSchema,
+  type PairingOffer
+} from '../../../src/shared/mobile-relay-pairing-offer'
+
+export { PairingOfferSchema }
+export type { PairingOffer }
 
 export type RpcRequest = {
   id: string
@@ -23,17 +30,6 @@ export type RpcFailure = {
 }
 
 export type RpcResponse = RpcSuccess | RpcFailure
-
-const PAIRING_OFFER_VERSION = 2
-
-export const PairingOfferSchema = z.object({
-  v: z.literal(PAIRING_OFFER_VERSION),
-  endpoint: z.string().min(1),
-  deviceToken: z.string().min(1),
-  publicKeyB64: z.string().min(1)
-})
-
-export type PairingOffer = z.infer<typeof PairingOfferSchema>
 
 export type ConnectionLogLevel = 'info' | 'success' | 'warn' | 'error'
 
