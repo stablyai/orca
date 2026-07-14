@@ -30,7 +30,7 @@ describe('GitHubItemDialog source host boundaries', () => {
     const source = componentSource('GitHubItemDialog.tsx')
     const section = sourceBetween(source, 'function PRReviewersPanel', 'function isPRFileViewed')
 
-    expect(section).toContain('resolveGitHubSourceSettings(repoOwnerSettings, sourceContext)')
+    expect(section).toContain('useResolvedGitHubSourceSettings(item.repoId ?? null, sourceContext)')
     expect(section).toContain('useRepoAssigneesBySlug(')
     expect(section).toContain('sourceSettings')
     expect(section).toContain('useRepoAssignees(')
@@ -55,7 +55,7 @@ describe('GitHubItemDialog source host boundaries', () => {
       'function GitHubLabelsSettingsLink'
     )
 
-    expect(section).toContain('resolveGitHubSourceSettings(repoOwnerSettings, sourceContext)')
+    expect(section).toContain('useResolvedGitHubSourceSettings(item.repoId ?? null, sourceContext)')
     expect(section).toContain('useRepoLabels(')
     expect(section).toContain('useRepoLabelsBySlug(slugOwner, slugRepo, sourceSettings)')
     expect(section).toContain('useRepoAssignees(')
@@ -190,10 +190,8 @@ describe('GitHubItemDialog source host boundaries', () => {
       'function CommentReactions'
     )
 
-    expect(actionsSection).toContain('getSettingsForRepoRuntimeOwner(s, repoId ?? item.repoId')
-    expect(actionsSection).toContain(
-      'resolveGitHubSourceSettings(repoOwnerSettings, sourceContext)'
-    )
+    expect(actionsSection).toContain('useResolvedGitHubSourceSettings(')
+    expect(actionsSection).toContain('repoId ?? item.repoId ?? null,')
     expect(actionsSection).toContain('getActiveRuntimeTarget(sourceSettings)')
     expect(actionsSection).toContain(
       'const canMergeWithRepoContext = !!repoPath || mergeTarget.kind ==='

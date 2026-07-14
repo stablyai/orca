@@ -11,7 +11,6 @@ import React, {
 } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { useShallow } from 'zustand/react/shallow'
 import type { editor as monacoEditor } from 'monaco-editor'
 import {
   ArrowDown,
@@ -50,6 +49,7 @@ import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { useResolvedGitHubSourceSettings } from '@/hooks/useResolvedGitHubSourceSettings'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import {
   Accordion,
@@ -541,13 +541,7 @@ function PRAssigneesPanel({
   }))
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
-  const repoOwnerSettings = useAppStore(
-    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
-  )
-  const sourceSettings = useMemo(
-    () => resolveGitHubSourceSettings(repoOwnerSettings, sourceContext),
-    [repoOwnerSettings, sourceContext]
-  )
+  const sourceSettings = useResolvedGitHubSourceSettings(item.repoId ?? null, sourceContext)
   const { isPending, run } = useImmediateMutation()
 
   // Why: PR assignees can change through background refetches; sync them
@@ -770,13 +764,7 @@ function PRReviewersPanel({
     reviewRequests: item.reviewRequests
   }))
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
-  const repoOwnerSettings = useAppStore(
-    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
-  )
-  const sourceSettings = useMemo(
-    () => resolveGitHubSourceSettings(repoOwnerSettings, sourceContext),
-    [repoOwnerSettings, sourceContext]
-  )
+  const sourceSettings = useResolvedGitHubSourceSettings(item.repoId ?? null, sourceContext)
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
   const reviewerInputFocusFrameRef = useRef<number | null>(null)
   const reviewerPanelMountedRef = useRef(true)
@@ -3220,12 +3208,9 @@ function ConversationTab({
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null)
   const bodyTextareaFocusFrameRef = useRef<number | null>(null)
   const canUseRepoMutationContext = canUseGitHubRepoContext(repoPath, sourceContext)
-  const repoOwnerSettings = useAppStore(
-    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null))
-  )
-  const sourceSettings = useMemo(
-    () => resolveGitHubSourceSettings(repoOwnerSettings, sourceContext),
-    [repoOwnerSettings, sourceContext]
+  const sourceSettings = useResolvedGitHubSourceSettings(
+    item.repoId ?? repoId ?? null,
+    sourceContext
   )
   const repoAssignees = useRepoAssignees(repoPath, item.repoId, sourceSettings)
   const commentCounts = useMemo(() => getPRCommentAudienceCounts(comments), [comments])
@@ -3826,12 +3811,9 @@ function PRActionsPanel({
   // Why: merge must route through the repo OWNER host — a runtime-owned repo
   // viewed from a local GitHub source has a null source runtime id, and routing
   // by that lands on local gh:mergePR → "Access denied" (#6957/#7590).
-  const repoOwnerSettings = useAppStore(
-    useShallow((s) => getSettingsForRepoRuntimeOwner(s, repoId ?? item.repoId ?? null))
-  )
-  const sourceSettings = useMemo(
-    () => resolveGitHubSourceSettings(repoOwnerSettings, sourceContext),
-    [repoOwnerSettings, sourceContext]
+  const sourceSettings = useResolvedGitHubSourceSettings(
+    repoId ?? item.repoId ?? null,
+    sourceContext
   )
   const mergeTarget = getActiveRuntimeTarget(sourceSettings)
   const canMutateWithRepoContext =
@@ -5798,12 +5780,9 @@ function GHEditSection({
   const assigneesItemKey = `${item.repoId}\0${item.id}`
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
-  const repoOwnerSettings = useAppStore(
-    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null))
-  )
-  const sourceSettings = useMemo(
-    () => resolveGitHubSourceSettings(repoOwnerSettings, sourceContext),
-    [repoOwnerSettings, sourceContext]
+  const sourceSettings = useResolvedGitHubSourceSettings(
+    item.repoId ?? repoId ?? null,
+    sourceContext
   )
   const { isPending, run } = useImmediateMutation()
   // Why: when the dialog opens from a Project view, mutations route through

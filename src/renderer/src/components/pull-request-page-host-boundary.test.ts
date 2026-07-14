@@ -21,7 +21,7 @@ describe('PullRequestPage host boundaries', () => {
     const source = componentSource('PullRequestPage.tsx')
     const section = sourceBetween(source, 'function PRReviewersPanel', 'function isPRFileViewed')
 
-    expect(section).toContain('resolveGitHubSourceSettings(repoOwnerSettings, sourceContext)')
+    expect(section).toContain('useResolvedGitHubSourceSettings(item.repoId ?? null, sourceContext)')
     expect(section).toContain('useRepoAssigneesBySlug(')
     expect(section).toContain('sourceSettings')
     expect(section).toContain('useRepoAssignees(')
@@ -45,8 +45,8 @@ describe('PullRequestPage host boundaries', () => {
     const source = componentSource('PullRequestPage.tsx')
     const section = sourceBetween(source, 'function GHEditSection', 'function GHCommentComposer')
 
-    expect(section).toContain('getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null)')
-    expect(section).toContain('resolveGitHubSourceSettings(repoOwnerSettings, sourceContext)')
+    expect(section).toContain('useResolvedGitHubSourceSettings(')
+    expect(section).toContain('item.repoId ?? repoId ?? null,')
     expect(section).toContain('useRepoLabels(')
     expect(section).toContain('useRepoLabelsBySlug(slugOwner, slugRepo, sourceSettings)')
     expect(section).toContain('useRepoAssignees(')
@@ -90,7 +90,8 @@ describe('PullRequestPage host boundaries', () => {
     const source = componentSource('PullRequestPage.tsx')
     const section = sourceBetween(source, 'function ConversationTab', 'const mentionOptions')
 
-    expect(section).toContain('getSettingsForRepoRuntimeOwner(s, item.repoId ?? repoId ?? null)')
+    expect(section).toContain('useResolvedGitHubSourceSettings(')
+    expect(section).toContain('item.repoId ?? repoId ?? null,')
     expect(section).toContain('useRepoAssignees(repoPath, item.repoId, sourceSettings)')
   })
 
@@ -274,7 +275,7 @@ describe('PullRequestPage host boundaries', () => {
       "repo: getGitHubRuntimeRepoId(args.sourceContext, args.repoId ?? '')"
     )
     expect(editHelperSection).toContain('{ local: false }')
-    expect(editSection).toContain('resolveGitHubSourceSettings(repoOwnerSettings, sourceContext)')
+    expect(editSection).toContain('useResolvedGitHubSourceSettings(')
     expect(editSection).toContain('sourceContext,')
   })
 
@@ -286,12 +287,8 @@ describe('PullRequestPage host boundaries', () => {
       'function CommentReactions'
     )
 
-    expect(actionsSection).toContain(
-      'getSettingsForRepoRuntimeOwner(s, repoId ?? item.repoId ?? null)'
-    )
-    expect(actionsSection).toContain(
-      'resolveGitHubSourceSettings(repoOwnerSettings, sourceContext)'
-    )
+    expect(actionsSection).toContain('useResolvedGitHubSourceSettings(')
+    expect(actionsSection).toContain('repoId ?? item.repoId ?? null,')
     expect(actionsSection).toContain('getActiveRuntimeTarget(sourceSettings)')
     expect(actionsSection).toContain(
       'const canMergeWithRepoContext = !!repoPath || mergeTarget.kind ==='

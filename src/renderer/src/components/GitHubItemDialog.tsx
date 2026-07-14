@@ -57,6 +57,7 @@ import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { useResolvedGitHubSourceSettings } from '@/hooks/useResolvedGitHubSourceSettings'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import {
   Accordion,
@@ -494,13 +495,7 @@ function PRAssigneesPanel({
   }))
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
-  const repoOwnerSettings = useAppStore(
-    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
-  )
-  const sourceSettings = useMemo(
-    () => resolveGitHubSourceSettings(repoOwnerSettings, sourceContext),
-    [repoOwnerSettings, sourceContext]
-  )
+  const sourceSettings = useResolvedGitHubSourceSettings(item.repoId ?? null, sourceContext)
   const { isPending, run } = useImmediateMutation()
 
   // Why: PR assignees can change through background refetches; sync them
@@ -726,13 +721,7 @@ function PRReviewersPanel({
     reviewRequests: item.reviewRequests
   }))
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
-  const repoOwnerSettings = useAppStore(
-    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
-  )
-  const sourceSettings = useMemo(
-    () => resolveGitHubSourceSettings(repoOwnerSettings, sourceContext),
-    [repoOwnerSettings, sourceContext]
-  )
+  const sourceSettings = useResolvedGitHubSourceSettings(item.repoId ?? null, sourceContext)
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
   const reviewerInputFocusFrameRef = useRef<number | null>(null)
   const reviewerPanelMountedRef = useRef(true)
@@ -3836,12 +3825,9 @@ function PRActionsPanel({
   const actionItem = { ...item, state: localState }
   const mergePresentation = presentGitHubPRMergeState(actionItem)
   const mergeMethods = resolveGitHubPRMergeMethods(actionItem.mergeMethodSettings)
-  const repoOwnerSettings = useAppStore(
-    useShallow((s) => getSettingsForRepoRuntimeOwner(s, repoId ?? item.repoId ?? null))
-  )
-  const sourceSettings = useMemo(
-    () => resolveGitHubSourceSettings(repoOwnerSettings, sourceContext),
-    [repoOwnerSettings, sourceContext]
+  const sourceSettings = useResolvedGitHubSourceSettings(
+    repoId ?? item.repoId ?? null,
+    sourceContext
   )
   const mergeTarget = getActiveRuntimeTarget(sourceSettings)
   const canMutateWithRepoContext =
@@ -5588,13 +5574,7 @@ function GHEditSection({
       return Array.from(deduped.values()).sort((a, b) => b.number - a.number)
     })
   )
-  const repoOwnerSettings = useAppStore(
-    useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
-  )
-  const sourceSettings = useMemo(
-    () => resolveGitHubSourceSettings(repoOwnerSettings, sourceContext),
-    [repoOwnerSettings, sourceContext]
-  )
+  const sourceSettings = useResolvedGitHubSourceSettings(item.repoId ?? null, sourceContext)
   const { isPending, run } = useImmediateMutation()
   // Why: when the dialog opens from a Project view, mutations route through
   // *BySlug IPCs and we must keep `projectViewCache` in sync alongside
