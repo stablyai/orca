@@ -10062,7 +10062,7 @@
             "emptyConversationDetail": "이 세션에는 저장된 대화가 없어 재개할 수 없습니다.",
             "queuedMessages": "대기 중인 메시지 {{value0}}개",
             "subagentTranscripts": "서브에이전트 대화 기록 {{value0}}개",
-            "resumeWithAgent": "Resume with {{value0}}"
+            "resumeWithAgent": "{{value0}}(으)로 이어가기"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "{{value0}} 세션 재개",
