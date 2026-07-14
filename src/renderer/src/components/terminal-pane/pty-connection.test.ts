@@ -6690,7 +6690,12 @@ describe('connectPanePty', () => {
       await flushAsyncTicks()
 
       expect(sendDraft).toHaveBeenCalledTimes(2)
-      expect(sendDraft).toHaveBeenLastCalledWith(expect.anything(), 'pty-codex', 'linked draft')
+      expect(sendDraft).toHaveBeenLastCalledWith(
+        expect.anything(),
+        'pty-codex',
+        'linked draft',
+        expect.any(Function)
+      )
       expect(
         beginCurrentDeliveryAttempt({
           worktreeId: 'wt-1',
