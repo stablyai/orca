@@ -246,11 +246,12 @@ describe('CodexHookService', () => {
     }
   )
 
-  // Why: Codex executes hooks through the active turn shell, which is
-  // PowerShell for Orca's native Windows sessions, and falls back to cmd.exe
-  // when no turn shell is available. The managed command must survive both.
+  // Why: Codex executes hooks through the active turn shell, which can be
+  // Windows PowerShell or PowerShell 7 for native Windows sessions, and falls
+  // back to cmd.exe when no turn shell is available. The managed command must
+  // survive every available Windows shell without requiring optional pwsh.
   it.skipIf(process.platform !== 'win32')(
-    'runs the managed command from both Codex Windows shells',
+    'runs the managed command from Codex Windows shells',
     () => {
       const status = new CodexHookService().install()
       expect(status.state).toBe('installed')
@@ -265,7 +266,7 @@ describe('CodexHookService', () => {
 
       const cleanEnv = { ...process.env }
       for (const key of Object.keys(cleanEnv)) {
-        if (key.startsWith('ORCA_')) {
+        if (key.toUpperCase().startsWith('ORCA_')) {
           delete cleanEnv[key]
         }
       }
@@ -277,11 +278,24 @@ describe('CodexHookService', () => {
         'v1.0',
         'powershell.exe'
       )
+      const pwshPath = join(
+        process.env.ProgramFiles ?? 'C:\\Program Files',
+        'PowerShell',
+        '7',
+        'pwsh.exe'
+      )
       const cmdPath = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'cmd.exe')
       const shellCases = [
         { name: 'PowerShell', executable: powershellPath, args: ['-NoProfile', '-Command'] },
         { name: 'cmd.exe', executable: cmdPath, args: ['/d', '/c'] }
       ]
+      if (existsSync(pwshPath)) {
+        shellCases.splice(1, 0, {
+          name: 'PowerShell 7',
+          executable: pwshPath,
+          args: ['-NoProfile', '-Command']
+        })
+      }
       for (const shellCase of shellCases) {
         const result = spawnSync(shellCase.executable, [...shellCase.args, command], {
           env: cleanEnv,
