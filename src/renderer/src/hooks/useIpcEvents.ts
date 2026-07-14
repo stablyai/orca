@@ -842,6 +842,11 @@ export function useIpcEvents(): void {
     type AgentStatusApplyResult = 'applied' | 'pending' | 'dropped'
     const pendingAgentStatusEvents: PendingAgentStatusEvent[] = []
     let pendingAgentStatusRetryTimer: ReturnType<typeof setTimeout> | null = null
+    // Why: applyAgentStatus -> store.setAgentStatus notifies the store
+    // subscriber synchronously, which re-enters flushPendingAgentStatuses while
+    // the queue is still mid-drain. Guard against that re-entrancy so the same
+    // event is not reprocessed forever (crash 9fc89529: stack overflow).
+    let isFlushingAgentStatuses = false
 
     unsubs.push(attachMobileMarkdownBridge())
 
@@ -2917,25 +2922,37 @@ export function useIpcEvents(): void {
     }
 
     function flushPendingAgentStatuses(): void {
+      // Why: a re-entrant call (store subscriber firing during a setAgentStatus
+      // inside the loop below) must not reprocess the still-queued events — the
+      // outer flush already owns them. Bailing here breaks the infinite
+      // recursion without dropping work; the outer loop finishes the drain.
+      if (isFlushingAgentStatuses) {
+        return
+      }
       if (pendingAgentStatusEvents.length === 0) {
         return
       }
-      const now = Date.now()
-      const remaining: PendingAgentStatusEvent[] = []
-      for (const event of pendingAgentStatusEvents) {
-        if (now - event.firstSeenAt > PENDING_AGENT_STATUS_TTL_MS) {
-          continue
+      isFlushingAgentStatuses = true
+      try {
+        const now = Date.now()
+        const remaining: PendingAgentStatusEvent[] = []
+        for (const event of pendingAgentStatusEvents) {
+          if (now - event.firstSeenAt > PENDING_AGENT_STATUS_TTL_MS) {
+            continue
+          }
+          const result = applyAgentStatus(event.data, { retry: true })
+          if (result === 'pending') {
+            remaining.push(event)
+          }
         }
-        const result = applyAgentStatus(event.data, { retry: true })
-        if (result === 'pending') {
-          remaining.push(event)
+        pendingAgentStatusEvents.length = 0
+        pendingAgentStatusEvents.push(...remaining)
+        if (pendingAgentStatusEvents.length === 0 && pendingAgentStatusRetryTimer !== null) {
+          globalThis.clearTimeout(pendingAgentStatusRetryTimer)
+          pendingAgentStatusRetryTimer = null
         }
-      }
-      pendingAgentStatusEvents.length = 0
-      pendingAgentStatusEvents.push(...remaining)
-      if (pendingAgentStatusEvents.length === 0 && pendingAgentStatusRetryTimer !== null) {
-        globalThis.clearTimeout(pendingAgentStatusRetryTimer)
-        pendingAgentStatusRetryTimer = null
+      } finally {
+        isFlushingAgentStatuses = false
       }
       schedulePendingAgentStatusFlush()
     }
