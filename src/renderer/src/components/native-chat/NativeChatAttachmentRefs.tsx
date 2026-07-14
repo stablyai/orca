@@ -17,11 +17,14 @@ function openAttachment(block: NativeChatAttachmentBlock): void {
   if (!open) {
     return
   }
+  // Why: on the web client window.api is a fallback Proxy, so `open` is a truthy
+  // stub that resolves `undefined` (not {ok}); `result?.ok` avoids an unhandled
+  // rejection reading `.ok` of undefined, and still surfaces the failure toast.
   void open({ hash: block.hash, fileName: block.fileName, mime: block.mime }).then((result) => {
-    if (!result.ok) {
+    if (!result?.ok) {
       toast.error(
         translate('components.native-chat.attachment.openFailed', 'Could not open attachment'),
-        { description: result.error }
+        { description: result?.error }
       )
     }
   })

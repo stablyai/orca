@@ -120,4 +120,15 @@ describe('NativeChatMessageList attachment chips', () => {
     expect(() => fireEvent.click(screen.getByText('report.pdf'))).not.toThrow()
     expect(openSpy).not.toHaveBeenCalled()
   })
+
+  it('toasts (no unhandled rejection) when open resolves undefined — the real web fallback Proxy', async () => {
+    // Why: on the web client window.api is a fallback Proxy, so open() is a truthy
+    // stub that resolves undefined; reading result.ok directly would throw.
+    openSpy.mockResolvedValue(undefined as unknown as { ok: true })
+    renderList(sessionWith([attachmentMessage()]))
+    fireEvent.click(screen.getByText('report.pdf'))
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(toastMock.error).toHaveBeenCalled()
+  })
 })
