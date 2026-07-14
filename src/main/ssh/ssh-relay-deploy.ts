@@ -438,6 +438,8 @@ const RELAY_NATIVE_DEPS = {
   '@parcel/watcher': '2.5.6'
 } as const
 
+const LOAD_RELAY_NATIVE_DEPS = 'require("node-pty"); require("@parcel/watcher")'
+
 async function hasRequiredNativeDeps(
   conn: SshConnection,
   remoteDir: string,
@@ -451,13 +453,13 @@ async function hasRequiredNativeDeps(
           hostPlatform,
           nodePath,
           remoteDir,
-          `try { & ${powerShellLiteral(nodePath)} -e ${powerShellNativeArg('require.resolve("node-pty"); require.resolve("@parcel/watcher"); console.log("ORCA-NATIVE-DEPS-OK")')} } catch { 'MISSING' }`
+          `try { & ${powerShellLiteral(nodePath)} -e ${powerShellNativeArg(`${LOAD_RELAY_NATIVE_DEPS}; console.log("ORCA-NATIVE-DEPS-OK")`)} } catch { 'MISSING' }`
         )
       : commandWithNodePath(
           hostPlatform,
           nodePath,
           remoteDir,
-          `(${escapedNode} -e 'require.resolve("node-pty"); require.resolve("@parcel/watcher"); console.log("ORCA-NATIVE-DEPS-OK")' 2>/dev/null || echo MISSING)`
+          `(${escapedNode} -e '${LOAD_RELAY_NATIVE_DEPS}; console.log("ORCA-NATIVE-DEPS-OK")' 2>/dev/null || echo MISSING)`
         )
     const probe = await execHostCommand(conn, hostPlatform, command)
     return probe.includes('ORCA-NATIVE-DEPS-OK')
@@ -509,12 +511,10 @@ async function installNativeDeps(
   hostPlatform: RemoteHostPlatform,
   nodePath: string
 ): Promise<void> {
-  // Why: node's bin directory must be in PATH for npm's child processes.
+  // Why: commandWithNodePath puts node's bin directory in PATH for npm's child processes.
   // npm install runs node-pty's prebuild script (`node scripts/prebuild.js`)
   // which spawns `node` as a child — if node isn't in PATH, that child
   // fails with exit 127 even though we invoked npm via its full path.
-  const escapedNode = shellEscape(nodePath)
-
   // npm init -y rejects '+' in derived package names (content-hashed dir
   // names like relay-0.1.0+abc123). Bypass it with a fixed minimal
   // package.json. type:commonjs pins module resolution against Node default
@@ -542,7 +542,9 @@ async function installNativeDeps(
           hostPlatform,
           nodePath,
           remoteDir,
-          `npm install --omit=dev --no-audit --no-fund ${Object.entries(RELAY_NATIVE_DEPS)
+          `npm install --ignore-scripts=false --omit=dev --no-audit --no-fund ${Object.entries(
+            RELAY_NATIVE_DEPS
+          )
             .map(([dep, version]) => powerShellLiteral(`${dep}@${version}`))
             .join(' ')}`
         )
@@ -550,7 +552,7 @@ async function installNativeDeps(
           hostPlatform,
           nodePath,
           remoteDir,
-          `npm install --omit=dev --no-audit --no-fund ${installArgs} 2>&1`
+          `npm install --ignore-scripts=false --omit=dev --no-audit --no-fund ${installArgs} 2>&1`
         )
     await execHostCommand(conn, hostPlatform, command, {
       timeoutMs: NATIVE_DEPS_INSTALL_TIMEOUT_MS
@@ -576,54 +578,121 @@ async function installNativeDeps(
     throw err
   }
 
-  // SFTP doesn't preserve execute bits; node-pty's spawn-helper prebuild
-  // must be +x for posix_spawnp.
-  if (!isWindowsRemoteHost(hostPlatform)) {
-    await execHostCommand(
-      conn,
-      hostPlatform,
-      `find ${shellEscape(joinRemotePath(hostPlatform, remoteDir, 'node_modules/node-pty/prebuilds'))} -name spawn-helper -exec chmod +x {} + 2>/dev/null; true`
-    )
+  await makeNodePtySpawnHelperExecutable(conn, remoteDir, hostPlatform)
+
+  let probe = await probeInstalledNativeDeps(conn, remoteDir, hostPlatform, nodePath)
+  if (!probe.available) {
+    // Why: npm treats an already-present package as up to date, so enabling
+    // lifecycle scripts on install cannot repair a binding skipped earlier.
+    console.warn(`[ssh-relay] Rebuilding unloadable native deps at ${remoteDir}`)
+    let rebuilt = false
+    try {
+      await rebuildNativeDeps(conn, remoteDir, hostPlatform, nodePath)
+      rebuilt = true
+    } catch (err) {
+      console.warn(
+        `[ssh-relay][NATIVE-DEPS-REBUILD-FAIL] npm rebuild native deps failed at ${remoteDir} (${platform}): ${(err as Error).message}`
+      )
+    }
+    if (rebuilt) {
+      await makeNodePtySpawnHelperExecutable(conn, remoteDir, hostPlatform)
+      probe = await probeInstalledNativeDeps(conn, remoteDir, hostPlatform, nodePath)
+    }
   }
 
-  // node -e require() catches unloadable installs (wrong arch, missing
-  // prebuild, broken native binding) that test -d cannot. Stderr → file
-  // so .bashrc noise can't pollute the sentinel match; preserved for the
-  // [NPTY-MISSING] breadcrumb. MISSING is non-fatal by design — see
-  // docs/ssh-relay-versioned-install-dirs.md (relay still serves
-  // fs/git/preflight; only pty.spawn fails at runtime).
-  const PROBE_OK = 'ORCA-NPTY-PROBE-OK'
-  const stderrFile = joinRemotePath(hostPlatform, remoteDir, '.npty-probe.stderr')
-  const escapedStderr = shellEscape(stderrFile)
-  const probeCommand = isWindowsRemoteHost(hostPlatform)
+  // MISSING is non-fatal by design: the relay still serves fs/git/preflight;
+  // only native-backed operations fail on hosts that cannot build the addons.
+  if (!probe.available) {
+    console.warn(
+      `[ssh-relay][NPTY-MISSING] native deps installed but require() failed at ${remoteDir} (${platform}). stdout=${probe.output.trim().slice(-200)} stderr=${probe.stderr.trim().slice(-500)}`
+    )
+  }
+}
+
+async function rebuildNativeDeps(
+  conn: SshConnection,
+  remoteDir: string,
+  hostPlatform: RemoteHostPlatform,
+  nodePath: string
+): Promise<void> {
+  const depNames = Object.keys(RELAY_NATIVE_DEPS)
+  const command = isWindowsRemoteHost(hostPlatform)
     ? commandWithNodePath(
         hostPlatform,
         nodePath,
         remoteDir,
-        `try { & ${powerShellLiteral(nodePath)} -e ${powerShellNativeArg('require("node-pty"); console.log(process.argv[1])')} ${powerShellLiteral(PROBE_OK)}; if ($LASTEXITCODE -ne 0) { 'MISSING' } } catch { 'MISSING' }`
+        `npm rebuild --ignore-scripts=false ${depNames.map(powerShellLiteral).join(' ')}`
       )
     : commandWithNodePath(
         hostPlatform,
         nodePath,
         remoteDir,
-        `(${escapedNode} -e 'require("node-pty"); console.log(process.argv[1])' ${shellEscape(PROBE_OK)} 2>${escapedStderr} || echo MISSING)`
+        `npm rebuild --ignore-scripts=false ${depNames.map(shellEscape).join(' ')} 2>&1`
+      )
+  await execHostCommand(conn, hostPlatform, command, {
+    timeoutMs: NATIVE_DEPS_INSTALL_TIMEOUT_MS
+  })
+}
+
+async function makeNodePtySpawnHelperExecutable(
+  conn: SshConnection,
+  remoteDir: string,
+  hostPlatform: RemoteHostPlatform
+): Promise<void> {
+  if (isWindowsRemoteHost(hostPlatform)) {
+    return
+  }
+  // SFTP doesn't preserve execute bits; node-pty's spawn-helper prebuild
+  // must be +x for posix_spawnp.
+  await execHostCommand(
+    conn,
+    hostPlatform,
+    `find ${shellEscape(joinRemotePath(hostPlatform, remoteDir, 'node_modules/node-pty/prebuilds'))} -name spawn-helper -exec chmod +x {} + 2>/dev/null; true`
+  )
+}
+
+async function probeInstalledNativeDeps(
+  conn: SshConnection,
+  remoteDir: string,
+  hostPlatform: RemoteHostPlatform,
+  nodePath: string
+): Promise<{ available: boolean; output: string; stderr: string }> {
+  // require() catches unloadable installs (wrong arch, missing prebuild, or a
+  // skipped lifecycle script) that require.resolve() and test -d both miss.
+  const PROBE_OK = 'ORCA-NPTY-PROBE-OK'
+  const stderrFile = joinRemotePath(hostPlatform, remoteDir, '.npty-probe.stderr')
+  const escapedStderr = shellEscape(stderrFile)
+  const probeJs = `${LOAD_RELAY_NATIVE_DEPS}; console.log(process.argv[1])`
+  const probeCommand = isWindowsRemoteHost(hostPlatform)
+    ? commandWithNodePath(
+        hostPlatform,
+        nodePath,
+        remoteDir,
+        `try { & ${powerShellLiteral(nodePath)} -e ${powerShellNativeArg(probeJs)} ${powerShellLiteral(PROBE_OK)}; if ($LASTEXITCODE -ne 0) { 'MISSING' } } catch { 'MISSING' }`
+      )
+    : commandWithNodePath(
+        hostPlatform,
+        nodePath,
+        remoteDir,
+        `(${shellEscape(nodePath)} -e '${probeJs}' ${shellEscape(PROBE_OK)} 2>${escapedStderr} || echo MISSING)`
       )
   const probeOutput = await execHostCommand(conn, hostPlatform, probeCommand)
-  if (!probeOutput.includes(PROBE_OK)) {
-    const remoteStderr = isWindowsRemoteHost(hostPlatform)
+  const remoteStderr =
+    probeOutput.includes(PROBE_OK) || isWindowsRemoteHost(hostPlatform)
       ? ''
       : await execHostCommand(conn, hostPlatform, `cat ${escapedStderr} 2>/dev/null; true`).catch(
           () => ''
         )
-    console.warn(
-      `[ssh-relay][NPTY-MISSING] node-pty installed but require() failed at ${remoteDir} (${platform}). stdout=${probeOutput.trim().slice(-200)} stderr=${remoteStderr.trim().slice(-500)}`
-    )
-  }
   await execHostCommand(
     conn,
     hostPlatform,
     removeRemoteFileCommand(hostPlatform, stderrFile)
   ).catch(() => {})
+  return {
+    available: probeOutput.includes(PROBE_OK),
+    output: probeOutput,
+    stderr: remoteStderr
+  }
 }
 
 function getLocalRelayPath(platform: RelayPlatform): string | null {

@@ -1,6 +1,6 @@
 // Why: regression coverage for the install-probe contract. The original
 // "node-pty is not available" bug shipped because every layer that should
-// have caught it (chained shell, swallowing catch, dir-only probe) was
+// have caught it (chained shell, swallowing catch, resolve-only probe) was
 // silent. Tests below pin the parts that, individually, would have caught
 // it.
 
@@ -129,6 +129,7 @@ function decodePowerShellCommand(command: string): string | null {
 //   7: probe (cd && node -e require)
 //   [8: cat stderr — only when probe stdout is MISSING (graceful path)]
 //   8 or 9: rm probe-stderr (best-effort cleanup; runs whenever probe resolved)
+//   [next: npm rebuild → chmod → second probe when the first probe is MISSING]
 //   next: socket DEAD     next: socket READY
 //
 // When the probe rejects (SSH channel close or cd-failure when the install
@@ -143,6 +144,9 @@ function makeExecResponses(opts: {
   // Override probe stdout for shell-noise pressure tests. If set, replaces
   // the load-test stdout entirely (useful for testing pollution prefixes).
   probeStdoutOverride?: string
+  // Result after the automatic rebuild. Defaults to missing so legacy tests
+  // continue to exercise the final degraded-mode warning.
+  repairProbe?: 'ok' | 'missing'
   // Raw stdout for the build-toolchain probe that runs in installNativeDeps'
   // catch when `npm install` rejects on Linux. Defaults to a fully-present
   // toolchain so the original npm error propagates unchanged.
@@ -187,6 +191,16 @@ function makeExecResponses(opts: {
       slots.push('') // cat stderr (graceful failure path captures detail)
     }
     slots.push('') // rm -f stderr (best-effort cleanup)
+    if (!probeOk) {
+      slots.push('') // npm rebuild with lifecycle scripts explicitly enabled
+      slots.push('') // chmod prebuilds after rebuild
+      const repairProbe = opts.repairProbe === 'ok' ? 'ORCA-NPTY-PROBE-OK\n' : 'MISSING\n'
+      slots.push(repairProbe)
+      if (!repairProbe.includes('ORCA-NPTY-PROBE-OK')) {
+        slots.push('') // cat stderr after unsuccessful rebuild
+      }
+      slots.push('') // rm -f stderr after rebuild probe
+    }
   }
   slots.push('DEAD', 'READY')
   return slots
@@ -262,6 +276,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       (c) => c.includes('npm install') && c.includes('node-pty') && c.includes('@parcel/watcher')
     )
     expect(npmInstallIdx).toBeGreaterThanOrEqual(0)
+    expect(execCalls[npmInstallIdx]).toContain('--ignore-scripts=false')
     // Pin actual ordering: number of execCommand calls observed at the moment
     // ws.end() ran for package.json must be < the index of `npm install`.
     // Catches a future refactor that fires SFTP-write and npm install via
@@ -377,6 +392,27 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
 
     expect(vi.mocked(finalizeInstall)).toHaveBeenCalledTimes(1)
     expect(vi.mocked(abandonInstall)).not.toHaveBeenCalled()
+  })
+
+  it('rebuilds unloadable native deps and recovers before first relay launch', async () => {
+    const conn = makeMockConnection(sftpCapture)
+    feed(makeExecResponses({ npmInstall: 'ok', probe: 'missing', repairProbe: 'ok' }))
+
+    await deployAndLaunchRelay(conn)
+
+    const execCalls = vi.mocked(execCommand).mock.calls.map(([, c]) => c)
+    const failedProbeIdx = execCalls.findIndex((c) => c.includes('require("node-pty")'))
+    const rebuildIdx = execCalls.findIndex((c) => c.includes('npm rebuild'))
+    const repairedProbeIdx = execCalls.findIndex(
+      (c, index) => index > rebuildIdx && c.includes('require("node-pty")')
+    )
+    expect(rebuildIdx).toBeGreaterThan(failedProbeIdx)
+    expect(execCalls[rebuildIdx]).toContain('--ignore-scripts=false')
+    expect(repairedProbeIdx).toBeGreaterThan(rebuildIdx)
+
+    const warnMessages = warnSpy.mock.calls.map((args) => String(args[0] ?? ''))
+    expect(warnMessages.some((m) => m.includes('[ssh-relay][NPTY-MISSING]'))).toBe(false)
+    expect(vi.mocked(finalizeInstall)).toHaveBeenCalledTimes(1)
   })
 
   it('lets a probe SSH-channel failure bubble up rather than silently mapping to MISSING', async () => {
@@ -536,6 +572,9 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       '', // npm install native deps
       'MISSING\n', // native process exit normalized by PowerShell command
       '', // remove probe stderr file
+      '', // npm rebuild native deps
+      'MISSING\n', // rebuilt native process still cannot load
+      '', // remove second probe stderr file
       '', // no persisted active pipe marker
       'WAITING',
       '', // WMI relay launch
@@ -554,6 +593,13 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     const probeScript = decodePowerShellCommand(probeCommand) ?? ''
     expect(probeScript).toContain('$LASTEXITCODE -ne 0')
     expect(probeScript).toContain("'MISSING'")
+
+    const npmScripts = vi
+      .mocked(execCommand)
+      .mock.calls.map(([, command]) => decodePowerShellCommand(command) ?? '')
+      .filter((script) => script.includes('npm install') || script.includes('npm rebuild'))
+    expect(npmScripts).toHaveLength(2)
+    expect(npmScripts.every((script) => script.includes('--ignore-scripts=false'))).toBe(true)
 
     const warnMessages = warnSpy.mock.calls.map((args) => String(args[0] ?? ''))
     expect(warnMessages.some((m) => m.includes('[ssh-relay][NPTY-MISSING]'))).toBe(true)
@@ -627,6 +673,28 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
         (c) => c.includes('npm install') && c.includes('node-pty') && c.includes('@parcel/watcher')
       )
     ).toBe(true)
+  })
+
+  it('loads native bindings when checking whether a completed relay needs repair', async () => {
+    vi.mocked(isRelayAlreadyInstalled).mockResolvedValue(true)
+    const conn = makeMockConnection(sftpCapture)
+    feed([
+      '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
+      '/home/u',
+      'ORCA-NATIVE-DEPS-OK',
+      'DEAD',
+      'READY'
+    ])
+
+    await deployAndLaunchRelay(conn)
+
+    const healthProbe = vi
+      .mocked(execCommand)
+      .mock.calls.map(([, c]) => c)
+      .find((c) => c.includes('ORCA-NATIVE-DEPS-OK'))
+    expect(healthProbe).toContain('require("node-pty")')
+    expect(healthProbe).toContain('require("@parcel/watcher")')
+    expect(healthProbe).not.toContain('require.resolve')
   })
 
   it('does not mutate an existing relay dir when required native deps are present', async () => {
