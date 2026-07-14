@@ -337,10 +337,11 @@ export function createMainWindow(
   // the window back to full-screen after the user already resized it (#591).
   let handledInitialReadyToShow = false
   let initialRevealFallbackTimer: ReturnType<typeof setTimeout> | null =
-    process.platform === 'win32'
+    process.platform === 'win32' || process.platform === 'linux'
       ? setTimeout(() => {
-          // Why: GPU/driver failures on Windows can prevent ready-to-show forever,
-          // leaving the only app window hidden while the main process stays alive.
+          // Why: GPU/driver failures on Windows and Linux/X11 can prevent
+          // ready-to-show forever, leaving the only app window hidden while the
+          // main process stays alive (#8421).
           initialRevealFallbackTimer = null
           revealInitialWindow()
         }, 10_000)

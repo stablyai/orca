@@ -4322,7 +4322,9 @@ export function registerPtyHandlers(
           agentHookServer.registerPaneKeyAlias(
             legacySpawnPaneKey.paneKey,
             migrationUnsupportedPaneKey,
-            result.id
+            result.id,
+            Date.now(),
+            { authorityVerified: true }
           )
           clearMigrationUnsupportedPtysForPaneKey(migrationUnsupportedPaneKey)
         } else if (validatedPaneKey) {
@@ -4951,6 +4953,11 @@ export function registerPtyHandlers(
   })
 
   ipcMain.handle('pty:kill', async (_event, args: { id: string; keepHistory?: boolean }) => {
+    if (typeof args?.id !== 'string' || !args.id || args.id.startsWith('remote:')) {
+      // Why: runtime terminal handles belong to terminal.close; allowing them
+      // to fall through unowned PTY routing could target the local provider.
+      throw new Error('Invalid PTY provider id')
+    }
     const ownedConnectionId = ptyOwnership.get(args.id)
     const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
     const connectionId = ownedConnectionId ?? parsedSshId?.connectionId

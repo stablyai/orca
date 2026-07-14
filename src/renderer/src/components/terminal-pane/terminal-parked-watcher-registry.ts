@@ -62,6 +62,13 @@ export function disposeParkedTabWatchers(tabId: string): void {
   entry.disposersByPtyId.clear()
 }
 
+export function retireParkedTerminalTab(tabId: string): void {
+  // Why: explicit tab retirement permanently invalidates both live parked
+  // observers and unmounted-pane candidates; neither may reattach later.
+  disposeParkedTabWatchers(tabId)
+  capturedPanesByTabId.delete(tabId)
+}
+
 /**
  * Synchronously disposes any parked watcher subscribed to these PTYs.
  * shutdownWorktreeTerminals silences the live transports' final teardown

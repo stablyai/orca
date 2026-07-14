@@ -327,6 +327,7 @@ export function EditorContent({
       // the change/save callbacks so no draft, dirty state, or write can occur —
       // mirrors the conflict-review read-only rendering pattern.
       readOnly={activeFile.readOnly === true}
+      liveTail={activeFile.liveTail === true}
       onContentChange={activeFile.readOnly === true ? noopEditorContentChange : handleContentChange}
       onSave={activeFile.readOnly === true ? noopEditorSave : isMarkdown ? md.mdSave : handleSave}
       worktreeId={activeFile.worktreeId}

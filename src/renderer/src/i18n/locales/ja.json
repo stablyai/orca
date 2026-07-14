@@ -2884,6 +2884,9 @@
           },
           "TerminalTabSplitMenuSection": {
             "splitTerminal": "ターミナルを分割"
+          },
+          "TerminalTabLeadingIcon": {
+            "7ab2964bea": "未読のエージェント完了"
           }
         }
       },
@@ -13038,7 +13041,8 @@
         "otherPlaceholder": "答えを入力してください",
         "cancel": "キャンセル",
         "send": "回答を送信する",
-        "next": "次へ"
+        "next": "次へ",
+        "skip": "スキップ"
       },
       "approval": {
         "title": "{{value0}} を許可しますか?",

@@ -730,9 +730,16 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           ? spawnResult.launchAgent
           : undefined
 
-        // If destroyed while spawn was in flight, kill the new pty and bail
+        // If destroyed while the connect was in flight, bail — and kill only
+        // what this connect CREATED. A fresh spawn is ours to reap, but a
+        // reattach (sessionId) resolves to a pre-existing session owned by the
+        // tab lifecycle: tab close kills it by id through its own path, and
+        // killing it here turns a remount racing a slow reattach into the loss
+        // of a live shell — the exact failure pane recovery exists to prevent.
         if (destroyed) {
-          window.api.pty.kill(spawnResult.id)
+          if (!options.sessionId) {
+            window.api.pty.kill(spawnResult.id)
+          }
           return
         }
 

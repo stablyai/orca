@@ -155,11 +155,11 @@ describe('empty prompt submit', () => {
 
 describe('nativeChatQuestionOffsets', () => {
   it('paces each question a full step apart, Enter 500ms after its body', () => {
-    expect(NATIVE_CHAT_QUESTION_STEP_MS).toBe(800)
-    expect(NATIVE_CHAT_ADVANCE_BUFFER_MS).toBe(300)
+    expect(NATIVE_CHAT_QUESTION_STEP_MS).toBe(1000)
+    expect(NATIVE_CHAT_ADVANCE_BUFFER_MS).toBe(500)
     expect(nativeChatQuestionOffsets(0)).toEqual({ bodyAt: 0, enterAt: 500 })
-    expect(nativeChatQuestionOffsets(1)).toEqual({ bodyAt: 800, enterAt: 1300 })
-    expect(nativeChatQuestionOffsets(2)).toEqual({ bodyAt: 1600, enterAt: 2100 })
+    expect(nativeChatQuestionOffsets(1)).toEqual({ bodyAt: 1000, enterAt: 1500 })
+    expect(nativeChatQuestionOffsets(2)).toEqual({ bodyAt: 2000, enterAt: 2500 })
   })
 })
 

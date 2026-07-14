@@ -5,7 +5,8 @@ import type { OpenFile } from '@/store/slices/editor'
 
 const lifecycle = vi.hoisted(() => ({
   events: [] as string[],
-  models: new Map<string, { content: string; undo: string[] }>()
+  models: new Map<string, { content: string; undo: string[] }>(),
+  mountedProps: [] as { filePath: string; readOnly?: boolean; liveTail?: boolean }[]
 }))
 
 vi.mock('@/lib/lazy-with-retry', async () => {
@@ -16,10 +17,20 @@ vi.mock('@/lib/lazy-with-retry', async () => {
       if (!factory.toString().includes('/MonacoEditor.tsx')) {
         return () => null
       }
-      return function MockRetainedMonaco(props: { filePath: string; content: string }) {
+      return function MockRetainedMonaco(props: {
+        filePath: string
+        content: string
+        readOnly?: boolean
+        liveTail?: boolean
+      }) {
         /* oxlint-disable react-hooks/exhaustive-deps -- Mount-only by design: a prop-effect would hide a missing outer React remount. */
         React.useEffect(() => {
           lifecycle.events.push(`mount:${props.filePath}`)
+          lifecycle.mountedProps.push({
+            filePath: props.filePath,
+            readOnly: props.readOnly,
+            liveTail: props.liveTail
+          })
           const retained = lifecycle.models.get(props.filePath) ?? { content: '', undo: [] }
           const model = {
             getValue: () => retained.content,
@@ -93,7 +104,7 @@ vi.mock('@/store', () => ({
 
 import { EditorContent } from './EditorContent'
 
-function file(filePath: string): OpenFile {
+function file(filePath: string, overrides: Partial<OpenFile> = {}): OpenFile {
   return {
     id: filePath,
     filePath,
@@ -101,7 +112,8 @@ function file(filePath: string): OpenFile {
     worktreeId: 'repo::/repo',
     language: 'typescript',
     isDirty: false,
-    mode: 'edit'
+    mode: 'edit',
+    ...overrides
   }
 }
 
@@ -136,6 +148,7 @@ afterEach(() => {
   cleanup()
   lifecycle.events.length = 0
   lifecycle.models.clear()
+  lifecycle.mountedProps.length = 0
 })
 
 describe('EditorContent Monaco lifecycle boundary', () => {
@@ -161,5 +174,15 @@ describe('EditorContent Monaco lifecycle boundary', () => {
       content: 'first with edits',
       undo: ['first undo']
     })
+  })
+
+  it('passes live-tail ownership only for a read-only live log', () => {
+    const liveLog = file('/repo/session.jsonl', { readOnly: true, liveTail: true })
+
+    render(<EditorContent {...props(liveLog, 'session content')} />)
+
+    expect(lifecycle.mountedProps).toEqual([
+      { filePath: liveLog.filePath, readOnly: true, liveTail: true }
+    ])
   })
 })

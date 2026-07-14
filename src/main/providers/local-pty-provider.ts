@@ -15,7 +15,7 @@ import { resolveProcessCwd } from './process-cwd'
 import { existsSync } from 'node:fs'
 import * as pty from 'node-pty'
 import { parseWslPath, isWslAvailable } from '../wsl'
-import { splitWorktreeId } from '../../shared/worktree-id'
+import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
 import {
   injectHistoryEnv,
   updateHistFileForFallback,
@@ -154,7 +154,11 @@ function runPtyCleanup(id: string): void {
 function getWslContextFromWorktreeId(
   worktreeId: string | undefined
 ): { distro: string; treatPosixCwdAsWsl: true } | undefined {
-  const worktreePath = worktreeId ? splitWorktreeId(worktreeId)?.worktreePath : undefined
+  // Why: strip any synthetic `::workspace:<uuid>` folder-workspace suffix so WSL
+  // detection parses the real path, not a nonexistent identifier.
+  const worktreePath = worktreeId
+    ? splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
+    : undefined
   const wslInfo = worktreePath ? parseWslPath(worktreePath) : null
   return wslInfo ? { distro: wslInfo.distro, treatPosixCwdAsWsl: true } : undefined
 }

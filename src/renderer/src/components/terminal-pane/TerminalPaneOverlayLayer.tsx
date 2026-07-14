@@ -15,6 +15,7 @@ import { shouldMountBackgroundWorktreeTab } from '../terminal/background-termina
 import { useNativeChatToggleShortcut } from '../native-chat/use-native-chat-toggle-shortcut'
 import { shouldDeferParkedPtyExitTabClose } from './terminal-parked-tab-watchers'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
+import type { TerminalTabCloseReason } from '@/store/slices/terminal-tab-retirement'
 
 type TerminalOverlayAssignment = {
   unifiedTabId: string
@@ -61,7 +62,7 @@ type TerminalOverlaySlotProps = {
   activityTerminalPortal: ActivityTerminalPortalTarget | null
   onFocusOwningGroup: ((groupId: string) => void) | undefined
   consumeSuppressedPtyExit: (ptyId: string) => boolean
-  closeTab: (tabId: string) => void
+  closeTab: (tabId: string, options?: { reason?: TerminalTabCloseReason }) => void
   leaveWorktreeIfEmpty: () => void
 }
 
@@ -246,7 +247,7 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
         if (shouldDeferParkedPtyExitTabClose(terminalTabId, ptyId)) {
           return
         }
-        closeTab(terminalTabId)
+        closeTab(terminalTabId, { reason: 'pty-exit' })
         leaveWorktreeIfEmpty()
       }}
       onCloseTab={() => {

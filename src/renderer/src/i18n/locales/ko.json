@@ -2884,6 +2884,9 @@
           },
           "TerminalTabSplitMenuSection": {
             "splitTerminal": "터미널 분할"
+          },
+          "TerminalTabLeadingIcon": {
+            "7ab2964bea": "읽지 않은 에이전트 완료"
           }
         }
       },
@@ -13038,7 +13041,8 @@
         "otherPlaceholder": "답변을 입력하세요",
         "cancel": "취소",
         "send": "답변 보내기",
-        "next": "다음"
+        "next": "다음",
+        "skip": "건너뛰기"
       },
       "approval": {
         "title": "{{value0}}을(를) 허용하시겠습니까?",

@@ -2884,6 +2884,9 @@
           },
           "TerminalTabSplitMenuSection": {
             "splitTerminal": "Split terminal"
+          },
+          "TerminalTabLeadingIcon": {
+            "7ab2964bea": "Unread agent completion"
           }
         }
       },
@@ -13038,7 +13041,8 @@
         "otherPlaceholder": "Type your answer",
         "cancel": "Cancel",
         "send": "Send answer",
-        "next": "Next"
+        "next": "Next",
+        "skip": "Skip"
       },
       "approval": {
         "title": "Allow {{value0}}?",

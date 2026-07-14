@@ -199,6 +199,58 @@ describe('safeFit', () => {
     expect(activeBuffer.viewportY).toBe(42)
   })
 
+  it('restores pinned content via marker when fit reflow renumbers buffer lines', () => {
+    const pane = createPane({
+      proposedCols: 100,
+      proposedRows: 32,
+      terminalCols: 120,
+      terminalRows: 32
+    })
+    const activeBuffer = pane.terminal.buffer.active as {
+      viewportY: number
+      baseY: number
+      cursorY?: number
+    }
+    activeBuffer.viewportY = 42
+    activeBuffer.baseY = 100
+    activeBuffer.cursorY = 0
+    const marker = { line: 42, isDisposed: false, dispose: vi.fn() }
+    ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi.fn(() => marker)
+    vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
+      // Reflow at narrower cols rewraps lines; the tracked content now lives
+      // at a different absolute line than the pre-fit viewport number.
+      activeBuffer.baseY = 130
+      activeBuffer.viewportY = 0
+      marker.line = 57
+    })
+
+    safeFit(pane)
+
+    expect(pane.terminal.scrollToLine).toHaveBeenCalledWith(57)
+    expect(activeBuffer.viewportY).toBe(57)
+    expect(marker.dispose).toHaveBeenCalled()
+  })
+
+  it('keeps a follow-output pane at the bottom through fit', () => {
+    const pane = createPane({
+      proposedCols: 100,
+      proposedRows: 32,
+      terminalCols: 120,
+      terminalRows: 32
+    })
+    const activeBuffer = pane.terminal.buffer.active as { viewportY: number; baseY: number }
+    activeBuffer.viewportY = 100
+    activeBuffer.baseY = 100
+    vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
+      activeBuffer.baseY = 130
+      activeBuffer.viewportY = 0
+    })
+
+    safeFit(pane)
+
+    expect(pane.terminal.scrollToBottom).toHaveBeenCalled()
+  })
+
   it('does not throw when xterm rejects scroll restoration during layout', () => {
     const pane = createPane({
       proposedCols: 100,

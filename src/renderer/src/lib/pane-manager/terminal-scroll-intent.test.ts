@@ -367,4 +367,119 @@ describe('terminal scroll intent', () => {
 
     expect(terminal.scrollToLine).toHaveBeenCalledWith(40)
   })
+
+  it('reverts a wheel pin to followOutput when the viewport never leaves the bottom', async () => {
+    const frameCallbacks: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
+    vi.stubGlobal('Element', TestElement)
+    const terminal = createTerminal({ viewportY: 100, baseY: 100 })
+    const host = new TestElement() as unknown as HTMLElement
+    const disposable = attachTerminalScrollIntentTracking(terminal, host)
+
+    // A sub-row trackpad delta or a wheel consumed by a mouse-reporting TUI:
+    // the wheel event fires but xterm's viewport never moves.
+    const wheelUp = new Event('wheel') as WheelEvent
+    Object.defineProperty(wheelUp, 'deltaY', { value: -2 })
+    host.dispatchEvent(wheelUp)
+    expect(getTerminalScrollIntentKind(terminal)).toBe('pinnedViewport')
+
+    await Promise.resolve()
+    while (frameCallbacks.length) {
+      frameCallbacks.shift()?.(16)
+    }
+    vi.advanceTimersByTime(80)
+
+    expect(getTerminalScrollIntentKind(terminal)).toBe('followOutput')
+    disposable.dispose()
+  })
+
+  it('keeps a wheel pin when the viewport leaves the bottom before settle', async () => {
+    const frameCallbacks: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
+    vi.stubGlobal('Element', TestElement)
+    const terminal = createTerminal({ viewportY: 100, baseY: 100 })
+    const host = new TestElement() as unknown as HTMLElement
+    const disposable = attachTerminalScrollIntentTracking(terminal, host)
+
+    const wheelUp = new Event('wheel') as WheelEvent
+    Object.defineProperty(wheelUp, 'deltaY', { value: -10 })
+    host.dispatchEvent(wheelUp)
+
+    terminal.buffer.active.viewportY = 60
+    await Promise.resolve()
+    while (frameCallbacks.length) {
+      frameCallbacks.shift()?.(16)
+    }
+    vi.advanceTimersByTime(80)
+
+    expect(getTerminalScrollIntentKind(terminal)).toBe('pinnedViewport')
+    terminal.buffer.active.viewportY = 0
+    enforceTerminalCurrentScrollIntent(terminal)
+    expect(terminal.scrollToLine).toHaveBeenLastCalledWith(60)
+    disposable.dispose()
+  })
+
+  it('does not freeze the viewport when a pinned intent is latched at the bottom', () => {
+    const terminal = createTerminal({ viewportY: 100, baseY: 100 })
+    // Phantom pin: a wheel/PageUp the viewport never followed latched
+    // pinnedViewport while the terminal was still at the bottom.
+    markTerminalPinnedViewport(terminal)
+
+    for (let batch = 1; batch <= 2; batch += 1) {
+      const snapshot = captureTerminalWriteScrollIntent(terminal)
+      // xterm follows output during the write because the viewport was at bottom.
+      terminal.buffer.active.baseY += 25
+      terminal.buffer.active.viewportY = terminal.buffer.active.baseY
+      enforceTerminalWriteScrollIntent(terminal, snapshot)
+      expect(terminal.buffer.active.viewportY).toBe(terminal.buffer.active.baseY)
+    }
+    expect(getTerminalScrollIntentKind(terminal)).toBe('followOutput')
+  })
+
+  it('resumes following on visibility enforce when the stored pin was recorded at the bottom', () => {
+    const terminal = createTerminal({ viewportY: 100, baseY: 100 })
+    markTerminalPinnedViewport(terminal)
+
+    terminal.buffer.active.baseY = 400
+    terminal.buffer.active.viewportY = 100
+    enforceTerminalCurrentScrollIntent(terminal)
+
+    expect(terminal.scrollToBottom).toHaveBeenCalled()
+    expect(terminal.buffer.active.viewportY).toBe(400)
+    expect(getTerminalScrollIntentKind(terminal)).toBe('followOutput')
+  })
+
+  it('restores a pinned viewport by bottom offset after a rebuild shrinks the scrollback', () => {
+    const terminal = createTerminal({ viewportY: 550, baseY: 600 })
+    markTerminalPinnedViewport(terminal)
+
+    // Snapshot replay rebuilds a shorter, renumbered buffer.
+    terminal.buffer.active.baseY = 200
+    terminal.buffer.active.viewportY = 200
+    enforceTerminalCurrentScrollIntent(terminal)
+
+    expect(terminal.scrollToLine).toHaveBeenLastCalledWith(150)
+    expect(terminal.buffer.active.viewportY).toBe(150)
+  })
+
+  it('supports bottom-offset restore for buffer-rebuild write paths', () => {
+    const terminal = createTerminal({ viewportY: 550, baseY: 600 })
+    markTerminalPinnedViewport(terminal)
+    const snapshot = captureTerminalWriteScrollIntent(terminal)
+
+    terminal.buffer.active.baseY = 80
+    terminal.buffer.active.viewportY = 80
+    enforceTerminalWriteScrollIntent(terminal, snapshot, { restoreBy: 'bottomOffset' })
+
+    expect(terminal.scrollToLine).toHaveBeenLastCalledWith(30)
+    expect(terminal.buffer.active.viewportY).toBe(30)
+  })
 })

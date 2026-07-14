@@ -188,10 +188,12 @@ export function buildEditorSessionData(
     WorkspaceVisibleTabType
   >
   const allEditFileIds = new Set(Object.values(editFileIdsByWorktree).flatMap((ids) => [...ids]))
+  // Why: preserve the actual value so per-file hide overrides survive restart;
+  // the map only ever carries `false` entries (visible is the default).
   const persistedMarkdownFrontmatterVisible = Object.fromEntries(
-    Object.keys(markdownFrontmatterVisible ?? {})
-      .filter((fileId) => allEditFileIds.has(fileId))
-      .map((fileId) => [fileId, true])
+    Object.entries(markdownFrontmatterVisible ?? {}).filter(([fileId]) =>
+      allEditFileIds.has(fileId)
+    )
   )
 
   return {

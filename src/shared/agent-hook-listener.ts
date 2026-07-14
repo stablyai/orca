@@ -155,6 +155,47 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.claudeLeadStateByPaneKey.delete(paneKey)
 }
 
+function movePaneScopedMapEntries<T>(
+  map: Map<string, T>,
+  fromPaneKey: string,
+  toPaneKey: string
+): void {
+  for (const [key, value] of Array.from(map.entries())) {
+    if (key !== fromPaneKey && !key.startsWith(`${fromPaneKey}\0`)) {
+      continue
+    }
+    map.delete(key)
+    map.set(`${toPaneKey}${key.slice(fromPaneKey.length)}`, value)
+  }
+}
+
+function movePaneScopedSetEntries(set: Set<string>, fromPaneKey: string, toPaneKey: string): void {
+  for (const key of Array.from(set)) {
+    if (key !== fromPaneKey && !key.startsWith(`${fromPaneKey}\0`)) {
+      continue
+    }
+    set.delete(key)
+    set.add(`${toPaneKey}${key.slice(fromPaneKey.length)}`)
+  }
+}
+
+export function movePaneCacheState(
+  state: HookListenerState,
+  fromPaneKey: string,
+  toPaneKey: string
+): void {
+  if (fromPaneKey === toPaneKey) {
+    return
+  }
+  movePaneScopedMapEntries(state.lastPromptByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.lastToolByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.lastStatusByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.antigravityCompletedTranscriptByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedSetEntries(state.ampCompletedCacheKeys, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.claudeSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.claudeLeadStateByPaneKey, fromPaneKey, toPaneKey)
+}
+
 function clearPaneTurnCacheState(state: HookListenerState, paneKey: string): void {
   state.lastPromptByPaneKey.delete(paneKey)
   state.lastToolByPaneKey.delete(paneKey)

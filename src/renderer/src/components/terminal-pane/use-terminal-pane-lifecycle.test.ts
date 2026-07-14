@@ -151,12 +151,23 @@ describe('shouldDetachPaneTransportOnUnmount', () => {
     ).toBe(true)
   })
 
-  it('destroys when the tab is gone and no replacement owns the PTY', () => {
+  it('detaches when closeTab already owns provider shutdown for the removed tab', () => {
     expect(
       shouldDetachPaneTransportOnUnmount({
         tabStillExists: false,
         tabId: 'tab-1',
         ptyId: 'remote:env@@term-1',
+        worktreeTabs: []
+      })
+    ).toBe(true)
+  })
+
+  it('destroys an ID-less transport so a pending spawn cannot outlive unmount', () => {
+    expect(
+      shouldDetachPaneTransportOnUnmount({
+        tabStillExists: false,
+        tabId: 'tab-1',
+        ptyId: null,
         worktreeTabs: []
       })
     ).toBe(false)

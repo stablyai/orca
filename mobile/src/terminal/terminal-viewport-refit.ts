@@ -7,7 +7,8 @@ import { shouldRecoverTerminalOnAppStateChange } from './terminal-foreground-rec
 import {
   isTerminalUpdateViewportApplied,
   isTerminalUpdateViewportUpdated,
-  isTerminalViewportRefitTargetCurrent
+  isTerminalViewportRefitTargetCurrent,
+  shouldRefitOnFrameHeightChange
 } from './terminal-viewport-refit-state'
 
 export type TerminalViewportDims = { cols: number; rows: number }
@@ -32,6 +33,12 @@ type TerminalViewportRefitOptions = {
   // tab-strip change. Carries that measured width so those resizes re-fit the PTY;
   // the 150ms debounce coalesces the stream of drag widths into one settle-time refit.
   terminalFrameWidth: number
+  // Why: the frame height settles when the accessory/live-input dock lays out
+  // after a new agent terminal's first fit; carrying it re-fits the PTY so its
+  // rows stop overflowing behind the dock. See shouldRefitOnFrameHeightChange.
+  terminalFrameHeight: number
+  // Why: gate the height refit so a keyboard-driven resize never reflows the PTY.
+  keyboardVisibleRef: RefObject<boolean>
   unsubscribeTerminal: (handle: string) => void
   subscribeToTerminal: (handle: string) => void
 }
@@ -56,6 +63,8 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
     tabStripVisible,
     textScale,
     terminalFrameWidth,
+    terminalFrameHeight,
+    keyboardVisibleRef,
     unsubscribeTerminal,
     subscribeToTerminal
   } = options
@@ -225,6 +234,27 @@ export function useTerminalViewportRefit(options: TerminalViewportRefitOptions):
     viewportMeasuredRef.current = false
     scheduleViewportRefit()
   }, [terminalFrameWidth, viewportMeasuredRef, scheduleViewportRefit])
+
+  // Why: re-fit when the frame height settles after a new agent terminal's
+  // first fit so its rows stop overflowing behind the dock; the keyboard guard
+  // keeps an IME resize from reflowing the PTY. The refit's row-count guard
+  // makes a same-row height change a no-op.
+  const prevFrameHeightRef = useRef(terminalFrameHeight)
+  useEffect(() => {
+    const previousHeight = prevFrameHeightRef.current
+    prevFrameHeightRef.current = terminalFrameHeight
+    if (
+      !shouldRefitOnFrameHeightChange({
+        previousHeight,
+        nextHeight: terminalFrameHeight,
+        keyboardVisible: keyboardVisibleRef.current
+      })
+    ) {
+      return
+    }
+    viewportMeasuredRef.current = false
+    scheduleViewportRefit()
+  }, [terminalFrameHeight, keyboardVisibleRef, viewportMeasuredRef, scheduleViewportRefit])
 
   useEffect(() => {
     if (Platform.OS !== 'ios') {

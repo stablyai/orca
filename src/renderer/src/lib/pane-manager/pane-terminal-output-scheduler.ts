@@ -18,6 +18,10 @@ import {
   registerTerminalOutputAckCredits
 } from './pane-terminal-output-ack-credit'
 import {
+  armTerminalWriteStallWatch,
+  settleTerminalWriteStallWatch
+} from './terminal-write-pipeline-health'
+import {
   TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS,
   terminalOutputBacklogCapChars
 } from '../../../../shared/terminal-scrollback-policy'
@@ -924,19 +928,21 @@ function makeParseClockPacer(): () => void {
 }
 
 function composeParsedCallback(
+  terminal: TerminalOutputTarget,
   onParsed: TerminalOutputParsedCallback | undefined,
   ackCreditsParsed: (() => void) | undefined,
   pacer: (() => void) | undefined
-): TerminalOutputParsedCallback | undefined {
-  if (!onParsed && !ackCreditsParsed && !pacer) {
-    return undefined
-  }
+): TerminalOutputParsedCallback {
+  // Why always non-undefined: the write-completion callback doubles as the
+  // pipeline-health settle signal. A write with no callback could never settle
+  // the stall watch, forcing a probe round-trip for every healthy idle pane.
   return () => {
     try {
       onParsed?.()
     } finally {
       ackCreditsParsed?.()
       pacer?.()
+      settleTerminalWriteStallWatch(terminal)
     }
   }
 }
@@ -948,6 +954,16 @@ function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null
   }
   const pacer = entry.highPriority ? makeParseClockPacer() : undefined
   const ackCreditsParsed = registerTerminalOutputAckCredits(entry.terminal, queuedWrite.ackCredits)
+  // Why armed BEFORE the write: a wedged WriteBuffer (escaping callback throw,
+  // issue #2836) or a disposed xterm (write() silently drops its completion —
+  // verified against 6.1.0-beta.287) never runs the parsed callback below. The
+  // stall watch probe-certifies dead-vs-slow and hands the pane to recovery;
+  // the entry cleanup credits queued deliveries so main's in-flight window
+  // never leaks. Arming first keeps a synchronously-completing write able to
+  // settle its own watch.
+  armTerminalWriteStallWatch(entry.terminal, {
+    onCertifiedDead: () => discardTerminalOutput(entry.terminal)
+  })
   try {
     queuedWrite.beforeWrite?.(queuedWrite.data)
     if (queuedWrite.foreground) {
@@ -960,14 +976,19 @@ function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null
           forceViewportRefresh: queuedWrite.forceForegroundRefresh,
           followupViewportRefresh: queuedWrite.followupForegroundRefresh,
           shouldRefreshViewportSynchronously: queuedWrite.shouldRefreshForegroundSynchronously,
-          onParsed: composeParsedCallback(queuedWrite.onParsed, ackCreditsParsed, pacer)
+          onParsed: composeParsedCallback(
+            entry.terminal,
+            queuedWrite.onParsed,
+            ackCreditsParsed,
+            pacer
+          )
         }
       )
     } else {
       writeBackgroundTerminalChunk(
         entry.terminal,
         queuedWrite.data,
-        composeParsedCallback(queuedWrite.onParsed, ackCreditsParsed, pacer)
+        composeParsedCallback(entry.terminal, queuedWrite.onParsed, ackCreditsParsed, pacer)
       )
     }
   } catch {
@@ -1213,6 +1234,9 @@ export function writeTerminalOutput(
       terminal,
       options.ackCredit ? [options.ackCredit] : []
     )
+    armTerminalWriteStallWatch(terminal, {
+      onCertifiedDead: () => discardTerminalOutput(terminal)
+    })
     try {
       options.beforeWrite?.(data)
       writeForegroundTerminalChunkWithIntent(
@@ -1223,7 +1247,7 @@ export function writeTerminalOutput(
           followupViewportRefresh: options.followupForegroundRefresh === true,
           shouldRefreshViewportSynchronously:
             options.shouldRefreshForegroundSynchronously ?? ALWAYS_REFRESH_FOREGROUND_SYNCHRONOUSLY,
-          onParsed: composeParsedCallback(options.onParsed, ackCreditsParsed, undefined)
+          onParsed: composeParsedCallback(terminal, options.onParsed, ackCreditsParsed, undefined)
         }
       )
     } catch (error) {
@@ -1296,6 +1320,9 @@ export function flushTerminalOutput(
       debugState.flushWriteCount++
     }
     const ackCreditsParsed = registerTerminalOutputAckCredits(terminal, queuedWrite.ackCredits)
+    armTerminalWriteStallWatch(terminal, {
+      onCertifiedDead: () => discardTerminalOutput(terminal)
+    })
     try {
       queuedWrite.beforeWrite?.(queuedWrite.data)
       if (queuedWrite.foreground) {
@@ -1308,14 +1335,19 @@ export function flushTerminalOutput(
             forceViewportRefresh: queuedWrite.forceForegroundRefresh,
             followupViewportRefresh: queuedWrite.followupForegroundRefresh,
             shouldRefreshViewportSynchronously: queuedWrite.shouldRefreshForegroundSynchronously,
-            onParsed: composeParsedCallback(queuedWrite.onParsed, ackCreditsParsed, undefined)
+            onParsed: composeParsedCallback(
+              terminal,
+              queuedWrite.onParsed,
+              ackCreditsParsed,
+              undefined
+            )
           }
         )
       } else {
         writeBackgroundTerminalChunk(
           terminal,
           queuedWrite.data,
-          composeParsedCallback(queuedWrite.onParsed, ackCreditsParsed, undefined)
+          composeParsedCallback(terminal, queuedWrite.onParsed, ackCreditsParsed, undefined)
         )
       }
     } catch {
@@ -1408,6 +1440,9 @@ export function discardTerminalOutput(terminal: TerminalOutputTarget): void {
   discardInFlightTerminalOutputAckCredits(terminal)
   queuedByTerminal.delete(terminal)
   discardForegroundRenderSettle(terminal)
+  // Why: a legitimately disposed pane must not leave a pending stall watch to
+  // probe the dead terminal later and report a false wedge.
+  settleTerminalWriteStallWatch(terminal)
   recordQueueDebugPressure()
 }
 

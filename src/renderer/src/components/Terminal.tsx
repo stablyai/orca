@@ -1334,9 +1334,9 @@ function Terminal(): React.JSX.Element | null {
       if (shouldDeferParkedPtyExitTabClose(tabId, ptyId)) {
         return
       }
-      handleCloseTab(tabId)
+      closeTerminalTab(tabId, { reason: 'pty-exit' })
     },
-    [consumeSuppressedPtyExit, handleCloseTab]
+    [consumeSuppressedPtyExit]
   )
 
   const handleCloseOthers = useCallback(
@@ -1364,11 +1364,17 @@ function Terminal(): React.JSX.Element | null {
             (unifiedTab?.contentType === 'browser' &&
               browserWorkspaceHasRemoteOwner(state, unifiedTab.entityId, runtimeEnvironmentId)))
         ) {
-          void closeWebRuntimeSessionTab({
-            worktreeId: activeWorktreeId,
-            tabId: unifiedTab.contentType === 'browser' ? unifiedTab.id : unifiedTab.entityId,
-            environmentId: runtimeEnvironmentId
-          })
+          if (unifiedTab.contentType === 'terminal') {
+            // Why: paired-host bulk close must revoke renderer resume and hook
+            // authority as well as removing the host-owned session tab.
+            closeTerminalTab(unifiedTab.entityId)
+          } else {
+            void closeWebRuntimeSessionTab({
+              worktreeId: activeWorktreeId,
+              tabId: unifiedTab.id,
+              environmentId: runtimeEnvironmentId
+            })
+          }
           continue
         }
         if ((state.tabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)) {
@@ -1423,11 +1429,17 @@ function Terminal(): React.JSX.Element | null {
             (unifiedTab?.contentType === 'browser' &&
               browserWorkspaceHasRemoteOwner(state, unifiedTab.entityId, runtimeEnvironmentId)))
         ) {
-          void closeWebRuntimeSessionTab({
-            worktreeId: activeWorktreeId,
-            tabId: unifiedTab.contentType === 'browser' ? unifiedTab.id : unifiedTab.entityId,
-            environmentId: runtimeEnvironmentId
-          })
+          if (unifiedTab.contentType === 'terminal') {
+            // Why: route every terminal close through the destructive local
+            // lifecycle boundary before the paired host RPC.
+            closeTerminalTab(unifiedTab.entityId)
+          } else {
+            void closeWebRuntimeSessionTab({
+              worktreeId: activeWorktreeId,
+              tabId: unifiedTab.id,
+              environmentId: runtimeEnvironmentId
+            })
+          }
           continue
         }
         if ((state.tabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)) {

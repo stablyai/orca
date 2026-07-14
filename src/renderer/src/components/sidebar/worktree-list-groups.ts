@@ -32,7 +32,7 @@ import {
 import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace-statuses'
 import type { AppState } from '../../store/types'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from '../../store/slices/github-cache-key'
-import { getRepoDisplayLabelsByPath } from '@/lib/repo-display-labels'
+import { getRepoDisplayLabelKey, getRepoDisplayLabelsByPath } from '@/lib/repo-display-labels'
 import { translate } from '@/i18n/i18n'
 import { getExecutionHostLabel, getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
@@ -709,7 +709,9 @@ function withRepoSectionDisplayLabels(entries: readonly OrderedGroupEntry[]): Or
   const labelsByPath = getRepoDisplayLabelsByPath(repos)
   return entries.map(([key, group]) => [
     key,
-    group.repo ? { ...group, label: labelsByPath.get(group.repo.path) ?? group.label } : group
+    group.repo
+      ? { ...group, label: labelsByPath.get(getRepoDisplayLabelKey(group.repo)) ?? group.label }
+      : group
   ])
 }
 

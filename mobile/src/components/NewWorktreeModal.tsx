@@ -10,21 +10,20 @@ import {
   ActivityIndicator,
   Keyboard
 } from 'react-native'
-import { ChevronDown, ChevronUp, Check } from 'lucide-react-native'
+import { ChevronDown, ChevronUp } from 'lucide-react-native'
 import type { RpcClient } from '../transport/rpc-client'
-import type { RpcSuccess } from '../transport/types'
+import type { RpcResponse, RpcSuccess } from '../transport/types'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
-import { BottomDrawer } from './BottomDrawer'
+import { BottomDrawer, BOTTOM_DRAWER_HIDE_DURATION_MS } from './BottomDrawer'
+import { BottomDrawerModalHost } from './bottom-drawer-modal-host'
 import { PickerListDrawer } from './PickerListDrawer'
 import { MobileAgentIcon } from './MobileAgentIcon'
-import { MobileWorkspaceNameInput } from './MobileWorkspaceNameInput'
 import { getSuggestedCreatureName } from './worktree-name-suggestion'
 import { deriveWorkspaceSshGate, workspaceSshStatusLabel } from '../tasks/workspace-ssh-gate'
-import { WORKTREE_CREATE_TIMEOUT_MS } from '../tasks/workspace-create-timeout'
 import {
   isSetupHookTrusted,
   normalizeSetupHookTrust,
-  trustedOrcaHooksWithSetupApproval,
+  persistSetupHookTrustApproval,
   wasSetupHookPreviouslyApproved,
   type SetupHookTrust
 } from '../tasks/setup-hook-trust'
@@ -49,6 +48,24 @@ import {
   refreshMobileNewWorkspaceDialogSelectedRepo,
   resolveMobileNewWorkspaceDialogRepoId
 } from '../worktree/new-workspace-dialog-repo-selection'
+import { createBlankWorkspace } from '../tasks/blank-workspace-create'
+import { createWorkspaceFromComposerSource } from '../tasks/source-workspace-create'
+import { MOBILE_TASKS_CAPABILITY } from '../tasks/mobile-tasks-capability'
+import { normalizeWorkspaceAgent } from '../tasks/workspace-agent-selection'
+import {
+  filterAvailableTaskProviders,
+  normalizeVisibleTaskProviders,
+  type TaskProvider
+} from '../tasks/mobile-task-providers'
+import { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
+import type { SmartModeAvailabilityInput } from '../tasks/mobile-smart-source-modes'
+import { deriveRepoSlug, type PasteRepoCandidate } from '../tasks/smart-source-paste-intent'
+import { shouldPreserveWorkspaceSourceOnRepoChange } from '../../../src/shared/new-workspace/workspace-source'
+import { getComposerRepoWorktreeBranches } from '../../../src/shared/composer-branch-selection'
+import { SmartWorkspaceSourceField } from './SmartWorkspaceSourceField'
+import { SmartWorkspaceSourceDrawer } from './SmartWorkspaceSourceDrawer'
+import { SmartWorkspaceAdvancedFields } from './SmartWorkspaceAdvancedFields'
+import { SetupHookTrustDrawer, type SetupTrustPrompt } from './SetupHookTrustDrawer'
 
 type Repo = {
   id: string
@@ -56,6 +73,9 @@ type Repo = {
   path: string
   badgeColor?: string
   connectionId?: string | null
+  kind?: 'git' | 'folder'
+  upstream?: { owner: string; repo: string } | null
+  gitRemoteIdentity?: { remoteUrl?: string; canonicalKey?: string } | null
 }
 
 type SetupDecision = 'inherit' | 'run' | 'skip'
@@ -91,13 +111,11 @@ type CreateOptions = {
   approvedSetupContentHash?: string
 }
 
-type SetupTrustPrompt = {
-  repoId: string
-  repoName: string
-  scriptContent: string
-  contentHash: string
-  previouslyApproved: boolean
-}
+type NewWorktreeDrawerView = 'form' | 'transition' | 'source' | 'repo' | 'agent' | 'trust'
+
+// Why: iOS cannot reliably present a second native modal until the first drawer's
+// exit commits; one extra frame keeps transitions sequential on slower devices.
+const NEW_WORKTREE_DRAWER_TRANSITION_MS = BOTTOM_DRAWER_HIDE_DURATION_MS + 16
 
 function repoColor(name: string): string {
   const palette = ['#f97316', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f59e0b', '#6366f1']
@@ -124,6 +142,7 @@ type Props = {
   // on the on-disk directory basename, so paths (not displayNames) are
   // what the suggestion logic must dedupe against.
   existingWorktreePaths?: readonly string[]
+  existingWorktrees?: readonly { repoId: string; branch: string }[]
   onCreated: (worktreeId: string, name: string) => void
   onClose: () => void
 }
@@ -133,6 +152,7 @@ export function NewWorktreeModal({
   client,
   hostId,
   existingWorktreePaths,
+  existingWorktrees,
   onCreated,
   onClose
 }: Props) {
@@ -157,6 +177,7 @@ export function NewWorktreeModal({
       client={client}
       hostId={hostId}
       existingWorktreePaths={existingWorktreePaths}
+      existingWorktrees={existingWorktrees}
       onCreated={onCreated}
       onClose={onClose}
     />
@@ -168,25 +189,28 @@ function NewWorktreeModalContent({
   client,
   hostId,
   existingWorktreePaths,
+  existingWorktrees,
   onCreated,
   onClose
 }: Props) {
   const [initialRepos] = useState(() => (hostId ? (getCachedRepos(hostId) as Repo[] | null) : null))
   const [repos, setRepos] = useState<Repo[]>(initialRepos ?? [])
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null)
-  const [showRepoPicker, setShowRepoPicker] = useState(false)
-  const [nameAutoFocusEnabled, setNameAutoFocusEnabled] = useState(true)
+  const [drawerView, setDrawerView] = useState<NewWorktreeDrawerView>('form')
+  const drawerTransitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const createInFlightRef = useRef(false)
+  const setupTrustActionInFlightRef = useRef(false)
   const [selectedAgentState, setSelectedAgent] = useState<AgentOption>(AGENT_OPTIONS[0]!)
   const [runtimeSettings, setRuntimeSettings] = useState<RuntimeSettings | null>(null)
   const [detectedAgentIdsState, setDetectedAgentIdsState] = useState<DetectedAgentIdsState | null>(
     null
   )
   const [agentOverriddenState, setAgentOverridden] = useState(false)
-  const [showAgentPicker, setShowAgentPicker] = useState(false)
   const [sshState, setSshState] = useState<SshConnectionState | null>(null)
   const [sshConnectingTargetId, setSshConnectingTargetId] = useState<string | null>(null)
-  const [name, setName] = useState('')
   const [note, setNote] = useState('')
+  const [availableProviders, setAvailableProviders] = useState<TaskProvider[]>([])
+  const [tasksSupported, setTasksSupported] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [setupHookDetails, setSetupHookDetails] = useState<SetupHookDetails | null>(null)
   const [trustedOrcaHooks, setTrustedOrcaHooks] = useState<PersistedTrustedOrcaHooks>({})
@@ -200,12 +224,40 @@ function NewWorktreeModalContent({
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(initialRepos == null)
   const lastVisitedRepo = useLastVisitedWorktreeRepoId(hostId, visible)
+  const selectedRepoWorktreeBranches = useMemo(
+    () => getComposerRepoWorktreeBranches(existingWorktrees ?? [], selectedRepo?.id ?? null),
+    [existingWorktrees, selectedRepo]
+  )
 
-  // Why: matches the desktop UI — the input shows a generic "Workspace name"
-  // placeholder, not the suggested creature. The creature name is only used
-  // as a server-bound fallback when the user submits with a blank field, so
-  // it's recomputed lazily inside handleCreate() to stay fresh against
-  // existingWorktreePaths at submission time.
+  useEffect(() => {
+    return () => {
+      if (drawerTransitionTimerRef.current) {
+        clearTimeout(drawerTransitionTimerRef.current)
+      }
+    }
+  }, [])
+
+  function transitionDrawer(nextView: Exclude<NewWorktreeDrawerView, 'transition'>): void {
+    if (drawerTransitionTimerRef.current) {
+      clearTimeout(drawerTransitionTimerRef.current)
+    }
+    setDrawerView('transition')
+    drawerTransitionTimerRef.current = setTimeout(() => {
+      drawerTransitionTimerRef.current = null
+      setDrawerView(nextView)
+    }, NEW_WORKTREE_DRAWER_TRANSITION_MS)
+  }
+
+  // The Smart source picker owns the workspace name AND the linked-source
+  // selection: typing names the workspace and drives source search, and picking
+  // a source resolves the base/branch/push metadata (matching desktop). The
+  // creature-name fallback is only computed lazily at submit for a blank name.
+  const composer = useMobileComposerSource({
+    client,
+    selectedRepoId: selectedRepo?.id ?? null,
+    worktreeBranches: selectedRepoWorktreeBranches,
+    onError: setError
+  })
 
   const selectedRepoConnectionId = selectedRepo?.connectionId ?? null
   const sshGate = deriveWorkspaceSshGate({
@@ -241,6 +293,25 @@ function NewWorktreeModalContent({
     setAgentOverridden(selectedAgentResolution.agentOverridden)
   }
   const selectedAgent = selectedAgentResolution.selectedAgent
+
+  const selectedRepoIsGit = selectedRepo ? selectedRepo.kind !== 'folder' : true
+  const sourceAvailability: SmartModeAvailabilityInput = {
+    textOnly: selectedRepo != null && !selectedRepoIsGit,
+    tasksSupported,
+    hasRepo: selectedRepo != null,
+    githubAvailable: availableProviders.includes('github'),
+    gitlabAvailable: availableProviders.includes('gitlab'),
+    linearAvailable: availableProviders.includes('linear')
+  }
+  const pasteRepos = useMemo<PasteRepoCandidate[]>(
+    () =>
+      repos.map((repo) => ({
+        id: repo.id,
+        displayName: repo.displayName,
+        slug: deriveRepoSlug(repo)
+      })),
+    [repos]
+  )
 
   useEffect(() => {
     if (!visible || !lastVisitedRepo.loaded || selectedRepo || repos.length === 0) {
@@ -298,27 +369,68 @@ function NewWorktreeModalContent({
       })
 
     void (async () => {
-      try {
-        const [settingsResponse, uiResponse] = await Promise.all([
-          client.sendRequest('settings.get'),
-          client.sendRequest('ui.get')
-        ])
-        if (stale) {
-          return
-        }
-        if (settingsResponse.ok) {
-          const result = (settingsResponse as RpcSuccess).result as { settings: RuntimeSettings }
-          setRuntimeSettings(result.settings)
-        }
-        if (uiResponse.ok) {
-          const result = (uiResponse as RpcSuccess).result as {
-            ui?: { trustedOrcaHooks?: PersistedTrustedOrcaHooks }
-          }
-          setTrustedOrcaHooks(result.ui?.trustedOrcaHooks ?? {})
-        }
-      } catch {
-        // Non-critical; repo.list owns the visible loading state.
+      // Why: settle each RPC independently so a flaky availability probe (e.g. a
+      // linear.status timeout, which rejects rather than resolving {ok:false})
+      // can't discard the already-resolved critical settings/ui results.
+      const probes = Promise.allSettled([
+        client.sendRequest('status.get'),
+        client.sendRequest('preflight.check'),
+        client.sendRequest('linear.status')
+      ])
+      const okResult = (entry: PromiseSettledResult<RpcResponse>): RpcSuccess | null =>
+        entry.status === 'fulfilled' && entry.value.ok ? (entry.value as RpcSuccess) : null
+      // Why: hydrate settings/trust the moment their own RPCs settle — gating them
+      // on the probes (a first-open preflight.check can take seconds) widens the
+      // window where an already-trusted setup hook spuriously re-prompts on create.
+      const [settingsRes, uiRes] = await Promise.allSettled([
+        client.sendRequest('settings.get'),
+        client.sendRequest('ui.get')
+      ])
+      if (stale) {
+        return
       }
+
+      const settingsResult = okResult(settingsRes)
+      const settingsValue = settingsResult
+        ? (
+            settingsResult.result as {
+              settings: RuntimeSettings & { visibleTaskProviders?: unknown }
+            }
+          ).settings
+        : null
+      if (settingsValue) {
+        setRuntimeSettings(settingsValue)
+      }
+      const uiResult = okResult(uiRes)
+      if (uiResult) {
+        const ui = (uiResult.result as { ui?: { trustedOrcaHooks?: PersistedTrustedOrcaHooks } }).ui
+        setTrustedOrcaHooks(ui?.trustedOrcaHooks ?? {})
+      }
+
+      const [statusRes, preflightRes, linearRes] = await probes
+      if (stale) {
+        return
+      }
+      // Tasks is an additive RPC surface, so older paired desktops without the
+      // capability fall back to branch + blank sources only.
+      const statusResult = okResult(statusRes)
+      const capabilities =
+        (statusResult?.result as { capabilities?: string[] } | undefined)?.capabilities ?? []
+      setTasksSupported(capabilities.includes(MOBILE_TASKS_CAPABILITY))
+      const glabInstalled =
+        (okResult(preflightRes)?.result as { glab?: { installed?: boolean } } | undefined)?.glab
+          ?.installed === true
+      const linearConnected =
+        (okResult(linearRes)?.result as { connected?: boolean } | undefined)?.connected === true
+      const visibleProviders = normalizeVisibleTaskProviders(settingsValue?.visibleTaskProviders)
+      setAvailableProviders(
+        // Drop filterAvailableTaskProviders' forced 'github' fallback when the user
+        // hid GitHub; the Branch tab always guarantees at least one tab remains.
+        filterAvailableTaskProviders(visibleProviders, {
+          gitlabInstalled: glabInstalled,
+          linearConnected
+        }).filter((provider) => visibleProviders.includes(provider))
+      )
     })()
     return () => {
       stale = true
@@ -486,31 +598,11 @@ function NewWorktreeModalContent({
     }
   }
 
-  async function persistSetupHookTrust(
-    repoId: string,
-    contentHash: string,
-    alwaysTrust: boolean
-  ): Promise<void> {
-    if (!client) {
-      return
-    }
-    const next = trustedOrcaHooksWithSetupApproval({
-      trust: trustedOrcaHooks,
-      repoId,
-      contentHash,
-      alwaysTrust
-    })
-    const response = await client.sendRequest('ui.set', { trustedOrcaHooks: next })
-    if (!response.ok) {
-      throw new Error(response.error.message)
-    }
-    setTrustedOrcaHooks(next)
-  }
-
   async function handleCreate(options: CreateOptions = {}) {
-    if (!client || !selectedRepo) {
+    if (!client || !selectedRepo || createInFlightRef.current) {
       return
     }
+    createInFlightRef.current = true
     setCreating(true)
     setError('')
 
@@ -555,24 +647,9 @@ function NewWorktreeModalContent({
       // server invent one. The pre-flight basename dedupe is only a hint;
       // the authoritative collision is checked server-side against git
       // branches/remotes/PRs, so we also retry-with-suffix on conflict.
-      const trimmedName = name.trim()
+      const trimmedName = composer.name.trim()
       const baseName = trimmedName || getSuggestedCreatureName(existingWorktreePaths ?? [])
 
-      // Why: mirrors src/renderer/src/store/slices/worktrees.ts
-      // (createWorktree retry loop). Server-side checks (Branch X already
-      // exists locally / on a remote / already has PR #N) can fire even
-      // after the pre-flight basename dedupe — branches outlive worktrees
-      // in git, and remote branches/PRs aren't visible from worktree.ps.
-      // Retry up to 25 times by appending -2, -3, ... before surfacing
-      // the error. The desktop applies this to user-typed names too, so
-      // mobile follows suit for parity.
-      const retryablePatterns = [
-        /already exists locally/i,
-        /already exists on a remote/i,
-        /already has pr #\d+/i
-      ]
-      const candidateFor = (attempt: number): string =>
-        attempt === 0 ? baseName : `${baseName}-${attempt + 1}`
       let setupDecision: SetupDecision = 'inherit'
       if (setupCommand) {
         if (options.setupOverride) {
@@ -602,44 +679,46 @@ function NewWorktreeModalContent({
           contentHash: setupTrust.contentHash,
           previouslyApproved: wasSetupHookPreviouslyApproved(trustedOrcaHooks, selectedRepo.id)
         })
+        transitionDrawer('trust')
         return
       }
 
-      let lastError: string | null = null
-      for (let attempt = 0; attempt < 25; attempt += 1) {
-        const candidateName = candidateFor(attempt)
-        const params: Record<string, unknown> = {
-          repo: `id:${selectedRepo.id}`,
-          startupCommand: command,
-          setupDecision,
-          name: candidateName
-        }
-        if (selectedAgent.id !== '__blank__') {
-          params.createdWithAgent = selectedAgent.id
-        }
-        if (note.trim()) {
-          params.comment = note.trim()
-        }
-
-        const response = await client.sendRequest('worktree.create', params, {
-          timeoutMs: WORKTREE_CREATE_TIMEOUT_MS
-        })
-        if (response.ok) {
-          const result = (response as RpcSuccess).result as { worktree: { id: string } }
-          onClose()
-          onCreated(result.worktree.id, candidateName)
-          return
-        }
-
-        lastError = response.error.message
-        if (!retryablePatterns.some((p) => p.test(lastError ?? ''))) {
-          break
-        }
+      const createdWithAgentId = selectedAgent.id !== '__blank__' ? selectedAgent.id : undefined
+      const trimmedNote = note.trim() || undefined
+      const createSelection = composer.createSelection
+      const result = createSelection
+        ? await createWorkspaceFromComposerSource({
+            client,
+            selection: createSelection,
+            targetRepoId: selectedRepo.id,
+            setupDecision,
+            agent: {
+              choice: normalizeWorkspaceAgent(selectedAgent.id) ?? 'blank',
+              startupCommand: command
+            },
+            workspaceName: trimmedName || undefined,
+            note: trimmedNote,
+            nameIsAutoManaged: composer.isNameAutoManaged
+          })
+        : await createBlankWorkspace({
+            client,
+            repoId: selectedRepo.id,
+            baseName,
+            startupCommand: command,
+            createdWithAgentId,
+            comment: trimmedNote,
+            setupDecision
+          })
+      if ('error' in result) {
+        setError(result.error)
+        return
       }
-      setError(lastError ?? 'Failed to create workspace')
+      onClose()
+      onCreated(result.worktreeId, result.name)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create workspace')
     } finally {
+      createInFlightRef.current = false
       setCreating(false)
     }
   }
@@ -670,15 +749,90 @@ function NewWorktreeModalContent({
   )
 
   function prepareSelectionPickerOpen(): void {
-    // Why: picker taps can beat the delayed name-field focus; suppressing it
-    // prevents the keyboard from reopening under the picker drawer.
-    setNameAutoFocusEnabled(false)
+    // Why: picker taps can beat an open soft keyboard; dismissing it prevents the
+    // keyboard from reopening under the picker drawer.
     Keyboard.dismiss()
   }
 
+  function handleRepoSelected(repo: Repo): void {
+    const repoChanged = repo.id !== selectedRepo?.id
+    setSelectedRepo(repo)
+    // Branch and provider-backed sources are repo-scoped; Linear/Jira are global
+    // work context and survive choosing a different implementation repo.
+    if (repoChanged && !shouldPreserveWorkspaceSourceOnRepoChange(composer.linkedWorkItem)) {
+      composer.handleClearSmartNameSelection()
+    }
+  }
+
+  async function approveSetupTrust(alwaysTrust: boolean): Promise<void> {
+    if (
+      !client ||
+      !setupTrustPrompt ||
+      setupTrustActionInFlightRef.current ||
+      createInFlightRef.current
+    ) {
+      return
+    }
+    setupTrustActionInFlightRef.current = true
+    setCreating(true)
+    try {
+      const nextTrust = await persistSetupHookTrustApproval({
+        client,
+        trust: trustedOrcaHooks,
+        repoId: setupTrustPrompt.repoId,
+        contentHash: setupTrustPrompt.contentHash,
+        alwaysTrust
+      })
+      setTrustedOrcaHooks(nextTrust)
+      const approvedHash = setupTrustPrompt.contentHash
+      setSetupTrustPrompt(null)
+      transitionDrawer('form')
+      await handleCreate({ setupOverride: 'run', approvedSetupContentHash: approvedHash })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to trust setup script.')
+    } finally {
+      setupTrustActionInFlightRef.current = false
+      if (!createInFlightRef.current) {
+        setCreating(false)
+      }
+    }
+  }
+
+  function closeSetupTrust(): void {
+    if (setupTrustActionInFlightRef.current || createInFlightRef.current) {
+      return
+    }
+    setSetupTrustPrompt(null)
+    transitionDrawer('form')
+  }
+
+  function skipSetupTrust(): void {
+    if (setupTrustActionInFlightRef.current || createInFlightRef.current) {
+      return
+    }
+    closeSetupTrust()
+    void handleCreate({ setupOverride: 'skip' })
+  }
+
   return (
-    <>
-      <BottomDrawer visible={visible} onClose={onClose}>
+    // Why: hosting the form and every picker in one persistent native Modal makes
+    // form → repo/agent transitions in-window view swaps, avoiding the iOS
+    // dismiss-then-present race that left the dropdowns unresponsive. Native back
+    // closes the flow from the form, routes the trust prompt through its in-flight
+    // guard, and otherwise returns to the form from a picker.
+    <BottomDrawerModalHost
+      visible={visible}
+      onRequestClose={() => {
+        if (drawerView === 'form') {
+          onClose()
+        } else if (drawerView === 'trust') {
+          closeSetupTrust()
+        } else {
+          transitionDrawer('form')
+        }
+      }}
+    >
+      <BottomDrawer visible={visible && drawerView === 'form'} onClose={onClose}>
         <View style={styles.header}>
           <Text style={styles.title}>Create Workspace</Text>
           <Text style={styles.subtitle}>
@@ -702,7 +856,7 @@ function NewWorktreeModalContent({
                 style={styles.fieldButton}
                 onPress={() => {
                   prepareSelectionPickerOpen()
-                  setShowRepoPicker(true)
+                  transitionDrawer('repo')
                 }}
               >
                 {selectedRepo ? (
@@ -719,6 +873,18 @@ function NewWorktreeModalContent({
                 <ChevronDown size={14} color={colors.textMuted} />
               </Pressable>
             </View>
+
+            <SmartWorkspaceSourceField
+              composer={composer}
+              label={selectedRepoIsGit ? "Name or 'Create From'" : 'Workspace name'}
+              disabled={sshGate.requiresConnection}
+              onBeforeOpen={() => setError('')}
+              onOpenDrawer={() => transitionDrawer('source')}
+            />
+
+            {composer.forkPushWarning ? (
+              <Text style={styles.sourceWarning}>{composer.forkPushWarning}</Text>
+            ) : null}
 
             {selectedRepoConnectionId ? (
               <View style={styles.field}>
@@ -764,35 +930,13 @@ function NewWorktreeModalContent({
             ) : null}
 
             <View style={styles.field}>
-              <Text style={styles.label}>
-                Workspace Name <Text style={styles.labelHint}>[Optional]</Text>
-              </Text>
-              <MobileWorkspaceNameInput
-                style={styles.input}
-                value={name}
-                onChangeText={(t) => {
-                  setName(t)
-                  setError('')
-                }}
-                placeholderTextColor={colors.textMuted}
-                shouldAutoFocus={nameAutoFocusEnabled && visible && !loading && repos.length > 0}
-                returnKeyType="done"
-                onSubmitEditing={() => {
-                  if (canCreate) {
-                    void handleCreate()
-                  }
-                }}
-              />
-            </View>
-
-            <View style={styles.field}>
               <Text style={styles.label}>Agent</Text>
               <Pressable
                 style={[styles.fieldButton, sshGate.requiresConnection && styles.disabled]}
                 disabled={sshGate.requiresConnection}
                 onPress={() => {
                   prepareSelectionPickerOpen()
-                  setShowAgentPicker(true)
+                  transitionDrawer('agent')
                 }}
               >
                 <MobileAgentIcon agentId={selectedAgent.id} size={16} />
@@ -814,6 +958,11 @@ function NewWorktreeModalContent({
 
             {showAdvanced && (
               <>
+                <SmartWorkspaceAdvancedFields
+                  composer={composer}
+                  selectedRepoIsGit={selectedRepoIsGit}
+                />
+
                 <View style={styles.field}>
                   <Text style={styles.label}>Note</Text>
                   <TextInput
@@ -903,22 +1052,39 @@ function NewWorktreeModalContent({
         )}
       </BottomDrawer>
 
-      {/* Sub-modals for pickers — rendered outside the main modal so they
-          layer on top and scroll without touch conflicts. */}
+      {/* Why: list drawers stay outside the form's ScrollView, and the transition
+          state lets each hosted overlay finish hiding before the next appears. */}
+      <SmartWorkspaceSourceDrawer
+        visible={visible && drawerView === 'source'}
+        client={client}
+        composer={composer}
+        availability={sourceAvailability}
+        repoId={selectedRepo?.id ?? null}
+        repos={pasteRepos}
+        sshReady={!sshGate.requiresConnection}
+        onRepoChange={(repoId) => {
+          const nextRepo = repos.find((repo) => repo.id === repoId)
+          if (nextRepo) {
+            setSelectedRepo(nextRepo)
+          }
+        }}
+        onClose={() => transitionDrawer('form')}
+      />
+
       <PickerListDrawer
-        visible={visible && showRepoPicker}
+        visible={visible && drawerView === 'repo'}
         title="Repository"
         items={repoPickerItems}
         selectedId={selectedRepo?.id ?? ''}
-        onSelect={(item) => setSelectedRepo(item.repo)}
-        onClose={() => setShowRepoPicker(false)}
+        onSelect={(item) => handleRepoSelected(item.repo)}
+        onClose={() => transitionDrawer('form')}
         renderIcon={(item) => {
           return <View style={[styles.repoDot, { backgroundColor: repoBadgeColor(item.repo) }]} />
         }}
       />
 
       <PickerListDrawer
-        visible={visible && showAgentPicker}
+        visible={visible && drawerView === 'agent'}
         title="Agent"
         items={pickerAgentOptions}
         selectedId={selectedAgent.id}
@@ -926,105 +1092,20 @@ function NewWorktreeModalContent({
           setAgentOverridden(true)
           setSelectedAgent(agent)
         }}
-        onClose={() => setShowAgentPicker(false)}
+        onClose={() => transitionDrawer('form')}
         renderIcon={(agent) => <MobileAgentIcon agentId={agent.id} size={18} />}
       />
 
-      <BottomDrawer
-        visible={visible && setupTrustPrompt != null}
-        onClose={() => setSetupTrustPrompt(null)}
-      >
-        {setupTrustPrompt ? (
-          <View>
-            <View style={styles.trustHeader}>
-              <Text style={styles.title}>
-                {setupTrustPrompt.previouslyApproved
-                  ? `${setupTrustPrompt.repoName}'s setup script changed`
-                  : `Run setup from ${setupTrustPrompt.repoName}?`}
-              </Text>
-              <Text style={styles.subtitle}>
-                This repository's orca.yaml runs before the workspace starts. Only run it if you
-                trust this repository.
-              </Text>
-            </View>
-
-            <View style={styles.trustScriptBox}>
-              <Text style={styles.trustScriptLabel}>
-                {setupTrustPrompt.previouslyApproved ? 'New setup script' : 'Setup script'}
-              </Text>
-              <Text style={styles.trustScriptText}>{setupTrustPrompt.scriptContent}</Text>
-            </View>
-
-            <View style={styles.trustActionGroup}>
-              <Pressable
-                style={styles.trustActionRow}
-                disabled={creating}
-                onPress={() =>
-                  void (async () => {
-                    try {
-                      await persistSetupHookTrust(
-                        setupTrustPrompt.repoId,
-                        setupTrustPrompt.contentHash,
-                        false
-                      )
-                      const approvedHash = setupTrustPrompt.contentHash
-                      setSetupTrustPrompt(null)
-                      await handleCreate({
-                        setupOverride: 'run',
-                        approvedSetupContentHash: approvedHash
-                      })
-                    } catch (err) {
-                      setError(err instanceof Error ? err.message : 'Failed to trust setup script.')
-                    }
-                  })()
-                }
-              >
-                <Check size={16} color={colors.textPrimary} />
-                <Text style={styles.trustActionText}>Run hooks</Text>
-              </Pressable>
-              <View style={styles.trustActionSeparator} />
-              <Pressable
-                style={styles.trustActionRow}
-                disabled={creating}
-                onPress={() =>
-                  void (async () => {
-                    try {
-                      await persistSetupHookTrust(
-                        setupTrustPrompt.repoId,
-                        setupTrustPrompt.contentHash,
-                        true
-                      )
-                      const approvedHash = setupTrustPrompt.contentHash
-                      setSetupTrustPrompt(null)
-                      await handleCreate({
-                        setupOverride: 'run',
-                        approvedSetupContentHash: approvedHash
-                      })
-                    } catch (err) {
-                      setError(err instanceof Error ? err.message : 'Failed to trust setup script.')
-                    }
-                  })()
-                }
-              >
-                <Check size={16} color={colors.textPrimary} />
-                <Text style={styles.trustActionText}>Always trust and run</Text>
-              </Pressable>
-              <View style={styles.trustActionSeparator} />
-              <Pressable
-                style={styles.trustActionRow}
-                disabled={creating}
-                onPress={() => {
-                  setSetupTrustPrompt(null)
-                  void handleCreate({ setupOverride: 'skip' })
-                }}
-              >
-                <Text style={styles.trustActionText}>Don't run</Text>
-              </Pressable>
-            </View>
-          </View>
-        ) : null}
-      </BottomDrawer>
-    </>
+      <SetupHookTrustDrawer
+        visible={visible && drawerView === 'trust' && setupTrustPrompt != null}
+        prompt={setupTrustPrompt}
+        busy={creating}
+        onRunOnce={() => void approveSetupTrust(false)}
+        onAlwaysTrust={() => void approveSetupTrust(true)}
+        onDontRun={skipSetupTrust}
+        onClose={closeSetupTrust}
+      />
+    </BottomDrawerModalHost>
   )
 }
 
@@ -1164,6 +1245,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginBottom: spacing.md
   },
+  sourceWarning: {
+    marginTop: -spacing.sm,
+    marginBottom: spacing.md,
+    fontSize: 12,
+    color: colors.statusAmber
+  },
   advancedToggle: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1246,52 +1333,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: typography.monoFamily,
     color: colors.textPrimary
-  },
-  trustHeader: {
-    paddingHorizontal: spacing.xs,
-    marginBottom: spacing.md
-  },
-  trustScriptBox: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    padding: spacing.md,
-    marginBottom: spacing.md
-  },
-  trustScriptLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginBottom: spacing.sm
-  },
-  trustScriptText: {
-    fontSize: 13,
-    fontFamily: typography.monoFamily,
-    color: colors.textPrimary
-  },
-  trustActionGroup: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.input,
-    overflow: 'hidden'
-  },
-  trustActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md
-  },
-  trustActionText: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    color: colors.textPrimary,
-    fontWeight: '500'
-  },
-  trustActionSeparator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
   },
   actions: {
     flexDirection: 'row',

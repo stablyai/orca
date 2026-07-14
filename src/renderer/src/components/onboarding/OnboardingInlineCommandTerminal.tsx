@@ -296,7 +296,7 @@ export function OnboardingInlineCommandTerminal({
               isVisible
               onPtyExit={() => {
                 onTerminalExit?.()
-                closeTab(tabId, { recordInteraction: false })
+                closeTab(tabId, { recordInteraction: false, reason: 'pty-exit' })
               }}
               onCloseTab={() => closeTab(tabId, { recordInteraction: false })}
             />

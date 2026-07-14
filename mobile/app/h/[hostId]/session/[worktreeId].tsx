@@ -1080,6 +1080,13 @@ export default function SessionScreen() {
   // the row) without any window-dim change. Tracking the measured width lets the
   // refit hook re-fit the PTY on those resizes — see terminal-viewport-refit.ts.
   const [terminalFrameWidth, setTerminalFrameWidth] = useState(0)
+  // Why: a new agent terminal can fit before the accessory/live-input dock lays
+  // out, over-fitting the PTY so its bottom-pinned input box hides behind the
+  // dock; tracking the settled height lets the refit hook correct it.
+  const [terminalFrameHeight, setTerminalFrameHeight] = useState(0)
+  // Why: lets the height refit skip keyboard-driven resizes (never reflow the
+  // PTY per keystroke); mirrors keyboardHeight but readable synchronously.
+  const keyboardVisibleRef = useRef(false)
 
   const activeSessionTab = sessionTabs.find((tab) => tab.id === activeSessionTabId) ?? null
   const {
@@ -2602,15 +2609,19 @@ export default function SessionScreen() {
     tabStripVisible: terminals.length > 1,
     textScale: terminalTextScale,
     terminalFrameWidth,
+    terminalFrameHeight,
+    keyboardVisibleRef,
     unsubscribeTerminal,
     subscribeToTerminal
   })
 
   useEffect(() => {
     const onShow = (e: KeyboardEvent) => {
+      keyboardVisibleRef.current = true
       setKeyboardHeight(e.endCoordinates?.height ?? 0)
     }
     const onHide = () => {
+      keyboardVisibleRef.current = false
       setKeyboardHeight(0)
     }
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
@@ -4831,10 +4842,12 @@ export default function SessionScreen() {
                 style={styles.terminalFrame}
                 onLayout={(e) => {
                   terminalFrameHeightRef.current = e.nativeEvent.layout.height
-                  // Trigger a refit only when the width actually changes (sidebar
-                  // resize, fold, rotation) — avoids churn on height-only changes.
+                  // Track width AND height so the refit hook re-fits on sidebar/
+                  // fold/rotation (width) and on the dock settling (height).
                   const nextWidth = Math.round(e.nativeEvent.layout.width)
+                  const nextHeight = Math.round(e.nativeEvent.layout.height)
                   setTerminalFrameWidth((prev) => (prev === nextWidth ? prev : nextWidth))
+                  setTerminalFrameHeight((prev) => (prev === nextHeight ? prev : nextHeight))
                 }}
               >
                 {terminals.map((terminal) => (

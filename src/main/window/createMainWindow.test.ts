@@ -2837,11 +2837,39 @@ describe('createMainWindow', () => {
     })
   })
 
-  it('does not install the startup reveal fallback off Windows', () => {
+  it('reveals the startup window on Linux when ready-to-show never fires', () => {
     vi.useFakeTimers()
     const { browserWindowInstance } = createStartupRevealWindowFixture()
 
     withPlatform('linux', () => {
+      createMainWindow(null)
+      vi.advanceTimersByTime(9_999)
+      expect(browserWindowInstance.show).not.toHaveBeenCalled()
+
+      vi.advanceTimersByTime(1)
+
+      expect(browserWindowInstance.show).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('cancels the Linux startup reveal fallback after ready-to-show', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+
+    withPlatform('linux', () => {
+      createMainWindow(null)
+      windowHandlers['ready-to-show']()
+      vi.advanceTimersByTime(10_000)
+
+      expect(browserWindowInstance.show).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('does not install the startup reveal fallback on macOS', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance } = createStartupRevealWindowFixture()
+
+    withPlatform('darwin', () => {
       createMainWindow(null)
       vi.advanceTimersByTime(10_000)
 
@@ -2892,6 +2920,57 @@ describe('createMainWindow', () => {
     const { browserWindowInstance } = createStartupRevealWindowFixture()
 
     withPlatform('win32', () => {
+      createMainWindow(createStartupRevealStore(true) as never)
+      browserWindowInstance.isDestroyed.mockReturnValue(true)
+      vi.advanceTimersByTime(10_000)
+
+      expect(browserWindowInstance.show).not.toHaveBeenCalled()
+      expect(browserWindowInstance.maximize).not.toHaveBeenCalled()
+    })
+  })
+
+  it('keeps the headless E2E window hidden when the Linux fallback fires', () => {
+    vi.useFakeTimers()
+    const previousHeadless = process.env.ORCA_E2E_HEADLESS
+    process.env.ORCA_E2E_HEADLESS = '1'
+    const { browserWindowInstance } = createStartupRevealWindowFixture()
+
+    try {
+      withPlatform('linux', () => {
+        createMainWindow(createStartupRevealStore(true) as never)
+        vi.advanceTimersByTime(10_000)
+
+        expect(browserWindowInstance.show).not.toHaveBeenCalled()
+        expect(browserWindowInstance.maximize).not.toHaveBeenCalled()
+      })
+    } finally {
+      if (previousHeadless === undefined) {
+        delete process.env.ORCA_E2E_HEADLESS
+      } else {
+        process.env.ORCA_E2E_HEADLESS = previousHeadless
+      }
+    }
+  })
+
+  it('clears the Linux startup reveal fallback when the window is closed', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+
+    withPlatform('linux', () => {
+      createMainWindow(createStartupRevealStore(true) as never)
+      windowHandlers.closed()
+      vi.advanceTimersByTime(10_000)
+
+      expect(browserWindowInstance.show).not.toHaveBeenCalled()
+      expect(browserWindowInstance.maximize).not.toHaveBeenCalled()
+    })
+  })
+
+  it('does not show or maximize a destroyed window when the Linux fallback fires', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance } = createStartupRevealWindowFixture()
+
+    withPlatform('linux', () => {
       createMainWindow(createStartupRevealStore(true) as never)
       browserWindowInstance.isDestroyed.mockReturnValue(true)
       vi.advanceTimersByTime(10_000)

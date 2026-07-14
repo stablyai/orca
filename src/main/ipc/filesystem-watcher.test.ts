@@ -124,7 +124,9 @@ describe('registerFilesystemWatcherHandlers', () => {
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
     await vi.advanceTimersByTimeAsync(1_000)
 
-    expect(watchMock).toHaveBeenCalledWith('/home/me/repo', expect.any(Function))
+    expect(watchMock).toHaveBeenCalledWith('/home/me/repo', expect.any(Function), {
+      signal: expect.any(AbortSignal)
+    })
     const onEvents = watchMock.mock.calls[0][1]
     onEvents([{ path: '/home/me/repo/file.txt', type: 'update' }])
     expect(sendMock).toHaveBeenCalledWith('fs:changed', {
@@ -161,7 +163,9 @@ describe('registerFilesystemWatcherHandlers', () => {
 
     await vi.advanceTimersByTimeAsync(1_000)
 
-    expect(retryWatchMock).toHaveBeenCalledWith('/home/me/repo', expect.any(Function))
+    expect(retryWatchMock).toHaveBeenCalledWith('/home/me/repo', expect.any(Function), {
+      signal: expect.any(AbortSignal)
+    })
     handlers['fs:unwatchWorktree'](
       { sender: { id: 1 } },
       { worktreePath: '/home/me/repo', connectionId: 'conn-1' }

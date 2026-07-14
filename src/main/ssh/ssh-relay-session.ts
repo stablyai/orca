@@ -61,7 +61,8 @@ import { isMainWindowVisible, onMainWindowBecameVisible } from '../window/main-w
 import type { SshPortForwardManager } from './ssh-port-forward'
 import type { SshConnection } from './ssh-connection'
 import { joinRemotePath, isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
-import { makeRemoteDirectoryCommand, makeRemoteExecutableCommand } from './ssh-remote-commands'
+import { makeRemoteDirectoryCommand } from './ssh-remote-commands'
+import { createRemoteCliInstallPlan } from './ssh-remote-cli-launcher'
 import {
   DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
   type DetectedPort,
@@ -653,14 +654,14 @@ export class SshRelaySession {
     }
 
     try {
-      await this.installRemoteOrcaCliShim()
+      await this.installRemoteOrcaCliLauncher()
     } catch (error) {
-      // Why: the remote `orca` CLI shim is a convenience bridge. On session-
+      // Why: the remote `orca` CLI launcher is a convenience bridge. On session-
       // limited remotes (MaxSessions=1) the relay bridge holds the only slot,
       // so this raw-connection install can fail — that must not fail the
       // whole connection, matching the managed-hook install above.
       console.warn(
-        `[ssh-relay-session] remote orca CLI shim install failed for ${this.targetId}: ${
+        `[ssh-relay-session] remote orca CLI launcher install failed for ${this.targetId}: ${
           error instanceof Error ? error.message : String(error)
         }`
       )
@@ -775,34 +776,38 @@ export class SshRelaySession {
     }
   }
 
-  private async installRemoteOrcaCliShim(): Promise<void> {
+  private async installRemoteOrcaCliLauncher(): Promise<void> {
     if (!this.remoteCliBridgeEnv) {
       return
     }
     const { binDir, hostPlatform } = this.remoteCliBridgeEnv
-    const shim = buildRemoteCliShim(this.remoteCliBridgeEnv)
+    const plan = createRemoteCliInstallPlan(this.remoteCliBridgeEnv)
     const conn = this.requireReadyConnection()
     await execCommand(conn, makeRemoteDirectoryCommand(hostPlatform, binDir), {
       wrapCommand: !isWindowsRemoteHost(hostPlatform)
     })
     if (typeof conn.writeFile === 'function') {
-      await conn.writeFile(shim.path, shim.contents, { hostPlatform })
+      for (const file of plan.files) {
+        await conn.writeFile(file.path, file.contents, { hostPlatform })
+      }
     } else {
       const sftp = await conn.sftp()
       try {
-        await new Promise<void>((resolve, reject) => {
-          const ws = sftp.createWriteStream(shim.path)
-          sftp.once('error', reject)
-          ws.once('close', resolve)
-          ws.once('error', reject)
-          ws.end(shim.contents)
-        })
+        for (const file of plan.files) {
+          await new Promise<void>((resolve, reject) => {
+            const ws = sftp.createWriteStream(file.path)
+            sftp.once('error', reject)
+            ws.once('close', resolve)
+            ws.once('error', reject)
+            ws.end(file.contents)
+          })
+        }
       } finally {
         sftp.end()
       }
     }
-    if (!isWindowsRemoteHost(hostPlatform)) {
-      await execCommand(conn, makeRemoteExecutableCommand(hostPlatform, shim.path))
+    for (const command of plan.postWriteCommands) {
+      await execCommand(conn, command, { wrapCommand: !isWindowsRemoteHost(hostPlatform) })
     }
   }
 
@@ -1262,49 +1267,5 @@ export class SshRelaySession {
         }
       }
     }
-  }
-}
-
-function quoteSh(value: string): string {
-  return `'${value.replaceAll("'", `'\\''`)}'`
-}
-
-function buildRemoteCliShim(env: RemoteCliBridgeEnv): {
-  path: string
-  contents: string
-} {
-  if (isWindowsRemoteHost(env.hostPlatform)) {
-    const shimPath = joinRemotePath(env.hostPlatform, env.binDir, 'orca.cmd')
-    return {
-      path: shimPath,
-      contents: [
-        '@echo off',
-        'setlocal',
-        `if not defined ORCA_RELAY_NODE_PATH set "ORCA_RELAY_NODE_PATH=${env.nodePath}"`,
-        `if not defined ORCA_RELAY_DIR set "ORCA_RELAY_DIR=${env.relayDir}"`,
-        `if not defined ORCA_RELAY_SOCKET_PATH set "ORCA_RELAY_SOCKET_PATH=${env.sockPath}"`,
-        '"%ORCA_RELAY_NODE_PATH%" "%ORCA_RELAY_DIR%/relay.js" --sock-path "%ORCA_RELAY_SOCKET_PATH%" --orca-cli %*',
-        'exit /b %ERRORLEVEL%',
-        ''
-      ].join('\r\n')
-    }
-  }
-
-  const shimPath = joinRemotePath(env.hostPlatform, env.binDir, 'orca')
-  return {
-    path: shimPath,
-    contents: [
-      '#!/usr/bin/env sh',
-      'set -eu',
-      `ORCA_RELAY_NODE_PATH=\${ORCA_RELAY_NODE_PATH:-${quoteSh(env.nodePath)}}`,
-      `ORCA_RELAY_DIR=\${ORCA_RELAY_DIR:-${quoteSh(env.relayDir)}}`,
-      `ORCA_RELAY_SOCKET_PATH=\${ORCA_RELAY_SOCKET_PATH:-${quoteSh(env.sockPath)}}`,
-      'if [ ! -S "$ORCA_RELAY_SOCKET_PATH" ]; then',
-      '  echo "Orca SSH CLI bridge cannot find the relay socket: $ORCA_RELAY_SOCKET_PATH" >&2',
-      '  exit 1',
-      'fi',
-      'exec "$ORCA_RELAY_NODE_PATH" "$ORCA_RELAY_DIR/relay.js" --sock-path "$ORCA_RELAY_SOCKET_PATH" --orca-cli "$@"',
-      ''
-    ].join('\n')
   }
 }
