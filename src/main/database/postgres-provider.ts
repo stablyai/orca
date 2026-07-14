@@ -13,7 +13,10 @@ import type { DatabaseProvider } from './database-provider'
 
 type ActiveQuery = {
   client: Client
+  clientConfig: ClientConfig
   cursor: Cursor<unknown[]> | null
+  backendPid: number | null
+  cancelPromise: Promise<boolean> | null
 }
 
 type CursorReadResult = {
@@ -177,10 +180,18 @@ export class PostgresProvider implements DatabaseProvider {
     if (this.activeQueries.has(request.queryId)) {
       throw new Error('A query with this id is already running')
     }
-    const client = new Client(
-      toClientConfig(request.connection, request.credential.password || undefined)
+    const clientConfig = toClientConfig(
+      request.connection,
+      request.credential.password || undefined
     )
-    const active: ActiveQuery = { client, cursor: null }
+    const client = new Client(clientConfig)
+    const active: ActiveQuery = {
+      client,
+      clientConfig,
+      cursor: null,
+      backendPid: null,
+      cancelPromise: null
+    }
     this.activeQueries.set(request.queryId, active)
     const removeAbort = addAbortHandler(signal, () => void this.cancel(request.queryId))
     const startedAt = performance.now()
@@ -192,6 +203,7 @@ export class PostgresProvider implements DatabaseProvider {
     let transactionOpen = false
     try {
       await client.connect()
+      active.backendPid = (client as Client & { processID?: number }).processID ?? null
       await client.query(request.readOnly ? 'BEGIN READ ONLY' : 'BEGIN')
       transactionOpen = true
       await client.query(`SET LOCAL statement_timeout = ${timeoutMs}`)
@@ -234,8 +246,36 @@ export class PostgresProvider implements DatabaseProvider {
     if (!active) {
       return false
     }
-    await active.cursor?.close().catch(() => {})
-    await active.client.end().catch(() => {})
-    return true
+    active.cancelPromise ??= this.cancelActiveQuery(active)
+    return active.cancelPromise
+  }
+
+  private async cancelActiveQuery(active: ActiveQuery): Promise<boolean> {
+    // Why: closing a busy pg-cursor is serialized behind the query that it is
+    // meant to stop, so awaiting cursor.close() makes the cancel RPC hang until
+    // the statement finishes. PostgreSQL's cancellation function runs through
+    // a second short-lived connection and interrupts the target backend while
+    // leaving its connection usable for the execute path to roll back cleanly.
+    if (active.backendPid === null) {
+      void active.client.end().catch(() => {})
+      return true
+    }
+    const cancelClient = new Client({
+      ...active.clientConfig,
+      connectionTimeoutMillis: 5_000,
+      statement_timeout: 5_000,
+      query_timeout: 7_000,
+      application_name: 'orca-database-tab-cancel'
+    })
+    try {
+      await cancelClient.connect()
+      const result = await cancelClient.query<{ canceled: boolean }>(
+        'SELECT pg_cancel_backend($1) AS canceled',
+        [active.backendPid]
+      )
+      return result.rows[0]?.canceled === true
+    } finally {
+      await cancelClient.end().catch(() => {})
+    }
   }
 }
