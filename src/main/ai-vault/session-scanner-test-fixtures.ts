@@ -61,26 +61,34 @@ export function writeAntigravityConversationDb(args: {
   mkdirSync(args.dir, { recursive: true })
   const dbPath = join(args.dir, `${args.conversationId}.db`)
   const db = new SyncDatabase(dbPath)
-  db.exec(
-    `CREATE TABLE steps (idx integer, step_type integer NOT NULL DEFAULT 0, step_payload blob, PRIMARY KEY (idx));
-     CREATE TABLE trajectory_metadata_blob (id text DEFAULT 'main', data blob, PRIMARY KEY (id));`
-  )
-  const metaBlob = new Uint8Array(pbMessageField(3, pbStringField(12, args.workspaceUri)))
-  db.prepare('INSERT INTO trajectory_metadata_blob (id, data) VALUES (?, ?)').run('main', metaBlob)
-  const userStep = new Uint8Array([
-    ...pbVarintField(1, 14),
-    ...pbVarintField(4, 3),
-    ...pbMessageField(
-      5,
-      pbMessageField(1, [...pbVarintField(1, args.unixSeconds), ...pbVarintField(2, 0)])
-    ),
-    ...pbMessageField(19, pbStringField(2, args.userText))
-  ])
-  db.prepare('INSERT INTO steps (idx, step_type, step_payload) VALUES (?, ?, ?)').run(
-    0,
-    14,
-    userStep
-  )
-  db.close()
+  // try/finally so a throw in exec/prepare/run still closes the handle — an
+  // open SQLite handle locks the file on Windows and breaks temp-dir cleanup.
+  try {
+    db.exec(
+      `CREATE TABLE steps (idx integer, step_type integer NOT NULL DEFAULT 0, step_payload blob, PRIMARY KEY (idx));
+       CREATE TABLE trajectory_metadata_blob (id text DEFAULT 'main', data blob, PRIMARY KEY (id));`
+    )
+    const metaBlob = new Uint8Array(pbMessageField(3, pbStringField(12, args.workspaceUri)))
+    db.prepare('INSERT INTO trajectory_metadata_blob (id, data) VALUES (?, ?)').run(
+      'main',
+      metaBlob
+    )
+    const userStep = new Uint8Array([
+      ...pbVarintField(1, 14),
+      ...pbVarintField(4, 3),
+      ...pbMessageField(
+        5,
+        pbMessageField(1, [...pbVarintField(1, args.unixSeconds), ...pbVarintField(2, 0)])
+      ),
+      ...pbMessageField(19, pbStringField(2, args.userText))
+    ])
+    db.prepare('INSERT INTO steps (idx, step_type, step_payload) VALUES (?, ?, ?)').run(
+      0,
+      14,
+      userStep
+    )
+  } finally {
+    db.close()
+  }
   return dbPath
 }

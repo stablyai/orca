@@ -4,13 +4,19 @@
 // Kept separate from any single test file so the encoder is not duplicated.
 
 export function encodeVarint(value: number): number[] {
+  // Guard non-representable inputs: negatives/fractions produce wrong bytes and
+  // Infinity/NaN would loop forever. Arithmetic (% / Math.floor) rather than
+  // bitwise so values above 2^31 aren't truncated to signed 32-bit.
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new RangeError(`encodeVarint expects a non-negative safe integer, got ${value}`)
+  }
   const out: number[] = []
   let remaining = value
   do {
-    let byte = remaining & 0x7f
+    let byte = remaining % 128
     remaining = Math.floor(remaining / 128)
     if (remaining > 0) {
-      byte |= 0x80
+      byte += 0x80
     }
     out.push(byte)
   } while (remaining > 0)
@@ -18,7 +24,9 @@ export function encodeVarint(value: number): number[] {
 }
 
 export function tag(field: number, wire: number): number[] {
-  return encodeVarint((field << 3) | wire)
+  // Arithmetic, not `field << 3`: the shift truncates to signed 32-bit and
+  // emits wrong bytes for field numbers at the top of the protobuf range.
+  return encodeVarint(field * 8 + wire)
 }
 
 export function varintField(field: number, value: number): number[] {
