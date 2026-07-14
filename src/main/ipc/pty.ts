@@ -45,6 +45,7 @@ import {
   isWslShellName,
   resolveLocalWindowsTerminalRuntimeOptions
 } from '../../shared/local-windows-terminal-runtime'
+import { applyTerminalGitCredentialPromptGuard } from './terminal-git-credential-guard'
 import { openCodeHookService } from '../opencode/hook-service'
 import { mimoCodeHookService } from '../mimo/hook-service'
 import {
@@ -565,6 +566,8 @@ export type BuildPtyHostEnvOptions = {
    *  resolve to Pi for back-compat. NEVER infer from disk presence; that's
    *  the bug this option fixes (cross-agent shadowing when both dirs exist). */
   launchCommand?: string
+  /** Trusted agent identity for wrapped commands that cannot be recognized from text. */
+  launchAgent?: TuiAgent
   shellPath?: string
   isWsl?: boolean
   /** Distro for WSL spawns (null = Windows default distro). Drives the WSL
@@ -572,6 +575,9 @@ export type BuildPtyHostEnvOptions = {
   wslDistro?: string | null
   agentStatusHooksEnabled: boolean
   networkProxySettings?: NetworkProxySettings
+  /** Keep indexed Git config off the sparse daemon wire; the daemon appends
+   *  guard entries after merging its authoritative inherited environment. */
+  deferGitConfigGuardToDaemon?: boolean
 }
 
 function readInheritedPath(baseEnv: Record<string, string>): string {
@@ -861,6 +867,15 @@ export function buildPtyHostEnv(
   const piAgentKind = detectPiAgentKindFromCommand(launchCommandHint)
   const hasLaunchCommand =
     typeof launchCommandHint === 'string' && launchCommandHint.trim().length > 0
+
+  // Why: unattended agents must fail instead of opening OS credential UI and
+  // retrying auth in a loop; ordinary user terminals keep normal Git behavior.
+  applyTerminalGitCredentialPromptGuard(baseEnv, {
+    launchCommand: launchCommandHint,
+    isUnattended: opts.launchAgent !== undefined,
+    deferGitConfigGuardToHost: opts.deferGitConfigGuardToDaemon
+  })
+
   const shouldPrepareOmpShadow = piAgentKind === 'omp' || !hasLaunchCommand
   // Why: source shadows are agent-scoped. Trusting the other kind's source
   // would reintroduce the exact Pi/OMP extension-state shadowing this PR fixes.
@@ -1563,6 +1578,7 @@ export function registerPtyHandlers(
           skipCodexHomeEnv: ctx?.isWsl === true && !selectedCodexHomePath,
           githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
           launchCommand: ctx?.command,
+          launchAgent: ctx?.launchAgent,
           shellPath: ctx?.shellPath,
           isWsl: ctx?.isWsl,
           wslDistro: ctx?.wslDistro ?? null,
@@ -3047,11 +3063,13 @@ export function registerPtyHandlers(
           skipCodexHomeEnv,
           githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
           launchCommand: args.command,
+          launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
           shellPath: daemonShellOverride ?? process.env.COMSPEC,
           isWsl: shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd),
           wslDistro: codexSelectionTarget.runtime === 'wsl' ? codexSelectionTarget.wslDistro : null,
           agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
-          networkProxySettings: getSettings?.()
+          networkProxySettings: getSettings?.(),
+          deferGitConfigGuardToDaemon: provider.supportsGitCredentialGuardHost?.(sessionId) === true
         })
         promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
       }
@@ -3086,6 +3104,9 @@ export function registerPtyHandlers(
       }
       if (args.startupCommandDelivery !== undefined) {
         spawnOptions.startupCommandDelivery = args.startupCommandDelivery
+      }
+      if (isTuiAgent(args.launchAgent)) {
+        spawnOptions.launchAgent = args.launchAgent
       }
       if (args.worktreeId !== undefined) {
         spawnOptions.worktreeId = args.worktreeId
@@ -3961,12 +3982,15 @@ export function registerPtyHandlers(
             skipCodexHomeEnv,
             githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
             launchCommand: args.command,
+            launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
             shellPath: effectiveShellOverride ?? process.env.COMSPEC,
             isWsl: shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, cwd),
             wslDistro:
               codexSelectionTarget.runtime === 'wsl' ? codexSelectionTarget.wslDistro : null,
             agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
-            networkProxySettings: getSettings?.()
+            networkProxySettings: getSettings?.(),
+            deferGitConfigGuardToDaemon:
+              provider.supportsGitCredentialGuardHost?.(effectiveSessionId) === true
           })
           promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
         } catch (err) {

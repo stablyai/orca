@@ -34,6 +34,11 @@ import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { parseWslPath } from '../wsl'
 import { addWslEnvKeys } from '../wsl-env'
+import {
+  gitCredentialPromptGuardEnv,
+  mergeGitConfigEnvProtocol
+} from '../../shared/git-credential-prompt-env'
+import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../shared/terminal-git-credential-guard'
 import { getWslContextFromSessionId } from './wsl-session-context'
 import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import {
@@ -60,6 +65,7 @@ import { getAgentForegroundContextPaths } from '../providers/agent-foreground-co
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
 import { killPosixPtySession } from '../../relay/pty-session-kill'
+import type { TuiAgent } from '../../shared/types'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -83,6 +89,23 @@ const PTY_SPAWN_HEALTH_TIMEOUT_MS = 4_000
 // fallback (losing daemon persistence) until a manual restart.
 const PTY_SPAWN_HEALTH_RETRY_ATTEMPTS = 2
 const PENDING_PRE_LISTENER_DATA_MAX_CHARS = 512 * 1024
+
+function composeGuardedDaemonGitConfigEnv(
+  env: Record<string, string>,
+  explicitEnv: Record<string, string> | undefined,
+  launchAgent: TuiAgent | undefined
+): void {
+  const policy = explicitEnv?.[TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV]
+  delete env[TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV]
+  if (policy !== 'guard' && launchAgent === undefined) {
+    return
+  }
+  // Why: the daemon can outlive Electron, so only its process.env is the
+  // authoritative inherited config. The raw env merge already gives an
+  // explicit wire protocol normal override semantics; append only the guard.
+  Object.assign(env, gitCredentialPromptGuardEnv(env, process.platform))
+}
+
 export type PtySubprocessOptions = {
   sessionId: string
   cols: number
@@ -92,6 +115,7 @@ export type PtySubprocessOptions = {
   envToDelete?: string[]
   command?: string
   startupCommandDelivery?: StartupCommandDelivery
+  launchAgent?: TuiAgent
   /** Explicit shell executable path/basename the renderer asked for.
    *  Overrides env.COMSPEC / env.SHELL resolution inside the daemon so a user
    *  who picks "New WSL terminal" from the "+" menu actually gets WSL. */
@@ -544,8 +568,7 @@ function spawnDaemonPtyWithWindowsFallback(args: {
 export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandle {
   const size = normalizePtySize(opts.cols, opts.rows)
   const env: Record<string, string> = {
-    ...process.env,
-    ...opts.env,
+    ...mergeGitConfigEnvProtocol(process.env, opts.env),
     TERM: 'xterm-256color',
     COLORTERM: 'truecolor',
     TERM_PROGRAM: 'Orca',
@@ -562,6 +585,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     // restores clickable refs like `owner/repo#123` / `PR#123`.
     FORCE_HYPERLINK: '1'
   } as Record<string, string>
+  composeGuardedDaemonGitConfigEnv(env, opts.env, opts.launchAgent)
   for (const key of opts.envToDelete ?? []) {
     delete env[key]
   }

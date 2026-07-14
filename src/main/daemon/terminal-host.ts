@@ -100,6 +100,7 @@ export class TerminalHost {
       envToDelete: opts.envToDelete,
       command: opts.command,
       startupCommandDelivery: opts.startupCommandDelivery,
+      ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
       shellOverride: opts.shellOverride,
       terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
       terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation

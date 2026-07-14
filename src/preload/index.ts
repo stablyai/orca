@@ -598,16 +598,23 @@ const api = {
     getGitUsername: (args: { repoId: string }): Promise<string> =>
       ipcRenderer.invoke('repos:getGitUsername', args),
 
-    getBaseRefDefault: (args: { repoId: string }): Promise<BaseRefDefaultResult> =>
-      ipcRenderer.invoke('repos:getBaseRefDefault', args),
+    getBaseRefDefault: (args: {
+      repoId: string
+      hostId?: ExecutionHostId
+    }): Promise<BaseRefDefaultResult> => ipcRenderer.invoke('repos:getBaseRefDefault', args),
 
-    searchBaseRefs: (args: { repoId: string; query: string; limit?: number }): Promise<string[]> =>
-      ipcRenderer.invoke('repos:searchBaseRefs', args),
+    searchBaseRefs: (args: {
+      repoId: string
+      query: string
+      limit?: number
+      hostId?: ExecutionHostId
+    }): Promise<string[]> => ipcRenderer.invoke('repos:searchBaseRefs', args),
 
     searchBaseRefDetails: (args: {
       repoId: string
       query: string
       limit?: number
+      hostId?: ExecutionHostId
     }): Promise<BaseRefSearchResult[]> => ipcRenderer.invoke('repos:searchBaseRefDetails', args),
 
     onChanged: (callback: () => void): (() => void) => {
@@ -2639,6 +2646,7 @@ const api = {
 
     readIssueCommand: (args: {
       repoId: string
+      hostId?: ExecutionHostId
     }): Promise<{
       status?: 'ok' | 'error'
       localContent: string | null
@@ -2648,8 +2656,11 @@ const api = {
       source: 'local' | 'shared' | 'none'
     }> => ipcRenderer.invoke('hooks:readIssueCommand', args),
 
-    writeIssueCommand: (args: { repoId: string; content: string }): Promise<void> =>
-      ipcRenderer.invoke('hooks:writeIssueCommand', args)
+    writeIssueCommand: (args: {
+      repoId: string
+      content: string
+      hostId?: ExecutionHostId
+    }): Promise<void> => ipcRenderer.invoke('hooks:writeIssueCommand', args)
   },
 
   ephemeralVm: {

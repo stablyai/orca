@@ -1020,12 +1020,21 @@ export type PreloadApi = {
     getDefaultCreateProjectParent: () => Promise<string>
     onCloneProgress: (callback: (data: { phase: string; percent: number }) => void) => () => void
     getGitUsername: (args: { repoId: string }) => Promise<string>
-    getBaseRefDefault: (args: { repoId: string }) => Promise<BaseRefDefaultResult>
-    searchBaseRefs: (args: { repoId: string; query: string; limit?: number }) => Promise<string[]>
+    getBaseRefDefault: (args: {
+      repoId: string
+      hostId?: ExecutionHostId
+    }) => Promise<BaseRefDefaultResult>
+    searchBaseRefs: (args: {
+      repoId: string
+      query: string
+      limit?: number
+      hostId?: ExecutionHostId
+    }) => Promise<string[]>
     searchBaseRefDetails: (args: {
       repoId: string
       query: string
       limit?: number
+      hostId?: ExecutionHostId
     }) => Promise<BaseRefSearchResult[]>
     onChanged: (callback: () => void) => () => void
   }
@@ -2242,7 +2251,7 @@ export type PreloadApi = {
       worktreePath: string
       command: string
     }) => Promise<WorktreeSetupLaunch>
-    readIssueCommand: (args: { repoId: string }) => Promise<{
+    readIssueCommand: (args: { repoId: string; hostId?: ExecutionHostId }) => Promise<{
       status?: 'ok' | 'error'
       localContent: string | null
       sharedContent: string | null
@@ -2250,7 +2259,11 @@ export type PreloadApi = {
       localFilePath: string
       source: 'local' | 'shared' | 'none'
     }>
-    writeIssueCommand: (args: { repoId: string; content: string }) => Promise<void>
+    writeIssueCommand: (args: {
+      repoId: string
+      content: string
+      hostId?: ExecutionHostId
+    }) => Promise<void>
   }
   ephemeralVm: {
     listRecipes: (args: { repoId: string }) => Promise<{

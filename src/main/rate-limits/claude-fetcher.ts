@@ -158,12 +158,15 @@ async function readFromKeychain(configDir?: string): Promise<OAuthCredentialRead
     if (scopedCredentials.token) {
       return scopedCredentials
     }
-    if (scopedCredentials.hasRefreshableCredentials) {
-      return scopedCredentials
-    }
     const legacyCredentials = await readCredentialsFromStrictKeychain(undefined, 'legacy-keychain')
+    // Why: Orca cannot refresh tokens itself, so an actual access token from
+    // either item beats refresh-only credentials. A scoped item the CLI stopped
+    // maintaining must not shadow a still-working legacy token.
     if (legacyCredentials.token) {
       return legacyCredentials
+    }
+    if (scopedCredentials.hasRefreshableCredentials) {
+      return scopedCredentials
     }
     if (legacyCredentials.hasRefreshableCredentials) {
       return legacyCredentials
@@ -637,6 +640,84 @@ async function supplementOAuthUsageFromCli(input: {
   }
 }
 
+async function completeOAuthUsageSuccess(input: {
+  oauthLimits: ProviderRateLimits
+  oauthCredentials: OAuthCredentialReadResult
+  attempts: ClaudeUsageAttemptState
+  options?: FetchClaudeRateLimitsOptions
+}): Promise<ProviderRateLimits> {
+  const limits = await supplementOAuthUsageFromCli({
+    oauthLimits: input.oauthLimits,
+    authPreparation: input.options?.authPreparation,
+    oauthCredentials: input.oauthCredentials,
+    attempts: input.attempts,
+    networkProxySettings: input.options?.networkProxySettings,
+    allowUsagePanelSupplement:
+      input.options?.allowUsagePanelSupplement ??
+      isManagedClaudeAuth(input.options?.authPreparation),
+    signal: input.options?.signal
+  })
+  if (input.options?.signal?.aborted) {
+    return abortedClaudeRateLimitResult()
+  }
+  return withClaudeUsageMetadata(
+    limits,
+    metadataForAttempt({
+      attemptedSources: input.attempts.attemptedSources,
+      oauthCredentials: input.oauthCredentials,
+      authPreparation: input.options?.authPreparation,
+      source: 'oauth'
+    })
+  )
+}
+
+function canRetryWithLegacyKeychainToken(input: {
+  classification: ClaudeUsageErrorClassification
+  oauthCredentials: OAuthCredentialReadResult
+  authPreparation?: ClaudeRuntimeAuthPreparation
+}): boolean {
+  // Why: the CLI only maintains the legacy keychain item for the default config
+  // dir, so a scoped item can hold a token that expired long ago and will 401
+  // on every fetch with no recovery path. Host system-default auth may retry
+  // with the legacy item; managed/WSL credentials must never be answered with
+  // the host user's legacy keychain account.
+  return (
+    input.classification.failureKind === 'stale-token' &&
+    input.oauthCredentials.source === 'scoped-keychain' &&
+    (input.authPreparation?.runtime ?? 'host') === 'host' &&
+    !isManagedClaudeAuth(input.authPreparation)
+  )
+}
+
+async function retryOAuthWithLegacyKeychainToken(input: {
+  failedToken: string | null
+  attempts: ClaudeUsageAttemptState
+  options?: FetchClaudeRateLimitsOptions
+}): Promise<ProviderRateLimits | null> {
+  const legacyCredentials = await readCredentialsFromStrictKeychain(undefined, 'legacy-keychain')
+  if (!legacyCredentials.token || legacyCredentials.token === input.failedToken) {
+    return null
+  }
+  if (input.options?.signal?.aborted) {
+    return abortedClaudeRateLimitResult()
+  }
+  try {
+    const oauthLimits = await fetchViaOAuth(legacyCredentials.token, input.options?.signal)
+    if (input.options?.signal?.aborted) {
+      return abortedClaudeRateLimitResult()
+    }
+    return await completeOAuthUsageSuccess({
+      oauthLimits,
+      oauthCredentials: legacyCredentials,
+      attempts: input.attempts,
+      options: input.options
+    })
+  } catch (err) {
+    warnClaudeUsageFetchFailure(input.options?.authPreparation, legacyCredentials, err)
+    return null
+  }
+}
+
 function shouldDeferForLiveClaude(
   authPreparation: ClaudeRuntimeAuthPreparation | undefined,
   classification: ClaudeUsageErrorClassification
@@ -798,31 +879,27 @@ export async function fetchClaudeRateLimits(
       if (options?.signal?.aborted) {
         return abortedClaudeRateLimitResult()
       }
-      const limits = await supplementOAuthUsageFromCli({
-        oauthLimits,
-        authPreparation: options?.authPreparation,
-        oauthCredentials,
-        attempts,
-        networkProxySettings: options?.networkProxySettings,
-        allowUsagePanelSupplement:
-          options?.allowUsagePanelSupplement ?? isManagedClaudeAuth(options?.authPreparation),
-        signal: options?.signal
-      })
-      if (options?.signal?.aborted) {
-        return abortedClaudeRateLimitResult()
-      }
-      return withClaudeUsageMetadata(
-        limits,
-        metadataForAttempt({
-          attemptedSources: attempts.attemptedSources,
-          oauthCredentials,
-          authPreparation: options?.authPreparation,
-          source: 'oauth'
-        })
-      )
+      return await completeOAuthUsageSuccess({ oauthLimits, oauthCredentials, attempts, options })
     } catch (err) {
       warnClaudeUsageFetchFailure(options?.authPreparation, oauthCredentials, err)
       const classification = classifyClaudeOAuthUsageError(err)
+
+      if (
+        canRetryWithLegacyKeychainToken({
+          classification,
+          oauthCredentials,
+          authPreparation: options?.authPreparation
+        })
+      ) {
+        const legacyResult = await retryOAuthWithLegacyKeychainToken({
+          failedToken: oauthCredentials.token,
+          attempts,
+          options
+        })
+        if (legacyResult) {
+          return legacyResult
+        }
+      }
 
       if (shouldDeferForLiveClaude(options?.authPreparation, classification)) {
         return liveClaudeDeferredResult({

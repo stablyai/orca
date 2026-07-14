@@ -699,7 +699,8 @@
         "devSearchKeywordToast": "toast",
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
-        "devSearchKeywordNotification": "notification"
+        "devSearchKeywordNotification": "notification",
+        "projectHostsSummary": "호스트 {{value0}}개"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "붙여넣기 내용이 너무 큽니다."
@@ -6075,7 +6076,7 @@
           "26fef02bf3": "프로젝트 아이콘",
           "c7ef4415de": "표시 이름",
           "b0a0c14a1c": "사이드바 및 탭에 대한 프로젝트별 표시 세부 정보입니다.",
-          "170624bdfb": "Orca에서 이 프로젝트를 제거하세요.",
+          "removeProjectAllHosts": "구성된 모든 호스트의 Orca에서 이 프로젝트를 제거합니다.",
           "0909e5d650": "프로젝트 제거",
           "ee5a290616": "폴더로 열렸습니다. 이 워크스페이스에서는 Git 기능을 사용할 수 없습니다.",
           "323debba71": "유형:",

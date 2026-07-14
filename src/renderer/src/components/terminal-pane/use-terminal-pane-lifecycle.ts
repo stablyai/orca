@@ -15,7 +15,10 @@ import {
   resolveTerminalCursorInactiveStyle
 } from '@/lib/pane-manager/pane-terminal-options'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
-import { configureTerminalOutputBacklogCap } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import {
+  configureTerminalOutputBacklogCap,
+  writeTerminalOutput
+} from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
 import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-mouse-wheel'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
@@ -131,6 +134,17 @@ import {
   resolveTabTitleAfterPaneClose,
   shouldClearLaunchAgentForClosedPane
 } from './terminal-pane-close-identity'
+
+export function resetTerminalKeyboardProtocolAfterInterrupt(terminal: Terminal): void {
+  // Use the guarded output path so a certified/throwing xterm cannot escape a
+  // keyboard handler or retain more writes while pane recovery is delayed.
+  writeTerminalOutput(terminal, RESET_KITTY_KEYBOARD_PROTOCOL, {
+    foreground: true,
+    // The interrupt itself already took the synchronous input path. Queue the
+    // renderer reset so it cannot flush a PTY backlog inside the key handler.
+    latencySensitive: false
+  })
+}
 
 export function recordRuntimeCreatedTerminalPaneSplit(
   createdPane: unknown,
@@ -981,7 +995,7 @@ export function useTerminalPaneLifecycle({
               pane.terminal.input(TERMINAL_INTERRUPT_INPUT)
               // Why: CLIs such as Codex can die on SIGINT before restoring
               // xterm's renderer-side Kitty flags, leaving the shell corrupted.
-              pane.terminal.write(RESET_KITTY_KEYBOARD_PROTOCOL)
+              resetTerminalKeyboardProtocolAfterInterrupt(pane.terminal)
             } else {
               pendingTerminalInterruptKeyup = false
             }

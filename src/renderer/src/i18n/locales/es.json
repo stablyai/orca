@@ -699,7 +699,8 @@
         "devSearchKeywordToast": "toast",
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
-        "devSearchKeywordNotification": "notification"
+        "devSearchKeywordNotification": "notification",
+        "projectHostsSummary": "{{value0}} hosts"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "El contenido pegado es demasiado grande."
@@ -6090,7 +6091,7 @@
           "26fef02bf3": "Icono de proyecto",
           "c7ef4415de": "Nombre para mostrar",
           "b0a0c14a1c": "Detalles de visualización específicos del proyecto para la barra lateral y las pestañas.",
-          "170624bdfb": "Eliminar este proyecto de Orca.",
+          "removeProjectAllHosts": "Eliminar este proyecto de Orca en todos los hosts configurados.",
           "0909e5d650": "Eliminar proyecto",
           "ee5a290616": "Abierto como carpeta. Las funciones de Git no están disponibles para este espacio de trabajo.",
           "323debba71": "Tipo:",

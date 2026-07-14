@@ -11,6 +11,7 @@ import {
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../shared/clipboard-text'
 import { redactPtyIdForDiagnostics } from '../../shared/pty-delivery-diagnostics'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
+import type { TuiAgent } from '../../shared/types'
 
 const isWindowsHost = process.platform === 'win32'
 const posixOnlyIt = isWindowsHost ? it.skip : it
@@ -770,7 +771,8 @@ describe('registerPtyHandlers', () => {
     // buildPtyHostEnv to piTitlebarExtensionService.buildPtyEnv was untested
     // for the OMP case because this helper never forwarded a command. Accept
     // an optional `command` so callers can exercise OMP target resolution.
-    command?: string
+    command?: string,
+    launchAgent?: TuiAgent
   ): Promise<Record<string, string>> {
     const savedEnv: Record<string, string | undefined> = {}
     if (processEnvOverrides) {
@@ -798,7 +800,8 @@ describe('registerPtyHandlers', () => {
         cols: 80,
         rows: 24,
         ...(argsEnv ? { env: argsEnv } : {}),
-        ...(command ? { command } : {})
+        ...(command ? { command } : {}),
+        ...(launchAgent ? { launchAgent } : {})
       })
       const spawnCall = spawnMock.mock.calls.at(-1)!
       return spawnCall[2].env as Record<string, string>
@@ -963,6 +966,27 @@ describe('registerPtyHandlers', () => {
       expect(env.TERM).toBe('xterm-256color')
       expect(env.COLORTERM).toBe('truecolor')
       expect(env.TERM_PROGRAM).toBe('Orca')
+    })
+
+    it('keeps indexed Git prompt guards in a local agent terminal env', async () => {
+      const env = await spawnAndGetEnv(undefined, undefined, undefined, undefined, 'claude')
+      expect(env.GIT_TERMINAL_PROMPT).toBe('0')
+      expect(env.GCM_INTERACTIVE).toBe('never')
+      expect(Object.values(env)).toContain('credential.interactive')
+      expect(Object.values(env)).toContain('credential.guiPrompt')
+    })
+
+    it('guards a trusted local agent when its command uses a custom wrapper', async () => {
+      const env = await spawnAndGetEnv(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'cd /repo && custom-agent-wrapper',
+        'claude'
+      )
+      expect(env.GIT_TERMINAL_PROMPT).toBe('0')
+      expect(env.GCM_INTERACTIVE).toBe('never')
     })
 
     it('advertises OSC 8 hyperlink support via FORCE_HYPERLINK', async () => {
@@ -1450,7 +1474,7 @@ describe('registerPtyHandlers', () => {
       // OpenCode plugin dir, Pi managed extension env, Codex home, and dev-mode CLI
       // overrides were silently missing for daemon users (the common case).
 
-      function setupDaemonAdapter() {
+      function setupDaemonAdapter(supportsGitCredentialGuardHost = true) {
         const daemonSpawn = vi.fn(
           async (options: {
             env: Record<string, string>
@@ -1462,6 +1486,7 @@ describe('registerPtyHandlers', () => {
         )
         setLocalPtyProvider({
           spawn: daemonSpawn,
+          supportsGitCredentialGuardHost: () => supportsGitCredentialGuardHost,
           write: vi.fn(),
           resize: vi.fn(),
           kill: vi.fn(),
@@ -1538,9 +1563,10 @@ describe('registerPtyHandlers', () => {
           shellOverride?: string
           command?: string
           envToDelete?: string[]
-        }
+        },
+        supportsGitCredentialGuardHost = true
       ): Promise<DaemonSpawnCall> {
-        const daemonSpawn = setupDaemonAdapter()
+        const daemonSpawn = setupDaemonAdapter(supportsGitCredentialGuardHost)
         const savedEnv: Record<string, string | undefined> = {}
         if (processEnvOverrides) {
           for (const [k, v] of Object.entries(processEnvOverrides)) {
@@ -1587,7 +1613,8 @@ describe('registerPtyHandlers', () => {
           httpProxyBypassRules?: string
         },
         processEnvOverrides?: Record<string, string | undefined>,
-        spawnArgs?: { cwd?: string; shellOverride?: string; command?: string }
+        spawnArgs?: { cwd?: string; shellOverride?: string; command?: string },
+        supportsGitCredentialGuardHost = true
       ): Promise<Record<string, string>> {
         return (
           await daemonSpawnAndGetOptions(
@@ -1595,7 +1622,8 @@ describe('registerPtyHandlers', () => {
             getSelectedCodexHomePath,
             getSettings,
             processEnvOverrides,
-            spawnArgs
+            spawnArgs,
+            supportsGitCredentialGuardHost
           )
         ).env
       }
@@ -2156,6 +2184,47 @@ describe('registerPtyHandlers', () => {
         } finally {
           mockedApp.isPackaged = prev
         }
+      })
+
+      it('defers indexed Git prompt guards from the daemon wire environment', async () => {
+        const env = await daemonSpawnAndGetEnv(
+          {
+            GIT_CONFIG_COUNT: '1',
+            GIT_CONFIG_KEY_0: 'http.proxy',
+            GIT_CONFIG_VALUE_0: 'http://proxy.invalid'
+          },
+          undefined,
+          undefined,
+          undefined,
+          { command: 'claude' }
+        )
+
+        expect(env.GIT_TERMINAL_PROMPT).toBe('0')
+        expect(env.GCM_INTERACTIVE).toBe('never')
+        expect(env.GIT_CONFIG_COUNT).toBe('1')
+        expect(env.GIT_CONFIG_KEY_0).toBe('http.proxy')
+        expect(env.GIT_CONFIG_KEY_1).toBeUndefined()
+      })
+
+      it('materializes the full guard for a legacy daemon host', async () => {
+        const env = await daemonSpawnAndGetEnv(
+          {
+            GIT_CONFIG_COUNT: '1',
+            GIT_CONFIG_KEY_0: 'http.proxy',
+            GIT_CONFIG_VALUE_0: 'http://proxy.invalid'
+          },
+          undefined,
+          undefined,
+          undefined,
+          { command: 'claude' },
+          false
+        )
+
+        expect(env.GIT_TERMINAL_PROMPT).toBe('0')
+        expect(env.GCM_INTERACTIVE).toBe('never')
+        expect(env.GIT_CONFIG_COUNT).toBe('3')
+        expect(env.GIT_CONFIG_KEY_1).toBe('credential.interactive')
+        expect(env.GIT_CONFIG_KEY_2).toBe('credential.guiPrompt')
       })
 
       it('passes the minted sessionId through to provider.spawn and host env setup', async () => {
