@@ -1114,6 +1114,30 @@ describe('PtyHandler', () => {
       })
     })
 
+    it('waits without double-closing when immediate teardown follows graceful shutdown', async () => {
+      await withWindowsPlatform(async () => {
+        let onExitCb: ((evt: { exitCode: number }) => void) | undefined
+        const mockKill = vi.fn()
+        mockPtySpawn.mockReturnValue({
+          ...mockPtyInstance,
+          kill: mockKill,
+          onData: vi.fn(),
+          onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+            onExitCb = cb
+          })
+        })
+        await dispatcher.callRequest('pty.spawn', {})
+
+        await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: false })
+        const immediate = dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+
+        expectBareKills(mockKill, 1)
+        onExitCb!({ exitCode: 0 })
+        await immediate
+        expectBareKills(mockKill, 1)
+      })
+    })
+
     it('on stale-spawn cleanup including the SIGKILL fallback', async () => {
       await withWindowsPlatform(async () => {
         const mockKill = mockKillablePty()
@@ -1124,14 +1148,14 @@ describe('PtyHandler', () => {
       })
     })
 
-    it('on graceful-shutdown SIGKILL fallback', async () => {
+    it('does not double-close ConPTY on the graceful-shutdown fallback', async () => {
       await withWindowsPlatform(async () => {
         const mockKill = mockKillablePty()
         await dispatcher.callRequest('pty.spawn', {})
         await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: false })
         expectBareKills(mockKill, 1)
         vi.advanceTimersByTime(5000)
-        expectBareKills(mockKill, 2)
+        expectBareKills(mockKill, 1)
       })
     })
 

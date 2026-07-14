@@ -969,7 +969,19 @@ export class PtyHandler {
       this.clearPtyFlowState(id)
     } else {
       this.releaseStartupCommand(managed)
-      killPtyProcess(managed.pty, 'SIGTERM')
+      if (process.platform === 'win32') {
+        // Why: ConPTY close is already the force-capable operation. Remember
+        // it so an overlapping deletion waits instead of double-closing it.
+        managed.windowsImmediateKillIssued = true
+        try {
+          killPtyProcess(managed.pty, 'SIGTERM')
+        } catch (error) {
+          managed.windowsImmediateKillIssued = false
+          throw error
+        }
+      } else {
+        killPtyProcess(managed.pty, 'SIGTERM')
+      }
 
       // Why: Some processes ignore SIGTERM (e.g. a hung child, a custom signal
       // handler). Without a SIGKILL fallback the PTY process would leak and the
