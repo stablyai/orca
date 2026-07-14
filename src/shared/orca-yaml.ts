@@ -123,7 +123,11 @@ function normalizeQuickCommands(value: unknown): OrcaQuickCommandTemplate[] {
         }
         return { action: 'agent-prompt', label, agent, prompt }
       }
-      const command = typeof record.command === 'string' ? record.command.trimEnd() : ''
+      const rawCommand = typeof record.command === 'string' ? record.command : ''
+      // Why: insert-only commands may end with an intentional cursor space, so
+      // strip only block-scalar newlines for them instead of a full trimEnd.
+      const command =
+        record.appendEnter === false ? rawCommand.replace(/[\r\n]+$/, '') : rawCommand.trimEnd()
       if (!command.trim()) {
         return null
       }

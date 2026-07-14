@@ -56,6 +56,13 @@ export const createProjectQuickCommandsSlice: StateCreator<
     if (!repoId) {
       return
     }
+    // Why: duplicate bare repo ids cannot be routed to one owner host (see
+    // findRepoOwner); a bare-id cache could serve another host's commands, so
+    // skip loading and drop any cached bucket until the ambiguity clears.
+    if (get().repos.filter((repo) => repo.id === repoId).length > 1) {
+      set((s) => omitProjectQuickCommandsForRepos(s, [repoId]))
+      return
+    }
     const cached = get().projectQuickCommandsByRepo[repoId]
     if (cached !== undefined && !opts?.refresh) {
       return

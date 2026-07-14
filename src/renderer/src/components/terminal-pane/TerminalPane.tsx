@@ -2580,6 +2580,13 @@ function TerminalPane(
     forceBracketedMultilineTextPaste,
     rightClickToPaste
   })
+  // Why: a background refresh on open picks up orca.yaml edits (e.g. after a
+  // git pull) while the cached list renders without flicker.
+  useEffect(() => {
+    if (contextMenu.open && quickCommandRepoId !== null) {
+      void loadProjectQuickCommands(quickCommandRepoId, { refresh: true })
+    }
+  }, [contextMenu.open, quickCommandRepoId, loadProjectQuickCommands])
   const getContextMenuLeafId = useCallback((): string | null => {
     const paneId = contextMenu.menuPaneId
     const manager = managerRef.current

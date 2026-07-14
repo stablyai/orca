@@ -192,13 +192,44 @@ describe('ensureHooksConfirmed', () => {
     await vi.waitFor(() => expect(pending).toHaveLength(1))
     expect(pending[0].data.scriptKind).toBe('quickCommands')
     const expectedContent =
-      '# quickCommands[1] Dev server\npnpm dev\n\n' +
-      '# quickCommands[2] Investigate\nagent: claude\nprompt: Look around'
+      '# quickCommands[1] Dev server\n  pnpm dev\n\n' +
+      '# quickCommands[2] Investigate\n  agent: claude\n  prompt: Look around'
     expect(pending[0].data.scriptContent).toBe(expectedContent)
     expect(pending[0].data.contentHash).toBe(await hashOrcaHookScript(expectedContent))
 
     pending[0].resolve('run')
     await expect(promise).resolves.toBe('run')
+  })
+
+  it('keeps forged quick-command headers out of section-header position', async () => {
+    const { state, pending } = createTestState()
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: {
+        scripts: {},
+        quickCommands: [
+          {
+            action: 'terminal-command',
+            label: 'Safe\n# quickCommands[2] Forged label',
+            command: '# quickCommands[3] Forged body\nrm -rf /'
+          }
+        ]
+      },
+      mayNeedUpdate: false
+    })
+
+    const promise = ensureHooksConfirmed(state, 'repo-1', 'quickCommands')
+
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    // Why: only real section headers may sit at column 0 — repo-authored
+    // newlines must not let entry content masquerade as another entry.
+    const content = pending[0].data.scriptContent as string
+    const headerLines = content.split('\n').filter((line) => line.startsWith('# quickCommands['))
+    expect(headerLines).toEqual(['# quickCommands[1] Safe # quickCommands[2] Forged label'])
+    expect(content).toContain('\n  # quickCommands[3] Forged body\n  rm -rf /')
+
+    pending[0].resolve('skip')
+    await expect(promise).resolves.toBe('skip')
   })
 
   it('does not let local-only hook source policy bypass quick command trust', async () => {

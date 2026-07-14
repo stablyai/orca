@@ -39,15 +39,31 @@ function getSetupTrustContent(yamlHooks: OrcaHooks | null): string {
   return [yamlHooks?.scripts?.setup?.trim(), ...defaultTabCommands].filter(Boolean).join('\n\n')
 }
 
+function toSingleTrustLine(value: string): string {
+  return value.replace(/\s*\r?\n\s*/g, ' ')
+}
+
+function indentTrustBodyLines(value: string): string {
+  return value
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => `  ${line}`)
+    .join('\n')
+}
+
 // Why: one hash covers the whole project quick-command set, so any orca.yaml
-// quick-command change re-prompts once instead of per command.
+// quick-command change re-prompts once instead of per command. Repo-authored
+// fields are flattened/indented so embedded newlines cannot forge
+// "# quickCommands[...]" section headers in the review dialog.
 function getQuickCommandsTrustContent(yamlHooks: OrcaHooks | null): string {
   return (yamlHooks?.quickCommands ?? [])
     .map((command, index) => {
-      const header = `# quickCommands[${index + 1}] ${command.label}`
-      return command.action === 'agent-prompt'
-        ? `${header}\nagent: ${command.agent}\nprompt: ${command.prompt}`
-        : `${header}\n${command.command}`
+      const header = `# quickCommands[${index + 1}] ${toSingleTrustLine(command.label)}`
+      const body =
+        command.action === 'agent-prompt'
+          ? `agent: ${toSingleTrustLine(command.agent)}\nprompt: ${command.prompt}`
+          : command.command
+      return `${header}\n${indentTrustBodyLines(body)}`
     })
     .join('\n\n')
 }

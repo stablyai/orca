@@ -109,6 +109,24 @@ describe('createProjectQuickCommandsSlice', () => {
     await store.getState().loadProjectQuickCommands('repo-1', { refresh: true })
     expect(store.getState().projectQuickCommandsByRepo['repo-1']).toBe(loaded)
   })
+
+  it('skips loading and drops the cache when the repo id is duplicated across hosts', async () => {
+    const store = createTestStore()
+    checkRuntimeHooksMock.mockResolvedValue(okHooksResult([]))
+    await store.getState().loadProjectQuickCommands('repo-1')
+    expect(store.getState().projectQuickCommandsByRepo).toEqual({ 'repo-1': [] })
+
+    store.setState({
+      repos: [
+        { id: 'repo-1', displayName: 'Repo One' },
+        { id: 'repo-1', displayName: 'Repo One (ssh)' }
+      ]
+    } as unknown as Partial<AppState>)
+    await store.getState().loadProjectQuickCommands('repo-1', { refresh: true })
+
+    expect(checkRuntimeHooksMock).toHaveBeenCalledTimes(1)
+    expect(store.getState().projectQuickCommandsByRepo).toEqual({})
+  })
 })
 
 describe('omitProjectQuickCommandsForRepos', () => {

@@ -466,11 +466,19 @@ export function useTerminalPaneContextMenu({
       if (!pane) {
         return
       }
+      // Why: the trust prompt can outlive the pane (a close/remount may even
+      // reuse numeric ids), so only dispatch to the same still-live pane.
+      const livePane = managerRef.current
+        ?.getPanes()
+        .find((candidate) => candidate.id === pane.id && candidate.leafId === pane.leafId)
+      if (!livePane) {
+        return
+      }
       sendTerminalQuickCommandToPane({
         command,
-        pane,
+        pane: livePane,
         tabId,
-        transport: paneTransportsRef.current.get(pane.id)
+        transport: paneTransportsRef.current.get(livePane.id)
       })
     })()
   }

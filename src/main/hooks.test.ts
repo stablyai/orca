@@ -4,6 +4,7 @@ import type * as GitRunner from './git/runner'
 
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { MAX_QUICK_COMMANDS } from '../shared/terminal-quick-commands'
 import { getDefaultTabsLaunch, parseOrcaYaml } from './hooks'
 
 // Mock fs and path used by loadHooks
@@ -247,6 +248,58 @@ describe('parseOrcaYaml', () => {
     expect(parseOrcaYaml(yaml)).toEqual({
       scripts: {},
       quickCommands: [{ action: 'terminal-command', label: 'Valid', command: 'pnpm lint' }]
+    })
+  })
+
+  it('preserves the trailing cursor space for insert-only quick commands', () => {
+    const yaml = [
+      'quickCommands:',
+      '  - label: Interactive rebase',
+      "    command: 'git rebase -i '",
+      '    appendEnter: false',
+      '  - label: Block scalar',
+      '    command: |',
+      '      pnpm exec vitest run ',
+      '    appendEnter: false',
+      '  - label: Run mode still trims',
+      "    command: 'pnpm dev '"
+    ].join('\n')
+
+    expect(parseOrcaYaml(yaml)).toEqual({
+      scripts: {},
+      quickCommands: [
+        {
+          action: 'terminal-command',
+          label: 'Interactive rebase',
+          command: 'git rebase -i ',
+          appendEnter: false
+        },
+        {
+          action: 'terminal-command',
+          label: 'Block scalar',
+          command: 'pnpm exec vitest run ',
+          appendEnter: false
+        },
+        { action: 'terminal-command', label: 'Run mode still trims', command: 'pnpm dev' }
+      ]
+    })
+  })
+
+  it('caps quick commands at MAX_QUICK_COMMANDS entries', () => {
+    const yaml = [
+      'quickCommands:',
+      ...Array.from({ length: MAX_QUICK_COMMANDS + 1 }, (_, i) => [
+        `  - label: Cmd ${i + 1}`,
+        `    command: echo ${i + 1}`
+      ]).flat()
+    ].join('\n')
+
+    const parsed = parseOrcaYaml(yaml)
+    expect(parsed?.quickCommands).toHaveLength(MAX_QUICK_COMMANDS)
+    expect(parsed?.quickCommands?.at(-1)).toEqual({
+      action: 'terminal-command',
+      label: `Cmd ${MAX_QUICK_COMMANDS}`,
+      command: `echo ${MAX_QUICK_COMMANDS}`
     })
   })
 
