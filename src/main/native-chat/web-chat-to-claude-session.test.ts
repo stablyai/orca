@@ -25,7 +25,7 @@ test('claudeProjectSlug: / 와 . 를 - 로', () => {
 
 test('writeWebChatAsClaudeSession: parentUuid 체인 + sessionId==파일명 + 필드셋', () => {
   const res = writeWebChatAsClaudeSession({
-    messages: [msg('user', '2+2?', 0), msg('assistant', '4', 1)],
+    messages: [msg('user', '2+2?', 1000), msg('assistant', '4', 2000)],
     cwd: '/tmp/wt',
     gitBranch: 'main',
     dirOverride: dir
@@ -49,15 +49,51 @@ test('writeWebChatAsClaudeSession: parentUuid 체인 + sessionId==파일명 + �
     gitBranch: 'main',
     userType: 'external',
     isSidechain: false,
+    timestamp: new Date(1000).toISOString(),
     message: { role: 'user', content: '2+2?' }
   })
   expect(lines[1]).toMatchObject({
     parentUuid: lines[0].uuid,
     type: 'assistant',
     sessionId: res.sessionId,
-    message: { role: 'assistant', type: 'message', content: [{ type: 'text', text: '4' }] }
+    timestamp: new Date(2000).toISOString(),
+    message: {
+      role: 'assistant',
+      type: 'message',
+      model: 'claude-opus-4-8',
+      content: [{ type: 'text', text: '4' }]
+    }
   })
+  // 메시지별 timestamp를 각자 반영해야 함(하나의 now로 뭉개면 안 됨) — 순서 보존의 핵심.
+  expect(lines[0].timestamp).not.toBe(lines[1].timestamp)
   expect(typeof lines[0].version).toBe('string')
+})
+
+test('writeWebChatAsClaudeSession: timestamp가 null이면 현재 시각으로 대체', () => {
+  const res = writeWebChatAsClaudeSession({
+    messages: [
+      {
+        id: 'm0',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'hi' }],
+        timestamp: null,
+        source: 'transcript'
+      }
+    ],
+    cwd: '/tmp/wt',
+    gitBranch: null,
+    dirOverride: dir
+  })
+  if (!('sessionId' in res)) {
+    throw new Error('expected sessionId')
+  }
+  const files = readdirSync(dir)
+  const [line] = readFileSync(join(dir, files[0]), 'utf-8')
+    .trim()
+    .split('\n')
+    .map((l) => JSON.parse(l))
+  expect(typeof line.timestamp).toBe('string')
+  expect(Number.isNaN(Date.parse(line.timestamp))).toBe(false)
 })
 
 test('writeWebChatAsClaudeSession: 빈 대화 → error', () => {

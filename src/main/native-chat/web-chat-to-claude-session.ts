@@ -18,8 +18,11 @@ function readClaudeVersion(): string {
   }
   try {
     // "2.1.207 (Claude Code)" → "2.1.207". 하드코딩 금지(버전 스키마 취약성 완화).
+    // SSH 유스케이스: 바이너리가 멎어도 메인 프로세스가 블록되지 않도록 타임아웃을 둔다.
     cachedVersion =
-      execFileSync('claude', ['--version'], { encoding: 'utf-8' }).trim().split(/\s+/)[0] || '0.0.0'
+      execFileSync('claude', ['--version'], { encoding: 'utf-8', timeout: 5000 })
+        .trim()
+        .split(/\s+/)[0] || '0.0.0'
   } catch {
     cachedVersion = '0.0.0'
   }
@@ -50,7 +53,6 @@ export function writeWebChatAsClaudeSession(args: {
   }
   const sessionId = randomUUID()
   const version = readClaudeVersion()
-  const now = new Date().toISOString()
   const base = {
     sessionId,
     cwd: args.cwd,
@@ -64,13 +66,16 @@ export function writeWebChatAsClaudeSession(args: {
   for (const m of turns) {
     const uuid = randomUUID()
     const text = messageText(m)
+    // 각 메시지 고유 timestamp를 쓴다. 없으면(null) 기록 시각으로 대체 — 다회차 대화의 순서를 보존.
+    const timestamp =
+      m.timestamp != null ? new Date(m.timestamp).toISOString() : new Date().toISOString()
     const rec =
       m.role === 'user'
         ? {
             parentUuid,
             uuid,
             type: 'user',
-            timestamp: now,
+            timestamp,
             entrypoint: 'cli',
             permissionMode: 'default',
             promptSource: 'user',
@@ -81,11 +86,11 @@ export function writeWebChatAsClaudeSession(args: {
             parentUuid,
             uuid,
             type: 'assistant',
-            timestamp: now,
+            timestamp,
             message: {
               role: 'assistant',
               type: 'message',
-              model: 'claude-opus-4-7',
+              model: 'claude-opus-4-8',
               content: [{ type: 'text', text }],
               stop_reason: 'end_turn'
             },
