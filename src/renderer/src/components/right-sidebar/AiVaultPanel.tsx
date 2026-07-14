@@ -47,6 +47,7 @@ import {
   type AiVaultSort
 } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
+import { revealAiVaultSessionLog } from './ai-vault-session-reveal-log'
 import { AiVaultPanelHeader } from './AiVaultPanelHeader'
 import { AiVaultSessionVirtualList } from './AiVaultSessionVirtualList'
 import { useAiVaultSessionRefresh } from './ai-vault-session-refresh'
@@ -409,7 +410,7 @@ export default function AiVaultPanel(): React.JSX.Element {
             ? openWebChatSessionTranscript(session)
             : void openAiVaultSessionLogInOrca(session)
         }
-        onRevealLog={(session) => void window.api.shell.openPath(session.filePath)}
+        onRevealLog={(session) => void revealAiVaultSessionLog(session)}
         onOpenCwd={(session) => {
           if (session.cwd) {
             void window.api.shell.openPath(session.cwd)

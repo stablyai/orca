@@ -21,6 +21,22 @@ export function isSyntheticAiVaultSessionPath(filePath: string): boolean {
   return filePath.includes('#')
 }
 
+export type AiVaultRevealLogAction = { kind: 'open' | 'reveal'; path: string }
+
+/**
+ * How "Reveal Log" should act for a session's filePath. Synthetic
+ * `<db>#<id>` identities (web chat, OpenCode SQLite) have no per-session file,
+ * so reveal the backing database in the file manager (opening the synthetic
+ * string with the shell just silently fails); a real transcript path opens
+ * directly. The `<db>` split mirrors the scanner's `lastIndexOf('#')`.
+ */
+export function resolveAiVaultRevealLogAction(filePath: string): AiVaultRevealLogAction {
+  if (isSyntheticAiVaultSessionPath(filePath)) {
+    return { kind: 'reveal', path: filePath.slice(0, filePath.lastIndexOf('#')) }
+  }
+  return { kind: 'open', path: filePath }
+}
+
 /**
  * Whether AI Vault `View Log` / `Open Log` can open this session's log inside
  * Orca as a read-only tab: a non-blank, local, single-file (non-synthetic)

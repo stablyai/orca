@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   canOpenAiVaultSessionLogInOrca,
   canUseLocalAiVaultSessionPathActions,
-  isSyntheticAiVaultSessionPath
+  isSyntheticAiVaultSessionPath,
+  resolveAiVaultRevealLogAction
 } from './ai-vault-session-path-actions'
 
 describe('canUseLocalAiVaultSessionPathActions', () => {
@@ -54,5 +55,28 @@ describe('canOpenAiVaultSessionLogInOrca', () => {
         executionHostId: 'local'
       })
     ).toBe(false)
+  })
+})
+
+describe('resolveAiVaultRevealLogAction', () => {
+  it('reveals the backing database for an OpenCode synthetic identity', () => {
+    expect(resolveAiVaultRevealLogAction('/home/user/.opencode/db.sqlite#sess_123')).toEqual({
+      kind: 'reveal',
+      path: '/home/user/.opencode/db.sqlite'
+    })
+  })
+
+  it('reveals the chats database for a web-chat synthetic identity', () => {
+    expect(resolveAiVaultRevealLogAction('/home/user/.orca/chats.db#chatgpt/conv_9')).toEqual({
+      kind: 'reveal',
+      path: '/home/user/.orca/chats.db'
+    })
+  })
+
+  it('opens a real transcript path directly', () => {
+    expect(resolveAiVaultRevealLogAction('/home/user/.claude/sessions/log.jsonl')).toEqual({
+      kind: 'open',
+      path: '/home/user/.claude/sessions/log.jsonl'
+    })
   })
 })

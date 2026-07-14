@@ -9972,7 +9972,8 @@
             "openSupportedWorkspace": "Abre un workspace antes de reanudar una sesión.",
             "localSessionSshWorkspaceUnsupported": "El historial de esta sesión solo existe en este equipo. Para reanudarla, abre un workspace local. Los workspaces SSH no tienen acceso a ese historial.",
             "sessionHostMismatchUnsupported": "Esta sesión pertenece a un host diferente. Abre un espacio de trabajo en el mismo host para reanudarla.",
-            "webChatResumeEmpty": "No hay conversación para reanudar."
+            "webChatResumeEmpty": "No hay conversación para reanudar.",
+            "revealLogFailed": "Could not open the log location."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Buscando sesiones",
