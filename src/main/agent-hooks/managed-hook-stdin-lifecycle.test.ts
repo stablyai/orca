@@ -2,9 +2,17 @@
 // matrix catches an unread early exit without duplicating template assertions.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type * as osModule from 'node:os'
 
@@ -231,17 +239,34 @@ function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
 describe('Windows managed hook stdin structure', () => {
   it('routes every batch guard to a shared drain epilogue', () => {
     const home = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-windows-'))
+    const inheritedUserData = mkdtempSync(join(tmpdir(), 'orca-hook-inherited-user-data-'))
+    const inheritedHooksPath = join(inheritedUserData, 'codex-runtime-home', 'home', 'hooks.json')
+    const inheritedHooks = '{"hooks":{"Stop":[]}}\n'
+    mkdirSync(dirname(inheritedHooksPath), { recursive: true })
+    writeFileSync(inheritedHooksPath, inheritedHooks, 'utf8')
     homedirMock.mockReturnValue(home)
+    const previousOrcaUserDataPath = process.env.ORCA_USER_DATA_PATH
     const previousGrokHome = process.env.GROK_HOME
     const previousKimiHome = process.env.KIMI_CODE_HOME
+    process.env.ORCA_USER_DATA_PATH = inheritedUserData
     delete process.env.GROK_HOME
     delete process.env.KIMI_CODE_HOME
     try {
+      // Why: Orca terminals export their live userData path; installer tests
+      // must redirect it before simulating another platform.
+      process.env.ORCA_USER_DATA_PATH = join(home, 'orca-user-data')
       withPlatform('win32', () => {
         for (const entry of LOCAL_INSTALLERS) {
           expect(entry.install().state, `${entry.agent} install status`).toBe('installed')
         }
       })
+      expect(readFileSync(inheritedHooksPath, 'utf8')).toBe(inheritedHooks)
+      expect(
+        readFileSync(
+          join(home, 'orca-user-data', 'codex-runtime-home', 'home', 'hooks.json'),
+          'utf8'
+        )
+      ).toContain('WindowsPowerShell')
       const hooksDir = join(home, '.orca', 'agent-hooks')
       const fileNames = readdirSync(hooksDir)
       const mainBatchScripts = fileNames.filter(
@@ -277,6 +302,11 @@ describe('Windows managed hook stdin structure', () => {
       expect(kimi.indexOf('payload=$(cat)')).toBeLessThan(kimi.indexOf('exit 0'))
     } finally {
       homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
+      if (previousOrcaUserDataPath === undefined) {
+        delete process.env.ORCA_USER_DATA_PATH
+      } else {
+        process.env.ORCA_USER_DATA_PATH = previousOrcaUserDataPath
+      }
       if (previousGrokHome === undefined) {
         delete process.env.GROK_HOME
       } else {
@@ -288,6 +318,7 @@ describe('Windows managed hook stdin structure', () => {
         process.env.KIMI_CODE_HOME = previousKimiHome
       }
       rmSync(home, { recursive: true, force: true })
+      rmSync(inheritedUserData, { recursive: true, force: true })
     }
   })
 
@@ -296,6 +327,8 @@ describe('Windows managed hook stdin structure', () => {
     async () => {
       const home = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-windows-live-'))
       homedirMock.mockReturnValue(home)
+      const previousOrcaUserDataPath = process.env.ORCA_USER_DATA_PATH
+      process.env.ORCA_USER_DATA_PATH = join(home, 'orca-user-data')
       try {
         const gitBash = findGitBash()
         for (const entry of LOCAL_INSTALLERS) {
@@ -360,6 +393,11 @@ describe('Windows managed hook stdin structure', () => {
         }
       } finally {
         homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
+        if (previousOrcaUserDataPath === undefined) {
+          delete process.env.ORCA_USER_DATA_PATH
+        } else {
+          process.env.ORCA_USER_DATA_PATH = previousOrcaUserDataPath
+        }
         rmSync(home, { recursive: true, force: true })
       }
     }
