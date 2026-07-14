@@ -8716,7 +8716,7 @@ describe('registerWorktreeHandlers', () => {
       expect(getSshGitProviderMock).not.toHaveBeenCalled()
     })
 
-    it('keeps metadata when local terminal teardown cannot be verified', async () => {
+    it('forgets metadata when disconnected SSH teardown cannot be verified', async () => {
       const worktreeId = 'repo-1::/workspace/feature-wt'
       store.getRepo.mockReturnValue({
         id: 'repo-1',
@@ -8729,13 +8729,20 @@ describe('registerWorktreeHandlers', () => {
       killAllProcessesForWorktreeMock.mockRejectedValue(
         new Error('Failed to stop remote worktree terminals')
       )
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-      await expect(handlers['worktrees:forgetLocal'](null, { worktreeId })).rejects.toThrow(
-        'Failed to stop remote worktree terminals'
-      )
+      try {
+        await expect(handlers['worktrees:forgetLocal'](null, { worktreeId })).resolves.toEqual({})
 
-      expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
-      expect(deleteWorktreeHistoryDirMock).not.toHaveBeenCalled()
+        expect(warn).toHaveBeenCalledWith(
+          `[worktree-teardown] forget-local failed for ${worktreeId}:`,
+          expect.objectContaining({ message: 'Failed to stop remote worktree terminals' })
+        )
+        expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId)
+        expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
+      } finally {
+        warn.mockRestore()
+      }
     })
 
     it('rejects forgetting a folder project root', async () => {

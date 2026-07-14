@@ -2064,13 +2064,15 @@ export function registerWorktreeHandlers(
             )
           }
 
-          // Why: forgetting metadata releases Orca's last addressable owner. An
-          // unverified terminal must keep that owner intact so cleanup can retry.
+          // Why: Forget Locally is the escape hatch for a disconnected target.
+          // Provider absence cannot block removing only Orca's local metadata.
           await killAllProcessesForWorktree(args.worktreeId, {
             runtime,
             localProvider: getLocalPtyProvider(),
             connectionId: repo.connectionId ?? null,
             onPtyStopped: clearProviderPtyState
+          }).catch((error) => {
+            console.warn(`[worktree-teardown] forget-local failed for ${args.worktreeId}:`, error)
           })
 
           runtime.clearOptimisticReconcileToken(args.worktreeId)
