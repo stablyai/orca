@@ -82,102 +82,124 @@ export function useTerminalViewportRefit(
     keyboardVisible: false,
     pending: false
   })
-  const scheduleViewportRefit = useCallback(() => {
-    if (refitTimerRef.current) {
-      clearTimeout(refitTimerRef.current)
-    }
-    refitTimerRef.current = setTimeout(() => {
-      refitTimerRef.current = null
-      const runSeq = refitRunSeqRef.current + 1
-      refitRunSeqRef.current = runSeq
-      const handle = activeHandleRef.current
-      if (!handle) {
-        return
+  // Why: marks the currently-armed timer as a height refit so its callback can
+  // re-check the keyboard at fire time. Non-height refits (width/rotation and
+  // the forced reconnect/foreground re-asserts) stay unguarded so they always run.
+  const heightOriginatedRefitRef = useRef(false)
+  const scheduleViewportRefit = useCallback(
+    (options?: { heightOriginated?: boolean }) => {
+      if (refitTimerRef.current) {
+        clearTimeout(refitTimerRef.current)
       }
-      const ref = terminalRefs.current.get(handle)
-      if (!ref) {
-        return
-      }
-      const isCurrentTarget = () =>
-        isTerminalViewportRefitTargetCurrent({
-          activeHandle: activeHandleRef.current,
-          expectedHandle: handle,
-          currentRef: terminalRefs.current.get(handle),
-          expectedRef: ref,
-          disposed: disposedRef.current,
-          runSeq,
-          currentRunSeq: refitRunSeqRef.current
-        })
-      void (async () => {
-        const dims = await ref.measureFitDimensions(terminalFrameHeightRef.current || undefined)
-        if (!isCurrentTarget()) {
-          return
-        }
-        if (!dims) {
-          return
-        }
-        const forceRefit = forceNextRefitRef.current
-        forceNextRefitRef.current = false
-        const prev = viewportRef.current
-        if (!forceRefit && prev && prev.cols === dims.cols && prev.rows === dims.rows) {
-          return
-        }
-        viewportRef.current = dims
-        viewportMeasuredRef.current = true
-        // Why: prefer the in-place viewport update RPC over the legacy
-        // unsubscribe → subscribe cycle. This keeps the server-side
-        // mobile subscriber record alive (no driver=idle blip on the
-        // desktop banner; no false phone-fit baseline capture on the
-        // re-subscribe). See docs/mobile-presence-lock.md.
-        const rpc = clientRef.current
-        const deviceToken = deviceTokenRef.current
-        if (rpc && deviceToken && updateViewportCapabilityRef.current !== 'unsupported') {
-          try {
-            const response = await rpc.sendRequest('terminal.updateViewport', {
-              terminal: handle,
-              client: { id: deviceToken, type: 'mobile' as const },
-              viewport: dims
-            })
-            if (!isCurrentTarget()) {
-              return
-            }
-            updateViewportCapabilityRef.current = resolveTerminalUpdateViewportCapability(response)
-            if (isTerminalUpdateViewportUpdated(response)) {
-              rpc.updateTerminalSubscriptionViewport(handle, dims)
-              if (isTerminalUpdateViewportApplied(response)) {
-                // Why: updateViewport reflows the server PTY and re-streams only
-                // the visible screen, so the WebView's local xterm scrollback
-                // stays wrapped at the old width. Reflow it locally only when
-                // the server actually applied phone-fit; desktop mode records
-                // the viewport but leaves the PTY at desktop dims.
-                ref.reflow(dims.cols, dims.rows)
-              }
-              return
-            }
-          } catch {
-            // Fall through to legacy resubscribe.
+      heightOriginatedRefitRef.current = options?.heightOriginated ?? false
+      refitTimerRef.current = setTimeout(() => {
+        refitTimerRef.current = null
+        // Why: a height refit deferred at keyboard-close can fire after the keyboard
+        // reopened within the 150ms debounce; re-check and re-defer so we never
+        // reflow the PTY mid-keystroke. Scoped via the height-originated flag.
+        if (heightOriginatedRefitRef.current) {
+          heightOriginatedRefitRef.current = false
+          const decision = reduceTerminalFrameHeightRefit(frameHeightRefitStateRef.current, {
+            type: 'refit-committed'
+          })
+          frameHeightRefitStateRef.current = decision.state
+          if (!decision.shouldRefit) {
+            return
           }
         }
-        if (!isCurrentTarget()) {
+        const runSeq = refitRunSeqRef.current + 1
+        refitRunSeqRef.current = runSeq
+        const handle = activeHandleRef.current
+        if (!handle) {
           return
         }
-        unsubscribeTerminal(handle)
-        initializedHandlesRef.current.delete(handle)
-        subscribeToTerminal(handle)
-      })()
-    }, 150)
-  }, [
-    activeHandleRef,
-    terminalRefs,
-    terminalFrameHeightRef,
-    viewportRef,
-    viewportMeasuredRef,
-    clientRef,
-    deviceTokenRef,
-    initializedHandlesRef,
-    unsubscribeTerminal,
-    subscribeToTerminal
-  ])
+        const ref = terminalRefs.current.get(handle)
+        if (!ref) {
+          return
+        }
+        const isCurrentTarget = () =>
+          isTerminalViewportRefitTargetCurrent({
+            activeHandle: activeHandleRef.current,
+            expectedHandle: handle,
+            currentRef: terminalRefs.current.get(handle),
+            expectedRef: ref,
+            disposed: disposedRef.current,
+            runSeq,
+            currentRunSeq: refitRunSeqRef.current
+          })
+        void (async () => {
+          const dims = await ref.measureFitDimensions(terminalFrameHeightRef.current || undefined)
+          if (!isCurrentTarget()) {
+            return
+          }
+          if (!dims) {
+            return
+          }
+          const forceRefit = forceNextRefitRef.current
+          forceNextRefitRef.current = false
+          const prev = viewportRef.current
+          if (!forceRefit && prev && prev.cols === dims.cols && prev.rows === dims.rows) {
+            return
+          }
+          viewportRef.current = dims
+          viewportMeasuredRef.current = true
+          // Why: prefer the in-place viewport update RPC over the legacy
+          // unsubscribe → subscribe cycle. This keeps the server-side
+          // mobile subscriber record alive (no driver=idle blip on the
+          // desktop banner; no false phone-fit baseline capture on the
+          // re-subscribe). See docs/mobile-presence-lock.md.
+          const rpc = clientRef.current
+          const deviceToken = deviceTokenRef.current
+          if (rpc && deviceToken && updateViewportCapabilityRef.current !== 'unsupported') {
+            try {
+              const response = await rpc.sendRequest('terminal.updateViewport', {
+                terminal: handle,
+                client: { id: deviceToken, type: 'mobile' as const },
+                viewport: dims
+              })
+              if (!isCurrentTarget()) {
+                return
+              }
+              updateViewportCapabilityRef.current =
+                resolveTerminalUpdateViewportCapability(response)
+              if (isTerminalUpdateViewportUpdated(response)) {
+                rpc.updateTerminalSubscriptionViewport(handle, dims)
+                if (isTerminalUpdateViewportApplied(response)) {
+                  // Why: updateViewport reflows the server PTY and re-streams only
+                  // the visible screen, so the WebView's local xterm scrollback
+                  // stays wrapped at the old width. Reflow it locally only when
+                  // the server actually applied phone-fit; desktop mode records
+                  // the viewport but leaves the PTY at desktop dims.
+                  ref.reflow(dims.cols, dims.rows)
+                }
+                return
+              }
+            } catch {
+              // Fall through to legacy resubscribe.
+            }
+          }
+          if (!isCurrentTarget()) {
+            return
+          }
+          unsubscribeTerminal(handle)
+          initializedHandlesRef.current.delete(handle)
+          subscribeToTerminal(handle)
+        })()
+      }, 150)
+    },
+    [
+      activeHandleRef,
+      terminalRefs,
+      terminalFrameHeightRef,
+      viewportRef,
+      viewportMeasuredRef,
+      clientRef,
+      deviceTokenRef,
+      initializedHandlesRef,
+      unsubscribeTerminal,
+      subscribeToTerminal
+    ]
+  )
   const scheduleForcedViewportRefit = useCallback(() => {
     forceNextRefitRef.current = true
     scheduleViewportRefit()
@@ -258,7 +280,7 @@ export function useTerminalViewportRefit(
         return
       }
       viewportMeasuredRef.current = false
-      scheduleViewportRefit()
+      scheduleViewportRefit({ heightOriginated: true })
     },
     [viewportMeasuredRef, scheduleViewportRefit]
   )

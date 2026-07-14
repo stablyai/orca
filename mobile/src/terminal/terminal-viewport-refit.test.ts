@@ -91,7 +91,48 @@ describe('terminal viewport refit', () => {
     expect(notifier).toContain("{ type: 'frame-height', height }")
     expect(notifier).toContain("{ type: 'keyboard-visibility', visible }")
     expect(notifier).toContain('viewportMeasuredRef.current = false')
-    expect(notifier).toContain('scheduleViewportRefit()')
+    expect(notifier).toContain('scheduleViewportRefit({ heightOriginated: true })')
+  })
+
+  it('re-defers a height refit if the keyboard reopens before the debounce fires', () => {
+    // Settle while the keyboard is up -> deferred (pending), no refit.
+    let r = reduceTerminalFrameHeightRefit(
+      { frameHeight: 600, keyboardVisible: true, pending: false },
+      { type: 'frame-height', height: 520 }
+    )
+    expect(r.shouldRefit).toBe(false)
+    expect(r.state.pending).toBe(true)
+
+    // Keyboard closes -> refit scheduled (the hook arms a 150ms timer here).
+    r = reduceTerminalFrameHeightRefit(r.state, { type: 'keyboard-visibility', visible: false })
+    expect(r.shouldRefit).toBe(true)
+
+    // Keyboard reopens inside the debounce window, then the timer fires:
+    // the committed refit must NOT reflow while typing, and stays owed.
+    r = reduceTerminalFrameHeightRefit(r.state, { type: 'keyboard-visibility', visible: true })
+    const committed = reduceTerminalFrameHeightRefit(r.state, { type: 'refit-committed' })
+    expect(committed.shouldRefit).toBe(false)
+    expect(committed.state.pending).toBe(true)
+
+    // Keyboard closes again -> rescheduled -> now the committed refit runs.
+    const rescheduled = reduceTerminalFrameHeightRefit(committed.state, {
+      type: 'keyboard-visibility',
+      visible: false
+    })
+    expect(rescheduled.shouldRefit).toBe(true)
+    const ran = reduceTerminalFrameHeightRefit(rescheduled.state, { type: 'refit-committed' })
+    expect(ran.shouldRefit).toBe(true)
+    expect(ran.state.pending).toBe(false)
+  })
+
+  it('re-checks the keyboard at fire time only for height-originated refits', () => {
+    const start = hookSource.indexOf('refitTimerRef.current = setTimeout(')
+    expect(start).toBeGreaterThanOrEqual(0)
+    const timerBody = hookSource.slice(start, start + 900)
+    // The height flag scopes the guard; forced/width refits stay unguarded.
+    expect(timerBody).toContain('if (heightOriginatedRefitRef.current)')
+    expect(timerBody).toContain("type: 'refit-committed'")
+    expect(timerBody).toContain('if (!decision.shouldRefit)')
   })
 
   it('is wired into the session screen', () => {

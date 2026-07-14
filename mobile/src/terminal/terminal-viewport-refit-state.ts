@@ -46,11 +46,22 @@ export type TerminalFrameHeightRefitState = {
 export type TerminalFrameHeightRefitEvent =
   | { type: 'frame-height'; height: number }
   | { type: 'keyboard-visibility'; visible: boolean }
+  | { type: 'refit-committed' }
 
 export function reduceTerminalFrameHeightRefit(
   state: TerminalFrameHeightRefitState,
   event: TerminalFrameHeightRefitEvent
 ): { state: TerminalFrameHeightRefitState; shouldRefit: boolean } {
+  if (event.type === 'refit-committed') {
+    // Why: the debounced height refit is firing. The keyboard can reopen during
+    // the debounce window, so re-check here and re-defer rather than reflow the
+    // PTY mid-keystroke; it runs on the next keyboard close.
+    if (state.keyboardVisible) {
+      return { state: { ...state, pending: true }, shouldRefit: false }
+    }
+    return { state: { ...state, pending: false }, shouldRefit: true }
+  }
+
   if (event.type === 'keyboard-visibility') {
     if (event.visible === state.keyboardVisible) {
       return { state, shouldRefit: false }
