@@ -862,7 +862,8 @@ describe('registerPtyHandlers', () => {
         expect.any(String),
         'wt-renderer',
         null,
-        undefined
+        undefined,
+        false
       )
       expect(releaseWorktreeSpawn).toHaveBeenCalledTimes(1)
     })
