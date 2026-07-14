@@ -16,6 +16,7 @@ import {
 } from '@/lib/pane-manager/pane-terminal-options'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
 import { configureTerminalOutputBacklogCap } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { useHiddenSshScrollbackTrim } from './terminal-ssh-scrollback-trim'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
 import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-mouse-wheel'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
@@ -570,6 +571,12 @@ export function useTerminalPaneLifecycle({
   // scrollback setting; applying it where the setting is read keeps the two
   // in lockstep without a separate settings subscription.
   configureTerminalOutputBacklogCap(settings?.terminalScrollbackRows)
+  useHiddenSshScrollbackTrim({
+    managerRef,
+    paneTransportsRef,
+    isVisible,
+    configuredScrollbackRows: terminalScrollbackRows
+  })
   const systemPrefersDarkRef = useRef(systemPrefersDark)
   systemPrefersDarkRef.current = systemPrefersDark
   const previousVisibleForReconcileRef = useRef<TerminalPaneVisibilitySnapshot | null>(null)
