@@ -19,7 +19,13 @@ const DatabaseCredential = z.object({
 
 const DatabaseConnectionRequest = z.object({
   connection: DatabaseConnection,
-  credential: DatabaseCredential
+  credential: DatabaseCredential,
+  execution: z
+    .object({
+      kind: z.literal('ssh'),
+      connectionId: z.string().trim().min(1).max(255)
+    })
+    .optional()
 })
 
 const DatabaseQueryRequest = DatabaseConnectionRequest.extend({

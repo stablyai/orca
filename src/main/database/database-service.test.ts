@@ -64,4 +64,62 @@ describe('DatabaseService', () => {
     expect(provider.execute).toHaveBeenCalledWith(request, undefined)
     expect(provider.cancel).toHaveBeenCalledWith('query-1')
   })
+
+  it('uses and closes the project SSH route around database operations', async () => {
+    const provider = createProvider()
+    const close = vi.fn().mockResolvedValue(undefined)
+    const sshConnectionRoute = {
+      open: vi.fn().mockResolvedValue({
+        connection: {
+          ...connectionRequest.connection,
+          host: '127.0.0.1',
+          port: 45_678,
+          tlsServerName: 'db.internal'
+        },
+        close
+      })
+    }
+    const service = new DatabaseService([provider], sshConnectionRoute as never)
+    const sshRequest: DatabaseConnectionRequest = {
+      ...connectionRequest,
+      execution: { kind: 'ssh', connectionId: 'ssh-p8' }
+    }
+
+    await service.testConnection(sshRequest)
+
+    expect(provider.testConnection).toHaveBeenCalledWith(
+      {
+        ...sshRequest,
+        connection: {
+          ...connectionRequest.connection,
+          host: '127.0.0.1',
+          port: 45_678,
+          tlsServerName: 'db.internal'
+        }
+      },
+      undefined
+    )
+    expect(close).toHaveBeenCalledTimes(1)
+  })
+
+  it('closes the project SSH route when the provider rejects', async () => {
+    const provider = createProvider()
+    vi.mocked(provider.execute).mockRejectedValueOnce(new Error('query failed'))
+    const close = vi.fn().mockResolvedValue(undefined)
+    const service = new DatabaseService([provider], {
+      open: vi.fn().mockResolvedValue({ connection: connectionRequest.connection, close })
+    } as never)
+    const request: DatabaseQueryRequest = {
+      ...connectionRequest,
+      execution: { kind: 'ssh', connectionId: 'ssh-p8' },
+      queryId: 'query-failure',
+      sql: 'SELECT broken',
+      readOnly: true,
+      maxRows: 500,
+      timeoutMs: 30_000
+    }
+
+    await expect(service.execute(request)).rejects.toThrow('query failed')
+    expect(close).toHaveBeenCalledTimes(1)
+  })
 })

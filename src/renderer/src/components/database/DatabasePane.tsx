@@ -10,7 +10,10 @@ import {
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useAppStore } from '@/store'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  getRuntimeEnvironmentIdForWorktree,
+  getSshConnectionIdForWorktree
+} from '@/lib/worktree-runtime-owner'
 import {
   cancelDatabaseQuery,
   executeDatabaseQuery,
@@ -40,6 +43,9 @@ export default function DatabasePane({ tab }: { tab: Tab }): React.JSX.Element {
   const runtimeEnvironmentId = useAppStore((state) =>
     getRuntimeEnvironmentIdForWorktree(state, tab.worktreeId)
   )
+  const sshConnectionId = useAppStore((state) =>
+    getSshConnectionIdForWorktree(state, tab.worktreeId)
+  )
   const [password, setPassword] = useState(() => getDatabaseTabPassword(tab.id))
   const [connected, setConnected] = useState(false)
   const [showConnection, setShowConnection] = useState(true)
@@ -49,11 +55,21 @@ export default function DatabasePane({ tab }: { tab: Tab }): React.JSX.Element {
   const [runningQueryId, setRunningQueryId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const queryRef = useRef<HTMLTextAreaElement>(null)
-  const ownerLabel = runtimeEnvironmentId
-    ? translate('auto.components.database.owner.runtime', 'Runtime: {{value0}}', {
-        value0: runtimeEnvironmentId
-      })
-    : translate('auto.components.database.owner.local', 'Local desktop')
+  const ownerLabel = sshConnectionId
+    ? runtimeEnvironmentId
+      ? translate(
+          'auto.components.database.owner.runtimeSsh',
+          'Runtime: {{value0}} → SSH: {{value1}}',
+          { value0: runtimeEnvironmentId, value1: sshConnectionId }
+        )
+      : translate('auto.components.database.owner.ssh', 'SSH: {{value0}}', {
+          value0: sshConnectionId
+        })
+    : runtimeEnvironmentId
+      ? translate('auto.components.database.owner.runtime', 'Runtime: {{value0}}', {
+          value0: runtimeEnvironmentId
+        })
+      : translate('auto.components.database.owner.local', 'Local desktop')
 
   const request = useMemo(
     () => ({ connection: database.connection, credential: { password: password || undefined } }),

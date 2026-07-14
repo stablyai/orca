@@ -36,7 +36,10 @@ function toClientConfig(
   const ssl =
     connection.sslMode === 'disable'
       ? false
-      : { rejectUnauthorized: connection.sslMode === 'verify-full' }
+      : {
+          rejectUnauthorized: connection.sslMode === 'verify-full',
+          ...(connection.tlsServerName ? { servername: connection.tlsServerName } : {})
+        }
   return {
     host: connection.host,
     port: connection.port,

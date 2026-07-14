@@ -114,6 +114,27 @@ describe('PostgresProvider', () => {
     })
   })
 
+  it('preserves the database TLS identity across a loopback SSH tunnel', async () => {
+    const provider = new PostgresProvider()
+
+    await provider.testConnection({
+      ...request,
+      connection: {
+        ...request.connection,
+        host: '127.0.0.1',
+        port: 45_678,
+        sslMode: 'verify-full',
+        tlsServerName: 'db.internal'
+      }
+    })
+
+    expect(postgres.clientConfigs[0]).toMatchObject({
+      host: '127.0.0.1',
+      port: 45_678,
+      ssl: { rejectUnauthorized: true, servername: 'db.internal' }
+    })
+  })
+
   it('runs read-only queries in a bounded transaction and reports truncation', async () => {
     postgres.cursorRows = [[1], [2], [3]]
     const provider = new PostgresProvider()

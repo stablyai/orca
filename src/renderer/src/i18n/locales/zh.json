@@ -12985,7 +12985,9 @@
         },
         "owner": {
           "runtime": "Runtime: {{value0}}",
-          "local": "Local desktop"
+          "local": "Local desktop",
+          "runtimeSsh": "Runtime: {{value0}} → SSH: {{value1}}",
+          "ssh": "SSH: {{value0}}"
         },
         "toolbar": {
           "readOnly": "Read only",

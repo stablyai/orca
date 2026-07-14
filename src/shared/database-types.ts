@@ -9,6 +9,13 @@ export type DatabaseConnectionConfig = {
   database: string
   user: string
   sslMode: DatabaseSslMode
+  /** Internal TLS identity retained when an SSH tunnel rewrites host to loopback. */
+  tlsServerName?: string
+}
+
+export type DatabaseExecutionContext = {
+  kind: 'ssh'
+  connectionId: string
 }
 
 export type DatabaseTabState = {
@@ -62,6 +69,7 @@ export type DatabaseConnectionTestResult = {
 export type DatabaseConnectionRequest = {
   connection: DatabaseConnectionConfig
   credential: DatabaseCredential
+  execution?: DatabaseExecutionContext
 }
 
 export type DatabaseQueryRequest = DatabaseConnectionRequest & {

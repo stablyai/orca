@@ -7,7 +7,10 @@ import type {
   DatabaseSchemaResult
 } from '../../../shared/database-types'
 import { DATABASE_QUERY_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  getRuntimeEnvironmentIdForWorktree,
+  getSshConnectionIdForWorktree
+} from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
 import {
   assertRuntimeEnvironmentCapability,
@@ -21,6 +24,20 @@ function getDatabaseTarget(worktreeId: string): RuntimeClientTarget {
   return getActiveRuntimeTarget({
     activeRuntimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, worktreeId)
   })
+}
+
+function withProjectExecution<TRequest extends DatabaseConnectionRequest>(
+  worktreeId: string,
+  request: TRequest
+): TRequest {
+  const sshConnectionId = getSshConnectionIdForWorktree(useAppStore.getState(), worktreeId)
+  if (!sshConnectionId) {
+    return request
+  }
+  return {
+    ...request,
+    execution: { kind: 'ssh', connectionId: sshConnectionId }
+  }
 }
 
 async function callDatabaseRuntimeRpc<TResult>(
@@ -45,21 +62,36 @@ export function testDatabaseConnection(
   worktreeId: string,
   request: DatabaseConnectionRequest
 ): Promise<DatabaseConnectionTestResult> {
-  return callDatabaseRuntimeRpc(worktreeId, 'database.testConnection', request, 35_000)
+  return callDatabaseRuntimeRpc(
+    worktreeId,
+    'database.testConnection',
+    withProjectExecution(worktreeId, request),
+    35_000
+  )
 }
 
 export function introspectDatabase(
   worktreeId: string,
   request: DatabaseConnectionRequest
 ): Promise<DatabaseSchemaResult> {
-  return callDatabaseRuntimeRpc(worktreeId, 'database.introspect', request, 35_000)
+  return callDatabaseRuntimeRpc(
+    worktreeId,
+    'database.introspect',
+    withProjectExecution(worktreeId, request),
+    35_000
+  )
 }
 
 export function executeDatabaseQuery(
   worktreeId: string,
   request: DatabaseQueryRequest
 ): Promise<DatabaseQueryResult> {
-  return callDatabaseRuntimeRpc(worktreeId, 'database.execute', request, request.timeoutMs + 10_000)
+  return callDatabaseRuntimeRpc(
+    worktreeId,
+    'database.execute',
+    withProjectExecution(worktreeId, request),
+    request.timeoutMs + 10_000
+  )
 }
 
 export async function cancelDatabaseQuery(

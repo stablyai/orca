@@ -1275,6 +1275,10 @@ export function getSshConnectionManager(): SshConnectionManager | null {
   return connectionManager
 }
 
+export function getSshPortForwardManager(): SshPortForwardManager | null {
+  return portForwardManager
+}
+
 export async function resetSshHandlerStateForTests(): Promise<void> {
   advertisedUrlWatcherUnsubscribe?.()
   advertisedUrlWatcherUnsubscribe = null
