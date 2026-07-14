@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import type { AgentType } from '../../../../shared/native-chat-types'
@@ -14,8 +14,10 @@ import {
 const ESC = '\x1b'
 
 export type NativeChatInteractiveSend = {
-  /** Send answer text (bracketed-paste wrapped + Enter, like the composer). */
-  sendAnswer: (text: string) => void
+  /** Send answer text (bracketed-paste wrapped + Enter, like the composer).
+   *  Returns the ms after which every scheduled write has fired (0 if nothing
+   *  was sent) so the caller can keep the card up until the send settles. */
+  sendAnswer: (text: string) => number
   /** Send a raw control string (e.g. an approval option number or ESC) as-is. */
   sendRaw: (raw: string) => void
   /** Send ESC to interrupt — cancels a question / denies an approval. */
@@ -43,7 +45,9 @@ export function useNativeChatInteractiveSend(
     inFlightRef.current?.cancel()
     inFlightRef.current = null
   }, [])
-  useEffect(() => cancelInFlight, [cancelInFlight])
+  // Why: a split can be rebound without unmounting this view. Cancel during
+  // commit so no delayed answer write can race the replacement PTY.
+  useLayoutEffect(() => cancelInFlight, [cancelInFlight, targetPtyId, terminalTabId])
 
   const sendRaw = useCallback(
     (raw: string) => {
@@ -56,12 +60,12 @@ export function useNativeChatInteractiveSend(
   )
 
   const sendAnswer = useCallback(
-    (text: string) => {
+    (text: string): number => {
       if (text.trim() === '') {
-        return
+        return 0
       }
       if (!targetPtyId) {
-        return
+        return 0
       }
       // Cancel any prior in-flight answer before starting a new one.
       cancelInFlight()
@@ -73,9 +77,11 @@ export function useNativeChatInteractiveSend(
       // so each Enter lands on its rendered question and only the last submits.
       // Other agents (e.g. Codex) submit the whole answer with one Enter, so
       // gate the stepping on Claude and send a single body + Enter otherwise.
-      inFlightRef.current = shouldStepNativeChatAskAnswer(agent)
+      const handle = shouldStepNativeChatAskAnswer(agent)
         ? sendNativeChatAnswer(settings, targetPtyId, text.split('\n'))
         : sendNativeChatMessage(settings, targetPtyId, text)
+      inFlightRef.current = handle
+      return handle.settleAfterMs
     },
     [terminalTabId, targetPtyId, agent, cancelInFlight]
   )

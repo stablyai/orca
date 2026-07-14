@@ -66,6 +66,8 @@ export function getMobilePrCreateBlockMessage(prefill: MobilePrPrefill): string 
       return `A ${copy.reviewLabel} already exists for this branch.`
     case 'fork_head_unsupported':
       return `Creating a ${copy.reviewLabel} from this fork is not supported.`
+    case 'base_not_on_remote':
+      return `Push the base branch before creating a ${copy.reviewLabel}.`
     case 'needs_push':
     case null:
     case undefined:

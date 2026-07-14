@@ -28,7 +28,11 @@ export const NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS = 300
 
 /** Cancels an in-flight send's pending pty writes (the delayed Enter, and any
  *  later question bodies/Enters). Safe to call after the send completes. */
-export type NativeChatSendHandle = { cancel: () => void }
+export type NativeChatSendHandle = {
+  cancel: () => void
+  /** Time after which every scheduled write has fired and the handle can drop. */
+  settleAfterMs: number
+}
 
 /**
  * Send a native-chat message through the verified runtime pty path: framed body
@@ -45,7 +49,7 @@ export function sendNativeChatMessage(
   const timer = setTimeout(() => {
     sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
   }, NATIVE_CHAT_SUBMIT_DELAY_MS)
-  return { cancel: () => clearTimeout(timer) }
+  return { cancel: () => clearTimeout(timer), settleAfterMs: NATIVE_CHAT_SUBMIT_DELAY_MS }
 }
 
 export function sendNativeChatMessageWithImageAttachments(
@@ -84,7 +88,11 @@ export function sendNativeChatMessageWithImageAttachments(
       for (const timer of timers) {
         clearTimeout(timer)
       }
-    }
+    },
+    settleAfterMs:
+      trimmedText.length > 0
+        ? NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS + NATIVE_CHAT_SUBMIT_DELAY_MS
+        : NATIVE_CHAT_SUBMIT_DELAY_MS
   }
 }
 
@@ -125,6 +133,7 @@ export function sendNativeChatAnswer(
       for (const timer of timers) {
         clearTimeout(timer)
       }
-    }
+    },
+    settleAfterMs: nativeChatQuestionOffsets(lines.length - 1).enterAt
   }
 }

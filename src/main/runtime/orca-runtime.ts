@@ -172,6 +172,10 @@ import type {
   LinearStatusSetResult
 } from '../../shared/linear-agent-access'
 import {
+  HEADLESS_RUNTIME_WINDOW_ID,
+  type RuntimeDesktopWindowStatus
+} from '../../shared/runtime-types'
+import {
   LINEAR_SEARCH_MAX_LIMIT,
   LINEAR_WRITE_BODY_CAP,
   clampLinearSearchLimit
@@ -1020,6 +1024,7 @@ type TerminalCreateOptions = {
   launchConfig?: WorktreeStartupLaunch['launchConfig']
   launchToken?: string
   launchAgent?: TuiAgent
+  viewMode?: 'terminal' | 'chat'
   startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
   telemetry?: WorktreeStartupLaunch['telemetry']
   title?: string
@@ -1318,6 +1323,7 @@ type RuntimeNotifier = {
       launchConfig?: SleepingAgentLaunchConfig
       launchToken?: string
       launchAgent?: TuiAgent
+      viewMode?: 'terminal' | 'chat'
       activate?: boolean
       presentation?: RuntimeTerminalPresentation
       tabId?: string
@@ -2139,7 +2145,11 @@ export class OrcaRuntimeService {
   // creates so ordinary renderer spawns never publish here.
   private pendingMobileTerminalCreatesByKey = new Map<
     string,
-    { activate: boolean; selectIfNoActiveTab: boolean }
+    {
+      activate: boolean
+      selectIfNoActiveTab: boolean
+      viewMode?: 'terminal' | 'chat'
+    }
   >()
   private mobileSessionTabListeners = new Set<(snapshot: RuntimeMobileSessionTabsResult) => void>()
   // Why: coalesces title/status-driven session.tabs emits so spinner churn
@@ -2500,8 +2510,10 @@ export class OrcaRuntimeService {
   private readonly onPtyStopped: ((ptyId: string) => void) | null
   private readonly onTerminalAgentStatus: ((event: RuntimeTerminalAgentStatusEvent) => void) | null
   private readonly onTerminalSideEffects: ((batch: TerminalSideEffectBatch) => void) | null
+  private terminalSideEffectConsumerAvailable = false
   private readonly getAgentStatusSnapshotFn: (() => AgentStatusIpcPayload[]) | null
   private readonly buildAgentHookPtyEnv: (() => Record<string, string>) | null
+  private readonly getDesktopWindowStatusFn: () => RuntimeDesktopWindowStatus
   private accountServices: RuntimeAccountServices | null = null
   private commitMessageAgentEnv: CommitMessageAgentEnvironmentResolvers | null = null
   private automationService: AutomationService | null = null
@@ -2535,6 +2547,7 @@ export class OrcaRuntimeService {
       // managed-Codex sessions. The runtime ctor runs in BOTH window and serve.
       getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
       buildAgentHookPtyEnv?: () => Record<string, string>
+      getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
     }
   ) {
     this.store = store
@@ -2561,6 +2574,7 @@ export class OrcaRuntimeService {
     this.onPtyStopped = deps?.onPtyStopped ?? null
     this.onTerminalAgentStatus = deps?.onTerminalAgentStatus ?? null
     this.buildAgentHookPtyEnv = deps?.buildAgentHookPtyEnv ?? null
+    this.getDesktopWindowStatusFn = deps?.getDesktopWindowStatus ?? (() => 'openable')
     this.onTerminalSideEffects = deps?.onTerminalSideEffects ?? null
     // Why: the ConPTY spawn mark can land after daemon stream data already
     // created this PTY's emulator; the mark retrofits the DA1 override here
@@ -2963,6 +2977,7 @@ export class OrcaRuntimeService {
       rendererGraphEpoch: this.rendererGraphEpoch,
       graphStatus: this.graphStatus,
       authoritativeWindowId: this.authoritativeWindowId,
+      desktopWindowStatus: hasRenderer ? 'available' : this.getDesktopWindowStatusFn(),
       liveTabCount: this.tabs.size,
       liveLeafCount: this.leaves.size,
       runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
@@ -3077,9 +3092,76 @@ export class OrcaRuntimeService {
   }
 
   attachWindow(windowId: number): void {
+    if (this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID) {
+      // Why: promotion is a renderer reload of the same graph owner, not a new
+      // runtime; stale handles must transition before the real window publishes.
+      this.persistWindowlessPtyBindingsForDesktopAttach()
+      this.markRendererReloading(HEADLESS_RUNTIME_WINDOW_ID)
+      this.authoritativeWindowId = windowId
+      return
+    }
     if (this.authoritativeWindowId === null) {
+      // Why: a promoted serve can close and later reopen its window while new
+      // background PTYs keep arriving; every windowless gap needs this handoff.
+      this.persistWindowlessPtyBindingsForDesktopAttach()
       this.authoritativeWindowId = windowId
     }
+  }
+
+  private persistWindowlessPtyBindingsForDesktopAttach(): void {
+    const session = this.store?.getWorkspaceSession?.()
+    if (!session || !this.store?.setWorkspaceSession) {
+      return
+    }
+    const promotablePtys = [...this.ptysById.values()].filter((pty) => {
+      if (!pty.connected || !pty.tabId) {
+        return false
+      }
+      const tab = session.tabsByWorktree[pty.worktreeId]?.find(
+        (candidate) => candidate.id === pty.tabId
+      )
+      if (!tab) {
+        return false
+      }
+      const layoutPtyIds = Object.values(
+        session.terminalLayoutsByTabId[pty.tabId]?.ptyIdsByLeafId ?? {}
+      )
+      return tab.ptyId === pty.ptyId || layoutPtyIds.includes(pty.ptyId)
+    })
+    if (promotablePtys.length === 0) {
+      return
+    }
+
+    // Why: renderer hydration treats an explicitly-present shutdown list as
+    // authoritative. A windowless owner has no renderer shutdown pass, so seed
+    // that existing reattach contract before its next desktop window loads.
+    const activeWorktreeIdsOnShutdown = [
+      ...new Set([
+        ...(session.activeWorktreeIdsOnShutdown ?? []),
+        ...promotablePtys.map((pty) => pty.worktreeId)
+      ])
+    ]
+    const activeConnectionIdsAtShutdown = [
+      ...new Set([
+        ...(session.activeConnectionIdsAtShutdown ?? []),
+        ...promotablePtys
+          .map((pty) => pty.connectionId)
+          .filter((connectionId): connectionId is string => connectionId !== null)
+      ])
+    ]
+    const remoteSessionIdsByTabId = { ...session.remoteSessionIdsByTabId }
+    for (const pty of promotablePtys) {
+      if (pty.connectionId && pty.tabId) {
+        remoteSessionIdsByTabId[pty.tabId] = pty.ptyId
+      }
+    }
+
+    this.store.setWorkspaceSession({
+      ...session,
+      activeWorktreeIdsOnShutdown,
+      ...(activeConnectionIdsAtShutdown.length > 0 ? { activeConnectionIdsAtShutdown } : {}),
+      ...(Object.keys(remoteSessionIdsByTabId).length > 0 ? { remoteSessionIdsByTabId } : {})
+    })
   }
 
   syncWindowGraph(windowId: number, graph: RuntimeSyncWindowGraph): RuntimeSyncWindowGraphResult {
@@ -3206,6 +3288,7 @@ export class OrcaRuntimeService {
     this.rebuildLeafPtyIndex()
     this.notifyMobileSessionTabSnapshots()
     this.graphStatus = 'ready'
+    this.setTerminalSideEffectConsumerAvailable(windowId !== HEADLESS_RUNTIME_WINDOW_ID)
     this.refreshWritableFlags()
     for (const leaf of this.leaves.values()) {
       this.adoptPreAllocatedHandle(leaf)
@@ -3667,6 +3750,7 @@ export class OrcaRuntimeService {
       activate: boolean
       selectIfNoActiveTab?: boolean
       startupCwd?: string
+      viewMode?: 'terminal' | 'chat'
       split?: { splitFromLeafId: string; direction: 'horizontal' | 'vertical' }
     }
   ): void {
@@ -3698,6 +3782,17 @@ export class OrcaRuntimeService {
       baseLayout,
       args.split
     )
+    // Why: a main-side PTY rescue or split publication must not erase the
+    // host's explicit tab mode before the renderer graph catches up.
+    const viewMode =
+      args.viewMode ??
+      existingTab?.viewMode ??
+      existing?.tabs.find(
+        (candidate): candidate is RuntimeMobileSessionTerminalTab =>
+          candidate.type === 'terminal' &&
+          candidate.parentTabId === args.tabId &&
+          candidate.viewMode !== undefined
+      )?.viewMode
     const tab: RuntimeMobileSessionTerminalTab = {
       type: 'terminal',
       id: `${args.tabId}::${args.leafId}`,
@@ -3707,6 +3802,7 @@ export class OrcaRuntimeService {
       title,
       ...(pty.launchAgent ? { launchAgent: pty.launchAgent } : {}),
       ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
+      ...(viewMode ? { viewMode } : {}),
       parentLayout,
       isActive:
         args.activate || (args.selectIfNoActiveTab !== false && existing?.activeTabId == null)
@@ -5972,7 +6068,7 @@ export class OrcaRuntimeService {
   /** Record one derived side-effect fact: batched per chunk while applying
    *  bytes, emitted immediately for between-chunk facts (stale-title timer). */
   private recordTerminalSideEffectFact(ptyId: string, fact: TerminalSideEffectFact): void {
-    if (!this.onTerminalSideEffects) {
+    if (!this.onTerminalSideEffects || !this.terminalSideEffectConsumerAvailable) {
       return
     }
     const entry = this.ptyTitleTrackersByPtyId.get(ptyId)
@@ -5988,7 +6084,11 @@ export class OrcaRuntimeService {
     facts: TerminalSideEffectFact[],
     options: { replay?: boolean } = {}
   ): void {
-    if (!this.onTerminalSideEffects || facts.length === 0) {
+    if (
+      !this.onTerminalSideEffects ||
+      !this.terminalSideEffectConsumerAvailable ||
+      facts.length === 0
+    ) {
       return
     }
     const batch: TerminalSideEffectBatch = {
@@ -6167,7 +6267,7 @@ export class OrcaRuntimeService {
         // Why: bell/command-finished/pr-link/2031 facts exist only for the
         // pty:sideEffect channel. Headless serve has no consumer, so skip the
         // per-chunk bell walk and 133/URL/2031 scans entirely.
-        ...(this.onTerminalSideEffects
+        ...(this.terminalSideEffectConsumerAvailable
           ? {
               onBell: () => {
                 this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
@@ -6200,7 +6300,7 @@ export class OrcaRuntimeService {
       // headless serve skips the per-chunk scrape entirely. The detector
       // self-arms on the Command Code banner; the spawn command (when main
       // saw one) mirrors the renderer detector's startupCommand fast-arm.
-      commandCodeDetector: this.onTerminalSideEffects
+      commandCodeDetector: this.terminalSideEffectConsumerAvailable
         ? createCommandCodeOutputStatusDetector({
             startupCommand: this.terminalSpawnCommandsByPtyId.get(ptyId) ?? null,
             onWorking: (prompt) => {
@@ -6297,6 +6397,19 @@ export class OrcaRuntimeService {
   private disposePtyTitleTracker(ptyId: string): void {
     this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.dispose()
     this.ptyTitleTrackersByPtyId.delete(ptyId)
+  }
+
+  private setTerminalSideEffectConsumerAvailable(available: boolean): void {
+    const nextAvailable = available && this.onTerminalSideEffects !== null
+    if (nextAvailable === this.terminalSideEffectConsumerAvailable) {
+      return
+    }
+    this.terminalSideEffectConsumerAvailable = nextAvailable
+    // Why: optional bell/command/link scanners are selected when a tracker is
+    // created. Rebuild at the window boundary so pure headless output stays cheap.
+    for (const ptyId of [...this.ptyTitleTrackersByPtyId.keys()]) {
+      this.disposePtyTitleTracker(ptyId)
+    }
   }
 
   private extractLastOsc7CwdForPty(
@@ -17647,12 +17760,12 @@ export class OrcaRuntimeService {
   ): Promise<RuntimeTerminalCreate> {
     const presentation = resolveTerminalPresentation(opts)
     const requiresRendererFocus = opts.presentation === 'focused' || opts.focus === true
+    const availableAuthoritativeWindow = this.getAvailableAuthoritativeWindow()
     // Why: pre-diff createTerminal fell back to the renderer's active worktree
     // when no selector was provided. The new background-spawn branch hard-
     // requires a resolvable selector, so route the no-selector case through
     // the renderer IPC path to preserve that behavior.
-    const rendererWindow =
-      opts.rendererBacked === true ? this.getAvailableAuthoritativeWindow() : null
+    const rendererWindow = opts.rendererBacked === true ? availableAuthoritativeWindow : null
     const shouldCreateInBackground =
       worktreeSelector !== undefined &&
       ((!requiresRendererFocus && opts.rendererBacked !== true) ||
@@ -17773,7 +17886,14 @@ export class OrcaRuntimeService {
         tabId,
         leafId,
         ...(launchOpts.sessionId ? { sessionId: launchOpts.sessionId } : {}),
-        ...(launchOpts.persistHostSessionBinding ? { persistHostSessionBinding: true } : {})
+        // Why: a headless-created pane has no renderer session writer. Persist
+        // its tab/leaf binding at spawn so a later promoted window reattaches
+        // the live daemon or SSH PTY instead of replacing it with a fresh one.
+        // Re-check freshly: the entry-time snapshot can go stale across the
+        // awaits above if the authoritative window is destroyed mid-spawn.
+        ...(launchOpts.persistHostSessionBinding || this.getAvailableAuthoritativeWindow() === null
+          ? { persistHostSessionBinding: true }
+          : {})
       })
       this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
       this.registerPty(result.id, workspace.id, workspace.connectionId)
@@ -17806,6 +17926,7 @@ export class OrcaRuntimeService {
           // Why: explicit background presentation may carry legacy activate
           // metadata from an already-owned renderer pane; don't select it on mobile.
           selectIfNoActiveTab: presentation !== 'background',
+          ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
           ...(cwd !== workspace.path ? { startupCwd: cwd } : {})
         })
       }
@@ -17824,6 +17945,7 @@ export class OrcaRuntimeService {
             ...(effectiveLaunchConfig ? { launchConfig: effectiveLaunchConfig } : {}),
             ...(launchToken ? { launchToken } : {}),
             ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
+            ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
             activate: presentation === 'focused',
             ...(presentation ? { presentation } : {}),
             tabId,
@@ -17899,6 +18021,7 @@ export class OrcaRuntimeService {
         ...(launchOpts.launchConfig ? { launchConfig: launchOpts.launchConfig } : {}),
         ...(launchOpts.launchToken ? { launchToken: launchOpts.launchToken } : {}),
         ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
+        ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
         startupCommandDelivery: launchOpts.startupCommandDelivery,
         title: launchOpts.title,
         activate: presentation === 'focused',
@@ -17957,6 +18080,7 @@ export class OrcaRuntimeService {
       agent?: TuiAgent
       launchConfig?: SleepingAgentLaunchConfig
       launchAgent?: TuiAgent
+      viewMode?: 'terminal' | 'chat'
       activate?: boolean
       clientMutationId?: string
       signal?: AbortSignal
@@ -18001,6 +18125,7 @@ export class OrcaRuntimeService {
       agent?: TuiAgent
       launchConfig?: SleepingAgentLaunchConfig
       launchAgent?: TuiAgent
+      viewMode?: 'terminal' | 'chat'
       activate?: boolean
       clientMutationId?: string
       signal?: AbortSignal
@@ -18034,6 +18159,7 @@ export class OrcaRuntimeService {
           env: startupCommand.env,
           startupCommandDelivery: startupCommand.startupCommandDelivery,
           launchAgent: startupCommand.launchAgent,
+          viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
           launchConfig: startupCommand.launchConfig
         }
@@ -18082,6 +18208,7 @@ export class OrcaRuntimeService {
         ...(startupCommand.env ? { env: startupCommand.env } : {}),
         ...(startupCommand.launchConfig ? { launchConfig: startupCommand.launchConfig } : {}),
         ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
+        ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
         startupCommandDelivery: startupCommand.startupCommandDelivery,
         source: 'runtime-session',
         activate: opts.activate
@@ -18100,7 +18227,8 @@ export class OrcaRuntimeService {
     // requested group, so any wrong-group placement is cosmetic and stall-window-only.
     this.pendingMobileTerminalCreatesByKey.set(pendingCreateKey, {
       activate: opts.activate !== false,
-      selectIfNoActiveTab: true
+      selectIfNoActiveTab: true,
+      ...(opts.viewMode ? { viewMode: opts.viewMode } : {})
     })
     try {
       // Why: the PTY spawn and the tabCreate reply race on independent IPC
@@ -18145,6 +18273,7 @@ export class OrcaRuntimeService {
           startupCommandDelivery: startupCommand.startupCommandDelivery,
           identity: { tabId: pendingSurface.tab.parentTabId, leafId: pendingSurface.tab.leafId },
           launchAgent: startupCommand.launchAgent,
+          viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
           launchConfig: startupCommand.launchConfig
         }
@@ -18268,6 +18397,7 @@ export class OrcaRuntimeService {
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
       identity?: { tabId: string; leafId: string; sessionId?: string }
       launchAgent?: TuiAgent
+      viewMode?: 'terminal' | 'chat'
       targetGroupId?: string
       launchConfig?: SleepingAgentLaunchConfig
     } = {}
@@ -18285,6 +18415,7 @@ export class OrcaRuntimeService {
       env: opts.env,
       ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
       ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
+      ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
       startupCommandDelivery: opts.startupCommandDelivery,
       ...(opts.identity
         ? {
@@ -18306,6 +18437,11 @@ export class OrcaRuntimeService {
     }
     const parentTabId = livePty.pty.tabId ?? `pty:${livePty.pty.ptyId}`
     const leafId = parsePaneKey(livePty.pty.paneKey ?? '')?.leafId ?? randomUUID()
+    if (opts.viewMode) {
+      // Why: the runtime-owned binding must survive a serve restart with the
+      // same initial mode, not fall back to a later client's local default.
+      this.persistHeadlessSessionTabProps(worktreeId, parentTabId, { viewMode: opts.viewMode })
+    }
     const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
     const existingSurface =
       existing?.tabs.find(
@@ -18328,6 +18464,7 @@ export class OrcaRuntimeService {
       title: terminal.title ?? livePty.pty.title ?? 'Terminal',
       ...(cwd ? { startupCwd: cwd } : {}),
       ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
+      ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
       parentLayout,
       isActive: activate
     }
@@ -18474,21 +18611,27 @@ export class OrcaRuntimeService {
       return null
     }
     const existing = this.findMobileTerminalSurface(worktreeId, tabId)
-    if (existing) {
-      // Why: the renderer's own publication already landed; stay idempotent.
+    if (
+      existing &&
+      this.isReadyMobileTerminalSurface(existing) &&
+      (pending.viewMode === undefined || existing.tab.viewMode === pending.viewMode)
+    ) {
+      // Why: the renderer's ready publication already landed with the intended
+      // mode; only a pending shell still needs the main-side PTY rescue.
       return existing
     }
     const pty = this.findLiveRegisteredPtyForRendererTab(worktreeId, tabId)
     const leafId = pty ? parsePaneKey(pty.paneKey ?? '')?.leafId : undefined
     if (!pty || !leafId) {
-      return null
+      return existing
     }
     this.publishPtyBackedMobileSessionTerminal(worktreeId, pty, {
       tabId,
       leafId,
       title: null,
       activate: pending.activate,
-      selectIfNoActiveTab: pending.selectIfNoActiveTab
+      selectIfNoActiveTab: pending.selectIfNoActiveTab,
+      ...(pending.viewMode ? { viewMode: pending.viewMode } : {})
     })
     // Why: waitForMobileTerminalSurface's check closures are drained only inside
     // syncWindowGraph; a main-side publish must drain them too or the pending
@@ -19095,6 +19238,7 @@ export class OrcaRuntimeService {
     // against whatever the renderer rebuilds next.
     this.rendererGraphEpoch += 1
     this.graphStatus = 'reloading'
+    this.setTerminalSideEffectConsumerAvailable(false)
     this.rememberDetachedPreAllocatedLeaves()
     this.handles.clear()
     this.handleByLeafKey.clear()
@@ -19111,6 +19255,7 @@ export class OrcaRuntimeService {
       return
     }
     this.graphStatus = 'ready'
+    this.setTerminalSideEffectConsumerAvailable(windowId !== HEADLESS_RUNTIME_WINDOW_ID)
     this.refreshWritableFlags()
   }
 
@@ -19124,6 +19269,7 @@ export class OrcaRuntimeService {
       this.rendererGraphEpoch += 1
     }
     this.graphStatus = 'unavailable'
+    this.setTerminalSideEffectConsumerAvailable(false)
     this.authoritativeWindowId = null
     this.rememberDetachedPreAllocatedLeaves()
     this.tabs.clear()

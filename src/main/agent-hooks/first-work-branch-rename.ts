@@ -4,7 +4,7 @@
 // owns the orchestration: gate on the signal, enforce the safety guardrails,
 // summarize the prompt via the configured agent, and rename.
 import type { GlobalSettings, Repo } from '../../shared/types'
-import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../shared/worktree-id'
+import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import {
@@ -188,7 +188,10 @@ async function runAutoRename(
   }
 
   const repo = deps.getRepo(getRepoIdFromWorktreeId(worktreeId))
-  const parsed = splitWorktreeId(worktreeId)
+  // Why: worktreePath is a Git subprocess cwd. Folder-workspace instance IDs
+  // carry a synthetic `::workspace:<uuid>` suffix that is not a real directory,
+  // so resolve to the backing folder or Git spawns against a nonexistent cwd.
+  const parsed = splitWorktreeIdForFilesystem(worktreeId)
   if (!repo || !parsed) {
     return stop('unresolved repo or worktree id')
   }

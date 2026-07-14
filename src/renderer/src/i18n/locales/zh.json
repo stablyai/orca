@@ -2884,6 +2884,9 @@
           },
           "TerminalTabSplitMenuSection": {
             "splitTerminal": "拆分终端"
+          },
+          "TerminalTabLeadingIcon": {
+            "7ab2964bea": "未读的代理完成"
           }
         }
       },
@@ -13039,7 +13042,8 @@
         "otherPlaceholder": "输入你的回答",
         "cancel": "取消",
         "send": "发送回答",
-        "next": "下一步"
+        "next": "下一步",
+        "skip": "跳过"
       },
       "approval": {
         "title": "允许 {{value0}}？",

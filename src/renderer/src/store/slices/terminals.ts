@@ -34,7 +34,10 @@ import {
   parsePaneKey
 } from '../../../../shared/stable-pane-id'
 import { isValidHostTerminalTabId, isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
-import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../../../shared/worktree-id'
+import {
+  getRepoIdFromWorktreeId,
+  splitWorktreeIdForFilesystem
+} from '../../../../shared/worktree-id'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
@@ -168,7 +171,11 @@ function buildRuntimeSessionPlaceholders({
     }
     const worktreeId =
       workspaceScope?.type === 'worktree' ? workspaceScope.worktreeId : workspaceSessionKey
-    const parsed = splitWorktreeId(worktreeId)
+    // Why: folder-workspace instance IDs carry a synthetic `::workspace:<uuid>`
+    // suffix. The placeholder's `id` keeps it for identity, but `path`/display
+    // must be the real folder path so Git and other filesystem callers do not
+    // spawn against a nonexistent cwd — matching the authoritative worktree.
+    const parsed = splitWorktreeIdForFilesystem(worktreeId)
     if (!parsed) {
       continue
     }
@@ -3263,7 +3270,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         if (existing) {
           continue
         }
-        const path = splitWorktreeId(worktreeId)?.worktreePath ?? ''
+        // Why: strip the synthetic `::workspace:<uuid>` folder-workspace suffix
+        // so the placeholder path is a real cwd; `id` above keeps it for identity.
+        const path = splitWorktreeIdForFilesystem(worktreeId)?.worktreePath ?? ''
         // Why: SSH worktree paths may use backslash separators on Windows remotes.
         const displayName = path.split(/[/\\]/).pop() || path
         const placeholder: Worktree = {

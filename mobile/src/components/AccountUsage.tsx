@@ -17,6 +17,7 @@ export {
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
   getUsageBarState,
+  getWindowResetLabel,
   hasActiveProviderUsage,
   hasRenderableUsage
 } from './account-usage-state'
@@ -28,12 +29,14 @@ export function UsageBar({
   label,
   usedPercent,
   unavailable,
-  loading
+  loading,
+  resetText
 }: {
   label: string
   usedPercent: number | null
   unavailable: boolean
   loading?: boolean
+  resetText?: string | null
 }) {
   // Why: round then clamp so bar width, color, and label share one value (desktop parity).
   const used = usedPercent == null ? null : Math.max(0, Math.min(100, Math.round(usedPercent)))
@@ -47,34 +50,48 @@ export function UsageBar({
           ? colors.statusAmber
           : colors.statusGreen
   return (
-    <View style={styles.usageBar}>
-      <Text style={styles.usageLabel}>{label}</Text>
-      <View style={styles.usageTrack}>
-        <View
-          style={[
-            styles.usageFill,
-            {
-              width: `${used ?? 0}%`,
-              backgroundColor: unavailable ? colors.textMuted : barColor
-            }
-          ]}
-        />
+    <View style={styles.usageBarColumn}>
+      <View style={styles.usageBar}>
+        <Text style={styles.usageLabel}>{label}</Text>
+        <View style={styles.usageTrack}>
+          <View
+            style={[
+              styles.usageFill,
+              {
+                width: `${used ?? 0}%`,
+                backgroundColor: unavailable ? colors.textMuted : barColor
+              }
+            ]}
+          />
+        </View>
+        {loading ? (
+          <ActivityIndicator
+            size="small"
+            color={colors.textSecondary}
+            style={styles.usageSpinner}
+          />
+        ) : (
+          <Text style={styles.usageValue}>{unavailable || used == null ? '—' : `${used}%`}</Text>
+        )}
       </View>
-      {loading ? (
-        <ActivityIndicator size="small" color={colors.textSecondary} style={styles.usageSpinner} />
-      ) : (
-        <Text style={styles.usageValue}>{unavailable || used == null ? '—' : `${used}%`}</Text>
-      )}
+      {resetText ? (
+        <Text style={styles.usageResetText} numberOfLines={1}>
+          {resetText}
+        </Text>
+      ) : null}
     </View>
   )
 }
 
 const styles = StyleSheet.create({
+  usageBarColumn: {
+    flex: 1,
+    gap: 2
+  },
   usageBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    flex: 1
+    gap: spacing.xs
   },
   usageLabel: {
     fontSize: typography.metaSize,
@@ -100,5 +117,12 @@ const styles = StyleSheet.create({
   },
   usageSpinner: {
     width: 36
+  },
+  // Why: indented past the window label so the countdown aligns with the
+  // start of the track above it.
+  usageResetText: {
+    fontSize: typography.metaSize,
+    color: colors.textMuted,
+    marginLeft: 22 + spacing.xs
   }
 })

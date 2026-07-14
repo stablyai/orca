@@ -145,7 +145,10 @@ export async function fetchGrokRateLimits(
   }
   const session = readResult.session
   if (!isGrokAccessTokenFresh(session)) {
-    return result('error', 'Grok session expired — run grok login to refresh')
+    // Why: a genuine sign-out returns 'missing' earlier, so reaching here always
+    // means a stored, refreshable session — Grok CLI refreshes the access token
+    // on its next run, so don't tell users to re-run `grok login` (#8497).
+    return result('error', 'Grok access token expired — Grok CLI will refresh it on next use')
   }
 
   try {

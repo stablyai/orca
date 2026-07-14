@@ -159,6 +159,10 @@ describe('fetchGrokRateLimits', () => {
     const result = await fetchGrokRateLimits()
     expect(result.status).toBe('error')
     expect(result.error).toMatch(/expired/i)
+    // Why: a stored-but-expired access token is refreshed by Grok CLI on next
+    // use (a genuine sign-out returns 'missing'), so the message must not tell
+    // users to re-run `grok login` (#8497).
+    expect(result.error).not.toMatch(/grok login/i)
     expect(netFetchMock).not.toHaveBeenCalled()
   })
 })

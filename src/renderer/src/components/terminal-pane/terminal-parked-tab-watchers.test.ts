@@ -45,6 +45,10 @@ vi.mock('./pty-dispatcher', () => ({
 }))
 
 type MockStoreState = {
+  tabsByWorktree: Record<
+    string,
+    { id: string; launchAgent?: 'claude' | 'codex'; ptyId: string | null }[]
+  >
   terminalLayoutsByTabId: Record<
     string,
     {
@@ -55,8 +59,10 @@ type MockStoreState = {
     }
   >
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
+  clearTabLaunchAgent: ReturnType<typeof vi.fn>
   clearRuntimePaneTitle: ReturnType<typeof vi.fn>
   setTabLayout: ReturnType<typeof vi.fn>
+  updateTabTitle: ReturnType<typeof vi.fn>
 }
 
 let mockStoreState: MockStoreState
@@ -102,10 +108,13 @@ function syncParked(args?: {
 describe('terminal-parked-tab-watchers', () => {
   beforeEach(() => {
     mockStoreState = {
+      tabsByWorktree: {},
       terminalLayoutsByTabId: {},
       runtimePaneTitlesByTabId: {},
+      clearTabLaunchAgent: vi.fn(),
       clearRuntimePaneTitle: vi.fn(),
-      setTabLayout: vi.fn()
+      setTabLayout: vi.fn(),
+      updateTabTitle: vi.fn()
     }
     ;(globalThis as { window?: unknown }).window = { api: { pty: { write: ptyWrite } } }
   })
@@ -368,6 +377,64 @@ describe('terminal-parked-tab-watchers', () => {
         expandedLeafId: null,
         ptyIdsByLeafId: { [LEAF_ID]: PTY_ID }
       })
+    })
+
+    it('retires launch/title hints when the launch-owning parked leaf exits', () => {
+      mockStoreState.tabsByWorktree = {
+        [WORKTREE_ID]: [{ id: TAB_ID, launchAgent: 'codex', ptyId: PTY_ID }]
+      }
+      mockStoreState.runtimePaneTitlesByTabId = {
+        [TAB_ID]: { 1: 'Codex', 2: 'PowerShell' }
+      }
+      capturePanes([
+        { ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true },
+        { ptyId: SECOND_PTY_ID, paneId: 2, leafId: SECOND_LEAF_ID, drivesTabTitle: false }
+      ])
+      syncParked()
+      mockStoreState.terminalLayoutsByTabId[TAB_ID] = {
+        root: {
+          type: 'split',
+          direction: 'vertical',
+          first: { type: 'leaf', leafId: LEAF_ID },
+          second: { type: 'leaf', leafId: SECOND_LEAF_ID }
+        },
+        activeLeafId: LEAF_ID,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [LEAF_ID]: PTY_ID, [SECOND_LEAF_ID]: SECOND_PTY_ID }
+      }
+
+      hostOnPtyExit(TAB_ID, PTY_ID)
+
+      expect(mockStoreState.clearTabLaunchAgent).toHaveBeenCalledWith(TAB_ID)
+      expect(mockStoreState.updateTabTitle).toHaveBeenCalledWith(TAB_ID, 'PowerShell')
+    })
+
+    it('keeps launch ownership when only a parked shell sibling exits', () => {
+      mockStoreState.tabsByWorktree = {
+        [WORKTREE_ID]: [{ id: TAB_ID, launchAgent: 'claude', ptyId: PTY_ID }]
+      }
+      mockStoreState.runtimePaneTitlesByTabId = { [TAB_ID]: { 1: 'Claude Code' } }
+      capturePanes([
+        { ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true },
+        { ptyId: SECOND_PTY_ID, paneId: 2, leafId: SECOND_LEAF_ID, drivesTabTitle: false }
+      ])
+      syncParked()
+      mockStoreState.terminalLayoutsByTabId[TAB_ID] = {
+        root: {
+          type: 'split',
+          direction: 'vertical',
+          first: { type: 'leaf', leafId: LEAF_ID },
+          second: { type: 'leaf', leafId: SECOND_LEAF_ID }
+        },
+        activeLeafId: SECOND_LEAF_ID,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [LEAF_ID]: PTY_ID, [SECOND_LEAF_ID]: SECOND_PTY_ID }
+      }
+
+      hostOnPtyExit(TAB_ID, SECOND_PTY_ID)
+
+      expect(mockStoreState.clearTabLaunchAgent).not.toHaveBeenCalled()
+      expect(mockStoreState.updateTabTitle).toHaveBeenCalledWith(TAB_ID, 'Claude Code')
     })
 
     it('keeps exit→closeTab parity for a parked single-leaf tab', () => {

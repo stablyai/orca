@@ -233,11 +233,17 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'github.updatePRState',
   'github.repoSlug',
   'github.workItem',
+  // Cross-repo GitHub work-item lookup: lets the mobile create-workspace Smart
+  // picker resolve a pasted github.com URL that points at a different repo.
+  'github.workItemByOwnerRepo',
   'github.workItemDetails',
   'gitlab.createIssue',
   'gitlab.addIssueComment',
   'gitlab.addMRComment',
   'gitlab.listWorkItems',
+  // Mobile create-workspace Smart picker: resolve a pasted GitLab URL to an exact
+  // issue/MR. (MR listing reuses gitlab.listWorkItems, which returns issues + MRs.)
+  'gitlab.workItemByPath',
   'gitlab.mergeMR',
   'gitlab.resolveMRDiscussion',
   'gitlab.todos',

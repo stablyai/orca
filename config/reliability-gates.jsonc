@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-12",
+  "updatedAt": "2026-07-13",
   "policy": {
     "maturityLevels": [
       "experimental",
@@ -161,6 +161,165 @@
       "demotionRule": "Keep experimental or demote if the focused gate flakes without a product or harness bug, if index-only churn can emit worktrees:changed, or if structural add/remove/HEAD/lock changes fail to converge."
     },
     {
+      "id": "runtime.headless-desktop-promotion-continuity",
+      "title": "Headless serve opens its desktop without replacing live terminal sessions",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime-platform",
+      "layer": "electron-runtime-contract",
+      "surfaces": [
+        "headless orca serve",
+        "single-instance desktop activation",
+        "CLI open",
+        "persistent terminal reattach"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local",
+        "daemon",
+        "ssh"
+      ],
+      "coverageNotes": "Deterministic unit coverage exercises activation gating, single-instance ownership, quit policy, local/remote CLI status, headless binding persistence, local daemon identity, and SSH identity transfer. A macOS Electron journey starts one headless owner in an isolated profile, creates and writes to a daemon PTY, activates the GUI through a second process, and verifies the original owner/runtime/daemon/PTY identities plus pre- and post-promotion I/O. Live packaged, Linux, and Windows journeys remain uncollected.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/8457"
+      ],
+      "invariant": "A safely promotable headless serve process is the single app owner. Desktop activation opens a window in that same process only after the persistent PTY provider and runtime RPC are ready; every live persisted local or SSH terminal remains bound to the same PTY/session, and a committed Cmd+Q still exits the promoted app.",
+      "oracle": "Unit tests coalesce early activation, fail closed on a fallback local provider, preserve the production single-instance path for serve, expose explicit desktop window state to local and remote clients, persist headless tab/leaf bindings, transfer local and SSH reattach metadata, and retain quit intent. The Electron journey asserts one main-process PID, runtime id, daemon PID, and PTY id across activation; confirms output written before promotion is visible afterward; confirms new terminal input still works; and requires the activating second process to exit.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/serve-desktop-activation.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts src/main/startup/single-instance-lock.test.ts src/main/startup/window-all-closed-quit-policy.test.ts src/cli/runtime-client.test.ts src/cli/runtime/websocket-transport.test.ts src/main/runtime/orca-runtime.test.ts",
+        "pnpm exec electron-vite build --mode e2e",
+        "pnpm run test:e2e -- tests/e2e/headless-serve-desktop-activation.spec.ts --workers=1"
+      ],
+      "testFiles": [
+        "src/main/startup/serve-desktop-activation.test.ts",
+        "src/main/startup/serve-desktop-activation-wiring.test.ts",
+        "src/main/startup/single-instance-lock.test.ts",
+        "src/main/startup/window-all-closed-quit-policy.test.ts",
+        "src/cli/runtime-client.test.ts",
+        "src/cli/runtime/websocket-transport.test.ts",
+        "src/main/runtime/orca-runtime.test.ts",
+        "tests/e2e/headless-serve-desktop-activation.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/startup/serve-desktop-activation.test.ts",
+          "assertions": [
+            "early activation requests coalesce until the persistent provider is ready",
+            "a blocked provider drops pending activation and never opens a window"
+          ]
+        },
+        {
+          "file": "src/main/startup/serve-desktop-activation-wiring.test.ts",
+          "assertions": [
+            "second-instance and macOS app activation use the same safety gate",
+            "headless PTY registration waits for provider settlement and promotion waits for RPC startup"
+          ]
+        },
+        {
+          "file": "src/main/startup/single-instance-lock.test.ts",
+          "assertions": [
+            "serve never skips the single-instance lock even in development",
+            "the isolated E2E profile can opt into the production ownership path"
+          ]
+        },
+        {
+          "file": "src/main/startup/window-all-closed-quit-policy.test.ts",
+          "assertions": [
+            "a promoted serve owner remains alive after an ordinary window close but exits after a committed quit"
+          ]
+        },
+        {
+          "file": "src/cli/runtime-client.test.ts",
+          "assertions": [
+            "local open activates a reachable headless owner and waits for a desktop window",
+            "unsafe promotion returns an explicit blocked error instead of launching a second owner"
+          ]
+        },
+        {
+          "file": "src/cli/runtime/websocket-transport.test.ts",
+          "assertions": [
+            "remote-paired open reports remote desktop state without launching a local app"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime.test.ts",
+          "assertions": [
+            "the headless sentinel transfers authority to the first real window",
+            "headless local and SSH PTY bindings are persisted on first promotion and later windowless reattach without changing ordinary desktop spawn persistence",
+            "status distinguishes available, openable, initializing, and blocked desktop states",
+            "desktop-only bell, command, and link scanners remain disabled until a real renderer graph is ready"
+          ]
+        },
+        {
+          "file": "tests/e2e/headless-serve-desktop-activation.spec.ts",
+          "assertions": [
+            "desktop activation keeps the same main owner PID, runtime id, daemon PID, and PTY id",
+            "terminal output written before promotion remains visible and post-promotion input/output still works",
+            "the activating second process exits instead of becoming another owner"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/serve-desktop-activation.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts src/main/startup/single-instance-lock.test.ts src/main/startup/window-all-closed-quit-policy.test.ts src/cli/runtime-client.test.ts src/cli/runtime/websocket-transport.test.ts src/main/runtime/orca-runtime.test.ts",
+          "result": "passed",
+          "durationSeconds": 13,
+          "summary": "Seven activation, ownership, quit, local/remote CLI, and runtime contract files passed with 704 tests, including first and repeated windowless reattach, local/SSH identity transfer, ordinary desktop persistence isolation, and dynamic side-effect scanner gating."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run test:e2e -- tests/e2e/headless-serve-desktop-activation.spec.ts --workers=1",
+          "result": "passed",
+          "durationSeconds": 52,
+          "summary": "The isolated Electron journey passed repeatedly on the final source; the latest 51.6-second run retained the same main owner, runtime, daemon, and PTY, restored pre-promotion output, accepted post-promotion input, and observed the activating process exit."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 120,
+        "scope": "focused unit contracts plus one isolated Electron headless-to-desktop journey"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "New deterministic contracts and two consecutive local macOS Electron passes; CI and cross-platform soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The first Electron red run proved that bypassing the dev single-instance lock created a second owner. After enforcing one owner, the next red run retained owner/runtime/daemon identity but exposed a new PTY because the headless tab/leaf binding was not persisted. The final implementation persists that binding before renderer hydration and both subsequent Electron runs kept the original PTY and transcript. Focused unit tests were also observed red before the activation gate, promotion metadata transfer, and headless spawn-persistence changes were added."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "Activation adds no polling in the app owner and performs one bounded pass over live PTY records plus persisted terminal bindings only when a headless owner opens its first window. Desktop-only bell, command, PR-link, and mode scanners are rebuilt only while a real renderer graph is ready, preserving the prior pure-headless output path. CLI open keeps its existing 250ms bounded startup poll."
+      },
+      "promotionCriteria": [
+        "Collect at least 100 consecutive CI or soak passes or 14 days without an unexplained flake.",
+        "Add live packaged activation coverage on macOS plus representative Linux and Windows single-instance journeys.",
+        "Add an Electron SSH promotion journey in addition to the deterministic identity-transfer unit contract."
+      ],
+      "knownGaps": [
+        "The Electron journey uses an isolated development bundle rather than the installed application so it cannot disturb a real user session.",
+        "Linux and Windows single-instance activation have unit coverage but no live Electron evidence yet.",
+        "SSH identity transfer is deterministic unit coverage only; the live Electron journey currently exercises the local daemon provider."
+      ],
+      "demotionRule": "Quarantine the Electron journey only with a linked product or harness defect; demote if activation changes the owner/runtime/daemon/PTY identity, loses prior output, opens before provider readiness, or fails to honor a committed quit."
+    },
+    {
       "id": "editor.live-log-append-stability",
       "title": "Long live session logs retain their Monaco viewport while appending",
       "maturity": "experimental",
@@ -172,20 +331,24 @@
       "providers": ["local"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local"],
-      "coverageNotes": "Focused tests and real-Monaco 9/50 MiB benchmarks are platform-independent. Local macOS Electron evidence opens a synthetic 9 MiB transcript through Agent Session History at fixed 900x720 viewport, 13px font, 1x zoom, and asserts the full 9 MiB model length loaded as a font-metric-independent containment check (word-wrap pixel geometry varies ~10% across runners, so a generous content-height floor is only a collapsed/truncated-render smoke check), then verifies three five-second-cadence watcher appends with Find open and closed. Live Windows/Linux evidence remains uncollected.",
+      "coverageNotes": "Focused tests and real-Monaco 9/50 MiB performance and undo-retention benchmarks are platform-independent. Local macOS Electron evidence opens a synthetic 9 MiB transcript through Agent Session History at fixed 900x720 viewport, 13px font, 1x zoom, and asserts the full 9 MiB model length loaded as a font-metric-independent containment check (word-wrap pixel geometry varies ~10% across runners, so a generous content-height floor is only a collapsed/truncated-render smoke check), then verifies three five-second-cadence watcher appends with Find open and closed. Live Windows/Linux evidence remains uncollected.",
       "motivatingLinks": ["https://github.com/stablyai/orca/pull/8432"],
-      "invariant": "Append-only external file growth changes only Monaco's model suffix, retaining the viewport, selection, Find state, and renderer liveness above the append point; arbitrary rewrites continue to replace the model content.",
-      "oracle": "Focused tests assert one post-mount content owner, actual outer lifecycle remount ordering across retained path models, exact end-of-model suffix edits with one model read, no-op equality, and full replacement for non-appends. With Node forced GC, real-Monaco benchmarks alternate 30 suffix and 30 replacement samples after five warmups on fresh equivalent models at 9 and 50 MiB, forcing GC and event-loop settlement between every arm. The Electron scenario alternates an e2e-only legacy setValue red control and the fixed watcher append from restored equivalent model/geometry at the measured legacy-failure cadence, asserting that the control disrupts anchor state while the fixed path preserves visible ranges, selection, complete Find state, scroll offset, renderer survival, and forced-GC heap/native-memory budgets.",
+      "invariant": "Append-only external file growth changes only Monaco's model suffix, retaining the viewport, selection, Find state, and renderer liveness above the append point; read-only live tails do not create undo history, while editable external updates remain undoable and arbitrary rewrites continue to replace the model content.",
+      "oracle": "Focused tests assert one post-mount content owner, actual outer lifecycle remount ordering across retained path models, exact end-of-model suffix edits with one model read, no-op equality, full replacement for non-appends, and real-Monaco undo behavior for read-only live tails versus editable files. With Node forced GC, real-Monaco benchmarks alternate 30 suffix and 30 replacement samples after five warmups on fresh equivalent models at 9 and 50 MiB, then compare exact Monaco undo-service and ArrayBuffer retention after five 10 MiB appends. The Electron scenario alternates an e2e-only legacy setValue red control and the fixed watcher append from restored equivalent model/geometry at the measured legacy-failure cadence, asserting that the control disrupts anchor state while the fixed path preserves visible ranges, selection, complete Find state, scroll offset, non-undoability, renderer survival, and forced-GC heap/native-memory budgets.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/editor/monaco-content-sync.test.ts src/renderer/src/components/editor/MonacoEditor.content-owner.test.tsx src/renderer/src/components/editor/EditorContent.monaco-lifecycle.test.tsx",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/editor/monaco-content-sync.undo-history.test.ts",
         "node --expose-gc ./node_modules/vitest/vitest.mjs bench src/renderer/src/components/editor/monaco-content-sync.bench.ts --pool=threads",
+        "node --expose-gc ./node_modules/vitest/vitest.mjs bench src/renderer/src/components/editor/monaco-content-sync.undo-retention.bench.ts --pool=threads",
         "pnpm run test:e2e -- tests/e2e/agent-session-log-tail-stability.spec.ts --workers=1"
       ],
       "testFiles": [
         "src/renderer/src/components/editor/monaco-content-sync.test.ts",
+        "src/renderer/src/components/editor/monaco-content-sync.undo-history.test.ts",
         "src/renderer/src/components/editor/MonacoEditor.content-owner.test.tsx",
         "src/renderer/src/components/editor/EditorContent.monaco-lifecycle.test.tsx",
         "src/renderer/src/components/editor/monaco-content-sync.bench.ts",
+        "src/renderer/src/components/editor/monaco-content-sync.undo-retention.bench.ts",
         "tests/e2e/agent-session-log-tail-stability.spec.ts"
       ],
       "assertionRefs": [
@@ -194,8 +357,13 @@
           "assertions": [
             "append-only drift reads the current model once and inserts only at the previous model end",
             "identical content emits no edit and non-append drift retains full replacement plus undo stops",
+            "read-only live-tail appends, replacements, truncations, and stale retained-model remounts use non-undoing edits",
             "a stale retained target model reconciles on mount without explicit undo stops while prior-path content and undo history remain isolated"
           ]
+        },
+        {
+          "file": "src/renderer/src/components/editor/monaco-content-sync.undo-history.test.ts",
+          "assertions": ["a real Monaco read-only live-tail append leaves canUndo false while an ordinary external update remains undoable"]
         },
         {
           "file": "src/renderer/src/components/editor/MonacoEditor.content-owner.test.tsx",
@@ -210,11 +378,16 @@
           "assertions": ["with forced GC and deterministic settlement between every arm, fresh real-Monaco 9 MiB and 50 MiB models alternate 30 append and 30 replacement samples after five warmups; append p95 stays below 50/100ms and at least 2x faster"]
         },
         {
+          "file": "src/renderer/src/components/editor/monaco-content-sync.undo-retention.bench.ts",
+          "assertions": ["five 10 MiB read-only live-tail appends retain zero Monaco undo-service and ArrayBuffer bytes while the undoable control retains at least 50 MiB"]
+        },
+        {
           "file": "tests/e2e/agent-session-log-tail-stability.spec.ts",
           "assertions": [
             "production Agent Session History opens a synthetic 9 MiB View Log and confirms the full model length loaded as font-metric-independent containment, with a generous content-height floor as a collapsed/truncated-render smoke check",
             "an executable e2e-only legacy setValue control disrupts selection/Find/anchor state at each fixed-geometry five-second sample, then restores the equivalent model state before the fixed arm",
             "three alternating watcher suffix appends preserve visible ranges, selection, scroll offset, Find open/query/active-match state, and exact suffix content",
+            "the production read-only live-tail model remains non-undoable before and after every watcher append",
             "the renderer remains responsive with no render-process-gone event and forced-GC JS-heap/working-set/private-memory peak and retained budgets hold against paired legacy controls"
           ]
         }
@@ -246,12 +419,39 @@
           "result": "passed",
           "durationSeconds": 78,
           "summary": "The production View Log journey alternated retained e2e-only legacy-red controls with fixed appends from restored equivalent state; every control detected instability while the fixed path retained viewport, selection, complete Find state, renderer liveness, and normalized forced-GC/native memory budgets."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/editor/monaco-content-sync.undo-history.test.ts",
+          "result": "passed",
+          "durationSeconds": 4,
+          "summary": "The real-Monaco undo-history test confirmed a read-only live-tail append leaves canUndo false while an ordinary external update remains undoable."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "node --expose-gc ./node_modules/vitest/vitest.mjs bench src/renderer/src/components/editor/monaco-content-sync.undo-retention.bench.ts --pool=threads",
+          "result": "passed",
+          "durationSeconds": 5,
+          "summary": "The undoable 50 MiB control retained 104,858,630 undo-service bytes and 104,857,790 ArrayBuffer bytes; the read-only live-tail arm retained zero of both and remained non-undoable."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run test:e2e -- tests/e2e/agent-session-log-tail-stability.spec.ts --workers=1",
+          "result": "passed",
+          "durationSeconds": 78,
+          "summary": "The production View Log journey preserved viewport, selection, Find state, renderer liveness, and forced-GC/native budgets across three watcher appends while canUndo remained false."
         }
       ],
       "runtimeBudget": { "p95Seconds": 600, "scope": "local focused renderer tests plus one Electron production-journey scenario" },
       "flakeHistory": { "status": "unknown", "evidence": "New deterministic gate with local macOS passes; CI soak history is not yet available." },
-      "redGreenEvidence": { "status": "complete", "evidence": "The retained Electron gate itself executes the former read-only wrapper setValue behavior behind MODE=e2e at fixed 900x720, 13px, 1x zoom, the full 9 MiB model length loaded (with a generous content-height floor, since word-wrap pixel geometry is runner-dependent), and five-second cadence. The control retains a flat incoming value like the former controlled IPC prop. Each legacy arm must disrupt selection, Find active-match state, visible range, or scroll anchor, then restore identical model length/tail/geometry and anchor state before the fixed watcher arm; every fixed arm must preserve them. Production builds never install the control. The original exact-file dev repro also recorded renderer exit code 5." },
-      "performanceBudget": { "required": true, "evidence": "Every update retrieves the model value once and performs at most one equality-or-prefix comparison; a matching append submits only the suffix. The registered Node command requires --expose-gc and --pool=threads so worker GC is available; alternating fresh real-Monaco arms force GC and deterministic event-loop settlement after every operation. Observed p95 ranges: 9 MiB append 4.02-5.51ms versus replacement 81.42-83.76ms; 50 MiB append 22.72-26.60ms versus replacement 445.11-449.21ms. Electron alternates each legacy replacement control and fixed watcher suffix from equivalent restored model state/geometry, samples forced-GC JS heap plus app.getAppMetrics renderer working set and OS private memory before/after/settled, asserts retained memory within max(20MiB,10%), and requires suffix peak deltas for jsHeapMb, workingSetMb, and privateMb not exceed the paired legacy controls." },
+      "redGreenEvidence": { "status": "complete", "evidence": "A fail-first real-Monaco test observed canUndo=true after one read-only live-tail append, and the forced-GC 50 MiB control retained 104,858,630 bytes in Monaco's undo service. After the fix the read-only arm retained zero undo-service bytes while the editable control stayed undoable. The retained Electron gate also proves each fixed watcher arm preserves viewport, selection, Find state, and non-undoability. Production builds never install its legacy setValue control." },
+      "performanceBudget": { "required": true, "evidence": "Every update retrieves the model value once and performs at most one equality-or-prefix comparison; a matching append submits only the suffix. The registered Node commands require --expose-gc and --pool=threads so worker GC is available. Current p95: 9 MiB append 5.93-7.12ms versus replacement 114.09-145.89ms; 50 MiB append 26.84-34.91ms versus replacement 602.36-699.21ms. The new 50 MiB retention arm measured 104,858,630 undo-service bytes and 104,857,790 ArrayBuffer bytes for the undoable control versus zero for read-only live-tail sync. Electron forced-GC JS-heap, renderer working-set, and OS-private-memory budgets also pass." },
       "promotionCriteria": [
         "Collect stable soak history on macOS, Linux, and Windows.",
         "Accumulate 100 consecutive deterministic gate passes or 14 days without unexplained flakes."

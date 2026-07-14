@@ -6,6 +6,20 @@ import Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
 import type { MessageType } from './db'
 
+// Overwrites the datetime('now')-seeded timestamps with explicit fixture values
+// so stale-detection assertions stay deterministic (no wall clock).
+function setDispatchTimes(
+  d: OrchestrationDb,
+  id: string,
+  dispatchedAt: string,
+  heartbeatAt: string | null = null
+): void {
+  const sqlite = (d as unknown as { db: Database.Database }).db
+  sqlite
+    .prepare('UPDATE dispatch_contexts SET dispatched_at = ?, last_heartbeat_at = ? WHERE id = ?')
+    .run(dispatchedAt, heartbeatAt, id)
+}
+
 describe('OrchestrationDb', () => {
   let db: OrchestrationDb | undefined
 
@@ -694,6 +708,67 @@ describe('OrchestrationDb', () => {
 
       const stale = d.getStaleDispatches(iso(10 * 60 * 1000))
       expect(stale.map((s) => s.id)).toEqual([ctxB.id])
+    })
+
+    // Regression for #8452: dispatched_at / last_heartbeat_at are written by
+    // datetime('now') (space-format, e.g. "2026-07-12 12:00:00") while the
+    // threshold is ISO ("...T11:55:00.000Z"). Raw TEXT ordering ranks the space
+    // (0x20) below the 'T' (0x54) at index 10, flagging fresh same-date rows.
+    it('getStaleDispatches ignores fresh SQLite space-format timestamps (#8452)', () => {
+      const d = createDb()
+
+      // Fresh worker: dispatched 12:00, heartbeat 12:05 (space-format), both
+      // after the 11:55 threshold → NOT stale.
+      const fresh = d.createDispatchContext(d.createTask({ spec: 'fresh' }).id, 'term_fresh')
+      setDispatchTimes(d, fresh.id, '2026-07-12 12:00:00', '2026-07-12 12:05:00')
+
+      // Legacy ISO-format fresh row (mixed-format table) stays fresh too.
+      const legacy = d.createDispatchContext(d.createTask({ spec: 'legacy' }).id, 'term_legacy')
+      setDispatchTimes(d, legacy.id, '2026-07-12T12:00:00.000Z', '2026-07-12T12:05:00.000Z')
+
+      // Genuinely hung: dispatched + heartbeated at 10:00, ~2h before threshold.
+      const hung = d.createDispatchContext(d.createTask({ spec: 'hung' }).id, 'term_hung')
+      setDispatchTimes(d, hung.id, '2026-07-12 10:00:00', '2026-07-12 10:00:00')
+
+      const stale = d.getStaleDispatches('2026-07-12T11:55:00.000Z')
+      expect(stale.map((s) => s.id)).toEqual([hung.id])
+    })
+
+    it('getStaleDispatches keeps a just-dispatched space-format row in the grace window (#8452)', () => {
+      const d = createDb()
+
+      // Space-format dispatched_at one minute after the threshold, no heartbeat
+      // yet → still inside the grace window, must not be flagged.
+      const ctx = d.createDispatchContext(d.createTask({ spec: 'x' }).id, 'term_x')
+      setDispatchTimes(d, ctx.id, '2026-07-12 12:00:00')
+
+      const stale = d.getStaleDispatches('2026-07-12T11:59:00.000Z')
+      expect(stale).toEqual([])
+    })
+
+    // Same-UTC-date midnight threshold: keeps the buggy space-vs-'T' compare in
+    // play so this guards the fix at a day boundary (#8452; idea from @KMGeon's #8453).
+    it('getStaleDispatches keeps a fresh row just after a UTC-midnight threshold (#8452)', () => {
+      const d = createDb()
+
+      const ctx = d.createDispatchContext(d.createTask({ spec: 'midnight' }).id, 'term_midnight')
+      setDispatchTimes(d, ctx.id, '2026-05-04 00:04:00')
+
+      const stale = d.getStaleDispatches('2026-05-04T00:00:00.000Z')
+      expect(stale).toEqual([])
+    })
+
+    // Guards the last_heartbeat_at half of the fix on its own: a worker
+    // dispatched long before the threshold (stale under either format) that
+    // just sent a fresh space-format heartbeat must stay fresh (#8452).
+    it('getStaleDispatches keeps a live worker with a fresh space-format heartbeat (#8452)', () => {
+      const d = createDb()
+
+      const ctx = d.createDispatchContext(d.createTask({ spec: 'live' }).id, 'term_live')
+      setDispatchTimes(d, ctx.id, '2026-07-12 10:00:00', '2026-07-12 11:59:00')
+
+      const stale = d.getStaleDispatches('2026-07-12T11:55:00.000Z')
+      expect(stale).toEqual([])
     })
 
     it('getThreadMessagesFor returns only same-thread replies to a handle', () => {

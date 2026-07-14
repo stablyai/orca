@@ -10,14 +10,14 @@ import {
 describe('mobileNativeChatQuestionOffsets', () => {
   it('matches the desktop cadence constants', () => {
     expect(MOBILE_NATIVE_CHAT_SUBMIT_DELAY_MS).toBe(500)
-    expect(MOBILE_NATIVE_CHAT_ADVANCE_BUFFER_MS).toBe(300)
-    expect(MOBILE_NATIVE_CHAT_QUESTION_STEP_MS).toBe(800)
+    expect(MOBILE_NATIVE_CHAT_ADVANCE_BUFFER_MS).toBe(500)
+    expect(MOBILE_NATIVE_CHAT_QUESTION_STEP_MS).toBe(1000)
   })
 
   it('paces each question a full step apart, Enter 500ms after its body', () => {
     expect(mobileNativeChatQuestionOffsets(0)).toEqual({ bodyAt: 0, enterAt: 500 })
-    expect(mobileNativeChatQuestionOffsets(1)).toEqual({ bodyAt: 800, enterAt: 1300 })
-    expect(mobileNativeChatQuestionOffsets(2)).toEqual({ bodyAt: 1600, enterAt: 2100 })
+    expect(mobileNativeChatQuestionOffsets(1)).toEqual({ bodyAt: 1000, enterAt: 1500 })
+    expect(mobileNativeChatQuestionOffsets(2)).toEqual({ bodyAt: 2000, enterAt: 2500 })
   })
 })
 

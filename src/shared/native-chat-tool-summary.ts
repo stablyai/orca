@@ -13,6 +13,26 @@ export function summarizeToolInput(input: unknown): string {
     : `${collapsed.slice(0, MAX_PREVIEW_LENGTH - 1)}…`
 }
 
+/** Full, pretty-printed tool-call input for the expanded detail view. Strings
+ *  pass through as-is; objects/arrays print as indented JSON so a diff-less call
+ *  (e.g. a question payload) reads cleanly instead of one long minified line. */
+export function formatToolInput(input: unknown): string {
+  if (input === null || input === undefined) {
+    return ''
+  }
+  if (typeof input === 'string') {
+    return input
+  }
+  if (typeof input === 'number' || typeof input === 'boolean') {
+    return String(input)
+  }
+  try {
+    return JSON.stringify(input, null, 2) ?? ''
+  } catch {
+    return ''
+  }
+}
+
 export function toolFilePath(input: unknown): string | null {
   if (!input || typeof input !== 'object') {
     return null

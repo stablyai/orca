@@ -1428,6 +1428,7 @@ export function HostScreen({
         client={client}
         hostId={hostId}
         existingWorktreePaths={existingWorktreePaths}
+        existingWorktrees={worktrees}
         onVisibleChange={(visible) => {
           newWorktreeModalVisibleRef.current = visible
         }}

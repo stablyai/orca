@@ -20,34 +20,54 @@ else
   echo "Orca WSL CLI requires Windows interop and could not find powershell.exe." >&2
   exit 1
 fi
+# Why: a shell can outlive a deleted worktree; keep explicit CLI selectors and
+# help usable, and repair cwd before any WSL interop tool tries to resolve it.
+ORCA_WSL_CWD=$(pwd -P 2>/dev/null) || {
+  ORCA_WSL_CWD=/
+  cd /
+}
 ORCA_BRIDGE_PS1_WIN=$(wslpath -w "$ORCA_BRIDGE_PS1")
-exec "$ORCA_POWERSHELL" -NoProfile -ExecutionPolicy Bypass -File "$ORCA_BRIDGE_PS1_WIN" "$ORCA_WIN_LAUNCHER" "$@"
+ORCA_WSL_CWD_WIN=$(wslpath -w "$ORCA_WSL_CWD")
+exec "$ORCA_POWERSHELL" -NoProfile -ExecutionPolicy Bypass -File "$ORCA_BRIDGE_PS1_WIN" "$ORCA_WIN_LAUNCHER" -WslCwd "$ORCA_WSL_CWD_WIN" "$@"
 `
 }
 
 export function buildWslBridgeScript(): string {
   return `${BRIDGE_MANAGED_MARKER}
+[CmdletBinding(PositionalBinding=$false)]
 param(
-  [Parameter(Mandatory=$true)]
+  [Parameter(Mandatory=$true, Position=0)]
   [string]$OrcaLauncher,
+
+  [string]$WslCwd,
 
   [Parameter(ValueFromRemainingArguments=$true)]
   [string[]]$ForwardArgs
 )
 
+$exitCode = 0
 try {
+  if ([string]::IsNullOrEmpty($WslCwd)) {
+    Remove-Item Env:ORCA_CLI_CWD -ErrorAction SilentlyContinue
+  } else {
+    $env:ORCA_CLI_CWD = $WslCwd
+  }
+  Push-Location -LiteralPath (Split-Path -Parent $OrcaLauncher)
   & $OrcaLauncher @ForwardArgs
-  if (-not $?) {
-    exit 1
-  }
   if ($null -eq $LASTEXITCODE) {
-    exit 0
+    if (-not $?) {
+      $exitCode = 1
+    } else {
+      $exitCode = 0
+    }
+  } else {
+    $exitCode = $LASTEXITCODE
   }
-  exit $LASTEXITCODE
 } catch {
   Write-Error $_
-  exit 1
+  $exitCode = 1
 }
+exit $exitCode
 `
 }
 

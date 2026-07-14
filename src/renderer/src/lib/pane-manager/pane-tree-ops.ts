@@ -10,8 +10,11 @@ import { getFitOverrideForPty } from './mobile-fit-overrides'
 import { disposeWebgl, attachWebgl } from './pane-webgl-renderer'
 import {
   captureTerminalWriteScrollIntent,
-  enforceTerminalWriteScrollIntent
+  enforceTerminalWriteScrollIntent,
+  syncTerminalScrollIntentFromViewport
 } from './terminal-scroll-intent'
+import { captureScrollState, releaseScrollStateMarker, restoreScrollState } from './pane-scroll'
+import type { ScrollState } from './pane-manager-types'
 
 export { captureScrollState, restoreScrollState } from './pane-scroll'
 
@@ -73,7 +76,16 @@ export function safeFit(pane: ManagedPane): void {
     return
   }
   let scrollIntent = null as ReturnType<typeof captureTerminalWriteScrollIntent>
+  let pinnedScrollState: ScrollState | null = null
   let shouldRestoreScroll = false
+  const captureScrollForFit = (): void => {
+    scrollIntent = captureTerminalWriteScrollIntent(pane.terminal)
+    // Why: fit can reflow and renumber every buffer row; a marker tracks the
+    // pinned content itself, while a numeric line would point elsewhere after.
+    pinnedScrollState =
+      scrollIntent?.kind === 'pinnedViewport' ? captureScrollState(pane.terminal) : null
+    shouldRestoreScroll = true
+  }
   try {
     // Why: when a mobile client has resized this PTY to phone dimensions,
     // the desktop must keep xterm at those dimensions instead of fitting to
@@ -85,8 +97,7 @@ export function safeFit(pane: ManagedPane): void {
     if (override) {
       if (pane.terminal.cols !== override.cols || pane.terminal.rows !== override.rows) {
         if (canPreserveScrollIntentForFit(pane)) {
-          scrollIntent = captureTerminalWriteScrollIntent(pane.terminal)
-          shouldRestoreScroll = true
+          captureScrollForFit()
         }
         pane.terminal.resize(override.cols, override.rows)
       }
@@ -101,8 +112,7 @@ export function safeFit(pane: ManagedPane): void {
       return
     }
     if (canPreserveScrollIntentForFit(pane)) {
-      scrollIntent = captureTerminalWriteScrollIntent(pane.terminal)
-      shouldRestoreScroll = true
+      captureScrollForFit()
     }
     pane.fitAddon.fit()
   } catch {
@@ -110,10 +120,19 @@ export function safeFit(pane: ManagedPane): void {
   } finally {
     if (shouldRestoreScroll) {
       try {
-        enforceTerminalWriteScrollIntent(pane.terminal, scrollIntent)
+        if (pinnedScrollState) {
+          restoreScrollState(pane.terminal, pinnedScrollState)
+          syncTerminalScrollIntentFromViewport(pane.terminal)
+        } else {
+          enforceTerminalWriteScrollIntent(pane.terminal, scrollIntent)
+        }
       } catch {
         // Why: xterm can temporarily expose a terminal whose renderer has not
         // initialized dimensions yet during SSH reattach/layout. Fit is best-effort.
+      } finally {
+        if (pinnedScrollState) {
+          releaseScrollStateMarker(pinnedScrollState)
+        }
       }
     }
   }

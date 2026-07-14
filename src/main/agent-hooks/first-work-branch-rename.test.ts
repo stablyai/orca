@@ -185,6 +185,19 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
   })
 
+  it('runs Git against the backing folder for a folder-workspace instance id', async () => {
+    // Why: instance ids carry a synthetic `::workspace:<uuid>` suffix that is not
+    // a real directory. The Git cwd must resolve to the folder or `rev-parse`
+    // spawns against a nonexistent path (ENOENT).
+    const instanceId = `${WORKTREE_ID}::workspace:123e4567-e89b-12d3-a456-426614174000`
+    const { deps } = makeDeps({ resolveWorktreeIdForTab: () => instanceId })
+    await maybeAutoRenameBranchOnFirstWork(workingEvent({ worktreeId: undefined }), deps)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['branch', '-m', 'you/fix-auth'],
+      expect.objectContaining({ cwd: '/repo/wt' })
+    )
+  })
+
   it('skips when no worktree can be resolved for the tab', async () => {
     const { deps } = makeDeps({ resolveWorktreeIdForTab: () => undefined })
     await maybeAutoRenameBranchOnFirstWork(workingEvent({ worktreeId: undefined }), deps)

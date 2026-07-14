@@ -81,7 +81,10 @@ import { useTabStripDragScrollHandlers } from './tab-strip-drag-scroll'
 import { shouldShowWindowsShellMenu } from './windows-shell-menu-visibility'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import { selectTabAgentTypesByTabId } from './tab-agent-types-by-tab-id'
+import {
+  selectNativeChatTabWideFallbackUnsafeTabsById,
+  selectTabAgentTypesByTabId
+} from './tab-agent-types-by-tab-id'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 
 const isWindows = navigator.userAgent.includes('Windows')
@@ -449,16 +452,20 @@ function TabBarInner({
     [unifiedTabs]
   )
 
-  // Why: gate the tab long-press view-mode toggle to agent terminals. A tab is
-  // eligible when it launched an agent or has a live agent-status entry on any of
-  // its panes (paneKey = `${unifiedTabId}:…`), mirroring the toggle button's gate.
+  // Why: gate the tab long-press view-mode toggle to the agent in its active leaf.
+  // Tab-wide launch/title hints are safe only before the terminal is split.
   const toggleTabViewMode = useAppStore((s) => s.toggleTabViewMode)
   // Why: the strip only needs each tab's stable agent identity, but the whole
   // agentStatusByPaneKey map churns on every working↔idle transition app-wide.
   // Select a shallow-stable { tabId: agentType } projection so the strip
   // re-renders only when a tab gains/loses/changes its agent, not on status flips.
   const tabAgentTypesByTabId = useAppStore(
-    useShallow((s) => selectTabAgentTypesByTabId(s.agentStatusByPaneKey ?? {}))
+    useShallow((s) =>
+      selectTabAgentTypesByTabId(s.agentStatusByPaneKey ?? {}, s.terminalLayoutsByTabId)
+    )
+  )
+  const nativeChatTabWideFallbackUnsafeTabsById = useAppStore(
+    useShallow((s) => selectNativeChatTabWideFallbackUnsafeTabsById(s.terminalLayoutsByTabId))
   )
   const nativeChatEnabled = useAppStore((s) => s.settings?.experimentalNativeChat === true)
   const nativeChatTranscriptIsLocalReadable = useAppStore((s) =>
@@ -1117,14 +1124,16 @@ function TabBarInner({
                 // agent-status pane keys are `${terminalTab.id}:${leafId}`, and
                 // the unified tab id can differ from it.
                 const detectedAgent = tabAgentTypesByTabId[terminalTab.id] ?? null
+                const tabWideFallbackSafe =
+                  nativeChatTabWideFallbackUnsafeTabsById[terminalTab.id] !== true
                 const canToggleViewMode =
                   unifiedTabForItem !== undefined &&
                   canToggleNativeChat({
                     experimentalNativeChatEnabled: nativeChatEnabled,
                     contentType: 'terminal',
-                    launchAgent: terminalTab.launchAgent,
+                    launchAgent: tabWideFallbackSafe ? terminalTab.launchAgent : null,
                     detectedAgent,
-                    resolvedAgent,
+                    resolvedAgent: tabWideFallbackSafe ? resolvedAgent : null,
                     nativeChatTranscriptIsLocalReadable,
                     isChatViewMode: unifiedTabForItem.viewMode === 'chat'
                   })

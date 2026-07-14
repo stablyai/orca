@@ -100,9 +100,9 @@ docs/reference/react-performance-audit.md
 validation-screenshots/
 .stably-browser
 
-# PR verification evidence screenshots are referenced from notes but should not
-# be committed.
-notes/artifacts/
+# Local scratch notes and PR evidence screenshots (not part of the product).
+/notes/
+/pr-evidence/
 
 # Playwright
 test-results/
@@ -123,5 +123,5 @@ src/renderer/src/i18n/locales/.ko-catalog-cache.json
 src/renderer/src/i18n/locales/.ja-catalog-cache.json
 src/renderer/src/i18n/locales/.es-catalog-cache.json
 
-# Bench result JSONs are working artifacts; headline numbers live in notes/terminal-performance-initiative.md
+# Bench result JSONs are working artifacts
 tools/benchmarks/results/terminal-pipeline-*.json

@@ -1,6 +1,7 @@
 export {
   briefToolArg,
   countToolCalls,
+  formatToolInput,
   summarizeToolInput,
   summarizeToolRun,
   toolFilePath

@@ -1403,6 +1403,51 @@ describe('createIpcPtyTransport', () => {
     })
   })
 
+  it('does not kill a pre-existing session when a reattach resolves after destroy', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawnControls: { resolve: ((value: { id: string }) => void) | null } = { resolve: null }
+    const spawnPromise = new Promise<{ id: string }>((resolve) => {
+      spawnControls.resolve = resolve
+    })
+    const spawnMock = vi.fn().mockReturnValue(spawnPromise)
+    const killMock = vi.fn()
+
+    ;(globalThis as { window: typeof window }).window = {
+      ...originalWindow,
+      api: {
+        ...originalWindow?.api,
+        pty: {
+          ...originalWindow?.api?.pty,
+          spawn: spawnMock,
+          write: vi.fn(),
+          resize: vi.fn(),
+          kill: killMock,
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {})
+        }
+      }
+    } as unknown as typeof window
+
+    const transport = createIpcPtyTransport({})
+    const connectPromise = transport.connect({
+      url: '',
+      callbacks: {},
+      // A reattach targets a session that existed before this transport;
+      // destroying the view must not reap the user's live shell.
+      sessionId: 'pty-preexisting'
+    })
+
+    transport.destroy?.()
+    if (!spawnControls.resolve) {
+      throw new Error('Expected spawn resolver to be captured')
+    }
+    spawnControls.resolve({ id: 'pty-preexisting' })
+    await connectPromise
+
+    expect(killMock).not.toHaveBeenCalledWith('pty-preexisting')
+  })
+
   it('kills a PTY that finishes spawning after the transport was destroyed', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawnControls: { resolve: ((value: { id: string }) => void) | null } = { resolve: null }
