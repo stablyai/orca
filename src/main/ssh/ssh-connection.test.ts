@@ -42,6 +42,10 @@ vi.mock('ssh2', () => {
     // to decide which log line to emit. A real Socket instance lets the test
     // exercise the "enabled" branch instead of the "skipped (proxy socket)" branch.
     _sock: Socket | undefined = new Socket()
+    // Why: production code clears ssh2's internal handshake timer when a
+    // keyboard-interactive prompt arrives (and warns when the field is
+    // missing); a dummy timer keeps that path exercised without the warning.
+    _readyTimeout: NodeJS.Timeout = setTimeout(() => {}, 0)
     lastExecCommand?: string
     lastConnectConfig?: unknown
     constructor() {

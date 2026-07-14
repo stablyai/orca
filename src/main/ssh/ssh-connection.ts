@@ -994,7 +994,17 @@ export class SshConnection {
         // wait on a human (push approval, OTP entry). A prompt proves the
         // server is alive; from here the server's LoginGraceTime and the
         // credential dialog timeout bound the wait.
-        clearTimeout((client as unknown as { _readyTimeout?: NodeJS.Timeout })._readyTimeout)
+        const readyTimeout = (client as unknown as { _readyTimeout?: NodeJS.Timeout })._readyTimeout
+        if (readyTimeout !== undefined) {
+          clearTimeout(readyTimeout)
+        } else {
+          // Why: this reaches into ssh2 internals — if the field moves, the
+          // handshake timeout silently cuts MFA prompts short again. Make
+          // that breakage visible.
+          console.warn(
+            `[ssh] Could not clear the handshake timeout for ${this.target.label}; keyboard-interactive prompts may be cut short`
+          )
+        }
         collectKeyboardInteractiveResponses(
           {
             targetId: this.target.id,
@@ -1020,7 +1030,14 @@ export class SshConnection {
               finish(responses ?? [])
             }
           },
-          () => {
+          (err) => {
+            // Why: distinguishes a real failure (e.g. a broken credential
+            // prompter) from an expected user cancellation in the logs.
+            console.warn(
+              `[ssh] keyboard-interactive handling failed for ${this.target.label}: ${
+                err instanceof Error ? err.message : String(err)
+              }`
+            )
             if (!settled) {
               finish([])
             }
