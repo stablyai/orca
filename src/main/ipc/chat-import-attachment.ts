@@ -36,10 +36,14 @@ function lastPathSegment(fileName: string): string {
   return segments.at(-1) ?? 'attachment'
 }
 
+// Security: web-chat fileName/mime metadata is untrusted. Preserving the
+// fileName's own extension would let a hostile attachment (e.g.
+// fileName='invoice.exe', mime='image/png') be written and opened as an
+// executable. The output extension always comes from the mime allowlist.
 export function sanitizeAttachmentFileName(fileName: string, mime: string): string {
   const base = lastPathSegment(fileName.trim())
-  const hasExtension = /\.[^./\\]+$/.test(base)
-  return hasExtension ? base : `${base}${extensionForMime(mime)}`
+  const stem = base.replace(/\.[^./\\]*$/, '').replace(/\.+$/, '') || 'attachment'
+  return `${stem}${extensionForMime(mime)}`
 }
 
 export type ChatImportAttachmentOpenArgs = {
@@ -67,21 +71,39 @@ export function writeAttachmentTemp(
   return destination
 }
 
+export type OpenStoredAttachmentDeps = {
+  readBlob: (hash: string) => Buffer | null
+  openPath: (path: string) => Promise<string>
+  tmpDir: string
+}
+
+// Pure/injectable: keeps the openPath-failure branch unit-testable without electron.
+export async function openStoredAttachment(
+  deps: OpenStoredAttachmentDeps,
+  args: ChatImportAttachmentOpenArgs
+): Promise<ChatImportAttachmentOpenResult> {
+  try {
+    const path = writeAttachmentTemp(deps.readBlob, deps.tmpDir, args)
+    // shell.openPath never rejects on failure — it resolves an error message
+    // string ('' on success), so the result must be inspected explicitly.
+    const error = await deps.openPath(path)
+    return error ? { ok: false, error } : { ok: true }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
 export function registerChatImportAttachmentHandlers(): void {
   ipcMain.handle(
     'chatImportAttachment:open',
-    async (_event, args: ChatImportAttachmentOpenArgs): Promise<ChatImportAttachmentOpenResult> => {
-      try {
-        const path = writeAttachmentTemp(
-          (hash) => readBlob(chatImportBlobDir(), hash),
-          join(app.getPath('temp'), 'orca-attachments'),
-          args
-        )
-        await shell.openPath(path)
-        return { ok: true }
-      } catch (error) {
-        return { ok: false, error: error instanceof Error ? error.message : String(error) }
-      }
-    }
+    async (_event, args: ChatImportAttachmentOpenArgs): Promise<ChatImportAttachmentOpenResult> =>
+      openStoredAttachment(
+        {
+          readBlob: (hash) => readBlob(chatImportBlobDir(), hash),
+          openPath: (path) => shell.openPath(path),
+          tmpDir: join(app.getPath('temp'), 'orca-attachments')
+        },
+        args
+      )
   )
 }
