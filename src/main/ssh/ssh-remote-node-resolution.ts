@@ -171,6 +171,15 @@ async function tryResolveViaLoginShell(
   return null
 }
 
+/**
+ * Builds a `<shell> <mode> <command>` invocation, selecting the login-shell flag
+ * the given shell actually supports: `-c` for sh/dash/csh/tcsh, `-lc` otherwise.
+ * csh/tcsh reject the combined `-lc` form, so they must use `-c`. See issue #8701.
+ *
+ * @param shell - absolute path to the login shell (e.g. `/bin/csh`)
+ * @param command - the command to run inside that shell
+ * @returns the shell-escaped invocation string
+ */
 function buildCommandInShell(shell: string, command: string): string {
   const shellName = shell.split('/').at(-1)
   // Why: dash and POSIX sh do not require `-l`; when $SHELL falls back to

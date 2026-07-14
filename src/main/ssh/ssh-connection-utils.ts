@@ -92,6 +92,15 @@ export function shellEscape(s: string): string {
   return `'${s.replace(/'/g, "'\\''")}'`
 }
 
+/**
+ * Wraps a POSIX shell snippet so it executes correctly even when the remote
+ * user's login shell is non-POSIX (csh/tcsh). The snippet is base64-encoded onto
+ * a single physical line, which every login shell passes through untouched;
+ * `/bin/sh` then decodes and runs the original command. See issue #8701.
+ *
+ * @param command - the POSIX `sh` command (may be multiline) to run remotely
+ * @returns a single-line wrapped command safe to hand to any login shell via ssh
+ */
 export function wrapRemoteCommandForPosixShell(command: string): string {
   // Why: sshd hands the wrapped string to the user's LOGIN shell, not to
   // /bin/sh. On csh/tcsh login shells a single-quoted argument spanning raw
