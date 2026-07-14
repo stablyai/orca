@@ -15,6 +15,7 @@ import {
 
 export type CodexSessionParseState = {
   accumulator: SessionAccumulator
+  historyMode: string | null
   previousTotals: CodexUsageSnapshot | null
   rejectedWorkerSession: boolean
   sawSessionMeta: boolean
@@ -43,6 +44,7 @@ export function consumeCodexRecordLine(state: CodexSessionParseState, line: stri
       return
     }
     state.sawSessionMeta = true
+    state.historyMode = extractString(payload.history_mode) ?? extractString(payload.historyMode)
     const sessionId = extractString(payload.id)
     if (sessionId) {
       accumulator.sessionId = sessionId
@@ -76,7 +78,11 @@ export function consumeCodexRecordLine(state: CodexSessionParseState, line: stri
     return
   }
 
-  if (record.type === 'response_item' && payload.type === 'message') {
+  if (
+    record.type === 'response_item' &&
+    payload.type === 'message' &&
+    state.historyMode !== 'paginated'
+  ) {
     accumulator.messageCount++
     if (payload.role === 'user' && !accumulator.title) {
       accumulator.title = extractContentText(payload.content)

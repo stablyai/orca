@@ -1,4 +1,6 @@
 import { createReadStream } from 'node:fs'
+import { stat } from 'node:fs/promises'
+import { Readable } from 'node:stream'
 import type { AgentType, NativeChatMessage } from '../../shared/native-chat-types'
 import { isCodexCompressedRolloutPath } from '../ai-vault/session-scanner-codex-paths'
 import { openCodexRolloutStream } from '../ai-vault/session-scanner-codex-rollout-read'
@@ -6,11 +8,12 @@ import { errorMessage } from '../ai-vault/session-scanner-values'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import {
   decodeClaudeTranscriptLine,
-  decodeCodexTranscriptLine,
+  createCodexTranscriptLineDecoder,
   decodeGrokTranscriptLine
 } from './transcript-line-decoders'
 import { decodeTranscriptStream } from './transcript-stream-lines'
 import type { TranscriptDecodeLimits } from './transcript-stream-lines'
+import { newlineAlignedTailStart, readStreamTail } from './transcript-tail-window'
 
 export type ReadTranscriptResult =
   | { messages: NativeChatMessage[] }
@@ -49,7 +52,9 @@ export async function readNativeChatTranscript(
       }
     }
     if (agent === 'codex') {
-      return { messages: await readTranscript(filePath, decodeCodexTranscriptLine, options.limits) }
+      return {
+        messages: await readTranscript(filePath, createCodexTranscriptLineDecoder(), options.limits)
+      }
     }
     if (agent === 'grok') {
       return { messages: await readTranscript(filePath, decodeGrokTranscriptLine, options.limits) }
@@ -72,9 +77,23 @@ async function readTranscript(
 ): Promise<NativeChatMessage[]> {
   // Why: Codex cold-compresses older rollouts; other agents remain plain JSONL.
   // Keep plain reads as bytes so malformed UTF-8 cannot distort safety limits.
-  const stream = isCodexCompressedRolloutPath(filePath)
-    ? openCodexRolloutStream(filePath)
-    : createReadStream(filePath)
-  const { messages } = await decodeTranscriptStream(stream, filePath, 0, decode, true, limits)
+  const compressed = isCodexCompressedRolloutPath(filePath)
+  let start = 0
+  let stream: Readable
+  if (compressed && limits?.maxDecodedBytes !== undefined) {
+    const tail = await readStreamTail(openCodexRolloutStream(filePath), limits.maxDecodedBytes)
+    start = tail.decodedStart
+    stream = Readable.from(tail.bytes)
+  } else if (compressed) {
+    stream = openCodexRolloutStream(filePath)
+  } else {
+    const end = (await stat(filePath)).size
+    start =
+      limits?.maxDecodedBytes === undefined
+        ? 0
+        : await newlineAlignedTailStart(filePath, end, limits.maxDecodedBytes)
+    stream = createReadStream(filePath, { start })
+  }
+  const { messages } = await decodeTranscriptStream(stream, filePath, start, decode, true, limits)
   return messages
 }

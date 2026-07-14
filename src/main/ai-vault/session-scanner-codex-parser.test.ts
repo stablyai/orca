@@ -35,6 +35,15 @@ describe('parseCodexSessionFile', () => {
         },
         {
           timestamp: '2026-06-18T10:00:01.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'text', text: 'Paginated user prompt' }]
+          }
+        },
+        {
+          timestamp: '2026-06-18T10:00:01.000Z',
           type: 'event_msg',
           payload: {
             type: 'item_completed',
@@ -43,6 +52,15 @@ describe('parseCodexSessionFile', () => {
               id: 'item-user-1',
               content: [{ type: 'text', text: 'Paginated user prompt' }]
             }
+          }
+        },
+        {
+          timestamp: '2026-06-18T10:00:02.000Z',
+          type: 'response_item',
+          payload: {
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'text', text: 'Paginated assistant reply' }]
           }
         },
         {

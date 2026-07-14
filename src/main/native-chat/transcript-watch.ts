@@ -14,11 +14,12 @@ import type { AgentType, NativeChatMessage } from '../../shared/native-chat-type
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import {
   decodeClaudeTranscriptLine,
-  decodeCodexTranscriptLine,
+  createCodexTranscriptLineDecoder,
   decodeGrokTranscriptLine
 } from './transcript-line-decoders'
 import { decodeTranscriptStream, TranscriptDecodeLimitError } from './transcript-stream-lines'
 import type { TranscriptDecodeLimits } from './transcript-stream-lines'
+import { newlineAlignedTailStart } from './transcript-tail-window'
 
 export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
   agent: AgentType
@@ -47,8 +48,8 @@ export type NativeChatTranscriptSubscription = {
 
 // Why: a single watch event can fire several times for one append; we read from
 // the last byte offset so re-entrant reads never re-emit prior messages. Each
-// decoder is stateless per-line, so tailing reuses the same record→message
-// mapping the full reader uses.
+// subscription owns one decoder instance, so provider-specific stream state
+// (such as Codex pagination mode) remains consistent across drain passes.
 const DEFAULT_DEBOUNCE_MS = 40
 
 // Why: process-wide count of live FSWatchers opened by this module. The U4 leak
@@ -68,7 +69,7 @@ function lineDecoderForAgent(
     return decodeClaudeTranscriptLine
   }
   if (agent === 'codex') {
-    return decodeCodexTranscriptLine
+    return createCodexTranscriptLineDecoder()
   }
   if (agent === 'grok') {
     return decodeGrokTranscriptLine
@@ -140,12 +141,12 @@ function installTranscriptWatcher(
   limits?: TranscriptDecodeLimits,
   afterReadSnapshotForTests?: (end: number) => Promise<void>
 ): NativeChatTranscriptSubscription | null {
-  // Why: seed the offset at 0 so the FIRST drain re-reads the whole file. This
-  // closes the read/subscribe race — a turn appended between the caller's
-  // readSession EOF and the watcher install is still emitted. Re-emitted lines
-  // collapse by deterministic id in the assembler (no dup, no drop). Subsequent
-  // drains use the incremental offset so the full re-read happens only once.
+  // Why: the FIRST drain re-reads the full local transcript or the bounded
+  // newline-aligned remote tail. This closes the read/subscribe race — a turn
+  // appended between readSession EOF and watcher install is still emitted.
+  // Later drains use the incremental offset, so the seed read happens once.
   let offset = 0
+  let initialDrain = true
   let closed = false
   let reading = false
   let pendingReadRequested = false
@@ -171,7 +172,12 @@ function installTranscriptWatcher(
           if (currentSize < offset) {
             // Rotation/replacement/truncation: re-read from the top.
             offset = 0
+            initialDrain = true
           }
+          if (initialDrain && limits?.maxDecodedBytes !== undefined) {
+            offset = await newlineAlignedTailStart(filePath, currentSize, limits.maxDecodedBytes)
+          }
+          initialDrain = false
           attemptedEnd = currentSize
           await afterReadSnapshotForTests?.(currentSize)
           const { messages, consumedTo } = await readAppendedMessages(

@@ -160,6 +160,29 @@ describe('subscribeNativeChatTranscript', () => {
     expect(seen.some((message) => message.id === 'u-large')).toBe(false)
   })
 
+  it('seeds a newline-aligned tail when bounded history exceeds the remote window', async () => {
+    const initial = Array.from({ length: 8 }, (_unused, index) =>
+      claudeLine(`u-${index}`, 'user', `message-${index}-${'x'.repeat(80)}`)
+    ).join('')
+    const filePath = await tempFile(initial)
+    const seen: NativeChatMessage[] = []
+
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'ignored',
+      filePath,
+      onAppend: (messages) => seen.push(...messages),
+      debounceMs: 5,
+      limits: { maxDecodedBytes: 512, maxLineBytes: 256, maxMessages: 40 }
+    })
+
+    await waitFor(() => seen.some((message) => message.id === 'u-7'))
+    sub.unsubscribe()
+
+    expect(seen.some((message) => message.id === 'u-0')).toBe(false)
+    expect(seen.at(-1)?.id).toBe('u-7')
+  })
+
   it('releases the watcher on unsubscribe (no leak)', async () => {
     const filePath = await tempFile(claudeLine('u-1', 'user', 'hi'))
     const before = getActiveNativeChatWatcherCount()

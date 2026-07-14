@@ -144,9 +144,9 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
     handler: async (params, { runtime, connectionId, clientKind }, emit) => {
       let closed = false
       let unsubscribe = (): void => {}
-      // Why: the subscriber seeds its read offset at 0, so the first drain emits
-      // the whole transcript and later drains emit only appended turns. The first
-      // batch is windowed to the tail (a full transcript would freeze mobile);
+      // Why: the subscriber seeds from a bounded, newline-aligned transcript
+      // tail and later drains emit only appended turns. The first batch is
+      // windowed again by message count for a fast paired-client snapshot;
       // later incremental batches are smaller than the window so they pass through.
       // Clients merge by message id, so the initial windowed batch doubles as the
       // snapshot. Keyed by the client-supplied subscriptionId when present so

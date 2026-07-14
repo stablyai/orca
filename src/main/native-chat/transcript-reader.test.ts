@@ -177,6 +177,20 @@ describe('readNativeChatTranscript (codex)', () => {
   it('maps paginated item_completed turn items into chat messages', async () => {
     const filePath = await writeFixture('orca-native-chat-codex-paginated-', [
       {
+        type: 'session_meta',
+        timestamp: '2026-06-01T10:00:00.000Z',
+        payload: { id: 'codex-paginated', history_mode: 'paginated' }
+      },
+      {
+        type: 'response_item',
+        timestamp: '2026-06-01T10:00:01.000Z',
+        payload: {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'text', text: 'Paginated hello' }]
+        }
+      },
+      {
         type: 'event_msg',
         timestamp: '2026-06-01T10:00:01.000Z',
         payload: {
@@ -186,6 +200,15 @@ describe('readNativeChatTranscript (codex)', () => {
             id: 'user-1',
             content: [{ type: 'text', text: 'Paginated hello' }]
           }
+        }
+      },
+      {
+        type: 'response_item',
+        timestamp: '2026-06-01T10:00:04.000Z',
+        payload: {
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Done.' }]
         }
       },
       {
@@ -256,6 +279,46 @@ describe('readNativeChatTranscript (codex)', () => {
       }
     })
     expect(result.messages[3]?.blocks[0]).toEqual({ type: 'text', text: 'Done.' })
+    expect(result.messages.map((message) => message.id)).toEqual([
+      'user-1',
+      'reason-1',
+      'cmd-1',
+      'agent-1'
+    ])
+  })
+
+  it('deduplicates adjacent response and TurnItem messages when a tail omits session_meta', async () => {
+    const filePath = await writeFixture('orca-native-chat-codex-tail-dedupe-', [
+      {
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Same completed answer' }]
+        }
+      },
+      {
+        type: 'event_msg',
+        payload: {
+          type: 'item_completed',
+          item: {
+            type: 'agent_message',
+            id: 'canonical-answer',
+            content: [{ type: 'text', text: 'Same completed answer' }]
+          }
+        }
+      }
+    ])
+
+    const result = await readNativeChatTranscript('codex', 'session', { filePath })
+    if (!('messages' in result)) {
+      throw new Error(`expected messages, got ${result.error}`)
+    }
+    expect(result.messages).toHaveLength(1)
+    expect(result.messages[0]?.blocks[0]).toEqual({
+      type: 'text',
+      text: 'Same completed answer'
+    })
   })
 
   it('reads cold-compressed .jsonl.zst transcripts', async () => {
@@ -298,7 +361,7 @@ describe('readNativeChatTranscript (codex)', () => {
     expect(result.messages[0]?.blocks[0]).toEqual({ type: 'text', text: 'From zst' })
   })
 
-  it('stops compressed transcript decoding at the decompressed byte limit', async () => {
+  it('returns a newline-aligned compressed tail within the decompressed byte window', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-codex-zst-byte-limit-'))
     tempRoots.push(root)
     const filePath = join(root, 'rollout-session.jsonl.zst')
@@ -322,7 +385,37 @@ describe('readNativeChatTranscript (codex)', () => {
       limits: { maxDecodedBytes: 512 }
     })
 
-    expect(result).toEqual({ error: expect.stringContaining('decoded byte limit') })
+    if (!('messages' in result)) {
+      throw new Error(`expected messages, got ${result.error}`)
+    }
+    expect(result.messages.map((message) => message.id)).toEqual(['u18', 'u19'])
+  })
+
+  it('returns a newline-aligned plain tail instead of failing on an oversized transcript', async () => {
+    const filePath = await writeFixture(
+      'orca-native-chat-codex-plain-tail-',
+      Array.from({ length: 20 }, (_unused, index) => ({
+        type: 'event_msg',
+        payload: {
+          type: 'item_completed',
+          item: {
+            type: 'user_message',
+            id: `plain-${index}`,
+            content: [{ type: 'text', text: 'x'.repeat(100) }]
+          }
+        }
+      }))
+    )
+
+    const result = await readNativeChatTranscript('codex', 'session', {
+      filePath,
+      limits: { maxDecodedBytes: 512 }
+    })
+
+    if (!('messages' in result)) {
+      throw new Error(`expected messages, got ${result.error}`)
+    }
+    expect(result.messages.map((message) => message.id)).toEqual(['plain-18', 'plain-19'])
   })
 
   it('rejects a decompressed transcript line over the per-line byte limit', async () => {

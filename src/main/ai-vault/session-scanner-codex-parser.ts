@@ -66,6 +66,7 @@ function createCodexParseState(file: FileWithMtime): CodexSessionParseState {
       file,
       sessionId: sessionIdFromCodexRolloutPath(file.path)
     }),
+    historyMode: null,
     previousTotals: null,
     rejectedWorkerSession: false,
     sawSessionMeta: false,
