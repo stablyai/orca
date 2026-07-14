@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
-import { View, Text, StyleSheet, Pressable, FlatList, Alert } from 'react-native'
+import { View, Text, StyleSheet, Pressable, FlatList } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useFocusEffect } from 'expo-router'
 import {
@@ -9,9 +9,6 @@ import {
   ChevronRight,
   Terminal,
   Plus,
-  RefreshCw,
-  PowerOff,
-  Edit3,
   ListTodo
 } from 'lucide-react-native'
 import { ClaudeIcon, OpenAIIcon } from '../src/components/AgentIcons'
@@ -42,10 +39,7 @@ import { triggerMediumImpact } from '../src/platform/haptics'
 import { OrcaLogo } from '../src/components/OrcaLogo'
 import { StatusDot } from '../src/components/StatusDot'
 import { TaskProviderLogo } from '../src/components/TaskProviderLogo'
-import { TextInputModal } from '../src/components/TextInputModal'
-import { ActionSheetModal, type ActionSheetAction } from '../src/components/ActionSheetModal'
-import { ConfirmModal } from '../src/components/ConfirmModal'
-import { useDrawerHandoff } from '../src/components/drawer-handoff'
+import { HostActionsSheet } from '../src/components/HostActionsSheet'
 import { setCachedWorktrees, getCachedWorktrees } from '../src/cache/worktree-cache'
 import { loadHomeSnapshot, saveHomeSnapshot } from '../src/cache/home-snapshot-cache'
 import { colors, spacing, radii } from '../src/theme/mobile-theme'
@@ -307,8 +301,6 @@ export default function HomeScreen() {
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const [hosts, setHosts] = useState<HostProfile[]>([])
   const [actionTarget, setActionTarget] = useState<HostProfile | null>(null)
-  const [renameTarget, setRenameTarget] = useState<HostProfile | null>(null)
-  const [confirmRemove, setConfirmRemove] = useState<HostProfile | null>(null)
   const [hostStates, setHostStates] = useState<Record<string, ConnectionState>>({})
   const [hostAttempts, setHostAttempts] = useState<Record<string, number>>({})
   const [hostLastConnected, setHostLastConnected] = useState<Record<string, number | null>>({})
@@ -328,10 +320,6 @@ export default function HomeScreen() {
   const closeHostClient = useCloseHost()
   const forceReconnectHost = useForceReconnect()
   const primeHosts = usePrimeHosts()
-  // Why: the long-press action sheet auto-dismisses on tap; defer the follow-up
-  // confirm/rename drawer until its hide animation finishes so the two modals
-  // never present at once (that freezes iOS — issue #8555).
-  const runDrawerHandoff = useDrawerHandoff()
   // Why: feed the loaded HostProfiles into the provider's prime cache as
   // soon as we have them. This avoids a second Keychain pass inside
   // openEntry on cold start (which serialised behind the first one and
@@ -699,33 +687,23 @@ export default function HomeScreen() {
     </Pressable>
   )
 
-  async function handleRename(newName: string) {
-    if (!renameTarget) {
-      return
-    }
+  async function handleRename(hostId: string, newName: string): Promise<boolean> {
     try {
-      await renameHost(renameTarget.id, newName)
-      setRenameTarget(null)
+      await renameHost(hostId, newName)
       setHosts(await loadHosts())
+      return true
     } catch {
-      setRenameTarget(null)
+      return false
     }
   }
 
-  async function handleRemove() {
-    if (!confirmRemove) {
-      return
-    }
-    const hostToRemove = confirmRemove
+  async function handleRemove(hostId: string): Promise<boolean> {
     try {
-      await removeHostAndCloseClient(hostToRemove.id, closeHostClient)
-      setConfirmRemove(null)
+      await removeHostAndCloseClient(hostId, closeHostClient)
       setHosts(await loadHosts())
+      return true
     } catch {
-      // Why: ConfirmModal closes on confirm; re-open for retry and surface the
-      // failure instead of silently leaving the host listed.
-      setConfirmRemove(hostToRemove)
-      Alert.alert('Could not remove host', 'Please try again.')
+      return false
     }
   }
 
@@ -1042,84 +1020,19 @@ export default function HomeScreen() {
         />
       )}
 
-      {/* ─── Action sheets (shared by both states) ─── */}
-      <ActionSheetModal
-        visible={actionTarget != null}
-        title={actionTarget?.name}
-        message={actionTarget ? endpointLabel(actionTarget.endpoint) : undefined}
-        actions={(() => {
-          const host = actionTarget
-          if (!host) {
-            return []
-          }
-          const state = hostStates[host.id] ?? 'connecting'
-          const isLive =
-            state === 'connected' ||
-            state === 'connecting' ||
-            state === 'handshaking' ||
-            state === 'reconnecting'
-          // Why: "Reconnect" implies "you were connected, try again". If
-          // the client has never reached 'connected' this session (cold
-          // start, unreachable host, or after Disconnect) the action is
-          // functionally a fresh Connect — using the right verb makes
-          // the affordance match what tapping it actually does.
-          const hasEverConnected = (hostLastConnected[host.id] ?? null) != null
-          const items: ActionSheetAction[] = []
-          items.push({
-            label: hasEverConnected && isLive ? 'Reconnect' : 'Connect',
-            icon: RefreshCw,
-            onPress: () => {
-              setActionTarget(null)
-              void forceReconnectHost(host.id)
-            }
-          })
-          if (isLive) {
-            items.push({
-              label: 'Disconnect',
-              icon: PowerOff,
-              onPress: () => {
-                setActionTarget(null)
-                closeHostClient(host.id)
-              }
-            })
-          }
-          items.push({
-            label: 'Rename',
-            icon: Edit3,
-            onPress: () => {
-              runDrawerHandoff(() => setRenameTarget(host))
-            }
-          })
-          items.push({
-            label: 'Remove',
-            destructive: true,
-            onPress: () => {
-              runDrawerHandoff(() => setConfirmRemove(host))
-            }
-          })
-          return items
-        })()}
+      {/* ─── Host actions (long-press): one hosted drawer for actions/rename/remove ─── */}
+      <HostActionsSheet
+        host={actionTarget}
+        subtitle={actionTarget ? endpointLabel(actionTarget.endpoint) : undefined}
+        state={actionTarget ? (hostStates[actionTarget.id] ?? 'connecting') : 'disconnected'}
+        hasEverConnected={
+          actionTarget ? (hostLastConnected[actionTarget.id] ?? null) != null : false
+        }
+        onReconnect={(hostId) => void forceReconnectHost(hostId)}
+        onDisconnect={(hostId) => closeHostClient(hostId)}
+        onRename={handleRename}
+        onRemove={handleRemove}
         onClose={() => setActionTarget(null)}
-      />
-
-      <TextInputModal
-        visible={renameTarget != null}
-        title="Rename Host"
-        message="Enter a new name for this host."
-        defaultValue={renameTarget?.name ?? ''}
-        placeholder="Host name"
-        onSubmit={(name) => void handleRename(name)}
-        onCancel={() => setRenameTarget(null)}
-      />
-
-      <ConfirmModal
-        visible={confirmRemove != null}
-        title="Remove Host"
-        message={`Remove "${confirmRemove?.name}"? You can re-pair later.`}
-        confirmLabel="Remove"
-        destructive
-        onConfirm={() => void handleRemove()}
-        onCancel={() => setConfirmRemove(null)}
       />
     </SafeAreaView>
   )
