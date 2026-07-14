@@ -7,7 +7,13 @@
     "../src/preload/**/*",
     "../src/shared/**/*",
     "../src/relay/**/*",
-    "../src/types/**/*"
+    "../src/types/**/*",
+    // Task 2's shared path-derivation module, consumed by the main-process
+    // browser/host detection in src/main/chat-import (mirrors the reverse
+    // whitelist in tsconfig.cli.json for src/main files the CLI needs).
+    "../src/cli/chat-import-host/native-messaging-host-paths.ts",
+    "../src/cli/chat-import-host/install-native-messaging-host.ts",
+    "../src/cli/chat-import-host/native-messaging-manifest.ts"
   ],
   "compilerOptions": {
     "composite": true,
