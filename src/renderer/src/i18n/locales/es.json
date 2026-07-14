@@ -12965,11 +12965,15 @@
           "copiedToast": "Marcado copiado: pégalo en tu agente ({{value0}})",
           "copy": "Copiar marcado",
           "drawButton": "Dibujar en la captura",
+          "drawHint": "Nuevo: dibuja en la página y cópialo en tu agente",
+          "errorAttach": "No se pudo adjuntar la captura de pantalla con marcado.",
+          "errorCapture": "No se pudo capturar la página para dibujar.",
+          "errorUnavailable": "El marcado de captura de pantalla no está disponible en esta página.",
+          "fontSize": "Tamaño de letra",
           "hint": "Dibuja en la página y luego copia el marcado para pegarlo en tu agente.",
           "redo": "Rehacer",
           "style": "Color y grosor",
           "textInput": "Texto de anotación",
-          "undo": "Deshacer",
           "tool": {
             "arrow": "Flecha",
             "ellipse": "Elipse",
@@ -12978,11 +12982,8 @@
             "rect": "Rectángulo",
             "text": "Texto"
           },
-          "widthOption": "{{value0}} px",
-          "fontSize": "Tamaño de letra",
-          "errorUnavailable": "El marcado de captura de pantalla no está disponible en esta página.",
-          "errorCapture": "No se pudo capturar la página para dibujar.",
-          "errorAttach": "No se pudo adjuntar la captura de pantalla con marcado."
+          "undo": "Deshacer",
+          "widthOption": "{{value0}} px"
         }
       }
     },

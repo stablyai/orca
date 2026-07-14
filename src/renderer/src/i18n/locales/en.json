@@ -12965,11 +12965,15 @@
           "copiedToast": "Markup copied — paste it into your agent ({{value0}})",
           "copy": "Copy markup",
           "drawButton": "Draw on screenshot",
+          "drawHint": "New — draw on the page, then copy it to your agent",
+          "errorAttach": "Could not attach the markup screenshot.",
+          "errorCapture": "Could not capture the page to draw on.",
+          "errorUnavailable": "Screenshot markup is not available on this page.",
+          "fontSize": "Font size",
           "hint": "Draw on the page, then copy the markup to paste into your agent.",
           "redo": "Redo",
           "style": "Color and thickness",
           "textInput": "Annotation text",
-          "undo": "Undo",
           "tool": {
             "arrow": "Arrow",
             "ellipse": "Ellipse",
@@ -12978,11 +12982,8 @@
             "rect": "Rectangle",
             "text": "Text"
           },
-          "widthOption": "{{value0}} px",
-          "fontSize": "Font size",
-          "errorUnavailable": "Screenshot markup is not available on this page.",
-          "errorCapture": "Could not capture the page to draw on.",
-          "errorAttach": "Could not attach the markup screenshot."
+          "undo": "Undo",
+          "widthOption": "{{value0}} px"
         }
       }
     },
