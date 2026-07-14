@@ -1,5 +1,8 @@
+import { topRecentSyncs } from './recent-syncs.js'
+
 const SVC = { 'chatgpt.com': 'ChatGPT', 'claude.ai': 'Claude', 'gemini.google.com': 'Gemini' }
 const CODE = { 'chatgpt.com': 'CHATGPT', 'claude.ai': 'CLAUDE', 'gemini.google.com': 'GEMINI' }
+const SRC_LABEL = { CHATGPT: 'ChatGPT', CLAUDE: 'Claude.ai', GEMINI: 'Gemini' }
 const $ = (id) => document.getElementById(id)
 
 async function currentTab() {
@@ -202,4 +205,53 @@ function finishProg(r) {
 // 다른 탭/사이트의 진행 메시지가 현재 팝업에 섞이지 않도록 소스를 확인한다.
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'PROGRESS' && site && msg.source === site.code) updateProg(msg)
+})
+
+function escapeHtml(s) {
+  return String(s).replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]
+  )
+}
+
+function truncateTitle(title) {
+  const t = title || '(제목 없음)'
+  return t.length > 26 ? t.slice(0, 26) + '…' : t
+}
+
+// 절대 시각 대신 "N일 전" 형태의 상대 시간으로 스캔 가독성을 높인다.
+function relativeTime(dateStr) {
+  const then = new Date(dateStr).getTime()
+  if (Number.isNaN(then)) return ''
+  const min = Math.floor((Date.now() - then) / 60000)
+  if (min < 1) return '방금 전'
+  if (min < 60) return `${min}분 전`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}시간 전`
+  return `${Math.floor(hr / 24)}일 전`
+}
+
+// 동기화 도중(성공 응답마다 background가 storage를 갱신) 팝업이 열려 있어도
+// 최신 목록을 보여주도록 초기 로드와 동기화 완료 시 다시 호출한다.
+async function renderRecent() {
+  const el = $('recent')
+  if (!el) return
+  const { recentSyncs } = await chrome.storage.local.get('recentSyncs')
+  const items = topRecentSyncs(recentSyncs || [], 10)
+  if (items.length === 0) {
+    el.innerHTML = `<div class="recent-empty">아직 동기화한 대화가 없어요</div>`
+    return
+  }
+  el.innerHTML =
+    `<div class="recent-h">최근 동기화</div>` +
+    items
+      .map(
+        (it) =>
+          `<div class="recent-item"><span class="recent-title">${escapeHtml(truncateTitle(it.title))}</span><span class="recent-meta">${escapeHtml(SRC_LABEL[it.source] || it.source)} · ${relativeTime(it.date)}</span></div>`
+      )
+      .join('')
+}
+renderRecent()
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.recentSyncs) renderRecent()
 })

@@ -1,4 +1,6 @@
 // background.js
+import { pushRecentSync } from './recent-syncs.js'
+
 const HOST = 'com.orca.chatimport'
 let port = null
 let seq = 0
@@ -49,7 +51,26 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
   if (msg.type === 'PUSH') {
     native({ type: 'INGEST', conv: msg.conv })
-      .then((r) => sendResponse(r && r.error ? { error: r.error } : { ok: true, id: r && r.id }))
+      .then((r) => {
+        if (r && r.error) {
+          sendResponse({ error: r.error })
+          return
+        }
+        sendResponse({ ok: true, id: r && r.id })
+        // 팝업 "최근 동기화" 목록용 기록. 응답은 이미 보냈으므로 실패해도 동기화 결과에 영향 없음.
+        chrome.storage.local.get('recentSyncs').then(({ recentSyncs: list }) => {
+          const recentSyncs = pushRecentSync(
+            list || [],
+            {
+              title: msg.conv.title,
+              source: msg.conv.source,
+              date: msg.conv.updatedAt || new Date().toISOString()
+            },
+            30
+          )
+          chrome.storage.local.set({ recentSyncs })
+        })
+      })
       .catch((e) => sendResponse({ error: e.message }))
     return true
   }

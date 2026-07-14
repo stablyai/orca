@@ -143,6 +143,50 @@ body {
   margin: 0;
   cursor: pointer;
 }
+.recent {
+  margin: 0 15px 10px;
+}
+.recent-h {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+  letter-spacing: 0.2px;
+}
+.recent-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--line-soft);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.recent-item:last-child {
+  margin-bottom: 0;
+}
+.recent-title {
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recent-meta {
+  flex: none;
+  font-size: 10.5px;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+.recent-empty {
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  text-align: center;
+  padding: 10px 0;
+}
 .foot {
   border-top: 1px solid var(--line-soft);
   padding: 9px 15px;
