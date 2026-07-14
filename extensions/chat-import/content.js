@@ -136,7 +136,9 @@ const ADAPTERS = {
         if (!url) continue
         out.push({
           kind: isImg ? 'image' : 'file',
-          mime: isImg ? 'image/*' : 'application/octet-stream',
+          // 열기 IPC의 mime→확장자 allowlist가 concrete 타입만 알아서 'image/*'는
+          // .bin으로 떨어져 안 열린다. Gemini처럼 파일명 기반 concrete mime을 준다.
+          mime: isImg ? _extMime(f.file_name || '') : 'application/octet-stream',
           name: f.file_name || (isImg ? 'image' : 'file'),
           size: 0,
           width: 0,
