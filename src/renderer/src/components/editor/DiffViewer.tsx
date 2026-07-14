@@ -25,6 +25,8 @@ import { getDiffViewerLargeDiffSaveAction } from './diff-viewer-large-diff-save-
 import type { DiffViewerProps } from './diff-viewer-props'
 import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
 import { useDiffEditorRegistration } from './diff-navigation-context'
+import { resolveMonacoEditorTheme } from '@/lib/editor-theme'
+import { resolveDocumentTheme } from '@/lib/document-theme'
 
 export default function DiffViewer({
   modelKey,
@@ -68,9 +70,10 @@ export default function DiffViewer({
     settings?.terminalFontSize ?? 13,
     editorFontZoomLevel
   )
-  const isDark =
-    settings?.theme === 'dark' ||
-    (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const monacoTheme = resolveMonacoEditorTheme(
+    settings?.editorTheme,
+    resolveDocumentTheme(settings?.theme ?? 'system')
+  )
 
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
   const { registerDiffEditor, unregisterDiffEditor } = useDiffEditorRegistration()
@@ -443,7 +446,7 @@ export default function DiffViewer({
             language={language}
             original={originalContent}
             modified={modifiedContent}
-            theme={isDark ? 'vs-dark' : 'vs'}
+            theme={monacoTheme}
             onMount={handleMount}
             // Why: A single file can have multiple live diff tabs at once
             // (staged, unstaged, branch compare versions). The kept Monaco models

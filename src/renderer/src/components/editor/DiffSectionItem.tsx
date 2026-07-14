@@ -40,7 +40,7 @@ export function DiffSectionItem({
   index,
   isBranchMode,
   sideBySide,
-  isDark,
+  monacoTheme,
   settings,
   sectionHeight,
   worktreeId,
@@ -64,7 +64,7 @@ export function DiffSectionItem({
   index: number
   isBranchMode: boolean
   sideBySide: boolean
-  isDark: boolean
+  monacoTheme: Parameters<typeof DiffSectionBody>[0]['monacoTheme']
   settings: {
     terminalFontSize?: number
     terminalFontFamily?: string
@@ -425,7 +425,7 @@ export function DiffSectionItem({
           addLineCommentLabel={addLineCommentLabel}
           isBranchMode={isBranchMode}
           sideBySide={sideBySide}
-          isDark={isDark}
+          monacoTheme={monacoTheme}
           language={language}
           modelPathBase={modelPathBase}
           isEditable={isEditable}

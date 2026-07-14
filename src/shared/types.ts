@@ -2523,6 +2523,9 @@ export type GlobalSettings = {
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number
   editorMinimapEnabled: boolean
+  /** Defaults to following the resolved app theme for profiles created before
+   *  independent Monaco color themes were configurable. */
+  editorTheme?: 'app' | 'light' | 'dark' | 'high-contrast-light' | 'high-contrast-dark' | 'dracula'
   /** Defaults on for profiles saved before file-editor wrapping became configurable. */
   editorWordWrap?: boolean
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */
