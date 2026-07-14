@@ -57,6 +57,12 @@ function previewActiveSurfacePatch(
       activeTabTypeByWorktree: nextActiveTabTypeByWorktree('simulator')
     }
   }
+  if (unifiedTab.contentType === 'database') {
+    return {
+      activeTabType: 'database',
+      activeTabTypeByWorktree: nextActiveTabTypeByWorktree('database')
+    }
+  }
   return {
     activeFileId: unifiedTab.entityId,
     activeTabType: 'editor',

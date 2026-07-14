@@ -87,6 +87,9 @@ export function selectFloatingVisibleTabCount(state: FloatingVisibleTabCountStat
       // Why: simulator unified tabs have no separate backing record; the tab
       // itself is the visible floating workspace item.
       count += 1
+    } else if (tab.contentType === 'database') {
+      // Why: database tabs are self-contained unified tabs, just like simulator tabs.
+      count += 1
     } else {
       count += editorIds.has(tab.entityId) ? 1 : 0
     }

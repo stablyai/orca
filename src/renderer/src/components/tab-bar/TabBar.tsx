@@ -9,6 +9,7 @@ import { SortableContext } from '@dnd-kit/sortable'
 import {
   ChevronLeft,
   ChevronRight,
+  Database,
   FilePlus,
   FileText,
   Globe,
@@ -32,6 +33,7 @@ import type { OpenFile } from '../../store/slices/editor'
 import SortableTab from './SortableTab'
 import EditorFileTab from './EditorFileTab'
 import BrowserTab, { getBrowserTabLabel } from './BrowserTab'
+import DatabaseTab from './DatabaseTab'
 import { QuickLaunchAgentMenuItems } from './QuickLaunchButton'
 import type { DropIndicator } from './drop-indicator'
 import { reconcileTabOrder } from './reconcile-order'
@@ -123,6 +125,7 @@ type TabBarProps = {
   /** On Windows, opens a new terminal with a specific shell instead of the default. */
   onNewTerminalWithShell?: (shell: string) => void
   onNewBrowserTab: () => void
+  onNewDatabaseTab?: () => void
   onNewSimulatorTab?: () => void
   onOpenEntry?: (args: TabCreateEntryArgs) => Promise<void>
   terminalOnly?: boolean
@@ -137,11 +140,13 @@ type TabBarProps = {
   browserTabs?: (BrowserTabState & { tabId?: string })[]
   activeFileId?: string | null
   activeBrowserTabId?: string | null
+  activeDatabaseTabId?: string | null
   activeSimulatorTabId?: string | null
   activeTabType?: WorkspaceVisibleTabType
   onActivateFile?: (fileId: string) => void
   onCloseFile?: (fileId: string) => void
   onActivateBrowserTab?: (tabId: string) => void
+  onActivateDatabaseTab?: (tabId: string) => void
   onCloseBrowserTab?: (tabId: string) => void
   onDuplicateBrowserTab?: (tabId: string) => void
   onCloseAllFiles?: () => void
@@ -182,6 +187,13 @@ type TabItem =
       isPinned: boolean
       data: Tab
     }
+  | {
+      type: 'database'
+      id: string
+      unifiedTabId: string
+      isPinned: boolean
+      data: Tab
+    }
 
 function getTabDragLabel(item: TabItem, generatedTitlesEnabled: boolean): string {
   if (item.type === 'terminal') {
@@ -192,6 +204,9 @@ function getTabDragLabel(item: TabItem, generatedTitlesEnabled: boolean): string
   }
   if (item.type === 'simulator') {
     return item.data.label || 'Mobile Emulator'
+  }
+  if (item.type === 'database') {
+    return item.data.customLabel?.trim() || item.data.label || 'Database Query'
   }
   return getEditorDisplayLabel(item.data)
 }
@@ -248,6 +263,7 @@ function TabBarInner({
   onNewTerminalTab,
   onNewTerminalWithShell,
   onNewBrowserTab,
+  onNewDatabaseTab,
   onNewSimulatorTab,
   onOpenEntry,
   terminalOnly = false,
@@ -262,11 +278,13 @@ function TabBarInner({
   browserTabs,
   activeFileId,
   activeBrowserTabId,
+  activeDatabaseTabId,
   activeSimulatorTabId,
   activeTabType,
   onActivateFile,
   onCloseFile,
   onActivateBrowserTab,
+  onActivateDatabaseTab,
   onCloseBrowserTab,
   onDuplicateBrowserTab,
   onCloseAllFiles,
@@ -590,6 +608,7 @@ function TabBarInner({
         terminalOnly,
         windowsShellEntries,
         hasNewBrowser: !terminalOnly,
+        hasNewDatabase: !terminalOnly && Boolean(onNewDatabaseTab),
         hasNewMarkdown: !terminalOnly && Boolean(onNewFileTab),
         hasOpenMarkdown: !terminalOnly && Boolean(onOpenFileTab),
         hasSimulator: !terminalOnly && mobileEmulatorEnabled && Boolean(onNewSimulatorTab),
@@ -598,6 +617,7 @@ function TabBarInner({
     [
       mobileEmulatorEnabled,
       onNewFileTab,
+      onNewDatabaseTab,
       onNewSimulatorTab,
       onOpenFileTab,
       terminalOnly,
@@ -626,6 +646,9 @@ function TabBarInner({
         break
       case 'new-browser':
         onNewBrowserTab()
+        break
+      case 'new-database':
+        onNewDatabaseTab?.()
         break
       case 'new-markdown':
         onNewFileTab?.()
@@ -749,6 +772,16 @@ function TabBarInner({
       <DropdownMenuShortcut>{newBrowserShortcut}</DropdownMenuShortcut>
     </DropdownMenuItem>
   ) : null
+  const newDatabaseMenuItem =
+    !terminalOnly && onNewDatabaseTab ? (
+      <DropdownMenuItem
+        onSelect={onNewDatabaseTab}
+        className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+      >
+        <Database className="size-4 text-muted-foreground" />
+        {translate('auto.components.tab.bar.TabBar.newDatabase', 'New Database Query')}
+      </DropdownMenuItem>
+    ) : null
   const newSimulatorMenuItem =
     !terminalOnly && mobileEmulatorEnabled && onNewSimulatorTab ? (
       workspaceHasSimulatorTab ? (
@@ -820,6 +853,7 @@ function TabBarInner({
         {openMarkdownMenuItem}
         {defaultTerminalMenuItems}
         {newBrowserMenuItem}
+        {newDatabaseMenuItem}
         {newSimulatorMenuItem}
         {mobileEmulatorIntroMenuBlock}
       </>
@@ -827,6 +861,7 @@ function TabBarInner({
       <>
         {defaultTerminalMenuItems}
         {newBrowserMenuItem}
+        {newDatabaseMenuItem}
         {newMarkdownMenuItem}
         {openMarkdownMenuItem}
         {newSimulatorMenuItem}
@@ -871,6 +906,13 @@ function TabBarInner({
         .map((t) => t.id),
     [unifiedTabs, resolvedGroupId]
   )
+  const databaseTabIds = useMemo(
+    () =>
+      unifiedTabs
+        .filter((tab) => tab.groupId === resolvedGroupId && tab.contentType === 'database')
+        .map((tab) => tab.id),
+    [resolvedGroupId, unifiedTabs]
+  )
 
   // Build the unified ordered list, reconciling stored order with current items
   const orderedItems = useMemo(() => {
@@ -879,7 +921,8 @@ function TabBarInner({
       terminalIds,
       editorFileIds,
       browserTabIds,
-      simulatorTabIds
+      simulatorTabIds,
+      databaseTabIds
     )
     const items: TabItem[] = []
     for (const id of ids) {
@@ -930,6 +973,17 @@ function TabBarInner({
         })
         continue
       }
+      const databaseUnified = unifiedTabByVisibleId.get(id)
+      if (databaseUnified?.contentType === 'database') {
+        items.push({
+          type: 'database',
+          id,
+          unifiedTabId: databaseUnified.id,
+          isPinned: databaseUnified.isPinned === true,
+          data: databaseUnified
+        })
+        continue
+      }
     }
     return items
   }, [
@@ -938,6 +992,7 @@ function TabBarInner({
     editorFileIds,
     browserTabIds,
     simulatorTabIds,
+    databaseTabIds,
     terminalMap,
     editorMap,
     browserMap,
@@ -972,6 +1027,9 @@ function TabBarInner({
       if (item.type === 'simulator') {
         return activeTabType === 'simulator' && item.id === activeSimulatorTabId
       }
+      if (item.type === 'database') {
+        return activeTabType === 'database' && item.id === activeDatabaseTabId
+      }
       return (
         (activeTabType === 'editor' || activeTabType === 'simulator') && activeFileId === item.id
       )
@@ -979,6 +1037,7 @@ function TabBarInner({
     return activeItem?.id ?? null
   }, [
     activeBrowserTabId,
+    activeDatabaseTabId,
     activeFileId,
     activeSimulatorTabId,
     activeTabId,
@@ -1215,6 +1274,24 @@ function TabBarInner({
                     onCloseToRight={() => onCloseToRight(item.id)}
                     onCloseAll={() => onCloseAllFiles?.()}
                     onMakePermanent={() => {}}
+                    onTogglePin={() => togglePinned(item)}
+                    dragData={dragData}
+                    dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+                    includeTopTabBorder={includeTopTabBorder}
+                  />
+                )
+              }
+              if (item.type === 'database') {
+                return (
+                  <DatabaseTab
+                    key={item.id}
+                    tab={item.data}
+                    isActive={activeTabType === 'database' && activeDatabaseTabId === item.id}
+                    isPinned={item.isPinned}
+                    hasTabsToRight={index < orderedItems.length - 1}
+                    onActivate={() => onActivateDatabaseTab?.(item.id)}
+                    onClose={() => onCloseFile?.(item.id)}
+                    onCloseToRight={() => onCloseToRight(item.id)}
                     onTogglePin={() => togglePinned(item)}
                     dragData={dragData}
                     dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}

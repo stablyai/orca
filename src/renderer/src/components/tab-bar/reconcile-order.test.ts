@@ -32,4 +32,8 @@ describe('reconcileTabOrder', () => {
     const stored = ['t1', 'e1', 't2', 'e2']
     expect(reconcileTabOrder(stored, ['t1', 't2'], ['e1', 'e2'])).toEqual(['t1', 'e1', 't2', 'e2'])
   })
+
+  it('keeps database query tabs in the unified order', () => {
+    expect(reconcileTabOrder(['db1', 't1'], ['t1'], [], [], [], ['db1'])).toEqual(['db1', 't1'])
+  })
 })

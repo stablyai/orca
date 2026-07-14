@@ -126,6 +126,8 @@ import { closeTerminalTab } from './terminal/terminal-tab-actions'
 import { translate } from '@/i18n/i18n'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
+import { openDatabaseTab } from './database/database-tab-actions'
+import { clearDatabaseTabPassword } from './database/database-tab-credentials'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
 
@@ -263,6 +265,8 @@ function Terminal(): React.JSX.Element | null {
   const createTab = useAppStore((s) => s.createTab)
   const closeTab = useAppStore((s) => s.closeTab)
   const setActiveTab = useAppStore((s) => s.setActiveTab)
+  const activateUnifiedTab = useAppStore((s) => s.activateTab)
+  const closeUnifiedTab = useAppStore((s) => s.closeUnifiedTab)
   const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
   const setTabCustomTitle = useAppStore((s) => s.setTabCustomTitle)
   const setTabColor = useAppStore((s) => s.setTabColor)
@@ -577,6 +581,22 @@ function Terminal(): React.JSX.Element | null {
       closeFile(fileId)
     },
     [activeWorktreeId, closeFile, queueEditorCloseRequests]
+  )
+
+  const handleCloseDatabaseTab = useCallback(
+    (tabId: string) => {
+      const tab = activeWorktreeId
+        ? (useAppStore.getState().unifiedTabsByWorktree[activeWorktreeId] ?? []).find(
+            (candidate) => candidate.id === tabId && candidate.contentType === 'database'
+          )
+        : null
+      if (!tab || tab.isPinned) {
+        return
+      }
+      clearDatabaseTabPassword(tab.id)
+      closeUnifiedTab(tab.id)
+    },
+    [activeWorktreeId, closeUnifiedTab]
   )
 
   const handleSaveDialogSave = useCallback(async () => {
@@ -1209,6 +1229,17 @@ function Terminal(): React.JSX.Element | null {
     await openTabBarEntry(args)
   }, [])
 
+  const handleNewDatabaseTab = useCallback(() => {
+    if (!activeWorktreeId) {
+      return
+    }
+    const state = useAppStore.getState()
+    const targetGroupId =
+      state.activeGroupIdByWorktree[activeWorktreeId] ??
+      state.groupsByWorktree[activeWorktreeId]?.[0]?.id
+    openDatabaseTab(activeWorktreeId, targetGroupId)
+  }, [activeWorktreeId])
+
   const handleDuplicateBrowserTab = useCallback(
     (browserTabId: string) => {
       if (!activeWorktreeId) {
@@ -1357,6 +1388,13 @@ function Terminal(): React.JSX.Element | null {
         if (unifiedTab?.isPinned) {
           continue
         }
+        if (unifiedTab?.contentType === 'database' || unifiedTab?.contentType === 'simulator') {
+          if (unifiedTab.contentType === 'database') {
+            clearDatabaseTabPassword(unifiedTab.id)
+          }
+          closeUnifiedTab(unifiedTab.id)
+          continue
+        }
         const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
         if (
           isWebRuntimeSessionActive(runtimeEnvironmentId) &&
@@ -1393,7 +1431,14 @@ function Terminal(): React.JSX.Element | null {
         queueEditorCloseRequests(dirtyFileIds)
       }
     },
-    [activeWorktreeId, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests]
+    [
+      activeWorktreeId,
+      closeBrowserTab,
+      closeFile,
+      closeTab,
+      closeUnifiedTab,
+      queueEditorCloseRequests
+    ]
   )
 
   const handleCloseTabsToRight = useCallback(
@@ -1416,6 +1461,13 @@ function Terminal(): React.JSX.Element | null {
         if (unifiedTab?.isPinned) {
           continue
         }
+        if (unifiedTab?.contentType === 'database' || unifiedTab?.contentType === 'simulator') {
+          if (unifiedTab.contentType === 'database') {
+            clearDatabaseTabPassword(unifiedTab.id)
+          }
+          closeUnifiedTab(unifiedTab.id)
+          continue
+        }
         const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
         if (
           isWebRuntimeSessionActive(runtimeEnvironmentId) &&
@@ -1452,7 +1504,14 @@ function Terminal(): React.JSX.Element | null {
         queueEditorCloseRequests(dirtyFileIds)
       }
     },
-    [activeWorktreeId, closeBrowserTab, closeFile, closeTab, queueEditorCloseRequests]
+    [
+      activeWorktreeId,
+      closeBrowserTab,
+      closeFile,
+      closeTab,
+      closeUnifiedTab,
+      queueEditorCloseRequests
+    ]
   )
 
   const handleCloseAllFiles = useCallback(() => {
@@ -1723,6 +1782,11 @@ function Terminal(): React.JSX.Element | null {
           handleCloseFile(state.activeFileId)
         } else if (state.activeTabType === 'browser' && state.activeBrowserTabId) {
           handleCloseBrowserTab(state.activeBrowserTabId)
+        } else if (state.activeTabType === 'database' && state.activeWorktreeId) {
+          const databaseTab = state.getActiveTab(state.activeWorktreeId)
+          if (databaseTab?.contentType === 'database') {
+            handleCloseDatabaseTab(databaseTab.id)
+          }
         }
         return
       }
@@ -1850,6 +1914,7 @@ function Terminal(): React.JSX.Element | null {
     handleCloseBrowserTab,
     closeBrowserTab,
     handleCloseFile,
+    handleCloseDatabaseTab,
     handleCloseAllFiles,
     keybindings,
     mobileEmulatorEnabled,
@@ -2000,6 +2065,7 @@ function Terminal(): React.JSX.Element | null {
             onNewTerminalTab={() => handleNewTab()}
             onNewTerminalWithShell={handleNewTab}
             onNewBrowserTab={handleNewBrowserTab}
+            onNewDatabaseTab={handleNewDatabaseTab}
             onNewSimulatorTab={mobileEmulatorEnabled ? handleNewSimulatorTab : undefined}
             onOpenEntry={handleOpenEntry}
             onNewFileTab={handleNewFile}
@@ -2011,6 +2077,11 @@ function Terminal(): React.JSX.Element | null {
             browserTabs={worktreeBrowserTabs}
             activeFileId={activeFileId}
             activeBrowserTabId={activeBrowserTabId}
+            activeDatabaseTabId={
+              activeTabType === 'database' && renderedActiveWorktreeId
+                ? (useAppStore.getState().getActiveTab(renderedActiveWorktreeId)?.id ?? null)
+                : null
+            }
             activeSimulatorTabId={
               activeTabType === 'simulator' && renderedActiveWorktreeId
                 ? (useAppStore.getState().getActiveTab(renderedActiveWorktreeId)?.id ?? null)
@@ -2026,11 +2097,35 @@ function Terminal(): React.JSX.Element | null {
                 setActiveTabType('simulator')
                 return
               }
+              if (unifiedTab?.contentType === 'database') {
+                activateUnifiedTab(fileId)
+                setActiveTabType('database')
+                return
+              }
               setActiveFile(fileId)
               setActiveTabType('editor')
             }}
-            onCloseFile={handleCloseFile}
+            onCloseFile={(visibleId) => {
+              const unifiedTab = renderedActiveWorktreeId
+                ? (
+                    useAppStore.getState().unifiedTabsByWorktree[renderedActiveWorktreeId] ?? []
+                  ).find((tab) => tab.id === visibleId)
+                : null
+              if (unifiedTab?.contentType === 'database') {
+                handleCloseDatabaseTab(unifiedTab.id)
+                return
+              }
+              if (unifiedTab?.contentType === 'simulator') {
+                closeUnifiedTab(unifiedTab.id)
+                return
+              }
+              handleCloseFile(visibleId)
+            }}
             onActivateBrowserTab={handleActivateBrowserTab}
+            onActivateDatabaseTab={(tabId) => {
+              activateUnifiedTab(tabId)
+              setActiveTabType('database')
+            }}
             onCloseBrowserTab={handleCloseBrowserTab}
             onDuplicateBrowserTab={handleDuplicateBrowserTab}
             onCloseAllFiles={handleCloseAllFiles}

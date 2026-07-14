@@ -43,6 +43,7 @@ export const BROWSER_HEADLESS_RUNTIME_CAPABILITY = 'browser.headless.v1' as cons
 // floor-taking input. Mobile must not forward replies unless advertised.
 export const TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY =
   'terminal.query-reply-input.v1' as const
+export const DATABASE_QUERY_RUNTIME_CAPABILITY = 'database.query.v1' as const
 
 export const RUNTIME_CAPABILITIES = [
   'runtime.status.compat.v1',
@@ -59,6 +60,7 @@ export const RUNTIME_CAPABILITIES = [
   FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
   LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY,
   AI_VAULT_RUNTIME_CAPABILITY,
+  DATABASE_QUERY_RUNTIME_CAPABILITY,
   TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY
 ] as const
 

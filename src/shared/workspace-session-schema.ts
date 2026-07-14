@@ -98,10 +98,17 @@ const tabContentTypeSchema = z.enum([
   'conflict-review',
   'check-details',
   'browser',
-  'simulator'
+  'simulator',
+  'database'
 ])
 
-const workspaceVisibleTabTypeSchema = z.enum(['terminal', 'editor', 'browser', 'simulator'])
+const workspaceVisibleTabTypeSchema = z.enum([
+  'terminal',
+  'editor',
+  'browser',
+  'simulator',
+  'database'
+])
 
 const tabSchema = z.object({
   id: z.string(),
@@ -118,6 +125,20 @@ const tabSchema = z.object({
   createdAt: z.number(),
   isPreview: z.boolean().optional(),
   isPinned: z.boolean().optional(),
+  database: z
+    .object({
+      connection: z.object({
+        providerId: z.literal('postgres'),
+        host: z.string(),
+        port: z.number().int().min(1).max(65_535),
+        database: z.string(),
+        user: z.string(),
+        sslMode: z.enum(['disable', 'require', 'verify-full'])
+      }),
+      queryDraft: z.string(),
+      readOnly: z.boolean()
+    })
+    .optional(),
   // Why: persist the per-tab native-chat view mode so 'chat' survives reload /
   // session restore. `.catch('terminal')` tolerates unknown future values (a
   // newer build that wrote an unrecognized mode) by degrading to the safe
