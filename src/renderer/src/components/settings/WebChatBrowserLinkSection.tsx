@@ -31,15 +31,25 @@ const SOURCE_ORDER: ChatImportSource[] = ['CHATGPT', 'CLAUDE', 'GEMINI']
 export function WebChatBrowserLinkSection(): React.JSX.Element | null {
   const [status, setStatus] = useState<ChatImportSetupStatus | null>(null)
   const [installing, setInstalling] = useState<ChatImportBrowserId | null>(null)
+  const [loadFailed, setLoadFailed] = useState(false)
 
   useEffect(() => {
     // Guard against a setState after unmount if the status load resolves late.
     let active = true
-    void window.api.chatImportSetup.getStatus().then((next) => {
-      if (active) {
-        setStatus(next)
-      }
-    })
+    window.api.chatImportSetup
+      .getStatus()
+      .then((next) => {
+        if (active) {
+          setStatus(next)
+        }
+      })
+      .catch(() => {
+        // Why: an IPC rejection must not leave the pane on its loading
+        // spinner forever — fall back to an error state instead.
+        if (active) {
+          setLoadFailed(true)
+        }
+      })
     return () => {
       active = false
     }
@@ -154,6 +164,13 @@ export function WebChatBrowserLinkSection(): React.JSX.Element | null {
 
           <LoadGuide extensionDir={status.extensionDir} onCopy={copyExtensionDir} />
         </>
+      ) : loadFailed ? (
+        <p className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.settings.WebChatBrowserLinkSection.loadError',
+            "Couldn't check browsers. Try reopening settings."
+          )}
+        </p>
       ) : (
         <p className="text-xs text-muted-foreground">
           {translate(

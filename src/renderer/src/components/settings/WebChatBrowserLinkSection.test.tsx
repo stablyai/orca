@@ -152,6 +152,19 @@ describe('WebChatBrowserLinkSection', () => {
     expect(rendered.textContent).toContain('Never')
   })
 
+  it('shows an error state instead of a permanent spinner when getStatus rejects', async () => {
+    mocks.getStatus.mockReset()
+    mocks.getStatus.mockRejectedValue(new Error('db error'))
+
+    const rendered = await renderSection()
+    // The rejection needs an extra microtask hop through .then().catch();
+    // one more flush than the happy-path render covers it.
+    await flush()
+
+    expect(rendered.textContent).not.toContain('Checking browsers')
+    expect(rendered.textContent).toContain("Couldn't check browsers")
+  })
+
   it('copies the extension folder path from the load guide', async () => {
     const rendered = await renderSection()
 

@@ -115,21 +115,37 @@ function runWindowsRegistryAdd(registryKey: string, manifestPath: string): void 
 function resolveExtensionDir(): string {
   // Why: packaged extensions ship under resources/, dev serves them straight
   // from the repo — mirrors the resourcesPath split in agent-browser-bridge.ts.
+  // The packaged path depends on the chatImportExtensionResource entry in
+  // config/electron-builder.config.cjs actually copying the folder there.
   return app.isPackaged
     ? join(process.resourcesPath, 'extensions', 'chat-import')
     : join(app.getAppPath(), 'extensions', 'chat-import')
 }
 
-function readLastSynced(): ChatImportLastSyncedBySource {
-  const dbPath = chatImportDbPath()
+const EMPTY_LAST_SYNCED: ChatImportLastSyncedBySource = {
+  CHATGPT: null,
+  CLAUDE: null,
+  GEMINI: null
+}
+
+// Exported (not just internal) so a corrupt/locked db path can be exercised
+// directly in tests without going through the full getStatus() IPC handler.
+export function readLastSynced(dbPath: string = chatImportDbPath()): ChatImportLastSyncedBySource {
   if (!existsSync(dbPath)) {
-    return { CHATGPT: null, CLAUDE: null, GEMINI: null }
+    return EMPTY_LAST_SYNCED
   }
-  const db = new SyncDatabase(dbPath, { readonly: true, fileMustExist: true })
+  let db: SyncDatabase | null = null
   try {
+    db = new SyncDatabase(dbPath, { readonly: true, fileMustExist: true })
     return lastSyncedBySource(db)
+  } catch {
+    // Why: node:sqlite throws on SQLITE_BUSY/corruption (e.g. the native host
+    // is mid-write during a sync). Degrading to "no sync data yet" keeps
+    // getStatus() resolving instead of rejecting and freezing the settings
+    // pane on its loading state forever.
+    return EMPTY_LAST_SYNCED
   } finally {
-    db.close()
+    db?.close()
   }
 }
 

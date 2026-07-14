@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
   app: { isPackaged: false, getAppPath: () => '/app', getPath: () => '/userdata' },
@@ -6,7 +9,7 @@ vi.mock('electron', () => ({
 }))
 
 import { CHAT_IMPORT_EXTENSION_ID } from '../chat-import/chat-import-extension'
-import { buildSetupStatus, resolveInstall } from './chat-import-setup'
+import { buildSetupStatus, readLastSynced, resolveInstall } from './chat-import-setup'
 
 const baseDeps = {
   platform: 'darwin' as NodeJS.Platform,
@@ -119,5 +122,42 @@ describe('resolveInstall', () => {
       install: installSpy
     })
     expect(installSpy).toHaveBeenCalledWith(expect.objectContaining({ browser: 'edge' }))
+  })
+})
+
+describe('readLastSynced', () => {
+  const tempDirs: string[] = []
+
+  afterEach(() => {
+    while (tempDirs.length > 0) {
+      const dir = tempDirs.pop()
+      if (dir) {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  })
+
+  it('returns all-null instead of throwing when the db path is missing', () => {
+    expect(readLastSynced('/nonexistent/chat-import/chats.db')).toEqual({
+      CHATGPT: null,
+      CLAUDE: null,
+      GEMINI: null
+    })
+  })
+
+  it('returns all-null instead of throwing when the db file is corrupt', () => {
+    // Why: node:sqlite opens a bogus file without error but throws
+    // "file is not a database" on the first query — this reproduces the
+    // SQLITE_BUSY/corruption case from a native host mid-write.
+    const dir = mkdtempSync(join(tmpdir(), 'chat-import-setup-test-'))
+    tempDirs.push(dir)
+    const dbPath = join(dir, 'corrupt.db')
+    writeFileSync(dbPath, 'not a sqlite file')
+
+    expect(readLastSynced(dbPath)).toEqual({
+      CHATGPT: null,
+      CLAUDE: null,
+      GEMINI: null
+    })
   })
 })

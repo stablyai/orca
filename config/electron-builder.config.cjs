@@ -25,13 +25,26 @@ const relayExtraResource = {
   from: 'out/relay',
   to: 'relay'
 }
+// Why: resolveExtensionDir() (src/main/ipc/chat-import-setup.ts) points the
+// settings pane's "Load unpacked" guide at process.resourcesPath/extensions/
+// chat-import when app.isPackaged — without this entry that folder never
+// ships and the extension can't be loaded from a production build.
+const chatImportExtensionResource = {
+  from: 'extensions/chat-import',
+  to: 'extensions/chat-import',
+  filter: ['**/*', '!**/*.test.js', '!tests/**', '!generate-*.mjs']
+}
 // Why: the main bundle, packaged CLI, SSH paths, and speech worker all execute
 // from package directories where pnpm's symlink farm is absent. Copy the exact
 // runtime dependency closure to Resources/node_modules so bare require() calls
 // do not fall through to a developer checkout's node_modules.
 const packagedRuntimeNodeModuleResources = createPackagedRuntimeNodeModuleResources()
 
-const commonExtraResources = [relayExtraResource, ...packagedRuntimeNodeModuleResources]
+const commonExtraResources = [
+  relayExtraResource,
+  chatImportExtensionResource,
+  ...packagedRuntimeNodeModuleResources
+]
 const macSpeechNativeResource = {
   from: 'node_modules/sherpa-onnx-darwin-${arch}',
   to: 'node_modules/sherpa-onnx-darwin-${arch}'
@@ -134,6 +147,7 @@ module.exports = {
     }
     prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName, context.arch)
     verifyPackagedMainRuntimeDeps(resourcesDir)
+    assertChatImportExtensionCopied(resourcesDir)
     // Why: boot the packaged daemon-entry under plain Node, but only for the
     // slice matching the packaging host's arch — daemon-entry.js is JS, yet it
     // require()s the native (N-API) node-pty for the TARGET arch, which the host
@@ -380,6 +394,13 @@ module.exports = {
     owner: 'stablyai',
     repo: 'orca',
     releaseType: 'release'
+  }
+}
+
+function assertChatImportExtensionCopied(resourcesDir) {
+  const manifestPath = join(resourcesDir, 'extensions', 'chat-import', 'manifest.json')
+  if (!existsSync(manifestPath)) {
+    throw new Error(`Missing chat-import extension resources at ${manifestPath}`)
   }
 }
 
