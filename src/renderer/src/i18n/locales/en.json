@@ -12963,7 +12963,7 @@
           "cancel": "Cancel",
           "clear": "Clear all",
           "copiedToast": "Markup copied — paste it into your agent ({{value0}})",
-          "copy": "Copy markup",
+          "copy": "Copy Markup",
           "drawButton": "Draw on screenshot",
           "drawHint": "New — draw on the page, then copy it to your agent",
           "errorAttach": "Could not attach the markup screenshot.",

@@ -150,7 +150,7 @@ export function MarkupOverlay({
           </Button>
           <Button type="button" size="sm" onClick={handleDone} disabled={busy || !baseLoaded}>
             <Check className="size-4" />
-            {translate('auto.components.browser-pane.markup.copy', 'Copy markup')}
+            {translate('auto.components.browser-pane.markup.copy', 'Copy Markup')}
           </Button>
         </div>
       </div>
