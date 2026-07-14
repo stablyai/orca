@@ -1,11 +1,12 @@
 import { existsSync } from 'node:fs'
-import type { NativeChatMessage } from '../../shared/native-chat-types'
+import type { NativeChatBlock, NativeChatMessage } from '../../shared/native-chat-types'
 import type { ReadTranscriptResult } from './transcript-reader'
 import SyncDatabase from '../sqlite/sync-database'
 import { tableExists } from '../opencode-usage/schema-helpers'
 import { chatImportDbPath } from '../chat-import/chat-import-paths'
 import { errorMessage } from '../ai-vault/session-scanner-values'
 import { WEB_CHAT_AGENTS, type WebChatAgent } from '../../shared/ai-vault-types'
+import { listMessageAttachments } from '../chat-import/chat-import-store'
 
 // Why: agent 파라미터는 AgentType(열린 문자열 유니온)이라, 웹 3종만 이 리더로
 // 라우팅하기 위한 문자열 기반 가드. isWebChatAgent(AiVaultAgent)와 달리 임의 문자열을 받는다.
@@ -44,6 +45,7 @@ export function readWebChatConversation(
     if (!tableExists(db, 'messages')) {
       return { messages: [] }
     }
+    const hasAttachments = tableExists(db, 'attachments')
     const rows = db
       .prepare(
         'SELECT role, idx, text, created_at FROM messages WHERE conv_id = ? ORDER BY idx ASC'
@@ -52,13 +54,26 @@ export function readWebChatConversation(
     const messages: NativeChatMessage[] = []
     for (const row of rows) {
       const text = row.text
-      if (!text) {
+      const atts = hasAttachments ? listMessageAttachments(db, convId, row.idx) : []
+      // Why: keep attachment-only messages (no text) so restored images/files still render.
+      if (!text && atts.length === 0) {
         continue
       }
+      const blocks: NativeChatBlock[] = [
+        ...(text ? [{ type: 'text' as const, text }] : []),
+        ...atts.map((a) => ({
+          type: 'attachment' as const,
+          kind: a.kind,
+          hash: a.hash,
+          fileName: a.fileName,
+          mime: a.mimeType,
+          size: a.size
+        }))
+      ]
       messages.push({
         id: `${convId}#${row.idx}`,
         role: row.role === 'USER' ? 'user' : 'assistant',
-        blocks: [{ type: 'text', text }],
+        blocks,
         timestamp: row.created_at ? Date.parse(row.created_at) || null : null,
         source: 'transcript'
       })

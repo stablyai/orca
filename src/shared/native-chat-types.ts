@@ -58,11 +58,23 @@ export type NativeChatImageRefBlock = {
   alt?: string
 }
 
+/** A file/image attachment restored from a web-chat import (chats.db `attachments`
+ *  table), referenced by content hash into the blob store. */
+export type NativeChatAttachmentBlock = {
+  type: 'attachment'
+  kind: 'image' | 'file'
+  hash: string
+  fileName: string
+  mime: string
+  size: number
+}
+
 export type NativeChatBlock =
   | NativeChatTextBlock
   | NativeChatToolCallBlock
   | NativeChatToolResultBlock
   | NativeChatImageRefBlock
+  | NativeChatAttachmentBlock
 
 export type NativeChatMessage = {
   /** Stable across re-reads/appends so the assembler and the renderer list can
@@ -117,4 +129,8 @@ export function isToolResultBlock(block: NativeChatBlock): block is NativeChatTo
 
 export function isImageRefBlock(block: NativeChatBlock): block is NativeChatImageRefBlock {
   return block.type === 'image-ref'
+}
+
+export function isAttachmentBlock(block: NativeChatBlock): block is NativeChatAttachmentBlock {
+  return block.type === 'attachment'
 }
