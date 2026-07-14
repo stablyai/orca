@@ -9,6 +9,7 @@ import {
   subscribeNativeChatTranscript,
   type NativeChatTranscriptSubscription
 } from '../native-chat/transcript-watch'
+import { writeWebChatAsClaudeSession } from '../native-chat/web-chat-to-claude-session'
 
 // Re-export so existing test imports of `clearNativeChatTranscriptCache` from
 // this module keep working after the cache moved to transcript-read-cache.ts.
@@ -46,6 +47,12 @@ async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscr
   // Desktop is full-class: window by count only, no char truncation.
   const result = await readNativeChatTranscriptCached(agent, sessionId, args.transcriptPath)
   return windowTranscript(result, limit)
+}
+
+export type NativeChatWriteWebChatClaudeSessionArgs = {
+  messages: NativeChatMessage[]
+  cwd: string
+  gitBranch: string | null
 }
 
 export type NativeChatSubscribeArgs = {
@@ -209,6 +216,10 @@ export function _getNativeChatPendingSubscriptionCountForTest(): number {
 export function registerNativeChatHandlers(): void {
   ipcMain.handle('nativeChat:readSession', (_event, args: NativeChatReadSessionArgs) =>
     readSession(args)
+  )
+  ipcMain.handle(
+    'nativeChat:writeWebChatClaudeSession',
+    (_event, args: NativeChatWriteWebChatClaudeSessionArgs) => writeWebChatAsClaudeSession(args)
   )
   ipcMain.on('nativeChat:subscribe', (event, args: NativeChatSubscribeArgs) => {
     void handleSubscribe(event, args)

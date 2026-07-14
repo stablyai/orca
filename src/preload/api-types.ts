@@ -814,6 +814,14 @@ export type AiVaultApi = {
 
 export type NativeChatReadSessionResult = { messages: NativeChatMessage[] } | { error: string }
 
+export type NativeChatWriteWebChatClaudeSessionArgs = {
+  messages: NativeChatMessage[]
+  cwd: string
+  gitBranch: string | null
+}
+
+export type NativeChatWriteWebChatClaudeSessionResult = { sessionId: string } | { error: string }
+
 /** Messages appended to a live-tailed transcript since the previous emit. */
 export type NativeChatAppendedMessages = NativeChatMessage[]
 
@@ -850,6 +858,11 @@ export type NativeChatApi = {
     args: NativeChatSubscribeArgs,
     onAppended: (messages: NativeChatAppendedMessages) => void
   ) => () => void
+  /** Writes an imported web chat as a real Claude Code session JSONL so
+   *  `claude --resume <sessionId>` can load it natively. */
+  writeWebChatClaudeSession: (
+    args: NativeChatWriteWebChatClaudeSessionArgs
+  ) => Promise<NativeChatWriteWebChatClaudeSessionResult>
 }
 
 export type AppApi = {
@@ -2073,10 +2086,7 @@ export type PreloadApi = {
      *  IPC — call sparingly. */
     getSync: () => GlobalSettings | null
     set: (args: Partial<GlobalSettings>) => Promise<GlobalSettings>
-    updatePRBotAuthorOverride: (args: {
-      author: string
-      isBot: boolean
-    }) => Promise<GlobalSettings>
+    updatePRBotAuthorOverride: (args: { author: string; isBot: boolean }) => Promise<GlobalSettings>
     listFonts: () => Promise<string[]>
     previewGhosttyImport: () => Promise<GhosttyImportPreview>
     previewWarpThemeImport: (source: WarpThemeImportSource) => Promise<WarpThemeImportPreview>

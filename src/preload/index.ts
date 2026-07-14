@@ -175,7 +175,9 @@ import type { AgentType } from '../shared/native-chat-types'
 import type {
   NativeChatAppendedMessages,
   NativeChatAppendedPayload,
-  NativeChatReadSessionResult
+  NativeChatReadSessionResult,
+  NativeChatWriteWebChatClaudeSessionArgs,
+  NativeChatWriteWebChatClaudeSessionResult
 } from './api-types'
 import {
   ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
@@ -3880,7 +3882,11 @@ const api = {
         ipcRenderer.removeListener('nativeChat:appended', listener)
         ipcRenderer.send('nativeChat:unsubscribe', { subscriptionId: args.subscriptionId })
       }
-    }
+    },
+    writeWebChatClaudeSession: (
+      args: NativeChatWriteWebChatClaudeSessionArgs
+    ): Promise<NativeChatWriteWebChatClaudeSessionResult> =>
+      ipcRenderer.invoke('nativeChat:writeWebChatClaudeSession', args)
   },
 
   runtime: {
