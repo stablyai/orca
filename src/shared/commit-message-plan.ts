@@ -68,6 +68,44 @@ function planAdditionalAgentArgs(
   return { ok: true, args: tokenized.tokens }
 }
 
+const CODEX_MODEL_OPTION_ALIASES = ['--model', '-m'] as const
+
+function matchesOption(token: string, aliases: readonly string[]): boolean {
+  return aliases.some((alias) => token === alias || token.startsWith(`${alias}=`))
+}
+
+function omitGeneratedOptionWhenRecipeOverrides(args: {
+  generatedArgs: string[]
+  recipeArgs: string[]
+  aliases: readonly string[]
+}): string[] {
+  let recipeSuppliesOption = false
+  for (const token of args.recipeArgs) {
+    if (token === '--') {
+      break
+    }
+    if (matchesOption(token, args.aliases)) {
+      recipeSuppliesOption = true
+      break
+    }
+  }
+  if (!recipeSuppliesOption) {
+    return args.generatedArgs
+  }
+
+  const optionIndex = args.generatedArgs.findIndex((token) => matchesOption(token, args.aliases))
+  if (optionIndex === -1) {
+    return args.generatedArgs
+  }
+
+  const optionUsesEquals = args.generatedArgs[optionIndex]?.includes('=') ?? false
+  const deleteCount = optionUsesEquals ? 1 : 2
+  return [
+    ...args.generatedArgs.slice(0, optionIndex),
+    ...args.generatedArgs.slice(optionIndex + deleteCount)
+  ]
+}
+
 function insertAdditionalAgentArgs(args: {
   baseArgs: string[]
   agentArgs: string[]
@@ -164,8 +202,18 @@ export function planCommitMessageGeneration(
   if (!agentArgs.ok) {
     return agentArgs
   }
+  // Why: Codex rejects repeated singleton model flags. Recipe CLI arguments
+  // are the more specific setting, so they replace Orca's generated model.
+  const generatedArgs =
+    input.agentId === 'codex'
+      ? omitGeneratedOptionWhenRecipeOverrides({
+          generatedArgs: baseArgs,
+          recipeArgs: agentArgs.args,
+          aliases: CODEX_MODEL_OPTION_ALIASES
+        })
+      : baseArgs
   const args = insertAdditionalAgentArgs({
-    baseArgs,
+    baseArgs: generatedArgs,
     agentArgs: agentArgs.args,
     promptDelivery: spec.promptDelivery,
     prompt: argvPrompt
