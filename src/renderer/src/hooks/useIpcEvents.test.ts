@@ -1758,6 +1758,7 @@ describe('useIpcEvents updater integration', () => {
             afterTabId?: string
             targetGroupId?: string
             command?: string
+            shellOverride?: 'powershell.exe' | 'pwsh.exe' | 'cmd.exe' | 'wsl.exe' | 'git-bash'
             cwd?: string
             launchConfig?: SleepingAgentLaunchConfig
             launchAgent?: TuiAgent
@@ -1906,6 +1907,7 @@ describe('useIpcEvents updater integration', () => {
               afterTabId?: string
               targetGroupId?: string
               command?: string
+              shellOverride?: 'powershell.exe' | 'pwsh.exe' | 'cmd.exe' | 'wsl.exe' | 'git-bash'
               cwd?: string
               launchConfig?: SleepingAgentLaunchConfig
               launchAgent?: TuiAgent
@@ -2116,14 +2118,15 @@ describe('useIpcEvents updater integration', () => {
     requestTerminalCreateListenerRef.current({
       requestId: 'req-focused',
       worktreeId: 'wt-3',
-      title: 'Shell'
+      title: 'Shell',
+      shellOverride: 'pwsh.exe'
     })
 
     expect(setActiveView).not.toHaveBeenCalled()
     expect(setActiveWorktree).not.toHaveBeenCalled()
     expect(markWorktreeVisited).not.toHaveBeenCalled()
     expect(recordWorktreeVisit).not.toHaveBeenCalled()
-    expect(createTab).toHaveBeenCalledWith('wt-3', undefined, undefined, {
+    expect(createTab).toHaveBeenCalledWith('wt-3', undefined, 'pwsh.exe', {
       activate: false,
       recordInteraction: false
     })

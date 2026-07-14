@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DEFAULT_BOUNDED_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import * as gitBash from '../main/git-bash'
+import * as pwsh from '../main/pwsh'
+import * as windowsPowerShellExecutable from '../main/providers/windows-powershell-executable'
 import * as ptyShellUtils from './pty-shell-utils'
 import {
   resolveSetupAgentSequenceLaunchCommand,
@@ -239,6 +241,79 @@ describe('PtyHandler', () => {
         configurable: true,
         value: originalPlatform
       })
+    }
+  })
+
+  it('resolves pwsh to the remote PowerShell 7+ executable before spawning', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const resolvePwshSpy = vi
+      .spyOn(pwsh, 'resolveAvailablePwshPath')
+      .mockReturnValue('C:\\Program Files\\PowerShell\\7\\pwsh.exe')
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'pwsh.exe'
+      })
+
+      expect(mockPtySpawn).toHaveBeenCalledWith(
+        'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
+        expect.any(Array),
+        expect.any(Object)
+      )
+    } finally {
+      resolvePwshSpy.mockRestore()
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
+  it('does not spawn a bare pwsh alias when PowerShell 7+ is unavailable', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const resolvePwshSpy = vi.spyOn(pwsh, 'resolveAvailablePwshPath').mockReturnValue(null)
+    const resolveCandidateSpy = vi
+      .spyOn(windowsPowerShellExecutable, 'resolveWindowsPowerShellExecutablePath')
+      .mockReturnValue(null)
+    try {
+      await expect(
+        dispatcher.callRequest('pty.spawn', {
+          cols: 80,
+          rows: 24,
+          shellOverride: 'pwsh.exe'
+        })
+      ).rejects.toThrow('PowerShell 7+ is not available')
+      expect(mockPtySpawn).not.toHaveBeenCalled()
+    } finally {
+      resolvePwshSpy.mockRestore()
+      resolveCandidateSpy.mockRestore()
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
+  it('attempts a safe absolute pwsh path after a transient version-probe timeout', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const resolvePwshSpy = vi.spyOn(pwsh, 'resolveAvailablePwshPath').mockReturnValue(null)
+    const resolveCandidateSpy = vi
+      .spyOn(windowsPowerShellExecutable, 'resolveWindowsPowerShellExecutablePath')
+      .mockReturnValue('C:\\Program Files\\PowerShell\\7\\pwsh.exe')
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        shellOverride: 'pwsh.exe'
+      })
+
+      expect(mockPtySpawn).toHaveBeenCalledWith(
+        'C:\\Program Files\\PowerShell\\7\\pwsh.exe',
+        expect.any(Array),
+        expect.any(Object)
+      )
+    } finally {
+      resolvePwshSpy.mockRestore()
+      resolveCandidateSpy.mockRestore()
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
   })
 

@@ -1,14 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileMock, execFileSyncMock } = vi.hoisted(() => ({
+const { execFileMock, execFileSyncMock, resolvePwshPathsMock } = vi.hoisted(() => ({
   execFileMock: vi.fn(),
-  execFileSyncMock: vi.fn()
+  execFileSyncMock: vi.fn(),
+  resolvePwshPathsMock: vi.fn()
 }))
 
 vi.mock('child_process', () => ({
   execFile: execFileMock,
   execFileSync: execFileSyncMock
 }))
+
+vi.mock('./providers/windows-powershell-executable', () => ({
+  cacheWindowsPwshSupport: vi.fn(),
+  resolveWindowsPwshExecutablePaths: resolvePwshPathsMock
+}))
+
+const PWSH7 = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 
 function setPlatform(platform: NodeJS.Platform): () => void {
   const originalPlatform = process.platform
@@ -31,6 +39,8 @@ describe('isPwshAvailable', () => {
     vi.useRealTimers()
     execFileMock.mockReset()
     execFileSyncMock.mockReset()
+    resolvePwshPathsMock.mockReset()
+    resolvePwshPathsMock.mockReturnValue([PWSH7])
   })
 
   it('returns false on non-Windows platforms', async () => {
@@ -52,7 +62,7 @@ describe('isPwshAvailable', () => {
     try {
       const { isPwshAvailable } = await import('./pwsh')
       expect(isPwshAvailable()).toBe(true)
-      expect(execFileSyncMock).toHaveBeenCalledWith('pwsh.exe', ['-Version'], {
+      expect(execFileSyncMock).toHaveBeenCalledWith(PWSH7, ['-Version'], {
         stdio: ['pipe', 'pipe', 'pipe'],
         timeout: 5000
       })
@@ -70,6 +80,31 @@ describe('isPwshAvailable', () => {
     try {
       const { isPwshAvailable } = await import('./pwsh')
       expect(isPwshAvailable()).toBe(false)
+    } finally {
+      restorePlatform()
+    }
+  })
+
+  it('returns false when only PowerShell 6 is installed', async () => {
+    const restorePlatform = setPlatform('win32')
+    execFileSyncMock.mockReturnValue('PowerShell 6.2.7')
+
+    try {
+      const { isPwshAvailable } = await import('./pwsh')
+      expect(isPwshAvailable()).toBe(false)
+    } finally {
+      restorePlatform()
+    }
+  })
+
+  it('returns false when pwsh is only an App Execution Alias', async () => {
+    const restorePlatform = setPlatform('win32')
+    resolvePwshPathsMock.mockReturnValue([])
+
+    try {
+      const { isPwshAvailable } = await import('./pwsh')
+      expect(isPwshAvailable()).toBe(false)
+      expect(execFileSyncMock).not.toHaveBeenCalled()
     } finally {
       restorePlatform()
     }
@@ -120,12 +155,35 @@ describe('isPwshAvailable', () => {
       const { isPwshAvailable, warmPwshAvailabilityCache } = await import('./pwsh')
       await expect(warmPwshAvailabilityCache()).resolves.toBe(true)
       expect(execFileMock).toHaveBeenCalledWith(
-        'pwsh.exe',
+        PWSH7,
         ['-Version'],
         { timeout: 30_000 },
         expect.any(Function)
       )
       expect(isPwshAvailable()).toBe(true)
+      expect(execFileSyncMock).not.toHaveBeenCalled()
+    } finally {
+      restorePlatform()
+    }
+  })
+
+  it('asynchronously skips legacy PowerShell and caches the next PowerShell 7+ path', async () => {
+    const restorePlatform = setPlatform('win32')
+    const pwsh6 = 'D:\\Tools\\PowerShell\\6\\pwsh.exe'
+    resolvePwshPathsMock.mockReturnValue([pwsh6, PWSH7])
+    execFileMock
+      .mockImplementationOnce((_file, _args, _options, callback) => {
+        callback(null, 'PowerShell 6.2.7', '')
+      })
+      .mockImplementationOnce((_file, _args, _options, callback) => {
+        callback(null, 'PowerShell 7.5.0', '')
+      })
+
+    try {
+      const { resolveAvailablePwshPath, warmPwshAvailabilityCache } = await import('./pwsh')
+      await expect(warmPwshAvailabilityCache()).resolves.toBe(true)
+      expect(resolveAvailablePwshPath()).toBe(PWSH7)
+      expect(execFileMock).toHaveBeenCalledTimes(2)
       expect(execFileSyncMock).not.toHaveBeenCalled()
     } finally {
       restorePlatform()

@@ -121,7 +121,7 @@ type TabBarProps = {
   onCloseToRight: (tabId: string) => void
   onNewTerminalTab: () => void
   /** On Windows, opens a new terminal with a specific shell instead of the default. */
-  onNewTerminalWithShell?: (shell: string) => void
+  onNewTerminalWithShell?: (shell: BuiltInWindowsTerminalShell) => void
   onNewBrowserTab: () => void
   onNewSimulatorTab?: () => void
   onOpenEntry?: (args: TabCreateEntryArgs) => Promise<void>
@@ -301,9 +301,6 @@ function TabBarInner({
   const activeGroupIdForWorktree = useAppStore((s) => s.activeGroupIdByWorktree[worktreeId])
   const defaultWindowsShell = useAppStore(
     (s) => s.settings?.terminalWindowsShell ?? 'powershell.exe'
-  )
-  const defaultWindowsPowerShellImplementation = useAppStore(
-    (s) => s.settings?.terminalWindowsPowerShellImplementation ?? 'auto'
   )
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -553,6 +550,12 @@ function TabBarInner({
           shell: 'cmd.exe'
         }
       )
+      if (windowsTerminalCapabilities.pwshAvailable) {
+        allShells.splice(1, 0, {
+          label: translate('auto.components.tab.bar.TabBar.23fc4463de', 'PowerShell 7+'),
+          shell: 'pwsh.exe'
+        })
+      }
       if (windowsTerminalCapabilities.gitBashAvailable) {
         allShells.push({
           label: translate('auto.components.tab.bar.TabBar.efb33546ff', 'Git Bash'),
@@ -582,6 +585,7 @@ function TabBarInner({
     projectRuntimeShellMenuMode,
     showWindowsShellMenu,
     windowsTerminalCapabilities.gitBashAvailable,
+    windowsTerminalCapabilities.pwshAvailable,
     windowsTerminalCapabilities.wslAvailable
   ])
   const createMenuOptions = useMemo(
@@ -616,13 +620,7 @@ function TabBarInner({
           break
         }
         queueNewActiveTerminalFocusAfterNewTabMenuClose()
-        onNewTerminalWithShell(
-          resolveWindowsShellLaunchTarget(
-            option.shell,
-            defaultWindowsPowerShellImplementation,
-            windowsTerminalCapabilities.pwshAvailable
-          )
-        )
+        onNewTerminalWithShell(resolveWindowsShellLaunchTarget(option.shell))
         break
       case 'new-browser':
         onNewBrowserTab()
@@ -701,19 +699,8 @@ function TabBarInner({
           <DropdownMenuItem
             key={entry.shell}
             onSelect={() => {
-              // Why: the top-level Windows shell menu models shell
-              // categories, not concrete executables. When the user
-              // picked PowerShell 7+ in advanced settings, launching the
-              // "PowerShell" menu item must preserve that implementation
-              // instead of forcing inbox powershell.exe.
               queueNewActiveTerminalFocusAfterNewTabMenuClose()
-              onNewTerminalWithShell(
-                resolveWindowsShellLaunchTarget(
-                  entry.shell,
-                  defaultWindowsPowerShellImplementation,
-                  windowsTerminalCapabilities.pwshAvailable
-                )
-              )
+              onNewTerminalWithShell(resolveWindowsShellLaunchTarget(entry.shell))
             }}
             className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
           >

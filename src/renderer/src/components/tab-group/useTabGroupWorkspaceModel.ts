@@ -30,6 +30,7 @@ import { ensureSimulatorTab, getSimulatorTabForWorktree } from '@/lib/ensure-sim
 import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
+import type { BuiltInWindowsTerminalShell } from '../../../../shared/windows-terminal-shell'
 
 export function recordTerminalTabGroupSplit(createdTerminal: TerminalTab | null | undefined): void {
   if (!createdTerminal) {
@@ -656,14 +657,14 @@ export function useTabGroupWorkspaceModel({
       newTerminalTab: () => {
         void openNewTerminalTabInActiveWorkspace(groupId)
       },
-      newTerminalWithShell: (shellOverride: string) => {
+      newTerminalWithShell: (shellOverride: BuiltInWindowsTerminalShell) => {
         void (async () => {
           if (
             await createWebRuntimeSessionTerminal({
               worktreeId,
               environmentId: getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId),
               targetGroupId: groupId,
-              command: shellOverride,
+              shellOverride,
               activate: true
             })
           ) {

@@ -72,7 +72,7 @@ const useAppStoreMock = vi.fn(
       pinTab: typeof pinTabMock
       unpinTab: typeof unpinTabMock
       settings: {
-        terminalWindowsShell: 'powershell.exe' | 'cmd.exe' | 'wsl.exe' | 'git-bash'
+        terminalWindowsShell: 'powershell.exe' | 'pwsh.exe' | 'cmd.exe' | 'wsl.exe' | 'git-bash'
         terminalWindowsPowerShellImplementation: 'auto' | 'powershell.exe' | 'pwsh.exe'
         activeRuntimeEnvironmentId: string | null
         localWindowsRuntimeDefault: { kind: 'windows-host' } | { kind: 'wsl'; distro: string }
@@ -361,7 +361,7 @@ describe('TabBar PowerShell launch wiring', () => {
     vi.unstubAllGlobals()
   })
 
-  it('passes pwsh.exe when the PowerShell menu item uses the PowerShell 7+ implementation', async () => {
+  it('offers PowerShell 7+ as an explicit terminal profile when pwsh is available', async () => {
     vi.stubGlobal('window', {
       api: {
         wsl: {
@@ -404,7 +404,7 @@ describe('TabBar PowerShell launch wiring', () => {
       onTogglePaneExpand: () => {}
     })
 
-    const item = findDropdownMenuItemByText(expandNode(element), 'New Terminal: PowerShell')
+    const item = findDropdownMenuItemByText(expandNode(element), 'New Terminal: PowerShell 7+')
     expect(item).not.toBeNull()
 
     const onSelect = item?.props.onSelect as (() => void) | undefined
@@ -780,7 +780,7 @@ describe('TabBar PowerShell launch wiring', () => {
 
     const onSelect = powerShellItem?.props.onSelect as (() => void) | undefined
     onSelect?.()
-    expect(onNewTerminalWithShell).toHaveBeenCalledWith('pwsh.exe')
+    expect(onNewTerminalWithShell).toHaveBeenCalledWith('powershell.exe')
   })
 
   it('keeps SSH Linux hosts on the generic new-terminal entry', async () => {

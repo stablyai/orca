@@ -13,6 +13,7 @@ import type { TerminalPaneSplitSource } from '../../../shared/feature-education-
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { TerminalPaneLayoutNode, TuiAgent } from '../../../shared/types'
+import type { BuiltInWindowsTerminalShell } from '../../../shared/windows-terminal-shell'
 import type { AppState } from '../store/types'
 import { getRuntimeEnvironmentIdForWorktree } from '../lib/worktree-runtime-owner'
 import { useAppStore } from '../store'
@@ -50,6 +51,7 @@ export async function createWebRuntimeSessionTerminal(args: {
   afterTabId?: string
   targetGroupId?: string
   command?: string
+  shellOverride?: BuiltInWindowsTerminalShell
   cwd?: string
   env?: Record<string, string>
   startupCommandDelivery?: StartupCommandDelivery
@@ -80,6 +82,7 @@ export async function createWebRuntimeSessionTerminal(args: {
         afterTabId: args.afterTabId ? toHostSessionTabId(args.afterTabId) : undefined,
         targetGroupId: args.targetGroupId,
         command: args.command,
+        shellOverride: args.shellOverride,
         cwd: args.cwd,
         ...(args.env ? { env: args.env } : {}),
         startupCommandDelivery: args.startupCommandDelivery,

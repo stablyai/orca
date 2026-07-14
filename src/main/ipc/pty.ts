@@ -2940,7 +2940,7 @@ export function registerPtyHandlers(
       const terminalRuntimeOptions =
         process.platform === 'win32' && !args.connectionId
           ? resolveLocalWindowsTerminalRuntimeOptions({
-              requestedShellOverride: undefined,
+              requestedShellOverride: args.shellOverride,
               settings: getSettings?.(),
               projectRuntime: resolveLocalProjectRuntimeForWorktreeId(store, args.worktreeId),
               fallbackHostShell: process.env.COMSPEC || 'powershell.exe'
@@ -3101,13 +3101,19 @@ export function registerPtyHandlers(
       if (typeof args.tabId === 'string' && args.tabId.length > 0 && args.tabId.length <= 512) {
         spawnOptions.tabId = args.tabId
       }
+      if (args.shellOverride !== undefined) {
+        spawnOptions.shellOverride = args.shellOverride
+      }
       if (process.platform === 'win32' && !args.connectionId) {
         spawnOptions.shellOverride = terminalRuntimeOptions.shellOverride
         spawnOptions.terminalWindowsWslDistro =
           terminalRuntimeOptions.terminalWindowsWslDistro ?? null
-        spawnOptions.terminalWindowsPowerShellImplementation = getSettings
-          ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
-          : undefined
+        spawnOptions.terminalWindowsPowerShellImplementation =
+          args.shellOverride === 'powershell.exe' || args.shellOverride === 'pwsh.exe'
+            ? args.shellOverride
+            : getSettings
+              ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
+              : undefined
       }
 
       const existingPaneSpawn = materializedPaneKey
@@ -3243,7 +3249,8 @@ export function registerPtyHandlers(
               : undefined,
             !args.connectionId
               ? shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd)
-              : undefined
+              : undefined,
+            daemonShellOverride ?? args.shellOverride
           )
         }
         // Why: arms main's per-PTY Command Code output detector from the launch
@@ -3994,9 +4001,12 @@ export function registerPtyHandlers(
         // executable without inventing a fourth top-level shell.
         spawnOptions.terminalWindowsWslDistro =
           terminalRuntimeOptions.terminalWindowsWslDistro ?? null
-        spawnOptions.terminalWindowsPowerShellImplementation = getSettings
-          ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
-          : undefined
+        spawnOptions.terminalWindowsPowerShellImplementation =
+          args.shellOverride === 'powershell.exe' || args.shellOverride === 'pwsh.exe'
+            ? args.shellOverride
+            : getSettings
+              ? (getSettings()?.terminalWindowsPowerShellImplementation ?? 'auto')
+              : undefined
       }
       const existingPaneSpawn = reservationPaneKey
         ? paneSpawnReservationsByPaneKey.get(reservationPaneKey)
@@ -4294,7 +4304,8 @@ export function registerPtyHandlers(
               : undefined,
             !args.connectionId
               ? shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, cwd)
-              : undefined
+              : undefined,
+            effectiveShellOverride
           )
         }
         // Why: arms main's per-PTY Command Code output detector from the launch

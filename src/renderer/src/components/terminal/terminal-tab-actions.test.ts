@@ -71,9 +71,9 @@ describe('createNewTerminalTab', () => {
         setTabBarOrder
       })
 
-    createNewTerminalTab('wt-1', 'zsh')
+    createNewTerminalTab('wt-1', 'pwsh.exe')
 
-    expect(createTab).toHaveBeenCalledWith('wt-1', undefined, 'zsh', undefined)
+    expect(createTab).toHaveBeenCalledWith('wt-1', undefined, 'pwsh.exe', undefined)
     expect(setActiveTabType).toHaveBeenCalledWith('terminal')
     expect(setTabBarOrder).toHaveBeenCalledWith('wt-1', ['tab-1'])
     expect(createWebRuntimeSessionTerminalMock).not.toHaveBeenCalled()
@@ -89,12 +89,12 @@ describe('createNewTerminalTab', () => {
       setActiveTabType
     })
 
-    createNewTerminalTab('wt-1', 'pwsh')
+    createNewTerminalTab('wt-1', 'pwsh.exe')
 
     expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       environmentId: 'web-runtime',
-      command: 'pwsh',
+      shellOverride: 'pwsh.exe',
       activate: true
     })
     expect(createTab).not.toHaveBeenCalled()
@@ -113,12 +113,12 @@ describe('createNewTerminalTab', () => {
       setActiveTabType
     })
 
-    createNewTerminalTab('wt-1', 'pwsh')
+    createNewTerminalTab('wt-1', 'pwsh.exe')
 
     expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       environmentId: 'owner-runtime',
-      command: 'pwsh',
+      shellOverride: 'pwsh.exe',
       activate: true
     })
     expect(createTab).not.toHaveBeenCalled()
@@ -164,7 +164,7 @@ describe('createNewTerminalTab', () => {
     expect(createWebRuntimeSessionTerminalMock).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       environmentId: 'web-runtime',
-      command: undefined,
+      shellOverride: undefined,
       cwd: '/repo/packages/app',
       activate: true
     })

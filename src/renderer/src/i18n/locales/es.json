@@ -2796,7 +2796,8 @@
             "2148f65e04": "PowerShell",
             "ab589350e5": "No se pudo generar el comando de inicio para {{value0}}.",
             "7a9b4af2af": "Desplazar pestañas a la izquierda",
-            "232e075b07": "Desplazar pestañas a la derecha"
+            "232e075b07": "Desplazar pestañas a la derecha",
+            "23fc4463de": "PowerShell 7+"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "Crear archivo",
@@ -10397,7 +10398,10 @@
           "loadingDistros": "Cargando distribuciones",
           "windowsDefault": "Predeterminada de Windows",
           "rightClickBehavior": "Comportamiento del clic derecho",
-          "rightClickBehaviorDescription": "Elige el comportamiento del ratón en la terminal que coincida con tu memoria muscular de Windows."
+          "rightClickBehaviorDescription": "Elige el comportamiento del ratón en la terminal que coincida con tu memoria muscular de Windows.",
+          "powerShell7": "PowerShell 7+",
+          "powerShell7Description": "Abre nuevos paneles de terminal con el ejecutable de PowerShell 7+ instalado.",
+          "powerShell7Unavailable": "Seleccionado, pero no se detectó PowerShell 7+ en este equipo."
         },
         "mac": {
           "notification": {

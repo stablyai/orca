@@ -2,6 +2,8 @@
 import type { IPty } from 'node-pty'
 import type * as NodePty from 'node-pty'
 import { resolveWindowsGitBashShellPath } from '../main/git-bash'
+import { resolveAvailablePwshPath } from '../main/pwsh'
+import { resolveWindowsPowerShellExecutablePath } from '../main/providers/windows-powershell-executable'
 import { WINDOWS_GIT_BASH_SHELL } from '../shared/windows-terminal-shell'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import {
@@ -172,6 +174,16 @@ function resolvePtyShellOverride(shellOverride: string): string {
   const normalized = shellOverride.toLowerCase()
   if (!ALLOWED_WINDOWS_SHELL_OVERRIDES.has(normalized)) {
     throw new Error(`Unsupported Windows shell override: ${shellOverride}`)
+  }
+  if (normalized === 'pwsh.exe' || normalized === 'pwsh') {
+    // Why: a cold pwsh version probe may time out; an explicit profile should
+    // still attempt the safe absolute executable instead of a Store alias.
+    const resolvedPwsh =
+      resolveAvailablePwshPath() ?? resolveWindowsPowerShellExecutablePath('pwsh.exe')
+    if (!resolvedPwsh) {
+      throw new Error('PowerShell 7+ is not available on this Windows host')
+    }
+    return resolvedPwsh
   }
   return resolveWindowsGitBashShellPath(shellOverride) ?? shellOverride
 }

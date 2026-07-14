@@ -2796,7 +2796,8 @@
             "2148f65e04": "PowerShell",
             "ab589350e5": "无法为 {{value0}} 构建启动命令。",
             "7a9b4af2af": "向左滚动标签页",
-            "232e075b07": "向右滚动标签页"
+            "232e075b07": "向右滚动标签页",
+            "23fc4463de": "PowerShell 7+"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "创建文件",
@@ -10397,7 +10398,10 @@
           "loadingDistros": "正在加载发行版",
           "windowsDefault": "Windows 默认值",
           "rightClickBehavior": "右键单击行为",
-          "rightClickBehaviorDescription": "选择符合你在 Windows 上使用习惯的终端鼠标行为。"
+          "rightClickBehaviorDescription": "选择符合你在 Windows 上使用习惯的终端鼠标行为。",
+          "powerShell7": "PowerShell 7+",
+          "powerShell7Description": "使用已安装的 PowerShell 7+ 可执行文件打开新的终端窗格。",
+          "powerShell7Unavailable": "已选择，但未在此计算机上检测到 PowerShell 7+。"
         },
         "mac": {
           "notification": {

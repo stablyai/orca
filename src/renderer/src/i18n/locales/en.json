@@ -2796,7 +2796,8 @@
             "2148f65e04": "PowerShell",
             "ab589350e5": "Could not build launch command for {{value0}}.",
             "7a9b4af2af": "Scroll tabs left",
-            "232e075b07": "Scroll tabs right"
+            "232e075b07": "Scroll tabs right",
+            "23fc4463de": "PowerShell 7+"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "Create file",
@@ -10397,7 +10398,10 @@
           "loadingDistros": "Loading distributions",
           "windowsDefault": "Windows default",
           "rightClickBehavior": "Right-click behavior",
-          "rightClickBehaviorDescription": "Pick the terminal mouse behavior that matches your Windows muscle memory."
+          "rightClickBehaviorDescription": "Pick the terminal mouse behavior that matches your Windows muscle memory.",
+          "powerShell7": "PowerShell 7+",
+          "powerShell7Description": "Opens new terminal panes with the installed PowerShell 7+ executable.",
+          "powerShell7Unavailable": "Selected, but PowerShell 7+ was not detected on this machine."
         },
         "mac": {
           "notification": {

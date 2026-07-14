@@ -55,6 +55,41 @@ describe('buildWindowsPowerShellSpawnAttempts', () => {
     expect(attempts[2].shellArgs[0]).toBe('/K')
   })
 
+  it('does not cross into cmd.exe with a PowerShell-rendered startup command', () => {
+    restorePlatform = setPlatform('win32')
+    const attempts = buildWindowsPowerShellSpawnAttempts({
+      shellPath: 'pwsh.exe',
+      cwd: 'C:\\repo',
+      defaultCwd: 'C:\\Users\\dev',
+      startupCommand: "& 'orca' 'user text & echo ORCA_CMD_SEPARATOR_REACTIVATED'",
+      resolveOptions: {
+        platform: 'win32',
+        env: WIN_ENV,
+        isRealExecutable: (p) => p === PWSH7 || p === WINDOWS_POWERSHELL
+      }
+    })
+
+    expect(attempts.map((attempt) => attempt.shellPath)).toEqual([PWSH7, WINDOWS_POWERSHELL])
+  })
+
+  it('fails closed when a command-bearing launch has no safe PowerShell executable', () => {
+    restorePlatform = setPlatform('win32')
+
+    expect(() =>
+      buildWindowsPowerShellSpawnAttempts({
+        shellPath: 'pwsh.exe',
+        cwd: 'C:\\repo',
+        defaultCwd: 'C:\\Users\\dev',
+        startupCommand: "& 'orca' 'prompt'",
+        resolveOptions: {
+          platform: 'win32',
+          env: WIN_ENV,
+          isRealExecutable: () => false
+        }
+      })
+    ).toThrow('No safe PowerShell executable')
+  })
+
   it('repro: when pwsh is only a Store alias, the primary attempt is the real Windows PowerShell', () => {
     restorePlatform = setPlatform('win32')
     const aliasStub = 'C:\\Users\\dev\\AppData\\Local\\Microsoft\\WindowsApps\\pwsh.exe'

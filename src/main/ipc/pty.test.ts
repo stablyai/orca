@@ -381,7 +381,12 @@ describe('registerPtyHandlers', () => {
     // mirror that here so ZDOTDIR/wrapper assertions match the mocked userData.
     process.env.ORCA_USER_DATA_PATH = '/tmp/orca-user-data'
     existsSyncMock.mockReturnValue(true)
-    statSyncMock.mockReturnValue({ isDirectory: () => true, mode: 0o755 })
+    statSyncMock.mockReturnValue({
+      isDirectory: () => true,
+      isFile: () => true,
+      mode: 0o755,
+      size: 1
+    })
     readFileSyncMock.mockReturnValue('')
     openCodeBuildPtyEnvMock.mockImplementation((_ptyId: string, existingConfigDir?: string) => ({
       ORCA_OPENCODE_HOOK_PORT: '4567',
@@ -1807,7 +1812,8 @@ describe('registerPtyHandlers', () => {
           'wt-runtime',
           null,
           { tabId: 'tab-1', leafId },
-          false
+          false,
+          undefined
         )
       })
 
@@ -1868,7 +1874,8 @@ describe('registerPtyHandlers', () => {
             'repo-1::C:\\repo',
             null,
             undefined,
-            true
+            true,
+            'wsl.exe'
           )
         })
       })
@@ -4574,7 +4581,8 @@ describe('registerPtyHandlers', () => {
       'wt-1',
       null,
       { tabId: 'tab-1', leafId },
-      false
+      false,
+      undefined
     )
   })
 
@@ -4609,7 +4617,8 @@ describe('registerPtyHandlers', () => {
       'wt-1',
       null,
       undefined,
-      false
+      false,
+      undefined
     )
   })
 

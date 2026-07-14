@@ -36,6 +36,7 @@ import {
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import EditorAutosaveController from './editor/EditorAutosaveController'
 import type { Tab, TabContentType, TabGroupLayoutNode, TuiAgent } from '../../../shared/types'
+import type { BuiltInWindowsTerminalShell } from '../../../shared/windows-terminal-shell'
 import { hasFeatureInteraction } from '../../../shared/feature-interactions'
 import BrowserPane from './browser-pane/BrowserPane'
 import BrowserPaneOverlayLayer from './browser-pane/BrowserPaneOverlayLayer'
@@ -1075,7 +1076,7 @@ function Terminal(): React.JSX.Element | null {
   }, [activeWorktreeId, hydrationSucceeded, workspaceSessionReady])
 
   const handleNewTab = useCallback(
-    (shellOverride?: string) => {
+    (shellOverride?: BuiltInWindowsTerminalShell) => {
       if (!activeWorktreeId) {
         return
       }
@@ -1088,7 +1089,7 @@ function Terminal(): React.JSX.Element | null {
           worktreeId: activeWorktreeId,
           environmentId: runtimeEnvironmentId,
           targetGroupId,
-          command: shellOverride,
+          shellOverride,
           activate: true
         })
         return

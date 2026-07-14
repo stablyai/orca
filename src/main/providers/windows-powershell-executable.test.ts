@@ -14,6 +14,7 @@ const WIN_ENV: NodeJS.ProcessEnv = {
 }
 
 const PWSH7 = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+const PWSH8 = 'C:\\Program Files\\PowerShell\\8\\pwsh.exe'
 const PATH_PWSH7 = 'D:\\Tools\\PowerShell\\7\\pwsh.exe'
 const WINDOWS_POWERSHELL = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 // The Microsoft Store App Execution Alias stub for pwsh — a zero-byte reparse
@@ -37,6 +38,28 @@ describe('resolveWindowsPowerShellExecutablePath', () => {
         platform: 'win32',
         env: WIN_ENV,
         isRealExecutable: (p) => p === PWSH7
+      })
+    ).toBe(PWSH7)
+  })
+
+  it('skips an unsupported pwsh major and selects the next PowerShell 7+ candidate', () => {
+    expect(
+      resolveWindowsPowerShellExecutablePath('pwsh.exe', {
+        platform: 'win32',
+        env: WIN_ENV,
+        isRealExecutable: (path) => path === PWSH7 || path === PWSH8,
+        pwshSupport: (path) => (path === PWSH7 ? 'unsupported' : 'supported')
+      })
+    ).toBe(PWSH8)
+  })
+
+  it('keeps an explicit pwsh candidate eligible when its version probe times out', () => {
+    expect(
+      resolveWindowsPowerShellExecutablePath('pwsh.exe', {
+        platform: 'win32',
+        env: WIN_ENV,
+        isRealExecutable: (path) => path === PWSH7,
+        pwshSupport: () => 'unknown'
       })
     ).toBe(PWSH7)
   })

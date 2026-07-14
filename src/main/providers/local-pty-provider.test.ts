@@ -634,11 +634,11 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.HISTFILE).toContain('terminal-history-wsl/Debian')
     })
 
-    it('repro: keeps explicit PowerShell 7 selection when the pwsh probe is cold-false', async () => {
+    it('repro: keeps explicit PowerShell 7 shell selection when the pwsh probe is cold-false', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const pwshAvailable = vi.fn(() => false)
       provider.configure({
-        getWindowsShell: () => 'powershell.exe',
+        getWindowsShell: () => 'pwsh.exe',
         getWindowsPowerShellImplementation: () => 'pwsh.exe',
         pwshAvailable
       })
@@ -653,6 +653,24 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[0]).toBe(PWSH7_ABS)
       expect(spawnCall[1]).toContain('-EncodedCommand')
       expect(pwshAvailable).not.toHaveBeenCalled()
+    })
+
+    it('keeps an explicit Windows PowerShell shell override on version 5.1', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      provider.configure({
+        getWindowsPowerShellImplementation: () => 'pwsh.exe',
+        pwshAvailable: () => true
+      })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\Users\\jin\\repo',
+        shellOverride: 'powershell.exe'
+      })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[0]).toBe(WINDOWS_POWERSHELL_ABS)
     })
 
     it('marks Orca terminal handle for WSL import when buildSpawnEnv opts in', async () => {

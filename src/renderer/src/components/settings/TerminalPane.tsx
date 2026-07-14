@@ -68,6 +68,7 @@ export function TerminalPane({
         key="windows-shell"
         updateSettings={updateSettings}
         windowsShell={windowsShell}
+        pwshAvailable={pwshAvailable ?? false}
         gitBashAvailable={gitBashAvailable}
       />
     ) : null,

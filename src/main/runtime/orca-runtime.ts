@@ -218,7 +218,10 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../shared/tui-agent-launch-defaults'
-import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
+import {
+  resolveLocalWindowsAgentStartupShell,
+  type BuiltInWindowsTerminalShell
+} from '../../shared/windows-terminal-shell'
 import {
   getTuiAgentLaunchCommand,
   isTuiAgent,
@@ -985,6 +988,7 @@ type RuntimePtyWorktreeRecord = {
   // spawn-time tab/pane identity so later reveals can adopt under the env key.
   tabId: string | null
   paneKey: string | null
+  shellOverride: string | null
   launchConfig: SleepingAgentLaunchConfig | null
   launchToken: string | null
   launchAgent: TuiAgent | null
@@ -1014,6 +1018,7 @@ type RuntimePtyWorktreeRecord = {
 
 type TerminalCreateOptions = {
   command?: string
+  shellOverride?: string
   claudeAgentTeamsSourceCommand?: string
   cwd?: string
   env?: Record<string, string>
@@ -1183,6 +1188,7 @@ type RuntimePtyController = {
     rows: number
     cwd?: string
     command?: string
+    shellOverride?: string
     commandDelivery?: 'renderer' | 'provider'
     startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
     env?: Record<string, string>
@@ -1304,6 +1310,7 @@ type RuntimeNotifier = {
     worktreeId: string,
     opts: {
       command?: string
+      shellOverride?: BuiltInWindowsTerminalShell
       cwd?: string
       env?: Record<string, string>
       title?: string
@@ -5554,7 +5561,8 @@ export class OrcaRuntimeService {
     worktreeId: string,
     connectionId: string | null = null,
     binding?: { tabId: string; leafId: string },
-    isWsl?: boolean
+    isWsl?: boolean,
+    shellOverride?: string
   ): void {
     // Why: record the renderer pane identity at spawn time so a stalled graph
     // sync can't hide that a live PTY already backs a pending mobile create.
@@ -5566,6 +5574,7 @@ export class OrcaRuntimeService {
       connected: true,
       connectionId,
       ...(isWsl !== undefined ? { isWsl } : {}),
+      ...(shellOverride !== undefined ? { shellOverride } : {}),
       ...(binding && paneKey ? { tabId: binding.tabId, paneKey } : {})
     })
     // Why: the renderer's own PTY spawn is the reliable signal that the pending
@@ -17693,6 +17702,7 @@ export class OrcaRuntimeService {
         command: sequencedStartupCommand
           ? launchOpts.command
           : (agentTeamsPlan?.command ?? launchOpts.command),
+        shellOverride: launchOpts.shellOverride,
         commandDelivery: 'provider',
         startupCommandDelivery: launchOpts.startupCommandDelivery,
         env,
@@ -17721,6 +17731,7 @@ export class OrcaRuntimeService {
         }
         pty.tabId = tabId
         pty.paneKey = paneKey
+        pty.shellOverride = launchOpts.shellOverride ?? null
         pty.launchConfig = effectiveLaunchConfig
           ? copySleepingAgentLaunchConfig(effectiveLaunchConfig)
           : null
@@ -17885,6 +17896,7 @@ export class OrcaRuntimeService {
       afterTabId?: string
       targetGroupId?: string
       command?: string
+      shellOverride?: BuiltInWindowsTerminalShell
       cwd?: string
       env?: Record<string, string>
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
@@ -17930,6 +17942,7 @@ export class OrcaRuntimeService {
       afterTabId?: string
       targetGroupId?: string
       command?: string
+      shellOverride?: BuiltInWindowsTerminalShell
       cwd?: string
       env?: Record<string, string>
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
@@ -17966,6 +17979,7 @@ export class OrcaRuntimeService {
         opts.afterTabId,
         {
           command: startupCommand.command,
+          shellOverride: opts.shellOverride,
           cwd,
           env: startupCommand.env,
           startupCommandDelivery: startupCommand.startupCommandDelivery,
@@ -18015,6 +18029,7 @@ export class OrcaRuntimeService {
         afterTabId: afterDesktopTabId,
         targetGroupId: opts.targetGroupId,
         command: startupCommand.command,
+        shellOverride: opts.shellOverride,
         cwd,
         ...(startupCommand.env ? { env: startupCommand.env } : {}),
         ...(startupCommand.launchConfig ? { launchConfig: startupCommand.launchConfig } : {}),
@@ -18079,6 +18094,7 @@ export class OrcaRuntimeService {
         opts.afterTabId,
         {
           command: startupCommand.command,
+          shellOverride: opts.shellOverride,
           cwd,
           env: startupCommand.env,
           startupCommandDelivery: startupCommand.startupCommandDelivery,
@@ -18203,6 +18219,7 @@ export class OrcaRuntimeService {
     afterTabId?: string,
     opts: {
       command?: string
+      shellOverride?: BuiltInWindowsTerminalShell
       cwd?: string
       env?: Record<string, string>
       startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
@@ -18222,6 +18239,7 @@ export class OrcaRuntimeService {
     const terminal = await this.createTerminal(`id:${worktreeId}`, {
       focus: false,
       command: opts.command,
+      shellOverride: opts.shellOverride,
       cwd,
       env: opts.env,
       ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
@@ -18743,6 +18761,7 @@ export class OrcaRuntimeService {
       rows: 40,
       cwd: workspace.path,
       command: opts.command,
+      shellOverride: pty.shellOverride ?? undefined,
       commandDelivery: 'provider',
       env: this.buildTerminalWorkspaceEnv(workspace, opts.env ?? {}, paneKey, parentTabId),
       envToDelete: opts.envToDelete,
@@ -18756,6 +18775,7 @@ export class OrcaRuntimeService {
     if (createdPty) {
       createdPty.tabId = parentTabId
       createdPty.paneKey = paneKey
+      createdPty.shellOverride = pty.shellOverride
     }
 
     try {
@@ -20132,6 +20152,7 @@ export class OrcaRuntimeService {
         | 'preview'
         | 'tabId'
         | 'paneKey'
+        | 'shellOverride'
         | 'title'
         | 'connectionId'
         | 'isWsl'
@@ -20148,6 +20169,7 @@ export class OrcaRuntimeService {
         isWsl: state.isWsl ?? null,
         tabId: state.tabId ?? null,
         paneKey: state.paneKey ?? null,
+        shellOverride: state.shellOverride ?? null,
         launchConfig: null,
         launchToken: null,
         launchAgent: null,
@@ -20195,6 +20217,9 @@ export class OrcaRuntimeService {
     }
     if (state.paneKey !== undefined) {
       pty.paneKey = state.paneKey
+    }
+    if (state.shellOverride !== undefined) {
+      pty.shellOverride = state.shellOverride
     }
     if (state.connected !== undefined) {
       pty.connected = state.connected

@@ -1714,7 +1714,12 @@ export function useIpcEvents(): void {
                   recordInteraction: false,
                   ...(data.cwd ? { startupCwd: data.cwd } : {})
                 }
-          const tab = store.createTab(worktreeId, data.targetGroupId, undefined, tabOptions)
+          const tab = store.createTab(
+            worktreeId,
+            data.targetGroupId,
+            data.shellOverride,
+            tabOptions
+          )
           if (!shouldActivate) {
             // Why: renderer-backed Codex startup must mount its new TerminalPane
             // without switching UI or connecting every saved tab in the worktree.

@@ -2796,7 +2796,8 @@
             "2148f65e04": "PowerShell",
             "ab589350e5": "{{value0}} の起動コマンドを構築できませんでした。",
             "7a9b4af2af": "タブを左にスクロール",
-            "232e075b07": "タブを右にスクロール"
+            "232e075b07": "タブを右にスクロール",
+            "23fc4463de": "PowerShell 7+"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "ファイルの作成",
@@ -10397,7 +10398,10 @@
           "loadingDistros": "ディストリビューションを読み込み中",
           "windowsDefault": "Windows の既定",
           "rightClickBehavior": "右クリックの動作",
-          "rightClickBehaviorDescription": "Windows で慣れた terminal のマウス操作に合うものを選びます。"
+          "rightClickBehaviorDescription": "Windows で慣れた terminal のマウス操作に合うものを選びます。",
+          "powerShell7": "PowerShell 7+",
+          "powerShell7Description": "インストール済みの PowerShell 7+ 実行ファイルで新しいターミナルペインを開きます。",
+          "powerShell7Unavailable": "選択されていますが、このマシンでは PowerShell 7+ が検出されませんでした。"
         },
         "mac": {
           "notification": {

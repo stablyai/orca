@@ -1825,6 +1825,35 @@ describe('createPtySubprocess', () => {
     )
   })
 
+  it('keeps an explicit powershell.exe override on Windows PowerShell 5.1', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    isPwshAvailableMock.mockReturnValue(true)
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        shellOverride: 'powershell.exe',
+        terminalWindowsPowerShellImplementation: 'pwsh.exe'
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      WINDOWS_POWERSHELL_ABS,
+      POWERSHELL_OSC133_COMMAND_ARGS,
+      expect.any(Object)
+    )
+  })
+
   it('spawns pwsh.exe when PowerShell 7 is selected and available on Windows', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
