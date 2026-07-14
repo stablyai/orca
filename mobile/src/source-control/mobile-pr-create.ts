@@ -67,8 +67,9 @@ export function getMobilePrCreateBlockMessage(prefill: MobilePrPrefill): string 
     case 'fork_head_unsupported':
       return `Creating a ${copy.reviewLabel} from this fork is not supported.`
     case 'needs_push':
-    case null:
-    case undefined:
+    default:
+      // needs_push / null / undefined and any future reason share the generic
+      // copy; a default clause keeps the function total for tsc's return check.
       return `This branch is not ready for a ${copy.reviewLabel} yet.`
   }
 }
