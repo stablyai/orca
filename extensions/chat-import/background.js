@@ -40,6 +40,19 @@ function native(msg) {
   })
 }
 
+// 최근 동기화 기록의 get→계산→set을 체인으로 직렬화한다. 대량 동기화(또는 두 탭 동시
+// 동기화) 중 겹치는 get/set이 서로 덮어써 기록을 잃는 레이스를 막기 위함.
+let recentSyncsChain = Promise.resolve()
+function recordRecentSync(entry) {
+  recentSyncsChain = recentSyncsChain
+    .then(async () => {
+      const { recentSyncs = [] } = await chrome.storage.local.get('recentSyncs')
+      await chrome.storage.local.set({ recentSyncs: pushRecentSync(recentSyncs, entry, 30) })
+    })
+    .catch(() => {}) // 기록 실패가 동기화 자체를 막지 않도록
+  return recentSyncsChain
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'GET_INGESTED_IDS') {
     native({ type: 'INGESTED_IDS', source: msg.source })
@@ -58,17 +71,11 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         }
         sendResponse({ ok: true, id: r && r.id })
         // 팝업 "최근 동기화" 목록용 기록. 응답은 이미 보냈으므로 실패해도 동기화 결과에 영향 없음.
-        chrome.storage.local.get('recentSyncs').then(({ recentSyncs: list }) => {
-          const recentSyncs = pushRecentSync(
-            list || [],
-            {
-              title: msg.conv.title,
-              source: msg.conv.source,
-              date: msg.conv.updatedAt || new Date().toISOString()
-            },
-            30
-          )
-          chrome.storage.local.set({ recentSyncs })
+        recordRecentSync({
+          id: msg.conv.externalId,
+          title: msg.conv.title,
+          source: msg.conv.source,
+          date: msg.conv.updatedAt || new Date().toISOString()
         })
       })
       .catch((e) => sendResponse({ error: e.message }))

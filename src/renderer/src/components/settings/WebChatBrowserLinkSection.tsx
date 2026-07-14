@@ -187,26 +187,28 @@ function browserBadge(status: ChatImportBrowserStatus): {
   tone: IntegrationStatusTone
   label: string
 } {
+  // Why: an uninstalled browser that left a stale native-host manifest behind
+  // must not read as "linked" — detection takes precedence over host state.
+  if (!status.detected) {
+    return {
+      tone: 'neutral',
+      label: translate(
+        'auto.components.settings.WebChatBrowserLinkSection.badgeNotDetected',
+        'Not detected'
+      )
+    }
+  }
   if (status.hostInstalled) {
     return {
       tone: 'connected',
       label: translate('auto.components.settings.WebChatBrowserLinkSection.badgeLinked', 'Linked')
     }
   }
-  if (status.detected) {
-    return {
-      tone: 'attention',
-      label: translate(
-        'auto.components.settings.WebChatBrowserLinkSection.badgeNotInstalled',
-        'Not installed'
-      )
-    }
-  }
   return {
-    tone: 'neutral',
+    tone: 'attention',
     label: translate(
-      'auto.components.settings.WebChatBrowserLinkSection.badgeNotDetected',
-      'Not detected'
+      'auto.components.settings.WebChatBrowserLinkSection.badgeNotInstalled',
+      'Not installed'
     )
   }
 }
