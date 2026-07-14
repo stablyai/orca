@@ -2122,7 +2122,6 @@ app.whenReady().then(async () => {
     logStartupMilestone('wsl-cli-barrier-resolved', {
       reconciliation: managedWslCliReconciliationStatus
     })
-    await startServeAgentHookServer()
     // Why: headless PTYs must never start on the fallback provider and then be
     // swept when an activated renderer registers desktop lifecycle handlers.
     await localPtyStartupReady
