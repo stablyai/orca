@@ -18,6 +18,7 @@ import { foldToolMessages, splitNativeChatBlocks } from './native-chat-tool-fold
 import { isNearBottom, shouldShowJumpToLatest, type ScrollGeometry } from './native-chat-autoscroll'
 import { isNativeChatPastedImagePath } from './native-chat-image-paste'
 import { NativeChatToolRun } from './NativeChatToolRun'
+import { NativeChatAttachmentRefs } from './NativeChatAttachmentRefs'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
 
@@ -142,6 +143,9 @@ function MessageRow({
   const { prose, tools } = useMemo(() => splitNativeChatBlocks(message.blocks), [message.blocks])
   const markdown = proseToMarkdown(prose)
   const hasImages = prose.some((block) => block.type === 'image-ref')
+  // Attachment-only turns carry no text/tools; count them so the empty-row guard
+  // below doesn't skip a message whose only content is an attachment chip.
+  const hasAttachments = prose.some((block) => block.type === 'attachment')
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isSystem = message.role === 'system'
@@ -155,7 +159,7 @@ function MessageRow({
   // Skip rows with nothing renderable so the transcript shows no empty/ghost
   // bubble.
   // After all hooks, so hook order stays unconditional.
-  if (markdown.length === 0 && !hasImages && tools.length === 0) {
+  if (markdown.length === 0 && !hasImages && !hasAttachments && tools.length === 0) {
     return null
   }
 
@@ -168,20 +172,17 @@ function MessageRow({
     return (
       <div ref={rowRef} className="flex flex-col items-end gap-0.5">
         <div className="max-w-[85%] rounded-xl rounded-tr-sm border border-border bg-card px-3 py-2 text-sm text-card-foreground">
+          <ImageAttachmentRefs blocks={prose} />
+          <NativeChatAttachmentRefs blocks={prose} />
           {markdown ? (
-            <>
-              <ImageAttachmentRefs blocks={prose} />
-              <CommentMarkdown
-                content={markdown}
-                variant="document"
-                className="text-sm"
-                onLinkClick={onLinkClick}
-                allowFileUriLinks={allowFileUriLinks}
-              />
-            </>
-          ) : (
-            <ImageAttachmentRefs blocks={prose} />
-          )}
+            <CommentMarkdown
+              content={markdown}
+              variant="document"
+              className="text-sm"
+              onLinkClick={onLinkClick}
+              allowFileUriLinks={allowFileUriLinks}
+            />
+          ) : null}
         </div>
         {deliveryFailed ? (
           <div className="max-w-[85%] text-[11px] text-destructive/80">
@@ -217,6 +218,7 @@ function MessageRow({
         />
       ) : null}
       <ImageAttachmentRefs blocks={prose} />
+      <NativeChatAttachmentRefs blocks={prose} />
       {markdown ? (
         <CommentMarkdown
           content={markdown}
