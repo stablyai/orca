@@ -21,6 +21,7 @@ export type WorkspaceTabContentType =
   | 'diff'
   | 'conflict-review'
   | 'check-details'
+  | 'database'
 
 export type SearchableWorkspaceTab = {
   tab: Tab & { contentType: WorkspaceTabContentType }
@@ -38,7 +39,7 @@ export type SearchableWorkspaceTab = {
   isCurrentWorktree: boolean
 }
 
-type WorkspaceTabPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator'
+type WorkspaceTabPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator' | 'database'
 
 export type BuildSearchableWorkspaceTabsOptions = WorkspaceTabAgentMetadataState & {
   worktrees: readonly Worktree[]
@@ -79,7 +80,9 @@ function getActiveUnifiedTabId({
     ? (groupsByWorktree[worktreeId] ?? []).find((group) => group.id === activeGroupId)
     : undefined
   const activeUnifiedTabId = activeGroup?.activeTabId ?? null
-  return activeTabType === 'terminal' || activeTabType === 'editor' ? activeUnifiedTabId : null
+  return activeTabType === 'terminal' || activeTabType === 'editor' || activeTabType === 'database'
+    ? activeUnifiedTabId
+    : null
 }
 
 function isCurrentWorkspaceTab({
@@ -108,13 +111,21 @@ function isCurrentWorkspaceTab({
   if (tab.worktreeId !== activeWorktreeId) {
     return false
   }
-  const visibleType = tab.contentType === 'terminal' ? 'terminal' : 'editor'
+  const visibleType =
+    tab.contentType === 'terminal'
+      ? 'terminal'
+      : tab.contentType === 'database'
+        ? 'database'
+        : 'editor'
   const storedType = activeTabTypeByWorktree[tab.worktreeId] ?? activeTabType
   if (storedType !== visibleType || activeUnifiedTabId !== tab.id) {
     return false
   }
   if (visibleType === 'terminal') {
     return (activeTabIdByWorktree[tab.worktreeId] ?? activeTabId) === tab.entityId
+  }
+  if (visibleType === 'database') {
+    return true
   }
   return (activeFileIdByWorktree[tab.worktreeId] ?? activeFileId) === tab.entityId
 }
@@ -127,7 +138,8 @@ function isWorkspaceTabContentType(
     contentType === 'editor' ||
     contentType === 'diff' ||
     contentType === 'conflict-review' ||
-    contentType === 'check-details'
+    contentType === 'check-details' ||
+    contentType === 'database'
   )
 }
 
@@ -218,6 +230,19 @@ export function buildSearchableWorkspaceTabs({
             retainedAgentsByPaneKey,
             sleepingAgentSessionsByPaneKey
           })
+        })
+        continue
+      }
+
+      if (tab.contentType === 'database') {
+        const title = resolveUnifiedTabLabel(tab, generatedTitlesEnabled, 'Database Query')
+        entries.push({
+          ...baseEntry,
+          title,
+          secondaryText: 'Database query tab',
+          titleSearchText: title,
+          secondarySearchTexts: ['Database query tab', 'SQL', 'PostgreSQL'],
+          agentMetadata: []
         })
         continue
       }

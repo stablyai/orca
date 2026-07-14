@@ -5,6 +5,7 @@ import {
   getExecutionHostIdForWorktree,
   getRuntimeEnvironmentIdForWorktree,
   getRuntimeSessionMirrorEnvironmentIds,
+  getSshConnectionIdForWorktree,
   getSettingsForWorktreeRuntimeOwner,
   type WorktreeRuntimeOwnerState
 } from './worktree-runtime-owner'
@@ -195,6 +196,37 @@ describe('getExplicitRuntimeEnvironmentIdForWorktree', () => {
     expect(
       getExecutionHostIdForWorktree(hostOverrideState, 'runtime-repo::wt-runtime-override')
     ).toBe('runtime:worktree-env')
+  })
+})
+
+describe('getSshConnectionIdForWorktree', () => {
+  it('returns the SSH target for a desktop-owned SSH repo', () => {
+    const sshState: WorktreeRuntimeOwnerState = {
+      repos: [{ id: 'ssh-repo', connectionId: 'ssh-p8', executionHostId: 'ssh:ssh-p8' }],
+      worktreesByRepo: {
+        'ssh-repo': [{ id: 'ssh-repo::wt', repoId: 'ssh-repo' }]
+      }
+    }
+
+    expect(getSshConnectionIdForWorktree(sshState, 'ssh-repo::wt')).toBe('ssh-p8')
+  })
+
+  it('preserves the nested SSH target for a runtime-owned repo', () => {
+    const nestedState: WorktreeRuntimeOwnerState = {
+      repos: [{ id: 'nested-repo', connectionId: 'ssh-p8', executionHostId: 'runtime:linux-jae' }],
+      worktreesByRepo: {
+        'nested-repo': [
+          { id: 'nested-repo::wt', repoId: 'nested-repo', hostId: 'runtime:linux-jae' }
+        ]
+      }
+    }
+
+    expect(getRuntimeEnvironmentIdForWorktree(nestedState, 'nested-repo::wt')).toBe('linux-jae')
+    expect(getSshConnectionIdForWorktree(nestedState, 'nested-repo::wt')).toBe('ssh-p8')
+  })
+
+  it('uses the runtime project group SSH target for nested folder workspaces', () => {
+    expect(getSshConnectionIdForWorktree(state, 'folder:runtime-folder')).toBe('ssh-inside-runtime')
   })
 })
 

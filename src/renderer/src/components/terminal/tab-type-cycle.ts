@@ -1,4 +1,4 @@
-export type TabCycleType = 'terminal' | 'editor' | 'browser' | 'simulator'
+export type TabCycleType = 'terminal' | 'editor' | 'browser' | 'simulator' | 'database'
 
 export type TypeCyclableTab = {
   type: TabCycleType
@@ -29,6 +29,9 @@ export function getActiveEntityIdForTabType(
     return activeBrowserTabId
   }
   if (activeTabType === 'simulator') {
+    return activeTabId
+  }
+  if (activeTabType === 'database') {
     return activeTabId
   }
   return activeTabId

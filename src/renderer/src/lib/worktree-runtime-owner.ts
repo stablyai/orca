@@ -179,6 +179,38 @@ export function getRuntimeEnvironmentIdForWorktree(
   return state.settings?.activeRuntimeEnvironmentId?.trim() || null
 }
 
+export function getSshConnectionIdForWorktree(
+  state: WorktreeRuntimeOwnerState,
+  worktreeId: string | null | undefined
+): string | null {
+  if (!worktreeId || worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    return null
+  }
+  const workspaceScope = parseWorkspaceKey(worktreeId)
+  if (workspaceScope?.type === 'folder') {
+    const folderWorkspace = findFolderWorkspace(state, workspaceScope.folderWorkspaceId)
+    const projectGroup = findFolderProjectGroup(state, workspaceScope.folderWorkspaceId)
+    const explicitGroupHost = parseExecutionHostId(projectGroup?.executionHostId)
+    if (explicitGroupHost?.kind === 'ssh') {
+      return explicitGroupHost.targetId
+    }
+    return projectGroup?.connectionId?.trim() || folderWorkspace?.connectionId?.trim() || null
+  }
+
+  const worktree = findWorktreeRecord(state.worktreesByRepo, worktreeId)
+  const explicitWorktreeHost = parseExecutionHostId(worktree?.hostId)
+  if (explicitWorktreeHost?.kind === 'ssh') {
+    return explicitWorktreeHost.targetId
+  }
+  const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
+  const repo = findRepoRecord(state.repos, repoId)
+  const explicitRepoHost = parseExecutionHostId(repo?.executionHostId)
+  if (explicitRepoHost?.kind === 'ssh') {
+    return explicitRepoHost.targetId
+  }
+  return repo?.connectionId?.trim() || null
+}
+
 export function getExplicitRuntimeEnvironmentIdForWorktree(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string | null | undefined

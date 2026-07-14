@@ -7,6 +7,9 @@ import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { FileText, Globe, Minus, TerminalSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import EmulatorPane from '@/components/emulator-pane/EmulatorPane'
+import DatabasePane from '@/components/database/DatabasePane'
+import { openDatabaseTab } from '@/components/database/database-tab-actions'
+import { clearDatabaseTabPassword } from '@/components/database/database-tab-credentials'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import TabBar from '@/components/tab-bar/TabBar'
@@ -258,14 +261,16 @@ export function FloatingTerminalPanel({
     activeTab &&
     activeTab.contentType !== 'terminal' &&
     activeTab.contentType !== 'browser' &&
-    activeTab.contentType !== 'simulator'
+    activeTab.contentType !== 'simulator' &&
+    activeTab.contentType !== 'database'
       ? activeTab.id
       : null
   const activeEditorFileId =
     activeTab &&
     activeTab.contentType !== 'terminal' &&
     activeTab.contentType !== 'browser' &&
-    activeTab.contentType !== 'simulator'
+    activeTab.contentType !== 'simulator' &&
+    activeTab.contentType !== 'database'
       ? activeTab.entityId
       : null
   const terminalTabById = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab])), [tabs])
@@ -319,7 +324,8 @@ export function FloatingTerminalPanel({
           (tab) =>
             tab.contentType !== 'terminal' &&
             tab.contentType !== 'browser' &&
-            tab.contentType !== 'simulator'
+            tab.contentType !== 'simulator' &&
+            tab.contentType !== 'database'
         )
         .map((tab) => {
           const file = floatingFiles.find((candidate) => candidate.id === tab.entityId)
@@ -332,15 +338,24 @@ export function FloatingTerminalPanel({
     () => groupTabs.filter((tab) => tab.contentType === 'simulator'),
     [groupTabs]
   )
+  const databaseItems = useMemo(
+    () => groupTabs.filter((tab) => tab.contentType === 'database'),
+    [groupTabs]
+  )
   // Why: restored sessions can retain unified tabs whose backing records are
   // gone; the empty landing should follow what the user can see.
   const hasVisibleFloatingTabs =
     terminalItems.length > 0 ||
     browserItems.length > 0 ||
     editorItems.length > 0 ||
-    simulatorItems.length > 0
+    simulatorItems.length > 0 ||
+    databaseItems.length > 0
   const visibleFloatingItemCount =
-    terminalItems.length + browserItems.length + editorItems.length + simulatorItems.length
+    terminalItems.length +
+    browserItems.length +
+    editorItems.length +
+    simulatorItems.length +
+    databaseItems.length
   const activeClosableTab = hasVisibleFloatingTabs ? activeTab : null
   const tabBarOrder = useMemo(
     () =>
@@ -368,9 +383,20 @@ export function FloatingTerminalPanel({
         if (tab.contentType === 'simulator') {
           return simulatorItems.some((item) => item.id === tab.id)
         }
+        if (tab.contentType === 'database') {
+          return databaseItems.some((item) => item.id === tab.id)
+        }
         return editorItems.some((item) => item.tabId === tab.id)
       }),
-    [browserItems, editorItems, groupTabs, simulatorItems, tabBarOrder, terminalItems]
+    [
+      browserItems,
+      databaseItems,
+      editorItems,
+      groupTabs,
+      simulatorItems,
+      tabBarOrder,
+      terminalItems
+    ]
   )
   const activeBrowserTab = activeBrowserId
     ? (browserTabs.find((tab) => tab.id === activeBrowserId) ?? null)
@@ -385,7 +411,9 @@ export function FloatingTerminalPanel({
         ? 'terminal'
         : activeTab?.contentType === 'simulator'
           ? 'simulator'
-          : 'editor'
+          : activeTab?.contentType === 'database'
+            ? 'database'
+            : 'editor'
 
   useContextualTour('floating-workspace', open, 'floating_workspace_visible', {
     recordFeatureInteraction: tourInteractionSnapshot?.recordFeatureInteractionForTour ?? false,
@@ -677,6 +705,10 @@ export function FloatingTerminalPanel({
     })
   }, [activeGroup, browserDefaultUrl, createBrowserTab])
 
+  const createFloatingDatabaseTab = useCallback(() => {
+    openDatabaseTab(FLOATING_TERMINAL_WORKTREE_ID, activeGroup?.id)
+  }, [activeGroup])
+
   const createFloatingMarkdownTab = useCallback(() => {
     if (!markdownCwd) {
       return
@@ -753,6 +785,9 @@ export function FloatingTerminalPanel({
           destroyWorkspaceWebviews(state.browserPagesByWorkspace, item.entityId)
           closeBrowserTab(item.entityId)
         } else if (item.contentType === 'simulator') {
+          closeUnifiedTab(item.id)
+        } else if (item.contentType === 'database') {
+          clearDatabaseTabPassword(item.id)
           closeUnifiedTab(item.id)
         } else {
           const file = state.openFiles.find((candidate) => candidate.id === item.entityId)
@@ -844,6 +879,7 @@ export function FloatingTerminalPanel({
             // Why: simulator tabs are not files; "Close All Files" must leave
             // the Mobile Emulator open like terminal/browser tabs do.
             tab.contentType !== 'simulator' &&
+            tab.contentType !== 'database' &&
             !tab.isPinned
         )
         .map((tab) => tab.id)
@@ -1449,6 +1485,7 @@ export function FloatingTerminalPanel({
               onNewTerminalTab={() => createFloatingTerminalTab()}
               onNewTerminalWithShell={createFloatingTerminalTab}
               onNewBrowserTab={createFloatingBrowserTab}
+              onNewDatabaseTab={createFloatingDatabaseTab}
               onNewFileTab={createFloatingMarkdownTab}
               onOpenFileTab={openFloatingMarkdownTab}
               newTabMenuOrder="markdown-first"
@@ -1461,11 +1498,13 @@ export function FloatingTerminalPanel({
               browserTabs={browserItems}
               activeFileId={activeEditorUnifiedId}
               activeBrowserTabId={activeBrowserId}
+              activeDatabaseTabId={activeTab?.contentType === 'database' ? activeTab.id : null}
               activeSimulatorTabId={activeTab?.contentType === 'simulator' ? activeTab.id : null}
               activeTabType={activeTabType}
               onActivateFile={activateFloatingItem}
               onCloseFile={closeFloatingItem}
               onActivateBrowserTab={activateFloatingItem}
+              onActivateDatabaseTab={activateFloatingItem}
               onCloseBrowserTab={closeFloatingItem}
               onDuplicateBrowserTab={(browserTabId) => {
                 const source = browserTabs.find((tab) => tab.id === browserTabId)
@@ -1547,6 +1586,18 @@ export function FloatingTerminalPanel({
                 aria-hidden={!isActive}
               >
                 <EmulatorPane tab={tab} worktreeId={tab.worktreeId} isActive={open && isActive} />
+              </div>
+            )
+          })}
+          {databaseItems.map((tab) => {
+            const isActive = tab.id === activeTab?.id
+            return (
+              <div
+                key={tab.id}
+                className={isActive ? 'absolute inset-0 flex' : 'absolute inset-0 hidden'}
+                aria-hidden={!isActive}
+              >
+                <DatabasePane tab={tab} />
               </div>
             )
           })}

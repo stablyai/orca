@@ -30,6 +30,8 @@ import { ensureSimulatorTab, getSimulatorTabForWorktree } from '@/lib/ensure-sim
 import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
+import { openDatabaseTab } from '../database/database-tab-actions'
+import { clearDatabaseTabPassword } from '../database/database-tab-credentials'
 
 export function recordTerminalTabGroupSplit(createdTerminal: TerminalTab | null | undefined): void {
   if (!createdTerminal) {
@@ -283,6 +285,9 @@ export function useTabGroupWorkspaceModel({
         closeUnifiedTab(item.id)
       } else if (item.contentType === 'simulator') {
         closeUnifiedTab(item.id)
+      } else if (item.contentType === 'database') {
+        clearDatabaseTabPassword(item.id)
+        closeUnifiedTab(item.id)
       } else {
         const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id)
         if (!canCloseTab) {
@@ -345,6 +350,9 @@ export function useTabGroupWorkspaceModel({
         } else if (item.contentType === 'terminal') {
           closeTab(item.entityId)
         } else if (item.contentType === 'simulator') {
+          closeUnifiedTab(item.id)
+        } else if (item.contentType === 'database') {
+          clearDatabaseTabPassword(item.id)
           closeUnifiedTab(item.id)
         } else {
           const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id)
@@ -466,6 +474,21 @@ export function useTabGroupWorkspaceModel({
       setActiveTabType('browser')
     },
     [activateTab, focusGroup, groupId, groupTabs, setActiveBrowserTab, setActiveTabType, worktreeId]
+  )
+
+  const activateDatabase = useCallback(
+    (databaseTabId: string) => {
+      const item = groupTabs.find(
+        (candidate) => candidate.id === databaseTabId && candidate.contentType === 'database'
+      )
+      if (!item) {
+        return
+      }
+      focusGroup(worktreeId, groupId)
+      activateTab(item.id)
+      setActiveTabType('database')
+    },
+    [activateTab, focusGroup, groupId, groupTabs, setActiveTabType, worktreeId]
   )
 
   const createSplitGroup = useCallback(
@@ -590,6 +613,7 @@ export function useTabGroupWorkspaceModel({
         focusGroup(worktreeId, groupId)
       },
       activateBrowser,
+      activateDatabase,
       activateEditor,
       activateTerminal,
       closeAllEditorTabsInGroup,
@@ -600,6 +624,9 @@ export function useTabGroupWorkspaceModel({
       createSplitGroup,
       newBrowserTab: () => {
         void openNewBrowserTabInActiveWorkspace(groupId)
+      },
+      newDatabaseTab: () => {
+        openDatabaseTab(worktreeId, groupId)
       },
       newSimulatorTab: worktreeState.mobileEmulatorEnabled
         ? () => {

@@ -19,6 +19,7 @@ import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
 import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDragSplit'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 import { translate } from '@/i18n/i18n'
+import DatabasePane from '../database/DatabasePane'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 
@@ -121,6 +122,7 @@ export default function TabGroupPanel({
       onNewTerminalTab={commands.newTerminalTab}
       onNewTerminalWithShell={commands.newTerminalWithShell}
       onNewBrowserTab={commands.newBrowserTab}
+      onNewDatabaseTab={commands.newDatabaseTab}
       onNewSimulatorTab={commands.newSimulatorTab}
       onOpenEntry={commands.openEntry}
       onNewFileTab={commands.newFileTab}
@@ -132,11 +134,13 @@ export default function TabGroupPanel({
       activeFileId={
         activeTab?.contentType === 'terminal' ||
         activeTab?.contentType === 'browser' ||
-        activeTab?.contentType === 'simulator'
+        activeTab?.contentType === 'simulator' ||
+        activeTab?.contentType === 'database'
           ? null
           : activeTab?.id
       }
       activeBrowserTabId={activeTab?.contentType === 'browser' ? activeTab.entityId : null}
+      activeDatabaseTabId={activeTab?.contentType === 'database' ? activeTab.id : null}
       activeSimulatorTabId={activeTab?.contentType === 'simulator' ? activeTab.id : null}
       activeTabType={
         activeTab?.contentType === 'terminal'
@@ -145,11 +149,14 @@ export default function TabGroupPanel({
             ? 'browser'
             : activeTab?.contentType === 'simulator'
               ? 'simulator'
-              : 'editor'
+              : activeTab?.contentType === 'database'
+                ? 'database'
+                : 'editor'
       }
       onActivateFile={commands.activateEditor}
       onCloseFile={commands.closeItem}
       onActivateBrowserTab={commands.activateBrowser}
+      onActivateDatabaseTab={commands.activateDatabase}
       onCloseBrowserTab={(browserTabId) => {
         const item = model.groupTabs.find(
           (candidate) => candidate.entityId === browserTabId && candidate.contentType === 'browser'
@@ -355,7 +362,8 @@ export default function TabGroupPanel({
         {activeTab &&
           activeTab.contentType !== 'terminal' &&
           activeTab.contentType !== 'browser' &&
-          activeTab.contentType !== 'simulator' && (
+          activeTab.contentType !== 'simulator' &&
+          activeTab.contentType !== 'database' && (
             <div className="absolute inset-0 flex min-h-0 min-w-0">
               {/* Why: split groups render editor content inside a plain relative pane body
                   instead of the legacy flex column in Terminal.tsx. */}
@@ -373,6 +381,21 @@ export default function TabGroupPanel({
               </Suspense>
             </div>
           )}
+
+        {model.groupTabs
+          .filter((tab) => tab.contentType === 'database')
+          .map((tab) => {
+            const isActive = tab.id === activeTab?.id
+            return (
+              <div
+                key={tab.id}
+                className={isActive ? 'absolute inset-0 min-h-0 min-w-0' : 'hidden'}
+                aria-hidden={!isActive}
+              >
+                <DatabasePane tab={tab} />
+              </div>
+            )
+          })}
 
         {/* Why: terminal/browser/simulator panes are rendered at the worktree level by
             overlay layers and absolutely positioned over this body element

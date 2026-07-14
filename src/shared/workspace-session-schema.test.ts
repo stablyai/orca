@@ -51,6 +51,67 @@ describe('parseWorkspaceSession', () => {
     expect(result.ok).toBe(true)
   })
 
+  it('restores database tab state without retaining credentials', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      unifiedTabs: {
+        wt: [
+          {
+            id: 'database-tab',
+            entityId: 'database-tab',
+            groupId: 'group-1',
+            worktreeId: 'wt',
+            contentType: 'database',
+            label: 'Database Query',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            database: {
+              profileId: 'profile-p8-app',
+              connection: {
+                providerId: 'postgres',
+                host: 'db.internal',
+                port: 5432,
+                database: 'app',
+                schema: 'reporting',
+                user: 'developer',
+                sslMode: 'require',
+                password: 'must-not-survive'
+              },
+              queryDraft: 'SELECT 1',
+              readOnly: true,
+              credential: { password: 'must-not-survive' }
+            }
+          }
+        ]
+      },
+      tabGroups: {
+        wt: [
+          {
+            id: 'group-1',
+            worktreeId: 'wt',
+            activeTabId: 'database-tab',
+            tabOrder: ['database-tab']
+          }
+        ]
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+    const database = result.value.unifiedTabs?.wt?.[0]?.database
+    expect(database?.queryDraft).toBe('SELECT 1')
+    expect(database?.profileId).toBe('profile-p8-app')
+    expect(database?.connection.schema).toBe('reporting')
+    expect(JSON.stringify(database)).not.toContain('must-not-survive')
+  })
+
   it('preserves an isolated browser tab session partition across hydration', () => {
     // Regression for #6923: the resolved partition must survive persist→load,
     // otherwise a restored isolated tab falls back to the shared default

@@ -41,6 +41,7 @@ import type {
   LocalWindowsRuntimePreference
 } from './project-execution-runtime'
 import type { UsagePercentageDisplay } from './usage-percentage-display'
+import type { DatabaseTabState } from './database-types'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -779,8 +780,9 @@ export type TabContentType =
   | 'check-details'
   | 'browser'
   | 'simulator'
+  | 'database'
 
-export type WorkspaceVisibleTabType = 'terminal' | 'editor' | 'browser' | 'simulator'
+export type WorkspaceVisibleTabType = 'terminal' | 'editor' | 'browser' | 'simulator' | 'database'
 export type CtrlTabOrderMode = 'mru' | 'sequential'
 
 export type Tab = {
@@ -798,6 +800,8 @@ export type Tab = {
   createdAt: number
   isPreview?: boolean // preview tabs get replaced by next single-click open
   isPinned?: boolean // pinned tabs survive "close others"
+  /** Database query state is persisted with the tab, but credentials never are. */
+  database?: DatabaseTabState
   /** Why: per-tab rendering mode for coding-agent terminals. `'chat'` shows the
    *  native chat view as an overlay while the live terminal stays mounted
    *  underneath; `'terminal'` (the default for legacy/missing) shows the raw

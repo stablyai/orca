@@ -22,7 +22,7 @@ import {
   handleSwitchTerminalTab
 } from './ipc-tab-switch'
 
-type ActiveTabType = 'terminal' | 'editor' | 'browser' | 'simulator'
+type ActiveTabType = 'terminal' | 'editor' | 'browser' | 'simulator' | 'database'
 
 type MockGroup = {
   id: string
@@ -233,6 +233,21 @@ describe('handleSwitchTab', () => {
     expect(store.setActiveTab).not.toHaveBeenCalled()
     expect(store.setActiveFile).not.toHaveBeenCalled()
     expect(store.setActiveTabType).toHaveBeenCalledWith('browser')
+  })
+
+  it('activates database tabs as unified tabs instead of editor files', () => {
+    const store = makeStore('database')
+    store.groupsByWorktree = { 'wt-1': [{ id: 'group-1', activeTabId: 'database-1' }] }
+    getStateMock.mockReturnValue(store)
+    getActiveTabNavOrderMock.mockReturnValue([
+      { type: 'database', id: 'database-1', tabId: 'database-1' },
+      { type: 'database', id: 'database-2', tabId: 'database-2' }
+    ])
+
+    expect(handleSwitchTab(1)).toBe(true)
+    expect(store.activateTab).toHaveBeenCalledWith('database-2')
+    expect(store.setActiveFile).not.toHaveBeenCalled()
+    expect(store.setActiveTabType).toHaveBeenCalledWith('database')
   })
 
   it('returns false when the active type has only one tab', () => {

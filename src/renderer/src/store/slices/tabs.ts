@@ -65,6 +65,7 @@ export type TabsSlice = {
         | 'color'
         | 'isPreview'
         | 'isPinned'
+        | 'database'
       > & {
         targetGroupId: string
         activate: boolean
@@ -91,6 +92,7 @@ export type TabsSlice = {
         | 'color'
         | 'isPreview'
         | 'isPinned'
+        | 'database'
       > & {
         activate: boolean
         recordInteraction: boolean
@@ -116,6 +118,7 @@ export type TabsSlice = {
     opts?: { recordInteraction?: boolean }
   ) => void
   setTabLabel: (tabId: string, label: string) => void
+  setDatabaseTabState: (tabId: string, database: NonNullable<Tab['database']>) => void
   /** Set a tab's view mode (terminal vs native chat). Patches only that tab. */
   setTabViewMode: (tabId: string, mode: 'terminal' | 'chat') => void
   /** Flip a tab between the terminal and native chat renderings. The live
@@ -167,6 +170,7 @@ export type TabsSlice = {
         | 'customLabel'
         | 'color'
         | 'isPinned'
+        | 'database'
       >
     >
   ) => Tab | null
@@ -409,7 +413,12 @@ function collapseGroupLayout(
 }
 
 function toVisibleTabType(contentType: TabContentType): WorkspaceVisibleTabType {
-  if (contentType === 'browser' || contentType === 'terminal' || contentType === 'simulator') {
+  if (
+    contentType === 'browser' ||
+    contentType === 'terminal' ||
+    contentType === 'simulator' ||
+    contentType === 'database'
+  ) {
     return contentType
   }
   return 'editor'
@@ -662,7 +671,8 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         sortOrder: nextOrder.length,
         createdAt: Date.now(),
         isPreview: init?.isPreview,
-        isPinned: init?.isPinned
+        isPinned: init?.isPinned,
+        database: init?.database
       }
 
       nextOrder = dedupeTabOrder([...nextOrder, created.id])
@@ -734,7 +744,8 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         sortOrder: 0,
         createdAt: Date.now(),
         isPreview: init?.isPreview,
-        isPinned: init?.isPinned
+        isPinned: init?.isPinned,
+        database: init?.database
       }
       const newGroup: TabGroup = {
         id: newGroupId,
@@ -1081,6 +1092,10 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
 
   setTabLabel: (tabId, label) => {
     set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { label }) ?? {})
+  },
+
+  setDatabaseTabState: (tabId, database) => {
+    set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { database }) ?? {})
   },
 
   setTabViewMode: (tabId, mode) => {
@@ -1767,6 +1782,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       customLabel: init?.customLabel ?? tab.customLabel,
       color: init?.color ?? tab.color,
       isPinned: init?.isPinned ?? tab.isPinned,
+      database: init?.database ?? tab.database,
       id: init?.id,
       targetGroupId
     })
@@ -1923,6 +1939,9 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         return liveBrowserIds.has(tab.entityId)
       }
       if (tab.contentType === 'simulator') {
+        return true
+      }
+      if (tab.contentType === 'database') {
         return true
       }
       return liveEditorIds.has(tab.entityId)

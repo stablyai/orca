@@ -2796,7 +2796,8 @@
             "2148f65e04": "PowerShell",
             "ab589350e5": "无法为 {{value0}} 构建启动命令。",
             "7a9b4af2af": "向左滚动标签页",
-            "232e075b07": "向右滚动标签页"
+            "232e075b07": "向右滚动标签页",
+            "newDatabase": "New Database Query"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "创建文件",
@@ -2866,7 +2867,13 @@
                   "1baeb07c17": "iOS 模拟器",
                   "8a580f88cf": "iPhone",
                   "7ecdc5ef08": "iPad",
-                  "14965cc123": "移动端"
+                  "14965cc123": "移动端",
+                  "newDatabase": "New Database Query",
+                  "database": "database",
+                  "sql": "sql",
+                  "query": "query",
+                  "postgres": "postgres",
+                  "postgresql": "postgresql"
                 }
               }
             }
@@ -12960,6 +12967,65 @@
         "searchLabels": "筛选标签…",
         "searchAssignee": "筛选负责人…",
         "back": "返回"
+      },
+      "database": {
+        "connection": {
+          "title": "PostgreSQL connection",
+          "description": "The query runs on the runtime that owns this project. The password stays in memory and is never saved with the tab.",
+          "host": "Host",
+          "port": "Port",
+          "database": "Database",
+          "user": "User",
+          "password": "Password",
+          "tls": "TLS",
+          "tlsDisabled": "Disabled",
+          "tlsRequired": "Required",
+          "tlsVerify": "Verify certificate",
+          "connect": "Test and connect",
+          "savedProfile": "Profile",
+          "newProfile": "New profile",
+          "deleteProfile": "Delete profile",
+          "profileName": "Profile name",
+          "passwordSaved": "Saved in node vault",
+          "rememberPassword": "Remember password on this node so every client paired to it can use this profile.",
+          "saveAndConnect": "Save and connect"
+        },
+        "owner": {
+          "runtime": "Runtime: {{value0}}",
+          "local": "Local desktop",
+          "runtimeSsh": "Runtime: {{value0}} → SSH: {{value1}}",
+          "ssh": "SSH: {{value0}}"
+        },
+        "toolbar": {
+          "readOnly": "Read only",
+          "editConnection": "Edit connection",
+          "cancel": "Cancel",
+          "run": "Run",
+          "shortcut": "{{value0}}Enter · {{value1}} row limit",
+          "resultSummary": "{{value0}} rows{{value1}} · {{value2}} ms",
+          "allSchemas": "All schemas"
+        },
+        "editor": {
+          "label": "SQL query"
+        },
+        "results": {
+          "empty": "Run a query to see results.",
+          "summary": "{{value0}} · {{value1}} rows · {{value2}} ms",
+          "complete": "Query complete",
+          "null": "NULL"
+        },
+        "schema": {
+          "connect": "Connect to load the schema.",
+          "empty": "No user tables found."
+        },
+        "tab": {
+          "title": "Database Query",
+          "closeLabel": "Close database tab",
+          "unpin": "Unpin Tab",
+          "pin": "Pin Tab",
+          "close": "Close",
+          "closeRight": "Close Tabs To The Right"
+        }
       }
     },
     "i18n": {
