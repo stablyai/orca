@@ -9047,6 +9047,32 @@
             "title": "Web Chat Import Directories",
             "description": "Choose the folder each web agent imports conversations from."
           }
+        },
+        "WebChatBrowserLinkSection": {
+          "installSuccess": "Browser linked.",
+          "installError": "Couldn't link the browser.",
+          "copySuccess": "Copied the extension folder path.",
+          "copyError": "Couldn't copy the path.",
+          "sectionTitle": "Browser linking",
+          "sectionDescription": "Detect your browsers, install the native messaging host, and load the Orca extension so web chats import automatically.",
+          "lastSyncedHeading": "Last synced",
+          "loading": "Checking browsers...",
+          "badgeLinked": "Linked",
+          "badgeNotInstalled": "Not installed",
+          "badgeNotDetected": "Not detected",
+          "reinstall": "Reinstall",
+          "install": "Install",
+          "notDetectedHint": "This browser wasn't detected on your system.",
+          "neverSynced": "Never",
+          "guideHeading": "Load the extension",
+          "guideStep1": "Open your browser's extensions page (for example chrome://extensions).",
+          "guideStep2": "Turn on Developer mode.",
+          "guideStep3": "Choose \"Load unpacked\" and select the folder below.",
+          "copyPath": "Copy extension folder path",
+          "justNow": "Just now",
+          "minutesAgo": "{{value0}}m ago",
+          "hoursAgo": "{{value0}}h ago",
+          "daysAgo": "{{value0}}d ago"
         }
       },
       "right": {

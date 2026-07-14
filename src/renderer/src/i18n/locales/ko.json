@@ -9047,6 +9047,32 @@
             "title": "Web Chat Import Directories",
             "description": "Choose the folder each web agent imports conversations from."
           }
+        },
+        "WebChatBrowserLinkSection": {
+          "installSuccess": "브라우저를 연동했어요.",
+          "installError": "브라우저를 연동하지 못했어요.",
+          "copySuccess": "확장 프로그램 폴더 경로를 복사했어요.",
+          "copyError": "경로를 복사하지 못했어요.",
+          "sectionTitle": "브라우저 연동",
+          "sectionDescription": "브라우저를 감지하고 네이티브 메시징 호스트를 설치한 뒤 Orca 확장 프로그램을 불러오면 웹 대화가 자동으로 들어와요.",
+          "lastSyncedHeading": "마지막 동기화",
+          "loading": "브라우저를 확인하는 중이에요...",
+          "badgeLinked": "연동됨",
+          "badgeNotInstalled": "미설치",
+          "badgeNotDetected": "감지 안 됨",
+          "reinstall": "다시 설치",
+          "install": "설치",
+          "notDetectedHint": "이 브라우저가 시스템에서 감지되지 않았어요.",
+          "neverSynced": "없음",
+          "guideHeading": "확장 프로그램 불러오기",
+          "guideStep1": "브라우저 확장 프로그램 페이지를 열어요 (예: chrome://extensions).",
+          "guideStep2": "개발자 모드를 켜요.",
+          "guideStep3": "\"압축해제된 확장 프로그램을 로드합니다\"를 눌러 아래 폴더를 선택해요.",
+          "copyPath": "확장 프로그램 폴더 경로 복사",
+          "justNow": "방금",
+          "minutesAgo": "{{value0}}분 전",
+          "hoursAgo": "{{value0}}시간 전",
+          "daysAgo": "{{value0}}일 전"
         }
       },
       "right": {

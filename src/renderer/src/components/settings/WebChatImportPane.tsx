@@ -12,6 +12,7 @@ import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { SearchableSetting } from './SearchableSetting'
+import { WebChatBrowserLinkSection } from './WebChatBrowserLinkSection'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { translate } from '@/i18n/i18n'
 
@@ -29,36 +30,39 @@ export function WebChatImportPane({
   const defaultDirByAgent = resolveWebChatCwdByAgent({}, settings.workspaceDir)
 
   return (
-    <SearchableSetting
-      title={translate('auto.components.settings.WebChatImportPane.paneTitle', 'Web Chat Import')}
-      description={translate(
-        'auto.components.settings.WebChatImportPane.paneDescription',
-        'Choose the folder each web agent imports conversations from. Leave a field empty to use the default folder inside your workspace directory.'
-      )}
-      keywords={[
-        'web chat',
-        'chatgpt',
-        'claude.ai',
-        'gemini',
-        'import',
-        'directory',
-        'folder',
-        'ai vault',
-        'transcripts'
-      ]}
-      className="space-y-3"
-    >
-      {WEB_CHAT_AGENTS.map((agent) => (
-        <WebChatAgentDirectoryRow
-          key={agent}
-          agent={agent}
-          value={settings.webChatDirByAgent?.[agent] ?? ''}
-          placeholder={defaultDirByAgent[agent]}
-          webChatDirByAgent={settings.webChatDirByAgent}
-          updateSettings={updateSettings}
-        />
-      ))}
-    </SearchableSetting>
+    <div className="space-y-6">
+      <SearchableSetting
+        title={translate('auto.components.settings.WebChatImportPane.paneTitle', 'Web Chat Import')}
+        description={translate(
+          'auto.components.settings.WebChatImportPane.paneDescription',
+          'Choose the folder each web agent imports conversations from. Leave a field empty to use the default folder inside your workspace directory.'
+        )}
+        keywords={[
+          'web chat',
+          'chatgpt',
+          'claude.ai',
+          'gemini',
+          'import',
+          'directory',
+          'folder',
+          'ai vault',
+          'transcripts'
+        ]}
+        className="space-y-3"
+      >
+        {WEB_CHAT_AGENTS.map((agent) => (
+          <WebChatAgentDirectoryRow
+            key={agent}
+            agent={agent}
+            value={settings.webChatDirByAgent?.[agent] ?? ''}
+            placeholder={defaultDirByAgent[agent]}
+            webChatDirByAgent={settings.webChatDirByAgent}
+            updateSettings={updateSettings}
+          />
+        ))}
+      </SearchableSetting>
+      <WebChatBrowserLinkSection />
+    </div>
   )
 }
 
