@@ -16,7 +16,11 @@ import { join } from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { createManagedCommandMatcher, wrapPosixHookCommand } from '../agent-hooks/installer-utils'
+import {
+  createManagedCommandMatcher,
+  wrapPosixHookCommand,
+  wrapWindowsCrossShellHookCommand
+} from '../agent-hooks/installer-utils'
 import { computeTrustedHash, upsertHookTrustEntriesInContent } from './config-toml-trust'
 
 const { getPathMock, homedirMock } = vi.hoisted(() => ({
@@ -261,7 +265,7 @@ describe('CodexHookService', () => {
 
       const command = hooksConfig.hooks.Stop?.[0]?.hooks?.[0]?.command ?? ''
       expect(command).toBe(
-        join(tmpHome, '.orca', 'agent-hooks', 'codex-hook.cmd').replaceAll('\\', '/')
+        wrapWindowsCrossShellHookCommand(join(tmpHome, '.orca', 'agent-hooks', 'codex-hook.cmd'))
       )
 
       const result = spawnSync('powershell.exe', ['-NoProfile', '-Command', command], {
