@@ -19,8 +19,14 @@ beforeEach(() => {
 })
 afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
-test('claudeProjectSlug: / 와 . 를 - 로', () => {
+test('claudeProjectSlug: 영숫자 아닌 문자(/·.·공백·비ASCII)를 모두 - 로', () => {
   expect(claudeProjectSlug('/Users/x/a.b/c')).toBe('-Users-x-a-b-c')
+  // Why: Claude는 공백·한글 등 비영숫자도 -로 접는다(실제 native 세션 dir 역산으로 확인).
+  // 이걸 놓치면 한글/공백 cwd에서 claude --resume이 세션 파일을 못 찾는다.
+  expect(claudeProjectSlug('/Users/macbook/Desktop/오르카테스트')).toBe(
+    '-Users-macbook-Desktop-------'
+  )
+  expect(claudeProjectSlug('/Users/x/AI 에이전트')).toBe('-Users-x-AI-----')
 })
 
 test('writeWebChatAsClaudeSession: parentUuid 체인 + sessionId==파일명 + 필드셋', () => {

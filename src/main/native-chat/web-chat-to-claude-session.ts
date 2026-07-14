@@ -5,10 +5,11 @@ import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { isTextBlock, type NativeChatMessage } from '../../shared/native-chat-types'
 
-// Why: Claude Code는 cwd의 '/'·'.'를 '-'로 접어 projects/<slug> 디렉토리를 만든다.
-// go/no-go로 이 인코딩이면 claude --resume이 파일을 찾는 걸 확인함.
+// Why: Claude Code는 cwd의 영숫자가 아닌 모든 문자(/, ., 공백, 한글 등 비ASCII)를 '-'로
+// 접어 projects/<slug> 디렉토리를 만든다. 실제 native 세션 dir을 역산해 확인함 — '/'·'.'만
+// 바꾸면 한글/공백 경로에서 slug가 어긋나 claude --resume이 세션을 못 찾는다.
 export function claudeProjectSlug(cwd: string): string {
-  return cwd.replace(/[/.]/g, '-')
+  return cwd.replace(/[^A-Za-z0-9]/g, '-')
 }
 
 let cachedVersion: string | null = null
