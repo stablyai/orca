@@ -1,5 +1,9 @@
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 import { compareFileNames } from '../../../shared/file-name-sort'
+import {
+  hasIdentifierTransitionMatchBeforeSeparator,
+  isPathSeparator
+} from './quick-open-word-boundaries'
 
 export const QUICK_OPEN_RESULT_LIMIT = 50
 export const QUICK_OPEN_QUERY_MAX_BYTES = 2 * 1024
@@ -84,8 +88,10 @@ export function rankQuickOpenFiles(
     }
     return finalizeResults(results)
   }
-  const compactFilenameQuery = normalizedQuery.includes(' ')
-    ? normalizedQuery.replace(/ /g, '')
+  // Why: spaces, hyphens, and underscores are equivalent human separators, so
+  // camelCase basenames earn the filename boost for all three query styles.
+  const compactFilenameQuery = /[ _-]/.test(normalizedQuery)
+    ? normalizedQuery.replace(/[ _-]/g, '')
     : null
   const hasFlexibleIdentifierSeparator =
     normalizedQuery.includes('_') || normalizedQuery.includes('-')
@@ -157,6 +163,21 @@ function fuzzyMatchIndexedFile(
       continue
     }
 
+    if (
+      isIdentifierSeparator(query[qi]) &&
+      qi + 1 < query.length &&
+      lastMatchIdx >= 0 &&
+      hasIdentifierTransitionMatchBeforeSeparator(path, wordStarts, lastMatchIdx + 1, query[qi + 1])
+    ) {
+      // Why: typed separators also bridge zero-width case transitions. Rank
+      // literal (0) < swapped separator (+1) < case transition (+2) so the
+      // order stays deterministic regardless of the filename boost.
+      score += 2
+      qi++
+      requireWordStart = true
+      continue
+    }
+
     const wanted = query[qi]
     let matched = false
     for (let ti = lastMatchIdx + 1; ti < path.length; ti++) {
@@ -187,6 +208,13 @@ function fuzzyMatchIndexedFile(
     }
 
     if (!matched) {
+      // Why: a trailing separator mid-typing ("product-") must not blank out
+      // results that a trailing space would keep; literal was tried above.
+      if (isIdentifierSeparator(wanted) && qi === query.length - 1 && lastMatchIdx >= 0) {
+        score += 2
+        qi++
+        continue
+      }
       return null
     }
   }
@@ -265,10 +293,6 @@ function includesIgnoringSeparators(value: string, wanted: string): boolean {
     }
   }
   return false
-}
-
-function isPathSeparator(ch: string): boolean {
-  return ch === '/' || ch === '_' || ch === '-' || ch === '.' || ch === ' '
 }
 
 function searchCharactersMatch(valueChar: string, queryChar: string): boolean {

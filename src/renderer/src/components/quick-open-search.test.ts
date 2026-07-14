@@ -230,20 +230,72 @@ describe('quick-open-search', () => {
     ])
   })
 
+  it('matches spaced and identifier-separated queries to PascalCase names', () => {
+    const files = prepareQuickOpenFiles(['ui/ProductDetail.tsx', 'ui/OrderDetail.tsx'])
+
+    for (const query of ['product detail', 'product-detail', 'product_detail']) {
+      expect(rankQuickOpenFiles(query, files).map((item) => item.path)).toEqual([
+        'ui/ProductDetail.tsx'
+      ])
+    }
+  })
+
+  it('gives PascalCase filenames the same boost for spaced and separator queries', () => {
+    const files = prepareQuickOpenFiles([
+      'archive/old-product-detail-backup.txt',
+      'ui/ProductDetail.tsx'
+    ])
+
+    for (const query of ['product detail', 'product-detail', 'product_detail']) {
+      const results = rankQuickOpenFiles(query, files)
+      expect(results.map((item) => item.path)).toEqual([
+        'archive/old-product-detail-backup.txt',
+        'ui/ProductDetail.tsx'
+      ])
+      // Why: without boost parity the camelCase file trailed by ~100 points
+      // for `-`/`_` queries while staying competitive for spaced ones.
+      expect(results[1].score).toBeLessThan(-100)
+    }
+  })
+
+  it('keeps camelCase matches while typing a trailing separator', () => {
+    const files = prepareQuickOpenFiles(['lib/product-x.ts', 'ui/ProductDetail.tsx'])
+
+    expect(rankQuickOpenFiles('product-', files).map((item) => item.path)).toEqual([
+      'lib/product-x.ts',
+      'ui/ProductDetail.tsx'
+    ])
+    expect(rankQuickOpenFiles('product_', files).map((item) => item.path)).toEqual([
+      'lib/product-x.ts',
+      'ui/ProductDetail.tsx'
+    ])
+  })
+
+  it('requires a literal separator for leading separator queries', () => {
+    const files = prepareQuickOpenFiles(['ui/ProductDetail.tsx', 'ui/-detail.tsx'])
+
+    expect(rankQuickOpenFiles('-detail', files).map((item) => item.path)).toEqual([
+      'ui/-detail.tsx'
+    ])
+  })
+
   it('treats hyphens and underscores as interchangeable identifier separators', () => {
     const variants = prepareQuickOpenFiles([
       'lib/product-detail.dart',
       'lib/product_detail.dart',
+      'lib/ProductDetail.tsx',
       'lib/order_detail.dart'
     ])
 
     expect(rankQuickOpenFiles('product-detail', variants).map((item) => item.path)).toEqual([
       'lib/product-detail.dart',
-      'lib/product_detail.dart'
+      'lib/product_detail.dart',
+      'lib/ProductDetail.tsx'
     ])
     expect(rankQuickOpenFiles('product_detail', variants).map((item) => item.path)).toEqual([
       'lib/product_detail.dart',
-      'lib/product-detail.dart'
+      'lib/product-detail.dart',
+      'lib/ProductDetail.tsx'
     ])
   })
 
