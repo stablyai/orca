@@ -5,7 +5,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import type { TuiAgent } from '../../../../shared/types'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
-import { resumeWebChatAsLocalAgent } from './ai-vault-web-chat-resume'
+import { useWorktreeById } from '@/store/selectors'
+import { resumeWebChatWithAgent } from './ai-vault-web-chat-resume'
 
 // Web resume seeds the default local agent with the imported transcript. Disabled
 // when there is no valid default agent or no active workspace to launch into; a
@@ -20,6 +21,9 @@ export function AiVaultWebChatResumeButton({
   resumeAgent: TuiAgent | null
   activeWorktreeId: string | null
 }): React.JSX.Element {
+  // Why: convert-or-seed (resumeWebChatWithAgent) needs the worktree's cwd/branch
+  // to write a resumable Claude session in the right project directory.
+  const worktree = useWorktreeById(activeWorktreeId ?? null)
   const disabled = !resumeAgent || !activeWorktreeId
   const hint = !resumeAgent
     ? translate(
@@ -42,11 +46,13 @@ export function AiVaultWebChatResumeButton({
       draggable={false}
       onClick={(event) => {
         event.stopPropagation()
-        if (resumeAgent && activeWorktreeId) {
-          void resumeWebChatAsLocalAgent({
+        if (resumeAgent && activeWorktreeId && worktree) {
+          void resumeWebChatWithAgent({
             session,
             agent: resumeAgent,
-            worktreeId: activeWorktreeId
+            worktreeId: activeWorktreeId,
+            cwd: worktree.path,
+            gitBranch: worktree.branch || null
           })
         }
       }}
