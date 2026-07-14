@@ -1,5 +1,6 @@
 import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { nativeMessagingManifestPath, windowsRegistryHostKey } from './native-messaging-host-paths'
 import {
   buildNativeMessagingManifest,
   NATIVE_MESSAGING_HOST_NAME
@@ -21,41 +22,6 @@ export type InstallOptions = {
 }
 
 export type InstallResult = { launcherPath: string; manifestPath: string }
-
-// Per-browser NativeMessagingHosts directory, relative to the OS config root.
-const BROWSER_DIR: Record<InstallBrowser, { darwin: string[]; linux: string[] }> = {
-  chrome: { darwin: ['Google', 'Chrome'], linux: ['google-chrome'] },
-  edge: { darwin: ['Microsoft Edge'], linux: ['microsoft-edge'] },
-  brave: {
-    darwin: ['BraveSoftware', 'Brave-Browser'],
-    linux: ['BraveSoftware', 'Brave-Browser']
-  },
-  chromium: { darwin: ['Chromium'], linux: ['chromium'] }
-}
-
-// Per-browser registry hive under HKCU, mirroring BROWSER_DIR for Windows —
-// each Chromium-based browser reads NativeMessagingHosts from its own hive.
-const WINDOWS_REGISTRY_BASE: Record<InstallBrowser, string> = {
-  chrome: 'Software\\Google\\Chrome',
-  edge: 'Software\\Microsoft\\Edge',
-  brave: 'Software\\BraveSoftware\\Brave-Browser',
-  chromium: 'Software\\Chromium'
-}
-
-function hostDir(options: InstallOptions): string {
-  const seg = BROWSER_DIR[options.browser]
-  if (options.platform === 'darwin') {
-    return join(
-      options.homeDir,
-      'Library',
-      'Application Support',
-      ...seg.darwin,
-      'NativeMessagingHosts'
-    )
-  }
-  // linux
-  return join(options.homeDir, '.config', ...seg.linux, 'NativeMessagingHosts')
-}
 
 function writeLauncher(options: InstallOptions): string {
   const dir = join(options.userDataPath, 'chat-import')
@@ -84,23 +50,17 @@ function writeLauncher(options: InstallOptions): string {
 export function installNativeMessagingHost(options: InstallOptions): InstallResult {
   const launcherPath = writeLauncher(options)
   const manifest = buildNativeMessagingManifest({ launcherPath, extensionId: options.extensionId })
+  const manifestPath = nativeMessagingManifestPath(options)
 
   if (options.platform === 'win32') {
     // Windows: manifest lives on disk; the registry value under the
     // browser's own hive points that browser at it.
-    const dir = join(options.userDataPath, 'chat-import')
-    const manifestPath = join(dir, `${NATIVE_MESSAGING_HOST_NAME}.json`)
     writeFileSync(manifestPath, JSON.stringify(manifest, null, 2))
-    options.runRegistry(
-      `HKCU\\${WINDOWS_REGISTRY_BASE[options.browser]}\\NativeMessagingHosts\\${NATIVE_MESSAGING_HOST_NAME}`,
-      manifestPath
-    )
+    options.runRegistry(`HKCU\\${windowsRegistryHostKey(options.browser)}`, manifestPath)
     return { launcherPath, manifestPath }
   }
 
-  const dir = hostDir(options)
-  mkdirSync(dir, { recursive: true })
-  const manifestPath = join(dir, `${NATIVE_MESSAGING_HOST_NAME}.json`)
+  mkdirSync(dirname(manifestPath), { recursive: true })
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2))
   return { launcherPath, manifestPath }
 }
