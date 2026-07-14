@@ -8,6 +8,7 @@ const require = createRequire(import.meta.url)
 const electronBuilderConfig = require('../electron-builder.config.cjs')
 const electronBuilderNativeRebuild = require('./electron-builder-native-rebuild.cjs')
 const {
+  PACKAGED_RUNTIME_PACKAGE_ROOTS,
   createPackagedRuntimeNodeModuleResources,
   findAsarEntry,
   prunePackagedNodePty,
@@ -19,6 +20,10 @@ const {
 } = require('../packaged-runtime-node-modules.cjs')
 
 describe('electron-builder config', () => {
+  it('copies database driver packages required by the main process', () => {
+    expect(PACKAGED_RUNTIME_PACKAGE_ROOTS).toEqual(expect.arrayContaining(['pg', 'pg-cursor']))
+  })
+
   it('excludes repo-only source trees from app.asar', () => {
     expect(electronBuilderConfig.files).toEqual(
       expect.arrayContaining([
