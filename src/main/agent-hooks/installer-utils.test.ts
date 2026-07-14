@@ -21,6 +21,7 @@ import {
   hookDefinitionHasManagedCommand,
   removeManagedCommands,
   wrapPosixHookCommand,
+  wrapWindowsCrossShellHookCommand,
   wrapWindowsCmdHookCommand,
   wrapWindowsGitBashHookCommand,
   wrapWindowsHookCommand,
@@ -481,6 +482,22 @@ describe('wrapWindowsCmdHookCommand', () => {
   it('falls back to the encoded launcher when cmd.exe would split or expand the path', () => {
     const scriptPath = 'C:\\Users\\Jane Doe\\%ORCA_TEST%\\codex-hook.cmd'
     const command = wrapWindowsCmdHookCommand(scriptPath)
+    expect(command).toMatch(qualifiedWindowsPowerShellCommand)
+    expect(decodeWindowsHookCommand(command)).toBe(expectedDecodedWindowsHookCommand(scriptPath))
+  })
+})
+
+describe('wrapWindowsCrossShellHookCommand', () => {
+  it('uses a forward-slash direct path when every supported Windows shell can parse it', () => {
+    expect(
+      wrapWindowsCrossShellHookCommand('C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd')
+    ).toBe('C:/Users/alice/.orca/agent-hooks/codex-hook.cmd')
+  })
+
+  it('falls back to the encoded launcher when the path needs shell quoting', () => {
+    const scriptPath = 'C:\\Users\\Jane Doe\\.orca\\agent-hooks\\codex-hook.cmd'
+    const command = wrapWindowsCrossShellHookCommand(scriptPath)
+
     expect(command).toMatch(qualifiedWindowsPowerShellCommand)
     expect(decodeWindowsHookCommand(command)).toBe(expectedDecodedWindowsHookCommand(scriptPath))
   })

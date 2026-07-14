@@ -13,7 +13,7 @@ import {
 import { homedir, tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { createManagedCommandMatcher, wrapPosixHookCommand } from '../agent-hooks/installer-utils'
@@ -246,11 +246,10 @@ describe('CodexHookService', () => {
     }
   )
 
-  // Why: the common case — a profile path with no spaces or cmd metacharacters
-  // — must launch the .cmd directly with no PowerShell, restoring the pre-#6078
-  // speed that Codex 0.140's synchronous "Running <event> hook" rows expose.
+  // Why: Codex runs hooks through the session shell, which may be PowerShell;
+  // a CMD-only guard fails before the managed script can drain stdin.
   it.skipIf(process.platform !== 'win32')(
-    'launches the managed .cmd directly when the profile path is cmd-safe',
+    'runs a shell-safe managed hook through PowerShell without a shell syntax failure',
     () => {
       const status = new CodexHookService().install()
       expect(status.state).toBe('installed')
@@ -260,16 +259,23 @@ describe('CodexHookService', () => {
         readFileSync(join(managedCodexHome, 'hooks.json'), 'utf-8')
       ) as { hooks: Record<string, { hooks?: { command?: string }[] }[]> }
 
-      // Why: the temp home is normally cmd-safe; guard so a runner whose tmpdir
-      // holds an exotic character still asserts the correct (fallback) branch.
       const command = hooksConfig.hooks.Stop?.[0]?.hooks?.[0]?.command ?? ''
-      const cmdSafe = /^[A-Za-z0-9_.:\\~-]+$/.test(join(tmpHome, '.orca', 'agent-hooks'))
-      if (cmdSafe) {
-        expect(command).not.toMatch(/powershell/i)
-        expect(command).toMatch(/\\agent-hooks\\codex-hook\.cmd$/)
-      } else {
-        expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
-      }
+      expect(command).toBe(
+        join(tmpHome, '.orca', 'agent-hooks', 'codex-hook.cmd').replaceAll('\\', '/')
+      )
+
+      const result = spawnSync('powershell.exe', ['-NoProfile', '-Command', command], {
+        env: {
+          ...process.env,
+          ORCA_AGENT_HOOK_ENDPOINT: '',
+          ORCA_AGENT_HOOK_PORT: '',
+          ORCA_AGENT_HOOK_TOKEN: '',
+          ORCA_PANE_KEY: ''
+        },
+        input: Buffer.alloc(1_000_000, 'x')
+      })
+      expect(result.error).toBeUndefined()
+      expect(result.status).toBe(0)
     }
   )
 

@@ -13,7 +13,7 @@ import {
   readHooksJson,
   removeManagedCommands,
   wrapPosixHookCommand,
-  wrapWindowsCmdHookCommand,
+  wrapWindowsCrossShellHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition
@@ -131,8 +131,10 @@ function getManagedScriptPath(): string {
 }
 
 function getManagedCommand(scriptPath: string): string {
+  // Why: Codex runs hooks through the session shell, which can be PowerShell
+  // or Git Bash on Windows; use a command all supported shells can parse.
   return process.platform === 'win32'
-    ? wrapWindowsCmdHookCommand(scriptPath)
+    ? wrapWindowsCrossShellHookCommand(scriptPath)
     : wrapPosixHookCommand(scriptPath)
 }
 

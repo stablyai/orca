@@ -189,6 +189,13 @@ export function wrapWindowsCmdHookCommand(scriptPath: string): string {
 
 export const WINDOWS_GIT_BASH_SAFE_PATH = /^[A-Za-z0-9_.:/~-]+$/
 
+export function wrapWindowsCrossShellHookCommand(scriptPath: string): string {
+  const shellPath = scriptPath.replaceAll('\\', '/')
+  // Why: Windows hook hosts may use CMD, PowerShell, or Git Bash. Installers
+  // publish scripts first, so a safe direct path avoids another interpreter.
+  return WINDOWS_GIT_BASH_SAFE_PATH.test(shellPath) ? shellPath : wrapWindowsHookCommand(scriptPath)
+}
+
 export function wrapWindowsGitBashHookCommand(scriptPath: string): string {
   const bashPath = scriptPath.replaceAll('\\', '/')
   // Why: Claude's Git Bash runner can execute a forward-slash .cmd directly;
