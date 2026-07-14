@@ -219,7 +219,14 @@ export function registerNativeChatHandlers(): void {
   )
   ipcMain.handle(
     'nativeChat:writeWebChatClaudeSession',
-    (_event, args: NativeChatWriteWebChatClaudeSessionArgs) => writeWebChatAsClaudeSession(args)
+    // Why: whitelist fields — forwarding the raw renderer payload would let a compromised
+    // renderer smuggle in dirOverride (test-only escape hatch) for an arbitrary-dir write.
+    (_event, args: NativeChatWriteWebChatClaudeSessionArgs) =>
+      writeWebChatAsClaudeSession({
+        messages: args.messages,
+        cwd: args.cwd,
+        gitBranch: args.gitBranch
+      })
   )
   ipcMain.on('nativeChat:subscribe', (event, args: NativeChatSubscribeArgs) => {
     void handleSubscribe(event, args)

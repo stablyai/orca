@@ -1,4 +1,4 @@
-import { appendFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -310,6 +310,57 @@ describe('nativeChat:readSession handler', () => {
         error?: string
       }
       expect(result.error).toBeTruthy()
+    } finally {
+      if (previousHome === undefined) {
+        delete process.env.HOME
+      } else {
+        process.env.HOME = previousHome
+      }
+    }
+  })
+})
+
+describe('nativeChat:writeWebChatClaudeSession handler', () => {
+  it('whitelists fields and drops a renderer-supplied dirOverride (arbitrary-write hole)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-ipc-write-'))
+    tempRoots.push(root)
+    const evilDir = await mkdtemp(join(tmpdir(), 'orca-native-chat-ipc-evil-'))
+    tempRoots.push(evilDir)
+
+    registerNativeChatHandlers()
+    const handler = handlers.get('nativeChat:writeWebChatClaudeSession')
+    expect(handler).toBeDefined()
+
+    const previousHome = process.env.HOME
+    process.env.HOME = root
+    try {
+      const result = (await handler!(
+        {},
+        {
+          messages: [
+            {
+              id: 'm0',
+              role: 'user',
+              blocks: [{ type: 'text', text: 'hi' }],
+              timestamp: 0,
+              source: 'transcript'
+            }
+          ],
+          cwd: '/tmp/wt',
+          gitBranch: null,
+          // A compromised renderer could send this; the handler must not forward it.
+          dirOverride: evilDir
+        }
+      )) as { sessionId?: string; error?: string }
+      expect(result.sessionId).toBeTruthy()
+
+      // dirOverride must be dropped: nothing written under the attacker-controlled dir.
+      await expect(readdir(evilDir)).resolves.toEqual([])
+
+      // The real write path is ~/.claude/projects/<slug(cwd)>/<sessionId>.jsonl.
+      const projectDir = join(root, '.claude', 'projects', '-tmp-wt')
+      const files = await readdir(projectDir)
+      expect(files).toEqual([`${result.sessionId}.jsonl`])
     } finally {
       if (previousHome === undefined) {
         delete process.env.HOME

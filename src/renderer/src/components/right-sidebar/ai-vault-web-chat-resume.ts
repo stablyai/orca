@@ -5,9 +5,11 @@ import type { AiVaultAgent, AiVaultSession, WebChatAgent } from '../../../../sha
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { launchAiVaultSessionInNewTab } from '@/lib/launch-ai-vault-session'
 import { buildAiVaultResumeStartupForWorktree } from '@/lib/ai-vault-resume-command'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import { buildWebChatResumeSeed } from '@/lib/web-chat-resume-seed'
 import { translate } from '@/i18n/i18n'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 
 // 지원 타겟(v1). claude=진짜 변환, codex=시드. openclaude/agy/gemini는 후속.
@@ -65,6 +67,14 @@ export async function resumeWebChatWithAgent(args: {
     return
   }
   if (args.agent === 'claude') {
+    const state = useAppStore.getState()
+    const host = parseExecutionHostId(getExecutionHostIdForWorktree(state, args.worktreeId))
+    // Why: 세션 파일은 로컬 ~/.claude에 쓰지만 원격(SSH/runtime) 워크트리에선 원격 claude가
+    // 그 파일을 못 찾는다. 시드는 원격에서도 동작하므로 원격 호스트는 시드로 이어간다.
+    if (host?.kind === 'ssh' || host?.kind === 'runtime') {
+      seedResume(args, read.messages)
+      return
+    }
     const written = await window.api.nativeChat.writeWebChatClaudeSession({
       messages: read.messages,
       cwd: args.cwd,
@@ -76,7 +86,7 @@ export async function resumeWebChatWithAgent(args: {
       return
     }
     const startup = buildAiVaultResumeStartupForWorktree({
-      state: useAppStore.getState(),
+      state,
       worktreeId: args.worktreeId,
       // Why: 방금 쓴 세션을 로컬 claude 세션처럼 취급 — cwd는 세션 파일을 쓴 cwd와
       // 동일해야 claude --resume이 <slug>/<id>.jsonl을 찾는다.

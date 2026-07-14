@@ -105,3 +105,15 @@ test('writeWebChatAsClaudeSession: 빈 대화 → error', () => {
   })
   expect('error' in res).toBe(true)
 })
+
+test('writeWebChatAsClaudeSession: timestamp가 범위 밖(RangeError 유발)이어도 throw 대신 {error} 반환', () => {
+  // Date 생성자는 8.64e15ms를 넘는 값에서 Invalid Date가 아니라 RangeError를 던진다.
+  // 레코드 빌딩이 try 밖에 있으면 여기서 그대로 throw되어 호출자의 error→seed 폴백이 못 돈다.
+  const res = writeWebChatAsClaudeSession({
+    messages: [msg('user', 'hi', 8.7e15)],
+    cwd: '/tmp/wt',
+    gitBranch: null,
+    dirOverride: dir
+  })
+  expect('error' in res).toBe(true)
+})

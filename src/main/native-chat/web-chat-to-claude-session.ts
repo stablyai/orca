@@ -61,45 +61,48 @@ export function writeWebChatAsClaudeSession(args: {
     userType: 'external' as const,
     isSidechain: false
   }
-  const lines: string[] = []
-  let parentUuid: string | null = null
-  for (const m of turns) {
-    const uuid = randomUUID()
-    const text = messageText(m)
-    // 각 메시지 고유 timestamp를 쓴다. 없으면(null) 기록 시각으로 대체 — 다회차 대화의 순서를 보존.
-    const timestamp =
-      m.timestamp != null ? new Date(m.timestamp).toISOString() : new Date().toISOString()
-    const rec =
-      m.role === 'user'
-        ? {
-            parentUuid,
-            uuid,
-            type: 'user',
-            timestamp,
-            entrypoint: 'cli',
-            permissionMode: 'default',
-            promptSource: 'user',
-            message: { role: 'user', content: text },
-            ...base
-          }
-        : {
-            parentUuid,
-            uuid,
-            type: 'assistant',
-            timestamp,
-            message: {
-              role: 'assistant',
-              type: 'message',
-              model: 'claude-opus-4-8',
-              content: [{ type: 'text', text }],
-              stop_reason: 'end_turn'
-            },
-            ...base
-          }
-    lines.push(JSON.stringify(rec))
-    parentUuid = uuid
-  }
+  // Why: record building (incl. new Date(...).toISOString()) can throw (e.g. RangeError on
+  // an out-of-range timestamp) — keep it inside try so the caller always gets {error}, never
+  // an unhandled throw, and its error→seed fallback still fires.
   try {
+    const lines: string[] = []
+    let parentUuid: string | null = null
+    for (const m of turns) {
+      const uuid = randomUUID()
+      const text = messageText(m)
+      // 각 메시지 고유 timestamp를 쓴다. 없으면(null) 기록 시각으로 대체 — 다회차 대화의 순서를 보존.
+      const timestamp =
+        m.timestamp != null ? new Date(m.timestamp).toISOString() : new Date().toISOString()
+      const rec =
+        m.role === 'user'
+          ? {
+              parentUuid,
+              uuid,
+              type: 'user',
+              timestamp,
+              entrypoint: 'cli',
+              permissionMode: 'default',
+              promptSource: 'user',
+              message: { role: 'user', content: text },
+              ...base
+            }
+          : {
+              parentUuid,
+              uuid,
+              type: 'assistant',
+              timestamp,
+              message: {
+                role: 'assistant',
+                type: 'message',
+                model: 'claude-opus-4-8',
+                content: [{ type: 'text', text }],
+                stop_reason: 'end_turn'
+              },
+              ...base
+            }
+      lines.push(JSON.stringify(rec))
+      parentUuid = uuid
+    }
     const dir =
       args.dirOverride ?? join(homedir(), '.claude', 'projects', claudeProjectSlug(args.cwd))
     mkdirSync(dir, { recursive: true })

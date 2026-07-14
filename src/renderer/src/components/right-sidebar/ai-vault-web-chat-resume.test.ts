@@ -24,6 +24,16 @@ vi.mock('@/store', () => ({
   }
 }))
 
+// Why: stable mock reference — default local so existing tests stay green;
+// individual tests override the return value to simulate a remote worktree.
+const getExecutionHostIdForWorktreeSpy = vi.fn(
+  (_state: unknown, _worktreeId: unknown): string => 'local'
+)
+vi.mock('@/lib/worktree-runtime-owner', () => ({
+  getExecutionHostIdForWorktree: (state: unknown, worktreeId: unknown) =>
+    getExecutionHostIdForWorktreeSpy(state, worktreeId)
+}))
+
 const toastError = vi.fn()
 vi.mock('sonner', () => ({ toast: { error: (m: unknown) => toastError(m), success: vi.fn() } }))
 
@@ -63,6 +73,8 @@ beforeEach(() => {
   toastError.mockClear()
   readSessionStub.mockClear()
   writeWebChatClaudeSessionStub.mockClear()
+  getExecutionHostIdForWorktreeSpy.mockClear()
+  getExecutionHostIdForWorktreeSpy.mockImplementation(() => 'local')
   readSessionStub.mockImplementation(async () => ({
     messages: [
       {
@@ -176,6 +188,41 @@ test('resumeWebChatWithAgent: readSession 빈 대화면 launch 안 하고 toast'
   })
   expect(launchAgentInNewTabSpy).not.toHaveBeenCalled()
   expect(toastError).toHaveBeenCalled()
+})
+
+test('resumeWebChatWithAgent(claude): 원격(SSH) 워크트리면 세션 변환 없이 시드로 폴백', async () => {
+  getExecutionHostIdForWorktreeSpy.mockImplementation(() => 'ssh:host-1')
+  await resumeWebChatWithAgent({
+    session: { agent: 'claude-web', sessionId: 'c_1', title: 'T' },
+    agent: 'claude',
+    worktreeId: 'w1',
+    cwd: '/w/1',
+    gitBranch: 'main'
+  })
+  expect(writeWebChatClaudeSessionStub).not.toHaveBeenCalled()
+  expect(launchAiVaultSessionInNewTabSpy).not.toHaveBeenCalled()
+  expect(launchAgentInNewTabSpy).toHaveBeenCalledWith(
+    expect.objectContaining({
+      agent: 'claude',
+      worktreeId: 'w1',
+      promptDelivery: 'submit-after-ready',
+      launchSource: 'web_chat_resume'
+    })
+  )
+})
+
+test('resumeWebChatWithAgent(claude): 원격(runtime) 워크트리도 시드로 폴백', async () => {
+  getExecutionHostIdForWorktreeSpy.mockImplementation(() => 'runtime:env-1')
+  await resumeWebChatWithAgent({
+    session: { agent: 'claude-web', sessionId: 'c_1', title: 'T' },
+    agent: 'claude',
+    worktreeId: 'w1',
+    cwd: '/w/1',
+    gitBranch: null
+  })
+  expect(writeWebChatClaudeSessionStub).not.toHaveBeenCalled()
+  expect(launchAiVaultSessionInNewTabSpy).not.toHaveBeenCalled()
+  expect(launchAgentInNewTabSpy).toHaveBeenCalled()
 })
 
 test('resumeWebChatWithAgent(claude): 변환 실패면 시드로 폴백', async () => {
