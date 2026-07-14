@@ -16,8 +16,16 @@ export type ChatImportHostResponse =
 
 // Why: upload state (chunks-in-flight) is per-CONNECTION, not per-message — the
 // caller owns it and injects it here so it can accumulate across STORE_BLOB calls.
+// `total` is pinned at the first chunk and `received`/`size` are tracked incrementally
+// so validation doesn't depend on re-deriving state from a possibly-sparse chunks array.
+export type ChatImportUpload = {
+  chunks: Buffer[]
+  total: number
+  received: number
+  size: number
+}
 export type ChatImportBlobCtx = {
-  uploads: Map<string, Buffer[]>
+  uploads: Map<string, ChatImportUpload>
   putBlob: (bytes: Buffer) => string
 }
 
@@ -148,18 +156,45 @@ export function processChatImportHostMessage(
       const total = Number(request.total)
       const data =
         typeof request.data === 'string' ? Buffer.from(request.data, 'base64') : Buffer.alloc(0)
-      const chunks = blobCtx.uploads.get(uploadId) ?? []
-      chunks[seq] = data
+      // Why: an out-of-range/non-integer seq would set a non-index property on the
+      // chunks array — invisible to size/finalize checks — so reject before touching state.
+      if (
+        !Number.isInteger(total) ||
+        total <= 0 ||
+        !Number.isInteger(seq) ||
+        seq < 0 ||
+        seq >= total
+      ) {
+        blobCtx.uploads.delete(uploadId)
+        return withId({ type: 'ERROR', error: 'bad blob chunk' })
+      }
+      let up = blobCtx.uploads.get(uploadId)
+      if (!up) {
+        up = { chunks: Array.from<Buffer>({ length: total }), total, received: 0, size: 0 }
+        blobCtx.uploads.set(uploadId, up)
+      }
+      // Why: total is pinned at the first chunk; a later chunk disagreeing means a
+      // corrupt/hostile stream, not a legitimate resize.
+      if (up.total !== total) {
+        blobCtx.uploads.delete(uploadId)
+        return withId({ type: 'ERROR', error: 'blob total mismatch' })
+      }
+      if (!up.chunks[seq]) {
+        up.received += 1
+        up.size += data.length
+      }
+      up.chunks[seq] = data
       // Why: caps memory a single upload can hold across chunks before it's flushed to disk.
       const MAX_BLOB_BYTES = 25 * 1024 * 1024
-      if (chunks.reduce((n, c) => n + (c?.length ?? 0), 0) > MAX_BLOB_BYTES) {
+      if (up.size > MAX_BLOB_BYTES) {
         blobCtx.uploads.delete(uploadId)
         return withId({ type: 'ERROR', error: 'blob too large' })
       }
-      blobCtx.uploads.set(uploadId, chunks)
-      if (seq >= total - 1) {
-        const bytes = Buffer.concat(chunks)
+      // Why: finalize only when every chunk has arrived (no holes) — Buffer.concat throws
+      // on a hole, and cleanup must happen unconditionally, not after a call that can throw.
+      if (up.received === total) {
         blobCtx.uploads.delete(uploadId)
+        const bytes = Buffer.concat(up.chunks)
         const hash = blobCtx.putBlob(bytes)
         return withId({ type: 'STORE_BLOB', ok: true, hash, size: bytes.length })
       }

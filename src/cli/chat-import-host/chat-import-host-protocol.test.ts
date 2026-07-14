@@ -7,9 +7,10 @@ import {
   listIngestedExternalIds,
   listMessageAttachments
 } from '../../main/chat-import/chat-import-store'
+import type { ChatImportBlobCtx } from './chat-import-host-protocol'
 import { processChatImportHostMessage } from './chat-import-host-protocol'
 
-function freshBlobCtx(): { uploads: Map<string, Buffer[]>; putBlob: (bytes: Buffer) => string } {
+function freshBlobCtx(): ChatImportBlobCtx {
   return { uploads: new Map(), putBlob: vi.fn(() => 'a'.repeat(64)) }
 }
 
@@ -199,6 +200,140 @@ describe('processChatImportHostMessage', () => {
     expect(res.type).toBe('ERROR')
     expect(blobCtx.putBlob).not.toHaveBeenCalled()
     expect(blobCtx.uploads.has('u3')).toBe(false)
+  })
+
+  it('STORE_BLOB rejects an upload whose chunks accumulate past the 25MB cap', () => {
+    const db = tempDb()
+    const blobCtx = freshBlobCtx()
+    const chunk = Buffer.alloc(20 * 1024 * 1024)
+    const res0 = processChatImportHostMessage(
+      db,
+      JSON.stringify({
+        type: 'STORE_BLOB',
+        uploadId: 'u-cap',
+        seq: 0,
+        total: 2,
+        data: chunk.toString('base64')
+      }),
+      'now',
+      blobCtx
+    )
+    expect(res0).toEqual({ type: 'STORE_BLOB', ok: true })
+
+    const res1 = processChatImportHostMessage(
+      db,
+      JSON.stringify({
+        type: 'STORE_BLOB',
+        uploadId: 'u-cap',
+        seq: 1,
+        total: 2,
+        data: chunk.toString('base64')
+      }),
+      'now',
+      blobCtx
+    )
+    expect(res1.type).toBe('ERROR')
+    expect(blobCtx.putBlob).not.toHaveBeenCalled()
+    expect(blobCtx.uploads.has('u-cap')).toBe(false)
+  })
+
+  it('STORE_BLOB with a non-integer seq is rejected and does not leak the upload', () => {
+    const db = tempDb()
+    const blobCtx = freshBlobCtx()
+    const big = Buffer.alloc(1024)
+    const res = processChatImportHostMessage(
+      db,
+      JSON.stringify({
+        type: 'STORE_BLOB',
+        uploadId: 'u-bad-seq',
+        seq: 'bad',
+        total: 1,
+        data: big.toString('base64')
+      }),
+      'now',
+      blobCtx
+    )
+    expect(res.type).toBe('ERROR')
+    expect(blobCtx.putBlob).not.toHaveBeenCalled()
+    expect(blobCtx.uploads.has('u-bad-seq')).toBe(false)
+  })
+
+  it('STORE_BLOB rejects a later chunk whose total disagrees with the pinned total', () => {
+    const db = tempDb()
+    const blobCtx = freshBlobCtx()
+    const part0 = Buffer.from('hello ')
+    const res0 = processChatImportHostMessage(
+      db,
+      JSON.stringify({
+        type: 'STORE_BLOB',
+        uploadId: 'u-total-mismatch',
+        seq: 0,
+        total: 3,
+        data: part0.toString('base64')
+      }),
+      'now',
+      blobCtx
+    )
+    expect(res0).toEqual({ type: 'STORE_BLOB', ok: true })
+
+    const res1 = processChatImportHostMessage(
+      db,
+      JSON.stringify({
+        type: 'STORE_BLOB',
+        uploadId: 'u-total-mismatch',
+        seq: 1,
+        total: 1,
+        data: part0.toString('base64')
+      }),
+      'now',
+      blobCtx
+    )
+    expect(res1.type).toBe('ERROR')
+    expect(blobCtx.putBlob).not.toHaveBeenCalled()
+    expect(blobCtx.uploads.has('u-total-mismatch')).toBe(false)
+  })
+
+  it('STORE_BLOB finalizes correctly when chunks arrive out of order', () => {
+    const db = tempDb()
+    const blobCtx = freshBlobCtx()
+    const part0 = Buffer.from('hello ')
+    const part1 = Buffer.from('world')
+
+    const res1 = processChatImportHostMessage(
+      db,
+      JSON.stringify({
+        type: 'STORE_BLOB',
+        uploadId: 'u-out-of-order',
+        seq: 1,
+        total: 2,
+        data: part1.toString('base64')
+      }),
+      'now',
+      blobCtx
+    )
+    expect(res1).toEqual({ type: 'STORE_BLOB', ok: true })
+    expect(blobCtx.putBlob).not.toHaveBeenCalled()
+
+    const res0 = processChatImportHostMessage(
+      db,
+      JSON.stringify({
+        type: 'STORE_BLOB',
+        uploadId: 'u-out-of-order',
+        seq: 0,
+        total: 2,
+        data: part0.toString('base64')
+      }),
+      'now',
+      blobCtx
+    )
+    expect(res0).toMatchObject({
+      type: 'STORE_BLOB',
+      ok: true,
+      size: part0.length + part1.length
+    })
+    expect(blobCtx.putBlob).toHaveBeenCalledTimes(1)
+    expect(blobCtx.putBlob).toHaveBeenCalledWith(Buffer.concat([part0, part1]))
+    expect(blobCtx.uploads.has('u-out-of-order')).toBe(false)
   })
 
   it('INGEST keeps whitelisted attachments and drops malformed ones', () => {
