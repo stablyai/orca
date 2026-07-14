@@ -699,8 +699,8 @@
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
         "devSearchKeywordNotification": "notification",
-        "webChatImportTitle": "Web Chat Import",
-        "webChatImportDescription": "Set where ChatGPT, Claude.ai, and Gemini conversations are imported from."
+        "webChatImportTitle": "ウェブチャットのインポート",
+        "webChatImportDescription": "ChatGPT、Claude.ai、Gemini の会話をどこからインポートするかを設定します。"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "貼り付け内容が大きすぎます。"
@@ -6411,8 +6411,8 @@
           "65358016ea": "破棄",
           "dev": "Dev Tools",
           "devDescription": "Dev-only tools for exercising UI states.",
-          "webChatImportTitle": "Web Chat Import",
-          "webChatImportDescription": "Set where ChatGPT, Claude.ai, and Gemini conversations are imported from."
+          "webChatImportTitle": "ウェブチャットのインポート",
+          "webChatImportDescription": "ChatGPT、Claude.ai、Gemini の会話をどこからインポートするかを設定します。"
         },
         "SettingsFormControls": {
           "42a4d15a30": "一致するフォントがありません。",
@@ -9038,41 +9038,42 @@
           "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
         },
         "WebChatImportPane": {
-          "paneTitle": "Web Chat Import",
-          "paneDescription": "Choose the folder each web agent imports conversations from. Leave a field empty to use the default folder inside your workspace directory.",
-          "browseButton": "Browse"
+          "paneTitle": "ウェブチャットのインポート",
+          "paneDescription": "各ウェブエージェントが会話をインポートするフォルダを選択します。空欄のままにすると、ワークスペースディレクトリ内のデフォルトフォルダが使われます。",
+          "browseButton": "参照"
         },
         "webChatImport": {
           "search": {
-            "title": "Web Chat Import Directories",
-            "description": "Choose the folder each web agent imports conversations from."
+            "title": "ウェブチャットのインポート先フォルダ",
+            "description": "各ウェブエージェントが会話をインポートするフォルダを選択します。"
           }
         },
         "WebChatBrowserLinkSection": {
-          "installSuccess": "Browser linked.",
-          "installError": "Couldn't link the browser.",
-          "copySuccess": "Copied the extension folder path.",
-          "copyError": "Couldn't copy the path.",
-          "sectionTitle": "Browser linking",
-          "sectionDescription": "Detect your browsers, install the native messaging host, and load the Orca extension so web chats import automatically.",
-          "lastSyncedHeading": "Last synced",
-          "loading": "Checking browsers...",
-          "badgeLinked": "Linked",
-          "badgeNotInstalled": "Not installed",
-          "badgeNotDetected": "Not detected",
-          "reinstall": "Reinstall",
-          "install": "Install",
-          "notDetectedHint": "This browser wasn't detected on your system.",
-          "neverSynced": "Never",
-          "guideHeading": "Load the extension",
-          "guideStep1": "Open your browser's extensions page (for example chrome://extensions).",
-          "guideStep2": "Turn on Developer mode.",
-          "guideStep3": "Choose \"Load unpacked\" and select the folder below.",
-          "copyPath": "Copy extension folder path",
-          "justNow": "Just now",
-          "minutesAgo": "{{value0}}m ago",
-          "hoursAgo": "{{value0}}h ago",
-          "daysAgo": "{{value0}}d ago"
+          "installSuccess": "ブラウザを連携しました。",
+          "installError": "ブラウザを連携できませんでした。",
+          "copySuccess": "拡張機能フォルダのパスをコピーしました。",
+          "copyError": "パスをコピーできませんでした。",
+          "sectionTitle": "ブラウザ連携",
+          "sectionDescription": "ブラウザを検出し、ネイティブメッセージングホストをインストールして Orca 拡張機能を読み込むと、ウェブチャットが自動的にインポートされます。",
+          "lastSyncedHeading": "最終同期",
+          "loading": "ブラウザを確認しています...",
+          "badgeLinked": "連携済み",
+          "badgeNotInstalled": "未インストール",
+          "badgeNotDetected": "未検出",
+          "reinstall": "再インストール",
+          "install": "インストール",
+          "notDetectedHint": "このブラウザはお使いのシステムで検出されませんでした。",
+          "neverSynced": "未同期",
+          "guideHeading": "拡張機能を読み込む",
+          "guideStep1": "ブラウザの拡張機能ページを開きます(例: chrome://extensions)。",
+          "guideStep2": "デベロッパーモードを有効にします。",
+          "guideStep3": "「Load unpacked」を選び、以下のフォルダを選択します。",
+          "copyPath": "拡張機能フォルダのパスをコピー",
+          "justNow": "たった今",
+          "minutesAgo": "{{value0}}分前",
+          "hoursAgo": "{{value0}}時間前",
+          "daysAgo": "{{value0}}日前",
+          "loadError": "ブラウザを確認できませんでした。設定を開き直してください。"
         }
       },
       "right": {
@@ -9999,7 +10000,7 @@
             "localSessionSshWorkspaceUnsupported": "このセッションの履歴はこのマシンに保存されているため、SSH ワークスペースでは再開できません。代わりにローカルワークスペースを開いてください。",
             "sessionHostMismatchUnsupported": "このセッションは別のホストに属しています。再開するには同じホスト上のワークスペースを開いてください。",
             "webChatResumeEmpty": "再開できる会話がありません。",
-            "revealLogFailed": "Could not open the log location."
+            "revealLogFailed": "ログの保存場所を開けませんでした。"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -10089,7 +10090,7 @@
             "emptyConversationDetail": "このセッションには保存された会話がなく、再開できません。",
             "queuedMessages": "キュー内のメッセージ {{value0}} 件",
             "subagentTranscripts": "サブエージェントの履歴 {{value0}} 件",
-            "resumeWithAgent": "Resume with {{value0}}"
+            "resumeWithAgent": "{{value0}} で再開"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "{{value0}} セッションを再開",
@@ -13088,7 +13089,10 @@
         "allow": "許可する",
         "deny": "拒否"
       },
-      "launchPromptNotDelivered": "配信されませんでした — ターミナルを確認してください"
+      "launchPromptNotDelivered": "配信されませんでした — ターミナルを確認してください",
+      "attachment": {
+        "openFailed": "添付ファイルを開けませんでした。"
+      }
     },
     "tab": {
       "bar": {

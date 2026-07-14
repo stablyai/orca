@@ -9072,7 +9072,8 @@
           "justNow": "Just now",
           "minutesAgo": "{{value0}}m ago",
           "hoursAgo": "{{value0}}h ago",
-          "daysAgo": "{{value0}}d ago"
+          "daysAgo": "{{value0}}d ago",
+          "loadError": "Couldn't check browsers. Try reopening settings."
         }
       },
       "right": {
@@ -13088,7 +13089,10 @@
         "allow": "Allow",
         "deny": "Deny"
       },
-      "launchPromptNotDelivered": "Not delivered — check the terminal"
+      "launchPromptNotDelivered": "Not delivered — check the terminal",
+      "attachment": {
+        "openFailed": "Could not open attachment"
+      }
     },
     "tab": {
       "bar": {

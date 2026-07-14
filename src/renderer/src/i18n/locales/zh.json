@@ -699,8 +699,8 @@
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
         "devSearchKeywordNotification": "notification",
-        "webChatImportTitle": "Web Chat Import",
-        "webChatImportDescription": "Set where ChatGPT, Claude.ai, and Gemini conversations are imported from."
+        "webChatImportTitle": "网页聊天导入",
+        "webChatImportDescription": "设置从 ChatGPT、Claude.ai 和 Gemini 导入对话的来源。"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "粘贴内容过大。"
@@ -6374,8 +6374,8 @@
           "65358016ea": "放弃",
           "dev": "开发工具",
           "devDescription": "仅用于调试 UI 状态的开发工具。",
-          "webChatImportTitle": "Web Chat Import",
-          "webChatImportDescription": "Set where ChatGPT, Claude.ai, and Gemini conversations are imported from."
+          "webChatImportTitle": "网页聊天导入",
+          "webChatImportDescription": "设置从 ChatGPT、Claude.ai 和 Gemini 导入对话的来源。"
         },
         "SettingsFormControls": {
           "42a4d15a30": "没有匹配的字体。",
@@ -9038,41 +9038,42 @@
           "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
         },
         "WebChatImportPane": {
-          "paneTitle": "Web Chat Import",
-          "paneDescription": "Choose the folder each web agent imports conversations from. Leave a field empty to use the default folder inside your workspace directory.",
-          "browseButton": "Browse"
+          "paneTitle": "网页聊天导入",
+          "paneDescription": "选择每个网页版智能体导入对话的文件夹。留空则使用工作区目录内的默认文件夹。",
+          "browseButton": "浏览"
         },
         "webChatImport": {
           "search": {
-            "title": "Web Chat Import Directories",
-            "description": "Choose the folder each web agent imports conversations from."
+            "title": "网页聊天导入目录",
+            "description": "选择每个网页版智能体导入对话的文件夹。"
           }
         },
         "WebChatBrowserLinkSection": {
-          "installSuccess": "Browser linked.",
-          "installError": "Couldn't link the browser.",
-          "copySuccess": "Copied the extension folder path.",
-          "copyError": "Couldn't copy the path.",
-          "sectionTitle": "Browser linking",
-          "sectionDescription": "Detect your browsers, install the native messaging host, and load the Orca extension so web chats import automatically.",
-          "lastSyncedHeading": "Last synced",
-          "loading": "Checking browsers...",
-          "badgeLinked": "Linked",
-          "badgeNotInstalled": "Not installed",
-          "badgeNotDetected": "Not detected",
-          "reinstall": "Reinstall",
-          "install": "Install",
-          "notDetectedHint": "This browser wasn't detected on your system.",
-          "neverSynced": "Never",
-          "guideHeading": "Load the extension",
-          "guideStep1": "Open your browser's extensions page (for example chrome://extensions).",
-          "guideStep2": "Turn on Developer mode.",
-          "guideStep3": "Choose \"Load unpacked\" and select the folder below.",
-          "copyPath": "Copy extension folder path",
-          "justNow": "Just now",
-          "minutesAgo": "{{value0}}m ago",
-          "hoursAgo": "{{value0}}h ago",
-          "daysAgo": "{{value0}}d ago"
+          "installSuccess": "浏览器已关联。",
+          "installError": "无法关联浏览器。",
+          "copySuccess": "已复制扩展程序文件夹路径。",
+          "copyError": "无法复制路径。",
+          "sectionTitle": "浏览器关联",
+          "sectionDescription": "检测你的浏览器，安装原生消息主机，并加载 Orca 扩展程序，实现网页聊天自动导入。",
+          "lastSyncedHeading": "上次同步",
+          "loading": "正在检查浏览器...",
+          "badgeLinked": "已关联",
+          "badgeNotInstalled": "未安装",
+          "badgeNotDetected": "未检测到",
+          "reinstall": "重新安装",
+          "install": "安装",
+          "notDetectedHint": "系统中未检测到此浏览器。",
+          "neverSynced": "从未同步",
+          "guideHeading": "加载扩展程序",
+          "guideStep1": "打开浏览器的扩展程序页面（例如 chrome://extensions）。",
+          "guideStep2": "开启开发者模式。",
+          "guideStep3": "选择“加载已解压的扩展程序”，然后选择下方的文件夹。",
+          "copyPath": "复制扩展程序文件夹路径",
+          "justNow": "刚刚",
+          "minutesAgo": "{{value0}} 分钟前",
+          "hoursAgo": "{{value0}} 小时前",
+          "daysAgo": "{{value0}} 天前",
+          "loadError": "无法检查浏览器。请尝试重新打开设置。"
         }
       },
       "right": {
@@ -9999,7 +10000,7 @@
             "localSessionSshWorkspaceUnsupported": "此会话的历史记录存储在本机上，因此无法在 SSH 工作区中恢复。请改为打开一个本地工作区。",
             "sessionHostMismatchUnsupported": "此会话属于其他主机。请打开同一主机上的工作区以恢复它。",
             "webChatResumeEmpty": "没有可继续的对话内容。",
-            "revealLogFailed": "Could not open the log location."
+            "revealLogFailed": "无法打开日志所在位置。"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "正在扫描会话",
@@ -10089,7 +10090,7 @@
             "emptyConversationDetail": "此会话没有已保存的对话，无法恢复。",
             "queuedMessages": "{{value0}} 条排队消息",
             "subagentTranscripts": "{{value0}} 个子智能体记录",
-            "resumeWithAgent": "Resume with {{value0}}"
+            "resumeWithAgent": "使用 {{value0}} 恢复"
           },
           "AiVaultSessionRow": {
             "resumeAgentSession": "恢复 {{value0}} 会话",
@@ -13088,7 +13089,10 @@
         "allow": "允许",
         "deny": "拒绝"
       },
-      "launchPromptNotDelivered": "未送达 — 请检查终端"
+      "launchPromptNotDelivered": "未送达 — 请检查终端",
+      "attachment": {
+        "openFailed": "无法打开附件。"
+      }
     },
     "tab": {
       "bar": {

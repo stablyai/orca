@@ -9072,7 +9072,8 @@
           "justNow": "방금",
           "minutesAgo": "{{value0}}분 전",
           "hoursAgo": "{{value0}}시간 전",
-          "daysAgo": "{{value0}}일 전"
+          "daysAgo": "{{value0}}일 전",
+          "loadError": "브라우저를 확인할 수 없습니다. 설정을 다시 열어 보세요."
         }
       },
       "right": {
@@ -13088,7 +13089,10 @@
         "allow": "허용하다",
         "deny": "부인하다"
       },
-      "launchPromptNotDelivered": "전달되지 않음 — 터미널을 확인하세요"
+      "launchPromptNotDelivered": "전달되지 않음 — 터미널을 확인하세요",
+      "attachment": {
+        "openFailed": "첨부를 열 수 없습니다."
+      }
     },
     "tab": {
       "bar": {
