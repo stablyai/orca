@@ -5336,9 +5336,9 @@ export default function SessionScreen() {
             : []),
           {
             label: 'Rename',
+            closeBeforePress: true,
             onPress: () => {
               const target = actionTarget
-              setActionTarget(null)
               if (target) {
                 setRenameTarget(target)
               }
