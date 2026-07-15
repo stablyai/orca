@@ -285,6 +285,12 @@ describe('computeProjectHeaderDropPreview', () => {
       expect(lastPreview(360, 340)).toBeNull()
     })
 
+    it('rejects an edge-zone final drop below measured content when the estimate overshoots', () => {
+      // 389 crosses the estimated final boundary (380 + 8px padding) while still
+      // sitting below the measured list end, so the content bound must win.
+      expect(lastPreview(389, 350)).toBeNull()
+    })
+
     it('still snaps within the measured content when the estimate overshoots', () => {
       // 335 is inside the real last section (ends at 340) → drop after 'c'.
       expect(lastPreview(335, 340)).toEqual({

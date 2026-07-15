@@ -168,10 +168,40 @@ describe('computeProjectGroupHeaderDropPreview', () => {
       scrollTop: 0,
       sidebarProjectGroupHeaderIds: ['a', 'b', 'c'],
       rects: [
-        { groupId: 'c', bucketKey: 'root', headerIndex: 2, top: 300, bottom: 328, sectionBottom: 380 }
+        {
+          groupId: 'c',
+          bucketKey: 'root',
+          headerIndex: 2,
+          top: 300,
+          bottom: 328,
+          sectionBottom: 380
+        }
       ],
       // Estimate ends at 380 but the list renders to 340; 360 is below content.
       contentBottom: 340
+    })
+
+    expect(preview).toBeNull()
+  })
+
+  it('rejects an edge-zone final drop below measured content when the estimate overshoots', () => {
+    const preview = computeProjectGroupHeaderDropPreview({
+      pointerY: 389,
+      containerTop: 0,
+      scrollTop: 0,
+      sidebarProjectGroupHeaderIds: ['a', 'b', 'c'],
+      rects: [
+        {
+          groupId: 'c',
+          bucketKey: 'root',
+          headerIndex: 2,
+          top: 300,
+          bottom: 328,
+          sectionBottom: 380
+        }
+      ],
+      // 389 crosses the estimated final boundary but remains below real content.
+      contentBottom: 350
     })
 
     expect(preview).toBeNull()
@@ -184,7 +214,14 @@ describe('computeProjectGroupHeaderDropPreview', () => {
       scrollTop: 0,
       sidebarProjectGroupHeaderIds: ['a', 'b', 'c'],
       rects: [
-        { groupId: 'c', bucketKey: 'root', headerIndex: 2, top: 300, bottom: 328, sectionBottom: 380 }
+        {
+          groupId: 'c',
+          bucketKey: 'root',
+          headerIndex: 2,
+          top: 300,
+          bottom: 328,
+          sectionBottom: 380
+        }
       ],
       contentBottom: 340
     })

@@ -34,6 +34,11 @@ export function computeWorktreeSidebarHeaderDropPreview<
   }
 
   const localY = args.pointerY - args.containerTop + args.scrollTop
+  // Why: every preview branch, including estimated edge slots, must stay
+  // inside the measured list content rather than fabricate a reorder below it.
+  if (args.contentBottom !== undefined && localY > args.contentBottom) {
+    return null
+  }
   const first = args.rects[0]!
   const last = args.rects.at(-1)!
   const lastBoundaryBottom = Math.max(last.bottom, last.sectionBottom ?? last.bottom)
@@ -78,13 +83,6 @@ export function computeWorktreeSidebarHeaderDropPreview<
       dropIndex,
       dropIndicatorY: Math.max(args.scrollTop, indicatorY)
     }
-  }
-
-  // Below the measured list end there is no real section body, only the last
-  // rect's estimated sectionBottom overshooting the content. Return null (as the
-  // parent did) rather than snapping a phantom final-slot drop there.
-  if (args.contentBottom !== undefined && localY > args.contentBottom) {
-    return null
   }
 
   // localY is in a section body or interior gap, not a header band. Snap to the
