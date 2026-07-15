@@ -154,6 +154,8 @@ export type PtyProcessInfo = {
   id: string
   cwd: string
   title: string
+  /** Owning worktree when the provider can report it authoritatively. */
+  worktreeId?: string
   /** Trusted ORCA_TERMINAL_HANDLE exported into this PTY, when known. */
   terminalHandle?: string
 }
@@ -196,6 +198,8 @@ export type IPtyProvider = {
     id: string,
     opts?: { scrollbackRows?: number }
   ) => Promise<PtyProviderBufferSnapshot | null>
+  /** Whether this exact PTY can return a sequence-safe provider snapshot. */
+  canProvideAuthoritativeBufferSnapshot?: (id: string) => boolean
   /**
    * The size the PTY has ACTUALLY applied, not the last size requested.
    * resize() is fire-and-forget for remote providers (daemon/SSH `notify`),
@@ -290,8 +294,9 @@ export type IFilesystemProvider = {
   watch(
     rootPath: string,
     callback: (events: FsChangeEvent[]) => void,
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal; onTerminalError?: (error: Error) => void }
   ): Promise<() => void>
+  closeWatch?(rootPath: string): Promise<void>
 }
 
 export type FileUploadSession = {

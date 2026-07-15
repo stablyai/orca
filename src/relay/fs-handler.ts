@@ -96,6 +96,10 @@ export class FsHandler {
     })
   }
 
+  getWatchRegistry(): RelayFilesystemWatchRegistry {
+    return this.watchRegistry
+  }
+
   private registerHandlers(): void {
     this.dispatcher.onRequest('fs.readDir', (p) => this.readDir(p))
     this.dispatcher.onRequest('fs.readFile', (p) => this.readFile(p))
@@ -118,7 +122,14 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.listFiles', (p, c) => this.listFiles(p, c))
     this.dispatcher.onRequest('fs.workspaceSpaceScan', (p, c) => this.workspaceSpaceScan(p, c))
     this.dispatcher.onRequest('fs.watch', (p, context) =>
-      this.watchRegistry.watch(expandTilde(p.rootPath as string), context)
+      this.watchRegistry.watch(
+        expandTilde(p.rootPath as string),
+        context,
+        typeof p.watchId === 'number' && Number.isSafeInteger(p.watchId) ? p.watchId : undefined
+      )
+    )
+    this.dispatcher.onRequest('fs.unwatchAndWait', (p, context) =>
+      this.watchRegistry.unwatchAndWait(expandTilde(p.rootPath as string), context)
     )
     this.dispatcher.onNotification('fs.unwatch', (p, context) =>
       this.watchRegistry.unwatch(expandTilde(p.rootPath as string), context)
@@ -247,7 +258,14 @@ export class FsHandler {
     if (stats.isDirectory() && !recursive) {
       throw new Error('Cannot delete directory without recursive flag')
     }
-    await rm(targetPath, { recursive: !!recursive, force: true })
+    const remove = () => rm(targetPath, { recursive: !!recursive, force: true })
+    if (stats.isDirectory()) {
+      // Why: forced orphan cleanup bypasses git.removeWorktree but must hold
+      // the same relay-wide watcher fence through recursive deletion.
+      await this.watchRegistry.runWithRemovalFence(targetPath, remove)
+      return
+    }
+    await remove()
   }
 
   private async createFile(params: Record<string, unknown>) {

@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 
 const TESTFLIGHT_URL = 'https://testflight.apple.com/join/YjeGMQBA'
 const ANDROID_APK_URL =
-  'https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.27/app-release.apk'
+  'https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.31/app-release.apk'
 
 export function MobileRelayBetaAvailability(): React.JSX.Element {
   return (

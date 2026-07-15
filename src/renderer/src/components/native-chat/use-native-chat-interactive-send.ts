@@ -3,7 +3,14 @@ import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import type { AgentType } from '../../../../shared/native-chat-types'
 import {
-  sendNativeChatAnswer,
+  buildAskAnswerKeys,
+  formatAskAnswer,
+  hasAskAnswer,
+  type AskAnswerSelection,
+  type AskPrompt
+} from './native-chat-interactive-prompt'
+import {
+  sendNativeChatAskAnswer,
   sendNativeChatMessage,
   type NativeChatSendHandle
 } from './native-chat-runtime-send'
@@ -13,12 +20,14 @@ import {
 const ESC = '\x1b'
 
 export type NativeChatInteractiveSend = {
-  /** Send answer text (bracketed-paste wrapped + Enter, like the composer).
-   *  Returns the ms after which every scheduled write has fired (0 if nothing
-   *  was sent) so the caller can keep the card up until the send settles. */
-  sendAnswer: (text: string) => number
+  /** Deliver the answer to an AskUserQuestion prompt. Returns the ms after which
+   *  every scheduled write has fired (0 if nothing was sent) so the caller can
+   *  keep the card up until the send settles. */
+  sendAnswer: (prompt: AskPrompt, selections: AskAnswerSelection[]) => number
   /** Send a raw control string (e.g. an approval option number or ESC) as-is. */
   sendRaw: (raw: string) => void
+  /** Stop delayed writes without interrupting the agent. */
+  cancelPending: () => void
   /** Send ESC to interrupt — cancels a question / denies an approval. */
   cancel: () => void
 }
@@ -27,9 +36,10 @@ export type NativeChatInteractiveSend = {
  * Reuse the desktop composer's exact send path for the interactive cards:
  * resolve this tab's live ptyId + runtime owner settings, then write bytes via
  * `sendRuntimePtyInput` (which branches local pty:write vs remote runtime RPC,
- * so SSH panes work unchanged). Answers go through `sendNativeChatMessage`
- * (bracketed-paste framed body, then a separate delayed Enter); control strings
- * (option digits, ESC) are written raw so the agent reads them as keystrokes.
+ * so SSH panes work unchanged). Claude's AskUserQuestion answers are delivered
+ * as selector keystrokes (by option number, `sendNativeChatAskAnswer`); other
+ * agents' question tools commit a pasted answer, so those still go through
+ * `sendNativeChatMessage`. Control strings (option digits, ESC) are written raw.
  */
 export function useNativeChatInteractiveSend(
   terminalTabId: string,
@@ -59,27 +69,21 @@ export function useNativeChatInteractiveSend(
   )
 
   const sendAnswer = useCallback(
-    (text: string): number => {
-      if (text.trim() === '') {
-        return 0
-      }
-      if (!targetPtyId) {
+    (prompt: AskPrompt, selections: AskAnswerSelection[]): number => {
+      if (!targetPtyId || !hasAskAnswer(prompt, selections)) {
         return 0
       }
       // Cancel any prior in-flight answer before starting a new one.
       cancelInFlight()
       const settings = getSettingsForAgentTabRuntimeOwner(terminalTabId)
-      // Only Claude's AskUserQuestion is a MULTI-STEP prompt: one question per
-      // step, each Enter advances to the next, the final Enter submits. So a
-      // multi-line answer (one line per question, as `formatAskAnswer` builds
-      // it) is sent as a per-question sequence — body then its own Enter, paced
-      // so each Enter lands on its rendered question and only the last submits.
-      // Other agents (e.g. Codex) submit the whole answer with one Enter, so
-      // gate the stepping on Claude and send a single body + Enter otherwise.
-      const handle =
+      // Claude's AskUserQuestion is an arrow-navigate selector: it commits by the
+      // highlighted option, not a pasted label, so answer it with per-option
+      // keystrokes (by option number), paced so each step renders before the next.
+      // Other agents' question tools commit a pasted answer, so send label text.
+      const handle: NativeChatSendHandle =
         agent === 'claude'
-          ? sendNativeChatAnswer(settings, targetPtyId, text.split('\n'))
-          : sendNativeChatMessage(settings, targetPtyId, text)
+          ? sendNativeChatAskAnswer(settings, targetPtyId, buildAskAnswerKeys(prompt, selections))
+          : sendNativeChatMessage(settings, targetPtyId, formatAskAnswer(prompt, selections))
       inFlightRef.current = handle
       return handle.settleAfterMs
     },
@@ -92,5 +96,5 @@ export function useNativeChatInteractiveSend(
     sendRaw(ESC)
   }, [cancelInFlight, sendRaw])
 
-  return { sendAnswer, sendRaw, cancel }
+  return { sendAnswer, sendRaw, cancelPending: cancelInFlight, cancel }
 }

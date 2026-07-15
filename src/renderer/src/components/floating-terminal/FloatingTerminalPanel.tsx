@@ -748,7 +748,7 @@ export function FloatingTerminalPanel({
       const dirtyEditorFileIds: string[] = []
       for (const item of items) {
         if (item.contentType === 'terminal') {
-          closeTab(item.entityId)
+          closeTab(item.entityId, { reason: 'cleanup' })
         } else if (item.contentType === 'browser') {
           destroyWorkspaceWebviews(state.browserPagesByWorkspace, item.entityId)
           closeBrowserTab(item.entityId)

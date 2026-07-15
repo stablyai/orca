@@ -926,7 +926,11 @@ describe('getPRForBranch', () => {
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     expect(outcome).toMatchObject({
       kind: 'found',
-      pr: { number: 6012, confirmedContainedHeadOid: 'cccc3333cccc3333' }
+      pr: {
+        number: 6012,
+        headRefName: 'fix-hibernation-wake',
+        confirmedContainedHeadOid: 'cccc3333cccc3333'
+      }
     })
   })
 

@@ -16544,6 +16544,12 @@ describe('connectPanePty', () => {
         `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`,
         expect.any(Function)
       )
+      transport.sendInput.mockClear()
+      sendTerminalInputThroughPane(pane, '\x1b[I')
+      sendTerminalInputThroughPane(pane, '\x7f')
+      expect(transport.sendInput).toHaveBeenCalledTimes(2)
+      expect(transport.sendInput).toHaveBeenNthCalledWith(1, '\x1b[I')
+      expect(transport.sendInput).toHaveBeenLastCalledWith('\x7f')
     } finally {
       restoreUserAgent()
     }
@@ -16640,8 +16646,21 @@ describe('connectPanePty', () => {
 
     titleHandler('Codex working', 'Codex working')
     await vi.advanceTimersByTimeAsync(2_500)
+    const inspectionsBeforeIdle = getForegroundProcess.mock.calls.length
     getForegroundProcess.mockResolvedValue(null)
-    await vi.advanceTimersByTimeAsync(800)
+    // Why: active process polling is jittered, so a fixed window can consume
+    // both null samples before the replacement hook row is installed.
+    for (
+      let attempts = 0;
+      getForegroundProcess.mock.calls.length === inspectionsBeforeIdle;
+      attempts += 1
+    ) {
+      if (attempts >= 10) {
+        throw new Error('Expected the first idle process inspection')
+      }
+      await vi.advanceTimersToNextTimerAsync()
+    }
+    expect(getForegroundProcess).toHaveBeenCalledTimes(inspectionsBeforeIdle + 1)
 
     mockStoreState.agentStatusByPaneKey[paneKey] = {
       state: 'working',
@@ -16745,7 +16764,7 @@ describe('connectPanePty', () => {
     )
   })
 
-  it('resets stale Kitty keyboard state when a native Windows agent becomes idle', async () => {
+  it('resets stale keyboard state when a native Windows agent becomes idle', async () => {
     const restoreUserAgent = temporarilySetNavigatorUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     )
@@ -16815,12 +16834,73 @@ describe('connectPanePty', () => {
         `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`,
         expect.any(Function)
       )
+      transport.sendInput.mockClear()
+      sendTerminalInputThroughPane(pane, '\x1b[I')
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I')
     } finally {
       restoreUserAgent()
     }
   })
 
-  it('resets stale Kitty keyboard state when native Windows hook status reaches done', async () => {
+  it.each([
+    {
+      name: 'WSL',
+      configure: (): void => {
+        mockStoreState.tabsByWorktree = {
+          'wt-1': [{ id: 'tab-1', ptyId: null, shellOverride: 'wsl.exe' }]
+        }
+      }
+    },
+    {
+      name: 'remote runtime',
+      configure: (): void => {
+        mockStoreState.repos = [
+          {
+            id: 'repo1',
+            connectionId: null,
+            displayName: 'orca',
+            executionHostId: 'runtime:owner-runtime'
+          }
+        ]
+      }
+    }
+  ])(
+    'keeps $name focus reports and idle reset remote-safe on Windows clients',
+    async ({ configure }) => {
+      const restoreUserAgent = temporarilySetNavigatorUserAgent(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+      )
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      transportFactoryQueue.push(transport)
+
+      try {
+        configure()
+        const pane = createPane(1)
+        connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+
+        const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
+          | ((title: string) => void)
+          | undefined
+        if (!idleHandler) {
+          throw new Error('Expected onAgentBecameIdle to be registered')
+        }
+        idleHandler('* Codex done')
+
+        expect(pane.terminal.write).toHaveBeenCalledWith(
+          RESET_TERMINAL_CURSOR_STYLE,
+          expect.any(Function)
+        )
+        transport.sendInput.mockClear()
+        sendTerminalInputThroughPane(pane, '\x1b[I')
+        expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I')
+      } finally {
+        restoreUserAgent()
+      }
+    }
+  )
+
+  it('resets stale keyboard state when native Windows hook status reaches done', async () => {
     const restoreUserAgent = temporarilySetNavigatorUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     )
@@ -16848,7 +16928,7 @@ describe('connectPanePty', () => {
       notifyStoreSubscribers()
       expect(pane.terminal.write).not.toHaveBeenCalled()
 
-      mockStoreState.agentStatusByPaneKey[paneKey] = {
+      const doneStatus = {
         state: 'done',
         prompt: 'ship it',
         updatedAt: Date.now(),
@@ -16857,12 +16937,117 @@ describe('connectPanePty', () => {
         paneKey,
         stateHistory: []
       }
+      mockStoreState.agentStatusByPaneKey[paneKey] = doneStatus
       notifyStoreSubscribers()
 
       expect(pane.terminal.write).toHaveBeenCalledWith(
         `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`,
         expect.any(Function)
       )
+    } finally {
+      restoreUserAgent()
+    }
+  })
+
+  it('drops only focus reports while native Windows Codex is done and resumes them when working', async () => {
+    const restoreUserAgent = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    try {
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      const pane = createPane(1)
+      pane.terminal.modes.sendFocusMode = true
+      const doneStatus = {
+        state: 'done',
+        prompt: 'ship it',
+        updatedAt: Date.now(),
+        stateStartedAt: Date.now(),
+        agentType: 'codex',
+        paneKey,
+        stateHistory: []
+      }
+
+      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+
+      mockStoreState.agentStatusByPaneKey[paneKey] = doneStatus
+      notifyStoreSubscribers()
+      const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
+        | ((title: string) => void)
+        | undefined
+      idleHandler?.('* Codex done')
+      transport.sendInput.mockClear()
+
+      sendTerminalInputThroughPane(pane, '\x1b[O')
+      sendTerminalInputThroughPane(pane, '\x1b[I')
+      expect(transport.sendInput).not.toHaveBeenCalled()
+
+      sendTerminalInputThroughPane(pane, '\x7f')
+      sendTerminalInputThroughPane(pane, 'x')
+      expect(transport.sendInput).toHaveBeenNthCalledWith(1, '\x7f')
+      expect(transport.sendInput).toHaveBeenNthCalledWith(2, 'x')
+      expect(pane.terminal.modes.sendFocusMode).toBe(true)
+
+      mockStoreState.agentStatusByPaneKey[paneKey] = {
+        ...doneStatus,
+        state: 'working'
+      }
+      notifyStoreSubscribers()
+      transport.sendInput.mockClear()
+
+      sendTerminalInputThroughPane(pane, '\x1b[I')
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[I')
+      expect(pane.terminal.modes.sendFocusMode).toBe(true)
+
+      mockStoreState.agentStatusByPaneKey[paneKey] = {
+        ...doneStatus,
+        state: 'waiting'
+      }
+      notifyStoreSubscribers()
+      transport.sendInput.mockClear()
+      sendTerminalInputThroughPane(pane, '\x1b[O')
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[O')
+    } finally {
+      restoreUserAgent()
+    }
+  })
+
+  it('keeps focus reports enabled for native Windows Cursor completion', async () => {
+    const restoreUserAgent = temporarilySetNavigatorUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    )
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    try {
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      const pane = createPane(1)
+      pane.terminal.modes.sendFocusMode = true
+
+      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+
+      mockStoreState.agentStatusByPaneKey[paneKey] = {
+        state: 'done',
+        prompt: 'ship it',
+        updatedAt: Date.now(),
+        stateStartedAt: Date.now(),
+        agentType: 'cursor',
+        paneKey,
+        stateHistory: []
+      }
+      notifyStoreSubscribers()
+      transport.sendInput.mockClear()
+
+      sendTerminalInputThroughPane(pane, '\x1b[O')
+      sendTerminalInputThroughPane(pane, '\x1b[I')
+
+      expect(transport.sendInput).toHaveBeenNthCalledWith(1, '\x1b[O')
+      expect(transport.sendInput).toHaveBeenNthCalledWith(2, '\x1b[I')
+      expect(pane.terminal.modes.sendFocusMode).toBe(true)
     } finally {
       restoreUserAgent()
     }

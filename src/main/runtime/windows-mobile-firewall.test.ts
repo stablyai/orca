@@ -25,6 +25,7 @@ describe('windows mobile firewall', () => {
     const runPowerShell = vi.fn().mockResolvedValue(
       JSON.stringify({
         matchingRuleScopes: [{ remoteAddresses: ['192.168.0.0/24'] }],
+        blockingRuleDetected: false,
         localAddress: '192.168.0.108',
         localPrefixLength: 24,
         privateFirewallEnabled: true,
@@ -38,20 +39,53 @@ describe('windows mobile firewall', () => {
       supported: true,
       port: 6768,
       ruleAllowed: true,
+      blockingRuleDetected: false,
       privateFirewallEnabled: true,
       networkCategory: 'private',
       inspectionAvailable: true
     })
 
     const script = runPowerShell.mock.calls[0]![0] as string
+    // Why: without ActiveStore, GPO-applied Block rules are invisible and the
+    // post-repair re-inspection could report a false success on managed hosts.
+    expect(script).toContain(
+      "Get-NetFirewallApplicationFilter -PolicyStore ActiveStore -Program 'C:\\Users\\O''Brien\\Orca\\Orca.exe'"
+    )
+    expect(script).toContain('Get-NetFirewallProfile -PolicyStore ActiveStore -Name Private')
     expect(script).toContain("LocalPort | Where-Object { [string]$_ -eq 'Any'")
     expect(script).toContain("[string]$_ -eq '6768'")
     expect(script).toContain("C:\\Users\\O''Brien\\Orca\\Orca.exe")
     expect(script).toContain("$profile -match 'Private'")
     expect(script).toContain("Get-NetIPAddress -IPAddress '192.168.0.108'")
     expect(script).toContain('Get-NetFirewallAddressFilter')
+    expect(script).toContain("[string]$rule.Action -eq 'Block'")
     expect(script).toContain('remoteAddresses = @($addressFilter.RemoteAddress')
     expect(script).toContain('$localPrefixLength = [int]$ip.PrefixLength')
+  })
+
+  it('treats an overlapping inbound Block rule as overriding a matching Allow rule', async () => {
+    const runPowerShell = vi.fn().mockResolvedValue(
+      JSON.stringify({
+        matchingRuleScopes: [{ remoteAddresses: ['Any'] }],
+        blockingRuleDetected: true,
+        localAddress: '192.168.0.108',
+        localPrefixLength: 24,
+        privateFirewallEnabled: true,
+        networkCategory: 'Private'
+      })
+    )
+
+    await expect(
+      inspectWindowsMobileFirewall(6768, '192.168.0.108', environment(runPowerShell))
+    ).resolves.toEqual({
+      supported: true,
+      port: 6768,
+      ruleAllowed: false,
+      blockingRuleDetected: true,
+      privateFirewallEnabled: true,
+      networkCategory: 'private',
+      inspectionAvailable: true
+    })
   })
 
   it('does not accept a qualifying rule whose remote-address scope excludes the phone subnet', async () => {
@@ -100,6 +134,7 @@ describe('windows mobile firewall', () => {
       supported: true,
       port: 6768,
       ruleAllowed: false,
+      blockingRuleDetected: false,
       privateFirewallEnabled: true,
       networkCategory: 'unknown',
       inspectionAvailable: false
@@ -133,6 +168,10 @@ describe('windows mobile firewall', () => {
     expect(encoded).toBeTruthy()
     const repairScript = Buffer.from(encoded!, 'base64').toString('utf16le')
     expect(repairScript).toContain("-Name 'Orca.MobilePairing'")
+    expect(repairScript).toContain(
+      "Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' -and $_.Action -eq 'Block' }"
+    )
+    expect(repairScript).toContain('$rule | Remove-NetFirewallRule')
     expect(repairScript).toContain('-Profile Private')
     expect(repairScript).toContain('-Protocol TCP')
     expect(repairScript).toContain('-LocalPort 6769')

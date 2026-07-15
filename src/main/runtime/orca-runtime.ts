@@ -666,7 +666,11 @@ import {
   getDefaultVoiceSettings
 } from '../../shared/constants'
 import { listRepoWorktrees } from '../repo-worktrees'
-import { createWorktreeLinkedPaths, removeWorktreeLinkedPaths } from '../ipc/worktree-symlinks'
+import {
+  createWorktreeLinkedPaths,
+  findExistingWorktreeSymlinkPaths,
+  removeWorktreeLinkedPaths
+} from '../ipc/worktree-symlinks'
 import { deleteWorktreeHistoryDir } from '../terminal-history'
 import {
   cleanupUnusedWorktreePushTargetRemote,
@@ -715,7 +719,15 @@ import {
 import { prefetchWorktreeCreateBase } from '../worktree-create-base-prefetch'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
-import { closeLocalWatcherForWorktreePath } from '../ipc/filesystem-watcher'
+import {
+  closeLocalWatcherForWorktreePath,
+  closeRemoteWatcherForWorktreePath,
+  forgetLocalWatcherRemovalSnapshot,
+  forgetRemoteWatcherRemovalSnapshot,
+  restoreLocalWatcherAfterFailedRemoval,
+  restoreRemoteWatcherAfterFailedRemoval
+} from '../ipc/filesystem-watcher'
+import { acquireWatcherRemovalGate } from '../ipc/watcher-removal-gate'
 import { HeadlessEmulator } from '../daemon/headless-emulator'
 import {
   isNativeWindowsConptyPty,
@@ -2229,7 +2241,11 @@ export class OrcaRuntimeService {
     >
   >()
   private driverListeners = new Map<string, Set<(driver: DriverState) => void>>()
-  private subscriptionCleanups = new Map<string, () => void>()
+  private subscriptionCleanups = new Map<string, () => void | Promise<void>>()
+  private subscriptionCleanupPromises = new Map<
+    string,
+    { cleanup: () => void | Promise<void>; promise: Promise<void> }
+  >()
   // Why: index of subscriptionIds by per-WebSocket connectionId so the
   // server can sweep all subscriptions for a closing socket without
   // touching subscriptions on other live sockets that share the same
@@ -2531,6 +2547,7 @@ export class OrcaRuntimeService {
   private removeManagedWorktreeInFlight = new Map<string, RuntimeWorktreeRemovalInFlight>()
   private preservedBranchCleanupByWorktreeId = new Map<string, PreservedBranchCleanupTarget>()
   private readonly getLocalProviderFn: (() => IPtyProvider) | null
+  private readonly getSshProviderFn: ((connectionId: string) => IPtyProvider | undefined) | null
   private readonly onPtyStopped: ((ptyId: string) => void) | null
   private readonly onTerminalAgentStatus: ((event: RuntimeTerminalAgentStatusEvent) => void) | null
   private readonly onTerminalSideEffects: ((batch: TerminalSideEffectBatch) => void) | null
@@ -2558,6 +2575,7 @@ export class OrcaRuntimeService {
     stats?: StatsCollector,
     deps?: {
       getLocalProvider?: () => IPtyProvider
+      getSshProvider?: (connectionId: string) => IPtyProvider | undefined
       onPtyStopped?: (ptyId: string) => void
       onTerminalAgentStatus?: (event: RuntimeTerminalAgentStatusEvent) => void
       onTerminalSideEffects?: (batch: TerminalSideEffectBatch) => void
@@ -2595,6 +2613,7 @@ export class OrcaRuntimeService {
     // lazily via thunk so teardown always sees the currently-installed
     // provider (design §4.3 wire-up).
     this.getLocalProviderFn = deps?.getLocalProvider ?? null
+    this.getSshProviderFn = deps?.getSshProvider ?? null
     this.onPtyStopped = deps?.onPtyStopped ?? null
     this.onTerminalAgentStatus = deps?.onTerminalAgentStatus ?? null
     this.buildAgentHookPtyEnv = deps?.buildAgentHookPtyEnv ?? null
@@ -2617,6 +2636,32 @@ export class OrcaRuntimeService {
 
   getLocalProvider(): IPtyProvider | null {
     return this.getLocalProviderFn ? this.getLocalProviderFn() : null
+  }
+
+  private async stopPtysForDestructiveWorktreeRemoval(
+    worktreeId: string,
+    connectionId?: string
+  ): Promise<void> {
+    const provider = connectionId ? this.getSshProviderFn?.(connectionId) : this.getLocalProvider()
+    if (!provider) {
+      throw new Error(`PTY provider unavailable for worktree deletion: ${worktreeId}`)
+    }
+    const teardownResult = await killAllProcessesForWorktree(worktreeId, {
+      runtime: this,
+      localProvider: provider,
+      onPtyStopped: this.onPtyStopped ?? undefined,
+      requirePhysicalStop: true,
+      ...(connectionId ? { includeLocalRegistry: false } : {})
+    })
+    const total =
+      teardownResult.runtimeStopped +
+      teardownResult.providerStopped +
+      teardownResult.registryStopped
+    if (total > 0) {
+      console.info(
+        `[worktree-teardown] ${worktreeId} killed runtime=${teardownResult.runtimeStopped} provider=${teardownResult.providerStopped} registry=${teardownResult.registryStopped}`
+      )
+    }
   }
 
   getStatsSummary(): StatsSummary | null {
@@ -5416,6 +5461,91 @@ export class OrcaRuntimeService {
     this.fileCommands.readFileExplorerDir.bind(this.fileCommands)
   watchFileExplorer: RuntimeFileCommands['watchFileExplorer'] =
     this.fileCommands.watchFileExplorer.bind(this.fileCommands)
+  closeFileWatchersForRemoval = async (
+    worktreePath: string,
+    connectionId?: string
+  ): Promise<void> => {
+    const results = await Promise.allSettled([
+      connectionId
+        ? closeRemoteWatcherForWorktreePath(connectionId, worktreePath)
+        : closeLocalWatcherForWorktreePath(worktreePath),
+      this.fileCommands.closeFileExplorerWatchersForPath(worktreePath, connectionId)
+    ])
+    const failure = results.find((result): result is PromiseRejectedResult => {
+      return result.status === 'rejected'
+    })
+    if (failure) {
+      // Why: restoration must start only after every bounded teardown settles;
+      // otherwise a late close can stale a just-restored logical subscription.
+      throw failure.reason
+    }
+  }
+  restoreFileWatchersAfterFailedRemoval = async (
+    worktreePath: string,
+    connectionId?: string
+  ): Promise<void> => {
+    await Promise.all([
+      connectionId
+        ? restoreRemoteWatcherAfterFailedRemoval(connectionId, worktreePath)
+        : restoreLocalWatcherAfterFailedRemoval(worktreePath),
+      this.fileCommands.restoreFileExplorerWatchersAfterFailedRemoval(worktreePath, connectionId)
+    ])
+  }
+  forgetFileWatchersAfterRemoval = (worktreePath: string, connectionId?: string): void => {
+    if (connectionId) {
+      forgetRemoteWatcherRemovalSnapshot(connectionId, worktreePath)
+    } else {
+      forgetLocalWatcherRemovalSnapshot(worktreePath)
+    }
+    this.fileCommands.forgetFileExplorerWatchersAfterRemoval(worktreePath, connectionId)
+  }
+  acquireFileWatcherRemoval = async (
+    worktreePath: string,
+    connectionId?: string
+  ): Promise<{ finish(removed: boolean): Promise<void> }> => {
+    const gate = acquireWatcherRemovalGate(worktreePath, connectionId)
+    try {
+      // Why: the first pass aborts desktop setup immediately; the second catches
+      // any pre-gate runtime install that published after the first snapshot.
+      await this.closeFileWatchersForRemoval(worktreePath, connectionId)
+      await gate.ready
+      await this.closeFileWatchersForRemoval(worktreePath, connectionId)
+      let finished = false
+      return {
+        finish: async (removed) => {
+          if (finished) {
+            return
+          }
+          finished = true
+          if (removed) {
+            this.forgetFileWatchersAfterRemoval(worktreePath, connectionId)
+          }
+          gate.release()
+          if (!removed) {
+            await this.restoreFileWatchersAfterFailedRemoval(worktreePath, connectionId).catch(
+              (restoreError: unknown) => {
+                console.error('[worktrees] failed to restore watchers after removal failed', {
+                  worktreePath,
+                  restoreError
+                })
+              }
+            )
+          }
+        }
+      }
+    } catch (error) {
+      gate.release()
+      await this.restoreFileWatchersAfterFailedRemoval(worktreePath, connectionId).catch(
+        (restoreError: unknown) => {
+          console.error('[worktrees] failed to restore watchers after removal setup failed', {
+            worktreePath,
+            restoreError
+          })
+        }
+      )
+      throw error
+    }
+  }
   readFileExplorerPreview: RuntimeFileCommands['readFileExplorerPreview'] =
     this.fileCommands.readFileExplorerPreview.bind(this.fileCommands)
   readFileExplorerChunk: RuntimeFileCommands['readFileExplorerChunk'] =
@@ -7613,7 +7743,7 @@ export class OrcaRuntimeService {
 
   registerSubscriptionCleanup(
     subscriptionId: string,
-    cleanup: () => void,
+    cleanup: () => void | Promise<void>,
     connectionId?: string
   ): void {
     // Why: mobile clients reconnect frequently (phone lock, network switch).
@@ -7622,6 +7752,9 @@ export class OrcaRuntimeService {
     // listener leaks in dataListeners and duplicates every PTY data event.
     const existing = this.subscriptionCleanups.get(subscriptionId)
     if (existing) {
+      // Why: the stable id is about to belong to a newer connection; detach
+      // the old owner before its asynchronous cleanup can overlap the rebind.
+      this.removeSubscriptionConnectionIndex(subscriptionId)
       this.cleanupSubscription(subscriptionId)
     }
     this.subscriptionCleanups.set(subscriptionId, cleanup)
@@ -7637,21 +7770,83 @@ export class OrcaRuntimeService {
   }
 
   cleanupSubscription(subscriptionId: string): void {
-    const cleanup = this.subscriptionCleanups.get(subscriptionId)
-    if (cleanup) {
-      this.subscriptionCleanups.delete(subscriptionId)
-      const connectionId = this.subscriptionConnectionByEntry.get(subscriptionId)
-      if (connectionId) {
-        this.subscriptionConnectionByEntry.delete(subscriptionId)
-        const set = this.subscriptionsByConnection.get(connectionId)
-        if (set) {
-          set.delete(subscriptionId)
-          if (set.size === 0) {
-            this.subscriptionsByConnection.delete(connectionId)
+    void this.cleanupSubscriptionAndWait(subscriptionId).catch((error) => {
+      console.error(`[runtime] subscription cleanup failed for ${subscriptionId}:`, error)
+    })
+  }
+
+  retrySubscriptionCleanupAfter(
+    subscriptionId: string,
+    cleanupOwner: () => void | Promise<void>,
+    gate: Promise<void>
+  ): void {
+    const failedGeneration = this.subscriptionCleanupPromises.get(subscriptionId)
+    void gate.then(
+      async () => {
+        await (failedGeneration?.cleanup === cleanupOwner
+          ? failedGeneration.promise.catch(() => undefined)
+          : undefined)
+        while (this.subscriptionCleanups.get(subscriptionId) === cleanupOwner) {
+          const newerGeneration = this.subscriptionCleanupPromises.get(subscriptionId)
+          if (newerGeneration?.cleanup === cleanupOwner) {
+            // Why: a caller may already be retrying this owner; wait for that
+            // exact generation so a rejected join cannot consume our retry.
+            await newerGeneration.promise.catch(() => undefined)
+            continue
           }
+          this.cleanupSubscription(subscriptionId)
+          return
+        }
+      },
+      () => undefined
+    )
+  }
+
+  async cleanupSubscriptionAndWait(subscriptionId: string): Promise<void> {
+    const cleanup = this.subscriptionCleanups.get(subscriptionId)
+    if (!cleanup) {
+      return
+    }
+    const inFlight = this.subscriptionCleanupPromises.get(subscriptionId)
+    if (inFlight?.cleanup === cleanup) {
+      return inFlight.promise
+    }
+    let cleanupResult: void | Promise<void>
+    try {
+      cleanupResult = cleanup()
+    } catch (error) {
+      cleanupResult = Promise.reject(error)
+    }
+    const promise = Promise.resolve(cleanupResult)
+      .then(() => {
+        // Why: a reconnect can replace this id while old async cleanup runs;
+        // only the generation that registered this callback may remove it.
+        if (this.subscriptionCleanups.get(subscriptionId) !== cleanup) {
+          return
+        }
+        this.subscriptionCleanups.delete(subscriptionId)
+        this.removeSubscriptionConnectionIndex(subscriptionId)
+      })
+      .finally(() => {
+        if (this.subscriptionCleanupPromises.get(subscriptionId)?.promise === promise) {
+          this.subscriptionCleanupPromises.delete(subscriptionId)
+        }
+      })
+    this.subscriptionCleanupPromises.set(subscriptionId, { cleanup, promise })
+    return promise
+  }
+
+  private removeSubscriptionConnectionIndex(subscriptionId: string): void {
+    const connectionId = this.subscriptionConnectionByEntry.get(subscriptionId)
+    if (connectionId) {
+      this.subscriptionConnectionByEntry.delete(subscriptionId)
+      const set = this.subscriptionsByConnection.get(connectionId)
+      if (set) {
+        set.delete(subscriptionId)
+        if (set.size === 0) {
+          this.subscriptionsByConnection.delete(connectionId)
         }
       }
-      cleanup()
     }
   }
 
@@ -7675,7 +7870,14 @@ export class OrcaRuntimeService {
     // mutates both the set and the index map.
     const ids = Array.from(set)
     for (const id of ids) {
+      if (this.subscriptionConnectionByEntry.get(id) !== connectionId) {
+        set.delete(id)
+        continue
+      }
       this.cleanupSubscription(id)
+    }
+    if (set.size === 0) {
+      this.subscriptionsByConnection.delete(connectionId)
     }
   }
 
@@ -17485,7 +17687,18 @@ export class OrcaRuntimeService {
             throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
           }
           if (repo.connectionId) {
-            await fsProvider!.deletePath(removalTarget.path, true)
+            const removalGate = await this.acquireFileWatcherRemoval(
+              removalTarget.path,
+              repo.connectionId
+            )
+            let removalCompleted = false
+            try {
+              await this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id, repo.connectionId)
+              await fsProvider!.deletePath(removalTarget.path, true)
+              removalCompleted = true
+            } finally {
+              await removalGate.finish(removalCompleted)
+            }
             await cleanupUnusedWorktreePushTargetRemoteSsh(
               provider!,
               repo.path,
@@ -17494,7 +17707,15 @@ export class OrcaRuntimeService {
               store
             )
           } else {
-            await removeLocalWorktreePath(removalTarget.path, localWorktreeGitOptions)
+            const removalGate = await this.acquireFileWatcherRemoval(removalTarget.path)
+            let removalCompleted = false
+            try {
+              await this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id)
+              await removeLocalWorktreePath(removalTarget.path, localWorktreeGitOptions)
+              removalCompleted = true
+            } finally {
+              await removalGate.finish(removalCompleted)
+            }
             await cleanupUnusedWorktreePushTargetRemote(
               repo.path,
               removalTarget.id,
@@ -17532,10 +17753,15 @@ export class OrcaRuntimeService {
             if (!force) {
               throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
             }
-            await closeLocalWatcherForWorktreePath(removalTarget.path).catch((err) => {
-              console.warn(`[filesystem-watcher] failed to close ${removalTarget.path}:`, err)
-            })
-            await removeLocalWorktreePath(removalTarget.path, localWorktreeGitOptions)
+            const removalGate = await this.acquireFileWatcherRemoval(removalTarget.path)
+            let removalCompleted = false
+            try {
+              await this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id)
+              await removeLocalWorktreePath(removalTarget.path, localWorktreeGitOptions)
+              removalCompleted = true
+            } finally {
+              await removalGate.finish(removalCompleted)
+            }
             await cleanupUnusedWorktreePushTargetRemote(
               repo.path,
               removalTarget.id,
@@ -17636,9 +17862,21 @@ export class OrcaRuntimeService {
       }
       if (repo.connectionId) {
         const remoteRemoveOptions = !deleteBranch ? { deleteBranch } : {}
-        const rawRemovalResult = await (Object.keys(remoteRemoveOptions).length > 0
-          ? provider!.removeWorktree(canonicalWorktreePath, force, remoteRemoveOptions)
-          : provider!.removeWorktree(canonicalWorktreePath, force))
+        const removalGate = await this.acquireFileWatcherRemoval(
+          canonicalWorktreePath,
+          repo.connectionId
+        )
+        let rawRemovalResult: RemoveWorktreeResult | undefined
+        let removalCompleted = false
+        try {
+          await this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id, repo.connectionId)
+          rawRemovalResult = await (Object.keys(remoteRemoveOptions).length > 0
+            ? provider!.removeWorktree(canonicalWorktreePath, force, remoteRemoveOptions)
+            : provider!.removeWorktree(canonicalWorktreePath, force))
+          removalCompleted = true
+        } finally {
+          await removalGate.finish(removalCompleted)
+        }
         const removalResult = this.preserveBranchHeadFallback(
           rawRemovalResult,
           registeredWorktree.head
@@ -17704,133 +17942,122 @@ export class OrcaRuntimeService {
         throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
       }
 
-      let shouldTearDownPtys = true
-      if (repo.symlinkPaths && repo.symlinkPaths.length > 0) {
-        await removeWorktreeLinkedPaths(canonicalWorktreePath, repo.symlinkPaths)
-      }
+      const linkedPaths = repo.symlinkPaths ?? []
+      const ignoredLinkedPaths = force
+        ? []
+        : await findExistingWorktreeSymlinkPaths(canonicalWorktreePath, linkedPaths)
       try {
         await (hasLocalWorktreeGitOptions
-          ? assertWorktreeCleanForRemoval(canonicalWorktreePath, force, localWorktreeGitOptions)
-          : assertWorktreeCleanForRemoval(canonicalWorktreePath, force))
+          ? assertWorktreeCleanForRemoval(canonicalWorktreePath, force, {
+              ...localWorktreeGitOptions,
+              ...(ignoredLinkedPaths.length > 0
+                ? { ignoredUntrackedPaths: ignoredLinkedPaths }
+                : {})
+            })
+          : ignoredLinkedPaths.length > 0
+            ? assertWorktreeCleanForRemoval(canonicalWorktreePath, force, {
+                ignoredUntrackedPaths: ignoredLinkedPaths
+              })
+            : assertWorktreeCleanForRemoval(canonicalWorktreePath, force))
       } catch (error) {
         if (!isOrphanCompatiblePreflightError(error)) {
           throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
         }
-        // Why: orphan cleanup does not need live shells to be killed first,
-        // and preflight did not prove the worktree is cleanly removable.
-        shouldTearDownPtys = false
-      }
-
-      const localProvider = this.getLocalProvider()
-      await closeLocalWatcherForWorktreePath(canonicalWorktreePath).catch((err) => {
-        console.warn(`[filesystem-watcher] failed to close ${canonicalWorktreePath}:`, err)
-      })
-      if (localProvider && shouldTearDownPtys) {
-        // Why: once preflight proves normal deletion is clean, kill PTYs before
-        // git-level removal so Windows handles cannot keep the directory busy. This also
-        // closes the headless-CLI leak for confirmed-removable worktrees.
-        await killAllProcessesForWorktree(removalTarget.id, {
-          runtime: this,
-          localProvider,
-          onPtyStopped: this.onPtyStopped ?? undefined
-        })
-          .then((r) => {
-            const total = r.runtimeStopped + r.providerStopped + r.registryStopped
-            if (total > 0) {
-              // Why (design §4.4 observability): breadcrumb lets ops
-              // distinguish a renderer-state-induced leak (diff-path purge
-              // non-empty) from a backend-induced one (nothing to kill but
-              // memory still pinned). Emit only when the sweep actually did
-              // work so steady-state logs stay quiet.
-              console.info(
-                `[worktree-teardown] ${removalTarget.id} killed runtime=${r.runtimeStopped} provider=${r.providerStopped} registry=${r.registryStopped}`
-              )
-            }
-          })
-          .catch((err) => {
-            console.warn(`[worktree-teardown] failed for ${removalTarget.id}:`, err)
-          })
+        // Why: Git can still classify this as an orphan after preflight;
+        // retain strict PTY teardown before any recursive fallback deletion.
       }
 
       let removalResult: RemoveWorktreeResult | undefined
+      const removalGate = await this.acquireFileWatcherRemoval(canonicalWorktreePath)
+      let removalCompleted = false
       try {
-        const removeOptions = {
-          ...(!deleteBranch ? { deleteBranch } : {}),
-          // Why: removal already validated the Git row under the selected
-          // project runtime; keep branch cleanup on that same canonical row.
-          knownRemovedWorktree: refreshedRegisteredWorktree,
-          ...localWorktreeGitOptions
+        // Why: linked-path deletion is destructive too; PTYs must release every
+        // handle before Windows or WSL filesystem cleanup starts.
+        await this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id)
+
+        if (linkedPaths.length > 0) {
+          await removeWorktreeLinkedPaths(canonicalWorktreePath, linkedPaths)
         }
-        removalResult = this.preserveBranchHeadFallback(
-          await removeWorktree(repo.path, canonicalWorktreePath, force, removeOptions),
-          refreshedRegisteredWorktree.head
-        )
-      } catch (error) {
-        // Why: Git for Windows can deregister a clean worktree before its
-        // recursive filesystem deletion fails transiently.
-        const recoveredRemovalResult = await recoverLocalWindowsWorktreeRemoval({
-          error,
-          force,
-          canonicalWorktreePath,
-          repoPath: repo.path,
-          localWorktreeGitOptions,
-          registeredWorktree: refreshedRegisteredWorktree,
-          deleteBranch,
-          closeWatcher: (worktreePath) =>
-            closeLocalWatcherForWorktreePath(worktreePath).catch((err) => {
-              console.warn(`[filesystem-watcher] failed to close ${worktreePath}:`, err)
-            })
-        })
-        if (recoveredRemovalResult) {
-          removalResult = recoveredRemovalResult
-        } else if (isOrphanedWorktreeError(error)) {
-          const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
-          if (
-            await canSafelyRemoveOrphanedWorktreeDirectory(
-              toLocalWorktreeRuntimePath(canonicalWorktreePath, localWorktreeGitOptions),
-              toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
-              access.statPath,
-              access.readPath
-            )
-          ) {
-            await closeLocalWatcherForWorktreePath(canonicalWorktreePath).catch((err) => {
-              console.warn(`[filesystem-watcher] failed to close ${canonicalWorktreePath}:`, err)
-            })
-            await removeLocalWorktreePath(canonicalWorktreePath, localWorktreeGitOptions).catch(
-              () => {}
-            )
-          } else {
-            console.warn(
-              `[worktrees] Refusing recursive cleanup for unproven worktree directory: ${canonicalWorktreePath}`
-            )
-          }
-          // Why: `git worktree remove` failed, so git's internal worktree tracking
-          // (`.git/worktrees/<name>`) is still intact. Without pruning, `git worktree
-          // list` continues to show the stale entry and the branch it had checked out
-          // remains locked — other worktrees cannot check it out.
-          await gitExecFileAsync(['worktree', 'prune'], {
-            cwd: repo.path,
+
+        try {
+          const removeOptions = {
+            ...(!deleteBranch ? { deleteBranch } : {}),
+            // Why: removal already validated the Git row under the selected
+            // project runtime; keep branch cleanup on that same canonical row.
+            knownRemovedWorktree: refreshedRegisteredWorktree,
             ...localWorktreeGitOptions
-          }).catch(() => {})
-          await cleanupUnusedWorktreePushTargetRemote(
-            repo.path,
-            removalTarget.id,
-            removedPushTarget,
-            store,
-            localWorktreeGitOptions
-          )
-          this.clearOptimisticReconcileToken(removalTarget.id)
-          this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
-          this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
-          this.invalidateResolvedWorktreeCache()
-          invalidateAuthorizedRootsCache()
-          this.notifyWorktreesChanged(repo.id)
-          return {
-            ...(warning ? { warning } : {})
           }
-        } else {
-          throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
+          removalResult = this.preserveBranchHeadFallback(
+            await removeWorktree(repo.path, canonicalWorktreePath, force, removeOptions),
+            refreshedRegisteredWorktree.head
+          )
+        } catch (error) {
+          // Why: Git for Windows can deregister a clean worktree before its
+          // recursive filesystem deletion fails transiently.
+          const recoveredRemovalResult = await recoverLocalWindowsWorktreeRemoval({
+            error,
+            force,
+            canonicalWorktreePath,
+            repoPath: repo.path,
+            localWorktreeGitOptions,
+            registeredWorktree: refreshedRegisteredWorktree,
+            deleteBranch,
+            closeWatcher: (worktreePath) => this.closeFileWatchersForRemoval(worktreePath)
+          })
+          if (recoveredRemovalResult) {
+            removalResult = recoveredRemovalResult
+            removalCompleted = true
+          } else if (isOrphanedWorktreeError(error)) {
+            const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
+            if (
+              await canSafelyRemoveOrphanedWorktreeDirectory(
+                toLocalWorktreeRuntimePath(canonicalWorktreePath, localWorktreeGitOptions),
+                toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
+                access.statPath,
+                access.readPath
+              )
+            ) {
+              await this.closeFileWatchersForRemoval(canonicalWorktreePath)
+              await removeLocalWorktreePath(canonicalWorktreePath, localWorktreeGitOptions).catch(
+                () => {}
+              )
+            } else {
+              console.warn(
+                `[worktrees] Refusing recursive cleanup for unproven worktree directory: ${canonicalWorktreePath}`
+              )
+            }
+            // Why: `git worktree remove` failed, so git's internal worktree tracking
+            // (`.git/worktrees/<name>`) is still intact. Without pruning, `git worktree
+            // list` continues to show the stale entry and the branch it had checked out
+            // remains locked — other worktrees cannot check it out.
+            await gitExecFileAsync(['worktree', 'prune'], {
+              cwd: repo.path,
+              ...localWorktreeGitOptions
+            }).catch(() => {})
+            await cleanupUnusedWorktreePushTargetRemote(
+              repo.path,
+              removalTarget.id,
+              removedPushTarget,
+              store,
+              localWorktreeGitOptions
+            )
+            this.clearOptimisticReconcileToken(removalTarget.id)
+            this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
+            this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
+            this.invalidateResolvedWorktreeCache()
+            invalidateAuthorizedRootsCache()
+            this.notifyWorktreesChanged(repo.id)
+            removalCompleted = true
+            return {
+              ...(warning ? { warning } : {})
+            }
+          } else {
+            throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
+          }
         }
+        removalCompleted = true
+      } finally {
+        await removalGate.finish(removalCompleted)
       }
 
       await cleanupUnusedWorktreePushTargetRemote(
@@ -19281,12 +19508,24 @@ export class OrcaRuntimeService {
     })
   }
 
-  async stopTerminalsForWorktree(worktreeSelector: string): Promise<{ stopped: number }> {
+  async stopTerminalsForWorktree(
+    worktreeSelector: string,
+    options: {
+      deadline?: number
+      stopPty?: (
+        ptyId: string,
+        stop: () => boolean | Promise<boolean>
+      ) => Promise<{ stopped: boolean; owner: boolean }>
+    } = {}
+  ): Promise<{ stopped: number }> {
     // Why: this mutates live PTYs, so the runtime must reject it while the
     // renderer graph is reloading instead of acting on cached leaf ownership.
     const graphEpoch = this.captureReadyGraphEpoch()
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     this.assertStableReadyGraph(graphEpoch)
+    if (options.deadline !== undefined && Date.now() >= options.deadline) {
+      return { stopped: 0 }
+    }
     const ptyIds = new Set<string>()
     for (const leaf of this.leaves.values()) {
       if (leaf.worktreeId === worktree.id && leaf.ptyId) {
@@ -19301,7 +19540,24 @@ export class OrcaRuntimeService {
 
     let stopped = 0
     for (const ptyId of ptyIds) {
-      if (this.ptyController?.kill(ptyId)) {
+      if (options.deadline !== undefined && Date.now() >= options.deadline) {
+        break
+      }
+      const stop = (): boolean | Promise<boolean> => {
+        if (options.deadline !== undefined && Date.now() >= options.deadline) {
+          return false
+        }
+        if (options.stopPty) {
+          // Why: destructive worktree cleanup must not let its cross-surface
+          // dedupe treat fire-and-forget controller.kill as physical exit.
+          return this.ptyController?.stopAndWait?.(ptyId) ?? false
+        }
+        return Boolean(this.ptyController?.kill(ptyId))
+      }
+      const stopResult = options.stopPty
+        ? await options.stopPty(ptyId, stop)
+        : { stopped: stop(), owner: true }
+      if (stopResult.owner && stopResult.stopped) {
         stopped += 1
       }
     }

@@ -1382,6 +1382,46 @@ describe('createPtySubprocess', () => {
     expect(proc.kill).toHaveBeenCalled()
   })
 
+  it('propagates rejected graceful kills without marking the wrapper dead', () => {
+    const proc = mockPtyProcess()
+    proc.kill.mockImplementationOnce(() => {
+      throw new Error('native kill rejected')
+    })
+    spawnMock.mockReturnValue(proc)
+
+    const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    expect(() => handle.kill()).toThrow('native kill rejected')
+    handle.write('still owned')
+    expect(() => handle.kill()).not.toThrow()
+
+    expect(proc.write).toHaveBeenCalledWith('still owned')
+    expect(proc.kill).toHaveBeenCalledTimes(2)
+  })
+
+  it('propagates rejected force kills so the owner can retry', () => {
+    const proc = mockPtyProcess(77)
+    proc.kill.mockImplementation(() => {
+      throw new Error('native fallback rejected')
+    })
+    spawnMock.mockReturnValue(proc)
+    const killSpy = vi
+      .spyOn(process, 'kill')
+      .mockImplementationOnce(() => {
+        throw new Error('SIGKILL rejected')
+      })
+      .mockImplementationOnce(() => true)
+
+    try {
+      const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+      expect(() => handle.forceKill()).toThrow('SIGKILL rejected')
+      expect(() => handle.forceKill()).not.toThrow()
+      expect(killSpy).toHaveBeenCalledTimes(2)
+      expect(proc.kill).toHaveBeenCalledOnce()
+    } finally {
+      killSpy.mockRestore()
+    }
+  })
+
   it('forceKill sends SIGKILL to the child pid', () => {
     const proc = mockPtyProcess(77)
     spawnMock.mockReturnValue(proc)

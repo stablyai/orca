@@ -994,15 +994,80 @@ function findWorktreeById(state: AppState, worktreeId: string): Worktree | null 
   return null
 }
 
+type WorktreeLookupEntry = {
+  first: Worktree
+  unique: Worktree | null
+}
+
+type WorktreeLookupIndex = {
+  byId: Map<string, WorktreeLookupEntry>
+  repoHostIdsByRepoId: Map<string, Set<string>>
+}
+
+function buildWorktreeLookupIndex(state: AppState): WorktreeLookupIndex {
+  const byId = new Map<string, WorktreeLookupEntry>()
+  for (const worktrees of Object.values(state.worktreesByRepo)) {
+    for (const worktree of worktrees) {
+      const worktreeId = worktree.id
+      const existing = byId.get(worktreeId)
+      if (existing) {
+        existing.unique = null
+      } else {
+        byId.set(worktreeId, { first: worktree, unique: worktree })
+      }
+    }
+  }
+
+  const repoHostIdsByRepoId = new Map<string, Set<string>>()
+  for (const repo of state.repos ?? []) {
+    let hostIds = repoHostIdsByRepoId.get(repo.id)
+    if (!hostIds) {
+      hostIds = new Set<string>()
+      repoHostIdsByRepoId.set(repo.id, hostIds)
+    }
+    hostIds.add(getRepoExecutionHostId(repo))
+  }
+  return { byId, repoHostIdsByRepoId }
+}
+
+function findUniqueWorktreeById(
+  state: AppState,
+  worktreeId: string,
+  executionHostId?: string,
+  lookupIndex = buildWorktreeLookupIndex(state)
+): Worktree | null {
+  const match = lookupIndex.byId.get(worktreeId)?.unique ?? null
+  // Why: metadata persistence is keyed only by worktree id. If two hosts own
+  // that id, the index marks it non-unique and destructive clears fail closed.
+  if (!match || executionHostId === undefined) {
+    return match
+  }
+  const expectedHostId = normalizeExecutionHostId(executionHostId) ?? LOCAL_EXECUTION_HOST_ID
+  const explicitWorktreeHostId = normalizeExecutionHostId(match.hostId)
+  if (explicitWorktreeHostId) {
+    return explicitWorktreeHostId === expectedHostId ? match : null
+  }
+  const repoHostIds = lookupIndex.repoHostIdsByRepoId.get(match.repoId)
+  // Pre-host persisted rows are safe only when their repo has one unambiguous owner.
+  if (!repoHostIds || repoHostIds.size !== 1 || !repoHostIds.has(expectedHostId)) {
+    return null
+  }
+  return match
+}
+
 function isStaleExactLinkedPRLookup(
   state: AppState,
   worktreeId: string | undefined,
-  linkedPRNumber: number | null | undefined
+  linkedPRNumber: number | null | undefined,
+  lookupIndex?: WorktreeLookupIndex
 ): boolean {
   if (!worktreeId || linkedPRNumber == null) {
     return false
   }
-  return findWorktreeById(state, worktreeId)?.linkedPR !== linkedPRNumber
+  const worktree = lookupIndex
+    ? (lookupIndex.byId.get(worktreeId)?.first ?? null)
+    : findWorktreeById(state, worktreeId)
+  return worktree?.linkedPR !== linkedPRNumber
 }
 
 function shouldClearDivergedLinkedMergedPR(args: {
@@ -1037,6 +1102,58 @@ function shouldApplyDivergedLinkedPRClear(args: {
     requestHeadOid !== null &&
     worktree?.linkedPR === linkedPRNumber &&
     worktree.branch.replace(/^refs\/heads\//, '') === branch &&
+    worktree.head === requestHeadOid &&
+    worktree.isBare !== true &&
+    worktree.isArchived !== true
+  )
+}
+
+// Why: a linked PR is a branch-scoped hint. When a lookup returns the linked
+// open or draft PR while the worktree sits on a different branch — and neither
+// the push target nor the worktree HEAD still points at the PR head — the link is stale
+// (a branch switch whose identity-path clear was missed) and would otherwise
+// pin Checks to the previous branch's PR on every refresh.
+export function shouldClearBranchMismatchedLinkedOpenPR(args: {
+  pr: PRInfo | null
+  linkedPRNumber: number | null
+  branch: string
+  requestHeadOid: string | null
+  pushTargetBranch: string | null
+}): boolean {
+  const { pr, linkedPRNumber, branch, requestHeadOid, pushTargetBranch } = args
+  const headRefName = pr?.headRefName?.trim() ?? ''
+  const currentBranch = branch.replace(/^refs\/heads\//, '').trim()
+  return (
+    linkedPRNumber != null &&
+    pr?.number === linkedPRNumber &&
+    // Draft reviews are open PRs too; their distinct renderer state must not
+    // leave the same stale durable link permanently wedged after a branch switch.
+    (pr.state === 'open' || pr.state === 'draft') &&
+    requestHeadOid !== null &&
+    headRefName !== '' &&
+    currentBranch !== '' &&
+    headRefName !== currentBranch &&
+    (pushTargetBranch === null || pushTargetBranch !== headRefName) &&
+    // A worktree parked on the PR's own head commit is the same line of work
+    // (e.g. a PR checkout under a renamed local branch); keep the link.
+    !(pr.headSha != null && pr.headSha === requestHeadOid)
+  )
+}
+
+function shouldApplyBranchMismatchedLinkedPRClear(args: {
+  worktree: Pick<Worktree, 'linkedPR' | 'branch' | 'head' | 'isBare' | 'isArchived'> | undefined
+  linkedPRNumber: number
+  branch: string
+  requestHeadOid: string | null
+}): boolean {
+  const { worktree, linkedPRNumber, branch, requestHeadOid } = args
+  return (
+    Boolean(worktree) &&
+    requestHeadOid !== null &&
+    worktree?.linkedPR === linkedPRNumber &&
+    // Branch-scoped: only clear while the worktree is still on the branch the
+    // mismatch was computed against; a newer switch gets its own validation.
+    worktree.branch.replace(/^refs\/heads\//, '') === branch.replace(/^refs\/heads\//, '') &&
     worktree.head === requestHeadOid &&
     worktree.isBare !== true &&
     worktree.isArchived !== true
@@ -1315,17 +1432,23 @@ function shouldPreserveExistingPRForFallbackMiss(args: {
   fallbackPRNumber?: number | null
   fallbackPRSource?: GitHubPRFallbackSource | null
 }): boolean {
+  if (
+    args.nextPR !== null ||
+    args.linkedPRNumber != null ||
+    args.currentPR?.state !== 'merged' ||
+    typeof args.currentPR.headSha !== 'string' ||
+    args.currentPR.headSha.length === 0
+  ) {
+    return false
+  }
+  // Why: the common found/non-merged paths do not depend on worktree state.
+  // Gate the global lookup so batched refresh aliases do not multiply full scans.
   const worktree = args.worktreeId ? findWorktreeById(args.state, args.worktreeId) : null
   const worktreeHead = worktree?.head
   // Why: merged branch PRs are only safe to keep when cached PR metadata still
   // matches the commit this stored worktree is actually on — exactly, or via a
   // head confirmed to be part of the merged PR.
   const preservesMergedPRForCurrentHead =
-    args.nextPR === null &&
-    args.linkedPRNumber == null &&
-    args.currentPR?.state === 'merged' &&
-    typeof args.currentPR.headSha === 'string' &&
-    args.currentPR.headSha.length > 0 &&
     typeof worktreeHead === 'string' &&
     worktreeHead.length > 0 &&
     (args.currentPR.headSha === worktreeHead ||
@@ -3133,8 +3256,17 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           if (didUpdatePRCache) {
             debouncedSaveCache(get())
           }
+          const linkedPRWorktree =
+            options?.worktreeId && linkedPRNumber != null
+              ? findUniqueWorktreeById(
+                  get(),
+                  options.worktreeId,
+                  repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
+                )
+              : null
           if (
             options?.worktreeId &&
+            linkedPRWorktree &&
             linkedPRNumber != null &&
             shouldClearDivergedLinkedMergedPR({ pr, linkedPRNumber, requestHeadOid })
           ) {
@@ -3144,15 +3276,61 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               options.worktreeId,
               { linkedPR: null },
               {
-                shouldApply: (worktree) =>
+                shouldApply: () =>
                   shouldApplyDivergedLinkedPRClear({
-                    worktree,
+                    worktree:
+                      findUniqueWorktreeById(
+                        get(),
+                        options.worktreeId!,
+                        repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
+                      ) ?? undefined,
                     linkedPRNumber,
                     branch,
                     requestHeadOid
                   })
               }
             )
+          }
+          if (
+            options?.worktreeId &&
+            linkedPRWorktree &&
+            linkedPRNumber != null &&
+            shouldClearBranchMismatchedLinkedOpenPR({
+              pr,
+              linkedPRNumber,
+              branch,
+              requestHeadOid,
+              pushTargetBranch: linkedPRWorktree.pushTarget?.branchName ?? null
+            })
+          ) {
+            void get().updateWorktreeMeta(
+              options.worktreeId,
+              { linkedPR: null },
+              {
+                // Why: the branch-scoped PR refetch below updates both GitHub
+                // caches; the generic metadata refresh would duplicate provider work.
+                suppressHostedReviewRefresh: true,
+                shouldApply: () =>
+                  shouldApplyBranchMismatchedLinkedPRClear({
+                    worktree:
+                      findUniqueWorktreeById(
+                        get(),
+                        options.worktreeId!,
+                        repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
+                      ) ?? undefined,
+                    linkedPRNumber,
+                    branch,
+                    requestHeadOid
+                  })
+              }
+            )
+            // Re-resolve by branch right away so visible Checks recover on this
+            // refresh instead of keeping the stale linked PR cached.
+            void get().fetchPRForBranch(repoPath, branch, {
+              force: true,
+              repoId,
+              worktreeId: options.worktreeId
+            })
           }
         }
         if (
@@ -3881,28 +4059,18 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       linkedPRNumber: number
       branch: string
       requestHeadOid: string | null
+      executionHostId: string
     }[] = []
-    if (event.outcome?.kind === 'found') {
-      const pr = event.outcome.pr
-      for (const alias of event.aliases) {
-        const linkedPRNumber = alias.linkedPRNumber ?? null
-        const requestHeadOid = alias.currentHeadOid ?? null
-        if (
-          alias.worktreeId &&
-          linkedPRNumber != null &&
-          shouldClearDivergedLinkedMergedPR({ pr, linkedPRNumber, requestHeadOid })
-        ) {
-          divergedLinkedPRClears.push({
-            worktreeId: alias.worktreeId,
-            linkedPRNumber,
-            branch: alias.branch,
-            requestHeadOid
-          })
-        }
-      }
-    }
+    const branchMismatchedLinkedPRClears: {
+      worktreeId: string
+      linkedPRNumber: number
+      branch: string
+      requestHeadOid: string | null
+      executionHostId: string
+    }[] = []
     let didUpdatePRCache = false
     set((s) => {
+      let linkedWorktreeLookupIndex: WorktreeLookupIndex | undefined
       const nextSequences = { ...s.prRefreshSequences }
       const prunedStates = pruneExpiredPRRefreshStates(s.prRefreshStates)
       const nextStates = { ...prunedStates }
@@ -4015,10 +4183,68 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                   return pr
                 })()
               : null
+          const linkedPRNumber = alias.linkedPRNumber ?? null
+          // Why: one coordinator outcome can fan out to many linked aliases.
+          // Build one lazy index instead of rescanning all worktrees per alias.
+          const worktreeLookupIndex =
+            alias.worktreeId && linkedPRNumber != null
+              ? (linkedWorktreeLookupIndex ??= buildWorktreeLookupIndex(s))
+              : undefined
           // Why: queued local refreshes may finish after the user unlinks an
           // exact PR; those older results must not restore the manual-link UI.
-          if (isStaleExactLinkedPRLookup(s, alias.worktreeId, alias.linkedPRNumber)) {
+          if (
+            isStaleExactLinkedPRLookup(s, alias.worktreeId, linkedPRNumber, worktreeLookupIndex)
+          ) {
             continue
+          }
+          if (event.outcome.kind === 'found' && alias.worktreeId) {
+            const requestHeadOid = alias.currentHeadOid ?? null
+            const worktree =
+              linkedPRNumber != null
+                ? findUniqueWorktreeById(
+                    s,
+                    alias.worktreeId,
+                    aliasExecutionHostId,
+                    worktreeLookupIndex
+                  )
+                : null
+            // Why: only an event that won the sequence gate above owns metadata
+            // side effects; rejected late outcomes must not unlink a newer PR.
+            if (
+              worktree &&
+              linkedPRNumber != null &&
+              shouldClearDivergedLinkedMergedPR({
+                pr: event.outcome.pr,
+                linkedPRNumber,
+                requestHeadOid
+              })
+            ) {
+              divergedLinkedPRClears.push({
+                worktreeId: alias.worktreeId,
+                linkedPRNumber,
+                branch: alias.branch,
+                requestHeadOid,
+                executionHostId: aliasExecutionHostId
+              })
+            } else if (
+              worktree &&
+              linkedPRNumber != null &&
+              shouldClearBranchMismatchedLinkedOpenPR({
+                pr: event.outcome.pr,
+                linkedPRNumber,
+                branch: alias.branch,
+                requestHeadOid,
+                pushTargetBranch: worktree.pushTarget?.branchName ?? null
+              })
+            ) {
+              branchMismatchedLinkedPRClears.push({
+                worktreeId: alias.worktreeId,
+                linkedPRNumber,
+                branch: alias.branch,
+                requestHeadOid,
+                executionHostId: aliasExecutionHostId
+              })
+            }
           }
           const nextCaches = applyGitHubPRResultToCaches({
             prCache: nextPRCache,
@@ -4102,9 +4328,26 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         clear.worktreeId,
         { linkedPR: null },
         {
-          shouldApply: (worktree) =>
+          shouldApply: () =>
             shouldApplyDivergedLinkedPRClear({
-              worktree,
+              worktree:
+                findUniqueWorktreeById(get(), clear.worktreeId, clear.executionHostId) ?? undefined,
+              linkedPRNumber: clear.linkedPRNumber,
+              branch: clear.branch,
+              requestHeadOid: clear.requestHeadOid
+            })
+        }
+      )
+    }
+    for (const clear of branchMismatchedLinkedPRClears) {
+      void get().updateWorktreeMeta(
+        clear.worktreeId,
+        { linkedPR: null },
+        {
+          shouldApply: () =>
+            shouldApplyBranchMismatchedLinkedPRClear({
+              worktree:
+                findUniqueWorktreeById(get(), clear.worktreeId, clear.executionHostId) ?? undefined,
               linkedPRNumber: clear.linkedPRNumber,
               branch: clear.branch,
               requestHeadOid: clear.requestHeadOid

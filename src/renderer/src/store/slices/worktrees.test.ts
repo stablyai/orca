@@ -409,6 +409,88 @@ describe('fetchWorktrees', () => {
     expect(store.getState().sortEpoch).toBe(8)
   })
 
+  it('clears branch-scoped linked reviews when the listing observes a branch switch', async () => {
+    const store = createTestStore()
+    const existing = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      branch: 'refs/heads/feature-one',
+      linkedPR: 101,
+      pushTarget: { remoteName: 'origin', branchName: 'feature-one' }
+    })
+    // Persisted metadata still carries the stale link when the listing refresh
+    // is the first path to observe the terminal branch switch.
+    const refreshed = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      branch: 'refs/heads/feature-two',
+      head: 'def456',
+      linkedPR: 101,
+      pushTarget: { remoteName: 'origin', branchName: 'feature-one' }
+    })
+
+    mockApi.worktrees.list.mockResolvedValue([refreshed])
+    store.setState({ worktreesByRepo: { repo1: [existing] } } as Partial<AppState>)
+
+    await store.getState().fetchWorktrees('repo1')
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      branch: 'refs/heads/feature-two',
+      head: 'def456',
+      linkedPR: null,
+      pushTarget: undefined
+    })
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
+      worktreeId: 'repo1::/path/wt1',
+      updates: expect.objectContaining({ linkedPR: null, pushTarget: undefined })
+    })
+  })
+
+  it('does not merge a stale listing row over a newer branch and review link', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+    const requestStarted = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo1',
+      path: '/path/wt1',
+      branch: 'refs/heads/feature-one',
+      head: 'first-head',
+      linkedPR: 101
+    })
+    const staleResponse = makeWorktree({
+      ...requestStarted,
+      branch: 'refs/heads/feature-two',
+      head: 'stale-head',
+      linkedPR: 202
+    })
+    let resolveListing!: (worktrees: Worktree[]) => void
+    const listing = new Promise<Worktree[]>((resolve) => {
+      resolveListing = resolve
+    })
+    worktreeListMock.mockReturnValueOnce(listing)
+    store.setState({ worktreesByRepo: { repo1: [requestStarted] } } as Partial<AppState>)
+
+    const refresh = store.getState().fetchWorktrees('repo1')
+    await vi.waitFor(() => expect(worktreeListMock).toHaveBeenCalledTimes(1))
+    const latest = makeWorktree({
+      ...requestStarted,
+      branch: 'refs/heads/feature-three',
+      head: 'latest-head',
+      linkedPR: 303
+    })
+    store.setState({ worktreesByRepo: { repo1: [latest] } } as Partial<AppState>)
+    resolveListing([staleResponse])
+
+    await refresh
+
+    expect(store.getState().worktreesByRepo.repo1).toEqual([latest])
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+  })
+
   it('updates the repo entry when only the persisted base ref changes', async () => {
     const store = createTestStore()
     const existing = makeWorktree({
@@ -4392,6 +4474,40 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().worktreesByRepo.repo1[0]?.pushTarget).toBeUndefined()
   })
 
+  it('skips duplicate hosted-review work when the unlinking caller owns the refresh', async () => {
+    const store = createTestStore()
+    const fetchHostedReviewForBranch = vi.fn().mockResolvedValue(null)
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      branch: 'refs/heads/review-branch',
+      linkedPR: 2548,
+      pushTarget: { remoteName: 'fork', branchName: 'owner/old-pr' }
+    })
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [wt] },
+      fetchHostedReviewForBranch
+    } as Partial<AppState>)
+
+    await store
+      .getState()
+      .updateWorktreeMeta(wt.id, { linkedPR: null }, { suppressHostedReviewRefresh: true })
+
+    expect(fetchHostedReviewForBranch).not.toHaveBeenCalled()
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
+      worktreeId: wt.id,
+      updates: { linkedPR: null, pushTarget: undefined }
+    })
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      linkedPR: null,
+      pushTarget: undefined
+    })
+  })
+
   it('clears an older GitHub link and target when replacing it with a GitLab MR', async () => {
     const store = createTestStore()
     const oldPushTarget = { remoteName: 'fork', branchName: 'owner/old-pr' }
@@ -6720,6 +6836,10 @@ describe('migrateWorktreeIdentity', () => {
       lastVisitedAtByWorktreeId: { [OLD]: 123 },
       defaultTerminalTabsAppliedByWorktreeId: { [OLD]: true },
       recentlyClosedEditorTabsByWorktree: { [OLD]: [{ id: 'f1', worktreeId: OLD }] },
+      recentlyClosedTerminalTabsByWorktree: {
+        [OLD]: [{ startupCwd: '/ws/cunner/packages/app' }, { startupCwd: '/elsewhere/dir' }]
+      },
+      recentlyClosedTabKindsByWorktree: { [OLD]: ['terminal', 'editor'] },
       remoteStatusesByWorktree: { [OLD]: { ahead: 1 } },
       everActivatedWorktreeIds: new Set([OLD]),
       openFiles: [{ id: 'f1', worktreeId: OLD }],
@@ -6766,6 +6886,15 @@ describe('migrateWorktreeIdentity', () => {
     expect(s.defaultTerminalTabsAppliedByWorktreeId[NEW]).toBe(true)
     // The two maps absent from the purge list are still re-keyed.
     expect(s.recentlyClosedEditorTabsByWorktree[NEW]).toEqual([{ id: 'f1', worktreeId: NEW }])
+    // Terminal reopen snapshots re-key AND remap startupCwd under the old
+    // worktree path; paths outside the renamed folder stay as-is.
+    expect(s.recentlyClosedTerminalTabsByWorktree[OLD]).toBeUndefined()
+    expect(s.recentlyClosedTerminalTabsByWorktree[NEW]).toEqual([
+      { startupCwd: '/ws/worktree-creation-spinner/packages/app' },
+      { startupCwd: '/elsewhere/dir' }
+    ])
+    expect(s.recentlyClosedTabKindsByWorktree[OLD]).toBeUndefined()
+    expect(s.recentlyClosedTabKindsByWorktree[NEW]).toEqual(['terminal', 'editor'])
     expect(s.remoteStatusesByWorktree[NEW]).toEqual({ ahead: 1 })
     expect(s.everActivatedWorktreeIds.has(NEW)).toBe(true)
     expect(s.everActivatedWorktreeIds.has(OLD)).toBe(false)

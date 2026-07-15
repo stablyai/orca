@@ -505,10 +505,12 @@ describe('SshPtyProvider', () => {
   })
 
   it('listProcesses returns process list', async () => {
-    const processes = [{ id: 'pty-1', cwd: '/home', title: 'zsh' }]
+    const processes = [{ id: 'pty-1', cwd: '/home', title: 'zsh', worktreeId: 'repo::/home' }]
     mux.request.mockResolvedValue(processes)
     const result = await provider.listProcesses()
-    expect(result).toEqual([{ id: scopedPty1, cwd: '/home', title: 'zsh' }])
+    expect(result).toEqual([
+      { id: scopedPty1, cwd: '/home', title: 'zsh', worktreeId: 'repo::/home' }
+    ])
   })
 
   it('getDefaultShell returns shell path', async () => {

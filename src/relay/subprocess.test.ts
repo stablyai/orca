@@ -99,6 +99,10 @@ describe('Subprocess: Relay entry point', () => {
     await relay.sentinelReceived
   }, 10_000)
 
+  it('keeps the Node-18 relay bundle free of unsupported array copy methods', () => {
+    expect(readFileSync(relayEntry, 'utf8')).not.toContain('.toReversed(')
+  })
+
   it('responds to fs.stat over stdin/stdout', async () => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-sub-'))
     writeFileSync(path.join(tmpDir, 'test.txt'), 'hello')

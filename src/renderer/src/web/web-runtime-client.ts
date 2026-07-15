@@ -35,12 +35,16 @@ type SubscriptionCallbacks = {
   onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
   onError?: (error: { code: string; message: string }) => void
   onClose?: () => void
+  onTransportInterrupted?: () => void
+  onTransportReplayed?: () => void
 }
 
 type RuntimeSubscription = {
+  id: string
   method: string
   params: unknown
   callbacks: SubscriptionCallbacks
+  needsReplay: boolean
 }
 
 export type WebRuntimeSubscriptionHandle = {
@@ -61,7 +65,6 @@ export type SubscribeOptions = {
 const REQUEST_TIMEOUT_MS = 30_000
 const CONNECT_TIMEOUT_MS = 12_000
 const HANDSHAKE_TIMEOUT_MS = 10_000
-const FILE_WATCH_READY_CLEANUP_TIMEOUT_MS = 5_000
 const RECONNECT_DELAYS_MS = [500, 1000, 2000, 4000, 8000, 15_000]
 const SHARED_CONNECTION_SUBSCRIPTION_METHODS = new Set(['files.watch'])
 // Why: the browser WebSocket API hides protocol pings/pongs, so a half-open
@@ -99,6 +102,7 @@ export class WebRuntimeClient {
   private lastHeartbeatTickAt = 0
   private readonly pending = new Map<string, PendingRequest>()
   private readonly subscriptions = new Map<string, RuntimeSubscription>()
+  private readonly fileWatchTeardownRetries = new Map<string, Set<() => Promise<void>>>()
   private readonly childClients = new Set<WebRuntimeClient>()
   private readonly waiters: { resolve: () => void; reject: (error: Error) => void }[] = []
   private readonly serverPublicKey: Uint8Array
@@ -187,69 +191,93 @@ export class WebRuntimeClient {
     callbacks: SubscriptionCallbacks,
     options?: { timeoutMs?: number }
   ): Promise<WebRuntimeSubscriptionHandle> {
+    const teardownKey = JSON.stringify(params) ?? String(params)
+    await Promise.all(
+      Array.from(this.fileWatchTeardownRetries.get(teardownKey) ?? [], (retry) => retry())
+    )
     let stopped = false
     let remoteSubscriptionId: string | null = null
+    let transportInterrupted = false
+    let pendingReplayResync = false
     let unwatchStarted = false
     let handle: WebRuntimeSubscriptionHandle | null = null
-    let readyCleanupTimer: number | null = null
-    const clearReadyCleanupTimer = (): void => {
-      if (readyCleanupTimer === null) {
-        return
-      }
-      window.clearTimeout(readyCleanupTimer)
-      readyCleanupTimer = null
-    }
     const dropLocalSubscription = (): void => {
-      clearReadyCleanupTimer()
       handle?.unsubscribe()
     }
-    const schedulePreReadyCleanup = (): void => {
-      if (readyCleanupTimer !== null) {
-        return
+    let unwatchAttempt: Promise<void> | null = null
+    const retryRemoteUnwatch = (): Promise<void> => {
+      if (unwatchAttempt) {
+        return unwatchAttempt
       }
-      // Why: if a stopped watch never reaches ready/error, no remote id exists
-      // to unwatch; bound the lifetime of the local callback on this socket.
-      readyCleanupTimer = window.setTimeout(() => {
-        readyCleanupTimer = null
-        handle?.unsubscribe()
-      }, FILE_WATCH_READY_CLEANUP_TIMEOUT_MS)
+      unwatchStarted = true
+      const attempt = this.call(
+        'files.unwatch',
+        { subscriptionId: remoteSubscriptionId! },
+        { timeoutMs: 5_000 }
+      )
+        .then((response) => {
+          if (response.ok === false) {
+            throw new Error(`${response.error.code}: ${response.error.message}`)
+          }
+          const retries = this.fileWatchTeardownRetries.get(teardownKey)
+          retries?.delete(retryRemoteUnwatch)
+          if (retries?.size === 0) {
+            this.fileWatchTeardownRetries.delete(teardownKey)
+          }
+          dropLocalSubscription()
+        })
+        .catch((error: unknown) => {
+          console.warn('Failed to unwatch remote file subscription:', error)
+          throw error
+        })
+        .finally(() => {
+          unwatchAttempt = null
+          unwatchStarted = false
+        })
+      unwatchAttempt = attempt
+      return attempt
     }
     const unwatchAndDropLocalSubscription = (): void => {
       if (unwatchStarted) {
         return
       }
-      unwatchStarted = true
       if (!remoteSubscriptionId) {
         dropLocalSubscription()
         return
       }
-      clearReadyCleanupTimer()
-      // Why: shared files.watch streams stay on this socket, so stop the
-      // server watcher before removing the local callback that receives ready.
-      void this.call(
-        'files.unwatch',
-        { subscriptionId: remoteSubscriptionId },
-        { timeoutMs: 5_000 }
-      )
-        .catch((error) => {
-          console.warn('Failed to unwatch remote file subscription:', error)
-        })
-        .finally(() => {
-          dropLocalSubscription()
-        })
+      // Why: retain the shared-socket callback and retry ownership until the
+      // server acknowledges physical teardown; a new watch joins this barrier.
+      const retries = this.fileWatchTeardownRetries.get(teardownKey) ?? new Set()
+      retries.add(retryRemoteUnwatch)
+      this.fileWatchTeardownRetries.set(teardownKey, retries)
+      void retryRemoteUnwatch().catch(() => {})
     }
     const wrappedCallbacks: SubscriptionCallbacks = {
       ...callbacks,
       onResponse: (response) => {
-        if (isFileWatchReadyResponse(response)) {
-          remoteSubscriptionId = response.result.subscriptionId
+        transportInterrupted = false
+        const nextSubscriptionId = getFileWatchSubscriptionId(response)
+        if (nextSubscriptionId) {
+          remoteSubscriptionId = nextSubscriptionId
           if (stopped) {
             unwatchAndDropLocalSubscription()
             return
           }
         }
+        // Why: the server publishes cancellation ownership before native setup;
+        // callers should still become ready only after the watcher is live.
+        if (isFileWatchStartingResponse(response)) {
+          return
+        }
         if (!stopped) {
           callbacks.onResponse(response)
+          if (pendingReplayResync && nextSubscriptionId && response.ok) {
+            pendingReplayResync = false
+            // Why: a replayed watch reports changes only from its own native
+            // setup; the reconnect gap produced no events, so consumers must
+            // conservatively re-scan once the replacement is ready.
+            callbacks.onResponse(createFileWatchReplayOverflowResponse(response, params))
+          }
         } else if (response.ok === false) {
           dropLocalSubscription()
         }
@@ -263,6 +291,25 @@ export class WebRuntimeClient {
         if (!stopped) {
           callbacks.onClose?.()
         }
+      },
+      onTransportInterrupted: () => {
+        transportInterrupted = true
+        remoteSubscriptionId = null
+        if (!stopped) {
+          return
+        }
+        const retries = this.fileWatchTeardownRetries.get(teardownKey)
+        retries?.delete(retryRemoteUnwatch)
+        if (retries?.size === 0) {
+          this.fileWatchTeardownRetries.delete(teardownKey)
+        }
+        // Why: socket close physically releases the old server subscription;
+        // a locally stopped watch must not be replayed on the replacement.
+        dropLocalSubscription()
+      },
+      onTransportReplayed: () => {
+        transportInterrupted = false
+        pendingReplayResync = true
       }
     }
     handle = await this.subscribeOnCurrentConnection(
@@ -280,9 +327,13 @@ export class WebRuntimeClient {
         stopped = true
         if (remoteSubscriptionId) {
           unwatchAndDropLocalSubscription()
-        } else {
-          schedulePreReadyCleanup()
+        } else if (transportInterrupted) {
+          // Why: socket close already released the old server subscription;
+          // remove its replay record instead of reviving a locally stopped watch.
+          dropLocalSubscription()
         }
+        // Why: an older server may not publish its id until ready. Retain the
+        // callback so a late response can still physically unwatch the root.
       },
       sendBinary: (bytes) => handle?.sendBinary(bytes)
     }
@@ -296,14 +347,15 @@ export class WebRuntimeClient {
   ): Promise<WebRuntimeSubscriptionHandle> {
     await this.waitForConnected(options?.timeoutMs)
     const id = this.nextId()
-    this.subscriptions.set(id, { method, params, callbacks })
+    const subscription: RuntimeSubscription = { id, method, params, callbacks, needsReplay: false }
+    this.subscriptions.set(id, subscription)
     if (!this.sendEncrypted({ id, deviceToken: this.pairing.deviceToken, method, params })) {
       this.subscriptions.delete(id)
       throw new Error('Remote Orca runtime is not connected.')
     }
     return {
       unsubscribe: () => {
-        this.subscriptions.delete(id)
+        this.subscriptions.delete(subscription.id)
         // Tell the server to reap its keyed cleanup (e.g. native-chat fs-watcher)
         // before the socket goes away. Best-effort: a closed socket already reaps.
         const teardown = options?.buildUnsubscribe?.(params)
@@ -329,6 +381,7 @@ export class WebRuntimeClient {
       child.close({ notifySubscriptions: shouldNotifySubscriptions })
     }
     this.childClients.clear()
+    this.fileWatchTeardownRetries.clear()
     this.clearTimers()
     this.rejectAllPending('Remote Orca runtime connection closed.')
     this.rejectAllWaiters(new Error('Remote Orca runtime connection closed.'))
@@ -512,6 +565,11 @@ export class WebRuntimeClient {
 
     const subscription = this.subscriptions.get(response.id)
     if (subscription && isSubscriptionResponse(response)) {
+      // Why: setup failures are terminal. Evict before callbacks so a
+      // synchronous retry creates a fresh watch and reconnect cannot replay it.
+      if (response.ok === false) {
+        this.subscriptions.delete(response.id)
+      }
       subscription.callbacks.onResponse(response)
       if (response.ok && isEndResult(response.result)) {
         this.subscriptions.delete(response.id)
@@ -595,7 +653,7 @@ export class WebRuntimeClient {
     this.clearHandshakeTimer()
     this.clearHeartbeatTimer()
     this.rejectAllPending('Remote Orca runtime connection interrupted.')
-    this.notifySubscriptionsClosed()
+    this.handleInterruptedSubscriptions()
     if (this.intentionallyClosed || this.state === 'auth-failed') {
       this.setState(this.state === 'auth-failed' ? 'auth-failed' : 'disconnected')
       return
@@ -620,6 +678,7 @@ export class WebRuntimeClient {
   private setState(next: WebRuntimeConnectionState): void {
     this.state = next
     if (next === 'connected') {
+      this.replayInterruptedSubscriptions()
       this.startHeartbeat()
       for (const waiter of this.waiters.splice(0)) {
         waiter.resolve()
@@ -654,6 +713,44 @@ export class WebRuntimeClient {
     this.subscriptions.clear()
     for (const subscription of subscriptions) {
       subscription.callbacks.onClose?.()
+    }
+  }
+
+  private handleInterruptedSubscriptions(): void {
+    for (const [id, subscription] of Array.from(this.subscriptions)) {
+      if (!SHARED_CONNECTION_SUBSCRIPTION_METHODS.has(subscription.method)) {
+        this.subscriptions.delete(id)
+        subscription.callbacks.onClose?.()
+        continue
+      }
+      subscription.callbacks.onTransportInterrupted?.()
+      if (this.subscriptions.get(subscription.id) === subscription) {
+        subscription.needsReplay = true
+      }
+    }
+  }
+
+  private replayInterruptedSubscriptions(): void {
+    for (const subscription of Array.from(this.subscriptions.values())) {
+      if (!subscription.needsReplay) {
+        continue
+      }
+      this.subscriptions.delete(subscription.id)
+      subscription.id = this.nextId()
+      subscription.needsReplay = false
+      this.subscriptions.set(subscription.id, subscription)
+      if (
+        this.sendEncrypted({
+          id: subscription.id,
+          deviceToken: this.pairing.deviceToken,
+          method: subscription.method,
+          params: subscription.params
+        })
+      ) {
+        subscription.callbacks.onTransportReplayed?.()
+      } else {
+        subscription.needsReplay = true
+      }
     }
   }
 
@@ -774,9 +871,6 @@ function isSubscriptionResponse(
   if (response.ok === false) {
     return true
   }
-  if (response.ok === false) {
-    return true
-  }
   const success = response as RuntimeRpcResponse<unknown> & { ok: true; streaming?: true }
   return (
     success.streaming === true || isEndResult(success.result) || isScrollbackResult(success.result)
@@ -796,18 +890,49 @@ function isRuntimeFailureResponse(
   )
 }
 
-function isFileWatchReadyResponse(
-  response: RuntimeRpcResponse<unknown>
-): response is RuntimeRpcSuccess<{ type: 'ready'; subscriptionId: string }> {
+function getFileWatchSubscriptionId(response: RuntimeRpcResponse<unknown>): string | null {
   if (!response.ok) {
-    return false
+    return null
   }
   const result = response.result
+  if (!result || typeof result !== 'object') {
+    return null
+  }
+  const subscriptionId = (result as { subscriptionId?: unknown }).subscriptionId
+  return typeof subscriptionId === 'string' ? subscriptionId : null
+}
+
+function createFileWatchReplayOverflowResponse(
+  readyResponse: RuntimeRpcSuccess<unknown>,
+  params: unknown
+): RuntimeRpcSuccess<{
+  type: 'changed'
+  worktree: string
+  events: { kind: 'overflow'; absolutePath: string }[]
+}> {
+  const worktree = (params as { worktree?: unknown } | null)?.worktree
+  return {
+    id: readyResponse.id,
+    ok: true,
+    result: {
+      type: 'changed',
+      worktree: typeof worktree === 'string' ? worktree : '',
+      // Why: overflow consumers re-scan the whole root and never read the
+      // path; the client does not know the server-side root path here.
+      events: [{ kind: 'overflow', absolutePath: '' }]
+    },
+    _meta: readyResponse._meta
+  }
+}
+
+function isFileWatchStartingResponse(
+  response: RuntimeRpcResponse<unknown>
+): response is RuntimeRpcSuccess<{ type: 'starting'; subscriptionId: string }> {
   return (
-    !!result &&
-    typeof result === 'object' &&
-    (result as { type?: unknown }).type === 'ready' &&
-    typeof (result as { subscriptionId?: unknown }).subscriptionId === 'string'
+    response.ok &&
+    !!response.result &&
+    typeof response.result === 'object' &&
+    (response.result as { type?: unknown }).type === 'starting'
   )
 }
 

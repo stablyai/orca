@@ -19,6 +19,7 @@ export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-rea
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence'
 import type { GlobalSettings, TuiAgent } from '../../shared/types'
+import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { terminalOutputBacklogCapChars } from '../../shared/terminal-scrollback-policy'
 import type {
   PtyDeliveryWriteOff,
@@ -109,6 +110,7 @@ import {
   type TerminalStartupCwdMissingDirFallback
 } from '../../shared/terminal-startup-cwd'
 import { isWslUncPath } from '../../shared/wsl-paths'
+import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
 import {
   clearMigrationUnsupportedPty,
   clearMigrationUnsupportedPtysForPaneKey
@@ -117,6 +119,7 @@ import { parseWslPath } from '../wsl'
 import { mergePersistedWindowsPath } from '../pty/windows-environment-path'
 import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import { PtyProducerFlowController } from './pty-producer-flow-control'
+import { beginTerminalInstall } from './watcher-removal-gate'
 import {
   clearHiddenRendererPtyDeliveryState,
   getHiddenRendererPtyDeliveryDebug,
@@ -1065,6 +1068,34 @@ function routesFreshSpawnsToLocalProvider(
   return (provider as FreshLocalFallbackProvider).routesFreshSpawnsToLocalProvider === true
 }
 
+function beginPtySpawnForWorktree(
+  worktreeId: string | undefined,
+  cwd: string | undefined,
+  connectionId: string | null | undefined
+): () => void {
+  const worktreePath = worktreeId
+    ? splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
+    : undefined
+  const installPaths = new Map<string, string>()
+  for (const candidate of [worktreePath, cwd]) {
+    if (candidate) {
+      installPaths.set(normalizeRuntimePathForComparison(candidate), candidate)
+    }
+  }
+  const finishes: (() => void)[] = []
+  try {
+    for (const candidate of installPaths.values()) {
+      finishes.push(beginTerminalInstall(candidate, connectionId ?? undefined))
+    }
+  } catch (error) {
+    // Why: the worktree ID and actual cwd can belong to different roots. If
+    // either is deleting, release any earlier admission before rejecting.
+    finishes.toReversed().forEach((finish) => finish())
+    throw error
+  }
+  return () => finishes.toReversed().forEach((finish) => finish())
+}
+
 /** Register an SSH PTY provider for a connection. */
 export function registerSshPtyProvider(connectionId: string, provider: IPtyProvider): void {
   sshProviders.set(connectionId, provider)
@@ -1518,6 +1549,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:confirmForegroundProcess')
   ipcMain.removeHandler('pty:getCwd')
   ipcMain.removeHandler('pty:getSize')
+  ipcMain.removeAllListeners('pty:getAuthoritativeBufferSnapshotCapabilitiesSync')
   ipcMain.removeHandler('pty:declarePendingPaneSerializer')
   ipcMain.removeHandler('pty:settlePaneSerializer')
   ipcMain.removeHandler('pty:clearPendingPaneSerializer')
@@ -2881,13 +2913,9 @@ export function registerPtyHandlers(
       if (options?.isRecoveryReloadInFlight?.(mainWindow.webContents.id)) {
         return
       }
-      const killed = lp.killOrphanedPtys(generation - 1)
-      for (const { id } of killed) {
-        clearProviderPtyState(id)
-        ptyOwnership.delete(id)
-        markClaudePtyExited(id)
-        runtime?.onPtyExit(id, -1)
-      }
+      // Why: the retained provider onExit callback is the only physical-exit
+      // proof; it clears ownership and notifies runtime after the OS reaps it.
+      lp.killOrphanedPtys(generation - 1)
     }
     didFinishLoadWebContents = mainWindow.webContents
     mainWindow.webContents.on('did-finish-load', didFinishLoadHandler)
@@ -3137,6 +3165,11 @@ export function registerPtyHandlers(
       if (existingPaneSpawn) {
         return await existingPaneSpawn.promise
       }
+      const finishTerminalInstall = beginPtySpawnForWorktree(
+        args.worktreeId,
+        cwd,
+        args.connectionId
+      )
       const paneSpawnReservation = materializedPaneKey
         ? reservePaneSpawn(materializedPaneKey)
         : null
@@ -3325,6 +3358,8 @@ export function registerPtyHandlers(
         // no-op once the reservation has already resolved.
         rejectPaneSpawnReservation(materializedPaneKey, paneSpawnReservation, err)
         throw err
+      } finally {
+        finishTerminalInstall()
       }
     },
     write: (ptyId, data) => {
@@ -4048,6 +4083,11 @@ export function registerPtyHandlers(
       if (existingPaneSpawn) {
         return await existingPaneSpawn.promise
       }
+      const finishTerminalInstall = beginPtySpawnForWorktree(
+        args.worktreeId,
+        cwd,
+        args.connectionId
+      )
       const paneSpawnReservation = reservationPaneKey ? reservePaneSpawn(reservationPaneKey) : null
       const initiallyHidden = args.initiallyHidden === true
       // Why pre-spawn for daemon-host sessions (id minted up front): daemon
@@ -4467,6 +4507,8 @@ export function registerPtyHandlers(
         // no-op once the reservation has already resolved.
         rejectPaneSpawnReservation(reservationPaneKey, paneSpawnReservation, err)
         throw err
+      } finally {
+        finishTerminalInstall()
       }
     }
   )
@@ -5078,6 +5120,40 @@ export function registerPtyHandlers(
         }
       }
       return Array.from(deduped.values())
+    }
+  )
+
+  ipcMain.on(
+    'pty:getAuthoritativeBufferSnapshotCapabilitiesSync',
+    (event, args: { ids?: unknown }) => {
+      const ids = Array.isArray(args?.ids) ? args.ids.slice(0, 512) : []
+      const capabilities: { id: string; authoritative: boolean | null }[] = []
+      const seen = new Set<string>()
+      for (const value of ids) {
+        if (
+          typeof value !== 'string' ||
+          value.length === 0 ||
+          value.length > 512 ||
+          seen.has(value)
+        ) {
+          continue
+        }
+        seen.add(value)
+        const provider = tryGetProviderForPty(value)
+        // Why: degraded routing mixes preserved daemons with an in-process
+        // fallback. Keep all of its panes mounted rather than guess ownership.
+        capabilities.push({
+          id: value,
+          authoritative: provider?.canProvideAuthoritativeBufferSnapshot
+            ? provider.canProvideAuthoritativeBufferSnapshot(value)
+            : provider && routesFreshSpawnsToLocalProvider(provider)
+              ? false
+              : null
+        })
+      }
+      // Why: cold deferral runs during render, before hidden panes mount. This
+      // batch is an in-memory route lookup so legacy PTYs can mount in that pass.
+      event.returnValue = capabilities
     }
   )
 

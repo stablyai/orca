@@ -514,26 +514,24 @@ describe('ProviderPanel reset rendering', () => {
     expect(markup).not.toContain('140%')
   })
 
-  it.each(PROVIDER_IDS)(
-    'applies remaining copy to %s while retaining consumption bar direction',
-    (providerId) => {
-      const p = provider({
-        provider: providerId,
-        status: 'ok',
-        session: {
-          usedPercent: 25,
-          windowMinutes: 300,
-          resetsAt: null,
-          resetDescription: null
-        }
-      })
+  it.each(PROVIDER_IDS)('applies remaining copy and meter fill to %s', (providerId) => {
+    const p = provider({
+      provider: providerId,
+      status: 'ok',
+      session: {
+        usedPercent: 25,
+        windowMinutes: 300,
+        resetsAt: null,
+        resetDescription: null
+      }
+    })
 
-      const markup = renderToStaticMarkup(ProviderPanel({ p, usagePercentageDisplay: 'remaining' }))
+    const markup = renderToStaticMarkup(ProviderPanel({ p, usagePercentageDisplay: 'remaining' }))
 
-      expect(markup).toContain('75% left')
-      expect(markup).toContain('width:25%')
-    }
-  )
+    expect(markup).toContain('75% left')
+    expect(markup).toContain('width:75%')
+    expect(markup).not.toContain('width:25%')
+  })
 })
 
 describe('clampUsedPercent', () => {

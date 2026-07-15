@@ -35,6 +35,7 @@ function createAdapter(
     protocolVersion,
     supportsGitCredentialGuardHost: () =>
       protocolVersion >= GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
+    canProvideAuthoritativeBufferSnapshot: () => protocolVersion >= 20,
     spawn: vi.fn(async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
       const id = opts.sessionId ?? `${label}-new`
       sessions.push(id)
@@ -127,6 +128,16 @@ function createAdapter(
 }
 
 describe('DaemonPtyRouter', () => {
+  it('reports snapshot capability for the adapter that owns each session', async () => {
+    const current = createAdapter('current', ['current-session'], undefined, 22)
+    const legacy = createAdapter('legacy', ['legacy-session'], undefined, 19)
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    await router.discoverLegacySessions()
+
+    expect(router.canProvideAuthoritativeBufferSnapshot('current-session')).toBe(true)
+    expect(router.canProvideAuthoritativeBufferSnapshot('legacy-session')).toBe(false)
+  })
+
   it('reports guard-host support for the adapter that owns the session', async () => {
     const current = createAdapter('current', [], undefined, 22)
     const legacy = createAdapter('legacy', ['legacy-session'], undefined, 21)

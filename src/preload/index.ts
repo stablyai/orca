@@ -568,6 +568,8 @@ const api = {
 
     reorder: (args) => ipcRenderer.invoke('repos:reorder', args),
 
+    reorderForHost: (args) => ipcRenderer.invoke('repos:reorderForHost', args),
+
     update: (args) => ipcRenderer.invoke('repos:update', args),
 
     pickFolder: () => ipcRenderer.invoke('repos:pickFolder'),
@@ -973,6 +975,10 @@ const api = {
 
     listSessions: (): Promise<{ id: string; cwd: string; title: string }[]> =>
       ipcRenderer.invoke('pty:listSessions'),
+    getAuthoritativeBufferSnapshotCapabilities: (
+      ids: string[]
+    ): { id: string; authoritative: boolean | null }[] =>
+      ipcRenderer.sendSync('pty:getAuthoritativeBufferSnapshotCapabilitiesSync', { ids }),
     hasPty: (id: string): Promise<boolean | null> => ipcRenderer.invoke('pty:hasPty', { id }),
 
     getMainBufferSnapshot: (

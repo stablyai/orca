@@ -156,6 +156,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return this.protocolVersion >= GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION
   }
 
+  canProvideAuthoritativeBufferSnapshot(_id: string): boolean {
+    return this.supportsAuthoritativeBufferSnapshots
+  }
+
   constructor(opts: DaemonPtyAdapterOptions) {
     this.protocolVersion = opts.protocolVersion ?? PROTOCOL_VERSION
     this.socketPath = opts.socketPath
@@ -523,6 +527,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
       if (coldRestore) {
         this.coldRestoreCache.set(id, coldRestore)
         this.sleepRestoreSessionIds.add(id)
+        // Why: physical exit must not mark intentional sleep as a clean end;
+        // the final checkpoint remains the wake-time recovery authority.
+        this.historyManager?.suspendSession(id)
       }
     }
     await this.client.request('kill', { sessionId: id, immediate: opts.immediate ?? false })
@@ -775,7 +782,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
       .filter((s) => s.isAlive)
       .map((s) => ({
         id: s.sessionId,
-        cwd: s.cwd ?? '',
+        // Why: OSC 7 may not arrive before destructive cleanup. Spawn cwd is
+        // still authoritative ownership until the daemon reports a live cwd.
+        cwd: s.cwd ?? this.initialCwds.get(s.sessionId) ?? '',
         title: 'shell',
         ...(s.terminalHandle ? { terminalHandle: s.terminalHandle } : {})
       }))
