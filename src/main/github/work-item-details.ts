@@ -85,7 +85,7 @@ const ISSUE_DETAILS_QUERY = `query($owner: String!, $repo: String!, $number: Int
   repository(owner: $owner, name: $repo) {
     issue(number: $number) {
       body
-      assignees(first: 50) { nodes { login } }
+      assignees(first: 50) { nodes { login avatarUrl(size: 48) ... on User { name } } }
       participants(first: 100) {
         nodes { login avatarUrl(size: 48) ... on User { name } }
       }
@@ -111,7 +111,7 @@ type GraphQLIssueDetailsResponse = {
     repository?: {
       issue?: {
         body?: string | null
-        assignees?: { nodes?: { login?: string }[] }
+        assignees?: { nodes?: { login?: string; avatarUrl?: string; name?: string | null }[] }
         participants?: { nodes?: GitHubAssignableUser[] }
         comments?: {
           nodes?: {
@@ -323,6 +323,12 @@ async function getIssueTimelineItems(
   }
 }
 
+/**
+ * Fetch an issue's body, comments, assignees, participants, and timeline in a
+ * single GraphQL round-trip. Returns null on any partial error so the caller
+ * falls back to the strict REST path. Assignee/participant avatars are resolved
+ * here so GitHub Enterprise users don't render blank.
+ */
 async function getIssueDetailsViaGraphQL(
   repoPath: string,
   issueNumber: number,
@@ -332,6 +338,10 @@ async function getIssueDetailsViaGraphQL(
   body: string
   comments: PRComment[]
   assignees: string[]
+  // Avatar-bearing assignees, kept separate from the `assignees` login list so
+  // callers that only need logins are unaffected; used to enrich assignee
+  // avatars that `gh` leaves blank (notably GitHub Enterprise users).
+  assigneeUsers: GitHubAssignableUser[]
   participants: GitHubAssignableUser[]
   timelineItems: GitHubIssueTimelineItem[]
 } | null> {
@@ -386,9 +396,16 @@ async function getIssueDetailsViaGraphQL(
         url: c.url ?? '',
         isBot: c.author?.__typename === 'Bot'
       }))
-    const assignees = (issue.assignees?.nodes ?? [])
-      .map((a) => a.login)
-      .filter((login): login is string => Boolean(login))
+    const assigneeUsers: GitHubAssignableUser[] = (issue.assignees?.nodes ?? [])
+      .filter((a): a is { login: string; avatarUrl?: string; name?: string | null } =>
+        Boolean(a.login)
+      )
+      .map((a) => ({
+        login: a.login,
+        name: a.name ?? null,
+        avatarUrl: a.avatarUrl ?? ''
+      }))
+    const assignees = assigneeUsers.map((a) => a.login)
     const participants: GitHubAssignableUser[] = (issue.participants?.nodes ?? [])
       .filter((u) => Boolean(u.login))
       .map((u) => ({
@@ -401,6 +418,7 @@ async function getIssueDetailsViaGraphQL(
       body: issue.body ?? '',
       comments,
       assignees,
+      assigneeUsers,
       participants,
       timelineItems
     }
@@ -926,12 +944,17 @@ async function getGitHubUsersByLogin(
   }
 }
 
-// Why: the work item's author/reviewers/assignees come from `gh pr view`, which
-// omits avatar_url. On GitHub Enterprise the login-based `github.com/{login}.png`
-// URL 404s, so those avatars render blank while comment avatars (fetched via
-// GraphQL) work. `knownUsers` (participants + the mention-author batch, which
-// already includes the item's reviewers/assignees) carries the GraphQL-resolved
-// avatars, so we stamp them onto the item without any extra round-trip. See #8784.
+/**
+ * Stamp GraphQL-resolved avatars onto a work item's author, reviewers, review
+ * requests, latest reviews, and assignees.
+ *
+ * The work item's users come from `gh pr view`, which omits avatar_url. On
+ * GitHub Enterprise the login-based `github.com/{login}.png` URL 404s, so those
+ * avatars render blank while comment avatars (fetched via GraphQL) work.
+ * `knownUsers` (participants + the mention-author batch, which already includes
+ * the item's reviewers/assignees) carries the resolved avatars, so we apply
+ * them without any extra round-trip. See #8784.
+ */
 function enrichItemDisplayAvatars(
   item: Omit<GitHubWorkItem, 'repoId'>,
   knownUsers: GitHubAssignableUser[]
@@ -1088,7 +1111,13 @@ export async function getWorkItemDetails(
       )
       if (collapsed) {
         return {
-          item: enrichItemDisplayAvatars(item, collapsed.participants),
+          // Include assigneeUsers: a non-participating assignee is absent from
+          // the participants connection, so without them item.assignees keeps a
+          // blank/placeholder avatar (common for GitHub Enterprise users).
+          item: enrichItemDisplayAvatars(item, [
+            ...collapsed.participants,
+            ...collapsed.assigneeUsers
+          ]),
           body: collapsed.body,
           comments: collapsed.comments,
           assignees: collapsed.assignees,

@@ -52,6 +52,15 @@ describe('GitHubUserAvatar', () => {
     expect(container.textContent).toBe('AL')
   })
 
+  it('skips leading non-BMP chars so initials never render a broken surrogate', () => {
+    ;({ root, container } = render(<GitHubUserAvatar login="rocketdev" name="🚀 Developer" />))
+    act(() => {
+      container?.querySelector('img')?.dispatchEvent(new Event('error'))
+    })
+    // Emoji word is skipped entirely rather than split into a broken half.
+    expect(container.textContent).toBe('D')
+  })
+
   it('derives initials from the login when no name is given', () => {
     ;({ root, container } = render(<GitHubUserAvatar login="octocat" />))
     act(() => {

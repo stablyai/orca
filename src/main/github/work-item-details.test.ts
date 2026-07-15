@@ -216,6 +216,56 @@ describe('getWorkItemDetails', () => {
     expect(details?.participants?.[0]?.login).toBe('issue-author')
   })
 
+  it('enriches a non-participating assignee avatar from the GraphQL assignees connection', async () => {
+    // Why: a GHE assignee who never commented is absent from `participants`, so
+    // the enrichment must also draw avatars from the `assignees` connection or
+    // item.assignees keeps the blank avatar `gh` returns.
+    getWorkItemMock.mockResolvedValueOnce({
+      id: 'issue:924',
+      type: 'issue',
+      number: 924,
+      title: 'Assignee avatar',
+      state: 'open',
+      url: 'https://github.com/acme/widgets/issues/924',
+      labels: [],
+      updatedAt: '2026-04-01T00:00:00Z',
+      author: 'issue-author',
+      assignees: [{ login: 'ghe-assignee', name: 'GHE Assignee', avatarUrl: '' }]
+    })
+    getIssueOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          data: {
+            repository: {
+              issue: {
+                body: 'Issue body',
+                assignees: {
+                  nodes: [
+                    {
+                      login: 'ghe-assignee',
+                      name: 'GHE Assignee',
+                      avatarUrl: 'https://ghe.example.com/avatars/ghe-assignee'
+                    }
+                  ]
+                },
+                participants: { nodes: [{ login: 'issue-author', avatarUrl: 'https://x/y' }] },
+                comments: { nodes: [] }
+              }
+            }
+          }
+        })
+      })
+      .mockResolvedValueOnce({ stdout: '' })
+
+    const details = await getWorkItemDetails('/repo-root', 924, 'issue')
+
+    expect(details?.item.assignees?.[0]).toMatchObject({
+      login: 'ghe-assignee',
+      avatarUrl: 'https://ghe.example.com/avatars/ghe-assignee'
+    })
+  })
+
   it('caps issue timeline pagination by supported activity items', async () => {
     getWorkItemMock.mockResolvedValueOnce({
       id: 'issue:923',

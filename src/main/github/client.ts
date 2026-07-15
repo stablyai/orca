@@ -490,11 +490,14 @@ function mapIssueWorkItem(item: Record<string, unknown>): MainWorkItem {
   }
 }
 
-// Why: derive both the author login and its API avatar_url in one place so GHE
-// avatars render (the login-only `github.com/{login}.png` URL 404s on GHE). REST
-// exposes `user.avatar_url`; gh/GraphQL expose `author.avatarUrl`. `gh pr view`
-// omits the avatar entirely, so authorAvatarUrl is left undefined and the UI
-// falls back to the login URL then a placeholder. See #8784.
+/**
+ * Derive both the author login and its API avatar_url in one place so GHE
+ * avatars render (the login-only `github.com/{login}.png` URL 404s on GHE).
+ *
+ * REST exposes `user.avatar_url`; gh/GraphQL expose `author.avatarUrl`. `gh pr
+ * view` omits the avatar entirely, so authorAvatarUrl is left undefined and the
+ * UI falls back to the login URL then a placeholder. See #8784.
+ */
 function authorFieldsFromUnknown(
   item: Record<string, unknown>
 ): Pick<MainWorkItem, 'author' | 'authorAvatarUrl'> {
