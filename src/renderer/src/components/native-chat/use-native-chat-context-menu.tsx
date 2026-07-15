@@ -46,6 +46,7 @@ type UseNativeChatContextMenuArgs = {
 
 export type NativeChatContextMenuActions = {
   onPaste: () => void
+  canSplitPane: boolean
   onSplitRight: () => void
   onSplitDown: () => void
   canEqualizePaneSizes: boolean
@@ -65,6 +66,7 @@ export type NativeChatContextMenuActions = {
 
 /** No-op defaults for when the view has no pane-management actions wired. */
 export const emptyNativeChatContextMenuActions: Omit<NativeChatContextMenuActions, 'onPaste'> = {
+  canSplitPane: false,
   onSplitRight: () => {},
   onSplitDown: () => {},
   canEqualizePaneSizes: false,
@@ -192,20 +194,24 @@ export function useNativeChatContextMenu({
             )}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={actions.onSplitRight}>
-            <PanelRightClose />
-            {translate(
-              'auto.components.terminal.pane.TerminalContextMenu.20e565d865',
-              'Split Terminal Right'
-            )}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={actions.onSplitDown}>
-            <PanelBottomClose />
-            {translate(
-              'auto.components.terminal.pane.TerminalContextMenu.98bccf4fa2',
-              'Split Terminal Down'
-            )}
-          </DropdownMenuItem>
+          {actions.canSplitPane ? (
+            <>
+              <DropdownMenuItem onSelect={actions.onSplitRight}>
+                <PanelRightClose />
+                {translate(
+                  'auto.components.terminal.pane.TerminalContextMenu.20e565d865',
+                  'Split Terminal Right'
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={actions.onSplitDown}>
+                <PanelBottomClose />
+                {translate(
+                  'auto.components.terminal.pane.TerminalContextMenu.98bccf4fa2',
+                  'Split Terminal Down'
+                )}
+              </DropdownMenuItem>
+            </>
+          ) : null}
           {actions.canEqualizePaneSizes ? (
             <DropdownMenuItem onSelect={actions.onEqualizePaneSizes}>
               <PanelsTopLeft />

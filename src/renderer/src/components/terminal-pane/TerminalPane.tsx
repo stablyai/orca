@@ -533,6 +533,7 @@ function TerminalPane(
     () => (terminalTab ? sanitizeTerminalLayoutPaneTitles(savedLayout, terminalTab) : savedLayout),
     [savedLayout, terminalTab]
   )
+  const canUserSplitPane = restoredLayout.layoutMode !== 'orchestration-grid'
   const expectedLayoutLeafIds = useMemo(
     () => collectLeafIdsInOrder(restoredLayout.root),
     [restoredLayout.root]
@@ -1689,6 +1690,7 @@ function TerminalPane(
     tabId,
     worktreeId,
     isActive,
+    canSplitPane: canUserSplitPane,
     keyboardScopeRef: containerRef,
     managerRef,
     paneTransportsRef,
@@ -2546,7 +2548,8 @@ function TerminalPane(
     onAgentSessionForkReady: setAgentSessionFork,
     onAgentSessionContinuationReady: setAgentSessionContinuation,
     forceBracketedMultilineTextPaste,
-    rightClickToPaste
+    rightClickToPaste,
+    canSplitPane: canUserSplitPane
   })
   const {
     executionHostId: quickCommandExecutionHostId,
@@ -3071,6 +3074,7 @@ function TerminalPane(
                 onSwitchToTerminal={switchNativeChatToTerminal}
                 readTerminalScreen={readNativeChatTerminalScreen}
                 contextMenuActions={{
+                  canSplitPane: canUserSplitPane,
                   onSplitRight: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitRight),
                   onSplitDown: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitDown),
                   canEqualizePaneSizes: managedPanes.length > 1 && expandedPaneId === null,
@@ -3118,6 +3122,7 @@ function TerminalPane(
         onCopy={() => void contextMenu.onCopy()}
         onSelectAll={contextMenu.onSelectAll}
         onPaste={() => void contextMenu.onPaste()}
+        canSplitPane={canUserSplitPane}
         onSplitRight={contextMenu.onSplitRight}
         onSplitDown={contextMenu.onSplitDown}
         keybindings={keybindings}
@@ -3186,7 +3191,7 @@ function TerminalPane(
         worktreeId={worktreeId}
         cwd={cwd ?? ''}
         showAlwaysOnHeaders={isActive && terminalContentVisible}
-        showSplitButton={showSplitButton}
+        canSplitPane={canUserSplitPane}
         paneCount={paneCount}
         activePaneId={activePane?.id}
         panes={managedPanes}

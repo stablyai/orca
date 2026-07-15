@@ -53,6 +53,7 @@ import {
   markTerminalPinnedViewport,
   syncTerminalScrollIntentFromViewport
 } from '@/lib/pane-manager/terminal-scroll-intent'
+import { runTerminalPaneUserSplit } from './terminal-pane-user-split'
 
 export function resolveTerminalKeyboardShortcutAction(
   event: Parameters<typeof resolveTerminalShortcutAction>[0],
@@ -202,6 +203,7 @@ type KeyboardHandlersDeps = {
   tabId: string
   worktreeId: string
   isActive: boolean
+  canSplitPane: boolean
   keyboardScopeRef: React.RefObject<HTMLElement | null>
   managerRef: React.RefObject<PaneManager | null>
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
@@ -238,6 +240,7 @@ export function useTerminalKeyboardShortcuts({
   tabId,
   worktreeId,
   isActive,
+  canSplitPane,
   keyboardScopeRef,
   managerRef,
   paneTransportsRef,
@@ -812,25 +815,27 @@ export function useTerminalKeyboardShortcuts({
       if (action.type === 'splitActivePane') {
         e.preventDefault()
         e.stopImmediatePropagation()
-        if (expandedPaneIdRef.current !== null) {
-          setExpandedPane(null)
-          restoreExpandedLayout()
-          refreshPaneSizes(true)
-          persistLayoutSnapshot()
-        }
-        const pane = manager.getActivePane() ?? manager.getPanes()[0]
-        if (!pane) {
-          return
-        }
-        splitTerminalPaneWithInheritedCwd({
-          manager,
-          getManager: () => managerRef.current,
-          paneTransports: paneTransportsRef.current,
-          paneCwdMap: paneCwdRef.current,
-          fallbackCwd,
-          pane,
-          direction: action.direction,
-          source: getKeyboardSplitTelemetrySource()
+        runTerminalPaneUserSplit(canSplitPane, () => {
+          if (expandedPaneIdRef.current !== null) {
+            setExpandedPane(null)
+            restoreExpandedLayout()
+            refreshPaneSizes(true)
+            persistLayoutSnapshot()
+          }
+          const pane = manager.getActivePane() ?? manager.getPanes()[0]
+          if (!pane) {
+            return
+          }
+          splitTerminalPaneWithInheritedCwd({
+            manager,
+            getManager: () => managerRef.current,
+            paneTransports: paneTransportsRef.current,
+            paneCwdMap: paneCwdRef.current,
+            fallbackCwd,
+            pane,
+            direction: action.direction,
+            source: getKeyboardSplitTelemetrySource()
+          })
         })
       }
     }
@@ -976,6 +981,7 @@ export function useTerminalKeyboardShortcuts({
     }
   }, [
     isActive,
+    canSplitPane,
     keyboardScopeRef,
     managerRef,
     paneTransportsRef,
