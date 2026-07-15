@@ -104,7 +104,9 @@ describe('repo group handlers', () => {
   })
 
   it('does not create a group when --parent-group cannot be resolved', async () => {
-    await expect(run('repo group create', { name: 'New', 'parent-group': 'nope' })).rejects.toMatchObject({
+    await expect(
+      run('repo group create', { name: 'New', 'parent-group': 'nope' })
+    ).rejects.toMatchObject({
       code: 'selector_not_found'
     })
     expect(mutatingCalls()).toEqual([])
@@ -142,9 +144,7 @@ describe('repo group handlers', () => {
 
   it('fails loudly when the runtime reports the group vanished on update', async () => {
     callMock.mockImplementation(async (method: string) =>
-      method === 'projectGroup.list'
-        ? { result: { groups: GROUPS } }
-        : { result: { group: null } }
+      method === 'projectGroup.list' ? { result: { groups: GROUPS } } : { result: { group: null } }
     )
     await expect(run('repo group set', { group: 'id:g2', name: 'X' })).rejects.toMatchObject({
       code: 'selector_not_found'
@@ -224,5 +224,12 @@ describe('repo rm handler', () => {
   it('removes a repo registration', async () => {
     await run('repo rm', { repo: 'id:r1' })
     expect(callMock).toHaveBeenCalledWith('repo.rm', { repo: 'id:r1' })
+  })
+
+  it('fails loudly when the runtime reports nothing was removed', async () => {
+    callMock.mockResolvedValue({ result: { removed: false } })
+    await expect(run('repo rm', { repo: 'id:r1' })).rejects.toMatchObject({
+      code: 'selector_not_found'
+    })
   })
 })

@@ -78,6 +78,10 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
   'repo rm': async ({ flags, client, json }) => {
     const repo = getRequiredStringFlag(flags, 'repo')
     const result = await client.call<{ removed: boolean }>('repo.rm', { repo })
+    // Why: a runtime that reports removed: false must not read as success.
+    if (!result.result.removed) {
+      throw new RuntimeClientError('selector_not_found', `Repo ${repo} is not registered.`)
+    }
     printResult(result, json, () => `Removed repo registration for ${repo}.`)
   },
   'repo set-base-ref': async ({ flags, client, json }) => {
