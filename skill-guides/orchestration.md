@@ -334,7 +334,7 @@ Wait only for `tui-idle` when needed to avoid losing the prompt. Do not monitor 
 Choose the worker location before creating a terminal. `Fresh worker` means a fresh agent session, not a new git worktree. For parallel work, create one fresh agent terminal per worker in the same required worktree, falling back to the active worktree when none is named. If the task says current worktree only, depends on uncommitted files/artifacts, or must validate/PR the current branch, keep every worker in the active worktree:
 
 ```bash
-orca terminal create --worktree active --title <task-name> --command "codex" --json
+orca terminal create --worktree active --title <task-name> --command "codex" --placement orchestration-grid --json
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
 orca orchestration dispatch --task <task_id> --to <handle> --inject --json
 ```
@@ -344,6 +344,8 @@ Reuse an idle agent in the required worktree only if the prompt allows reuse; ot
 When a new worktree is allowed, use child lineage for isolated work that is stacked under or dependent on the active worktree, and use `--no-parent` when it is not stacked. Decide the Git base separately: `--no-parent` makes the worktree top-level in Orca, while omitted `--base-branch` uses the repo default base.
 
 For every new worktree, pass `--setup run` so any configured repository setup hook runs. This does not mean waiting for setup before agent launch: preserve the repository's startup policy, whose default starts setup and the agent side by side. Use `--setup skip` or `--setup inherit` only when there is a concrete task-specific reason, and state that reason before creating the worktree. This rule does not rerun setup for current or existing worktrees.
+
+`--placement orchestration-grid` is the default placement policy for supervised same-worktree workers: each create returns a distinct worker handle but reuses one visible terminal tab, with equal-size panes in rows of at most six. Use `--placement tab` only when a supervised worker needs an isolated tab; omit `--placement` for ordinary non-orchestrated terminal creation, which remains backward-compatible and creates a tab.
 
 ```bash
 orca worktree create --name <task-name> --agent codex --setup run --json
@@ -364,8 +366,13 @@ Sidebar lineage and orchestration lifecycle are related but not identical. A sam
 Other terminal commands coordinators often need:
 
 ```bash
+<<<<<<< HEAD
 orca terminal list [--worktree <selector>] [--include-visual-layouts] [--json]
 orca terminal create [--worktree <selector>] [--title <text>] [--command <cmd>] [--json]
+=======
+orca terminal list [--worktree <selector>] [--json]
+orca terminal create [--worktree <selector>] [--title <text>] [--command <cmd>] [--placement tab|orchestration-grid] [--json]
+>>>>>>> a012b76e0 (fix(skills): migrate grid guidance to canonical sources)
 orca terminal split --terminal <handle> [--direction horizontal|vertical] [--command <cmd>] [--json]
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms <n> --json
 orca terminal read --terminal <handle> --json
@@ -392,7 +399,7 @@ Wait for `tui-idle` before dispatching. Always pass `--timeout-ms`; real coding 
 ## Example
 
 ```bash
-orca terminal create --worktree active --title login-css-worker --command "claude" --json
+orca terminal create --worktree active --title login-css-worker --command "claude" --placement orchestration-grid --json
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
 orca orchestration task-create --spec "Fix the login button CSS" --json
 orca orchestration dispatch --task <task_id> --to <handle> --inject --json
