@@ -294,8 +294,8 @@ describe('parseWorkspaceSession sleeping agents', () => {
         'tab1:pane-1': {
           paneKey: 'tab1:pane-1',
           worktreeId: 'wt',
-          agent: 'pi',
-          providerSession: { key: 'session_id', id: 'pi-session' },
+          agent: 'definitely-not-an-agent',
+          providerSession: { key: 'session_id', id: 'bogus-session' },
           prompt: 'continue',
           state: 'working',
           capturedAt: 10,
