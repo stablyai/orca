@@ -117,7 +117,9 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
               <Text style={[styles.tabText, i === index && styles.tabTextActive]} numberOfLines={1}>
                 {qq.header || `Step ${i + 1}`}
               </Text>
-              {isAnswered(i) ? <Check size={11} color={colors.statusGreen} strokeWidth={3} /> : null}
+              {isAnswered(i) ? (
+                <Check size={11} color={colors.statusGreen} strokeWidth={3} />
+              ) : null}
             </Pressable>
           ))}
         </ScrollView>
