@@ -213,6 +213,20 @@ test.describe('Native chat compact activity', () => {
       await expect(chat.getByText('-const label = "Tool activity"')).toBeVisible()
       await expect(chat.getByText('+const label = "Completed activity"')).toBeVisible()
       await transcript.screenshot({ path: path.join(screenshotDir, '03-file-diff-expanded.png') })
+
+      // Why: UI evidence must cover both canonical themes without bypassing Orca's theme state.
+      await orcaPage.evaluate(() => {
+        const store = window.__store
+        if (!store) {
+          throw new Error('Store unavailable')
+        }
+        const state = store.getState()
+        store.setState({ settings: { ...state.settings!, theme: 'dark' } })
+      })
+      await expect(orcaPage.locator('html')).toHaveClass(/dark/)
+      await transcript.screenshot({
+        path: path.join(screenshotDir, '04-file-diff-expanded-dark.png')
+      })
     } finally {
       rmSync(scratchDir, { recursive: true, force: true })
     }
