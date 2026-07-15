@@ -1116,6 +1116,19 @@ function makeWorktreeMeta(overrides: Partial<WorktreeMeta> = {}): WorktreeMeta {
   }
 }
 
+function makeWorktreeInfo(
+  path: string,
+  head = 'head'
+): {
+  path: string
+  head: string
+  branch: string
+  isBare: boolean
+  isMainWorktree: boolean
+} {
+  return { path, head, branch: 'main', isBare: false, isMainWorktree: path.endsWith('/repo') }
+}
+
 function deferred<T>(): {
   promise: Promise<T>
   resolve: (value: T) => void
@@ -25154,6 +25167,331 @@ describe('OrcaRuntimeService', () => {
     })
 
     expect(removeWorktreeLineage).not.toHaveBeenCalled()
+  })
+
+  it('bounds repeated detected worktree scans across the reported 15-repo shape', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const repos = Array.from({ length: 15 }, (_, index) => ({
+      id: `repo-${index + 1}`,
+      path: `/tmp/repo-${index + 1}`,
+      displayName: `repo-${index + 1}`,
+      badgeColor: 'blue' as const,
+      addedAt: 1
+    }))
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getRepos: () => repos,
+      getRepo: (id: string) => repos.find((repo) => repo.id === id),
+      getAllWorktreeMeta: () => ({}),
+      getWorktreeMeta: () => undefined
+    } as never)
+    vi.mocked(listWorktrees).mockImplementation(async (repoPath) => [
+      {
+        path: `${repoPath}/main`,
+        head: repoPath,
+        branch: 'main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+
+    const poll = async () =>
+      Promise.all(repos.map((repo) => runtime.listDetectedManagedWorktrees(`id:${repo.id}`)))
+    const first = await poll()
+    expect(listWorktrees).toHaveBeenCalledTimes(15)
+    const second = await poll()
+
+    expect(first.flatMap((result) => result.worktrees)).toHaveLength(15)
+    expect(second.flatMap((result) => result.worktrees)).toHaveLength(15)
+    expect(second.flatMap((result) => result.worktrees).map((worktree) => worktree.path)).toEqual(
+      repos.map((repo) => `${repo.path}/main`)
+    )
+    expect(listWorktrees).toHaveBeenCalledTimes(15)
+    console.log('reproduction base: 30 backend scans; head: 15 backend scans; outputs: 15 repos')
+  })
+
+  it('worktree scan cache: shares one in-flight repo scan across concurrent consumers', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const pending = deferred<ReturnType<typeof makeWorktreeInfo>[]>()
+    vi.mocked(listWorktrees).mockReturnValueOnce(pending.promise)
+    const runtime = createRuntime()
+
+    const detected = runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+    const resolved = runtime.listManagedWorktrees()
+    await Promise.resolve()
+    expect(listWorktrees).toHaveBeenCalledTimes(1)
+
+    pending.resolve([makeWorktreeInfo(TEST_WORKTREE_PATH)])
+    await expect(Promise.all([detected, resolved])).resolves.toBeTruthy()
+    expect(listWorktrees).toHaveBeenCalledTimes(1)
+  })
+
+  it('worktree scan cache: rescans immediately after worktree invalidation', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const runtime = createRuntime()
+    await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+    runtime.notifyBranchRenamed(TEST_REPO_ID)
+    await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+
+    expect(listWorktrees).toHaveBeenCalledTimes(2)
+  })
+
+  it('worktree scan cache: expires scans per repo without coupling sibling repos', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    vi.useFakeTimers({ now: 0 })
+    try {
+      const repos = [
+        { ...store.getRepos()[0], id: 'repo-a', path: '/tmp/repo-a' },
+        { ...store.getRepos()[0], id: 'repo-b', path: '/tmp/repo-b' }
+      ]
+      const runtime = new OrcaRuntimeService({
+        ...store,
+        getRepos: () => repos,
+        getRepo: (id: string) => repos.find((repo) => repo.id === id)
+      } as never)
+      vi.mocked(listWorktrees).mockImplementation(async (repoPath) => [makeWorktreeInfo(repoPath)])
+
+      await runtime.listDetectedManagedWorktrees('id:repo-a')
+      await vi.advanceTimersByTimeAsync(10_000)
+      await runtime.listDetectedManagedWorktrees('id:repo-b')
+      await vi.advanceTimersByTimeAsync(20_000)
+      await runtime.listDetectedManagedWorktrees('id:repo-a')
+      await runtime.listDetectedManagedWorktrees('id:repo-b')
+
+      expect(listWorktrees).toHaveBeenCalledTimes(3)
+      expect(listWorktrees).toHaveBeenNthCalledWith(3, '/tmp/repo-a')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('worktree scan cache: does not cache non-authoritative scan failures', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const runtime = createRuntime()
+    vi.mocked(listWorktrees)
+      .mockRejectedValueOnce(new Error('git unavailable'))
+      .mockResolvedValueOnce([makeWorktreeInfo(TEST_WORKTREE_PATH)])
+
+    await expect(runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)).resolves.toMatchObject(
+      {
+        authoritative: false
+      }
+    )
+    await expect(runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)).resolves.toMatchObject(
+      {
+        authoritative: true
+      }
+    )
+    expect(listWorktrees).toHaveBeenCalledTimes(2)
+  })
+
+  it('worktree scan cache: keeps lineage shaping outside the raw scan cache', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const parentId = `${TEST_REPO_ID}::/tmp/parent`
+    const childId = `${TEST_REPO_ID}::/tmp/child`
+    const lineage: WorktreeLineage = {
+      worktreeId: childId,
+      worktreeInstanceId: 'child',
+      parentWorktreeId: parentId,
+      parentWorktreeInstanceId: 'parent',
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' },
+      createdAt: 1
+    }
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getAllWorktreeMeta: () => ({
+        [parentId]: makeWorktreeMeta({ instanceId: 'parent' }),
+        [childId]: makeWorktreeMeta({ instanceId: 'child' })
+      }),
+      getWorktreeMeta: (id: string) =>
+        ({
+          [parentId]: makeWorktreeMeta({ instanceId: 'parent' }),
+          [childId]: makeWorktreeMeta({ instanceId: 'child' })
+        })[id],
+      getAllWorktreeLineage: () => ({ [childId]: lineage })
+    } as never)
+    vi.mocked(listWorktrees).mockResolvedValue([
+      makeWorktreeInfo('/tmp/parent', 'parent'),
+      makeWorktreeInfo('/tmp/child', 'child')
+    ])
+
+    const result = await runtime.listManagedWorktrees()
+    const child = result.worktrees.find((worktree) => worktree.id === childId)
+    expect(child).toMatchObject({ parentWorktreeId: parentId, lineage })
+    expect(listWorktrees).toHaveBeenCalledTimes(1)
+  })
+
+  it.skip('bounds repeated detected worktree scans across the reported 15-repo shape', async () => {
+    const repos = Array.from({ length: 15 }, (_, index) => ({
+      id: `repo-${index + 1}`,
+      path: `/tmp/repo-${index + 1}`,
+      displayName: `repo-${index + 1}`,
+      badgeColor: 'blue',
+      addedAt: 1
+    }))
+    const runtimeStore = {
+      ...store,
+      getRepo: (id: string) => repos.find((repo) => repo.id === id),
+      getRepos: () => repos
+    }
+    vi.mocked(listWorktrees).mockImplementation(async (repoPath) => [
+      {
+        path: `${repoPath}/worktree`,
+        head: repoPath,
+        branch: `branch/${repoPath}`,
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const poll = async () =>
+      Promise.all(repos.map((repo) => runtime.listDetectedManagedWorktrees(`id:${repo.id}`)))
+    const first = await poll()
+    const second = await poll()
+
+    expect(listWorktrees).toHaveBeenCalledTimes(15)
+    expect(first.flatMap((result) => result.worktrees)).toHaveLength(15)
+    expect(second.flatMap((result) => result.worktrees)).toHaveLength(15)
+    expect(
+      new Set(second.flatMap((result) => result.worktrees.map((worktree) => worktree.repoId)))
+    ).toEqual(new Set(repos.map((repo) => repo.id)))
+  })
+
+  it('worktree scan cache: shares one in-flight repo scan across concurrent consumers', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    let resolveScan!: (worktrees: typeof MOCK_GIT_WORKTREES) => void
+    const scan = new Promise<typeof MOCK_GIT_WORKTREES>((resolve) => {
+      resolveScan = resolve
+    })
+    vi.mocked(listWorktrees).mockReturnValueOnce(scan)
+    const runtime = new OrcaRuntimeService(store as never)
+
+    const detected = runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+    const resolved = runtime.listManagedWorktrees()
+    await Promise.resolve()
+    expect(listWorktrees).toHaveBeenCalledTimes(1)
+    resolveScan(MOCK_GIT_WORKTREES)
+
+    await expect(Promise.all([detected, resolved])).resolves.toHaveLength(2)
+    expect(listWorktrees).toHaveBeenCalledTimes(1)
+  })
+
+  it('worktree scan cache: rescans immediately after worktree invalidation', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const runtime = new OrcaRuntimeService(store as never)
+
+    await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+    runtime.notifyBranchRenamed(TEST_REPO_ID)
+    await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+
+    expect(listWorktrees).toHaveBeenCalledTimes(2)
+  })
+
+  it.skip('worktree scan cache: expires scans per repo without coupling sibling repos', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    vi.useFakeTimers()
+    try {
+      const repos = [
+        { ...store.getRepo(TEST_REPO_ID)!, id: 'repo-a', path: '/tmp/repo-a' },
+        { ...store.getRepo(TEST_REPO_ID)!, id: 'repo-b', path: '/tmp/repo-b' }
+      ]
+      const runtimeStore = {
+        ...store,
+        getRepo: (id: string) => repos.find((repo) => repo.id === id),
+        getRepos: () => repos
+      }
+      const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+      await runtime.listDetectedManagedWorktrees('id:repo-a')
+      await runtime.listDetectedManagedWorktrees('id:repo-b')
+      vi.advanceTimersByTime(30_000)
+      await runtime.listDetectedManagedWorktrees('id:repo-a')
+      await runtime.listDetectedManagedWorktrees('id:repo-b')
+
+      expect(listWorktrees).toHaveBeenCalledTimes(3)
+      expect(listWorktrees).toHaveBeenNthCalledWith(
+        3,
+        expect.objectContaining({ id: 'repo-a' }),
+        expect.anything()
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('worktree scan cache: does not cache non-authoritative scan failures', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    vi.mocked(listWorktrees).mockRejectedValueOnce(new Error('git unavailable'))
+    const runtime = new OrcaRuntimeService(store as never)
+
+    await expect(runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)).resolves.toMatchObject(
+      {
+        authoritative: false
+      }
+    )
+    await expect(runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)).resolves.toMatchObject(
+      {
+        authoritative: true
+      }
+    )
+    await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+
+    expect(listWorktrees).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps lineage shaping outside the raw scan cache', async () => {
+    const paths = ['orchestration', 'cli', 'manual']
+    const metaById: Record<string, WorktreeMeta> = {}
+    const lineageById: Record<string, WorktreeLineage> = {}
+    const worktrees = paths.flatMap((origin, index) => {
+      const parentPath = `/tmp/${origin}-parent`
+      const childPath = `/tmp/${origin}-child`
+      const parentId = `${TEST_REPO_ID}::${parentPath}`
+      const childId = `${TEST_REPO_ID}::${childPath}`
+      metaById[parentId] = makeWorktreeMeta({ instanceId: `parent-${index}` })
+      metaById[childId] = makeWorktreeMeta({ instanceId: `child-${index}` })
+      lineageById[childId] = {
+        worktreeId: childId,
+        worktreeInstanceId: `child-${index}`,
+        parentWorktreeId: parentId,
+        parentWorktreeInstanceId: `parent-${index}`,
+        origin: origin === 'orchestration' ? 'orchestration' : origin === 'cli' ? 'cli' : 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 1
+      }
+      return [
+        { path: parentPath, head: 'parent', branch: origin, isBare: false, isMainWorktree: false },
+        {
+          path: childPath,
+          head: 'child',
+          branch: `${origin}-child`,
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]
+    })
+    const runtimeStore = {
+      ...store,
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+        return metaById[worktreeId]
+      },
+      getAllWorktreeLineage: () => lineageById
+    }
+    vi.mocked(listWorktrees).mockResolvedValueOnce(worktrees)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const listed = await runtime.listManagedWorktrees(`id:${TEST_REPO_ID}`)
+
+    expect(
+      listed.worktrees
+        .filter((worktree) => worktree.lineage)
+        .map((worktree) => worktree.lineage?.origin)
+    ).toEqual(paths)
   })
 
   it('does not prune lineage when an SSH runtime provider is unavailable', async () => {

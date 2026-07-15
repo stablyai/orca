@@ -2019,6 +2019,17 @@ type RuntimeWorktreeScanResult =
   | { ok: true; worktrees: GitWorktreeInfo[] }
   | { ok: false; worktrees: GitWorktreeInfo[] }
 
+type RuntimeWorktreeScanCache = {
+  generation: number
+  result: Extract<RuntimeWorktreeScanResult, { ok: true }>
+  expiresAt: number
+}
+
+type RuntimeWorktreeScanInFlight = {
+  generation: number
+  promise: Promise<RuntimeWorktreeScanResult>
+}
+
 type WorktreeLineageCandidate = {
   source: 'env-workspace' | 'cwd-context' | 'terminal-context' | 'orchestration-context'
   parent: ResolvedWorkspaceParent
@@ -2211,6 +2222,8 @@ export class OrcaRuntimeService {
   private resolvedWorktreeCache: ResolvedWorktreeCache | null = null
   private resolvedWorktreeInFlight: ResolvedWorktreeInFlight | null = null
   private resolvedWorktreeGeneration = 0
+  private worktreeScanCache = new Map<string, RuntimeWorktreeScanCache>()
+  private worktreeScanInFlight = new Map<string, RuntimeWorktreeScanInFlight>()
   private cloneInFlightByPath = new Map<string, Promise<void>>()
   private agentDetector: AgentDetector | null = null
   private ptyForegroundAgentRefreshes = new Map<string, PtyForegroundAgentRefresh>()
@@ -20692,6 +20705,39 @@ export class OrcaRuntimeService {
     repo: Repo,
     projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
   ): Promise<RuntimeWorktreeScanResult> {
+    const now = Date.now()
+    const generation = this.resolvedWorktreeGeneration
+    const cached = this.worktreeScanCache.get(repo.id)
+    if (cached?.generation === generation && cached.expiresAt > now) {
+      return cached.result
+    }
+    const inFlight = this.worktreeScanInFlight.get(repo.id)
+    if (inFlight?.generation === generation) {
+      return inFlight.promise
+    }
+    const promise = this.listRepoWorktreesForResolutionUncached(repo, projectRuntimeByRepoId)
+    this.worktreeScanInFlight.set(repo.id, { generation, promise })
+    try {
+      const result = await promise
+      if (result.ok && generation === this.resolvedWorktreeGeneration) {
+        this.worktreeScanCache.set(repo.id, {
+          generation,
+          result,
+          expiresAt: Date.now() + WORKTREE_SCAN_CACHE_TTL_MS
+        })
+      }
+      return result
+    } finally {
+      if (this.worktreeScanInFlight.get(repo.id)?.promise === promise) {
+        this.worktreeScanInFlight.delete(repo.id)
+      }
+    }
+  }
+
+  private async listRepoWorktreesForResolutionUncached(
+    repo: Repo,
+    projectRuntimeByRepoId: ReadonlyMap<string, ProjectExecutionRuntimeResolution> | undefined
+  ): Promise<RuntimeWorktreeScanResult> {
     if (!repo.connectionId) {
       const projectRuntime = projectRuntimeByRepoId
         ? projectRuntimeByRepoId.get(repo.id)
@@ -20752,6 +20798,8 @@ export class OrcaRuntimeService {
   private invalidateResolvedWorktreeCache(): void {
     this.resolvedWorktreeGeneration += 1
     this.resolvedWorktreeCache = null
+    this.worktreeScanCache.clear()
+    this.worktreeScanInFlight.clear()
   }
 
   /** Invalidate the worktree cache and tell the renderer to re-list, after an
@@ -25532,6 +25580,7 @@ const DEFAULT_WORKTREE_LIST_LIMIT = 200
 const DEFAULT_WORKTREE_PS_LIMIT = 200
 const DISCONNECTED_PTY_RECORD_MAX = 128
 const RESOLVED_WORKTREE_CACHE_TTL_MS = 1000
+const WORKTREE_SCAN_CACHE_TTL_MS = 30_000
 const RESOLVED_WORKTREE_REPO_TIMEOUT_MS = 5000
 const PTY_CONTROLLER_LIST_TIMEOUT_MS = 3000
 // Why (§3.3): 30s freshness window. A second worktree-create or dispatch-probe
