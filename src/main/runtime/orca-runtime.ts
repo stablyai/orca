@@ -37707,7 +37707,7 @@ export class OrcaRuntimeService {
       writable: pty.connected,
       lastOutputAt: pty.lastOutputAt,
       preview: pty.preview,
-      // A background PTY can later be adopted by a renderer leaf.
+      // Why: report current visibility after a background PTY is adopted.
       surface: this.leafExistsForPty(pty.ptyId) ? 'visible' : 'background',
       ...(pty.lastExitCause ? { exitCause: pty.lastExitCause } : {}),
       ...this.terminalExecutionHostField(pty.ptyId, pty.worktreeId),
