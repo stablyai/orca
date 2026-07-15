@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { spawn } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -88,11 +89,17 @@ describe('GrokHookService', () => {
     expect(script).toContain('/hook/grok')
     if (process.platform === 'win32') {
       expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
+      // Why: empty GROK_HOME must not reach the trailing-backslash check.
+      // cmd expands %VAR% before `if` chains, so only a goto-skip is safe.
+      expect(script).toContain('set "ORCA_GROK_HOME="')
+      expect(script).toContain('if not defined GROK_HOME goto :orca_grok_home_ready')
       expect(script).toContain('set "ORCA_GROK_HOME=%GROK_HOME%"')
       expect(script).toContain('%GROK_HOME:~4096,1%')
+      expect(script).toContain('if not defined ORCA_GROK_HOME goto :orca_grok_home_ready')
       expect(script).toContain(
         'if "%ORCA_GROK_HOME:~-1%"=="\\" set "ORCA_GROK_HOME=%ORCA_GROK_HOME%."'
       )
+      expect(script).toContain(':orca_grok_home_ready')
       expect(script).toContain('--data-urlencode "grokHome=%ORCA_GROK_HOME%"')
     } else {
       // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
@@ -191,4 +198,117 @@ describe('GrokHookService', () => {
       )
     ).toBe(true)
   })
+
+  // Why: Orca panes inject ORCA_AGENT_HOOK_* so the script reaches the
+  // GROK_HOME block instead of the stdin-drain early exit. Grok itself
+  // almost never sets GROK_HOME (defaults to ~/.grok). The old script ran
+  // `if "%ORCA_GROK_HOME:~-1%"=="\"` on an empty variable and failed every
+  // hook with "The syntax of the command is incorrect."
+  it.skipIf(process.platform !== 'win32')(
+    'exits 0 with Orca env set and GROK_HOME unset (empty-home cmd parse)',
+    async () => {
+      expect(new GrokHookService().install().state).toBe('installed')
+      const scriptPath = join(homeDir, '.orca', 'agent-hooks', GROK_SCRIPT_FILE_NAME)
+
+      const env: NodeJS.ProcessEnv = {
+        ...Object.fromEntries(
+          Object.entries(process.env).filter(
+            ([key]) => !key.startsWith('ORCA_') && key !== 'GROK_HOME'
+          )
+        ),
+        // Why: non-routable port — curl fails closed; the script still exits 0.
+        ORCA_AGENT_HOOK_PORT: '1',
+        ORCA_AGENT_HOOK_TOKEN: 'test-token',
+        ORCA_PANE_KEY: 'test-pane',
+        ORCA_TAB_ID: 'test-tab',
+        ORCA_AGENT_LAUNCH_TOKEN: 'test-launch',
+        ORCA_WORKTREE_ID: 'test-worktree',
+        ORCA_AGENT_HOOK_ENV: 'test',
+        ORCA_AGENT_HOOK_VERSION: '1'
+      }
+      delete env.GROK_HOME
+
+      const result = await new Promise<{ exitCode: number | null; stderr: string }>(
+        (resolve, reject) => {
+          const child = spawn('cmd.exe', ['/d', '/c', scriptPath], {
+            env,
+            stdio: ['pipe', 'ignore', 'pipe']
+          })
+          let stderr = ''
+          const timeout = setTimeout(() => {
+            child.kill('SIGKILL')
+            reject(new Error('grok-hook.cmd timed out'))
+          }, 10_000)
+          child.stderr.on('data', (chunk: Buffer) => {
+            stderr += chunk.toString('utf8')
+          })
+          child.on('error', (error) => {
+            clearTimeout(timeout)
+            reject(error)
+          })
+          child.on('close', (exitCode) => {
+            clearTimeout(timeout)
+            resolve({ exitCode, stderr })
+          })
+          child.stdin.end('{"hookEventName":"pre_tool_use","sessionId":"test"}')
+        }
+      )
+
+      expect(result.exitCode, `stderr=${result.stderr}`).toBe(0)
+      expect(result.stderr).not.toMatch(/syntax of the command is incorrect/i)
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
+    'exits 0 with Orca env set and GROK_HOME trailing backslash',
+    async () => {
+      expect(new GrokHookService().install().state).toBe('installed')
+      const scriptPath = join(homeDir, '.orca', 'agent-hooks', GROK_SCRIPT_FILE_NAME)
+      const grokHome = join(homeDir, 'custom-grok') + '\\'
+
+      const env: NodeJS.ProcessEnv = {
+        ...Object.fromEntries(
+          Object.entries(process.env).filter(([key]) => !key.startsWith('ORCA_'))
+        ),
+        GROK_HOME: grokHome,
+        ORCA_AGENT_HOOK_PORT: '1',
+        ORCA_AGENT_HOOK_TOKEN: 'test-token',
+        ORCA_PANE_KEY: 'test-pane',
+        ORCA_TAB_ID: 'test-tab',
+        ORCA_AGENT_LAUNCH_TOKEN: 'test-launch',
+        ORCA_WORKTREE_ID: 'test-worktree',
+        ORCA_AGENT_HOOK_ENV: 'test',
+        ORCA_AGENT_HOOK_VERSION: '1'
+      }
+
+      const result = await new Promise<{ exitCode: number | null; stderr: string }>(
+        (resolve, reject) => {
+          const child = spawn('cmd.exe', ['/d', '/c', scriptPath], {
+            env,
+            stdio: ['pipe', 'ignore', 'pipe']
+          })
+          let stderr = ''
+          const timeout = setTimeout(() => {
+            child.kill('SIGKILL')
+            reject(new Error('grok-hook.cmd timed out'))
+          }, 10_000)
+          child.stderr.on('data', (chunk: Buffer) => {
+            stderr += chunk.toString('utf8')
+          })
+          child.on('error', (error) => {
+            clearTimeout(timeout)
+            reject(error)
+          })
+          child.on('close', (exitCode) => {
+            clearTimeout(timeout)
+            resolve({ exitCode, stderr })
+          })
+          child.stdin.end('{"hookEventName":"pre_tool_use","sessionId":"test"}')
+        }
+      )
+
+      expect(result.exitCode, `stderr=${result.stderr}`).toBe(0)
+      expect(result.stderr).not.toMatch(/syntax of the command is incorrect/i)
+    }
+  )
 })
