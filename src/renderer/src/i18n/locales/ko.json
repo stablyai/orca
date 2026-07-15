@@ -4022,7 +4022,8 @@
           "65a9820bd1": "Agent 상태",
           "219ebf1961": "브랜치 이름",
           "automation": "자동화",
-          "folderPathIdentity": "브랜치 / 폴더 경로"
+          "folderPathIdentity": "브랜치 / 폴더 경로",
+          "showGroups": "Show groups"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "연결 중...",
@@ -4434,7 +4435,8 @@
               "682ed5d551": "닫힘",
               "7c2f009786": "진행중",
               "6798dc7c94": "리뷰 중",
-              "5076efc3d2": "완료"
+              "5076efc3d2": "완료",
+              "ungrouped": "Ungrouped"
             }
           }
         },

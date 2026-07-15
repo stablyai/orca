@@ -5186,6 +5186,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const sortBy = useAppStore((s) => s.sortBy)
   const setSortBy = useAppStore((s) => s.setSortBy)
+  const showGroups = useAppStore((s) => s.showGroups)
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
@@ -5801,7 +5802,8 @@ const WorktreeList = React.memo(function WorktreeList({
         pendingCreations,
         projectGrouping,
         visibleFolderWorkspacesForRows,
-        hostLabelById
+        hostLabelById,
+        showGroups
       ),
     [
       groupBy,
@@ -5822,7 +5824,8 @@ const WorktreeList = React.memo(function WorktreeList({
       importedWorktreesByRepo,
       newExternalWorktreesInboxByRepo,
       pendingCreations,
-      hostLabelById
+      hostLabelById,
+      showGroups
     ]
   )
   const orderedHostOptions = useMemo(

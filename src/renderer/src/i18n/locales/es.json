@@ -4041,7 +4041,8 @@
           "2d74665a56": "Puertos",
           "65a9820bd1": "Estados de Agents",
           "219ebf1961": "Nombre de rama",
-          "folderPathIdentity": "Rama / ruta de carpeta"
+          "folderPathIdentity": "Rama / ruta de carpeta",
+          "showGroups": "Show groups"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "Conectando...",
@@ -4453,7 +4454,8 @@
               "682ed5d551": "Cerrado",
               "7c2f009786": "En curso",
               "6798dc7c94": "En revisión",
-              "5076efc3d2": "Hecho"
+              "5076efc3d2": "Hecho",
+              "ungrouped": "Ungrouped"
             }
           }
         },

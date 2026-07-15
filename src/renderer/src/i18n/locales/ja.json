@@ -4022,7 +4022,8 @@
           "65a9820bd1": "Agent ステータス",
           "219ebf1961": "ブランチ名",
           "automation": "自動化",
-          "folderPathIdentity": "ブランチ / フォルダパス"
+          "folderPathIdentity": "ブランチ / フォルダパス",
+          "showGroups": "Show groups"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "接続中...",
@@ -4434,7 +4435,8 @@
               "682ed5d551": "クローズ",
               "7c2f009786": "進行中",
               "6798dc7c94": "レビュー中",
-              "5076efc3d2": "完了"
+              "5076efc3d2": "完了",
+              "ungrouped": "Ungrouped"
             }
           }
         },

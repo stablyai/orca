@@ -831,6 +831,114 @@ function sortProjectEntries(
  * Build the flat row list consumed by the virtualizer.
  * Extracted here to keep WorktreeList.tsx under the line-count lint limit.
  */
+/**
+ * Render group (folder) headers with a flat worktree list under each, for views
+ * that have no repo headers of their own (the 'none' lens with Show groups on).
+ * Mirrors the project-group hierarchy + collapse behavior of the repo lens, but
+ * lists each group's worktrees directly instead of nesting them under repos.
+ */
+function appendFlatGroupedWorktrees(args: {
+  result: Row[]
+  worktrees: Worktree[]
+  projectGroups: readonly ProjectGroup[]
+  repoMap: Map<string, Repo>
+  lineageById: Record<string, WorktreeLineage>
+  worktreeMap: Map<string, Worktree>
+  collapsedGroups: Set<string>
+  nestLineage: boolean
+}): void {
+  const { result, worktrees, projectGroups, repoMap, lineageById, worktreeMap, collapsedGroups } =
+    args
+  const nestLineage = args.nestLineage
+
+  const worktreesByGroupId = new Map<string | null, Worktree[]>()
+  for (const worktree of worktrees) {
+    const groupId = repoMap.get(worktree.repoId)?.projectGroupId ?? null
+    const list = worktreesByGroupId.get(groupId) ?? []
+    list.push(worktree)
+    worktreesByGroupId.set(groupId, list)
+  }
+
+  const projectGroupsById = new Map(projectGroups.map((group) => [group.id, group]))
+  const childGroupsByParentId = new Map<string | null, ProjectGroup[]>()
+  for (const group of projectGroups) {
+    const parentId =
+      group.parentGroupId && projectGroupsById.has(group.parentGroupId) ? group.parentGroupId : null
+    const children = childGroupsByParentId.get(parentId) ?? []
+    children.push(group)
+    childGroupsByParentId.set(parentId, children)
+  }
+  for (const children of childGroupsByParentId.values()) {
+    children.sort((a, b) => a.tabOrder - b.tabOrder || a.name.localeCompare(b.name))
+  }
+
+  const subtreeCount = (groupId: string): number => {
+    const direct = worktreesByGroupId.get(groupId)?.length ?? 0
+    const children = childGroupsByParentId.get(groupId) ?? []
+    return children.reduce((count, child) => count + subtreeCount(child.id), direct)
+  }
+
+  const emitGroup = (group: ProjectGroup, depth: number): void => {
+    const key = getProjectGroupHeaderKey(group.id)
+    result.push({
+      type: 'header',
+      key,
+      label: group.name,
+      count: subtreeCount(group.id),
+      tone: PROJECT_GROUP_META.tone,
+      icon: PROJECT_GROUP_META.icon,
+      projectGroup: group,
+      projectGroupDepth: depth
+    })
+    if (collapsedGroups.has(key)) {
+      return
+    }
+    appendWorktreeRows(result, worktreesByGroupId.get(group.id) ?? [], repoMap, lineageById, worktreeMap, {
+      nestLineage,
+      collapsedGroups,
+      groupDepth: depth + 1,
+      sectionKey: key
+    })
+    for (const child of childGroupsByParentId.get(group.id) ?? []) {
+      emitGroup(child, depth + 1)
+    }
+  }
+
+  for (const group of childGroupsByParentId.get(null) ?? []) {
+    emitGroup(group, 0)
+  }
+
+  // Why: repos with no group (or whose group metadata hasn't loaded) must not
+  // vanish — collect them under a trailing "Ungrouped" folder.
+  const ungrouped: Worktree[] = [...(worktreesByGroupId.get(null) ?? [])]
+  for (const [groupId, list] of worktreesByGroupId) {
+    if (groupId !== null && !projectGroupsById.has(groupId)) {
+      ungrouped.push(...list)
+    }
+  }
+  if (ungrouped.length > 0) {
+    const key = getProjectGroupHeaderKey(null)
+    result.push({
+      type: 'header',
+      key,
+      label: translate('auto.components.sidebar.worktree.list.groups.ungrouped', 'Ungrouped'),
+      count: ungrouped.length,
+      tone: PROJECT_GROUP_META.tone,
+      icon: PROJECT_GROUP_META.icon,
+      projectGroup: { id: null, name: 'Ungrouped', tabOrder: Number.MAX_SAFE_INTEGER },
+      projectGroupDepth: 0
+    })
+    if (!collapsedGroups.has(key)) {
+      appendWorktreeRows(result, ungrouped, repoMap, lineageById, worktreeMap, {
+        nestLineage,
+        collapsedGroups,
+        groupDepth: 1,
+        sectionKey: key
+      })
+    }
+  }
+}
+
 export function buildRows(
   groupBy: WorktreeGroupBy,
   worktrees: Worktree[],
@@ -856,7 +964,11 @@ export function buildRows(
   pendingCreations: readonly PendingCreationRef[] = [],
   projectGrouping?: ProjectGroupingModel,
   folderWorkspaces: readonly FolderWorkspace[] = [],
-  hostLabelById?: ReadonlyMap<string, string>
+  hostLabelById?: ReadonlyMap<string, string>,
+  // Why: groups (folders of projects) are a persistent organizational structure,
+  // not just the 'repo' lens. When on (default), they frame the sidebar in the
+  // flat ('none') view too and wrap the repo lens; when off they collapse away.
+  showGroups = true
 ): Row[] {
   const result: Row[] = []
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
@@ -894,23 +1006,39 @@ export function buildRows(
   )
 
   if (groupBy === 'none') {
-    if (worktrees.length > 0) {
-      result.push({
-        type: 'header',
-        key: ALL_GROUP_KEY,
-        label: ALL_GROUP_META.label,
-        count: worktrees.length,
-        tone: ALL_GROUP_META.tone,
-        icon: ALL_GROUP_META.icon
+    if (worktrees.length === 0) {
+      return result
+    }
+    // Why: groups are a persistent structure, so when Show groups is on they
+    // frame even the flat list — each group folder with its worktrees inside.
+    if (showGroups && projectGroups.length > 0) {
+      appendFlatGroupedWorktrees({
+        result,
+        worktrees,
+        projectGroups,
+        repoMap,
+        lineageById,
+        worktreeMap,
+        collapsedGroups,
+        nestLineage
       })
-      if (!collapsedGroups.has(ALL_GROUP_KEY)) {
-        appendWorktreeRows(result, worktrees, repoMap, lineageById, worktreeMap, {
-          nestLineage,
-          collapsedGroups,
-          groupDepth: 0,
-          sectionKey: ALL_GROUP_KEY
-        })
-      }
+      return result
+    }
+    result.push({
+      type: 'header',
+      key: ALL_GROUP_KEY,
+      label: ALL_GROUP_META.label,
+      count: worktrees.length,
+      tone: ALL_GROUP_META.tone,
+      icon: ALL_GROUP_META.icon
+    })
+    if (!collapsedGroups.has(ALL_GROUP_KEY)) {
+      appendWorktreeRows(result, worktrees, repoMap, lineageById, worktreeMap, {
+        nestLineage,
+        collapsedGroups,
+        groupDepth: 0,
+        sectionKey: ALL_GROUP_KEY
+      })
     }
     return result
   }
@@ -1159,7 +1287,9 @@ export function buildRows(
     }
   }
 
-  if (groupBy !== 'repo' || projectGroups.length === 0) {
+  // Why: with Show groups off, the repo lens drops its group-folder wrapper and
+  // renders projects as a flat list of repo headers.
+  if (groupBy !== 'repo' || projectGroups.length === 0 || !showGroups) {
     appendOrderedGroups(
       groupBy === 'repo' ? withRepoSectionDisplayLabels(orderedGroups) : orderedGroups
     )

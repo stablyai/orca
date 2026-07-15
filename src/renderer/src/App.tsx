@@ -636,6 +636,7 @@ function App(): React.JSX.Element {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const groupBy = useAppStore((s) => s.groupBy)
   const sortBy = useAppStore((s) => s.sortBy)
+  const showGroups = useAppStore((s) => s.showGroups)
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
@@ -1428,6 +1429,7 @@ function App(): React.JSX.Element {
         markdownTocPanelWidth,
         groupBy,
         sortBy,
+        showGroups,
         projectOrderBy,
         showActiveOnly: false,
         hideSleepingWorkspaces: !showSleepingWorkspaces,
@@ -1460,6 +1462,7 @@ function App(): React.JSX.Element {
     markdownTocPanelWidth,
     groupBy,
     sortBy,
+    showGroups,
     projectOrderBy,
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,

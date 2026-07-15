@@ -4022,7 +4022,8 @@
           "65a9820bd1": "智能体状态",
           "219ebf1961": "分支名称",
           "automation": "自动化",
-          "folderPathIdentity": "分支 / 文件夹路径"
+          "folderPathIdentity": "分支 / 文件夹路径",
+          "showGroups": "Show groups"
         },
         "SshDisconnectedDialog": {
           "ca4a7892af": "正在连接...",
@@ -4434,7 +4435,8 @@
               "682ed5d551": "已关闭",
               "7c2f009786": "进行中",
               "6798dc7c94": "评审中",
-              "5076efc3d2": "完成"
+              "5076efc3d2": "完成",
+              "ungrouped": "Ungrouped"
             }
           }
         },
