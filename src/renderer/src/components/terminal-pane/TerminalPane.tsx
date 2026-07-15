@@ -76,6 +76,7 @@ import {
 import { useSystemPrefersDark } from './use-system-prefers-dark'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 import { useTerminalPaneLifecycle } from './use-terminal-pane-lifecycle'
+import { useTerminalBackgroundImageUrl } from './terminal-background-image-blob'
 import { useTerminalPaneContextMenu } from './use-terminal-pane-context-menu'
 import {
   detachTerminalPaneToTab,
@@ -2917,6 +2918,10 @@ export default function TerminalPane({
     []
   )
 
+  const terminalBackgroundImageUrl = useTerminalBackgroundImageUrl(
+    settings?.terminalBackgroundImage ?? null
+  )
+
   const effectiveAppearance = settings
     ? resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
     : null
@@ -3019,6 +3024,18 @@ export default function TerminalPane({
   const contextMenuCanToggleChat = canToggleChatForLeaf(contextMenuLeafId)
   return (
     <>
+      {/* Why: sits behind the PaneManager container, whose background and
+          xterm cells are already rgba() when terminalBackgroundOpacity < 1
+          (terminal-appearance.ts), so the image shows through with no change
+          to the appearance hot path. Plain DOM behind the panes — never part
+          of the WebGL rendering pipeline. */}
+      {terminalBackgroundImageUrl && isVisible ? (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: `url(${terminalBackgroundImageUrl})` }}
+        />
+      ) : null}
       <div
         ref={setContainerRef}
         className="absolute inset-0 min-h-0 min-w-0"

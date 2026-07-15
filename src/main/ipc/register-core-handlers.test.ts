@@ -23,6 +23,7 @@ const {
   registerDiagnosticsHandlersMock,
   registerShellHandlersMock,
   registerPetHandlersMock,
+  registerTerminalBackgroundHandlersMock,
   registerSessionHandlersMock,
   registerUIHandlersMock,
   setTrustedUIRendererWebContentsIdMock,
@@ -84,6 +85,7 @@ const {
   registerDiagnosticsHandlersMock: vi.fn(),
   registerShellHandlersMock: vi.fn(),
   registerPetHandlersMock: vi.fn(),
+  registerTerminalBackgroundHandlersMock: vi.fn(),
   registerSessionHandlersMock: vi.fn(),
   registerUIHandlersMock: vi.fn(),
   setTrustedUIRendererWebContentsIdMock: vi.fn(),
@@ -242,6 +244,11 @@ vi.mock('./pet', () => ({
   registerPetHandlers: registerPetHandlersMock
 }))
 
+vi.mock('./terminal-background', () => ({
+  registerTerminalBackgroundHandlers: registerTerminalBackgroundHandlersMock,
+  pruneOrphanTerminalBackgrounds: vi.fn(() => Promise.resolve())
+}))
+
 vi.mock('./session', () => ({
   registerSessionHandlers: registerSessionHandlersMock
 }))
@@ -382,6 +389,7 @@ describe('registerCoreHandlers', () => {
     registerDiagnosticsHandlersMock.mockReset()
     registerShellHandlersMock.mockReset()
     registerPetHandlersMock.mockReset()
+    registerTerminalBackgroundHandlersMock.mockReset()
     registerSessionHandlersMock.mockReset()
     registerUIHandlersMock.mockReset()
     setTrustedUIRendererWebContentsIdMock.mockReset()
@@ -470,6 +478,7 @@ describe('registerCoreHandlers', () => {
       getPtyIdForPaneKey: expect.any(Function)
     })
     expect(registerPetHandlersMock).toHaveBeenCalled()
+    expect(registerTerminalBackgroundHandlersMock).toHaveBeenCalled()
     expect(registerClaudeAccountHandlersMock).toHaveBeenCalledWith(claudeAccounts)
     expect(registerMiniMaxCredentialsHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerGrokAccountHandlersMock).toHaveBeenCalled()

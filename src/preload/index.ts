@@ -65,6 +65,7 @@ import type {
 } from '../shared/pty-renderer-delivery-health'
 import type { TerminalViewAttributes } from '../shared/terminal-view-attributes'
 import type { PtyMainDeliveryDiagnostics } from '../shared/pty-delivery-diagnostics'
+import type { TerminalBackgroundImage } from '../shared/terminal-background-image'
 import type {
   WarpThemeImportPreview,
   WarpThemeImportSource
@@ -2214,6 +2215,15 @@ const api = {
       ipcRenderer.invoke('pet:read', id, fileName, kind),
     delete: (id: string, fileName: string, kind?: 'image' | 'bundle'): Promise<void> =>
       ipcRenderer.invoke('pet:delete', id, fileName, kind)
+  },
+
+  terminalBackground: {
+    pick: (): Promise<TerminalBackgroundImage | null> =>
+      ipcRenderer.invoke('terminalBackground:pick'),
+    read: (id: string, fileName: string): Promise<ArrayBuffer | null> =>
+      ipcRenderer.invoke('terminalBackground:read', id, fileName),
+    delete: (id: string, fileName: string): Promise<void> =>
+      ipcRenderer.invoke('terminalBackground:delete', id, fileName)
   },
 
   browser: {

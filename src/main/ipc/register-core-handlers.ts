@@ -46,6 +46,10 @@ import { registerTelemetryHandlers } from './telemetry'
 import { registerBrowserHandlers } from './browser'
 import { registerShellHandlers } from './shell'
 import { registerPetHandlers } from './pet'
+import {
+  pruneOrphanTerminalBackgrounds,
+  registerTerminalBackgroundHandlers
+} from './terminal-background'
 import { registerUIHandlers, setTrustedUIRendererWebContentsId } from './ui'
 import { registerEmulatorFrameStreamHandlers } from './emulator-frame-stream'
 import { registerEmulatorVideoStreamHandlers } from './emulator-video-stream'
@@ -170,6 +174,8 @@ export function registerCoreHandlers(
   registerBrowserHandlers()
   registerShellHandlers()
   registerPetHandlers()
+  registerTerminalBackgroundHandlers(store)
+  void pruneOrphanTerminalBackgrounds(store)
   registerSessionHandlers(store)
   registerUIHandlers(store)
   registerEmulatorFrameStreamHandlers()
