@@ -20667,9 +20667,11 @@ export class OrcaRuntimeService {
     const livePtyIds = new Set(sessions.map((session) => session.id))
     for (const session of sessions) {
       this.adoptControllerTerminalHandle(session.id, session.terminalHandle)
+      // Why: workspace identity migration rekeys persisted ownership while a
+      // running daemon PTY keeps the worktree id minted into its session id.
       const worktreeId =
-        inferWorktreeIdFromPtyId(session.id) ??
         persistedWorktreeIdByPtyId.get(session.id) ??
+        inferWorktreeIdFromPtyId(session.id) ??
         findResolvedWorktreeIdForPath(resolvedWorktrees, session.cwd)
       if (targetWorktreeId && worktreeId !== targetWorktreeId) {
         continue

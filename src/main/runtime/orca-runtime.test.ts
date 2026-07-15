@@ -22553,6 +22553,40 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('prefers migrated layout ownership over a worktree id frozen in the PTY id', async () => {
+    const priorWorktreeId = `${TEST_REPO_ID}::/tmp/worktree-before-rename`
+    const migratedPtyId = `${priorWorktreeId}@@daemon-controller-pty`
+    const session = makeWorkspaceSessionWithHeadlessTerminal()
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+      ...session,
+      tabsByWorktree: {
+        [TEST_WORKTREE_ID]: session.tabsByWorktree[TEST_WORKTREE_ID]!.map((tab) => ({
+          ...tab,
+          ptyId: null
+        }))
+      },
+      terminalLayoutsByTabId: {
+        'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: migratedPtyId })
+      }
+    })
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      write: vi.fn(() => true),
+      kill: vi.fn(() => true),
+      getForegroundProcess: vi.fn(async () => null),
+      listProcesses: vi.fn(async () => [{ id: migratedPtyId, cwd: '', title: 'shell' }])
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+
+    expect(worktrees[0]).toMatchObject({
+      worktreeId: TEST_WORKTREE_ID,
+      hasHostSidebarActivity: true,
+      hasAttachedPty: true,
+      liveTerminalCount: 1
+    })
+  })
+
   it('preserves deferred startup activity before restored terminal panes mount', async () => {
     const session = makeWorkspaceSessionWithHeadlessTerminal({
       activeWorktreeIdsOnShutdown: [TEST_WORKTREE_ID]
