@@ -8,8 +8,7 @@ const dependencies = vi.hoisted(() => ({
   forceReconnectHost: vi.fn(),
   loadHosts: vi.fn(),
   primeHosts: vi.fn(),
-  renameHost: vi.fn(),
-  updateHostEndpoint: vi.fn()
+  updateHostNameAndEndpoint: vi.fn()
 }))
 
 vi.mock('react-native', () => ({
@@ -39,8 +38,7 @@ vi.mock('lucide-react-native', () => ({
 
 vi.mock('./transport/host-store', () => ({
   loadHosts: dependencies.loadHosts,
-  renameHost: dependencies.renameHost,
-  updateHostEndpoint: dependencies.updateHostEndpoint
+  updateHostNameAndEndpoint: dependencies.updateHostNameAndEndpoint
 }))
 
 vi.mock('./transport/client-context', () => ({

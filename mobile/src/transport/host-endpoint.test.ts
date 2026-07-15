@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { displayHostEndpoint, endpointPort, normalizeHostEndpoint } from './host-endpoint'
+import {
+  displayHostEndpoint,
+  endpointPort,
+  endpointScheme,
+  normalizeHostEndpoint
+} from './host-endpoint'
 
 describe('displayHostEndpoint', () => {
   it('shows host:port for websocket URLs', () => {
@@ -29,6 +34,20 @@ describe('endpointPort', () => {
   it('preserves scheme-default ports that URL.port hides', () => {
     expect(endpointPort('ws://192.168.1.10:80')).toBe('80')
     expect(endpointPort('wss://desk.example:443')).toBe('443')
+  })
+})
+
+describe('endpointScheme', () => {
+  it('returns wss for a wss:// endpoint', () => {
+    expect(endpointScheme('wss://desk.example:8443')).toBe('wss')
+  })
+
+  it('returns ws for a ws:// endpoint', () => {
+    expect(endpointScheme('ws://192.168.1.10:6768')).toBe('ws')
+  })
+
+  it('falls back to ws for a non-URL endpoint', () => {
+    expect(endpointScheme('not-a-url')).toBe('ws')
   })
 })
 

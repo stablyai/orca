@@ -299,29 +299,25 @@ export async function retryPendingHostCredentialCleanup(): Promise<{
   return retryPendingHostCredentialCleanups(deleteHostCredentials)
 }
 
-export async function renameHost(hostId: string, newName: string): Promise<void> {
-  await mutateStoredHosts((hosts) => {
-    const index = hosts.findIndex((h) => h.id === hostId)
-    if (index < 0) {
-      return hosts
-    }
-    const next = hosts.slice()
-    next[index] = { ...next[index]!, name: newName }
-    return next
-  })
-}
-
-// Why: Edit host rewrites only the connection address when the same paired
-// desktop is reachable at a different IP (LAN vs Tailscale). deviceToken and
-// publicKey stay in place so workspaces do not need re-pairing.
-export async function updateHostEndpoint(hostId: string, endpoint: string): Promise<void> {
+// Why: Edit host can change name and endpoint together; a single
+// mutateStoredHosts pass keeps both fields committed atomically so a
+// mid-save failure can never persist one change without the other, and a
+// host removed mid-edit throws consistently instead of silently no-oping.
+export async function updateHostNameAndEndpoint(
+  hostId: string,
+  updates: { name?: string; endpoint?: string }
+): Promise<void> {
   await mutateStoredHosts((hosts) => {
     const index = hosts.findIndex((host) => host.id === hostId)
     if (index < 0) {
       throw new Error('Host not found')
     }
     const next = hosts.slice()
-    next[index] = { ...next[index]!, endpoint }
+    next[index] = {
+      ...next[index]!,
+      ...(updates.name !== undefined ? { name: updates.name } : {}),
+      ...(updates.endpoint !== undefined ? { endpoint: updates.endpoint } : {})
+    }
     return next
   })
 }

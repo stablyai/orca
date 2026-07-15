@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
-import { loadHosts, renameHost, updateHostEndpoint } from '../../../src/transport/host-store'
+import { loadHosts, updateHostNameAndEndpoint } from '../../../src/transport/host-store'
 import {
   displayHostEndpoint,
   endpointPort,
@@ -37,6 +37,11 @@ export default function EditHostScreen() {
   const [address, setAddress] = useState('')
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  // Why: setSaving(true) doesn't take effect until React commits a
+  // re-render, so a second trigger (Save button + Address onSubmitEditing)
+  // dispatched before that commit would still read stale `saving` state and
+  // re-enter handleSave. A ref mutates synchronously and closes that race.
+  const savingRef = useRef(false)
 
   const load = useCallback(async () => {
     if (!hostId) {
@@ -85,7 +90,7 @@ export default function EditHostScreen() {
     !saving
 
   async function handleSave() {
-    if (!host || !hostId) {
+    if (!host || !hostId || savingRef.current) {
       return
     }
     const nextName = name.trim()
@@ -105,28 +110,43 @@ export default function EditHostScreen() {
       return
     }
 
+    savingRef.current = true
     setSaving(true)
     setSaveError(null)
     try {
-      if (willRename) {
-        await renameHost(host.id, nextName)
-      }
-      if (willUpdateEndpoint) {
-        await updateHostEndpoint(host.id, normalizedEndpoint.endpoint)
-      }
-
-      const hosts = await loadHosts()
-      primeHosts(hosts)
-
-      if (willUpdateEndpoint) {
-        await forceReconnectHost(host.id)
-      }
-
-      router.back()
+      // Why: a single mutateStoredHosts pass so name + endpoint commit
+      // atomically — a mid-save failure can never persist one without the
+      // other, and a host removed mid-edit throws instead of no-oping.
+      await updateHostNameAndEndpoint(host.id, {
+        ...(willRename ? { name: nextName } : {}),
+        ...(willUpdateEndpoint ? { endpoint: normalizedEndpoint.endpoint } : {})
+      })
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save host.')
-    } finally {
+      savingRef.current = false
       setSaving(false)
+      return
+    }
+
+    try {
+      // Why: the write already committed above; a re-prime failure here
+      // must not be reported as a save failure — the next loadHosts() call
+      // elsewhere in the app picks up the fresh state regardless.
+      const hosts = await loadHosts()
+      primeHosts(hosts)
+    } catch {
+      // best-effort re-prime; persisted data is unaffected
+    }
+
+    savingRef.current = false
+    setSaving(false)
+    router.back()
+
+    if (willUpdateEndpoint) {
+      // Why: reconnect is a follow-on side effect of a save that already
+      // committed — its failure or a hang must not be reported as a save
+      // failure or block navigating back.
+      void forceReconnectHost(host.id).catch(() => {})
     }
   }
 
