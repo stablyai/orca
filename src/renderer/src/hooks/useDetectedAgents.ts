@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../shared/types'
+import { getRuntimeAgentDetectionKey } from '@/lib/runtime-agent-detection-key'
 
 export type UseDetectedAgentsResult = {
   /** Null while detection is in flight on first load. */
@@ -16,7 +17,7 @@ export type UseDetectedAgentsResult = {
 export type AgentDetectionTarget =
   | { kind: 'local' }
   | { kind: 'ssh'; connectionId: string }
-  | { kind: 'runtime'; environmentId: string }
+  | { kind: 'runtime'; environmentId: string; connectionId?: string | null }
 
 function normalizeAgentDetectionTarget(
   target: AgentDetectionTarget | string | null | undefined
@@ -62,6 +63,11 @@ export function useDetectedAgents(
       : target?.kind === 'runtime'
         ? target.environmentId
         : null
+  const runtimeDetectionKey =
+    target?.kind === 'runtime'
+      ? getRuntimeAgentDetectionKey(target.environmentId, target.connectionId)
+      : null
+  const runtimeConnectionId = target?.kind === 'runtime' ? target.connectionId : null
 
   const detectedIds = useAppStore((s) => {
     if (isUnknown) {
@@ -70,8 +76,8 @@ export function useDetectedAgents(
     if (targetKind === 'ssh' && targetId) {
       return s.remoteDetectedAgentIds[targetId] ?? null
     }
-    if (targetKind === 'runtime' && targetId) {
-      return s.runtimeDetectedAgentIds[targetId] ?? null
+    if (targetKind === 'runtime' && runtimeDetectionKey) {
+      return s.runtimeDetectedAgentIds[runtimeDetectionKey] ?? null
     }
     return s.detectedAgentIds
   })
@@ -82,8 +88,8 @@ export function useDetectedAgents(
     if (targetKind === 'ssh' && targetId) {
       return s.isDetectingRemoteAgents[targetId] ?? false
     }
-    if (targetKind === 'runtime' && targetId) {
-      return s.isDetectingRuntimeAgents[targetId] ?? false
+    if (targetKind === 'runtime' && runtimeDetectionKey) {
+      return s.isDetectingRuntimeAgents[runtimeDetectionKey] ?? false
     }
     return s.isDetectingAgents
   })
@@ -100,8 +106,8 @@ export function useDetectedAgents(
     const emptyRetryKey =
       targetKind === 'ssh' && targetId
         ? `ssh:${targetId}`
-        : targetKind === 'runtime' && targetId
-          ? `runtime:${targetId}`
+        : targetKind === 'runtime' && runtimeDetectionKey
+          ? `runtime:${runtimeDetectionKey}`
           : null
     if (targetKind === 'ssh' && targetId) {
       if (detectedIds === null) {
@@ -116,19 +122,29 @@ export function useDetectedAgents(
     } else if (targetKind === 'runtime' && targetId) {
       if (detectedIds === null) {
         retriedEmptyTargetRef.current = emptyRetryKey
-        void ensureRuntime(targetId)
+        void ensureRuntime(targetId, runtimeConnectionId)
       } else if (detectedIds.length === 0 && retriedEmptyTargetRef.current !== emptyRetryKey) {
         // Why: remote `orca serve` users can install/fix PATH without reconnecting;
         // retry once per mounted surface so the menu can pick that up.
         retriedEmptyTargetRef.current = emptyRetryKey
-        void ensureRuntime(targetId)
+        void ensureRuntime(targetId, runtimeConnectionId)
       }
     } else {
       if (detectedIds === null) {
         void ensureLocal()
       }
     }
-  }, [isUnknown, targetKind, targetId, detectedIds, ensureLocal, ensureRemote, ensureRuntime])
+  }, [
+    isUnknown,
+    targetKind,
+    targetId,
+    runtimeDetectionKey,
+    runtimeConnectionId,
+    detectedIds,
+    ensureLocal,
+    ensureRemote,
+    ensureRuntime
+  ])
 
   return { detectedIds, isLoading, isRefreshing, refresh }
 }

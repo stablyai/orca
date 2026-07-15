@@ -3661,7 +3661,9 @@
           "35831a7312": "추가 중...",
           "lockedDescription": "{{value0}}의 Git 리포지토리 경로를 입력하세요.",
           "lockedDisconnected": "{{value0}} 연결이 끊어졌습니다.",
-          "93e0221434": "연결"
+          "93e0221434": "연결",
+          "noServerSshTargets": "No SSH targets configured on this Orca server.",
+          "backToHostMenu": "Back to host menu"
         },
         "AddRepoServerStartStep": {
           "ae990c86a0": "옵션 추가로 돌아가기",
@@ -4672,7 +4674,9 @@
           "sshImportFailed": "SSH 구성을 가져오지 못했습니다.",
           "importing": "가져오는 중...",
           "importSshConfig": "~/.ssh/config 가져오기",
-          "sshPersistenceDefault": "이 호스트의 원격 터미널은 종료하거나 릴레이를 재설정할 때까지 계속 실행됩니다."
+          "sshPersistenceDefault": "이 호스트의 원격 터미널은 종료하거나 릴레이를 재설정할 때까지 계속 실행됩니다.",
+          "sshServerTitle": "Add SSH host to {{value0}}",
+          "sshServerDescription": "Save this SSH machine on {{value0}} so projects and workspaces run through that server."
         },
         "ForgetSshWorkspaceDialog": {
           "reconnectFailed": "재연결 실패",

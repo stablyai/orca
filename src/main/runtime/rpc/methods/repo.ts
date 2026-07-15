@@ -14,6 +14,13 @@ const RepoPath = z.object({
   kind: z.enum(['git', 'folder']).optional()
 })
 
+const SshRepoPath = z.object({
+  connectionId: requiredString('Missing SSH target'),
+  remotePath: requiredString('Missing remote path'),
+  displayName: OptionalString,
+  kind: z.enum(['git', 'folder']).optional()
+})
+
 const RepoCreate = z.object({
   parentPath: requiredString('Missing parent path'),
   name: requiredString('Missing repo name'),
@@ -74,7 +81,8 @@ const ProjectGroupMoveProject = z.object({
 })
 
 const ProjectGroupScanNested = z.object({
-  path: requiredString('Missing folder path')
+  path: requiredString('Missing folder path'),
+  connectionId: OptionalString
 })
 
 const ProjectGroupImportNested = z.discriminatedUnion('mode', [
@@ -149,7 +157,8 @@ export const REPO_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'projectGroup.scanNested',
     params: ProjectGroupScanNested,
-    handler: async (params, { runtime }) => runtime.scanNestedRepos(params.path)
+    handler: async (params, { runtime }) =>
+      runtime.scanNestedRepos(params.path, params.connectionId)
   }),
   defineMethod({
     name: 'projectGroup.importNested',
@@ -180,6 +189,11 @@ export const REPO_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => ({
       repo: await runtime.addRepo(params.path, params.kind)
     })
+  }),
+  defineMethod({
+    name: 'repo.addRemote',
+    params: SshRepoPath,
+    handler: async (params, { runtime }) => runtime.addSshRepo(params)
   }),
   defineMethod({
     name: 'repo.create',

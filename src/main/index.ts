@@ -153,6 +153,7 @@ import {
   getLocalPtyProvider,
   registerHeadlessPtyRuntime
 } from './ipc/pty'
+import { registerSshHandlers } from './ipc/ssh'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { EmulatorBridge } from './emulator/emulator-bridge'
 import { serveSimStateWatcher } from './emulator/serve-sim-state-watcher'
@@ -2141,6 +2142,9 @@ app.whenReady().then(async () => {
       (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
       store
     )
+    // Why: serve has no BrowserWindow, so desktop startup never installs the
+    // SSH managers required by runtime RPC clients and SSH-backed projects.
+    registerSshHandlers(store, () => null, runtime)
     // Why: headless servers have no renderer to mount <webview> browser panes.
     // Back them with main-process offscreen WebContents instead, so this host can
     // own browser pages and advertise browser.headless.v1 — but only when a

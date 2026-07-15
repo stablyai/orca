@@ -3661,7 +3661,9 @@
           "35831a7312": "添加...",
           "lockedDescription": "输入 {{value0}} 上 Git 仓库的路径。",
           "lockedDisconnected": "{{value0}} 已断开连接。",
-          "93e0221434": "连接"
+          "93e0221434": "连接",
+          "noServerSshTargets": "No SSH targets configured on this Orca server.",
+          "backToHostMenu": "Back to host menu"
         },
         "AddRepoServerStartStep": {
           "ae990c86a0": "返回添加选项",
@@ -4672,7 +4674,9 @@
           "sshImportFailed": "导入 SSH 配置失败。",
           "importing": "正在导入...",
           "importSshConfig": "导入 ~/.ssh/config",
-          "sshPersistenceDefault": "此主机上的远程终端会保持运行，直到你结束它们或重置中继。"
+          "sshPersistenceDefault": "此主机上的远程终端会保持运行，直到你结束它们或重置中继。",
+          "sshServerTitle": "Add SSH host to {{value0}}",
+          "sshServerDescription": "Save this SSH machine on {{value0}} so projects and workspaces run through that server."
         },
         "ForgetSshWorkspaceDialog": {
           "reconnectFailed": "重新连接失败",

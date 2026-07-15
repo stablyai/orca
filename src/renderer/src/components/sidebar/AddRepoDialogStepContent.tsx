@@ -190,6 +190,7 @@ export function AddRepoDialogStepContent({
     return (
       <RemoteStep
         sshTargets={sshTargets}
+        runtimeEnvironmentId={activeRuntimeEnvironmentId}
         selectedTargetId={selectedTargetId}
         lockSshTargetSelection={lockSshTargetSelection}
         remotePath={remotePath}

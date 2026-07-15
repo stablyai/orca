@@ -131,6 +131,11 @@ export function applyRuntimeEnvironmentSshStateChanged(
   state: SshConnectionState
 ): void {
   const store = useAppStore.getState()
+  if (state.status !== 'connected') {
+    // Agent availability on a nested SSH host is tied to its live relay; a
+    // reconnect must probe the host again instead of reusing the old result.
+    store.clearRuntimeDetectedAgents(environmentId, targetId)
+  }
   const bucket = store.sshStateByEnvironment.get(environmentId)
   if (bucket?.targetsHydrated && bucket.targetLabels.has(targetId)) {
     store.setEnvironmentSshConnectionState(environmentId, targetId, state)

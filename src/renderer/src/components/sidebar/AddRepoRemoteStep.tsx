@@ -10,6 +10,7 @@ import { translate } from '@/i18n/i18n'
 
 type RemoteStepProps = {
   sshTargets: (SshTarget & { state?: SshConnectionState })[]
+  runtimeEnvironmentId?: string | null
   selectedTargetId: string | null
   lockSshTargetSelection?: boolean
   remotePath: string
@@ -26,6 +27,7 @@ type RemoteStepProps = {
 
 export function RemoteStep({
   sshTargets,
+  runtimeEnvironmentId,
   selectedTargetId,
   lockSshTargetSelection = false,
   remotePath,
@@ -68,6 +70,7 @@ export function RemoteStep({
         </DialogHeader>
         <RemoteFileBrowser
           targetId={selectedTargetId}
+          runtimeEnvironmentId={runtimeEnvironmentId ?? undefined}
           initialPath={remotePath || '~'}
           onSelect={(path) => {
             onRemotePathChange(path)
@@ -111,10 +114,15 @@ export function RemoteStep({
             {sshTargets.length === 0 ? (
               <div className="space-y-1.5 py-1">
                 <p className="text-xs text-muted-foreground">
-                  {translate(
-                    'auto.components.sidebar.AddRepoRemoteStep.df6fbcf880',
-                    'No SSH targets configured.'
-                  )}
+                  {runtimeEnvironmentId
+                    ? translate(
+                        'auto.components.sidebar.AddRepoRemoteStep.noServerSshTargets',
+                        'No SSH targets configured on this Orca server.'
+                      )
+                    : translate(
+                        'auto.components.sidebar.AddRepoRemoteStep.df6fbcf880',
+                        'No SSH targets configured.'
+                      )}
                 </p>
                 <Button
                   variant="outline"
@@ -123,10 +131,15 @@ export function RemoteStep({
                   onClick={onOpenSshSettings}
                 >
                   <Settings className="size-3.5" />
-                  {translate(
-                    'auto.components.sidebar.AddRepoRemoteStep.0416bde073',
-                    'Add in Settings'
-                  )}
+                  {runtimeEnvironmentId
+                    ? translate(
+                        'auto.components.sidebar.AddRepoRemoteStep.backToHostMenu',
+                        'Back to host menu'
+                      )
+                    : translate(
+                        'auto.components.sidebar.AddRepoRemoteStep.0416bde073',
+                        'Add in Settings'
+                      )}
                 </Button>
               </div>
             ) : (

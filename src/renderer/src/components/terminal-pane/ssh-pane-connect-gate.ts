@@ -16,6 +16,7 @@ export type SshPaneConnectGate = {
 // deferred-connect flow first and which session it should reattach.
 export function resolveSshPaneConnectGate(input: {
   connectionId: string
+  sshOwnerEnvironmentId?: string | null
   sshStatus: string | undefined
   isDeferredTarget: boolean
   restoredLeafSessionId: string | null
@@ -24,6 +25,11 @@ export function resolveSshPaneConnectGate(input: {
   hasLeafSessionMap: boolean
 }): SshPaneConnectGate {
   const sshConnected = input.sshStatus === 'connected'
+  if (input.sshOwnerEnvironmentId) {
+    // Nested SSH is owned by the remote Orca runtime and has no local relay or
+    // persisted local SSH PTY id for this renderer to reconnect.
+    return { pendingSessionId: null, enterDeferredFlow: false, sshConnected }
+  }
   // Why: the deferred maps can miss a tab (e.g. activeConnectionIdsAtShutdown
   // wasn't persisted, so restore registered no deferred target). The tab's own
   // restored app SSH pty id still names the session — reattach it rather than

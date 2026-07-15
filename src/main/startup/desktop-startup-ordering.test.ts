@@ -98,4 +98,20 @@ describe('startup ordering', () => {
     expect(desktopSetWebContents).toBeGreaterThanOrEqual(0)
     expect(desktopAutomationStart).toBeGreaterThan(desktopSetWebContents)
   })
+
+  it('registers SSH handlers before the headless runtime starts accepting requests', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const serveStart = source.indexOf('if (serveOptions) {')
+    const serveReturn = source.indexOf(
+      'return',
+      source.indexOf('await printServeReady', serveStart)
+    )
+    const serveStartup = source.slice(serveStart, serveReturn)
+    const sshHandlers = serveStartup.indexOf('registerSshHandlers(store, () => null, runtime)')
+    const runtimeRpcStart = serveStartup.indexOf('await runtimeRpc.start()')
+
+    expect(serveStart).toBeGreaterThanOrEqual(0)
+    expect(sshHandlers).toBeGreaterThanOrEqual(0)
+    expect(runtimeRpcStart).toBeGreaterThan(sshHandlers)
+  })
 })

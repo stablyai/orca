@@ -20,17 +20,25 @@ import {
 } from '../settings/ssh-target-draft'
 import { MAX_SSH_RELAY_GRACE_PERIOD_SECONDS, type SshTarget } from '../../../../shared/ssh-types'
 import { RemoteServerFields, SshHostFields } from './AddRemoteHostFields'
+import { hydrateRuntimeEnvironmentSshState } from '@/runtime/runtime-environment-ssh-state'
+import {
+  addSshTargetForOwner,
+  importSshConfigForOwner,
+  type SshTargetOwnerEnvironment
+} from '@/runtime/runtime-ssh-target-management'
 
 export type AddRemoteHostMode = 'ssh' | 'server'
 
 type AddRemoteHostDialogProps = {
   mode: AddRemoteHostMode | null
   onOpenChange: (mode: AddRemoteHostMode | null) => void
+  sshOwnerEnvironment?: SshTargetOwnerEnvironment | null
 }
 
 export function AddRemoteHostDialog({
   mode,
-  onOpenChange
+  onOpenChange,
+  sshOwnerEnvironment = null
 }: AddRemoteHostDialogProps): React.JSX.Element {
   const open = mode !== null
   const [sshForm, setSshForm] = useState<EditingTarget>(EMPTY_FORM)
@@ -58,6 +66,10 @@ export function AddRemoteHostDialog({
   }
 
   const refreshSshTargetMetadata = async () => {
+    if (sshOwnerEnvironment) {
+      await hydrateRuntimeEnvironmentSshState(sshOwnerEnvironment.id, { force: true })
+      return
+    }
     const targets = (await window.api.ssh.listTargets()) as SshTarget[]
     setSshTargetsMetadata(targets)
   }
@@ -107,8 +119,10 @@ export function AddRemoteHostDialog({
 
     setIsSaving(true)
     try {
-      const result = await window.api.ssh.addTarget({ target })
-      recordSshRepoReadoptions(result.repoReadoptions)
+      const result = await addSshTargetForOwner(sshOwnerEnvironment, target)
+      if (!sshOwnerEnvironment) {
+        recordSshRepoReadoptions(result.repoReadoptions)
+      }
       await refreshSshTargetMetadata()
       recordFeatureInteraction('ssh')
       toast.success(
@@ -133,9 +147,11 @@ export function AddRemoteHostDialog({
   const importSshConfig = async () => {
     setIsImporting(true)
     try {
-      const result = await window.api.ssh.importConfig()
+      const result = await importSshConfigForOwner(sshOwnerEnvironment)
       const synced = result.targets
-      recordSshRepoReadoptions(result.repoReadoptions)
+      if (!sshOwnerEnvironment) {
+        recordSshRepoReadoptions(result.repoReadoptions)
+      }
       await refreshSshTargetMetadata()
       recordFeatureInteraction('ssh')
       if (synced.length === 0) {
@@ -228,7 +244,13 @@ export function AddRemoteHostDialog({
                   'auto.components.sidebar.AddRemoteHostDialog.serverTitle',
                   'Add remote server'
                 )
-              : translate('auto.components.sidebar.AddRemoteHostDialog.sshTitle', 'Add SSH host')}
+              : sshOwnerEnvironment
+                ? translate(
+                    'auto.components.sidebar.AddRemoteHostDialog.sshServerTitle',
+                    'Add SSH host to {{value0}}',
+                    { value0: sshOwnerEnvironment.label }
+                  )
+                : translate('auto.components.sidebar.AddRemoteHostDialog.sshTitle', 'Add SSH host')}
           </DialogTitle>
           <DialogDescription>
             {mode === 'server'
@@ -236,10 +258,16 @@ export function AddRemoteHostDialog({
                   'auto.components.sidebar.AddRemoteHostDialog.serverDescription',
                   'Pair with Orca running on another computer.'
                 )
-              : translate(
-                  'auto.components.sidebar.AddRemoteHostDialog.sshDescription',
-                  'Add a persistent machine you can log into over SSH.'
-                )}
+              : sshOwnerEnvironment
+                ? translate(
+                    'auto.components.sidebar.AddRemoteHostDialog.sshServerDescription',
+                    'Save this SSH machine on {{value0}} so projects and workspaces run through that server.',
+                    { value0: sshOwnerEnvironment.label }
+                  )
+                : translate(
+                    'auto.components.sidebar.AddRemoteHostDialog.sshDescription',
+                    'Add a persistent machine you can log into over SSH.'
+                  )}
           </DialogDescription>
         </DialogHeader>
 

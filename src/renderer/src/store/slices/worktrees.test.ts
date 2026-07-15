@@ -3951,6 +3951,48 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().worktreesByRepo.repo1).toEqual([wt])
   })
 
+  it('creates a server-owned SSH repo worktree through its owning runtime', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/home/jae/feature',
+      repoId: 'repo1',
+      path: '/home/jae/feature'
+    })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-create',
+      ok: true,
+      result: { worktree: wt },
+      _meta: { runtimeId: 'runtime-linux' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-elsewhere' } as never,
+      repos: [
+        {
+          id: 'repo1',
+          path: '/home/jae/project',
+          displayName: 'p8 project',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: 'ssh-p8',
+          executionHostId: 'runtime:env-linux'
+        }
+      ],
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main', 'skip')
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-linux',
+        method: 'worktree.create',
+        params: expect.objectContaining({ repo: 'repo1', name: 'feature' })
+      })
+    )
+    expect(mockApi.worktrees.create).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo.repo1).toEqual([{ ...wt, hostId: 'runtime:env-linux' }])
+  })
+
   it('passes startup commands through remote runtime worktree creation', async () => {
     const store = createTestStore()
     const wt = makeWorktree({

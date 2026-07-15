@@ -84,7 +84,10 @@ import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connectio
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  getExplicitRuntimeEnvironmentIdForWorktree,
+  getRuntimeEnvironmentIdForWorktree
+} from '@/lib/worktree-runtime-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
 import {
@@ -3476,8 +3479,18 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // SSH connection is active. Without the active-connection check, we'd try
       // to reattach to a relay that isn't connected yet (the deferred/passphrase
       // targets), which would fail.
-      const sshState = repo?.connectionId ? get().sshConnectionStates.get(repo.connectionId) : null
-      const sshConnected = repo?.connectionId != null && sshState?.status === 'connected'
+      const sshOwnerEnvironmentId = repo?.connectionId
+        ? getExplicitRuntimeEnvironmentIdForWorktree(get(), worktreeId)
+        : null
+      const sshState =
+        repo?.connectionId && !sshOwnerEnvironmentId
+          ? get().sshConnectionStates.get(repo.connectionId)
+          : null
+      const sshConnected =
+        repo?.connectionId != null &&
+        (sshOwnerEnvironmentId !== null || sshState?.status === 'connected')
+      // Runtime-owned SSH terminals restore through runtime handles; only
+      // desktop-owned SSH sessions depend on the local provider being ready.
       const supportsDeferredReattach = !repo?.connectionId || sshConnected
       console.debug(
         `[reconnect-terminals] worktree=${worktreeId} connectionId=${repo?.connectionId} sshStatus=${sshState?.status} supportsDeferredReattach=${supportsDeferredReattach}`
@@ -3555,6 +3568,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
       const repo = repoId ? get().repos.find((entry) => entry.id === repoId) : null
       if (!repo?.connectionId) {
+        continue
+      }
+      if (getExplicitRuntimeEnvironmentIdForWorktree(get(), worktreeId)) {
         continue
       }
       const sshConnected = get().sshConnectionStates.get(repo.connectionId)?.status === 'connected'

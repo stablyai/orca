@@ -15,6 +15,9 @@ import {
 import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
 import { useGitStatusFileWatchRefresh } from './git-status-file-watch-refresh'
 import { useGitStatusPushSignalRefresh } from './git-status-push-signal-refresh'
+import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { selectRuntimeAwareSshStatus } from '@/store/slices/runtime-environment-ssh'
+import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 
 const MIN_STATUS_REFRESH_INTERVAL_MS = 3000
 const INTERACTIVE_STATUS_POLL_INTERVAL_MS = MIN_STATUS_REFRESH_INTERVAL_MS
@@ -46,6 +49,8 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   const setConflictOperation = useAppStore((s) => s.setConflictOperation)
   const conflictOperationByWorktree = useAppStore((s) => s.gitConflictOperationByWorktree)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
+  const sshStateByEnvironment = useAppStore((s) => s.sshStateByEnvironment)
+  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
@@ -59,9 +64,29 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   const activeRepoSupportsGit = activeRepo ? isGitRepoKind(activeRepo) : false
   const activeConnectionId = activeRepo?.connectionId ?? null
   const isConnectionReady = useCallback(
-    (connectionId: string | null | undefined): boolean =>
-      !connectionId || sshConnectionStates.get(connectionId)?.status === 'connected',
-    [sshConnectionStates]
+    (connectionId: string | null | undefined, worktreeId = activeWorktreeId): boolean => {
+      if (!connectionId) {
+        return true
+      }
+      const state = useAppStore.getState()
+      const sshOwnerEnvironmentId =
+        worktreeId && !isPairedWebClientWindow()
+          ? getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
+          : null
+      return (
+        selectRuntimeAwareSshStatus(
+          {
+            ...state,
+            runtimeStatusByEnvironmentId,
+            sshConnectionStates,
+            sshStateByEnvironment
+          },
+          sshOwnerEnvironmentId,
+          connectionId
+        ) === 'connected'
+      )
+    },
+    [activeWorktreeId, runtimeStatusByEnvironmentId, sshConnectionStates, sshStateByEnvironment]
   )
   const activeGitStatusPollingArgs = {
     activeWorktreeId,
@@ -270,7 +295,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
           const connectionId = getConnectionId(id) ?? undefined
           // Why: after explicit SSH disconnect the provider is intentionally
           // gone; keep remote polling quiet until the target reconnects.
-          if (!isConnectionReady(connectionId)) {
+          if (!isConnectionReady(connectionId, id)) {
             continue
           }
           const op = (await getRuntimeGitConflictOperation({

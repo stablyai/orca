@@ -84,4 +84,19 @@ describe('resolveSshPaneConnectGate', () => {
     })
     expect(gate.enterDeferredFlow).toBe(false)
   })
+
+  it('does not use the desktop SSH gate for a target owned by a remote Orca server', () => {
+    const gate = resolveSshPaneConnectGate({
+      ...BASE,
+      connectionId: 'ssh-p8',
+      sshOwnerEnvironmentId: 'env-linux',
+      isDeferredTarget: true,
+      deferredTabSessionId: 'ssh:ssh-p8@@local-session'
+    })
+    expect(gate).toEqual({
+      pendingSessionId: null,
+      enterDeferredFlow: false,
+      sshConnected: false
+    })
+  })
 })

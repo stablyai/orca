@@ -14,6 +14,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { statusColor } from '@/components/settings/SshTargetCard'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
+import { connectRuntimeEnvironmentSshTarget } from '@/runtime/runtime-environment-ssh-state'
 
 type SshDisconnectedDialogProps = {
   open: boolean
@@ -21,6 +22,7 @@ type SshDisconnectedDialogProps = {
   targetId: string
   targetLabel: string
   status: SshConnectionStatus
+  sshOwnerEnvironmentId?: string | null
 }
 
 const STATUS_MESSAGES: Partial<Record<SshConnectionStatus, string>> = {
@@ -65,7 +67,8 @@ export function SshDisconnectedDialog({
   onOpenChange,
   targetId,
   targetLabel,
-  status
+  status,
+  sshOwnerEnvironmentId = null
 }: SshDisconnectedDialogProps): React.JSX.Element {
   const [connecting, setConnecting] = useState(false)
   const mountedRef = useMountedRef()
@@ -73,7 +76,22 @@ export function SshDisconnectedDialog({
   const handleReconnect = useCallback(async () => {
     setConnecting(true)
     try {
-      await window.api.ssh.connect({ targetId })
+      if (sshOwnerEnvironmentId) {
+        const connectedState = await connectRuntimeEnvironmentSshTarget(
+          sshOwnerEnvironmentId,
+          targetId
+        )
+        if (connectedState?.status !== 'connected') {
+          throw new Error(
+            translate(
+              'auto.components.sidebar.SshDisconnectedDialog.656368f3a2',
+              'Reconnection failed'
+            )
+          )
+        }
+      } else {
+        await window.api.ssh.connect({ targetId })
+      }
       if (mountedRef.current) {
         onOpenChange(false)
       }
@@ -91,7 +109,7 @@ export function SshDisconnectedDialog({
         setConnecting(false)
       }
     }
-  }, [mountedRef, targetId, onOpenChange])
+  }, [mountedRef, onOpenChange, sshOwnerEnvironmentId, targetId])
 
   const isConnecting =
     connecting ||

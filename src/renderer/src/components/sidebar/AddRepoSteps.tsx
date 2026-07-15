@@ -2,12 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import type { NestedRepoScanResult } from '../../../../shared/types'
+import type { NestedRepoScanResult, Repo } from '../../../../shared/types'
 import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
 import { createNestedRepoTelemetryAttemptId } from '../../../../shared/nested-repo-telemetry'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 
 // ── SSH host project hook ───────────────────────────────────────────
 
@@ -32,7 +33,8 @@ export function useRemoteRepo(
     inProgress: boolean,
     scanId: string | null
   ) => void,
-  onNestedScanResult?: (scan: NestedRepoScanResult | null, attemptId: string) => void
+  onNestedScanResult?: (scan: NestedRepoScanResult | null, attemptId: string) => void,
+  runtimeEnvironmentId?: string | null
 ) {
   const [sshTargets, setSshTargets] = useState<(SshTarget & { state?: SshConnectionState })[]>([])
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null)
@@ -69,15 +71,30 @@ export function useRemoteRepo(
       const gen = ++remoteGenRef.current
       setStep('remote')
       try {
-        const targets = (await window.api.ssh.listTargets()) as SshTarget[]
+        const targets = runtimeEnvironmentId
+          ? (
+              await callRuntimeRpc<{ targets: SshTarget[] }>(
+                { kind: 'environment', environmentId: runtimeEnvironmentId },
+                'ssh.listTargets'
+              )
+            ).targets
+          : ((await window.api.ssh.listTargets()) as SshTarget[])
         if (gen !== remoteGenRef.current) {
           return
         }
         const withState = await Promise.all(
           targets.map(async (t) => {
-            const state = (await window.api.ssh.getState({
-              targetId: t.id
-            })) as SshConnectionState | null
+            const state = runtimeEnvironmentId
+              ? (
+                  await callRuntimeRpc<{ state: SshConnectionState | null }>(
+                    { kind: 'environment', environmentId: runtimeEnvironmentId },
+                    'ssh.getState',
+                    { targetId: t.id }
+                  )
+                ).state
+              : ((await window.api.ssh.getState({
+                  targetId: t.id
+                })) as SshConnectionState | null)
             return { ...t, state: state ?? undefined }
           })
         )
@@ -103,13 +120,18 @@ export function useRemoteRepo(
         setSshTargets([])
       }
     },
-    [setStep]
+    [runtimeEnvironmentId, setStep]
   )
 
   // Why: keep the target list's connection state in sync while the dialog is
   // open, so clicking the inline Connect button below updates the dot/label
   // live without the user reopening the step.
   useEffect(() => {
+    if (runtimeEnvironmentId) {
+      // Remote-runtime SSH events hydrate the environment-scoped store bucket;
+      // never mix same-named local target events into this server-owned list.
+      return
+    }
     const unsubscribe = window.api.ssh.onStateChanged(({ targetId, state }) => {
       setSshTargets((prev) => prev.map((t) => (t.id === targetId ? { ...t, state } : t)))
       if (state.status === 'connected') {
@@ -117,19 +139,36 @@ export function useRemoteRepo(
       }
     })
     return unsubscribe
-  }, [])
+  }, [runtimeEnvironmentId])
 
-  const handleConnectTarget = useCallback(async (targetId: string) => {
-    try {
-      await window.api.ssh.connect({ targetId })
-    } catch (err) {
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : translate('auto.components.sidebar.AddRepoSteps.3e64e8a70d', 'Connection failed')
-      )
-    }
-  }, [])
+  const handleConnectTarget = useCallback(
+    async (targetId: string) => {
+      try {
+        const state = runtimeEnvironmentId
+          ? (
+              await callRuntimeRpc<{ state: SshConnectionState | null }>(
+                { kind: 'environment', environmentId: runtimeEnvironmentId },
+                'ssh.connect',
+                { targetId },
+                { timeoutMs: 60_000 }
+              )
+            ).state
+          : await window.api.ssh.connect({ targetId })
+        if (state) {
+          setSshTargets((prev) =>
+            prev.map((target) => (target.id === targetId ? { ...target, state } : target))
+          )
+        }
+      } catch (err) {
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : translate('auto.components.sidebar.AddRepoSteps.3e64e8a70d', 'Connection failed')
+        )
+      }
+    },
+    [runtimeEnvironmentId]
+  )
 
   const handleAddRemoteRepo = useCallback(async () => {
     if (!selectedTargetId || !remotePath.trim()) {
@@ -175,10 +214,19 @@ export function useRemoteRepo(
         return
       }
       setRemoteNestedScanId(null)
-      const result = await window.api.repos.addRemote({
-        connectionId: selectedTargetId,
-        remotePath: trimmedRemotePath
-      })
+      const result = runtimeEnvironmentId
+        ? await callRuntimeRpc<{ repo: Repo } | { error: string }>(
+            { kind: 'environment', environmentId: runtimeEnvironmentId },
+            'repo.addRemote',
+            {
+              connectionId: selectedTargetId,
+              remotePath: trimmedRemotePath
+            }
+          )
+        : await window.api.repos.addRemote({
+            connectionId: selectedTargetId,
+            remotePath: trimmedRemotePath
+          })
       if ('error' in result) {
         throw new Error(result.error)
       }
@@ -236,7 +284,8 @@ export function useRemoteRepo(
     fetchWorktrees,
     mountedRef,
     closeModal,
-    onGitRepoReady
+    onGitRepoReady,
+    runtimeEnvironmentId
   ])
 
   return {

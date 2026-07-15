@@ -9,6 +9,54 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('repo RPC methods', () => {
+  it('adds an existing project through an SSH target owned by the runtime server', async () => {
+    const result = {
+      repo: {
+        id: 'repo-p8',
+        path: '/srv/project',
+        connectionId: 'ssh-p8',
+        kind: 'git'
+      }
+    }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      addSshRepo: vi.fn().mockResolvedValue(result)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.addRemote', {
+        connectionId: 'ssh-p8',
+        remotePath: '/srv/project'
+      })
+    )
+
+    expect(runtime.addSshRepo).toHaveBeenCalledWith({
+      connectionId: 'ssh-p8',
+      remotePath: '/srv/project'
+    })
+    expect(response).toMatchObject({ ok: true, result })
+  })
+
+  it('scans nested projects through the selected runtime SSH target', async () => {
+    const scan = { selectedPath: '/srv', selectedPathKind: 'non_git_folder', repos: [] }
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      scanNestedRepos: vi.fn().mockResolvedValue(scan)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('projectGroup.scanNested', {
+        path: '/srv',
+        connectionId: 'ssh-p8'
+      })
+    )
+
+    expect(runtime.scanNestedRepos).toHaveBeenCalledWith('/srv', 'ssh-p8')
+    expect(response).toMatchObject({ ok: true, result: scan })
+  })
+
   it('updates project runtime preferences on the runtime server', async () => {
     const project = {
       id: 'project-1',

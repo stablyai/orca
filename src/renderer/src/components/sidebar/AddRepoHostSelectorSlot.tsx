@@ -9,6 +9,15 @@ export function AddRepoHostSelectorSlot({
   hostSelection: ReturnType<typeof useAddRepoHostSelection>
 }) {
   const [addRemoteHostMode, setAddRemoteHostMode] = useState<AddRemoteHostMode | null>(null)
+  const selectedRuntimeEnvironment =
+    hostSelection.selectedParsedHost?.kind === 'runtime'
+      ? {
+          id: hostSelection.selectedParsedHost.environmentId,
+          label:
+            hostSelection.hostOptions.find((host) => host.id === hostSelection.selectedHostId)
+              ?.label ?? hostSelection.selectedParsedHost.environmentId
+        }
+      : null
 
   return (
     <>
@@ -22,7 +31,11 @@ export function AddRepoHostSelectorSlot({
         onAddSshHost={() => setAddRemoteHostMode('ssh')}
         onAddRemoteServer={() => setAddRemoteHostMode('server')}
       />
-      <AddRemoteHostDialog mode={addRemoteHostMode} onOpenChange={setAddRemoteHostMode} />
+      <AddRemoteHostDialog
+        mode={addRemoteHostMode}
+        onOpenChange={setAddRemoteHostMode}
+        sshOwnerEnvironment={selectedRuntimeEnvironment}
+      />
     </>
   )
 }

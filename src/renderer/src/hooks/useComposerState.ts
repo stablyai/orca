@@ -30,6 +30,10 @@ import {
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import {
+  connectRuntimeEnvironmentSshTarget,
+  hydrateRuntimeEnvironmentSshState
+} from '@/runtime/runtime-environment-ssh-state'
 import { resolveWorktreeCreateBaseBranch } from '@/runtime/worktree-create-base'
 import {
   buildTaskSourceContextFromRepo,
@@ -142,7 +146,12 @@ import {
 } from '../../../shared/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
 import { queueNewWorkspaceTerminalFocus } from '@/lib/new-workspace-terminal-focus'
-import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
+import {
+  getRuntimeEnvironmentIdForRepo,
+  getSettingsForRepoRuntimeOwner
+} from '@/lib/repo-runtime-owner'
+import { selectRuntimeAwareSshStatus } from '@/store/slices/runtime-environment-ssh'
+import { getRuntimeAgentDetectionKey } from '@/lib/runtime-agent-detection-key'
 import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
 import type { SmartNameMode } from '@/components/new-workspace/smart-workspace-source-results'
@@ -849,6 +858,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       selectedRepo?.id ?? null
     )
   }, [selectedRepo, settings])
+  const runtimeEnvironmentId = selectedRepoSettings?.activeRuntimeEnvironmentId?.trim() || null
   // Why: key the recipe load on the repo's stable identity, not the whole repo
   // object. `updateRepo` (e.g. saving the setup-startup policy from this very
   // composer, or a GitHub upstream backfill) replaces the selected repo object
@@ -918,14 +928,25 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     selectedRepoIsGit
   ])
   const selectedRepoConnectionId = selectedRepo?.connectionId ?? null
-  const selectedRepoSshState = selectedRepoConnectionId
-    ? (sshConnectionStates.get(selectedRepoConnectionId) ?? null)
-    : null
+  const selectedRepoOwnerSshStatus = useAppStore((state) =>
+    selectedRepoConnectionId
+      ? selectRuntimeAwareSshStatus(state, runtimeEnvironmentId, selectedRepoConnectionId)
+      : null
+  )
   const { selectedRepoSshStatus, selectedRepoRequiresConnection, selectedRepoConnectInProgress } =
     getSelectedRepoSshGate({
       connectionId: selectedRepoConnectionId,
-      status: selectedRepoSshState?.status ?? null
+      status: selectedRepoOwnerSshStatus
     })
+  useEffect(() => {
+    if (!runtimeEnvironmentId || !selectedRepoConnectionId) {
+      return
+    }
+    // A repo can be owned by a paired Orca server while its connectionId names
+    // an SSH target configured on that server. Hydrate that server's bucket so
+    // the composer never consults the desktop's unrelated local SSH map.
+    void hydrateRuntimeEnvironmentSshState(runtimeEnvironmentId).catch(() => {})
+  }, [runtimeEnvironmentId, selectedRepoConnectionId])
   const repoIdRef = useRef(repoId)
   repoIdRef.current = repoId
   const setRepoId = useCallback(
@@ -1136,13 +1157,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // not the local machine.
   const connectionId = selectedRepoConnectionId
   const isRemote = typeof connectionId === 'string'
-  const runtimeEnvironmentId = selectedRepoSettings?.activeRuntimeEnvironmentId?.trim() || null
+  const runtimeAgentDetectionKey = runtimeEnvironmentId
+    ? getRuntimeAgentDetectionKey(runtimeEnvironmentId, connectionId)
+    : null
   const detectedAgentList = useAppStore((s) => {
+    if (runtimeAgentDetectionKey) {
+      return s.runtimeDetectedAgentIds[runtimeAgentDetectionKey] ?? null
+    }
     if (isRemote) {
       return s.remoteDetectedAgentIds[connectionId] ?? null
-    }
-    if (runtimeEnvironmentId) {
-      return s.runtimeDetectedAgentIds[runtimeEnvironmentId] ?? null
     }
     return s.detectedAgentIds
   })
@@ -1716,10 +1739,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       return
     }
     let cancelled = false
-    const detect = isRemote
-      ? ensureRemoteDetectedAgents(connectionId)
-      : runtimeEnvironmentId
-        ? ensureRuntimeDetectedAgents(runtimeEnvironmentId)
+    const detect = runtimeEnvironmentId
+      ? ensureRuntimeDetectedAgents(runtimeEnvironmentId, connectionId)
+      : isRemote
+        ? ensureRemoteDetectedAgents(connectionId)
         : ensureDetectedAgents()
     void detect.then((ids) => {
       if (cancelled) {
@@ -1820,13 +1843,21 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     if (liveRepo?.connectionId !== targetId) {
       return
     }
-    const liveStatus = liveState.sshConnectionStates.get(targetId)?.status ?? null
+    const sshOwnerEnvironmentId = liveRepo
+      ? getRuntimeEnvironmentIdForRepo(
+          { repos: [liveRepo], settings: liveState.settings },
+          liveRepo.id
+        )
+      : null
+    const liveStatus = selectRuntimeAwareSshStatus(liveState, sshOwnerEnvironmentId, targetId)
     if (liveStatus === 'connected' || isSshConnectInProgress(liveStatus)) {
       return
     }
 
     try {
-      await window.api.ssh.connect({ targetId })
+      await (sshOwnerEnvironmentId
+        ? connectRuntimeEnvironmentSshTarget(sshOwnerEnvironmentId, targetId)
+        : window.api.ssh.connect({ targetId }))
     } catch (error) {
       toast.error(
         error instanceof Error

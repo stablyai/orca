@@ -1972,7 +1972,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         await callRuntimeRpc<NestedRepoScanResult>(
           target,
           'projectGroup.scanNested',
-          { path },
+          { path, connectionId },
           // Why: older runtime servers cannot stream or cancel scans, so the
           // renderer must retain a bounded failure path for large folders.
           { timeoutMs: 20_000 }

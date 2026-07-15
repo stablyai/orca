@@ -17,12 +17,15 @@ import {
   shouldDeferRemoteFileBrowserPasteResolve,
   type DirEntry
 } from './remote-file-browser-helpers'
-import { browseRuntimeServerDirectory } from '@/runtime/runtime-server-directory-browser'
+import {
+  browseRuntimeServerDirectory,
+  browseRuntimeSshDirectory
+} from '@/runtime/runtime-server-directory-browser'
 import { translate } from '@/i18n/i18n'
 
 type RemoteFileBrowserProps = (
-  | { targetId: string; runtimeEnvironmentId?: never }
-  | { runtimeEnvironmentId: string; targetId?: never }
+  | { targetId: string; runtimeEnvironmentId?: string }
+  | { targetId?: never; runtimeEnvironmentId: string }
 ) & {
   initialPath?: string
   onSelect: (path: string) => void
@@ -124,7 +127,9 @@ export function RemoteFileBrowser({
         return cached
       }
       const result = targetId
-        ? await window.api.ssh.browseDir({ targetId, dirPath })
+        ? runtimeEnvironmentId
+          ? await browseRuntimeSshDirectory(runtimeEnvironmentId, targetId, dirPath)
+          : await window.api.ssh.browseDir({ targetId, dirPath })
         : await browseRuntimeServerDirectory(
             requireRuntimeEnvironmentId(runtimeEnvironmentId),
             dirPath

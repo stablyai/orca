@@ -12,6 +12,7 @@ import {
   RUNTIME_PROTOCOL_VERSION
 } from '../../../../shared/protocol-version'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import { getRuntimeAgentDetectionKey } from '@/lib/runtime-agent-detection-key'
 
 const detectAgents = vi.fn()
 const refreshAgents = vi.fn()
@@ -512,15 +513,75 @@ describe('createDetectedAgentsSlice remote detection', () => {
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
       selector: 'env-1',
       method: 'status.get',
-      params: undefined,
-      timeoutMs: undefined
+      timeoutMs: 30_000
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
       selector: 'env-1',
       method: 'preflight.detectAgents',
       params: undefined,
-      timeoutMs: undefined
+      timeoutMs: 30_000
     })
+  })
+
+  it('detects agents through an SSH target owned by the runtime', async () => {
+    const store = createTestStore()
+    runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
+      const result =
+        method === 'status.get'
+          ? {
+              runtimeId: 'remote-runtime',
+              rendererGraphEpoch: 1,
+              graphStatus: 'ready',
+              authoritativeWindowId: null,
+              liveTabCount: 0,
+              liveLeafCount: 0,
+              runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+              minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
+            }
+          : ['codex']
+      return Promise.resolve({
+        id: method,
+        ok: true,
+        result,
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+    })
+
+    await expect(
+      store.getState().ensureRuntimeDetectedAgents('env-linux', 'ssh-p8')
+    ).resolves.toEqual(['codex'])
+
+    const detectionKey = getRuntimeAgentDetectionKey('env-linux', 'ssh-p8')
+    expect(store.getState().runtimeDetectedAgentIds[detectionKey]).toEqual(['codex'])
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
+      selector: 'env-linux',
+      method: 'preflight.detectRemoteAgents',
+      params: { connectionId: 'ssh-p8' },
+      timeoutMs: 30_000
+    })
+    expect(store.getState().runtimeDetectedAgentIds['env-linux']).toBeUndefined()
+  })
+
+  it('clears only the disconnected SSH target agent cache inside a runtime', () => {
+    const store = createTestStore()
+    const p8Key = getRuntimeAgentDetectionKey('env-linux', 'ssh-p8')
+    const p9Key = getRuntimeAgentDetectionKey('env-linux', 'ssh-p9')
+    store.setState({
+      runtimeDetectedAgentIds: {
+        'env-linux': ['claude'],
+        [p8Key]: ['codex'],
+        [p9Key]: ['kilo']
+      },
+      isDetectingRuntimeAgents: { [p8Key]: false, [p9Key]: false }
+    } as Partial<AppState>)
+
+    store.getState().clearRuntimeDetectedAgents('env-linux', 'ssh-p8')
+
+    expect(store.getState().runtimeDetectedAgentIds).toEqual({
+      'env-linux': ['claude'],
+      [p9Key]: ['kilo']
+    })
+    expect(store.getState().isDetectingRuntimeAgents).toEqual({ [p9Key]: false })
   })
 
   it('re-runs runtime detection after an empty result instead of pinning it', async () => {

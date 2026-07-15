@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { browseRuntimeServerDirectory } from './runtime-server-directory-browser'
+import {
+  browseRuntimeServerDirectory,
+  browseRuntimeSshDirectory
+} from './runtime-server-directory-browser'
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
@@ -53,6 +56,20 @@ describe('runtime server directory browser', () => {
       selector: 'env-1',
       method: 'files.browseServerDir',
       params: { path: '~' },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('routes SSH browse requests through the selected runtime environment', async () => {
+    await expect(browseRuntimeSshDirectory('env-1', 'ssh-p8', '~/src')).resolves.toEqual({
+      resolvedPath: '/home/me',
+      entries: [{ name: 'repo', isDirectory: true, isSymlink: false }]
+    })
+
+    expect(runtimeEnvironmentCall).toHaveBeenLastCalledWith({
+      selector: 'env-1',
+      method: 'ssh.browseDir',
+      params: { targetId: 'ssh-p8', dirPath: '~/src' },
       timeoutMs: 15_000
     })
   })

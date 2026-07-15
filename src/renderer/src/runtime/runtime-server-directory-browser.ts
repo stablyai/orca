@@ -17,3 +17,17 @@ export async function browseRuntimeServerDirectory(
     { timeoutMs: 15_000 }
   )
 }
+
+/** Browse an SSH target through the paired runtime environment that owns it. */
+export async function browseRuntimeSshDirectory(
+  environmentId: string,
+  targetId: string,
+  dirPath: string
+): Promise<RuntimeServerDirectoryListing> {
+  return callRuntimeRpc<RuntimeServerDirectoryListing>(
+    { kind: 'environment', environmentId },
+    'ssh.browseDir',
+    { targetId, dirPath },
+    { timeoutMs: 15_000 }
+  )
+}

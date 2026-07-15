@@ -210,8 +210,11 @@ import {
   ALL_EXECUTION_HOSTS_SCOPE,
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
+  parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
+import { selectRuntimeAwareSshStatus } from '@/store/slices/runtime-environment-ssh'
+import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { getRepoHeaderCreateState } from './repo-header-create-state'
 import type { PendingSidebarRowReveal, PendingSidebarWorktreeReveal } from '@/store/slices/ui'
 import { getRepositoryIconSectionId } from '@/components/settings/repository-settings-targets'
@@ -1768,6 +1771,31 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const activeStickyHostIndexRef = useRef<number | null>(null)
   const stickyRangeStartIndexRef = useRef(0)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
+  const sshStateByEnvironment = useAppStore((s) => s.sshStateByEnvironment)
+  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const getRepoSshStatus = useCallback(
+    (repo: Repo): ReturnType<typeof selectRuntimeAwareSshStatus> => {
+      if (!repo.connectionId) {
+        return null
+      }
+      const parsedOwner = parseExecutionHostId(getRepoExecutionHostId(repo))
+      const sshOwnerEnvironmentId =
+        !isPairedWebClientWindow() && parsedOwner?.kind === 'runtime'
+          ? parsedOwner.environmentId
+          : null
+      return selectRuntimeAwareSshStatus(
+        {
+          ...useAppStore.getState(),
+          runtimeStatusByEnvironmentId,
+          sshConnectionStates,
+          sshStateByEnvironment
+        },
+        sshOwnerEnvironmentId,
+        repo.connectionId
+      )
+    },
+    [runtimeStatusByEnvironmentId, sshConnectionStates, sshStateByEnvironment]
+  )
   const {
     folderWorkspacePathStatuses,
     fetchFolderWorkspacePathStatus,
@@ -4140,9 +4168,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 ? getRepoHeaderCreateState({
                     repo: row.repo,
                     label: row.label,
-                    sshStatus: row.repo.connectionId
-                      ? (sshConnectionStates.get(row.repo.connectionId)?.status ?? null)
-                      : null
+                    sshStatus: getRepoSshStatus(row.repo)
                   })
                 : null
               const projectGroupPathStatus =

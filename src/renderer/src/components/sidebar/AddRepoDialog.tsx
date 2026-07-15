@@ -94,7 +94,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     (repoId) => completeGitRepoAdd(repoId, 'ssh_remote_path'),
     scanNestedRepos,
     showRemoteNestedRepoReview,
-    trackRemoteNestedScanResult
+    trackRemoteNestedScanResult,
+    selectedRuntimeEnvironmentId
   )
 
   const {
@@ -328,7 +329,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
         createError={createError}
         isCreating={isCreating}
         hostSelector={<AddRepoHostSelectorSlot hostSelection={hostSelection} />}
-        showRemoteAction={false}
+        showRemoteAction={selectedHostKind === 'runtime'}
         browseHostKind={
           selectedHostKind === 'ssh' || selectedHostKind === 'runtime' ? selectedHostKind : 'local'
         }
@@ -366,6 +367,10 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
         }}
         onAddRemoteRepo={handleAddRemoteRepo}
         onOpenSshSettings={() => {
+          if (selectedRuntimeEnvironmentId) {
+            setStep('add')
+            return
+          }
           closeModal()
           openSettingsTarget({ pane: 'ssh', repoId: null, sectionId: 'ssh' })
           openSettingsPage()

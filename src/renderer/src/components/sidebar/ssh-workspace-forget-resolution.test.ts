@@ -67,4 +67,20 @@ describe('resolveSshWorkspaceForget', () => {
     })
     expect(result).toEqual({ kind: 'disconnected', targetId: 'ssh-live', status: 'disconnected' })
   })
+
+  it('uses the owning runtime SSH state instead of same-named local state', () => {
+    const result = resolveSshWorkspaceForget({
+      repo: { connectionId: 'ssh-p8' },
+      sshConnectionStates: stateMap({ 'ssh-p8': 'auth-failed' }),
+      sshTargetLabels: new Map(),
+      sshOwnerEnvironmentId: 'env-linux',
+      targetConfigured: true,
+      connectionStatus: 'connected'
+    })
+    expect(result).toEqual({
+      kind: 'connected',
+      targetId: 'ssh-p8',
+      sshOwnerEnvironmentId: 'env-linux'
+    })
+  })
 })

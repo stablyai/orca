@@ -8,6 +8,7 @@ import {
   resyncRuntimeEnvironmentSshTargets
 } from './runtime-environment-ssh-state'
 import { callRuntimeRpc } from './runtime-rpc-client'
+import { getRuntimeAgentDetectionKey } from '@/lib/runtime-agent-detection-key'
 
 vi.mock('./runtime-rpc-client', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -134,6 +135,19 @@ describe('hydrateRuntimeEnvironmentSshState', () => {
 })
 
 describe('applyRuntimeEnvironmentSshStateChanged', () => {
+  it('clears the nested target agent cache when its relay disconnects', () => {
+    const envId = nextEnvId()
+    const detectionKey = getRuntimeAgentDetectionKey(envId, 'ssh-1')
+    useAppStore.setState({ runtimeDetectedAgentIds: { [detectionKey]: ['codex'] } })
+    useAppStore
+      .getState()
+      .setEnvironmentSshTargetsMetadata(envId, [{ id: 'ssh-1', label: 'devbox' }])
+
+    applyRuntimeEnvironmentSshStateChanged(envId, 'ssh-1', connState('ssh-1', 'disconnected'))
+
+    expect(useAppStore.getState().runtimeDetectedAgentIds[detectionKey]).toBeUndefined()
+  })
+
   it('applies a known target state directly into the owning bucket without RPC', () => {
     const envId = nextEnvId()
     useAppStore

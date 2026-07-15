@@ -3661,7 +3661,9 @@
           "35831a7312": "追加中...",
           "lockedDescription": "{{value0}} 上の Git リポジトリへのパスを入力してください。",
           "lockedDisconnected": "{{value0}} は切断されています。",
-          "93e0221434": "接続"
+          "93e0221434": "接続",
+          "noServerSshTargets": "No SSH targets configured on this Orca server.",
+          "backToHostMenu": "Back to host menu"
         },
         "AddRepoServerStartStep": {
           "ae990c86a0": "オプションの追加に戻る",
@@ -4672,7 +4674,9 @@
           "sshImportFailed": "SSH 構成のインポートに失敗しました。",
           "importing": "インポート中...",
           "importSshConfig": "~/.ssh/config をインポートします",
-          "sshPersistenceDefault": "このホスト上のリモートターミナルは、終了するかリレーをリセットするまで動作し続けます。"
+          "sshPersistenceDefault": "このホスト上のリモートターミナルは、終了するかリレーをリセットするまで動作し続けます。",
+          "sshServerTitle": "Add SSH host to {{value0}}",
+          "sshServerDescription": "Save this SSH machine on {{value0}} so projects and workspaces run through that server."
         },
         "ForgetSshWorkspaceDialog": {
           "reconnectFailed": "再接続に失敗しました",

@@ -6,7 +6,7 @@ import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-after-delete'
 import { showDeleteWorktreeFailureToast } from './delete-worktree-failure-toast'
 import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
-import { resolveSshWorkspaceForget } from './ssh-workspace-forget-resolution'
+import { resolveRuntimeAwareSshWorkspaceForget } from './runtime-aware-ssh-workspace-forget'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import {
   isPathInsideOrEqual,
@@ -275,11 +275,7 @@ export function runWorktreeDelete(worktreeId: string): void {
       : null
   const sshResolution = isPairedWebClientWindow()
     ? { kind: 'not-ssh' as const }
-    : resolveSshWorkspaceForget({
-        repo,
-        sshConnectionStates: state.sshConnectionStates,
-        sshTargetLabels: state.sshTargetLabels
-      })
+    : resolveRuntimeAwareSshWorkspaceForget(state, repo, worktreeId)
   if (sshResolution.kind === 'ghost' || sshResolution.kind === 'disconnected') {
     // Why no lineage-children warning here (unlike the normal path below):
     // forget-local is metadata-only and per-worktree, so it can't fail on a

@@ -1,5 +1,5 @@
 import type { Repo } from '../../../../shared/types'
-import type { SshConnectionState } from '../../../../shared/ssh-types'
+import type { SshConnectionState, SshConnectionStatus } from '../../../../shared/ssh-types'
 import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 
 /**
@@ -11,19 +11,27 @@ import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 export type SshWorkspaceForgetResolution =
   | { kind: 'not-ssh' }
   // Target exists and the relay is connected — normal remote removal works.
-  | { kind: 'connected'; targetId: string }
+  | { kind: 'connected'; targetId: string; sshOwnerEnvironmentId?: string | null }
   // Target still configured but not connected — offer Reconnect & Delete plus
   // a local-only forget fallback.
-  | { kind: 'disconnected'; targetId: string; status: SshConnectionState['status'] }
+  | {
+      kind: 'disconnected'
+      targetId: string
+      status: SshConnectionState['status']
+      sshOwnerEnvironmentId?: string | null
+    }
   // Target was removed; only a project-only "ghost" host remains. Reconnect is
   // impossible, so forget-from-Orca is the only path.
-  | { kind: 'ghost'; targetId: string }
+  | { kind: 'ghost'; targetId: string; sshOwnerEnvironmentId?: string | null }
 
 export function resolveSshWorkspaceForget(args: {
   repo: Pick<Repo, 'connectionId'> | null | undefined
   sshConnectionStates: ReadonlyMap<string, SshConnectionState>
   // Keys are configured SSH target ids (targets that still exist in settings).
   sshTargetLabels: ReadonlyMap<string, string>
+  sshOwnerEnvironmentId?: string | null
+  targetConfigured?: boolean
+  connectionStatus?: SshConnectionStatus | null
 }): SshWorkspaceForgetResolution {
   const connectionId = args.repo?.connectionId?.trim()
   // Why: runtime-owned (ephemeral-VM) SSH targets manage their own lifecycle and
@@ -32,19 +40,27 @@ export function resolveSshWorkspaceForget(args: {
     return { kind: 'not-ssh' }
   }
 
-  const isConfigured = args.sshTargetLabels.has(connectionId)
-  const status = args.sshConnectionStates.get(connectionId)?.status
+  const isConfigured = args.targetConfigured ?? args.sshTargetLabels.has(connectionId)
+  const status = args.connectionStatus ?? args.sshConnectionStates.get(connectionId)?.status
+  const ownership = args.sshOwnerEnvironmentId
+    ? { sshOwnerEnvironmentId: args.sshOwnerEnvironmentId }
+    : {}
 
   // Why: a target the user removed leaves repos pinned to a dead id with no
   // configured target — the grey ghost host. Reconnect can never succeed, so
   // the only escape is to forget it from Orca.
   if (!isConfigured) {
-    return { kind: 'ghost', targetId: connectionId }
+    return { kind: 'ghost', targetId: connectionId, ...ownership }
   }
 
   if (status === 'connected') {
-    return { kind: 'connected', targetId: connectionId }
+    return { kind: 'connected', targetId: connectionId, ...ownership }
   }
 
-  return { kind: 'disconnected', targetId: connectionId, status: status ?? 'disconnected' }
+  return {
+    kind: 'disconnected',
+    targetId: connectionId,
+    status: status ?? 'disconnected',
+    ...ownership
+  }
 }

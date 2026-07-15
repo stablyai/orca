@@ -83,6 +83,13 @@ import { recordRendererCrashBreadcrumb } from '@/lib/crash-diagnostics'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constants'
+import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  selectRuntimeAwareSshStatus,
+  selectRuntimeAwareSshTargetLabel
+} from '@/store/slices/runtime-environment-ssh'
+import { hydrateRuntimeEnvironmentSshState } from '@/runtime/runtime-environment-ssh-state'
+import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 
 type WorktreeRenameRequest = {
   worktreeId: string
@@ -332,6 +339,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
   )
 
   // SSH disconnected state
+  const sshOwnerEnvironmentId = useAppStore((s) =>
+    repo?.connectionId && !isPairedWebClientWindow()
+      ? getExplicitRuntimeEnvironmentIdForWorktree(s, worktree.id)
+      : null
+  )
   const sshStatus = useAppStore((s) => {
     // Why: runtime-owned (per-workspace-env) SSH targets are hidden and their relay health is
     // owned by the runtime layer — Orca suppresses their ssh:state-changed broadcasts, so their
@@ -339,8 +351,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     if (!repo?.connectionId || isRuntimeOwnedSshTargetId(repo.connectionId)) {
       return null
     }
-    const state = s.sshConnectionStates.get(repo.connectionId)
-    return state?.status ?? 'disconnected'
+    return selectRuntimeAwareSshStatus(s, sshOwnerEnvironmentId, repo.connectionId)
   })
   const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
   // Why: a terminal view already carries its own in-pane reconnect overlay, so
@@ -372,8 +383,16 @@ const WorktreeCard = React.memo(function WorktreeCard({
   // Why: read the target label from the store (populated during hydration in
   // useIpcEvents.ts) instead of calling listTargets IPC per card instance.
   const sshTargetLabel = useAppStore((s) =>
-    repo?.connectionId ? (s.sshTargetLabels.get(repo.connectionId) ?? '') : ''
+    repo?.connectionId
+      ? selectRuntimeAwareSshTargetLabel(s, sshOwnerEnvironmentId, repo.connectionId)
+      : ''
   )
+  useEffect(() => {
+    if (!sshOwnerEnvironmentId) {
+      return
+    }
+    void hydrateRuntimeEnvironmentSshState(sshOwnerEnvironmentId).catch(() => {})
+  }, [sshOwnerEnvironmentId])
 
   const gitIdentityDisplay = getWorktreeGitIdentityDisplay(worktree)
   const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
@@ -1933,6 +1952,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
           targetId={repo.connectionId}
           targetLabel={sshTargetLabel || repo.displayName}
           status={sshStatus ?? 'disconnected'}
+          sshOwnerEnvironmentId={sshOwnerEnvironmentId}
         />
       )}
 

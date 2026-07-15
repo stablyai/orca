@@ -15,6 +15,11 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { runWorktreeDeleteWithToast } from './delete-worktree-flow'
 import type { SshWorkspaceForgetResolution } from './ssh-workspace-forget-resolution'
+import {
+  connectRuntimeEnvironmentSshTarget,
+  resyncRuntimeEnvironmentSshTargets
+} from '@/runtime/runtime-environment-ssh-state'
+import { selectRuntimeAwareSshTargetLabel } from '@/store/slices/runtime-environment-ssh'
 
 type ForgetSshWorkspaceModalData = {
   worktreeId: string
@@ -39,9 +44,11 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
     if (!targetId) {
       return ''
     }
+    const sshOwnerEnvironmentId =
+      resolution?.kind !== 'not-ssh' ? resolution?.sshOwnerEnvironmentId : null
     // Prefer the live label, then the removed target's last known label (ghost
     // host), then the raw id as a last resort.
-    return s.sshTargetLabels.get(targetId) ?? s.removedSshTargetLabels.get(targetId) ?? targetId
+    return selectRuntimeAwareSshTargetLabel(s, sshOwnerEnvironmentId ?? null, targetId)
   })
   const [busy, setBusy] = useState<null | 'reconnect' | 'forget'>(null)
   const mountedRef = useMountedRef()
@@ -66,8 +73,13 @@ export function ForgetSshWorkspaceDialog(): React.JSX.Element | null {
     }
     setBusy('reconnect')
     try {
-      await window.api.ssh.connect({ targetId: resolution.targetId })
+      await (resolution.sshOwnerEnvironmentId
+        ? connectRuntimeEnvironmentSshTarget(resolution.sshOwnerEnvironmentId, resolution.targetId)
+        : window.api.ssh.connect({ targetId: resolution.targetId }))
     } catch (err) {
+      if (resolution.sshOwnerEnvironmentId) {
+        void resyncRuntimeEnvironmentSshTargets(resolution.sshOwnerEnvironmentId).catch(() => {})
+      }
       if (mountedRef.current) {
         setBusy(null)
       }

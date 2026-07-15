@@ -6,6 +6,11 @@ import {
   localPreflightContextKey
 } from '@/lib/local-preflight-context'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import {
+  getRuntimeAgentDetectionEnvironmentId,
+  getRuntimeAgentDetectionKey,
+  runtimeAgentDetectionKeyMatches
+} from '@/lib/runtime-agent-detection-key'
 
 export type DetectedAgentsSlice = {
   detectedAgentIds: TuiAgent[] | null
@@ -34,12 +39,17 @@ export type DetectedAgentsSlice = {
   ensureRemoteDetectedAgents: (connectionId: string) => Promise<TuiAgent[]>
   clearRemoteDetectedAgents: (connectionId: string) => void
 
-  // Why: remote runtime hosts are not SSH connections, but their tab-bar
+  // Why: remote runtime hosts are not local SSH connections, but their tab-bar
   // launch menu still has to probe the host where the workspace actually runs.
+  // Keys are either an environment id or an environment + server-owned SSH
+  // target composite produced by getRuntimeAgentDetectionKey().
   runtimeDetectedAgentIds: Record<string, TuiAgent[] | null>
   isDetectingRuntimeAgents: Record<string, boolean>
-  ensureRuntimeDetectedAgents: (environmentId: string) => Promise<TuiAgent[]>
-  clearRuntimeDetectedAgents: (environmentId: string) => void
+  ensureRuntimeDetectedAgents: (
+    environmentId: string,
+    connectionId?: string | null
+  ) => Promise<TuiAgent[]>
+  clearRuntimeDetectedAgents: (environmentId: string, connectionId?: string | null) => void
   /** Drops runtime detected-agent caches for environments not in the kept set.
    *  Wired into setRuntimeEnvironments so removed environments don't leak their
    *  detected-agent entries for the renderer session. */
@@ -243,36 +253,40 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
     })
   },
 
-  ensureRuntimeDetectedAgents: (environmentId: string) => {
-    const existing = get().runtimeDetectedAgentIds[environmentId]
+  ensureRuntimeDetectedAgents: (environmentId: string, connectionId?: string | null) => {
+    const detectionKey = getRuntimeAgentDetectionKey(environmentId, connectionId)
+    const existing = get().runtimeDetectedAgentIds[detectionKey]
     // Why: an empty result ([]) is truthy, so a prior "no agents found" detection
     // must not be treated as cached — re-detect so a later install / PATH fix is
     // picked up without a reconnect. Non-empty results still short-circuit.
     if (existing?.length) {
       return Promise.resolve(existing)
     }
-    const inflight = runtimeDetectPromises.get(environmentId)
+    const inflight = runtimeDetectPromises.get(detectionKey)
     if (inflight) {
       return inflight
     }
 
     set((s) => ({
-      isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [environmentId]: true }
+      isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [detectionKey]: true }
     }))
 
+    const remoteConnectionId = connectionId?.trim() || null
     const pending = callRuntimeRpc<TuiAgent[]>(
       { kind: 'environment', environmentId },
-      'preflight.detectAgents'
+      remoteConnectionId ? 'preflight.detectRemoteAgents' : 'preflight.detectAgents',
+      remoteConnectionId ? { connectionId: remoteConnectionId } : undefined,
+      { timeoutMs: 30_000 }
     )
       .then((ids) => {
         const typed = ids as TuiAgent[]
         // Why: skip committing if the environment was removed (retained out)
         // while the detect was in flight — otherwise it re-adds a stale entry
         // that retainRuntimeDetectedAgents just pruned.
-        if (runtimeDetectPromises.get(environmentId) === pending) {
+        if (runtimeDetectPromises.get(detectionKey) === pending) {
           set((s) => ({
-            runtimeDetectedAgentIds: { ...s.runtimeDetectedAgentIds, [environmentId]: typed },
-            isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [environmentId]: false }
+            runtimeDetectedAgentIds: { ...s.runtimeDetectedAgentIds, [detectionKey]: typed },
+            isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [detectionKey]: false }
           }))
         }
         return typed
@@ -284,52 +298,66 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
         // retained out mid-detect, don't re-add the isDetecting entry that
         // retainRuntimeDetectedAgents just pruned (and don't clobber a freshly
         // started detect's spinner).
-        if (runtimeDetectPromises.get(environmentId) === pending) {
+        if (runtimeDetectPromises.get(detectionKey) === pending) {
           set((s) => ({
-            isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [environmentId]: false }
+            isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [detectionKey]: false }
           }))
         }
         return [] as TuiAgent[]
       })
       .finally(() => {
-        if (runtimeDetectPromises.get(environmentId) === pending) {
-          runtimeDetectPromises.delete(environmentId)
+        if (runtimeDetectPromises.get(detectionKey) === pending) {
+          runtimeDetectPromises.delete(detectionKey)
         }
       })
 
-    runtimeDetectPromises.set(environmentId, pending)
+    runtimeDetectPromises.set(detectionKey, pending)
     return pending
   },
 
-  clearRuntimeDetectedAgents: (environmentId: string) => {
-    runtimeDetectPromises.delete(environmentId)
+  clearRuntimeDetectedAgents: (environmentId: string, connectionId?: string | null) => {
+    for (const key of runtimeDetectPromises.keys()) {
+      if (runtimeAgentDetectionKeyMatches(key, environmentId, connectionId)) {
+        runtimeDetectPromises.delete(key)
+      }
+    }
     set((s) => {
-      const { [environmentId]: _, ...restAgents } = s.runtimeDetectedAgentIds
-      const { [environmentId]: __, ...restLoading } = s.isDetectingRuntimeAgents
+      const restAgents = { ...s.runtimeDetectedAgentIds }
+      const restLoading = { ...s.isDetectingRuntimeAgents }
+      for (const key of Object.keys(restAgents)) {
+        if (runtimeAgentDetectionKeyMatches(key, environmentId, connectionId)) {
+          delete restAgents[key]
+        }
+      }
+      for (const key of Object.keys(restLoading)) {
+        if (runtimeAgentDetectionKeyMatches(key, environmentId, connectionId)) {
+          delete restLoading[key]
+        }
+      }
       return { runtimeDetectedAgentIds: restAgents, isDetectingRuntimeAgents: restLoading }
     })
   },
 
   retainRuntimeDetectedAgents: (environmentIds: Iterable<string>) => {
     const keep = new Set(environmentIds)
-    for (const id of runtimeDetectPromises.keys()) {
-      if (!keep.has(id)) {
-        runtimeDetectPromises.delete(id)
+    for (const key of runtimeDetectPromises.keys()) {
+      if (!keep.has(getRuntimeAgentDetectionEnvironmentId(key))) {
+        runtimeDetectPromises.delete(key)
       }
     }
     set((s) => {
       let changed = false
       const nextAgents = { ...s.runtimeDetectedAgentIds }
       const nextLoading = { ...s.isDetectingRuntimeAgents }
-      for (const id of Object.keys(nextAgents)) {
-        if (!keep.has(id)) {
-          delete nextAgents[id]
+      for (const key of Object.keys(nextAgents)) {
+        if (!keep.has(getRuntimeAgentDetectionEnvironmentId(key))) {
+          delete nextAgents[key]
           changed = true
         }
       }
-      for (const id of Object.keys(nextLoading)) {
-        if (!keep.has(id)) {
-          delete nextLoading[id]
+      for (const key of Object.keys(nextLoading)) {
+        if (!keep.has(getRuntimeAgentDetectionEnvironmentId(key))) {
+          delete nextLoading[key]
           changed = true
         }
       }

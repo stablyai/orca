@@ -101,6 +101,48 @@ export function listRegisteredRemovedSshTargetLabels(): Record<string, string> {
   return sshStore?.listRemovedTargetLabels() ?? {}
 }
 
+/** Drain repository re-adoptions produced by the most recent SSH target mutation. */
+function takeRegisteredRepoReadoptions(): SshRepoReadoption[] {
+  if (!sshStore || sshStore.lastRepoReadoptions.length === 0) {
+    return []
+  }
+  const repoReadoptions = sshStore.lastRepoReadoptions
+  sshStore.lastRepoReadoptions = []
+  // Why: add/import can re-adopt repositories from a removed target id. The
+  // desktop event remains best-effort; paired clients receive the same changes
+  // from the runtime repo catalog refresh after their management action.
+  const win = getCurrentMainWindow()
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('repos:changed')
+  }
+  currentRuntime?.notifyReposChanged()
+  return repoReadoptions
+}
+
+/** Add an SSH target through the process-wide registry used by desktop and runtime RPC. */
+export function addRegisteredSshTarget(target: Omit<SshTarget, 'id'>): {
+  target: SshTarget
+  repoReadoptions: SshRepoReadoption[]
+} {
+  if (!sshStore) {
+    throw new Error('ssh_handlers_not_registered')
+  }
+  const added = sshStore.addTarget(target)
+  return { target: added, repoReadoptions: takeRegisteredRepoReadoptions() }
+}
+
+/** Import OpenSSH hosts through the process-wide registry used by desktop and runtime RPC. */
+export function importRegisteredSshConfig(options?: { reAdopt?: boolean }): {
+  targets: SshTarget[]
+  repoReadoptions: SshRepoReadoption[]
+} {
+  if (!sshStore) {
+    throw new Error('ssh_handlers_not_registered')
+  }
+  const targets = sshStore.importFromSshConfig(options)
+  return { targets, repoReadoptions: takeRegisteredRepoReadoptions() }
+}
+
 export async function disconnectRegisteredSshTarget(targetId: string): Promise<void> {
   if (!connectionManager) {
     return
@@ -742,22 +784,6 @@ export function registerSshHandlers(
 
   // ── Target CRUD ────────────────────────────────────────────────────
 
-  // Why: SSH target add/import can re-adopt workspaces orphaned on a removed
-  // target id (see ssh-target-readoption). When that re-points repos, the
-  // renderer must refresh its repo list to surface the reattached workspaces.
-  function takeRepoReadoptions(): SshRepoReadoption[] {
-    if (!sshStore || sshStore.lastRepoReadoptions.length === 0) {
-      return []
-    }
-    const repoReadoptions = sshStore.lastRepoReadoptions
-    sshStore.lastRepoReadoptions = []
-    const win = getCurrentMainWindow()
-    if (win && !win.isDestroyed()) {
-      win.webContents.send('repos:changed')
-    }
-    return repoReadoptions
-  }
-
   ipcMain.handle('ssh:listTargets', () => {
     return sshStore!.listTargets()
   })
@@ -767,12 +793,7 @@ export function registerSshHandlers(
   })
 
   ipcMain.handle('ssh:addTarget', (_event, args: { target: Omit<SshTarget, 'id'> }) => {
-    const target = sshStore!.addTarget(args.target)
-    // Why: re-adding a removed host can re-adopt orphaned workspaces (re-point
-    // repos/worktrees off the dead id). Refresh the renderer's repo list so the
-    // reattached workspaces move from grey ghosts back onto the live host.
-    const repoReadoptions = takeRepoReadoptions()
-    return { target, repoReadoptions }
+    return addRegisteredSshTarget(args.target)
   })
 
   ipcMain.handle(
@@ -787,9 +808,7 @@ export function registerSshHandlers(
   })
 
   ipcMain.handle('ssh:importConfig', (_event, args?: { reAdopt?: boolean }) => {
-    const targets = sshStore!.importFromSshConfig(args)
-    const repoReadoptions = takeRepoReadoptions()
-    return { targets, repoReadoptions }
+    return importRegisteredSshConfig(args)
   })
 
   // ── Connection lifecycle ───────────────────────────────────────────
