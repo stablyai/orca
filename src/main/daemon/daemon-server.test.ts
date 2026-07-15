@@ -741,6 +741,47 @@ describe('DaemonServer', () => {
         vi.useRealTimers()
       }
     })
+
+    it('records the requesting control client id in the session-killed log', async () => {
+      const killLog = { log: vi.fn(), close: vi.fn() }
+      server = new DaemonServer({
+        socketPath,
+        tokenPath,
+        log: killLog,
+        spawnSubprocess: () => createMockSubprocess()
+      })
+      const daemon = server as unknown as DaemonServerPrivate
+      const controlSocket = { destroy: vi.fn() } as unknown as Socket
+      const streamSocket = {
+        destroyed: false,
+        destroy: vi.fn(),
+        write: vi.fn()
+      } as unknown as Socket
+
+      daemon.clients.set('control-42', {
+        clientId: 'control-42',
+        controlSocket,
+        streamSocket,
+        authenticatedPairEstablished: true
+      })
+
+      await daemon.routeRequest('control-42', {
+        id: 'req-1',
+        type: 'createOrAttach',
+        payload: { sessionId: 'sess-1', cols: 80, rows: 24 }
+      })
+      await daemon.routeRequest('control-42', {
+        id: 'req-2',
+        type: 'kill',
+        payload: { sessionId: 'sess-1', immediate: true }
+      })
+
+      expect(killLog.log).toHaveBeenCalledWith('session-killed', {
+        sessionId: 'sess-1',
+        immediate: true,
+        clientId: 'control-42'
+      })
+    })
   })
 
   describe('authentication', () => {

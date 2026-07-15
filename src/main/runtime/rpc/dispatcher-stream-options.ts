@@ -7,6 +7,7 @@ export type RpcDispatchStreamingOptions = {
   signal?: AbortSignal
   clientId?: string
   pairedDeviceId?: string
+  deviceId?: string
   clientKind?: 'mobile' | 'runtime'
   clientCapabilities?: readonly RuntimeCapability[]
   pairing?: PairingRpcContext

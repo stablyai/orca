@@ -931,9 +931,12 @@ export class DaemonServer {
           request.payload.sessionId
         )
         this.lastInputAtBySessionId.delete(request.payload.sessionId)
+        // Why: attribute the kill to the requesting daemon-control client (#8871);
+        // this is the local control client, not the remote paired device.
         this.log.log('session-killed', {
           sessionId: request.payload.sessionId,
-          immediate: request.payload.immediate === true
+          immediate: request.payload.immediate === true,
+          clientId
         })
         try {
           await this.host.kill(request.payload.sessionId, { immediate: request.payload.immediate })

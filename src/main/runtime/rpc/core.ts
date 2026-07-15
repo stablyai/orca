@@ -70,9 +70,14 @@ export type RpcContext = {
   // Why: shared-control multiplexes many logical streams over one socket; the frame id lets handlers register cleanup per logical stream.
   requestId?: string
   // Why: paired mobile device token; state-owning handlers use it to clean up when that device disconnects.
+  // SECURITY: this is the device's bearer credential — never log it or any
+  // reversible transform. For attribution use `deviceId` / `pairedDeviceId` below.
   clientId?: string
   // Why: navigation is keyed by revocable device identity, never by the bearer credential or transient socket id.
   pairedDeviceId?: string
+  // Why: non-sensitive, stable per-device id for action attribution spans (same
+  // value as pairedDeviceId on the WebSocket path). Undefined for in-process callers.
+  deviceId?: string
   // Why: lets handlers gate mobile payload truncation to phones only; undefined for in-process callers → treat as full-class (no clip).
   clientKind?: 'mobile' | 'runtime'
   // Why: negotiation is bound to the authenticated socket, never asserted by a destructive request.
