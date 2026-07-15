@@ -12,6 +12,12 @@ export function normalizeRuntimePathSeparators(value: string): string {
 
 export function normalizeRuntimePathForComparison(value: string): string {
   const normalized = trimRuntimePathTrailingSlash(normalizeRuntimePathSeparators(value))
+  const wslUnc = normalized.match(/^\/\/(?:wsl\.localhost|wsl\$)\/([^/]+)(\/[\s\S]*)?$/i)
+  if (wslUnc) {
+    // Why: Windows exposes the same case-sensitive WSL filesystem through two
+    // UNC aliases, while the distro/server portion remains case-insensitive.
+    return `//wsl/${wslUnc[1].toLowerCase()}${wslUnc[2] ?? ''}`
+  }
   return isWindowsAbsolutePathLike(value) ? normalized.toLowerCase() : normalized
 }
 
@@ -57,16 +63,11 @@ export function isPathInsideOrEqual(rootPath: string, candidatePath: string): bo
 }
 
 export function relativePathInsideRoot(rootPath: string, candidatePath: string): string | null {
-  const normalizedRoot = trimRuntimePathTrailingSlash(normalizeRuntimePathSeparators(rootPath))
   const normalizedCandidate = trimRuntimePathTrailingSlash(
     normalizeRuntimePathSeparators(candidatePath)
   )
-  const comparisonRoot = isWindowsAbsolutePathLike(rootPath)
-    ? normalizedRoot.toLowerCase()
-    : normalizedRoot
-  const comparisonCandidate = isWindowsAbsolutePathLike(rootPath)
-    ? normalizedCandidate.toLowerCase()
-    : normalizedCandidate
+  const comparisonRoot = normalizeRuntimePathForComparison(rootPath)
+  const comparisonCandidate = normalizeRuntimePathForComparison(candidatePath)
 
   if (comparisonCandidate === comparisonRoot) {
     return ''
@@ -76,7 +77,11 @@ export function relativePathInsideRoot(rootPath: string, candidatePath: string):
   if (!comparisonCandidate.startsWith(comparisonPrefix)) {
     return null
   }
-  return normalizedCandidate.slice(comparisonPrefix.length)
+  // WSL comparison keys fold the UNC alias but preserve Linux path casing, so
+  // their suffix is both aligned across aliases and safe to return directly.
+  return comparisonRoot.startsWith('//wsl/')
+    ? comparisonCandidate.slice(comparisonPrefix.length)
+    : normalizedCandidate.slice(comparisonPrefix.length)
 }
 
 function trimRuntimePathTrailingSlash(value: string): string {

@@ -52,6 +52,10 @@ export function GrokAccountsSection(): React.JSX.Element {
 
   const signedIn = status?.signedIn === true
   const tokenFresh = status?.tokenFresh === true
+  // Why: unified-billing accounts have no weekly credits; surface their
+  // monthly included usage instead of hiding the usage row entirely.
+  const usageIsWeekly = Boolean(grokUsage?.weekly)
+  const usageWindow = grokUsage?.weekly ?? grokUsage?.monthly ?? null
 
   return (
     <section id="accounts-grok" className="space-y-4 scroll-mt-6">
@@ -148,32 +152,46 @@ export function GrokAccountsSection(): React.JSX.Element {
         </Button>
       </div>
 
-      {grokUsage?.weekly ? (
+      {usageWindow ? (
         <SearchableSetting
-          title={translate(
-            'auto.components.settings.GrokAccountsSection.a8f3e2c1b4',
-            'Weekly credits'
-          )}
-          description={translate(
-            'auto.components.settings.GrokAccountsSection.b7e2d9f0a3',
-            'Same weekly credit % as the grok /usage screen in the terminal.'
-          )}
+          title={
+            usageIsWeekly
+              ? translate(
+                  'auto.components.settings.GrokAccountsSection.a8f3e2c1b4',
+                  'Weekly credits'
+                )
+              : translate(
+                  'auto.components.settings.GrokAccountsSection.e6dadc1e2b',
+                  'Monthly usage'
+                )
+          }
+          description={
+            usageIsWeekly
+              ? translate(
+                  'auto.components.settings.GrokAccountsSection.b7e2d9f0a3',
+                  'Same weekly credit % as the grok /usage screen in the terminal.'
+                )
+              : translate(
+                  'auto.components.settings.GrokAccountsSection.75e396bf42',
+                  'Included monthly usage for Grok unified-billing accounts.'
+                )
+          }
           keywords={['grok', 'xai', 'usage', 'credits', 'oauth']}
         >
           <div className="flex items-center gap-2 text-xs">
             <Badge variant="secondary" className="tabular-nums">
-              {Math.round(grokUsage.weekly.usedPercent)}%
+              {Math.round(usageWindow.usedPercent)}%
             </Badge>
-            {grokUsage.weekly.resetDescription ? (
+            {usageWindow.resetDescription ? (
               <span className="text-muted-foreground">
                 {translate(
                   'auto.components.settings.GrokAccountsSection.c6d1a8f4e2',
                   'Resets {{when}}',
-                  { when: grokUsage.weekly.resetDescription }
+                  { when: usageWindow.resetDescription }
                 )}
               </span>
             ) : null}
-            {grokUsage.usageMetadata?.authProvenance ? (
+            {grokUsage?.usageMetadata?.authProvenance ? (
               <span className="truncate text-muted-foreground">
                 {grokUsage.usageMetadata.authProvenance}
               </span>

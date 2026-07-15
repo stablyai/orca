@@ -5,7 +5,11 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 
 if (process.platform !== 'win32') {
-  process.exit(0)
+  // Why: electron-builder treats a skipped native build like success and can
+  // continue toward a Windows package whose declared orca.exe does not exist.
+  throw new Error(
+    'Windows CLI launcher compilation requires a Windows host; refusing to package without it.'
+  )
 }
 
 const repoRoot = resolve(import.meta.dirname, '../..')

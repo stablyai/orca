@@ -44,7 +44,11 @@ import { gitExecMutatesRepository } from '../shared/git-exec-mutation'
 import { detectConflictOperation, getStatusOp } from './git-handler-status-ops'
 import { checkIgnoredPathsOp } from './git-handler-check-ignore'
 import { resolveRelayPushTarget } from './git-handler-push-target'
-import { isNoUpstreamError, normalizeGitErrorMessage } from '../shared/git-remote-error'
+import {
+  isNoUpstreamError,
+  normalizeGitErrorMessage,
+  runPullWithDivergenceFallback
+} from '../shared/git-remote-error'
 import { upstreamOnlyCommitsArePatchEquivalent } from '../shared/git-upstream-status'
 import { assertGitPushTargetShape } from '../shared/git-push-target-validation'
 import { getPublishTargetStatus, type GitCommandRunner } from '../shared/git-publish-target-status'
@@ -55,7 +59,7 @@ import {
   resolveEffectiveGitUpstream
 } from '../shared/git-effective-upstream'
 import { loadGitHistoryFromExecutor } from '../shared/git-history'
-import { buildRelayGitEnv } from './relay-command-env'
+import { buildRelayGitEnv, buildRelayUnattendedGitEnv } from './relay-command-env'
 import {
   removeSafeUntrackedDiscardTarget,
   removeSafeUntrackedDiscardTargets
@@ -303,15 +307,9 @@ export class GitHandler {
       timeout?: number
     }
   ): Promise<{ stdout: string; stderr: string }> {
-    const env = buildRelayGitEnv()
+    const env = opts?.nonInteractive ? buildRelayUnattendedGitEnv() : buildRelayGitEnv()
     if (opts?.disableOptionalLocks) {
       env.GIT_OPTIONAL_LOCKS = '0'
-    }
-    if (opts?.nonInteractive) {
-      env.GIT_TERMINAL_PROMPT = '0'
-      env.GIT_ASKPASS = ''
-      env.SSH_ASKPASS = ''
-      env.GIT_SSH_COMMAND ??= 'ssh -o BatchMode=yes'
     }
     const execOptions = {
       cwd: expandTilde(cwd),
@@ -1021,29 +1019,33 @@ export class GitHandler {
   private async pullWithArgs(params: Record<string, unknown>, pullArgs: string[]) {
     this.clearGitMutationReadCaches()
     const worktreePath = params.worktreePath as string
+    const runPull = async (effectiveArgs: string[]): Promise<void> => {
+      if (params.pushTarget !== undefined) {
+        assertGitPushTargetShape(params.pushTarget)
+        const pushTarget = params.pushTarget as GitPushTarget
+        await this.git(['check-ref-format', '--branch', pushTarget.branchName], worktreePath)
+        await this.git(
+          ['pull', ...effectiveArgs, pushTarget.remoteName, pushTarget.branchName],
+          worktreePath
+        )
+        return
+      }
+      const upstream = await resolveEffectiveGitUpstream((args) => this.git(args, worktreePath))
+      if (upstream && !upstream.isConfiguredUpstream) {
+        // Why: legacy Orca branches may still track origin/main while pushes
+        // target origin/<branch>. Pull the same effective branch the UI reports.
+        await this.git(
+          ['pull', ...effectiveArgs, upstream.remoteName, upstream.branchName],
+          worktreePath
+        )
+        return
+      }
+      await this.git(['pull', ...effectiveArgs], worktreePath)
+    }
+
     try {
       try {
-        if (params.pushTarget !== undefined) {
-          assertGitPushTargetShape(params.pushTarget)
-          const pushTarget = params.pushTarget as GitPushTarget
-          await this.git(['check-ref-format', '--branch', pushTarget.branchName], worktreePath)
-          await this.git(
-            ['pull', ...pullArgs, pushTarget.remoteName, pushTarget.branchName],
-            worktreePath
-          )
-          return
-        }
-        const upstream = await resolveEffectiveGitUpstream((args) => this.git(args, worktreePath))
-        if (upstream && !upstream.isConfiguredUpstream) {
-          // Why: legacy Orca branches may still track origin/main while pushes
-          // target origin/<branch>. Pull the same effective branch the UI reports.
-          await this.git(
-            ['pull', ...pullArgs, upstream.remoteName, upstream.branchName],
-            worktreePath
-          )
-          return
-        }
-        await this.git(['pull', ...pullArgs], worktreePath)
+        await runPullWithDivergenceFallback(pullArgs, runPull)
       } catch (error) {
         // Why: mirror the local gitPull normalization so SSH users see the same
         // actionable messages instead of raw git stderr.
@@ -1174,7 +1176,7 @@ export class GitHandler {
     return await new Promise((resolve, reject) => {
       const child = spawn('git', args, {
         cwd: expandTilde(cwd),
-        env: buildRelayGitEnv(),
+        env: buildRelayUnattendedGitEnv(),
         stdio: ['ignore', 'pipe', 'pipe']
       })
       let stdout = ''

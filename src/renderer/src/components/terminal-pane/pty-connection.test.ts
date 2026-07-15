@@ -200,6 +200,7 @@ type StoreState = {
   setAgentStatus: ReturnType<typeof vi.fn>
   removeAgentStatus: ReturnType<typeof vi.fn>
   dropAgentStatus: ReturnType<typeof vi.fn>
+  retireAgentPaneAuthority: ReturnType<typeof vi.fn>
   setPaneForegroundAgent: ReturnType<typeof vi.fn>
   clearPaneForegroundAgent: ReturnType<typeof vi.fn>
   markTerminalTabUnread: ReturnType<typeof vi.fn>
@@ -828,6 +829,7 @@ describe('connectPanePty', () => {
       ),
       removeAgentStatus: vi.fn(),
       dropAgentStatus: vi.fn(),
+      retireAgentPaneAuthority: vi.fn(),
       setPaneForegroundAgent: vi.fn((paneKey: string, entry: PaneForegroundAgentEntry) => {
         mockStoreState.paneForegroundAgentByPaneKey[paneKey] = entry
       }),
@@ -861,6 +863,7 @@ describe('connectPanePty', () => {
           ackColdRestore: vi.fn(),
           onClearBufferRequest: vi.fn(() => vi.fn()),
           onSerializeBufferRequest: vi.fn(() => vi.fn()),
+          sendSerializedBuffer: vi.fn(),
           declarePendingPaneSerializer: vi.fn().mockResolvedValue(1),
           settlePaneSerializer: vi.fn().mockResolvedValue(undefined),
           clearPendingPaneSerializer: vi.fn().mockResolvedValue(undefined)
@@ -4957,6 +4960,7 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
 
     capturedDataCallback.current?.('\x1b]133;D;130\x07thebr ~/repo $ ')
+    await flushAsyncTicks(1)
 
     expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
     expect(mockStoreState.removeAgentStatus).not.toHaveBeenCalled()
@@ -4998,6 +5002,7 @@ describe('connectPanePty', () => {
       expect.objectContaining({ agentType: 'codex' })
     )
     capturedDataCallback.current?.('\x1b]133;D;130\x07thebr ~/repo $ ')
+    await flushAsyncTicks(1)
 
     expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledWith(paneKey)
     expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
@@ -5635,7 +5640,7 @@ describe('connectPanePty', () => {
     expect(transport.resize).toHaveBeenLastCalledWith(65, 63)
   })
 
-  it('adopts a still-live background PTY via attach instead of reattaching when an eager buffer exists', async () => {
+  it('adopts a live eager PTY and withholds snapshots after its renderer dies', async () => {
     // Why: background automation tabs spawn the agent PTY eagerly and register an
     // eager buffer, then never mount until opened. On first mount the restored
     // ptyId equals the tab ptyId, so without this guard the pane mis-routes into
@@ -5679,6 +5684,19 @@ describe('connectPanePty', () => {
     )
     const { hasPtySerializer } = await import('./pty-buffer-serializer')
     expect(hasPtySerializer(eagerPtyId)).toBe(true)
+
+    const serializeRequestHandler = (
+      window.api.pty.onSerializeBufferRequest as unknown as {
+        mock: { calls: [[(request: { requestId: string; ptyId: string }) => void]] }
+      }
+    ).mock.calls[0]?.[0]
+    const { notifyUndeliverableWrite } =
+      await import('@/lib/pane-manager/terminal-write-pipeline-health')
+    notifyUndeliverableWrite(pane.terminal, 'replay-wedged')
+    serializeRequestHandler?.({ requestId: 'dead-renderer', ptyId: eagerPtyId })
+    await flushAsyncTicks()
+
+    expect(window.api.pty.sendSerializedBuffer).toHaveBeenCalledWith('dead-renderer', null)
   })
 
   it('does not adopt another tab live eager PTY from a stale restored leaf binding', async () => {
@@ -7836,6 +7854,65 @@ describe('connectPanePty', () => {
     expect(transport.sendInput).not.toHaveBeenCalled()
   })
 
+  it('renders the reattach snapshot before live bytes delivered during the spawn reply', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('tab-pty')
+    transport.connect.mockImplementation(
+      async ({ sessionId, callbacks }: { sessionId?: string; callbacks?: ConnectCallbacks }) => {
+        if (!sessionId) {
+          return null
+        }
+        // Why: the real dispatcher drains bytes emitted after snapshot capture
+        // as soon as the spawn IPC resolves, before connect() returns.
+        callbacks?.onData?.('post-snapshot-live')
+        return { id: sessionId, snapshot: 'authoritative-snapshot' }
+      }
+    )
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+    const { writes } = captureCallbackTerminalWrites(pane)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+    })
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+
+    const snapshotIndex = writes.indexOf('authoritative-snapshot')
+    const liveIndex = writes.indexOf('post-snapshot-live')
+    expect(snapshotIndex).toBeGreaterThanOrEqual(0)
+    expect(liveIndex).toBeGreaterThan(snapshotIndex)
+  })
+
+  it('does not fresh-spawn after a dead deferred session delivers its buffered exit', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('tab-pty')
+    transport.connect.mockImplementation(
+      async ({ sessionId, callbacks }: { sessionId?: string; callbacks?: ConnectCallbacks }) => {
+        if (!sessionId) {
+          return 'unexpected-fresh-pty'
+        }
+        callbacks?.onData?.('dead-session-final-frame')
+        return { id: sessionId, exitedBeforeAttach: true }
+      }
+    )
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+    const { writes } = captureCallbackTerminalWrites(pane)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+    })
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+    expect(writes).toContain('dead-session-final-frame')
+    expect(deps.updateTabPtyId).not.toHaveBeenCalled()
+  })
+
   // Why: Phase 6 deleted the hidden-skip eligibility grammar. With the kill
   // switch off, EVERY hidden chunk — plain, control-heavy, rich glyphs,
   // synchronized frames, embedded queries — rides the bounded background
@@ -7978,6 +8055,68 @@ describe('connectPanePty', () => {
         expect.stringContaining('model snapshot'),
         expect.any(Function)
       )
+    })
+
+    it('kicks pane recovery when reveal finds the write pipeline certified dead', async () => {
+      // The 2026-07-13 fossil-pane incident shape: bytes drop while hidden,
+      // the pipeline is certified dead, and certification's own recovery
+      // request came up empty — reveal must re-kick recovery instead of
+      // silently skipping the restore and stranding the stale frame.
+      enableMainAuthority()
+      const remountTerminalTabForRecovery = vi.fn<(tabId: string) => boolean>(() => true)
+      mockStoreState = { ...mockStoreState, remountTerminalTabForRecovery } as StoreState
+      const { _resetTerminalPaneRecoveryForTests } = await import('./terminal-pane-recovery')
+      _resetTerminalPaneRecoveryForTests()
+      const deps = createDeps({ isVisibleRef: { current: false } })
+      const { pane, dataCallback } = await connectHiddenPane(deps)
+      const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+        typeof vi.fn
+      >
+      getMainBufferSnapshot.mockResolvedValue({
+        data: 'model snapshot\r\n',
+        cols: 100,
+        rows: 30,
+        seq: 64
+      })
+
+      dataCallback('hidden output\r\n', { seq: 16, rawLength: 16 })
+
+      // Pipeline dies while hidden; the certification-time recovery request
+      // finds no remountable tab (budget stays unconsumed, no retry timer).
+      remountTerminalTabForRecovery.mockReturnValueOnce(false)
+      const ackCredit = vi.fn()
+      const { writeTerminalOutput } =
+        await import('@/lib/pane-manager/pane-terminal-output-scheduler')
+      writeTerminalOutput(pane.terminal, 'queued before certification', {
+        foreground: false,
+        ackCredit
+      })
+      const { notifyUndeliverableWrite } =
+        await import('@/lib/pane-manager/terminal-write-pipeline-health')
+      notifyUndeliverableWrite(pane.terminal, 'write-stalled')
+      expect(ackCredit).toHaveBeenCalledTimes(1)
+      await flushAsyncTicks(4)
+      expect(remountTerminalTabForRecovery).toHaveBeenCalledTimes(1)
+
+      const { _dispatchPtyModelRestoreNeededForTest } = await import('./pty-model-restore-channel')
+      _dispatchPtyModelRestoreNeededForTest({ id: 'pty-id', reason: 'hidden-drop', markerSeq: 64 })
+      ;(deps.isVisibleRef as { current: boolean }).current = true
+      const { requestTerminalBacklogRecovery } =
+        await import('@/lib/pane-manager/pane-terminal-output-scheduler')
+      requestTerminalBacklogRecovery(pane.terminal as never)
+      await flushAsyncTicks(20)
+
+      // Restore stays skipped (a dead pipeline can never parse the snapshot),
+      // but recovery got exactly one re-kick for the revealed pane.
+      expect(getMainBufferSnapshot).not.toHaveBeenCalled()
+      expect(remountTerminalTabForRecovery).toHaveBeenCalledTimes(2)
+      expect(remountTerminalTabForRecovery).toHaveBeenLastCalledWith('tab-1')
+
+      // Latched per xterm instance: repeat restore attempts do not spam.
+      _dispatchPtyModelRestoreNeededForTest({ id: 'pty-id', reason: 'hidden-drop', markerSeq: 96 })
+      await flushAsyncTicks(4)
+      expect(remountTerminalTabForRecovery).toHaveBeenCalledTimes(2)
+      _resetTerminalPaneRecoveryForTests()
     })
 
     it('clears the hidden bit on visibility flips through syncProcessTracking', async () => {

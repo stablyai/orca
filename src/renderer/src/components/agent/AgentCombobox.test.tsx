@@ -1,6 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
+import type { TuiAgent } from '../../../../shared/types'
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
+import { AGENT_FAVICON_ASSETS } from '@/lib/agent-favicon-assets'
 import AgentCombobox from './AgentCombobox'
 
 describe('AgentCombobox', () => {
@@ -36,5 +38,15 @@ describe('AgentCombobox', () => {
     expect(markup).not.toContain('/resources/opencode.webp')
     expect(markup).not.toContain('https://www.google.com/s2/favicons')
     expect(markup).not.toContain('<img')
+  })
+
+  it('renders bundled favicons for favicon-domain agents instead of the remote Google service', () => {
+    // Why: previously loaded from Google's favicon service (#8451). Iterate the
+    // full asset map so missing files/key mismatches fail the test.
+    for (const agent of Object.keys(AGENT_FAVICON_ASSETS) as TuiAgent[]) {
+      const markup = renderToStaticMarkup(<AgentIcon agent={agent} />)
+      expect(markup).toContain(`/shared/agent-icons/${agent}.png`)
+      expect(markup).not.toContain('https://www.google.com/s2/favicons')
+    }
   })
 })

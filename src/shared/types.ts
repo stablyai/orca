@@ -433,6 +433,17 @@ export type GitWorktreeInfo = {
   isMainWorktree: boolean
 }
 
+/** Head/branch snapshot read from Git metadata files without spawning Git.
+ *  Carries background-worktree freshness when status-only churn includes a
+ *  real head move (external commit/amend/reset) that must not re-enter the
+ *  structural `worktrees:changed` fanout. */
+export type WorktreeHeadIdentity = {
+  worktreePath: string
+  head: string
+  /** Full ref (e.g. `refs/heads/main`), or null for a detached HEAD. */
+  branch: string | null
+}
+
 // ─── Worktree (app-level, enriched) ──────────────────────────────────
 export type WorkspaceStatus = string
 
@@ -3558,7 +3569,10 @@ export type PersistedTrustedOrcaHooks = Record<string, PersistedTrustedOrcaHookR
 
 export type LegacyPaneKeyAliasEntry = {
   ptyId: string
+  /** Physical pane key retained by the live process. Field name is persisted
+   *  for compatibility; UUID keys are used after pane-to-tab detach. */
   legacyPaneKey: string
+  /** Current logical owner pane key. May belong to another tab after detach. */
   stablePaneKey: string
   updatedAt: number
 }

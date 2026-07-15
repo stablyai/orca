@@ -429,6 +429,48 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
     })
 
+    it('drops stale inherited Git config indices behind a smaller explicit count', async () => {
+      const keys = [
+        'GIT_CONFIG_COUNT',
+        'GIT_CONFIG_KEY_0',
+        'GIT_CONFIG_VALUE_0',
+        'GIT_CONFIG_KEY_1',
+        'GIT_CONFIG_VALUE_1'
+      ] as const
+      const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
+      process.env.GIT_CONFIG_COUNT = '2'
+      process.env.GIT_CONFIG_KEY_0 = 'base.zero'
+      process.env.GIT_CONFIG_VALUE_0 = 'zero'
+      process.env.GIT_CONFIG_KEY_1 = 'base.one'
+      process.env.GIT_CONFIG_VALUE_1 = 'one'
+
+      try {
+        await provider.spawn({
+          cols: 80,
+          rows: 24,
+          env: {
+            GIT_CONFIG_COUNT: '1',
+            GIT_CONFIG_KEY_0: 'override.zero',
+            GIT_CONFIG_VALUE_0: 'override'
+          }
+        })
+
+        const spawnEnv = spawnMock.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+        expect(spawnEnv.GIT_CONFIG_COUNT).toBe('1')
+        expect(spawnEnv.GIT_CONFIG_KEY_0).toBe('override.zero')
+        expect(spawnEnv.GIT_CONFIG_KEY_1).toBeUndefined()
+        expect(spawnEnv.GIT_CONFIG_VALUE_1).toBeUndefined()
+      } finally {
+        for (const key of keys) {
+          if (saved[key] === undefined) {
+            delete process.env[key]
+          } else {
+            process.env[key] = saved[key]
+          }
+        }
+      }
+    })
+
     it('does not inherit AppImage runtime env into Linux PTY shells', async () => {
       const saved = {
         APPIMAGE: process.env.APPIMAGE,

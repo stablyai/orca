@@ -764,6 +764,29 @@
   height: 2.405em;
 }
 
+/* Heading toggle sizes mirror the plain h2–h4 scales (1.4 / 1.15 / 1em). */
+.rich-markdown-editor details.orca-details[data-orca-toggle='heading-2'] > summary,
+.rich-markdown-editor .orca-details[data-type='details'][data-orca-toggle='heading-2'] summary {
+  font-size: 1.4em;
+  line-height: 1.3;
+}
+
+.rich-markdown-editor .orca-details[data-type='details'][data-orca-toggle='heading-2'] > button {
+  height: 1.82em;
+}
+
+.rich-markdown-editor details.orca-details[data-orca-toggle='heading-3'] > summary,
+.rich-markdown-editor .orca-details[data-type='details'][data-orca-toggle='heading-3'] summary {
+  font-size: 1.15em;
+  line-height: 1.3;
+}
+
+.rich-markdown-editor details.orca-details[data-orca-toggle='heading-4'] > summary,
+.rich-markdown-editor .orca-details[data-type='details'][data-orca-toggle='heading-4'] summary {
+  font-size: 1em;
+  line-height: 1.3;
+}
+
 .rich-markdown-editor blockquote {
   padding: 0.5em 1em;
   border-left: 3px solid var(--border);

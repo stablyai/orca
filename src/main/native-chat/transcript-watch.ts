@@ -29,6 +29,10 @@ export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
   filePath?: string
   /** Coalesce window for rapid fs.watch events (ms). Defaults to 40ms. */
   debounceMs?: number
+  /** Overrides the resolve-poll interval (see subscribeViaResolvePoll) so tests
+   *  don't wait out the production backoff. Production ignores this and backs
+   *  off from 500ms to a 5s cap. */
+  resolvePollIntervalMs?: number
 }
 
 export type NativeChatTranscriptSubscription = {
@@ -115,26 +119,17 @@ async function readAppendedMessages(
 }
 
 /**
- * Subscribe to live appends on an agent's transcript file. Returns an
- * unsubscribe fn that tears the watcher down completely.
- *
- * Handles file rotation/replacement: when the file shrinks (a new session id
- * resolved to a smaller/newer file, or the file was truncated), the offset is
- * reset to 0 so the replacement's content is read from the top.
+ * Install a live-tail watcher on an already-resolved file path. Returns null
+ * (rather than throwing) when `watch()` fails — e.g. the file vanished between
+ * resolve and install — so the caller can fall back to the resolve-poll below
+ * instead of surfacing a hard error.
  */
-export async function subscribeNativeChatTranscript(
-  args: SubscribeNativeChatTranscriptArgs
-): Promise<NativeChatTranscriptSubscription> {
-  const { agent, sessionId, onAppend, debounceMs } = args
-  const decode = lineDecoderForAgent(agent)
-  const filePath = args.filePath ?? (await resolveSessionFilePath(agent, sessionId, args))
-
-  if (!filePath || !decode) {
-    // Nothing watchable — return a no-op teardown so callers can unconditionally
-    // unsubscribe without null-checks.
-    return { unsubscribe: () => {} }
-  }
-
+function installTranscriptWatcher(
+  filePath: string,
+  decode: (line: string, fallbackId: string) => NativeChatMessage | null,
+  onAppend: (messages: NativeChatMessage[]) => void,
+  debounceMs?: number
+): NativeChatTranscriptSubscription | null {
   // Why: seed the offset at 0 so the FIRST drain re-reads the whole file. This
   // closes the read/subscribe race — a turn appended between the caller's
   // readSession EOF and the watcher install is still emitted. Re-emitted lines
@@ -161,12 +156,12 @@ export async function subscribeNativeChatTranscript(
       do {
         pendingReadRequested = false
         try {
-          const currentSize = await fileSize(filePath!)
+          const currentSize = await fileSize(filePath)
           if (currentSize < offset) {
             // Rotation/replacement/truncation: re-read from the top.
             offset = 0
           }
-          const { messages, consumedTo } = await readAppendedMessages(filePath!, offset, decode!)
+          const { messages, consumedTo } = await readAppendedMessages(filePath, offset, decode)
           offset = consumedTo
           if (!closed && messages.length > 0) {
             onAppend(messages)
@@ -200,8 +195,8 @@ export async function subscribeNativeChatTranscript(
   try {
     watcher = watch(filePath, scheduleDrain)
   } catch {
-    // File vanished between resolve and watch — return a no-op teardown.
-    return { unsubscribe: () => {} }
+    // File vanished between resolve and watch.
+    return null
   }
   activeWatcherCount++
 
@@ -224,4 +219,136 @@ export async function subscribeNativeChatTranscript(
       activeWatcherCount--
     }
   }
+}
+
+/** One resolve+install attempt. Returns null when the file isn't resolvable
+ *  yet, or vanished between resolve and `watch()` — either case is retried by
+ *  the resolve-poll rather than treated as a hard failure. */
+async function attemptInstall(
+  args: SubscribeNativeChatTranscriptArgs,
+  decode: (line: string, fallbackId: string) => NativeChatMessage | null
+): Promise<NativeChatTranscriptSubscription | null> {
+  const filePath = args.filePath ?? (await resolveSessionFilePath(args.agent, args.sessionId, args))
+  if (!filePath) {
+    return null
+  }
+  return installTranscriptWatcher(filePath, decode, args.onAppend, args.debounceMs)
+}
+
+// Why: Claude Code (and other agents) can take from ~3s to minutes to flush a
+// brand-new session's first JSONL line (#8401) — resolveSessionFilePath
+// genuinely has nothing to find yet. Poll for it instead of going deaf; each
+// attempt is a cheap glob, so the cost of polling is negligible next to the
+// gap it covers.
+const INITIAL_RESOLVE_POLL_MS = 500
+const MAX_RESOLVE_POLL_MS = 5_000
+
+/**
+ * Background retry loop for a transcript that hasn't been resolvable yet.
+ * Returns a subscription immediately (per subscribeNativeChatTranscript's
+ * contract); the loop keeps retrying resolve+install until it succeeds or
+ * unsubscribe() cancels it.
+ */
+function subscribeViaResolvePoll(
+  args: SubscribeNativeChatTranscriptArgs,
+  decode: (line: string, fallbackId: string) => NativeChatMessage | null
+): NativeChatTranscriptSubscription {
+  let closed = false
+  let installed: NativeChatTranscriptSubscription | null = null
+  let pollTimer: ReturnType<typeof setTimeout> | null = null
+  let delay = args.resolvePollIntervalMs ?? INITIAL_RESOLVE_POLL_MS
+
+  function scheduleAttempt(): void {
+    if (closed) {
+      return
+    }
+    pollTimer = setTimeout(() => {
+      pollTimer = null
+      void runAttempt()
+    }, delay)
+    // Why: never hold the event loop open (headless `orca serve` shutdown) for
+    // a session that may genuinely never resolve.
+    pollTimer.unref?.()
+    // Only back off in production; a test-supplied interval stays fixed so
+    // tests resolve in bounded, predictable time.
+    if (args.resolvePollIntervalMs === undefined) {
+      delay = Math.min(delay * 2, MAX_RESOLVE_POLL_MS)
+    }
+  }
+
+  async function runAttempt(): Promise<void> {
+    if (closed) {
+      return
+    }
+    let result: NativeChatTranscriptSubscription | null
+    try {
+      result = await attemptInstall(args, decode)
+    } catch {
+      // Why: a transient resolve failure (EACCES/EIO during the glob) must not
+      // kill the poll loop with an unhandled rejection — retry like a miss.
+      result = null
+    }
+    if (closed) {
+      // unsubscribe() ran while this attempt was in flight.
+      result?.unsubscribe()
+      return
+    }
+    if (result) {
+      installed = result
+      return
+    }
+    scheduleAttempt()
+  }
+
+  scheduleAttempt()
+
+  return {
+    unsubscribe: () => {
+      if (closed) {
+        return
+      }
+      closed = true
+      if (pollTimer) {
+        clearTimeout(pollTimer)
+        pollTimer = null
+      }
+      installed?.unsubscribe()
+      installed = null
+    }
+  }
+}
+
+/**
+ * Subscribe to live appends on an agent's transcript file. Returns an
+ * unsubscribe fn that tears the watcher down completely.
+ *
+ * Handles file rotation/replacement: when the file shrinks (a new session id
+ * resolved to a smaller/newer file, or the file was truncated), the offset is
+ * reset to 0 so the replacement's content is read from the top.
+ *
+ * When the transcript isn't resolvable yet (a just-created session whose
+ * agent hasn't flushed its first JSONL line, #8401), returns the subscription
+ * immediately and keeps retrying resolve+install in the background rather
+ * than returning a no-op that never recovers.
+ */
+export async function subscribeNativeChatTranscript(
+  args: SubscribeNativeChatTranscriptArgs
+): Promise<NativeChatTranscriptSubscription> {
+  const decode = lineDecoderForAgent(args.agent)
+  if (!decode) {
+    // Nothing watchable — return a no-op teardown so callers can unconditionally
+    // unsubscribe without null-checks.
+    return { unsubscribe: () => {} }
+  }
+  // Why: a blank session id (and no explicit file) can never resolve — bail out
+  // instead of resolve-polling an unresolvable target forever.
+  if (!args.filePath && !args.sessionId.trim()) {
+    return { unsubscribe: () => {} }
+  }
+
+  const installed = await attemptInstall(args, decode)
+  if (installed) {
+    return installed
+  }
+  return subscribeViaResolvePoll(args, decode)
 }

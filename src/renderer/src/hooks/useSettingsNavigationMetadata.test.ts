@@ -181,6 +181,42 @@ describe('settings navigation metadata', () => {
     expect(ids({ isDev: true, isWebClient: true })).not.toContain('dev')
   })
 
+  it('renders one repo nav section per project even across execution hosts', () => {
+    const gitRemote = {
+      canonicalKey: 'gitlab.com/acme/app',
+      remoteName: 'origin',
+      remoteUrl: 'git@gitlab.com:acme/app.git'
+    }
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [
+        {
+          id: 'local-1',
+          path: '/a',
+          displayName: 'App',
+          badgeColor: '#000',
+          addedAt: 0,
+          gitRemoteIdentity: gitRemote
+        },
+        {
+          id: 'remote-9',
+          path: '/b',
+          displayName: 'App',
+          badgeColor: '#000',
+          addedAt: 0,
+          gitRemoteIdentity: gitRemote,
+          executionHostId: 'runtime:home-mac'
+        }
+      ]
+    })
+
+    const repoSections = sections.filter((section) => section.id.startsWith('repo-'))
+    expect(repoSections).toHaveLength(1)
+    expect(repoSections[0].id).toBe('repo-local-1')
+  })
+
   it('keeps macOS permissions mac-only', () => {
     expect(ids({ isMac: false })).not.toContain('developer-permissions')
     expect(ids({ isMac: true })).toContain('developer-permissions')

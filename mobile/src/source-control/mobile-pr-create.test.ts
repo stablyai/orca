@@ -8,7 +8,8 @@ import {
   getMobilePrCreateBlockMessage,
   mobileRepoSelectorFromWorktreeId,
   resolveMobilePrPrefill,
-  shouldPushBeforeMobilePrCreate
+  shouldPushBeforeMobilePrCreate,
+  type MobilePrPrefill
 } from './mobile-pr-create'
 
 function ok(result: unknown): RpcSuccess {
@@ -121,6 +122,19 @@ describe('mobile create form gating parity', () => {
       }) === null
 
     expect(mobileAllowsComposer).toBe(desktopAllowsComposer)
+  })
+
+  it('stays safely blocked for a reason added by a newer desktop contract', () => {
+    expect(
+      getMobilePrCreateBlockMessage({
+        provider: 'github',
+        base: 'main',
+        title: 'Add feature',
+        body: '',
+        canCreate: false,
+        blockedReason: 'future_desktop_reason' as unknown as MobilePrPrefill['blockedReason']
+      })
+    ).toBe('This branch is not ready for a pull request yet.')
   })
 })
 

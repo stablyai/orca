@@ -745,7 +745,9 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       onMigrationUnsupportedClear: () => noopUnsubscribe,
       getMigrationUnsupportedSnapshot: () => Promise.resolve([]),
       drop: () => {},
-      dropByTabPrefix: () => {}
+      dropByTabPrefix: () => {},
+      retirePaneAuthority: () => {},
+      transferPaneAuthority: () => {}
     },
     mobile: {
       listNetworkInterfaces: () => Promise.resolve({ interfaces: [] }),
@@ -758,7 +760,10 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       revokeDevice: () => Promise.resolve({ revoked: false }),
       listRuntimeAccessGrants: () => Promise.resolve({ grants: [] }),
       revokeRuntimeAccess: () => Promise.resolve({ revoked: false }),
-      isWebSocketReady: () => Promise.resolve({ ready: Boolean(activeEnvironment), endpoint: null })
+      isWebSocketReady: () =>
+        Promise.resolve({ ready: Boolean(activeEnvironment), endpoint: null }),
+      getRelayStatus: () => Promise.resolve({ status: 'offline' as const }),
+      onRelayStatusChanged: () => noopUnsubscribe
     },
     telemetryTrack: () => Promise.resolve(),
     telemetrySetOptIn: () => Promise.resolve(),
@@ -1469,6 +1474,8 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
     // pairing; the dialog falls back to the persisted excerpt on web clients.
     getBranchRenameFailureOutput: async () => null,
     onChanged: () => noopUnsubscribe,
+    onGitStatusMetadataChanged: () => noopUnsubscribe,
+    onHeadIdentitiesChanged: () => noopUnsubscribe,
     onBaseStatus: () => noopUnsubscribe,
     onRemoteBranchConflict: () => noopUnsubscribe
   }
@@ -2755,6 +2762,8 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     getCwd: () => Promise.resolve('~'),
     getSize: () => Promise.resolve(null),
     listSessions: () => Promise.resolve([]),
+    getAuthoritativeBufferSnapshotCapabilities: (ids) =>
+      ids.map((id) => ({ id, authoritative: false })),
     hasPty: () => Promise.resolve(null),
     getMainBufferSnapshot: () => Promise.resolve(null),
     // Why: remote-runtime PTYs never transit local main, so the web client has
@@ -2802,7 +2811,7 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     clearPendingPaneSerializer: () => Promise.resolve(),
     management: {
       listSessions: () => Promise.resolve({ sessions: [], degraded: false }),
-      killAll: () => Promise.resolve({ killedCount: 0, remainingCount: 0 }),
+      killAll: () => Promise.resolve({ killedCount: 0, remainingCount: 0, killedSessionIds: [] }),
       killOne: () => Promise.resolve({ success: false }),
       restart: () => Promise.resolve({ success: false })
     }

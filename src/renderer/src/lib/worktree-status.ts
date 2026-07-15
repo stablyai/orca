@@ -7,10 +7,12 @@ import type {
   TerminalPaneLayoutNode,
   TerminalTab
 } from '../../../shared/types'
+import type { LiveAgentWorktreeStatus } from './worktree-activity-state'
 
 export type WorktreeStatus = 'active' | 'working' | 'permission' | 'done' | 'inactive'
 
 type WorktreeStatusHeuristicOptions = {
+  liveAgentStatus?: LiveAgentWorktreeStatus
   agentStatusPaneIdsByTabId?: Record<string, ReadonlySet<string>>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
   terminalLayoutRootsByTabId?: Record<string, TerminalPaneLayoutNode | null | undefined>
@@ -50,17 +52,15 @@ export function getWorktreeStatus(
   const hasStatus = (status: 'permission' | 'working'): boolean =>
     liveTabs.some((tab) => tabHasStatus(tab, runtimePaneTitlesByTabId, status, options))
 
-  if (hasStatus('permission')) {
+  if (options.liveAgentStatus === 'permission' || hasStatus('permission')) {
     return 'permission'
   }
-  if (hasStatus('working')) {
+  if (options.liveAgentStatus === 'working' || hasStatus('working')) {
     return 'working'
   }
   if (liveTabs.length > 0 || browserTabs.length > 0) {
     // Why: browser-only worktrees are still active from the user's point of
-    // view even when they have no PTY-backed terminal. The sidebar filter
-    // already treats them as active, so every navigation surface must reuse
-    // that rule instead of showing a misleading inactive dot.
+    // view even when they have no PTY-backed terminal.
     return 'active'
   }
   return 'inactive'

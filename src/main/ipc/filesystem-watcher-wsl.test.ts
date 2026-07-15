@@ -189,7 +189,9 @@ describe('createWslWatcher', () => {
     const controller = new AbortController()
     controller.abort()
 
-    await expect(createWslWatcher(ROOT_KEY, ROOT_KEY, makeDeps(), controller.signal)).rejects.toMatchObject({
+    await expect(
+      createWslWatcher(ROOT_KEY, ROOT_KEY, makeDeps(), controller.signal)
+    ).rejects.toMatchObject({
       name: 'AbortError'
     })
     expect(spawnMock).not.toHaveBeenCalled()

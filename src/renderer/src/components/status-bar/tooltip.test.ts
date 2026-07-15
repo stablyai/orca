@@ -135,6 +135,21 @@ describe('provider usage error copy', () => {
     )
   })
 
+  it('keeps the reworded Grok expired-token error classified as an auth failure (#8497)', () => {
+    // Why: the fix (grok-fetcher.ts) dropped the "run grok login" wording that
+    // used to trigger auth classification; this pins that the new copy still
+    // resolves to the softer refresh message instead of leaking the raw string.
+    const grok = provider({
+      provider: 'grok',
+      error: 'Grok access token expired — Grok CLI will refresh it on next use'
+    })
+
+    expect(getProviderUsageStatusLabel(grok)).toBe('Refresh failed')
+    expect(getProviderUsageErrorMessage(grok)).toBe(
+      'Grok usage could not be refreshed. Agent sessions may still be signed in.'
+    )
+  })
+
   it('frames known Codex auth refresh failures as auth-shaped usage failures', () => {
     const cases = [
       'Please reauthenticate before checking usage.',
@@ -167,6 +182,20 @@ describe('provider usage error copy', () => {
     expect(getProviderUsageStatusLabel(p)).toBe('Limited')
     expect(getProviderUsageErrorMessage(p)).toBe(
       'Rate limit reached while refreshing OAuth access token.'
+    )
+  })
+
+  it('classifies the Codex chatgpt-auth-required rate-limits read error as auth, not Limited', () => {
+    // Why: the message mentions "rate limits" only as the object it failed to
+    // read; labeling it "Limited" would wrongly imply the user hit a limit.
+    const p = provider({
+      provider: 'codex',
+      error: 'chatgpt authentication required to read rate limits'
+    })
+
+    expect(getProviderUsageStatusLabel(p)).toBe('Refresh failed')
+    expect(getProviderUsageErrorMessage(p)).toBe(
+      'Codex usage could not be refreshed. Agent sessions may still be signed in.'
     )
   })
 

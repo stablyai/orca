@@ -9,9 +9,11 @@ import {
   nonInteractiveGitEnv,
   parseRetryAfterMs,
   promptGuardGitEnv,
+  promptGuardShellEnv,
   redirectPortedHostnameToEnv,
   untranslatedGitOutputEnv
 } from './runner'
+import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
 
 // Reads git config injected via the GIT_CONFIG_COUNT/KEY/VALUE env protocol
 // back into a plain key→value map so tests can assert on it directly.
@@ -189,6 +191,47 @@ describe('appendGitConfigEnv', () => {
     expect(env.GIT_CONFIG_KEY_1).toBe('credential.guiPrompt')
     expect(env.GIT_CONFIG_VALUE_1).toBe('false')
   })
+
+  it.each(['bogus', '-1', '0', String(Number.MAX_SAFE_INTEGER)])(
+    'does not overwrite dangling caller config when count is %s',
+    (count) => {
+      const original = {
+        GIT_CONFIG_COUNT: count,
+        GIT_CONFIG_KEY_0: 'user.key',
+        GIT_CONFIG_VALUE_0: 'caller-value'
+      }
+      expect(appendGitConfigEnv(original, [['credential.interactive', 'false']])).toEqual(original)
+    }
+  )
+
+  it('does not append to an incomplete indexed-config protocol', () => {
+    const original = { GIT_CONFIG_COUNT: '1', GIT_CONFIG_KEY_0: 'user.key' }
+    expect(appendGitConfigEnv(original, [['credential.interactive', 'false']])).toEqual(original)
+  })
+})
+
+describe('mergeGitConfigEnvProtocol', () => {
+  it('replaces inherited indexed config atomically when an override has a smaller count', () => {
+    const env = mergeGitConfigEnvProtocol(
+      {
+        GIT_CONFIG_COUNT: '2',
+        GIT_CONFIG_KEY_0: 'base.zero',
+        GIT_CONFIG_VALUE_0: 'zero',
+        GIT_CONFIG_KEY_1: 'base.one',
+        GIT_CONFIG_VALUE_1: 'one'
+      },
+      {
+        GIT_CONFIG_COUNT: '1',
+        GIT_CONFIG_KEY_0: 'override.zero',
+        GIT_CONFIG_VALUE_0: 'override'
+      }
+    )
+
+    expect(env.GIT_CONFIG_COUNT).toBe('1')
+    expect(env.GIT_CONFIG_KEY_0).toBe('override.zero')
+    expect(env.GIT_CONFIG_KEY_1).toBeUndefined()
+    expect(env.GIT_CONFIG_VALUE_1).toBeUndefined()
+  })
 })
 
 describe('promptGuardGitEnv credential-interactivity disable (STA-1292)', () => {
@@ -217,6 +260,60 @@ describe('nonInteractiveGitEnv credential-interactivity disable (STA-1292)', () 
     expect(config['credential.helper']).toBeUndefined()
     // Its own BatchMode SSH guard is still applied and unaffected.
     expect(env.GIT_SSH_COMMAND).toBe('ssh -o BatchMode=yes')
+  })
+})
+
+describe('guard-env WSLENV forwarding (#7652)', () => {
+  it('registers the guard vars in WSLENV on Windows so WSL-routed git imports them', () => {
+    const env = promptGuardGitEnv({ PATH: '/usr/bin' }, 'win32')
+    const keys = (env.WSLENV ?? '').split(':')
+    expect(keys).toContain('GIT_TERMINAL_PROMPT')
+    expect(keys).toContain('GCM_INTERACTIVE')
+    expect(keys).toContain('GIT_CONFIG_COUNT')
+    expect(keys).toContain('GIT_CONFIG_KEY_0')
+    expect(keys).toContain('GIT_CONFIG_VALUE_0')
+    expect(keys).toContain('GIT_CONFIG_KEY_1')
+    expect(keys).toContain('GIT_CONFIG_VALUE_1')
+    // Windows askpass paths are meaningless inside a distro.
+    expect(keys).not.toContain('GIT_ASKPASS')
+    expect(keys).not.toContain('SSH_ASKPASS')
+  })
+
+  it('preserves a caller-set WSLENV instead of clobbering it', () => {
+    const env = promptGuardGitEnv({ PATH: '/usr/bin', WSLENV: 'MY_VAR/p' }, 'win32')
+    const keys = (env.WSLENV ?? '').split(':')
+    expect(keys[0]).toBe('MY_VAR/p')
+    expect(keys).toContain('GIT_TERMINAL_PROMPT')
+  })
+
+  it('does not touch WSLENV on non-Windows hosts', () => {
+    const env = promptGuardGitEnv({ PATH: '/usr/bin' }, 'darwin')
+    expect(env.WSLENV).toBeUndefined()
+  })
+
+  it('forwards GIT_SSH_COMMAND only when nonInteractiveGitEnv set the default itself', () => {
+    const defaulted = nonInteractiveGitEnv({ PATH: '/usr/bin' }, 'win32')
+    expect((defaulted.WSLENV ?? '').split(':')).toContain('GIT_SSH_COMMAND')
+
+    // A caller's Windows-specific ssh command must not leak into the distro.
+    const callerSet = nonInteractiveGitEnv(
+      { PATH: '/usr/bin', GIT_SSH_COMMAND: 'C:\\ssh\\ssh.exe' },
+      'win32'
+    )
+    expect((callerSet.WSLENV ?? '').split(':')).not.toContain('GIT_SSH_COMMAND')
+  })
+})
+
+describe('promptGuardShellEnv keeps the shell locale (#7652 x #7808)', () => {
+  it('guards without pinning the locale — a terminal env is the whole shell, not just git', () => {
+    const env = promptGuardShellEnv({ PATH: '/usr/bin', LC_ALL: 'ja_JP.UTF-8' }, 'win32')
+    expect(env.GIT_TERMINAL_PROMPT).toBe('0')
+    expect(env.GCM_INTERACTIVE).toBe('never')
+    expect((env.WSLENV ?? '').split(':')).toContain('GIT_TERMINAL_PROMPT')
+    // The user's locale survives; no pins appear where none existed.
+    expect(env.LC_ALL).toBe('ja_JP.UTF-8')
+    expect(env.LANG).toBeUndefined()
+    expect(env.LANGUAGE).toBeUndefined()
   })
 })
 

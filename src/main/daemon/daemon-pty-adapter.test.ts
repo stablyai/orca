@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { DaemonClient } from './client'
+import { DaemonProtocolError } from './daemon-errors'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonServer } from './daemon-server'
 import { HeadlessEmulator } from './headless-emulator'
@@ -131,6 +132,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const result = await adapter.spawn({ cols: 80, rows: 24 })
       expect(result.id).toBeDefined()
       expect(typeof result.id).toBe('string')
+      expect(result.providerSequence).toEqual({ value: 0, generation: 'reset' })
     })
 
     it('uses worktreeId as session prefix when provided', async () => {
@@ -260,6 +262,16 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   describe('background stream thinning compatibility', () => {
+    it('reports authoritative snapshot support only for protocol v20 and newer', () => {
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 19 })
+      try {
+        expect(legacy.canProvideAuthoritativeBufferSnapshot('legacy-session')).toBe(false)
+        expect(adapter.canProvideAuthoritativeBufferSnapshot('current-session')).toBe(true)
+      } finally {
+        legacy.dispose()
+      }
+    })
+
     it('reports background state on the authoritative-snapshot protocol', () => {
       const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
       try {
@@ -313,6 +325,42 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       } finally {
         legacy.dispose()
         notifySpy.mockRestore()
+        requestSpy.mockRestore()
+        ensureConnectedSpy.mockRestore()
+      }
+    })
+
+    it('still returns the v19 attach snapshot for a desktop renderer replay', async () => {
+      const ensureConnectedSpy = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const requestSpy = vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
+        isNew: false,
+        pid: 123,
+        shellState: 'unsupported',
+        snapshot: {
+          scrollbackAnsi: 'legacy history\r\n',
+          rehydrateSequences: '\x1b[?2004h',
+          snapshotAnsi: 'legacy prompt',
+          modes: { alternateScreen: false },
+          cols: 80,
+          rows: 24
+        }
+      } as never)
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 19 })
+      try {
+        const result = await legacy.spawn({ sessionId: 'legacy-session', cols: 80, rows: 24 })
+
+        expect(result).toMatchObject({
+          id: 'legacy-session',
+          isReattach: true,
+          snapshot: expect.stringContaining('legacy history')
+        })
+        expect(result.snapshot).toContain('legacy prompt')
+        expect(result.providerSequence).toBeUndefined()
+        await expect(legacy.getBufferSnapshot('legacy-session')).resolves.toBeNull()
+      } finally {
+        legacy.dispose()
         requestSpy.mockRestore()
         ensureConnectedSpy.mockRestore()
       }
@@ -505,6 +553,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(second.launchAgent).toBe('droid')
       expect(second.snapshot).toBeDefined()
       expect(second.snapshot).toContain('hello from shell')
+      expect(second.providerSequence).toEqual({
+        value: 'hello from shell\r\n'.length,
+        generation: 'continued'
+      })
     })
 
     it('includes rehydrateSequences in snapshot when terminal modes are active', async () => {
@@ -527,6 +579,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(result.id).toBe('brand-new')
       expect(result.isReattach).toBeUndefined()
       expect(result.snapshot).toBeUndefined()
+      expect(result.providerSequence).toEqual({ value: 0, generation: 'reset' })
     })
   })
 
@@ -1943,6 +1996,34 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await expect(noRespawnAdapter.spawn({ cols: 80, rows: 24 })).rejects.toThrow()
 
       noRespawnAdapter.dispose()
+    })
+
+    it('treats a hello handshake timeout as daemon-gone and respawns (#8689)', async () => {
+      // Why: a wedged daemon accepts the socket connection but never answers
+      // hello, so ensureConnected() rejects with "Hello response timed out".
+      // That must be classified as daemon-gone so withDaemonRetry respawns and
+      // retries — otherwise every terminal spawn fails against the wedge forever.
+      const realEnsureConnected = DaemonClient.prototype.ensureConnected
+      const ensureConnectedSpy = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockImplementationOnce(async () => {
+          // The exact error type + message the real client raises on a wedge.
+          throw new DaemonProtocolError('Hello response timed out')
+        })
+        .mockImplementation(function (this: DaemonClient) {
+          return realEnsureConnected.call(this)
+        })
+      const respawnFn = vi.fn(async () => {})
+      const respawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn: respawnFn })
+
+      try {
+        const result = await respawnAdapter.spawn({ cols: 80, rows: 24 })
+        expect(result.id).toBeDefined()
+        expect(respawnFn).toHaveBeenCalledOnce()
+      } finally {
+        ensureConnectedSpy.mockRestore()
+        respawnAdapter.dispose()
+      }
     })
 
     it('coalesces concurrent respawns so only one daemon is forked', async () => {

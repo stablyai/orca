@@ -139,6 +139,9 @@ function LinkEditInput({
         }
         if (e.key === 'Escape') {
           e.preventDefault()
+          // Stop the bubble container's Escape handler (which calls onDismiss)
+          // from also firing; editing Escape must only cancel the edit.
+          e.stopPropagation()
           onCancel()
         }
         // Cmd/Ctrl+K while editing cancels the edit.
