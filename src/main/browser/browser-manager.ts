@@ -235,6 +235,12 @@ export class BrowserManager {
   private readonly worktreeIdByTabId = new Map<string, string>()
   private readonly policyAttachedGuestIds = new Set<number>()
   private readonly policyCleanupByGuestId = new Map<number, () => void>()
+  // Why: popups bind their lifetime to the opener guest's 'destroyed' event, but
+  // a renderer process swap destroys the old guest while the tab lives on under a
+  // new guest id. Track the detachers so a swap (retireStaleGuestWebContents) can
+  // unbind the listener without closing the popup, while a real tab close still
+  // lets 'destroyed' fire and close it.
+  private readonly popupOpenerCloseDetachersByGuestId = new Map<number, Set<() => void>>()
   private shouldForwardDictationShortcut: (() => boolean) | null = null
   private readonly pendingLoadFailuresByGuestId = new Map<
     number,
@@ -770,11 +776,21 @@ export class BrowserManager {
     // owning browser tab must not leave orphaned session-bearing popups.
     const closePopupWithOpener = (): void => popup.close()
     openerGuest.once('destroyed', closePopupWithOpener)
-    popup.onClosed(() => {
+    // Why: a renderer process swap destroys this guest WebContents while the tab
+    // persists under a new guest id. Register a detacher so retirement can unbind
+    // the 'destroyed' listener before Chromium fires it — otherwise the swap
+    // would force-close a live OAuth/SSO popup.
+    const openerGuestId = openerGuest.id
+    const detachOpenerClose = (): void => {
       if (!openerGuest.isDestroyed()) {
         openerGuest.off('destroyed', closePopupWithOpener)
       }
-    })
+      this.popupOpenerCloseDetachersByGuestId.get(openerGuestId)?.delete(detachOpenerClose)
+    }
+    const detachers = this.popupOpenerCloseDetachersByGuestId.get(openerGuestId) ?? new Set()
+    detachers.add(detachOpenerClose)
+    this.popupOpenerCloseDetachersByGuestId.set(openerGuestId, detachers)
+    popup.onClosed(detachOpenerClose)
     return popup.contentWebContents
   }
 
@@ -783,8 +799,25 @@ export class BrowserManager {
     // swaps renderer processes. Late events from the dead guest must stop
     // resolving to the live page, or stale download/popup/permission callbacks
     // can be delivered to the wrong session after the swap.
+    //
+    // Why: unbind popups from the retired guest's 'destroyed' event first. The
+    // tab stays alive under a new guest id, so the imminent destruction of this
+    // stale WebContents must not force-close its in-flight OAuth/SSO popups.
+    this.detachPopupOpenerCloseListeners(previousWebContentsId)
     this.cleanupGuestPolicyAttachment(previousWebContentsId)
     this.tabIdByWebContentsId.delete(previousWebContentsId)
+  }
+
+  private detachPopupOpenerCloseListeners(guestWebContentsId: number): void {
+    const detachers = this.popupOpenerCloseDetachersByGuestId.get(guestWebContentsId)
+    if (!detachers) {
+      return
+    }
+    // Why: iterate a snapshot — each detacher removes itself from the set.
+    for (const detach of [...detachers]) {
+      detach()
+    }
+    this.popupOpenerCloseDetachersByGuestId.delete(guestWebContentsId)
   }
 
   private cleanupGuestPolicyAttachment(guestWebContentsId: number): void {

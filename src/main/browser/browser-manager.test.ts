@@ -1823,6 +1823,95 @@ describe('browserManager', () => {
     expect(browserManager.getGuestWebContentsId('browser-1')).toBe(newGuest.id)
   })
 
+  it('keeps opener popups alive when the tab process-swaps to a new guest', () => {
+    const rendererSendMock = vi.fn()
+    const oldGuestOnceMock = vi.fn()
+    const oldGuestOffMock = vi.fn()
+    const oldGuest = {
+      id: 610,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      once: oldGuestOnceMock,
+      off: oldGuestOffMock,
+      openDevTools: guestOpenDevToolsMock
+    }
+    const newGuest = {
+      id: 611,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      on: vi.fn(),
+      once: vi.fn(),
+      off: vi.fn(),
+      openDevTools: guestOpenDevToolsMock
+    }
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === oldGuest.id) {
+        return oldGuest
+      }
+      if (id === newGuest.id) {
+        return newGuest
+      }
+      if (id === rendererWebContentsId) {
+        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(oldGuest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-1',
+      webContentsId: oldGuest.id,
+      rendererWebContentsId
+    })
+
+    const popupContents = {
+      id: 620,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'window'),
+      setBackgroundThrottling: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      on: vi.fn(),
+      once: vi.fn(),
+      off: vi.fn()
+    }
+    const popupCloseMock = vi.fn()
+    openPopupWithOriginBarMock.mockReturnValue({
+      contentWebContents: popupContents,
+      close: popupCloseMock,
+      onClosed: vi.fn()
+    })
+
+    const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
+      url: string
+    }) => { createWindow: (options: Record<string, unknown>) => unknown }
+    const response = handler({ url: 'https://sso.example.com/auth' })
+    response.createWindow({ webContents: { id: 621 }, width: 500, height: 600 })
+
+    // The popup binds its lifetime to the opener guest's 'destroyed' event.
+    const destroyedCall = oldGuestOnceMock.mock.calls.find(([event]) => event === 'destroyed')
+    expect(destroyedCall).toBeDefined()
+    const closePopupWithOpener = (destroyedCall as [string, () => void])[1]
+
+    // Simulate a renderer process swap: the same tab re-registers with a new
+    // guest id while Chromium is about to destroy the old guest WebContents.
+    browserManager.attachGuestPolicies(newGuest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-1',
+      webContentsId: newGuest.id,
+      rendererWebContentsId
+    })
+
+    // Retiring the stale guest must unbind the popup-close listener so the
+    // guest's imminent 'destroyed' event cannot force-close the live popup.
+    expect(oldGuestOffMock).toHaveBeenCalledWith('destroyed', closePopupWithOpener)
+    expect(popupCloseMock).not.toHaveBeenCalled()
+  })
+
   it('does not forward ctrl/cmd+r or readline chords from browser guests', () => {
     const rendererSendMock = vi.fn()
     const guest = {
