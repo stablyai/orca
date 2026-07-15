@@ -17,6 +17,7 @@ import { writeFile, rename, mkdir, rm, copyFile } from 'node:fs/promises'
 import { join, dirname, isAbsolute, resolve, sep } from 'node:path'
 import { homedir } from 'node:os'
 import { createHash, randomUUID } from 'node:crypto'
+import { isDeepStrictEqual } from 'node:util'
 import type {
   Automation,
   AutomationCreateInput,
@@ -64,6 +65,7 @@ import type {
   TerminalPaneLayoutNode,
   TerminalLayoutSnapshot,
   TerminalTab,
+  TabGroupLayoutNode,
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../shared/types'
@@ -511,7 +513,11 @@ const BACKUP_COUNT = 5
 const BACKUP_MIN_INTERVAL_MS = 60 * 60 * 1000
 const WORKSPACE_SESSION_PATCH_FULL_NORMALIZATION_KEYS = new Set<keyof WorkspaceSessionState>([
   'tabsByWorktree',
-  'terminalLayoutsByTabId'
+  'terminalLayoutsByTabId',
+  'unifiedTabs',
+  'tabGroups',
+  'tabGroupLayouts',
+  'activeGroupIdByWorktree'
 ])
 
 function logPersistenceStartupMilestone(
@@ -557,9 +563,42 @@ function parseWorkspaceSessionsByHostId(
       )
       continue
     }
-    partitions[hostId] = { ...defaults, ...result.value }
+    partitions[hostId] = preserveWorkspaceSessionGlobalActiveProjection(value, {
+      ...defaults,
+      ...result.value
+    })
   }
   return partitions
+}
+
+function preserveWorkspaceSessionGlobalActiveProjection(
+  raw: unknown,
+  session: WorkspaceSessionState
+): WorkspaceSessionState {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return session
+  }
+  const source = raw as Record<string, unknown>
+  const next = session as WorkspaceSessionState & {
+    activeBrowserTabId?: string | null
+    activeFileId?: string | null
+    activeTabType?: 'terminal' | 'browser' | 'simulator' | 'editor'
+  }
+  if (source.activeBrowserTabId === null || typeof source.activeBrowserTabId === 'string') {
+    next.activeBrowserTabId = source.activeBrowserTabId
+  }
+  if (source.activeFileId === null || typeof source.activeFileId === 'string') {
+    next.activeFileId = source.activeFileId
+  }
+  if (
+    source.activeTabType === 'terminal' ||
+    source.activeTabType === 'browser' ||
+    source.activeTabType === 'simulator' ||
+    source.activeTabType === 'editor'
+  ) {
+    next.activeTabType = source.activeTabType
+  }
+  return next
 }
 
 function backupPath(dataFile: string, index: number): string {
@@ -2600,6 +2639,482 @@ export type StoreOptions = {
   dataFile?: string
 }
 
+export type WorkspaceSessionTerminalTabRemoval = {
+  worktreeId: string
+  tabId: string
+  createdAt: number
+  leafId: string
+  ptyId: string
+}
+
+export type WorkspaceSessionTerminalTabRemovalReceipt = WorkspaceSessionTerminalTabRemoval & {
+  durableRemoval: true
+}
+
+const TERMINAL_TAB_REMOVAL_REPLAY_FENCE_MAX = 32
+
+type WorkspaceSessionTerminalTabRemovalReplayFence = WorkspaceSessionTerminalTabRemoval & {
+  unifiedIdentity: WorkspaceSessionTerminalTabUnifiedIdentity[]
+  projection: {
+    unifiedTabs: NonNullable<WorkspaceSessionState['unifiedTabs']>[string] | undefined
+    tabGroups: NonNullable<WorkspaceSessionState['tabGroups']>[string] | undefined
+    tabGroupLayout: TabGroupLayoutNode | undefined
+    activeGroupId: string | undefined
+  }
+}
+
+type WorkspaceSessionTerminalTabUnifiedIdentity = {
+  id: string
+  entityId: string
+  groupId: string
+  worktreeId: string
+  contentType: string
+}
+
+function terminalTabRemovalUnifiedIdentity(
+  session: WorkspaceSessionState,
+  identity: WorkspaceSessionTerminalTabRemoval
+): WorkspaceSessionTerminalTabUnifiedIdentity[] {
+  return Object.entries(session.unifiedTabs ?? {}).flatMap(([worktreeId, tabs]) =>
+    tabs
+      .filter((tab) => tab.id === identity.tabId || tab.entityId === identity.tabId)
+      .map((tab) => ({
+        id: tab.id,
+        entityId: tab.entityId,
+        groupId: tab.groupId,
+        worktreeId,
+        contentType: tab.contentType
+      }))
+  )
+}
+
+function canonicalizeTerminalTabProjection(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(canonicalizeTerminalTabProjection)
+  }
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, entry]) => [key, canonicalizeTerminalTabProjection(entry)])
+    )
+  }
+  return value
+}
+
+function terminalTabProjectionEqual(left: unknown, right: unknown): boolean {
+  return isDeepStrictEqual(
+    canonicalizeTerminalTabProjection(left),
+    canonicalizeTerminalTabProjection(right)
+  )
+}
+
+function findWorkspaceSessionTabGroupSiblingId(
+  root: TabGroupLayoutNode,
+  groupId: string
+): string | null {
+  if (root.type === 'leaf') {
+    return null
+  }
+  if (root.first.type === 'leaf' && root.first.groupId === groupId) {
+    return root.second.type === 'leaf'
+      ? root.second.groupId
+      : findFirstWorkspaceSessionTabGroupId(root.second)
+  }
+  if (root.second.type === 'leaf' && root.second.groupId === groupId) {
+    return root.first.type === 'leaf'
+      ? root.first.groupId
+      : findFirstWorkspaceSessionTabGroupId(root.first)
+  }
+  return (
+    findWorkspaceSessionTabGroupSiblingId(root.first, groupId) ??
+    findWorkspaceSessionTabGroupSiblingId(root.second, groupId)
+  )
+}
+
+function findFirstWorkspaceSessionTabGroupId(root: TabGroupLayoutNode): string {
+  return root.type === 'leaf' ? root.groupId : findFirstWorkspaceSessionTabGroupId(root.first)
+}
+
+function removeWorkspaceSessionTabGroupLayoutLeaf(
+  root: TabGroupLayoutNode,
+  groupId: string
+): TabGroupLayoutNode | null {
+  if (root.type === 'leaf') {
+    return root.groupId === groupId ? null : root
+  }
+  const first = removeWorkspaceSessionTabGroupLayoutLeaf(root.first, groupId)
+  const second = removeWorkspaceSessionTabGroupLayoutLeaf(root.second, groupId)
+  if (!first) {
+    return second
+  }
+  if (!second) {
+    return first
+  }
+  return { ...root, first, second }
+}
+
+function dedupeWorkspaceSessionTabOrder(tabOrder: string[]): string[] {
+  return Array.from(new Set(tabOrder))
+}
+
+function sanitizeWorkspaceSessionRecentTabIds(
+  recentTabIds: string[] | undefined,
+  tabOrder: string[]
+): string[] {
+  const validIds = new Set(tabOrder)
+  const seen = new Set<string>()
+  const reversed: string[] = []
+  for (let index = (recentTabIds?.length ?? 0) - 1; index >= 0; index--) {
+    const tabId = recentTabIds![index]!
+    if (!validIds.has(tabId) || seen.has(tabId)) {
+      continue
+    }
+    seen.add(tabId)
+    reversed.push(tabId)
+  }
+  return reversed.toReversed()
+}
+
+function pickWorkspaceSessionTabSuccessor(
+  tabOrder: string[],
+  recentTabIds: string[] | undefined,
+  closingTabId: string
+): string | null {
+  const sanitized = sanitizeWorkspaceSessionRecentTabIds(recentTabIds, tabOrder)
+  for (let index = sanitized.length - 1; index >= 0; index--) {
+    if (sanitized[index] !== closingTabId) {
+      return sanitized[index]!
+    }
+  }
+  const closingIndex = tabOrder.indexOf(closingTabId)
+  if (closingIndex < 0) {
+    return null
+  }
+  return tabOrder[closingIndex + 1] ?? tabOrder[closingIndex - 1] ?? null
+}
+
+function terminalTabRemovalVisibleType(
+  contentType: string
+): 'terminal' | 'browser' | 'simulator' | 'editor' {
+  return contentType === 'terminal' || contentType === 'browser' || contentType === 'simulator'
+    ? contentType
+    : 'editor'
+}
+
+function collectWorkspaceSessionGroupLayoutLeafIds(root: TabGroupLayoutNode): string[] {
+  return root.type === 'leaf'
+    ? [root.groupId]
+    : [
+        ...collectWorkspaceSessionGroupLayoutLeafIds(root.first),
+        ...collectWorkspaceSessionGroupLayoutLeafIds(root.second)
+      ]
+}
+
+function hasAmbiguousTerminalUnifiedProjection(
+  session: WorkspaceSessionState,
+  identity: WorkspaceSessionTerminalTabRemoval
+): boolean {
+  const unifiedEntries = Object.entries(session.unifiedTabs ?? {}).flatMap(([worktreeId, tabs]) =>
+    tabs.map((tab) => ({ tab, worktreeId }))
+  )
+  const targetEntries = unifiedEntries.filter(
+    ({ tab }) => tab.id === identity.tabId || tab.entityId === identity.tabId
+  )
+  const groupEntries = Object.entries(session.tabGroups ?? {}).flatMap(([worktreeId, groups]) =>
+    groups.map((group) => ({ group, worktreeId }))
+  )
+  const groupIds = groupEntries.map(({ group }) => group.id)
+  if (
+    new Set(groupIds).size !== groupIds.length ||
+    groupEntries.some(({ group, worktreeId }) => group.worktreeId !== worktreeId)
+  ) {
+    return true
+  }
+  if (targetEntries.length === 0) {
+    return groupEntries.some(
+      ({ group }) =>
+        group.activeTabId === identity.tabId ||
+        group.tabOrder.includes(identity.tabId) ||
+        group.recentTabIds?.includes(identity.tabId)
+    )
+  }
+  if (targetEntries.length !== 1) {
+    return true
+  }
+  const target = targetEntries[0]!
+  if (
+    target.worktreeId !== identity.worktreeId ||
+    target.tab.worktreeId !== identity.worktreeId ||
+    target.tab.contentType !== 'terminal' ||
+    unifiedEntries.filter(({ tab }) => tab.id === target.tab.id).length !== 1 ||
+    unifiedEntries.filter(({ tab }) => tab.entityId === target.tab.entityId).length !== 1
+  ) {
+    return true
+  }
+  const ownerGroups = groupEntries.filter(({ worktreeId }) => worktreeId === identity.worktreeId)
+  const ownerLayout = session.tabGroupLayouts?.[identity.worktreeId]
+  const activeGroupId = session.activeGroupIdByWorktree?.[identity.worktreeId]
+  if (
+    !ownerLayout ||
+    !activeGroupId ||
+    !ownerGroups.some(({ group }) => group.id === activeGroupId)
+  ) {
+    return true
+  }
+  const layoutLeafIds = collectWorkspaceSessionGroupLayoutLeafIds(ownerLayout)
+  const ownerGroupIds = ownerGroups.map(({ group }) => group.id)
+  if (
+    layoutLeafIds.length !== ownerGroupIds.length ||
+    new Set(layoutLeafIds).size !== layoutLeafIds.length ||
+    ownerGroupIds.some((groupId) => !layoutLeafIds.includes(groupId))
+  ) {
+    return true
+  }
+  const containingGroups = groupEntries.filter(({ group }) =>
+    group.tabOrder.includes(target.tab.id)
+  )
+  if (
+    containingGroups.length !== 1 ||
+    containingGroups[0]!.worktreeId !== identity.worktreeId ||
+    containingGroups[0]!.group.id !== target.tab.groupId ||
+    containingGroups[0]!.group.tabOrder.filter((tabId) => tabId === target.tab.id).length !== 1
+  ) {
+    return true
+  }
+  return groupEntries.some(
+    ({ group }) =>
+      group.id !== target.tab.groupId &&
+      (group.activeTabId === target.tab.id || group.recentTabIds?.includes(target.tab.id))
+  )
+}
+
+function removeTerminalTabFromWorkspaceSessionProjection(
+  session: WorkspaceSessionState,
+  identity: WorkspaceSessionTerminalTabRemoval
+): WorkspaceSessionState {
+  const next = cloneWorkspaceSessionState(session)
+  const nextTabs = (next.tabsByWorktree[identity.worktreeId] ?? []).filter(
+    (tab) => tab.id !== identity.tabId
+  )
+  next.tabsByWorktree[identity.worktreeId] = nextTabs
+  delete next.terminalLayoutsByTabId[identity.tabId]
+  const nextActiveTabId =
+    next.activeTabIdByWorktree?.[identity.worktreeId] === identity.tabId
+      ? (nextTabs[0]?.id ?? null)
+      : (next.activeTabIdByWorktree?.[identity.worktreeId] ?? null)
+  if (next.activeWorktreeId === identity.worktreeId && next.activeTabId === identity.tabId) {
+    next.activeTabId = nextActiveTabId
+  }
+  next.activeTabIdByWorktree = {
+    ...next.activeTabIdByWorktree,
+    [identity.worktreeId]: nextActiveTabId
+  }
+
+  const unifiedTabs = next.unifiedTabs?.[identity.worktreeId]
+  const removedUnifiedIds = new Set(
+    (unifiedTabs ?? [])
+      .filter((tab) => tab.id === identity.tabId || tab.entityId === identity.tabId)
+      .map((tab) => tab.id)
+  )
+  removedUnifiedIds.add(identity.tabId)
+  if (unifiedTabs) {
+    next.unifiedTabs = {
+      ...next.unifiedTabs,
+      [identity.worktreeId]: unifiedTabs.filter((tab) => !removedUnifiedIds.has(tab.id))
+    }
+  }
+
+  const affectedGroupIds = new Set<string>()
+  let groups = (next.tabGroups?.[identity.worktreeId] ?? []).map((group) => {
+    const priorTabOrder = dedupeWorkspaceSessionTabOrder(group.tabOrder)
+    const closingTabId = priorTabOrder.find((tabId) => removedUnifiedIds.has(tabId))
+    const hasRemovedRecentReference = group.recentTabIds?.some((tabId) =>
+      removedUnifiedIds.has(tabId)
+    )
+    if (!closingTabId && !hasRemovedRecentReference) {
+      return group
+    }
+    const tabOrder = priorTabOrder.filter((tabId) => !removedUnifiedIds.has(tabId))
+    const recentTabIds = sanitizeWorkspaceSessionRecentTabIds(
+      group.recentTabIds?.filter((tabId) => !removedUnifiedIds.has(tabId)),
+      tabOrder
+    )
+    const tabMembershipRemoved = tabOrder.length !== group.tabOrder.length
+    const recentReferenceRemoved = !terminalTabProjectionEqual(
+      recentTabIds,
+      group.recentTabIds ?? []
+    )
+    if (tabMembershipRemoved) {
+      affectedGroupIds.add(group.id)
+    }
+    return !tabMembershipRemoved && !recentReferenceRemoved
+      ? group
+      : {
+          ...group,
+          activeTabId:
+            group.activeTabId && removedUnifiedIds.has(group.activeTabId)
+              ? closingTabId
+                ? pickWorkspaceSessionTabSuccessor(priorTabOrder, group.recentTabIds, closingTabId)
+                : null
+              : group.activeTabId,
+          tabOrder,
+          ...(recentTabIds ? { recentTabIds } : {})
+        }
+  })
+  let groupLayout = next.tabGroupLayouts?.[identity.worktreeId]
+  let activeGroupId = next.activeGroupIdByWorktree?.[identity.worktreeId]
+  for (const emptyGroup of groups.filter(
+    (group) => affectedGroupIds.has(group.id) && group.tabOrder.length === 0
+  )) {
+    if (groups.length <= 1 || !groupLayout) {
+      continue
+    }
+    const siblingId = findWorkspaceSessionTabGroupSiblingId(groupLayout, emptyGroup.id)
+    groupLayout = removeWorkspaceSessionTabGroupLayoutLeaf(groupLayout, emptyGroup.id) ?? undefined
+    groups = groups.filter((group) => group.id !== emptyGroup.id)
+    if (activeGroupId === emptyGroup.id) {
+      activeGroupId = siblingId ?? groups[0]?.id
+    }
+  }
+  if (next.tabGroups?.[identity.worktreeId]) {
+    next.tabGroups = { ...next.tabGroups, [identity.worktreeId]: groups }
+  }
+  if (next.tabGroupLayouts?.[identity.worktreeId]) {
+    next.tabGroupLayouts = { ...next.tabGroupLayouts }
+    if (groupLayout) {
+      next.tabGroupLayouts[identity.worktreeId] = groupLayout
+    } else {
+      delete next.tabGroupLayouts[identity.worktreeId]
+    }
+  }
+  if (next.activeGroupIdByWorktree?.[identity.worktreeId] && activeGroupId) {
+    next.activeGroupIdByWorktree = {
+      ...next.activeGroupIdByWorktree,
+      [identity.worktreeId]: activeGroupId
+    }
+  }
+
+  if (next.remoteSessionIdsByTabId) {
+    next.remoteSessionIdsByTabId = { ...next.remoteSessionIdsByTabId }
+    delete next.remoteSessionIdsByTabId[identity.tabId]
+  }
+  if (next.sleepingAgentSessionsByPaneKey) {
+    next.sleepingAgentSessionsByPaneKey = Object.fromEntries(
+      Object.entries(next.sleepingAgentSessionsByPaneKey).filter(
+        ([, record]) => record.tabId !== identity.tabId || record.worktreeId !== identity.worktreeId
+      )
+    )
+  }
+  if (!nextTabs.some((tab) => typeof tab.ptyId === 'string' && tab.ptyId.length > 0)) {
+    next.activeWorktreeIdsOnShutdown = next.activeWorktreeIdsOnShutdown?.filter(
+      (worktreeId) => worktreeId !== identity.worktreeId
+    )
+  }
+  const activeGroup = groups.find((group) => group.id === activeGroupId) ?? groups[0] ?? null
+  const activeUnifiedId = activeGroup?.activeTabId ?? activeGroup?.tabOrder[0]
+  const activeUnifiedTab = next.unifiedTabs?.[identity.worktreeId]?.find(
+    (tab) => tab.id === activeUnifiedId
+  )
+  const browserSurvivors = next.browserTabsByWorktree?.[identity.worktreeId] ?? []
+  const fileSurvivors = next.openFilesByWorktree?.[identity.worktreeId] ?? []
+  const hasSurfaceSurvivor =
+    nextTabs.length > 0 ||
+    (next.unifiedTabs?.[identity.worktreeId]?.length ?? 0) > 0 ||
+    browserSurvivors.length > 0 ||
+    fileSurvivors.length > 0
+  const restoredBrowserId = next.activeBrowserTabIdByWorktree?.[identity.worktreeId] ?? null
+  const restoredFileId = next.activeFileIdByWorktree?.[identity.worktreeId] ?? null
+  const restoredTerminalId = next.activeTabIdByWorktree?.[identity.worktreeId] ?? null
+  const browserStillOpen = browserSurvivors.some((browser) => browser.id === restoredBrowserId)
+  const fileStillOpen = fileSurvivors.some((file) => file.filePath === restoredFileId)
+  const terminalStillExists = nextTabs.some((tab) => tab.id === restoredTerminalId)
+  const hasGroupOwnedSurface = groups.length > 0 || groupLayout !== undefined
+  let projectedBrowserId: string | null
+  let projectedFileId: string | null
+  let projectedType: 'terminal' | 'browser' | 'simulator' | 'editor'
+  if (activeUnifiedTab) {
+    projectedFileId =
+      terminalTabRemovalVisibleType(activeUnifiedTab.contentType) === 'editor'
+        ? activeUnifiedTab.entityId
+        : fileStillOpen
+          ? restoredFileId
+          : null
+    projectedBrowserId =
+      activeUnifiedTab.contentType === 'browser'
+        ? activeUnifiedTab.entityId
+        : browserStillOpen
+          ? restoredBrowserId
+          : (browserSurvivors[0]?.id ?? null)
+    projectedType = terminalTabRemovalVisibleType(activeUnifiedTab.contentType)
+  } else if (hasGroupOwnedSurface) {
+    projectedFileId = fileStillOpen ? restoredFileId : null
+    projectedBrowserId = browserStillOpen ? restoredBrowserId : (browserSurvivors[0]?.id ?? null)
+    projectedType = 'terminal'
+  } else if (browserStillOpen) {
+    projectedFileId = fileStillOpen ? restoredFileId : null
+    projectedBrowserId = restoredBrowserId
+    projectedType = 'browser'
+  } else if (fileStillOpen) {
+    projectedFileId = restoredFileId
+    projectedBrowserId = browserSurvivors[0]?.id ?? null
+    projectedType = 'editor'
+  } else {
+    projectedFileId = fileSurvivors[0]?.filePath ?? null
+    projectedBrowserId = browserSurvivors[0]?.id ?? null
+    projectedType = projectedFileId ? 'editor' : projectedBrowserId ? 'browser' : 'terminal'
+  }
+  const projectedTerminalId =
+    activeUnifiedTab?.contentType === 'terminal'
+      ? activeUnifiedTab.entityId
+      : terminalStillExists
+        ? restoredTerminalId
+        : (nextTabs[0]?.id ?? null)
+  next.activeTabIdByWorktree = {
+    ...next.activeTabIdByWorktree,
+    [identity.worktreeId]: projectedTerminalId
+  }
+  next.activeBrowserTabIdByWorktree = {
+    ...next.activeBrowserTabIdByWorktree,
+    [identity.worktreeId]: projectedBrowserId
+  }
+  next.activeFileIdByWorktree = {
+    ...next.activeFileIdByWorktree,
+    [identity.worktreeId]: projectedFileId
+  }
+  next.activeTabTypeByWorktree = {
+    ...next.activeTabTypeByWorktree,
+    [identity.worktreeId]: projectedType
+  }
+  if (next.activeWorktreeId === identity.worktreeId) {
+    const active = next as WorkspaceSessionState & {
+      activeBrowserTabId?: string | null
+      activeFileId?: string | null
+      activeTabType?: 'terminal' | 'browser' | 'simulator' | 'editor'
+    }
+    active.activeTabId = projectedTerminalId
+    active.activeBrowserTabId = projectedBrowserId
+    active.activeFileId = projectedFileId
+    active.activeTabType = projectedType
+  }
+  if (!hasSurfaceSurvivor) {
+    if (next.activeWorktreeId === identity.worktreeId) {
+      const landing = next as WorkspaceSessionState & {
+        activeBrowserTabId?: string | null
+        activeFileId?: string | null
+        activeTabType?: 'terminal'
+      }
+      landing.activeWorktreeId = null
+      landing.activeWorkspaceKey = null
+      landing.activeTabId = null
+      landing.activeBrowserTabId = null
+      landing.activeFileId = null
+      landing.activeTabType = 'terminal'
+    }
+  }
+  return next
+}
+
 export class Store {
   private state: PersistedState
   private readonly dataFile: string
@@ -2619,6 +3134,13 @@ export class Store {
   private lastWrittenStateHash: string | null = null
   private firstPendingSaveAt: number | null = null
   private githubCacheDirty = false
+  private terminalTabRemovalReplayFences = new Map<
+    string,
+    WorkspaceSessionTerminalTabRemovalReplayFence
+  >()
+  private terminalTabRemovalAmbiguousReplayFences = new Set<string>()
+  private terminalTabRemovalTransactionTail: Promise<void> = Promise.resolve()
+  private terminalTabRemovalTransactionActive = false
   private gitUsernameCache = new Map<string, string>()
   private loadNeedsSave = false
   private settingsChangeListeners = new Set<
@@ -3405,7 +3927,10 @@ export class Store {
               )
               return defaults.workspaceSession
             }
-            return { ...defaults.workspaceSession, ...result.value }
+            return preserveWorkspaceSessionGlobalActiveProjection(parsed.workspaceSession, {
+              ...defaults.workspaceSession,
+              ...result.value
+            })
           })(),
           // Why: per-host session partitions for non-'local' hosts. 'local'
           // stays in workspaceSession (legacy field) so a downgrade still
@@ -3627,6 +4152,10 @@ export class Store {
     this.writeTimer = setTimeout(() => {
       this.writeTimer = null
       this.firstPendingSaveAt = null
+      if (this.terminalTabRemovalTransactionActive) {
+        this.scheduleSave()
+        return
+      }
       // Why (issue #1158): serialize async writes so backup rotation never has
       // two callers racing over the same dataFile/tmp/.bak paths.
       const prev = this.pendingWrite ?? Promise.resolve()
@@ -3712,18 +4241,14 @@ export class Store {
       // Why: if flush() ran while this async write was in-flight, it bumped
       // writeGeneration and already wrote the latest state synchronously.
       // Renaming this stale tmp file would overwrite the fresh data.
-      if (this.writeGeneration !== gen) {
+      if (this.writesFrozen || this.writeGeneration !== gen) {
         return
       }
-      await rename(tmpFile, dataFile)
+      // Why: no await may separate admission from the physical replacement;
+      // flush/freeze are synchronous and must be totally ordered with rename.
+      renameSync(tmpFile, dataFile)
       renamed = true
-      // Why the gen re-check: a sync flush can interleave during the rename
-      // await, write fresher state, and record its own hash. Recording this
-      // stale hash over it would make later saves skip against content that
-      // is not what the file holds.
-      if (this.writeGeneration === gen) {
-        this.lastWrittenStateHash = stateHash
-      }
+      this.lastWrittenStateHash = stateHash
     } finally {
       if (!renamed) {
         await rm(tmpFile).catch(() => {})
@@ -3798,7 +4323,8 @@ export class Store {
     // Why: bump writeGeneration so any in-flight async writeToDiskAsync skips
     // its rename, preventing a stale snapshot from overwriting this sync write.
     this.writeGeneration++
-    this.pendingWrite = null
+    // Keep the promise drainable even after a sync flush: an async writer may
+    // already be inside rename, past the generation check, and can still win.
     this.writeToDiskSync({ force: asyncWriteWasInFlight })
   }
 
@@ -5644,6 +6170,157 @@ export class Store {
     this.setHostWorkspaceSession(resolved, session)
   }
 
+  async removeWorkspaceSessionTerminalTabAndFlush(
+    identity: WorkspaceSessionTerminalTabRemoval,
+    validatePreCommit?: () => void
+  ): Promise<WorkspaceSessionTerminalTabRemovalReceipt> {
+    let releaseTransaction!: () => void
+    const priorTransaction = this.terminalTabRemovalTransactionTail
+    this.terminalTabRemovalTransactionTail = new Promise<void>((resolve) => {
+      releaseTransaction = resolve
+    })
+    await priorTransaction
+    this.terminalTabRemovalTransactionActive = true
+    try {
+      await this.drainPendingWriteForTerminalTabRemoval()
+      if (this.writesFrozen) {
+        throw new Error('terminal_tab_removal_writes_frozen')
+      }
+      // Why: runtime ownership can drift while this transaction drains prior
+      // writes; validation and the following mutation must share one sync turn.
+      validatePreCommit?.()
+      const session = this.state.workspaceSession
+      const replayFenceKey = `${identity.worktreeId}\u0000${identity.tabId}`
+      const replayFence = this.terminalTabRemovalReplayFences.get(replayFenceKey)
+      const matches = Object.entries(session.tabsByWorktree).flatMap(([worktreeId, tabs]) =>
+        tabs.filter((tab) => tab.id === identity.tabId).map((tab) => ({ tab, worktreeId }))
+      )
+      const match = matches[0]
+      const layout = session.terminalLayoutsByTabId?.[identity.tabId]
+      const bindings = Object.entries(layout?.ptyIdsByLeafId ?? {})
+      if (
+        (replayFence &&
+          this.terminalTabRemovalAmbiguousReplayFences.has(replayFenceKey) &&
+          replayFence.createdAt === identity.createdAt &&
+          replayFence.leafId === identity.leafId &&
+          replayFence.ptyId === identity.ptyId) ||
+        matches.length !== 1 ||
+        match?.worktreeId !== identity.worktreeId ||
+        match.tab.worktreeId !== identity.worktreeId ||
+        match.tab.createdAt !== identity.createdAt ||
+        match.tab.isPinned === true ||
+        match.tab.ptyId !== identity.ptyId ||
+        layout?.root?.type !== 'leaf' ||
+        layout.root.leafId !== identity.leafId ||
+        layout.activeLeafId !== identity.leafId ||
+        bindings.length !== 1 ||
+        bindings[0]?.[0] !== identity.leafId ||
+        bindings[0]?.[1] !== identity.ptyId
+      ) {
+        throw new Error('terminal_tab_identity_ambiguous')
+      }
+      if (hasAmbiguousTerminalUnifiedProjection(session, identity)) {
+        throw new Error('terminal_tab_unified_identity_ambiguous')
+      }
+
+      const sessionBeforeRemoval = cloneWorkspaceSessionState(session)
+      this.state.workspaceSession = removeTerminalTabFromWorkspaceSessionProjection(
+        session,
+        identity
+      )
+      const removalStateHash = this.computeStateHash()
+      // Why: serialized atomic replacement closes the same-process/process-crash
+      // window only; cross-process stop intent and power-loss fsync are out of scope.
+      try {
+        this.flushOrThrow()
+      } catch (error) {
+        const primaryWriteCommitted = this.lastWrittenStateHash === removalStateHash
+        this.state.workspaceSession = sessionBeforeRemoval
+        if (!primaryWriteCommitted) {
+          throw error
+        }
+        // Why: a flush can fail after its atomic rename during backup rotation;
+        // rewrite the prior snapshot so memory and disk retain one identity.
+        try {
+          this.flushOrThrow()
+        } catch (rollbackCause) {
+          throw Object.assign(new Error('terminal_tab_removal_rollback_incomplete'), {
+            cause: error,
+            rollbackCause
+          })
+        }
+        throw error
+      }
+      this.rememberTerminalTabRemovalReplayFence(replayFenceKey, identity, sessionBeforeRemoval)
+      deleteRemovedTerminalScrollbackSnapshots(
+        sessionBeforeRemoval,
+        this.state.workspaceSession,
+        this.terminalScrollbackSnapshotStorage
+      )
+      return { ...identity, durableRemoval: true }
+    } finally {
+      this.terminalTabRemovalTransactionActive = false
+      releaseTransaction()
+    }
+  }
+
+  private async drainPendingWriteForTerminalTabRemoval(): Promise<void> {
+    const hadScheduledSave = this.writeTimer !== null
+    if (this.writeTimer) {
+      clearTimeout(this.writeTimer)
+      this.writeTimer = null
+    }
+    this.firstPendingSaveAt = null
+    const pendingWrite = this.pendingWrite
+    if (pendingWrite) {
+      await pendingWrite
+      if (this.pendingWrite === pendingWrite) {
+        this.pendingWrite = null
+      }
+    }
+    // A rejected removal must not cancel an unrelated debounced mutation.
+    // Commit that captured state before identity validation can fail closed.
+    if (hadScheduledSave) {
+      try {
+        this.flushOrThrow()
+      } catch (error) {
+        // Why: EIO/ENOSPC before identity validation must not turn timer
+        // cancellation into silent loss of an unrelated renderer mutation.
+        this.scheduleSave()
+        throw error
+      }
+    }
+  }
+
+  private rememberTerminalTabRemovalReplayFence(
+    replayFenceKey: string,
+    identity: WorkspaceSessionTerminalTabRemoval,
+    sessionBeforeRemoval: WorkspaceSessionState
+  ): void {
+    this.terminalTabRemovalReplayFences.delete(replayFenceKey)
+    this.terminalTabRemovalReplayFences.set(replayFenceKey, {
+      ...identity,
+      unifiedIdentity: terminalTabRemovalUnifiedIdentity(sessionBeforeRemoval, identity),
+      projection: {
+        unifiedTabs: structuredClone(sessionBeforeRemoval.unifiedTabs?.[identity.worktreeId]),
+        tabGroups: structuredClone(sessionBeforeRemoval.tabGroups?.[identity.worktreeId]),
+        tabGroupLayout: structuredClone(
+          sessionBeforeRemoval.tabGroupLayouts?.[identity.worktreeId]
+        ),
+        activeGroupId: sessionBeforeRemoval.activeGroupIdByWorktree?.[identity.worktreeId]
+      }
+    })
+    this.terminalTabRemovalAmbiguousReplayFences.delete(replayFenceKey)
+    while (this.terminalTabRemovalReplayFences.size > TERMINAL_TAB_REMOVAL_REPLAY_FENCE_MAX) {
+      const oldestKey = this.terminalTabRemovalReplayFences.keys().next().value
+      if (oldestKey === undefined) {
+        break
+      }
+      this.terminalTabRemovalReplayFences.delete(oldestKey)
+      this.terminalTabRemovalAmbiguousReplayFences.delete(oldestKey)
+    }
+  }
+
   /** Persist a non-'local' host partition. The PTY-binding race protections in
    *  setLocalWorkspaceSession only apply to the local daemon, so remote hosts
    *  take the lighter prune-and-store path. */
@@ -5671,6 +6348,7 @@ export class Store {
     // the durable binding and re-open the orphan window. Merge in any
     // existing bindings whenever the incoming snapshot's binding is empty.
     const prior = this.state.workspaceSession
+    session = this.applyTerminalTabRemovalReplayFences(session, prior)
     const normalized = normalizeWorkspaceSessionPaneIdentities(
       session,
       prior?.terminalLayoutsByTabId
@@ -5810,6 +6488,186 @@ export class Store {
     this.scheduleSave()
   }
 
+  private applyTerminalTabRemovalReplayFences(
+    session: WorkspaceSessionState,
+    prior: WorkspaceSessionState | undefined
+  ): WorkspaceSessionState {
+    let next = session
+    for (const identity of this.terminalTabRemovalReplayFences.values()) {
+      const replayFenceKey = `${identity.worktreeId}\u0000${identity.tabId}`
+      if (!this.hasSuppressibleTerminalTabRemovalReplayIdentity(next, identity)) {
+        if (
+          next.tabsByWorktree[identity.worktreeId]?.some(
+            (candidate) => candidate.id === identity.tabId
+          )
+        ) {
+          this.terminalTabRemovalAmbiguousReplayFences.add(replayFenceKey)
+        }
+        continue
+      }
+      if (prior && this.hasTerminalTabReplacementIdentity(prior, identity)) {
+        next = this.preserveTerminalTabReplacementProjection(next, prior, identity)
+        continue
+      }
+      // Why: renderer session writes are debounced; an already-captured snapshot
+      // must not recreate the exact stopped tab after its synchronous commit.
+      next = removeTerminalTabFromWorkspaceSessionProjection(next, identity)
+    }
+    return next
+  }
+
+  private hasTerminalTabReplacementIdentity(
+    session: WorkspaceSessionState,
+    identity: WorkspaceSessionTerminalTabRemovalReplayFence
+  ): boolean {
+    return (
+      session.tabsByWorktree[identity.worktreeId]?.some(
+        (candidate) => candidate.id === identity.tabId
+      ) === true && !this.hasSuppressibleTerminalTabRemovalReplayIdentity(session, identity)
+    )
+  }
+
+  private hasSuppressibleTerminalTabRemovalReplayIdentity(
+    session: WorkspaceSessionState,
+    identity: WorkspaceSessionTerminalTabRemovalReplayFence
+  ): boolean {
+    const matches = Object.entries(session.tabsByWorktree).flatMap(([worktreeId, tabs]) =>
+      tabs.filter((tab) => tab.id === identity.tabId).map((tab) => ({ tab, worktreeId }))
+    )
+    const match = matches[0]
+    const layout = session.terminalLayoutsByTabId[identity.tabId]
+    const bindings = Object.entries(layout?.ptyIdsByLeafId ?? {})
+    const tabPtyId = match?.tab.ptyId
+    return (
+      matches.length === 1 &&
+      match?.worktreeId === identity.worktreeId &&
+      match.tab.worktreeId === identity.worktreeId &&
+      match.tab.createdAt === identity.createdAt &&
+      match.tab.isPinned !== true &&
+      (tabPtyId === null ||
+        tabPtyId === undefined ||
+        tabPtyId === '' ||
+        tabPtyId === identity.ptyId) &&
+      layout?.root?.type === 'leaf' &&
+      layout.root.leafId === identity.leafId &&
+      layout.activeLeafId === identity.leafId &&
+      bindings.length <= 1 &&
+      bindings.every(([leafId, ptyId]) => leafId === identity.leafId && ptyId === identity.ptyId) &&
+      terminalTabProjectionEqual(
+        terminalTabRemovalUnifiedIdentity(session, identity),
+        identity.unifiedIdentity
+      )
+    )
+  }
+
+  private preserveTerminalTabReplacementProjection(
+    incoming: WorkspaceSessionState,
+    prior: WorkspaceSessionState,
+    identity: WorkspaceSessionTerminalTabRemoval
+  ): WorkspaceSessionState {
+    const worktreeId = identity.worktreeId
+    const priorTab = prior.tabsByWorktree[worktreeId]!.find((tab) => tab.id === identity.tabId)!
+    const priorLayout = prior.terminalLayoutsByTabId[identity.tabId]
+    const priorBindings = Object.entries(priorLayout?.ptyIdsByLeafId ?? {})
+    if (
+      priorTab.worktreeId === worktreeId &&
+      priorTab.createdAt === identity.createdAt &&
+      priorTab.isPinned !== true &&
+      typeof priorTab.ptyId === 'string' &&
+      priorTab.ptyId !== identity.ptyId &&
+      priorLayout?.root?.type === 'leaf' &&
+      priorLayout.root.leafId === identity.leafId &&
+      priorLayout.activeLeafId === identity.leafId &&
+      priorBindings.length === 1 &&
+      priorBindings[0]?.[0] === identity.leafId &&
+      priorBindings[0]?.[1] === priorTab.ptyId
+    ) {
+      // Why: a snapshot carrying the stopped binding is stale as a whole;
+      // rebuilding from it would delete newer siblings and active selectors.
+      return prior
+    }
+    const incomingTabs = incoming.tabsByWorktree[worktreeId] ?? []
+    const tabIndex = incomingTabs.findIndex((tab) => tab.id === identity.tabId)
+    const cleaned = removeTerminalTabFromWorkspaceSessionProjection(incoming, identity)
+    const nextTabs = cleaned.tabsByWorktree[worktreeId] ?? []
+    nextTabs.splice(tabIndex < 0 ? nextTabs.length : tabIndex, 0, priorTab)
+    const next: WorkspaceSessionState = {
+      ...cleaned,
+      tabsByWorktree: { ...cleaned.tabsByWorktree, [worktreeId]: nextTabs },
+      terminalLayoutsByTabId: {
+        ...cleaned.terminalLayoutsByTabId,
+        ...(priorLayout ? { [identity.tabId]: priorLayout } : {})
+      }
+    }
+
+    const isTargetUnifiedTab = (
+      tab: NonNullable<WorkspaceSessionState['unifiedTabs']>[string][number]
+    ) => tab.id === identity.tabId || tab.entityId === identity.tabId
+    const priorUnifiedTabs = prior.unifiedTabs?.[worktreeId]
+    const replacementTabs = priorUnifiedTabs?.filter(isTargetUnifiedTab) ?? []
+    if (replacementTabs.length > 0) {
+      const firstPriorIndex = priorUnifiedTabs?.findIndex(isTargetUnifiedTab) ?? -1
+      const incomingUnifiedTabs = incoming.unifiedTabs?.[worktreeId] ?? []
+      const firstIncomingIndex = incomingUnifiedTabs.findIndex(isTargetUnifiedTab)
+      const remaining = next.unifiedTabs?.[worktreeId] ?? []
+      remaining.splice(
+        firstIncomingIndex >= 0 ? firstIncomingIndex : Math.min(firstPriorIndex, remaining.length),
+        0,
+        ...replacementTabs
+      )
+      next.unifiedTabs = { ...next.unifiedTabs, [worktreeId]: remaining }
+    }
+    if (prior.tabGroups?.[worktreeId]) {
+      next.tabGroups = { ...next.tabGroups, [worktreeId]: prior.tabGroups[worktreeId] }
+    }
+    if (prior.tabGroupLayouts?.[worktreeId]) {
+      next.tabGroupLayouts = {
+        ...next.tabGroupLayouts,
+        [worktreeId]: prior.tabGroupLayouts[worktreeId]
+      }
+    }
+    if (prior.activeGroupIdByWorktree?.[worktreeId]) {
+      next.activeGroupIdByWorktree = {
+        ...next.activeGroupIdByWorktree,
+        [worktreeId]: prior.activeGroupIdByWorktree[worktreeId]
+      }
+    }
+    if (prior.activeTabIdByWorktree?.[worktreeId] !== undefined) {
+      next.activeTabIdByWorktree = {
+        ...next.activeTabIdByWorktree,
+        [worktreeId]: prior.activeTabIdByWorktree[worktreeId]!
+      }
+    }
+    if (prior.activeTabTypeByWorktree?.[worktreeId] !== undefined) {
+      next.activeTabTypeByWorktree = {
+        ...next.activeTabTypeByWorktree,
+        [worktreeId]: prior.activeTabTypeByWorktree[worktreeId]!
+      }
+    }
+    if (incoming.activeTabId === identity.tabId || prior.activeTabId === identity.tabId) {
+      next.activeTabId = prior.activeTabId
+    }
+    if (prior.remoteSessionIdsByTabId?.[identity.tabId]) {
+      next.remoteSessionIdsByTabId = {
+        ...next.remoteSessionIdsByTabId,
+        [identity.tabId]: prior.remoteSessionIdsByTabId[identity.tabId]
+      }
+    }
+    const preservedSleeping = Object.fromEntries(
+      Object.entries(prior.sleepingAgentSessionsByPaneKey ?? {}).filter(
+        ([, record]) => record.tabId === identity.tabId && record.worktreeId === identity.worktreeId
+      )
+    )
+    next.sleepingAgentSessionsByPaneKey = {
+      ...next.sleepingAgentSessionsByPaneKey,
+      ...preservedSleeping
+    }
+    next.activeWorktreeIdsOnShutdown = prior.activeWorktreeIdsOnShutdown?.includes(worktreeId)
+      ? Array.from(new Set([...(next.activeWorktreeIdsOnShutdown ?? []), worktreeId]))
+      : next.activeWorktreeIdsOnShutdown?.filter((candidate) => candidate !== worktreeId)
+    return next
+  }
+
   patchWorkspaceSession(patch: WorkspaceSessionPatch, hostId?: string | null): void {
     const resolved = this.resolveHostId(hostId)
     // Why: the renderer's debounced hot path sends only changed top-level
@@ -5818,6 +6676,13 @@ export class Store {
     let next: WorkspaceSessionState = {
       ...this.getWorkspaceSession(resolved),
       ...patch
+    }
+    if (resolved === LOCAL_EXECUTION_HOST_ID) {
+      next = this.applyTerminalTabRemovalReplayFencesToPatch(
+        next,
+        patch,
+        this.getWorkspaceSession(resolved)
+      )
     }
     if (workspaceSessionPatchNeedsFullNormalization(patch)) {
       this.setWorkspaceSession(next, resolved)
@@ -5835,6 +6700,866 @@ export class Store {
       }
     }
     this.scheduleSave()
+  }
+
+  private applyTerminalTabRemovalReplayFencesToPatch(
+    session: WorkspaceSessionState,
+    patch: WorkspaceSessionPatch,
+    prior: WorkspaceSessionState
+  ): WorkspaceSessionState {
+    const fencesByWorktree = new Map<string, WorkspaceSessionTerminalTabRemovalReplayFence[]>()
+    for (const fence of this.terminalTabRemovalReplayFences.values()) {
+      const fences = fencesByWorktree.get(fence.worktreeId) ?? []
+      fences.push(fence)
+      fencesByWorktree.set(fence.worktreeId, fences)
+    }
+    let next = session
+    for (const [worktreeId, fences] of fencesByWorktree) {
+      next = this.normalizeTerminalTabRemovalReplayPatchForWorktree(
+        next,
+        patch,
+        prior,
+        worktreeId,
+        fences
+      )
+    }
+    next = this.normalizeTerminalTabRemovalReplayGlobalSelectors(
+      next,
+      patch,
+      prior,
+      new Set(
+        [...this.terminalTabRemovalReplayFences.values()].flatMap((fence) => [
+          fence.tabId,
+          ...fence.unifiedIdentity.map((identity) => identity.id)
+        ])
+      ),
+      new Map(
+        [...fencesByWorktree].map(([worktreeId, fences]) => [
+          worktreeId,
+          new Set(
+            fences.flatMap((fence) => [
+              fence.tabId,
+              ...fence.unifiedIdentity.map((identity) => identity.id)
+            ])
+          )
+        ])
+      )
+    )
+    return this.validateOwnedWorkspaceSessionSelectorMaps(next, patch)
+  }
+
+  private getWorkspaceSessionSelectorProjection(
+    session: WorkspaceSessionState,
+    worktreeId: string,
+    selectors: {
+      terminalId: string | null | undefined
+      browserId: string | null | undefined
+      fileId: string | null | undefined
+      activeType: 'terminal' | 'browser' | 'simulator' | 'editor' | undefined
+      committedType?: 'terminal' | 'browser' | 'simulator' | 'editor'
+    } = {
+      terminalId: session.activeTabIdByWorktree?.[worktreeId],
+      browserId: session.activeBrowserTabIdByWorktree?.[worktreeId],
+      fileId: session.activeFileIdByWorktree?.[worktreeId],
+      activeType: session.activeTabTypeByWorktree?.[worktreeId]
+    }
+  ): {
+    terminalIds: Set<string>
+    browserIds: Set<string>
+    fileIds: Set<string>
+    visibleType: 'terminal' | 'browser' | 'simulator' | 'editor'
+  } {
+    const unifiedTabs = session.unifiedTabs?.[worktreeId] ?? []
+    const activeGroup = session.tabGroups?.[worktreeId]?.find(
+      (group) => group.id === session.activeGroupIdByWorktree?.[worktreeId]
+    )
+    const activeUnifiedTab = unifiedTabs.find((tab) => tab.id === activeGroup?.activeTabId)
+    const terminalIds = new Set(
+      unifiedTabs
+        .filter((tab) => tab.contentType === 'terminal')
+        .flatMap((tab) => [tab.id, tab.entityId])
+    )
+    for (const tab of session.tabsByWorktree[worktreeId] ?? []) {
+      terminalIds.add(tab.id)
+    }
+    const browserIds = new Set(
+      unifiedTabs
+        .filter((tab) => tab.contentType === 'browser')
+        .flatMap((tab) => [tab.id, tab.entityId])
+    )
+    for (const tab of session.browserTabsByWorktree?.[worktreeId] ?? []) {
+      browserIds.add(tab.id)
+    }
+    const fileIds = new Set(
+      unifiedTabs
+        .filter((tab) => terminalTabRemovalVisibleType(tab.contentType) === 'editor')
+        .flatMap((tab) => [tab.id, tab.entityId])
+    )
+    for (const file of session.openFilesByWorktree?.[worktreeId] ?? []) {
+      fileIds.add(file.filePath)
+    }
+    const hasSelectedTerminal =
+      selectors.terminalId != null && terminalIds.has(selectors.terminalId)
+    const hasSelectedBrowser = selectors.browserId != null && browserIds.has(selectors.browserId)
+    const hasSelectedFile = selectors.fileId != null && fileIds.has(selectors.fileId)
+    const visibleType = activeUnifiedTab
+      ? terminalTabRemovalVisibleType(activeUnifiedTab.contentType)
+      : selectors.activeType === 'browser' && hasSelectedBrowser
+        ? 'browser'
+        : selectors.activeType === 'editor' && hasSelectedFile
+          ? 'editor'
+          : selectors.activeType === 'terminal' && hasSelectedTerminal
+            ? 'terminal'
+            : selectors.committedType === 'browser' && hasSelectedBrowser
+              ? 'browser'
+              : selectors.committedType === 'editor' && hasSelectedFile
+                ? 'editor'
+                : selectors.committedType === 'terminal' && hasSelectedTerminal
+                  ? 'terminal'
+                  : hasSelectedBrowser && !hasSelectedFile && !hasSelectedTerminal
+                    ? 'browser'
+                    : hasSelectedFile && !hasSelectedBrowser && !hasSelectedTerminal
+                      ? 'editor'
+                      : 'terminal'
+    return { terminalIds, browserIds, fileIds, visibleType }
+  }
+
+  private normalizeTerminalTabRemovalReplayGlobalSelectors(
+    session: WorkspaceSessionState,
+    patch: WorkspaceSessionPatch,
+    prior: WorkspaceSessionState,
+    stoppedIds: ReadonlySet<string>,
+    stoppedTabIdsByWorktree: ReadonlyMap<string, ReadonlySet<string>>
+  ): WorkspaceSessionState {
+    if (stoppedIds.size === 0) {
+      return session
+    }
+    const active = session as WorkspaceSessionState & {
+      activeBrowserTabId?: string | null
+      activeFileId?: string | null
+      activeTabType?: 'terminal' | 'browser' | 'simulator' | 'editor'
+    }
+    const priorActive = prior as typeof active
+    const patchActive = patch as WorkspaceSessionPatch & {
+      activeBrowserTabId?: string | null
+      activeFileId?: string | null
+      activeTabType?: 'terminal' | 'browser' | 'simulator' | 'editor'
+    }
+    const requestedActiveWorktreeId = Object.hasOwn(patch, 'activeWorktreeId')
+      ? patch.activeWorktreeId
+      : prior.activeWorktreeId
+    const parsedRequestedWorkspace = requestedActiveWorktreeId
+      ? parseWorkspaceKey(requestedActiveWorktreeId)
+      : null
+    // Why: renderer folder switches already carry a canonical WorkspaceKey in
+    // activeWorktreeId; only legacy raw worktree IDs need a worktree prefix.
+    const expectedWorkspaceKey = requestedActiveWorktreeId
+      ? parsedRequestedWorkspace
+        ? (requestedActiveWorktreeId as WorkspaceKey)
+        : worktreeWorkspaceKey(requestedActiveWorktreeId)
+      : null
+    const requestedWorkspaceKey = Object.hasOwn(patch, 'activeWorkspaceKey')
+      ? patch.activeWorkspaceKey
+      : Object.hasOwn(patch, 'activeWorktreeId')
+        ? expectedWorkspaceKey
+        : prior.activeWorkspaceKey
+    const hasWorktreeSurface = (worktreeId: string): boolean =>
+      (session.tabsByWorktree[worktreeId]?.length ?? 0) > 0 ||
+      (session.unifiedTabs?.[worktreeId]?.length ?? 0) > 0 ||
+      (session.browserTabsByWorktree?.[worktreeId]?.length ?? 0) > 0 ||
+      (session.openFilesByWorktree?.[worktreeId]?.length ?? 0) > 0
+    const replaysFencedLanding =
+      requestedActiveWorktreeId != null &&
+      (!Object.hasOwn(patch, 'activeWorkspaceKey') ||
+        requestedWorkspaceKey === expectedWorkspaceKey) &&
+      !hasWorktreeSurface(requestedActiveWorktreeId) &&
+      prior.activeWorktreeId == null &&
+      prior.activeWorkspaceKey == null &&
+      typeof patch.activeTabId === 'string' &&
+      stoppedTabIdsByWorktree.get(requestedActiveWorktreeId)?.has(patch.activeTabId) === true
+    if (
+      requestedActiveWorktreeId &&
+      !replaysFencedLanding &&
+      (!hasWorktreeSurface(requestedActiveWorktreeId) ||
+        requestedWorkspaceKey !== expectedWorkspaceKey)
+    ) {
+      throw new Error('terminal_tab_replay_projection_ambiguous')
+    }
+    if (!requestedActiveWorktreeId && requestedWorkspaceKey) {
+      throw new Error('terminal_tab_replay_projection_ambiguous')
+    }
+    const activeWorktreeId = replaysFencedLanding
+      ? prior.activeWorktreeId
+      : requestedActiveWorktreeId
+    active.activeWorktreeId = activeWorktreeId ?? null
+    active.activeWorkspaceKey = replaysFencedLanding
+      ? (prior.activeWorkspaceKey ?? null)
+      : (requestedWorkspaceKey ?? null)
+    const worktreeProjection = activeWorktreeId
+      ? this.getWorkspaceSessionSelectorProjection(session, activeWorktreeId)
+      : {
+          terminalIds: new Set<string>(),
+          browserIds: new Set<string>(),
+          fileIds: new Set<string>(),
+          visibleType: 'terminal' as const
+        }
+    const selectorStoppedIds =
+      stoppedTabIdsByWorktree.get(
+        replaysFencedLanding ? requestedActiveWorktreeId! : (activeWorktreeId ?? '')
+      ) ?? new Set<string>()
+    const requestedGlobalType = patchActive.activeTabType
+    const hasStaleGlobalSelectorTuple =
+      Object.hasOwn(patch, 'activeTabType') &&
+      requestedGlobalType === 'terminal' &&
+      requestedGlobalType !== worktreeProjection.visibleType &&
+      activeWorktreeId != null &&
+      typeof patch.activeTabId === 'string' &&
+      stoppedTabIdsByWorktree.get(activeWorktreeId)?.has(patch.activeTabId) === true
+    const resolveIdSelector = (
+      ownsField: boolean,
+      requested: string | null | undefined,
+      current: string | null | undefined,
+      validIds: ReadonlySet<string>,
+      allowStoppedTerminalId = false
+    ): string | null => {
+      if (!ownsField) {
+        return current ?? null
+      }
+      if (requested == null || validIds.has(requested)) {
+        return requested ?? null
+      }
+      if (allowStoppedTerminalId && selectorStoppedIds.has(requested)) {
+        return current && validIds.has(current) ? current : null
+      }
+      throw new Error('terminal_tab_replay_projection_ambiguous')
+    }
+    active.activeTabId = resolveIdSelector(
+      Object.hasOwn(patch, 'activeTabId') && !hasStaleGlobalSelectorTuple,
+      patch.activeTabId,
+      prior.activeTabId,
+      worktreeProjection.terminalIds,
+      true
+    )
+    if (hasStaleGlobalSelectorTuple) {
+      resolveIdSelector(
+        Object.hasOwn(patch, 'activeBrowserTabId'),
+        patchActive.activeBrowserTabId,
+        priorActive.activeBrowserTabId,
+        worktreeProjection.browserIds
+      )
+      resolveIdSelector(
+        Object.hasOwn(patch, 'activeFileId'),
+        patchActive.activeFileId,
+        priorActive.activeFileId,
+        worktreeProjection.fileIds
+      )
+    }
+    active.activeBrowserTabId = resolveIdSelector(
+      Object.hasOwn(patch, 'activeBrowserTabId') && !hasStaleGlobalSelectorTuple,
+      patchActive.activeBrowserTabId,
+      priorActive.activeBrowserTabId,
+      worktreeProjection.browserIds
+    )
+    active.activeFileId = resolveIdSelector(
+      Object.hasOwn(patch, 'activeFileId') && !hasStaleGlobalSelectorTuple,
+      patchActive.activeFileId,
+      priorActive.activeFileId,
+      worktreeProjection.fileIds
+    )
+    const resolvedProjection = activeWorktreeId
+      ? this.getWorkspaceSessionSelectorProjection(session, activeWorktreeId, {
+          terminalId: active.activeTabId,
+          browserId: active.activeBrowserTabId,
+          fileId: active.activeFileId,
+          activeType: hasStaleGlobalSelectorTuple
+            ? worktreeProjection.visibleType
+            : requestedGlobalType,
+          committedType: priorActive.activeTabType
+        })
+      : worktreeProjection
+    if (
+      Object.hasOwn(patch, 'activeTabType') &&
+      requestedGlobalType !== resolvedProjection.visibleType &&
+      !hasStaleGlobalSelectorTuple
+    ) {
+      throw new Error('terminal_tab_replay_projection_ambiguous')
+    }
+    active.activeTabType = Object.hasOwn(patch, 'activeTabType')
+      ? hasStaleGlobalSelectorTuple
+        ? resolvedProjection.visibleType
+        : requestedGlobalType
+      : priorActive.activeTabType === resolvedProjection.visibleType
+        ? priorActive.activeTabType
+        : resolvedProjection.visibleType
+    return session
+  }
+
+  private validateOwnedWorkspaceSessionSelectorMaps(
+    session: WorkspaceSessionState,
+    patch: WorkspaceSessionPatch
+  ): WorkspaceSessionState {
+    const ownedSelectorMaps = [
+      patch.activeTabIdByWorktree,
+      patch.activeBrowserTabIdByWorktree,
+      patch.activeFileIdByWorktree,
+      patch.activeTabTypeByWorktree,
+      patch.activeGroupIdByWorktree
+    ].filter((selector): selector is NonNullable<typeof selector> => selector !== undefined)
+    const worktreeIds = new Set(ownedSelectorMaps.flatMap((selector) => Object.keys(selector)))
+    for (const worktreeId of worktreeIds) {
+      const groups = session.tabGroups?.[worktreeId] ?? []
+      const activeGroupId = session.activeGroupIdByWorktree?.[worktreeId]
+      if (
+        Object.hasOwn(patch.activeGroupIdByWorktree ?? {}, worktreeId) &&
+        (!activeGroupId || !groups.some((group) => group.id === activeGroupId))
+      ) {
+        throw new Error('terminal_tab_replay_projection_ambiguous')
+      }
+      const terminalId = session.activeTabIdByWorktree?.[worktreeId]
+      const browserId = session.activeBrowserTabIdByWorktree?.[worktreeId]
+      const fileId = session.activeFileIdByWorktree?.[worktreeId]
+      const activeType = session.activeTabTypeByWorktree?.[worktreeId]
+      const { terminalIds, browserIds, fileIds, visibleType } =
+        this.getWorkspaceSessionSelectorProjection(session, worktreeId, {
+          terminalId,
+          browserId,
+          fileId,
+          activeType
+        })
+      if (
+        (Object.hasOwn(patch.activeTabIdByWorktree ?? {}, worktreeId) &&
+          terminalId !== null &&
+          terminalId !== undefined &&
+          !terminalIds.has(terminalId)) ||
+        (Object.hasOwn(patch.activeBrowserTabIdByWorktree ?? {}, worktreeId) &&
+          browserId !== null &&
+          browserId !== undefined &&
+          !browserIds.has(browserId)) ||
+        (Object.hasOwn(patch.activeFileIdByWorktree ?? {}, worktreeId) &&
+          fileId !== null &&
+          fileId !== undefined &&
+          !fileIds.has(fileId)) ||
+        (Object.hasOwn(patch.activeTabTypeByWorktree ?? {}, worktreeId) &&
+          activeType !== visibleType)
+      ) {
+        throw new Error('terminal_tab_replay_projection_ambiguous')
+      }
+    }
+    return session
+  }
+
+  private normalizeTerminalTabRemovalReplayPatchForWorktree(
+    session: WorkspaceSessionState,
+    patch: WorkspaceSessionPatch,
+    prior: WorkspaceSessionState,
+    worktreeId: string,
+    fences: readonly WorkspaceSessionTerminalTabRemovalReplayFence[]
+  ): WorkspaceSessionState {
+    const ownsTabsByWorktree = Object.hasOwn(patch, 'tabsByWorktree')
+    const ownsTerminalLayouts = Object.hasOwn(patch, 'terminalLayoutsByTabId')
+    const ownsUnifiedTabs = Object.hasOwn(patch, 'unifiedTabs')
+    const hasUnifiedTabsForWorktree =
+      ownsUnifiedTabs && Object.hasOwn(patch.unifiedTabs ?? {}, worktreeId)
+    const ownsTabGroups = Object.hasOwn(patch, 'tabGroups')
+    const hasTabGroupsForWorktree =
+      ownsTabGroups && Object.hasOwn(patch.tabGroups ?? {}, worktreeId)
+    const ownsTabGroupLayout = Object.hasOwn(patch, 'tabGroupLayouts')
+    const hasTabGroupLayoutForWorktree =
+      ownsTabGroupLayout && Object.hasOwn(patch.tabGroupLayouts ?? {}, worktreeId)
+    const ownsActiveGroupField = Object.hasOwn(patch, 'activeGroupIdByWorktree')
+    const ownsActiveGroup =
+      ownsActiveGroupField && Object.hasOwn(patch.activeGroupIdByWorktree ?? {}, worktreeId)
+    const ownsWorktreeSelector = [
+      patch.activeTabIdByWorktree,
+      patch.activeBrowserTabIdByWorktree,
+      patch.activeFileIdByWorktree,
+      patch.activeTabTypeByWorktree
+    ].some((selector) => selector !== undefined && Object.hasOwn(selector, worktreeId))
+    const ownsGlobalSelector = [
+      'activeWorktreeId',
+      'activeWorkspaceKey',
+      'activeTabId',
+      'activeBrowserTabId',
+      'activeFileId',
+      'activeTabType'
+    ].some((key) => Object.hasOwn(patch, key))
+    const patchedTabs = ownsUnifiedTabs ? (patch.unifiedTabs?.[worktreeId] ?? []) : undefined
+    const patchedLegacyTabs = ownsTabsByWorktree
+      ? Object.entries(patch.tabsByWorktree ?? {}).flatMap(([ownerWorktreeId, tabs]) =>
+          tabs.map((tab) => ({ ownerWorktreeId, tab }))
+        )
+      : []
+    const matchesFence = (
+      tab: NonNullable<WorkspaceSessionState['unifiedTabs']>[string][number],
+      fence: WorkspaceSessionTerminalTabRemovalReplayFence
+    ): boolean => {
+      const projectedTab = fence.projection.unifiedTabs?.find(
+        (candidate) => candidate.id === tab.id && candidate.entityId === tab.entityId
+      )
+      return (
+        projectedTab?.createdAt === tab.createdAt &&
+        fence.unifiedIdentity.some(
+          (identity) =>
+            tab.id === identity.id &&
+            tab.entityId === identity.entityId &&
+            tab.groupId === identity.groupId &&
+            tab.worktreeId === identity.worktreeId &&
+            tab.contentType === identity.contentType
+        )
+      )
+    }
+    const protectedReplacementIds = new Set(
+      fences
+        .filter((fence) => this.hasTerminalTabReplacementIdentity(prior, fence))
+        .map((fence) => fence.tabId)
+    )
+    const incomingReplacementIds = new Set([
+      ...(patchedTabs ?? []).flatMap((tab) =>
+        fences.some(
+          (fence) =>
+            (tab.id === fence.tabId || tab.entityId === fence.tabId) && !matchesFence(tab, fence)
+        )
+          ? [tab.id]
+          : []
+      ),
+      ...patchedLegacyTabs.flatMap(({ ownerWorktreeId, tab }) =>
+        fences.some(
+          (fence) =>
+            tab.id === fence.tabId &&
+            (ownerWorktreeId !== fence.worktreeId ||
+              tab.worktreeId !== fence.worktreeId ||
+              tab.createdAt !== fence.createdAt ||
+              tab.isPinned === true ||
+              (typeof tab.ptyId === 'string' && tab.ptyId.length > 0 && tab.ptyId !== fence.ptyId))
+        )
+          ? [tab.id]
+          : []
+      )
+    ])
+    const stoppedFences = fences.filter(
+      (fence) =>
+        !protectedReplacementIds.has(fence.tabId) && !incomingReplacementIds.has(fence.tabId)
+    )
+    const stoppedIds = new Set(
+      stoppedFences.flatMap((fence) => [
+        fence.tabId,
+        ...fence.unifiedIdentity.map((identity) => identity.id)
+      ])
+    )
+    const stoppedGroupIds = new Set(
+      stoppedFences.flatMap((fence) => fence.unifiedIdentity.map((identity) => identity.groupId))
+    )
+    const patchedGroups = ownsTabGroups ? (patch.tabGroups?.[worktreeId] ?? []) : undefined
+    const patchLayout = ownsTabGroupLayout ? patch.tabGroupLayouts?.[worktreeId] : undefined
+    const hasStaleLegacyReference = stoppedFences.some(
+      (fence) =>
+        patchedLegacyTabs.some(
+          ({ ownerWorktreeId, tab }) =>
+            ownerWorktreeId === fence.worktreeId &&
+            tab.worktreeId === fence.worktreeId &&
+            tab.id === fence.tabId
+        ) ||
+        (ownsTerminalLayouts && Object.hasOwn(patch.terminalLayoutsByTabId ?? {}, fence.tabId))
+    )
+    const hasStaleReference =
+      hasStaleLegacyReference ||
+      (patchedTabs?.some((tab) => fences.some((fence) => matchesFence(tab, fence))) ?? false) ||
+      (patchedGroups?.some(
+        (group) =>
+          stoppedIds.has(group.activeTabId ?? '') ||
+          group.tabOrder.some((id) => stoppedIds.has(id)) ||
+          group.recentTabIds?.some((id) => stoppedIds.has(id))
+      ) ??
+        false) ||
+      (patchLayout
+        ? collectWorkspaceSessionGroupLayoutLeafIds(patchLayout).some((id) =>
+            stoppedGroupIds.has(id)
+          )
+        : false) ||
+      fences.some(
+        (fence) =>
+          (Object.hasOwn(patch, 'unifiedTabs') &&
+            terminalTabProjectionEqual(patchedTabs, fence.projection.unifiedTabs)) ||
+          (Object.hasOwn(patch, 'tabGroups') &&
+            terminalTabProjectionEqual(patchedGroups, fence.projection.tabGroups)) ||
+          (Object.hasOwn(patch, 'tabGroupLayouts') &&
+            terminalTabProjectionEqual(patchLayout, fence.projection.tabGroupLayout)) ||
+          (Object.hasOwn(patch, 'activeGroupIdByWorktree') &&
+            patch.activeGroupIdByWorktree?.[worktreeId] === fence.projection.activeGroupId)
+      ) ||
+      ownsWorktreeSelector ||
+      ownsActiveGroup ||
+      (ownsGlobalSelector &&
+        (prior.activeWorktreeId === worktreeId || patch.activeWorktreeId === worktreeId))
+    if (!hasStaleReference) {
+      return session
+    }
+
+    const mergedTabs = structuredClone(
+      ownsUnifiedTabs ? [] : (prior.unifiedTabs?.[worktreeId] ?? [])
+    )
+    for (const tab of patchedTabs ?? []) {
+      const stopped = fences.some((fence) => matchesFence(tab, fence))
+      const currentIndex = mergedTabs.findIndex((current) => current.id === tab.id)
+      if (stopped) {
+        if (protectedReplacementIds.has(tab.id)) {
+          mergedTabs.push(
+            ...(prior.unifiedTabs?.[worktreeId] ?? []).filter(
+              (current) => current.id === tab.id || current.entityId === tab.entityId
+            )
+          )
+        }
+        if (currentIndex >= 0 && !protectedReplacementIds.has(tab.id)) {
+          mergedTabs.splice(currentIndex, 1)
+        }
+        continue
+      }
+      if (currentIndex >= 0) {
+        mergedTabs[currentIndex] = tab
+      } else {
+        mergedTabs.push(tab)
+      }
+    }
+    const validTabIds = new Set(mergedTabs.map((tab) => tab.id))
+    const mergedGroups = structuredClone(ownsTabGroups ? [] : (prior.tabGroups?.[worktreeId] ?? []))
+    const explicitGroupIds = new Set<string>()
+    const explicitGroupByTabId = new Map<string, string>()
+    const staleOnlyGroupIds = new Set(
+      (patchedGroups ?? [])
+        .filter(
+          (group) =>
+            (stoppedIds.has(group.activeTabId ?? '') ||
+              group.tabOrder.some((tabId) => stoppedIds.has(tabId)) ||
+              group.recentTabIds?.some((tabId) => stoppedIds.has(tabId))) &&
+            !group.tabOrder.some((tabId) => validTabIds.has(tabId) && !stoppedIds.has(tabId))
+        )
+        .map((group) => group.id)
+    )
+    for (const patchedGroup of patchedGroups ?? []) {
+      if (staleOnlyGroupIds.has(patchedGroup.id)) {
+        continue
+      }
+      if (explicitGroupIds.has(patchedGroup.id)) {
+        throw new Error('terminal_tab_replay_projection_ambiguous')
+      }
+      explicitGroupIds.add(patchedGroup.id)
+      for (const tabId of patchedGroup.tabOrder) {
+        if (stoppedIds.has(tabId) || !validTabIds.has(tabId)) {
+          continue
+        }
+        const owner = explicitGroupByTabId.get(tabId)
+        if (owner && owner !== patchedGroup.id) {
+          throw new Error('terminal_tab_replay_projection_ambiguous')
+        }
+        explicitGroupByTabId.set(tabId, patchedGroup.id)
+      }
+    }
+    for (const tab of mergedTabs) {
+      const explicitOwner = explicitGroupByTabId.get(tab.id)
+      if (explicitOwner) {
+        tab.groupId = explicitOwner
+      }
+    }
+    for (const group of mergedGroups) {
+      if (explicitGroupIds.has(group.id)) {
+        continue
+      }
+      group.tabOrder = group.tabOrder.filter(
+        (tabId) =>
+          validTabIds.has(tabId) &&
+          !stoppedIds.has(tabId) &&
+          (explicitGroupByTabId.get(tabId) ?? group.id) === group.id
+      )
+      group.recentTabIds = (group.recentTabIds ?? []).filter((tabId) =>
+        group.tabOrder.includes(tabId)
+      )
+      if (!group.tabOrder.includes(group.activeTabId ?? '')) {
+        group.activeTabId = group.recentTabIds.at(-1) ?? group.tabOrder[0] ?? null
+      }
+    }
+    for (const patchedGroup of patchedGroups ?? []) {
+      if (staleOnlyGroupIds.has(patchedGroup.id)) {
+        continue
+      }
+      const currentIndex = mergedGroups.findIndex((group) => group.id === patchedGroup.id)
+      const current = currentIndex >= 0 ? mergedGroups[currentIndex]! : undefined
+      const tabOrder = Array.from(
+        new Set(patchedGroup.tabOrder.filter((id) => !stoppedIds.has(id) && validTabIds.has(id)))
+      )
+      const recentSource = Object.hasOwn(patchedGroup, 'recentTabIds')
+        ? (patchedGroup.recentTabIds ?? [])
+        : (current?.recentTabIds ?? [])
+      const recentTabIds = Array.from(new Set(recentSource.filter((id) => tabOrder.includes(id))))
+      const requestedActiveTabId = patchedGroup.activeTabId
+      if (
+        requestedActiveTabId &&
+        !stoppedIds.has(requestedActiveTabId) &&
+        !tabOrder.includes(requestedActiveTabId)
+      ) {
+        throw new Error('terminal_tab_replay_projection_ambiguous')
+      }
+      const activeTabId =
+        requestedActiveTabId && tabOrder.includes(requestedActiveTabId)
+          ? requestedActiveTabId
+          : (recentTabIds.at(-1) ?? tabOrder[0] ?? null)
+      const merged = { ...current, ...patchedGroup, activeTabId, tabOrder, recentTabIds }
+      if (currentIndex >= 0) {
+        mergedGroups[currentIndex] = merged
+      } else if (tabOrder.length > 0) {
+        mergedGroups.push(merged)
+      }
+    }
+    for (let index = mergedGroups.length - 1; index >= 0; index--) {
+      const group = mergedGroups[index]!
+      group.tabOrder = group.tabOrder.filter((id) => validTabIds.has(id))
+      group.recentTabIds = (group.recentTabIds ?? []).filter((id) => group.tabOrder.includes(id))
+      if (!group.tabOrder.includes(group.activeTabId ?? '')) {
+        group.activeTabId = group.recentTabIds.at(-1) ?? group.tabOrder[0] ?? null
+      }
+      if (
+        group.tabOrder.length === 0 &&
+        stoppedGroupIds.has(group.id) &&
+        !prior.tabGroups?.[worktreeId]?.some((current) => current.id === group.id)
+      ) {
+        mergedGroups.splice(index, 1)
+      }
+    }
+    for (const tab of mergedTabs) {
+      const containingGroups = mergedGroups.filter((group) => group.tabOrder.includes(tab.id))
+      if (containingGroups.length > 1) {
+        throw new Error('terminal_tab_replay_projection_ambiguous')
+      }
+      if (containingGroups.length === 0) {
+        const owner = mergedGroups.find((group) => group.id === tab.groupId)
+        if (!owner || explicitGroupIds.has(owner.id)) {
+          throw new Error('terminal_tab_replay_projection_ambiguous')
+        }
+        owner.tabOrder.push(tab.id)
+        owner.activeTabId ??= tab.id
+      } else if (containingGroups[0]!.id !== tab.groupId) {
+        throw new Error('terminal_tab_replay_projection_ambiguous')
+      }
+    }
+
+    let mergedLayout = structuredClone(
+      ownsTabGroupLayout ? patchLayout : prior.tabGroupLayouts?.[worktreeId]
+    )
+    const mergedGroupIds = new Set(mergedGroups.map((group) => group.id))
+    for (const groupId of mergedLayout
+      ? collectWorkspaceSessionGroupLayoutLeafIds(mergedLayout)
+      : []) {
+      if (!mergedGroupIds.has(groupId)) {
+        mergedLayout = removeWorkspaceSessionTabGroupLayoutLeaf(mergedLayout!, groupId) ?? undefined
+      }
+    }
+    const layoutIds = mergedLayout ? collectWorkspaceSessionGroupLayoutLeafIds(mergedLayout) : []
+    if (
+      mergedGroups.length > 0 &&
+      (layoutIds.length !== mergedGroups.length ||
+        new Set(layoutIds).size !== layoutIds.length ||
+        mergedGroups.some((group) => !layoutIds.includes(group.id)))
+    ) {
+      throw new Error('terminal_tab_replay_projection_ambiguous')
+    }
+    const groupOrder = new Map(layoutIds.map((groupId, index) => [groupId, index]))
+    mergedGroups.sort(
+      (left, right) =>
+        (groupOrder.get(left.id) ?? Number.MAX_SAFE_INTEGER) -
+        (groupOrder.get(right.id) ?? Number.MAX_SAFE_INTEGER)
+    )
+
+    const requestedActiveGroupId = ownsActiveGroup
+      ? patch.activeGroupIdByWorktree?.[worktreeId]
+      : undefined
+    if (
+      ownsActiveGroup &&
+      requestedActiveGroupId !== undefined &&
+      !mergedGroupIds.has(requestedActiveGroupId) &&
+      !stoppedGroupIds.has(requestedActiveGroupId)
+    ) {
+      throw new Error('terminal_tab_replay_projection_ambiguous')
+    }
+    const priorActiveGroupId = prior.activeGroupIdByWorktree?.[worktreeId]
+    const activeGroupId =
+      requestedActiveGroupId && mergedGroupIds.has(requestedActiveGroupId)
+        ? requestedActiveGroupId
+        : priorActiveGroupId && mergedGroupIds.has(priorActiveGroupId)
+          ? priorActiveGroupId
+          : (mergedGroups[0]?.id ?? null)
+    const next = structuredClone(session)
+    if (ownsTabsByWorktree) {
+      next.tabsByWorktree = structuredClone(session.tabsByWorktree)
+      for (const fence of stoppedFences) {
+        next.tabsByWorktree[fence.worktreeId] = (
+          next.tabsByWorktree[fence.worktreeId] ?? []
+        ).filter((tab) => tab.id !== fence.tabId)
+      }
+    }
+    if (ownsTerminalLayouts) {
+      next.terminalLayoutsByTabId = structuredClone(session.terminalLayoutsByTabId)
+      for (const fence of stoppedFences) {
+        delete next.terminalLayoutsByTabId[fence.tabId]
+      }
+    }
+    next.unifiedTabs = ownsUnifiedTabs
+      ? { ...next.unifiedTabs }
+      : { ...prior.unifiedTabs, ...next.unifiedTabs }
+    if (!ownsUnifiedTabs || hasUnifiedTabsForWorktree) {
+      next.unifiedTabs[worktreeId] = mergedTabs
+    } else {
+      delete next.unifiedTabs[worktreeId]
+    }
+    next.tabGroups = ownsTabGroups
+      ? { ...next.tabGroups }
+      : { ...prior.tabGroups, ...next.tabGroups }
+    if (!ownsTabGroups || hasTabGroupsForWorktree) {
+      next.tabGroups[worktreeId] = mergedGroups
+    } else {
+      delete next.tabGroups[worktreeId]
+    }
+    next.tabGroupLayouts = ownsTabGroupLayout
+      ? { ...next.tabGroupLayouts }
+      : { ...prior.tabGroupLayouts, ...next.tabGroupLayouts }
+    if (mergedLayout && (!ownsTabGroupLayout || hasTabGroupLayoutForWorktree)) {
+      next.tabGroupLayouts[worktreeId] = mergedLayout
+    } else {
+      delete next.tabGroupLayouts[worktreeId]
+    }
+    next.activeGroupIdByWorktree = ownsActiveGroupField
+      ? { ...next.activeGroupIdByWorktree }
+      : { ...prior.activeGroupIdByWorktree, ...next.activeGroupIdByWorktree }
+    if (activeGroupId && (!ownsActiveGroupField || ownsActiveGroup)) {
+      next.activeGroupIdByWorktree[worktreeId] = activeGroupId
+    } else {
+      delete next.activeGroupIdByWorktree[worktreeId]
+    }
+
+    const worktreeProjection = this.getWorkspaceSessionSelectorProjection(next, worktreeId, {
+      terminalId: next.activeTabIdByWorktree?.[worktreeId],
+      browserId: next.activeBrowserTabIdByWorktree?.[worktreeId],
+      fileId: next.activeFileIdByWorktree?.[worktreeId],
+      activeType: next.activeTabTypeByWorktree?.[worktreeId],
+      committedType: prior.activeTabTypeByWorktree?.[worktreeId]
+    })
+    const resolveIdSelector = (
+      ownsField: boolean,
+      requested: string | null | undefined,
+      current: string | null | undefined,
+      validIds: ReadonlySet<string>,
+      allowStoppedTerminalId = false
+    ): string | null => {
+      if (!ownsField) {
+        return current ?? null
+      }
+      if (requested === null || requested === undefined || validIds.has(requested)) {
+        return requested ?? null
+      }
+      if (allowStoppedTerminalId && stoppedIds.has(requested)) {
+        return current && validIds.has(current) ? current : null
+      }
+      throw new Error('terminal_tab_replay_projection_ambiguous')
+    }
+    const ownsActiveTabIdByWorktreeField = Object.hasOwn(patch, 'activeTabIdByWorktree')
+    const ownsActiveTabIdByWorktree =
+      ownsActiveTabIdByWorktreeField && Object.hasOwn(patch.activeTabIdByWorktree ?? {}, worktreeId)
+    const ownsActiveBrowserTabIdByWorktreeField = Object.hasOwn(
+      patch,
+      'activeBrowserTabIdByWorktree'
+    )
+    const ownsActiveBrowserTabIdByWorktree =
+      ownsActiveBrowserTabIdByWorktreeField &&
+      Object.hasOwn(patch.activeBrowserTabIdByWorktree ?? {}, worktreeId)
+    const ownsActiveFileIdByWorktreeField = Object.hasOwn(patch, 'activeFileIdByWorktree')
+    const ownsActiveFileIdByWorktree =
+      ownsActiveFileIdByWorktreeField &&
+      Object.hasOwn(patch.activeFileIdByWorktree ?? {}, worktreeId)
+    const ownsActiveTabTypeByWorktreeField = Object.hasOwn(patch, 'activeTabTypeByWorktree')
+    const ownsActiveTabTypeByWorktree =
+      ownsActiveTabTypeByWorktreeField &&
+      Object.hasOwn(patch.activeTabTypeByWorktree ?? {}, worktreeId)
+    const requestedWorktreeType = patch.activeTabTypeByWorktree?.[worktreeId]
+    const requestedWorktreeTerminalId = patch.activeTabIdByWorktree?.[worktreeId]
+    const hasStaleWorktreeSelectorTuple =
+      ownsActiveTabTypeByWorktree &&
+      requestedWorktreeType === 'terminal' &&
+      requestedWorktreeType !== worktreeProjection.visibleType &&
+      typeof requestedWorktreeTerminalId === 'string' &&
+      stoppedIds.has(requestedWorktreeTerminalId)
+    next.activeTabIdByWorktree = ownsActiveTabIdByWorktreeField
+      ? { ...next.activeTabIdByWorktree }
+      : { ...prior.activeTabIdByWorktree, ...next.activeTabIdByWorktree }
+    if (!ownsActiveTabIdByWorktreeField || ownsActiveTabIdByWorktree) {
+      next.activeTabIdByWorktree[worktreeId] = resolveIdSelector(
+        ownsActiveTabIdByWorktree && !hasStaleWorktreeSelectorTuple,
+        patch.activeTabIdByWorktree?.[worktreeId],
+        prior.activeTabIdByWorktree?.[worktreeId],
+        worktreeProjection.terminalIds,
+        true
+      )
+    } else {
+      delete next.activeTabIdByWorktree[worktreeId]
+    }
+    next.activeBrowserTabIdByWorktree = ownsActiveBrowserTabIdByWorktreeField
+      ? { ...next.activeBrowserTabIdByWorktree }
+      : { ...prior.activeBrowserTabIdByWorktree, ...next.activeBrowserTabIdByWorktree }
+    if (hasStaleWorktreeSelectorTuple) {
+      resolveIdSelector(
+        ownsActiveBrowserTabIdByWorktree,
+        patch.activeBrowserTabIdByWorktree?.[worktreeId],
+        prior.activeBrowserTabIdByWorktree?.[worktreeId],
+        worktreeProjection.browserIds
+      )
+      resolveIdSelector(
+        ownsActiveFileIdByWorktree,
+        patch.activeFileIdByWorktree?.[worktreeId],
+        prior.activeFileIdByWorktree?.[worktreeId],
+        worktreeProjection.fileIds
+      )
+    }
+    if (!ownsActiveBrowserTabIdByWorktreeField || ownsActiveBrowserTabIdByWorktree) {
+      next.activeBrowserTabIdByWorktree[worktreeId] = resolveIdSelector(
+        ownsActiveBrowserTabIdByWorktree && !hasStaleWorktreeSelectorTuple,
+        patch.activeBrowserTabIdByWorktree?.[worktreeId],
+        prior.activeBrowserTabIdByWorktree?.[worktreeId],
+        worktreeProjection.browserIds
+      )
+    } else {
+      delete next.activeBrowserTabIdByWorktree[worktreeId]
+    }
+    next.activeFileIdByWorktree = ownsActiveFileIdByWorktreeField
+      ? { ...next.activeFileIdByWorktree }
+      : { ...prior.activeFileIdByWorktree, ...next.activeFileIdByWorktree }
+    if (!ownsActiveFileIdByWorktreeField || ownsActiveFileIdByWorktree) {
+      next.activeFileIdByWorktree[worktreeId] = resolveIdSelector(
+        ownsActiveFileIdByWorktree && !hasStaleWorktreeSelectorTuple,
+        patch.activeFileIdByWorktree?.[worktreeId],
+        prior.activeFileIdByWorktree?.[worktreeId],
+        worktreeProjection.fileIds
+      )
+    } else {
+      delete next.activeFileIdByWorktree[worktreeId]
+    }
+    if (
+      ownsActiveTabTypeByWorktree &&
+      requestedWorktreeType !== worktreeProjection.visibleType &&
+      !hasStaleWorktreeSelectorTuple
+    ) {
+      throw new Error('terminal_tab_replay_projection_ambiguous')
+    }
+    next.activeTabTypeByWorktree = ownsActiveTabTypeByWorktreeField
+      ? { ...next.activeTabTypeByWorktree }
+      : { ...prior.activeTabTypeByWorktree, ...next.activeTabTypeByWorktree }
+    if (!ownsActiveTabTypeByWorktreeField || ownsActiveTabTypeByWorktree) {
+      next.activeTabTypeByWorktree[worktreeId] = ownsActiveTabTypeByWorktree
+        ? requestedWorktreeType === worktreeProjection.visibleType
+          ? requestedWorktreeType
+          : worktreeProjection.visibleType
+        : (prior.activeTabTypeByWorktree?.[worktreeId] ?? worktreeProjection.visibleType)
+    } else {
+      delete next.activeTabTypeByWorktree[worktreeId]
+    }
+
+    return next
   }
 
   private getTerminalLayoutLeafIds(root: TerminalPaneLayoutNode | null): Set<string> {

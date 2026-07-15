@@ -826,6 +826,7 @@ type RuntimeStore = {
   getGitHubCache: Store['getGitHubCache']
   getWorkspaceSession?: Store['getWorkspaceSession']
   setWorkspaceSession?: Store['setWorkspaceSession']
+  removeWorkspaceSessionTerminalTabAndFlush?: Store['removeWorkspaceSessionTerminalTabAndFlush']
   persistPtyBinding?: Store['persistPtyBinding']
   getUI?: Store['getUI']
   updateUI?: Store['updateUI']
@@ -1010,6 +1011,20 @@ type RuntimePtyWorktreeRecord = {
   waitBlockedAt: number | null
   // Why: memoized wait scan of the current retained tail (see RuntimeLeafRecord).
   tailWaitState?: TerminalTailWaitState
+}
+
+type DormantTerminalStopConfirmation = {
+  handle: string
+  record: RuntimePtyWorktreeRecord
+  ptyId: string
+  worktreeId: string
+  tabId: string
+  leafId: string
+  createdAt: number
+}
+
+type DormantTerminalCloseInFlight = DormantTerminalStopConfirmation & {
+  promise: Promise<RuntimeTerminalClose>
 }
 
 type TerminalCreateOptions = {
@@ -2226,6 +2241,8 @@ export class OrcaRuntimeService {
   // iterates them all. Listeners are cleaned up via subscriptionCleanups.
   private notificationListeners = new Set<(event: MobileNotificationEvent) => void>()
   private ptysById = new Map<string, RuntimePtyWorktreeRecord>()
+  private stoppedDormantTerminalByPtyId = new Map<string, DormantTerminalStopConfirmation>()
+  private dormantTerminalCloseByPtyId = new Map<string, DormantTerminalCloseInFlight>()
   private titleObservationSequence = 0
   private headlessTerminals = new Map<string, RuntimeHeadlessTerminal>()
   private ptyOutputSequenceById = new Map<string, number>()
@@ -3291,8 +3308,55 @@ export class OrcaRuntimeService {
       // so include them on every hydrate regardless of the onlyServeOwnedTerminals
       // filter, which is about terminal PTY ownership and never applies to browsers.
       const browserTabs = this.buildHeadlessMobileSessionBrowserTabs(entryWorktreeId)
-      const tabs: RuntimeMobileSessionSnapshotTab[] = [...terminalTabs, ...browserTabs]
+      const persistedGroups = session.tabGroups?.[entryWorktreeId]
+      const persistedLayout = session.tabGroupLayouts?.[entryWorktreeId]
+      const persistedUnifiedTabs = session.unifiedTabs?.[entryWorktreeId] ?? []
+      const existingCommittedNonTerminalTabs =
+        options.force === true
+          ? (existing?.tabs.filter((tab) => {
+              if (tab.type === 'terminal') {
+                return false
+              }
+              if (
+                tab.type === 'browser' &&
+                browserTabs.some(
+                  (browser) => browser.id === tab.id || browser.browserPageId === tab.browserPageId
+                )
+              ) {
+                return false
+              }
+              return persistedUnifiedTabs.some(
+                (unified) =>
+                  unified.id === tab.id ||
+                  ('filePath' in tab && unified.entityId === tab.filePath) ||
+                  (tab.type === 'browser' && unified.entityId === tab.browserPageId)
+              )
+            }) ?? [])
+          : []
+      const committedNonTerminalTabs = this.mergeMobileSessionSnapshotTabs(
+        existingCommittedNonTerminalTabs,
+        this.buildPersistedHeadlessMobileSessionNonTerminalTabs(entryWorktreeId, session)
+      )
+      const tabs = this.mergeMobileSessionSnapshotTabs(
+        [...terminalTabs, ...browserTabs],
+        committedNonTerminalTabs
+      )
       if (tabs.length === 0) {
+        if (options.force === true) {
+          this.mobileSessionTabsByWorktree.set(entryWorktreeId, {
+            worktree: existing?.worktree ?? entryWorktreeId,
+            publicationEpoch: `headless-hydrated:${Date.now().toString(36)}`,
+            snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
+            activeGroupId: session.activeGroupIdByWorktree?.[entryWorktreeId] ?? null,
+            activeTabId: null,
+            activeTabType: null,
+            ...(persistedGroups
+              ? { tabGroups: persistedGroups.map((group) => ({ ...group })) }
+              : {}),
+            ...(persistedLayout ? { tabGroupLayout: persistedLayout } : {}),
+            tabs: []
+          })
+        }
         continue
       }
       const activeTab = this.pickHeadlessActiveTerminalTab(terminalTabs)
@@ -3305,11 +3369,39 @@ export class OrcaRuntimeService {
         options.onlyServeOwnedTerminals === true && existing
           ? this.mergeMobileSessionSnapshotTabs(existing.tabs, tabs)
           : tabs
+      const committedActiveGroup = persistedGroups?.find(
+        (group) => group.id === session.activeGroupIdByWorktree?.[entryWorktreeId]
+      )
+      const committedActiveUnified = persistedUnifiedTabs.find(
+        (tab) => tab.id === committedActiveGroup?.activeTabId
+      )
+      const committedActiveTab = committedActiveUnified
+        ? (mergedTabs.find((tab) => {
+            if (tab.type === 'terminal') {
+              return (
+                tab.parentTabId === committedActiveUnified.entityId ||
+                tab.parentTabId === committedActiveUnified.id
+              )
+            }
+            if (tab.type === 'browser') {
+              return (
+                tab.id === committedActiveUnified.id ||
+                tab.browserPageId === committedActiveUnified.entityId
+              )
+            }
+            return (
+              tab.id === committedActiveUnified.id ||
+              tab.filePath === committedActiveUnified.entityId
+            )
+          }) ?? null)
+        : (committedNonTerminalTabs.find((tab) => tab.isActive) ?? null)
       const mergedActiveTab =
-        existing?.tabs.find((tab) => tab.id === existing.activeTabId) ??
-        activeTab ??
-        mergedTabs[0] ??
-        null
+        options.force === true
+          ? (committedActiveTab ?? activeTab ?? mergedTabs[0] ?? null)
+          : (existing?.tabs.find((tab) => tab.id === existing.activeTabId) ??
+            activeTab ??
+            mergedTabs[0] ??
+            null)
       const mergedTerminalTabs = mergedTabs.filter(
         (tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal'
       )
@@ -3319,12 +3411,10 @@ export class OrcaRuntimeService {
       // Why: a persisted multi-group split must be restored on cold rebuild, or
       // the headless serve coalesces the user's group layout back into one group
       // (the persisted tabGroups/tabGroupLayouts would otherwise be write-only).
-      const persistedGroups = session.tabGroups?.[entryWorktreeId]
-      const persistedLayout = session.tabGroupLayouts?.[entryWorktreeId]
       const hasPersistedSplit =
         options.onlyServeOwnedTerminals !== true &&
         persistedGroups !== undefined &&
-        persistedGroups.length > 1
+        (persistedGroups.length > 1 || options.force === true)
       const activeTopLevelId = mergedActiveTab
         ? mergedActiveTab.type === 'terminal'
           ? mergedActiveTab.parentTabId
@@ -3334,46 +3424,56 @@ export class OrcaRuntimeService {
         worktree: existing?.worktree ?? entryWorktreeId,
         publicationEpoch: `headless-hydrated:${Date.now().toString(36)}`,
         snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
-        activeGroupId: existing?.activeGroupId ?? groupId,
+        activeGroupId:
+          options.force === true
+            ? (session.activeGroupIdByWorktree?.[entryWorktreeId] ?? groupId)
+            : (existing?.activeGroupId ?? groupId),
         activeTabId: mergedActiveTab?.id ?? null,
         activeTabType: mergedActiveTab?.type ?? null,
-        tabGroups: hasPersistedSplit
-          ? this.appendBrowserTabOrder(
-              this.distributeHeadlessTabsAcrossGroups(
-                persistedGroups.map((group) => ({
-                  id: group.id,
-                  activeTabId: group.activeTabId,
-                  tabOrder: [...group.tabOrder],
-                  ...(group.recentTabIds ? { recentTabIds: [...group.recentTabIds] } : {})
-                })),
-                this.collectHeadlessParentTabOrder(mergedTerminalTabs),
-                activeTopLevelId
-              ),
-              mergedBrowserOrder,
-              undefined,
-              // Why: distribute drops browser ids (terminal-only), so carry each
-              // browser's persisted group forward instead of coalescing left.
-              this.collectBrowserGroupAssignment(persistedGroups, mergedBrowserOrder)
-            )
-          : options.onlyServeOwnedTerminals === true && existing?.tabGroups
-            ? this.appendBrowserTabOrder(
-                this.mergeMobileSessionTabGroups(
-                  entryWorktreeId,
-                  existing.tabGroups,
-                  mergedTerminalTabs,
-                  mergedActiveTab?.type === 'terminal' ? mergedActiveTab : null
-                ),
-                mergedBrowserOrder
-              )
-            : [
-                {
-                  id: groupId,
-                  activeTabId: mergedActiveTab?.id
-                    ? (activeTab?.parentTabId ?? mergedActiveTab.id)
-                    : (tabOrder[0] ?? null),
-                  tabOrder
-                }
-              ],
+        tabGroups:
+          options.force === true && persistedGroups
+            ? persistedGroups.map((group) => ({
+                ...group,
+                tabOrder: [...group.tabOrder],
+                ...(group.recentTabIds ? { recentTabIds: [...group.recentTabIds] } : {})
+              }))
+            : hasPersistedSplit
+              ? this.appendBrowserTabOrder(
+                  this.distributeHeadlessTabsAcrossGroups(
+                    persistedGroups.map((group) => ({
+                      id: group.id,
+                      activeTabId: group.activeTabId,
+                      tabOrder: [...group.tabOrder],
+                      ...(group.recentTabIds ? { recentTabIds: [...group.recentTabIds] } : {})
+                    })),
+                    this.collectHeadlessParentTabOrder(mergedTerminalTabs),
+                    activeTopLevelId
+                  ),
+                  mergedBrowserOrder,
+                  undefined,
+                  // Why: distribute drops browser ids (terminal-only), so carry each
+                  // browser's persisted group forward instead of coalescing left.
+                  this.collectBrowserGroupAssignment(persistedGroups, mergedBrowserOrder)
+                )
+              : options.onlyServeOwnedTerminals === true && existing?.tabGroups
+                ? this.appendBrowserTabOrder(
+                    this.mergeMobileSessionTabGroups(
+                      entryWorktreeId,
+                      existing.tabGroups,
+                      mergedTerminalTabs,
+                      mergedActiveTab?.type === 'terminal' ? mergedActiveTab : null
+                    ),
+                    mergedBrowserOrder
+                  )
+                : [
+                    {
+                      id: groupId,
+                      activeTabId: mergedActiveTab?.id
+                        ? (activeTab?.parentTabId ?? mergedActiveTab.id)
+                        : (tabOrder[0] ?? null),
+                      tabOrder
+                    }
+                  ],
         ...(hasPersistedSplit && persistedLayout ? { tabGroupLayout: persistedLayout } : {}),
         tabs: mergedTabs
       })
@@ -3882,6 +3982,158 @@ export class OrcaRuntimeService {
     })
   }
 
+  private buildPersistedHeadlessMobileSessionNonTerminalTabs(
+    worktreeId: string,
+    session: WorkspaceSessionState
+  ): RuntimeMobileSessionSnapshotTab[] {
+    const unifiedTabs = session.unifiedTabs?.[worktreeId] ?? []
+    const activeGroup = session.tabGroups?.[worktreeId]?.find(
+      (group) => group.id === session.activeGroupIdByWorktree?.[worktreeId]
+    )
+    const openFiles = session.openFilesByWorktree?.[worktreeId] ?? []
+    const browserWorkspaces = session.browserTabsByWorktree?.[worktreeId] ?? []
+    const unifiedSnapshotTabs = unifiedTabs.flatMap((tab): RuntimeMobileSessionSnapshotTab[] => {
+      const isActive = tab.id === activeGroup?.activeTabId
+      if (tab.contentType === 'editor') {
+        const file = openFiles.find((candidate) => candidate.filePath === tab.entityId)
+        const filePath = file?.filePath ?? tab.entityId
+        const relativePath = file?.relativePath ?? tab.label
+        const language = file?.language ?? 'plaintext'
+        if (language === 'markdown') {
+          return [
+            {
+              type: 'markdown',
+              id: tab.id,
+              title: tab.label,
+              filePath,
+              relativePath,
+              language: 'markdown',
+              mode: 'edit',
+              isDirty: file?.dirtyDraftContent !== undefined,
+              sourceFileId: tab.id,
+              sourceFilePath: filePath,
+              sourceRelativePath: relativePath,
+              documentVersion: `persisted:${tab.createdAt}`,
+              ...(tab.color != null ? { color: tab.color } : {}),
+              ...(tab.isPinned ? { isPinned: true } : {}),
+              isActive
+            }
+          ]
+        }
+        return [
+          {
+            type: 'file',
+            id: tab.id,
+            title: tab.label,
+            filePath,
+            relativePath,
+            language,
+            isDirty: file?.dirtyDraftContent !== undefined,
+            ...(tab.color != null ? { color: tab.color } : {}),
+            ...(tab.isPinned ? { isPinned: true } : {}),
+            isActive
+          }
+        ]
+      }
+      if (tab.contentType !== 'browser' && tab.contentType !== 'simulator') {
+        return []
+      }
+      const workspace = browserWorkspaces.find(
+        (candidate) => candidate.id === tab.entityId || candidate.id === tab.id
+      )
+      const page = workspace?.activePageId
+        ? session.browserPagesByWorkspace?.[workspace.id]?.find(
+            (candidate) => candidate.id === workspace.activePageId
+          )
+        : undefined
+      return [
+        {
+          type: 'browser',
+          id: tab.id,
+          title: tab.label || workspace?.title || page?.title || 'Browser',
+          browserWorkspaceId: workspace?.id ?? tab.entityId,
+          browserPageId: page?.id ?? workspace?.activePageId ?? null,
+          url: page?.url ?? workspace?.url ?? 'about:blank',
+          loading: page?.loading ?? workspace?.loading ?? false,
+          canGoBack: page?.canGoBack ?? workspace?.canGoBack ?? false,
+          canGoForward: page?.canGoForward ?? workspace?.canGoForward ?? false,
+          ...(tab.color != null ? { color: tab.color } : {}),
+          ...(tab.isPinned ? { isPinned: true } : {}),
+          isActive
+        }
+      ]
+    })
+    const legacyFiles: RuntimeMobileSessionSnapshotTab[] = openFiles
+      .filter(
+        (file) =>
+          !unifiedTabs.some(
+            (tab) =>
+              tab.contentType === 'editor' &&
+              (tab.id === file.filePath || tab.entityId === file.filePath)
+          )
+      )
+      .map((file) => ({
+        type: 'file',
+        id: file.filePath,
+        title: file.relativePath || file.filePath,
+        filePath: file.filePath,
+        relativePath: file.relativePath,
+        language: file.language,
+        isDirty: file.dirtyDraftContent !== undefined,
+        isActive: false
+      }))
+    const legacyBrowsers: RuntimeMobileSessionSnapshotTab[] = browserWorkspaces
+      .filter(
+        (workspace) =>
+          !unifiedTabs.some(
+            (tab) =>
+              (tab.contentType === 'browser' || tab.contentType === 'simulator') &&
+              (tab.id === workspace.id || tab.entityId === workspace.id)
+          )
+      )
+      .map((workspace) => {
+        const page = workspace.activePageId
+          ? session.browserPagesByWorkspace?.[workspace.id]?.find(
+              (candidate) => candidate.id === workspace.activePageId
+            )
+          : undefined
+        return {
+          type: 'browser',
+          id: workspace.id,
+          title: page?.title || workspace.title || 'Browser',
+          browserWorkspaceId: workspace.id,
+          browserPageId: page?.id ?? workspace.activePageId ?? null,
+          url: page?.url ?? workspace.url ?? 'about:blank',
+          loading: page?.loading ?? workspace.loading ?? false,
+          canGoBack: page?.canGoBack ?? workspace.canGoBack ?? false,
+          canGoForward: page?.canGoForward ?? workspace.canGoForward ?? false,
+          isActive: false
+        }
+      })
+    const merged = this.mergeMobileSessionSnapshotTabs(unifiedSnapshotTabs, [
+      ...legacyFiles,
+      ...legacyBrowsers
+    ])
+    if (unifiedTabs.some((tab) => tab.id === activeGroup?.activeTabId)) {
+      return merged
+    }
+    const activeType = session.activeTabTypeByWorktree?.[worktreeId]
+    const activeBrowserId = session.activeBrowserTabIdByWorktree?.[worktreeId]
+    const activeFileId = session.activeFileIdByWorktree?.[worktreeId]
+    return merged.map((tab) => ({
+      ...tab,
+      isActive:
+        (activeType === 'browser' &&
+          tab.type === 'browser' &&
+          (tab.id === activeBrowserId ||
+            tab.browserWorkspaceId === activeBrowserId ||
+            tab.browserPageId === activeBrowserId)) ||
+        (activeType === 'editor' &&
+          (tab.type === 'file' || tab.type === 'markdown') &&
+          (tab.id === activeFileId || tab.filePath === activeFileId))
+    }))
+  }
+
   private getPersistedUnifiedSessionTabProps(
     worktreeId: string,
     tabId: string
@@ -4206,7 +4458,13 @@ export class OrcaRuntimeService {
     }
     const result = this.toMobileSessionTabsResult(snapshot)
     for (const listener of this.mobileSessionTabListeners) {
-      listener(result)
+      try {
+        listener(result)
+      } catch (error) {
+        // A client callback is observational; it must not roll back or strand
+        // an already-committed runtime state transition.
+        console.error('[runtime] Mobile session tab listener failed:', error)
+      }
     }
   }
 
@@ -4652,7 +4910,8 @@ export class OrcaRuntimeService {
     worktreeId: string,
     snapshot: RuntimeMobileSessionTabsSnapshot,
     tab: RuntimeMobileSessionTerminalTab,
-    alreadyKilledPtyIds: ReadonlySet<string> = new Set()
+    alreadyKilledPtyIds: ReadonlySet<string> = new Set(),
+    durableRemovalCompleted = false
   ): void {
     const closedParentTabId = tab.parentTabId
     const nextTabs = snapshot.tabs.filter((candidate) => {
@@ -4672,7 +4931,9 @@ export class OrcaRuntimeService {
       }
       return false
     })
-    this.removePersistedHeadlessTerminalTab(worktreeId, closedParentTabId)
+    if (!durableRemovalCompleted) {
+      this.removePersistedHeadlessTerminalTab(worktreeId, closedParentTabId)
+    }
     const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
@@ -18692,7 +18953,7 @@ export class OrcaRuntimeService {
     }
     const tabId = this.resolveTabIdForTerminalClose(handle)
     const livePty = this.getLivePtyForHandle(handle)
-    if (livePty && !this.tabs.has(tabId) && this.store?.getWorkspaceSession) {
+    if (livePty && !this.tabs.has(tabId)) {
       if (this.graphStatus !== 'ready') {
         throw new Error('terminal_tab_close_unavailable')
       }
@@ -18716,26 +18977,88 @@ export class OrcaRuntimeService {
     tabId: string,
     pty: RuntimePtyWorktreeRecord
   ): Promise<RuntimeTerminalClose> {
-    const session = this.store?.getWorkspaceSession?.()
-    const persistedTabs = session?.tabsByWorktree[pty.worktreeId] ?? []
-    const persistedMatches = persistedTabs.filter((tab) => tab.id === tabId)
-    const layout = session?.terminalLayoutsByTabId?.[tabId]
+    const leafId = parsePaneKey(pty.paneKey ?? '')?.leafId ?? ''
+    const matches = Object.entries(
+      this.store?.getWorkspaceSession?.().tabsByWorktree ?? {}
+    ).flatMap(([worktreeId, tabs]) =>
+      tabs.filter((tab) => tab.id === tabId).map((tab) => ({ tab, worktreeId }))
+    )
+    const request: Omit<DormantTerminalCloseInFlight, 'promise'> = {
+      handle,
+      record: pty,
+      ptyId: pty.ptyId,
+      worktreeId: pty.worktreeId,
+      tabId,
+      leafId,
+      createdAt: matches.length === 1 ? matches[0]!.tab.createdAt : Number.NaN
+    }
+    const existing = this.dormantTerminalCloseByPtyId.get(pty.ptyId)
+    if (existing) {
+      if (this.hasExactDormantTerminalStopConfirmation(existing, request)) {
+        return existing.promise
+      }
+      throw new Error('terminal_tab_identity_ambiguous')
+    }
+    const promise = this.performDormantTerminalTabClose(handle, tabId, pty)
+    const inFlight = { ...request, promise }
+    this.dormantTerminalCloseByPtyId.set(pty.ptyId, inFlight)
+    const clear = (): void => {
+      if (this.dormantTerminalCloseByPtyId.get(pty.ptyId) === inFlight) {
+        this.dormantTerminalCloseByPtyId.delete(pty.ptyId)
+      }
+    }
+    void promise.then(clear, clear)
+    return promise
+  }
+
+  private async performDormantTerminalTabClose(
+    handle: string,
+    tabId: string,
+    pty: RuntimePtyWorktreeRecord
+  ): Promise<RuntimeTerminalClose> {
+    const store = this.store
     const leafId = parsePaneKey(pty.paneKey ?? '')?.leafId
-    if (!session || persistedMatches.length === 0 || !layout || !leafId) {
+    if (
+      !store?.getWorkspaceSession ||
+      !store.removeWorkspaceSessionTerminalTabAndFlush ||
+      !this.ptyController?.stopAndWait
+    ) {
+      throw new Error('terminal_tab_close_unavailable')
+    }
+    const graphEpoch = this.rendererGraphEpoch
+    const session = store.getWorkspaceSession()
+    const persistedMatches = Object.entries(session.tabsByWorktree).flatMap(([worktreeId, tabs]) =>
+      tabs.filter((tab) => tab.id === tabId).map((tab) => ({ tab, worktreeId }))
+    )
+    const persistedTab = persistedMatches[0]?.tab
+    if (!persistedTab || !session.terminalLayoutsByTabId?.[tabId] || !leafId) {
       throw new Error('terminal_tab_identity_missing')
     }
-    const persistedTab = persistedMatches[0]!
-    const ptyBindings = Object.entries(layout.ptyIdsByLeafId ?? {})
-    const exactBinding = ptyBindings.filter(
-      ([candidateLeafId, candidatePtyId]) =>
-        candidateLeafId === leafId && candidatePtyId === pty.ptyId
-    )
+    const stopIdentity: DormantTerminalStopConfirmation = {
+      handle,
+      record: pty,
+      ptyId: pty.ptyId,
+      worktreeId: pty.worktreeId,
+      tabId,
+      leafId,
+      createdAt: persistedTab.createdAt
+    }
+    const priorStop = this.stoppedDormantTerminalByPtyId.get(pty.ptyId)
+    const hasExactPriorStop = priorStop
+      ? this.hasExactDormantTerminalStopConfirmation(priorStop, stopIdentity)
+      : false
+    if (priorStop && !hasExactPriorStop) {
+      this.stoppedDormantTerminalByPtyId.delete(pty.ptyId)
+    }
     if (
-      persistedMatches.length !== 1 ||
-      persistedTab.isPinned === true ||
-      persistedTab.ptyId !== pty.ptyId ||
-      ptyBindings.length !== 1 ||
-      exactBinding.length !== 1
+      !this.hasExactDormantTerminalIdentity(session, {
+        handle,
+        tabId,
+        leafId,
+        pty,
+        createdAt: persistedTab.createdAt
+      }) ||
+      !this.isDormantTerminalAbsentFromRenderer(tabId, pty.ptyId)
     ) {
       throw new Error('terminal_tab_identity_ambiguous')
     }
@@ -18746,40 +19069,216 @@ export class OrcaRuntimeService {
       allowAttachedWindow: true,
       force: true
     })
-    const snapshot = this.mobileSessionTabsByWorktree.get(pty.worktreeId)
-    const snapshotMatches = snapshot?.tabs.filter(
-      (candidate): candidate is RuntimeMobileSessionTerminalTab =>
-        candidate.type === 'terminal' &&
-        candidate.parentTabId === tabId &&
-        candidate.leafId === leafId &&
-        candidate.ptyId === pty.ptyId
-    )
-    if (!snapshot || snapshotMatches?.length !== 1 || snapshotMatches[0]!.isPinned === true) {
+    const initialSnapshot = this.mobileSessionTabsByWorktree.get(pty.worktreeId)
+    if (!this.getExactDormantSnapshotTab(initialSnapshot, tabId, leafId, pty.ptyId)) {
       throw new Error('terminal_tab_identity_ambiguous')
     }
-    if (this.ptysById.get(pty.ptyId) !== pty || this.handleByPtyId.get(pty.ptyId) !== handle) {
-      throw new Error('terminal_handle_stale')
+
+    if (!hasExactPriorStop) {
+      const ptyKilled = await this.ptyController.stopAndWait(pty.ptyId)
+      if (!ptyKilled) {
+        throw new Error('terminal_tab_close_unavailable')
+      }
+      this.rememberStoppedDormantTerminal(stopIdentity)
     }
 
-    const ptyKilled = (await this.ptyController?.stopAndWait?.(pty.ptyId)) ?? false
-    if (!ptyKilled) {
-      throw new Error('terminal_tab_close_unavailable')
+    let durableRemoval: boolean | 'unknown' = false
+    try {
+      const identity = { handle, tabId, leafId, pty, createdAt: persistedTab.createdAt }
+      const currentSession = store.getWorkspaceSession()
+      const currentSnapshot = this.mobileSessionTabsByWorktree.get(pty.worktreeId)
+      const currentSnapshotTab = this.getExactDormantSnapshotTab(
+        currentSnapshot,
+        tabId,
+        leafId,
+        pty.ptyId
+      )
+      if (
+        this.graphStatus !== 'ready' ||
+        this.rendererGraphEpoch !== graphEpoch ||
+        !this.isDormantTerminalAbsentFromRenderer(tabId, pty.ptyId) ||
+        !this.hasExactDormantTerminalIdentity(currentSession, identity) ||
+        !currentSnapshot ||
+        !currentSnapshotTab
+      ) {
+        throw new Error('terminal_tab_identity_changed')
+      }
+
+      const receipt = await store.removeWorkspaceSessionTerminalTabAndFlush(
+        {
+          worktreeId: pty.worktreeId,
+          tabId,
+          createdAt: persistedTab.createdAt,
+          leafId,
+          ptyId: pty.ptyId
+        },
+        () => {
+          const latestSession = store.getWorkspaceSession!()
+          const latestSnapshot = this.mobileSessionTabsByWorktree.get(pty.worktreeId)
+          const confirmedStop = this.stoppedDormantTerminalByPtyId.get(pty.ptyId)
+          if (
+            this.graphStatus !== 'ready' ||
+            this.rendererGraphEpoch !== graphEpoch ||
+            !this.isDormantTerminalAbsentFromRenderer(tabId, pty.ptyId) ||
+            this.ptysById.get(pty.ptyId) !== pty ||
+            this.handleByPtyId.get(pty.ptyId) !== handle ||
+            !this.hasExactDormantTerminalIdentity(latestSession, identity) ||
+            !this.getExactDormantSnapshotTab(latestSnapshot, tabId, leafId, pty.ptyId) ||
+            !confirmedStop ||
+            !this.hasExactDormantTerminalStopConfirmation(confirmedStop, stopIdentity)
+          ) {
+            throw new Error('terminal_tab_identity_changed')
+          }
+        }
+      )
+      if (
+        receipt?.durableRemoval !== true ||
+        receipt.worktreeId !== pty.worktreeId ||
+        receipt.tabId !== tabId ||
+        receipt.createdAt !== persistedTab.createdAt ||
+        receipt.leafId !== leafId ||
+        receipt.ptyId !== pty.ptyId
+      ) {
+        throw new Error('terminal_tab_durable_removal_unconfirmed')
+      }
+      durableRemoval = true
+
+      // Cleanup is irrevocable after the durable receipt. Do it before client
+      // publication or renderer notification, both of which are fallible.
+      this.dropDisconnectedPtyRecord(pty.ptyId)
+      this.stoppedDormantTerminalByPtyId.delete(pty.ptyId)
+      // Rebuild from the committed projection: the persistence transaction has
+      // already selected MRU/group/layout successors more accurately than the
+      // pre-close mobile snapshot can infer.
+      this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(pty.worktreeId, {
+        allowAttachedWindow: true,
+        force: true
+      })
+      const committedSnapshot = this.mobileSessionTabsByWorktree.get(pty.worktreeId)
+      if (committedSnapshot) {
+        this.emitMobileSessionTabsSnapshot(committedSnapshot)
+      }
+      this.notifier!.closeTerminal(tabId)
+      return {
+        handle,
+        tabId,
+        closeMode: 'tab',
+        tabCloseRequested: true,
+        ptyKilled: true
+      }
+    } catch (cause) {
+      if (
+        durableRemoval === false &&
+        cause instanceof Error &&
+        cause.message === 'terminal_tab_removal_rollback_incomplete'
+      ) {
+        durableRemoval = 'unknown'
+      }
+      const partial: Error & RuntimeTerminalClose & { durableRemoval: boolean | 'unknown' } =
+        Object.assign(new Error('terminal_tab_close_partial'), {
+          cause,
+          handle,
+          tabId,
+          closeMode: 'tab' as const,
+          tabCloseRequested: false,
+          ptyKilled: true,
+          durableRemoval
+        })
+      throw partial
     }
-    this.closeHeadlessMobileTerminalTab(
-      pty.worktreeId,
-      snapshot,
-      snapshotMatches[0]!,
-      new Set([pty.ptyId])
+  }
+
+  private hasExactDormantTerminalStopConfirmation(
+    prior: DormantTerminalStopConfirmation,
+    current: DormantTerminalStopConfirmation
+  ): boolean {
+    return (
+      prior.handle === current.handle &&
+      prior.record === current.record &&
+      prior.ptyId === current.ptyId &&
+      prior.worktreeId === current.worktreeId &&
+      prior.tabId === current.tabId &&
+      prior.leafId === current.leafId &&
+      prior.createdAt === current.createdAt &&
+      current.record.ptyId === prior.ptyId &&
+      current.record.worktreeId === prior.worktreeId &&
+      current.record.tabId === prior.tabId &&
+      parsePaneKey(current.record.paneKey ?? '')?.leafId === prior.leafId
     )
-    this.dropDisconnectedPtyRecord(pty.ptyId)
-    this.notifier!.closeTerminal(tabId)
-    return {
-      handle,
-      tabId,
-      closeMode: 'tab',
-      tabCloseRequested: true,
-      ptyKilled: true
+  }
+
+  private rememberStoppedDormantTerminal(stop: DormantTerminalStopConfirmation): void {
+    this.stoppedDormantTerminalByPtyId.delete(stop.ptyId)
+    this.stoppedDormantTerminalByPtyId.set(stop.ptyId, stop)
+    while (this.stoppedDormantTerminalByPtyId.size > DISCONNECTED_PTY_RECORD_MAX) {
+      const oldest = this.stoppedDormantTerminalByPtyId.keys().next().value
+      if (oldest === undefined) {
+        break
+      }
+      this.stoppedDormantTerminalByPtyId.delete(oldest)
     }
+  }
+
+  private hasExactDormantTerminalIdentity(
+    session: WorkspaceSessionState,
+    identity: {
+      handle: string
+      tabId: string
+      leafId: string
+      pty: RuntimePtyWorktreeRecord
+      createdAt: number
+    }
+  ): boolean {
+    const matches = Object.entries(session.tabsByWorktree).flatMap(([worktreeId, tabs]) =>
+      tabs.filter((tab) => tab.id === identity.tabId).map((tab) => ({ tab, worktreeId }))
+    )
+    const match = matches[0]
+    const layout = session.terminalLayoutsByTabId?.[identity.tabId]
+    const bindings = Object.entries(layout?.ptyIdsByLeafId ?? {})
+    return (
+      matches.length === 1 &&
+      match?.worktreeId === identity.pty.worktreeId &&
+      match.tab.worktreeId === identity.pty.worktreeId &&
+      match.tab.createdAt === identity.createdAt &&
+      match.tab.isPinned !== true &&
+      match.tab.ptyId === identity.pty.ptyId &&
+      layout?.root?.type === 'leaf' &&
+      layout.root.leafId === identity.leafId &&
+      layout.activeLeafId === identity.leafId &&
+      bindings.length === 1 &&
+      bindings[0]?.[0] === identity.leafId &&
+      bindings[0]?.[1] === identity.pty.ptyId &&
+      this.ptysById.get(identity.pty.ptyId) === identity.pty &&
+      this.handleByPtyId.get(identity.pty.ptyId) === identity.handle
+    )
+  }
+
+  private isDormantTerminalAbsentFromRenderer(tabId: string, ptyId: string): boolean {
+    return (
+      !this.tabs.has(tabId) &&
+      ![...this.leaves.values()].some((leaf) => leaf.tabId === tabId || leaf.ptyId === ptyId)
+    )
+  }
+
+  private getExactDormantSnapshotTab(
+    snapshot: RuntimeMobileSessionTabsSnapshot | undefined,
+    tabId: string,
+    leafId: string,
+    ptyId: string
+  ): RuntimeMobileSessionTerminalTab | null {
+    const matches = snapshot?.tabs.filter(
+      (candidate): candidate is RuntimeMobileSessionTerminalTab =>
+        candidate.type === 'terminal' && candidate.parentTabId === tabId
+    )
+    if (
+      matches?.length !== 1 ||
+      matches[0]!.leafId !== leafId ||
+      matches[0]!.ptyId !== ptyId ||
+      matches[0]!.isPinned === true
+    ) {
+      return null
+    }
+    return matches[0]!
   }
 
   private resolveTabIdForTerminalClose(handle: string): string {
@@ -20471,6 +20970,7 @@ export class OrcaRuntimeService {
   private dropDisconnectedPtyRecord(ptyId: string): void {
     // Why: pruning can remove a PTY without the normal exit callback.
     serveSimStateWatcher.unbindPty(ptyId)
+    this.stoppedDormantTerminalByPtyId.delete(ptyId)
     this.ptysById.delete(ptyId)
     this.recentPtyOutputById.delete(ptyId)
     this.clearWaitBlockedCheckState(ptyId)
@@ -20948,6 +21448,11 @@ export class OrcaRuntimeService {
           ? liveBrowserTabsByPageId.get(tab.browserPageId)
           : undefined
         if (!liveTab) {
+          // Why: durable legacy browser workspaces have no live page on a headless
+          // host; retain the workspace descriptor without inventing routable state.
+          if (!this.offscreenBrowserBackend && !this.agentBrowserBridge?.tabList) {
+            tabs.push({ ...tab, browserPageId: null })
+          }
           continue
         }
         // Why: renderer session snapshots can lag behind BrowserView teardown or

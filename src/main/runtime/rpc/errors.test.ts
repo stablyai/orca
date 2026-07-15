@@ -9,10 +9,100 @@ class LineageError extends Error {
 }
 
 describe('mapRuntimeError', () => {
+  it('preserves only bounded terminal tab partial-close state', () => {
+    const error = Object.assign(new Error('terminal_tab_close_partial'), {
+      handle: 'term_123',
+      tabId: 'tab-123',
+      closeMode: 'tab',
+      tabCloseRequested: false,
+      ptyKilled: true,
+      durableRemoval: true,
+      cause: new Error('secret cause'),
+      arbitrary: 'must-not-leak',
+      secret: 'vault-token',
+      data: { unrelated: 'must-not-leak' }
+    })
+    error.stack = 'secret stack'
+
+    const response = mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, error)
+
+    expect(response).toEqual({
+      id: 'req_1',
+      ok: false,
+      error: {
+        code: 'terminal_tab_close_partial',
+        message: 'terminal_tab_close_partial',
+        data: {
+          handle: 'term_123',
+          tabId: 'tab-123',
+          closeMode: 'tab',
+          tabCloseRequested: false,
+          ptyKilled: true,
+          durableRemoval: true
+        }
+      },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    const serialized = JSON.stringify(response)
+    expect(serialized).not.toContain('secret cause')
+    expect(serialized).not.toContain('secret stack')
+    expect(serialized).not.toContain('must-not-leak')
+    expect(serialized).not.toContain('vault-token')
+  })
+
+  it('preserves bounded unknown durability without exposing rollback causes', () => {
+    const error = Object.assign(new Error('terminal_tab_close_partial'), {
+      handle: 'term_123',
+      tabId: 'tab-123',
+      closeMode: 'tab',
+      tabCloseRequested: false,
+      ptyKilled: true,
+      durableRemoval: 'unknown',
+      cause: Object.assign(new Error('terminal_tab_removal_rollback_incomplete'), {
+        rollbackCause: new Error('secret rollback path')
+      }),
+      secret: 'vault-token'
+    })
+
+    const response = mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, error)
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: {
+        code: 'terminal_tab_close_partial',
+        data: {
+          handle: 'term_123',
+          tabId: 'tab-123',
+          closeMode: 'tab',
+          tabCloseRequested: false,
+          ptyKilled: true,
+          durableRemoval: 'unknown'
+        }
+      }
+    })
+    expect(JSON.stringify(response)).not.toContain('secret rollback path')
+    expect(JSON.stringify(response)).not.toContain('vault-token')
+  })
+
+  it('keeps unrelated runtime failures generic without forwarding error data', () => {
+    const error = Object.assign(new Error('provider exploded'), {
+      data: { secret: 'must-not-leak' },
+      arbitrary: 'must-not-leak'
+    })
+
+    expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, error)).toEqual({
+      id: 'req_1',
+      ok: false,
+      error: { code: 'runtime_error', message: 'provider exploded' },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+  })
+
   it.each([
     'terminal_tab_close_unavailable',
     'terminal_tab_identity_missing',
-    'terminal_tab_identity_ambiguous'
+    'terminal_tab_identity_ambiguous',
+    'terminal_tab_unified_identity_ambiguous'
   ])('preserves the typed terminal tab close failure %s', (code) => {
     expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, new Error(code))).toMatchObject({
       ok: false,

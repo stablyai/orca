@@ -15,6 +15,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import type * as NodeFsPromises from 'node:fs/promises'
 import type {
   PersistedState,
   Project,
@@ -25,6 +26,7 @@ import type {
   TerminalTab,
   WorktreeLineage,
   WorkspaceLineage,
+  WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../shared/types'
 import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
@@ -52,6 +54,25 @@ const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => 
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
 }))
+
+const { asyncRenameControl } = vi.hoisted(() => ({
+  asyncRenameControl: {
+    beforeRename: null as null | ((source: string, destination: string) => Promise<void>),
+    afterRename: null as null | ((source: string, destination: string) => void)
+  }
+}))
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFsPromises>()
+  return {
+    ...actual,
+    rename: async (source: string, destination: string) => {
+      await asyncRenameControl.beforeRename?.(source, destination)
+      await actual.rename(source, destination)
+      asyncRenameControl.afterRename?.(source, destination)
+    }
+  }
+})
 
 vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
@@ -226,6 +247,373 @@ const makeTerminalTab = (overrides: Partial<TerminalTab> = {}): TerminalTab => (
   ...overrides
 })
 
+function makeReplayFenceSession(tabIds: readonly ('tab1' | 'tab2')[]): WorkspaceSessionState {
+  const metadata = {
+    tab1: { ptyId: 'pty1', leafId: TEST_LEAF_1, createdAt: 11, groupId: 'group1' },
+    tab2: { ptyId: 'pty2', leafId: TEST_LEAF_2, createdAt: 12, groupId: 'group2' }
+  }
+  const groups = tabIds.map((tabId) => ({
+    id: metadata[tabId].groupId,
+    worktreeId: 'wt1',
+    activeTabId: tabId,
+    tabOrder: [tabId],
+    recentTabIds: [tabId]
+  }))
+  return {
+    ...getDefaultWorkspaceSession(),
+    activeWorktreeId: 'wt1',
+    activeWorkspaceKey: 'worktree:wt1',
+    activeTabId: tabIds[0] ?? null,
+    tabsByWorktree: {
+      wt1: tabIds.map((tabId) =>
+        makeTerminalTab({ id: tabId, worktreeId: 'wt1', ...metadata[tabId] })
+      )
+    },
+    terminalLayoutsByTabId: Object.fromEntries(
+      tabIds.map((tabId) => {
+        const target = metadata[tabId]
+        return [
+          tabId,
+          {
+            root: { type: 'leaf', leafId: target.leafId },
+            activeLeafId: target.leafId,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [target.leafId]: target.ptyId }
+          }
+        ]
+      })
+    ),
+    unifiedTabs: {
+      wt1: tabIds.map((tabId, index) => ({
+        id: tabId,
+        entityId: tabId,
+        groupId: metadata[tabId].groupId,
+        worktreeId: 'wt1',
+        contentType: 'terminal',
+        label: tabId,
+        customLabel: null,
+        color: null,
+        sortOrder: index,
+        createdAt: metadata[tabId].createdAt
+      }))
+    },
+    tabGroups: { wt1: groups },
+    tabGroupLayouts: {
+      wt1:
+        groups.length === 2
+          ? {
+              type: 'split',
+              direction: 'horizontal',
+              first: { type: 'leaf', groupId: groups[0]!.id },
+              second: { type: 'leaf', groupId: groups[1]!.id }
+            }
+          : { type: 'leaf', groupId: groups[0]!.id }
+    },
+    activeGroupIdByWorktree: { wt1: groups[0]!.id }
+  } as WorkspaceSessionState
+}
+
+function makeStructuralReplayAuthoritySession(): WorkspaceSessionState {
+  const target = {
+    id: 'tab1',
+    entityId: 'tab1',
+    groupId: 'group-target',
+    worktreeId: 'wt1',
+    contentType: 'terminal' as const,
+    label: 'Stopped terminal',
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 11
+  }
+  const editor = {
+    id: 'editor-a',
+    entityId: '/tmp/a.md',
+    groupId: 'group-a',
+    worktreeId: 'wt1',
+    contentType: 'editor' as const,
+    label: 'a.md',
+    customLabel: null,
+    color: null,
+    sortOrder: 1,
+    createdAt: 12
+  }
+  const browser = {
+    id: 'browser-b',
+    entityId: 'browser-workspace-b',
+    groupId: 'group-b',
+    worktreeId: 'wt1',
+    contentType: 'browser' as const,
+    label: 'Browser B',
+    customLabel: null,
+    color: null,
+    sortOrder: 2,
+    createdAt: 13
+  }
+  const other = {
+    id: 'editor-other',
+    entityId: '/tmp/other.ts',
+    groupId: 'group-other',
+    worktreeId: 'wt2',
+    contentType: 'editor' as const,
+    label: 'other.ts',
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 20
+  }
+  const omitted = {
+    id: 'browser-omitted',
+    entityId: 'browser-workspace-omitted',
+    groupId: 'group-omitted',
+    worktreeId: 'wt3',
+    contentType: 'browser' as const,
+    label: 'Omitted browser',
+    customLabel: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 30
+  }
+  return {
+    ...getDefaultWorkspaceSession(),
+    activeWorktreeId: 'wt1',
+    activeWorkspaceKey: 'worktree:wt1',
+    activeTabId: 'tab1',
+    activeBrowserTabId: null,
+    activeFileId: null,
+    activeTabType: 'terminal',
+    tabsByWorktree: {
+      wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })],
+      wt2: [],
+      wt3: []
+    },
+    terminalLayoutsByTabId: {
+      tab1: {
+        root: { type: 'leaf', leafId: TEST_LEAF_1 },
+        activeLeafId: TEST_LEAF_1,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+      }
+    },
+    unifiedTabs: { wt1: [target, editor, browser], wt2: [other], wt3: [omitted] },
+    tabGroups: {
+      wt1: [
+        {
+          id: target.groupId,
+          worktreeId: 'wt1',
+          activeTabId: target.id,
+          tabOrder: [target.id],
+          recentTabIds: [target.id]
+        },
+        {
+          id: editor.groupId,
+          worktreeId: 'wt1',
+          activeTabId: editor.id,
+          tabOrder: [editor.id],
+          recentTabIds: [editor.id]
+        },
+        {
+          id: browser.groupId,
+          worktreeId: 'wt1',
+          activeTabId: browser.id,
+          tabOrder: [browser.id],
+          recentTabIds: [browser.id]
+        }
+      ],
+      wt2: [
+        {
+          id: other.groupId,
+          worktreeId: 'wt2',
+          activeTabId: other.id,
+          tabOrder: [other.id],
+          recentTabIds: [other.id]
+        }
+      ],
+      wt3: [
+        {
+          id: omitted.groupId,
+          worktreeId: 'wt3',
+          activeTabId: omitted.id,
+          tabOrder: [omitted.id],
+          recentTabIds: [omitted.id]
+        }
+      ]
+    },
+    tabGroupLayouts: {
+      wt1: {
+        type: 'split',
+        direction: 'horizontal',
+        first: { type: 'leaf', groupId: target.groupId },
+        second: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', groupId: editor.groupId },
+          second: { type: 'leaf', groupId: browser.groupId }
+        }
+      },
+      wt2: { type: 'leaf', groupId: other.groupId },
+      wt3: { type: 'leaf', groupId: omitted.groupId }
+    },
+    activeGroupIdByWorktree: {
+      wt1: target.groupId,
+      wt2: other.groupId,
+      wt3: omitted.groupId
+    },
+    activeTabIdByWorktree: { wt1: 'tab1', wt2: null, wt3: null },
+    activeBrowserTabIdByWorktree: { wt1: null, wt2: null, wt3: omitted.entityId },
+    activeFileIdByWorktree: { wt1: null, wt2: other.entityId, wt3: null },
+    activeTabTypeByWorktree: { wt1: 'terminal', wt2: 'editor', wt3: 'browser' }
+  } as WorkspaceSessionState
+}
+
+function makeCrossWorktreeReplaySession(): WorkspaceSessionState {
+  const worktrees = [
+    {
+      worktreeId: 'wt1',
+      groupId: 'group-wt1',
+      targetId: 'tab1',
+      targetPtyId: 'pty1',
+      targetLeafId: TEST_LEAF_1,
+      targetCreatedAt: 11,
+      survivorId: 'survivor-wt1',
+      survivorPtyId: 'pty-survivor-wt1',
+      survivorLeafId: TEST_LEAF_LIVE,
+      survivorCreatedAt: 13
+    },
+    {
+      worktreeId: 'wt2',
+      groupId: 'group-wt2',
+      targetId: 'tab2',
+      targetPtyId: 'pty2',
+      targetLeafId: TEST_LEAF_2,
+      targetCreatedAt: 12,
+      survivorId: 'survivor-wt2',
+      survivorPtyId: 'pty-survivor-wt2',
+      survivorLeafId: TEST_LEAF_EXPIRED,
+      survivorCreatedAt: 14
+    }
+  ] as const
+  return {
+    ...getDefaultWorkspaceSession(),
+    activeWorktreeId: 'wt1',
+    activeWorkspaceKey: 'worktree:wt1',
+    activeTabId: 'tab1',
+    activeBrowserTabId: null,
+    activeFileId: null,
+    activeTabType: 'terminal',
+    tabsByWorktree: Object.fromEntries(
+      worktrees.map((target) => [
+        target.worktreeId,
+        [
+          makeTerminalTab({
+            id: target.targetId,
+            worktreeId: target.worktreeId,
+            ptyId: target.targetPtyId,
+            createdAt: target.targetCreatedAt
+          }),
+          makeTerminalTab({
+            id: target.survivorId,
+            worktreeId: target.worktreeId,
+            ptyId: target.survivorPtyId,
+            createdAt: target.survivorCreatedAt
+          })
+        ]
+      ])
+    ),
+    terminalLayoutsByTabId: Object.fromEntries(
+      worktrees.flatMap((target) => [
+        [
+          target.targetId,
+          {
+            root: { type: 'leaf', leafId: target.targetLeafId },
+            activeLeafId: target.targetLeafId,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [target.targetLeafId]: target.targetPtyId }
+          }
+        ],
+        [
+          target.survivorId,
+          {
+            root: { type: 'leaf', leafId: target.survivorLeafId },
+            activeLeafId: target.survivorLeafId,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [target.survivorLeafId]: target.survivorPtyId }
+          }
+        ]
+      ])
+    ),
+    unifiedTabs: Object.fromEntries(
+      worktrees.map((target) => [
+        target.worktreeId,
+        [
+          {
+            id: target.targetId,
+            entityId: target.targetId,
+            groupId: target.groupId,
+            worktreeId: target.worktreeId,
+            contentType: 'terminal',
+            label: target.targetId,
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: target.targetCreatedAt
+          },
+          {
+            id: target.survivorId,
+            entityId: target.survivorId,
+            groupId: target.groupId,
+            worktreeId: target.worktreeId,
+            contentType: 'terminal',
+            label: target.survivorId,
+            customLabel: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: target.survivorCreatedAt
+          }
+        ]
+      ])
+    ),
+    tabGroups: Object.fromEntries(
+      worktrees.map((target) => [
+        target.worktreeId,
+        [
+          {
+            id: target.groupId,
+            worktreeId: target.worktreeId,
+            activeTabId: target.targetId,
+            tabOrder: [target.targetId, target.survivorId],
+            recentTabIds: [target.targetId, target.survivorId]
+          }
+        ]
+      ])
+    ),
+    tabGroupLayouts: Object.fromEntries(
+      worktrees.map((target) => [target.worktreeId, { type: 'leaf', groupId: target.groupId }])
+    ),
+    activeGroupIdByWorktree: Object.fromEntries(
+      worktrees.map((target) => [target.worktreeId, target.groupId])
+    ),
+    activeTabIdByWorktree: Object.fromEntries(
+      worktrees.map((target) => [target.worktreeId, target.targetId])
+    ),
+    activeBrowserTabIdByWorktree: { wt1: null, wt2: null },
+    activeFileIdByWorktree: { wt1: null, wt2: null },
+    activeTabTypeByWorktree: { wt1: 'terminal', wt2: 'terminal' }
+  } as WorkspaceSessionState
+}
+
+function collectLayoutGroupIds(
+  root: NonNullable<WorkspaceSessionState['tabGroupLayouts']>[string] | undefined
+): Set<string> {
+  if (!root) {
+    return new Set()
+  }
+  if (root.type === 'leaf') {
+    return new Set([root.groupId])
+  }
+  return new Set([...collectLayoutGroupIds(root.first), ...collectLayoutGroupIds(root.second)])
+}
+
 const makeWorktreeLineage = (overrides: Partial<WorktreeLineage> = {}): WorktreeLineage => ({
   worktreeId: 'r1::/path/child',
   worktreeInstanceId: 'child-instance',
@@ -324,9 +712,13 @@ describe('Store', () => {
     trackMock.mockReset()
     getCohortAtEmitMock.mockReset()
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
+    asyncRenameControl.beforeRename = null
+    asyncRenameControl.afterRename = null
   })
 
   afterEach(() => {
+    asyncRenameControl.beforeRename = null
+    asyncRenameControl.afterRename = null
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
@@ -916,6 +1308,151 @@ describe('Store', () => {
       expect(onboarding.lastCompletedStep).toBe(expectedStep)
       expect(onboarding.closedAt).toBeNull()
       expect(onboarding.outcome).toBeNull()
+    }
+  )
+
+  it.each([
+    {
+      type: 'terminal' as const,
+      successorId: 'terminal-unified',
+      entityId: 'tab2',
+      expectedTabId: 'tab2',
+      expectedBrowserId: 'browser2',
+      expectedFileId: '/tmp/two.ts'
+    },
+    {
+      type: 'browser' as const,
+      successorId: 'browser-unified',
+      entityId: 'browser2',
+      expectedTabId: null,
+      expectedBrowserId: 'browser2',
+      expectedFileId: '/tmp/two.ts'
+    },
+    {
+      type: 'editor' as const,
+      successorId: 'editor-unified',
+      entityId: '/tmp/two.ts',
+      expectedTabId: null,
+      expectedBrowserId: 'browser2',
+      expectedFileId: '/tmp/two.ts'
+    },
+    {
+      type: 'simulator' as const,
+      successorId: 'simulator-unified',
+      entityId: 'simulator2',
+      expectedTabId: null,
+      expectedBrowserId: 'browser2',
+      expectedFileId: '/tmp/two.ts'
+    }
+  ])(
+    'projects the selected unified $type successor into every active selector',
+    async ({ type, successorId, entityId, expectedTabId, expectedBrowserId, expectedFileId }) => {
+      const store = await createStore()
+      store.setWorkspaceSession({
+        ...getDefaultWorkspaceSession(),
+        activeWorktreeId: 'wt1',
+        activeTabId: 'tab1',
+        activeBrowserTabId: 'stale-browser',
+        activeFileId: '/tmp/stale.ts',
+        activeTabType: 'terminal',
+        activeTabIdByWorktree: { wt1: 'tab1' },
+        activeBrowserTabIdByWorktree: { wt1: 'browser2' },
+        activeFileIdByWorktree: { wt1: '/tmp/two.ts' },
+        activeTabTypeByWorktree: { wt1: 'terminal' },
+        tabsByWorktree: {
+          wt1: [
+            makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 }),
+            ...(type === 'terminal'
+              ? [makeTerminalTab({ id: 'tab2', worktreeId: 'wt1', ptyId: null, createdAt: 12 })]
+              : [])
+          ]
+        },
+        terminalLayoutsByTabId: {
+          tab1: {
+            root: { type: 'leaf', leafId: TEST_LEAF_1 },
+            activeLeafId: TEST_LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+          }
+        },
+        browserTabsByWorktree: {
+          wt1: [{ id: 'browser2', worktreeId: 'wt1', title: 'Browser', url: 'about:blank' }]
+        },
+        openFilesByWorktree: {
+          wt1: [
+            {
+              filePath: '/tmp/two.ts',
+              relativePath: 'two.ts',
+              worktreeId: 'wt1',
+              language: 'typescript'
+            }
+          ]
+        },
+        unifiedTabs: {
+          wt1: [
+            {
+              id: 'tab1',
+              entityId: 'tab1',
+              groupId: 'group1',
+              worktreeId: 'wt1',
+              contentType: 'terminal',
+              label: 'Closing',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 11
+            },
+            {
+              id: successorId,
+              entityId,
+              groupId: 'group1',
+              worktreeId: 'wt1',
+              contentType: type,
+              label: 'Successor',
+              customLabel: null,
+              color: null,
+              sortOrder: 1,
+              createdAt: 12
+            }
+          ]
+        },
+        tabGroups: {
+          wt1: [
+            {
+              id: 'group1',
+              worktreeId: 'wt1',
+              activeTabId: 'tab1',
+              tabOrder: ['tab1', successorId],
+              recentTabIds: [successorId, 'tab1']
+            }
+          ]
+        },
+        tabGroupLayouts: { wt1: { type: 'leaf', groupId: 'group1' } },
+        activeGroupIdByWorktree: { wt1: 'group1' }
+      } as unknown as WorkspaceSessionState & {
+        activeBrowserTabId: string | null
+        activeFileId: string | null
+        activeTabType: string
+      })
+
+      await store.removeWorkspaceSessionTerminalTabAndFlush({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        createdAt: 11,
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty1'
+      })
+
+      expect(store.getWorkspaceSession()).toMatchObject({
+        activeTabId: expectedTabId,
+        activeBrowserTabId: expectedBrowserId,
+        activeFileId: expectedFileId,
+        activeTabType: type,
+        activeTabIdByWorktree: { wt1: expectedTabId },
+        activeBrowserTabIdByWorktree: { wt1: expectedBrowserId },
+        activeFileIdByWorktree: { wt1: expectedFileId },
+        activeTabTypeByWorktree: { wt1: type }
+      })
     }
   )
 
@@ -6621,6 +7158,3700 @@ describe('Store', () => {
     expect(store.getWorkspaceSession()).toEqual(session)
   })
 
+  it('durably removes the exact terminal tab from the full session projection', async () => {
+    const store = await createStore()
+    const otherWorktreeId = 'wt2'
+    const targetGroupId = 'group-target'
+    const survivorGroupId = 'group-survivor'
+    const otherGroupId = 'group-other'
+    const targetPaneKey = makePaneKey('tab1', TEST_LEAF_1)
+    const otherPaneKey = makePaneKey('tab2', TEST_LEAF_2)
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      activeTabIdByWorktree: { wt1: 'tab1', [otherWorktreeId]: 'tab2' },
+      activeTabTypeByWorktree: { wt1: 'terminal', [otherWorktreeId]: 'terminal' },
+      activeWorktreeIdsOnShutdown: ['wt1', otherWorktreeId],
+      activeConnectionIdsAtShutdown: ['ssh-1'],
+      remoteSessionIdsByTabId: { tab1: 'remote-1', tab2: 'remote-2' },
+      browserUrlHistory: [
+        {
+          url: 'https://example.com',
+          normalizedUrl: 'https://example.com',
+          title: 'Example',
+          lastVisitedAt: 7,
+          visitCount: 1
+        }
+      ],
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })],
+        [otherWorktreeId]: [
+          makeTerminalTab({
+            id: 'tab2',
+            worktreeId: otherWorktreeId,
+            ptyId: 'pty2',
+            createdAt: 22
+          })
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+        },
+        tab2: {
+          root: { type: 'leaf', leafId: TEST_LEAF_2 },
+          activeLeafId: TEST_LEAF_2,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_2]: 'pty2' }
+        }
+      },
+      unifiedTabs: {
+        wt1: [
+          {
+            id: 'tab1',
+            entityId: 'tab1',
+            groupId: targetGroupId,
+            worktreeId: 'wt1',
+            contentType: 'terminal',
+            label: 'Target',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 11
+          },
+          {
+            id: 'browser1',
+            entityId: 'browser-workspace-1',
+            groupId: survivorGroupId,
+            worktreeId: 'wt1',
+            contentType: 'browser',
+            label: 'Browser',
+            customLabel: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 12
+          }
+        ],
+        [otherWorktreeId]: [
+          {
+            id: 'tab2',
+            entityId: 'tab2',
+            groupId: otherGroupId,
+            worktreeId: otherWorktreeId,
+            contentType: 'terminal',
+            label: 'Other',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 22
+          }
+        ]
+      },
+      tabGroups: {
+        wt1: [
+          {
+            id: targetGroupId,
+            worktreeId: 'wt1',
+            activeTabId: 'tab1',
+            tabOrder: ['tab1'],
+            recentTabIds: ['tab1']
+          },
+          {
+            id: survivorGroupId,
+            worktreeId: 'wt1',
+            activeTabId: 'browser1',
+            tabOrder: ['browser1']
+          }
+        ],
+        [otherWorktreeId]: [
+          {
+            id: otherGroupId,
+            worktreeId: otherWorktreeId,
+            activeTabId: 'tab2',
+            tabOrder: ['tab2']
+          }
+        ]
+      },
+      tabGroupLayouts: {
+        wt1: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', groupId: targetGroupId },
+          second: { type: 'leaf', groupId: survivorGroupId }
+        },
+        [otherWorktreeId]: { type: 'leaf', groupId: otherGroupId }
+      },
+      activeGroupIdByWorktree: { wt1: targetGroupId, [otherWorktreeId]: otherGroupId },
+      sleepingAgentSessionsByPaneKey: {
+        [targetPaneKey]: {
+          paneKey: targetPaneKey,
+          tabId: 'tab1',
+          worktreeId: 'wt1',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'target-session' },
+          prompt: 'Target',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: 1
+        },
+        [otherPaneKey]: {
+          paneKey: otherPaneKey,
+          tabId: 'tab2',
+          worktreeId: otherWorktreeId,
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'other-session' },
+          prompt: 'Other',
+          state: 'done',
+          capturedAt: 2,
+          updatedAt: 2
+        }
+      }
+    } as WorkspaceSessionState)
+    store.flush()
+    const before = structuredClone(store.getWorkspaceSession())
+    const unrelatedWorktreeProjection = {
+      tabs: before.tabsByWorktree[otherWorktreeId],
+      unifiedTabs: before.unifiedTabs?.[otherWorktreeId],
+      groups: before.tabGroups?.[otherWorktreeId],
+      layout: before.tabGroupLayouts?.[otherWorktreeId],
+      activeGroupId: before.activeGroupIdByWorktree?.[otherWorktreeId],
+      activeTabId: before.activeTabIdByWorktree?.[otherWorktreeId],
+      activeTabType: before.activeTabTypeByWorktree?.[otherWorktreeId],
+      remoteSessionId: before.remoteSessionIdsByTabId?.tab2,
+      sleepingSession: before.sleepingAgentSessionsByPaneKey?.[otherPaneKey]
+    }
+
+    const receipt = await store.removeWorkspaceSessionTerminalTabAndFlush({
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      createdAt: 11,
+      leafId: TEST_LEAF_1,
+      ptyId: 'pty1'
+    })
+
+    expect(receipt).toEqual({
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      createdAt: 11,
+      leafId: TEST_LEAF_1,
+      ptyId: 'pty1',
+      durableRemoval: true
+    })
+    const after = store.getWorkspaceSession()
+    expect(after).toEqual({
+      ...before,
+      activeTabId: null,
+      activeBrowserTabId: 'browser-workspace-1',
+      activeFileId: null,
+      activeTabType: 'browser',
+      activeTabIdByWorktree: { ...before.activeTabIdByWorktree, wt1: null },
+      activeBrowserTabIdByWorktree: {
+        ...before.activeBrowserTabIdByWorktree,
+        wt1: 'browser-workspace-1'
+      },
+      activeFileIdByWorktree: { ...before.activeFileIdByWorktree, wt1: null },
+      activeTabTypeByWorktree: { ...before.activeTabTypeByWorktree, wt1: 'browser' },
+      activeWorktreeIdsOnShutdown: [otherWorktreeId],
+      tabsByWorktree: { ...before.tabsByWorktree, wt1: [] },
+      terminalLayoutsByTabId: { tab2: before.terminalLayoutsByTabId.tab2 },
+      unifiedTabs: { ...before.unifiedTabs, wt1: [before.unifiedTabs!.wt1![1]!] },
+      tabGroups: { ...before.tabGroups, wt1: [before.tabGroups!.wt1![1]!] },
+      tabGroupLayouts: {
+        ...before.tabGroupLayouts,
+        wt1: { type: 'leaf', groupId: survivorGroupId }
+      },
+      activeGroupIdByWorktree: {
+        ...before.activeGroupIdByWorktree,
+        wt1: survivorGroupId
+      },
+      remoteSessionIdsByTabId: { tab2: 'remote-2' },
+      sleepingAgentSessionsByPaneKey: {
+        [otherPaneKey]: before.sleepingAgentSessionsByPaneKey![otherPaneKey]!
+      }
+    })
+    expect({
+      tabs: after.tabsByWorktree[otherWorktreeId],
+      unifiedTabs: after.unifiedTabs?.[otherWorktreeId],
+      groups: after.tabGroups?.[otherWorktreeId],
+      layout: after.tabGroupLayouts?.[otherWorktreeId],
+      activeGroupId: after.activeGroupIdByWorktree?.[otherWorktreeId],
+      activeTabId: after.activeTabIdByWorktree?.[otherWorktreeId],
+      activeTabType: after.activeTabTypeByWorktree?.[otherWorktreeId],
+      remoteSessionId: after.remoteSessionIdsByTabId?.tab2,
+      sleepingSession: after.sleepingAgentSessionsByPaneKey?.[otherPaneKey]
+    }).toEqual(unrelatedWorktreeProjection)
+    const reloaded = await createStore()
+    expect(reloaded.getWorkspaceSession()).toEqual(after)
+  })
+
+  it('fences a stale same-process renderer replay but accepts replacement identity', async () => {
+    const store = await createStore()
+    const original = {
+      ...getDefaultWorkspaceSession(),
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      activeTabIdByWorktree: { wt1: 'tab1' },
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf' as const, leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+        }
+      },
+      unifiedTabs: {
+        wt1: [
+          {
+            id: 'tab1',
+            entityId: 'tab1',
+            groupId: 'group1',
+            worktreeId: 'wt1',
+            contentType: 'terminal' as const,
+            label: 'Target',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 11
+          }
+        ]
+      },
+      tabGroups: {
+        wt1: [{ id: 'group1', worktreeId: 'wt1', activeTabId: 'tab1', tabOrder: ['tab1'] }]
+      },
+      tabGroupLayouts: { wt1: { type: 'leaf' as const, groupId: 'group1' } },
+      activeGroupIdByWorktree: { wt1: 'group1' },
+      remoteSessionIdsByTabId: { tab1: 'remote-original' }
+    } as WorkspaceSessionState
+    store.setWorkspaceSession(original)
+    store.flush()
+    await store.removeWorkspaceSessionTerminalTabAndFlush({
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      createdAt: 11,
+      leafId: TEST_LEAF_1,
+      ptyId: 'pty1'
+    })
+
+    store.setWorkspaceSession(structuredClone(original))
+    store.flush()
+    expect(store.getWorkspaceSession().tabsByWorktree.wt1).toEqual([])
+    expect(store.getWorkspaceSession().terminalLayoutsByTabId.tab1).toBeUndefined()
+    expect(store.getWorkspaceSession()).toMatchObject({
+      unifiedTabs: { wt1: [] },
+      tabGroups: { wt1: [{ id: 'group1', activeTabId: null, tabOrder: [] }] },
+      remoteSessionIdsByTabId: {}
+    })
+    expect((await createStore()).getWorkspaceSession().tabsByWorktree.wt1).toEqual([])
+
+    const replacement = structuredClone(original)
+    replacement.tabsByWorktree.wt1![0] = {
+      ...replacement.tabsByWorktree.wt1![0]!,
+      createdAt: 12,
+      ptyId: 'pty-replacement'
+    }
+    replacement.terminalLayoutsByTabId.tab1!.ptyIdsByLeafId = {
+      [TEST_LEAF_1]: 'pty-replacement'
+    }
+    replacement.unifiedTabs!.wt1![0]!.createdAt = 12
+    store.setWorkspaceSession(replacement)
+    expect(store.getWorkspaceSession().tabsByWorktree.wt1?.[0]).toMatchObject({
+      createdAt: 12,
+      ptyId: 'pty-replacement'
+    })
+    expect(store.getWorkspaceSession()).toMatchObject({
+      unifiedTabs: { wt1: [{ id: 'tab1', createdAt: 12 }] },
+      tabGroups: { wt1: [{ id: 'group1', activeTabId: 'tab1', tabOrder: ['tab1'] }] },
+      remoteSessionIdsByTabId: { tab1: 'remote-original' }
+    })
+    expect(store.getWorkspaceSession().unifiedTabs?.wt1?.[0]).toMatchObject({
+      id: 'tab1',
+      createdAt: 12
+    })
+    store.setWorkspaceSession(structuredClone(original))
+    expect(store.getWorkspaceSession().tabsByWorktree.wt1?.[0]).toMatchObject({
+      createdAt: 12,
+      ptyId: 'pty-replacement'
+    })
+    expect(store.getWorkspaceSession()).toMatchObject({
+      unifiedTabs: { wt1: [{ id: 'tab1', createdAt: 12 }] },
+      tabGroups: { wt1: [{ id: 'group1', activeTabId: 'tab1', tabOrder: ['tab1'] }] },
+      remoteSessionIdsByTabId: { tab1: 'remote-original' }
+    })
+
+    const replacementBinding = structuredClone(original)
+    replacementBinding.tabsByWorktree.wt1![0] = {
+      ...replacementBinding.tabsByWorktree.wt1![0]!,
+      ptyId: 'pty-rebound'
+    }
+    replacementBinding.terminalLayoutsByTabId.tab1!.ptyIdsByLeafId = {
+      [TEST_LEAF_1]: 'pty-rebound'
+    }
+    replacementBinding.tabsByWorktree.wt1!.push(
+      makeTerminalTab({ id: 'tab2', worktreeId: 'wt1', ptyId: 'pty2', createdAt: 12 })
+    )
+    replacementBinding.terminalLayoutsByTabId.tab2 = {
+      root: { type: 'leaf', leafId: TEST_LEAF_2 },
+      activeLeafId: TEST_LEAF_2,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [TEST_LEAF_2]: 'pty2' }
+    }
+    replacementBinding.unifiedTabs!.wt1!.push(
+      {
+        id: 'tab2',
+        entityId: 'tab2',
+        groupId: 'group1',
+        worktreeId: 'wt1',
+        contentType: 'terminal',
+        label: 'Second',
+        customLabel: null,
+        color: null,
+        sortOrder: 1,
+        createdAt: 12
+      },
+      {
+        id: 'browser2',
+        entityId: 'browser2',
+        groupId: 'group1',
+        worktreeId: 'wt1',
+        contentType: 'browser',
+        label: 'Browser',
+        customLabel: null,
+        color: null,
+        sortOrder: 2,
+        createdAt: 13
+      }
+    )
+    replacementBinding.tabGroups!.wt1![0] = {
+      ...replacementBinding.tabGroups!.wt1![0]!,
+      activeTabId: 'browser2',
+      tabOrder: ['tab1', 'tab2', 'browser2'],
+      recentTabIds: ['tab2', 'browser2']
+    }
+    replacementBinding.activeWorktreeId = 'wt1'
+    replacementBinding.activeWorkspaceKey = 'worktree:wt1'
+    replacementBinding.activeTabId = 'tab2'
+    replacementBinding.activeTabIdByWorktree = { wt1: 'tab2' }
+    replacementBinding.activeBrowserTabIdByWorktree = { wt1: 'browser2' }
+    replacementBinding.activeFileIdByWorktree = { wt1: '/tmp/current.ts' }
+    replacementBinding.activeTabTypeByWorktree = { wt1: 'browser' }
+    Object.assign(replacementBinding, {
+      activeBrowserTabId: 'browser2',
+      activeFileId: '/tmp/current.ts',
+      activeTabType: 'browser'
+    })
+    store.setWorkspaceSession(replacementBinding)
+    expect(store.getWorkspaceSession().tabsByWorktree.wt1?.[0]?.ptyId).toBe('pty-rebound')
+    store.setWorkspaceSession(structuredClone(original))
+    const preserved = store.getWorkspaceSession()
+    expect(preserved.tabsByWorktree.wt1?.[0]).toMatchObject({
+      createdAt: 11,
+      ptyId: 'pty-rebound'
+    })
+    expect(preserved.tabsByWorktree.wt1).toEqual(replacementBinding.tabsByWorktree.wt1)
+    expect(preserved.terminalLayoutsByTabId).toEqual(replacementBinding.terminalLayoutsByTabId)
+    expect(preserved).toMatchObject({
+      activeWorktreeId: 'wt1',
+      activeWorkspaceKey: 'worktree:wt1',
+      activeTabId: 'tab2',
+      activeBrowserTabId: 'browser2',
+      activeFileId: '/tmp/current.ts',
+      activeTabType: 'browser',
+      activeTabIdByWorktree: { wt1: 'tab2' },
+      activeBrowserTabIdByWorktree: { wt1: 'browser2' },
+      activeFileIdByWorktree: { wt1: '/tmp/current.ts' },
+      activeTabTypeByWorktree: { wt1: 'browser' },
+      unifiedTabs: { wt1: replacementBinding.unifiedTabs!.wt1 },
+      tabGroups: { wt1: replacementBinding.tabGroups!.wt1 },
+      remoteSessionIdsByTabId: { tab1: 'remote-original' }
+    })
+    expect(preserved.tabsByWorktree.wt1?.filter((tab) => tab.id === 'tab1')).toEqual([
+      expect.objectContaining({ ptyId: 'pty-rebound' })
+    ])
+  })
+
+  it('semantically fences a stopped tab inside a mixed projection patch', async () => {
+    const store = await createStore()
+    const targetUnified = {
+      id: 'tab1',
+      entityId: 'tab1',
+      groupId: 'group1',
+      worktreeId: 'wt1',
+      contentType: 'terminal' as const,
+      label: 'Stopped',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 11
+    }
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeWorktreeId: 'wt1',
+      activeWorkspaceKey: 'worktree:wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+        }
+      },
+      unifiedTabs: { wt1: [targetUnified] },
+      tabGroups: {
+        wt1: [
+          {
+            id: 'group1',
+            worktreeId: 'wt1',
+            activeTabId: 'tab1',
+            tabOrder: ['tab1'],
+            recentTabIds: ['tab1']
+          }
+        ]
+      },
+      tabGroupLayouts: { wt1: { type: 'leaf', groupId: 'group1' } },
+      activeGroupIdByWorktree: { wt1: 'group1' }
+    })
+    await store.removeWorkspaceSessionTerminalTabAndFlush({
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      createdAt: 11,
+      leafId: TEST_LEAF_1,
+      ptyId: 'pty1'
+    })
+
+    const current = store.getWorkspaceSession()
+    const editor = {
+      id: 'editor-current',
+      entityId: '/tmp/current.ts',
+      groupId: 'group1',
+      worktreeId: 'wt1',
+      contentType: 'editor' as const,
+      label: 'current.ts',
+      customLabel: null,
+      color: null,
+      sortOrder: 1,
+      createdAt: 12
+    }
+    store.setWorkspaceSession(
+      Object.assign(structuredClone(current), {
+        activeWorktreeId: 'wt1',
+        activeWorkspaceKey: 'worktree:wt1',
+        activeTabId: null,
+        activeFileId: '/tmp/current.ts',
+        activeTabType: 'editor',
+        unifiedTabs: { wt1: [editor] },
+        tabGroups: {
+          wt1: [
+            {
+              id: 'group1',
+              worktreeId: 'wt1',
+              activeTabId: editor.id,
+              tabOrder: [editor.id],
+              recentTabIds: [editor.id]
+            }
+          ]
+        },
+        tabGroupLayouts: { wt1: { type: 'leaf', groupId: 'group1' } },
+        activeGroupIdByWorktree: { wt1: 'group1' },
+        activeTabIdByWorktree: { wt1: null },
+        activeFileIdByWorktree: { wt1: '/tmp/current.ts' },
+        activeTabTypeByWorktree: { wt1: 'editor' }
+      })
+    )
+    const markdown = {
+      id: 'markdown-new',
+      entityId: '/tmp/new.md',
+      groupId: 'group-new',
+      worktreeId: 'wt1',
+      contentType: 'editor' as const,
+      label: 'new.md',
+      customLabel: null,
+      color: null,
+      sortOrder: 2,
+      createdAt: 13
+    }
+    store.patchWorkspaceSession({
+      activeTabId: 'tab1',
+      activeFileId: null,
+      activeTabType: 'terminal',
+      activeTabIdByWorktree: { wt1: 'tab1' },
+      activeFileIdByWorktree: { wt1: null },
+      activeTabTypeByWorktree: { wt1: 'terminal' },
+      unifiedTabs: { wt1: [targetUnified, editor, markdown] },
+      tabGroups: {
+        wt1: [
+          {
+            id: 'group1',
+            worktreeId: 'wt1',
+            activeTabId: editor.id,
+            tabOrder: ['tab1', editor.id],
+            recentTabIds: ['tab1', editor.id]
+          },
+          {
+            id: 'group-new',
+            worktreeId: 'wt1',
+            activeTabId: markdown.id,
+            tabOrder: [markdown.id],
+            recentTabIds: [markdown.id]
+          }
+        ]
+      },
+      tabGroupLayouts: {
+        wt1: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', groupId: 'group1' },
+          second: { type: 'leaf', groupId: 'group-new' }
+        }
+      },
+      activeGroupIdByWorktree: { wt1: 'group1' }
+    } as never)
+
+    const fenced = store.getWorkspaceSession()
+    expect(fenced.unifiedTabs?.wt1?.map((tab) => tab.id)).toEqual([editor.id, markdown.id])
+    expect(fenced.tabGroups?.wt1).toMatchObject([
+      { id: 'group1', activeTabId: editor.id, tabOrder: [editor.id], recentTabIds: [editor.id] },
+      {
+        id: 'group-new',
+        activeTabId: markdown.id,
+        tabOrder: [markdown.id],
+        recentTabIds: [markdown.id]
+      }
+    ])
+    expect(fenced).toMatchObject({
+      activeWorktreeId: 'wt1',
+      activeWorkspaceKey: 'worktree:wt1',
+      activeTabId: null,
+      activeFileId: '/tmp/current.ts',
+      activeTabType: 'editor',
+      activeTabIdByWorktree: { wt1: null },
+      activeFileIdByWorktree: { wt1: '/tmp/current.ts' },
+      activeTabTypeByWorktree: { wt1: 'editor' },
+      tabGroupLayouts: {
+        wt1: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', groupId: 'group1' },
+          second: { type: 'leaf', groupId: 'group-new' }
+        }
+      },
+      activeGroupIdByWorktree: { wt1: 'group1' }
+    })
+    expect(fenced.unifiedTabs?.wt1?.some((tab) => tab.id === 'tab1')).toBe(false)
+  })
+
+  it('strips presentation-drifted stopped chrome while preserving a rebound binding', async () => {
+    const store = await createStore()
+    const original = makeReplayFenceSession(['tab1'])
+    store.setWorkspaceSession(original)
+    await store.removeWorkspaceSessionTerminalTabAndFlush({
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      createdAt: 11,
+      leafId: TEST_LEAF_1,
+      ptyId: 'pty1'
+    })
+    const presentationDrift = structuredClone(original.unifiedTabs!)
+    Object.assign(presentationDrift.wt1![0]!, {
+      label: 'Renamed stale terminal',
+      customLabel: 'Custom stale',
+      color: 'blue',
+      sortOrder: 99
+    })
+    store.patchWorkspaceSession({
+      unifiedTabs: presentationDrift,
+      tabGroups: { wt1: [{ ...original.tabGroups!.wt1![0]!, recentTabIds: ['tab1', 'tab1'] }] }
+    })
+    expect(store.getWorkspaceSession().unifiedTabs?.wt1).toEqual([])
+    expect(store.getWorkspaceSession().tabGroups?.wt1).toEqual([])
+
+    const rebound = structuredClone(original)
+    rebound.tabsByWorktree.wt1![0]!.ptyId = 'pty-rebound'
+    rebound.terminalLayoutsByTabId.tab1!.ptyIdsByLeafId = { [TEST_LEAF_1]: 'pty-rebound' }
+    store.setWorkspaceSession(rebound)
+    store.patchWorkspaceSession({ unifiedTabs: presentationDrift })
+
+    expect(store.getWorkspaceSession().tabsByWorktree.wt1).toEqual([
+      expect.objectContaining({ id: 'tab1', ptyId: 'pty-rebound' })
+    ])
+    expect(store.getWorkspaceSession().unifiedTabs?.wt1).toEqual([
+      expect.objectContaining({ id: 'tab1' })
+    ])
+  })
+
+  it('composes simultaneous fences independent of order and replay count', async () => {
+    const store = await createStore()
+    const original = makeReplayFenceSession(['tab1', 'tab2'])
+    store.setWorkspaceSession(original)
+    for (const target of [
+      { tabId: 'tab1', createdAt: 11, leafId: TEST_LEAF_1, ptyId: 'pty1' },
+      { tabId: 'tab2', createdAt: 12, leafId: TEST_LEAF_2, ptyId: 'pty2' }
+    ]) {
+      await store.removeWorkspaceSessionTerminalTabAndFlush({ worktreeId: 'wt1', ...target })
+    }
+    const editor = {
+      id: 'editor-current',
+      entityId: '/tmp/current.ts',
+      groupId: 'group-current',
+      worktreeId: 'wt1',
+      contentType: 'editor' as const,
+      label: 'Current',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 20
+    }
+    const current = Object.assign(structuredClone(store.getWorkspaceSession()), {
+      unifiedTabs: { wt1: [editor] },
+      tabGroups: {
+        wt1: [
+          {
+            id: 'group-current',
+            worktreeId: 'wt1',
+            activeTabId: editor.id,
+            tabOrder: [editor.id],
+            recentTabIds: [editor.id]
+          }
+        ]
+      },
+      tabGroupLayouts: { wt1: { type: 'leaf', groupId: 'group-current' } },
+      activeGroupIdByWorktree: { wt1: 'group-current' }
+    })
+    store.setWorkspaceSession(current)
+    const browser = {
+      id: 'browser-new',
+      entityId: 'browser-new',
+      groupId: 'group-browser',
+      worktreeId: 'wt1',
+      contentType: 'browser' as const,
+      label: 'Browser',
+      customLabel: null,
+      color: null,
+      sortOrder: 1,
+      createdAt: 21
+    }
+    const patch = {
+      unifiedTabs: {
+        wt1: [...original.unifiedTabs!.wt1!, { ...editor, label: 'Updated' }, browser]
+      },
+      tabGroups: {
+        wt1: [
+          ...original.tabGroups!.wt1!,
+          {
+            id: 'group-current',
+            worktreeId: 'wt1',
+            activeTabId: editor.id,
+            tabOrder: [editor.id],
+            recentTabIds: [editor.id]
+          },
+          {
+            id: 'group-browser',
+            worktreeId: 'wt1',
+            activeTabId: browser.id,
+            tabOrder: [browser.id],
+            recentTabIds: [browser.id]
+          }
+        ]
+      },
+      tabGroupLayouts: {
+        wt1: {
+          type: 'split',
+          direction: 'horizontal',
+          first: original.tabGroupLayouts!.wt1!,
+          second: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', groupId: 'group-current' },
+            second: { type: 'leaf', groupId: 'group-browser' }
+          }
+        }
+      },
+      activeGroupIdByWorktree: { wt1: 'group-current' }
+    } as const
+    const apply = (): WorkspaceSessionState => {
+      store.patchWorkspaceSession(structuredClone(patch) as never)
+      return structuredClone(store.getWorkspaceSession())
+    }
+    const forward = apply()
+    const internals = store as unknown as { terminalTabRemovalReplayFences: Map<string, object> }
+    const reversed = [...internals.terminalTabRemovalReplayFences.entries()].toReversed()
+    store.setWorkspaceSession(current)
+    internals.terminalTabRemovalReplayFences.clear()
+    for (const [key, value] of reversed) {
+      internals.terminalTabRemovalReplayFences.set(key, value)
+    }
+    const reverse = apply()
+    const repeated = apply()
+
+    expect(reverse).toEqual(forward)
+    expect(repeated).toEqual(reverse)
+    expect(reverse.unifiedTabs?.wt1?.map((tab) => tab.id)).toEqual([editor.id, browser.id])
+    expect(reverse.tabGroups?.wt1?.map((group) => group.id)).toEqual([
+      'group-current',
+      'group-browser'
+    ])
+    expect(collectLayoutGroupIds(reverse.tabGroupLayouts?.wt1)).toEqual(
+      new Set(['group-current', 'group-browser'])
+    )
+  })
+
+  it('lets valid non-target updates and selectors win a mixed stale patch', async () => {
+    const store = await createStore()
+    const original = makeReplayFenceSession(['tab1'])
+    store.setWorkspaceSession(original)
+    await store.removeWorkspaceSessionTerminalTabAndFlush({
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      createdAt: 11,
+      leafId: TEST_LEAF_1,
+      ptyId: 'pty1'
+    })
+    const editor = {
+      id: 'editor-current',
+      entityId: '/tmp/current.ts',
+      groupId: 'group-current',
+      worktreeId: 'wt1',
+      contentType: 'editor' as const,
+      label: 'Old label',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 20
+    }
+    store.setWorkspaceSession(
+      Object.assign(structuredClone(store.getWorkspaceSession()), {
+        activeWorktreeId: 'wt1',
+        activeWorkspaceKey: 'worktree:wt1',
+        activeFileId: '/tmp/current.ts',
+        activeTabType: 'editor',
+        unifiedTabs: { wt1: [editor] },
+        tabGroups: {
+          wt1: [
+            {
+              id: 'group-current',
+              worktreeId: 'wt1',
+              activeTabId: editor.id,
+              tabOrder: [editor.id],
+              recentTabIds: [editor.id]
+            }
+          ]
+        },
+        tabGroupLayouts: { wt1: { type: 'leaf', groupId: 'group-current' } },
+        activeGroupIdByWorktree: { wt1: 'group-current' },
+        activeFileIdByWorktree: { wt1: '/tmp/current.ts' },
+        activeTabTypeByWorktree: { wt1: 'editor' }
+      })
+    )
+    const markdown = {
+      id: 'markdown-new',
+      entityId: '/tmp/new.md',
+      groupId: 'group-current',
+      worktreeId: 'wt1',
+      contentType: 'editor' as const,
+      label: 'new.md',
+      customLabel: null,
+      color: null,
+      sortOrder: 1,
+      createdAt: 21
+    }
+    const browser = {
+      id: 'browser-new',
+      entityId: 'browser-new',
+      groupId: 'group-browser',
+      worktreeId: 'wt1',
+      contentType: 'browser' as const,
+      label: 'Browser',
+      customLabel: null,
+      color: 'purple',
+      sortOrder: 2,
+      createdAt: 22
+    }
+    store.patchWorkspaceSession({
+      activeTabId: null,
+      activeBrowserTabId: browser.id,
+      activeFileId: '/tmp/updated.ts',
+      activeTabType: 'browser',
+      activeTabIdByWorktree: { wt1: null },
+      activeBrowserTabIdByWorktree: { wt1: browser.id },
+      activeFileIdByWorktree: { wt1: '/tmp/updated.ts' },
+      activeTabTypeByWorktree: { wt1: 'browser' },
+      unifiedTabs: {
+        wt1: [
+          original.unifiedTabs!.wt1![0]!,
+          { ...editor, entityId: '/tmp/updated.ts', label: 'Updated label' },
+          markdown,
+          browser
+        ]
+      },
+      tabGroups: {
+        wt1: [
+          {
+            id: 'group-current',
+            worktreeId: 'wt1',
+            activeTabId: markdown.id,
+            tabOrder: [markdown.id, editor.id],
+            recentTabIds: [editor.id, markdown.id]
+          },
+          {
+            id: 'group-browser',
+            worktreeId: 'wt1',
+            activeTabId: browser.id,
+            tabOrder: [browser.id],
+            recentTabIds: [browser.id]
+          }
+        ]
+      },
+      tabGroupLayouts: {
+        wt1: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', groupId: 'group-current' },
+          second: { type: 'leaf', groupId: 'group-browser' }
+        }
+      },
+      activeGroupIdByWorktree: { wt1: 'group-browser' }
+    } as never)
+
+    const session = store.getWorkspaceSession()
+    expect(session.unifiedTabs?.wt1).toMatchObject([
+      { id: editor.id, entityId: '/tmp/updated.ts', label: 'Updated label' },
+      { id: markdown.id },
+      { id: browser.id, color: 'purple' }
+    ])
+    expect(session.tabGroups?.wt1).toMatchObject([
+      {
+        id: 'group-current',
+        activeTabId: markdown.id,
+        tabOrder: [markdown.id, editor.id],
+        recentTabIds: [editor.id, markdown.id]
+      },
+      {
+        id: 'group-browser',
+        activeTabId: browser.id,
+        tabOrder: [browser.id],
+        recentTabIds: [browser.id]
+      }
+    ])
+    expect(session).toMatchObject({
+      activeBrowserTabId: browser.id,
+      activeFileId: '/tmp/updated.ts',
+      activeTabType: 'browser',
+      activeBrowserTabIdByWorktree: { wt1: browser.id },
+      activeFileIdByWorktree: { wt1: '/tmp/updated.ts' },
+      activeTabTypeByWorktree: { wt1: 'browser' },
+      activeGroupIdByWorktree: { wt1: 'group-browser' }
+    })
+    expect(session.unifiedTabs?.wt1?.some((tab) => tab.id === 'tab1')).toBe(false)
+  })
+
+  it('rejects selector-only stopped identities while preserving surviving selectors', async () => {
+    const store = await createStore()
+    const original = makeReplayFenceSession(['tab1'])
+    const browser = {
+      id: 'browser-survivor',
+      entityId: 'browser-workspace-survivor',
+      groupId: 'group-browser',
+      worktreeId: 'wt1',
+      contentType: 'browser' as const,
+      label: 'Browser',
+      customLabel: null,
+      color: null,
+      sortOrder: 1,
+      createdAt: 12
+    }
+    original.unifiedTabs!.wt1!.push(browser)
+    original.tabGroups!.wt1!.push({
+      id: 'group-browser',
+      worktreeId: 'wt1',
+      activeTabId: browser.id,
+      tabOrder: [browser.id],
+      recentTabIds: [browser.id]
+    })
+    original.tabGroupLayouts!.wt1 = {
+      type: 'split',
+      direction: 'horizontal',
+      first: { type: 'leaf', groupId: 'group1' },
+      second: { type: 'leaf', groupId: 'group-browser' }
+    }
+    store.setWorkspaceSession(original)
+    await store.removeWorkspaceSessionTerminalTabAndFlush({
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      createdAt: 11,
+      leafId: TEST_LEAF_1,
+      ptyId: 'pty1'
+    })
+    const committed = structuredClone(store.getWorkspaceSession())
+    expect(() =>
+      store.patchWorkspaceSession({
+        activeWorktreeId: 'wt1',
+        activeWorkspaceKey: 'worktree:wt1',
+        activeTabId: 'tab1',
+        activeBrowserTabId: 'tab1',
+        activeFileId: 'tab1',
+        activeTabType: 'terminal',
+        activeTabIdByWorktree: { wt1: 'tab1' },
+        activeBrowserTabIdByWorktree: { wt1: 'tab1' },
+        activeFileIdByWorktree: { wt1: 'tab1' },
+        activeTabTypeByWorktree: { wt1: 'terminal' }
+      } as never)
+    ).toThrow('terminal_tab_replay_projection_ambiguous')
+
+    expect(store.getWorkspaceSession()).toEqual(committed)
+    expect(store.getWorkspaceSession().unifiedTabs?.wt1).toEqual([browser])
+  })
+
+  it('accepts a valid foreground switch with a stale fenced slice and rejects an invalid switch', async () => {
+    const store = await createStore()
+    const original = makeReplayFenceSession(['tab1'])
+    const foregroundBrowser = {
+      id: 'browser-wt1',
+      entityId: 'browser-workspace-wt1',
+      groupId: 'group-browser-wt1',
+      worktreeId: 'wt1',
+      contentType: 'browser' as const,
+      label: 'First browser',
+      customLabel: null,
+      color: null,
+      sortOrder: 1,
+      createdAt: 12
+    }
+    const otherBrowser = {
+      id: 'browser-wt2',
+      entityId: 'browser-workspace-wt2',
+      groupId: 'group-browser-wt2',
+      worktreeId: 'wt2',
+      contentType: 'browser' as const,
+      label: 'Other browser',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 20
+    }
+    original.unifiedTabs = {
+      wt1: [...original.unifiedTabs!.wt1!, foregroundBrowser],
+      wt2: [otherBrowser]
+    }
+    original.tabGroups = {
+      wt1: [
+        ...original.tabGroups!.wt1!,
+        {
+          id: foregroundBrowser.groupId,
+          worktreeId: 'wt1',
+          activeTabId: foregroundBrowser.id,
+          tabOrder: [foregroundBrowser.id],
+          recentTabIds: [foregroundBrowser.id]
+        }
+      ],
+      wt2: [
+        {
+          id: otherBrowser.groupId,
+          worktreeId: 'wt2',
+          activeTabId: otherBrowser.id,
+          tabOrder: [otherBrowser.id],
+          recentTabIds: [otherBrowser.id]
+        }
+      ]
+    }
+    original.tabGroupLayouts = {
+      wt1: {
+        type: 'split',
+        direction: 'horizontal',
+        first: { type: 'leaf', groupId: 'group1' },
+        second: { type: 'leaf', groupId: foregroundBrowser.groupId }
+      },
+      wt2: { type: 'leaf', groupId: otherBrowser.groupId }
+    }
+    original.activeGroupIdByWorktree = {
+      wt1: 'group1',
+      wt2: otherBrowser.groupId
+    }
+    original.activeBrowserTabIdByWorktree = {
+      wt1: foregroundBrowser.entityId,
+      wt2: otherBrowser.entityId
+    }
+    original.activeFileIdByWorktree = { wt1: null, wt2: null }
+    original.activeTabTypeByWorktree = { wt1: 'terminal', wt2: 'browser' }
+    store.setWorkspaceSession(original)
+    await store.removeWorkspaceSessionTerminalTabAndFlush({
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      createdAt: 11,
+      leafId: TEST_LEAF_1,
+      ptyId: 'pty1'
+    })
+    const committed = structuredClone(store.getWorkspaceSession())
+    const staleUnifiedTabs = {
+      ...committed.unifiedTabs,
+      wt1: original.unifiedTabs.wt1
+    }
+
+    store.patchWorkspaceSession({
+      unifiedTabs: staleUnifiedTabs,
+      activeWorktreeId: 'wt2',
+      activeWorkspaceKey: 'worktree:wt2',
+      activeTabId: null,
+      activeBrowserTabId: otherBrowser.entityId,
+      activeFileId: null,
+      activeTabType: 'browser'
+    } as never)
+
+    expect(store.getWorkspaceSession()).toMatchObject({
+      activeWorktreeId: 'wt2',
+      activeWorkspaceKey: 'worktree:wt2',
+      activeTabId: null,
+      activeBrowserTabId: otherBrowser.entityId,
+      activeFileId: null,
+      activeTabType: 'browser'
+    })
+    expect(store.getWorkspaceSession().unifiedTabs?.wt1).toEqual([foregroundBrowser])
+    const beforeInvalid = structuredClone(store.getWorkspaceSession())
+    expect(() =>
+      store.patchWorkspaceSession({
+        unifiedTabs: staleUnifiedTabs,
+        activeWorktreeId: 'missing-worktree',
+        activeWorkspaceKey: 'worktree:missing-worktree',
+        activeTabId: null,
+        activeBrowserTabId: 'missing-browser',
+        activeFileId: null,
+        activeTabType: 'browser'
+      } as never)
+    ).toThrow('terminal_tab_replay_projection_ambiguous')
+    expect(store.getWorkspaceSession()).toEqual(beforeInvalid)
+  })
+
+  it('treats explicit group moves and MRU reductions as authoritative and replay-idempotent', async () => {
+    const editorOne = {
+      id: 'editor-one',
+      entityId: '/tmp/one.ts',
+      groupId: 'group-a',
+      worktreeId: 'wt1',
+      contentType: 'editor' as const,
+      label: 'one.ts',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 20
+    }
+    const editorTwo = {
+      id: 'editor-two',
+      entityId: '/tmp/two.ts',
+      groupId: 'group-a',
+      worktreeId: 'wt1',
+      contentType: 'editor' as const,
+      label: 'two.ts',
+      customLabel: null,
+      color: null,
+      sortOrder: 1,
+      createdAt: 21
+    }
+    const browser = {
+      id: 'browser-one',
+      entityId: 'browser-workspace-one',
+      groupId: 'group-b',
+      worktreeId: 'wt1',
+      contentType: 'browser' as const,
+      label: 'Browser',
+      customLabel: null,
+      color: null,
+      sortOrder: 2,
+      createdAt: 22
+    }
+    const setup = async (): Promise<Awaited<ReturnType<typeof createStore>>> => {
+      const store = await createStore()
+      const original = makeReplayFenceSession(['tab1'])
+      store.setWorkspaceSession(original)
+      await store.removeWorkspaceSessionTerminalTabAndFlush({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        createdAt: 11,
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty1'
+      })
+      store.setWorkspaceSession({
+        ...store.getWorkspaceSession(),
+        activeWorktreeId: 'wt1',
+        activeWorkspaceKey: 'worktree:wt1',
+        activeTabId: null,
+        activeBrowserTabId: null,
+        activeFileId: editorTwo.entityId,
+        activeTabType: 'editor',
+        unifiedTabs: { wt1: [editorOne, editorTwo, browser] },
+        tabGroups: {
+          wt1: [
+            {
+              id: 'group-a',
+              worktreeId: 'wt1',
+              activeTabId: editorTwo.id,
+              tabOrder: [editorOne.id, editorTwo.id],
+              recentTabIds: [editorTwo.id, editorOne.id]
+            },
+            {
+              id: 'group-b',
+              worktreeId: 'wt1',
+              activeTabId: browser.id,
+              tabOrder: [browser.id],
+              recentTabIds: [browser.id]
+            }
+          ]
+        },
+        tabGroupLayouts: {
+          wt1: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', groupId: 'group-a' },
+            second: { type: 'leaf', groupId: 'group-b' }
+          }
+        },
+        activeGroupIdByWorktree: { wt1: 'group-a' },
+        activeTabIdByWorktree: { wt1: null },
+        activeBrowserTabIdByWorktree: { wt1: null },
+        activeFileIdByWorktree: { wt1: editorTwo.entityId },
+        activeTabTypeByWorktree: { wt1: 'editor' }
+      } as WorkspaceSessionState)
+      return store
+    }
+    const originalTarget = makeReplayFenceSession(['tab1']).unifiedTabs!.wt1![0]!
+    const movedEditor = { ...editorTwo, groupId: 'group-b' }
+    const groups = [
+      {
+        id: 'group-a',
+        worktreeId: 'wt1',
+        activeTabId: editorOne.id,
+        tabOrder: [editorOne.id],
+        recentTabIds: [editorOne.id]
+      },
+      {
+        id: 'group-b',
+        worktreeId: 'wt1',
+        activeTabId: movedEditor.id,
+        tabOrder: [movedEditor.id, browser.id],
+        recentTabIds: [movedEditor.id]
+      }
+    ]
+    const makePatch = (patchedGroups: typeof groups): WorkspaceSessionPatch =>
+      ({
+        unifiedTabs: { wt1: [originalTarget, editorOne, movedEditor, browser] },
+        tabGroups: { wt1: patchedGroups },
+        activeGroupIdByWorktree: { wt1: 'group-b' },
+        activeTabId: null,
+        activeBrowserTabId: null,
+        activeFileId: movedEditor.entityId,
+        activeTabType: 'editor',
+        activeTabIdByWorktree: { wt1: null },
+        activeBrowserTabIdByWorktree: { wt1: null },
+        activeFileIdByWorktree: { wt1: movedEditor.entityId },
+        activeTabTypeByWorktree: { wt1: 'editor' }
+      }) as never
+    const forwardStore = await setup()
+    forwardStore.patchWorkspaceSession(makePatch(groups))
+    const forward = structuredClone(forwardStore.getWorkspaceSession())
+    forwardStore.patchWorkspaceSession(makePatch(groups))
+    expect(forwardStore.getWorkspaceSession()).toEqual(forward)
+
+    const reverseStore = await setup()
+    reverseStore.patchWorkspaceSession(makePatch(groups.toReversed()))
+    const reverse = reverseStore.getWorkspaceSession()
+    expect(reverse).toEqual(forward)
+    expect(reverse.unifiedTabs?.wt1).toEqual([editorOne, movedEditor, browser])
+    expect(reverse.tabGroups?.wt1).toEqual(groups)
+    expect(reverse.tabGroups?.wt1?.[0]?.recentTabIds).toEqual([editorOne.id])
+    expect(reverse.tabGroups?.wt1?.[1]?.recentTabIds).toEqual([movedEditor.id])
+  })
+
+  it('suppresses a stale terminal-and-layout-only structural replay through cold reload', async () => {
+    const store = await createStore()
+    const original = makeReplayFenceSession(['tab1', 'tab2'])
+    store.setWorkspaceSession(original)
+    await store.removeWorkspaceSessionTerminalTabAndFlush({
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      createdAt: 11,
+      leafId: TEST_LEAF_1,
+      ptyId: 'pty1'
+    })
+    const committed = structuredClone(store.getWorkspaceSession())
+
+    store.patchWorkspaceSession({
+      tabsByWorktree: structuredClone(original.tabsByWorktree),
+      terminalLayoutsByTabId: structuredClone(original.terminalLayoutsByTabId)
+    })
+    store.flush()
+
+    const after = store.getWorkspaceSession()
+    expect(after.tabsByWorktree.wt1?.map((tab) => tab.id)).toEqual(['tab2'])
+    expect(after.terminalLayoutsByTabId.tab1).toBeUndefined()
+    expect(after.unifiedTabs?.wt1?.map((tab) => tab.id)).toEqual(['tab2'])
+    expect(after.tabGroups?.wt1).toEqual([
+      expect.objectContaining({
+        id: 'group2',
+        activeTabId: 'tab2',
+        tabOrder: ['tab2'],
+        recentTabIds: ['tab2']
+      })
+    ])
+    expect(after).toMatchObject({
+      activeWorktreeId: committed.activeWorktreeId,
+      activeWorkspaceKey: committed.activeWorkspaceKey,
+      activeTabId: committed.activeTabId,
+      activeTabIdByWorktree: committed.activeTabIdByWorktree,
+      activeTabTypeByWorktree: committed.activeTabTypeByWorktree,
+      activeGroupIdByWorktree: committed.activeGroupIdByWorktree
+    })
+    const reloaded = (await createStore()).getWorkspaceSession()
+    expect(reloaded.tabsByWorktree.wt1?.map((tab) => tab.id)).toEqual(['tab2'])
+    expect(reloaded.terminalLayoutsByTabId.tab1).toBeUndefined()
+    expect(reloaded.unifiedTabs?.wt1?.map((tab) => tab.id)).toEqual(['tab2'])
+    expect(reloaded.tabGroups?.wt1?.map((group) => group.id)).toEqual(['group2'])
+    expect(reloaded).toMatchObject({
+      activeTabId: after.activeTabId,
+      activeTabIdByWorktree: after.activeTabIdByWorktree,
+      activeTabTypeByWorktree: after.activeTabTypeByWorktree,
+      activeGroupIdByWorktree: after.activeGroupIdByWorktree
+    })
+  })
+
+  it('honors an explicitly owned full projection that removes a surviving surface', async () => {
+    const store = await createStore()
+    const original = makeStructuralReplayAuthoritySession()
+    store.setWorkspaceSession(original)
+    await store.removeWorkspaceSessionTerminalTabAndFlush({
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      createdAt: 11,
+      leafId: TEST_LEAF_1,
+      ptyId: 'pty1'
+    })
+    const committed = store.getWorkspaceSession()
+    const target = original.unifiedTabs!.wt1!.find((tab) => tab.id === 'tab1')!
+    const browser = {
+      ...original.unifiedTabs!.wt1!.find((tab) => tab.id === 'browser-b')!,
+      label: 'Authoritative browser'
+    }
+    const browserGroup = {
+      id: 'group-b',
+      worktreeId: 'wt1',
+      activeTabId: browser.id,
+      tabOrder: [browser.id],
+      recentTabIds: [browser.id]
+    }
+    const staleTargetGroup = original.tabGroups!.wt1!.find((group) => group.id === 'group-target')!
+    const patch: WorkspaceSessionPatch = {
+      tabsByWorktree: {
+        ...committed.tabsByWorktree,
+        wt1: original.tabsByWorktree.wt1
+      },
+      terminalLayoutsByTabId: original.terminalLayoutsByTabId,
+      unifiedTabs: {
+        wt1: [target, browser],
+        wt2: original.unifiedTabs!.wt2,
+        wt3: original.unifiedTabs!.wt3
+      },
+      tabGroups: {
+        wt1: [staleTargetGroup, browserGroup],
+        wt2: original.tabGroups!.wt2,
+        wt3: original.tabGroups!.wt3
+      },
+      tabGroupLayouts: {
+        wt1: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', groupId: 'group-target' },
+          second: { type: 'leaf', groupId: 'group-b' }
+        },
+        wt2: original.tabGroupLayouts!.wt2,
+        wt3: original.tabGroupLayouts!.wt3
+      },
+      activeGroupIdByWorktree: {
+        wt1: 'group-b',
+        wt2: 'group-other',
+        wt3: 'group-omitted'
+      },
+      activeTabId: null,
+      activeBrowserTabId: browser.entityId,
+      activeFileId: null,
+      activeTabType: 'browser',
+      activeTabIdByWorktree: { wt1: null, wt2: null, wt3: null },
+      activeBrowserTabIdByWorktree: {
+        wt1: browser.entityId,
+        wt2: null,
+        wt3: 'browser-workspace-omitted'
+      },
+      activeFileIdByWorktree: { wt1: null, wt2: '/tmp/other.ts', wt3: null },
+      activeTabTypeByWorktree: { wt1: 'browser', wt2: 'editor', wt3: 'browser' }
+    } as never
+
+    store.patchWorkspaceSession(structuredClone(patch))
+    const first = structuredClone(store.getWorkspaceSession())
+    expect(first.tabsByWorktree.wt1).toEqual([])
+    expect(first.terminalLayoutsByTabId.tab1).toBeUndefined()
+    expect(first.unifiedTabs?.wt1).toEqual([browser])
+    expect(first.tabGroups?.wt1).toEqual([browserGroup])
+    expect(first.tabGroupLayouts?.wt1).toEqual({ type: 'leaf', groupId: 'group-b' })
+    expect(first.activeGroupIdByWorktree?.wt1).toBe('group-b')
+    expect(first.unifiedTabs?.wt1?.some((tab) => tab.id === 'editor-a')).toBe(false)
+    store.patchWorkspaceSession(structuredClone(patch))
+    expect(JSON.stringify(store.getWorkspaceSession())).toBe(JSON.stringify(first))
+  })
+
+  it('treats owned structural maps as complete while preserving omitted top-level fields', async () => {
+    const store = await createStore()
+    const original = makeStructuralReplayAuthoritySession()
+    store.setWorkspaceSession(original)
+    await store.removeWorkspaceSessionTerminalTabAndFlush({
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      createdAt: 11,
+      leafId: TEST_LEAF_1,
+      ptyId: 'pty1'
+    })
+    const committed = structuredClone(store.getWorkspaceSession())
+    const target = original.unifiedTabs!.wt1!.find((tab) => tab.id === 'tab1')!
+    const browser = original.unifiedTabs!.wt1!.find((tab) => tab.id === 'browser-b')!
+    const otherTabs = structuredClone(original.unifiedTabs!.wt2!)
+    const otherGroups = structuredClone(original.tabGroups!.wt2!)
+    const otherLayout = structuredClone(original.tabGroupLayouts!.wt2!)
+    const completePatch: WorkspaceSessionPatch = {
+      unifiedTabs: { wt1: [target, browser], wt2: otherTabs },
+      tabGroups: {
+        wt1: [
+          original.tabGroups!.wt1!.find((group) => group.id === 'group-target')!,
+          {
+            id: 'group-b',
+            worktreeId: 'wt1',
+            activeTabId: browser.id,
+            tabOrder: [browser.id],
+            recentTabIds: [browser.id]
+          }
+        ],
+        wt2: otherGroups
+      },
+      tabGroupLayouts: {
+        wt1: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', groupId: 'group-target' },
+          second: { type: 'leaf', groupId: 'group-b' }
+        },
+        wt2: otherLayout
+      },
+      activeGroupIdByWorktree: { wt1: 'group-b', wt2: 'group-other' },
+      activeTabId: null,
+      activeBrowserTabId: browser.entityId,
+      activeFileId: null,
+      activeTabType: 'browser',
+      activeTabIdByWorktree: { wt1: null, wt2: null },
+      activeBrowserTabIdByWorktree: { wt1: browser.entityId, wt2: null },
+      activeFileIdByWorktree: { wt1: null, wt2: '/tmp/other.ts' },
+      activeTabTypeByWorktree: { wt1: 'browser', wt2: 'editor' }
+    } as never
+
+    store.patchWorkspaceSession(completePatch)
+    const after = store.getWorkspaceSession()
+    expect(Object.keys(after.unifiedTabs ?? {})).toEqual(['wt1', 'wt2'])
+    expect(Object.keys(after.tabGroups ?? {})).toEqual(['wt1', 'wt2'])
+    expect(Object.keys(after.tabGroupLayouts ?? {})).toEqual(['wt1', 'wt2'])
+    expect(after.unifiedTabs?.wt1).toEqual([browser])
+    expect(after.tabGroups?.wt1?.map((group) => group.id)).toEqual(['group-b'])
+    expect(after.unifiedTabs?.wt2).toEqual(otherTabs)
+    expect(after.tabGroups?.wt2).toEqual(otherGroups)
+    expect(after.tabGroupLayouts?.wt2).toEqual(otherLayout)
+    expect(after.tabsByWorktree).toEqual(committed.tabsByWorktree)
+    expect(after.terminalLayoutsByTabId).toEqual(committed.terminalLayoutsByTabId)
+
+    const beforeInvalid = structuredClone(after)
+    expect(() =>
+      store.patchWorkspaceSession({
+        ...completePatch,
+        tabGroups: {
+          ...completePatch.tabGroups,
+          wt1: [
+            ...completePatch.tabGroups!.wt1!,
+            {
+              id: 'group-duplicate',
+              worktreeId: 'wt1',
+              activeTabId: browser.id,
+              tabOrder: [browser.id],
+              recentTabIds: [browser.id]
+            }
+          ]
+        },
+        tabGroupLayouts: {
+          ...completePatch.tabGroupLayouts,
+          wt1: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', groupId: 'group-b' },
+            second: { type: 'leaf', groupId: 'group-duplicate' }
+          }
+        }
+      } as never)
+    ).toThrow('terminal_tab_replay_projection_ambiguous')
+    expect(store.getWorkspaceSession()).toEqual(beforeInvalid)
+  })
+
+  it.each([
+    [
+      'wt1 then wt2',
+      [
+        {
+          worktreeId: 'wt1',
+          tabId: 'tab1',
+          createdAt: 11,
+          leafId: TEST_LEAF_1,
+          ptyId: 'pty1'
+        },
+        {
+          worktreeId: 'wt2',
+          tabId: 'tab2',
+          createdAt: 12,
+          leafId: TEST_LEAF_2,
+          ptyId: 'pty2'
+        }
+      ]
+    ],
+    [
+      'wt2 then wt1',
+      [
+        {
+          worktreeId: 'wt2',
+          tabId: 'tab2',
+          createdAt: 12,
+          leafId: TEST_LEAF_2,
+          ptyId: 'pty2'
+        },
+        {
+          worktreeId: 'wt1',
+          tabId: 'tab1',
+          createdAt: 11,
+          leafId: TEST_LEAF_1,
+          ptyId: 'pty1'
+        }
+      ]
+    ]
+  ] as const)(
+    'composes complete stale structural replay across %s fence order',
+    async (_, removalOrder) => {
+      const store = await createStore()
+      const original = makeCrossWorktreeReplaySession()
+      store.setWorkspaceSession(original)
+      for (const identity of removalOrder) {
+        await store.removeWorkspaceSessionTerminalTabAndFlush(identity)
+      }
+      const replay = {
+        tabsByWorktree: structuredClone(original.tabsByWorktree),
+        terminalLayoutsByTabId: structuredClone(original.terminalLayoutsByTabId)
+      }
+
+      store.patchWorkspaceSession(structuredClone(replay))
+      store.patchWorkspaceSession(structuredClone(replay))
+      store.flush()
+
+      const after = store.getWorkspaceSession()
+      expect(after.tabsByWorktree).toMatchObject({
+        wt1: [expect.objectContaining({ id: 'survivor-wt1', ptyId: 'pty-survivor-wt1' })],
+        wt2: [expect.objectContaining({ id: 'survivor-wt2', ptyId: 'pty-survivor-wt2' })]
+      })
+      expect(Object.keys(after.terminalLayoutsByTabId).sort()).toEqual([
+        'survivor-wt1',
+        'survivor-wt2'
+      ])
+      expect(after.unifiedTabs).toMatchObject({
+        wt1: [expect.objectContaining({ id: 'survivor-wt1' })],
+        wt2: [expect.objectContaining({ id: 'survivor-wt2' })]
+      })
+      expect(after.tabGroups).toEqual({
+        wt1: [
+          {
+            id: 'group-wt1',
+            worktreeId: 'wt1',
+            activeTabId: 'survivor-wt1',
+            tabOrder: ['survivor-wt1'],
+            recentTabIds: ['survivor-wt1']
+          }
+        ],
+        wt2: [
+          {
+            id: 'group-wt2',
+            worktreeId: 'wt2',
+            activeTabId: 'survivor-wt2',
+            tabOrder: ['survivor-wt2'],
+            recentTabIds: ['survivor-wt2']
+          }
+        ]
+      })
+      expect(after.tabGroupLayouts).toEqual({
+        wt1: { type: 'leaf', groupId: 'group-wt1' },
+        wt2: { type: 'leaf', groupId: 'group-wt2' }
+      })
+      expect(after).toMatchObject({
+        activeTabId: 'survivor-wt1',
+        activeTabIdByWorktree: { wt1: 'survivor-wt1', wt2: 'survivor-wt2' },
+        activeTabTypeByWorktree: { wt1: 'terminal', wt2: 'terminal' },
+        activeGroupIdByWorktree: { wt1: 'group-wt1', wt2: 'group-wt2' }
+      })
+      expect(after.unifiedTabs?.wt1?.some((tab) => tab.id === 'tab1')).toBe(false)
+      expect(after.unifiedTabs?.wt2?.some((tab) => tab.id === 'tab2')).toBe(false)
+
+      const reloaded = (await createStore()).getWorkspaceSession()
+      expect(reloaded.tabsByWorktree.wt1?.map((tab) => tab.id)).toEqual(['survivor-wt1'])
+      expect(reloaded.tabsByWorktree.wt2?.map((tab) => tab.id)).toEqual(['survivor-wt2'])
+      expect(Object.keys(reloaded.terminalLayoutsByTabId).sort()).toEqual([
+        'survivor-wt1',
+        'survivor-wt2'
+      ])
+      expect(reloaded.unifiedTabs).toEqual(after.unifiedTabs)
+      expect(reloaded.tabGroups).toEqual(after.tabGroups)
+      expect(reloaded.tabGroupLayouts).toEqual(after.tabGroupLayouts)
+    }
+  )
+
+  it.each([
+    [
+      'wt1 then wt2',
+      [
+        {
+          worktreeId: 'wt1',
+          tabId: 'tab1',
+          createdAt: 11,
+          leafId: TEST_LEAF_1,
+          ptyId: 'pty1'
+        },
+        {
+          worktreeId: 'wt2',
+          tabId: 'tab2',
+          createdAt: 12,
+          leafId: TEST_LEAF_2,
+          ptyId: 'pty2'
+        }
+      ]
+    ],
+    [
+      'wt2 then wt1',
+      [
+        {
+          worktreeId: 'wt2',
+          tabId: 'tab2',
+          createdAt: 12,
+          leafId: TEST_LEAF_2,
+          ptyId: 'pty2'
+        },
+        {
+          worktreeId: 'wt1',
+          tabId: 'tab1',
+          createdAt: 11,
+          leafId: TEST_LEAF_1,
+          ptyId: 'pty1'
+        }
+      ]
+    ]
+  ] as const)(
+    'normalizes stale global selectors once across %s fence order',
+    async (_, removalOrder) => {
+      const store = await createStore()
+      const original = makeCrossWorktreeReplaySession()
+      store.setWorkspaceSession(original)
+      for (const identity of removalOrder) {
+        await store.removeWorkspaceSessionTerminalTabAndFlush(identity)
+      }
+      const committed = structuredClone(store.getWorkspaceSession())
+      const replay: WorkspaceSessionPatch = {
+        tabsByWorktree: structuredClone(original.tabsByWorktree),
+        terminalLayoutsByTabId: structuredClone(original.terminalLayoutsByTabId),
+        unifiedTabs: structuredClone(original.unifiedTabs),
+        tabGroups: structuredClone(original.tabGroups),
+        tabGroupLayouts: structuredClone(original.tabGroupLayouts),
+        activeGroupIdByWorktree: structuredClone(original.activeGroupIdByWorktree),
+        activeTabIdByWorktree: structuredClone(original.activeTabIdByWorktree),
+        activeBrowserTabIdByWorktree: structuredClone(original.activeBrowserTabIdByWorktree),
+        activeFileIdByWorktree: structuredClone(original.activeFileIdByWorktree),
+        activeTabTypeByWorktree: structuredClone(original.activeTabTypeByWorktree),
+        activeWorktreeId: 'wt1',
+        activeWorkspaceKey: 'worktree:wt1',
+        activeTabId: 'tab1',
+        activeBrowserTabId: null,
+        activeFileId: null,
+        activeTabType: 'terminal'
+      } as never
+
+      store.patchWorkspaceSession(structuredClone(replay))
+      store.patchWorkspaceSession(structuredClone(replay))
+      store.flush()
+
+      const after = store.getWorkspaceSession()
+      expect(after).toMatchObject({
+        activeWorktreeId: committed.activeWorktreeId,
+        activeWorkspaceKey: committed.activeWorkspaceKey,
+        activeTabId: committed.activeTabId,
+        activeBrowserTabId: null,
+        activeFileId: null,
+        activeTabType: 'terminal',
+        activeTabIdByWorktree: committed.activeTabIdByWorktree,
+        activeBrowserTabIdByWorktree: committed.activeBrowserTabIdByWorktree,
+        activeFileIdByWorktree: committed.activeFileIdByWorktree,
+        activeTabTypeByWorktree: committed.activeTabTypeByWorktree,
+        activeGroupIdByWorktree: committed.activeGroupIdByWorktree
+      })
+      expect(after.tabsByWorktree.wt1?.map((tab) => tab.id)).toEqual(['survivor-wt1'])
+      expect(after.tabsByWorktree.wt2?.map((tab) => tab.id)).toEqual(['survivor-wt2'])
+      expect(Object.keys(after.terminalLayoutsByTabId).sort()).toEqual([
+        'survivor-wt1',
+        'survivor-wt2'
+      ])
+      expect(after.unifiedTabs?.wt1?.some((tab) => tab.id === 'tab1')).toBe(false)
+      expect(after.unifiedTabs?.wt2?.some((tab) => tab.id === 'tab2')).toBe(false)
+      expect(after.tabGroups?.wt1?.flatMap((group) => group.tabOrder)).not.toContain('tab1')
+      expect(after.tabGroups?.wt2?.flatMap((group) => group.tabOrder)).not.toContain('tab2')
+
+      const reloaded = (await createStore()).getWorkspaceSession()
+      expect(reloaded).toEqual(after)
+    }
+  )
+
+  it.each([
+    ['browser', false],
+    ['browser', true],
+    ['file', false],
+    ['file', true]
+  ] as const)(
+    'accepts an authoritative %s-only selector projection with fence=%s',
+    async (survivor, withFence) => {
+      const store = await createStore()
+      const browserId = survivor === 'browser' ? 'browser1' : null
+      const fileId = survivor === 'file' ? '/tmp/file.ts' : null
+      const visibleType = survivor === 'browser' ? 'browser' : 'editor'
+      const session = {
+        ...getDefaultWorkspaceSession(),
+        activeWorktreeId: 'wt1',
+        activeWorkspaceKey: 'worktree:wt1',
+        activeTabId: withFence ? 'tab1' : null,
+        activeBrowserTabId: browserId,
+        activeFileId: fileId,
+        activeTabType: visibleType,
+        tabsByWorktree: {
+          wt1: withFence
+            ? [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })]
+            : []
+        },
+        terminalLayoutsByTabId: withFence
+          ? {
+              tab1: {
+                root: { type: 'leaf' as const, leafId: TEST_LEAF_1 },
+                activeLeafId: TEST_LEAF_1,
+                expandedLeafId: null,
+                ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+              }
+            }
+          : {},
+        unifiedTabs: { wt1: [] },
+        tabGroups: { wt1: [] },
+        tabGroupLayouts: {},
+        activeGroupIdByWorktree: {},
+        browserTabsByWorktree:
+          survivor === 'browser'
+            ? {
+                wt1: [
+                  {
+                    id: 'browser1',
+                    worktreeId: 'wt1',
+                    title: 'Browser',
+                    url: 'about:blank',
+                    loading: false,
+                    faviconUrl: null,
+                    canGoBack: false,
+                    canGoForward: false,
+                    loadError: null,
+                    createdAt: 12
+                  }
+                ]
+              }
+            : {},
+        openFilesByWorktree:
+          survivor === 'file'
+            ? {
+                wt1: [
+                  {
+                    filePath: '/tmp/file.ts',
+                    relativePath: 'file.ts',
+                    worktreeId: 'wt1',
+                    language: 'typescript'
+                  }
+                ]
+              }
+            : {},
+        activeTabIdByWorktree: { wt1: withFence ? 'tab1' : null },
+        activeBrowserTabIdByWorktree: { wt1: browserId },
+        activeFileIdByWorktree: { wt1: fileId },
+        activeTabTypeByWorktree: { wt1: visibleType }
+      } as WorkspaceSessionState & {
+        activeBrowserTabId: string | null
+        activeFileId: string | null
+        activeTabType: 'browser' | 'editor'
+      }
+      store.setWorkspaceSession(session)
+      if (withFence) {
+        await store.removeWorkspaceSessionTerminalTabAndFlush({
+          worktreeId: 'wt1',
+          tabId: 'tab1',
+          createdAt: 11,
+          leafId: TEST_LEAF_1,
+          ptyId: 'pty1'
+        })
+      }
+      const selectorPatch: WorkspaceSessionPatch & {
+        activeBrowserTabId: string | null
+        activeFileId: string | null
+        activeTabType: 'browser' | 'editor'
+      } = {
+        activeWorktreeId: 'wt1',
+        activeWorkspaceKey: 'worktree:wt1',
+        activeTabId: null,
+        activeBrowserTabId: browserId,
+        activeFileId: fileId,
+        activeTabType: visibleType,
+        activeTabIdByWorktree: { wt1: null },
+        activeBrowserTabIdByWorktree: { wt1: browserId },
+        activeFileIdByWorktree: { wt1: fileId },
+        activeTabTypeByWorktree: { wt1: visibleType }
+      }
+
+      store.patchWorkspaceSession(structuredClone(selectorPatch))
+      const first = structuredClone(store.getWorkspaceSession())
+      store.patchWorkspaceSession(structuredClone(selectorPatch))
+      store.flush()
+
+      expect(store.getWorkspaceSession()).toEqual(first)
+      expect(first).toMatchObject({
+        activeWorktreeId: 'wt1',
+        activeWorkspaceKey: 'worktree:wt1',
+        activeTabId: null,
+        activeBrowserTabId: browserId,
+        activeFileId: fileId,
+        activeTabType: visibleType,
+        activeTabIdByWorktree: { wt1: null },
+        activeBrowserTabIdByWorktree: { wt1: browserId },
+        activeFileIdByWorktree: { wt1: fileId },
+        activeTabTypeByWorktree: { wt1: visibleType }
+      })
+      expect((await createStore()).getWorkspaceSession()).toEqual(first)
+
+      const beforeInvalid = structuredClone(store.getWorkspaceSession())
+      expect(() =>
+        store.patchWorkspaceSession({
+          ...selectorPatch,
+          activeTabType: visibleType === 'browser' ? 'editor' : 'browser',
+          activeTabTypeByWorktree: {
+            wt1: visibleType === 'browser' ? 'editor' : 'browser'
+          }
+        } as never)
+      ).toThrow('terminal_tab_replay_projection_ambiguous')
+      expect(store.getWorkspaceSession()).toEqual(beforeInvalid)
+    }
+  )
+
+  it('uses the committed selector type to break a mixed legacy survivor tie', async () => {
+    const store = await createStore()
+    const original = {
+      ...getDefaultWorkspaceSession(),
+      activeWorktreeId: 'wt1',
+      activeWorkspaceKey: 'worktree:wt1',
+      activeTabId: 'tab1',
+      activeBrowserTabId: 'browser1',
+      activeFileId: '/tmp/file.ts',
+      activeTabType: 'terminal',
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf' as const, leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+        }
+      },
+      unifiedTabs: { wt1: [] },
+      tabGroups: { wt1: [] },
+      tabGroupLayouts: {},
+      activeGroupIdByWorktree: {},
+      browserTabsByWorktree: {
+        wt1: [
+          {
+            id: 'browser1',
+            worktreeId: 'wt1',
+            title: 'Browser',
+            url: 'about:blank',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 12
+          }
+        ]
+      },
+      openFilesByWorktree: {
+        wt1: [
+          {
+            filePath: '/tmp/file.ts',
+            relativePath: 'file.ts',
+            worktreeId: 'wt1',
+            language: 'typescript'
+          }
+        ]
+      },
+      activeTabIdByWorktree: { wt1: 'tab1' },
+      activeBrowserTabIdByWorktree: { wt1: 'browser1' },
+      activeFileIdByWorktree: { wt1: '/tmp/file.ts' },
+      activeTabTypeByWorktree: { wt1: 'terminal' }
+    } as WorkspaceSessionState & {
+      activeBrowserTabId: string
+      activeFileId: string
+      activeTabType: 'terminal'
+    }
+    store.setWorkspaceSession(original)
+    await store.removeWorkspaceSessionTerminalTabAndFlush({
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      createdAt: 11,
+      leafId: TEST_LEAF_1,
+      ptyId: 'pty1'
+    })
+    const committed = structuredClone(store.getWorkspaceSession())
+    expect(committed).toMatchObject({
+      activeTabId: null,
+      activeBrowserTabId: 'browser1',
+      activeFileId: '/tmp/file.ts',
+      activeTabType: 'browser',
+      activeTabIdByWorktree: { wt1: null },
+      activeBrowserTabIdByWorktree: { wt1: 'browser1' },
+      activeFileIdByWorktree: { wt1: '/tmp/file.ts' },
+      activeTabTypeByWorktree: { wt1: 'browser' }
+    })
+    const replay: WorkspaceSessionPatch & {
+      activeBrowserTabId: string
+      activeFileId: string
+      activeTabType: 'terminal'
+    } = {
+      tabsByWorktree: structuredClone(original.tabsByWorktree),
+      terminalLayoutsByTabId: structuredClone(original.terminalLayoutsByTabId),
+      activeWorktreeId: 'wt1',
+      activeWorkspaceKey: 'worktree:wt1',
+      activeTabId: 'tab1',
+      activeBrowserTabId: 'browser1',
+      activeFileId: '/tmp/file.ts',
+      activeTabType: 'terminal',
+      activeTabIdByWorktree: { wt1: 'tab1' },
+      activeBrowserTabIdByWorktree: { wt1: 'browser1' },
+      activeFileIdByWorktree: { wt1: '/tmp/file.ts' },
+      activeTabTypeByWorktree: { wt1: 'terminal' }
+    }
+
+    store.patchWorkspaceSession(structuredClone(replay))
+    store.patchWorkspaceSession(structuredClone(replay))
+    store.flush()
+
+    const after = store.getWorkspaceSession()
+    expect(after).toMatchObject({
+      activeWorktreeId: 'wt1',
+      activeWorkspaceKey: 'worktree:wt1',
+      activeTabId: null,
+      activeBrowserTabId: 'browser1',
+      activeFileId: '/tmp/file.ts',
+      activeTabType: 'browser',
+      activeTabIdByWorktree: { wt1: null },
+      activeBrowserTabIdByWorktree: { wt1: 'browser1' },
+      activeFileIdByWorktree: { wt1: '/tmp/file.ts' },
+      activeTabTypeByWorktree: { wt1: 'browser' }
+    })
+    expect((await createStore()).getWorkspaceSession()).toEqual(after)
+
+    const beforeInvalid = structuredClone(after)
+    expect(() =>
+      store.patchWorkspaceSession({
+        ...replay,
+        activeTabType: 'simulator',
+        activeTabTypeByWorktree: { wt1: 'simulator' }
+      } as never)
+    ).toThrow('terminal_tab_replay_projection_ambiguous')
+    expect(store.getWorkspaceSession()).toEqual(beforeInvalid)
+  })
+
+  it.each([
+    ['global unrelated terminal', 'global', 'missing-terminal', 'value', null],
+    ['global cross-worktree stopped terminal', 'global', 'tab2', 'value', null],
+    ['global type-only terminal', 'global', null, 'omitted', null],
+    ['global null-ID terminal', 'global', null, 'null', null],
+    ['global stopped ID with invalid browser', 'global', 'tab1', 'value', 'browser'],
+    ['global stopped ID with invalid file', 'global', 'tab1', 'value', 'file'],
+    ['global stopped ID aliased as browser', 'global', 'tab1', 'value', 'browser-stopped'],
+    ['global stopped ID aliased as file', 'global', 'tab1', 'value', 'file-stopped'],
+    ['worktree unrelated terminal', 'worktree', 'missing-terminal', 'value', null],
+    ['worktree cross-worktree stopped terminal', 'worktree', 'tab2', 'value', null],
+    ['worktree type-only terminal', 'worktree', null, 'omitted', null],
+    ['worktree null-ID terminal', 'worktree', null, 'null', null],
+    ['worktree stopped ID with invalid browser', 'worktree', 'tab1', 'value', 'browser'],
+    ['worktree stopped ID with invalid file', 'worktree', 'tab1', 'value', 'file'],
+    ['worktree stopped ID aliased as browser', 'worktree', 'tab1', 'value', 'browser-stopped'],
+    ['worktree stopped ID aliased as file', 'worktree', 'tab1', 'value', 'file-stopped']
+  ] as const)(
+    'rejects a stale terminal relaxation for a %s',
+    async (_, scope, requestedTabId, idShape, invalidCompanion) => {
+      const store = await createStore()
+      store.setWorkspaceSession({
+        ...getDefaultWorkspaceSession(),
+        activeWorktreeId: 'wt1',
+        activeWorkspaceKey: 'worktree:wt1',
+        activeTabId: 'tab1',
+        activeBrowserTabId: 'browser1',
+        activeFileId: '/tmp/file.ts',
+        activeTabType: 'terminal',
+        tabsByWorktree: {
+          wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })],
+          wt2: [makeTerminalTab({ id: 'tab2', worktreeId: 'wt2', ptyId: 'pty2', createdAt: 12 })]
+        },
+        terminalLayoutsByTabId: {
+          tab1: {
+            root: { type: 'leaf', leafId: TEST_LEAF_1 },
+            activeLeafId: TEST_LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+          },
+          tab2: {
+            root: { type: 'leaf', leafId: TEST_LEAF_2 },
+            activeLeafId: TEST_LEAF_2,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_2]: 'pty2' }
+          }
+        },
+        browserTabsByWorktree: {
+          wt1: [
+            {
+              id: 'browser1',
+              worktreeId: 'wt1',
+              title: 'Browser',
+              url: 'about:blank',
+              loading: false,
+              faviconUrl: null,
+              canGoBack: false,
+              canGoForward: false,
+              loadError: null,
+              createdAt: 13
+            }
+          ]
+        },
+        openFilesByWorktree: {
+          wt1: [
+            {
+              filePath: '/tmp/file.ts',
+              relativePath: 'file.ts',
+              worktreeId: 'wt1',
+              language: 'typescript'
+            }
+          ]
+        },
+        activeTabIdByWorktree: { wt1: 'tab1', wt2: 'tab2' },
+        activeBrowserTabIdByWorktree: { wt1: 'browser1', wt2: null },
+        activeFileIdByWorktree: { wt1: '/tmp/file.ts', wt2: null },
+        activeTabTypeByWorktree: { wt1: 'terminal', wt2: 'terminal' }
+      } as never)
+      await store.removeWorkspaceSessionTerminalTabAndFlush({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        createdAt: 11,
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty1'
+      })
+      await store.removeWorkspaceSessionTerminalTabAndFlush({
+        worktreeId: 'wt2',
+        tabId: 'tab2',
+        createdAt: 12,
+        leafId: TEST_LEAF_2,
+        ptyId: 'pty2'
+      })
+      const before = structuredClone(store.getWorkspaceSession())
+      const requestedBrowserId =
+        invalidCompanion === 'browser'
+          ? 'missing-browser'
+          : invalidCompanion === 'browser-stopped'
+            ? 'tab1'
+            : 'browser1'
+      const requestedFileId =
+        invalidCompanion === 'file'
+          ? '/tmp/missing.ts'
+          : invalidCompanion === 'file-stopped'
+            ? 'tab1'
+            : '/tmp/file.ts'
+      const requestedId = idShape === 'value' ? requestedTabId : null
+      const patch: WorkspaceSessionPatch =
+        scope === 'global'
+          ? ({
+              activeWorktreeId: 'wt1',
+              activeWorkspaceKey: 'worktree:wt1',
+              ...(idShape === 'omitted' ? {} : { activeTabId: requestedId }),
+              activeBrowserTabId: requestedBrowserId,
+              activeFileId: requestedFileId,
+              activeTabType: 'terminal'
+            } as never)
+          : {
+              ...(idShape === 'omitted' ? {} : { activeTabIdByWorktree: { wt1: requestedId } }),
+              activeBrowserTabIdByWorktree: { wt1: requestedBrowserId },
+              activeFileIdByWorktree: { wt1: requestedFileId },
+              activeTabTypeByWorktree: { wt1: 'terminal' }
+            }
+
+      expect(() => store.patchWorkspaceSession(patch)).toThrow(
+        'terminal_tab_replay_projection_ambiguous'
+      )
+      expect(store.getWorkspaceSession()).toEqual(before)
+    }
+  )
+
+  it.each([
+    ['worktree', 'wt2', 'tab2', 'worktree:wt2'],
+    ['canonical folder', folderWorkspaceKey('folder-1'), 'folder-tab', 'folder:folder-1']
+  ] as const)(
+    'accepts a real renderer foreground switch to a surfaced %s after a fence',
+    async (_, targetWorktreeId, targetTabId, expectedWorkspaceKey) => {
+      const { buildWorkspaceSessionPatch } = (await vi.importActual(
+        '../renderer/src/lib/workspace-session-patch'
+      )) as {
+        buildWorkspaceSessionPatch: (
+          snapshot: { activeWorktreeId: string; activeTabId: string },
+          changedFields: ('activeWorktreeId' | 'activeTabId')[]
+        ) => WorkspaceSessionPatch
+      }
+      const store = await createStore()
+      const original = {
+        ...getDefaultWorkspaceSession(),
+        activeWorktreeId: 'wt1',
+        activeWorkspaceKey: 'worktree:wt1',
+        activeTabId: 'tab1',
+        tabsByWorktree: {
+          wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })],
+          [targetWorktreeId]: [
+            makeTerminalTab({
+              id: targetTabId,
+              worktreeId: targetWorktreeId,
+              ptyId: 'target-pty',
+              createdAt: 12
+            })
+          ]
+        },
+        terminalLayoutsByTabId: {
+          tab1: {
+            root: { type: 'leaf' as const, leafId: TEST_LEAF_1 },
+            activeLeafId: TEST_LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+          },
+          [targetTabId]: {
+            root: { type: 'leaf' as const, leafId: TEST_LEAF_2 },
+            activeLeafId: TEST_LEAF_2,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_2]: 'target-pty' }
+          }
+        },
+        activeTabIdByWorktree: { wt1: 'tab1', [targetWorktreeId]: targetTabId },
+        activeTabTypeByWorktree: { wt1: 'terminal', [targetWorktreeId]: 'terminal' }
+      } as WorkspaceSessionState
+      store.setWorkspaceSession(original)
+      await store.removeWorkspaceSessionTerminalTabAndFlush({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        createdAt: 11,
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty1'
+      })
+      const productionPatch = buildWorkspaceSessionPatch(
+        { activeWorktreeId: targetWorktreeId, activeTabId: targetTabId } as never,
+        ['activeWorktreeId', 'activeTabId']
+      )
+      expect(productionPatch).toEqual({
+        activeWorktreeId: targetWorktreeId,
+        activeTabId: targetTabId
+      })
+
+      store.patchWorkspaceSession(structuredClone(productionPatch))
+      expect(store.getWorkspaceSession()).toMatchObject({
+        activeWorktreeId: targetWorktreeId,
+        activeWorkspaceKey: expectedWorkspaceKey,
+        activeTabId: targetTabId
+      })
+      store.patchWorkspaceSession({ ...productionPatch, activeWorkspaceKey: expectedWorkspaceKey })
+      const accepted = structuredClone(store.getWorkspaceSession())
+
+      for (const invalidPatch of [
+        { ...productionPatch, activeWorkspaceKey: 'folder:foreign' },
+        buildWorkspaceSessionPatch(
+          { activeWorktreeId: 'missing-worktree', activeTabId: 'missing-tab' } as never,
+          ['activeWorktreeId', 'activeTabId']
+        )
+      ]) {
+        expect(() => store.patchWorkspaceSession(invalidPatch as WorkspaceSessionPatch)).toThrow(
+          'terminal_tab_replay_projection_ambiguous'
+        )
+        expect(store.getWorkspaceSession()).toEqual(accepted)
+      }
+    }
+  )
+
+  it.each([
+    ['complete pre-close tuple', true],
+    ['renderer patch omitting the unchanged workspace key', false]
+  ] as const)(
+    'normalizes a fenced final-surface %s back to the committed landing state',
+    async (_, includesWorkspaceKey) => {
+      const store = await createStore()
+      const original = {
+        ...getDefaultWorkspaceSession(),
+        activeWorktreeId: 'wt1',
+        activeWorkspaceKey: 'worktree:wt1',
+        activeTabId: 'tab1',
+        activeBrowserTabId: null,
+        activeFileId: null,
+        activeTabType: 'terminal',
+        tabsByWorktree: {
+          wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })]
+        },
+        terminalLayoutsByTabId: {
+          tab1: {
+            root: { type: 'leaf' as const, leafId: TEST_LEAF_1 },
+            activeLeafId: TEST_LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+          }
+        },
+        activeTabIdByWorktree: { wt1: 'tab1' },
+        activeBrowserTabIdByWorktree: { wt1: null },
+        activeFileIdByWorktree: { wt1: null },
+        activeTabTypeByWorktree: { wt1: 'terminal' }
+      } as WorkspaceSessionState & {
+        activeBrowserTabId: null
+        activeFileId: null
+        activeTabType: 'terminal'
+      }
+      store.setWorkspaceSession(original)
+      await store.removeWorkspaceSessionTerminalTabAndFlush({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        createdAt: 11,
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty1'
+      })
+      const committed = structuredClone(store.getWorkspaceSession())
+      expect(committed).toMatchObject({
+        activeWorktreeId: null,
+        activeWorkspaceKey: null,
+        activeTabId: null,
+        activeBrowserTabId: null,
+        activeFileId: null,
+        activeTabType: 'terminal'
+      })
+      const replay: WorkspaceSessionPatch & {
+        activeBrowserTabId: null
+        activeFileId: null
+        activeTabType: 'terminal'
+      } = {
+        tabsByWorktree: structuredClone(original.tabsByWorktree),
+        terminalLayoutsByTabId: structuredClone(original.terminalLayoutsByTabId),
+        activeWorktreeId: 'wt1',
+        ...(includesWorkspaceKey ? { activeWorkspaceKey: 'worktree:wt1' } : {}),
+        activeTabId: 'tab1',
+        activeBrowserTabId: null,
+        activeFileId: null,
+        activeTabType: 'terminal',
+        activeTabIdByWorktree: { wt1: 'tab1' },
+        activeBrowserTabIdByWorktree: { wt1: null },
+        activeFileIdByWorktree: { wt1: null },
+        activeTabTypeByWorktree: { wt1: 'terminal' }
+      }
+
+      store.patchWorkspaceSession(structuredClone(replay))
+      const first = structuredClone(store.getWorkspaceSession())
+      store.patchWorkspaceSession(structuredClone(replay))
+      store.flush()
+
+      const after = store.getWorkspaceSession()
+      expect(after).toEqual(first)
+      expect(after).toMatchObject({
+        activeWorktreeId: committed.activeWorktreeId,
+        activeWorkspaceKey: committed.activeWorkspaceKey,
+        activeTabId: committed.activeTabId,
+        activeBrowserTabId: null,
+        activeFileId: null,
+        activeTabType: 'terminal',
+        activeTabIdByWorktree: committed.activeTabIdByWorktree,
+        activeBrowserTabIdByWorktree: committed.activeBrowserTabIdByWorktree,
+        activeFileIdByWorktree: committed.activeFileIdByWorktree,
+        activeTabTypeByWorktree: committed.activeTabTypeByWorktree
+      })
+      expect(after.tabsByWorktree.wt1).toEqual([])
+      expect(after.terminalLayoutsByTabId.tab1).toBeUndefined()
+      expect(after.unifiedTabs?.wt1?.some((tab) => tab.id === 'tab1')).toBe(false)
+      expect(after.tabGroups?.wt1?.flatMap((group) => group.tabOrder)).not.toContain('tab1')
+      expect((await createStore()).getWorkspaceSession()).toEqual(after)
+
+      const beforeInvalid = structuredClone(after)
+      expect(() =>
+        store.patchWorkspaceSession({
+          ...replay,
+          activeWorkspaceKey: 'worktree:wrong-worktree'
+        })
+      ).toThrow('terminal_tab_replay_projection_ambiguous')
+      expect(store.getWorkspaceSession()).toEqual(beforeInvalid)
+      expect(() =>
+        store.patchWorkspaceSession({
+          ...replay,
+          activeWorktreeId: 'missing-worktree',
+          activeWorkspaceKey: 'worktree:missing-worktree',
+          activeTabId: 'missing-tab'
+        })
+      ).toThrow('terminal_tab_replay_projection_ambiguous')
+      expect(store.getWorkspaceSession()).toEqual(beforeInvalid)
+    }
+  )
+
+  it('treats complete selector maps as authoritative across unaffected worktrees', async () => {
+    const store = await createStore()
+    const original = makeStructuralReplayAuthoritySession()
+    store.setWorkspaceSession(original)
+    await store.removeWorkspaceSessionTerminalTabAndFlush({
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      createdAt: 11,
+      leafId: TEST_LEAF_1,
+      ptyId: 'pty1'
+    })
+    const committed = structuredClone(store.getWorkspaceSession())
+    const staleStructuralReplay: WorkspaceSessionPatch = {
+      tabsByWorktree: structuredClone(original.tabsByWorktree),
+      terminalLayoutsByTabId: structuredClone(original.terminalLayoutsByTabId)
+    }
+    store.patchWorkspaceSession(staleStructuralReplay)
+    expect(store.getWorkspaceSession().activeTabIdByWorktree).toEqual(
+      committed.activeTabIdByWorktree
+    )
+    expect(store.getWorkspaceSession().activeBrowserTabIdByWorktree).toEqual(
+      committed.activeBrowserTabIdByWorktree
+    )
+    expect(store.getWorkspaceSession().activeFileIdByWorktree).toEqual(
+      committed.activeFileIdByWorktree
+    )
+    expect(store.getWorkspaceSession().activeTabTypeByWorktree).toEqual(
+      committed.activeTabTypeByWorktree
+    )
+    expect(store.getWorkspaceSession().activeGroupIdByWorktree).toEqual(
+      committed.activeGroupIdByWorktree
+    )
+
+    const authoritativeSelectors: WorkspaceSessionPatch = {
+      ...staleStructuralReplay,
+      activeTabIdByWorktree: {
+        wt1: committed.activeTabIdByWorktree?.wt1 ?? null,
+        wt2: committed.activeTabIdByWorktree?.wt2 ?? null
+      },
+      activeBrowserTabIdByWorktree: {
+        wt1: committed.activeBrowserTabIdByWorktree?.wt1 ?? null,
+        wt2: committed.activeBrowserTabIdByWorktree?.wt2 ?? null
+      },
+      activeFileIdByWorktree: {
+        wt1: committed.activeFileIdByWorktree?.wt1 ?? null,
+        wt2: committed.activeFileIdByWorktree?.wt2 ?? null
+      },
+      activeTabTypeByWorktree: {
+        wt1: committed.activeTabTypeByWorktree?.wt1 ?? 'terminal',
+        wt2: committed.activeTabTypeByWorktree?.wt2 ?? 'terminal'
+      },
+      activeGroupIdByWorktree: {
+        wt1: committed.activeGroupIdByWorktree?.wt1 ?? 'group-a',
+        wt2: committed.activeGroupIdByWorktree?.wt2 ?? 'group-other'
+      }
+    }
+    store.patchWorkspaceSession(structuredClone(authoritativeSelectors))
+    const first = structuredClone(store.getWorkspaceSession())
+    for (const key of [
+      'activeTabIdByWorktree',
+      'activeBrowserTabIdByWorktree',
+      'activeFileIdByWorktree',
+      'activeTabTypeByWorktree',
+      'activeGroupIdByWorktree'
+    ] as const) {
+      expect(Object.keys(first[key] ?? {})).toEqual(['wt1', 'wt2'])
+      expect(JSON.stringify(first[key]?.wt2)).toBe(JSON.stringify(authoritativeSelectors[key]?.wt2))
+    }
+    store.patchWorkspaceSession(structuredClone(authoritativeSelectors))
+    expect(JSON.stringify(store.getWorkspaceSession())).toBe(JSON.stringify(first))
+
+    const beforeInvalid = structuredClone(store.getWorkspaceSession())
+    expect(() =>
+      store.patchWorkspaceSession({
+        ...authoritativeSelectors,
+        activeFileIdByWorktree: {
+          ...authoritativeSelectors.activeFileIdByWorktree,
+          wt2: '/tmp/missing.ts'
+        }
+      })
+    ).toThrow('terminal_tab_replay_projection_ambiguous')
+    expect(store.getWorkspaceSession()).toEqual(beforeInvalid)
+  })
+
+  it.each(['tab-binding', 'layout-binding', 'both-bindings'] as const)(
+    'suppresses a stale pre-binding renderer replay missing %s',
+    async (missing) => {
+      const store = await createStore()
+      const original: WorkspaceSessionState = {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })]
+        },
+        terminalLayoutsByTabId: {
+          tab1: {
+            root: { type: 'leaf', leafId: TEST_LEAF_1 },
+            activeLeafId: TEST_LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+          }
+        }
+      }
+      store.setWorkspaceSession(original)
+      await store.removeWorkspaceSessionTerminalTabAndFlush({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        createdAt: 11,
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty1'
+      })
+
+      const stale = structuredClone(original)
+      if (missing !== 'layout-binding') {
+        stale.tabsByWorktree.wt1![0]!.ptyId = null
+      }
+      if (missing !== 'tab-binding') {
+        stale.terminalLayoutsByTabId.tab1!.ptyIdsByLeafId = {}
+      }
+      store.setWorkspaceSession(stale)
+
+      expect(store.getWorkspaceSession().tabsByWorktree.wt1).toEqual([])
+      expect(store.getWorkspaceSession().terminalLayoutsByTabId.tab1).toBeUndefined()
+    }
+  )
+
+  it('suppresses benign unified projection and object-key drift but preserves entity replacement', async () => {
+    const store = await createStore()
+    const original: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+        }
+      },
+      unifiedTabs: {
+        wt1: [
+          {
+            id: 'tab1',
+            entityId: 'tab1',
+            groupId: 'group1',
+            worktreeId: 'wt1',
+            contentType: 'terminal',
+            label: 'Original',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 11
+          }
+        ]
+      },
+      tabGroups: {
+        wt1: [{ id: 'group1', worktreeId: 'wt1', activeTabId: 'tab1', tabOrder: ['tab1'] }]
+      },
+      tabGroupLayouts: { wt1: { type: 'leaf', groupId: 'group1' } },
+      activeGroupIdByWorktree: { wt1: 'group1' }
+    }
+    store.setWorkspaceSession(original)
+    await store.removeWorkspaceSessionTerminalTabAndFlush({
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      createdAt: 11,
+      leafId: TEST_LEAF_1,
+      ptyId: 'pty1'
+    })
+
+    const benignDrift = structuredClone(original)
+    benignDrift.unifiedTabs!.wt1![0] = {
+      ...benignDrift.unifiedTabs!.wt1![0]!,
+      label: 'Renamed while stale',
+      createdAt: 12
+    }
+    benignDrift.tabGroups!.wt1![0] = {
+      ...benignDrift.tabGroups!.wt1![0]!,
+      recentTabIds: ['tab1']
+    }
+    store.setWorkspaceSession(benignDrift)
+    expect(store.getWorkspaceSession().tabsByWorktree.wt1).toEqual([])
+
+    const replacement = structuredClone(original)
+    replacement.unifiedTabs!.wt1![0]!.entityId = 'replacement-entity'
+    store.setWorkspaceSession(replacement)
+    expect(store.getWorkspaceSession().tabsByWorktree.wt1).toHaveLength(1)
+    expect(store.getWorkspaceSession().unifiedTabs?.wt1?.[0]?.entityId).toBe('replacement-entity')
+  })
+
+  it('deterministically bounds terminal removal replay and ambiguity fences', async () => {
+    const store = await createStore()
+    const makeSession = (index: number, drifted = false): WorkspaceSessionState => {
+      const tabId = `bounded-tab-${index}`
+      const ptyId = `bounded-pty-${index}`
+      return {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          wt1: [
+            makeTerminalTab({
+              id: tabId,
+              worktreeId: 'wt1',
+              ptyId,
+              createdAt: index + 1
+            })
+          ]
+        },
+        terminalLayoutsByTabId: {
+          [tabId]: {
+            root: { type: 'leaf', leafId: TEST_LEAF_1 },
+            activeLeafId: TEST_LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: drifted
+              ? { [TEST_LEAF_2]: `${ptyId}-replacement` }
+              : { [TEST_LEAF_1]: ptyId }
+          }
+        }
+      }
+    }
+    for (let index = 0; index < 33; index++) {
+      store.setWorkspaceSession(makeSession(index))
+      await store.removeWorkspaceSessionTerminalTabAndFlush({
+        worktreeId: 'wt1',
+        tabId: `bounded-tab-${index}`,
+        createdAt: index + 1,
+        leafId: TEST_LEAF_1,
+        ptyId: `bounded-pty-${index}`
+      })
+    }
+
+    const oldest = makeSession(0)
+    const newest = makeSession(32)
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { wt1: [...oldest.tabsByWorktree.wt1!, ...newest.tabsByWorktree.wt1!] },
+      terminalLayoutsByTabId: {
+        ...oldest.terminalLayoutsByTabId,
+        ...newest.terminalLayoutsByTabId
+      }
+    })
+    expect(store.getWorkspaceSession().tabsByWorktree.wt1?.map((tab) => tab.id)).toEqual([
+      'bounded-tab-0'
+    ])
+
+    const driftedTabs = Array.from(
+      { length: 33 },
+      (_, index) => makeSession(index, true).tabsByWorktree.wt1![0]!
+    )
+    const driftedLayouts = Object.assign(
+      {},
+      ...Array.from({ length: 33 }, (_, index) => makeSession(index, true).terminalLayoutsByTabId)
+    )
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { wt1: driftedTabs },
+      terminalLayoutsByTabId: driftedLayouts
+    })
+    const fences = store as unknown as {
+      terminalTabRemovalReplayFences: Map<string, unknown>
+      terminalTabRemovalAmbiguousReplayFences: Set<string>
+    }
+    expect(fences.terminalTabRemovalReplayFences.size).toBe(32)
+    expect(fences.terminalTabRemovalAmbiguousReplayFences.size).toBeLessThanOrEqual(32)
+  })
+
+  it('keeps the sole tab group as an empty renderer-compatible root', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+        }
+      },
+      unifiedTabs: {
+        wt1: [
+          {
+            id: 'tab1',
+            entityId: 'tab1',
+            groupId: 'group1',
+            worktreeId: 'wt1',
+            contentType: 'terminal',
+            label: 'Terminal',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 11
+          }
+        ]
+      },
+      tabGroups: {
+        wt1: [
+          {
+            id: 'group1',
+            worktreeId: 'wt1',
+            activeTabId: 'tab1',
+            tabOrder: ['tab1'],
+            recentTabIds: ['tab1']
+          }
+        ]
+      },
+      tabGroupLayouts: { wt1: { type: 'leaf', groupId: 'group1' } },
+      activeGroupIdByWorktree: { wt1: 'group1' }
+    } as WorkspaceSessionState)
+
+    await store.removeWorkspaceSessionTerminalTabAndFlush({
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      createdAt: 11,
+      leafId: TEST_LEAF_1,
+      ptyId: 'pty1'
+    })
+
+    expect(store.getWorkspaceSession()).toMatchObject({
+      unifiedTabs: { wt1: [] },
+      tabGroups: {
+        wt1: [{ id: 'group1', activeTabId: null, tabOrder: [], recentTabIds: [] }]
+      },
+      tabGroupLayouts: { wt1: { type: 'leaf', groupId: 'group1' } },
+      activeGroupIdByWorktree: { wt1: 'group1' }
+    })
+  })
+
+  it.each(['leaf', 'pinned', 'root', 'active-leaf', 'binding'] as const)(
+    'preserves a same-id replacement with changed %s identity',
+    async (drift) => {
+      const store = await createStore()
+      const original: WorkspaceSessionState = {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })]
+        },
+        terminalLayoutsByTabId: {
+          tab1: {
+            root: { type: 'leaf', leafId: TEST_LEAF_1 },
+            activeLeafId: TEST_LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+          }
+        }
+      }
+      store.setWorkspaceSession(original)
+      store.flush()
+      await store.removeWorkspaceSessionTerminalTabAndFlush({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        createdAt: 11,
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty1'
+      })
+
+      const replacement = structuredClone(original)
+      if (drift === 'pinned') {
+        replacement.tabsByWorktree.wt1![0]!.isPinned = true
+      }
+      if (drift === 'leaf') {
+        replacement.terminalLayoutsByTabId.tab1 = {
+          root: { type: 'leaf', leafId: TEST_LEAF_2 },
+          activeLeafId: TEST_LEAF_2,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_2]: 'pty1' }
+        }
+      }
+      if (drift === 'root') {
+        replacement.terminalLayoutsByTabId.tab1!.root = {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', leafId: TEST_LEAF_1 },
+          second: { type: 'leaf', leafId: TEST_LEAF_2 }
+        }
+      }
+      if (drift === 'active-leaf') {
+        replacement.terminalLayoutsByTabId.tab1!.activeLeafId = TEST_LEAF_2
+      }
+      if (drift === 'binding') {
+        replacement.terminalLayoutsByTabId.tab1!.ptyIdsByLeafId = {
+          [TEST_LEAF_1]: 'pty1',
+          [TEST_LEAF_2]: 'pty1'
+        }
+      }
+      store.setWorkspaceSession(replacement)
+      store.flush()
+      const memoryBefore = structuredClone(store.getWorkspaceSession())
+      const diskBefore = readFileSync(dataFile(), 'utf8')
+
+      expect(memoryBefore.tabsByWorktree.wt1).toHaveLength(1)
+      await expect(
+        store.removeWorkspaceSessionTerminalTabAndFlush({
+          worktreeId: 'wt1',
+          tabId: 'tab1',
+          createdAt: 11,
+          leafId: TEST_LEAF_1,
+          ptyId: 'pty1'
+        })
+      ).rejects.toThrow('terminal_tab_identity_ambiguous')
+      expect(store.getWorkspaceSession()).toEqual(memoryBefore)
+      expect(readFileSync(dataFile(), 'utf8')).toBe(diskBefore)
+    }
+  )
+
+  it('persists renderer landing state after the last workspace surface closes', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeWorkspaceKey: 'worktree:wt1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      activeBrowserTabId: 'browser1',
+      activeFileId: '/tmp/file.ts',
+      activeTabIdByWorktree: { wt1: 'tab1' },
+      activeBrowserTabIdByWorktree: { wt1: 'browser1' },
+      activeFileIdByWorktree: { wt1: '/tmp/file.ts' },
+      activeTabTypeByWorktree: { wt1: 'terminal' },
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+        }
+      }
+    } as WorkspaceSessionState & { activeBrowserTabId: string; activeFileId: string })
+
+    await store.removeWorkspaceSessionTerminalTabAndFlush({
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      createdAt: 11,
+      leafId: TEST_LEAF_1,
+      ptyId: 'pty1'
+    })
+
+    expect(store.getWorkspaceSession()).toMatchObject({
+      activeWorkspaceKey: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      activeBrowserTabId: null,
+      activeFileId: null,
+      activeTabType: 'terminal',
+      activeTabIdByWorktree: { wt1: null },
+      activeBrowserTabIdByWorktree: { wt1: null },
+      activeFileIdByWorktree: { wt1: null },
+      activeTabTypeByWorktree: { wt1: 'terminal' }
+    })
+    expect((await createStore()).getWorkspaceSession()).toMatchObject({
+      activeWorkspaceKey: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      activeBrowserTabId: null,
+      activeFileId: null,
+      activeTabType: 'terminal',
+      activeTabIdByWorktree: { wt1: null },
+      activeBrowserTabIdByWorktree: { wt1: null },
+      activeFileIdByWorktree: { wt1: null }
+    })
+  })
+
+  it('does not overwrite foreground selectors when closing a background worktree tab', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeWorktreeId: 'wt2',
+      activeWorkspaceKey: 'worktree:wt2',
+      activeTabId: 'foreground-terminal',
+      activeBrowserTabId: 'foreground-browser',
+      activeFileId: '/foreground.ts',
+      activeTabType: 'browser',
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })],
+        wt2: [
+          makeTerminalTab({
+            id: 'foreground-terminal',
+            worktreeId: 'wt2',
+            ptyId: null,
+            createdAt: 22
+          })
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+        }
+      }
+    } as WorkspaceSessionState & { activeBrowserTabId: string; activeFileId: string })
+
+    await store.removeWorkspaceSessionTerminalTabAndFlush({
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      createdAt: 11,
+      leafId: TEST_LEAF_1,
+      ptyId: 'pty1'
+    })
+
+    expect(store.getWorkspaceSession()).toMatchObject({
+      activeWorktreeId: 'wt2',
+      activeWorkspaceKey: 'worktree:wt2',
+      activeTabId: 'foreground-terminal',
+      activeBrowserTabId: 'foreground-browser',
+      activeFileId: '/foreground.ts',
+      activeTabType: 'browser'
+    })
+  })
+
+  it.each(['terminal', 'unified', 'browser', 'file'] as const)(
+    'preserves active workspace state when a %s surface survives',
+    async (survivor) => {
+      const store = await createStore()
+      const session = {
+        ...getDefaultWorkspaceSession(),
+        activeWorkspaceKey: 'worktree:wt1',
+        activeWorktreeId: 'wt1',
+        activeTabId: 'tab1',
+        activeBrowserTabId: survivor === 'browser' ? 'browser1' : null,
+        activeFileId: survivor === 'file' ? '/tmp/file.ts' : null,
+        activeTabIdByWorktree: { wt1: 'tab1' },
+        activeBrowserTabIdByWorktree: { wt1: survivor === 'browser' ? 'browser1' : null },
+        activeFileIdByWorktree: { wt1: survivor === 'file' ? '/tmp/file.ts' : null },
+        activeTabTypeByWorktree: {
+          wt1:
+            survivor === 'browser'
+              ? ('browser' as const)
+              : survivor === 'file'
+                ? 'editor'
+                : 'terminal'
+        },
+        tabsByWorktree: {
+          wt1: [
+            makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 }),
+            ...(survivor === 'terminal'
+              ? [makeTerminalTab({ id: 'tab2', worktreeId: 'wt1', ptyId: null, createdAt: 12 })]
+              : [])
+          ]
+        },
+        terminalLayoutsByTabId: {
+          tab1: {
+            root: { type: 'leaf' as const, leafId: TEST_LEAF_1 },
+            activeLeafId: TEST_LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+          }
+        },
+        unifiedTabs:
+          survivor === 'unified'
+            ? {
+                wt1: [
+                  {
+                    id: 'editor1',
+                    entityId: '/tmp/file.ts',
+                    groupId: 'group1',
+                    worktreeId: 'wt1',
+                    contentType: 'editor' as const,
+                    label: 'file.ts',
+                    customLabel: null,
+                    color: null,
+                    sortOrder: 0,
+                    createdAt: 12
+                  }
+                ]
+              }
+            : {},
+        browserTabsByWorktree:
+          survivor === 'browser'
+            ? { wt1: [{ id: 'browser1', worktreeId: 'wt1', title: 'Browser', url: 'about:blank' }] }
+            : {},
+        openFilesByWorktree:
+          survivor === 'file'
+            ? {
+                wt1: [
+                  {
+                    filePath: '/tmp/file.ts',
+                    relativePath: 'file.ts',
+                    worktreeId: 'wt1',
+                    language: 'typescript'
+                  }
+                ]
+              }
+            : {}
+      } as WorkspaceSessionState & {
+        activeBrowserTabId: string | null
+        activeFileId: string | null
+      }
+      store.setWorkspaceSession(session)
+
+      await store.removeWorkspaceSessionTerminalTabAndFlush({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        createdAt: 11,
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty1'
+      })
+
+      expect(store.getWorkspaceSession()).toMatchObject({
+        activeWorkspaceKey: 'worktree:wt1',
+        activeWorktreeId: 'wt1',
+        activeBrowserTabId: session.activeBrowserTabId,
+        activeFileId: session.activeFileId
+      })
+    }
+  )
+
+  it.each([
+    {
+      name: 'MRU history',
+      tabOrder: ['tab1', 'tab2', 'tab3'],
+      recentTabIds: ['tab3', 'ghost', 'tab2', 'tab3', 'tab1'],
+      expected: 'tab3',
+      expectedRecent: ['tab2', 'tab3']
+    },
+    {
+      name: 'sanitized neighbor fallback',
+      tabOrder: ['tab2', 'tab1', 'tab3'],
+      recentTabIds: ['ghost', 'tab1', 'tab1'],
+      expected: 'tab3',
+      expectedRecent: []
+    }
+  ])(
+    'selects the renderer $name successor after close',
+    async ({ tabOrder, recentTabIds, expected, expectedRecent }) => {
+      const store = await createStore()
+      store.setWorkspaceSession({
+        ...getDefaultWorkspaceSession(),
+        activeWorktreeId: 'wt1',
+        activeTabId: 'tab1',
+        activeTabTypeByWorktree: { wt1: 'terminal' },
+        tabsByWorktree: {
+          wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })]
+        },
+        terminalLayoutsByTabId: {
+          tab1: {
+            root: { type: 'leaf', leafId: TEST_LEAF_1 },
+            activeLeafId: TEST_LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+          }
+        },
+        unifiedTabs: {
+          wt1: [
+            {
+              id: 'tab1',
+              entityId: 'tab1',
+              groupId: 'group1',
+              worktreeId: 'wt1',
+              contentType: 'terminal',
+              label: 'Target',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 11
+            },
+            {
+              id: 'tab2',
+              entityId: '/tmp/two.ts',
+              groupId: 'group1',
+              worktreeId: 'wt1',
+              contentType: 'editor',
+              label: 'Two',
+              customLabel: null,
+              color: null,
+              sortOrder: 1,
+              createdAt: 12
+            },
+            {
+              id: 'tab3',
+              entityId: 'browser3',
+              groupId: 'group1',
+              worktreeId: 'wt1',
+              contentType: 'browser',
+              label: 'Three',
+              customLabel: null,
+              color: null,
+              sortOrder: 2,
+              createdAt: 13
+            }
+          ]
+        },
+        tabGroups: {
+          wt1: [
+            {
+              id: 'group1',
+              worktreeId: 'wt1',
+              activeTabId: 'tab1',
+              tabOrder,
+              recentTabIds
+            }
+          ]
+        },
+        tabGroupLayouts: { wt1: { type: 'leaf', groupId: 'group1' } },
+        activeGroupIdByWorktree: { wt1: 'group1' }
+      } as WorkspaceSessionState)
+
+      await store.removeWorkspaceSessionTerminalTabAndFlush({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        createdAt: 11,
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty1'
+      })
+
+      expect(store.getWorkspaceSession().tabGroups?.wt1?.[0]).toMatchObject({
+        activeTabId: expected,
+        recentTabIds: expectedRecent
+      })
+    }
+  )
+
+  it.each(['duplicate-id', 'entity-conflict', 'group-conflict'] as const)(
+    'rejects %s unified terminal identity without mutating state',
+    async (conflict) => {
+      const store = await createStore()
+      const targetUnifiedId = conflict === 'entity-conflict' ? 'unified-target' : 'tab1'
+      const unifiedTabs = [
+        {
+          id: targetUnifiedId,
+          entityId: 'tab1',
+          groupId: 'group1',
+          worktreeId: 'wt1',
+          contentType: 'terminal' as const,
+          label: 'Target',
+          customLabel: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 11
+        },
+        ...(conflict === 'duplicate-id'
+          ? [
+              {
+                id: 'tab1',
+                entityId: 'other-entity',
+                groupId: 'group1',
+                worktreeId: 'wt1',
+                contentType: 'editor' as const,
+                label: 'Duplicate',
+                customLabel: null,
+                color: null,
+                sortOrder: 1,
+                createdAt: 12
+              }
+            ]
+          : []),
+        ...(conflict === 'entity-conflict'
+          ? [
+              {
+                id: 'unified-other',
+                entityId: 'tab1',
+                groupId: 'group1',
+                worktreeId: 'wt1',
+                contentType: 'terminal' as const,
+                label: 'Entity conflict',
+                customLabel: null,
+                color: null,
+                sortOrder: 1,
+                createdAt: 12
+              }
+            ]
+          : [])
+      ]
+      store.setWorkspaceSession({
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })]
+        },
+        terminalLayoutsByTabId: {
+          tab1: {
+            root: { type: 'leaf', leafId: TEST_LEAF_1 },
+            activeLeafId: TEST_LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+          }
+        },
+        unifiedTabs: { wt1: unifiedTabs },
+        tabGroups: {
+          wt1: [
+            {
+              id: 'group1',
+              worktreeId: 'wt1',
+              activeTabId: targetUnifiedId,
+              tabOrder: [targetUnifiedId]
+            },
+            ...(conflict === 'group-conflict'
+              ? [
+                  {
+                    id: 'group2',
+                    worktreeId: 'wt1',
+                    activeTabId: targetUnifiedId,
+                    tabOrder: [targetUnifiedId]
+                  }
+                ]
+              : [])
+          ]
+        },
+        tabGroupLayouts: { wt1: { type: 'leaf', groupId: 'group1' } },
+        activeGroupIdByWorktree: { wt1: 'group1' }
+      } as WorkspaceSessionState)
+      store.flush()
+      const memoryBefore = structuredClone(store.getWorkspaceSession())
+      const diskBefore = readFileSync(dataFile(), 'utf8')
+      const countsBefore = {
+        unified: memoryBefore.unifiedTabs?.wt1?.length,
+        groups: memoryBefore.tabGroups?.wt1?.length,
+        terminal: memoryBefore.tabsByWorktree.wt1?.length
+      }
+
+      await expect(
+        store.removeWorkspaceSessionTerminalTabAndFlush({
+          worktreeId: 'wt1',
+          tabId: 'tab1',
+          createdAt: 11,
+          leafId: TEST_LEAF_1,
+          ptyId: 'pty1'
+        })
+      ).rejects.toThrow('terminal_tab_unified_identity_ambiguous')
+      expect(store.getWorkspaceSession()).toEqual(memoryBefore)
+      expect(readFileSync(dataFile(), 'utf8')).toBe(diskBefore)
+      expect({
+        unified: store.getWorkspaceSession().unifiedTabs?.wt1?.length,
+        groups: store.getWorkspaceSession().tabGroups?.wt1?.length,
+        terminal: store.getWorkspaceSession().tabsByWorktree.wt1?.length
+      }).toEqual(countsBefore)
+    }
+  )
+
+  it.each([
+    'duplicate-group-id',
+    'duplicate-layout-leaf',
+    'missing-layout-leaf',
+    'wrong-active-group',
+    'cross-worktree-group-collision'
+  ] as const)('rejects %s projection ambiguity with zero mutation', async (conflict) => {
+    const store = await createStore()
+    const groups: NonNullable<WorkspaceSessionState['tabGroups']> = {
+      wt1: [
+        {
+          id: 'group1',
+          worktreeId: 'wt1',
+          activeTabId: 'tab1',
+          tabOrder: ['tab1'],
+          recentTabIds: ['tab1']
+        },
+        ...(conflict === 'duplicate-group-id'
+          ? [
+              {
+                id: 'group1',
+                worktreeId: 'wt1',
+                activeTabId: null,
+                tabOrder: []
+              }
+            ]
+          : [])
+      ],
+      ...(conflict === 'cross-worktree-group-collision'
+        ? {
+            wt2: [
+              {
+                id: 'group1',
+                worktreeId: 'wt2',
+                activeTabId: null,
+                tabOrder: []
+              }
+            ]
+          }
+        : {})
+    }
+    const groupLayout =
+      conflict === 'duplicate-layout-leaf'
+        ? ({
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', groupId: 'group1' },
+            second: { type: 'leaf', groupId: 'group1' }
+          } as const)
+        : conflict === 'missing-layout-leaf'
+          ? ({ type: 'leaf', groupId: 'missing-group' } as const)
+          : ({ type: 'leaf', groupId: 'group1' } as const)
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+        }
+      },
+      unifiedTabs: {
+        wt1: [
+          {
+            id: 'tab1',
+            entityId: 'tab1',
+            groupId: 'group1',
+            worktreeId: 'wt1',
+            contentType: 'terminal',
+            label: 'Target',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 11
+          }
+        ]
+      },
+      tabGroups: groups,
+      tabGroupLayouts: { wt1: groupLayout },
+      activeGroupIdByWorktree: {
+        wt1: conflict === 'wrong-active-group' ? 'missing-group' : 'group1'
+      }
+    } as WorkspaceSessionState)
+    store.flush()
+    const memoryBefore = structuredClone(store.getWorkspaceSession())
+    const diskBefore = readFileSync(dataFile(), 'utf8')
+
+    await expect(
+      store.removeWorkspaceSessionTerminalTabAndFlush({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        createdAt: 11,
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty1'
+      })
+    ).rejects.toThrow('terminal_tab_unified_identity_ambiguous')
+    expect(store.getWorkspaceSession()).toEqual(memoryBefore)
+    expect(readFileSync(dataFile(), 'utf8')).toBe(diskBefore)
+  })
+
+  it('rejects a stale terminal-tab identity without changing memory or disk', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      activeTabIdByWorktree: { wt1: 'tab1' },
+      tabsByWorktree: {
+        wt1: [
+          makeTerminalTab({
+            id: 'tab1',
+            worktreeId: 'wt1',
+            ptyId: 'pty-replacement',
+            createdAt: 12
+          })
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_2 },
+          activeLeafId: TEST_LEAF_2,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_2]: 'pty-replacement' }
+        }
+      }
+    })
+    store.flush()
+    const memoryBefore = structuredClone(store.getWorkspaceSession())
+    const diskBefore = readFileSync(dataFile(), 'utf8')
+
+    await expect(
+      store.removeWorkspaceSessionTerminalTabAndFlush({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        createdAt: 11,
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty1'
+      })
+    ).rejects.toThrow('terminal_tab_identity_ambiguous')
+    expect(store.getWorkspaceSession()).toEqual(memoryBefore)
+    expect(readFileSync(dataFile(), 'utf8')).toBe(diskBefore)
+  })
+
+  it('durably preserves a pre-existing debounced save when removal is ambiguous', async () => {
+    const store = await createStore()
+    store.flush()
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: 'unrelated-pending-repo',
+      tabsByWorktree: {
+        wt1: [
+          makeTerminalTab({
+            id: 'tab1',
+            worktreeId: 'wt1',
+            ptyId: 'pty-replacement',
+            createdAt: 12
+          })
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_2 },
+          activeLeafId: TEST_LEAF_2,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_2]: 'pty-replacement' }
+        }
+      }
+    })
+    const pendingState = structuredClone(store.getWorkspaceSession())
+
+    await expect(
+      store.removeWorkspaceSessionTerminalTabAndFlush({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        createdAt: 11,
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty1'
+      })
+    ).rejects.toThrow('terminal_tab_identity_ambiguous')
+
+    expect(store.getWorkspaceSession()).toEqual(pendingState)
+    expect((await createStore()).getWorkspaceSession()).toEqual(pendingState)
+  })
+
+  it.each(['EIO', 'ENOSPC'])(
+    'reschedules an unrelated save after %s pre-validation flush failure',
+    async (code) => {
+      vi.useFakeTimers()
+      try {
+        const store = await createStore()
+        store.flush()
+        store.setWorkspaceSession({
+          ...getDefaultWorkspaceSession(),
+          activeRepoId: `pending-${code}`,
+          tabsByWorktree: {
+            wt1: [
+              makeTerminalTab({
+                id: 'tab1',
+                worktreeId: 'wt1',
+                ptyId: 'replacement',
+                createdAt: 12
+              })
+            ]
+          },
+          terminalLayoutsByTabId: {
+            tab1: {
+              root: { type: 'leaf', leafId: TEST_LEAF_2 },
+              activeLeafId: TEST_LEAF_2,
+              expandedLeafId: null,
+              ptyIdsByLeafId: { [TEST_LEAF_2]: 'replacement' }
+            }
+          }
+        })
+        const internals = store as unknown as { flushOrThrow: () => void }
+        const flush = internals.flushOrThrow.bind(store)
+        let fail = true
+        internals.flushOrThrow = () => {
+          if (fail) {
+            fail = false
+            throw Object.assign(new Error(code), { code })
+          }
+          flush()
+        }
+
+        await expect(
+          store.removeWorkspaceSessionTerminalTabAndFlush({
+            worktreeId: 'wt1',
+            tabId: 'tab1',
+            createdAt: 11,
+            leafId: TEST_LEAF_1,
+            ptyId: 'pty1'
+          })
+        ).rejects.toThrow(code)
+        await vi.advanceTimersByTimeAsync(1_000)
+        await store.waitForPendingWrite()
+
+        expect((await createStore()).getWorkspaceSession().activeRepoId).toBe(`pending-${code}`)
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+
+  it('rolls back terminal-tab removal when the synchronous flush fails', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      activeTabIdByWorktree: { wt1: 'tab1' },
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+        }
+      }
+    })
+    store.flush()
+    const memoryBefore = structuredClone(store.getWorkspaceSession())
+    const diskBefore = readFileSync(dataFile(), 'utf8')
+    ;(store as unknown as { flushOrThrow: () => void }).flushOrThrow = () => {
+      throw new Error('disk_write_failed')
+    }
+
+    await expect(
+      store.removeWorkspaceSessionTerminalTabAndFlush({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        createdAt: 11,
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty1'
+      })
+    ).rejects.toThrow('disk_write_failed')
+    expect(store.getWorkspaceSession()).toEqual(memoryBefore)
+    expect(readFileSync(dataFile(), 'utf8')).toBe(diskBefore)
+  })
+
+  it('rolls disk and memory back after a failure injected after the primary write', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+        }
+      }
+    })
+    store.flush()
+    const memoryBefore = structuredClone(store.getWorkspaceSession())
+    const diskBefore = readFileSync(dataFile(), 'utf8')
+    const internals = store as unknown as { flushOrThrow: () => void }
+    const flushOrThrow = internals.flushOrThrow.bind(store)
+    let calls = 0
+    internals.flushOrThrow = () => {
+      flushOrThrow()
+      calls++
+      if (calls === 1) {
+        throw new Error('post_primary_write_failed')
+      }
+    }
+
+    await expect(
+      store.removeWorkspaceSessionTerminalTabAndFlush({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        createdAt: 11,
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty1'
+      })
+    ).rejects.toThrow('post_primary_write_failed')
+    expect(calls).toBe(2)
+    expect(store.getWorkspaceSession()).toEqual(memoryBefore)
+    expect(readFileSync(dataFile(), 'utf8')).toBe(diskBefore)
+    expect((await createStore()).getWorkspaceSession()).toEqual(memoryBefore)
+  })
+
+  it('reports unknown durability when rollback cannot restore a post-write failure', async () => {
+    const store = await createStore()
+    const ref = 'v1-22222222222222222222222222222222'
+    const sidecar = join(testState.dir, 'terminal-scrollback', `${ref}.bin`)
+    mkdirSync(join(testState.dir, 'terminal-scrollback'), { recursive: true })
+    writeFileSync(sidecar, 'uncertain scrollback', 'utf8')
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' },
+          scrollbackRefsByLeafId: { [TEST_LEAF_1]: ref }
+        }
+      }
+    })
+    store.flush()
+    const internals = store as unknown as { flushOrThrow: () => void }
+    const flushOrThrow = internals.flushOrThrow.bind(store)
+    let calls = 0
+    internals.flushOrThrow = () => {
+      calls++
+      if (calls === 1) {
+        flushOrThrow()
+        throw new Error('post_primary_write_failed')
+      }
+      throw new Error('rollback_failed')
+    }
+
+    await expect(
+      store.removeWorkspaceSessionTerminalTabAndFlush({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        createdAt: 11,
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty1'
+      })
+    ).rejects.toThrow('terminal_tab_removal_rollback_incomplete')
+    expect(calls).toBe(2)
+    expect(store.getWorkspaceSession().tabsByWorktree.wt1).toHaveLength(1)
+    expect((await createStore()).getWorkspaceSession().tabsByWorktree.wt1).toEqual([])
+    expect(existsSync(sidecar)).toBe(true)
+  })
+
+  it('waits for a stale async rename that already passed its generation check', async () => {
+    vi.useFakeTimers()
+    try {
+      const store = await createStore()
+      store.flush()
+      store.setWorkspaceSession({
+        ...getDefaultWorkspaceSession(),
+        activeWorktreeId: 'wt1',
+        activeTabId: 'tab1',
+        tabsByWorktree: {
+          wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })]
+        },
+        terminalLayoutsByTabId: {
+          tab1: {
+            root: { type: 'leaf', leafId: TEST_LEAF_1 },
+            activeLeafId: TEST_LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+          }
+        }
+      })
+      await vi.advanceTimersByTimeAsync(1_000)
+      const receipt = await store.removeWorkspaceSessionTerminalTabAndFlush({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        createdAt: 11,
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty1'
+      })
+      expect(receipt.durableRemoval).toBe(true)
+      expect((await createStore()).getWorkspaceSession().tabsByWorktree.wt1).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('waits for a stale async rename retained across an ordinary flush', async () => {
+    vi.useFakeTimers()
+    try {
+      const store = await createStore()
+      store.flush()
+      store.setWorkspaceSession({
+        ...getDefaultWorkspaceSession(),
+        activeWorktreeId: 'wt1',
+        activeTabId: 'tab1',
+        tabsByWorktree: {
+          wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })]
+        },
+        terminalLayoutsByTabId: {
+          tab1: {
+            root: { type: 'leaf', leafId: TEST_LEAF_1 },
+            activeLeafId: TEST_LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+          }
+        }
+      })
+      await vi.advanceTimersByTimeAsync(1_000)
+      store.flush()
+      await expect(
+        store.removeWorkspaceSessionTerminalTabAndFlush({
+          worktreeId: 'wt1',
+          tabId: 'tab1',
+          createdAt: 11,
+          leafId: TEST_LEAF_1,
+          ptyId: 'pty1'
+        })
+      ).resolves.toMatchObject({ durableRemoval: true })
+      expect((await createStore()).getWorkspaceSession().tabsByWorktree.wt1).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('orders an ordinary flush after an async writer already admitted to rename', async () => {
+    vi.useFakeTimers()
+    try {
+      const store = await createStore()
+      store.flush()
+      store.setWorkspaceSession({
+        ...getDefaultWorkspaceSession(),
+        activeRepoId: 'stale-snapshot'
+      })
+      await vi.advanceTimersByTimeAsync(1_000)
+
+      store.setWorkspaceSession({
+        ...getDefaultWorkspaceSession(),
+        activeRepoId: 'flush-wins'
+      })
+      store.flush()
+
+      expect((await createStore()).getWorkspaceSession().activeRepoId).toBe('flush-wins')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drains a physical async rename before reporting frozen terminal writes', async () => {
+    vi.useFakeTimers()
+    try {
+      const store = await createStore()
+      store.flush()
+      store.setWorkspaceSession({
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })]
+        },
+        terminalLayoutsByTabId: {
+          tab1: {
+            root: { type: 'leaf', leafId: TEST_LEAF_1 },
+            activeLeafId: TEST_LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+          }
+        }
+      })
+      await vi.advanceTimersByTimeAsync(1_000)
+      await store.waitForPendingWrite()
+      store.freezeWrites()
+      await expect(
+        store.removeWorkspaceSessionTerminalTabAndFlush({
+          worktreeId: 'wt1',
+          tabId: 'tab1',
+          createdAt: 11,
+          leafId: TEST_LEAF_1,
+          ptyId: 'pty1'
+        })
+      ).rejects.toThrow('terminal_tab_removal_writes_frozen')
+      expect((await createStore()).getWorkspaceSession().tabsByWorktree.wt1).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('retains scrollback on failure, deletes it after durable success, and types frozen writes', async () => {
+    const store = await createStore()
+    const ref = 'v1-11111111111111111111111111111111'
+    const sidecar = join(testState.dir, 'terminal-scrollback', `${ref}.bin`)
+    mkdirSync(join(testState.dir, 'terminal-scrollback'), { recursive: true })
+    writeFileSync(sidecar, 'durable scrollback', 'utf8')
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' },
+          scrollbackRefsByLeafId: { [TEST_LEAF_1]: ref }
+        }
+      }
+    })
+    store.flush()
+    const internals = store as unknown as { flushOrThrow: () => void }
+    const flushOrThrow = internals.flushOrThrow.bind(store)
+    internals.flushOrThrow = () => {
+      throw new Error('disk_write_failed')
+    }
+
+    await expect(
+      store.removeWorkspaceSessionTerminalTabAndFlush({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        createdAt: 11,
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty1'
+      })
+    ).rejects.toThrow('disk_write_failed')
+    expect(existsSync(sidecar)).toBe(true)
+
+    internals.flushOrThrow = flushOrThrow
+    await store.removeWorkspaceSessionTerminalTabAndFlush({
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      createdAt: 11,
+      leafId: TEST_LEAF_1,
+      ptyId: 'pty1'
+    })
+    expect(existsSync(sidecar)).toBe(false)
+
+    const frozenStore = await createStore()
+    frozenStore.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+        }
+      }
+    })
+    frozenStore.freezeWrites()
+    await expect(
+      frozenStore.removeWorkspaceSessionTerminalTabAndFlush({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        createdAt: 11,
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty1'
+      })
+    ).rejects.toThrow('terminal_tab_removal_writes_frozen')
+  })
+
   it('patches workspace session without replacing unchanged slices', async () => {
     const store = await createStore()
     const tabsByWorktree = {
@@ -6684,6 +10915,155 @@ describe('Store', () => {
     expect(
       store.getWorkspaceSession().terminalLayoutsByTabId['tab-local'].buffersByLeafId
     ).toBeUndefined()
+  })
+
+  it.each(['unifiedTabs', 'tabGroups', 'tabGroupLayouts', 'activeGroupIdByWorktree'] as const)(
+    'fences a stale terminal projection delivered through a %s-only patch',
+    async (field) => {
+      const store = await createStore()
+      const original: WorkspaceSessionState = {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })]
+        },
+        terminalLayoutsByTabId: {
+          tab1: {
+            root: { type: 'leaf', leafId: TEST_LEAF_1 },
+            activeLeafId: TEST_LEAF_1,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+          }
+        },
+        unifiedTabs: {
+          wt1: [
+            {
+              id: 'tab1',
+              entityId: 'tab1',
+              groupId: 'group1',
+              worktreeId: 'wt1',
+              contentType: 'terminal',
+              label: 'Stale',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 11
+            },
+            {
+              id: 'editor2',
+              entityId: '/tmp/two.ts',
+              groupId: 'group2',
+              worktreeId: 'wt1',
+              contentType: 'editor',
+              label: 'Survivor',
+              customLabel: null,
+              color: null,
+              sortOrder: 1,
+              createdAt: 12
+            }
+          ]
+        },
+        tabGroups: {
+          wt1: [
+            {
+              id: 'group1',
+              worktreeId: 'wt1',
+              activeTabId: 'tab1',
+              tabOrder: ['tab1'],
+              recentTabIds: ['tab1']
+            },
+            {
+              id: 'group2',
+              worktreeId: 'wt1',
+              activeTabId: 'editor2',
+              tabOrder: ['editor2'],
+              recentTabIds: ['editor2']
+            }
+          ]
+        },
+        tabGroupLayouts: {
+          wt1: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', groupId: 'group1' },
+            second: { type: 'leaf', groupId: 'group2' }
+          }
+        },
+        activeGroupIdByWorktree: { wt1: 'group1' }
+      }
+      store.setWorkspaceSession(original)
+      await store.removeWorkspaceSessionTerminalTabAndFlush({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        createdAt: 11,
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty1'
+      })
+
+      store.patchWorkspaceSession({ [field]: structuredClone(original[field]) })
+
+      const session = store.getWorkspaceSession()
+      expect(session.unifiedTabs?.wt1?.map((tab) => tab.id)).toEqual(['editor2'])
+      expect(session.tabGroups?.wt1?.map((group) => group.id)).toEqual(['group2'])
+      expect(session.tabGroupLayouts?.wt1).toEqual({ type: 'leaf', groupId: 'group2' })
+      expect(session.activeGroupIdByWorktree?.wt1).toBe('group2')
+    }
+  )
+
+  it('allows a unified-only patch with legitimate replacement identity', async () => {
+    const store = await createStore()
+    const original: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty1', createdAt: 11 })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty1' }
+        }
+      },
+      unifiedTabs: {
+        wt1: [
+          {
+            id: 'tab1',
+            entityId: 'tab1',
+            groupId: 'group1',
+            worktreeId: 'wt1',
+            contentType: 'terminal',
+            label: 'Original',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 11
+          }
+        ]
+      },
+      tabGroups: {
+        wt1: [{ id: 'group1', worktreeId: 'wt1', activeTabId: 'tab1', tabOrder: ['tab1'] }]
+      },
+      tabGroupLayouts: { wt1: { type: 'leaf', groupId: 'group1' } },
+      activeGroupIdByWorktree: { wt1: 'group1' }
+    }
+    store.setWorkspaceSession(original)
+    await store.removeWorkspaceSessionTerminalTabAndFlush({
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      createdAt: 11,
+      leafId: TEST_LEAF_1,
+      ptyId: 'pty1'
+    })
+    const replacement = structuredClone(original.unifiedTabs!)
+    replacement.wt1![0]!.label = 'Replacement'
+    replacement.wt1![0]!.createdAt = 12
+
+    store.patchWorkspaceSession({ unifiedTabs: replacement })
+
+    expect(store.getWorkspaceSession().unifiedTabs?.wt1?.[0]).toMatchObject({
+      label: 'Replacement',
+      createdAt: 12
+    })
   })
 
   it('stores remote terminal scrollback out of workspace session JSON', async () => {

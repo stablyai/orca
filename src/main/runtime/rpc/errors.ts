@@ -46,6 +46,7 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'terminal_tab_close_unavailable',
   'terminal_tab_identity_missing',
   'terminal_tab_identity_ambiguous',
+  'terminal_tab_unified_identity_ambiguous',
   'no_active_terminal',
   'repo_not_found',
   'timeout',
@@ -60,6 +61,35 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
   const message = error instanceof Error ? error.message : String(error)
+  if (message === 'terminal_tab_close_partial' && error instanceof Error) {
+    const partial = error as Error & {
+      handle?: unknown
+      tabId?: unknown
+      closeMode?: unknown
+      tabCloseRequested?: unknown
+      ptyKilled?: unknown
+      durableRemoval?: unknown
+    }
+    if (
+      typeof partial.handle === 'string' &&
+      typeof partial.tabId === 'string' &&
+      partial.closeMode === 'tab' &&
+      typeof partial.tabCloseRequested === 'boolean' &&
+      typeof partial.ptyKilled === 'boolean' &&
+      (typeof partial.durableRemoval === 'boolean' || partial.durableRemoval === 'unknown')
+    ) {
+      // Why: partial close errors can contain causes or provider details; expose
+      // only the fixed recovery state the CLI needs to avoid repeating a kill.
+      return errorResponse(id, meta, message, message, {
+        handle: partial.handle,
+        tabId: partial.tabId,
+        closeMode: partial.closeMode,
+        tabCloseRequested: partial.tabCloseRequested,
+        ptyKilled: partial.ptyKilled,
+        durableRemoval: partial.durableRemoval
+      })
+    }
+  }
   if (
     error instanceof Error &&
     'code' in error &&
