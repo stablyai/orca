@@ -196,6 +196,8 @@ export type IPtyProvider = {
     id: string,
     opts?: { scrollbackRows?: number }
   ) => Promise<PtyProviderBufferSnapshot | null>
+  /** Whether this exact PTY can return a sequence-safe provider snapshot. */
+  canProvideAuthoritativeBufferSnapshot?: (id: string) => boolean
   /**
    * The size the PTY has ACTUALLY applied, not the last size requested.
    * resize() is fire-and-forget for remote providers (daemon/SSH `notify`),

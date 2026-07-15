@@ -96,6 +96,10 @@ import {
   shouldDeferParkedPtyExitTabClose,
   syncParkedTerminalTabWatchers
 } from './terminal-parked-tab-watchers'
+import {
+  clearTerminalProviderSnapshotCapabilities,
+  synchronizeTerminalProviderSnapshotCapabilities
+} from '../terminal/terminal-provider-snapshot-capability'
 
 const ptyWrite = vi.fn()
 const originalWindow = (globalThis as { window?: unknown }).window
@@ -125,6 +129,16 @@ function syncParked(args?: {
 
 describe('terminal-parked-tab-watchers', () => {
   beforeEach(() => {
+    clearTerminalProviderSnapshotCapabilities()
+    synchronizeTerminalProviderSnapshotCapabilities(
+      [
+        PTY_ID,
+        SECOND_PTY_ID,
+        `${WORKTREE_ID}@@session-after-wake`,
+        `${OTHER_WORKTREE_ID}@@session-9`
+      ],
+      (ids) => ids.map((id) => ({ id, authoritative: true }))
+    )
     mockStoreState = {
       tabsByWorktree: {},
       terminalLayoutsByTabId: {},

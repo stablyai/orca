@@ -3830,6 +3830,28 @@ describe('registerPtyHandlers', () => {
     })
   })
 
+  it('reports authoritative snapshot capability with the owning provider context', () => {
+    const capabilityProvider = {
+      authoritativeIds: new Set(['current-pty']),
+      canProvideAuthoritativeBufferSnapshot(id: string) {
+        return this.authoritativeIds.has(id)
+      }
+    }
+    registerPtyHandlers(mainWindow as never)
+    setLocalPtyProvider(capabilityProvider as never)
+    const listener = onMock.mock.calls.find(
+      ([channel]) => channel === 'pty:getAuthoritativeBufferSnapshotCapabilitiesSync'
+    )?.[1] as ((event: { returnValue?: unknown }, args: { ids: unknown[] }) => void) | undefined
+    const event: { returnValue?: unknown } = {}
+
+    listener?.(event, { ids: ['current-pty', 'legacy-pty', 'current-pty', 42] })
+
+    expect(event.returnValue).toEqual([
+      { id: 'current-pty', authoritative: true },
+      { id: 'legacy-pty', authoritative: false }
+    ])
+  })
+
   it('checks single-PTY liveness without listing every session', async () => {
     const hasPty = vi.fn((id: string) => id === 'live-pty')
     const listProcesses = vi.fn(async () => {

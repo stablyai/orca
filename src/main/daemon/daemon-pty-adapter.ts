@@ -156,6 +156,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
     return this.protocolVersion >= GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION
   }
 
+  canProvideAuthoritativeBufferSnapshot(_id: string): boolean {
+    return this.supportsAuthoritativeBufferSnapshots
+  }
+
   constructor(opts: DaemonPtyAdapterOptions) {
     this.protocolVersion = opts.protocolVersion ?? PROTOCOL_VERSION
     this.socketPath = opts.socketPath

@@ -135,6 +135,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     return await this.adapterFor(id).getBufferSnapshot(id, opts)
   }
 
+  canProvideAuthoritativeBufferSnapshot(id: string): boolean {
+    return this.adapterFor(id).canProvideAuthoritativeBufferSnapshot(id)
+  }
+
   async clearBuffer(id: string): Promise<void> {
     await this.adapterFor(id).clearBuffer(id)
   }

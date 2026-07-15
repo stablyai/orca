@@ -1,4 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
+import { isSnapshotBackedTerminalPty } from '../terminal-pane/terminal-hidden-view-parking'
+import {
+  clearTerminalProviderSnapshotCapabilities,
+  synchronizeTerminalProviderSnapshotCapabilities
+} from './terminal-provider-snapshot-capability'
 
 import {
   COLD_ACTIVATION_TAB_DEFER_THRESHOLD,
@@ -230,6 +235,38 @@ describe('cold activation tab deferral', () => {
     })
     expect(deferring).toBe(true)
     expect(restrictions.get('wt-1')).toEqual(new Set(['tab-1', 'tab-2', 'tab-5', 'tab-9']))
+  })
+
+  it('mounts legacy PTYs eagerly while deferring snapshot-capable siblings', () => {
+    const worktreeId = 'wt-1'
+    const allTabIds = tabIds(7)
+    const ptyIdByTabId = new Map(
+      allTabIds.map((tabId) => [tabId, `${worktreeId}@@${tabId}-session`])
+    )
+    const legacyPtyId = ptyIdByTabId.get('tab-2')!
+    clearTerminalProviderSnapshotCapabilities()
+    synchronizeTerminalProviderSnapshotCapabilities([...ptyIdByTabId.values()], (ids) =>
+      ids.map((id) => ({ id, authoritative: id !== legacyPtyId }))
+    )
+    const restrictions = new Map<string, ReadonlySet<string>>()
+    const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
+
+    const deferring = planColdActivationTabDeferral({
+      restrictions,
+      deferredMountTabIdsByWorktree,
+      worktreeId,
+      allTabIds,
+      isTabLive: () => false,
+      isTabDeferrable: (tabId) =>
+        isSnapshotBackedTerminalPty(ptyIdByTabId.get(tabId) ?? null, worktreeId),
+      immediateTabIds: new Set(['tab-1'])
+    })
+
+    expect(deferring).toBe(true)
+    expect(restrictions.get(worktreeId)).toEqual(new Set(['tab-1', 'tab-2']))
+    expect(deferredMountTabIdsByWorktree.get(worktreeId)).toEqual(
+      new Set(['tab-3', 'tab-4', 'tab-5', 'tab-6', 'tab-7'])
+    )
   })
 
   it('does not defer when most tabs are already live', () => {
