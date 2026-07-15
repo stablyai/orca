@@ -420,6 +420,30 @@ describe('shared agent-hook-listener', () => {
     })
   })
 
+  it('captures Pi session ids on Pi-compatible status events', () => {
+    const event = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'before_agent_start',
+          prompt: 'resume this task',
+          session_id: 'pi-session-1',
+          session_file: '/tmp/pi-session-1.jsonl'
+        }
+      },
+      'production'
+    )
+
+    expect(event?.payload).toMatchObject({
+      state: 'working',
+      prompt: 'resume this task',
+      agentType: 'pi'
+    })
+    expect(event?.providerSession).toEqual({ key: 'session_id', id: 'pi-session-1' })
+  })
+
   it('normalizes Command Code hooks and reads turn text from the transcript', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-transcript-'))
     const transcriptPath = join(tmpDir, 'transcript.jsonl')

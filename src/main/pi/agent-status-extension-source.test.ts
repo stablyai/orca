@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { getPiAgentStatusExtensionSource } from './agent-status-extension-source'
 
-type HookHandler = (event?: unknown) => Promise<void> | void
+type HookHandler = (event?: unknown, ctx?: unknown) => Promise<void> | void
 
 type FakeCurlChild = {
   on: ReturnType<typeof vi.fn>
@@ -24,7 +24,7 @@ type Harness = {
     readFileSync: ReturnType<typeof vi.fn>
   }
   handlers: Record<string, HookHandler>
-  callHook: (name: string, event?: unknown) => Promise<void>
+  callHook: (name: string, event?: unknown, ctx?: unknown) => Promise<void>
 }
 
 const BASE_ENV = {
@@ -146,13 +146,35 @@ function createHarness(args: {
     spawnedChildren,
     fsMock,
     handlers,
-    callHook: async (name, event) => {
-      await handlers[name]?.(event)
+    callHook: async (name, event, ctx) => {
+      await handlers[name]?.(event, ctx)
     }
   }
 }
 
 describe('getPiAgentStatusExtensionSource', () => {
+  it('includes the session id and file path in status posts after session_start', async () => {
+    const harness = createHarness({ kind: 'pi' })
+
+    await harness.callHook(
+      'session_start',
+      {},
+      {
+        sessionManager: {
+          getSessionId: () => 'pi-session-1',
+          getSessionFile: () => '/tmp/pi-session-1.jsonl'
+        }
+      }
+    )
+
+    const body = JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body))
+    expect(body.payload).toEqual({
+      hook_event_name: 'session_start',
+      session_id: 'pi-session-1',
+      session_file: '/tmp/pi-session-1.jsonl'
+    })
+  })
+
   it('routes an OMP executable through /hook/omp', async () => {
     const harness = createHarness({
       kind: 'pi',
