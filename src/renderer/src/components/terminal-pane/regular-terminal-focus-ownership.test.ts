@@ -241,6 +241,46 @@ describe('regular terminal focus ownership', () => {
     expect(document.activeElement).toBe(outside)
   })
 
+  it('rolls the focus mirror back to false when a newer owner wins the deferred reclaim', () => {
+    // Why: the eager syncFocused(true) on reactivation assumes the terminal
+    // will reclaim focus next frame. When a dialog/sidebar/rename input grabs
+    // focus first, the reclaim is skipped, so the main-process mirror must roll
+    // back to false or shortcuts stay stuck in 'terminal' context.
+    const pane = appendPane()
+    const helper = appendHelper(pane)
+    const outside = document.createElement('input')
+    document.body.appendChild(outside)
+    const syncFocused = vi.fn()
+    helper.focus()
+
+    const releasedHelper = releaseTerminalFocusForWindowBlur({
+      container: pane,
+      activeElement: helper,
+      syncFocused
+    })
+    document.body.focus()
+    syncFocused.mockClear()
+    const scheduled: (() => void)[] = []
+
+    resyncTerminalFocusForWindowFocus({
+      container: pane,
+      activeElement: document.activeElement,
+      syncFocused,
+      releasedHelper,
+      isMac: false,
+      scheduleRefocus: (callback) => scheduled.push(callback)
+    })
+    expect(syncFocused).toHaveBeenCalledWith(true)
+    // A newer focus owner (dialog/sidebar) grabs focus before the deferred reclaim.
+    outside.focus()
+    for (const run of scheduled) {
+      run()
+    }
+
+    expect(syncFocused).toHaveBeenLastCalledWith(false)
+    expect(document.activeElement).toBe(outside)
+  })
+
   it('does not reclaim a released helper that was detached from the DOM before refocus', () => {
     const pane = appendPane()
     const helper = appendHelper(pane)
