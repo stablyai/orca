@@ -272,6 +272,7 @@ type UseTerminalPaneLifecycleDeps = {
   initialLayoutRef: React.RefObject<TerminalLayoutSnapshot>
   managerRef: React.RefObject<PaneManager | null>
   containerRef: React.RefObject<HTMLDivElement | null>
+  expandedPaneIdRef: React.RefObject<number | null>
   expandedStyleSnapshotRef: React.MutableRefObject<
     Map<HTMLElement, { display: string; flex: string }>
   >
@@ -592,6 +593,9 @@ export function createTerminalPaneSplitEventHandler(args: {
   tabId: string
   getManager: () => TerminalPaneSplitManager | null
   startupDeps: SplitWithStartupDeps
+  getExpandedPaneId?: () => number | null
+  setExpandedPane?: (paneId: number | null) => void
+  syncExpandedLayout?: () => void
   recordSplit?: typeof recordRuntimeCreatedTerminalPaneSplit
   consumeMirrorTelemetry?: typeof consumePendingWebRuntimeSplitMirrorTelemetry
   publishCommittedSplit?: () => void
@@ -660,17 +664,24 @@ export function createTerminalPaneSplitEventHandler(args: {
       }
 
       const previousActivePaneId = manager.getActivePane()?.id ?? null
+      const previousExpandedPaneId = detail.orchestrationGrid
+        ? (args.getExpandedPaneId?.() ?? null)
+        : null
       let createdPane: ReturnType<TerminalPaneSplitManager['splitPane']> = null
       let rolledBack = false
+      let expansionCollapsed = false
+      let expansionRestored = false
       rollback = (): void => {
-        if (rolledBack || !createdPane) {
+        if (rolledBack) {
           return
         }
         const cleanupErrors: unknown[] = []
-        try {
-          manager.closePane(createdPane.id, { notifyLayoutChanged: false })
-        } catch (error) {
-          cleanupErrors.push(error)
+        if (createdPane) {
+          try {
+            manager.closePane(createdPane.id, { notifyLayoutChanged: false })
+          } catch (error) {
+            cleanupErrors.push(error)
+          }
         }
         try {
           if (previousActivePaneId !== null) {
@@ -681,6 +692,21 @@ export function createTerminalPaneSplitEventHandler(args: {
           }
         } catch (error) {
           cleanupErrors.push(error)
+        }
+        if (
+          expansionCollapsed &&
+          !expansionRestored &&
+          previousExpandedPaneId !== null &&
+          args.setExpandedPane &&
+          args.syncExpandedLayout
+        ) {
+          try {
+            args.setExpandedPane(previousExpandedPaneId)
+            args.syncExpandedLayout()
+            expansionRestored = true
+          } catch (error) {
+            cleanupErrors.push(error)
+          }
         }
         if (cleanupErrors.length > 0) {
           // Why: a transient teardown exception must leave rollback callable so
@@ -725,6 +751,13 @@ export function createTerminalPaneSplitEventHandler(args: {
         return
       }
       if (detail.orchestrationGrid) {
+        if (previousExpandedPaneId !== null && args.setExpandedPane && args.syncExpandedLayout) {
+          // Why: grid arrange reparents panes but does not undo the inline
+          // display overrides owned by expanded-pane state.
+          expansionCollapsed = true
+          args.setExpandedPane(null)
+          args.syncExpandedLayout()
+        }
         manager.arrangeOrchestrationGrid(undefined, { notifyLayoutChanged: false })
         if (!detail.acknowledge && detail.activate !== false) {
           manager.setActivePane(createdPane.id, {
@@ -905,6 +938,7 @@ export function useTerminalPaneLifecycle({
   initialLayoutRef,
   managerRef,
   containerRef,
+  expandedPaneIdRef,
   expandedStyleSnapshotRef,
   paneFontSizesRef,
   paneTransportsRef,
@@ -2040,6 +2074,9 @@ export function useTerminalPaneLifecycle({
       tabId,
       getManager: () => managerRef.current,
       startupDeps: ptyDeps,
+      getExpandedPaneId: () => expandedPaneIdRef.current,
+      setExpandedPane,
+      syncExpandedLayout,
       publishCommittedSplit: scheduleRuntimeGraphSync
     })
     window.addEventListener(SPLIT_TERMINAL_PANE_EVENT, onCliSplitPane)

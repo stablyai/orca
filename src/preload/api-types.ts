@@ -3247,6 +3247,18 @@ export type PreloadApi = {
       title?: string
       error?: string
     }) => void
+    onRollbackTerminalGridAppend?: (
+      callback: (data: {
+        requestId: string
+        transactionId: string
+        tabId: string
+        leafId: string
+      }) => void
+    ) => () => void
+    replyTerminalGridAppendRollback?: (reply: { requestId: string; error?: string }) => void
+    onCommitTerminalGridAppend?: (
+      callback: (data: { transactionId: string; tabId: string; leafId: string }) => void
+    ) => () => void
     onSplitTerminal: (
       callback: (data: {
         tabId: string

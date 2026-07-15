@@ -1364,6 +1364,7 @@ function TerminalPane(
     initialLayoutRef,
     managerRef,
     containerRef,
+    expandedPaneIdRef,
     expandedStyleSnapshotRef,
     paneFontSizesRef,
     paneTransportsRef,

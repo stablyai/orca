@@ -3939,6 +3939,34 @@ const api = {
     }): void => {
       ipcRenderer.send('terminal:tabCreateReply', reply)
     },
+    onRollbackTerminalGridAppend: (
+      callback: (data: {
+        requestId: string
+        transactionId: string
+        tabId: string
+        leafId: string
+      }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { requestId: string; transactionId: string; tabId: string; leafId: string }
+      ) => callback(data)
+      ipcRenderer.on('ui:rollbackTerminalGridAppend', listener)
+      return () => ipcRenderer.removeListener('ui:rollbackTerminalGridAppend', listener)
+    },
+    replyTerminalGridAppendRollback: (reply: { requestId: string; error?: string }): void => {
+      ipcRenderer.send('terminal:gridAppendRollbackReply', reply)
+    },
+    onCommitTerminalGridAppend: (
+      callback: (data: { transactionId: string; tabId: string; leafId: string }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { transactionId: string; tabId: string; leafId: string }
+      ) => callback(data)
+      ipcRenderer.on('ui:commitTerminalGridAppend', listener)
+      return () => ipcRenderer.removeListener('ui:commitTerminalGridAppend', listener)
+    },
     onSplitTerminal: (
       callback: (data: {
         tabId: string

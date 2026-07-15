@@ -41,8 +41,11 @@ import {
   addOrchestrationTerminalGridLeaf,
   collectTerminalLayoutLeafIds,
   getOrchestrationGridAppendSourceLeafIds,
-  ORCHESTRATION_TERMINAL_GRID_MAX_COLUMNS
+  ORCHESTRATION_TERMINAL_GRID_MAX_COLUMNS,
+  reflowOrchestrationTerminalGrid
 } from '../../../shared/orchestration-terminal-grid'
+import { detachTerminalLayoutLeaf } from '@/components/terminal-pane/terminal-layout-leaf-detach'
+import { TerminalGridAppendSettlementRegistry } from './terminal-grid-append-settlement'
 import type {
   RemoteWorkspacePatchResult,
   RemoteWorkspaceSnapshot
@@ -550,6 +553,54 @@ function runTerminalSurfaceActionTransaction(
   }
 }
 
+function createCommittedTerminalGridAppendRollback(args: {
+  tabId: string
+  leafId: string
+  ptyId: string
+  priorLayout: TerminalLayoutSnapshot
+  split: SuccessfulTerminalPaneSplit
+}): () => void {
+  let paneRolledBack = false
+  let layoutRolledBack = false
+  let bindingCleared = false
+  return () => {
+    if (!paneRolledBack) {
+      rollbackAcknowledgedTerminalPaneSplit(args.split)
+      paneRolledBack = true
+    }
+    const store = useAppStore.getState()
+    if (!layoutRolledBack) {
+      const currentLayout = store.terminalLayoutsByTabId?.[args.tabId]
+      const currentLeafIds = collectTerminalLayoutLeafIds(currentLayout?.root)
+      if (currentLeafIds.includes(args.leafId)) {
+        const detached = detachTerminalLayoutLeaf(currentLayout, args.leafId)
+        if (!detached) {
+          throw new Error(`Terminal grid append ${args.leafId} could not be detached`)
+        }
+        const remainingLeafIds = collectTerminalLayoutLeafIds(detached.sourceLayout.root)
+        const priorActiveLeafId = args.priorLayout.activeLeafId
+        const activeLeafId =
+          priorActiveLeafId && remainingLeafIds.includes(priorActiveLeafId)
+            ? priorActiveLeafId
+            : detached.sourceLayout.activeLeafId
+        const priorExpandedLeafId = args.priorLayout.expandedLeafId
+        store.setTabLayout(args.tabId, {
+          ...reflowOrchestrationTerminalGrid(detached.sourceLayout, remainingLeafIds, activeLeafId),
+          expandedLeafId:
+            priorExpandedLeafId && remainingLeafIds.includes(priorExpandedLeafId)
+              ? priorExpandedLeafId
+              : null
+        })
+      }
+      layoutRolledBack = true
+    }
+    if (!bindingCleared) {
+      store.clearTabPtyId(args.tabId, args.ptyId)
+      bindingCleared = true
+    }
+  }
+}
+
 function terminalSurfaceActionFailureMessage(
   tabId: string,
   reason: TerminalSurfaceActionCancellationReason,
@@ -838,6 +889,7 @@ function getWorktreeRuntimeEnvironmentId(worktreeId: string | null | undefined):
 export function useIpcEvents(): void {
   useEffect(() => {
     const unsubs: (() => void)[] = []
+    const terminalGridAppendSettlements = new TerminalGridAppendSettlementRegistry()
     unsubs.push(
       useAppStore.subscribe(() => {
         cancelTerminalSurfaceActionsForRemovedTabs(useAppStore.getState())
@@ -862,6 +914,31 @@ export function useIpcEvents(): void {
     let lastLiveAgentStatusApplyAt = 0
 
     unsubs.push(attachMobileMarkdownBridge())
+
+    const unsubscribeGridAppendRollback = window.api.ui.onRollbackTerminalGridAppend?.((data) => {
+      try {
+        terminalGridAppendSettlements.rollback(data)
+        window.api.ui.replyTerminalGridAppendRollback?.({ requestId: data.requestId })
+      } catch (error) {
+        window.api.ui.replyTerminalGridAppendRollback?.({
+          requestId: data.requestId,
+          error: terminalTransactionErrorMessage(error)
+        })
+      }
+    })
+    if (unsubscribeGridAppendRollback) {
+      unsubs.push(unsubscribeGridAppendRollback)
+    }
+    const unsubscribeGridAppendCommit = window.api.ui.onCommitTerminalGridAppend?.((data) => {
+      try {
+        terminalGridAppendSettlements.complete(data)
+      } catch (error) {
+        console.warn('[terminal-grid] failed to release append rollback:', error)
+      }
+    })
+    if (unsubscribeGridAppendCommit) {
+      unsubs.push(unsubscribeGridAppendCommit)
+    }
 
     const handleWorktreesChanged = async (
       repoId: string,
@@ -1668,6 +1745,9 @@ export function useIpcEvents(): void {
                       if (!sourceLeafId) {
                         throw new Error(`Terminal grid ${tab.id} has no append source`)
                       }
+                      if (isOrchestrationGrid && !existingLayout) {
+                        throw new Error(`Terminal grid ${tab.id} has no committed layout`)
+                      }
                       const direction = isOrchestrationGrid
                         ? currentLeafIds.length % ORCHESTRATION_TERMINAL_GRID_MAX_COLUMNS === 0
                           ? 'horizontal'
@@ -1729,6 +1809,20 @@ export function useIpcEvents(): void {
                       // layout are committed. Publishing now lets the trusted
                       // transport adoption skip a second tab-ownership write.
                       actionStore.updateTabPtyId(tab.id, ptyId)
+                      if (requestId && isOrchestrationGrid && existingLayout) {
+                        terminalGridAppendSettlements.register({
+                          transactionId: requestId,
+                          tabId: tab.id,
+                          leafId,
+                          rollback: createCommittedTerminalGridAppendRollback({
+                            tabId: tab.id,
+                            leafId,
+                            ptyId,
+                            priorLayout: existingLayout,
+                            split
+                          })
+                        })
+                      }
                       return () => {
                         // Why: worktree activation can schedule terminal/GitHub work
                         // and persist unread clearing, so it must stay post-ack.
@@ -4018,6 +4112,7 @@ export function useIpcEvents(): void {
       unsubscribeRuntimeEnvironmentStore()
       unsubscribeAgentStatusStore()
       cancelAllPendingTerminalSurfaceActions('ipc-events-disposed')
+      terminalGridAppendSettlements.clear()
       unsubs.forEach((fn) => fn())
       directSshEffectStopped = true
       for (const deadline of authorityReconciliationDeadlines) {

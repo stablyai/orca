@@ -15534,6 +15534,211 @@ describe('OrcaRuntimeService', () => {
     }
   )
 
+  it('rolls back the exact renderer grid leaf when durable persistence fails', async () => {
+    const oldLeafId = '11111111-1111-4111-8111-111111111111'
+    const persistOrchestrationGridPtyBinding = vi.fn(() => {
+      throw new Error('disk full')
+    })
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      persistOrchestrationGridPtyBinding
+    } as never)
+    const kill = vi.fn((_ptyId: string) => true)
+    const registrationAbort = vi.fn()
+    runtime.setPtyController({
+      spawn: vi.fn(async (args) => {
+        const staged = runtime.beginStagedPtyRuntimeRegistration()
+        staged.claim('pty-persist-failure')
+        runtime.registerPreAllocatedHandleForPty('pty-persist-failure', 'term_persist_failure')
+        runtime.registerPty('pty-persist-failure', args.worktreeId ?? TEST_WORKTREE_ID)
+        return {
+          id: 'pty-persist-failure',
+          runtimeRegistration: {
+            commit: () => staged.commit(),
+            complete: vi.fn(),
+            abort: async () => {
+              registrationAbort()
+              staged.abort()
+              kill('pty-persist-failure')
+            }
+          }
+        }
+      }),
+      write: () => true,
+      kill,
+      getForegroundProcess: async () => null
+    })
+    const rendererRollback = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('renderer rollback acknowledgement timed out'))
+      .mockResolvedValueOnce(undefined)
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn(
+        async (_worktreeId: string, opts: { leafId?: string; ptyId: string }) => ({
+          tabId: 'tab-grid',
+          leafId: opts.leafId,
+          layout: addOrchestrationTerminalGridLeaf(
+            {
+              root: { type: 'leaf', leafId: oldLeafId },
+              activeLeafId: oldLeafId,
+              expandedLeafId: null,
+              layoutMode: 'orchestration-grid',
+              ptyIdsByLeafId: { [oldLeafId]: 'pty-old' }
+            },
+            {
+              leafId: opts.leafId!,
+              ptyId: opts.ptyId,
+              activate: false
+            }
+          ),
+          rollback: rendererRollback
+        })
+      ),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    } as never)
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-grid',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Workers',
+          activeLeafId: oldLeafId,
+          layoutMode: 'orchestration-grid',
+          layout: { type: 'leaf', leafId: oldLeafId }
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-grid',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: oldLeafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-old'
+        }
+      ]
+    })
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents: { send: vi.fn() }
+    })
+
+    await expect(
+      runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        command: 'codex',
+        rendererBacked: true,
+        placement: 'orchestration-grid'
+      })
+    ).rejects.toThrow()
+
+    expect(rendererRollback).toHaveBeenCalledTimes(2)
+    expect(registrationAbort).toHaveBeenCalledOnce()
+    expect(kill).toHaveBeenCalledWith('pty-persist-failure')
+  })
+
+  it('appends a no-selector renderer-backed create to the active grid without minting an initial handle', async () => {
+    const oldLeafId = '21111111-1111-4111-8111-111111111111'
+    const newLeafId = '22222222-2222-4222-8222-222222222222'
+    const runtime = new OrcaRuntimeService(store)
+    const webContents = { send: vi.fn() }
+    webContents.send.mockImplementation(
+      (_channel: string, payload: { requestId: string; terminalHandle?: string }) => {
+        runtime.syncWindowGraph(1, {
+          tabs: [
+            {
+              tabId: 'tab-active-grid',
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Workers',
+              activeLeafId: oldLeafId,
+              layoutMode: 'orchestration-grid',
+              layout: {
+                type: 'split',
+                direction: 'vertical',
+                first: { type: 'leaf', leafId: oldLeafId },
+                second: { type: 'leaf', leafId: newLeafId }
+              }
+            }
+          ],
+          leaves: [
+            {
+              tabId: 'tab-active-grid',
+              worktreeId: TEST_WORKTREE_ID,
+              leafId: oldLeafId,
+              paneRuntimeId: 1,
+              ptyId: 'pty-old'
+            },
+            {
+              tabId: 'tab-active-grid',
+              worktreeId: TEST_WORKTREE_ID,
+              leafId: newLeafId,
+              paneRuntimeId: 2,
+              ptyId: 'pty-no-selector'
+            }
+          ]
+        })
+        ipcMain.emit(
+          'terminal:tabCreateReply',
+          { sender: webContents },
+          {
+            requestId: payload.requestId,
+            tabId: 'tab-active-grid',
+            leafId: newLeafId,
+            title: 'Worker 2'
+          }
+        )
+      }
+    )
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-active-grid',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Workers',
+          activeLeafId: oldLeafId,
+          layoutMode: 'orchestration-grid',
+          layout: { type: 'leaf', leafId: oldLeafId }
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-active-grid',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: oldLeafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-old'
+        }
+      ]
+    })
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents
+    })
+
+    const created = await runtime.createTerminal(undefined, {
+      command: 'codex',
+      rendererBacked: true,
+      placement: 'orchestration-grid',
+      title: 'Worker 2'
+    })
+
+    expect(created).toMatchObject({ tabId: 'tab-active-grid', title: 'Worker 2' })
+    expect(webContents.send).toHaveBeenCalledWith(
+      'terminal:requestTabCreate',
+      expect.not.objectContaining({ terminalHandle: expect.any(String) })
+    )
+  })
+
   it('kills a staged renderer-backed grid PTY when renderer attachment is rejected', async () => {
     const oldLeafId = '11111111-1111-4111-8111-111111111111'
     const persistOrchestrationGridPtyBinding = vi.fn()

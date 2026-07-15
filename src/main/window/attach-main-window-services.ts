@@ -68,6 +68,7 @@ import {
   setWorktreeBaseDirectoryWatcherSyncContext
 } from '../ipc/worktree-base-directory-watcher'
 import { logStartupMilestone } from '../startup/startup-diagnostics'
+import { requestTerminalGridAppendRollback } from './terminal-grid-append-rollback-relay'
 
 const UPDATER_SETUP_FALLBACK_MS = 15_000
 
@@ -398,11 +399,28 @@ function registerRuntimeWindowLifecycle(
             reject(new Error(reply.error))
             return
           }
+          const rollbackIdentity =
+            opts.placement === 'orchestration-grid' &&
+            opts.splitFromLeafId !== undefined &&
+            opts.tabId !== undefined &&
+            opts.leafId !== undefined
+              ? {
+                  transactionId: requestId,
+                  tabId: opts.tabId,
+                  leafId: opts.leafId
+                }
+              : null
           resolve({
             tabId: reply.tabId!,
             leafId: reply.leafId,
             layout: reply.layout,
-            title: reply.title
+            title: reply.title,
+            ...(rollbackIdentity
+              ? {
+                  rollback: () => requestTerminalGridAppendRollback(mainWindow, rollbackIdentity),
+                  complete: () => send('ui:commitTerminalGridAppend', rollbackIdentity)
+                }
+              : {})
           })
         }
         ipcMain.on('terminal:tabCreateReply', handler)

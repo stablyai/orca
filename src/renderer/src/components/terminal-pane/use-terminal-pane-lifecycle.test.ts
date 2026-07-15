@@ -396,22 +396,34 @@ describe('transactional terminal split event listener', () => {
     startupDeps?: { startup?: { command: string } | null }
     recordSplit?: (createdPane: unknown, splitArgs: unknown) => unknown
     publishCommittedSplit?: () => void
+    getExpandedPaneId?: () => number | null
+    setExpandedPane?: (paneId: number | null) => void
+    syncExpandedLayout?: () => void
   }): ReturnType<typeof vi.fn> {
     const acknowledge = vi.fn<(result: SplitTerminalPaneAcknowledgement) => void>()
     const target = new EventTarget()
     target.addEventListener(
       SPLIT_TERMINAL_PANE_EVENT,
-      createTerminalPaneSplitEventHandler({
-        tabId,
-        getManager: () => args.manager as never,
-        startupDeps: args.startupDeps ?? { startup: null },
-        recordSplit: (createdPane, splitArgs) => {
-          args.recordSplit?.(createdPane, splitArgs)
-          return true
-        },
-        consumeMirrorTelemetry: vi.fn(() => false),
-        publishCommittedSplit: args.publishCommittedSplit
-      })
+      createTerminalPaneSplitEventHandler(
+        Object.assign(
+          {
+            tabId,
+            getManager: () => args.manager as never,
+            startupDeps: args.startupDeps ?? { startup: null },
+            recordSplit: (createdPane, splitArgs) => {
+              args.recordSplit?.(createdPane, splitArgs)
+              return true
+            },
+            consumeMirrorTelemetry: vi.fn(() => false),
+            publishCommittedSplit: args.publishCommittedSplit
+          },
+          {
+            getExpandedPaneId: args.getExpandedPaneId,
+            setExpandedPane: args.setExpandedPane,
+            syncExpandedLayout: args.syncExpandedLayout
+          }
+        )
+      )
     )
     target.dispatchEvent(
       new CustomEvent<SplitTerminalPaneDetail>(SPLIT_TERMINAL_PANE_EVENT, {
@@ -479,6 +491,68 @@ describe('transactional terminal split event listener', () => {
       focus: false,
       notifyActiveChange: false
     })
+  })
+
+  it('collapses an expanded eight-pane maintained grid before appending the ninth pane', () => {
+    const elements = Array.from({ length: 9 }, () => ({ style: { display: '' } }))
+    const panes = elements.slice(0, 8).map((container, index) => ({ id: index + 1, container }))
+    let expandedPaneId: number | null = 1
+    for (const pane of panes.slice(1)) {
+      pane.container.style.display = 'none'
+    }
+    const operations: string[] = []
+    const manager = createManager({
+      getPanes: vi.fn(() => panes),
+      splitPaneAroundLeafIds: vi.fn(() => {
+        const created = { id: 9, leafId: newLeafId, container: elements[8]! }
+        panes.push(created)
+        return created
+      }),
+      arrangeOrchestrationGrid: vi.fn(() => operations.push('arrange')),
+      closePane: vi.fn((paneId: number) => {
+        const index = panes.findIndex((pane) => pane.id === paneId)
+        if (index >= 0) {
+          panes.splice(index, 1)
+        }
+      })
+    })
+    const setExpandedPane = vi.fn((paneId: number | null) => {
+      expandedPaneId = paneId
+      operations.push(`expand:${paneId ?? 'none'}`)
+    })
+    const syncExpandedLayout = vi.fn(() => {
+      operations.push('sync')
+      for (const pane of panes) {
+        pane.container.style.display =
+          expandedPaneId === null || pane.id === expandedPaneId ? '' : 'none'
+      }
+    })
+
+    const acknowledge = dispatchSplit({
+      manager,
+      detail: { ptyId: 'pty-worker-9' },
+      getExpandedPaneId: () => expandedPaneId,
+      setExpandedPane,
+      syncExpandedLayout
+    })
+
+    expect(acknowledge.mock.calls[0]![0].status).toBe('success')
+    expect(operations).toEqual(['expand:none', 'sync', 'arrange'])
+    expect(panes).toHaveLength(9)
+    expect(panes.every((pane) => pane.container.style.display !== 'none')).toBe(true)
+    expect(expandedPaneId).toBeNull()
+
+    const result = acknowledge.mock.calls[0]![0]
+    if (result.status !== 'success') {
+      throw new Error('Expected a successful split acknowledgement')
+    }
+    result.rollback()
+    result.rollback()
+
+    expect(panes).toHaveLength(8)
+    expect(expandedPaneId).toBe(1)
+    expect(panes[0]!.container.style.display).not.toBe('none')
+    expect(panes.slice(1).every((pane) => pane.container.style.display === 'none')).toBe(true)
   })
 
   it('keeps acknowledged rollback retryable when the first close cleanup throws', () => {

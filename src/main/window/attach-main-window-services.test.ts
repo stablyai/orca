@@ -880,6 +880,10 @@ describe('attachMainWindowServices', () => {
     const mainWindow = createMainWindow({ send: sendMock })
     const runtime = createRuntime()
 
+  it('exposes an acknowledged exact-leaf rollback for staged grid appends', async () => {
+    const sendMock = vi.fn()
+    const mainWindow = createMainWindow({ send: sendMock })
+    const runtime = createRuntime()
     attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
 
     const notifier = runtime.setNotifier.mock.calls[0][0] as {
@@ -942,6 +946,114 @@ describe('attachMainWindowServices', () => {
       title: undefined,
       identity
     })
+          placement: 'orchestration-grid'
+          splitFromLeafId: string
+          tabId: string
+          leafId: string
+        }
+      ) => Promise<{ rollback: () => Promise<void>; complete: () => void }>
+    }
+    const revealPromise = notifier.revealTerminalSession('wt-1', {
+      ptyId: 'pty-new',
+      placement: 'orchestration-grid',
+      splitFromLeafId: 'leaf-old',
+      tabId: 'tab-grid',
+      leafId: 'leaf-new'
+    })
+    const createPayload = sendMock.mock.calls.find(
+      ([channel]) => channel === 'ui:createTerminal'
+    )?.[1]
+    const createReplyHandler = onMock.mock.calls.find(
+      ([channel]) => channel === 'terminal:tabCreateReply'
+    )?.[1]
+    createReplyHandler?.(
+      { sender: mainWindow.webContents },
+      {
+        requestId: createPayload.requestId,
+        tabId: 'tab-grid',
+        leafId: 'leaf-new'
+      }
+    )
+    const revealed = await revealPromise
+
+    const rollbackPromise = revealed.rollback()
+    const rollbackPayload = sendMock.mock.calls.find(
+      ([channel]) => channel === 'ui:rollbackTerminalGridAppend'
+    )?.[1]
+    const rollbackReplyHandler = onMock.mock.calls.find(
+      ([channel]) => channel === 'terminal:gridAppendRollbackReply'
+    )?.[1]
+    expect(rollbackPayload).toEqual({
+      requestId: expect.any(String),
+      transactionId: createPayload.requestId,
+      tabId: 'tab-grid',
+      leafId: 'leaf-new'
+    })
+
+    rollbackReplyHandler?.({ sender: { send: vi.fn() } }, { requestId: rollbackPayload.requestId })
+    expect(removeListenerMock).not.toHaveBeenCalledWith(
+      'terminal:gridAppendRollbackReply',
+      rollbackReplyHandler
+    )
+    rollbackReplyHandler?.(
+      { sender: mainWindow.webContents },
+      { requestId: rollbackPayload.requestId }
+    )
+    await expect(rollbackPromise).resolves.toBeUndefined()
+    expect(removeListenerMock).toHaveBeenCalledWith(
+      'terminal:gridAppendRollbackReply',
+      rollbackReplyHandler
+    )
+  })
+
+  it('releases the renderer rollback token after a staged grid append commits', async () => {
+    const sendMock = vi.fn()
+    const mainWindow = createMainWindow({ send: sendMock })
+    const runtime = createRuntime()
+    attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
+    const notifier = runtime.setNotifier.mock.calls[0][0] as {
+      revealTerminalSession: (
+        worktreeId: string,
+        opts: {
+          ptyId: string
+          placement: 'orchestration-grid'
+          splitFromLeafId: string
+          tabId: string
+          leafId: string
+        }
+      ) => Promise<{ complete: () => void }>
+    }
+    const revealPromise = notifier.revealTerminalSession('wt-1', {
+      ptyId: 'pty-new',
+      placement: 'orchestration-grid',
+      splitFromLeafId: 'leaf-old',
+      tabId: 'tab-grid',
+      leafId: 'leaf-new'
+    })
+    const createPayload = sendMock.mock.calls.find(
+      ([channel]) => channel === 'ui:createTerminal'
+    )?.[1]
+    const createReplyHandler = onMock.mock.calls.find(
+      ([channel]) => channel === 'terminal:tabCreateReply'
+    )?.[1]
+    createReplyHandler?.(
+      { sender: mainWindow.webContents },
+      {
+        requestId: createPayload.requestId,
+        tabId: 'tab-grid',
+        leafId: 'leaf-new'
+      }
+    )
+
+    const revealed = await revealPromise
+    revealed.complete()
+
+    expect(sendMock).toHaveBeenCalledWith('ui:commitTerminalGridAppend', {
+      transactionId: createPayload.requestId,
+      tabId: 'tab-grid',
+      leafId: 'leaf-new'
+    })
+  })
   it('removes the reveal listener and timeout when renderer dispatch throws', async () => {
     vi.useFakeTimers()
     try {

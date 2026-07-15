@@ -6970,8 +6970,15 @@ describe('useIpcEvents agent status snapshot integration', () => {
     type GridLifecycleHarness = {
       createTerminal: (data: GridCreateTerminalData) => void
       requestTerminalCreate: (data: GridRequestTerminalCreateData) => void
+      rollbackTerminalGridAppend: (data: {
+        requestId: string
+        transactionId: string
+        tabId: string
+        leafId: string
+      }) => void
       registerConsumer: () => () => void
       replyTerminalCreate: ReturnType<typeof vi.fn>
+      replyTerminalGridAppendRollback: ReturnType<typeof vi.fn>
       dispatchEvent: ReturnType<typeof vi.fn>
       focusRuntimeTerminalSurface: ReturnType<typeof vi.fn>
       focusTerminalTabSurface: ReturnType<typeof vi.fn>
@@ -6985,6 +6992,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       markWorktreeVisited: ReturnType<typeof vi.fn>
       revealWorktreeInSidebar: ReturnType<typeof vi.fn>
       updateTabPtyId: ReturnType<typeof vi.fn>
+      clearTabPtyId: ReturnType<typeof vi.fn>
       dispose: () => void
     }
 
@@ -7035,7 +7043,18 @@ describe('useIpcEvents agent status snapshot integration', () => {
       const requestTerminalCreateListenerRef: {
         current: ((data: GridRequestTerminalCreateData) => void) | null
       } = { current: null }
+      const rollbackTerminalGridAppendListenerRef: {
+        current:
+          | ((data: {
+              requestId: string
+              transactionId: string
+              tabId: string
+              leafId: string
+            }) => void)
+          | null
+      } = { current: null }
       const replyTerminalCreate = vi.fn()
+      const replyTerminalGridAppendRollback = vi.fn()
       const splitEventTarget = new EventTarget()
       const emptySplitEventTarget = new EventTarget()
       const splitStartupDeps: {
@@ -7111,6 +7130,15 @@ describe('useIpcEvents agent status snapshot integration', () => {
           }
         })
         failAfterMutation('binding')
+      })
+      const clearTabPtyId = vi.fn((tabId: string, ptyId: string) => {
+        const ptyIdsByTabId = state.ptyIdsByTabId as Record<string, string[]>
+        replaceState({
+          ptyIdsByTabId: {
+            ...ptyIdsByTabId,
+            [tabId]: (ptyIdsByTabId[tabId] ?? []).filter((candidate) => candidate !== ptyId)
+          }
+        })
       })
       const setTabLayout = vi.fn((tabId: string, layout: TerminalLayoutSnapshot) => {
         replaceState({
@@ -7297,6 +7325,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         setActiveTab,
         revealWorktreeInSidebar,
         updateTabPtyId,
+        clearTabPtyId,
         setTabLayout,
         registerAgentLaunchConfig,
         clearAgentLaunchConfig,
@@ -7366,7 +7395,15 @@ describe('useIpcEvents agent status snapshot integration', () => {
               requestTerminalCreateListenerRef.current = listener
               return () => undefined
             },
-            replyTerminalCreate
+            replyTerminalCreate,
+            onRollbackTerminalGridAppend: (
+              listener: NonNullable<typeof rollbackTerminalGridAppendListenerRef.current>
+            ) => {
+              rollbackTerminalGridAppendListenerRef.current = listener
+              return () => undefined
+            },
+            replyTerminalGridAppendRollback,
+            onCommitTerminalGridAppend: () => () => undefined
           }
         }),
         dispatchEvent
@@ -7389,17 +7426,24 @@ describe('useIpcEvents agent status snapshot integration', () => {
       initializeIpcEvents()
       await Promise.resolve()
 
-      if (!createTerminalListenerRef.current || !requestTerminalCreateListenerRef.current) {
+      if (
+        !createTerminalListenerRef.current ||
+        !requestTerminalCreateListenerRef.current ||
+        !rollbackTerminalGridAppendListenerRef.current
+      ) {
         throw new Error('Expected terminal lifecycle listeners to be registered')
       }
       const createTerminal = createTerminalListenerRef.current
       const requestTerminalCreate = requestTerminalCreateListenerRef.current
+      const rollbackTerminalGridAppend = rollbackTerminalGridAppendListenerRef.current
 
       return {
         createTerminal,
         requestTerminalCreate,
+        rollbackTerminalGridAppend,
         registerConsumer: () => registerTerminalSurfaceActionConsumer(GRID_TAB_ID),
         replyTerminalCreate,
+        replyTerminalGridAppendRollback,
         dispatchEvent,
         focusRuntimeTerminalSurface,
         focusTerminalTabSurface,
@@ -7440,6 +7484,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         markWorktreeVisited,
         revealWorktreeInSidebar,
         updateTabPtyId,
+        clearTabPtyId,
         dispose: () => disposeEffect()
       }
     }
@@ -7766,6 +7811,64 @@ describe('useIpcEvents agent status snapshot integration', () => {
         appendedLeafIds[0]
       )
       expect(vi.getTimerCount()).toBe(0)
+
+      unregister()
+      harness.dispose()
+      vi.useRealTimers()
+    })
+
+    it('rolls back only the exact durable grid append and acknowledges retries idempotently', async () => {
+      vi.useFakeTimers()
+      const harness = await setupGridLifecycleHarness()
+      queueFocusedPtyAppend(harness, 'durable-grid-append')
+      const unregister = harness.registerConsumer()
+      const committedState = rendererStateSnapshot(harness)
+
+      harness.rollbackTerminalGridAppend({
+        requestId: 'rollback-wrong-leaf',
+        transactionId: 'durable-grid-append',
+        tabId: GRID_TAB_ID,
+        leafId: GRID_LEAF_D
+      })
+
+      expect(harness.replyTerminalGridAppendRollback).toHaveBeenLastCalledWith({
+        requestId: 'rollback-wrong-leaf',
+        error: 'Terminal grid append durable-grid-append identity does not match'
+      })
+      expect(rendererStateSnapshot(harness)).toEqual(committedState)
+      expect(harness.getOrphanResourceCount()).toBeGreaterThan(0)
+
+      harness.rollbackTerminalGridAppend({
+        requestId: 'rollback-success',
+        transactionId: 'durable-grid-append',
+        tabId: GRID_TAB_ID,
+        leafId: GRID_LEAF_C
+      })
+      harness.rollbackTerminalGridAppend({
+        requestId: 'rollback-retry',
+        transactionId: 'durable-grid-append',
+        tabId: GRID_TAB_ID,
+        leafId: GRID_LEAF_C
+      })
+
+      const layout = (
+        harness.getState().terminalLayoutsByTabId as Record<string, TerminalLayoutSnapshot>
+      )[GRID_TAB_ID]!
+      expect(collectTerminalLayoutLeafIds(layout.root)).toEqual([GRID_LEAF_A, GRID_LEAF_B])
+      expect(layout.ptyIdsByLeafId).toEqual({
+        [GRID_LEAF_A]: 'pty-grid-a',
+        [GRID_LEAF_B]: 'pty-grid-b'
+      })
+      expect(harness.clearTabPtyId).toHaveBeenCalledOnce()
+      expect(harness.clearTabPtyId).toHaveBeenCalledWith(GRID_TAB_ID, 'pty-grid-c')
+      expect(harness.getRollbackCount()).toBe(1)
+      expect(harness.getOrphanResourceCount()).toBe(0)
+      expect(harness.replyTerminalGridAppendRollback).toHaveBeenCalledWith({
+        requestId: 'rollback-success'
+      })
+      expect(harness.replyTerminalGridAppendRollback).toHaveBeenCalledWith({
+        requestId: 'rollback-retry'
+      })
 
       unregister()
       harness.dispose()
