@@ -244,6 +244,7 @@ function broadcastSshState(
   // has no surface for them. Broadcasting their state would make the renderer fire
   // a listTargets() lookup per event (incl. each relay-lost reconnect) for nothing.
   if (isRuntimeOwnedSshTargetId(targetId)) {
+    currentRuntime?.notifySshStateChanged?.(targetId, state)
     return
   }
   const enrichedState = withSshRemotePlatform(targetId, state)
@@ -920,18 +921,20 @@ export function registerSshHandlers(
       // instead of going through callbacks.onStateChange, which would
       // trigger the reconnection logic.
       const win = getCurrentMainWindow()
-      if (win && !win.isDestroyed()) {
-        clearRelayStateOverride(targetId)
+      const connectedState = withSshRemotePlatform(targetId, {
+        targetId,
+        status: 'connected',
+        error: null,
+        reconnectAttempt: 0
+      })
+      clearRelayStateOverride(targetId)
+      if (!isRuntimeOwnedSshTargetId(targetId) && win && !win.isDestroyed()) {
         win.webContents.send('ssh:state-changed', {
           targetId,
-          state: withSshRemotePlatform(targetId, {
-            targetId,
-            status: 'connected',
-            error: null,
-            reconnectAttempt: 0
-          })
+          state: connectedState
         })
       }
+      currentRuntime?.notifySshStateChanged?.(targetId, connectedState)
     } catch (err) {
       // Relay deployment failed — disconnect SSH
       activeSessions.delete(targetId)
