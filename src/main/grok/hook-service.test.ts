@@ -24,15 +24,27 @@ const WINDOWS_POWERSHELL_LAUNCHER =
 
 describe('GrokHookService', () => {
   let homeDir: string
+  let previousGrokHome: string | undefined
 
   beforeEach(() => {
     homeDir = mkdtempSync(join(tmpdir(), 'orca-grok-home-'))
     homedirMock.mockReturnValue(homeDir)
+    // Why: neutralize an ambient GROK_HOME so install() resolves under the
+    // mocked home instead of writing orca-status.json into the developer's real
+    // Grok home (which afterEach never cleans up). Tests that exercise a set
+    // GROK_HOME opt back in explicitly.
+    previousGrokHome = process.env.GROK_HOME
+    delete process.env.GROK_HOME
   })
 
   afterEach(() => {
     vi.clearAllMocks()
     rmSync(homeDir, { recursive: true, force: true })
+    if (previousGrokHome === undefined) {
+      delete process.env.GROK_HOME
+    } else {
+      process.env.GROK_HOME = previousGrokHome
+    }
   })
 
   it('installs a dedicated global Grok hook config and managed script', () => {
@@ -264,7 +276,7 @@ describe('GrokHookService', () => {
     async () => {
       expect(new GrokHookService().install().state).toBe('installed')
       const scriptPath = join(homeDir, '.orca', 'agent-hooks', GROK_SCRIPT_FILE_NAME)
-      const grokHome = join(homeDir, 'custom-grok') + '\\'
+      const grokHome = `${join(homeDir, 'custom-grok')}\\`
 
       const env: NodeJS.ProcessEnv = {
         ...Object.fromEntries(
