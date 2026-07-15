@@ -37,7 +37,8 @@ function respondWithAtom(
   tags: string[],
   missingManifestTags: string[] = [],
   missingAssetTags: string[] = [],
-  unavailableManifestTags: string[] = []
+  unavailableManifestTags: string[] = [],
+  missingManifestStatus = 404
 ): void {
   const missingManifests = new Set(missingManifestTags)
   const missingAssets = new Set(missingAssetTags)
@@ -63,7 +64,7 @@ function respondWithAtom(
       }
       return Promise.resolve({
         ok: !missingManifests.has(tag),
-        status: missingManifests.has(tag) ? 404 : 200,
+        status: missingManifests.has(tag) ? missingManifestStatus : 200,
         text: () => Promise.resolve(buildManifest(tag))
       })
     }
@@ -135,7 +136,9 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
     respondWithAtom(
       [publishingIncident.atomStableTag],
       [publishingIncident.atomStableTag],
-      [publishingIncident.atomStableTag]
+      [publishingIncident.atomStableTag],
+      [],
+      publishingIncident.missingManifestStatus
     )
 
     const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
@@ -146,8 +149,6 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
       tags: [],
       state: publishingIncident.expectedState
     })
-    expect(publishingIncident.missingManifestStatus).toBe(404)
-    expect(publishingIncident.missingWindowsAssetStatus).toBe(404)
   })
 
   it('preserves a verified last-good release when a newer manifest probe is unavailable', async () => {
@@ -218,7 +219,7 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
         const missing = url.endsWith('/Orca-1.4.28-arm64-mac.zip')
         return Promise.resolve({
           ok: !missing && !unavailable,
-          status: missing ? 404 : unavailable ? 503 : 200,
+          status: missing ? publishingIncident.missingWindowsAssetStatus : unavailable ? 503 : 200,
           text: () => Promise.resolve('')
         })
       }

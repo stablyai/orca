@@ -1123,7 +1123,7 @@ async function pinDefaultReleaseFeed(
     )
     autoUpdater.setFeedURL({ provider: 'generic', url })
     return 'ready'
-  } else if (releaseTagsResult.state === 'not-ready') {
+  } else if (releaseTagsResult.state === 'not-ready' && !isPerfCheck) {
     clearPrereleaseFallbackContext()
     if (releaseTagsResult.lastGoodTag) {
       // Why: during a publish window the newest tag is unsafe; a verified last-good concrete feed lets electron-updater emit a real result.
@@ -1149,7 +1149,11 @@ async function pinDefaultReleaseFeed(
       )
       return 'not-available'
     }
-    throw new Error('Could not resolve perf update feed')
+    throw new Error('Unable to find latest version on GitHub')
+  } else if (releaseTagsResult.state === 'unavailable') {
+    clearPrereleaseFallbackContext()
+    clearPublishingWindowLastGoodCheck()
+    throw new Error('Unable to find latest version on GitHub')
   } else {
     clearPrereleaseFallbackContext()
     clearPublishingWindowLastGoodCheck()

@@ -133,9 +133,10 @@ async function getPlatformManifestReadiness(tag: string): Promise<ReleaseReadine
     if (!res.ok) {
       return 'unavailable'
     }
+    const manifestText = await res.text()
     let assetNames: string[]
     try {
-      assetNames = getManifestAssetNames(await res.text())
+      assetNames = getManifestAssetNames(manifestText)
     } catch {
       return 'not-ready'
     }

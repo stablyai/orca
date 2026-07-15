@@ -1475,7 +1475,7 @@ describe('updater', () => {
     await vi.waitFor(() => {
       expect(sendMock).toHaveBeenCalledWith('updater:status', {
         state: 'error',
-        message: 'A new release is still being published. Try again shortly.',
+        message: "Couldn't reach the update server. Try again in a few minutes.",
         userInitiated: true
       })
     })
@@ -2503,6 +2503,34 @@ describe('updater', () => {
     })
   })
 
+  it('keeps unavailable release probes on generic copy without launching a moving feed', async () => {
+    appMock.getVersion.mockReturnValue('1.4.141')
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: [], state: 'unavailable' })
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    const feedCallsBeforeCheck = autoUpdaterMock.setFeedURL.mock.calls.length
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'error',
+        message: "Couldn't reach the update server. Try again in a few minutes.",
+        userInitiated: true
+      })
+    })
+    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+    expect(autoUpdaterMock.setFeedURL.mock.calls.slice(feedCallsBeforeCheck)).not.toContainEqual([
+      {
+        provider: 'generic',
+        url: 'https://github.com/stablyai/orca/releases/latest/download'
+      }
+    ])
+  })
+
   it('uses last-good concrete feed when a user-initiated check lands during publishing', async () => {
     appMock.getVersion.mockReturnValue('1.4.26')
     fetchNewerReleaseTagsMock.mockResolvedValue({
@@ -2525,7 +2553,6 @@ describe('updater', () => {
 
     setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
     const feedCallsBeforeCheck = autoUpdaterMock.setFeedURL.mock.calls.length
-
     checkForUpdatesFromMenu()
 
     await vi.waitFor(() => {
