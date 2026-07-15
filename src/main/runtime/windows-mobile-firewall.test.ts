@@ -24,7 +24,9 @@ describe('windows mobile firewall', () => {
   it('inspects the exact executable, port, and selected interface profile', async () => {
     const runPowerShell = vi.fn().mockResolvedValue(
       JSON.stringify({
-        ruleAllowed: true,
+        matchingRuleScopes: [{ remoteAddresses: ['192.168.0.0/24'] }],
+        localAddress: '192.168.0.108',
+        localPrefixLength: 24,
         privateFirewallEnabled: true,
         networkCategory: 'Private'
       })
@@ -47,6 +49,29 @@ describe('windows mobile firewall', () => {
     expect(script).toContain("C:\\Users\\O''Brien\\Orca\\Orca.exe")
     expect(script).toContain("$profile -match 'Private'")
     expect(script).toContain("Get-NetIPAddress -IPAddress '192.168.0.108'")
+    expect(script).toContain('Get-NetFirewallAddressFilter')
+    expect(script).toContain('remoteAddresses = @($addressFilter.RemoteAddress')
+    expect(script).toContain('$localPrefixLength = [int]$ip.PrefixLength')
+  })
+
+  it('does not accept a qualifying rule whose remote-address scope excludes the phone subnet', async () => {
+    const runPowerShell = vi.fn().mockResolvedValue(
+      JSON.stringify({
+        matchingRuleScopes: [{ remoteAddresses: ['192.168.1.0/24'] }],
+        localAddress: '192.168.0.108',
+        localPrefixLength: 24,
+        privateFirewallEnabled: true,
+        networkCategory: 'Private'
+      })
+    )
+
+    await expect(
+      inspectWindowsMobileFirewall(6768, '192.168.0.108', environment(runPowerShell))
+    ).resolves.toMatchObject({
+      supported: true,
+      ruleAllowed: false,
+      inspectionAvailable: true
+    })
   })
 
   it('does not support non-Windows or unpackaged development builds', async () => {
@@ -79,6 +104,22 @@ describe('windows mobile firewall', () => {
       networkCategory: 'unknown',
       inspectionAvailable: false
     })
+  })
+
+  it('returns an actionable status for malformed or empty PowerShell output', async () => {
+    for (const stdout of ['', 'not json']) {
+      await expect(
+        inspectWindowsMobileFirewall(
+          6768,
+          undefined,
+          environment(vi.fn().mockResolvedValue(stdout))
+        )
+      ).resolves.toMatchObject({
+        supported: true,
+        ruleAllowed: false,
+        inspectionAvailable: false
+      })
+    }
   })
 
   it('repairs only Orca mobile pairing on private networks after elevation', async () => {

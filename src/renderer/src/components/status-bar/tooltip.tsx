@@ -1,4 +1,8 @@
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
+import {
+  formatResetCountdown,
+  formatResetDuration
+} from '../../../../shared/rate-limit-reset-format'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { translate } from '@/i18n/i18n'
@@ -39,28 +43,9 @@ export function formatTimeAgo(ts: number): string {
   return `${hours}h ago`
 }
 
-function formatDuration(ms: number): string {
-  if (ms <= 0) {
-    return 'now'
-  }
-  const totalMins = Math.floor(ms / 60_000)
-  if (totalMins < 60) {
-    return `${totalMins}m`
-  }
-  const hours = Math.floor(totalMins / 60)
-  const mins = totalMins % 60
-  if (hours >= 24) {
-    const days = Math.floor(hours / 24)
-    const remHours = hours % 24
-    return remHours > 0 ? `${days}d ${remHours}h` : `${days}d`
-  }
-  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`
-}
-
-export function formatResetCountdown(ms: number): string {
-  const duration = formatDuration(ms)
-  return duration === 'now' ? 'Resets now' : `Resets in ${duration}`
-}
+// Re-export so existing tooltip consumers/tests keep their import path; the
+// implementation is shared with mobile in src/shared/rate-limit-reset-format.
+export { formatResetCountdown }
 
 export function formatResetCreditExpiry(
   expiresAt: number | null | undefined,
@@ -69,7 +54,7 @@ export function formatResetCreditExpiry(
   if (!expiresAt) {
     return null
   }
-  const duration = formatDuration(expiresAt - Date.now())
+  const duration = formatResetDuration(expiresAt - Date.now())
   if (duration === 'now') {
     return count > 1
       ? translate('auto.components.status.bar.tooltip.7ec6e030a0', 'Next expires now')

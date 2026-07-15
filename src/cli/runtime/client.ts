@@ -2,7 +2,7 @@ import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
 import { parsePairingCode, type PairingOffer } from '../../shared/pairing'
 import { launchOrcaApp } from './launch'
 import { getDefaultUserDataPath, readMetadata } from './metadata'
-import { getCliStatus } from './status'
+import { getCliStatus, resolveDesktopWindowStatus } from './status'
 import { sendRequest } from './transport'
 import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
 import { sendWebSocketRequest } from './websocket-transport'
@@ -116,9 +116,12 @@ export class RuntimeClient {
           app: {
             running: false,
             pid: null,
-            ...(response.result.desktopWindowStatus
-              ? { desktopWindowStatus: response.result.desktopWindowStatus }
-              : {})
+            // Why: reuse the shared resolver so remote status honors the same
+            // authoritativeWindowId fallback as local status for old runtimes.
+            ...(() => {
+              const desktopWindowStatus = resolveDesktopWindowStatus(response.result)
+              return desktopWindowStatus ? { desktopWindowStatus } : {}
+            })()
           },
           runtime: {
             state: graphState === 'ready' ? 'ready' : 'graph_not_ready',
@@ -176,10 +179,12 @@ export class RuntimeClient {
       return initial
     }
 
-    launchOrcaApp()
+    // Why: a blocked runtime can't open a window, so spawning the app would
+    // only hit the single-instance lock and exit — bail before launching.
     if (initial.result.app.desktopWindowStatus === 'blocked') {
       throwDesktopActivationBlocked()
     }
+    launchOrcaApp()
     if (initial.result.app.desktopWindowStatus === 'available') {
       return initial
     }

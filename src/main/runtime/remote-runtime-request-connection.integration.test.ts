@@ -478,9 +478,7 @@ describe('remote runtime request connection integration', () => {
             REMOTE_RUNTIME_REQUEST_TIMEOUT_MS,
             () => `cleanup count ${subscriptionCleanups.size}, event count ${mixedEvents.length}`
           )
-          expect(
-            (server as unknown as { wsConnectionIds: Map<unknown, unknown> }).wsConnectionIds.size
-          ).toBe(1)
+          expect(server.getMobileSocketWiring()?.connectionCount).toBe(1)
           for (const mixed of mixedSubscriptions) {
             mixed.close()
           }
@@ -500,9 +498,7 @@ describe('remote runtime request connection integration', () => {
               )
             )
           )
-          expect(
-            (server as unknown as { wsConnectionIds: Map<unknown, unknown> }).wsConnectionIds.size
-          ).toBe(1)
+          expect(server.getMobileSocketWiring()?.connectionCount).toBe(1)
           for (const extra of extraSubscriptions) {
             extra.close()
           }

@@ -13,9 +13,11 @@
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/types'
 import { useAppStore } from '@/store'
+import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { collectLeafIdsInOrder } from './terminal-layout-leaf-ids'
 import { detachTerminalLayoutLeaf } from './terminal-layout-leaf-detach'
 import { subscribeToPtyExit } from './pty-dispatcher'
+import { discardPreHandlerPtyState } from './pty-pre-handler-buffer'
 import { startParkedTerminalByteWatcher } from './parked-terminal-byte-watcher'
 import { isSnapshotBackedTerminalPty } from './terminal-hidden-view-parking'
 import {
@@ -33,6 +35,8 @@ import {
 // split exists only to break the store-slice import cycle.
 export {
   captureParkedTerminalPaneCandidates,
+  disposeAllParkedTerminalWatchers,
+  disposeRemovedWorktreeParkedTerminalWatchers,
   disposeParkedTerminalWatchersForPtyIds,
   disposeParkedTerminalWatchersForWorktree,
   getParkedTerminalWatcherTabIds,
@@ -113,7 +117,11 @@ export function canWatcherCoverParkedTerminalTab(
   )
 }
 
-function startParkedTabWatchers(worktreeId: string, tab: ParkableTerminalTabModel): void {
+function startParkedTabWatchers(
+  worktreeId: string,
+  tab: ParkableTerminalTabModel,
+  restoreTitleOnRegister: boolean
+): void {
   const state = useAppStore.getState()
   const panes = resolveParkedTerminalPaneCandidates(tab, state)
   const disposersByPtyId = new Map<string, () => void>()
@@ -144,31 +152,54 @@ function startParkedTabWatchers(worktreeId: string, tab: ParkableTerminalTabMode
       // title so an agent already working at park time still notifies when
       // it finishes while parked.
       ...(initialTitle !== undefined ? { initialTitle } : {}),
+      ...(restoreTitleOnRegister ? { restoreTitleOnRegister: true } : {}),
       // Why: no pane transport exists while parked; write straight to the
       // PTY, the same channel background agent launches use.
       sendInput: (data) => window.api.pty.write(ptyId, data)
     })
     // Why: a PTY that exits while parked has no pane to run exit cleanup; at
     // minimum its watcher must not outlive it.
-    const unsubscribeExit = subscribeToPtyExit(ptyId, () => {
+    const unsubscribeExit = subscribeToPtyExit(ptyId, (_code, { hadPrimary }) => {
       // Why: while parked this sidecar is the ONLY exit observer — the hosts'
       // onPtyExit runs from a mounted TerminalPane. Run the observed-exit
-      // teardown's data half here for a multi-leaf tab, or the dead leaf's
-      // stale binding reattaches on reveal and the daemon re-creates the
-      // exited session id as a fresh shell, resurrecting the pane.
-      if (disposersByPtyId.size > 1) {
-        useAppStore.getState().clearRuntimePaneTitle(tab.id, pane.paneId)
-        collapseParkedExitedLeaf(tab.id, ptyId)
+      // teardown here or a sole tab survives, while a dead split leaf can
+      // reattach on reveal and resurrect its exited session as a fresh shell.
+      useAppStore.getState().clearRuntimePaneTitle(tab.id, pane.paneId)
+      if (hadPrimary) {
+        // Why: detach intentionally retains the pane transport's primary exit
+        // owner. It already performs the tab/leaf close; this sidecar only
+        // retires parked observation so one exit cannot queue two confirms.
+        disposersByPtyId.get(ptyId)?.()
+        disposersByPtyId.delete(ptyId)
+        return
       }
+      if (disposersByPtyId.size > 1) {
+        // Why: this dead split leaf has no future mount. Consume its buffered
+        // frame and exit, and tombstone duplicate exit notifications.
+        discardPreHandlerPtyState(ptyId)
+        collapseParkedExitedLeaf(tab.id, ptyId)
+        disposersByPtyId.get(ptyId)?.()
+        disposersByPtyId.delete(ptyId)
+        return
+      }
+
+      // Why: the close may wait on pinned-tab confirmation. Dispose side
+      // effects now but retain the empty registry entry so parking does not
+      // restart a watcher against the dead PTY while the dialog is pending.
       disposersByPtyId.get(ptyId)?.()
       disposersByPtyId.delete(ptyId)
-      // Why: with the last watcher gone there is nothing left to watch or
-      // dispose; dropping the entry keeps the registry bounded to parked
-      // tabs that still hold live PTYs.
-      const entry = parkedWatchersByTabId.get(tab.id)
-      if (disposersByPtyId.size === 0 && entry?.disposersByPtyId === disposersByPtyId) {
-        parkedWatchersByTabId.delete(tab.id)
-      }
+      closeTerminalTab(tab.id, {
+        onClosed: () => {
+          discardPreHandlerPtyState(ptyId)
+          const entry = parkedWatchersByTabId.get(tab.id)
+          if (entry?.disposersByPtyId === disposersByPtyId) {
+            parkedWatchersByTabId.delete(tab.id)
+          }
+        },
+        // Why: cancellation keeps the buffered final frame and exit for the
+        // reveal-mounted pane, matching a pinned terminal that exited mounted.
+        onCancel: () => {}
+      })
     })
     paneIdByPtyId.set(ptyId, pane.paneId)
     disposersByPtyId.set(ptyId, () => {
@@ -206,6 +237,13 @@ export function shouldDeferParkedPtyExitTabClose(tabId: string, ptyId: string): 
   }
   const remaining = entry.disposersByPtyId.size
   if (remaining === 0) {
+    if (paneId !== undefined) {
+      // Why: an empty entry is the cancelled/pending pinned-close tombstone.
+      // The reveal-mounted pane owns the buffered exit now, so suppress its
+      // close once and drop the registry tombstone.
+      parkedWatchersByTabId.delete(tabId)
+      return true
+    }
     return false
   }
   // Why: this runs from the PTY exit handler, before the exit sidecar above
@@ -257,6 +295,18 @@ function collapseParkedExitedLeaf(tabId: string, ptyId: string): void {
   }
 }
 
+function disposeClosedParkedTabWatchers(
+  tabId: string,
+  entry: { paneIdByPtyId: ReadonlyMap<string, number> }
+): void {
+  // Why: another queued pinned-close request may close the tab before this
+  // exit request resolves. No pane can drain its retained final frame then.
+  for (const ptyId of entry.paneIdByPtyId.keys()) {
+    discardPreHandlerPtyState(ptyId)
+  }
+  disposeParkedTabWatchers(tabId)
+}
+
 /**
  * Reconciles watchers for one worktree against its rendered parked set.
  * Callers run this from an effect keyed on the committed render state, so
@@ -267,13 +317,19 @@ export function syncParkedTerminalTabWatchers(args: {
   worktreeId: string
   tabs: readonly ParkableTerminalTabModel[]
   parkedTabIds: ReadonlySet<string>
+  /** Parked-equivalent tabs whose pane has not restored the current title. */
+  restoreTitleOnStartTabIds?: ReadonlySet<string>
 }): void {
   const liveTabIds = new Set(args.tabs.map((tab) => tab.id))
   for (const [tabId, entry] of parkedWatchersByTabId) {
     if (entry.worktreeId !== args.worktreeId) {
       continue
     }
-    if (!args.parkedTabIds.has(tabId) || !liveTabIds.has(tabId)) {
+    if (!liveTabIds.has(tabId)) {
+      disposeClosedParkedTabWatchers(tabId, entry)
+      continue
+    }
+    if (!args.parkedTabIds.has(tabId) && entry.disposersByPtyId.size > 0) {
       disposeParkedTabWatchers(tabId)
     }
   }
@@ -293,7 +349,11 @@ export function syncParkedTerminalTabWatchers(args: {
       disposeParkedTabWatchers(tab.id)
     }
     if (!parkedWatchersByTabId.has(tab.id)) {
-      startParkedTabWatchers(args.worktreeId, tab)
+      startParkedTabWatchers(
+        args.worktreeId,
+        tab,
+        args.restoreTitleOnStartTabIds?.has(tab.id) === true
+      )
     }
   }
 }

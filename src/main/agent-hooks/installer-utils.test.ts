@@ -454,27 +454,32 @@ describe('wrapWindowsHookCommand', () => {
 })
 
 describe('wrapWindowsCmdHookCommand', () => {
-  it('keeps the safe-path launcher PowerShell-free and drains non-file paths', () => {
+  it('returns the bare, directly-spawnable path for a cmd-safe managed script', () => {
+    // Why: Codex/Antigravity/Devin launch the command as a program (argv[0]),
+    // not via cmd.exe, so the launcher must be a single spawnable token — a bare
+    // .cmd path. A cmd-builtin `if …` launcher has argv[0] = `if`, which is
+    // unspawnable and fails every hook with exit 1 (#8430 regression).
     const scriptPath = 'C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd'
     const command = wrapWindowsCmdHookCommand(scriptPath)
-    expect(command).toContain(`if exist "${scriptPath}\\."`)
-    expect(command).toContain(`if exist "${scriptPath}" (call "${scriptPath}")`)
-    expect(command).toContain('"%SystemRoot%\\System32\\more.com" >nul 2>nul')
+    expect(command).toBe(scriptPath)
+    expect(command).not.toMatch(/^if\b/)
     expect(command).not.toMatch(/powershell/i)
   })
 
   it.skipIf(process.platform !== 'win32')(
-    'drains stdin when a directory occupies the managed script path',
+    'resolves the launcher to a real executable file, not a shell fragment',
     () => {
-      const scriptPath = 'directory-hook.cmd'
-      mkdirSync(join(tmpDir, scriptPath))
-      const result = spawnSync('cmd.exe', ['/d', '/c', wrapWindowsCmdHookCommand(scriptPath)], {
-        cwd: tmpDir,
-        input: Buffer.alloc(1_000_000, 'x')
-      })
-
-      expect(result.error).toBeUndefined()
-      expect(result.status).toBe(0)
+      // Regression guard for #8430: Codex/Antigravity/Devin spawn the launcher as
+      // a program (argv[0]), so it must be an existing, launchable file. The broken
+      // `if exist … (call …)` form had argv[0] = `if` — a cmd builtin, not a file —
+      // which is unspawnable and failed every hook. The bare path is the file.
+      // win32-only: the real temp path is cmd-safe only with backslashes; a POSIX
+      // tmpDir has `/`, which routes to the encoded fallback by design.
+      const scriptPath = join(tmpDir, 'codex-hook.cmd')
+      writeFileSync(scriptPath, '@echo off\r\nexit /b 0\r\n', 'utf-8')
+      const command = wrapWindowsCmdHookCommand(scriptPath)
+      expect(command).toBe(scriptPath)
+      expect(existsSync(command)).toBe(true)
     }
   )
 

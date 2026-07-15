@@ -77,6 +77,12 @@ const MIN_POLL_MS = 30 * 1000 // 30 seconds — renderer input should never crea
 const MAX_POLL_MS = 2_147_483_647 // Max safe setInterval delay before Node clamps back to 1ms.
 const MIN_REFETCH_MS = 5 * 60 * 1000 // 5 minutes — debounce resume/manual refresh bursts
 const ACTIVE_FAILURE_REFETCH_MS = MIN_POLL_MS
+// Why: a persistent failure (bad auth, unsupported plan) retried at the 30s
+// floor hammers provider endpoints — Claude's tight-budget usage endpoint
+// starts returning 429s — without ever recovering. Back off per consecutive
+// failure, capped at the background poll cadence.
+const MAX_ACTIVE_FAILURE_REFETCH_MS = DEFAULT_POLL_MS
+const MAX_ACTIVE_FAILURE_STREAK = 8
 // Why: these providers have a dedicated fetch cycle, so an activation retry can
 // refresh just the failing one. Providers without one force a full fetchAll, so
 // their error retries stay on the 5-minute cadence to protect Claude's budget.
@@ -143,6 +149,18 @@ export class RateLimitService {
   // Why: after the first recovery attempt, repeated focus/show/restore events
   // during the same outage should not create a tight provider retry loop.
   private lastActiveFailureRetryAtByProvider: Record<ActiveRateLimitProvider, number> = {
+    claude: 0,
+    codex: 0,
+    gemini: 0,
+    'opencode-go': 0,
+    kimi: 0,
+    minimax: 0,
+    grok: 0,
+    antigravity: 0
+  }
+  // Why: consecutive applied failures per provider drive exponential backoff of
+  // the fast activation-retry lane; reset on any successful/unavailable result.
+  private activeFailureStreakByProvider: Record<ActiveRateLimitProvider, number> = {
     claude: 0,
     codex: 0,
     gemini: 0,
@@ -358,6 +376,8 @@ export class RateLimitService {
     }
     this.codexFetchTarget = nextTarget
     this.codexFetchGeneration += 1
+    // Why: a new account/target starts with a clean retry schedule.
+    this.activeFailureStreakByProvider.codex = 0
     this.inactiveCodexAccountsGeneration += 1
     this.pruneInactiveCodexState()
     this.lastInactiveCodexFetchAt = 0
@@ -377,6 +397,7 @@ export class RateLimitService {
     const targetChanged = !this.isSameCodexTarget(this.codexFetchTarget, nextTarget)
     this.codexFetchTarget = nextTarget
     this.codexFetchGeneration += 1
+    this.activeFailureStreakByProvider.codex = 0
     this.updateState({
       ...this.state,
       codex: this.withFetchingStatus(targetChanged ? null : this.state.codex, 'codex')
@@ -426,6 +447,8 @@ export class RateLimitService {
     this.inactiveClaudeAccountsGeneration += 1
     this.pruneInactiveClaudeState()
     this.claudeFetchGeneration += 1
+    // Why: a new account/target starts with a clean retry schedule.
+    this.activeFailureStreakByProvider.claude = 0
     this.lastInactiveClaudeFetchAt = 0
     this.updateState({
       ...this.state,
@@ -440,6 +463,7 @@ export class RateLimitService {
     const targetChanged = !this.isSameClaudeTarget(this.claudeFetchTarget, nextTarget)
     this.claudeFetchTarget = nextTarget
     this.claudeFetchGeneration += 1
+    this.activeFailureStreakByProvider.claude = 0
     this.updateState({
       ...this.state,
       claude: this.withFetchingStatus(targetChanged ? null : this.state.claude, 'claude')
@@ -764,7 +788,11 @@ export class RateLimitService {
       if (limits.status === 'error') {
         const lastRetryAt = this.lastActiveFailureRetryAtByProvider[provider]
         const throttleMs = INDIVIDUALLY_REFRESHABLE_PROVIDERS.has(provider)
-          ? ACTIVE_FAILURE_REFETCH_MS
+          ? Math.min(
+              ACTIVE_FAILURE_REFETCH_MS *
+                2 ** Math.max(0, this.activeFailureStreakByProvider[provider] - 1),
+              MAX_ACTIVE_FAILURE_REFETCH_MS
+            )
           : MIN_REFETCH_MS
         if (now - lastRetryAt >= throttleMs) {
           retryableFailures.push(provider)
@@ -783,6 +811,18 @@ export class RateLimitService {
       return
     }
     if (plan.kind === 'full') {
+      // Why: a full fetch retries failing providers too. Restart their retry
+      // clocks so the individual failure lane doesn't fire again right after,
+      // ahead of its backoff window. Skip when a fetch is already in flight —
+      // fetchAll would no-op and the throttle must not be consumed for free.
+      if (!this.isFetching) {
+        const now = Date.now()
+        for (const { provider, limits } of this.getActiveProviderState()) {
+          if (limits?.status === 'error') {
+            this.lastActiveFailureRetryAtByProvider[provider] = now
+          }
+        }
+      }
       await this.fetchAll()
       return
     }
@@ -1242,6 +1282,22 @@ export class RateLimitService {
     }
   }
 
+  private trackActiveFailureStreak(
+    provider: ActiveRateLimitProvider,
+    fresh: ProviderRateLimits
+  ): void {
+    if (fresh.status === 'error') {
+      this.activeFailureStreakByProvider[provider] = Math.min(
+        this.activeFailureStreakByProvider[provider] + 1,
+        MAX_ACTIVE_FAILURE_STREAK
+      )
+      return
+    }
+    if (fresh.status === 'ok' || fresh.status === 'unavailable') {
+      this.activeFailureStreakByProvider[provider] = 0
+    }
+  }
+
   private withFetchingStatus(
     current: ProviderRateLimits | null,
     provider:
@@ -1263,6 +1319,13 @@ export class RateLimitService {
         error: null,
         status: 'fetching'
       }
+    }
+    // Why: repainting a settled chip as "fetching" on every background refetch
+    // makes the status bar flash "…" → error each retry cycle when a provider
+    // is persistently failing. Keep the settled state visible until the new
+    // result lands; only providers with no settled state show a loading chip.
+    if (current.status === 'ok' || current.status === 'error' || current.status === 'unavailable') {
+      return current
     }
     return { ...current, status: 'fetching' }
   }
@@ -1481,6 +1544,22 @@ export class RateLimitService {
     const shouldApplyOpencode = opencodeGeneration === this.opencodeFetchGeneration
     const shouldApplyMiniMax = miniMaxGeneration === this.minimaxFetchGeneration
 
+    if (shouldApplyClaude) {
+      this.trackActiveFailureStreak('claude', claude)
+    }
+    if (shouldApplyCodex) {
+      this.trackActiveFailureStreak('codex', codex)
+    }
+    this.trackActiveFailureStreak('gemini', gemini)
+    this.trackActiveFailureStreak('antigravity', antigravity)
+    if (shouldApplyOpencode) {
+      this.trackActiveFailureStreak('opencode-go', opencodeGo)
+    }
+    this.trackActiveFailureStreak('kimi', kimi)
+    if (shouldApplyMiniMax) {
+      this.trackActiveFailureStreak('minimax', miniMax)
+    }
+
     // Why: account switches can race in-flight Codex fetches. Only apply a
     // Codex result if both the selected-account provenance and the request
     // generation still match, otherwise an old account could overwrite the
@@ -1523,6 +1602,7 @@ export class RateLimitService {
             error: grokResult.reason instanceof Error ? grokResult.reason.message : 'Unknown error',
             status: 'error'
           } satisfies ProviderRateLimits)
+    this.trackActiveFailureStreak('grok', grok)
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok)
@@ -1575,6 +1655,9 @@ export class RateLimitService {
     const shouldApplyCodex =
       codexGeneration === this.codexFetchGeneration && codexProvenance === latestCodexProvenance
 
+    if (shouldApplyCodex) {
+      this.trackActiveFailureStreak('codex', codex)
+    }
     this.updateState({
       ...this.state,
       codex: shouldApplyCodex ? this.applyStalePolicy(codex, previousState.codex) : this.state.codex
@@ -1630,6 +1713,9 @@ export class RateLimitService {
       claudeProvenance === latestClaudeProvenance &&
       this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
 
+    if (shouldApplyClaude) {
+      this.trackActiveFailureStreak('claude', claude)
+    }
     this.updateState({
       ...this.state,
       claude: shouldApplyClaude
@@ -1669,6 +1755,7 @@ export class RateLimitService {
       return
     }
 
+    this.trackActiveFailureStreak('grok', grok)
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok)

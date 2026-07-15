@@ -289,7 +289,8 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
     await expect(client.openOrca(100)).rejects.toMatchObject({
       code: 'desktop_activation_blocked'
     })
-    expect(launchOrcaApp).toHaveBeenCalledOnce()
+    // A blocked runtime can't promote, so we bail before spawning the app.
+    expect(launchOrcaApp).not.toHaveBeenCalled()
   })
 
   it('times out if the runtime never responds', async () => {

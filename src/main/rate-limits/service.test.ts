@@ -120,6 +120,19 @@ function unavailableProvider(
   }
 }
 
+// Why: beforeEach caches snapshot objects whose updatedAt is pinned at suite
+// start, so after 5 fake minutes every healthy provider looks stale and every
+// activation degrades to a full fetch. Backoff tests that reason about the
+// individual retry lane need healthy providers minted fresh at fetch time.
+function mockFreshBackgroundProviderFetches(): void {
+  vi.mocked(fetchCodexRateLimits).mockImplementation(async () => okProvider('codex', 24))
+  vi.mocked(fetchGeminiRateLimits).mockImplementation(async () => okProvider('gemini', 0))
+  vi.mocked(fetchOpenCodeGoRateLimits).mockImplementation(async () => okProvider('opencode-go', 0))
+  vi.mocked(fetchKimiRateLimits).mockImplementation(async () => okProvider('kimi', 0))
+  vi.mocked(fetchMiniMaxRateLimits).mockImplementation(async () => okProvider('minimax', 0))
+  vi.mocked(fetchGrokRateLimits).mockImplementation(async () => unavailableProvider('grok'))
+}
+
 function serviceInternals(service: RateLimitService): { fetchAll: () => Promise<void> } {
   return service as unknown as { fetchAll: () => Promise<void> }
 }
@@ -393,7 +406,7 @@ describe('RateLimitService', () => {
     }
   })
 
-  it('throttles repeated active-window retries while Claude is still failing', async () => {
+  it('backs off repeated active-window retries while Claude is still failing', async () => {
     vi.useFakeTimers()
     try {
       vi.mocked(fetchClaudeRateLimits).mockResolvedValue(errorProvider('claude', 'still failing'))
@@ -407,6 +420,7 @@ describe('RateLimitService', () => {
       await vi.advanceTimersByTimeAsync(1000)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
 
+      // First activation recovers immediately (retry timestamps start at 0).
       window.emit('focus')
       await vi.advanceTimersByTimeAsync(0)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
@@ -415,10 +429,174 @@ describe('RateLimitService', () => {
       await vi.advanceTimersByTimeAsync(0)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
 
+      // Two consecutive failures: the retry window doubled to 60s, so an
+      // activation at +30s must not hammer the endpoint again.
       await vi.advanceTimersByTimeAsync(30 * 1000)
       window.emit('restore')
       await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+
+      await vi.advanceTimersByTimeAsync(30 * 1000)
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(3)
+
+      // Three consecutive failures: 120s window.
+      await vi.advanceTimersByTimeAsync(60 * 1000)
+      window.emit('show')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(3)
+
+      await vi.advanceTimersByTimeAsync(60 * 1000)
+      window.emit('restore')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(4)
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('resets the retry backoff once Claude recovers', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits)
+        .mockResolvedValueOnce(errorProvider('claude', 'still failing'))
+        .mockResolvedValueOnce(errorProvider('claude', 'still failing'))
+        .mockResolvedValueOnce(okProvider('claude', 12))
+        .mockResolvedValue(errorProvider('claude', 'failing again'))
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      const window = new FakeRateLimitWindow()
+      service.attach(asRateLimitWindow(window))
+      service.start({ fetchImmediately: false })
+
+      await vi.advanceTimersByTimeAsync(1000)
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+
+      // Recovery fetch succeeds and must clear the failure streak.
+      await vi.advanceTimersByTimeAsync(60 * 1000)
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(3)
+      expect(service.getState().claude?.status).toBe('ok')
+
+      // The stale-ok snapshot forces a full refresh, which fails again.
+      await vi.advanceTimersByTimeAsync(5 * 60 * 1000)
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(4)
+      expect(service.getState().claude?.status).toBe('error')
+
+      // Consume the stale active-retry timestamp so the next windows measure
+      // the post-recovery streak rather than time elapsed before recovery.
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(5)
+
+      // Post-recovery streak is 2 (not the pre-recovery 4): the window must be
+      // 60s, so +30s stays throttled and +60s retries.
+      await vi.advanceTimersByTimeAsync(30 * 1000)
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(5)
+
+      await vi.advanceTimersByTimeAsync(30 * 1000)
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(6)
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('counts a stale-driven full fetch as the failing provider retry attempt', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockImplementation(async () =>
+        errorProvider('claude', 'still failing')
+      )
+      mockFreshBackgroundProviderFetches()
+
+      const service = new RateLimitService()
+      const window = new FakeRateLimitWindow()
+      service.attach(asRateLimitWindow(window))
+      service.start({ fetchImmediately: false })
+
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
+
+      // Healthy providers go stale after 5 minutes, so this activation runs a
+      // full fetch that also retries failing Claude (streak now 3 → 120s).
+      await vi.advanceTimersByTimeAsync(5 * 60 * 1000)
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(3)
+
+      // Why: the full fetch was itself a retry. An activation moments later
+      // must not fire the individual failure lane ahead of the backoff window.
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(3)
+
+      // Once the 120s window elapses, the individual retry lane fires again.
+      await vi.advanceTimersByTimeAsync(120 * 1000)
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(4)
+
+      service.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps a settled error chip settled during background refetches instead of flashing fetching', async () => {
+    vi.useFakeTimers()
+    try {
+      const secondClaude = deferred<ProviderRateLimits>()
+      vi.mocked(fetchClaudeRateLimits)
+        .mockResolvedValueOnce(errorProvider('claude', 'still failing'))
+        .mockImplementationOnce(() => secondClaude.promise)
+      vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
+
+      const service = new RateLimitService()
+      const window = new FakeRateLimitWindow()
+      const claudeStatuses: string[] = []
+      service.onStateChange((state) => {
+        if (state.claude) {
+          claudeStatuses.push(state.claude.status)
+        }
+      })
+      service.attach(asRateLimitWindow(window))
+      service.start({ fetchImmediately: false })
+
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(service.getState().claude?.status).toBe('error')
+
+      // Why: the retry must not repaint the settled error chip as a loading
+      // "…" chip while the refetch is in flight — that is the flash users see
+      // every cycle when a provider is stuck failing.
+      window.emit('focus')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(service.getState().claude?.status).toBe('error')
+
+      secondClaude.resolve(okProvider('claude', 12))
+      await vi.advanceTimersByTimeAsync(0)
+      expect(service.getState().claude?.status).toBe('ok')
+
+      const statusesAfterFirstSettle = claudeStatuses.slice(claudeStatuses.indexOf('error'))
+      expect(statusesAfterFirstSettle).not.toContain('fetching')
 
       service.stop()
     } finally {

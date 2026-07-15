@@ -59,7 +59,7 @@ import {
   resolveEffectiveGitUpstream
 } from '../shared/git-effective-upstream'
 import { loadGitHistoryFromExecutor } from '../shared/git-history'
-import { buildRelayGitEnv } from './relay-command-env'
+import { buildRelayGitEnv, buildRelayUnattendedGitEnv } from './relay-command-env'
 import {
   removeSafeUntrackedDiscardTarget,
   removeSafeUntrackedDiscardTargets
@@ -307,15 +307,9 @@ export class GitHandler {
       timeout?: number
     }
   ): Promise<{ stdout: string; stderr: string }> {
-    const env = buildRelayGitEnv()
+    const env = opts?.nonInteractive ? buildRelayUnattendedGitEnv() : buildRelayGitEnv()
     if (opts?.disableOptionalLocks) {
       env.GIT_OPTIONAL_LOCKS = '0'
-    }
-    if (opts?.nonInteractive) {
-      env.GIT_TERMINAL_PROMPT = '0'
-      env.GIT_ASKPASS = ''
-      env.SSH_ASKPASS = ''
-      env.GIT_SSH_COMMAND ??= 'ssh -o BatchMode=yes'
     }
     const execOptions = {
       cwd: expandTilde(cwd),
@@ -1182,7 +1176,7 @@ export class GitHandler {
     return await new Promise((resolve, reject) => {
       const child = spawn('git', args, {
         cwd: expandTilde(cwd),
-        env: buildRelayGitEnv(),
+        env: buildRelayUnattendedGitEnv(),
         stdio: ['ignore', 'pipe', 'pipe']
       })
       let stdout = ''

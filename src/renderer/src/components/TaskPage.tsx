@@ -205,6 +205,7 @@ import {
   type TaskPageRepoSourceState
 } from '@/components/task-page-cache-selectors'
 import { shouldHideTaskPageListChrome } from '@/components/task-page-list-chrome-visibility'
+import { accumulateWorkItemPages } from '@/components/task-page-work-item-pagination'
 import LinearIssueAttributeFilterDropdowns from '@/components/linear-issue-attribute-filter-dropdowns'
 import { resolveLinearIssueAttributeFilterPrimaryTeam } from '@/components/linear-issue-attribute-filter-primary-team'
 import {
@@ -6280,32 +6281,32 @@ export default function TaskPage(): React.JSX.Element {
       setPaginationLoading(true)
       setLoadingTargetPage(target)
       try {
-        let cursor = oldestItem.updatedAt
-        let loadedPages = pages.length
-        const newPages: GitHubWorkItem[][] = []
-
-        while (loadedPages <= target) {
-          const { items } = await fetchWorkItemsNextPage(
-            repoArgs,
-            PER_REPO_FETCH_LIMIT,
-            CROSS_REPO_DISPLAY_LIMIT,
-            q,
-            cursor
-          )
-          if (paginationGenerationRef.current !== requestGeneration) {
-            return
+        const result = await accumulateWorkItemPages({
+          existingPages: pages,
+          initialCursor: oldestItem.updatedAt,
+          targetPage: target,
+          // Why: uniform page size keeps deduped pages from shrinking below the
+          // size `totalPages` (count ÷ effectivePageSize) assumes — otherwise
+          // the per-page overlap loss would strand the tail items.
+          pageSize: effectivePageSize,
+          isCancelled: () => paginationGenerationRef.current !== requestGeneration,
+          fetchPage: async (cursor) => {
+            const { items } = await fetchWorkItemsNextPage(
+              repoArgs,
+              PER_REPO_FETCH_LIMIT,
+              CROSS_REPO_DISPLAY_LIMIT,
+              q,
+              cursor
+            )
+            return { items }
           }
-          if (items.length === 0) {
-            break
-          }
-          newPages.push(items)
-          cursor = items.at(-1)!.updatedAt
-          loadedPages += 1
+        })
+        if (result.cancelled) {
+          return
         }
-
-        if (newPages.length > 0) {
-          setPages((prev) => [...prev, ...newPages])
-          setCurrentPage(target < loadedPages ? target : loadedPages - 1)
+        if (result.newPages.length > 0) {
+          setPages((prev) => [...prev, ...result.newPages])
+          setCurrentPage(target < result.loadedPages ? target : result.loadedPages - 1)
         }
       } catch (err) {
         console.error('Failed to load next page:', err)
@@ -6316,7 +6317,14 @@ export default function TaskPage(): React.JSX.Element {
         }
       }
     },
-    [paginationLoading, selectedRepos, pages, appliedTaskSearch, fetchWorkItemsNextPage]
+    [
+      paginationLoading,
+      selectedRepos,
+      pages,
+      appliedTaskSearch,
+      fetchWorkItemsNextPage,
+      effectivePageSize
+    ]
   )
 
   useEffect(() => {

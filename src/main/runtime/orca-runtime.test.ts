@@ -7117,6 +7117,153 @@ describe('OrcaRuntimeService', () => {
       expect(runtime.getPtyOutputSequence('pty-1')).toBe(0)
     })
 
+    it('aligns a restored session and pre-response bytes to the provider sequence', async () => {
+      const { runtime } = createSideEffectRuntime()
+
+      // Simulate a stream-socket byte winning the race with the spawn response.
+      runtime.onPtyData('pty-restored', 'queued', 100)
+      expect(
+        runtime.synchronizePtyOutputSequenceFromProvider(
+          'pty-restored',
+          { value: 900, generation: 'continued' },
+          0
+        )
+      ).toBe(906)
+      runtime.onPtyData('pty-restored', 'fresh', 101)
+
+      expect(runtime.getPtyOutputSequence('pty-restored')).toBe(911)
+      await expect(runtime.serializeMainTerminalBuffer('pty-restored')).resolves.toMatchObject({
+        data: expect.stringContaining('queuedfresh'),
+        seq: 911,
+        source: 'headless'
+      })
+    })
+
+    it('does not double a fresh daemon sequence on same-main reattach', () => {
+      const { runtime } = createSideEffectRuntime()
+
+      expect(
+        runtime.synchronizePtyOutputSequenceFromProvider(
+          'pty-fresh',
+          { value: 0, generation: 'reset' },
+          0
+        )
+      ).toBe(0)
+      runtime.onPtyData('pty-fresh', 'fresh output', 100)
+      const sequenceBeforeReattach = runtime.getPtyOutputSequence('pty-fresh')
+
+      expect(
+        runtime.synchronizePtyOutputSequenceFromProvider(
+          'pty-fresh',
+          { value: sequenceBeforeReattach, generation: 'continued' },
+          sequenceBeforeReattach
+        )
+      ).toBe(sequenceBeforeReattach)
+    })
+
+    it('does not jump ahead of delayed bytes covered by a reattach snapshot', () => {
+      const { runtime } = createSideEffectRuntime()
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-delayed',
+        { value: 0, generation: 'reset' },
+        0
+      )
+      runtime.onPtyData('pty-delayed', 'before', 100)
+      const sequenceBeforeReattach = runtime.getPtyOutputSequence('pty-delayed')
+      const delayedCoveredBytes = 'queued'
+
+      expect(
+        runtime.synchronizePtyOutputSequenceFromProvider(
+          'pty-delayed',
+          {
+            value: sequenceBeforeReattach + delayedCoveredBytes.length,
+            generation: 'continued'
+          },
+          sequenceBeforeReattach
+        )
+      ).toBe(sequenceBeforeReattach)
+      runtime.onPtyData('pty-delayed', delayedCoveredBytes, 101)
+
+      expect(runtime.getPtyOutputSequence('pty-delayed')).toBe(
+        sequenceBeforeReattach + delayedCoveredBytes.length
+      )
+    })
+
+    it('retains bytes emitted before a fresh daemon spawn resolves', async () => {
+      const { runtime } = createSideEffectRuntime()
+      const earlyOutput = '\x1b]0;Fresh shell\x07early prompt'
+      runtime.onPtyData('pty-fresh', earlyOutput, 100)
+
+      expect(
+        runtime.synchronizePtyOutputSequenceFromProvider(
+          'pty-fresh',
+          { value: 0, generation: 'reset' },
+          0
+        )
+      ).toBe(earlyOutput.length)
+
+      await expect(runtime.serializeMainTerminalBuffer('pty-fresh')).resolves.toMatchObject({
+        data: expect.stringContaining('early prompt'),
+        lastTitle: 'Fresh shell',
+        seq: earlyOutput.length
+      })
+    })
+
+    it('drops stale headless state without rewinding the runtime sequence', async () => {
+      const { runtime } = createSideEffectRuntime()
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-restarted',
+        { value: 0, generation: 'reset' },
+        0
+      )
+      runtime.onPtyData('pty-restarted', 'old generation', 100)
+      const sequenceBeforeRespawn = runtime.getPtyOutputSequence('pty-restarted')
+
+      expect(
+        runtime.synchronizePtyOutputSequenceFromProvider(
+          'pty-restarted',
+          { value: 0, generation: 'reset' },
+          sequenceBeforeRespawn
+        )
+      ).toBe(sequenceBeforeRespawn)
+      runtime.onPtyData('pty-restarted', 'new generation', 101)
+
+      await expect(runtime.serializeMainTerminalBuffer('pty-restarted')).resolves.toMatchObject({
+        data: expect.not.stringContaining('old generation'),
+        seq: sequenceBeforeRespawn + 'new generation'.length
+      })
+    })
+
+    it('keeps active listener sequences monotonic across a daemon reset', () => {
+      const { runtime } = createSideEffectRuntime()
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-reset',
+        { value: 0, generation: 'reset' },
+        0
+      )
+      runtime.onPtyData('pty-reset', 'old', 100)
+      const sequenceBeforeRespawn = runtime.getPtyOutputSequence('pty-reset')
+      const observedSequences: number[] = []
+      runtime.subscribeToTerminalData('pty-reset', (_data, meta) => {
+        if (typeof meta?.seq === 'number') {
+          observedSequences.push(meta.seq)
+        }
+      })
+
+      runtime.onPtyData('pty-reset', 'early', 101)
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-reset',
+        { value: 0, generation: 'reset' },
+        sequenceBeforeRespawn
+      )
+      runtime.onPtyData('pty-reset', 'later', 102)
+
+      expect(observedSequences).toEqual([
+        sequenceBeforeRespawn + 'early'.length,
+        sequenceBeforeRespawn + 'early'.length + 'later'.length
+      ])
+    })
+
     it('carries the synthetic permission BEL as a bell fact', () => {
       const { runtime, batches } = createSideEffectRuntime()
       syncSinglePty(runtime)
@@ -7215,6 +7362,254 @@ describe('OrcaRuntimeService', () => {
       const snapshot = await runtime.serializeTerminalBuffer('pty-1', { scrollbackRows: 10 })
       expect(snapshot?.source).toBe('renderer')
       expect(snapshot?.lastTitle).toBe('⠋ Cursor Agent')
+    })
+
+    it('falls back to the provider snapshot for a restored PTY with no mounted renderer', async () => {
+      const { runtime } = createSideEffectRuntime()
+      const serializeBuffer = vi.fn()
+      const serializeProviderBuffer = vi.fn().mockResolvedValue({
+        data: 'restored screen\r\n',
+        scrollbackAnsi: 'restored history\r\n',
+        cols: 120,
+        rows: 40,
+        cwd: '/projects/restored',
+        seq: 900,
+        source: 'headless'
+      })
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeBuffer,
+        serializeProviderBuffer,
+        hasRendererSerializer: () => false
+      })
+
+      const snapshot = await runtime.serializeTerminalBuffer('pty-restored', {
+        scrollbackRows: 5000
+      })
+
+      expect(serializeBuffer).not.toHaveBeenCalled()
+      expect(serializeProviderBuffer).toHaveBeenCalledWith('pty-restored', {
+        scrollbackRows: 5000
+      })
+      expect(snapshot).toEqual({
+        data: 'restored screen\r\n',
+        scrollbackAnsi: 'restored history\r\n',
+        cols: 120,
+        rows: 40,
+        cwd: '/projects/restored',
+        seq: 900,
+        source: 'headless'
+      })
+    })
+
+    it('does not let pre-response bytes hide restored provider history', async () => {
+      const { runtime } = createSideEffectRuntime()
+      const serializeProviderBuffer = vi.fn().mockResolvedValue({
+        data: 'restored history\r\nqueued',
+        cols: 80,
+        rows: 24,
+        seq: 906,
+        source: 'headless'
+      })
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeProviderBuffer,
+        hasRendererSerializer: () => false
+      })
+      runtime.onPtyData('pty-restored', 'queued', 100)
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-restored',
+        { value: 900, generation: 'continued' },
+        0
+      )
+
+      const snapshot = await runtime.serializeTerminalBuffer('pty-restored', {
+        scrollbackRows: 5000
+      })
+
+      expect(snapshot?.data).toContain('restored history')
+      expect(serializeProviderBuffer).toHaveBeenCalledOnce()
+    })
+
+    it('keeps restored provider history authoritative after later live output', async () => {
+      const { runtime } = createSideEffectRuntime()
+      const serializeProviderBuffer = vi.fn().mockResolvedValue({
+        data: 'restored history\r\nlater output',
+        cols: 80,
+        rows: 24,
+        seq: 912,
+        source: 'headless'
+      })
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeProviderBuffer,
+        hasRendererSerializer: () => false
+      })
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-restored',
+        { value: 900, generation: 'continued' },
+        0
+      )
+      runtime.onPtyData('pty-restored', 'later output', 100)
+
+      const snapshot = await runtime.serializeTerminalBuffer('pty-restored')
+
+      expect(snapshot?.data).toContain('restored history')
+      expect(serializeProviderBuffer).toHaveBeenCalledOnce()
+    })
+
+    it('uses provider alternate-screen state while a partial model is unsafe', async () => {
+      const { runtime } = createSideEffectRuntime()
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeProviderBuffer: vi.fn().mockResolvedValue({
+          data: 'restored tui',
+          cols: 80,
+          rows: 24,
+          seq: 903,
+          source: 'headless',
+          alternateScreen: true
+        }),
+        hasRendererSerializer: () => false
+      })
+      runtime.onPtyData('pty-tui', 'tui', 100)
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-tui',
+        { value: 900, generation: 'continued' },
+        0
+      )
+
+      await runtime.serializeTerminalBuffer('pty-tui')
+
+      expect(runtime.isTerminalAlternateScreen('pty-tui')).toBe(true)
+    })
+
+    it('tracks live alternate-screen transitions after a provider snapshot', async () => {
+      const { runtime } = createSideEffectRuntime()
+      const serializeProviderBuffer = vi.fn().mockResolvedValue({
+        data: 'restored tui',
+        cols: 80,
+        rows: 24,
+        seq: 900,
+        source: 'headless',
+        alternateScreen: true
+      })
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeProviderBuffer,
+        hasRendererSerializer: () => false
+      })
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-tui',
+        { value: 900, generation: 'continued' },
+        0
+      )
+      await runtime.serializeTerminalBuffer('pty-tui')
+      expect(runtime.isTerminalAlternateScreen('pty-tui')).toBe(true)
+
+      runtime.onPtyData('pty-tui', '\x1b[?1049l', 100)
+      expect(runtime.isTerminalAlternateScreen('pty-tui')).toBe(false)
+      runtime.onPtyData('pty-tui', '\x1b[?1049h', 101)
+      expect(runtime.isTerminalAlternateScreen('pty-tui')).toBe(true)
+    })
+
+    it('keeps mode transitions that race a provider snapshot response', async () => {
+      const { runtime } = createSideEffectRuntime()
+      let resolveProviderSnapshot:
+        | ((snapshot: {
+            data: string
+            cols: number
+            rows: number
+            seq: number
+            source: 'headless'
+            alternateScreen: boolean
+          }) => void)
+        | undefined
+      const serializeProviderBuffer = vi.fn(
+        () =>
+          new Promise<{
+            data: string
+            cols: number
+            rows: number
+            seq: number
+            source: 'headless'
+            alternateScreen: boolean
+          }>((resolve) => {
+            resolveProviderSnapshot = resolve
+          })
+      )
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeProviderBuffer,
+        hasRendererSerializer: () => false
+      })
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-tui-race',
+        { value: 900, generation: 'continued' },
+        0
+      )
+
+      const snapshotPromise = runtime.serializeTerminalBuffer('pty-tui-race')
+      await vi.waitFor(() => expect(resolveProviderSnapshot).toBeDefined())
+      runtime.onPtyData('pty-tui-race', '\x1b[?1049l', 100)
+      resolveProviderSnapshot?.({
+        data: 'captured alt screen',
+        cols: 80,
+        rows: 24,
+        seq: 900,
+        source: 'headless',
+        alternateScreen: true
+      })
+      await snapshotPromise
+
+      expect(runtime.isTerminalAlternateScreen('pty-tui-race')).toBe(false)
+    })
+
+    it('translates reset provider snapshots without retaining the old title', async () => {
+      const { runtime } = createSideEffectRuntime()
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-replaced',
+        { value: 0, generation: 'reset' },
+        0
+      )
+      runtime.onPtyData('pty-replaced', '\x1b]0;Old process\x07old', 100)
+      const sequenceBeforeRespawn = runtime.getPtyOutputSequence('pty-replaced')
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeProviderBuffer: vi.fn().mockResolvedValue({
+          data: 'new process',
+          cols: 80,
+          rows: 24,
+          seq: 'new process'.length,
+          source: 'headless',
+          lastTitle: 'New process'
+        }),
+        hasRendererSerializer: () => false
+      })
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-replaced',
+        { value: 0, generation: 'reset' },
+        sequenceBeforeRespawn
+      )
+
+      await expect(runtime.serializeTerminalBuffer('pty-replaced')).resolves.toMatchObject({
+        lastTitle: 'New process',
+        seq: sequenceBeforeRespawn + 'new process'.length
+      })
     })
 
     it('prefers the tracked title over the headless emulator lastTitle', async () => {
@@ -9791,6 +10186,8 @@ describe('OrcaRuntimeService', () => {
         agentEnv: { CLAUDE_PROFILE: 'captured' }
       }
     })
+
+    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ launchAgent: 'claude' }))
 
     const spawnCall = spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined
     const spawnedEnv = spawnCall?.env ?? {}

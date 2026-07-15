@@ -70,7 +70,7 @@ export async function getCliStatus(
   }
 }
 
-function resolveDesktopWindowStatus(
+export function resolveDesktopWindowStatus(
   status: RuntimeStatus
 ): CliStatusResult['app']['desktopWindowStatus'] {
   if (status.desktopWindowStatus) {

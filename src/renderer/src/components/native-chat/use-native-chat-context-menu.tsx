@@ -60,6 +60,23 @@ export type NativeChatContextMenuActions = {
   onClosePane: () => void
 }
 
+/** No-op defaults for when the view has no pane-management actions wired. */
+export const emptyNativeChatContextMenuActions: Omit<NativeChatContextMenuActions, 'onPaste'> = {
+  onSplitRight: () => {},
+  onSplitDown: () => {},
+  canEqualizePaneSizes: false,
+  onEqualizePaneSizes: () => {},
+  canExpandPane: false,
+  isPaneExpanded: false,
+  onToggleExpand: () => {},
+  onForkAgentSession: () => {},
+  onSetTitle: () => {},
+  onCopyTerminalId: () => {},
+  onCopyPaneId: () => {},
+  canClosePane: false,
+  onClosePane: () => {}
+}
+
 export function useNativeChatContextMenu({
   rootRef,
   onSwitchToTerminal,

@@ -2,6 +2,8 @@ import { exec, spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { delimiter, join } from 'node:path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
+import { applyTerminalGitCredentialPromptGuard } from '../shared/terminal-git-credential-guard'
+import { mergeGitConfigEnvProtocol } from '../shared/git-credential-prompt-env'
 
 const DEFAULT_TIMEOUT_MS = 60_000
 const MAX_TIMEOUT_MS = 5 * 60 * 1000
@@ -168,7 +170,16 @@ export class AgentExecHandler {
       params.env && typeof params.env === 'object' && !Array.isArray(params.env)
         ? (params.env as Record<string, string>)
         : null
-    const spawnEnv = extraEnv ? { ...process.env, ...extraEnv } : process.env
+    const spawnEnv = mergeGitConfigEnvProtocol(process.env, extraEnv ?? undefined) as Record<
+      string,
+      string
+    >
+    // Why: this RPC has no interactive terminal, regardless of which wrapper
+    // launches the agent or hook command.
+    applyTerminalGitCredentialPromptGuard(spawnEnv, {
+      isUnattended: true,
+      platform: process.platform
+    })
 
     return new Promise<ExecResult>((resolve) => {
       let child

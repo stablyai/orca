@@ -61,7 +61,6 @@ type TerminalOverlaySlotProps = {
   activityTerminalPortal: ActivityTerminalPortalTarget | null
   onFocusOwningGroup: ((groupId: string) => void) | undefined
   consumeSuppressedPtyExit: (ptyId: string) => boolean
-  closeTab: (tabId: string) => void
   leaveWorktreeIfEmpty: () => void
 }
 
@@ -78,7 +77,6 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   activityTerminalPortal,
   onFocusOwningGroup,
   consumeSuppressedPtyExit,
-  closeTab,
   leaveWorktreeIfEmpty
 }: TerminalOverlaySlotProps): React.JSX.Element {
   const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
@@ -246,15 +244,16 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
         if (shouldDeferParkedPtyExitTabClose(terminalTabId, ptyId)) {
           return
         }
-        closeTab(terminalTabId)
-        leaveWorktreeIfEmpty()
+        closeTerminalTab(terminalTabId, {
+          reason: 'pty-exit',
+          onClosed: leaveWorktreeIfEmpty
+        })
       }}
       onCloseTab={() => {
         // Why: route through closeTerminalTab (not the raw store closeTab) so a
         // pinned tab hits the confirmation guard. The overlay's direct
         // store.closeTab was the path that closed pinned terminals silently.
-        closeTerminalTab(terminalTabId)
-        leaveWorktreeIfEmpty()
+        closeTerminalTab(terminalTabId, { onClosed: leaveWorktreeIfEmpty })
       }}
     />
   )
@@ -290,7 +289,8 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   coldParkTerminalPanes = false,
   shouldMeasureHiddenWorktree = false,
   activityTerminalPortals = EMPTY_ACTIVITY_PORTALS,
-  backgroundMountTabIds = null
+  backgroundMountTabIds = null,
+  activationDeferredMountTabIds = null
 }: {
   worktreeId: string
   worktreePath: string
@@ -301,6 +301,9 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   /** Non-null for targeted background mounts: only these terminal tabs get a
    *  TerminalPane, so waking one slept agent does not connect every saved tab. */
   backgroundMountTabIds?: ReadonlySet<string> | null
+  /** Only cold-activation deferred tabs receive immediate parked watcher
+   *  coverage; targeted mounts keep their existing delayed parking policy. */
+  activationDeferredMountTabIds?: ReadonlySet<string> | null
 }): React.JSX.Element | null {
   const { terminalTabs, unifiedTabs, groups, activeGroupId } = useAppStore(
     useShallow((state) => ({
@@ -312,7 +315,6 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   )
   const focusGroup = useAppStore((state) => state.focusGroup)
   const consumeSuppressedPtyExit = useAppStore((state) => state.consumeSuppressedPtyExit)
-  const closeTab = useAppStore((state) => state.closeTab)
   const setActiveWorktree = useAppStore((state) => state.setActiveWorktree)
   const reconcileWorktreeTabModel = useAppStore((state) => state.reconcileWorktreeTabModel)
 
@@ -321,9 +323,8 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   // Why: legacy TabGroupPanel routed terminal closes through
   // commands.closeItem → leaveWorktreeIfEmpty, which deselected the worktree
   // when the last renderable tab closed and sent the user back to Landing.
-  // The overlay layer calls store.closeTab directly, so replicate that
-  // post-close check here; otherwise closing the last terminal leaves an
-  // empty TabGroupPanel body selected.
+  // Run this only after the guarded close resolves; a pending/cancelled pinned
+  // close must leave the worktree and paired-web mirror selected.
   const leaveWorktreeIfEmpty = useCallback(() => {
     const state = useAppStore.getState()
     if (state.activeWorktreeId !== worktreeId) {
@@ -370,7 +371,8 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
     isWorktreeActive,
     coldParkTerminalPanes,
     shouldMeasureHiddenWorktree,
-    activityTerminalPortals
+    activityTerminalPortals,
+    activationDeferredMountTabIds
   })
 
   if (!worktreePath) {
@@ -411,7 +413,6 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
               activityTerminalPortal={activityTerminalPortal}
               onFocusOwningGroup={focusOwningGroup}
               consumeSuppressedPtyExit={consumeSuppressedPtyExit}
-              closeTab={closeTab}
               leaveWorktreeIfEmpty={leaveWorktreeIfEmpty}
             />
           )

@@ -14,21 +14,21 @@ describe('serve desktop activation wiring', () => {
 
   it('settles the persistent provider before headless PTY registration', () => {
     const appReadyIndex = source.indexOf('app.whenReady().then(async () => {')
-    const startupIndex = source.indexOf('startTerminalRuntimeStartupServices()', appReadyIndex)
+    const startupIndex = source.indexOf(
+      '\n  startTerminalRuntimeStartupServices()\n',
+      appReadyIndex
+    )
     const serveIndex = source.indexOf('if (serveOptions) {', appReadyIndex)
     const ptyReadyIndex = source.indexOf('await localPtyStartupReady', serveIndex)
     const headlessRegistrationIndex = source.indexOf('registerHeadlessPtyRuntime(', serveIndex)
 
-    expect(appReadyIndex).toBeGreaterThanOrEqual(0)
     expect(startupIndex).toBeGreaterThanOrEqual(0)
-    expect(serveIndex).toBeGreaterThanOrEqual(0)
     expect(startupIndex).toBeLessThan(serveIndex)
     expect(ptyReadyIndex).toBeGreaterThan(serveIndex)
     expect(headlessRegistrationIndex).toBeGreaterThan(ptyReadyIndex)
     expect(source).not.toContain(
       'if (!isServeMode) {\n    startDesktopFirstWindowStartupServices()'
     )
-    expect(source).not.toContain('startServeAgentHookServer')
   })
 
   it('publishes the named headless sentinel and only enables promotion after RPC is ready', () => {

@@ -501,6 +501,59 @@ describe('runner execFile timeout handling', () => {
     })
   })
 
+  it('forwards synthesized network SSH policy into the selected WSL distro', async () => {
+    await withPlatform('win32', async () => {
+      const child = createMockChildProcess(1234)
+      let capturedEnv: NodeJS.ProcessEnv | undefined
+      execFileMock.mockImplementation((_cmd, args, opts, cb) => {
+        const shellCommand = args[5] as string
+        if (shellCommand.includes("'config'")) {
+          cb(Object.assign(new Error('missing'), { code: 1 }), '', '')
+        } else {
+          capturedEnv = opts.env
+          cb(null, '', '')
+        }
+        return child
+      })
+
+      await gitExecFileAsync(['fetch', 'origin'], {
+        cwd: String.raw`C:\repo`,
+        env: {},
+        wslDistro: 'Ubuntu',
+        useConfiguredSshCommandForNetwork: true
+      })
+
+      expect(capturedEnv?.GIT_SSH_COMMAND).toBe('ssh -o BatchMode=yes')
+      expect((capturedEnv?.WSLENV ?? '').split(':')).toContain('GIT_SSH_COMMAND')
+    })
+  })
+
+  it('forwards synthesized network SSH policy when a UNC cwd selects WSL', async () => {
+    await withPlatform('win32', async () => {
+      const child = createMockChildProcess(1234)
+      let capturedEnv: NodeJS.ProcessEnv | undefined
+      execFileMock.mockImplementation((_cmd, args, opts, cb) => {
+        const shellCommand = args[5] as string
+        if (shellCommand.includes("'config'")) {
+          cb(Object.assign(new Error('missing'), { code: 1 }), '', '')
+        } else {
+          capturedEnv = opts.env
+          cb(null, '', '')
+        }
+        return child
+      })
+
+      await gitExecFileAsync(['fetch', 'origin'], {
+        cwd: String.raw`\\wsl.localhost\Ubuntu\home\me\repo`,
+        env: {},
+        useConfiguredSshCommandForNetwork: true
+      })
+
+      expect(capturedEnv?.GIT_SSH_COMMAND).toBe('ssh -o BatchMode=yes')
+      expect((capturedEnv?.WSLENV ?? '').split(':')).toContain('GIT_SSH_COMMAND')
+    })
+  })
+
   it('quotes WSL-routed executables before entering the shell', async () => {
     await withPlatform('win32', async () => {
       const child = createMockChildProcess(1234)

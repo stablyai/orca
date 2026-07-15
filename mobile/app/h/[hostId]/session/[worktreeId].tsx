@@ -56,12 +56,11 @@ import {
   saveTerminalTextScale,
   type MobileTerminalLinkOpenMode
 } from '../../../../src/storage/preferences'
+import { useHostClient, useForceReconnect } from '../../../../src/transport/client-context'
 import {
-  useHostClient,
-  useForceReconnect,
-  useReconnectAttempt,
-  useLastConnectedAt
-} from '../../../../src/transport/client-context'
+  useLastConnectedAt,
+  useReconnectAttempt
+} from '../../../../src/transport/client-context-connection-metrics'
 import {
   classifyConnection,
   verdictDisplayLabel
@@ -1080,7 +1079,6 @@ export default function SessionScreen() {
   // the row) without any window-dim change. Tracking the measured width lets the
   // refit hook re-fit the PTY on those resizes — see terminal-viewport-refit.ts.
   const [terminalFrameWidth, setTerminalFrameWidth] = useState(0)
-
   const activeSessionTab = sessionTabs.find((tab) => tab.id === activeSessionTabId) ?? null
   const {
     clearPendingLiveInputCommit,
@@ -2589,7 +2587,7 @@ export default function SessionScreen() {
   // Why: viewport refits for layout changes outside the subscribe path
   // (tab strip toggling, fold/unfold, rotation) live in a dedicated hook —
   // see terminal-viewport-refit.ts for the full rationale.
-  useTerminalViewportRefit({
+  const { notifyTerminalFrameHeight, notifyKeyboardVisibility } = useTerminalViewportRefit({
     activeHandleRef,
     terminalRefs,
     terminalFrameHeightRef,
@@ -2608,9 +2606,11 @@ export default function SessionScreen() {
 
   useEffect(() => {
     const onShow = (e: KeyboardEvent) => {
+      notifyKeyboardVisibility(true)
       setKeyboardHeight(e.endCoordinates?.height ?? 0)
     }
     const onHide = () => {
+      notifyKeyboardVisibility(false)
       setKeyboardHeight(0)
     }
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
@@ -2621,7 +2621,7 @@ export default function SessionScreen() {
       showSub.remove()
       hideSub.remove()
     }
-  }, [])
+  }, [notifyKeyboardVisibility])
 
   const scrollActiveTabIntoView = useCallback((tabId: string | null, animated: boolean) => {
     if (!tabId) {
@@ -4831,10 +4831,12 @@ export default function SessionScreen() {
                 style={styles.terminalFrame}
                 onLayout={(e) => {
                   terminalFrameHeightRef.current = e.nativeEvent.layout.height
-                  // Trigger a refit only when the width actually changes (sidebar
-                  // resize, fold, rotation) — avoids churn on height-only changes.
+                  // Why: notify height imperatively so dock settling re-fits the
+                  // PTY without rerendering SessionScreen for layout callbacks.
                   const nextWidth = Math.round(e.nativeEvent.layout.width)
+                  const nextHeight = Math.round(e.nativeEvent.layout.height)
                   setTerminalFrameWidth((prev) => (prev === nextWidth ? prev : nextWidth))
+                  notifyTerminalFrameHeight(nextHeight)
                 }}
               >
                 {terminals.map((terminal) => (

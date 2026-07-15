@@ -58,6 +58,7 @@ import { readWindowsConptyProcessIds } from './windows-conpty-process-membership
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from './pty-default-cwd'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
+import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -296,7 +297,13 @@ export type LocalPtyProviderOptions = {
   buildSpawnEnv?: (
     id: string,
     baseEnv: Record<string, string>,
-    ctx?: { command?: string; shellPath?: string; isWsl?: boolean; wslDistro?: string | null }
+    ctx?: {
+      command?: string
+      launchAgent?: PtySpawnOptions['launchAgent']
+      shellPath?: string
+      isWsl?: boolean
+      wslDistro?: string | null
+    }
   ) => Record<string, string>
   /** Whether worktree-scoped shell history is enabled. When true (or absent)
    *  and a worktreeId is provided, HISTFILE is scoped per-worktree. */
@@ -469,8 +476,7 @@ export class LocalPtyProvider implements IPtyProvider {
     validateWorkingDirectory(validationCwd)
 
     const spawnEnv: Record<string, string> = {
-      ...process.env,
-      ...args.env,
+      ...mergeGitConfigEnvProtocol(process.env, args.env),
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor',
       TERM_PROGRAM: 'Orca',
@@ -522,6 +528,7 @@ export class LocalPtyProvider implements IPtyProvider {
     const finalEnv = this.opts.buildSpawnEnv
       ? this.opts.buildSpawnEnv(id, spawnEnv, {
           command: args.command,
+          launchAgent: args.launchAgent,
           shellPath,
           isWsl: isWslShell,
           wslDistro: launchWslDistro

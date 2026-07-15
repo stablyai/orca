@@ -1,6 +1,7 @@
 import type { editor, IRange, ISelection } from 'monaco-editor'
 
 export type MonacoE2ESnapshot = {
+  canUndo: boolean
   contentHeight: number
   scrollHeight: number
   scrollTop: number
@@ -74,6 +75,7 @@ export function installMonacoE2EProbe(
           ? lastLine
           : (model?.getLineContent(lastLineNumber - 1) ?? '')
       return {
+        canUndo: model?.canUndo() ?? false,
         contentHeight: editorInstance.getContentHeight(),
         scrollHeight: editorInstance.getScrollHeight(),
         scrollTop: editorInstance.getScrollTop(),
