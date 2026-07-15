@@ -911,4 +911,106 @@ describe('SshPtyProvider', () => {
     const result = await provider.getDefaultShell()
     expect(result).toBe('/bin/bash')
   })
+
+  describe('event listeners', () => {
+    it('forwards pty.data notifications to data listeners', () => {
+      const handler = vi.fn()
+      provider.onData(handler)
+
+      // Get the notification handler that was registered
+      const notifHandler = mux.onNotification.mock.calls[0][0]
+      notifHandler('pty.data', { id: 'pty-1', data: 'output' })
+
+      expect(handler).toHaveBeenCalledWith({ id: scopedPty1, data: 'output' })
+    })
+
+    it('preserves the provider-issued terminal handle on lifecycle notifications', () => {
+      const dataHandler = vi.fn()
+      const exitHandler = vi.fn()
+      provider.onData(dataHandler)
+      provider.onExit(exitHandler)
+
+      const notifHandler = mux.onNotification.mock.calls[0][0]
+      notifHandler('pty.data', {
+        id: 'pty-grid',
+        data: 'early output',
+        terminalHandle: 'term_grid_target'
+      })
+      notifHandler('pty.exit', {
+        id: 'pty-grid',
+        code: 17,
+        terminalHandle: 'term_grid_target'
+      })
+
+      expect(dataHandler).toHaveBeenCalledWith({
+        id: 'ssh:conn-1@@pty-grid',
+        data: 'early output',
+        terminalHandle: 'term_grid_target'
+      })
+      expect(exitHandler).toHaveBeenCalledWith({
+        id: 'ssh:conn-1@@pty-grid',
+        code: 17,
+        terminalHandle: 'term_grid_target'
+      })
+    })
+
+    it('forwards pty.replay notifications to replay listeners', () => {
+      const handler = vi.fn()
+      provider.onReplay(handler)
+
+      const notifHandler = mux.onNotification.mock.calls[0][0]
+      notifHandler('pty.replay', { id: 'pty-1', data: 'buffered output' })
+
+      expect(handler).toHaveBeenCalledWith({ id: scopedPty1, data: 'buffered output' })
+    })
+
+    it('forwards pty.exit notifications to exit listeners', () => {
+      const handler = vi.fn()
+      provider.onExit(handler)
+
+      const notifHandler = mux.onNotification.mock.calls[0][0]
+      notifHandler('pty.exit', { id: 'pty-1', code: 0 })
+
+      expect(handler).toHaveBeenCalledWith({ id: scopedPty1, code: 0 })
+    })
+
+    it('allows unsubscribing from events', () => {
+      const handler = vi.fn()
+      const unsub = provider.onData(handler)
+      unsub()
+
+      const notifHandler = mux.onNotification.mock.calls[0][0]
+      notifHandler('pty.data', { id: 'pty-1', data: 'output' })
+
+      expect(handler).not.toHaveBeenCalled()
+    })
+
+    it('supports multiple listeners', () => {
+      const handler1 = vi.fn()
+      const handler2 = vi.fn()
+      provider.onData(handler1)
+      provider.onData(handler2)
+
+      const notifHandler = mux.onNotification.mock.calls[0][0]
+      notifHandler('pty.data', { id: 'pty-1', data: 'output' })
+
+      expect(handler1).toHaveBeenCalled()
+      expect(handler2).toHaveBeenCalled()
+    })
+
+    it('namespaces identical relay ids from different SSH connections', () => {
+      const otherMux = createMockMux()
+      const otherProvider = new SshPtyProvider('conn-2', otherMux as never)
+      const firstHandler = vi.fn()
+      const secondHandler = vi.fn()
+      provider.onData(firstHandler)
+      otherProvider.onData(secondHandler)
+
+      mux.onNotification.mock.calls[0][0]('pty.data', { id: 'pty-1', data: 'first' })
+      otherMux.onNotification.mock.calls[0][0]('pty.data', { id: 'pty-1', data: 'second' })
+
+      expect(firstHandler).toHaveBeenCalledWith({ id: scopedPty1, data: 'first' })
+      expect(secondHandler).toHaveBeenCalledWith({ id: 'ssh:conn-2@@pty-1', data: 'second' })
+    })
+  })
 })

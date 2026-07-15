@@ -1717,11 +1717,16 @@ export class SshRelaySession {
     providerGeneration: number
   ): void {
     ptyProvider.onData((payload) => {
-      if (
-        this.mux !== mux ||
-        this.activePtyProviderGeneration !== providerGeneration ||
-        payload.providerGeneration !== providerGeneration
-      ) {
+      const seq = this.runtime?.onPtyData(
+        payload.id,
+        payload.data,
+        Date.now(),
+        payload.data.length,
+        payload.terminalHandle
+      )
+      const rendererData = answerStartupTerminalColorQueriesForPty(payload.id, payload.data)
+      const win = this.getMainWindow()
+      if (!win || win.isDestroyed()) {
         return
       }
       const pending = this.pendingPtyReattaches.get(payload.id)
@@ -1763,12 +1768,15 @@ export class SshRelaySession {
       }
     })
     ptyProvider.onExit((payload) => {
-      if (
-        this.mux !== mux ||
-        this.activePtyProviderGeneration !== providerGeneration ||
-        payload.providerGeneration !== providerGeneration
-      ) {
-        return
+      const relayPtyId = toRelaySshPtyId(this.targetId, payload.id)
+      clearProviderPtyState(payload.id)
+      deletePtyOwnership(payload.id)
+      this.forwardedReattachReplayByPty.delete(payload.id)
+      this.store.markSshRemotePtyLease(this.targetId, relayPtyId, 'terminated')
+      this.runtime?.onPtyExit(payload.id, payload.code, payload.terminalHandle)
+      const win = this.getMainWindow()
+      if (win && !win.isDestroyed()) {
+        win.webContents.send('pty:exit', payload)
       }
       const pendingReattach = this.pendingPtyReattaches.get(payload.id)
       if (pendingReattach && !pendingReattach.activated) {

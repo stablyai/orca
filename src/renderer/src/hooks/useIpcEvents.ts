@@ -1764,6 +1764,11 @@ export function useIpcEvents(): void {
                       }
                     : undefined
                 )
+                if (!hasTerminalSurfaceActionConsumer(tab.id)) {
+                  // Why: restored inactive tabs do not mount from this PTY event alone,
+                  // so the bounded queue needs the same hidden mount as renderer creates.
+                  requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
+                }
                 return
               } else {
                 if (launchConfig) {

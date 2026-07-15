@@ -727,12 +727,11 @@ export class PtyHandler {
       this.pausedOutputPtys.delete(managed.id)
       this.consumerPausedOutputPtys.delete(managed.id)
       this.flushPtyOutput(managed.id)
-      this.pendingExitByPty.set(managed.id, {
+      this.dispatcher.notify('pty.exit', {
         id: managed.id,
         code: exitCode,
-        incarnationId: managed.incarnationId
+        ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {})
       })
-      this.publishPendingExit(managed.id)
       this.notifyExitListener(managed)
       this.agentSessionOwners.release(managed.id)
       this.removePty(managed.id)
@@ -742,15 +741,9 @@ export class PtyHandler {
     })
   }
 
-  private releaseRelayIngress(managed: ManagedPty): void {
-    const startupCommand = managed.startupCommand
-    const scanState = startupCommand?.scanState
-    if (scanState) {
-      const held = drainShellReadyHeldBytes(scanState)
-      startupCommand.scanState = null
-      managed.startupIngress?.accept(held)
-    }
-    managed.startupIngress?.drainAndClose()
+  private getPtyNotificationIdentity(id: string): { terminalHandle?: string } {
+    const terminalHandle = this.ptys.get(id)?.terminalHandle
+    return terminalHandle ? { terminalHandle } : {}
   }
 
   private notifyExitListener(managed: ManagedPty): void {
@@ -841,25 +834,19 @@ export class PtyHandler {
     return true
   }
 
-  private enqueuePtyOutput(
-    id: string,
-    data: string,
-    meta: { rawLength?: number; transformed?: boolean; seq?: number } = {}
-  ): void {
-    const queue = this.pendingOutputByPty.get(id) ?? []
-    if (this.sourcePublication?.accepts(id)) {
-      queue.push({ data, ...meta })
-      this.pendingOutputByPty.set(id, queue)
-      if (queue.length === 1 && this.shouldSendInteractiveOutputNow(id, data)) {
-        queue[0].interactive = true
-        if (this.flushPtyOutput(id)) {
-          return
-        }
-      }
-      if (this.pendingProducerBytes(id) >= PTY_OUTPUT_PRODUCER_HIGH_BYTES) {
-        this.pausePtyOutput(id)
-      }
-      this.scheduleOutputFlush(PTY_OUTPUT_BATCH_INTERVAL_MS)
+  private enqueuePtyOutput(id: string, data: string): void {
+    const existing = this.pendingOutputByPty.get(id)
+    const pending = { data: (existing?.data ?? '') + data }
+    if (this.shouldSendInteractiveOutputNow(id, pending.data)) {
+      this.pendingOutputByPty.delete(id)
+      this.clearOutputFlushTimerIfIdle()
+      // Why: remote agent TUIs redraw around each keystroke. Background relay
+      // batching should reduce SSH chatter, not add visible input echo delay.
+      this.dispatcher.notify('pty.data', {
+        id,
+        data: pending.data,
+        ...this.getPtyNotificationIdentity(id)
+      })
       return
     }
     const existing = queue.at(-1)
@@ -932,6 +919,12 @@ export class PtyHandler {
       if (this.flushPtyOutput(id, queue)) {
         writes++
       }
+      this.dispatcher.notify('pty.data', {
+        id,
+        data: chunk,
+        ...this.getPtyNotificationIdentity(id)
+      })
+      writes++
     }
     if (this.pendingOutputByPty.size > 0 && writes > 0) {
       // Why: yield between slices of a large chunk so client input and control frames can interleave.
@@ -946,88 +939,12 @@ export class PtyHandler {
       this.publishPendingExit(id)
       return true
     }
-    const desiredChars = pending.transformed
-      ? pending.data.length
-      : Math.min(pending.data.length, PTY_OUTPUT_FLUSH_CHUNK_CHARS)
-    const sourceOnlyEmission =
-      pending.transformed === true && pending.data.length === 0 && (pending.rawLength ?? 0) > 0
-    const paramsWithoutData = {
+    this.pendingOutputByPty.delete(id)
+    this.dispatcher.notify('pty.data', {
       id,
-      ...(pending.seq === undefined ? {} : { seq: pending.seq }),
-      ...(pending.rawLength === undefined ? {} : { rawLength: pending.rawLength }),
-      ...(pending.transformed ? { transformed: true } : {})
-    }
-    // Why: a failed publish may already have reserved this exact span (source-ledger append,
-    // partial legacy fan-out), so a retry must resend it verbatim and slice the remainder at
-    // the memo boundary — capacity and coalesced data can both have changed since. The capacity
-    // search is skipped on retry: its result is discarded, and publish re-checks capacity.
-    let chunkChars =
-      pending.transformed || pending.sourceChunk
-        ? desiredChars
-        : (this.dispatcher.maxLegacyPtyDataChars?.(paramsWithoutData, pending.data, desiredChars) ??
-          desiredChars)
-    if (
-      chunkChars > 0 &&
-      chunkChars < pending.data.length &&
-      pending.data.charCodeAt(chunkChars - 1) >= 0xd800 &&
-      pending.data.charCodeAt(chunkChars - 1) <= 0xdbff
-    ) {
-      chunkChars--
-    }
-    if (
-      (!sourceOnlyEmission && chunkChars <= 0) ||
-      (pending.transformed && chunkChars !== pending.data.length)
-    ) {
-      this.pendingOutputByPty.set(id, queue)
-      this.pausePtyOutput(id)
-      return false
-    }
-    const chunk = pending.sourceChunk?.data ?? pending.data.slice(0, chunkChars)
-    const remaining = pending.data.slice(chunk.length)
-    const chunkRawLength = pending.transformed
-      ? pending.rawLength
-      : pending.rawLength === undefined
-        ? undefined
-        : chunk.length
-    const chunkSeq =
-      pending.seq === undefined ? undefined : pending.seq - (pending.data.length - chunk.length)
-    const sourceChunk =
-      pending.sourceChunk ??
-      ({
-        data: chunk,
-        ...(chunkSeq === undefined ? {} : { seq: chunkSeq }),
-        ...(chunkRawLength === undefined ? {} : { rawLength: chunkRawLength }),
-        ...(pending.transformed ? { transformed: true } : {})
-      } satisfies RelayPtySourceOutput)
-    pending.sourceChunk = sourceChunk
-    const published = this.publishPtyOutput(id, sourceChunk, pending.interactive === true)
-    if (!published) {
-      this.pendingOutputByPty.set(id, queue)
-      this.pausePtyOutput(id)
-      return false
-    }
-    // rawLength fallback is defensive only: transformed memos always carry rawLength (ingress meta).
-    const publishedRawLength = sourceChunk.rawLength ?? sourceChunk.data.length
-    const remainingRawLength = pending.transformed
-      ? (pending.rawLength ?? 0) - publishedRawLength
-      : remaining.length
-    if (remaining || (pending.transformed && remainingRawLength > 0)) {
-      queue[0] = {
-        data: remaining,
-        ...(pending.transformed ? { transformed: true } : {}),
-        ...(pending.rawLength === undefined ? {} : { rawLength: remainingRawLength }),
-        seq: pending.seq
-      }
-    } else {
-      queue.shift()
-    }
-    if (queue.length === 0) {
-      this.pendingOutputByPty.delete(id)
-      this.publishPendingExit(id)
-    } else {
-      this.pendingOutputByPty.set(id, queue)
-    }
-    this.maybeResumePtyOutput(id)
+      data: pending.data,
+      ...this.getPtyNotificationIdentity(id)
+    })
     this.clearOutputFlushTimerIfIdle()
     return true
   }
@@ -1734,7 +1651,43 @@ export class PtyHandler {
       await this.waitForPhysicalExit(managed, IMMEDIATE_PTY_EXIT_TIMEOUT_MS)
     } else {
       this.releaseStartupCommand(managed)
-      this.requestGracefulKill(managed, 'force-kill')
+      killPtyProcess(managed.pty, 'SIGTERM')
+
+      // Why: Some processes ignore SIGTERM (e.g. a hung child, a custom signal
+      // handler). Without a SIGKILL fallback the PTY process would leak and the
+      // managed entry would never be cleaned up. The 5-second window gives
+      // well-behaved processes time to flush and exit gracefully. The timer is
+      // cleared in the onExit handler if the process terminates on its own.
+      // Do NOT call disposeManagedPty here: destroy()-right-after-SIGTERM
+      // collapses the graceful-shutdown window and risks interrupting shell
+      // EXIT traps. Fd release happens via onExit (natural exit) or via the
+      // killTimer → SIGKILL → disposeManagedPty chain below.
+      managed.killTimer = setTimeout(() => {
+        const still = this.ptys.get(id)
+        if (still && !still.disposed) {
+          killPtyProcess(still.pty, 'SIGKILL')
+          this.flushPtyOutput(id)
+          // Why: emit pty.exit BEFORE disposeManagedPty sets disposed=true.
+          // The natural onExit short-circuits on `managed.disposed`, so
+          // without this notify the renderer never learns the pane is dead
+          // when the SIGKILL fallback fires for a SIGTERM-ignoring child.
+          this.dispatcher.notify('pty.exit', {
+            id,
+            code: -1,
+            ...(still.terminalHandle ? { terminalHandle: still.terminalHandle } : {})
+          })
+          // Why: if SIGKILL's onExit never fires (kernel edge case,
+          // uninterruptible sleep, child wedged on a bad NFS mount), the
+          // fd and map entry would leak forever. Dispose synchronously so
+          // graceful-shutdown's SIGKILL fallback is a hard guarantee, not
+          // "hopefully onExit will run". The disposed guard inside
+          // disposeManagedPty makes a later onExit's dispose a no-op.
+          this.notifyExitListener(still)
+          disposeManagedPty(still)
+          this.ptys.delete(id)
+          this.clearPtyFlowState(id)
+        }
+      }, 5000)
     }
   }
 

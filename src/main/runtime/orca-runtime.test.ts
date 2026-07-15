@@ -15168,9 +15168,9 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store)
     const transaction = runtime.beginStagedPtyRuntimeRegistration()
 
+    transaction.claim('pty-staged-events')
     runtime.onPtySpawned('pty-staged-events')
     expect(runtime.onPtyData('pty-staged-events', 'hello', 1)).toBe(0)
-    transaction.claim('pty-staged-events')
     runtime.registerPreAllocatedHandleForPty('pty-staged-events', 'term_staged_events')
     runtime.registerPty('pty-staged-events', TEST_WORKTREE_ID)
     runtime.noteTerminalSpawnCommand('pty-staged-events', 'codex')
@@ -15193,6 +15193,60 @@ describe('OrcaRuntimeService', () => {
     transaction.abort(false)
     expect(runtime['ptysById'].has('pty-staged-events')).toBe(false)
     expect(runtime['handleByPtyId'].has('pty-staged-events')).toBe(false)
+  })
+
+  it.each(['pty-unrelated-local', 'ssh:ssh-unrelated@@relay-pty'])(
+    'does not capture unrelated PTY events while a renderer-grid spawn is unclaimed (%s)',
+    (unrelatedPtyId) => {
+      const runtime = new OrcaRuntimeService(store)
+      const transaction = runtime.beginStagedPtyRuntimeRegistration()
+
+      runtime.onPtySpawned(unrelatedPtyId)
+      runtime.registerPty(unrelatedPtyId, TEST_WORKTREE_ID)
+      expect(runtime.onPtyData(unrelatedPtyId, 'ordinary output', 1)).toBe(15)
+      expect(runtime['ptyOutputSequenceById'].get(unrelatedPtyId)).toBe(15)
+      expect(runtime['ptysById'].get(unrelatedPtyId)).toMatchObject({
+        worktreeId: TEST_WORKTREE_ID,
+        connected: true
+      })
+
+      runtime.onPtyExit(unrelatedPtyId, 0)
+      expect(runtime['ptysById'].get(unrelatedPtyId)).toMatchObject({
+        connected: false,
+        lastExitCode: 0
+      })
+
+      transaction.abort()
+      expect(runtime['ptysById'].get(unrelatedPtyId)).toMatchObject({
+        connected: false,
+        lastExitCode: 0
+      })
+    }
+  )
+
+  it('isolates an unclaimed SSH grid registration by exact provider spawn correlation', () => {
+    const runtime = new OrcaRuntimeService(store)
+    const transaction = runtime.beginStagedPtyRuntimeRegistration({
+      correlationId: 'term_grid_target'
+    })
+
+    runtime.registerPty('ssh:ssh-grid-target@@ordinary', TEST_WORKTREE_ID)
+    expect(
+      runtime.onPtyData('ssh:ssh-grid-target@@ordinary', 'ordinary', 1, 8, 'term_ordinary')
+    ).toBe(8)
+
+    expect(
+      runtime.onPtyData('ssh:ssh-grid-target@@staged', 'staged', 1, 6, 'term_grid_target')
+    ).toBe(0)
+    runtime.registerPty('ssh:ssh-grid-target@@staged', TEST_WORKTREE_ID)
+    expect(runtime['ptysById'].has('ssh:ssh-grid-target@@staged')).toBe(false)
+
+    transaction.claim('ssh:ssh-grid-target@@staged')
+    transaction.commit()
+
+    expect(runtime['ptyOutputSequenceById'].get('ssh:ssh-grid-target@@ordinary')).toBe(8)
+    expect(runtime['ptyOutputSequenceById'].get('ssh:ssh-grid-target@@staged')).toBe(6)
+    expect(runtime['ptysById'].has('ssh:ssh-grid-target@@staged')).toBe(true)
   })
 
   it.each([

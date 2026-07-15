@@ -24,9 +24,15 @@ import { SshAgentSessionCapabilities } from './ssh-agent-session-capabilities'
 import type { PtyProcessInspection } from './pty-process-inspection'
 import { SSH_SESSION_EXPIRED_ERROR } from './ssh-pty-errors'
 
-// Why: sequential relay teardown calls share one absolute budget; convert to the mux-relative timeout only at dispatch.
-function relayTimeoutOptions(deadlineMs: number | undefined): { timeoutMs: number } | undefined {
-  return deadlineMs === undefined ? undefined : { timeoutMs: Math.max(1, deadlineMs - Date.now()) }
+type DataCallback = (payload: { id: string; data: string; terminalHandle?: string }) => void
+type ReplayCallback = (payload: { id: string; data: string }) => void
+type ExitCallback = (payload: { id: string; code: number; terminalHandle?: string }) => void
+type RemoteCliBridgeEnv = {
+  binDir: string
+  relayDir: string
+  nodePath: string
+  sockPath: string
+  pathDelimiter?: ':' | ';'
 }
 
 /** Remote PTY provider that proxies IPtyProvider operations through the relay. */
@@ -50,12 +56,38 @@ export class SshPtyProvider implements IPtyProvider {
     this.agentSessionCapabilities = new SshAgentSessionCapabilities(mux)
     this.getAppliedSize = createSshPtyAppliedSizeReader(mux, connectionId)
 
-    this.outputState = new SshPtyProviderOutputState(providerGeneration, {
-      mux,
-      toAppPtyId: (id) => this.toAppPtyId(id),
-      livePtyIds: this.livePtyIds,
-      recordExit: (relayPtyId, incarnationId) => {
-        this.spawnExitRaces.recordExit(relayPtyId, incarnationId)
+    // Subscribe to relay notifications for PTY events
+    this.unsubscribeNotifications = mux.onNotification((method, params) => {
+      switch (method) {
+        case 'pty.data':
+          for (const cb of this.dataListeners) {
+            cb({
+              id: this.toAppPtyId(params.id as string),
+              data: params.data as string,
+              ...(typeof params.terminalHandle === 'string'
+                ? { terminalHandle: params.terminalHandle }
+                : {})
+            })
+          }
+          break
+
+        case 'pty.replay':
+          for (const cb of this.replayListeners) {
+            cb({ id: this.toAppPtyId(params.id as string), data: params.data as string })
+          }
+          break
+
+        case 'pty.exit':
+          for (const cb of this.exitListeners) {
+            cb({
+              id: this.toAppPtyId(params.id as string),
+              code: params.code as number,
+              ...(typeof params.terminalHandle === 'string'
+                ? { terminalHandle: params.terminalHandle }
+                : {})
+            })
+          }
+          break
       }
     })
   }

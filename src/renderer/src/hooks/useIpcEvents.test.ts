@@ -3753,8 +3753,11 @@ describe('useIpcEvents updater integration', () => {
         [delayedGridLeafId]: 'Worker C'
       }
     })
-    expect(dispatchEvent).toHaveBeenCalledOnce()
-    expect(dispatchEvent).toHaveBeenCalledWith(
+    const splitEventsAfterDelayedMount = dispatchEvent.mock.calls.filter(
+      ([event]) => event.type === 'orca-split-terminal-pane'
+    )
+    expect(splitEventsAfterDelayedMount).toHaveLength(1)
+    expect(splitEventsAfterDelayedMount[0]?.[0]).toEqual(
       expect.objectContaining({
         type: 'orca-split-terminal-pane',
         detail: expect.objectContaining({
@@ -3900,7 +3903,15 @@ describe('useIpcEvents updater integration', () => {
     expect(setTabLayout).not.toHaveBeenCalled()
     expect(queueTabStartupCommand).not.toHaveBeenCalled()
     expect(registerAgentLaunchConfig).not.toHaveBeenCalled()
-    expect(dispatchEvent).not.toHaveBeenCalled()
+    expect(
+      dispatchEvent.mock.calls.filter(([event]) => event.type === 'orca-split-terminal-pane')
+    ).toHaveLength(0)
+    expect(dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'orca-background-mount-terminal-worktree',
+        detail: { worktreeId: 'wt-2', tabIds: ['tab-existing'] }
+      })
+    )
     expectNoSplitSurfacing()
     expect(replyTerminalCreate).toHaveBeenCalledOnce()
     expect(replyTerminalCreate).toHaveBeenCalledWith({
@@ -3967,7 +3978,15 @@ describe('useIpcEvents updater integration', () => {
       expect(setTabLayout).not.toHaveBeenCalled()
       expect(queueTabStartupCommand).not.toHaveBeenCalled()
       expect(registerAgentLaunchConfig).not.toHaveBeenCalled()
-      expect(dispatchEvent).not.toHaveBeenCalled()
+      expect(
+        dispatchEvent.mock.calls.filter(([event]) => event.type === 'orca-split-terminal-pane')
+      ).toHaveLength(0)
+      expect(dispatchEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'orca-background-mount-terminal-worktree',
+          detail: { worktreeId: 'wt-2', tabIds: ['tab-existing'] }
+        })
+      )
       expectNoSplitSurfacing()
       expect(replyTerminalCreate).toHaveBeenCalledOnce()
       expect(replyTerminalCreate).toHaveBeenCalledWith({
@@ -7495,6 +7514,45 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
     afterEach(() => {
       vi.useRealTimers()
+    })
+
+    it('mounts a cold inactive grid before consuming a PTY-backed append', async () => {
+      vi.useFakeTimers()
+      const harness = await setupGridLifecycleHarness()
+
+      harness.createTerminal({
+        requestId: 'pty-cold-background-append',
+        worktreeId: GRID_WORKTREE_ID,
+        command: 'codex --background-worker',
+        launchConfig: { agentArgs: '--background-worker', agentEnv: {} },
+        launchAgent: 'codex',
+        title: 'Background worker',
+        ptyId: 'pty-grid-background',
+        presentation: 'background',
+        tabId: GRID_TAB_ID,
+        leafId: GRID_LEAF_C,
+        splitFromLeafId: GRID_LEAF_B,
+        splitSourceLeafIds: [GRID_LEAF_A, GRID_LEAF_B],
+        splitDirection: 'vertical',
+        placement: 'orchestration-grid'
+      })
+
+      const mountEvents = harness.dispatchEvent.mock.calls
+        .map(([event]) => event as CustomEvent)
+        .filter((event) => event.type === 'orca-background-mount-terminal-worktree')
+      harness.dispose()
+      vi.runAllTimers()
+
+      expect(mountEvents).toHaveLength(1)
+      expect(mountEvents[0]?.detail).toEqual({
+        worktreeId: GRID_WORKTREE_ID,
+        tabIds: [GRID_TAB_ID]
+      })
+      expect(harness.replyTerminalCreate).toHaveBeenCalledWith({
+        requestId: 'pty-cold-background-append',
+        error: 'Terminal creation was cancelled while the renderer was shutting down'
+      })
+      expect(vi.getTimerCount()).toBe(0)
     })
 
     it('consumes two queued PTY-backed appends from the freshest grid state', async () => {

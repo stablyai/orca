@@ -1317,6 +1317,10 @@ describe('PtyHandler', () => {
   it('consumes capable startup queries before relay replay and fanout', async () => {
     let dataCallback: ((data: string) => void) | undefined
     const term = {
+  it('correlates early PTY lifecycle notifications with the trusted terminal handle', async () => {
+    let dataCallback: ((data: string) => void) | undefined
+    let exitCallback: ((info: { exitCode: number }) => void) | undefined
+    mockPtySpawn.mockReturnValue({
       ...mockPtyInstance,
       onData: vi.fn((cb: (data: string) => void) => {
         dataCallback = cb
@@ -1651,6 +1655,28 @@ describe('PtyHandler', () => {
     }
   })
 
+      onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
+        exitCallback = cb
+      })
+    })
+
+    await dispatcher.callRequest('pty.spawn', {
+      env: { ORCA_TERMINAL_HANDLE: 'term_grid_target' }
+    })
+    dataCallback!('early output')
+    exitCallback!({ exitCode: 17 })
+
+    expect(dispatcher.notify).toHaveBeenNthCalledWith(1, 'pty.data', {
+      id: 'pty-1',
+      data: 'early output',
+      terminalHandle: 'term_grid_target'
+    })
+    expect(dispatcher.notify).toHaveBeenNthCalledWith(2, 'pty.exit', {
+      id: 'pty-1',
+      code: 17,
+      terminalHandle: 'term_grid_target'
+    })
+  })
   it('coalesces background PTY output before notifying the client', async () => {
     let dataCallback: ((data: string) => void) | undefined
     mockPtySpawn.mockReturnValue({
