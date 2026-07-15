@@ -134,6 +134,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
         worktreePath,
         connectionId,
         pushTarget: activePushTarget,
+        freshness: 'passive',
         deps: {
           setGitStatus,
           updateWorktreeGitIdentity,

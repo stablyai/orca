@@ -1357,6 +1357,7 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
         worktreePath: worktree.path,
         connectionId:
           currentState.repos.find((repo) => repo.id === worktree.repoId)?.connectionId ?? undefined,
+        freshness: 'passive',
         deps: {
           setGitStatus,
           updateWorktreeGitIdentity,

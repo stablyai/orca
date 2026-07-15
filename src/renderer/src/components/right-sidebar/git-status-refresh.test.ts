@@ -155,6 +155,80 @@ describe('refreshGitStatusForWorktree', () => {
     expect(deps.setGitStatus).toHaveBeenCalledWith('wt-3', status)
   })
 
+  it('coalesces repeated passive refreshes for one worktree into one git status request', async () => {
+    const status: GitStatusResult = {
+      entries: [{ path: 'src/index.ts', status: 'modified', area: 'unstaged' }],
+      conflictOperation: 'unknown',
+      head: 'abc123',
+      branch: 'refs/heads/main',
+      upstreamStatus: { hasUpstream: true, upstreamName: 'origin/main', ahead: 0, behind: 0 }
+    }
+    const statusRefresh = deferred<GitStatusResult>()
+    const gitStatus = vi.fn().mockReturnValue(statusRefresh.promise)
+    vi.stubGlobal('window', { api: { git: { status: gitStatus } } })
+    const deps = makeDeps()
+
+    const refreshes = Array.from({ length: 100 }, () =>
+      refreshGitStatusForWorktree({
+        worktreeId: 'wt-passive',
+        worktreePath: '/repo',
+        freshness: 'passive',
+        deps
+      })
+    )
+    await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(1))
+
+    statusRefresh.resolve(status)
+    await Promise.all(refreshes)
+
+    expect(gitStatus).toHaveBeenCalledTimes(1)
+    expect(deps.setGitStatus).toHaveBeenCalledTimes(100)
+  })
+
+  it('runs a fresh refresh instead of joining an older passive refresh', async () => {
+    const stalePassiveStatus = {
+      entries: [{ path: 'old.ts', status: 'modified', area: 'unstaged' }],
+      conflictOperation: 'unknown',
+      head: 'old',
+      branch: 'refs/heads/main',
+      upstreamStatus: { hasUpstream: true, upstreamName: 'origin/main', ahead: 0, behind: 0 }
+    } satisfies GitStatusResult
+    const freshStatus = {
+      entries: [{ path: 'new.ts', status: 'modified', area: 'unstaged' }],
+      conflictOperation: 'unknown',
+      head: 'new',
+      branch: 'refs/heads/main',
+      upstreamStatus: { hasUpstream: true, upstreamName: 'origin/main', ahead: 1, behind: 0 }
+    } satisfies GitStatusResult
+    const passiveStatus = deferred<GitStatusResult>()
+    const gitStatus = vi
+      .fn()
+      .mockReturnValueOnce(passiveStatus.promise)
+      .mockResolvedValueOnce(freshStatus)
+    vi.stubGlobal('window', { api: { git: { status: gitStatus } } })
+    const deps = makeDeps()
+
+    const passive = refreshGitStatusForWorktree({
+      worktreeId: 'wt-fresh',
+      worktreePath: '/repo',
+      freshness: 'passive',
+      deps
+    })
+    await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(1))
+
+    await refreshGitStatusForWorktree({
+      worktreeId: 'wt-fresh',
+      worktreePath: '/repo',
+      deps
+    })
+    passiveStatus.resolve(stalePassiveStatus)
+    await passive
+
+    expect(gitStatus).toHaveBeenCalledTimes(2)
+    expect(deps.setGitStatus).toHaveBeenCalledTimes(1)
+    expect(deps.setGitStatus).toHaveBeenCalledWith('wt-fresh', freshStatus)
+  })
+
   it('bypasses automatic no-upstream backoff only for strict refreshes', async () => {
     const status: GitStatusResult = {
       entries: [],
