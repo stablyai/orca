@@ -138,6 +138,9 @@ export type RuntimeMobileSessionTerminalTab = {
   type: 'terminal'
   id: string
   title: string
+  /** User-selected label. Kept separate so live OSC/pane titles can still
+   *  drive agent status without replacing the label shown on paired clients. */
+  customTitle?: string | null
   quickCommandLabel?: string | null
   parentTabId: string
   leafId: string

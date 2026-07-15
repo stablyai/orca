@@ -16045,6 +16045,64 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('publishes a desktop custom title over a live pane title to mobile clients', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'RENAMED_TITLE_8705',
+          activeLeafId: leafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId,
+          paneRuntimeId: 1,
+          ptyId: null,
+          paneTitle: 'LIVE_TITLE_8705',
+          title: 'RENAMED_TITLE_8705'
+        }
+      ],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'renderer-rename',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: `tab-1::${leafId}`,
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: `tab-1::${leafId}`,
+              parentTabId: 'tab-1',
+              leafId,
+              title: 'RENAMED_TITLE_8705',
+              customTitle: 'RENAMED_TITLE_8705',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(result.tabs[0]).toEqual(
+      expect.objectContaining({
+        type: 'terminal',
+        title: 'RENAMED_TITLE_8705'
+      })
+    )
+  })
+
   it('suppresses saved mobile agent status when live evidence is the Claude agents screen', async () => {
     const runtime = new OrcaRuntimeService(store)
     const leafId = '11111111-1111-4111-8111-111111111111'

@@ -3942,6 +3942,7 @@ export class OrcaRuntimeService {
             parentTabId: tab.id,
             leafId,
             title,
+            customTitle: tab.customTitle,
             ...(ptyId ? { ptyId } : {}),
             ...(tab.startupCwd ? { startupCwd: tab.startupCwd } : {}),
             ...(tab.launchAgent ? { launchAgent: tab.launchAgent } : {}),
@@ -21212,8 +21213,11 @@ export class OrcaRuntimeService {
         : null
       const launchAgent = tab.launchAgent ?? liveLeafPty?.launchAgent ?? pty?.launchAgent ?? null
       const ownerAgent = launchAgent ?? liveLeafPty?.foregroundAgent ?? pty?.foregroundAgent ?? null
+      // Why: live pane/OSC titles remain status evidence, but a user rename is
+      // the display authority and must survive publication to paired clients.
+      const customTitle = tab.customTitle?.trim() || null
       const title = normalizeCompatibleAgentTitleForOwner(
-        leafTitle ?? ptyTitle ?? syncedTab?.title ?? tab.title,
+        customTitle ?? leafTitle ?? ptyTitle ?? syncedTab?.title ?? tab.title,
         ownerAgent
       )
       const liveTitleEvidence = leafTitle ?? ptyTitle
