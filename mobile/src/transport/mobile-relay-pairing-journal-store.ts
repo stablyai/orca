@@ -27,9 +27,15 @@ export async function saveMobileRelayPairingJournal(
   const mutation = journalMutation.then(async () => {
     const existingRaw = await AsyncStorage.getItem(JOURNAL_STORAGE_KEY)
     const existing = existingRaw ? parseMetadata(existingRaw) : null
-    if (existing && existing.journalId !== metadata.journalId) {
+    if (
+      existing &&
+      existing.journalId !== metadata.journalId &&
+      (existing.winner !== undefined || existing.authorizationMode !== undefined)
+    ) {
       throw new Error('mobile relay pairing recovery pending')
     }
+    // Why: no install RPC can run before winner+authorization are durable, so
+    // a new user-initiated scan may safely supersede a pre-authorization attempt.
     // Why: metadata-first makes a crash before the keychain write recover as
     // an incomplete journal, never as an untracked bearer secret.
     await AsyncStorage.setItem(JOURNAL_STORAGE_KEY, JSON.stringify(metadata))
@@ -41,28 +47,36 @@ export async function saveMobileRelayPairingJournal(
 
 export async function loadMobileRelayPairingJournal(): Promise<MobileRelayPairingJournal | null> {
   requireNativeSecretStore()
-  await journalMutation
-  const rawMetadata = await AsyncStorage.getItem(JOURNAL_STORAGE_KEY)
-  if (rawMetadata === null) {
-    await SecureStore.deleteItemAsync(JOURNAL_SECRET_KEY, KEYCHAIN_OPTIONS).catch(() => {})
-    return null
-  }
-  const metadata = parseMetadata(rawMetadata)
-  if (!metadata) {
-    await removeIncompleteJournal()
-    return null
-  }
-  const rawSecrets = await SecureStore.getItemAsync(JOURNAL_SECRET_KEY, KEYCHAIN_OPTIONS)
-  if (rawSecrets === null) {
-    await AsyncStorage.removeItem(JOURNAL_STORAGE_KEY)
-    return null
-  }
-  const secrets = parseSecrets(rawSecrets)
-  if (!secrets || secrets.journalId !== metadata.journalId) {
-    await removeIncompleteJournal()
-    return null
-  }
-  return { metadata, secrets }
+  const load = journalMutation.then(async () => {
+    const rawMetadata = await AsyncStorage.getItem(JOURNAL_STORAGE_KEY)
+    if (rawMetadata === null) {
+      await SecureStore.deleteItemAsync(JOURNAL_SECRET_KEY, KEYCHAIN_OPTIONS).catch(() => {})
+      return null
+    }
+    const metadata = parseMetadata(rawMetadata)
+    if (!metadata) {
+      await removeIncompleteJournal()
+      return null
+    }
+    const rawSecrets = await SecureStore.getItemAsync(JOURNAL_SECRET_KEY, KEYCHAIN_OPTIONS)
+    if (rawSecrets === null) {
+      await AsyncStorage.removeItem(JOURNAL_STORAGE_KEY)
+      return null
+    }
+    const secrets = parseSecrets(rawSecrets)
+    if (!secrets || secrets.journalId !== metadata.journalId) {
+      await removeIncompleteJournal()
+      return null
+    }
+    return { metadata, secrets }
+  })
+  // Why: recovery may load while a new scan saves; serialize the complete
+  // metadata/secret snapshot and any cleanup so it cannot delete the new journal.
+  journalMutation = load.then(
+    () => undefined,
+    () => undefined
+  )
+  return load
 }
 
 async function removeIncompleteJournal(): Promise<void> {
