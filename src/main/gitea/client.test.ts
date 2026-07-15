@@ -14,7 +14,11 @@ import {
   normalizeGiteaApiBaseUrl
 } from './client'
 import { _resetGiteaRepoRefCache } from './repository-ref'
-import { _resetGiteaPullRequestScanCache } from './pull-request-scan-cache'
+import {
+  _getGiteaPullRequestScanCacheSize,
+  _resetGiteaPullRequestScanCache,
+  scanGiteaPullRequests
+} from './pull-request-scan-cache'
 
 const OLD_ENV = process.env
 
@@ -135,6 +139,68 @@ describe('Gitea client', () => {
     await getGiteaPullRequestForBranch('/repo', 'no-pr-branch')
 
     expect(listCalls).toBe(1)
+  })
+
+  it('retries a failed /pulls scan after only the short failure cooldown', async () => {
+    vi.useFakeTimers()
+    try {
+      let listCalls = 0
+      const fetchMock = vi.fn(async (url: string) => {
+        const parsed = new URL(url)
+        if (parsed.pathname.endsWith('/status')) {
+          return Response.json({ state: 'success' })
+        }
+        listCalls++
+        return listCalls === 1
+          ? Response.json({ message: 'temporary failure' }, { status: 503 })
+          : Response.json([giteaPr()])
+      })
+      vi.stubGlobal('fetch', fetchMock)
+
+      await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toBeNull()
+      await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toBeNull()
+      expect(listCalls).toBe(1)
+
+      await vi.advanceTimersByTimeAsync(3_001)
+      await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toMatchObject({
+        number: 7
+      })
+      expect(listCalls).toBe(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('expires successful scans and bounds retained repository listings', async () => {
+    vi.useFakeTimers()
+    try {
+      let listCalls = 0
+      const fetchMock = vi.fn(async (url: string) => {
+        const parsed = new URL(url)
+        if (parsed.pathname.endsWith('/status')) {
+          return Response.json({ state: 'success' })
+        }
+        listCalls++
+        return Response.json([giteaPr()])
+      })
+      vi.stubGlobal('fetch', fetchMock)
+
+      await getGiteaPullRequestForBranch('/repo', 'feature/gitea')
+      expect(_getGiteaPullRequestScanCacheSize()).toBe(1)
+      await vi.advanceTimersByTimeAsync(30_001)
+      expect(_getGiteaPullRequestScanCacheSize()).toBe(0)
+      await getGiteaPullRequestForBranch('/repo', 'feature/gitea')
+      expect(listCalls).toBe(2)
+
+      await Promise.all(
+        Array.from({ length: 40 }, (_, index) =>
+          scanGiteaPullRequests(`repo-${index}`, async () => [], 50, 5)
+        )
+      )
+      expect(_getGiteaPullRequestScanCacheSize()).toBe(32)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('does not let an in-flight scan re-cache results from before an invalidation', async () => {
