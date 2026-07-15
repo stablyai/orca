@@ -18,16 +18,23 @@ import {
 } from '../../../../shared/native-chat-types'
 import { compareMessages } from './native-chat-session-assembler'
 
-/** A tool-call block paired with the result that answered it, when one exists.
- *  `result` is null while the call is still in flight (no result yet). */
-export type NativeChatToolStep = {
-  call: NativeChatToolCallBlock
-  result: NativeChatToolResultBlock | null
-}
+/** One tool lifecycle row. Calls retain an optional result; a result-only row
+ *  preserves output that cannot be correlated to a call. */
+export type NativeChatToolStep =
+  | {
+      operationKey: string
+      call: NativeChatToolCallBlock
+      result: NativeChatToolResultBlock | null
+    }
+  | {
+      operationKey: string
+      call: null
+      result: NativeChatToolResultBlock
+    }
 
 /** One renderable item in the list: either a prose/role message carrying its
- *  non-tool blocks, or a tool step (call + optional result). The view renders
- *  each variant differently. */
+ *  non-tool blocks, or a tool lifecycle step. The view renders each variant
+ *  differently. */
 export type NativeChatRenderItem =
   | {
       kind: 'message'
@@ -39,7 +46,7 @@ export type NativeChatRenderItem =
   | {
       kind: 'tool-step'
       id: string
-      /** Role of the message the call originated from (assistant/tool). */
+      /** Role of the source message (assistant/tool). */
       role: NativeChatMessage['role']
       timestamp: number | null
       step: NativeChatToolStep
@@ -52,34 +59,184 @@ export function orderNativeChatMessages(messages: NativeChatMessage[]): NativeCh
   return [...messages].sort(compareMessages)
 }
 
-/** Collect every tool-result across the whole conversation in document order so
- *  a call can find its answer even when the result lands in a later message (the
- *  common transcript shape: assistant emits the call, a following tool message
- *  carries the result). Results carry no originating name in our model, so they
- *  are handed out FIFO to calls. */
-function collectToolResults(messages: NativeChatMessage[]): NativeChatToolResultBlock[] {
-  const results: NativeChatToolResultBlock[] = []
-  for (const message of messages) {
-    for (const block of message.blocks) {
-      if (isToolResultBlock(block)) {
-        results.push(block)
+type IndexedToolCall = {
+  block: NativeChatToolCallBlock
+  blockIndex: number
+  callId: string | null
+  operationKey: string
+}
+
+type IndexedToolResult = {
+  block: NativeChatToolResultBlock
+  blockIndex: number
+  callId: string | null
+  operationKey: string
+}
+
+function usableCallId(callId: string | undefined): string | null {
+  const normalized = callId?.trim()
+  return normalized ? normalized : null
+}
+
+function indexedOperationKey(
+  callId: string | null,
+  duplicateOrdinal: number,
+  blockIndex: number
+): string {
+  return callId
+    ? `provider:${encodeURIComponent(callId)}:${duplicateOrdinal}`
+    : `position:${blockIndex}`
+}
+
+function nextDuplicateOrdinal(callId: string | null, counts: Map<string, number>): number {
+  if (!callId) {
+    return 0
+  }
+  const ordinal = counts.get(callId) ?? 0
+  counts.set(callId, ordinal + 1)
+  return ordinal
+}
+
+function pairedOperationKey(call: IndexedToolCall, result: IndexedToolResult): string {
+  // Why: append-only transcript updates must not remount an existing row when
+  // its counterpart arrives; the earlier block owns identity for FIFO pairs.
+  return call.blockIndex <= result.blockIndex ? call.operationKey : result.operationKey
+}
+
+/** Pair one ordered run of tool blocks. Exact provider ids are reserved first,
+ *  then FIFO is retained only where at least one side lacks an id. */
+export function pairNativeChatToolBlocks(blocks: readonly NativeChatBlock[]): NativeChatToolStep[] {
+  const calls: IndexedToolCall[] = []
+  const results: IndexedToolResult[] = []
+  const callCountsById = new Map<string, number>()
+  const resultCountsById = new Map<string, number>()
+  for (const [blockIndex, block] of blocks.entries()) {
+    if (isToolCallBlock(block)) {
+      const callId = usableCallId(block.callId)
+      const duplicateOrdinal = nextDuplicateOrdinal(callId, callCountsById)
+      calls.push({
+        block,
+        blockIndex,
+        callId,
+        operationKey: indexedOperationKey(callId, duplicateOrdinal, blockIndex)
+      })
+    } else if (isToolResultBlock(block)) {
+      const callId = usableCallId(block.callId)
+      const duplicateOrdinal = nextDuplicateOrdinal(callId, resultCountsById)
+      results.push({
+        block,
+        blockIndex,
+        callId,
+        operationKey: indexedOperationKey(callId, duplicateOrdinal, blockIndex)
+      })
+    }
+  }
+
+  const resultOrdinalsByCallId = new Map<string, number[]>()
+  for (const [resultOrdinal, result] of results.entries()) {
+    if (!result.callId) {
+      continue
+    }
+    const ordinals = resultOrdinalsByCallId.get(result.callId) ?? []
+    ordinals.push(resultOrdinal)
+    resultOrdinalsByCallId.set(result.callId, ordinals)
+  }
+
+  const resultCursorByCallId = new Map<string, number>()
+  const resultByCallBlockIndex = new Map<number, IndexedToolResult>()
+  const consumedResults = results.map(() => false)
+  for (const call of calls) {
+    if (!call.callId) {
+      continue
+    }
+    const ordinals = resultOrdinalsByCallId.get(call.callId)
+    const cursor = resultCursorByCallId.get(call.callId) ?? 0
+    const resultOrdinal = ordinals?.[cursor]
+    if (resultOrdinal === undefined) {
+      continue
+    }
+    resultCursorByCallId.set(call.callId, cursor + 1)
+    resultByCallBlockIndex.set(call.blockIndex, results[resultOrdinal])
+    consumedResults[resultOrdinal] = true
+  }
+
+  let anyResultCursor = 0
+  let unlabeledResultCursor = 0
+  for (const call of calls) {
+    if (resultByCallBlockIndex.has(call.blockIndex)) {
+      continue
+    }
+    let resultOrdinal: number | undefined
+    if (call.callId) {
+      while (
+        unlabeledResultCursor < results.length &&
+        (consumedResults[unlabeledResultCursor] || results[unlabeledResultCursor].callId)
+      ) {
+        unlabeledResultCursor += 1
+      }
+      if (unlabeledResultCursor < results.length) {
+        resultOrdinal = unlabeledResultCursor
+        unlabeledResultCursor += 1
+      }
+    } else {
+      while (anyResultCursor < results.length && consumedResults[anyResultCursor]) {
+        anyResultCursor += 1
+      }
+      if (anyResultCursor < results.length) {
+        resultOrdinal = anyResultCursor
+        anyResultCursor += 1
+      }
+    }
+    if (resultOrdinal === undefined) {
+      continue
+    }
+    resultByCallBlockIndex.set(call.blockIndex, results[resultOrdinal])
+    consumedResults[resultOrdinal] = true
+  }
+
+  const resultOrdinalByBlockIndex = new Map(
+    results.map((result, resultOrdinal) => [result.blockIndex, resultOrdinal])
+  )
+  const callByBlockIndex = new Map(calls.map((call) => [call.blockIndex, call]))
+  const steps: NativeChatToolStep[] = []
+  for (const [blockIndex, block] of blocks.entries()) {
+    if (isToolCallBlock(block)) {
+      const call = callByBlockIndex.get(blockIndex)!
+      const result = resultByCallBlockIndex.get(blockIndex) ?? null
+      steps.push({
+        operationKey: result ? pairedOperationKey(call, result) : call.operationKey,
+        call: block,
+        result: result?.block ?? null
+      })
+    } else if (isToolResultBlock(block)) {
+      const resultOrdinal = resultOrdinalByBlockIndex.get(blockIndex)
+      if (resultOrdinal !== undefined && !consumedResults[resultOrdinal]) {
+        steps.push({
+          operationKey: results[resultOrdinal].operationKey,
+          call: null,
+          result: block
+        })
       }
     }
   }
-  return results
+  return steps
 }
 
 /**
  * Flatten ordered messages into render items, pairing tool calls with results.
- * Result pairing is FIFO across the conversation: tool results in our model
- * carry no back-reference to a call id, so we match the Nth call to the Nth
- * result in document order — the order both providers emit them. A call with no
- * remaining result renders as in-flight (`result: null`).
+ * Provider ids pair first even when results arrive out of order. FIFO applies
+ * only when a call or result has no usable id. Calls without a result remain in
+ * flight, and unmatched results remain visible as result-only steps.
  */
 export function buildNativeChatRenderItems(messages: NativeChatMessage[]): NativeChatRenderItem[] {
   const ordered = orderNativeChatMessages(messages)
-  const resultQueue = collectToolResults(ordered)
-  let resultCursor = 0
+  const toolSteps = pairNativeChatToolBlocks(ordered.flatMap((message) => message.blocks))
+  const stepByCall = new Map(
+    toolSteps.flatMap((step) => (step.call ? [[step.call, step] as const] : []))
+  )
+  const orphanStepByResult = new Map(
+    toolSteps.flatMap((step) => (step.call ? [] : [[step.result, step] as const]))
+  )
 
   const items: NativeChatRenderItem[] = []
   for (const message of ordered) {
@@ -88,14 +245,12 @@ export function buildNativeChatRenderItems(messages: NativeChatMessage[]): Nativ
 
     for (const block of message.blocks) {
       if (isToolCallBlock(block)) {
-        const result = resultQueue[resultCursor] ?? null
-        if (result) {
-          resultCursor += 1
-        }
-        steps.push({ call: block, result })
+        steps.push(stepByCall.get(block)!)
       } else if (isToolResultBlock(block)) {
-        // Results are emitted as steps from the call side; skip standalone ones.
-        continue
+        const step = orphanStepByResult.get(block)
+        if (step) {
+          steps.push(step)
+        }
       } else {
         nonToolBlocks.push(block)
       }

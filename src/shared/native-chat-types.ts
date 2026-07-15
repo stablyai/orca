@@ -40,6 +40,10 @@ export type NativeChatToolCallBlock = {
   type: 'tool-call'
   name: string
   input: unknown
+  /** Provider-owned identity used to correlate a later tool result. */
+  callId?: string
+  /** Provider-reported lifecycle state when the call record is self-contained. */
+  status?: 'in-progress' | 'completed' | 'incomplete'
 }
 
 /** The result returned to the agent for a prior tool call. */
@@ -47,6 +51,10 @@ export type NativeChatToolResultBlock = {
   type: 'tool-result'
   output: string
   isError?: boolean
+  /** Provider-owned identity of the tool call this result answers. */
+  callId?: string
+  /** Explicit result certainty. Omitted by legacy decoders that cannot know. */
+  outcome?: 'success' | 'error' | 'unknown'
 }
 
 /** A reference to an image, by local path or remote URL. Exactly the field

@@ -27,9 +27,39 @@ describe('decodeGrokTranscriptLine', () => {
     expect(decodeGrokTranscriptLine(line, 'fb-2')).toEqual({
       id: 'fb-2:asst-1',
       role: 'assistant',
-      blocks: [{ type: 'tool-call', name: 'grep', input: { pattern: 'foo' } }],
+      blocks: [{ type: 'tool-call', name: 'grep', input: { pattern: 'foo' }, callId: 'c1' }],
       timestamp: null,
       source: 'transcript'
+    })
+  })
+
+  it('preserves correlation ids on standalone calls and results', () => {
+    const call = JSON.stringify({
+      type: 'backend_tool_call',
+      call_id: 'grok-call-1',
+      name: 'read_file',
+      input: { path: 'README.md' }
+    })
+    const result = JSON.stringify({
+      type: 'tool_result',
+      tool_call_id: 'grok-call-1',
+      content: 'contents'
+    })
+
+    expect(decodeGrokTranscriptLine(call, 'fb-call')).toMatchObject({
+      role: 'assistant',
+      blocks: [
+        {
+          type: 'tool-call',
+          name: 'read_file',
+          input: { path: 'README.md' },
+          callId: 'grok-call-1'
+        }
+      ]
+    })
+    expect(decodeGrokTranscriptLine(result, 'fb-result')).toMatchObject({
+      role: 'tool',
+      blocks: [{ type: 'tool-result', output: 'contents', callId: 'grok-call-1' }]
     })
   })
 

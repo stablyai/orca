@@ -48,7 +48,7 @@ describe('readNativeChatTranscript (claude)', () => {
       timestamp: '2026-06-01T10:05:00.000Z',
       message: {
         role: 'assistant',
-        content: [{ type: 'tool_use', name: 'Bash', input: { command: 'ls' } }]
+        content: [{ type: 'tool_use', id: 'toolu-1', name: 'Bash', input: { command: 'ls' } }]
       }
     })
     records.push({
@@ -57,7 +57,14 @@ describe('readNativeChatTranscript (claude)', () => {
       timestamp: '2026-06-01T10:05:01.000Z',
       message: {
         role: 'user',
-        content: [{ type: 'tool_result', content: 'file-a\nfile-b', is_error: false }]
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'toolu-1',
+            content: 'file-a\nfile-b',
+            is_error: false
+          }
+        ]
       }
     })
 
@@ -79,12 +86,17 @@ describe('readNativeChatTranscript (claude)', () => {
     expect(toolCall?.blocks[0]).toEqual({
       type: 'tool-call',
       name: 'Bash',
-      input: { command: 'ls' }
+      input: { command: 'ls' },
+      callId: 'toolu-1'
     })
 
     const toolResult = result.messages.at(-1)
     expect(toolResult?.role).toBe('tool')
-    expect(toolResult?.blocks[0]).toEqual({ type: 'tool-result', output: 'file-a\nfile-b' })
+    expect(toolResult?.blocks[0]).toEqual({
+      type: 'tool-result',
+      output: 'file-a\nfile-b',
+      callId: 'toolu-1'
+    })
   })
 
   it('drops structurally marked injected user turns but keeps their tool results', async () => {
@@ -199,6 +211,7 @@ describe('readNativeChatTranscript (codex)', () => {
         timestamp: '2026-06-01T10:00:03.000Z',
         payload: {
           type: 'function_call',
+          call_id: 'call-1',
           name: 'shell',
           arguments: '{"command":["bash","-lc","make"]}'
         }
@@ -208,7 +221,8 @@ describe('readNativeChatTranscript (codex)', () => {
         timestamp: '2026-06-01T10:00:04.000Z',
         payload: {
           type: 'function_call_output',
-          output: { content: 'build ok', success: true }
+          call_id: 'call-1',
+          output: 'build ok'
         }
       },
       {
@@ -230,11 +244,17 @@ describe('readNativeChatTranscript (codex)', () => {
     expect(call?.blocks[0]).toEqual({
       type: 'tool-call',
       name: 'shell',
-      input: '{"command":["bash","-lc","make"]}'
+      input: { command: ['bash', '-lc', 'make'] },
+      callId: 'call-1'
     })
 
     const toolResult = result.messages.find((m) => m.blocks[0]?.type === 'tool-result')
-    expect(toolResult?.blocks[0]).toEqual({ type: 'tool-result', output: 'build ok' })
+    expect(toolResult?.blocks[0]).toEqual({
+      type: 'tool-result',
+      output: 'build ok',
+      callId: 'call-1',
+      outcome: 'unknown'
+    })
 
     const reasoning = result.messages.find((m) => m.role === 'reasoning')
     expect(reasoning?.blocks[0]).toEqual({ type: 'text', text: 'I will run it' })
