@@ -33,10 +33,12 @@ export async function readRelayWorktreeList(
 
 const PRUNABLE_EXISTENCE_PROBE_CONCURRENCY = 8
 
-/** Why: Git <2.36 does not emit the `prunable` porcelain field, so probe each
- *  linked worktree path directly instead of treating a stale registration as
- *  a live workspace (issue #8389). The relay runs on the host that owns the
- *  filesystem, so a plain stat is authoritative. */
+/** Why: Git <2.31 does not emit the `prunable` porcelain annotation, so probe
+ *  each linked worktree path directly instead of treating a stale registration
+ *  as a live workspace (issue #8389). Runs on the `-z`-unsupported fallback
+ *  (Git <2.36); on Git 2.31–2.35 the annotation is already parsed, so this is a
+ *  harmless backstop. The relay owns the filesystem, so a plain stat is
+ *  authoritative. */
 export async function annotatePrunableWorktreesByExistence(
   worktrees: Record<string, unknown>[]
 ): Promise<Record<string, unknown>[]> {
@@ -50,8 +52,10 @@ export async function annotatePrunableWorktreesByExistence(
       const worktree = worktrees[index]
       const worktreePath = typeof worktree?.path === 'string' ? worktree.path : ''
       // Git only marks linked worktrees prunable, and never locked ones (a
-      // lock shields the registration even when the directory is missing). A
-      // missing main worktree is surfaced by the repo-level failure paths.
+      // lock shields the registration even when the directory is missing). The
+      // `locked` annotation is only parsed on Git >=2.31, so on older Git a
+      // locked+missing worktree cannot be shielded here. A missing main
+      // worktree is surfaced by the repo-level failure paths.
       if (
         !worktreePath ||
         worktree.isMainWorktree === true ||

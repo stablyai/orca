@@ -613,9 +613,11 @@ async function readWorktreeList(
         parseWorktreeList(stdout),
         options
       )
-      // Why: Git <2.36 also lacks the `prunable` porcelain field, so probe
-      // each linked worktree path instead of treating stale registrations as
-      // live workspaces (issue #8389).
+      // Why: this `-z`-unsupported fallback (Git <2.36) also serves Git <2.31,
+      // which emits no `prunable` annotation; probe each linked worktree path
+      // for existence instead of treating stale registrations as live. On Git
+      // 2.31–2.35 `parseWorktreeList` already set `prunable`, so the probe is a
+      // harmless backstop that skips those entries (issue #8389).
       return annotatePrunableByExistence(normalized, repoPath, options)
     },
     isUnsupportedWorktreeListZError
@@ -636,8 +638,10 @@ async function annotatePrunableByExistence(
       nextIndex += 1
       const worktree = worktrees[index]
       // Git only marks linked worktrees prunable, and never locked ones (a
-      // lock shields the registration even when the directory is missing). A
-      // missing main worktree is handled by the repo-level ENOENT paths.
+      // lock shields the registration even when the directory is missing). The
+      // `locked` annotation is only parsed on Git >=2.31, so on older Git a
+      // locked+missing worktree cannot be shielded here. A missing main
+      // worktree is handled by the repo-level ENOENT paths.
       if (
         !worktree ||
         worktree.isMainWorktree ||

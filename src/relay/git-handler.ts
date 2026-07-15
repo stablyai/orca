@@ -1366,9 +1366,11 @@ export class GitHandler {
               repoPath,
               parseWorktreeList(stdout)
             )
-            // Why: Git <2.36 also lacks the `prunable` porcelain field; probe
-            // each linked worktree path instead of treating stale
-            // registrations as live workspaces (issue #8389).
+            // Why: this `-z`-unsupported fallback (Git <2.36) also serves Git
+            // <2.31, which emits no `prunable` annotation; probe each linked
+            // worktree path instead of treating stale registrations as live.
+            // On Git 2.31–2.35 the annotation is already parsed, so the probe
+            // is a harmless backstop (issue #8389).
             return annotatePrunableWorktreesByExistence(normalized)
           } catch {
             return []
