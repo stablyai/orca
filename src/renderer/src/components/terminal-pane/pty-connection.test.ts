@@ -6774,6 +6774,70 @@ describe('connectPanePty', () => {
     expect(rendered.visibleLines).toEqual(['PS >', '', '', ''])
   })
 
+  it('clears restored scrollback before cold-restore so history is not duplicated', async () => {
+    // Regression: when restoreScrollbackBuffers() wrote the saved xterm buffer
+    // (content A) for this leaf AND the daemon cold-restores the same lost
+    // session's disk scrollback (content B), writing B without a preceding
+    // clear left A+B duplicated in scrollback (the fresh-shell blanking scrolls
+    // rows into scrollback, it does not erase them). The restored-viewport
+    // marker set by restoreScrollbackBuffers is the signal that A was written,
+    // so the cold-restore branch must clear when it is present.
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('fresh-pty')
+    const written: string[] = []
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return {
+          id: 'fresh-pty',
+          coldRestore: { scrollback: 'cold TUI row one\r\ncold TUI row two', cwd: '/tmp/wt-1' }
+        }
+      }
+      return 'fresh-pty'
+    })
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }]
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    pane.terminal.rows = 4
+    pane.terminal.cols = 20
+    // Simulate the saved xterm buffer (content A) restoreScrollbackBuffers
+    // wrote during layout mount, mirrored by the marker below.
+    const savedBufferA = 'saved TUI row A1\r\nsaved TUI row A2'
+    const written0 = [savedBufferA]
+    pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
+      written.push(data)
+      callback?.()
+    })
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' },
+      restoredViewportBlankingPanesRef: { current: new Set([1]) }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(20)
+
+    const blankViewport = buildFreshShellViewportBlankingSequence(4)
+    // The clear must be written, and before the cold-restore scrollback (B).
+    expect(written).toContain('\x1b[2J\x1b[3J\x1b[H')
+    expect(written.indexOf('\x1b[2J\x1b[3J\x1b[H')).toBeLessThan(
+      written.indexOf('cold TUI row one\r\ncold TUI row two')
+    )
+
+    // End-to-end: replay A, then the connection writes (clear + B + blanking).
+    // The clear erases A, so only B survives — no duplicated history.
+    const rendered = await renderHeadlessTerminalState([...written0, ...written, 'PS >'], 20, 4)
+    expect(rendered.allLines.some((line) => line.includes('saved TUI row A'))).toBe(false)
+    expect(rendered.allLines.some((line) => line.includes('cold TUI row'))).toBe(true)
+    expect(rendered.visibleLines).toEqual(['PS >', '', '', ''])
+  })
+
   it('resumes the provider agent session when daemon reattach cold-restores a fresh shell', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('fresh-pty')

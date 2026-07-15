@@ -6812,6 +6812,17 @@ export function connectPanePty(
           }
         }
       } else if (connectResult?.coldRestore) {
+        // Why: restoreScrollbackBuffers() may have already written this leaf's
+        // saved xterm scrollback (buffer A) during layout mount, marking the
+        // pane. The cold-restore scrollback (buffer B) is the same lost session
+        // recorded on disk, so writing B below without clearing would leave A+B
+        // duplicated in scrollback (the fresh-shell blanking scrolls, not
+        // erases). Clear both screen and scrollback first, but only when a saved
+        // buffer was actually restored — a standalone cold-restore has no A to
+        // erase and must keep its scrollback (see the blanking test).
+        if (consumeRestoredViewportBlankingMarker()) {
+          writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+        }
         // replayIntoTerminal: the recorded scrollback is raw PTY output that
         // may contain query sequences the previous agent CLI emitted;
         // writing them through xterm.write would trigger auto-replies that
