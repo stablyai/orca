@@ -20841,7 +20841,10 @@ export class OrcaRuntimeService {
     const snapshotContainsAffectedRepo = this.resolvedWorktreeCache?.worktrees.some((worktree) =>
       [...affectedRepoIds].some((repoId) => worktree.id.startsWith(`${repoId}::`))
     )
-    if (snapshotContainsAffectedRepo || this.resolvedWorktreeInFlight) {
+    if (
+      affectedRepoIds.size > 0 &&
+      (snapshotContainsAffectedRepo || this.resolvedWorktreeInFlight)
+    ) {
       this.resolvedWorktreeGeneration += 1
       this.resolvedWorktreeCache = null
     }
