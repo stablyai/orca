@@ -20715,11 +20715,11 @@ export class OrcaRuntimeService {
   ): Promise<RuntimeWorktreeScanResult> {
     const now = Date.now()
     const generation = this.worktreeScanGenerations.get(repo.id) ?? 0
-    const projectRuntime =
-      projectRuntimeByRepoId?.get(repo.id) ??
-      (!repo.connectionId
+    const projectRuntime = projectRuntimeByRepoId
+      ? projectRuntimeByRepoId.get(repo.id)
+      : !repo.connectionId
         ? resolveLocalProjectRuntimeForRepo(this.requireStore(), repo)
-        : undefined)
+        : undefined
     const runtimeKey = projectRuntime
       ? projectRuntime.status === 'resolved'
         ? projectRuntime.runtime.cacheKey
