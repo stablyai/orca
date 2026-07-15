@@ -95,7 +95,7 @@ describe('useMobileNativeChatAnswerSend', () => {
 
     await act(async () => vi.advanceTimersByTimeAsync(500))
     expect(sendRequest.mock.calls[1]?.[1]).toMatchObject({ text: '', enter: true })
-    await act(async () => vi.advanceTimersByTimeAsync(300))
+    await act(async () => vi.advanceTimersByTimeAsync(500))
     expect(sendRequest.mock.calls[2]?.[1]).toMatchObject({ text: 'second', enter: false })
     await act(async () => vi.advanceTimersByTimeAsync(500))
     await expect(result).resolves.toBe(true)
