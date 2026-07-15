@@ -3124,6 +3124,7 @@ export class OrcaRuntimeService {
   // Why: SSH state changes originate in main's ssh handlers, not in runtime
   // methods, so they need a public entry point onto the client-event stream.
   notifySshStateChanged(targetId: string, state: SshConnectionState): void {
+    this.invalidateResolvedWorktreeCache()
     this.emitClientEvent({ type: 'sshStateChanged', targetId, state })
   }
 
