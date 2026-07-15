@@ -50,6 +50,7 @@ type CheckFailureSource = 'event' | 'promise' | 'fallback-promise'
 type MissingManifestPrereleaseFallbackResult = { userInitiated: boolean }
 type PrimaryEventSuppression = { failureKey: string; error: unknown }
 type UpdateCheckVariant = 'default' | 'prerelease' | 'perf'
+type ReleasePublishingError = Error & { updaterReleaseChannel?: UpdateCheckVariant }
 type ReleaseFeedPreflightResult = 'ready' | 'not-available'
 export type UpdateInstallMode =
   | 'interactive'
@@ -855,7 +856,7 @@ async function sendCheckFailureStatus(
       if (userInitiated) {
         // Why: a user click needs visible feedback (idle looks broken); distinguish incomplete releases from transport failures.
         sendErrorStatus(
-          isReleaseAssetsPublishingFailure(message)
+          isStableReleasePublishingFailure(message, sourceError)
             ? 'A new release is still being published. Try again shortly.'
             : "Couldn't reach the update server. Try again in a few minutes.",
           true
@@ -886,6 +887,14 @@ async function sendCheckFailureStatus(
     }
   })
   return pendingCheckFailurePromise
+}
+
+function isStableReleasePublishingFailure(message: string, sourceError: unknown): boolean {
+  if (!isReleaseAssetsPublishingFailure(message)) {
+    return false
+  }
+  const channel = (sourceError as ReleasePublishingError | null)?.updaterReleaseChannel
+  return channel === undefined || channel === 'default'
 }
 
 export function getUpdateStatus(): UpdateStatus {
@@ -1136,15 +1145,16 @@ async function pinDefaultReleaseFeed(
       return 'ready'
     }
     clearPublishingWindowLastGoodCheck()
-    if (isPerfCheck || includePrerelease) {
-      // Why: prerelease channels retain their legacy generic retry path;
-      // publishing copy is reserved for the stable release classifier.
-      throw new Error('Unable to find latest version on GitHub')
-    }
     console.info(
       `[updater] release feed deferred: current=${currentVersion} includePrerelease=${includePrerelease}; newest release assets are still publishing`
     )
-    throw new Error('Latest release assets are still publishing')
+    const error = new Error('Latest release assets are still publishing') as ReleasePublishingError
+    error.updaterReleaseChannel = isPerfCheck
+      ? 'perf'
+      : includePrerelease
+        ? 'prerelease'
+        : 'default'
+    throw error
   } else if (isPerfCheck) {
     clearPrereleaseFallbackContext()
     clearPublishingWindowLastGoodCheck()
