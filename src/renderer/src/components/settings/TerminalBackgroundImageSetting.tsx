@@ -15,6 +15,8 @@ type TerminalBackgroundImageSettingProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
+/** Desktop-only settings row to pick, preview, replace, or remove the terminal
+ *  background image. Renders null on the web client, which has no file picker. */
 export function TerminalBackgroundImageSetting({
   settings,
   updateSettings

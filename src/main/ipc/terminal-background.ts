@@ -17,6 +17,8 @@ type TerminalBackgroundStore = {
   getSettings: () => { terminalBackgroundImage?: { fileName?: string } | null }
 }
 
+/** Classify a picked source file by extension against the image allowlist,
+ *  returning its MIME + extension, or null when the type is not supported. */
 function classifyFile(src: string): { mimeType: string; ext: string } | null {
   const ext = extname(src).toLowerCase()
   const mime = TERMINAL_BACKGROUND_IMAGE_FORMATS[ext]
@@ -26,6 +28,7 @@ function classifyFile(src: string): { mimeType: string; ext: string } | null {
   return { mimeType: mime, ext }
 }
 
+/** Absolute path to the per-user background-image store under userData. */
 function getTerminalBackgroundsDir(): string {
   return join(app.getPath('userData'), 'terminal-backgrounds')
 }
@@ -34,6 +37,9 @@ function getTerminalBackgroundsDir(): string {
 // OOM the renderer when it builds a Blob URL. Same bound as custom pets.
 const MAX_BYTES = 64 * 1024 * 1024
 
+/** Resolve a stored image path from an untrusted (id, fileName) pair, or null
+ *  when it fails the shared id + extension allowlist or directory-containment
+ *  gate. The single trusted resolver for both read and delete. */
 function resolveTerminalBackgroundFile(id: string, fileName: string): string | null {
   // Why: gate on the shared id + allowlisted-extension check so read/delete can
   // only touch `${id}.<allowed-ext>` — the picker enforces the same allowlist,
@@ -82,6 +88,7 @@ export async function pruneOrphanTerminalBackgrounds(
   )
 }
 
+/** Register the pick/read/delete IPC handlers for terminal background images. */
 export function registerTerminalBackgroundHandlers(store: TerminalBackgroundStore): void {
   ipcMain.handle(
     'terminalBackground:pick',

@@ -6,16 +6,19 @@ import type { TerminalBackgroundImage } from '../../../../shared/terminal-backgr
 // IPC and are exposed as a blob: URL. There is at most one active background
 // image, but it can be shown by many panes and swapped at runtime, so the cache
 // is keyed by image id and reference-counted by the id each pane is *currently
-// displaying* — never by the requested id. That distinction is what keeps a
-// replace from revoking a URL a pane is still painting.
+// displaying* — never by the requested id. Blobs are revoked lazily by an LRU
+// pass (never eagerly on refcount 0), so a replace can't revoke a URL a pane is
+// still painting and a StrictMode remount can't reference a freed URL.
 const blobUrls = new Map<string, string>()
 const refCounts = new Map<string, number>()
 const pendingLoads = new Map<string, Promise<string | null>>()
 
-// Bounds memory if a corner case leaves an entry cached with no live consumer
-// (e.g. every pane unmounts while a read is still in flight).
+/** Bounds retained memory: once cached entries exceed this, unreferenced ones
+ *  (no pane displaying them) are revoked oldest-first on the next insert. */
 const MAX_CACHED = 4
 
+/** Revoke and drop unreferenced cached blobs (never `exceptId`) until the cache
+ *  is back within `MAX_CACHED`. The sole revocation path. */
 function releaseUnreferenced(exceptId: string): void {
   if (blobUrls.size <= MAX_CACHED) {
     return
@@ -32,8 +35,11 @@ function releaseUnreferenced(exceptId: string): void {
   }
 }
 
-/** Retain the cached entry for the id a pane is displaying; the returned release
- *  revokes the blob only once the last displaying pane lets go. */
+/** Track a reference to the cached entry for the id a pane is displaying, so
+ *  `releaseUnreferenced` never evicts an entry a pane still shows. Revocation is
+ *  deferred to that LRU pass rather than done here: React StrictMode runs effects
+ *  mount → unmount → mount, and revoking on the interim unmount (refcount 0) would
+ *  free a blob URL the remount still holds in state, breaking the background. */
 function retain(id: string): () => void {
   refCounts.set(id, (refCounts.get(id) ?? 0) + 1)
   let released = false
@@ -48,14 +54,11 @@ function retain(id: string): () => void {
       return
     }
     refCounts.delete(id)
-    const url = blobUrls.get(id)
-    if (url) {
-      URL.revokeObjectURL(url)
-      blobUrls.delete(id)
-    }
   }
 }
 
+/** Read the image bytes over IPC once per id (concurrent callers share the
+ *  in-flight promise) and cache a `blob:` URL, or null when the file is gone. */
 async function loadTerminalBackgroundBlobUrl(
   image: TerminalBackgroundImage
 ): Promise<string | null> {
@@ -126,11 +129,20 @@ export function useTerminalBackgroundImageUrl(
       return undefined
     }
     let cancelled = false
-    void loadTerminalBackgroundBlobUrl({ id, fileName, mimeType }).then((url) => {
-      if (!cancelled) {
-        setDisplayed(url ? { id, url } : null)
-      }
-    })
+    void loadTerminalBackgroundBlobUrl({ id, fileName, mimeType })
+      .then((url) => {
+        if (!cancelled) {
+          setDisplayed(url ? { id, url } : null)
+        }
+      })
+      .catch((error) => {
+        // Why: a rejected IPC read (fs error, timeout) must not surface as an
+        // unhandled rejection — drop the background instead.
+        console.warn('[terminal-background] failed to load background image', error)
+        if (!cancelled) {
+          setDisplayed(null)
+        }
+      })
     return () => {
       cancelled = true
     }
