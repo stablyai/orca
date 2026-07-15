@@ -99,6 +99,7 @@ vi.mock('./updater-nudge', () => ({
 const ONE_HOUR_MS = 60 * 60 * 1000
 const THIRTY_SECONDS_MS = 30 * 1000
 const FRIENDLY_MESSAGE = "Couldn't reach the update server. Try again in a few minutes."
+const PUBLISHING_MESSAGE = 'A new release is still being published. Try again shortly.'
 
 function makeBenignCheckFailure(message: string): void {
   autoUpdaterMock.checkForUpdates.mockImplementation(() => {
@@ -189,6 +190,26 @@ describe('updater check failure handling', () => {
     })
   })
 
+  it('surfaces the publishing sentinel with publishing-specific copy', async () => {
+    makeBenignCheckFailure('Latest release assets are still publishing')
+
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+    await vi.waitFor(() => {
+      expect(sendMock.mock.calls.map(([, status]) => status)).toContainEqual(
+        expect.objectContaining({
+          state: 'error',
+          userInitiated: true,
+          message: PUBLISHING_MESSAGE
+        })
+      )
+    })
+  })
+
   it('silently drops background benign failures to idle and waits for the hourly retry', async () => {
     vi.useFakeTimers()
     makeBenignCheckFailure('Unable to find latest version on GitHub')
@@ -215,6 +236,28 @@ describe('updater check failure handling', () => {
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
 
     await vi.advanceTimersByTimeAsync(ONE_HOUR_MS - THIRTY_SECONDS_MS)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps background publishing failures idle and schedules the short retry', async () => {
+    vi.useFakeTimers()
+    makeBenignCheckFailure('Latest release assets are still publishing')
+
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, checkForUpdates } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdates()
+    await vi.advanceTimersByTimeAsync(0)
+
+    const statuses = sendMock.mock.calls
+      .filter(([channel]) => channel === 'updater:status')
+      .map(([, status]) => status)
+    expect(statuses).toContainEqual({ state: 'idle' })
+    expect(statuses).not.toContainEqual(expect.objectContaining({ state: 'error' }))
+
+    await vi.advanceTimersByTimeAsync(ONE_HOUR_MS)
     expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
   })
 

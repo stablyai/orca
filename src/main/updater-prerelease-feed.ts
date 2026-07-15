@@ -103,7 +103,9 @@ function getManifestAssetNames(manifestText: string): string[] {
   return [...names]
 }
 
-async function isReleaseAssetAvailable(tag: string, assetName: string): Promise<boolean> {
+type ReleaseReadiness = 'ready' | 'not-ready' | 'unavailable'
+
+async function isReleaseAssetAvailable(tag: string, assetName: string): Promise<ReleaseReadiness> {
   try {
     const assetUrl = assetName.startsWith('http')
       ? assetName
@@ -112,32 +114,44 @@ async function isReleaseAssetAvailable(tag: string, assetName: string): Promise<
       method: 'HEAD',
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
     })
-    return res.ok
+    return res.status === 404 ? 'not-ready' : res.ok ? 'ready' : 'unavailable'
   } catch {
-    return false
+    return 'unavailable'
   }
 }
 
-async function hasReadyPlatformManifest(tag: string): Promise<boolean> {
+async function getPlatformManifestReadiness(tag: string): Promise<ReleaseReadiness> {
   try {
     // Why: cancelled/draft releases can appear in GitHub's atom feed before
     // they have updater manifests or the ZIP/exe/AppImage assets referenced by
     // those manifests. Pinning to those tags makes download clicks 404.
     const manifestUrl = getReleaseManifestUrl(tag)
     const res = await net.fetch(manifestUrl, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) })
-    if (!res.ok) {
-      return false
+    if (res.status === 404) {
+      return 'not-ready'
     }
-    const assetNames = getManifestAssetNames(await res.text())
+    if (!res.ok) {
+      return 'unavailable'
+    }
+    let assetNames: string[]
+    try {
+      assetNames = getManifestAssetNames(await res.text())
+    } catch {
+      return 'not-ready'
+    }
     if (assetNames.length === 0) {
-      return false
+      return 'not-ready'
     }
     const assetResults = await Promise.all(
       assetNames.map((assetName) => isReleaseAssetAvailable(tag, assetName))
     )
-    return assetResults.every(Boolean)
+    return assetResults.includes('unavailable')
+      ? 'unavailable'
+      : assetResults.includes('not-ready')
+        ? 'not-ready'
+        : 'ready'
   } catch {
-    return false
+    return 'unavailable'
   }
 }
 
@@ -216,28 +230,34 @@ export async function fetchNewerReleaseTagsWithReadiness(
     probeCandidates.map(async ({ tag, version }) => ({
       tag,
       version,
-      hasManifest: await hasReadyPlatformManifest(tag)
+      readiness: await getPlatformManifestReadiness(tag)
     }))
   )
 
   const primaryIndex = manifestResults.findIndex(
-    ({ hasManifest, version }) => hasManifest && compareVersions(version, currentVersion) > 0
+    ({ readiness, version }) =>
+      readiness === 'ready' && compareVersions(version, currentVersion) > 0
   )
   if (primaryIndex === -1) {
-    const lastGoodTag = manifestResults.find(({ hasManifest }) => hasManifest)?.tag
-    return lastGoodTag
-      ? { tags: [], state: 'not-ready', lastGoodTag }
-      : { tags: [], state: 'not-ready' }
+    const lastGoodTag = manifestResults.find(({ readiness }) => readiness === 'ready')?.tag
+    return manifestResults[0]?.readiness === 'unavailable'
+      ? { tags: [], state: 'unavailable' }
+      : lastGoodTag
+        ? { tags: [], state: 'not-ready', lastGoodTag }
+        : { tags: [], state: 'not-ready' }
   }
 
   if (primaryIndex > 0) {
-    return { tags: [], state: 'not-ready', lastGoodTag: manifestResults[primaryIndex].tag }
+    const precedingResults = manifestResults.slice(0, primaryIndex)
+    return precedingResults.some(({ readiness }) => readiness === 'unavailable')
+      ? { tags: [], state: 'unavailable' }
+      : { tags: [], state: 'not-ready', lastGoodTag: manifestResults[primaryIndex].tag }
   }
 
   return {
     tags: manifestResults
       .slice(primaryIndex)
-      .filter(({ hasManifest }) => hasManifest)
+      .filter(({ readiness }) => readiness === 'ready')
       .slice(0, maxTags)
       .map(({ tag }) => tag),
     state: 'ready'

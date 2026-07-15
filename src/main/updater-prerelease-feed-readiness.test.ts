@@ -41,7 +41,11 @@ function respondWithAtom(
   const missingAssets = new Set(missingAssetTags)
   netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
     if (url === 'https://github.com/stablyai/orca/releases.atom') {
-      return Promise.resolve({ ok: true, text: () => Promise.resolve(buildAtomFeed(tags)) })
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(buildAtomFeed(tags))
+      })
     }
 
     const manifestMatch = url.match(/\/releases\/download\/([^/]+)\/latest(?:-[a-z]+)?\.yml$/)
@@ -49,6 +53,7 @@ function respondWithAtom(
       const tag = decodeURIComponent(manifestMatch[1])
       return Promise.resolve({
         ok: !missingManifests.has(tag),
+        status: missingManifests.has(tag) ? 404 : 200,
         text: () => Promise.resolve(buildManifest(tag))
       })
     }
@@ -57,11 +62,12 @@ function respondWithAtom(
     if (assetMatch && init?.method === 'HEAD') {
       return Promise.resolve({
         ok: !missingAssets.has(decodeURIComponent(assetMatch[1])),
+        status: missingAssets.has(decodeURIComponent(assetMatch[1])) ? 404 : 200,
         text: () => Promise.resolve('')
       })
     }
 
-    return Promise.resolve({ ok: false, text: () => Promise.resolve('') })
+    return Promise.resolve({ ok: false, status: 503, text: () => Promise.resolve('') })
   })
 }
 
@@ -115,11 +121,51 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
     })
   })
 
+  it('reproduces the v1.4.142 publishing incident as not-ready', async () => {
+    const incident = {
+      installedVersion: '1.4.141',
+      atomStableTag: 'v1.4.142',
+      missingManifestStatus: 404,
+      missingWindowsAssetStatus: 404
+    }
+    respondWithAtom([incident.atomStableTag], [incident.atomStableTag], [incident.atomStableTag])
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    expect(await fetchNewerReleaseTagsWithReadiness(incident.installedVersion, 1)).toEqual({
+      tags: [],
+      state: 'not-ready'
+    })
+    expect(incident.missingManifestStatus).toBe(404)
+    expect(incident.missingWindowsAssetStatus).toBe(404)
+  })
+
+  it('reports transport failures as unavailable instead of not-ready', async () => {
+    netFetchMock.mockImplementation((url: string) => {
+      if (url === 'https://github.com/stablyai/orca/releases.atom') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve(buildAtomFeed(['v1.4.28']))
+        })
+      }
+      return Promise.reject(new Error('ETIMEDOUT'))
+    })
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    await expect(fetchNewerReleaseTagsWithReadiness('1.4.27', 1)).resolves.toEqual({
+      tags: [],
+      state: 'unavailable'
+    })
+  })
+
   it('requires every asset referenced by the manifest files list to be reachable', async () => {
     netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
       if (url === 'https://github.com/stablyai/orca/releases.atom') {
         return Promise.resolve({
           ok: true,
+          status: 200,
           text: () => Promise.resolve(buildAtomFeed(['v1.4.28', 'v1.4.27']))
         })
       }
@@ -129,6 +175,7 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
         const version = decodeURIComponent(manifestMatch[1]).replace(/^v/i, '')
         return Promise.resolve({
           ok: true,
+          status: 200,
           text: () =>
             Promise.resolve(
               [
@@ -147,6 +194,7 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
       if (init?.method === 'HEAD') {
         return Promise.resolve({
           ok: !url.endsWith('/Orca-1.4.28-arm64-mac.zip'),
+          status: url.endsWith('/Orca-1.4.28-arm64-mac.zip') ? 404 : 200,
           text: () => Promise.resolve('')
         })
       }
@@ -171,6 +219,7 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
       if (url === 'https://github.com/stablyai/orca/releases.atom') {
         return Promise.resolve({
           ok: true,
+          status: 200,
           text: () => Promise.resolve(buildAtomFeed(['v1.4.27']))
         })
       }
@@ -192,7 +241,7 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
 
       if (init?.method === 'HEAD') {
         assetUrls.push(url)
-        return Promise.resolve({ ok: true, text: () => Promise.resolve('') })
+        return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('') })
       }
 
       return Promise.resolve({ ok: false, text: () => Promise.resolve('') })
@@ -214,18 +263,26 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
       }
 
       if (url.includes('/releases/download/v1.4.28/')) {
-        return Promise.resolve({ ok: true, text: () => Promise.resolve('files:\n  - url: [') })
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve('files:\n  - url: [')
+        })
       }
 
       if (url.includes('/releases/download/v1.4.27/') && isPlatformManifestRequest(url)) {
-        return Promise.resolve({ ok: true, text: () => Promise.resolve(buildManifest('v1.4.27')) })
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve(buildManifest('v1.4.27'))
+        })
       }
 
       if (init?.method === 'HEAD') {
-        return Promise.resolve({ ok: true, text: () => Promise.resolve('') })
+        return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('') })
       }
 
-      return Promise.resolve({ ok: false, text: () => Promise.resolve('') })
+      return Promise.resolve({ ok: false, status: 503, text: () => Promise.resolve('') })
     })
 
     const { fetchNewerReleaseTag, fetchNewerReleaseTagsWithReadiness } =

@@ -853,8 +853,13 @@ async function sendCheckFailureStatus(
       clearAvailableUpdateContext()
       scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)
       if (userInitiated) {
-        // Why: a user click needs visible feedback (idle looks broken); the UI already prefixes context, so this carries only the actionable cause.
-        sendErrorStatus("Couldn't reach the update server. Try again in a few minutes.", true)
+        // Why: a user click needs visible feedback (idle looks broken); distinguish incomplete releases from transport failures.
+        sendErrorStatus(
+          isReleaseAssetsPublishingFailure(message)
+            ? 'A new release is still being published. Try again shortly.'
+            : "Couldn't reach the update server. Try again in a few minutes.",
+          true
+        )
       } else {
         if (isReleaseAssetsPublishingFailure(message)) {
           // Why: a nudge check can land while GitHub exposes a release before its assets; keep the campaign pending so the short retry can show it.
