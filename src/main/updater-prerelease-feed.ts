@@ -145,10 +145,10 @@ async function getPlatformManifestReadiness(tag: string): Promise<ReleaseReadine
     const assetResults = await Promise.all(
       assetNames.map((assetName) => isReleaseAssetAvailable(tag, assetName))
     )
-    return assetResults.includes('unavailable')
-      ? 'unavailable'
-      : assetResults.includes('not-ready')
-        ? 'not-ready'
+    return assetResults.includes('not-ready')
+      ? 'not-ready'
+      : assetResults.includes('unavailable')
+        ? 'unavailable'
         : 'ready'
   } catch {
     return 'unavailable'
@@ -240,18 +240,15 @@ export async function fetchNewerReleaseTagsWithReadiness(
   )
   if (primaryIndex === -1) {
     const lastGoodTag = manifestResults.find(({ readiness }) => readiness === 'ready')?.tag
-    return manifestResults[0]?.readiness === 'unavailable'
-      ? { tags: [], state: 'unavailable' }
-      : lastGoodTag
-        ? { tags: [], state: 'not-ready', lastGoodTag }
+    return lastGoodTag
+      ? { tags: [], state: 'not-ready', lastGoodTag }
+      : manifestResults[0]?.readiness === 'unavailable'
+        ? { tags: [], state: 'unavailable' }
         : { tags: [], state: 'not-ready' }
   }
 
   if (primaryIndex > 0) {
-    const precedingResults = manifestResults.slice(0, primaryIndex)
-    return precedingResults.some(({ readiness }) => readiness === 'unavailable')
-      ? { tags: [], state: 'unavailable' }
-      : { tags: [], state: 'not-ready', lastGoodTag: manifestResults[primaryIndex].tag }
+    return { tags: [], state: 'not-ready', lastGoodTag: manifestResults[primaryIndex].tag }
   }
 
   return {

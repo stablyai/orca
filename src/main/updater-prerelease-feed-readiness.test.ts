@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { publishingIncident } from './updater-prerelease-feed-reproduction.fixture'
 
 const { netFetchMock } = vi.hoisted(() => ({
   netFetchMock: vi.fn()
@@ -35,10 +36,12 @@ function isPlatformManifestRequest(url: string): boolean {
 function respondWithAtom(
   tags: string[],
   missingManifestTags: string[] = [],
-  missingAssetTags: string[] = []
+  missingAssetTags: string[] = [],
+  unavailableManifestTags: string[] = []
 ): void {
   const missingManifests = new Set(missingManifestTags)
   const missingAssets = new Set(missingAssetTags)
+  const unavailableManifests = new Set(unavailableManifestTags)
   netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
     if (url === 'https://github.com/stablyai/orca/releases.atom') {
       return Promise.resolve({
@@ -51,6 +54,13 @@ function respondWithAtom(
     const manifestMatch = url.match(/\/releases\/download\/([^/]+)\/latest(?:-[a-z]+)?\.yml$/)
     if (manifestMatch) {
       const tag = decodeURIComponent(manifestMatch[1])
+      if (unavailableManifests.has(tag)) {
+        return Promise.resolve({
+          ok: false,
+          status: 503,
+          text: () => Promise.resolve('')
+        })
+      }
       return Promise.resolve({
         ok: !missingManifests.has(tag),
         status: missingManifests.has(tag) ? 404 : 200,
@@ -122,22 +132,34 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
   })
 
   it('reproduces the v1.4.142 publishing incident as not-ready', async () => {
-    const incident = {
-      installedVersion: '1.4.141',
-      atomStableTag: 'v1.4.142',
-      missingManifestStatus: 404,
-      missingWindowsAssetStatus: 404
-    }
-    respondWithAtom([incident.atomStableTag], [incident.atomStableTag], [incident.atomStableTag])
+    respondWithAtom(
+      [publishingIncident.atomStableTag],
+      [publishingIncident.atomStableTag],
+      [publishingIncident.atomStableTag]
+    )
 
     const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
 
-    expect(await fetchNewerReleaseTagsWithReadiness(incident.installedVersion, 1)).toEqual({
+    expect(
+      await fetchNewerReleaseTagsWithReadiness(publishingIncident.installedVersion, 1)
+    ).toEqual({
       tags: [],
-      state: 'not-ready'
+      state: publishingIncident.expectedState
     })
-    expect(incident.missingManifestStatus).toBe(404)
-    expect(incident.missingWindowsAssetStatus).toBe(404)
+    expect(publishingIncident.missingManifestStatus).toBe(404)
+    expect(publishingIncident.missingWindowsAssetStatus).toBe(404)
+  })
+
+  it('preserves a verified last-good release when a newer manifest probe is unavailable', async () => {
+    respondWithAtom(['v1.4.28', 'v1.4.27'], [], [], ['v1.4.28'])
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    await expect(fetchNewerReleaseTagsWithReadiness('1.4.26', 1)).resolves.toEqual({
+      tags: [],
+      state: 'not-ready',
+      lastGoodTag: 'v1.4.27'
+    })
   })
 
   it('reports transport failures as unavailable instead of not-ready', async () => {
@@ -192,9 +214,11 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
       }
 
       if (init?.method === 'HEAD') {
+        const unavailable = url.endsWith('/Orca-1.4.28-mac.zip')
+        const missing = url.endsWith('/Orca-1.4.28-arm64-mac.zip')
         return Promise.resolve({
-          ok: !url.endsWith('/Orca-1.4.28-arm64-mac.zip'),
-          status: url.endsWith('/Orca-1.4.28-arm64-mac.zip') ? 404 : 200,
+          ok: !missing && !unavailable,
+          status: missing ? 404 : unavailable ? 503 : 200,
           text: () => Promise.resolve('')
         })
       }
