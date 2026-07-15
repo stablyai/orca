@@ -68,7 +68,18 @@ describe('mobile session startup', () => {
     expect(pendingActivationEffect).toContain('scheduleDelayedAction(() => void fetchSessionTabs()')
   })
 
-  it('keeps mobile session tab activation local to the phone', () => {
+  it('mirrors ready terminal taps while persisting them for headless hosts', () => {
+    const readyTerminalSwitch = sliceBetween(
+      'const switchTab = useCallback(',
+      'const switchSessionTab = useCallback('
+    )
+
+    expect(readyTerminalSwitch).toContain('focusMobileTerminal(client, handle)')
+    expect(readyTerminalSwitch).toContain('activateMobileSessionTab(client,')
+    expect(readyTerminalSwitch).toContain('notifyClients: false')
+  })
+
+  it('keeps background and pending session-tab activation local to the phone', () => {
     const activationRequests = source.split('activateMobileSessionTab(client,').slice(1)
 
     expect(activationRequests).toHaveLength(4)
