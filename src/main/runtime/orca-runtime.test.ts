@@ -12591,6 +12591,159 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('surfaces headless alternate-screen output through terminal read without renderer serializer', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData(
+      'pty-1',
+      'shell history\r\n\x1b[?1049h\x1b[2J\x1b[HClaude Code\r\nWorking on fix\r\nTool: Read\r\n',
+      100
+    )
+    await runtime.serializeTerminalBuffer('pty-1', { scrollbackRows: 0 })
+
+    const read = await runtime.readTerminal(terminal.handle)
+
+    expect(read.tail).toEqual(['Claude Code', 'Working on fix', 'Tool: Read'])
+  })
+
+  it('surfaces headless alternate-screen output through terminal show preview', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData(
+      'pty-1',
+      'shell history\r\n\x1b[?1049h\x1b[2J\x1b[HClaude Code\r\nWorking on fix\r\nTool: Read\r\n',
+      100
+    )
+    await runtime.serializeTerminalBuffer('pty-1', { scrollbackRows: 0 })
+
+    const shown = await runtime.showTerminal(terminal.handle)
+
+    expect(shown.preview).toBe('Claude Code\nWorking on fix\nTool: Read')
+  })
+
+  it('uses provider alternate-screen snapshots on the first terminal read call', async () => {
+    const serializeProviderBuffer = vi.fn().mockResolvedValue({
+      data: '\x1b[?1049h\x1b[2J\x1b[HClaude Code\r\nWorking on fix\r\nTool: Read\r\n',
+      cols: 80,
+      rows: 24,
+      seq: 900,
+      source: 'headless',
+      alternateScreen: true
+    })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeProviderBuffer,
+      hasRendererSerializer: () => false
+    })
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData('pty-1', 'shell history\r\n', 100)
+    runtime.synchronizePtyOutputSequenceFromProvider(
+      'pty-1',
+      { value: 900, generation: 'continued' },
+      0
+    )
+
+    const read = await runtime.readTerminal(terminal.handle)
+
+    expect(read.tail).toEqual(['Claude Code', 'Working on fix', 'Tool: Read'])
+    expect(serializeProviderBuffer).toHaveBeenCalledWith('pty-1', { scrollbackRows: 0 })
+  })
+
+  it('uses provider alternate-screen snapshots on the first terminal show call', async () => {
+    const serializeProviderBuffer = vi.fn().mockResolvedValue({
+      data: '\x1b[?1049h\x1b[2J\x1b[HClaude Code\r\nWorking on fix\r\nTool: Read\r\n',
+      cols: 80,
+      rows: 24,
+      seq: 900,
+      source: 'headless',
+      alternateScreen: true
+    })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeProviderBuffer,
+      hasRendererSerializer: () => false
+    })
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData('pty-1', 'shell history\r\n', 100)
+    runtime.synchronizePtyOutputSequenceFromProvider(
+      'pty-1',
+      { value: 900, generation: 'continued' },
+      0
+    )
+
+    const shown = await runtime.showTerminal(terminal.handle)
+
+    expect(shown.preview).toBe('Claude Code\nWorking on fix\nTool: Read')
+    expect(serializeProviderBuffer).toHaveBeenCalledWith('pty-1', { scrollbackRows: 0 })
+  })
+
+  it('keeps first provider-backed alternate-screen read and show aligned when the retained transcript is empty', async () => {
+    const createRuntime = async () => {
+      const serializeProviderBuffer = vi.fn().mockResolvedValue({
+        data: '\x1b[?1049h\x1b[2J\x1b[HClaude Code\r\nWorking on fix\r\nTool: Read\r\n',
+        cols: 80,
+        rows: 24,
+        seq: 900,
+        source: 'headless',
+        alternateScreen: true
+      })
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeProviderBuffer,
+        hasRendererSerializer: () => false
+      })
+      syncSinglePty(runtime)
+
+      const [terminal] = (await runtime.listTerminals()).terminals
+      runtime.synchronizePtyOutputSequenceFromProvider(
+        'pty-1',
+        { value: 900, generation: 'continued' },
+        0
+      )
+
+      return { runtime, terminal, serializeProviderBuffer }
+    }
+
+    const readState = await createRuntime()
+    const showState = await createRuntime()
+
+    const read = await readState.runtime.readTerminal(readState.terminal.handle)
+    const shown = await showState.runtime.showTerminal(showState.terminal.handle)
+
+    expect(read.tail).toEqual(['Claude Code', 'Working on fix', 'Tool: Read'])
+    expect(shown.preview).toBe('Claude Code\nWorking on fix\nTool: Read')
+    expect(shown.preview.split('\n')).toEqual(read.tail)
+    expect(readState.serializeProviderBuffer).toHaveBeenCalledWith('pty-1', { scrollbackRows: 0 })
+    expect(showState.serializeProviderBuffer).toHaveBeenCalledWith('pty-1', { scrollbackRows: 0 })
+  })
+
   it('returns renderer visible screen lines through terminal.read RPC JSON result', async () => {
     const serializeBuffer = vi.fn().mockResolvedValue({
       data: '\x1b[?1049hClaude Code\r\nChecking files\r\nWaiting for input\r\n',
@@ -12628,60 +12781,243 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  it('does not use renderer visible-screen fallback for cursor transcript reads', async () => {
-    const serializeBuffer = vi.fn().mockResolvedValue({
-      data: 'Visible TUI\n',
+  it('does not use visible-screen fallback for cursor transcript reads', async () => {
+    const serializeProviderBuffer = vi.fn().mockResolvedValue({
+      data: '\x1b[?1049h\x1b[2J\x1b[HVisible TUI\r\n',
       cols: 80,
-      rows: 24
+      rows: 24,
+      seq: 900,
+      source: 'headless',
+      alternateScreen: true
     })
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null,
-      hasRendererSerializer: () => true,
-      serializeBuffer
+      serializeProviderBuffer,
+      hasRendererSerializer: () => false
     })
     syncSinglePty(runtime)
 
     const [terminal] = (await runtime.listTerminals()).terminals
-    runtime.onPtyData('pty-1', '   \n', 100)
+    runtime.onPtyData('pty-1', 'shell history\r\n', 100)
+    runtime.synchronizePtyOutputSequenceFromProvider(
+      'pty-1',
+      { value: 900, generation: 'continued' },
+      0
+    )
+
+    const read = await runtime.readTerminal(terminal.handle, { cursor: 0 })
+    expect(read.tail).toEqual(['shell history'])
+    expect(serializeProviderBuffer).not.toHaveBeenCalled()
+
+    const shown = await runtime.showTerminal(terminal.handle)
+
+    expect(shown.preview).toBe('Visible TUI')
+    expect(serializeProviderBuffer).toHaveBeenCalledWith('pty-1', { scrollbackRows: 0 })
+  })
+
+  it('does not touch provider snapshots for first cursor reads on provider-preferred PTYs', async () => {
+    const serializeProviderBuffer = vi.fn().mockResolvedValue({
+      data: '\x1b[?1049h\x1b[2J\x1b[HVisible TUI\r\n',
+      cols: 80,
+      rows: 24,
+      seq: 900,
+      source: 'headless',
+      alternateScreen: true
+    })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeProviderBuffer,
+      hasRendererSerializer: () => false
+    })
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.synchronizePtyOutputSequenceFromProvider(
+      'pty-1',
+      { value: 900, generation: 'continued' },
+      0
+    )
 
     const read = await runtime.readTerminal(terminal.handle, { cursor: 0 })
 
-    expect(read.tail).toEqual([''])
-    expect(serializeBuffer).not.toHaveBeenCalledWith('pty-1', {
+    expect(read.tail).toEqual([])
+    expect(serializeProviderBuffer).not.toHaveBeenCalled()
+  })
+
+  it('keeps normal-screen read and show previews on retained output', async () => {
+    const nonblankSerializeBuffer = vi.fn().mockResolvedValue({
+      data: 'visible screen that should stay unused\r\n',
+      cols: 80,
+      rows: 24
+    })
+    const nonblankRuntime = new OrcaRuntimeService(store)
+    nonblankRuntime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      hasRendererSerializer: () => true,
+      serializeBuffer: nonblankSerializeBuffer
+    })
+    syncSinglePty(nonblankRuntime)
+
+    const [nonblankTerminal] = (await nonblankRuntime.listTerminals()).terminals
+    nonblankRuntime.onPtyData('pty-1', 'shell prompt\r\nstill retained\r\n', 100)
+
+    const nonblankRead = await nonblankRuntime.readTerminal(nonblankTerminal.handle)
+    const nonblankShow = await nonblankRuntime.showTerminal(nonblankTerminal.handle)
+
+    expect(nonblankRead.tail).toEqual(['shell prompt', 'still retained'])
+    expect(nonblankShow.preview).toBe('shell prompt\nstill retained')
+    expect(nonblankSerializeBuffer).not.toHaveBeenCalledWith('pty-1', {
+      scrollbackRows: 0,
+      altScreenForcesZeroRows: false
+    })
+
+    const shortBlankSerializeBuffer = vi.fn().mockResolvedValue({
+      data: 'shell prompt\r\n',
+      cols: 80,
+      rows: 24
+    })
+    const shortBlankRuntime = new OrcaRuntimeService(store)
+    shortBlankRuntime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      hasRendererSerializer: () => true,
+      serializeBuffer: shortBlankSerializeBuffer
+    })
+    syncSinglePty(shortBlankRuntime)
+
+    const [shortBlankTerminal] = (await shortBlankRuntime.listTerminals()).terminals
+    shortBlankRuntime.onPtyData('pty-1', '\n\n', 100)
+
+    const shortBlankRead = await shortBlankRuntime.readTerminal(shortBlankTerminal.handle)
+    const shortBlankShow = await shortBlankRuntime.showTerminal(shortBlankTerminal.handle)
+
+    expect(shortBlankRead.tail).toEqual(['', ''])
+    expect(shortBlankShow.preview).toBe('')
+    expect(shortBlankSerializeBuffer).not.toHaveBeenCalledWith('pty-1', {
       scrollbackRows: 0,
       altScreenForcesZeroRows: false
     })
   })
 
-  it('does not use renderer visible-screen fallback for a short blank shell tail', async () => {
-    const serializeBuffer = vi.fn().mockResolvedValue({
-      data: 'shell prompt\n',
+  it('keeps retained output when visible snapshots are unavailable', async () => {
+    const emptyProviderBuffer = vi.fn().mockResolvedValue({
+      data: '',
       cols: 80,
-      rows: 24
+      rows: 24,
+      seq: 900,
+      source: 'headless',
+      alternateScreen: true
+    })
+    const emptyRuntime = new OrcaRuntimeService(store)
+    emptyRuntime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeProviderBuffer: emptyProviderBuffer,
+      hasRendererSerializer: () => false
+    })
+    syncSinglePty(emptyRuntime)
+
+    const [emptyTerminal] = (await emptyRuntime.listTerminals()).terminals
+    emptyRuntime.onPtyData('pty-1', 'shell history\r\n', 100)
+    emptyRuntime.synchronizePtyOutputSequenceFromProvider(
+      'pty-1',
+      { value: 900, generation: 'continued' },
+      0
+    )
+
+    const emptyRead = await emptyRuntime.readTerminal(emptyTerminal.handle)
+    const emptyShow = await emptyRuntime.showTerminal(emptyTerminal.handle)
+
+    expect(emptyRead.tail).toEqual(['shell history'])
+    expect(emptyShow.preview).toBe('shell history')
+    expect(emptyProviderBuffer).toHaveBeenCalledWith('pty-1', { scrollbackRows: 0 })
+
+    const failingProviderBuffer = vi.fn().mockRejectedValue(new Error('snapshot unavailable'))
+    const failingRuntime = new OrcaRuntimeService(store)
+    failingRuntime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeProviderBuffer: failingProviderBuffer,
+      hasRendererSerializer: () => false
+    })
+    syncSinglePty(failingRuntime)
+
+    const [failingTerminal] = (await failingRuntime.listTerminals()).terminals
+    failingRuntime.onPtyData('pty-1', 'shell history\r\n', 100)
+    failingRuntime.synchronizePtyOutputSequenceFromProvider(
+      'pty-1',
+      { value: 900, generation: 'continued' },
+      0
+    )
+
+    const failingRead = await failingRuntime.readTerminal(failingTerminal.handle)
+    const failingShow = await failingRuntime.showTerminal(failingTerminal.handle)
+
+    expect(failingRead.tail).toEqual(['shell history'])
+    expect(failingShow.preview).toBe('shell history')
+    expect(failingProviderBuffer).toHaveBeenCalled()
+  })
+
+  it('bounds visible-snapshot read and show output', async () => {
+    const visibleLines = [
+      'skip-1',
+      'skip-2',
+      'A'.repeat(49),
+      'B'.repeat(49),
+      'C'.repeat(49),
+      'D'.repeat(49),
+      'E'.repeat(49),
+      'F'.repeat(50)
+    ]
+    const expectedVisibleTail = visibleLines.slice(-6)
+    const expectedPreview = expectedVisibleTail.join('\n')
+    expect(expectedPreview.length).toBe(300)
+
+    const serializeProviderBuffer = vi.fn().mockResolvedValue({
+      data: `\x1b[?1049h\x1b[2J\x1b[H${visibleLines.join('\r\n')}\r\n`,
+      cols: 80,
+      rows: 24,
+      seq: 900,
+      source: 'headless',
+      alternateScreen: true
     })
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null,
-      hasRendererSerializer: () => true,
-      serializeBuffer
+      serializeProviderBuffer,
+      hasRendererSerializer: () => false
     })
     syncSinglePty(runtime)
 
     const [terminal] = (await runtime.listTerminals()).terminals
-    runtime.onPtyData('pty-1', '\n\n', 100)
+    runtime.onPtyData('pty-1', 'shell history\r\n', 100)
+    runtime.synchronizePtyOutputSequenceFromProvider(
+      'pty-1',
+      { value: 900, generation: 'continued' },
+      0
+    )
 
-    const read = await runtime.readTerminal(terminal.handle)
+    const read = await runtime.readTerminal(terminal.handle, { limit: 6 })
+    const shown = await runtime.showTerminal(terminal.handle)
 
-    expect(read.tail).toEqual(['', ''])
-    expect(serializeBuffer).not.toHaveBeenCalledWith('pty-1', {
-      scrollbackRows: 0,
-      altScreenForcesZeroRows: false
-    })
+    expect(read.tail).toEqual(expectedVisibleTail)
+    expect(read.returnedLineCount).toBe(6)
+    expect(shown.preview).toBe(expectedPreview)
+    expect(shown.preview.length).toBe(300)
+    expect(shown.preview.split('\n')).toHaveLength(6)
   })
 
   it('trims oversized terminal output bursts without per-line array shifts', async () => {

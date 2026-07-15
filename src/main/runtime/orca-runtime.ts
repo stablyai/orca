@@ -7378,52 +7378,116 @@ export class OrcaRuntimeService {
     read: RuntimeTerminalRead,
     opts: { cursor?: number; limit?: number } = {}
   ): Promise<RuntimeTerminalRead> {
-    if (!shouldFallbackToVisibleTerminalSnapshot(read, opts)) {
+    if (typeof opts.cursor === 'number') {
       return read
     }
-    const lines = await this.readRendererVisibleSnapshotLines(ptyId)
+    const { snapshot, isAlternateScreen } = await this.prepareVisibleSnapshotFallback(ptyId)
+    if (!shouldFallbackToVisibleTerminalSnapshot(read, opts, isAlternateScreen)) {
+      return read
+    }
+    const lines = await this.readVisibleSnapshotLines(ptyId, snapshot)
     if (lines.length === 0) {
       return read
     }
     return buildVisibleSnapshotReadFallback(read, lines, opts.limit)
   }
 
-  private async readRendererVisibleSnapshotLines(ptyId: string): Promise<string[]> {
-    const controller = this.ptyController
-    if (!controller?.serializeBuffer) {
-      return []
+  // Why: provider-backed PTYs learn alternate-screen state from the provider
+  // snapshot itself on first access, so read/show must be able to reuse it.
+  private async prepareVisibleSnapshotFallback(ptyId: string): Promise<{
+    snapshot: {
+      data: string
+      cols: number
+      rows: number
+      cwd?: string | null
+      lastTitle?: string
+      seq?: number
+      source?: 'headless' | 'renderer'
+      oscLinks?: TerminalOscLinkRange[]
+      alternateScreen?: boolean
+      scrollbackAnsi?: string
+      pendingEscapeTailAnsi?: string
+    } | null
+    isAlternateScreen: boolean
+  }> {
+    const isAlternateScreen = this.isTerminalAlternateScreen(ptyId)
+    if (
+      isAlternateScreen ||
+      !this.providerSnapshotPreferredPtys.has(ptyId) ||
+      this.providerModeTrackersByPtyId.has(ptyId)
+    ) {
+      return { snapshot: null, isAlternateScreen }
     }
-    if (controller.hasRendererSerializer && !controller.hasRendererSerializer(ptyId)) {
-      return []
+    const snapshot = await this.serializeTerminalBuffer(ptyId, { scrollbackRows: 0 })
+    return {
+      snapshot,
+      isAlternateScreen: snapshot?.alternateScreen ?? this.isTerminalAlternateScreen(ptyId)
     }
+  }
+
+  private async readVisibleSnapshotLines(
+    ptyId: string,
+    snapshot: {
+      data: string
+      cols: number
+      rows: number
+      cwd?: string | null
+      lastTitle?: string
+      seq?: number
+      source?: 'headless' | 'renderer'
+      oscLinks?: TerminalOscLinkRange[]
+      alternateScreen?: boolean
+      scrollbackAnsi?: string
+      pendingEscapeTailAnsi?: string
+    } | null = null
+  ): Promise<string[]> {
     try {
-      // Why: raw PTY tails can be whitespace-only while a full-screen TUI is
-      // visibly nonblank in renderer xterm. Ask the renderer for the active
-      // screen instead of reusing the headless transcript path.
-      const snapshot = await controller.serializeBuffer(ptyId, {
-        scrollbackRows: 0,
-        altScreenForcesZeroRows: false
-      })
-      if (!snapshot || snapshot.data.length === 0) {
+      let currentSnapshot =
+        snapshot ?? (await this.serializeTerminalBuffer(ptyId, { scrollbackRows: 0 }))
+      if (!currentSnapshot || currentSnapshot.data.length === 0) {
         return []
       }
-      const emulator = new HeadlessEmulator({
-        cols: snapshot.cols,
-        rows: snapshot.rows,
-        scrollback: 0
-      })
-      try {
-        await emulator.write(snapshot.data)
-        return emulator
-          .getVisibleLines()
-          .map((line) => line.trimEnd())
-          .filter((line) => line.trim().length > 0)
-      } finally {
-        emulator.dispose()
+      const readLines = async (
+        loadedSnapshot: NonNullable<typeof currentSnapshot>
+      ): Promise<string[]> => {
+        const emulator = new HeadlessEmulator({
+          cols: loadedSnapshot.cols,
+          rows: loadedSnapshot.rows,
+          scrollback: 0
+        })
+        try {
+          await emulator.write(`\x1b[2J\x1b[3J\x1b[H${loadedSnapshot.data}`)
+          return emulator
+            .getVisibleLines()
+            .map((line) => line.trimEnd())
+            .filter((line) => line.trim().length > 0)
+        } finally {
+          emulator.dispose()
+        }
       }
+      let lines = await readLines(currentSnapshot)
+      if (lines.length === 0 && currentSnapshot.source !== 'renderer') {
+        const rendererSnapshot = await this.serializeRendererTerminalBuffer(ptyId, {
+          scrollbackRows: 0
+        })
+        if (rendererSnapshot?.data) {
+          currentSnapshot = rendererSnapshot
+          lines = await readLines(currentSnapshot)
+        }
+      }
+      return lines
     } catch {
       return []
     }
+  }
+
+  private async visibleSnapshotPreview(ptyId: string, preview: string): Promise<string> {
+    const { snapshot, isAlternateScreen } = await this.prepareVisibleSnapshotFallback(ptyId)
+    if (!isAlternateScreen) {
+      return preview
+    }
+    const lines = await this.readVisibleSnapshotLines(ptyId, snapshot)
+    return lines.length > 0 ? buildPreview(lines, '') : preview
   }
 
   private async serializeHeadlessTerminalBuffer(
@@ -10528,8 +10592,10 @@ export class OrcaRuntimeService {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       const worktreesById = await this.getResolvedWorktreeMap()
+      const summary = this.buildPtyTerminalSummary(pty.pty, worktreesById)
       return {
-        ...this.buildPtyTerminalSummary(pty.pty, worktreesById),
+        ...summary,
+        preview: await this.visibleSnapshotPreview(pty.pty.ptyId, summary.preview),
         tabId: pty.pty.tabId ?? pty.record.tabId,
         leafId: parsePaneKey(pty.pty.paneKey ?? '')?.leafId ?? pty.record.leafId,
         paneRuntimeId: -1,
@@ -10544,6 +10610,9 @@ export class OrcaRuntimeService {
     const summary = this.buildTerminalSummary(leaf, worktreesById)
     return {
       ...summary,
+      preview: leaf.ptyId
+        ? await this.visibleSnapshotPreview(leaf.ptyId, summary.preview)
+        : summary.preview,
       paneRuntimeId: leaf.paneRuntimeId,
       ptyId: leaf.ptyId,
       rendererGraphEpoch: this.rendererGraphEpoch
@@ -26559,10 +26628,14 @@ function readTerminalTail(args: {
 
 function shouldFallbackToVisibleTerminalSnapshot(
   read: RuntimeTerminalRead,
-  opts: { cursor?: number; limit?: number }
+  opts: { cursor?: number; limit?: number },
+  isAlternateScreen: boolean
 ): boolean {
   if (typeof opts.cursor === 'number') {
     return false
+  }
+  if (isAlternateScreen) {
+    return true
   }
   if (read.tail.length === 0) {
     return false
