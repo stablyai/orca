@@ -7269,7 +7269,20 @@ export class OrcaRuntimeService {
     }
 
     const rendererSnapshot = await this.serializeRendererTerminalBuffer(ptyId, opts)
-    return rendererSnapshot ?? this.serializeProviderTerminalBuffer(ptyId, opts)
+    if (!rendererSnapshot) {
+      return this.serializeProviderTerminalBuffer(ptyId, opts)
+    }
+    if (rendererSnapshot.data.length > 0) {
+      return rendererSnapshot
+    }
+    // Why: parked desktop panes register serializers before their xterm has
+    // hydrated. Treat that empty shell as provisional so retained provider
+    // history can restore mobile without forcing the desktop pane to mount.
+    const providerSnapshot = await this.serializeProviderTerminalBuffer(ptyId, opts)
+    return providerSnapshot &&
+      (providerSnapshot.data.length > 0 || Boolean(providerSnapshot.scrollbackAnsi))
+      ? providerSnapshot
+      : rendererSnapshot
   }
 
   private async serializeRendererTerminalBuffer(
@@ -8056,6 +8069,17 @@ export class OrcaRuntimeService {
     const { rateLimits } = this.requireAccountServices()
     await Promise.allSettled([
       rateLimits.refresh(),
+      rateLimits.fetchInactiveClaudeAccountsOnOpen(),
+      rateLimits.fetchInactiveCodexAccountsOnOpen()
+    ])
+  }
+
+  // Why: connection migration replays subscriptions; use the stale-aware lane
+  // so a reconnect cannot turn one mobile viewer into continuous forced fetches.
+  async refreshAccountsForMobileSubscriber(): Promise<void> {
+    const { rateLimits } = this.requireAccountServices()
+    await Promise.allSettled([
+      rateLimits.refreshIfStale(),
       rateLimits.fetchInactiveClaudeAccountsOnOpen(),
       rateLimits.fetchInactiveCodexAccountsOnOpen()
     ])
@@ -11494,6 +11518,7 @@ export class OrcaRuntimeService {
       const previousLastOutputAt = summary.lastOutputAt
       summary.liveTerminalCount += 1
       summary.hasAttachedPty = true
+      summary.hasHostSidebarActivity = true
       summary.lastOutputAt = maxTimestamp(summary.lastOutputAt, pty.lastOutputAt)
       summary.status = mergeWorktreeStatus(summary.status, 'active')
       if (
@@ -11505,6 +11530,19 @@ export class OrcaRuntimeService {
     }
 
     const session = this.store?.getWorkspaceSession?.()
+    for (const worktreeId of session?.activeWorktreeIdsOnShutdown ?? []) {
+      const summary = this.getSummaryForRuntimeWorktreeId(
+        summaries,
+        runtimeWorktreeSummaryPathIndex,
+        missingRuntimeWorktreeIds,
+        worktreeId
+      )
+      if (summary) {
+        // Why: desktop advertises deferred reattach ids as live before their
+        // panes mount; mobile must preserve the same startup activity view.
+        summary.hasHostSidebarActivity = true
+      }
+    }
     for (const [worktreeId, tabs] of Object.entries(session?.tabsByWorktree ?? {})) {
       if (tabs.length === 0) {
         continue
@@ -11531,6 +11569,23 @@ export class OrcaRuntimeService {
           summary.status,
           getSavedTabWorktreeStatus(tab.title, tab.ptyId !== null)
         )
+      }
+    }
+
+    for (const [worktreeId, tabs] of Object.entries(session?.browserTabsByWorktree ?? {})) {
+      if (tabs.length === 0) {
+        continue
+      }
+      const summary = this.getSummaryForRuntimeWorktreeId(
+        summaries,
+        runtimeWorktreeSummaryPathIndex,
+        missingRuntimeWorktreeIds,
+        worktreeId
+      )
+      if (summary) {
+        // Why: desktop's sleeping predicate treats any open browser workspace
+        // as active, so the mobile host projection must preserve that parity.
+        summary.hasHostSidebarActivity = true
       }
     }
 
@@ -20606,10 +20661,16 @@ export class OrcaRuntimeService {
       return null
     }
     const sessions = sessionsResult.value
+    const persistedWorktreeIdByPtyId = indexPersistedPtyWorktreeBindings(
+      this.store?.getWorkspaceSession?.()
+    )
     const livePtyIds = new Set(sessions.map((session) => session.id))
     for (const session of sessions) {
       this.adoptControllerTerminalHandle(session.id, session.terminalHandle)
+      // Why: workspace identity migration rekeys persisted ownership while a
+      // running daemon PTY keeps the worktree id minted into its session id.
       const worktreeId =
+        persistedWorktreeIdByPtyId.get(session.id) ??
         inferWorktreeIdFromPtyId(session.id) ??
         findResolvedWorktreeIdForPath(resolvedWorktrees, session.cwd)
       if (targetWorktreeId && worktreeId !== targetWorktreeId) {
@@ -26908,6 +26969,39 @@ function runtimePathsEqual(left: string, right: string): boolean {
 
 function inferWorktreeIdFromPtyId(ptyId: string): string | null {
   return parsePtySessionId(ptyId).worktreeId
+}
+
+function indexPersistedPtyWorktreeBindings(
+  session: WorkspaceSessionState | null | undefined
+): ReadonlyMap<string, string> {
+  const worktreeIdByPtyId = new Map<string, string>()
+  const ambiguousPtyIds = new Set<string>()
+  const bind = (ptyId: string | null | undefined, worktreeId: string): void => {
+    if (!ptyId || ambiguousPtyIds.has(ptyId)) {
+      return
+    }
+    const existingWorktreeId = worktreeIdByPtyId.get(ptyId)
+    if (existingWorktreeId && existingWorktreeId !== worktreeId) {
+      // Why: corrupt/stale duplicate bindings must not attribute a live PTY to
+      // whichever workspace happened to be visited first.
+      worktreeIdByPtyId.delete(ptyId)
+      ambiguousPtyIds.add(ptyId)
+      return
+    }
+    worktreeIdByPtyId.set(ptyId, worktreeId)
+  }
+
+  for (const [worktreeId, tabs] of Object.entries(session?.tabsByWorktree ?? {})) {
+    for (const tab of tabs) {
+      bind(tab.ptyId, worktreeId)
+      bind(session?.remoteSessionIdsByTabId?.[tab.id], worktreeId)
+      const layout = session?.terminalLayoutsByTabId[tab.id]
+      for (const ptyId of Object.values(layout?.ptyIdsByLeafId ?? {})) {
+        bind(ptyId, worktreeId)
+      }
+    }
+  }
+  return worktreeIdByPtyId
 }
 
 function setsEqual<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): boolean {

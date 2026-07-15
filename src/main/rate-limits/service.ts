@@ -347,6 +347,14 @@ export class RateLimitService {
     return this.getState()
   }
 
+  async refreshIfStale(): Promise<RateLimitState> {
+    // Why: reconnecting mobile subscribers need fresh backgrounded-desktop data,
+    // but replaying a subscription must not queue another forced provider fetch.
+    const plan = this.getActiveWindowRefreshPlan(Date.now())
+    await this.runActiveWindowRefreshPlan(plan)
+    return this.getState()
+  }
+
   async refreshGrok(): Promise<RateLimitState> {
     await this.fetchGrokOnly({ force: true })
     return this.getState()
@@ -477,6 +485,9 @@ export class RateLimitService {
       return
     }
     this.pruneInactiveClaudeState()
+    if (this.inactiveClaudeFetching.size > 0) {
+      return
+    }
     const accounts = this.inactiveClaudeAccountsResolver?.() ?? []
     if (accounts.length === 0) {
       return

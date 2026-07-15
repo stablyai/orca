@@ -7404,6 +7404,70 @@ describe('OrcaRuntimeService', () => {
       })
     })
 
+    it('falls back to provider history when a mounted renderer has not hydrated yet', async () => {
+      const { runtime } = createSideEffectRuntime()
+      const serializeBuffer = vi.fn().mockResolvedValue({
+        data: '',
+        cols: 80,
+        rows: 24
+      })
+      const serializeProviderBuffer = vi.fn().mockResolvedValue({
+        data: '',
+        scrollbackAnsi: 'restored history\r\n',
+        cols: 120,
+        rows: 40,
+        seq: 900,
+        source: 'headless'
+      })
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeBuffer,
+        serializeProviderBuffer,
+        hasRendererSerializer: () => true
+      })
+
+      const snapshot = await runtime.serializeTerminalBuffer('pty-restored', {
+        scrollbackRows: 5000
+      })
+
+      expect(serializeBuffer).toHaveBeenCalledOnce()
+      expect(serializeProviderBuffer).toHaveBeenCalledWith('pty-restored', {
+        scrollbackRows: 5000
+      })
+      expect(snapshot).toMatchObject({
+        data: '',
+        scrollbackAnsi: 'restored history\r\n',
+        source: 'headless'
+      })
+    })
+
+    it('keeps an empty renderer snapshot when the provider has no retained content', async () => {
+      const { runtime } = createSideEffectRuntime()
+      const serializeProviderBuffer = vi.fn().mockResolvedValue({
+        data: '',
+        scrollbackAnsi: '',
+        cols: 120,
+        rows: 40,
+        seq: 0,
+        source: 'headless'
+      })
+      runtime.setPtyController({
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null,
+        serializeBuffer: vi.fn().mockResolvedValue({ data: '', cols: 51, rows: 40 }),
+        serializeProviderBuffer,
+        hasRendererSerializer: () => true
+      })
+
+      const snapshot = await runtime.serializeTerminalBuffer('pty-new')
+
+      expect(serializeProviderBuffer).toHaveBeenCalledOnce()
+      expect(snapshot).toMatchObject({ data: '', cols: 51, rows: 40, source: 'renderer' })
+    })
+
     it('does not let pre-response bytes hide restored provider history', async () => {
       const { runtime } = createSideEffectRuntime()
       const serializeProviderBuffer = vi.fn().mockResolvedValue({
@@ -22456,6 +22520,124 @@ describe('OrcaRuntimeService', () => {
       hasHostSidebarActivity: true,
       status: 'active',
       liveTerminalCount: 1
+    })
+  })
+
+  it('attributes live legacy PTYs from saved layout bindings when their panes are hidden', async () => {
+    const session = makeWorkspaceSessionWithHeadlessTerminal()
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+      ...session,
+      tabsByWorktree: {
+        [TEST_WORKTREE_ID]: session.tabsByWorktree[TEST_WORKTREE_ID]!.map((tab) => ({
+          ...tab,
+          ptyId: null
+        }))
+      }
+    })
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      write: vi.fn(() => true),
+      kill: vi.fn(() => true),
+      getForegroundProcess: vi.fn(async () => null),
+      // Legacy local PTYs have opaque ids and the local provider cannot recover cwd.
+      listProcesses: vi.fn(async () => [{ id: 'persisted-pty', cwd: '', title: 'shell' }])
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+
+    expect(worktrees[0]).toMatchObject({
+      worktreeId: TEST_WORKTREE_ID,
+      hasHostSidebarActivity: true,
+      hasAttachedPty: true,
+      liveTerminalCount: 1
+    })
+  })
+
+  it('prefers migrated layout ownership over a worktree id frozen in the PTY id', async () => {
+    const priorWorktreeId = `${TEST_REPO_ID}::/tmp/worktree-before-rename`
+    const migratedPtyId = `${priorWorktreeId}@@daemon-controller-pty`
+    const session = makeWorkspaceSessionWithHeadlessTerminal()
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+      ...session,
+      tabsByWorktree: {
+        [TEST_WORKTREE_ID]: session.tabsByWorktree[TEST_WORKTREE_ID]!.map((tab) => ({
+          ...tab,
+          ptyId: null
+        }))
+      },
+      terminalLayoutsByTabId: {
+        'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: migratedPtyId })
+      }
+    })
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      write: vi.fn(() => true),
+      kill: vi.fn(() => true),
+      getForegroundProcess: vi.fn(async () => null),
+      listProcesses: vi.fn(async () => [{ id: migratedPtyId, cwd: '', title: 'shell' }])
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+
+    expect(worktrees[0]).toMatchObject({
+      worktreeId: TEST_WORKTREE_ID,
+      hasHostSidebarActivity: true,
+      hasAttachedPty: true,
+      liveTerminalCount: 1
+    })
+  })
+
+  it('preserves deferred startup activity before restored terminal panes mount', async () => {
+    const session = makeWorkspaceSessionWithHeadlessTerminal({
+      activeWorktreeIdsOnShutdown: [TEST_WORKTREE_ID]
+    })
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      write: vi.fn(() => true),
+      kill: vi.fn(() => true),
+      getForegroundProcess: vi.fn(async () => null),
+      listProcesses: vi.fn(async () => [])
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+
+    expect(worktrees[0]).toMatchObject({
+      worktreeId: TEST_WORKTREE_ID,
+      hasHostSidebarActivity: true
+    })
+  })
+
+  it('marks saved browser tabs as host sidebar activity like desktop', async () => {
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        tabsByWorktree: {},
+        terminalLayoutsByTabId: {},
+        browserTabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'browser-1',
+              worktreeId: TEST_WORKTREE_ID,
+              url: 'https://example.com',
+              title: 'Example',
+              loading: false,
+              faviconUrl: null,
+              canGoBack: false,
+              canGoForward: false,
+              loadError: null,
+              createdAt: 1
+            }
+          ]
+        }
+      })
+    )
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const { worktrees } = await runtime.getWorktreePs()
+
+    expect(worktrees[0]).toMatchObject({
+      worktreeId: TEST_WORKTREE_ID,
+      hasHostSidebarActivity: true
     })
   })
 

@@ -337,6 +337,11 @@ describe('remote runtime request connection integration', () => {
             listener({ claude: null, codex: null })
           }
         },
+        refreshAccountsForMobileSubscriber: async () => {
+          for (const listener of accountsListeners) {
+            listener({ claude: null, codex: null })
+          }
+        },
         onAccountsChanged: (listener: (snapshot: unknown) => void) => {
           accountsListeners.add(listener)
           return () => accountsListeners.delete(listener)
