@@ -1493,36 +1493,6 @@ describe('updater', () => {
     })
   })
 
-  it('keeps perf manifest outages benign without recording a completed check', async () => {
-    appMock.getVersion.mockReturnValue('1.4.120')
-    fetchNewerReleaseTagsMock.mockResolvedValue({
-      tags: [],
-      state: 'unavailable',
-      unavailableReason: 'manifest'
-    })
-    const setLastUpdateCheckAt = vi.fn()
-    const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
-
-    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
-
-    setupAutoUpdater(mainWindow as never, {
-      getLastUpdateCheckAt: () => Date.now(),
-      setLastUpdateCheckAt
-    })
-    checkForUpdatesFromMenu({ includePerfPrerelease: true })
-
-    await vi.waitFor(() => {
-      expect(sendMock).toHaveBeenCalledWith('updater:status', {
-        state: 'error',
-        message: "Couldn't reach the update server. Try again in a few minutes.",
-        userInitiated: true
-      })
-    })
-    expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
-    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
-  })
-
   it('keeps prerelease publishing-window misses on the generic retry path', async () => {
     appMock.getVersion.mockReturnValue('1.4.120-rc.5')
     fetchNewerReleaseTagsMock.mockResolvedValue({ tags: [], state: 'not-ready' })
@@ -2863,15 +2833,9 @@ describe('updater', () => {
       candidateLimit: 2,
       includePrerelease: true,
       result: { tags: [], state: 'not-ready' as const }
-    },
-    {
-      version: '1.4.26',
-      candidateLimit: 1,
-      includePrerelease: false,
-      result: { tags: [], state: 'unavailable' as const, unavailableReason: 'manifest' as const }
     }
   ])(
-    'keeps a nudge campaign pending across release channels',
+    'keeps a nudge campaign pending for $version',
     async ({ version, candidateLimit, includePrerelease, result }) => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-05-24T21:40:00Z'))

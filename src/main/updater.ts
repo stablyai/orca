@@ -1167,7 +1167,8 @@ async function pinDefaultReleaseFeed(
     throw error
   } else if (
     releaseTagsResult.state === 'unavailable' &&
-    releaseTagsResult.unavailableReason === 'manifest'
+    releaseTagsResult.unavailableReason === 'manifest' &&
+    !includePrerelease
   ) {
     clearPrereleaseFallbackContext()
     clearPublishingWindowLastGoodCheck()

@@ -207,9 +207,13 @@ describe('updater check failure handling', () => {
 
     const sendMock = vi.fn()
     const mainWindow = { webContents: { send: sendMock } }
+    const setLastUpdateCheckAt = vi.fn()
     const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
 
-    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      setLastUpdateCheckAt
+    })
     checkForUpdatesFromMenu()
     await vi.waitFor(() => {
       expect(sendMock.mock.calls.map(([, status]) => status)).toContainEqual(
@@ -220,6 +224,10 @@ describe('updater check failure handling', () => {
         })
       )
     })
+    expect(
+      sendMock.mock.calls.filter(([, status]) => status?.message === PUBLISHING_MESSAGE)
+    ).toHaveLength(1)
+    expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
   })
 
   it('maps the captured release incident through readiness into publishing copy', async () => {
