@@ -58,7 +58,7 @@ describe('mobile session startup', () => {
     expect(pendingActivationEffect).toContain(
       'pendingTerminalActivationAttemptRef.current === activationKey'
     )
-    expect(pendingActivationEffect).toContain("sendRequest('session.tabs.activate'")
+    expect(pendingActivationEffect).toContain('activateMobileSessionTab(client,')
     expect(pendingActivationEffect).toContain('tabId: activePendingTerminalTab.id')
     expect(pendingActivationEffect).toContain('leafId: activePendingTerminalTab.leafId')
     expect(pendingActivationEffect).toContain('notifyClients: false')
@@ -69,7 +69,7 @@ describe('mobile session startup', () => {
   })
 
   it('keeps mobile session tab activation local to the phone', () => {
-    const activationRequests = source.split("sendRequest('session.tabs.activate'").slice(1)
+    const activationRequests = source.split('activateMobileSessionTab(client,').slice(1)
 
     expect(activationRequests).toHaveLength(4)
     for (const request of activationRequests) {

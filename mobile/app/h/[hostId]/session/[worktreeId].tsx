@@ -198,6 +198,10 @@ import {
 } from '../../../../src/dictation/mobile-dictation-setup'
 import { TerminalPaneView } from '../../../../src/session/TerminalPaneView'
 import {
+  activateMobileSessionTab,
+  focusMobileTerminal
+} from '../../../../src/session/mobile-session-tab-activation'
+import {
   getRepoIdFromMobileWorktreeId,
   isFileExistsErrorMessage,
   isGestureMouseTrackingMode,
@@ -2931,15 +2935,13 @@ export default function SessionScreen() {
       }
       subscribeToTerminal(handle)
       if (client) {
-        void client.sendRequest('terminal.focus', { terminal: handle }).catch(() => {})
+        void focusMobileTerminal(client, handle).catch(() => {})
         if (matchingTab) {
-          void client
-            .sendRequest('session.tabs.activate', {
-              worktree: `id:${worktreeId}`,
-              tabId: matchingTab.id,
-              notifyClients: false
-            })
-            .catch(() => {})
+          void activateMobileSessionTab(client, {
+            worktree: `id:${worktreeId}`,
+            tabId: matchingTab.id,
+            notifyClients: false
+          }).catch(() => {})
         }
       }
     },
@@ -2973,13 +2975,11 @@ export default function SessionScreen() {
         activeHandleRef.current = null
         setActiveHandle(null)
         if (client) {
-          void client
-            .sendRequest('session.tabs.activate', {
-              worktree: `id:${worktreeId}`,
-              tabId: tab.id,
-              notifyClients: false
-            })
-            .catch(() => {})
+          void activateMobileSessionTab(client, {
+            worktree: `id:${worktreeId}`,
+            tabId: tab.id,
+            notifyClients: false
+          }).catch(() => {})
         }
         return
       }
@@ -2997,13 +2997,11 @@ export default function SessionScreen() {
       activeHandleRef.current = null
       setActiveHandle(null)
       if (client) {
-        void client
-          .sendRequest('session.tabs.activate', {
-            worktree: `id:${worktreeId}`,
-            tabId: tab.id,
-            notifyClients: false
-          })
-          .catch(() => {})
+        void activateMobileSessionTab(client, {
+          worktree: `id:${worktreeId}`,
+          tabId: tab.id,
+          notifyClients: false
+        }).catch(() => {})
       }
       if (tab.type === 'browser') {
         return
@@ -4302,13 +4300,12 @@ export default function SessionScreen() {
     // Why: a hydrated headless/server-owned tab can already be active but still
     // pending; activation is the RPC that materializes or focuses its PTY handle.
     pendingTerminalActivationAttemptRef.current = activationKey
-    void client
-      .sendRequest('session.tabs.activate', {
-        worktree: `id:${worktreeId}`,
-        tabId: activePendingTerminalTab.id,
-        leafId: activePendingTerminalTab.leafId,
-        notifyClients: false
-      })
+    void activateMobileSessionTab(client, {
+      worktree: `id:${worktreeId}`,
+      tabId: activePendingTerminalTab.id,
+      leafId: activePendingTerminalTab.leafId,
+      notifyClients: false
+    })
       .then((response) => {
         if (!response.ok) {
           if (pendingTerminalActivationAttemptRef.current === activationKey) {

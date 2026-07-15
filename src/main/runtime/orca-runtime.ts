@@ -8061,6 +8061,17 @@ export class OrcaRuntimeService {
     ])
   }
 
+  // Why: connection migration replays subscriptions; use the stale-aware lane
+  // so a reconnect cannot turn one mobile viewer into continuous forced fetches.
+  async refreshAccountsForMobileSubscriber(): Promise<void> {
+    const { rateLimits } = this.requireAccountServices()
+    await Promise.allSettled([
+      rateLimits.refreshIfStale(),
+      rateLimits.fetchInactiveClaudeAccountsOnOpen(),
+      rateLimits.fetchInactiveCodexAccountsOnOpen()
+    ])
+  }
+
   selectClaudeAccount(accountId: string | null): Promise<ClaudeRateLimitAccountsState> {
     return this.requireAccountServices().claudeAccounts.selectAccount(accountId)
   }

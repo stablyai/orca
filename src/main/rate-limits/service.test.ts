@@ -764,6 +764,39 @@ describe('RateLimitService', () => {
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
   })
 
+  it('does not refetch fresh provider data for replayed mobile subscriptions', async () => {
+    const service = new RateLimitService()
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 10))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 20))
+
+    await service.refreshIfStale()
+    await service.refreshIfStale()
+    await service.refreshIfStale()
+
+    expect(fetchClaudeRateLimits).toHaveBeenCalledOnce()
+    expect(fetchCodexRateLimits).toHaveBeenCalledOnce()
+  })
+
+  it('does not queue a follow-up fetch when a mobile subscription replays mid-fetch', async () => {
+    const service = new RateLimitService()
+    const claude = deferred<ProviderRateLimits>()
+    const codex = deferred<ProviderRateLimits>()
+    vi.mocked(fetchClaudeRateLimits).mockReturnValue(claude.promise)
+    vi.mocked(fetchCodexRateLimits).mockReturnValue(codex.promise)
+
+    const firstRefresh = service.refreshIfStale()
+    await Promise.resolve()
+    const replayedRefresh = service.refreshIfStale()
+
+    claude.resolve(okProvider('claude', 10))
+    codex.resolve(okProvider('codex', 20))
+    await firstRefresh
+    await replayedRefresh
+
+    expect(fetchClaudeRateLimits).toHaveBeenCalledOnce()
+    expect(fetchCodexRateLimits).toHaveBeenCalledOnce()
+  })
+
   it('waits for a queued explicit refresh when another fetch is already in flight', async () => {
     const service = new RateLimitService()
     const firstClaude = deferred<ProviderRateLimits>()
@@ -1283,6 +1316,24 @@ describe('RateLimitService', () => {
         signal: expect.any(AbortSignal)
       })
     )
+  })
+
+  it('does not start overlapping inactive Claude preview fetches', async () => {
+    const service = new RateLimitService()
+    const accountFetch = deferred<ProviderRateLimits>()
+    service.setInactiveClaudeAccountsResolver(() => [
+      { id: 'account-1', managedAuthPath: '/tmp/account-1/auth' }
+    ])
+    vi.mocked(fetchManagedAccountUsage).mockReturnValueOnce(accountFetch.promise)
+
+    const firstFetch = service.fetchInactiveClaudeAccountsOnOpen()
+    await Promise.resolve()
+    await service.fetchInactiveClaudeAccountsOnOpen()
+
+    expect(fetchManagedAccountUsage).toHaveBeenCalledTimes(1)
+
+    accountFetch.resolve(okProvider('claude', 50, Date.now()))
+    await firstFetch
   })
 
   it('does not start overlapping inactive Codex preview fetches', async () => {
