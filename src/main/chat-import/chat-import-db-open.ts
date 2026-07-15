@@ -11,6 +11,9 @@ export function openChatImportDbForWrite(dbPath: string): SyncDatabase {
   const db = new SyncDatabase(dbPath)
   db.pragma('journal_mode = WAL')
   db.pragma('busy_timeout = 5000')
+  // Why: SQLite defaults foreign keys off per connection, so the schema's
+  // ON DELETE CASCADE on messages would silently not fire without this.
+  db.pragma('foreign_keys = ON')
   initChatImportSchema(db)
   return db
 }

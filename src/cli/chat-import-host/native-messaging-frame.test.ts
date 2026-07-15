@@ -3,7 +3,8 @@ import {
   encodeNativeMessage,
   NativeMessageDecoder,
   NativeMessageFrameError,
-  MAX_FRAME_BYTES
+  MAX_FRAME_BYTES,
+  MAX_OUTBOUND_FRAME_BYTES
 } from './native-messaging-frame'
 
 describe('native messaging framing', () => {
@@ -37,5 +38,24 @@ describe('native messaging framing', () => {
     const header = Buffer.alloc(4)
     header.writeUInt32LE(MAX_FRAME_BYTES + 1, 0)
     expect(() => new NativeMessageDecoder().feed(header)).toThrow(NativeMessageFrameError)
+  })
+
+  it('carries frames decoded before an oversized one in the same chunk', () => {
+    const bad = Buffer.alloc(4)
+    bad.writeUInt32LE(MAX_FRAME_BYTES + 1, 0)
+    const chunk = Buffer.concat([encodeNativeMessage({ n: 1 }), bad])
+    try {
+      new NativeMessageDecoder().feed(chunk)
+      expect.unreachable('feed should have thrown')
+    } catch (err) {
+      expect(err).toBeInstanceOf(NativeMessageFrameError)
+      const frames = (err as NativeMessageFrameError).decodedFrames
+      expect(frames.map((s) => JSON.parse(s))).toEqual([{ n: 1 }])
+    }
+  })
+
+  it('refuses to encode a frame over Chrome’s 1 MB inbound limit', () => {
+    const tooBig = { pad: 'x'.repeat(MAX_OUTBOUND_FRAME_BYTES) }
+    expect(() => encodeNativeMessage(tooBig)).toThrow(NativeMessageFrameError)
   })
 })

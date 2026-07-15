@@ -39,6 +39,9 @@ export function runChatImportHost(options: {
         resolve()
       }
     }
+    const respond = (raw: string): void => {
+      options.output.write(encodeNativeMessage(processChatImportHostMessage(db, raw, now())))
+    }
     options.input.on('data', (chunk: Buffer) => {
       let frames: string[]
       try {
@@ -48,6 +51,8 @@ export function runChatImportHost(options: {
           // Corrupt framing is unrecoverable for this connection, but the ERROR
           // frame already told the caller what happened — end cleanly rather
           // than reject, since nothing else went wrong at the process level.
+          // Frames decoded before the bad one are intact, so answer them first.
+          err.decodedFrames.forEach(respond)
           options.output.write(encodeNativeMessage({ type: 'ERROR', error: err.message }))
           finish()
         } else {
@@ -55,9 +60,7 @@ export function runChatImportHost(options: {
         }
         return
       }
-      for (const raw of frames) {
-        options.output.write(encodeNativeMessage(processChatImportHostMessage(db, raw, now())))
-      }
+      frames.forEach(respond)
     })
     options.input.on('end', () => finish())
     options.input.on('error', (err) => finish(err instanceof Error ? err : new Error(String(err))))

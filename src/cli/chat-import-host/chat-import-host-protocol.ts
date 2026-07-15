@@ -29,17 +29,26 @@ function parseConversation(value: unknown): WebConversation | null {
     return null
   }
   const messages: WebConversation['messages'] = []
+  // Why: idx becomes part of the message primary key (`${convId}#${idx}`), so a
+  // duplicate or non-integer idx would collide mid-insert and leave the
+  // conversation's messages half-replaced.
+  const seenIdx = new Set<number>()
   for (const raw of c.messages) {
     if (!raw || typeof raw !== 'object') {
       return null
     }
     const m = raw as Record<string, unknown>
-    if ((m.role !== 'USER' && m.role !== 'AI') || typeof m.idx !== 'number') {
+    if ((m.role !== 'USER' && m.role !== 'AI') || !Number.isInteger(m.idx)) {
       return null
     }
+    const idx = m.idx as number
+    if (seenIdx.has(idx)) {
+      return null
+    }
+    seenIdx.add(idx)
     messages.push({
       role: m.role,
-      idx: m.idx,
+      idx,
       text: typeof m.text === 'string' ? m.text : null,
       createdAt: typeof m.createdAt === 'string' ? m.createdAt : null
     })

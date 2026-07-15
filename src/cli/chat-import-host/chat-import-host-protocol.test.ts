@@ -35,6 +35,30 @@ describe('processChatImportHostMessage', () => {
     expect(listIngestedExternalIds(db, 'CHATGPT')).toEqual(['c1'])
   })
 
+  it.each([
+    [
+      'duplicate idx',
+      [
+        { role: 'USER', idx: 0 },
+        { role: 'AI', idx: 0 }
+      ]
+    ],
+    ['non-integer idx', [{ role: 'USER', idx: 1.5 }]]
+  ])('INGEST rejects a conversation with %s before it reaches SQLite', (_label, messages) => {
+    const db = tempDb()
+    const conv = {
+      source: 'CHATGPT',
+      externalId: 'bad',
+      title: 'T',
+      createdAt: null,
+      updatedAt: null,
+      messages
+    }
+    const res = processChatImportHostMessage(db, JSON.stringify({ type: 'INGEST', conv }), 'now')
+    expect(res).toEqual({ type: 'ERROR', error: 'bad conversation' })
+    expect(listIngestedExternalIds(db, 'CHATGPT')).toEqual([])
+  })
+
   it('INGESTED_IDS returns stored ids for the source', () => {
     const db = tempDb()
     processChatImportHostMessage(

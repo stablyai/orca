@@ -67,6 +67,44 @@ describe('upsertWebConversation', () => {
     expect(rows).toEqual([{ text: 'two' }])
     db.close()
   })
+
+  it('rolls back to the previous messages when an insert fails mid-write', () => {
+    const db = tempDb()
+    const conv = {
+      source: 'CLAUDE' as const,
+      externalId: 'x',
+      title: 'first',
+      createdAt: null,
+      updatedAt: null,
+      messages: [{ role: 'USER' as const, idx: 0, text: 'kept', createdAt: null }]
+    }
+    upsertWebConversation(db, conv, '2026-07-13T00:00:00.000Z')
+
+    // Duplicate idx collides on the `${convId}#${idx}` primary key partway
+    // through the insert loop, after the delete has already run.
+    expect(() =>
+      upsertWebConversation(
+        db,
+        {
+          ...conv,
+          title: 'second',
+          messages: [
+            { role: 'USER', idx: 0, text: 'a', createdAt: null },
+            { role: 'AI', idx: 0, text: 'b', createdAt: null }
+          ]
+        },
+        '2026-07-13T00:01:00.000Z'
+      )
+    ).toThrow()
+
+    expect(db.prepare('SELECT text FROM messages WHERE conv_id = ?').all('CLAUDE/x')).toEqual([
+      { text: 'kept' }
+    ])
+    expect(db.prepare('SELECT title FROM conversations WHERE id = ?').all('CLAUDE/x')).toEqual([
+      { title: 'first' }
+    ])
+    db.close()
+  })
 })
 
 describe('listIngestedExternalIds', () => {
