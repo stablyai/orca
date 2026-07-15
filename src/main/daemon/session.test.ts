@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { PRODUCER_PAUSE_FAILSAFE_MS, Session } from './session'
+import { PRODUCER_PAUSE_FAILSAFE_MS, SESSION_FORCE_KILL_RETRY_MS, Session } from './session'
 import type { SessionState, ShellReadyState } from './types'
 import type { TuiAgent } from '../../shared/types'
 
@@ -362,13 +362,15 @@ describe('Session', () => {
       expect(taken?.snapshot).toBeTruthy()
     })
 
-    it('cancels the post-ready flush gate when force-disposing the subprocess', () => {
+    it('cancels the post-ready flush gate when force-disposing the subprocess', async () => {
       createSession({ shellReadySupported: true })
       session.write('codex\n')
 
       subprocess.simulateData('\x1b]777;orca-shell-ready\x07')
       expect(session.shellState).toBe('ready' satisfies ShellReadyState)
-      session.forceKillAndDisposeSubprocess()
+      const dispose = session.forceKillAndDisposeSubprocess()
+      subprocess.simulateExit(137)
+      await dispose
       vi.advanceTimersByTime(500)
 
       expect(subprocess.written).toEqual([])
@@ -412,6 +414,24 @@ describe('Session', () => {
       createSession()
       session.kill()
       expect(subprocess.killed).toBe(true)
+      expect(session.isTerminating).toBe(true)
+    })
+
+    it('allows a graceful retry when the first kill is rejected', () => {
+      let attempts = 0
+      subprocess.kill = () => {
+        attempts++
+        if (attempts === 1) {
+          throw new Error('graceful kill rejected')
+        }
+      }
+      createSession()
+
+      expect(() => session.kill()).toThrow('graceful kill rejected')
+      expect(session.isTerminating).toBe(false)
+      expect(() => session.kill()).not.toThrow()
+
+      expect(attempts).toBe(2)
       expect(session.isTerminating).toBe(true)
     })
 
@@ -462,7 +482,7 @@ describe('Session', () => {
       expect(exitCodes).toEqual([0])
     })
 
-    it('force-disposes after 5s if subprocess does not exit', () => {
+    it('force-kills after 5s but retains ownership until subprocess exit', () => {
       createSession()
       // Override kill to NOT trigger exit
       subprocess.kill = () => {}
@@ -472,11 +492,58 @@ describe('Session', () => {
       expect(session.state).not.toBe('exited')
 
       vi.advanceTimersByTime(5_000)
-      expect(session.state).toBe('exited')
       expect(forceKillSpy).toHaveBeenCalled()
+      expect(session.state).toBe('running')
+      expect(session.isTerminating).toBe(true)
+
+      subprocess.simulateExit(137)
+      expect(session.state).toBe('exited')
     })
 
-    it('ignores late data and exit after force-dispose', () => {
+    it('retries a rejected destructive force kill while retaining ownership', async () => {
+      let forceKillAttempts = 0
+      subprocess.forceKill = () => {
+        forceKillAttempts++
+        if (forceKillAttempts === 1) {
+          throw new Error('force kill rejected')
+        }
+      }
+      createSession()
+
+      const shutdown = session.forceKillAndWaitForExit()
+      expect(forceKillAttempts).toBe(1)
+      await vi.advanceTimersByTimeAsync(SESSION_FORCE_KILL_RETRY_MS)
+      expect(forceKillAttempts).toBe(2)
+      subprocess.simulateExit(137)
+      await shutdown
+
+      expect(session.state).toBe('exited')
+    })
+
+    it('retries a rejected graceful-deadline force kill', async () => {
+      subprocess.kill = () => {}
+      let forceKillAttempts = 0
+      subprocess.forceKill = () => {
+        forceKillAttempts++
+        if (forceKillAttempts === 1) {
+          throw new Error('transient graceful fallback failure')
+        }
+      }
+      createSession()
+
+      session.kill()
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(forceKillAttempts).toBe(1)
+      expect(session.isTerminating).toBe(true)
+
+      await vi.advanceTimersByTimeAsync(SESSION_FORCE_KILL_RETRY_MS)
+      expect(forceKillAttempts).toBe(2)
+      subprocess.simulateExit(137)
+      expect(session.state).toBe('exited')
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it('keeps late data and the real exit code until physical exit', () => {
       createSession()
       subprocess.kill = () => {}
       const onData = vi.fn()
@@ -489,10 +556,10 @@ describe('Session', () => {
       subprocess.simulateData('late output')
       subprocess.simulateExit(23)
 
-      expect(onData).not.toHaveBeenCalled()
+      expect(onData).toHaveBeenCalledWith('late output')
       expect(onExit).toHaveBeenCalledTimes(1)
-      expect(onExit).toHaveBeenCalledWith(-1)
-      expect(session.exitCode).toBe(-1)
+      expect(onExit).toHaveBeenCalledWith(23)
+      expect(session.exitCode).toBe(23)
     })
   })
 

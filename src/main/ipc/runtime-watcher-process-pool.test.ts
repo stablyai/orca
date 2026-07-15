@@ -13,6 +13,14 @@ type InstalledSubscription = {
   unsubscribe: ReturnType<typeof vi.fn<() => Promise<void>>>
 }
 
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve = (): void => undefined
+  const promise = new Promise<void>((nextResolve) => {
+    resolve = nextResolve
+  })
+  return { promise, resolve }
+}
+
 class FakeSupervisor {
   readonly subscriptions: InstalledSubscription[] = []
   readonly dispose = vi.fn()
@@ -40,7 +48,6 @@ describe('RuntimeWatcherProcessPool', () => {
   beforeEach(() => {
     supervisors = []
     pool = new RuntimeWatcherProcessPool({
-      maxSharedSupervisors: 4,
       createSupervisor: () => {
         const supervisor = new FakeSupervisor()
         supervisors.push(supervisor)
@@ -49,14 +56,14 @@ describe('RuntimeWatcherProcessPool', () => {
     })
   })
 
-  it('spreads roots across a bounded healthy pool before sharing children', async () => {
+  it('shares one healthy child until a fault requires quarantine isolation', async () => {
     for (const dir of ['/a', '/b', '/c', '/d', '/e']) {
       await pool.subscribe(dir, vi.fn(), {}, {})
     }
 
-    expect(supervisors).toHaveLength(4)
+    expect(supervisors).toHaveLength(1)
     expect(supervisors.map((supervisor) => supervisor.subscriptions.map(({ dir }) => dir))).toEqual(
-      [['/a', '/e'], ['/b'], ['/c'], ['/d']]
+      [['/a', '/b', '/c', '/d', '/e']]
     )
   })
 
@@ -104,7 +111,30 @@ describe('RuntimeWatcherProcessPool', () => {
     expect(supervisors[2].subscriptions.map(({ dir }) => dir)).toEqual(['/b'])
   })
 
-  it('bounds quarantine supervisors when a fused shard contains many roots', async () => {
+  it('does not assign a replacement until the failed child physically exits', async () => {
+    const physicalExit = deferred()
+    await pool.subscribe('/held', vi.fn(), {}, {})
+    const failure = new WatcherProcessFailure(
+      'file watcher process did not exit after termination deadline',
+      'supervisor',
+      'process_unavailable',
+      physicalExit.promise
+    )
+
+    supervisors[0].subscriptions[0].hooks.onTerminalError?.(failure)
+
+    await expect(pool.subscribe('/held', vi.fn(), {}, {})).rejects.toBe(failure)
+    expect(supervisors).toHaveLength(1)
+
+    physicalExit.resolve()
+    await physicalExit.promise
+    await expect(pool.subscribe('/held', vi.fn(), {}, {})).resolves.toBeDefined()
+
+    expect(supervisors).toHaveLength(2)
+    expect(supervisors[1].subscriptions.map(({ dir }) => dir)).toEqual(['/held'])
+  })
+
+  it('bounds single-root quarantine supervisors and their wait queue', async () => {
     pool = new RuntimeWatcherProcessPool({
       maxSharedSupervisors: 1,
       createSupervisor: () => {
@@ -113,7 +143,7 @@ describe('RuntimeWatcherProcessPool', () => {
         return supervisor
       }
     })
-    const roots = Array.from({ length: 12 }, (_, index) => `/root-${index}`)
+    const roots = Array.from({ length: 9 }, (_, index) => `/root-${index}`)
     for (const root of roots) {
       await pool.subscribe(root, vi.fn(), {}, {})
     }
@@ -127,14 +157,278 @@ describe('RuntimeWatcherProcessPool', () => {
     for (const installed of failedShard.subscriptions) {
       installed.hooks.onTerminalError?.(failure)
     }
-    for (const root of roots) {
-      await pool.subscribe(root, vi.fn(), {}, {})
-    }
+    const recoveries = roots.map((root) => pool.subscribe(root, vi.fn(), {}, {}))
+    const queueOverflow = expect(recoveries[8]).rejects.toThrow('quarantine capacity exhausted')
+    const active = await Promise.all(recoveries.slice(0, 4))
 
     expect(supervisors).toHaveLength(5)
     expect(supervisors.slice(1).map(({ subscriptions }) => subscriptions.length)).toEqual([
-      3, 3, 3, 3
+      1, 1, 1, 1
     ])
+
+    for (let index = 0; index < active.length; index++) {
+      await active[index].unsubscribe()
+      await expect(recoveries[index + 4]).resolves.toBeDefined()
+    }
+    await queueOverflow
+
+    expect(supervisors).toHaveLength(5)
+    expect(supervisors.slice(1).map(({ subscriptions }) => subscriptions.length)).toEqual([
+      2, 2, 2, 2
+    ])
+  })
+
+  it('does not fail a healthy queued root when a quarantine root fuses again', async () => {
+    pool = new RuntimeWatcherProcessPool({
+      maxSharedSupervisors: 1,
+      maxQuarantineSupervisors: 1,
+      createSupervisor: () => {
+        const supervisor = new FakeSupervisor()
+        supervisors.push(supervisor)
+        return supervisor
+      }
+    })
+    const failure = new WatcherProcessFailure(
+      'file watcher process crashed repeatedly',
+      'supervisor',
+      'supervisor_crash_fuse'
+    )
+    await pool.subscribe('/poison', vi.fn(), {}, {})
+    await pool.subscribe('/healthy', vi.fn(), {}, {})
+    for (const installed of supervisors[0].subscriptions) {
+      installed.hooks.onTerminalError?.(failure)
+    }
+
+    await pool.subscribe('/poison', vi.fn(), {}, {})
+    const healthyRecovery = pool.subscribe('/healthy', vi.fn(), {}, {})
+    supervisors[1].subscriptions[0].hooks.onTerminalError?.(failure)
+
+    await expect(healthyRecovery).resolves.toBeDefined()
+    await expect(pool.subscribe('/poison', vi.fn(), {}, {})).rejects.toThrow(
+      'failed again in quarantine'
+    )
+    expect(supervisors[1].subscriptions.map(({ dir }) => dir)).toEqual(['/poison'])
+    expect(supervisors[2].subscriptions.map(({ dir }) => dir)).toEqual(['/healthy'])
+  })
+
+  it('bounds how long a root can wait for quarantine capacity', async () => {
+    vi.useFakeTimers()
+    try {
+      pool = new RuntimeWatcherProcessPool({
+        maxSharedSupervisors: 1,
+        maxQuarantineSupervisors: 1,
+        createSupervisor: () => {
+          const supervisor = new FakeSupervisor()
+          supervisors.push(supervisor)
+          return supervisor
+        }
+      })
+      const failure = new WatcherProcessFailure(
+        'file watcher process crashed repeatedly',
+        'supervisor',
+        'supervisor_crash_fuse'
+      )
+      await pool.subscribe('/occupied', vi.fn(), {}, {})
+      await pool.subscribe('/waiting', vi.fn(), {}, {})
+      for (const installed of supervisors[0].subscriptions) {
+        installed.hooks.onTerminalError?.(failure)
+      }
+      await pool.subscribe('/occupied', vi.fn(), {}, {})
+
+      const waiting = pool.subscribe('/waiting', vi.fn(), {}, { subscribeTimeoutMs: 25 })
+      const timedOut = expect(waiting).rejects.toThrow('timed out waiting for quarantine capacity')
+      await vi.advanceTimersByTimeAsync(25)
+
+      await timedOut
+      expect(supervisors).toHaveLength(2)
+    } finally {
+      pool.dispose()
+      expect(vi.getTimerCount()).toBe(0)
+      vi.useRealTimers()
+    }
+  })
+
+  it('dedupes concurrent same-root assignments waiting for quarantine capacity', async () => {
+    pool = new RuntimeWatcherProcessPool({
+      maxSharedSupervisors: 1,
+      maxQuarantineSupervisors: 1,
+      createSupervisor: () => {
+        const supervisor = new FakeSupervisor()
+        supervisors.push(supervisor)
+        return supervisor
+      }
+    })
+    const failure = new WatcherProcessFailure(
+      'file watcher process crashed repeatedly',
+      'supervisor',
+      'supervisor_crash_fuse'
+    )
+    await pool.subscribe('/occupied', vi.fn(), {}, {})
+    await pool.subscribe('/same', vi.fn(), {}, {})
+    for (const installed of supervisors[0].subscriptions) {
+      installed.hooks.onTerminalError?.(failure)
+    }
+    const occupied = await pool.subscribe('/occupied', vi.fn(), {}, {})
+    const first = pool.subscribe('/same', vi.fn(), {}, {})
+    const second = pool.subscribe('/same', vi.fn(), {}, {})
+
+    await occupied.unsubscribe()
+    const [firstSubscription, secondSubscription] = await Promise.all([first, second])
+
+    expect(supervisors).toHaveLength(2)
+    expect(supervisors[1].subscriptions.map(({ dir }) => dir)).toEqual([
+      '/occupied',
+      '/same',
+      '/same'
+    ])
+    await firstSubscription.unsubscribe()
+    await secondSubscription.unsubscribe()
+  })
+
+  it('keeps a healthy same-root quarantine waiter when the first waiter aborts', async () => {
+    pool = new RuntimeWatcherProcessPool({
+      maxSharedSupervisors: 1,
+      maxQuarantineSupervisors: 1,
+      createSupervisor: () => {
+        const supervisor = new FakeSupervisor()
+        supervisors.push(supervisor)
+        return supervisor
+      }
+    })
+    const failure = new WatcherProcessFailure(
+      'file watcher process crashed repeatedly',
+      'supervisor',
+      'supervisor_crash_fuse'
+    )
+    await pool.subscribe('/occupied', vi.fn(), {}, {})
+    await pool.subscribe('/same', vi.fn(), {}, {})
+    for (const installed of supervisors[0].subscriptions) {
+      installed.hooks.onTerminalError?.(failure)
+    }
+    const occupied = await pool.subscribe('/occupied', vi.fn(), {}, {})
+    const firstController = new AbortController()
+    const first = pool.subscribe('/same', vi.fn(), {}, { signal: firstController.signal })
+    const second = pool.subscribe('/same', vi.fn(), {}, {})
+
+    firstController.abort()
+    await expect(first).rejects.toMatchObject({ code: 'subscribe_aborted' })
+    await occupied.unsubscribe()
+    const secondSubscription = await second
+
+    expect(supervisors[1].subscriptions.map(({ dir }) => dir)).toEqual(['/occupied', '/same'])
+    await secondSubscription.unsubscribe()
+  })
+
+  it('does not let an aborted zero-waiter assignment poison a same-turn replacement', async () => {
+    pool = new RuntimeWatcherProcessPool({
+      maxSharedSupervisors: 1,
+      maxQuarantineSupervisors: 1,
+      createSupervisor: () => {
+        const supervisor = new FakeSupervisor()
+        supervisors.push(supervisor)
+        return supervisor
+      }
+    })
+    const failure = new WatcherProcessFailure(
+      'file watcher process crashed repeatedly',
+      'supervisor',
+      'supervisor_crash_fuse'
+    )
+    await pool.subscribe('/occupied', vi.fn(), {}, {})
+    await pool.subscribe('/same', vi.fn(), {}, {})
+    for (const installed of supervisors[0].subscriptions) {
+      installed.hooks.onTerminalError?.(failure)
+    }
+    const occupied = await pool.subscribe('/occupied', vi.fn(), {}, {})
+    const controller = new AbortController()
+    const abandoned = pool.subscribe('/same', vi.fn(), {}, { signal: controller.signal })
+
+    controller.abort()
+    const replacement = pool.subscribe('/same', vi.fn(), {}, {})
+    await expect(abandoned).rejects.toMatchObject({ code: 'subscribe_aborted' })
+    await occupied.unsubscribe()
+    const replacementSubscription = await replacement
+
+    expect(supervisors[1].subscriptions.map(({ dir }) => dir)).toEqual(['/occupied', '/same'])
+    await replacementSubscription.unsubscribe()
+  })
+
+  it('rejects an aborted later same-root waiter without cancelling the first', async () => {
+    pool = new RuntimeWatcherProcessPool({
+      maxSharedSupervisors: 1,
+      maxQuarantineSupervisors: 1,
+      createSupervisor: () => {
+        const supervisor = new FakeSupervisor()
+        supervisors.push(supervisor)
+        return supervisor
+      }
+    })
+    const failure = new WatcherProcessFailure(
+      'file watcher process crashed repeatedly',
+      'supervisor',
+      'supervisor_crash_fuse'
+    )
+    await pool.subscribe('/occupied', vi.fn(), {}, {})
+    await pool.subscribe('/same', vi.fn(), {}, {})
+    for (const installed of supervisors[0].subscriptions) {
+      installed.hooks.onTerminalError?.(failure)
+    }
+    const occupied = await pool.subscribe('/occupied', vi.fn(), {}, {})
+    const first = pool.subscribe('/same', vi.fn(), {}, {})
+    const secondController = new AbortController()
+    const second = pool.subscribe('/same', vi.fn(), {}, { signal: secondController.signal })
+
+    secondController.abort()
+    await expect(second).rejects.toMatchObject({ code: 'subscribe_aborted' })
+    let firstSettled = false
+    void first.finally(() => {
+      firstSettled = true
+    })
+    await Promise.resolve()
+    expect(firstSettled).toBe(false)
+
+    await occupied.unsubscribe()
+    const firstSubscription = await first
+    expect(supervisors[1].subscriptions.map(({ dir }) => dir)).toEqual(['/occupied', '/same'])
+    await firstSubscription.unsubscribe()
+  })
+
+  it('releases a granted assignment when its last waiter aborts before lease publication', async () => {
+    pool = new RuntimeWatcherProcessPool({
+      maxSharedSupervisors: 1,
+      maxQuarantineSupervisors: 1,
+      createSupervisor: () => {
+        const supervisor = new FakeSupervisor()
+        supervisors.push(supervisor)
+        return supervisor
+      }
+    })
+    const failure = new WatcherProcessFailure(
+      'file watcher process crashed repeatedly',
+      'supervisor',
+      'supervisor_crash_fuse'
+    )
+    for (const root of ['/occupied', '/aborted', '/following']) {
+      await pool.subscribe(root, vi.fn(), {}, {})
+    }
+    for (const installed of supervisors[0].subscriptions) {
+      installed.hooks.onTerminalError?.(failure)
+    }
+    const occupied = await pool.subscribe('/occupied', vi.fn(), {}, {})
+    const controller = new AbortController()
+    const aborted = pool.subscribe('/aborted', vi.fn(), {}, { signal: controller.signal })
+
+    const release = occupied.unsubscribe()
+    queueMicrotask(() => controller.abort())
+    await release
+
+    await expect(aborted).rejects.toMatchObject({ code: 'subscribe_aborted' })
+    const following = pool.subscribe('/following', vi.fn(), {}, { subscribeTimeoutMs: 25 })
+    const followingSubscription = await following
+    expect(supervisors).toHaveLength(3)
+    expect(supervisors[2].subscriptions.map(({ dir }) => dir)).toEqual(['/following'])
+    expect(supervisors[1].dispose).toHaveBeenCalledTimes(1)
+    await followingSubscription.unsubscribe()
   })
 
   it('moves an explicitly timed-out root into quarantine for its retry', async () => {
@@ -324,5 +618,7 @@ describe('RuntimeWatcherProcessPool', () => {
     pool.resetForTest()
 
     expect(supervisors.every((supervisor) => supervisor.dispose.mock.calls.length === 1)).toBe(true)
+    await expect(pool.subscribe('/after-reset', vi.fn(), {}, {})).resolves.toBeDefined()
+    expect(supervisors).toHaveLength(2)
   })
 })

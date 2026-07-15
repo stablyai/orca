@@ -154,6 +154,8 @@ export type PtyProcessInfo = {
   id: string
   cwd: string
   title: string
+  /** Owning worktree when the provider can report it authoritatively. */
+  worktreeId?: string
   /** Trusted ORCA_TERMINAL_HANDLE exported into this PTY, when known. */
   terminalHandle?: string
 }
@@ -292,8 +294,9 @@ export type IFilesystemProvider = {
   watch(
     rootPath: string,
     callback: (events: FsChangeEvent[]) => void,
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal; onTerminalError?: (error: Error) => void }
   ): Promise<() => void>
+  closeWatch?(rootPath: string): Promise<void>
 }
 
 export type FileUploadSession = {

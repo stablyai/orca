@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, readFileSync } from 'node:fs'
 import { DaemonServer } from './daemon-server'
 import { DaemonClient } from './client'
 import { encodeNdjson } from './ndjson'
@@ -29,7 +29,7 @@ function createMockSubprocess(): SubprocessHandle & {
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
-    forceKill: vi.fn(),
+    forceKill: vi.fn(() => onExitCb?.(137)),
     signal: vi.fn(),
     onData(cb) {
       onDataCb = cb
@@ -658,6 +658,28 @@ describe('DaemonServer', () => {
 
       const c = new DaemonClient({ socketPath, tokenPath })
       await expect(c.ensureConnected()).rejects.toThrow()
+    })
+
+    it('still terminates via the shutdown RPC when disposal cannot prove physical exit', async () => {
+      await startServer()
+      const daemon = server as unknown as DaemonServerPrivate & {
+        host: { dispose: () => Promise<void> }
+      }
+      // Why: an unreapable child rejects dispose after its exit deadline; the
+      // daemon must exit anyway or its replacement flow strands it as an orphan.
+      daemon.host.dispose = vi.fn(() =>
+        Promise.reject(new Error('Timed out waiting for physical PTY exit'))
+      )
+
+      const c = await connectClient()
+      // The daemon may self-terminate before the reply flushes; callers treat
+      // that as success, so only the observable teardown below is asserted.
+      await c.request('shutdown', { killSessions: true }).catch(() => {})
+
+      await waitFor(() => daemon.server === null)
+      await waitFor(() => !existsSync(socketPath))
+      const late = new DaemonClient({ socketPath, tokenPath })
+      await expect(late.ensureConnected()).rejects.toThrow()
     })
   })
 })

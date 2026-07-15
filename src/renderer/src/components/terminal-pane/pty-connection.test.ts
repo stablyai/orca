@@ -16646,8 +16646,21 @@ describe('connectPanePty', () => {
 
     titleHandler('Codex working', 'Codex working')
     await vi.advanceTimersByTimeAsync(2_500)
+    const inspectionsBeforeIdle = getForegroundProcess.mock.calls.length
     getForegroundProcess.mockResolvedValue(null)
-    await vi.advanceTimersByTimeAsync(800)
+    // Why: active process polling is jittered, so a fixed window can consume
+    // both null samples before the replacement hook row is installed.
+    for (
+      let attempts = 0;
+      getForegroundProcess.mock.calls.length === inspectionsBeforeIdle;
+      attempts += 1
+    ) {
+      if (attempts >= 10) {
+        throw new Error('Expected the first idle process inspection')
+      }
+      await vi.advanceTimersToNextTimerAsync()
+    }
+    expect(getForegroundProcess).toHaveBeenCalledTimes(inspectionsBeforeIdle + 1)
 
     mockStoreState.agentStatusByPaneKey[paneKey] = {
       state: 'working',

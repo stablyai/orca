@@ -41,12 +41,12 @@ export function recordCoalescedCrashBreadcrumb({
   data?: CrashReportBreadcrumbData
   coalesceKey: string
   minIntervalMs: number
-}): void {
+}): { suppressedSinceLast: number } | undefined {
   const now = Date.now()
   const previous = coalescedBreadcrumbs.get(coalesceKey)
   if (previous && now - previous.recordedAt < minIntervalMs) {
     previous.suppressed += 1
-    return
+    return undefined
   }
 
   // Drop entries past their suppression window (they can no longer coalesce
@@ -66,10 +66,9 @@ export function recordCoalescedCrashBreadcrumb({
     }
     coalescedBreadcrumbs.delete(oldest.value)
   }
-  recordCrashBreadcrumb(
-    name,
-    previous?.suppressed ? { ...data, suppressedSinceLast: previous.suppressed } : data
-  )
+  const suppressedSinceLast = previous?.suppressed ?? 0
+  recordCrashBreadcrumb(name, suppressedSinceLast > 0 ? { ...data, suppressedSinceLast } : data)
+  return { suppressedSinceLast }
 }
 
 export function getCrashBreadcrumbSnapshot(): CrashReportBreadcrumb[] {

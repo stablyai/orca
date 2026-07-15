@@ -11,6 +11,7 @@ import {
   type TerminalSnapshot
 } from './types'
 import type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
+import { shutdownTerminalHostSessions } from './terminal-host-session-shutdown'
 import { TerminalSessionTeardown } from './terminal-session-teardown'
 
 export type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
@@ -46,11 +47,13 @@ export type TerminalHostOptions = {
 
 export class TerminalHost {
   private sessions = new Map<string, Session>()
-  private sessionTeardown = new TerminalSessionTeardown(this.sessions, (id) => this.reapSession(id))
+  private sessionTeardown = new TerminalSessionTeardown(this.sessions)
   private killedTombstones = new Map<string, number>()
   private spawnSubprocess: TerminalHostOptions['spawnSubprocess']
   private onFinalCheckpoint: TerminalHostOptions['onFinalCheckpoint']
   private maxTombstones: number
+  private creationFenced = false
+  private disposePromise: Promise<void> | null = null
 
   constructor(opts: TerminalHostOptions) {
     this.spawnSubprocess = opts.spawnSubprocess
@@ -65,6 +68,9 @@ export class TerminalHost {
    * already deliver them through shell launch arguments.
    */
   async createOrAttach(opts: CreateOrAttachOptions): Promise<CreateOrAttachResult> {
+    if (this.creationFenced) {
+      throw new Error('Terminal host is shutting down')
+    }
     const existing = this.sessions.get(opts.sessionId)
 
     // Why: async descendant capture must finish before anyone can attach or
@@ -87,6 +93,12 @@ export class TerminalHost {
         ...(existing.historySeeded !== undefined ? { historySeeded: existing.historySeeded } : {}),
         attachToken: token
       }
+    }
+
+    if (existing?.isAlive && existing.isTerminating) {
+      // Why: replacing a SIGKILLed-but-unreaped child would lose ownership of
+      // its native handles and let the same session id hide two generations.
+      throw new Error(`Session "${opts.sessionId}" is terminating`)
     }
 
     // Clean up dead session if present
@@ -202,21 +214,23 @@ export class TerminalHost {
     this.sessions.get(sessionId)?.resumeProducer()
   }
 
-  kill(sessionId: string, opts: { immediate?: boolean } = {}): void | Promise<void> {
+  kill(sessionId: string, opts: { immediate?: boolean } = {}): Promise<void> {
     const pending = this.sessionTeardown.get(sessionId)
     if (pending) {
-      return opts.immediate ? this.sessionTeardown.requestImmediate(sessionId) : pending
+      return Promise.resolve(
+        opts.immediate ? this.sessionTeardown.requestImmediate(sessionId) : pending
+      )
     }
     const session = this.getAliveSession(sessionId)
+    const killed = this.sessionTeardown.killSession(sessionId, session, opts.immediate === true)
     this.recordTombstone(sessionId)
-    return this.sessionTeardown.killSession(sessionId, session, opts.immediate === true)
+    return Promise.resolve(killed)
   }
 
   // Why: dispose a dead session's headless emulator and drop it from the map so
   // exited terminals don't pin ~5000 rows of scrollback for the daemon's life.
   // No-ops on live sessions (a live session must never be disposed here) and on
-  // already-reaped/unknown ids. Wired as the Session onExit hook and also called
-  // on the immediate-kill path.
+  // already-reaped/unknown ids. Wired as the Session onExit hook.
   private reapSession(sessionId: string): void {
     const session = this.sessions.get(sessionId)
     if (!session || session.isAlive) {
@@ -345,42 +359,24 @@ export class TerminalHost {
     return result
   }
 
-  dispose(): void {
-    // Why: write final checkpoints before killing sessions so graceful shutdown
-    // has zero data loss. The checkpoint callback writes synchronously to disk.
-    if (this.onFinalCheckpoint) {
-      for (const [sessionId, session] of this.sessions) {
-        if (!session.isAlive) {
-          continue
-        }
-        const take = session.takePendingOutput(true, { teardownSnapshot: true })
-        if (take?.snapshot) {
-          try {
-            this.onFinalCheckpoint(sessionId, take.snapshot, take.records)
-          } catch {
-            // Best-effort — don't block shutdown
-          }
-        }
-      }
+  dispose(): Promise<void> {
+    this.creationFenced = true
+    if (this.disposePromise) {
+      return this.disposePromise
     }
+    const disposePromise = this.disposeSessions()
+    this.disposePromise = disposePromise
+    void disposePromise.catch(() => {
+      // Why: keep failed native owners retryable on a later shutdown request.
+      if (this.disposePromise === disposePromise) {
+        this.disposePromise = null
+      }
+    })
+    return disposePromise
+  }
 
-    for (const [, session] of this.sessions) {
-      session.detachAllClients()
-      // Why: live-vs-exited is load-bearing. For LIVE sessions we use
-      // forceKillAndDisposeSubprocess (SIGKILL + destroy) to reap stubborn
-      // children AND release the ptmx fd on the same tick, bypassing the 5s
-      // KILL_TIMEOUT_MS fallback that would otherwise outlive the daemon
-      // process. For sessions that have already exited but are still in the
-      // map, SIGKILL would target a reaped pid — on POSIX that pid can be
-      // recycled to an unrelated process, so we MUST only release the fd via
-      // disposeSubprocess() (destroy without kill). See docs/fix-pty-fd-leak.md.
-      if (session.isAlive) {
-        session.forceKillAndDisposeSubprocess()
-      } else {
-        session.disposeSubprocess()
-      }
-    }
-    this.sessions.clear()
+  private async disposeSessions(): Promise<void> {
+    await shutdownTerminalHostSessions(this.sessions, this.onFinalCheckpoint)
     this.killedTombstones.clear()
   }
 

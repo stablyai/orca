@@ -112,6 +112,14 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
       stdout: expect.stringContaining('worktree ')
     })
 
+    // Why: the `prunable` porcelain annotation landed in Git 2.31 — five
+    // releases before `-z` (2.36) — so only Git <2.31 emits neither and needs
+    // Orca's path-existence fallback (issue #8389).
+    await runGit(['worktree', 'add', '-b', 'compat-stale', 'stale-wt'])
+    await rm(join(repoPath, 'stale-wt'), { recursive: true, force: true })
+    const staleList = await runGit(['worktree', 'list', '--porcelain'])
+    expect(staleList.stdout.includes('prunable')).toBe(supports(2, 31))
+
     const preferred = await runGit([
       'rev-parse',
       '--path-format=absolute',

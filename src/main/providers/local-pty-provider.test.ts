@@ -93,7 +93,13 @@ vi.mock('../wsl', () => ({
   wslUncDirectoryExists: () => true
 }))
 
-import { LocalPtyProvider } from './local-pty-provider'
+import {
+  _resetLocalPtyProviderStateForTest,
+  LOCAL_PTY_FORCE_KILL_RETRY_MS,
+  LOCAL_PTY_GRACEFUL_FORCE_TIMEOUT_MS,
+  LOCAL_PTY_PHYSICAL_EXIT_TIMEOUT_MS,
+  LocalPtyProvider
+} from './local-pty-provider'
 import { isRootLikePath } from './pty-path-safety'
 import { POWERLEVEL10K_WIZARD_DISABLE_ENV } from '../pty/powerlevel10k-wizard-env'
 
@@ -169,6 +175,7 @@ describe('LocalPtyProvider', () => {
   })
 
   afterEach(() => {
+    _resetLocalPtyProviderStateForTest()
     if (origPlatform) {
       Object.defineProperty(process, 'platform', origPlatform)
     }
@@ -1028,10 +1035,189 @@ describe('LocalPtyProvider', () => {
       })
 
       const { id } = await provider.spawn({ cols: 80, rows: 24 })
-      await provider.shutdown(id, { immediate: true })
+      const shutdown = provider.shutdown(id, { immediate: true })
+      exitCb?.({ exitCode: -1 })
+      await shutdown
 
       expect(killSpy).toHaveBeenCalledTimes(1)
       expect(destroySpy).not.toHaveBeenCalled()
+    })
+
+    it('keeps shutdown and ownership pending until node-pty reports physical exit', async () => {
+      const killSpy = vi.fn()
+      mockProc.kill = killSpy
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      let settled = false
+      const shutdown = provider.shutdown(id, { immediate: true }).finally(() => {
+        settled = true
+      })
+      await Promise.resolve()
+
+      expect(killSpy).toHaveBeenCalledWith('SIGKILL')
+      expect(settled).toBe(false)
+      expect(provider.hasPty(id)).toBe(true)
+      exitCb?.({ exitCode: 137 })
+      await shutdown
+      expect(provider.hasPty(id)).toBe(false)
+    })
+
+    it('keeps physical-exit tracking when orphan cleanup races immediate shutdown', async () => {
+      const killSpy = vi.fn(() => {
+        queueMicrotask(() => exitCb?.({ exitCode: 137 }))
+      })
+      mockProc.kill = killSpy
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      const shutdown = provider.shutdown(id, { immediate: true })
+      expect(provider.killOrphanedPtys(1)).toEqual([{ id }])
+      expect(provider.hasPty(id)).toBe(true)
+
+      await expect(shutdown).resolves.toBeUndefined()
+      expect(killSpy).toHaveBeenCalledTimes(1)
+      expect(provider.hasPty(id)).toBe(false)
+    })
+
+    it('escalates graceful shutdown before orphan cleanup disables the kill handle', async () => {
+      vi.useFakeTimers()
+      try {
+        const killSpy = vi.fn()
+        mockProc.kill = killSpy
+        const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+        const graceful = provider.shutdown(id, { immediate: false })
+        expect(killSpy.mock.calls).toEqual([['SIGTERM']])
+
+        expect(provider.killOrphanedPtys(1)).toEqual([{ id }])
+        expect(killSpy.mock.calls).toEqual([['SIGTERM'], ['SIGKILL']])
+
+        // The original graceful deadline was replaced by the immediate
+        // escalation, so it cannot call the now-neutralized proc.kill later.
+        await vi.advanceTimersByTimeAsync(LOCAL_PTY_GRACEFUL_FORCE_TIMEOUT_MS)
+        expect(killSpy).toHaveBeenCalledTimes(2)
+        exitCb?.({ exitCode: 137 })
+        await graceful
+        expect(provider.hasPty(id)).toBe(false)
+        expect(vi.getTimerCount()).toBe(0)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('escalates a graceful shutdown when destructive cleanup joins it', async () => {
+      const killSpy = vi.fn()
+      mockProc.kill = killSpy
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      const graceful = provider.shutdown(id, { immediate: false })
+      const immediate = provider.shutdown(id, { immediate: true })
+      expect(killSpy.mock.calls).toEqual([['SIGTERM'], ['SIGKILL']])
+
+      exitCb?.({ exitCode: 137 })
+      await Promise.all([graceful, immediate])
+      expect(provider.hasPty(id)).toBe(false)
+    })
+
+    it('force-kills a POSIX PTY that ignores graceful shutdown', async () => {
+      vi.useFakeTimers()
+      try {
+        const killSpy = vi.fn()
+        mockProc.kill = killSpy
+        const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+        const graceful = provider.shutdown(id, { immediate: false })
+        expect(killSpy.mock.calls).toEqual([['SIGTERM']])
+
+        await vi.advanceTimersByTimeAsync(LOCAL_PTY_GRACEFUL_FORCE_TIMEOUT_MS)
+        expect(killSpy.mock.calls).toEqual([['SIGTERM'], ['SIGKILL']])
+        exitCb?.({ exitCode: 137 })
+        await graceful
+        expect(provider.hasPty(id)).toBe(false)
+        expect(vi.getTimerCount()).toBe(0)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('retries a rejected graceful-deadline SIGKILL before the physical timeout', async () => {
+      vi.useFakeTimers()
+      try {
+        let forceAttempts = 0
+        const killSpy = vi.fn((signal: string) => {
+          if (signal === 'SIGKILL' && forceAttempts++ === 0) {
+            throw new Error('transient force-kill failure')
+          }
+        })
+        mockProc.kill = killSpy
+        const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+        const graceful = provider.shutdown(id, { immediate: false })
+        await vi.advanceTimersByTimeAsync(LOCAL_PTY_GRACEFUL_FORCE_TIMEOUT_MS)
+        expect(killSpy.mock.calls).toEqual([['SIGTERM'], ['SIGKILL']])
+        expect(provider.hasPty(id)).toBe(true)
+
+        await vi.advanceTimersByTimeAsync(LOCAL_PTY_FORCE_KILL_RETRY_MS)
+        expect(killSpy.mock.calls).toEqual([['SIGTERM'], ['SIGKILL'], ['SIGKILL']])
+        exitCb?.({ exitCode: 137 })
+        await graceful
+        expect(provider.hasPty(id)).toBe(false)
+        expect(vi.getTimerCount()).toBe(0)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('does not double-kill ConPTY when destructive cleanup joins shutdown', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const killSpy = vi.fn()
+      mockProc.kill = killSpy
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      const graceful = provider.shutdown(id, { immediate: false })
+      const immediate = provider.shutdown(id, { immediate: true })
+      expect(killSpy.mock.calls).toEqual([[]])
+
+      exitCb?.({ exitCode: 137 })
+      await Promise.all([graceful, immediate])
+      expect(killSpy).toHaveBeenCalledTimes(1)
+      expect(provider.hasPty(id)).toBe(false)
+    })
+
+    it('rejects a physical-exit timeout but retains the owner for a successful retry', async () => {
+      vi.useFakeTimers()
+      try {
+        const killSpy = vi.fn()
+        mockProc.kill = killSpy
+        const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+        const shutdown = provider.shutdown(id, { immediate: true })
+        const rejected = expect(shutdown).rejects.toThrow('Timed out waiting for PTY process exit')
+        await vi.advanceTimersByTimeAsync(LOCAL_PTY_PHYSICAL_EXIT_TIMEOUT_MS)
+        await rejected
+        expect(provider.hasPty(id)).toBe(true)
+
+        const retry = provider.shutdown(id, { immediate: true })
+        expect(killSpy).toHaveBeenCalledTimes(1)
+        exitCb?.({ exitCode: 137 })
+        await expect(retry).resolves.toBeUndefined()
+        expect(provider.hasPty(id)).toBe(false)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('propagates kill failure without dropping the physical owner', async () => {
+      mockProc.kill = vi.fn(() => {
+        throw new Error('kill denied')
+      })
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      await expect(provider.shutdown(id, { immediate: true })).rejects.toThrow('kill denied')
+      expect(provider.hasPty(id)).toBe(true)
+
+      mockProc.kill = vi.fn(() => exitCb?.({ exitCode: 137 }))
+      await expect(provider.shutdown(id, { immediate: true })).resolves.toBeUndefined()
+      expect(provider.hasPty(id)).toBe(false)
     })
 
     it('cancels pending shell-ready startup delivery on forced shutdown', async () => {
@@ -1232,13 +1418,14 @@ describe('LocalPtyProvider', () => {
   describe('listProcesses', () => {
     it('returns spawned PTYs', async () => {
       const before = await provider.listProcesses()
-      await provider.spawn({ cols: 80, rows: 24 })
+      await provider.spawn({ cols: 80, rows: 24, cwd: '/tmp/owned-cwd' })
       await provider.spawn({ cols: 80, rows: 24 })
       const after = await provider.listProcesses()
       expect(after.length - before.length).toBe(2)
       const newEntries = after.slice(before.length)
       expect(newEntries[0]).toHaveProperty('id')
       expect(newEntries[0]).toHaveProperty('title', 'zsh')
+      expect(newEntries[0]).toHaveProperty('cwd', '/tmp/owned-cwd')
     })
   })
 
@@ -1314,6 +1501,22 @@ describe('LocalPtyProvider', () => {
 
       expect(killSpy).toHaveBeenCalledTimes(1)
       expect(destroySpy).not.toHaveBeenCalled()
+    })
+
+    it('settles an overlapping shutdown when app quit takes final ownership', async () => {
+      mockProc.kill.mockImplementation(() => undefined)
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      const shutdown = provider.shutdown(id, { immediate: true })
+      let settled = false
+      void shutdown.then(() => {
+        settled = true
+      })
+      await Promise.resolve()
+      expect(settled).toBe(false)
+
+      provider.killAll()
+
+      await expect(shutdown).resolves.toBeUndefined()
     })
   })
 })

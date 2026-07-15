@@ -13,6 +13,7 @@ import {
 } from './usage-error-copy'
 import {
   clampUsedPercent,
+  getDisplayedUsagePercentage,
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
@@ -184,8 +185,8 @@ export function getWindowSections(
 // `text-background` for primary text and `text-background/50` for secondary
 // to stay readable inside the inverted tooltip container.
 
-// Why: color-coded by consumption so users can quickly gauge urgency.
-// Matches common harness usage meters (Claude/Codex): bars fill with % used.
+// Why: color always tracks % used so urgency reads correctly even when the meter
+// fills with % remaining (#8560) — low remaining still turns red, not green.
 // Green = comfortable (<60% used), yellow = caution (60-80%), red = critical (≥80%).
 export function barColor(usedPct: number): string {
   if (usedPct < 60) {
@@ -278,18 +279,18 @@ export function ProviderPanel({
     if (!w) {
       return null
     }
-    // Why: preference changes the copy only; consumption-based bar direction
-    // preserves the empty/green to full/red meter convention from #8167.
     const usedPct = clampUsedPercent(w.usedPercent)
+    const displayedPct = getDisplayedUsagePercentage(usedPct, usagePercentageDisplay)
     const resetLabel = w.resetsAt ? formatResetCountdown(w.resetsAt - Date.now()) : null
 
     return (
       <div className="space-y-1">
         <div className={`font-medium ${textClass}`}>{label}</div>
         <div className={`h-[6px] w-full overflow-hidden rounded-full ${emptyBarClass}`}>
+          {/* Why: fill follows the selected percentage; color still signals consumption urgency. */}
           <div
             className={`h-full rounded-full ${barColor(usedPct)} transition-all duration-300`}
-            style={{ width: `${usedPct}%` }}
+            style={{ width: `${displayedPct}%` }}
           />
         </div>
         <div className={`flex justify-between ${mutedClass}`}>

@@ -17,6 +17,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createWorktreeLinkedPaths,
   createWorktreeSymlinks,
+  findExistingWorktreeSymlinkPaths,
   removeWorktreeLinkedPaths,
   removeWorktreeSymlinks
 } from './worktree-symlinks'
@@ -432,6 +433,16 @@ describe('removeWorktreeSymlinks', () => {
 
     expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(false)
     expect(statSync(join(worktree, '.env')).isFile()).toBe(true)
+  })
+
+  it('identifies only actual symlinks for removal preflight', async () => {
+    writeFileSync(join(primary, '.env'), 'PRIMARY=1\n')
+    symlinkSync(join(primary, '.env'), join(worktree, '.env'))
+    writeFileSync(join(worktree, 'config.json'), '{}\n')
+
+    await expect(
+      findExistingWorktreeSymlinkPaths(worktree, ['.env', 'config.json', 'missing'])
+    ).resolves.toEqual(['.env'])
   })
 
   it('leaves APFS clone-copied regular files for git removal to judge', async () => {

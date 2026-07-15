@@ -4,6 +4,9 @@ import type { Session } from './session'
 type AgentTeardownOperation = {
   promise: Promise<void>
   immediate: boolean
+  rootSignalled: boolean
+  rootCompletion: Promise<void>
+  session: Session
 }
 
 /** Owns agent teardown by session id until descendant capture and root
@@ -11,10 +14,7 @@ type AgentTeardownOperation = {
 export class TerminalSessionTeardown {
   private operations = new Map<string, AgentTeardownOperation>()
 
-  constructor(
-    private sessions: ReadonlyMap<string, Session>,
-    private reapSession: (sessionId: string) => void
-  ) {}
+  constructor(private sessions: ReadonlyMap<string, Session>) {}
 
   get(sessionId: string): Promise<void> | undefined {
     return this.operations.get(sessionId)?.promise
@@ -24,6 +24,11 @@ export class TerminalSessionTeardown {
     const pending = this.operations.get(sessionId)
     if (pending) {
       pending.immediate = true
+      if (pending.rootSignalled && pending.session.isAlive) {
+        // Why: the snapshot callback may have already sent the graceful root
+        // signal in this turn; an immediate join must still escalate and wait.
+        pending.rootCompletion = pending.session.forceKillAndWaitForExit()
+      }
     }
     return pending?.promise
   }
@@ -33,7 +38,7 @@ export class TerminalSessionTeardown {
       return this.killAgentSession(sessionId, session, immediate)
     }
     if (immediate) {
-      this.finishImmediate(sessionId, session)
+      return session.forceKillAndWaitForExit()
     } else {
       session.kill()
     }
@@ -56,7 +61,7 @@ export class TerminalSessionTeardown {
       // A completed graceful sweep can leave the root alive during its grace
       // window. Immediate teardown may safely escalate once no scan is pending.
       if (immediate && session.isAlive && session.isTerminating) {
-        this.finishImmediate(sessionId, session)
+        return session.forceKillAndWaitForExit()
       }
       return
     }
@@ -66,9 +71,12 @@ export class TerminalSessionTeardown {
 
     const entry: AgentTeardownOperation = {
       promise: Promise.resolve(),
-      immediate
+      immediate,
+      rootSignalled: false,
+      rootCompletion: Promise.resolve(),
+      session
     }
-    const operation = Promise.resolve(
+    const sweep = Promise.resolve(
       killWithDescendantSweep(
         session.pid,
         () => {
@@ -77,8 +85,9 @@ export class TerminalSessionTeardown {
           if (!session.isAlive) {
             return
           }
+          entry.rootSignalled = true
           if (entry.immediate) {
-            this.finishImmediate(sessionId, session)
+            entry.rootCompletion = session.forceKillAndWaitForExit()
           } else {
             session.signalTerminationRoot()
           }
@@ -90,6 +99,9 @@ export class TerminalSessionTeardown {
         }
       )
     )
+    // Why: descendant capture completion only proves signals were requested;
+    // destructive callers must retain the native owner until OS-confirmed exit.
+    const operation = sweep.then(() => entry.rootCompletion)
     entry.promise = operation
     this.operations.set(sessionId, entry)
     const clearOperation = (): void => {
@@ -99,15 +111,5 @@ export class TerminalSessionTeardown {
     }
     void operation.then(clearOperation, clearOperation)
     return operation
-  }
-
-  private finishImmediate(sessionId: string, session: Session): void {
-    // Why: the old root may exit and a new same-id Session may appear after
-    // capture. Only this exact live Session is safe to force-kill and reap.
-    if (this.sessions.get(sessionId) !== session || !session.isAlive) {
-      return
-    }
-    session.forceKillAndDisposeSubprocess()
-    this.reapSession(sessionId)
   }
 }
