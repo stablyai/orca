@@ -1,5 +1,14 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { View, Text, StyleSheet, SectionList, Pressable, ActivityIndicator } from 'react-native'
+import {
+  View,
+  Text,
+  StyleSheet,
+  SectionList,
+  Pressable,
+  ActivityIndicator,
+  Alert,
+  RefreshControl
+} from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, usePathname, useRouter } from 'expo-router'
 import {
@@ -20,14 +29,18 @@ import {
   PanelLeftClose
 } from 'lucide-react-native'
 import type { RpcClient } from '../../../src/transport/rpc-client'
-import { loadHosts, updateLastConnected, removeHost } from '../../../src/transport/host-store'
+import { loadHosts, updateLastConnected } from '../../../src/transport/host-store'
+import { removeHostAndCloseClient } from '../../../src/transport/host-removal-lifecycle'
 import {
   useHostClient,
   useCloseHost,
-  useForceReconnect,
-  useReconnectAttempt,
-  useLastConnectedAt
+  useForceReconnect
 } from '../../../src/transport/client-context'
+import { useWorktreeResync } from '../../../src/transport/use-worktree-resync'
+import {
+  useLastConnectedAt,
+  useReconnectAttempt
+} from '../../../src/transport/client-context-connection-metrics'
 import {
   classifyConnection,
   type ConnectionVerdict
@@ -50,7 +63,7 @@ import { ProtocolBlockScreen } from '../../../src/components/ProtocolBlockScreen
 import { AuthFailedBanner } from '../../../src/components/AuthFailedBanner'
 import { MobileSearchField } from '../../../src/components/MobileSearchField'
 import { WorkspaceDetailPlaceholder } from '../../../src/components/WorkspaceDetailPlaceholder'
-import { getCachedWorktrees } from '../../../src/cache/worktree-cache'
+import { getCachedWorktrees, setCachedWorktrees } from '../../../src/cache/worktree-cache'
 import { setCachedRepos } from '../../../src/cache/repo-cache'
 import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
 import { useResponsiveLayout } from '../../../src/layout/responsive-layout'
@@ -450,6 +463,14 @@ export function HostScreen({
             areWorktreeListsEqual(current, result.worktrees) ? current : result.worktrees
           )
           setWorktreesLoaded(true)
+          // Why (#8498): the host detail screen seeds its list from the
+          // home-written cache, so a partial home fetch could poison it until a
+          // focus poll corrected it. Write the confirmed snapshot back through
+          // the same cache so a reconnect refetch (or a remount) can't serve a
+          // stale worktree list.
+          if (hostId) {
+            setCachedWorktrees(hostId, result.worktrees)
+          }
           // Drop the optimistic active override once the host confirms it (the
           // activate RPC has landed and worktree.ps now reports it active), so we
           // stop overriding and respect any later desktop-driven change.
@@ -604,6 +625,17 @@ export function HostScreen({
     return () => clearInterval(interval)
   }, [embedded, connState, fetchWorktrees, fetchRepoMetadata, syncViewSettingsFromDesktop])
 
+  // Why (#8498): reconnect refetch + manual pull-to-refresh, extracted to
+  // useWorktreeResync so this screen stays under its max-lines budget. The
+  // steady-state focus/embedded polls don't cover the transition INTO
+  // 'connected' after a background/sleep, which is when the cache is stalest.
+  const { refreshing, onRefresh } = useWorktreeResync({
+    client,
+    connState,
+    fetchWorktrees,
+    fetchRepoMetadata
+  })
+
   const updateLocalPins = useCallback(
     (worktreeId: string, pinned: boolean) => {
       setPinnedIds((prev) => {
@@ -684,13 +716,15 @@ export function HostScreen({
     if (!hostId) {
       return
     }
-    // Why: close the shared client first so its WebSocket is gone before
-    // the host record disappears; otherwise the next loadHosts() the
-    // provider does (e.g. on remount) wouldn't find this host but the
-    // socket would still be open, leaking state.
-    closeHostClient(hostId)
-    await removeHost(hostId)
-    leaveHost()
+    try {
+      await removeHostAndCloseClient(hostId, closeHostClient)
+      leaveHost()
+    } catch {
+      // Why: metadata commit can fail while the host is still paired; keep the
+      // screen mounted and re-open confirm (ConfirmModal closes on confirm).
+      setConfirmRemoveHost(true)
+      Alert.alert('Could not remove host', 'Please try again.')
+    }
   }, [hostId, leaveHost, closeHostClient])
 
   const navigateFromHostList = useCallback(
@@ -1218,6 +1252,16 @@ export function HostScreen({
             )
           }}
           ItemSeparatorComponent={ListSeparator}
+          // Why (#8498): manual pull-to-refresh forces a fresh worktree
+          // snapshot after a reconnect or whenever the cache looks stale.
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.textSecondary}
+              colors={[colors.textSecondary]}
+            />
+          }
           renderItem={({ item }) => (
             <WorktreeListRow
               item={item}
@@ -1417,6 +1461,7 @@ export function HostScreen({
         client={client}
         hostId={hostId}
         existingWorktreePaths={existingWorktreePaths}
+        existingWorktrees={worktrees}
         onVisibleChange={(visible) => {
           newWorktreeModalVisibleRef.current = visible
         }}

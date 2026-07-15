@@ -214,23 +214,31 @@ export function createFilePathLinkProvider(
             }
           )
         )
-      ).then((resolvedLinks) => {
-        const latestFingerprints = new Set(
-          buildCandidateLogicalLinesForBufferPosition(buffer, bufferLineNumber).map(
-            (logicalLine) => logicalLine.fingerprint
+      )
+        .then((resolvedLinks) => {
+          const latestFingerprints = new Set(
+            buildCandidateLogicalLinesForBufferPosition(buffer, bufferLineNumber).map(
+              (logicalLine) => logicalLine.fingerprint
+            )
           )
-        )
-        const providedLinks = resolvedLinks.filter(
-          (link): link is ProvidedFileLink => link !== null
-        )
-        const links = preferLongestNonOverlappingLinks(providedLinks)
-          .filter(({ logicalLine }) => latestFingerprints.has(logicalLine.fingerprint))
-          .map(({ link }) => link)
-        if (providedLinks.length > 0 && links.length === 0) {
-          return
-        }
-        callback(links.length > 0 ? links : undefined)
-      })
+          const providedLinks = resolvedLinks.filter(
+            (link): link is ProvidedFileLink => link !== null
+          )
+          const links = preferLongestNonOverlappingLinks(providedLinks)
+            .filter(({ logicalLine }) => latestFingerprints.has(logicalLine.fingerprint))
+            .map(({ link }) => link)
+          if (providedLinks.length > 0 && links.length === 0) {
+            return
+          }
+          callback(links.length > 0 ? links : undefined)
+        })
+        .catch(() => {
+          // Why: remote path-existence probes reject with "Remote connection
+          // dropped/reconnecting" during SSH teardown. Without a catch the
+          // rejected Promise.all is unhandled and the crash-breadcrumb buffer
+          // retains it, growing the renderer heap until it crashes (#8260).
+          callback(undefined)
+        })
     }
   }
 }

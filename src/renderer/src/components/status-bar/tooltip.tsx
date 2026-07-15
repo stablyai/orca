@@ -1,4 +1,8 @@
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
+import {
+  formatResetCountdown,
+  formatResetDuration
+} from '../../../../shared/rate-limit-reset-format'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { translate } from '@/i18n/i18n'
@@ -7,6 +11,14 @@ import {
   getProviderUsageErrorMessage,
   getProviderUsageStatusLabel
 } from './usage-error-copy'
+import {
+  clampUsedPercent,
+  type UsagePercentageDisplay
+} from '../../../../shared/usage-percentage-display'
+import { formatUsagePercentageLabel } from './usage-percentage-label'
+
+// Re-exported from its shared home so status-bar callers keep a single import.
+export { clampUsedPercent }
 
 export {
   getProviderDisplayName,
@@ -31,28 +43,9 @@ export function formatTimeAgo(ts: number): string {
   return `${hours}h ago`
 }
 
-function formatDuration(ms: number): string {
-  if (ms <= 0) {
-    return 'now'
-  }
-  const totalMins = Math.floor(ms / 60_000)
-  if (totalMins < 60) {
-    return `${totalMins}m`
-  }
-  const hours = Math.floor(totalMins / 60)
-  const mins = totalMins % 60
-  if (hours >= 24) {
-    const days = Math.floor(hours / 24)
-    const remHours = hours % 24
-    return remHours > 0 ? `${days}d ${remHours}h` : `${days}d`
-  }
-  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`
-}
-
-export function formatResetCountdown(ms: number): string {
-  const duration = formatDuration(ms)
-  return duration === 'now' ? 'Resets now' : `Resets in ${duration}`
-}
+// Re-export so existing tooltip consumers/tests keep their import path; the
+// implementation is shared with mobile in src/shared/rate-limit-reset-format.
+export { formatResetCountdown }
 
 export function formatResetCreditExpiry(
   expiresAt: number | null | undefined,
@@ -61,7 +54,7 @@ export function formatResetCreditExpiry(
   if (!expiresAt) {
     return null
   }
-  const duration = formatDuration(expiresAt - Date.now())
+  const duration = formatResetDuration(expiresAt - Date.now())
   if (duration === 'now') {
     return count > 1
       ? translate('auto.components.status.bar.tooltip.7ec6e030a0', 'Next expires now')
@@ -191,11 +184,6 @@ export function getWindowSections(
 // `text-background` for primary text and `text-background/50` for secondary
 // to stay readable inside the inverted tooltip container.
 
-// Why: single clamp for bar width + label so status bar and tooltip never diverge.
-export function clampUsedPercent(usedPercent: number): number {
-  return Math.max(0, Math.min(100, Math.round(usedPercent)))
-}
-
 // Why: color-coded by consumption so users can quickly gauge urgency.
 // Matches common harness usage meters (Claude/Codex): bars fill with % used.
 // Green = comfortable (<60% used), yellow = caution (60-80%), red = critical (≥80%).
@@ -213,12 +201,14 @@ export function ProviderPanel({
   p,
   inverted = false,
   className,
-  showResetCredits = true
+  showResetCredits = true,
+  usagePercentageDisplay = 'used'
 }: {
   p: ProviderRateLimits | null
   inverted?: boolean
   className?: string
   showResetCredits?: boolean
+  usagePercentageDisplay?: UsagePercentageDisplay
 }): React.JSX.Element {
   const textClass = inverted ? 'text-background' : 'text-foreground'
   const mutedClass = inverted ? 'text-background/60' : 'text-muted-foreground'
@@ -288,8 +278,8 @@ export function ProviderPanel({
     if (!w) {
       return null
     }
-    // Why: show % used (consumption), not remaining — matches Claude/Codex
-    // harness meters and avoids the "full green bar = exhausted" misread (#7551).
+    // Why: preference changes the copy only; consumption-based bar direction
+    // preserves the empty/green to full/red meter convention from #8167.
     const usedPct = clampUsedPercent(w.usedPercent)
     const resetLabel = w.resetsAt ? formatResetCountdown(w.resetsAt - Date.now()) : null
 
@@ -303,10 +293,7 @@ export function ProviderPanel({
           />
         </div>
         <div className={`flex justify-between ${mutedClass}`}>
-          <span>
-            {usedPct}
-            {translate('auto.components.status.bar.tooltip.cedb7b99e3', '% used')}
-          </span>
+          <span>{formatUsagePercentageLabel(usedPct, usagePercentageDisplay)}</span>
           {resetLabel && <span>{resetLabel}</span>}
         </div>
       </div>

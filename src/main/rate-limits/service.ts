@@ -59,6 +59,15 @@ type MiniMaxResolvedConfig = {
 }
 
 type GeminiCliOAuthEnabledResolver = () => boolean
+type ActiveRateLimitProvider = ProviderRateLimits['provider']
+type ActiveProviderState = {
+  provider: ActiveRateLimitProvider
+  limits: ProviderRateLimits | null
+}
+type ActiveWindowRefreshPlan =
+  | { kind: 'none' }
+  | { kind: 'full' }
+  | { kind: 'providers'; providers: ActiveRateLimitProvider[] }
 
 // Why: Claude's subscription usage endpoint has a tight request budget. Quota
 // state is informational, so prefer keeping a recent snapshot over polling it
@@ -67,6 +76,21 @@ const DEFAULT_POLL_MS = 15 * 60 * 1000 // 15 minutes
 const MIN_POLL_MS = 30 * 1000 // 30 seconds — renderer input should never create a tight loop.
 const MAX_POLL_MS = 2_147_483_647 // Max safe setInterval delay before Node clamps back to 1ms.
 const MIN_REFETCH_MS = 5 * 60 * 1000 // 5 minutes — debounce resume/manual refresh bursts
+const ACTIVE_FAILURE_REFETCH_MS = MIN_POLL_MS
+// Why: a persistent failure (bad auth, unsupported plan) retried at the 30s
+// floor hammers provider endpoints — Claude's tight-budget usage endpoint
+// starts returning 429s — without ever recovering. Back off per consecutive
+// failure, capped at the background poll cadence.
+const MAX_ACTIVE_FAILURE_REFETCH_MS = DEFAULT_POLL_MS
+const MAX_ACTIVE_FAILURE_STREAK = 8
+// Why: these providers have a dedicated fetch cycle, so an activation retry can
+// refresh just the failing one. Providers without one force a full fetchAll, so
+// their error retries stay on the 5-minute cadence to protect Claude's budget.
+const INDIVIDUALLY_REFRESHABLE_PROVIDERS: ReadonlySet<ActiveRateLimitProvider> = new Set([
+  'claude',
+  'codex',
+  'grok'
+])
 const STALE_THRESHOLD_MS = 30 * 60 * 1000 // 30 minutes — after this, stale data is dropped
 const INACTIVE_FETCH_DEBOUNCE_MS = 60 * 1000 // 60 seconds — debounce fetch-on-open
 const DEFERRED_STARTUP_ACTIVE_REFRESH_MS = 1000
@@ -122,7 +146,30 @@ export class RateLimitService {
   private pollInterval: number = DEFAULT_POLL_MS
   private timer: ReturnType<typeof setInterval> | null = null
   private deferredStartupRefreshTimer: ReturnType<typeof setTimeout> | null = null
-  private lastFetchAt = 0
+  // Why: after the first recovery attempt, repeated focus/show/restore events
+  // during the same outage should not create a tight provider retry loop.
+  private lastActiveFailureRetryAtByProvider: Record<ActiveRateLimitProvider, number> = {
+    claude: 0,
+    codex: 0,
+    gemini: 0,
+    'opencode-go': 0,
+    kimi: 0,
+    minimax: 0,
+    grok: 0,
+    antigravity: 0
+  }
+  // Why: consecutive applied failures per provider drive exponential backoff of
+  // the fast activation-retry lane; reset on any successful/unavailable result.
+  private activeFailureStreakByProvider: Record<ActiveRateLimitProvider, number> = {
+    claude: 0,
+    codex: 0,
+    gemini: 0,
+    'opencode-go': 0,
+    kimi: 0,
+    minimax: 0,
+    grok: 0,
+    antigravity: 0
+  }
   private mainWindow: BrowserWindow | null = null
   private detachWindowListeners: (() => void) | null = null
   private isFetching = false
@@ -300,6 +347,14 @@ export class RateLimitService {
     return this.getState()
   }
 
+  async refreshIfStale(): Promise<RateLimitState> {
+    // Why: reconnecting mobile subscribers need fresh backgrounded-desktop data,
+    // but replaying a subscription must not queue another forced provider fetch.
+    const plan = this.getActiveWindowRefreshPlan(Date.now())
+    await this.runActiveWindowRefreshPlan(plan)
+    return this.getState()
+  }
+
   async refreshGrok(): Promise<RateLimitState> {
     await this.fetchGrokOnly({ force: true })
     return this.getState()
@@ -329,6 +384,8 @@ export class RateLimitService {
     }
     this.codexFetchTarget = nextTarget
     this.codexFetchGeneration += 1
+    // Why: a new account/target starts with a clean retry schedule.
+    this.activeFailureStreakByProvider.codex = 0
     this.inactiveCodexAccountsGeneration += 1
     this.pruneInactiveCodexState()
     this.lastInactiveCodexFetchAt = 0
@@ -348,6 +405,7 @@ export class RateLimitService {
     const targetChanged = !this.isSameCodexTarget(this.codexFetchTarget, nextTarget)
     this.codexFetchTarget = nextTarget
     this.codexFetchGeneration += 1
+    this.activeFailureStreakByProvider.codex = 0
     this.updateState({
       ...this.state,
       codex: this.withFetchingStatus(targetChanged ? null : this.state.codex, 'codex')
@@ -397,6 +455,8 @@ export class RateLimitService {
     this.inactiveClaudeAccountsGeneration += 1
     this.pruneInactiveClaudeState()
     this.claudeFetchGeneration += 1
+    // Why: a new account/target starts with a clean retry schedule.
+    this.activeFailureStreakByProvider.claude = 0
     this.lastInactiveClaudeFetchAt = 0
     this.updateState({
       ...this.state,
@@ -411,6 +471,7 @@ export class RateLimitService {
     const targetChanged = !this.isSameClaudeTarget(this.claudeFetchTarget, nextTarget)
     this.claudeFetchTarget = nextTarget
     this.claudeFetchGeneration += 1
+    this.activeFailureStreakByProvider.claude = 0
     this.updateState({
       ...this.state,
       claude: this.withFetchingStatus(targetChanged ? null : this.state.claude, 'claude')
@@ -424,6 +485,9 @@ export class RateLimitService {
       return
     }
     this.pruneInactiveClaudeState()
+    if (this.inactiveClaudeFetching.size > 0) {
+      return
+    }
     const accounts = this.inactiveClaudeAccountsResolver?.() ?? []
     if (accounts.length === 0) {
       return
@@ -698,17 +762,120 @@ export class RateLimitService {
     return this.mainWindow.isFocused()
   }
 
+  private getActiveProviderState(): ActiveProviderState[] {
+    // Why: key by provider so a newly added provider is compile-forced to have
+    // an active-refresh entry — a missing one silently never recovers from a
+    // startup error (antigravity was omitted once and needed a fix-up).
+    const byProvider: Record<ActiveRateLimitProvider, ProviderRateLimits | null> = {
+      claude: this.state.claude,
+      codex: this.state.codex,
+      gemini: this.state.gemini,
+      'opencode-go': this.state.opencodeGo,
+      kimi: this.state.kimi,
+      minimax: this.state.minimax,
+      grok: this.state.grok,
+      antigravity: this.state.antigravity
+    }
+    return Object.entries(byProvider).map(([provider, limits]) => ({
+      provider: provider as ActiveRateLimitProvider,
+      limits
+    }))
+  }
+
+  private getActiveWindowRefreshPlan(now: number): ActiveWindowRefreshPlan {
+    const retryableFailures: ActiveRateLimitProvider[] = []
+    for (const { provider, limits } of this.getActiveProviderState()) {
+      if (!limits || limits.status === 'idle' || limits.status === 'fetching') {
+        return { kind: 'full' }
+      }
+      if (limits.status === 'ok' || limits.status === 'unavailable') {
+        if (now - limits.updatedAt >= MIN_REFETCH_MS) {
+          return { kind: 'full' }
+        }
+        continue
+      }
+      // Why: a failed startup read is not fresh data. Keep it eligible for
+      // activation recovery while throttling repeated events per provider.
+      if (limits.status === 'error') {
+        const lastRetryAt = this.lastActiveFailureRetryAtByProvider[provider]
+        const throttleMs = INDIVIDUALLY_REFRESHABLE_PROVIDERS.has(provider)
+          ? Math.min(
+              ACTIVE_FAILURE_REFETCH_MS *
+                2 ** Math.max(0, this.activeFailureStreakByProvider[provider] - 1),
+              MAX_ACTIVE_FAILURE_REFETCH_MS
+            )
+          : MIN_REFETCH_MS
+        if (now - lastRetryAt >= throttleMs) {
+          retryableFailures.push(provider)
+        }
+      }
+    }
+
+    if (retryableFailures.length === 0) {
+      return { kind: 'none' }
+    }
+    return { kind: 'providers', providers: retryableFailures }
+  }
+
+  private async runActiveWindowRefreshPlan(plan: ActiveWindowRefreshPlan): Promise<void> {
+    if (plan.kind === 'none') {
+      return
+    }
+    if (plan.kind === 'full') {
+      // Why: a full fetch retries failing providers too. Restart their retry
+      // clocks so the individual failure lane doesn't fire again right after,
+      // ahead of its backoff window. Skip when a fetch is already in flight —
+      // fetchAll would no-op and the throttle must not be consumed for free.
+      if (!this.isFetching) {
+        const now = Date.now()
+        for (const { provider, limits } of this.getActiveProviderState()) {
+          if (limits?.status === 'error') {
+            this.lastActiveFailureRetryAtByProvider[provider] = now
+          }
+        }
+      }
+      await this.fetchAll()
+      return
+    }
+
+    // Why: a fetch already in flight will refresh these providers; skip without
+    // consuming the per-provider retry throttle so the next activation retries.
+    if (this.isFetching) {
+      return
+    }
+
+    const now = Date.now()
+    for (const provider of plan.providers) {
+      this.lastActiveFailureRetryAtByProvider[provider] = now
+    }
+
+    const canRefreshIndividually = plan.providers.every((provider) =>
+      INDIVIDUALLY_REFRESHABLE_PROVIDERS.has(provider)
+    )
+    if (!canRefreshIndividually) {
+      await this.fetchAll()
+      return
+    }
+
+    // Why: partial failures of providers with a dedicated fetch cycle should
+    // recover without re-reading healthy providers still inside their debounce.
+    if (plan.providers.includes('claude')) {
+      await this.fetchClaudeOnly()
+    }
+    if (plan.providers.includes('codex')) {
+      await this.fetchCodexOnly()
+    }
+    if (plan.providers.includes('grok')) {
+      await this.fetchGrokOnly()
+    }
+  }
+
   private async refreshIfWindowActive(): Promise<void> {
     if (!this.shouldBackgroundPoll()) {
       return
     }
-    // Why: startup intentionally skips the pre-paint fetch. The first visible
-    // activation must still populate usage after update relaunches where the
-    // timer can be focus-gated for a long time.
-    if (Date.now() - this.lastFetchAt < MIN_REFETCH_MS) {
-      return
-    }
-    await this.fetchAll()
+    const plan = this.getActiveWindowRefreshPlan(Date.now())
+    await this.runActiveWindowRefreshPlan(plan)
   }
 
   private async fetchAll(options?: { force?: boolean }): Promise<void> {
@@ -1126,6 +1293,22 @@ export class RateLimitService {
     }
   }
 
+  private trackActiveFailureStreak(
+    provider: ActiveRateLimitProvider,
+    fresh: ProviderRateLimits
+  ): void {
+    if (fresh.status === 'error') {
+      this.activeFailureStreakByProvider[provider] = Math.min(
+        this.activeFailureStreakByProvider[provider] + 1,
+        MAX_ACTIVE_FAILURE_STREAK
+      )
+      return
+    }
+    if (fresh.status === 'ok' || fresh.status === 'unavailable') {
+      this.activeFailureStreakByProvider[provider] = 0
+    }
+  }
+
   private withFetchingStatus(
     current: ProviderRateLimits | null,
     provider:
@@ -1147,6 +1330,13 @@ export class RateLimitService {
         error: null,
         status: 'fetching'
       }
+    }
+    // Why: repainting a settled chip as "fetching" on every background refetch
+    // makes the status bar flash "…" → error each retry cycle when a provider
+    // is persistently failing. Keep the settled state visible until the new
+    // result lands; only providers with no settled state show a loading chip.
+    if (current.status === 'ok' || current.status === 'error' || current.status === 'unavailable') {
+      return current
     }
     return { ...current, status: 'fetching' }
   }
@@ -1365,6 +1555,22 @@ export class RateLimitService {
     const shouldApplyOpencode = opencodeGeneration === this.opencodeFetchGeneration
     const shouldApplyMiniMax = miniMaxGeneration === this.minimaxFetchGeneration
 
+    if (shouldApplyClaude) {
+      this.trackActiveFailureStreak('claude', claude)
+    }
+    if (shouldApplyCodex) {
+      this.trackActiveFailureStreak('codex', codex)
+    }
+    this.trackActiveFailureStreak('gemini', gemini)
+    this.trackActiveFailureStreak('antigravity', antigravity)
+    if (shouldApplyOpencode) {
+      this.trackActiveFailureStreak('opencode-go', opencodeGo)
+    }
+    this.trackActiveFailureStreak('kimi', kimi)
+    if (shouldApplyMiniMax) {
+      this.trackActiveFailureStreak('minimax', miniMax)
+    }
+
     // Why: account switches can race in-flight Codex fetches. Only apply a
     // Codex result if both the selected-account provenance and the request
     // generation still match, otherwise an old account could overwrite the
@@ -1407,12 +1613,11 @@ export class RateLimitService {
             error: grokResult.reason instanceof Error ? grokResult.reason.message : 'Unknown error',
             status: 'error'
           } satisfies ProviderRateLimits)
+    this.trackActiveFailureStreak('grok', grok)
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok)
     })
-
-    this.lastFetchAt = Date.now()
   }
 
   private async runFetchCodexOnlyCycle(signal: AbortSignal): Promise<void> {
@@ -1461,12 +1666,13 @@ export class RateLimitService {
     const shouldApplyCodex =
       codexGeneration === this.codexFetchGeneration && codexProvenance === latestCodexProvenance
 
+    if (shouldApplyCodex) {
+      this.trackActiveFailureStreak('codex', codex)
+    }
     this.updateState({
       ...this.state,
       codex: shouldApplyCodex ? this.applyStalePolicy(codex, previousState.codex) : this.state.codex
     })
-
-    this.lastFetchAt = Date.now()
   }
 
   private async runFetchClaudeOnlyCycle(signal: AbortSignal): Promise<void> {
@@ -1518,14 +1724,15 @@ export class RateLimitService {
       claudeProvenance === latestClaudeProvenance &&
       this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
 
+    if (shouldApplyClaude) {
+      this.trackActiveFailureStreak('claude', claude)
+    }
     this.updateState({
       ...this.state,
       claude: shouldApplyClaude
         ? this.applyStalePolicy(claude, previousState.claude)
         : this.state.claude
     })
-
-    this.lastFetchAt = Date.now()
   }
 
   private async runFetchGrokOnlyCycle(signal: AbortSignal): Promise<void> {
@@ -1559,12 +1766,11 @@ export class RateLimitService {
       return
     }
 
+    this.trackActiveFailureStreak('grok', grok)
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok)
     })
-
-    this.lastFetchAt = Date.now()
   }
 
   private applyStalePolicy(

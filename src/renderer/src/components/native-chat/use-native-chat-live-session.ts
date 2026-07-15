@@ -76,6 +76,17 @@ function nextSubscriptionId(): string {
   return `native-chat-${subscriptionCounter}-${Date.now()}`
 }
 
+// Why: a brand-new session's transcript can take seconds to minutes to appear
+// on disk (#8401), so a `notFound` miss retries — 1s/2s/4s/8s then every 10s —
+// until the window below elapses.
+const NOTFOUND_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000]
+const NOTFOUND_RETRY_FIXED_DELAY_MS = 10_000
+const NOTFOUND_RETRY_WINDOW_MS = 60_000
+
+function notFoundRetryDelayMs(attempt: number): number {
+  return NOTFOUND_RETRY_DELAYS_MS[attempt] ?? NOTFOUND_RETRY_FIXED_DELAY_MS
+}
+
 type ReadState =
   | { phase: 'loading' }
   | { phase: 'ready'; messages: NativeChatMessage[] }
@@ -161,31 +172,50 @@ export function useNativeChatLiveSession(
     }
 
     let cancelled = false
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
+    const retryStartedAt = Date.now()
+    // Re-bound as a plain const: TS doesn't retain the `!sessionId` narrowing
+    // above inside a nested function declaration (it's hoisted, so the
+    // narrowing can't be proven to hold at every call site).
+    const activeSessionId = sessionId
     limitRef.current = NATIVE_CHAT_INITIAL_LIMIT
     setRead({ phase: 'loading' })
     replaceList(appendMergerRef.current, [])
     setAppended([])
     setHasMore(false)
 
-    void transport
-      .readSession(agent, sessionId, limitRef.current, transcriptPath ?? undefined)
-      .then((result) => {
-        if (cancelled) {
-          return
-        }
-        if (result && 'error' in result) {
-          setRead({ phase: 'error', error: result.error })
-          return
-        }
-        const messages = result?.messages ?? []
-        setRead({ phase: 'ready', messages })
-        setHasMore(hasMoreNativeChatHistory(messages.length, limitRef.current))
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setRead({ phase: 'error', error: err instanceof Error ? err.message : String(err) })
-        }
-      })
+    function loadSession(attempt: number): void {
+      void transport
+        .readSession(agent, activeSessionId, limitRef.current, transcriptPath ?? undefined)
+        .then((result) => {
+          if (cancelled) {
+            return
+          }
+          if (result && 'error' in result) {
+            // A not-yet-flushed transcript: stay in 'loading' and retry with
+            // backoff instead of settling into a permanent error (#8401).
+            if (result.notFound && Date.now() - retryStartedAt < NOTFOUND_RETRY_WINDOW_MS) {
+              retryTimer = setTimeout(() => {
+                retryTimer = null
+                loadSession(attempt + 1)
+              }, notFoundRetryDelayMs(attempt))
+              return
+            }
+            setRead({ phase: 'error', error: result.error })
+            return
+          }
+          const messages = result?.messages ?? []
+          setRead({ phase: 'ready', messages })
+          setHasMore(hasMoreNativeChatHistory(messages.length, limitRef.current))
+        })
+        .catch((err: unknown) => {
+          if (!cancelled) {
+            setRead({ phase: 'error', error: err instanceof Error ? err.message : String(err) })
+          }
+        })
+    }
+
+    loadSession(0)
 
     const subscriptionId = nextSubscriptionId()
     const unsubscribe = transport.subscribe(
@@ -208,6 +238,10 @@ export function useNativeChatLiveSession(
 
     return () => {
       cancelled = true
+      if (retryTimer) {
+        clearTimeout(retryTimer)
+        retryTimer = null
+      }
       // Desktop returns a sync unsubscribe fn; the web RPC bridge returns a
       // Promise instead (and can't deliver streaming callbacks). Calling a
       // Promise as a function crashed the whole chat view, so resolve it first
@@ -304,9 +338,23 @@ export function useNativeChatLiveSession(
       sessionId,
       agent,
       hookState,
-      loading: read.phase === 'loading',
-      ...(read.phase === 'error' ? { error: read.error } : {})
+      // Why: a watcher append (fix for #8401) can land content while the read is
+      // still retrying ('loading') or after it settled into 'error' — in both
+      // cases showing the live content beats a spinner or a stale error, so each
+      // override only applies while there is nothing appended to render.
+      loading: read.phase === 'loading' && appended.length === 0,
+      ...(read.phase === 'error' && appended.length === 0 ? { error: read.error } : {})
     })
     return { ...session, hasMore, loadingEarlier, loadEarlier }
-  }, [assembledMessages, read, sessionId, agent, hookState, hasMore, loadingEarlier, loadEarlier])
+  }, [
+    assembledMessages,
+    read,
+    sessionId,
+    agent,
+    hookState,
+    hasMore,
+    loadingEarlier,
+    loadEarlier,
+    appended
+  ])
 }

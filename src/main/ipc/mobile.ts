@@ -1,10 +1,18 @@
-import { ipcMain } from 'electron'
+import { app, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
 import { networkInterfaces } from 'node:os'
 import QRCode from 'qrcode'
 import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
+import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import { isTailnetIPv4Address } from '../../shared/tailnet-address'
 import type { DeviceEntry } from '../runtime/device-registry'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
+import type { RelayBrokerStatus } from '../runtime/relay/relay-session-broker'
+import {
+  getWebSocketPort,
+  inspectWindowsMobileFirewall,
+  repairWindowsMobileFirewall,
+  type WindowsMobileFirewallEnvironment
+} from '../runtime/windows-mobile-firewall'
 
 export type NetworkInterface = {
   name: string
@@ -51,14 +59,36 @@ function toRuntimeAccessGrant(device: DeviceEntry): RuntimeAccessGrant {
 // device management, and WebSocket readiness status. They depend on the
 // OrcaRuntimeRpcServer because it owns the device registry and TLS state.
 
-export function registerMobileHandlers(rpcServer: OrcaRuntimeRpcServer): void {
+export type MobileHandlerDependencies = {
+  firewallEnvironment?: WindowsMobileFirewallEnvironment
+  openWindowsNetworkSettings?: () => Promise<void>
+  getRelayStatus?: () => RelayBrokerStatus
+}
+
+export function registerMobileHandlers(
+  rpcServer: OrcaRuntimeRpcServer,
+  dependencies: MobileHandlerDependencies = {}
+): void {
+  const firewallEnvironment = dependencies.firewallEnvironment ?? {
+    platform: process.platform,
+    isPackaged: app.isPackaged,
+    executablePath: process.execPath,
+    systemRoot: process.env.SystemRoot
+  }
   ipcMain.handle('mobile:listNetworkInterfaces', (): { interfaces: NetworkInterface[] } => ({
     interfaces: getNetworkInterfaces()
   }))
 
   ipcMain.handle(
     'mobile:getPairingQR',
-    async (_event, args?: { address?: string; rotate?: boolean }) => {
+    async (
+      _event,
+      args?: {
+        address?: string
+        connectionMode?: MobilePairingConnectionMode
+        rotate?: boolean
+      }
+    ) => {
       // Why: allow the caller to specify which network interface address to
       // embed in the QR code. This supports overlay networks (Tailscale,
       // ZeroTier) where the default LAN IP isn't reachable from the phone.
@@ -74,11 +104,11 @@ export function registerMobileHandlers(rpcServer: OrcaRuntimeRpcServer): void {
       // `rotate: true` (explicit "Regenerate" intent because the prior token
       // may have been exposed), we discard any pending token and mint a fresh
       // one so the new QR carries a different credential.
-      const offer = rpcServer.createPairingOffer({
+      const offer = await rpcServer.createMobilePairingOffer({
         address: ip,
+        connectionMode: args?.connectionMode,
         rotate: args?.rotate,
-        name: `Mobile ${new Date().toLocaleDateString()}`,
-        scope: 'mobile'
+        name: `Mobile ${new Date().toLocaleDateString()}`
       })
       if (!offer.available) {
         return { available: false as const }
@@ -167,12 +197,12 @@ export function registerMobileHandlers(rpcServer: OrcaRuntimeRpcServer): void {
     }
   })
 
-  ipcMain.handle('mobile:revokeDevice', (_event, args: { deviceId: string }) => {
+  ipcMain.handle('mobile:revokeDevice', async (_event, args: { deviceId: string }) => {
     const registry = rpcServer.getDeviceRegistry()
     if (!registry) {
       return { revoked: false }
     }
-    return { revoked: rpcServer.revokeMobileDevice(args.deviceId) }
+    return { revoked: await rpcServer.revokeMobileDevice(args.deviceId) }
   })
 
   ipcMain.handle('mobile:revokeRuntimeAccess', (_event, args: { deviceId: string }) => {
@@ -189,4 +219,37 @@ export function registerMobileHandlers(rpcServer: OrcaRuntimeRpcServer): void {
       endpoint: rpcServer.getWebSocketEndpoint()
     }
   })
+
+  ipcMain.handle('mobile:getWindowsFirewallStatus', (_event, args?: { address?: string }) => {
+    const port = getWebSocketPort(rpcServer.getWebSocketEndpoint())
+    return inspectWindowsMobileFirewall(port, args?.address, firewallEnvironment)
+  })
+
+  ipcMain.handle('mobile:repairWindowsFirewall', (event: IpcMainInvokeEvent) => {
+    if (!isWindowRenderer(event)) {
+      return { ok: false as const, reason: 'unsupported' as const }
+    }
+    // Why: elevated inputs come from the running runtime, never the renderer.
+    const port = getWebSocketPort(rpcServer.getWebSocketEndpoint())
+    return repairWindowsMobileFirewall(port, firewallEnvironment)
+  })
+
+  ipcMain.handle('mobile:openWindowsNetworkSettings', async (event: IpcMainInvokeEvent) => {
+    if (!isWindowRenderer(event) || firewallEnvironment.platform !== 'win32') {
+      return false
+    }
+    const openSettings =
+      dependencies.openWindowsNetworkSettings ??
+      (() => shell.openExternal('ms-settings:network-status'))
+    await openSettings()
+    return true
+  })
+
+  ipcMain.handle('mobile:getRelayStatus', () => ({
+    status: dependencies.getRelayStatus?.() ?? 'offline'
+  }))
+}
+
+function isWindowRenderer(event: IpcMainInvokeEvent): boolean {
+  return !event.sender.isDestroyed() && event.sender.getType() === 'window'
 }

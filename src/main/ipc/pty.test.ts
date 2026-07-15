@@ -11,6 +11,7 @@ import {
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../shared/clipboard-text'
 import { redactPtyIdForDiagnostics } from '../../shared/pty-delivery-diagnostics'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
+import type { TuiAgent } from '../../shared/types'
 
 const isWindowsHost = process.platform === 'win32'
 const posixOnlyIt = isWindowsHost ? it.skip : it
@@ -167,6 +168,13 @@ vi.mock('../telemetry/client', () => ({
 
 vi.mock('../telemetry/classify-error', () => ({
   classifyError: classifyErrorMock
+}))
+
+// Why: the real ensure writes to disk from process.resourcesPath, which does
+// not exist under vitest; env assembly only needs the returned dir path.
+vi.mock('../cli/linux-terminal-orca-cli-shim', () => ({
+  ensureLinuxTerminalOrcaCliShimDir: (options: { userDataPath: string }) =>
+    join(options.userDataPath, 'linux-orca-cli-shim')
 }))
 
 vi.mock('../memory/pty-registry', () => ({
@@ -752,7 +760,8 @@ describe('registerPtyHandlers', () => {
     // buildPtyHostEnv to piTitlebarExtensionService.buildPtyEnv was untested
     // for the OMP case because this helper never forwarded a command. Accept
     // an optional `command` so callers can exercise OMP target resolution.
-    command?: string
+    command?: string,
+    launchAgent?: TuiAgent
   ): Promise<Record<string, string>> {
     const savedEnv: Record<string, string | undefined> = {}
     if (processEnvOverrides) {
@@ -780,7 +789,8 @@ describe('registerPtyHandlers', () => {
         cols: 80,
         rows: 24,
         ...(argsEnv ? { env: argsEnv } : {}),
-        ...(command ? { command } : {})
+        ...(command ? { command } : {}),
+        ...(launchAgent ? { launchAgent } : {})
       })
       const spawnCall = spawnMock.mock.calls.at(-1)!
       return spawnCall[2].env as Record<string, string>
@@ -867,6 +877,27 @@ describe('registerPtyHandlers', () => {
       expect(env.TERM).toBe('xterm-256color')
       expect(env.COLORTERM).toBe('truecolor')
       expect(env.TERM_PROGRAM).toBe('Orca')
+    })
+
+    it('keeps indexed Git prompt guards in a local agent terminal env', async () => {
+      const env = await spawnAndGetEnv(undefined, undefined, undefined, undefined, 'claude')
+      expect(env.GIT_TERMINAL_PROMPT).toBe('0')
+      expect(env.GCM_INTERACTIVE).toBe('never')
+      expect(Object.values(env)).toContain('credential.interactive')
+      expect(Object.values(env)).toContain('credential.guiPrompt')
+    })
+
+    it('guards a trusted local agent when its command uses a custom wrapper', async () => {
+      const env = await spawnAndGetEnv(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'cd /repo && custom-agent-wrapper',
+        'claude'
+      )
+      expect(env.GIT_TERMINAL_PROMPT).toBe('0')
+      expect(env.GCM_INTERACTIVE).toBe('never')
     })
 
     it('advertises OSC 8 hyperlink support via FORCE_HYPERLINK', async () => {
@@ -1354,7 +1385,7 @@ describe('registerPtyHandlers', () => {
       // OpenCode plugin dir, Pi managed extension env, Codex home, and dev-mode CLI
       // overrides were silently missing for daemon users (the common case).
 
-      function setupDaemonAdapter() {
+      function setupDaemonAdapter(supportsGitCredentialGuardHost = true) {
         const daemonSpawn = vi.fn(
           async (options: {
             env: Record<string, string>
@@ -1366,6 +1397,7 @@ describe('registerPtyHandlers', () => {
         )
         setLocalPtyProvider({
           spawn: daemonSpawn,
+          supportsGitCredentialGuardHost: () => supportsGitCredentialGuardHost,
           write: vi.fn(),
           resize: vi.fn(),
           kill: vi.fn(),
@@ -1442,9 +1474,10 @@ describe('registerPtyHandlers', () => {
           shellOverride?: string
           command?: string
           envToDelete?: string[]
-        }
+        },
+        supportsGitCredentialGuardHost = true
       ): Promise<DaemonSpawnCall> {
-        const daemonSpawn = setupDaemonAdapter()
+        const daemonSpawn = setupDaemonAdapter(supportsGitCredentialGuardHost)
         const savedEnv: Record<string, string | undefined> = {}
         if (processEnvOverrides) {
           for (const [k, v] of Object.entries(processEnvOverrides)) {
@@ -1491,7 +1524,8 @@ describe('registerPtyHandlers', () => {
           httpProxyBypassRules?: string
         },
         processEnvOverrides?: Record<string, string | undefined>,
-        spawnArgs?: { cwd?: string; shellOverride?: string; command?: string }
+        spawnArgs?: { cwd?: string; shellOverride?: string; command?: string },
+        supportsGitCredentialGuardHost = true
       ): Promise<Record<string, string>> {
         return (
           await daemonSpawnAndGetOptions(
@@ -1499,7 +1533,8 @@ describe('registerPtyHandlers', () => {
             getSelectedCodexHomePath,
             getSettings,
             processEnvOverrides,
-            spawnArgs
+            spawnArgs,
+            supportsGitCredentialGuardHost
           )
         ).env
       }
@@ -1681,6 +1716,33 @@ describe('registerPtyHandlers', () => {
         }
       })
 
+      it('prepends the bare-orca CLI shim dir to PATH for packaged Linux spawns', async () => {
+        const originalPlatform = process.platform
+        Object.defineProperty(process, 'platform', {
+          configurable: true,
+          value: 'linux'
+        })
+        try {
+          // Why: overriding process.platform does not change the already-loaded
+          // node:path dialect; keep this synthetic PATH internally consistent.
+          const env = await daemonSpawnAndGetEnv({
+            PATH: ['/usr/local/bin', '/usr/bin'].join(delimiter)
+          })
+          const entries = env.PATH.split(delimiter)
+          const shimDir = join('/tmp/orca-user-data', 'linux-orca-cli-shim')
+          // Why: bare `orca` must resolve to the Orca CLI before /usr/bin/orca
+          // (the GNOME screen reader) inside Orca-managed terminals (#7904).
+          expect(entries.indexOf(shimDir)).toBeGreaterThanOrEqual(0)
+          expect(entries.indexOf(shimDir)).toBeLessThan(entries.indexOf('/usr/bin'))
+          expect(env.ORCA_CLI_COMMAND).toBeUndefined()
+        } finally {
+          Object.defineProperty(process, 'platform', {
+            configurable: true,
+            value: originalPlatform
+          })
+        }
+      })
+
       it('injects the agent-hook receiver env on the daemon path', async () => {
         const env = await daemonSpawnAndGetEnv({})
         expect(env.ORCA_AGENT_HOOK_PORT).toBe('5678')
@@ -1772,10 +1834,13 @@ describe('registerPtyHandlers', () => {
         // Why: runtime-created spawns (e.g. the mobile-create materialize path)
         // must thread the same {tabId, leafId} so the catch-path rescue can find
         // and keep their live PTY (#7587).
-        expect(runtime.registerPty).toHaveBeenCalledWith(expect.any(String), 'wt-runtime', null, {
-          tabId: 'tab-1',
-          leafId
-        })
+        expect(runtime.registerPty).toHaveBeenCalledWith(
+          expect.any(String),
+          'wt-runtime',
+          null,
+          { tabId: 'tab-1', leafId },
+          false
+        )
       })
 
       it('uses the owning project WSL runtime for runtime-created daemon PTYs', async () => {
@@ -1830,6 +1895,13 @@ describe('registerPtyHandlers', () => {
           expect(spawnOptions.shellOverride).toBe('wsl.exe')
           expect(spawnOptions.terminalWindowsWslDistro).toBe('Ubuntu')
           expect(spawnOptions.terminalWindowsPowerShellImplementation).toBe('auto')
+          expect(runtime.registerPty).toHaveBeenCalledWith(
+            expect.any(String),
+            'repo-1::C:\\repo',
+            null,
+            undefined,
+            true
+          )
         })
       })
 
@@ -2019,6 +2091,47 @@ describe('registerPtyHandlers', () => {
         } finally {
           mockedApp.isPackaged = prev
         }
+      })
+
+      it('defers indexed Git prompt guards from the daemon wire environment', async () => {
+        const env = await daemonSpawnAndGetEnv(
+          {
+            GIT_CONFIG_COUNT: '1',
+            GIT_CONFIG_KEY_0: 'http.proxy',
+            GIT_CONFIG_VALUE_0: 'http://proxy.invalid'
+          },
+          undefined,
+          undefined,
+          undefined,
+          { command: 'claude' }
+        )
+
+        expect(env.GIT_TERMINAL_PROMPT).toBe('0')
+        expect(env.GCM_INTERACTIVE).toBe('never')
+        expect(env.GIT_CONFIG_COUNT).toBe('1')
+        expect(env.GIT_CONFIG_KEY_0).toBe('http.proxy')
+        expect(env.GIT_CONFIG_KEY_1).toBeUndefined()
+      })
+
+      it('materializes the full guard for a legacy daemon host', async () => {
+        const env = await daemonSpawnAndGetEnv(
+          {
+            GIT_CONFIG_COUNT: '1',
+            GIT_CONFIG_KEY_0: 'http.proxy',
+            GIT_CONFIG_VALUE_0: 'http://proxy.invalid'
+          },
+          undefined,
+          undefined,
+          undefined,
+          { command: 'claude' },
+          false
+        )
+
+        expect(env.GIT_TERMINAL_PROMPT).toBe('0')
+        expect(env.GCM_INTERACTIVE).toBe('never')
+        expect(env.GIT_CONFIG_COUNT).toBe('3')
+        expect(env.GIT_CONFIG_KEY_1).toBe('credential.interactive')
+        expect(env.GIT_CONFIG_KEY_2).toBe('credential.guiPrompt')
       })
 
       it('passes the minted sessionId through to provider.spawn and host env setup', async () => {
@@ -3221,6 +3334,40 @@ describe('registerPtyHandlers', () => {
     })
   })
 
+  it('routes runtime foreground confirmation to the provider owning the captured PTY', async () => {
+    const confirmForegroundProcess = vi.fn(async () => 'codex')
+    registerSshPtyProvider('ssh-1', { confirmForegroundProcess } as never)
+    setPtyOwnership('remote-pty', 'ssh-1')
+    const runtime = { setPtyController: vi.fn() }
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+      confirmForegroundProcess: (ptyId: string) => Promise<string | null>
+    }
+
+    await expect(controller.confirmForegroundProcess('remote-pty')).resolves.toBe('codex')
+    expect(confirmForegroundProcess).toHaveBeenCalledOnce()
+    expect(confirmForegroundProcess).toHaveBeenCalledWith('remote-pty')
+    deletePtyOwnership('remote-pty')
+  })
+
+  it('returns unavailable runtime confirmation for unsupported or missing providers', async () => {
+    registerSshPtyProvider('ssh-1', {} as never)
+    setPtyOwnership('unsupported-pty', 'ssh-1')
+    setPtyOwnership('missing-pty', 'missing-connection')
+    const runtime = { setPtyController: vi.fn() }
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+      confirmForegroundProcess: (ptyId: string) => Promise<string | null>
+    }
+
+    await expect(controller.confirmForegroundProcess('unsupported-pty')).resolves.toBeNull()
+    await expect(controller.confirmForegroundProcess('missing-pty')).resolves.toBeNull()
+    deletePtyOwnership('unsupported-pty')
+    deletePtyOwnership('missing-pty')
+  })
+
   it('rethrows non-not-found local provider shutdown failures', async () => {
     setLocalPtyProvider({
       spawn: vi.fn(),
@@ -3250,6 +3397,17 @@ describe('registerPtyHandlers', () => {
     await expect(handlers.get('pty:kill')!(null, { id: 'local-pty' })).rejects.toThrow(
       'daemon unavailable'
     )
+  })
+
+  it('rejects runtime terminal IDs before unowned local provider routing', async () => {
+    const shutdown = vi.spyOn(getLocalPtyProvider(), 'shutdown')
+    handlers.clear()
+    registerPtyHandlers(mainWindow as never)
+
+    await expect(
+      handlers.get('pty:kill')!(null, { id: 'remote:env-1@@terminal-1' })
+    ).rejects.toThrow('Invalid PTY provider id')
+    expect(shutdown).not.toHaveBeenCalled()
   })
 
   it('synthesizes runtime exit after ordinary daemon-backed pty kill', async () => {
@@ -4075,12 +4233,13 @@ describe('registerPtyHandlers', () => {
       applied: { cols: number; rows: number } | null
       resize?: (cols: number, rows: number) => void
       getAppliedSize?: (id: string) => Promise<{ cols: number; rows: number } | null>
-    }): void {
+    }): ReturnType<typeof vi.fn> {
+      const write = vi.fn()
       setLocalPtyProvider({
         spawn: vi.fn(async (opts: { sessionId?: string }) => ({
           id: opts.sessionId ?? 'daemon-pty'
         })),
-        write: vi.fn(),
+        write,
         resize: vi.fn(args.resize ?? (() => {})),
         getAppliedSize: vi.fn(args.getAppliedSize ?? (async () => args.applied)),
         kill: vi.fn(),
@@ -4090,6 +4249,7 @@ describe('registerPtyHandlers', () => {
         listProcesses: vi.fn(async () => []),
         getForegroundProcess: vi.fn(async () => null)
       } as never)
+      return write
     }
 
     const resizeListener = (): ((event: unknown, args: unknown) => void) => {
@@ -4215,6 +4375,113 @@ describe('registerPtyHandlers', () => {
 
       resizeListener()(mainWindowIpcEvent, { id, cols: 120, rows: 30 })
 
+      expect(runtime.onExternalPtyResize).not.toHaveBeenCalled()
+    })
+
+    it('suppresses the host fit cascade while a remote viewer drives the width', async () => {
+      const resizeSpy = vi.fn()
+      setupProviderWithAppliedSize({ applied: { cols: 80, rows: 24 }, resize: resizeSpy })
+      const runtime = {
+        setPtyController: vi.fn(),
+        createPreAllocatedTerminalHandle: vi.fn(() => null),
+        registerPty: vi.fn(),
+        getDriver: vi.fn(() => ({ kind: 'idle' })),
+        // The whole point of the fix: a PTY with a remote viewer reports true,
+        // even though the presence-lock driver state stays idle/desktop.
+        isRemoteDesktopResizeDriven: vi.fn(() => true),
+        isResizeSuppressed: vi.fn(() => false),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn(),
+        recordRemoteDesktopHostReclaimTarget: vi.fn(),
+        onExternalPtyResize: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const spawn = await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
+      const id = (spawn as { id: string }).id
+      resizeSpy.mockClear()
+
+      // Host's own safeFit tries to widen the viewed PTY back to its window.
+      resizeListener()(mainWindowIpcEvent, { id, cols: 125, rows: 48 })
+
+      // It must not reach the PTY while the viewer owns the width.
+      expect(resizeSpy).not.toHaveBeenCalled()
+      expect(runtime.recordRemoteDesktopHostReclaimTarget).toHaveBeenCalledWith(id, 125, 48)
+      expect(runtime.onExternalPtyResize).not.toHaveBeenCalled()
+    })
+
+    it('lets trusted host activity reclaim remote viewport ownership', () => {
+      const claimRemoteDesktopHost = vi.fn().mockResolvedValue(true)
+      const runtime = {
+        setPtyController: vi.fn(),
+        claimRemoteDesktopHost
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const call = onMock.mock.calls.find((entry: unknown[]) => entry[0] === 'pty:claimViewport')
+      const claimListener = call?.[1] as
+        | ((event: unknown, args: { id: string; cols: number; rows: number }) => void)
+        | undefined
+      expect(claimListener).toBeTypeOf('function')
+
+      claimListener?.(mainWindowIpcEvent, { id: 'pty-1', cols: 125, rows: 48 })
+
+      expect(claimRemoteDesktopHost).toHaveBeenCalledWith('pty-1', 125, 48)
+    })
+
+    it('does not forward host input when viewport reclaim fails', async () => {
+      const write = setupProviderWithAppliedSize({ applied: { cols: 80, rows: 24 } })
+      const runtime = {
+        setPtyController: vi.fn(),
+        createPreAllocatedTerminalHandle: vi.fn(() => null),
+        registerPty: vi.fn(),
+        getDriver: vi.fn(() => ({ kind: 'idle' })),
+        claimRemoteDesktopHost: vi.fn().mockResolvedValue(false),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const spawn = await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
+      const id = (spawn as { id: string }).id
+      const claim = onMock.mock.calls.find((entry: unknown[]) => entry[0] === 'pty:claimViewport')
+      const writeEvent = onMock.mock.calls.find((entry: unknown[]) => entry[0] === 'pty:write')
+
+      claim?.[1](mainWindowIpcEvent, { id, cols: 125, rows: 48 })
+      writeEvent?.[1](mainWindowIpcEvent, { id, data: 'x' })
+      await Promise.resolve()
+
+      expect(write).not.toHaveBeenCalled()
+    })
+
+    it('does not populate the remote reclaim cache when only a phone drives', async () => {
+      const resizeSpy = vi.fn()
+      setupProviderWithAppliedSize({ applied: { cols: 80, rows: 24 }, resize: resizeSpy })
+      const runtime = {
+        setPtyController: vi.fn(),
+        createPreAllocatedTerminalHandle: vi.fn(() => null),
+        registerPty: vi.fn(),
+        getDriver: vi.fn(() => ({ kind: 'mobile', clientId: 'phone-A' })),
+        isRemoteDesktopResizeDriven: vi.fn(() => false),
+        isResizeSuppressed: vi.fn(() => false),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn(),
+        recordRemoteDesktopHostReclaimTarget: vi.fn(),
+        onExternalPtyResize: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const spawn = await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
+      const id = (spawn as { id: string }).id
+      resizeSpy.mockClear()
+
+      resizeListener()(mainWindowIpcEvent, { id, cols: 125, rows: 48 })
+
+      expect(resizeSpy).not.toHaveBeenCalled()
+      expect(runtime.recordRemoteDesktopHostReclaimTarget).not.toHaveBeenCalled()
       expect(runtime.onExternalPtyResize).not.toHaveBeenCalled()
     })
   })
@@ -4386,10 +4653,13 @@ describe('registerPtyHandlers', () => {
 
     // Why: this is the load-bearing wiring for #7587 — the runtime can only back a
     // stalled mobile create from a live spawn if the spawn threads {tabId, leafId}.
-    expect(runtime.registerPty).toHaveBeenCalledWith(expect.any(String), 'wt-1', null, {
-      tabId: 'tab-1',
-      leafId
-    })
+    expect(runtime.registerPty).toHaveBeenCalledWith(
+      expect.any(String),
+      'wt-1',
+      null,
+      { tabId: 'tab-1', leafId },
+      false
+    )
   })
 
   it('omits the pane identity from registerPty when the leafId is not a terminal leaf (#7587)', async () => {
@@ -4418,7 +4688,13 @@ describe('registerPtyHandlers', () => {
     // Why: legacy numeric pane ids (`pane:N`) are not terminal leaf ids, so the
     // spawn seam must not fabricate a binding for them (registerPty would ignore
     // it anyway); this pins that the seam passes a clean `undefined`.
-    expect(runtime.registerPty).toHaveBeenCalledWith(expect.any(String), 'wt-1', null, undefined)
+    expect(runtime.registerPty).toHaveBeenCalledWith(
+      expect.any(String),
+      'wt-1',
+      null,
+      undefined,
+      false
+    )
   })
 
   it('refreshes native Agent Teams env when captured teammate mode lives in launch args', async () => {
@@ -5897,10 +6173,12 @@ describe('registerPtyHandlers', () => {
     expect(spawnCall[0]).toBe('wsl.exe')
     expect(env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
     expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
+    expect(env.ORCA_CLI_COMMAND).toBe('orca-ide')
     expect(env.WSLENV?.split(':')).toEqual(
       expect.arrayContaining([
         'ORCA_TERMINAL_HANDLE/u',
         'ORCA_USER_DATA_PATH/p',
+        'ORCA_CLI_COMMAND/u',
         'ORCA_AGENT_HOOK_PORT/u',
         'ORCA_AGENT_HOOK_TOKEN/u',
         'ORCA_OMP_SOURCE_AGENT_DIR/p',
@@ -6530,6 +6808,8 @@ describe('registerPtyHandlers', () => {
 
   it('spawns a plain POSIX login shell and queues startup commands for the live session', async () => {
     const originalPlatform = process.platform
+    const originalHome = process.env.HOME
+    const originalOrcaOrigZdotdir = process.env.ORCA_ORIG_ZDOTDIR
     const originalShell = process.env.SHELL
     const originalZdotdir = process.env.ZDOTDIR
 
@@ -6537,6 +6817,9 @@ describe('registerPtyHandlers', () => {
       configurable: true,
       value: 'darwin'
     })
+    // Why: this test simulates macOS even when Vitest runs on a Windows host.
+    process.env.HOME = '/Users/test'
+    delete process.env.ORCA_ORIG_ZDOTDIR
     process.env.SHELL = '/bin/zsh'
     delete process.env.ZDOTDIR
 
@@ -6554,6 +6837,16 @@ describe('registerPtyHandlers', () => {
         configurable: true,
         value: originalPlatform
       })
+      if (originalHome === undefined) {
+        delete process.env.HOME
+      } else {
+        process.env.HOME = originalHome
+      }
+      if (originalOrcaOrigZdotdir === undefined) {
+        delete process.env.ORCA_ORIG_ZDOTDIR
+      } else {
+        process.env.ORCA_ORIG_ZDOTDIR = originalOrcaOrigZdotdir
+      }
       if (originalShell === undefined) {
         delete process.env.SHELL
       } else {
@@ -10213,6 +10506,44 @@ describe('registerPtyHandlers', () => {
     expect(mockProc.proc.write).not.toHaveBeenCalled()
   })
 
+  it('synchronizes runtime output sequencing from a provider reattach snapshot', async () => {
+    setLocalPtyProvider({
+      spawn: vi.fn(async () => ({
+        id: 'pty-restored',
+        isReattach: true,
+        providerSequence: { value: 900, generation: 'continued' as const }
+      })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => []),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+    const runtime = {
+      setPtyController: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      getPtyOutputSequence: vi.fn().mockReturnValue(7),
+      synchronizePtyOutputSequenceFromProvider: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn(),
+      createPreAllocatedTerminalHandle: vi.fn(() => null),
+      preAllocateHandleForPty: vi.fn()
+    }
+    registerPtyHandlers(mainWindow as never, runtime as never)
+
+    await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+    expect(runtime.synchronizePtyOutputSequenceFromProvider).toHaveBeenCalledWith(
+      'pty-restored',
+      { value: 900, generation: 'continued' },
+      7
+    )
+  })
+
   it('seeds headless terminal state with cold-restore cwd metadata', async () => {
     const oscLinks = [{ row: 0, startCol: 0, endCol: 8, uri: 'https://example.com/restored' }]
     const coldRestore = {
@@ -10250,7 +10581,7 @@ describe('registerPtyHandlers', () => {
       'pty-cold-restore',
       'restored history\r\n',
       undefined,
-      { cwd: '/projects/restored', oscLinks }
+      { cwd: '/projects/restored', oscLinks, preferProviderIfExisting: true }
     )
   })
 
@@ -10275,7 +10606,9 @@ describe('registerPtyHandlers', () => {
     expect(registerPaneKeyAliasMock).toHaveBeenCalledWith(
       'tab-1:0',
       stablePaneKey,
-      expect.any(String)
+      expect.any(String),
+      expect.any(Number),
+      { authorityVerified: true }
     )
     expect(clearMigrationUnsupportedPtysForPaneKeyMock).toHaveBeenCalledWith(stablePaneKey)
     expect(setMigrationUnsupportedPtyMock).not.toHaveBeenCalled()
@@ -11062,6 +11395,42 @@ describe('registerPtyHandlers', () => {
       const requestId = getSentRequestIds()[0]
       listener(null, { requestId, snapshot: { data: 'ok', cols: 'not-a-number' } })
       await expect(pending).resolves.toBeNull()
+    })
+  })
+
+  describe('provider buffer snapshot dispatch', () => {
+    it('exposes daemon history when no renderer pane is mounted', async () => {
+      const provider = installObservableDaemonTestProvider()
+      provider.getBufferSnapshot.mockResolvedValue({
+        data: 'restored screen\r\n',
+        scrollbackAnsi: 'restored history\r\n',
+        cols: 120,
+        rows: 40,
+        cwd: '/projects/restored',
+        seq: 900,
+        source: 'headless'
+      })
+      const runtime = { setPtyController: vi.fn() }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+        serializeProviderBuffer(ptyId: string, opts?: { scrollbackRows?: number }): Promise<unknown>
+      }
+
+      await expect(
+        controller.serializeProviderBuffer('daemon-restored', { scrollbackRows: 5000 })
+      ).resolves.toEqual({
+        data: 'restored screen\r\n',
+        scrollbackAnsi: 'restored history\r\n',
+        cols: 120,
+        rows: 40,
+        cwd: '/projects/restored',
+        seq: 900,
+        source: 'headless'
+      })
+      expect(provider.getBufferSnapshot).toHaveBeenCalledWith('daemon-restored', {
+        scrollbackRows: 5000
+      })
     })
   })
 

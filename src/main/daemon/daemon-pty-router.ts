@@ -62,6 +62,11 @@ export class DaemonPtyRouter implements IPtyProvider {
     return result
   }
 
+  supportsGitCredentialGuardHost(sessionId?: string): boolean {
+    const adapter = sessionId ? this.adapterFor(sessionId) : this.current
+    return adapter.supportsGitCredentialGuardHost()
+  }
+
   async attach(id: string): Promise<void> {
     await this.adapterFor(id).attach(id)
   }

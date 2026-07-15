@@ -133,7 +133,11 @@ export const WORKTREE_METHODS: RpcMethod[] = [
           }
         })
         finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
-        return result
+        // Why: agent callers need a stable dispatch target without traversing
+        // terminal-list layout duplicates after creating the worktree.
+        return params.startupAgent && result.startupTerminal?.handle
+          ? { ...result, agentTerminalHandle: result.startupTerminal.handle }
+          : result
       } catch (error) {
         releaseAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
         throw error

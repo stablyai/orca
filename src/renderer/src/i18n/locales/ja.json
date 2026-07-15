@@ -73,6 +73,7 @@
     "matchLabel": {
       "comment": "コメント",
       "issue": "Issue",
+      "mr": "MR",
       "port": "ポート",
       "pr": "PR"
     }
@@ -458,6 +459,13 @@
               "all": "コメントはまだありません。"
             }
           }
+        },
+        "bot": {
+          "author": {
+            "overrides": {
+              "6d5d52b53f": "ボット作成者の上書き数が上限に達しました"
+            }
+          }
         }
       },
       "resume": {
@@ -691,7 +699,8 @@
         "devSearchKeywordToast": "toast",
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
-        "devSearchKeywordNotification": "notification"
+        "devSearchKeywordNotification": "notification",
+        "projectHostsSummary": "{{value0}} 台のホスト"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "貼り付け内容が大きすぎます。"
@@ -722,6 +731,8 @@
       "GitHubItemDialog": {
         "3ab6ac0fc8": "選択した GitHub Issue または PR をプレビュー・編集します。",
         "3cd5ae5b7b": "ファイルは変更されませんでした。",
+        "filesUnavailable": "変更されたファイルを読み込めませんでした。",
+        "filesRetry": "再試行",
         "999b5ad7d9": "ファイル",
         "4bd1f5b055": "チェック",
         "e30a5470c9": "会話",
@@ -1385,7 +1396,9 @@
         "1ff5d979df": "担当者なし",
         "checkActionRequiredHint": "マージを解除するには、このチェックにGitHub上で手動アクション（例：ワークフロー実行の承認）が必要です。",
         "dd5d9a4f17": "{{value0}}に更新",
-        "71a3c0f9d2": "ワークスペースを開始"
+        "71a3c0f9d2": "ワークスペースを開始",
+        "filesUnavailable": "Couldn't load changed files.",
+        "filesRetry": "Retry"
       },
       "QuickOpen": {
         "1dbd3f59ff": "移動",
@@ -2366,7 +2379,9 @@
             "failed": "削除できなかったワークスペース: {{value0}}",
             "error": "ワークスペースのクリーンアップに失敗しました",
             "skippedAncestor": "ネストされたワークスペースを削除できなかったためスキップしました。",
-            "timedOut": "{{value0}} の削除に予想より時間がかかっています。バックグラウンドで継続されます。"
+            "timedOut": "{{value0}} の削除に予想より時間がかかっています。バックグラウンドで継続されます。",
+            "stillRemoving": "Still removing workspaces: {{value0}}",
+            "skippedPendingAncestor": "Skipped because a nested workspace has not finished removing."
           },
           "candidateRow": {
             "gitLabel": "Git",
@@ -2579,7 +2594,7 @@
               "blocked": {
                 "toast": {
                   "97c98f1afe": "設定を開く",
-                  "7cf51f74fd": "SSH、tmux、Neovim、または fzf からコピーするには、Terminal 設定で TUI クリップボードへの書き込みを有効にします。",
+                  "7cf51f74fd": "SSH、tmux、Neovim、fzf、または Grok からコピーするには、Terminal 設定で TUI クリップボードへの書き込みを有効にします。",
                   "89eaa3e80b": "Terminal のクリップボードへの書き込みがブロックされました"
                 }
               }
@@ -2874,6 +2889,9 @@
           },
           "TerminalTabSplitMenuSection": {
             "splitTerminal": "ターミナルを分割"
+          },
+          "TerminalTabLeadingIcon": {
+            "7ab2964bea": "未読のエージェント完了"
           }
         }
       },
@@ -3209,6 +3227,17 @@
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH ホスト"
+          },
+          "usagePercentageLabel": {
+            "used": "{{value0}}% 使用済み",
+            "remaining": "残り {{value0}}%"
+          },
+          "UsagePercentageDisplayChangeNotice": {
+            "title": "Usage now shows % used",
+            "body": "Prefer remaining? Change it in Settings.",
+            "dismiss": "Dismiss",
+            "openSettings": "Open Settings",
+            "gotIt": "Got it"
           }
         }
       },
@@ -5422,7 +5451,9 @@
           "bf16ef0af2": "オフ",
           "3f6892f307": "オン",
           "b82f86d7d2": "Rich Markdown Spellcheck",
-          "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown."
+          "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown.",
+          "7ddd66fede": "エディターのワードラップ",
+          "9b18de6eea": "水平スクロールを使わずに、ファイルエディターで長い行を折り返します。"
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "ローカルホスト、127.0.0.1、*.internal",
@@ -6142,7 +6173,7 @@
           "26fef02bf3": "プロジェクトアイコン",
           "c7ef4415de": "表示名",
           "b0a0c14a1c": "サイドバーとタブのプロジェクト固有の表示詳細。",
-          "170624bdfb": "このプロジェクトを Orca から削除します。",
+          "removeProjectAllHosts": "このプロジェクトを、設定済みのすべてのホストの Orca から削除します。",
           "0909e5d650": "プロジェクトの削除",
           "ee5a290616": "フォルダーとして開きます。このワークスペースでは Git 機能を使用できません。",
           "323debba71": "タイプ：",
@@ -6809,9 +6840,9 @@
           "348246b06f": "false",
           "5936387ddd": "自動",
           "adbafefe56": "カスタム",
-          "16753eea48": "Windows では、右クリックしてクリップボードを貼り付けます。 Ctrl キーを押しながら右クリックすると、コンテキスト メニューが開きます。",
+          "16753eea48": "右クリックしてクリップボードを貼り付けます。 Ctrl キーを押しながら右クリックすると、コンテキスト メニューが開きます。",
           "9c178cf8aa": "右クリックして貼り付けます",
-          "af0c3b6e39": "Windows では、右クリックしてクリップボードを terminal に貼り付けます。 Ctrl キーを押しながら右クリックしてコンテキスト メニューを開きます。",
+          "af0c3b6e39": "右クリックしてクリップボードを terminal に貼り付けます。 Ctrl キーを押しながら右クリックしてコンテキスト メニューを開きます。",
           "29154326bb": "の上",
           "ab20575a8a": "オフ",
           "ab3a1f9068": "wsl.exe",
@@ -7283,7 +7314,9 @@
             "f8e2a1c4b6": "Grok の使用状況",
             "e7d1b0f3a5": "Grok CLI OAuth から Grok の週次クレジット使用量を表示します。",
             "d6c0a9e2f4": "grok",
-            "c5b9f8d1e3": "xai"
+            "c5b9f8d1e3": "xai",
+            "usagePercentageDisplayTitle": "使用率",
+            "usagePercentageDisplayDescription": "プロバイダーの制限を使用済みまたは残りの割合で表示するかを選択します。"
           }
         },
         "auto": {
@@ -7735,7 +7768,9 @@
             "defaultProjectRuntime": "Default Project Runtime",
             "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects.",
             "d2d2d929c0": "Rich Markdown Spellcheck",
-            "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown."
+            "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown.",
+            "e61157e926": "エディターのワードラップ",
+            "005be5c699": "水平スクロールを使わずに、ファイルエディターで長い行を折り返します。"
           }
         },
         "git": {
@@ -8535,7 +8570,7 @@
               "e55186fe2b": "右クリック",
               "28ff08ed35": "窓",
               "e7d2793b03": "ターミナル",
-              "8ba875c132": "Windows では、右クリックしてクリップボードを terminal に貼り付けます。 Ctrl キーを押しながら右クリックしてコンテキスト メニューを開きます。",
+              "8ba875c132": "右クリックしてクリップボードを terminal に貼り付けます。 Ctrl キーを押しながら右クリックしてコンテキスト メニューを開きます。",
               "f0b8448570": "右クリックして貼り付けます",
               "04994f6929": "デフォルト",
               "fc564eadaf": "デビアン",
@@ -9053,7 +9088,67 @@
           "3325d996cb": "使用状況を更新",
           "a8f3e2c1b4": "週次クレジット",
           "b7e2d9f0a3": "ターミナルの grok /usage 画面と同じ週次クレジット率です。",
-          "c6d1a8f4e2": "{{when}} にリセット"
+          "c6d1a8f4e2": "{{when}} にリセット",
+          "e6dadc1e2b": "Monthly usage",
+          "75e396bf42": "Included monthly usage for Grok unified-billing accounts."
+        },
+        "AppearanceWindowSidebarSection": {
+          "usagePercentageDisplayUsed": "使用済み",
+          "usagePercentageDisplayRemaining": "残り"
+        },
+        "TerminalInteractionSection": {
+          "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
+          "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
+        },
+        "MobileRelayStatusSection": {
+          "registered": "Registered",
+          "connecting": "Connecting",
+          "reconnecting": "Reconnecting",
+          "offline": "Offline",
+          "title": "Orca Relay",
+          "automatic": "Connect from anywhere when a phone is paired",
+          "signInPrompt": "Sign in on this desktop to connect from anywhere",
+          "directStillAvailable": "LAN and Tailscale connections remain available.",
+          "directNeedsNoAccount": "LAN and Tailscale pairing still work without an account.",
+          "signIn": "Sign in",
+          "unavailable": "Unavailable",
+          "standby": "Standby — no relay devices"
+        },
+        "MobilePairingConnectionOptions": {
+          "ready": "準備完了",
+          "connecting": "接続中",
+          "available": "利用可能",
+          "reconnecting": "再接続中",
+          "unavailable": "利用不可",
+          "title": "新しいスマートフォンをどのように接続しますか？",
+          "anywhere": "Orca Relay で接続",
+          "recommended": "推奨",
+          "automaticDescription": "利用可能な場合は直接接続し、それ以外ではOrca Relayを使用します。",
+          "signInDescription": "Orca Relayを使用するには、このデスクトップでサインインしてください。",
+          "signIn": "サインイン",
+          "localOnly": "ローカルネットワークのみ",
+          "localShort": "LAN または Tailscale",
+          "localDescription": "このスマートフォンをOrca Relayに接続せず、LANまたはTailscaleを使用します。"
+        },
+        "MobilePairingSetupSection": {
+          "title": "スマートフォンをペアリング",
+          "automaticDescription": "ペアリングコードには、直接接続と暗号化されたOrca Relayのフォールバックが含まれます。",
+          "localDescription": "ペアリングコードは、下のローカルネットワークアドレスだけを使用します。",
+          "regenerate": "再生成",
+          "generate": "QRコードを生成",
+          "localSettings": "ローカル接続設定",
+          "localAddressDescription": "Orca Mobileからこのコンピューターへ直接接続できるLANまたはプライベートネットワークのアドレスを選択します。",
+          "refresh": "ネットワークインターフェースを更新",
+          "tailnet": "自分のtailnetで接続",
+          "tailnetDescription": "このコンピューターとスマートフォンにTailscaleをインストールし、同じtailnetにサインインして、上で100.x.y.zアドレスを選択します。",
+          "getTailscale": "Tailscaleを入手"
+        },
+        "MobileRelayBetaAvailability": {
+          "about": "Orca Relay ベータについて",
+          "beta": "ベータ",
+          "availability": "利用可能:",
+          "testFlight": "TestFlight",
+          "androidApk": "Android APK"
         }
       },
       "right": {
@@ -9688,7 +9783,9 @@
                 "b13f85d75c": "タイムライン",
                 "f5cf324efa": "Comment display options",
                 "5e6e5a13fa": "表示",
-                "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
+                "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
+                "b3195cba33": "作成者のボット指定を解除",
+                "f588b46a6c": "作成者をボットとして指定"
               },
               "empty": {
                 "state": {
@@ -9921,7 +10018,11 @@
             "92276aceb7": "削除",
             "7fb9435c86": "This permanently deletes the directory and its contents on the remote host. This cannot be undone.",
             "23e98f192f": "This permanently deletes the file on the remote host. This cannot be undone.",
-            "8b8ee9d22f": "このファイルを所有しているホストを特定できませんでした。ワークスペースの接続を確認して、もう一度お試しください。"
+            "8b8ee9d22f": "このファイルを所有しているホストを特定できませんでした。ワークスペースの接続を確認して、もう一度お試しください。",
+            "af1270b90d": "{{count}}個の項目を完全に削除しますか?",
+            "dd029aa5cd": "選択した項目とディレクトリの内容がリモートホスト上で完全に削除されます。この操作は元に戻せません。",
+            "77fdc36183": "Delete {{count}} items?",
+            "fca915a67a": "Remote items are permanently deleted and cannot be undone. Local items move to the {{value0}}."
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "シンボリックリンクターゲットを開けません"
@@ -10659,6 +10760,17 @@
           "trigger-label": "通知するネットワークアドレス",
           "custom-option": "{{address}}（カスタム）",
           "add-custom": "カスタムアドレスを追加…"
+        },
+        "WindowsFirewallNotice": {
+          "repair-success": "Windows Firewall now allows Orca Mobile on private networks",
+          "repair-failed": "Could not add the Windows Firewall rule",
+          "public-title": "Windows marks this network as public",
+          "missing-title": "Allow phone connections through Windows Firewall",
+          "public-description": "Change this trusted Wi-Fi network to Private before allowing Orca Mobile connections.",
+          "missing-description": "Windows may block the pairing server. Add a rule for this Orca app and TCP port {{port}} on Private networks.",
+          "open-settings": "Open network settings",
+          "waiting": "Waiting for Windows…",
+          "allow": "Allow phone connections"
         }
       },
       "gitlab": {
@@ -11456,7 +11568,9 @@
           "c98ce191da": "この差分には開くための変更側ファイルがありません",
           "9b80bbe1de": "ファイルタブを開く",
           "f0fd4174b5": "ファイル タブを開いてリッチ markdown 編集を使用する",
-          "a10d9b8337": "ファイルを開く"
+          "a10d9b8337": "ファイルを開く",
+          "2076ecfc9c": "前の変更",
+          "631dab0df3": "次の変更"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "PDFとしてエクスポート",
@@ -11655,7 +11769,8 @@
           "1c99b726e0": "リンクを削除する",
           "cdfe166f6f": "リンクを編集",
           "bfc813e909": "リンクを開く",
-          "7b0b945fdc": "リンクを貼り付けるか入力してください…"
+          "7b0b945fdc": "リンクを貼り付けるか入力してください…",
+          "copyLink": "リンクをコピー"
         },
         "RichMarkdownReviewNoteLayer": {
           "f3ef92952b": "このメモ",
@@ -11682,7 +11797,8 @@
           "68d090241d": "単語全体に一致",
           "fd97c7e585": "置換",
           "44682b4159": "リッチ markdown エディタで置換",
-          "c2884f5e95": "すべて置換"
+          "c2884f5e95": "すべて置換",
+          "preservedRichContentReadOnly": "保持されたリッチコンテンツはリッチモードでは読み取り専用です。"
         },
         "RichMarkdownSlashMenu": {
           "82c6816ff8": "ブロックが見つかりませんでした",
@@ -11899,6 +12015,24 @@
           "3fa2b8d417": "ディスクから再読み込み",
           "a95d02c644": "編集内容を保持",
           "2c8f1e07b9": "比較を読み込み中..."
+        },
+        "RichMarkdownEditor": {
+          "citationLinkAvailable": "{{value0}}、{{value1}}へのリンク。Enterキーで開くか、Tabキーでリンク操作に移動します。",
+          "citationFallbackLabel": "引用",
+          "citationLinkUnavailable": "{{value0}}、引用リンクは利用できません。{{value1}}",
+          "tabForCitationActions": "Tabキーで利用可能な操作に移動します。",
+          "noCitationActions": "利用できるリンク操作はありません。"
+        },
+        "richMarkdownHtmlSuperscriptLink": {
+          "availableAriaLabel": "{{value0}}、{{value1}}へのリンク",
+          "unavailableAriaLabel": "{{value0}}、引用リンクは利用できません"
+        },
+        "richMarkdownLinkClipboard": {
+          "copiedLink": "リンクをコピーしました",
+          "copyLinkFailed": "リンクをコピーできませんでした"
+        },
+        "richMarkdownSourceOwningCutFeedback": {
+          "selectLessContent": "保持されたHTML引用を切り取るには、選択範囲を小さくするかコードモードを使用してください。"
         }
       },
       "diff": {
@@ -12769,7 +12903,7 @@
         "profiles": {
           "switcher": {
             "cloud": {
-              "unavailable": "クラウドログインを利用できません"
+              "unavailable": "Orcaへのサインインは利用できません"
             },
             "reconnect": "プロファイルを再接続",
             "connect": "プロファイルを接続",
@@ -12793,7 +12927,14 @@
             "account": "アカウント",
             "org": {
               "members": "組織メンバー"
-            }
+            },
+            "signInWaiting": "サインインを待機中…",
+            "signInAgain": "もう一度サインイン",
+            "signIn": "Orcaにサインイン",
+            "accountTitle": "Orcaアカウント",
+            "accountSignedIn": "サインイン済み",
+            "accountSignInRequired": "サインインが必要です",
+            "accountSignedOut": "サインアウト済み"
           },
           "management": {
             "04e7bd2a23": "転送",
@@ -12836,8 +12977,8 @@
           },
           "signout": {
             "confirm": {
-              "title": "ログアウトしますか？",
-              "description": "{{profileName}}からログアウトし、プロジェクト、ワークツリー、ローカルメタデータをこのデバイスに保持します。",
+              "title": "Orcaからログアウトしますか？",
+              "description": "このデバイスでOrcaからログアウトします。ローカルのプロジェクトとワークツリーには影響しません。",
               "cancel": "キャンセル",
               "action": "ログアウト"
             }
@@ -12939,6 +13080,37 @@
         "searchLabels": "ラベルをフィルター…",
         "searchAssignee": "担当者をフィルター…",
         "back": "戻る"
+      },
+      "browser-pane": {
+        "markup": {
+          "cancel": "キャンセル",
+          "clear": "すべて消去",
+          "copiedToast": "注釈をコピーしました — エージェントに貼り付けてください（{{value0}}）",
+          "copy": "注釈をコピー",
+          "drawButton": "スクリーンショットに描き込み",
+          "drawHint": "ページに描き込み、マークアップをコピーしてエージェントに貼り付けられます。",
+          "drawHintBadge": "新機能",
+          "drawHintDismiss": "了解",
+          "drawHintTry": "試してみる",
+          "errorAttach": "注釈付きスクリーンショットを添付できませんでした。",
+          "errorCapture": "描画用にページを取得できませんでした。",
+          "errorUnavailable": "このページではスクリーンショット注釈を利用できません。",
+          "fontSize": "文字サイズ",
+          "hint": "ページに描き込み、注釈をコピーしてエージェントに貼り付けてください。",
+          "redo": "やり直し",
+          "style": "色と太さ",
+          "textInput": "注釈テキスト",
+          "tool": {
+            "arrow": "矢印",
+            "ellipse": "楕円",
+            "highlight": "ハイライト",
+            "pen": "ペン",
+            "rect": "四角形",
+            "text": "テキスト"
+          },
+          "undo": "元に戻す",
+          "widthOption": "{{value0}} px"
+        }
       }
     },
     "i18n": {
@@ -13020,7 +13192,8 @@
         "otherPlaceholder": "答えを入力してください",
         "cancel": "キャンセル",
         "send": "回答を送信する",
-        "next": "次へ"
+        "next": "次へ",
+        "skip": "スキップ"
       },
       "approval": {
         "title": "{{value0}} を許可しますか?",

@@ -67,6 +67,25 @@ describe('SshPtyProvider', () => {
       })
     })
 
+    it('forwards trusted agent identity for wrapped remote commands', async () => {
+      mux.request.mockResolvedValue({ id: 'pty-agent' })
+
+      await provider.spawn({
+        cols: 120,
+        rows: 40,
+        command: 'cd /repo && custom-agent-wrapper',
+        launchAgent: 'claude'
+      })
+
+      expect(mux.request).toHaveBeenCalledWith(
+        'pty.spawn',
+        expect.objectContaining({
+          command: 'cd /repo && custom-agent-wrapper',
+          launchAgent: 'claude'
+        })
+      )
+    })
+
     it('forwards pane identity as relay metadata on fresh spawn', async () => {
       mux.request.mockResolvedValue({ id: 'pty-2' })
 

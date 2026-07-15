@@ -13,6 +13,7 @@ import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
+import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
 
 export type HookCommandConfig = {
   type: 'command'
@@ -86,12 +87,13 @@ export function readHooksJson(configPath: string): HooksConfig | null {
 export function createManagedCommandMatcher(
   scriptFileName: string
 ): (command: string | undefined) => boolean {
-  const scriptStem = scriptFileName.replace(/\.(?:cmd|sh)$/, '')
-  // Why: local Windows installs use .cmd, while SSH/POSIX installs and older
-  // entries use .sh. A platform switch should still sweep stale Orca hooks.
+  const scriptStem = scriptFileName.replace(/\.(?:cmd|ps1|sh)$/, '')
+  // Why: local Windows installs use .cmd or Copilot's .ps1, while SSH/POSIX
+  // installs use .sh. A platform switch must still sweep stale Orca hooks.
   const needles = [
     `agent-hooks/${scriptFileName}`,
     `agent-hooks/${scriptStem}.cmd`,
+    `agent-hooks/${scriptStem}.ps1`,
     `agent-hooks/${scriptStem}.sh`
   ]
   return (command) => {
@@ -123,24 +125,26 @@ export function getSharedManagedScriptPath(scriptFileName: string): string {
   return join(homedir(), '.orca', 'agent-hooks', scriptFileName)
 }
 
+function quotePosixShellString(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`
+}
+
 // Why: a stale managed hook entry (left over after the user wiped userData,
 // switched dev↔prod installs, or had a partial install fail) used to fire
 // `/bin/sh "<missing path>"` on every tool call, which exits 127 and surfaces
 // as `PreToolUse hook (failed) error: hook exited with code 127` in the agent
-// transcript. Wrapping the launcher in `if [ -x ... ]; then ...; fi` makes a
-// missing/non-executable script a silent no-op so a broken install never
-// poisons the user's session. Failures inside the script itself are
-// unaffected — only the missing-script case short-circuits.
+// transcript. Guarding for a regular readable executable file makes a broken
+// install a silent no-op without hiding failures from a script that starts.
 export function wrapPosixHookCommand(scriptPath: string, env: Record<string, string> = {}): string {
   // Why: POSIX single-quote escape so $, `, ", and \ in scriptPath are taken
   // literally — avoids a shell-injection footgun if a future caller passes an
   // arbitrary path.
-  const quoted = `'${scriptPath.replaceAll("'", "'\\''")}'`
+  const quoted = quotePosixShellString(scriptPath)
   const envPrefix = Object.entries(env)
     .map(([key, value]) => `${key}='${value.replaceAll("'", "'\\''")}'`)
     .join(' ')
   const invocation = envPrefix ? `${envPrefix} /bin/sh ${quoted}` : `/bin/sh ${quoted}`
-  return `if [ -x ${quoted} ]; then ${invocation}; fi`
+  return `if [ -f ${quoted} ] && [ -r ${quoted} ] && [ -x ${quoted} ]; then ${invocation}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
 }
 
 function quotePowerShellString(value: string): string {
@@ -154,11 +158,17 @@ function getWindowsPowerShellExecutablePath(): string {
   return `${systemRoot.replaceAll('\\', '/')}/System32/WindowsPowerShell/v1.0/powershell.exe`
 }
 
-export function wrapWindowsHookCommand(scriptPath: string): string {
-  // Why: most Windows agents run hooks through Git Bash or another shell that
-  // mangles a raw backslash path. Codex has its own cmd.exe-safe fast path; the
-  // shared wrapper keeps the encoded launcher for every other agent.
-  const command = `& ${quotePowerShellString(scriptPath)}; exit $LASTEXITCODE`
+export function wrapWindowsHookCommand(
+  scriptPath: string,
+  env: Record<string, string> = {}
+): string {
+  // Why: the encoded launcher protects paths across Windows hook shells and
+  // owns stdin when a stale config points at a missing managed script.
+  const quoted = quotePowerShellString(scriptPath)
+  const envPrefix = Object.entries(env)
+    .map(([key, value]) => `$env:${key} = ${quotePowerShellString(value)}; `)
+    .join('')
+  const command = `${envPrefix}if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null; exit 0`
   const encodedCommand = Buffer.from(command, 'utf16le').toString('base64')
   return `${getWindowsPowerShellExecutablePath()} -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodedCommand}`
 }
@@ -166,9 +176,14 @@ export function wrapWindowsHookCommand(scriptPath: string): string {
 export const WINDOWS_CMD_SAFE_PATH = /^[A-Za-z0-9_.:\\~-]+$/
 
 export function wrapWindowsCmdHookCommand(scriptPath: string): string {
-  // Why: skip the ~360ms PowerShell interpreter startup when the path is safe
-  // for cmd.exe to invoke directly. The fallback keeps the encoded PowerShell
-  // launcher for paths with spaces or metacharacters.
+  // Why: Codex/Antigravity/Devin launch the hook command as a program (argv[0]),
+  // NOT through cmd.exe, so the launcher must be a single directly-spawnable
+  // token. The bare .cmd path is exactly that. A cmd-builtin `if exist …`
+  // launcher is unspawnable — its argv[0] is `if` — so it fails every hook with
+  // exit 1 (#8430 regression). A stale/missing script therefore surfaces a normal
+  // launch failure here; the missing-script stdin drain lives on the encoded
+  // fallback below, which needs a real interpreter for spaces/metacharacters
+  // anyway and cannot be reached by a cmd-builtin drain without breaking spawn.
   return WINDOWS_CMD_SAFE_PATH.test(scriptPath) ? scriptPath : wrapWindowsHookCommand(scriptPath)
 }
 
@@ -176,9 +191,11 @@ export const WINDOWS_GIT_BASH_SAFE_PATH = /^[A-Za-z0-9_.:/~-]+$/
 
 export function wrapWindowsGitBashHookCommand(scriptPath: string): string {
   const bashPath = scriptPath.replaceAll('\\', '/')
-  // Why: Claude Code's Windows hook runner is Git Bash/MSYS. It can execute a
-  // bare .cmd via forward slashes, but shell metacharacters must stay encoded.
-  return WINDOWS_GIT_BASH_SAFE_PATH.test(bashPath) ? bashPath : wrapWindowsHookCommand(scriptPath)
+  // Why: Claude's Git Bash runner can execute a forward-slash .cmd directly;
+  // unsafe paths stay encoded and the fast path gains a missing-file drain.
+  return WINDOWS_GIT_BASH_SAFE_PATH.test(bashPath)
+    ? `if [ -f ${quotePosixShellString(bashPath)} ]; then ${quotePosixShellString(bashPath)}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
+    : wrapWindowsHookCommand(scriptPath)
 }
 
 export function buildWindowsAgentHookPostCommand(source: AgentHookSource): string {
@@ -300,7 +317,7 @@ export function writeManagedScript(scriptPath: string, content: string): void {
   try {
     writeScriptWithAclRetry(tmpPath, content)
     // Why: chmod before rename so the canonical path is never visible in a
-    // non-executable state; wrapPosixHookCommand's `[ -x ]` guard would
+    // unreadable/non-executable state; wrapPosixHookCommand's guards would
     // silently skip the hook in that window.
     if (process.platform !== 'win32') {
       chmodSync(tmpPath, 0o755)

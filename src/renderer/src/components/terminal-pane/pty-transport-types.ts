@@ -32,10 +32,16 @@ export type PtyBufferSnapshot = {
   pendingEscapeTailAnsi?: string
 }
 
-export type LocalPtySessionMetadata = { cwd?: string; shellOverride?: string }
+export type LocalPtySessionMetadata = {
+  cwd?: string
+  shellOverride?: string
+}
 
 export type PtyConnectResult = {
   id: string
+  /** The requested session exited while it had no primary pane handler. Its
+   *  buffered final data/exit were delivered, so callers must not fresh-spawn. */
+  exitedBeforeAttach?: boolean
   launchAgent?: TuiAgent
   launchConfig?: SleepingAgentLaunchConfig
   snapshot?: string
@@ -101,14 +107,24 @@ export type PtyTransport = {
   // (preserving order) and sends the reply immediately.
   sendInputImmediate: (data: string) => boolean
   sendInputAccepted?: (data: string) => Promise<boolean>
+  claimViewport?: (cols: number, rows: number) => boolean
   resize: (
     cols: number,
     rows: number,
-    meta?: { widthPx?: number; heightPx?: number; cellW?: number; cellH?: number }
+    meta?: {
+      widthPx?: number
+      heightPx?: number
+      cellW?: number
+      cellH?: number
+      claim?: boolean
+    }
   ) => boolean
   isConnected: () => boolean
   getPtyId: () => string | null
   getConnectionId?: () => string | null | undefined
+  /** The runtime captured by this transport; legacy remote PTY ids do not
+   * encode their owner, and current worktree settings may have changed. */
+  getRuntimeEnvironmentId?: () => string | null
   getLocalSessionMetadata?: () => LocalPtySessionMetadata | null
   /** Drop cross-chunk parser carries (partial OSC-9999 prefix). Called when a
    *  model-restore marker reports dropped bytes — a carry spanning the gap

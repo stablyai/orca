@@ -197,6 +197,38 @@ describe('hydrateWorkspaceSession', () => {
     ])
   })
 
+  it('strips the synthetic workspace suffix from folder-workspace instance placeholders', () => {
+    const store = createTestStore()
+    const workspaceUuid = '123e4567-e89b-12d3-a456-426614174000'
+    const worktreeId = `folder-repo::/home/user::workspace:${workspaceUuid}`
+    const session: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: 'folder-repo',
+      activeWorktreeId: worktreeId,
+      activeTabId: 'folder-tab',
+      activeWorktreeIdsOnShutdown: [worktreeId],
+      tabsByWorktree: {
+        [worktreeId]: [makeTab({ id: 'folder-tab', worktreeId, ptyId: 'folder-session' })]
+      }
+    }
+
+    store.getState().hydrateWorkspaceSession(session, {
+      runtimeHostIdByWorkspaceSessionKey: {
+        [worktreeWorkspaceKey(worktreeId)]: 'runtime:env-1'
+      }
+    })
+
+    // Why: `id` keeps the `::workspace:<uuid>` identity suffix, but `path` and
+    // `displayName` must resolve to the real folder so Git and other filesystem
+    // callers never spawn against a nonexistent cwd.
+    expect(store.getState().worktreesByRepo['folder-repo']).toEqual([
+      expect.objectContaining({ id: worktreeId, path: '/home/user', displayName: 'user' })
+    ])
+    expect(store.getState().repos).toEqual([
+      expect.objectContaining({ id: 'folder-repo', path: '/home/user' })
+    ])
+  })
+
   it('avoids duplicate repo placeholders when a same-id local repo is already loaded', () => {
     const store = createTestStore()
     const worktreeId = 'same-repo::/srv/remote-wt'

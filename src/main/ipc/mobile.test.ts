@@ -6,7 +6,9 @@ const { handleMock, networkInterfacesMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({
-  ipcMain: { handle: handleMock }
+  app: { isPackaged: false },
+  ipcMain: { handle: handleMock },
+  shell: { openExternal: vi.fn() }
 }))
 
 vi.mock('qrcode', () => ({
@@ -62,13 +64,13 @@ describe('registerMobileHandlers', () => {
       en0: [{ family: 'IPv4', internal: false, address: '192.168.1.24' }],
       utun4: [{ family: 'IPv4', internal: false, address: '100.102.47.57' }]
     })
-    const createPairingOffer = vi.fn().mockReturnValue({
+    const createMobilePairingOffer = vi.fn().mockResolvedValue({
       available: true,
       pairingUrl: 'orca://pair#mobile',
       endpoint: 'ws://100.102.47.57:6768',
       deviceId: 'mobile-1'
     })
-    const rpcServer = { createPairingOffer }
+    const rpcServer = { createMobilePairingOffer }
 
     registerMobileHandlers(rpcServer as never)
 
@@ -79,12 +81,31 @@ describe('registerMobileHandlers', () => {
       deviceId: 'mobile-1'
     })
 
-    expect(createPairingOffer).toHaveBeenCalledWith({
+    expect(createMobilePairingOffer).toHaveBeenCalledWith({
       address: '100.102.47.57',
+      connectionMode: undefined,
       rotate: undefined,
-      name: expect.stringMatching(/^Mobile /),
-      scope: 'mobile'
+      name: expect.stringMatching(/^Mobile /)
     })
+  })
+
+  it('forwards an explicit local-only pairing choice', async () => {
+    networkInterfacesMock.mockReturnValue({
+      en0: [{ family: 'IPv4', internal: false, address: '192.168.1.24' }]
+    })
+    const createMobilePairingOffer = vi.fn().mockResolvedValue({
+      available: true,
+      pairingUrl: 'orca://pair#local',
+      endpoint: 'ws://192.168.1.24:6768',
+      deviceId: 'mobile-local'
+    })
+
+    registerMobileHandlers({ createMobilePairingOffer } as never)
+    await handlers.get('mobile:getPairingQR')?.(null, { connectionMode: 'local-only' })
+
+    expect(createMobilePairingOffer).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionMode: 'local-only' })
+    )
   })
 
   it('lists only paired mobile-scoped devices', () => {
@@ -225,5 +246,77 @@ describe('registerMobileHandlers', () => {
       revoked: true
     })
     expect(revokeRuntimeAccess).toHaveBeenCalledWith('runtime-1')
+  })
+
+  it('awaits mobile device revocation before replying', async () => {
+    const revokeMobileDevice = vi.fn().mockResolvedValue(true)
+    const rpcServer = {
+      getDeviceRegistry: () => ({}),
+      revokeMobileDevice
+    }
+
+    registerMobileHandlers(rpcServer as never)
+
+    await expect(
+      handlers.get('mobile:revokeDevice')?.(null, { deviceId: 'mobile-1' })
+    ).resolves.toEqual({ revoked: true })
+    expect(revokeMobileDevice).toHaveBeenCalledWith('mobile-1')
+  })
+
+  it('reports the current relay broker status without exposing a toggle', () => {
+    registerMobileHandlers({} as never, { getRelayStatus: () => 'registered' })
+
+    expect(handlers.get('mobile:getRelayStatus')?.()).toEqual({ status: 'registered' })
+  })
+
+  it('inspects and repairs the current packaged Windows websocket port', async () => {
+    const runPowerShell = vi
+      .fn()
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          ruleAllowed: false,
+          privateFirewallEnabled: true,
+          networkCategory: 'Private'
+        })
+      )
+      .mockResolvedValueOnce('{"launched":true,"exitCode":0}')
+    const rpcServer = { getWebSocketEndpoint: () => 'ws://0.0.0.0:6768' }
+    registerMobileHandlers(rpcServer as never, {
+      firewallEnvironment: {
+        platform: 'win32',
+        isPackaged: true,
+        executablePath: 'C:\\Program Files\\Orca\\Orca.exe',
+        runPowerShell
+      }
+    })
+
+    await expect(
+      handlers.get('mobile:getWindowsFirewallStatus')?.(null, { address: '192.168.0.108' })
+    ).resolves.toMatchObject({ supported: true, port: 6768, ruleAllowed: false })
+    await expect(
+      handlers.get('mobile:repairWindowsFirewall')?.({
+        sender: { isDestroyed: () => false, getType: () => 'window' }
+      })
+    ).resolves.toEqual({ ok: true })
+  })
+
+  it('rejects firewall mutation from a non-window renderer', async () => {
+    const runPowerShell = vi.fn()
+    const rpcServer = { getWebSocketEndpoint: () => 'ws://0.0.0.0:6768' }
+    registerMobileHandlers(rpcServer as never, {
+      firewallEnvironment: {
+        platform: 'win32',
+        isPackaged: true,
+        executablePath: 'C:\\Program Files\\Orca\\Orca.exe',
+        runPowerShell
+      }
+    })
+
+    expect(
+      handlers.get('mobile:repairWindowsFirewall')?.({
+        sender: { isDestroyed: () => false, getType: () => 'webview' }
+      })
+    ).toEqual({ ok: false, reason: 'unsupported' })
+    expect(runPowerShell).not.toHaveBeenCalled()
   })
 })

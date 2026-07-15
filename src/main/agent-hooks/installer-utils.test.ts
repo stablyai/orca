@@ -160,10 +160,8 @@ describe('createManagedCommandMatcher', () => {
   })
 
   it('matches the guarded launcher form so wrapped commands sweep correctly', () => {
-    // Why: wrapPosixHookCommand wraps the launcher in `if [ -x ... ]; then ...; fi`
-    // so a stale entry no-ops instead of returning exit 127. The sweep on
-    // install() must still recognize the guarded form as managed, otherwise
-    // repeated installs would accumulate one guarded + one unguarded entry.
+    // Why: older guarded launchers used a single `-x` check. The sweep must
+    // still recognize them or reinstalling would retain a stale duplicate.
     expect(
       match(
         'if [ -x "/Users/alice/Library/Application Support/Orca/agent-hooks/claude-hook.sh" ]; then /bin/sh "/Users/alice/Library/Application Support/Orca/agent-hooks/claude-hook.sh"; fi'
@@ -174,6 +172,17 @@ describe('createManagedCommandMatcher', () => {
   it('matches encoded Windows launcher commands by decoding their script path', () => {
     const command = wrapWindowsHookCommand('C:\\Users\\alice\\.orca\\agent-hooks\\claude-hook.cmd')
     expect(match(command)).toBe(true)
+  })
+
+  it('matches PowerShell and POSIX variants across Copilot platform switches', () => {
+    const matchPosix = createManagedCommandMatcher('copilot-hook.sh')
+    const matchPowerShell = createManagedCommandMatcher('copilot-hook.ps1')
+
+    expect(matchPosix("& 'C:\\Users\\alice\\.orca\\agent-hooks\\copilot-hook.ps1'")).toBe(true)
+    expect(
+      matchPosix(wrapWindowsHookCommand('C:\\Users\\alice\\.orca\\agent-hooks\\copilot-hook.ps1'))
+    ).toBe(true)
+    expect(matchPowerShell("/bin/sh '/home/alice/.orca/agent-hooks/copilot-hook.sh'")).toBe(true)
   })
 
   it('matches the legacy per-userData script path AND the new shared ~/.orca path', () => {
@@ -285,13 +294,15 @@ describe('writeManagedScript', () => {
 describe('wrapPosixHookCommand', () => {
   it('produces a guarded command that no-ops when the script is missing', () => {
     const cmd = wrapPosixHookCommand('/does/not/exist.sh')
-    expect(cmd).toBe("if [ -x '/does/not/exist.sh' ]; then /bin/sh '/does/not/exist.sh'; fi")
+    expect(cmd).toBe(
+      "if [ -f '/does/not/exist.sh' ] && [ -r '/does/not/exist.sh' ] && [ -x '/does/not/exist.sh' ]; then /bin/sh '/does/not/exist.sh'; else cat >/dev/null 2>&1 || :; fi"
+    )
   })
 
   it('preserves spaces in the script path (Library/Application Support case)', () => {
     // Why: Electron's userData on macOS lives under "Application Support" with
-    // a space. The guard must keep the path quoted so `[ -x ]` and `/bin/sh`
-    // each see one argument.
+    // a space. The guard must keep the path quoted so each file test and
+    // `/bin/sh` see one argument.
     const cmd = wrapPosixHookCommand('/Users/a/Library/Application Support/Orca/agent-hooks/x.sh')
     expect(cmd).toContain("'/Users/a/Library/Application Support/Orca/agent-hooks/x.sh'")
   })
@@ -302,7 +313,7 @@ describe('wrapPosixHookCommand', () => {
     // /bin/sh as a single argument.
     const cmd = wrapPosixHookCommand("/path/with'quote/x.sh")
     expect(cmd).toBe(
-      "if [ -x '/path/with'\\''quote/x.sh' ]; then /bin/sh '/path/with'\\''quote/x.sh'; fi"
+      "if [ -f '/path/with'\\''quote/x.sh' ] && [ -r '/path/with'\\''quote/x.sh' ] && [ -x '/path/with'\\''quote/x.sh' ]; then /bin/sh '/path/with'\\''quote/x.sh'; else cat >/dev/null 2>&1 || :; fi"
     )
   })
 
@@ -311,7 +322,7 @@ describe('wrapPosixHookCommand', () => {
       ORCA_COPILOT_HOOK_EVENT: 'UserPromptSubmit'
     })
     expect(cmd).toBe(
-      "if [ -x '/does/not/exist.sh' ]; then ORCA_COPILOT_HOOK_EVENT='UserPromptSubmit' /bin/sh '/does/not/exist.sh'; fi"
+      "if [ -f '/does/not/exist.sh' ] && [ -r '/does/not/exist.sh' ] && [ -x '/does/not/exist.sh' ]; then ORCA_COPILOT_HOOK_EVENT='UserPromptSubmit' /bin/sh '/does/not/exist.sh'; else cat >/dev/null 2>&1 || :; fi"
     )
   })
 
@@ -320,6 +331,35 @@ describe('wrapPosixHookCommand', () => {
     () => {
       const cmd = wrapPosixHookCommand('/does/not/exist.sh')
       const result = spawnSync('/bin/sh', ['-c', cmd])
+      expect(result.status).toBe(0)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'drains stdin when a directory occupies the managed script path',
+    () => {
+      const scriptPath = join(tmpDir, 'directory-hook.sh')
+      mkdirSync(scriptPath)
+      const result = spawnSync('/bin/sh', ['-c', wrapPosixHookCommand(scriptPath)], {
+        input: Buffer.alloc(1_000_000, 'x')
+      })
+
+      expect(result.error).toBeUndefined()
+      expect(result.status).toBe(0)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'drains stdin when the managed script is executable but unreadable',
+    () => {
+      const scriptPath = join(tmpDir, 'unreadable-hook.sh')
+      writeFileSync(scriptPath, '#!/bin/sh\nexit 0\n', 'utf-8')
+      chmodSync(scriptPath, 0o111)
+      const result = spawnSync('/bin/sh', ['-c', wrapPosixHookCommand(scriptPath)], {
+        input: Buffer.alloc(1_000_000, 'x')
+      })
+
+      expect(result.error).toBeUndefined()
       expect(result.status).toBe(0)
     }
   )
@@ -350,13 +390,27 @@ function decodeWindowsHookCommand(command: string): string {
   return Buffer.from(encodedCommand!, 'base64').toString('utf16le')
 }
 
+function expectedDecodedWindowsHookCommand(scriptPath: string): string {
+  const quoted = `'${scriptPath.replaceAll("'", "''")}'`
+  return `if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null; exit 0`
+}
+
 describe('wrapWindowsHookCommand', () => {
   it('invokes the .cmd through an encoded PowerShell command', () => {
     const command = wrapWindowsHookCommand('C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd')
     expect(command).toMatch(qualifiedWindowsPowerShellCommand)
     expect(command).not.toMatch(/^powershell\b/i)
     expect(decodeWindowsHookCommand(command)).toBe(
-      "& 'C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd'; exit $LASTEXITCODE"
+      expectedDecodedWindowsHookCommand('C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd')
+    )
+  })
+
+  it('scopes environment variables inside the encoded launcher', () => {
+    const command = wrapWindowsHookCommand('C:\\hooks\\copilot-hook.ps1', {
+      ORCA_COPILOT_HOOK_EVENT: 'UserPromptSubmit'
+    })
+    expect(decodeWindowsHookCommand(command)).toContain(
+      "$env:ORCA_COPILOT_HOOK_EVENT = 'UserPromptSubmit'; if (Test-Path"
     )
   })
 
@@ -367,7 +421,9 @@ describe('wrapWindowsHookCommand', () => {
     const cmd = wrapWindowsHookCommand('C:\\Users\\Jorge Silva\\.orca\\agent-hooks\\codex-hook.cmd')
     expect(cmd).toMatch(qualifiedWindowsPowerShellCommand)
     expect(decodeWindowsHookCommand(cmd)).toBe(
-      "& 'C:\\Users\\Jorge Silva\\.orca\\agent-hooks\\codex-hook.cmd'; exit $LASTEXITCODE"
+      expectedDecodedWindowsHookCommand(
+        'C:\\Users\\Jorge Silva\\.orca\\agent-hooks\\codex-hook.cmd'
+      )
     )
   })
 
@@ -376,7 +432,7 @@ describe('wrapWindowsHookCommand', () => {
     expect(cmd).not.toContain('%ORCA_TEST%')
     expect(cmd).not.toContain('^')
     expect(decodeWindowsHookCommand(cmd)).toBe(
-      "& 'C:\\Users\\%ORCA_TEST%\\a^b\\codex-hook.cmd'; exit $LASTEXITCODE"
+      expectedDecodedWindowsHookCommand('C:\\Users\\%ORCA_TEST%\\a^b\\codex-hook.cmd')
     )
   })
 
@@ -398,31 +454,57 @@ describe('wrapWindowsHookCommand', () => {
 })
 
 describe('wrapWindowsCmdHookCommand', () => {
-  it('returns a bare .cmd path when cmd.exe can invoke it safely', () => {
+  it('returns the bare, directly-spawnable path for a cmd-safe managed script', () => {
+    // Why: Codex/Antigravity/Devin launch the command as a program (argv[0]),
+    // not via cmd.exe, so the launcher must be a single spawnable token — a bare
+    // .cmd path. A cmd-builtin `if …` launcher has argv[0] = `if`, which is
+    // unspawnable and fails every hook with exit 1 (#8430 regression).
     const scriptPath = 'C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd'
-    expect(wrapWindowsCmdHookCommand(scriptPath)).toBe(scriptPath)
+    const command = wrapWindowsCmdHookCommand(scriptPath)
+    expect(command).toBe(scriptPath)
+    expect(command).not.toMatch(/^if\b/)
+    expect(command).not.toMatch(/powershell/i)
   })
+
+  it.skipIf(process.platform !== 'win32')(
+    'resolves the launcher to a real executable file, not a shell fragment',
+    () => {
+      // Regression guard for #8430: Codex/Antigravity/Devin spawn the launcher as
+      // a program (argv[0]), so it must be an existing, launchable file. The broken
+      // `if exist … (call …)` form had argv[0] = `if` — a cmd builtin, not a file —
+      // which is unspawnable and failed every hook. The bare path is the file.
+      // win32-only: the real temp path is cmd-safe only with backslashes; a POSIX
+      // tmpDir has `/`, which routes to the encoded fallback by design.
+      const scriptPath = join(tmpDir, 'codex-hook.cmd')
+      writeFileSync(scriptPath, '@echo off\r\nexit /b 0\r\n', 'utf-8')
+      const command = wrapWindowsCmdHookCommand(scriptPath)
+      expect(command).toBe(scriptPath)
+      expect(existsSync(command)).toBe(true)
+    }
+  )
 
   it('falls back to the encoded launcher when cmd.exe would split or expand the path', () => {
     const scriptPath = 'C:\\Users\\Jane Doe\\%ORCA_TEST%\\codex-hook.cmd'
     const command = wrapWindowsCmdHookCommand(scriptPath)
     expect(command).toMatch(qualifiedWindowsPowerShellCommand)
-    expect(decodeWindowsHookCommand(command)).toBe(`& '${scriptPath}'; exit $LASTEXITCODE`)
+    expect(decodeWindowsHookCommand(command)).toBe(expectedDecodedWindowsHookCommand(scriptPath))
   })
 })
 
 describe('wrapWindowsGitBashHookCommand', () => {
-  it('returns a forward-slash .cmd path when Git Bash can execute it safely', () => {
+  it('guards the forward-slash fast path and drains when missing', () => {
     expect(
       wrapWindowsGitBashHookCommand('C:\\Users\\alice\\.orca\\agent-hooks\\claude-hook.cmd')
-    ).toBe('C:/Users/alice/.orca/agent-hooks/claude-hook.cmd')
+    ).toBe(
+      "if [ -f 'C:/Users/alice/.orca/agent-hooks/claude-hook.cmd' ]; then 'C:/Users/alice/.orca/agent-hooks/claude-hook.cmd'; else cat >/dev/null 2>&1 || :; fi"
+    )
   })
 
   it('falls back to the encoded launcher when bash would split the path', () => {
     const scriptPath = 'C:\\Users\\Jane Doe\\.orca\\agent-hooks\\claude-hook.cmd'
     const command = wrapWindowsGitBashHookCommand(scriptPath)
     expect(command).toMatch(qualifiedWindowsPowerShellCommand)
-    expect(decodeWindowsHookCommand(command)).toBe(`& '${scriptPath}'; exit $LASTEXITCODE`)
+    expect(decodeWindowsHookCommand(command)).toBe(expectedDecodedWindowsHookCommand(scriptPath))
   })
 
   it('falls back to the encoded launcher when bash metacharacters are present', () => {
@@ -430,7 +512,7 @@ describe('wrapWindowsGitBashHookCommand', () => {
     const command = wrapWindowsGitBashHookCommand(scriptPath)
     expect(command).toMatch(qualifiedWindowsPowerShellCommand)
     expect(command).not.toContain('& bob')
-    expect(decodeWindowsHookCommand(command)).toBe(`& '${scriptPath}'; exit $LASTEXITCODE`)
+    expect(decodeWindowsHookCommand(command)).toBe(expectedDecodedWindowsHookCommand(scriptPath))
   })
 })
 

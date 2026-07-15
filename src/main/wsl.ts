@@ -113,6 +113,12 @@ export function toWindowsWslPath(linuxPath: string, distro: string): string {
 
 const wslHomeCache = new Map<string, string>()
 let wslDistroCache: string[] | null = null
+// Why: a wsl.exe failure must stay retryable (a transient error would
+// otherwise hide every distro until restart), but repeated failures cannot
+// re-spawn a blocking wsl.exe on every caller; brief negative caching bounds
+// the spawn rate on machines where WSL is absent or persistently broken.
+const WSL_DISTRO_LIST_FAILURE_TTL_MS = 15_000
+let wslDistroListFailedUntilMs = 0
 
 function normalizeWslListOutput(output: string): string[] {
   // Why: wsl.exe can emit UTF-16-looking NUL bytes when inherited through
@@ -138,6 +144,10 @@ export function listWslDistros(): string[] {
     return wslDistroCache
   }
 
+  if (Date.now() < wslDistroListFailedUntilMs) {
+    return []
+  }
+
   try {
     const output = execFileSync('wsl.exe', ['--list', '--quiet'], {
       encoding: 'utf-8',
@@ -147,8 +157,8 @@ export function listWslDistros(): string[] {
     wslDistroCache = normalizeWslListOutput(output).filter(isUserWslDistro)
     return wslDistroCache
   } catch {
-    wslDistroCache = []
-    return wslDistroCache
+    wslDistroListFailedUntilMs = Date.now() + WSL_DISTRO_LIST_FAILURE_TTL_MS
+    return []
   }
 }
 
@@ -162,13 +172,17 @@ export async function listWslDistrosAsync(): Promise<string[]> {
     return wslDistroCache
   }
 
+  if (Date.now() < wslDistroListFailedUntilMs) {
+    return []
+  }
+
   try {
     const output = await execFileUtf8('wsl.exe', ['--list', '--quiet'])
     wslDistroCache = normalizeWslListOutput(output).filter(isUserWslDistro)
     return wslDistroCache
   } catch {
-    wslDistroCache = []
-    return wslDistroCache
+    wslDistroListFailedUntilMs = Date.now() + WSL_DISTRO_LIST_FAILURE_TTL_MS
+    return []
   }
 }
 
@@ -279,6 +293,7 @@ export function getCachedWslAvailability(): boolean | null {
 export function _resetWslCachesForTests(): void {
   wslHomeCache.clear()
   wslDistroCache = null
+  wslDistroListFailedUntilMs = 0
   wslAvailableCache = null
 }
 

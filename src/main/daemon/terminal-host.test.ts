@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Session, type SubprocessHandle } from './session'
 import { TerminalHost } from './terminal-host'
+import type { TuiAgent } from '../../shared/types'
 
 function createMockSubprocess(
-  options: { startupCommandDeliveredInShellArgs?: boolean } = {}
+  options: { startupCommandDeliveredInShellArgs?: boolean; shellPath?: string } = {}
 ): SubprocessHandle {
   let onDataCb: ((data: string) => void) | null = null
   let onExitCb: ((code: number) => void) | null = null
@@ -12,6 +13,7 @@ function createMockSubprocess(
     ...(options.startupCommandDeliveredInShellArgs
       ? { startupCommandDeliveredInShellArgs: true }
       : {}),
+    ...(options.shellPath ? { shellPath: options.shellPath } : {}),
     getForegroundProcess: vi.fn(() => null),
     write: vi.fn(),
     resize: vi.fn(),
@@ -44,6 +46,7 @@ type MockSpawnFn = (opts: {
   cwd?: string
   env?: Record<string, string>
   command?: string
+  launchAgent?: TuiAgent
 }) => SubprocessHandle
 
 describe('TerminalHost', () => {
@@ -123,13 +126,14 @@ describe('TerminalHost', () => {
       expect(result.snapshot?.cols).toBe(80)
     })
 
-    it('passes cwd and env to spawn', async () => {
+    it('passes cwd, env, and trusted agent identity to spawn', async () => {
       await host.createOrAttach({
         sessionId: 'session-1',
         cols: 80,
         rows: 24,
         cwd: '/home/user',
         env: { FOO: 'bar' },
+        launchAgent: 'claude',
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
 
@@ -137,7 +141,8 @@ describe('TerminalHost', () => {
         expect.objectContaining({
           sessionId: 'session-1',
           cwd: '/home/user',
-          env: { FOO: 'bar' }
+          env: { FOO: 'bar' },
+          launchAgent: 'claude'
         })
       )
     })
@@ -191,6 +196,88 @@ describe('TerminalHost', () => {
       } finally {
         vi.useRealTimers()
       }
+    })
+
+    it('delivers startup commands immediately when the spawned shell cannot emit the ready marker', async () => {
+      spawnFn = vi.fn(() => {
+        const sub = createMockSubprocess({ shellPath: '/bin/sh' }) as ReturnType<
+          typeof createMockSubprocess
+        > & {
+          _onDataCb: ((data: string) => void) | null
+          _onExitCb: ((code: number) => void) | null
+        }
+        lastSubprocess = sub
+        return sub
+      })
+      host.dispose()
+      host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn })
+
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        command: 'echo hello',
+        shellReadySupported: true,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      expect(lastSubprocess.write).toHaveBeenCalledWith(
+        process.platform === 'win32' ? 'echo hello\r' : 'echo hello\n'
+      )
+    })
+
+    it('does not bracketed-paste-wrap multiline commands for a fallback shell without paste mode', async () => {
+      spawnFn = vi.fn(() => {
+        const sub = createMockSubprocess({ shellPath: '/bin/sh' }) as ReturnType<
+          typeof createMockSubprocess
+        > & {
+          _onDataCb: ((data: string) => void) | null
+          _onExitCb: ((code: number) => void) | null
+        }
+        lastSubprocess = sub
+        return sub
+      })
+      host.dispose()
+      host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn })
+
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        command: 'claude "line one\nline two"',
+        shellReadySupported: true,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      const written = (lastSubprocess.write as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]
+      expect(written).not.toContain('\x1b[200~')
+      expect(written).toContain('line one\nline two')
+    })
+
+    it('keeps the shell-ready barrier when the spawned shell supports the marker', async () => {
+      spawnFn = vi.fn(() => {
+        const sub = createMockSubprocess({ shellPath: '/bin/bash' }) as ReturnType<
+          typeof createMockSubprocess
+        > & {
+          _onDataCb: ((data: string) => void) | null
+          _onExitCb: ((code: number) => void) | null
+        }
+        lastSubprocess = sub
+        return sub
+      })
+      host.dispose()
+      host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn })
+
+      await host.createOrAttach({
+        sessionId: 'session-1',
+        cols: 80,
+        rows: 24,
+        command: 'echo hello',
+        shellReadySupported: true,
+        streamClient: { onData: vi.fn(), onExit: vi.fn() }
+      })
+
+      expect(lastSubprocess.write).not.toHaveBeenCalled()
     })
 
     it('does not write startup commands already embedded in shell args', async () => {

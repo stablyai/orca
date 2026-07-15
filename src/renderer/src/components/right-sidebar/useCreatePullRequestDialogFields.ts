@@ -91,7 +91,13 @@ function resolveCreateReviewDefaultBaseRef({
   currentBaseRef?: string | null
   eligibilityDefaultBaseRef?: string | null
 }): string {
-  return stripBaseRef(currentBaseRef?.trim() || eligibilityDefaultBaseRef?.trim() || '')
+  // Why: prefer the remote-validated main-process default over the worktree's
+  // local parent base. For a stacked worktree whose parent is local-only,
+  // `currentBaseRef` is that unpushable parent; the eligibility default has
+  // already fallen back to a ref the remote can resolve. Fall back to
+  // `currentBaseRef` only when eligibility supplied no default. Manual
+  // `setUserBase` still wins via the base-resync suppression.
+  return stripBaseRef(eligibilityDefaultBaseRef?.trim() || currentBaseRef?.trim() || '')
 }
 
 export function normalizeCreateReviewBaseSearchResults(

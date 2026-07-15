@@ -15,7 +15,10 @@ import {
   resolveTerminalCursorInactiveStyle
 } from '@/lib/pane-manager/pane-terminal-options'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
-import { configureTerminalOutputBacklogCap } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import {
+  configureTerminalOutputBacklogCap,
+  writeTerminalOutput
+} from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
 import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-mouse-wheel'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
@@ -31,6 +34,7 @@ import {
 import { createTerminalHandleLinkProvider } from './terminal-handle-links'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import { handleOscLink } from './terminal-osc-link-routing'
+import { handleTerminalWebLinkClick } from './terminal-web-link-click'
 import {
   installHttpLinkClickFallback,
   type TerminalLinkRoutingPreferenceRequester
@@ -66,6 +70,7 @@ import { parseOsc7 } from './parse-osc7'
 import { guardParserHandler } from './terminal-parser-handler-guard'
 import { resolveTerminalJisYenInput } from './terminal-jis-yen-input'
 import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
+import { installTerminalImeLinuxCandidateState } from './terminal-ime-linux-candidate-state'
 import {
   armTerminalImePendingCandidateKeyRelease,
   clearTerminalImePendingCandidateKeyRelease,
@@ -125,6 +130,21 @@ import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { seedStartupSessionRestoredBanner } from './session-restored-banner-pane-state'
+import {
+  resolveTabTitleAfterPaneClose,
+  shouldClearLaunchAgentForClosedPane
+} from './terminal-pane-close-identity'
+
+export function resetTerminalKeyboardProtocolAfterInterrupt(terminal: Terminal): void {
+  // Use the guarded output path so a certified/throwing xterm cannot escape a
+  // keyboard handler or retain more writes while pane recovery is delayed.
+  writeTerminalOutput(terminal, RESET_KITTY_KEYBOARD_PROTOCOL, {
+    foreground: true,
+    // The interrupt itself already took the synchronous input path. Queue the
+    // renderer reset so it cannot flush a PTY backlog inside the key handler.
+    latencySensitive: false
+  })
+}
 
 export function recordRuntimeCreatedTerminalPaneSplit(
   createdPane: unknown,
@@ -453,15 +473,9 @@ export function shouldDetachPaneTransportOnUnmount(args: {
   ptyId: string | null
   worktreeTabs: readonly TerminalTab[] | undefined
 }): boolean {
-  if (!args.ptyId) {
-    return false
-  }
-  if (args.tabStillExists) {
-    return true
-  }
-  return Boolean(
-    args.worktreeTabs?.some((tab) => tab.id !== args.tabId && tab.ptyId === args.ptyId)
-  )
+  // Why: mounted transport teardown is renderer-only; closeTab or the pane-close
+  // action already owns provider shutdown. Destroy only pending, ID-less spawns.
+  return Boolean(args.ptyId)
 }
 
 /**
@@ -495,6 +509,7 @@ export function getPreviousVisibleForTerminalPane(args: {
   return args.previous.isVisible
 }
 
+/** Wires mounted terminal panes to renderer state and terminal event handling. */
 export function useTerminalPaneLifecycle({
   tabId,
   worktreeId,
@@ -890,9 +905,17 @@ export function useTerminalPaneLifecycle({
           !isMac &&
           navigator.userAgent.includes('Linux') &&
           !/Android|CrOS/.test(navigator.userAgent)
+        const linuxImeCandidateState = isLinux
+          ? installTerminalImeLinuxCandidateState(pane.terminal.element)
+          : null
         const macNativeTextInputSourceTracker = isMac ? getMacNativeTextInputSourceTracker() : null
         const imeCompositionTracker = installTerminalImeCompositionTracker(pane.terminal.element)
-        imeCompositionDisposablesRef.current.set(pane.id, imeCompositionTracker)
+        imeCompositionDisposablesRef.current.set(pane.id, {
+          dispose: () => {
+            imeCompositionTracker.dispose()
+            linuxImeCandidateState?.dispose()
+          }
+        })
         // Why: only known macOS native text paths need xterm keydown bypass.
         // Source gates cover physical CJK/Vietnamese IME rewrites; synthetic
         // Unicode key events are detected by missing physical key identity.
@@ -911,6 +934,13 @@ export function useTerminalPaneLifecycle({
             }
         imeNativeTextForwarderDisposablesRef.current.set(pane.id, imeNativeTextForwarder)
         pane.terminal.attachCustomKeyEventHandler((e) => {
+          const linuxCandidateClassification = linuxImeCandidateState?.classifyKeyboardEvent(e) ?? {
+            candidateDigitGuardActive: false
+          }
+          /** Advances the fallback state after every terminal key event path. */
+          const observeLinuxCandidateEvent = (): void => {
+            linuxImeCandidateState?.observeKeyboardEvent(e, linuxCandidateClassification)
+          }
           const now = Date.now()
           const pendingCandidateReleaseGuardActive =
             shouldApplyTerminalImePendingCandidateKeyRelease(
@@ -924,6 +954,8 @@ export function useTerminalPaneLifecycle({
               imeCompositionTracker.isCandidateKeyGuardActive() ||
               pendingCandidateReleaseGuardActive,
             pendingCandidateKeyReleaseActive: pendingCandidateReleaseGuardActive,
+            linuxOrphanCandidateDigitGuardActive:
+              linuxCandidateClassification.candidateDigitGuardActive,
             isMac,
             isLinux
           }
@@ -941,11 +973,13 @@ export function useTerminalPaneLifecycle({
                 now
               )
             }
+            observeLinuxCandidateEvent()
             return false
           }
           clearTerminalImePendingCandidateKeyRelease(pendingTerminalImeCandidateKeyReleases, e)
           if (pendingTerminalInterruptKeyup && shouldSuppressTerminalInterruptKeyup(e)) {
             pendingTerminalInterruptKeyup = false
+            observeLinuxCandidateEvent()
             return false
           }
           if (
@@ -961,15 +995,17 @@ export function useTerminalPaneLifecycle({
               pane.terminal.input(TERMINAL_INTERRUPT_INPUT)
               // Why: CLIs such as Codex can die on SIGINT before restoring
               // xterm's renderer-side Kitty flags, leaving the shell corrupted.
-              pane.terminal.write(RESET_KITTY_KEYBOARD_PROTOCOL)
+              resetTerminalKeyboardProtocolAfterInterrupt(pane.terminal)
             } else {
               pendingTerminalInterruptKeyup = false
             }
+            observeLinuxCandidateEvent()
             return false
           }
           if (shouldSuppressTerminalModifierKeyboardEvent(e)) {
             // Why: stale Kitty keyboard reporting can encode standalone
             // modifier presses before Ctrl+C reaches the interrupt handler.
+            observeLinuxCandidateEvent()
             return false
           }
 
@@ -983,6 +1019,7 @@ export function useTerminalPaneLifecycle({
               // Keep it on xterm's onData path so PTY input guards still run.
               pane.terminal.input(jisYenInput.data)
             }
+            observeLinuxCandidateEvent()
             return false
           }
 
@@ -998,13 +1035,16 @@ export function useTerminalPaneLifecycle({
           if (imeNativeTextForwarder.claimKeyEvent(e)) {
             // Why: bypass xterm's kitty encoder for native text keydowns so the
             // committed glyph survives via the input event.
+            observeLinuxCandidateEvent()
             return false
           }
 
-          return !shouldBypassXtermKeyboardEvent(e, {
+          const shouldBypass = shouldBypassXtermKeyboardEvent(e, {
             isMac,
             hasSelection: pane.terminal.hasSelection()
           })
+          observeLinuxCandidateEvent()
+          return !shouldBypass
         })
 
         const linkProviderDisposable = pane.terminal.registerLinkProvider(
@@ -1250,6 +1290,13 @@ export function useTerminalPaneLifecycle({
           mouseHideDisposablesRef.current.delete(paneId)
         }
         const transport = paneTransportsRef.current.get(paneId)
+        const closedPtyId = transport?.getPtyId() ?? null
+        const terminalTab = useAppStore
+          .getState()
+          .tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)
+        if (!isDetachedToTab && shouldClearLaunchAgentForClosedPane(terminalTab, closedPtyId)) {
+          useAppStore.getState().clearTabLaunchAgent(tabId)
+        }
         const panePtyBinding = panePtyBindings.get(paneId)
         if (panePtyBinding) {
           panePtyBinding.dispose()
@@ -1257,16 +1304,10 @@ export function useTerminalPaneLifecycle({
         }
         const leafId = closedPane?.leafId
         if (leafId && !isDetachedToTab) {
-          // Why: closing a pane is user-initiated teardown of this row — drop
-          // (not remove) so any retained `done` snapshot for this pane is also
-          // cleared and a same-frame live→gone transition cannot re-snapshot
-          // it via the retention sync. This is pane-keyed state, so it must
-          // clear even if the PTY transport was already removed.
+          // Why: pane close permanently revokes only this pane's authority;
+          // an exact tombstone blocks queued hooks without suppressing siblings.
           const paneKey = makePaneKey(tabId, leafId)
-          useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
-          clearTerminalPaneUnread(paneKey)
-          useAppStore.getState().dropAgentStatus(paneKey)
-          useAppStore.getState().clearPaneForegroundAgent(paneKey)
+          useAppStore.getState().retireAgentPaneAuthority(paneKey)
         }
         if (transport) {
           if (isDetachedToTab) {
@@ -1322,10 +1363,7 @@ export function useTerminalPaneLifecycle({
         if (newActivePane) {
           reportActiveRendererPtyForPane(paneTransportsRef.current, newActivePane.id)
           const paneTitles = useAppStore.getState().runtimePaneTitlesByTabId[tabId] ?? {}
-          const activeTitle = paneTitles[newActivePane.id]
-          if (activeTitle) {
-            updateTabTitle(tabId, activeTitle)
-          }
+          updateTabTitle(tabId, resolveTabTitleAfterPaneClose(paneTitles, newActivePane.id))
         }
         scheduleRuntimeGraphSync()
       },
@@ -1453,28 +1491,16 @@ export function useTerminalPaneLifecycle({
       terminalTuiScrollSensitivity: () =>
         normalizeTerminalTuiMouseWheelMultiplier(settingsRef.current?.terminalTuiScrollSensitivity),
       onLinkClick: (event, url) => {
-        if (!event) {
-          return
-        }
         const activePane = managerRef.current?.getActivePane()
-        const handled = handleOscLink(url, event, {
+        handleTerminalWebLinkClick(url, event, {
           ...linkDeps,
+          terminal: activePane?.terminal ?? null,
           startupCwd: activePane ? getPaneLinkCwd(activePane.id) : startupCwd,
           runtimeEnvironmentId: activePane
             ? (linkDeps.getRuntimeEnvironmentIdForPane?.(activePane.id) ?? null)
             : null,
           requestOpenLinksInAppPreference
         })
-        // Why: Cmd/Ctrl+click on a plain-text URL (WebLinksAddon) takes focus
-        // away from the terminal before the click's mouseup reaches
-        // ownerDocument. That leaves xterm's SelectionService drag-select
-        // mousemove listener attached, so subsequent mouse motion extends a
-        // phantom selection until the next click/Esc. Explicitly clearing the
-        // selection also detaches those listeners (see
-        // SelectionService._removeMouseDownListeners).
-        if (handled) {
-          managerRef.current?.getActivePane()?.terminal.clearSelection()
-        }
       },
       formatLinkTooltip: (url, openLinkHint) => formatTerminalUrlTooltip(url, openLinkHint),
       // Why: TerminalPane instances stay mounted for hidden visited worktrees
@@ -1793,7 +1819,11 @@ export function useTerminalPaneLifecycle({
       releaseWebviewDragPassthrough = null
       managerRef.current = null
       if (e2eConfig.exposeStore) {
-        window.__paneManagers?.delete(tabId)
+        // Why: a replacement mount can register before this effect cleans up.
+        // Preserve the successor so E2E and recovery probes see the live pane.
+        if (window.__paneManagers?.get(tabId) === manager) {
+          window.__paneManagers.delete(tabId)
+        }
       }
       setTabPaneExpanded(tabId, false)
       setTabCanExpandPane(tabId, false)

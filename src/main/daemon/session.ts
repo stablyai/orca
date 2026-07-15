@@ -48,6 +48,10 @@ export type SubprocessHandle = {
   /** True when shell launch args already delivered the startup command, so the
    *  terminal host must skip its stdin fallback write. */
   startupCommandDeliveredInShellArgs?: boolean
+  /** Shell the subprocess actually spawned, after Unix/Windows fallbacks. The
+   *  host reconciles the caller's shell-ready assumption against it so a
+   *  fallback shell without a ready marker never gates startup commands. */
+  shellPath?: string
   write(data: string): void
   resize(cols: number, rows: number): void
   /** Stop reading the PTY fd (node-pty pause()) so the kernel/ConPTY buffer

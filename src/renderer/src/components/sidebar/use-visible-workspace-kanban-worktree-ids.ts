@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import type { Repo, Worktree } from '../../../../shared/types'
 import { computeVisibleWorktreeIds } from './visible-worktrees'
+import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
 import { getMissionMemberWorktreeIds } from '../../../../shared/missions'
 
@@ -9,6 +10,8 @@ type UseVisibleWorkspaceKanbanWorktreeIdsParams = {
   allWorktrees: readonly Worktree[]
   repoMap: Map<string, Repo>
 }
+
+const EMPTY_WORKTREE_ID_SET: ReadonlySet<string> = new Set()
 
 export function useVisibleWorkspaceKanbanWorktreeIds({
   allWorktrees,
@@ -29,6 +32,19 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
   )
   const missions = useAppStore((s) => s.missions)
   const missionMemberWorktreeIds = useMemo(() => getMissionMemberWorktreeIds(missions), [missions])
+  const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
+  // Why snapshot on the epoch: the always-mounted drawer must not scan every
+  // agent on unrelated store writes; membership changes advance this tick.
+  const worktreeIdsWithLiveAgent = useMemo(() => {
+    void agentStatusEpoch
+    return !showSleepingWorkspaces
+      ? getWorktreeIdsWithLiveAgent(
+          useAppStore.getState().agentStatusByPaneKey,
+          tabsByWorktree,
+          Date.now()
+        )
+      : EMPTY_WORKTREE_ID_SET
+  }, [agentStatusEpoch, showSleepingWorkspaces, tabsByWorktree])
 
   return useMemo(() => {
     // Why: the board has its own status ordering, but visibility must match
@@ -41,6 +57,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
         tabsByWorktree,
         ptyIdsByTabId,
         browserTabsByWorktree,
+        worktreeIdsWithLiveAgent,
         hideDefaultBranchWorkspace,
         hideAutomationGeneratedWorkspaces,
         missionMemberWorktreeIds,
@@ -67,6 +84,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
     repoMap,
     showSleepingWorkspaces,
     tabsByWorktree,
+    worktreeIdsWithLiveAgent,
     worktreesByRepo
   ])
 }

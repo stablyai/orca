@@ -128,6 +128,7 @@ import {
   timeRendererStartupStep,
   timeRendererStartupSyncStep
 } from './startup/startup-diagnostics'
+import { reconnectSshTargetForRendererStartup } from './startup/ssh-startup-reconnect'
 import { shouldRenderPetOverlay } from './components/pet/pet-overlay-visibility'
 import { applyDocumentTheme } from './lib/document-theme'
 import { getSystemPrefersDark } from './lib/terminal-theme'
@@ -1034,25 +1035,21 @@ function App(): React.JSX.Element {
               await timeRendererStartupStep(
                 'ssh-reconnect',
                 () =>
-                  Promise.allSettled(
-                    eagerTargets.map(({ targetId }) =>
-                      Promise.race([
-                        window.api.ssh.connect({ targetId }),
-                        new Promise((_, reject) =>
-                          setTimeout(
-                            () => reject(new Error('SSH reconnect timeout')),
-                            SSH_RECONNECT_TIMEOUT_MS
-                          )
-                        )
-                      ]).catch((err) => {
-                        const isTimeout =
-                          err instanceof Error && err.message === 'SSH reconnect timeout'
-                        if (isTimeout) {
-                          timedOutTargets.push(targetId)
+                  Promise.all(
+                    eagerTargets.map(async ({ targetId }) => {
+                      const result = await reconnectSshTargetForRendererStartup({
+                        targetId,
+                        timeoutMs: SSH_RECONNECT_TIMEOUT_MS,
+                        connect: (id) => window.api.ssh.connect({ targetId: id }),
+                        publishState: actions.setSshConnectionState,
+                        onFailure: (id, error) => {
+                          console.warn(`SSH auto-reconnect failed for ${id}:`, error)
                         }
-                        console.warn(`SSH auto-reconnect failed for ${targetId}:`, err)
                       })
-                    )
+                      if (result.timedOut) {
+                        timedOutTargets.push(targetId)
+                      }
+                    })
                   ),
                 {
                   eagerTargets: eagerTargets.length,
@@ -1066,11 +1063,9 @@ function App(): React.JSX.Element {
                 ])
               }
 
-              // Why: ssh.connect() resolves before the ssh:state-changed IPC
-              // event updates sshConnectionStates in the store. Without this,
-              // reconnectPersistedTerminals reads stale state and misclassifies
-              // successfully connected targets as disconnected, stranding their
-              // persisted PTYs. Polling getState ensures the store is current.
+              // Why: connect's returned state is published above, but older or
+              // wrapped providers may return no state. Poll main once as a
+              // compatibility fallback before terminal restoration.
               for (const { targetId } of eagerTargets) {
                 if (timedOutTargets.includes(targetId)) {
                   continue
@@ -1155,7 +1150,7 @@ function App(): React.JSX.Element {
           // UI writer and clobber ui.json (sidebar width, sort, filters, etc.).
           const fallbackUI = getStartupErrorFallbackUI(uiHydrated)
           if (fallbackUI) {
-            actions.hydratePersistedUI(fallbackUI)
+            actions.hydratePersistedUI(fallbackUI, 'startup')
           }
           // Why (issue #1158): surface a sticky, dismissible toast so the
           // user knows they're in degraded "no-save" mode. Without this, every
@@ -1445,6 +1440,10 @@ function App(): React.JSX.Element {
         hideAutomationGeneratedWorkspaces,
         showDotfilesByWorktree,
         filterRepoIds,
+        // Why: persist the active view so a reload restores it. openTaskPage etc.
+        // mutate activeView directly (not via setActiveView), so the value-keyed
+        // writer is what catches every transition.
+        activeView,
         // Why: rides the same debounced save so dashboard auto-acks (which fire
         // on focus/visibility) and the in-memory ack cleanup paths in
         // agent-status.ts (close/dismiss) both flow to disk through map
@@ -1471,6 +1470,7 @@ function App(): React.JSX.Element {
     hideAutomationGeneratedWorkspaces,
     showDotfilesByWorktree,
     filterRepoIds,
+    activeView,
     acknowledgedAgentsByPaneKey
   ])
 

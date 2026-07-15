@@ -247,8 +247,8 @@ describe('ClaudeHookService.installRemote', () => {
     expect(settings).toBeTruthy()
     const parsed = JSON.parse(settings!)
     // Why: every load-bearing event must be present and point at the
-    // remote-shaped script path with the `if [ -x ... ]; then ... fi`
-    // wrapper applied. Drift in any of these is a real bug — Claude
+    // remote-shaped script path with the guarded launcher applied. Drift in
+    // any of these is a real bug — Claude
     // Code rejects unknown shapes silently and the agent-hooks pipeline
     // goes dark.
     for (const event of [
@@ -266,7 +266,7 @@ describe('ClaudeHookService.installRemote', () => {
       expect(parsed.hooks[event]).toBeTruthy()
       const cmd = parsed.hooks[event][0].hooks[0].command as string
       expect(cmd).toContain('/home/dev/.orca/agent-hooks/claude-hook.sh')
-      expect(cmd).toMatch(/^if \[ -x /)
+      expect(cmd).toMatch(/^if \[ -f /)
     }
     // Managed script body
     const script = fs.files.get('/home/dev/.orca/agent-hooks/claude-hook.sh')
@@ -355,7 +355,7 @@ describe('OpenClaudeHookService-compatible install', () => {
         const command = parsed.hooks[event][0].hooks[0].command as string
         expect(isOpenClaudeManagedCommand(command)).toBe(true)
         if (process.platform !== 'win32') {
-          expect(command).toMatch(/^if \[ -x /)
+          expect(command).toMatch(/^if \[ -f /)
         }
       }
       expect(

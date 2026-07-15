@@ -315,6 +315,9 @@ describe('RpcDispatcher streaming', () => {
     )
 
     await vi.waitFor(() => expect(cleanups.has('terminal-1:desktop-1')).toBe(true))
+    // Cleanup now registers before snapshot work so a disconnect cannot orphan
+    // a desktop width floor; wait for the actual exit waiter before resolving it.
+    await vi.waitFor(() => expect(runtime.waitForTerminal).toHaveBeenCalled())
     resolveExit()
     await dispatchPromise
 

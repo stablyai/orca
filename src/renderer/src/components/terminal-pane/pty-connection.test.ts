@@ -200,6 +200,7 @@ type StoreState = {
   setAgentStatus: ReturnType<typeof vi.fn>
   removeAgentStatus: ReturnType<typeof vi.fn>
   dropAgentStatus: ReturnType<typeof vi.fn>
+  retireAgentPaneAuthority: ReturnType<typeof vi.fn>
   setPaneForegroundAgent: ReturnType<typeof vi.fn>
   clearPaneForegroundAgent: ReturnType<typeof vi.fn>
   markTerminalTabUnread: ReturnType<typeof vi.fn>
@@ -242,6 +243,7 @@ type MockTransport = {
   sendInput: ReturnType<typeof vi.fn>
   sendInputImmediate: ReturnType<typeof vi.fn>
   sendInputAccepted?: ReturnType<typeof vi.fn>
+  claimViewport: ReturnType<typeof vi.fn>
   resize: ReturnType<typeof vi.fn>
   getPtyId: ReturnType<typeof vi.fn>
   getConnectionId: ReturnType<typeof vi.fn>
@@ -383,6 +385,7 @@ function createMockTransport(initialPtyId: string | null = null): MockTransport 
       return ptyId
     }),
     sendInput: vi.fn(() => true),
+    claimViewport: vi.fn(() => true),
     resize: vi.fn(() => true),
     getPtyId: vi.fn(() => ptyId),
     getConnectionId: vi.fn(() => null),
@@ -826,6 +829,7 @@ describe('connectPanePty', () => {
       ),
       removeAgentStatus: vi.fn(),
       dropAgentStatus: vi.fn(),
+      retireAgentPaneAuthority: vi.fn(),
       setPaneForegroundAgent: vi.fn((paneKey: string, entry: PaneForegroundAgentEntry) => {
         mockStoreState.paneForegroundAgentByPaneKey[paneKey] = entry
       }),
@@ -859,6 +863,7 @@ describe('connectPanePty', () => {
           ackColdRestore: vi.fn(),
           onClearBufferRequest: vi.fn(() => vi.fn()),
           onSerializeBufferRequest: vi.fn(() => vi.fn()),
+          sendSerializedBuffer: vi.fn(),
           declarePendingPaneSerializer: vi.fn().mockResolvedValue(1),
           settlePaneSerializer: vi.fn().mockResolvedValue(undefined),
           clearPendingPaneSerializer: vi.fn().mockResolvedValue(undefined)
@@ -4000,6 +4005,7 @@ describe('connectPanePty', () => {
     const manager = createManager(1)
     const replayingPanesRef = { current: new Map<number, number>([[1, 1]]) }
     const deps = createDeps({ replayingPanesRef })
+    const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
 
     connectPanePty(pane as never, manager as never, deps as never)
 
@@ -4010,11 +4016,19 @@ describe('connectPanePty', () => {
     // Simulate xterm emitting a DA1 auto-reply during replay parse.
     ;(onDataHandler as (data: string) => void)('\x1b[?1;2c')
     expect(transport.sendInput).not.toHaveBeenCalled()
+    expect(transport.claimViewport).not.toHaveBeenCalled()
 
     // Once replay completes (guard cleared), real keystrokes flow through.
     replayingPanesRef.current.delete(1)
+    setFitOverride('pty-live', 'remote-desktop-fit', 80, 24)
     ;(onDataHandler as (data: string) => void)('a')
     expect(transport.sendInput).toHaveBeenCalledWith('a')
+    expect(transport.claimViewport).toHaveBeenCalledTimes(1)
+    ;(onDataHandler as (data: string) => void)('b')
+    // The renderer stays parked until runtime convergence is acknowledged, so
+    // a second keystroke can retry a transient failed resize.
+    expect(transport.claimViewport).toHaveBeenCalledTimes(2)
+    setFitOverride('pty-live', 'desktop-fit', 0, 0)
   })
 
   it('does not enumerate every worktree tab for ordinary input without Codex restart notices', async () => {
@@ -4582,7 +4596,7 @@ describe('connectPanePty', () => {
     }
   })
 
-  it('pastes a startup draft when Codex renders its composer in the first observed output', async () => {
+  it('orders a startup draft behind xterm focus input when Codex renders its composer', async () => {
     const { connectPanePty } = await import('./pty-connection')
 
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -4615,13 +4629,27 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
     expect(capturedDataCallback.current).not.toBeNull()
 
+    // A focused xterm emits CSI I after Codex enables focus reporting. The
+    // startup draft must use the same transport instead of racing a direct IPC.
+    ;(
+      pane.terminal.onData as unknown as {
+        mock: { calls: [(data: string) => void][] }
+      }
+    ).mock.calls[0]?.[0]('\x1b[I')
+    ;(mockStoreState.recordTerminalInput as ReturnType<typeof vi.fn>).mockClear()
     capturedDataCallback.current?.('\x1b[?2004h\x1b[2K› ')
     await flushAsyncTicks()
 
-    expect(window.api.pty.writeAccepted).toHaveBeenCalledWith(
-      'pty-codex',
+    expect(transport.sendInputAccepted).toHaveBeenCalledWith(
       '\x1b[200~https://github.com/stablyai/orca/issues/42\x1b[201~'
     )
+    expect(transport.sendInput.mock.calls.map(([data]) => data)).toEqual([
+      '\x1b[I',
+      '\x1b[200~https://github.com/stablyai/orca/issues/42\x1b[201~'
+    ])
+    expect(window.api.pty.writeAccepted).not.toHaveBeenCalled()
+    expect(mockStoreState.recordTerminalInput).toHaveBeenCalledOnce()
+    expect(mockStoreState.recordTerminalInput).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1))
   })
 
   it('does not consume startup draft delivery before deferred connect starts', async () => {
@@ -4932,6 +4960,7 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
 
     capturedDataCallback.current?.('\x1b]133;D;130\x07thebr ~/repo $ ')
+    await flushAsyncTicks(1)
 
     expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(paneKey)
     expect(mockStoreState.removeAgentStatus).not.toHaveBeenCalled()
@@ -4973,6 +5002,7 @@ describe('connectPanePty', () => {
       expect.objectContaining({ agentType: 'codex' })
     )
     capturedDataCallback.current?.('\x1b]133;D;130\x07thebr ~/repo $ ')
+    await flushAsyncTicks(1)
 
     expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledWith(paneKey)
     expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
@@ -5610,7 +5640,7 @@ describe('connectPanePty', () => {
     expect(transport.resize).toHaveBeenLastCalledWith(65, 63)
   })
 
-  it('adopts a still-live background PTY via attach instead of reattaching when an eager buffer exists', async () => {
+  it('adopts a live eager PTY and withholds snapshots after its renderer dies', async () => {
     // Why: background automation tabs spawn the agent PTY eagerly and register an
     // eager buffer, then never mount until opened. On first mount the restored
     // ptyId equals the tab ptyId, so without this guard the pane mis-routes into
@@ -5654,6 +5684,19 @@ describe('connectPanePty', () => {
     )
     const { hasPtySerializer } = await import('./pty-buffer-serializer')
     expect(hasPtySerializer(eagerPtyId)).toBe(true)
+
+    const serializeRequestHandler = (
+      window.api.pty.onSerializeBufferRequest as unknown as {
+        mock: { calls: [[(request: { requestId: string; ptyId: string }) => void]] }
+      }
+    ).mock.calls[0]?.[0]
+    const { notifyUndeliverableWrite } =
+      await import('@/lib/pane-manager/terminal-write-pipeline-health')
+    notifyUndeliverableWrite(pane.terminal, 'replay-wedged')
+    serializeRequestHandler?.({ requestId: 'dead-renderer', ptyId: eagerPtyId })
+    await flushAsyncTicks()
+
+    expect(window.api.pty.sendSerializedBuffer).toHaveBeenCalledWith('dead-renderer', null)
   })
 
   it('does not adopt another tab live eager PTY from a stale restored leaf binding', async () => {
@@ -7811,6 +7854,65 @@ describe('connectPanePty', () => {
     expect(transport.sendInput).not.toHaveBeenCalled()
   })
 
+  it('renders the reattach snapshot before live bytes delivered during the spawn reply', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('tab-pty')
+    transport.connect.mockImplementation(
+      async ({ sessionId, callbacks }: { sessionId?: string; callbacks?: ConnectCallbacks }) => {
+        if (!sessionId) {
+          return null
+        }
+        // Why: the real dispatcher drains bytes emitted after snapshot capture
+        // as soon as the spawn IPC resolves, before connect() returns.
+        callbacks?.onData?.('post-snapshot-live')
+        return { id: sessionId, snapshot: 'authoritative-snapshot' }
+      }
+    )
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+    const { writes } = captureCallbackTerminalWrites(pane)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+    })
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+
+    const snapshotIndex = writes.indexOf('authoritative-snapshot')
+    const liveIndex = writes.indexOf('post-snapshot-live')
+    expect(snapshotIndex).toBeGreaterThanOrEqual(0)
+    expect(liveIndex).toBeGreaterThan(snapshotIndex)
+  })
+
+  it('does not fresh-spawn after a dead deferred session delivers its buffered exit', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('tab-pty')
+    transport.connect.mockImplementation(
+      async ({ sessionId, callbacks }: { sessionId?: string; callbacks?: ConnectCallbacks }) => {
+        if (!sessionId) {
+          return 'unexpected-fresh-pty'
+        }
+        callbacks?.onData?.('dead-session-final-frame')
+        return { id: sessionId, exitedBeforeAttach: true }
+      }
+    )
+    transportFactoryQueue.push(transport)
+    const pane = createPane(1)
+    const { writes } = captureCallbackTerminalWrites(pane)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+    })
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+
+    expect(transport.connect).toHaveBeenCalledTimes(1)
+    expect(writes).toContain('dead-session-final-frame')
+    expect(deps.updateTabPtyId).not.toHaveBeenCalled()
+  })
+
   // Why: Phase 6 deleted the hidden-skip eligibility grammar. With the kill
   // switch off, EVERY hidden chunk — plain, control-heavy, rich glyphs,
   // synchronized frames, embedded queries — rides the bounded background
@@ -7953,6 +8055,68 @@ describe('connectPanePty', () => {
         expect.stringContaining('model snapshot'),
         expect.any(Function)
       )
+    })
+
+    it('kicks pane recovery when reveal finds the write pipeline certified dead', async () => {
+      // The 2026-07-13 fossil-pane incident shape: bytes drop while hidden,
+      // the pipeline is certified dead, and certification's own recovery
+      // request came up empty — reveal must re-kick recovery instead of
+      // silently skipping the restore and stranding the stale frame.
+      enableMainAuthority()
+      const remountTerminalTabForRecovery = vi.fn<(tabId: string) => boolean>(() => true)
+      mockStoreState = { ...mockStoreState, remountTerminalTabForRecovery } as StoreState
+      const { _resetTerminalPaneRecoveryForTests } = await import('./terminal-pane-recovery')
+      _resetTerminalPaneRecoveryForTests()
+      const deps = createDeps({ isVisibleRef: { current: false } })
+      const { pane, dataCallback } = await connectHiddenPane(deps)
+      const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+        typeof vi.fn
+      >
+      getMainBufferSnapshot.mockResolvedValue({
+        data: 'model snapshot\r\n',
+        cols: 100,
+        rows: 30,
+        seq: 64
+      })
+
+      dataCallback('hidden output\r\n', { seq: 16, rawLength: 16 })
+
+      // Pipeline dies while hidden; the certification-time recovery request
+      // finds no remountable tab (budget stays unconsumed, no retry timer).
+      remountTerminalTabForRecovery.mockReturnValueOnce(false)
+      const ackCredit = vi.fn()
+      const { writeTerminalOutput } =
+        await import('@/lib/pane-manager/pane-terminal-output-scheduler')
+      writeTerminalOutput(pane.terminal, 'queued before certification', {
+        foreground: false,
+        ackCredit
+      })
+      const { notifyUndeliverableWrite } =
+        await import('@/lib/pane-manager/terminal-write-pipeline-health')
+      notifyUndeliverableWrite(pane.terminal, 'write-stalled')
+      expect(ackCredit).toHaveBeenCalledTimes(1)
+      await flushAsyncTicks(4)
+      expect(remountTerminalTabForRecovery).toHaveBeenCalledTimes(1)
+
+      const { _dispatchPtyModelRestoreNeededForTest } = await import('./pty-model-restore-channel')
+      _dispatchPtyModelRestoreNeededForTest({ id: 'pty-id', reason: 'hidden-drop', markerSeq: 64 })
+      ;(deps.isVisibleRef as { current: boolean }).current = true
+      const { requestTerminalBacklogRecovery } =
+        await import('@/lib/pane-manager/pane-terminal-output-scheduler')
+      requestTerminalBacklogRecovery(pane.terminal as never)
+      await flushAsyncTicks(20)
+
+      // Restore stays skipped (a dead pipeline can never parse the snapshot),
+      // but recovery got exactly one re-kick for the revealed pane.
+      expect(getMainBufferSnapshot).not.toHaveBeenCalled()
+      expect(remountTerminalTabForRecovery).toHaveBeenCalledTimes(2)
+      expect(remountTerminalTabForRecovery).toHaveBeenLastCalledWith('tab-1')
+
+      // Latched per xterm instance: repeat restore attempts do not spam.
+      _dispatchPtyModelRestoreNeededForTest({ id: 'pty-id', reason: 'hidden-drop', markerSeq: 96 })
+      await flushAsyncTicks(4)
+      expect(remountTerminalTabForRecovery).toHaveBeenCalledTimes(2)
+      _resetTerminalPaneRecoveryForTests()
     })
 
     it('clears the hidden bit on visibility flips through syncProcessTracking', async () => {
@@ -11694,7 +11858,7 @@ describe('connectPanePty', () => {
     isVisibleRef.current = true
     resizeHandler({ cols: 122, rows: 42 })
 
-    expect(transport.resize).toHaveBeenCalledWith(122, 42)
+    expect(transport.resize).toHaveBeenCalledWith(122, 42, { claim: true })
     disposable.dispose()
   })
 
@@ -13401,6 +13565,9 @@ describe('connectPanePty', () => {
   it('attaches remote runtime PTY handles instead of creating a replacement terminal', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
+    transport.attach.mockImplementation(() => {
+      transport.getPtyId.mockReturnValue('remote:env-1@@terminal-1')
+    })
     transportFactoryQueue.push(transport)
 
     mockStoreState = {
@@ -13424,7 +13591,8 @@ describe('connectPanePty', () => {
     expect(transport.attach).toHaveBeenCalledWith(
       expect.objectContaining({ existingPtyId: 'remote:terminal-1' })
     )
-    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'remote:terminal-1')
+    expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'remote:env-1@@terminal-1')
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'remote:env-1@@terminal-1')
   })
 
   it('cold-spawns slept remote runtime PTYs instead of reattaching the preserved handle', async () => {
@@ -17588,7 +17756,9 @@ describe('connectPanePty', () => {
         binding.sampleForegroundAgentOnFocus()
         await vi.advanceTimersByTimeAsync(10_000)
 
-        expect(window.api.pty.confirmForegroundProcess).not.toHaveBeenCalled()
+        // Scope to this pane's pty id: a delayed confirm for another test's
+        // default `tab-pty` pane can fire during this advance and is not our subject.
+        expect(window.api.pty.confirmForegroundProcess).not.toHaveBeenCalledWith(ptyId)
       } finally {
         restoreUserAgent()
       }
@@ -18244,7 +18414,7 @@ describe('connectPanePty', () => {
         await flushAsyncTicks()
 
         expect(window.api.pty.getSize).toHaveBeenCalledWith('pty-pane-2')
-        expect(transport.resize).toHaveBeenCalledWith(82, 40)
+        expect(transport.resize).toHaveBeenCalledWith(82, 40, { claim: true })
       } finally {
         observer.restore()
       }
@@ -18293,7 +18463,7 @@ describe('connectPanePty', () => {
 
       expect(pane.fitAddon.fit).toHaveBeenCalled()
       expect(window.api.pty.getSize).toHaveBeenCalledWith('pty-pane-2')
-      expect(transport.resize).toHaveBeenCalledWith(65, 63)
+      expect(transport.resize).toHaveBeenCalledWith(65, 63, { claim: true })
     })
 
     it('skips foreground grid drift repair while mobile owns the PTY without a fit override', async () => {
@@ -18384,6 +18554,56 @@ describe('connectPanePty', () => {
       }
     })
 
+    it('updates the claiming desktop xterm before forwarding an observed viewport claim', async () => {
+      const originalDocument = globalThis.document
+      ;(globalThis as { document?: Document }).document = {
+        visibilityState: 'visible',
+        hasFocus: vi.fn(() => true)
+      } as unknown as Document
+      globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+        queueMicrotask(() => callback(0))
+        return 1
+      })
+      const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
+      const pane = createPane(2)
+      const observer = installObservedPane(pane)
+      try {
+        const { connectPanePty } = await import('./pty-connection')
+        const transport = createMockTransport('pty-pane-2')
+        transportFactoryQueue.push(transport)
+        const manager = createManager(2)
+        const deps = createDeps({
+          restoredLeafId: LEAF_2,
+          paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
+        })
+        let proposedGrid = { cols: 120, rows: 40 }
+        pane.fitAddon = {
+          ...pane.fitAddon,
+          proposeDimensions: vi.fn(() => proposedGrid)
+        } as never
+
+        connectPanePty(pane as never, manager as never, deps as never)
+        await flushAsyncTicks()
+        observer.trigger()
+        await flushAsyncTicks()
+        setFitOverride('pty-pane-2', 'remote-desktop-fit', 80, 24)
+        proposedGrid = { cols: 70, rows: 30 }
+        vi.mocked(pane.terminal.resize).mockClear()
+        transport.resize.mockClear()
+
+        observer.trigger()
+        await flushAsyncTicks()
+
+        expect(pane.terminal.resize).toHaveBeenCalledWith(70, 30)
+        expect(transport.resize).toHaveBeenCalledTimes(1)
+        expect(transport.resize).toHaveBeenCalledWith(70, 30, { claim: true })
+      } finally {
+        setFitOverride('pty-pane-2', 'desktop-fit', 0, 0)
+        observer.restore()
+        globalThis.document = originalDocument
+      }
+    })
+
     it('skips observed desktop reassertion while mobile owns the PTY without a fit override', async () => {
       const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
       const pane = createPane(2)
@@ -18444,7 +18664,7 @@ describe('connectPanePty', () => {
       binding.noteVisibilityResume()
       await flushAsyncTicks()
 
-      expect(transport.resize).toHaveBeenCalledWith(120, 40)
+      expect(transport.resize).toHaveBeenCalledWith(120, 40, { claim: true })
     })
 
     it('queues re-asserted resizes while pane resize holds are active', async () => {
@@ -18486,7 +18706,7 @@ describe('connectPanePty', () => {
         release.flush()
 
         expect(transport.resize).toHaveBeenCalledTimes(1)
-        expect(transport.resize).toHaveBeenCalledWith(120, 40)
+        expect(transport.resize).toHaveBeenCalledWith(120, 40, { claim: true })
       } finally {
         globalThis.CustomEvent = originalCustomEvent
       }

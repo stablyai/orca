@@ -11,6 +11,7 @@ import type {
   DetectedPort,
   EnrichedDetectedPort,
   SavedPortForward,
+  SshRepoReadoption,
   SshTarget,
   SshConnectionStatus,
   SshConnectionState
@@ -744,15 +745,17 @@ export function registerSshHandlers(
   // Why: SSH target add/import can re-adopt workspaces orphaned on a removed
   // target id (see ssh-target-readoption). When that re-points repos, the
   // renderer must refresh its repo list to surface the reattached workspaces.
-  function notifyReposChangedIfReadopted(): void {
-    if (!sshStore || sshStore.lastReadoptedRepoCount <= 0) {
-      return
+  function takeRepoReadoptions(): SshRepoReadoption[] {
+    if (!sshStore || sshStore.lastRepoReadoptions.length === 0) {
+      return []
     }
-    sshStore.lastReadoptedRepoCount = 0
+    const repoReadoptions = sshStore.lastRepoReadoptions
+    sshStore.lastRepoReadoptions = []
     const win = getCurrentMainWindow()
     if (win && !win.isDestroyed()) {
       win.webContents.send('repos:changed')
     }
+    return repoReadoptions
   }
 
   ipcMain.handle('ssh:listTargets', () => {
@@ -768,8 +771,8 @@ export function registerSshHandlers(
     // Why: re-adding a removed host can re-adopt orphaned workspaces (re-point
     // repos/worktrees off the dead id). Refresh the renderer's repo list so the
     // reattached workspaces move from grey ghosts back onto the live host.
-    notifyReposChangedIfReadopted()
-    return target
+    const repoReadoptions = takeRepoReadoptions()
+    return { target, repoReadoptions }
   })
 
   ipcMain.handle(
@@ -784,9 +787,9 @@ export function registerSshHandlers(
   })
 
   ipcMain.handle('ssh:importConfig', (_event, args?: { reAdopt?: boolean }) => {
-    const result = sshStore!.importFromSshConfig(args)
-    notifyReposChangedIfReadopted()
-    return result
+    const targets = sshStore!.importFromSshConfig(args)
+    const repoReadoptions = takeRepoReadoptions()
+    return { targets, repoReadoptions }
   })
 
   // ── Connection lifecycle ───────────────────────────────────────────

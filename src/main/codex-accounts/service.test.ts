@@ -102,6 +102,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     floatingTerminalTriggerLocation: 'floating-button',
     diffDefaultView: 'inline',
     combinedDiffFileTreeVisibleByDefault: false,
+    prBotAuthorOverrides: [],
     notifications: {
       enabled: true,
       agentTaskComplete: true,
@@ -147,7 +148,6 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     experimentalActivity: true,
     experimentalTerminalAttention: false,
     compactWorktreeCards: false,
-    experimentalWorktreeSymlinks: false,
     terminalWindowsShell: 'powershell.exe',
     terminalWindowsPowerShellImplementation: 'powershell.exe',
     enableGitHubAttribution: true,

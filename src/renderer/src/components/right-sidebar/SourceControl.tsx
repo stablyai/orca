@@ -1669,6 +1669,7 @@ function SourceControlInner(): React.JSX.Element {
     !activeRepo?.connectionId && hasHostedReviewLink && hostedReviewEntry === undefined
   const hasResolvableReviewPushTargetLink = hasResolvableHostedReviewPushTargetLink({
     linkedGitHubPR,
+    fallbackGitHubPR: fallbackGitHubPRNumber,
     linkedGitLabMR
   })
   useEffect(() => {
@@ -1687,9 +1688,7 @@ function SourceControlInner(): React.JSX.Element {
     ensureHostedReviewPushTarget,
     hasResolvableReviewPushTargetLink,
     isBranchVisible,
-    isFolder,
-    linkedGitHubPR,
-    linkedGitLabMR
+    isFolder
   ])
   const canUseHostedReviewPushTarget = hasUsableHostedReviewPushTarget({
     pushTarget: activeWorktree?.pushTarget,

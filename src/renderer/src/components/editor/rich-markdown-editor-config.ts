@@ -15,7 +15,7 @@ import {
   type DocLinkMenuState
 } from './rich-markdown-commands'
 import { isSingleEmptyTopLevelOrderedList } from './rich-markdown-list-continuation'
-import { getLinkBubblePosition, type LinkBubbleState } from './RichMarkdownLinkBubble'
+import type { LinkBubbleState } from './RichMarkdownLinkBubble'
 import {
   handleRichMarkdownEditorClick,
   type ActivateMarkdownLink,
@@ -29,8 +29,16 @@ import {
 import { getRichMarkdownSpellcheckAttribute } from './rich-markdown-spellcheck'
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react'
 import type { DiffComment } from '../../../../shared/types'
+import type { RichMarkdownEditorCodec } from './rich-markdown-source-transport'
+import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
+import {
+  getRichMarkdownSelectionLinkBubble,
+  openSelectedHtmlSuperscriptLink
+} from './rich-markdown-selected-link-actions'
 
 export type EditorConfigParams = {
+  codec: RichMarkdownEditorCodec
+  htmlSuperscriptLinkContext: RichMarkdownHtmlSuperscriptLinkContext
   content: string
   filePath: string
   worktreeId: string
@@ -79,6 +87,8 @@ export type EditorConfigParams = {
 export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseEditorOptions {
   const {
     content,
+    codec,
+    htmlSuperscriptLinkContext,
     filePath,
     worktreeId,
     worktreeRoot,
@@ -125,7 +135,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
 
   return {
     immediatelyRender: false,
-    content: encodeRawMarkdownHtmlForRichEditor(content),
+    content: encodeRawMarkdownHtmlForRichEditor(content, codec, { htmlSuperscriptLinks: true }),
     contentType: 'markdown' as const,
     editorProps: {
       attributes: {
@@ -135,13 +145,15 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
       handleDOMEvents: {
         cut: handleRichMarkdownCut
       },
-      handlePaste: (_view, event) =>
+      handlePaste: (view, event, slice) =>
         handleRichMarkdownPaste({
           editor: editorRef.current,
           event,
           filePath,
           worktreeId,
-          runtimeEnvironmentId
+          runtimeEnvironmentId,
+          slice,
+          view
         }),
       handleTextInput: (view, from, to, text) => {
         typedEmptyOrderedListMarkerRef.current = false
@@ -172,12 +184,22 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
         typedEmptyOrderedListMarkerRef,
         flushPendingSerialization,
         openSearchRef,
+        linkBubbleOwnerId: codec.transport.key,
+        htmlSuperscriptLinkContext,
         setIsEditingLink,
         setLinkBubble,
         setSelectedCommandIndex,
         setSelectedDocLinkIndex,
         setSlashMenu,
-        setDocLinkMenu
+        setDocLinkMenu,
+        openSelectedHtmlSuperscriptLink: () =>
+          openSelectedHtmlSuperscriptLink({
+            activateMarkdownLink,
+            context: htmlSuperscriptLinkContext,
+            editor: editorRef.current,
+            root: rootRef.current,
+            runtimeEnvironmentId
+          })
       }),
       handleClick: (view, pos, event) => {
         return handleRichMarkdownEditorClick({
@@ -185,6 +207,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
           editorRef,
           event,
           filePath,
+          htmlSuperscriptLinkContext,
           isMac,
           markdownCommentsRef,
           markdownSourceLineOffsetRef,
@@ -259,13 +282,9 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
       syncDocLinkMenu(nextEditor, rootRef.current, setDocLinkMenu)
       syncAnnotationTarget(nextEditor)
       setIsEditingLink(false)
-      if (nextEditor.isActive('link')) {
-        const attrs = nextEditor.getAttributes('link')
-        const pos = getLinkBubblePosition(nextEditor, rootRef.current)
-        setLinkBubble(pos ? { href: (attrs.href as string) || '', ...pos } : null)
-      } else {
-        setLinkBubble(null)
-      }
+      setLinkBubble(
+        getRichMarkdownSelectionLinkBubble(nextEditor, rootRef.current, htmlSuperscriptLinkContext)
+      )
     }
   }
 }

@@ -101,6 +101,7 @@ type RuntimeImportResult =
 type RuntimeFileWatchEvent =
   | { type: 'ready'; subscriptionId: string }
   | { type: 'changed'; worktree: string; events: FsChangedPayload['events'] }
+  | { type: 'error'; message: string }
   | { type: 'end' }
 
 const REMOTE_UPLOAD_BASE64_CHUNK_CHARS = 512 * 1024
@@ -886,7 +887,7 @@ function createSharedRuntimeFileWatch(
       },
       {
         onResponse: (response) => {
-          handleSharedRuntimeFileWatchResponse(shared, worktreePath, response)
+          handleSharedRuntimeFileWatchResponse(key, shared, worktreePath, response)
         },
         onError: (error) => {
           notifySharedRuntimeFileWatchError(shared, new Error(error.message))
@@ -922,6 +923,7 @@ function createSharedRuntimeFileWatch(
 }
 
 function handleSharedRuntimeFileWatchResponse(
+  key: string,
   shared: SharedRuntimeFileWatch,
   worktreePath: string,
   response: unknown
@@ -943,6 +945,30 @@ function handleSharedRuntimeFileWatchResponse(
       for (const listener of Array.from(shared.listeners)) {
         listener.onPayload({ worktreePath, events: event.events })
       }
+    } else if (event.type === 'error') {
+      // Why: error listeners may synchronously retry. Evict the terminal watch
+      // before callbacks run so the retry cannot join a stream awaiting `end`.
+      if (sharedRuntimeFileWatches.get(key) === shared) {
+        sharedRuntimeFileWatches.delete(key)
+      }
+      shared.closed = true
+      const listeners = Array.from(shared.listeners)
+      shared.listeners.clear()
+      for (const listener of listeners) {
+        listener.onError?.(new Error(event.message))
+      }
+    } else if (event.type === 'end') {
+      // Why: shared-control completes without onClose; evict and release its
+      // transport handle so later listeners start cleanly without retained state.
+      if (sharedRuntimeFileWatches.get(key) === shared) {
+        sharedRuntimeFileWatches.delete(key)
+      }
+      shared.closed = true
+      const unsubscribe = shared.unsubscribe
+      shared.unsubscribe = null
+      shared.remoteSubscriptionId = null
+      shared.listeners.clear()
+      unsubscribe?.()
     }
   } catch (err) {
     notifySharedRuntimeFileWatchError(shared, err instanceof Error ? err : new Error(String(err)))

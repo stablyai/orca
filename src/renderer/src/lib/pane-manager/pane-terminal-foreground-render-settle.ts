@@ -21,6 +21,7 @@ type ForegroundTerminalWriteOptions = {
   followupViewportRefresh?: boolean
   shouldRefreshViewportSynchronously?: () => boolean
   onParsed?: () => void
+  onWriteFailure?: () => void
 }
 
 const pendingViewportSettleRefreshByTerminal = new WeakMap<
@@ -139,7 +140,7 @@ export function writeForegroundTerminalChunk(
   terminal: ForegroundTerminalOutputTarget,
   data: string,
   options: ForegroundTerminalWriteOptions = {}
-): void {
+): boolean {
   const beforeWriteViewport = options.forceViewportRefresh
     ? captureViewportSnapshot(terminal)
     : null
@@ -147,7 +148,7 @@ export function writeForegroundTerminalChunk(
   // where an escaping throw permanently wedges the terminal (see
   // xterm-write-callback-guard.ts). Guard settle and onParsed separately so a
   // renderer/WebGL failure during settle can't starve the replay-guard release.
-  const runCompletionSteps = (): void => {
+  const runParsedSteps = (): void => {
     if (beforeWriteViewport) {
       runGuardedWriteCompletionStep('foreground-render-settle', () =>
         settleForegroundRender(terminal, beforeWriteViewport, options)
@@ -158,9 +159,15 @@ export function writeForegroundTerminalChunk(
     }
   }
   try {
-    terminal.write(data, runCompletionSteps)
+    terminal.write(data, runParsedSteps)
+    return true
   } catch {
-    runCompletionSteps()
+    // Why separate from parse completion: cleanup/recovery must run, but a
+    // synchronous write failure is not parser liveness evidence.
+    if (options.onWriteFailure) {
+      runGuardedWriteCompletionStep('foreground-on-write-failure', options.onWriteFailure)
+    }
+    return false
   }
 }
 

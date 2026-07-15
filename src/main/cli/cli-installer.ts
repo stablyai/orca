@@ -185,7 +185,7 @@ export class CliInstaller {
       await this.installAppImageWrapper(status.commandPath, status.launcherPath)
       await this.removeLegacyLinuxCommandIfManaged(status.launcherPath)
     } else if (this.isWindowsPackagedBundledCommand(status.commandPath, status.launcherPath)) {
-      // Why: packaged Windows already ships resources/bin/orca.cmd. Registration
+      // Why: packaged Windows already ships resources/bin/orca.exe. Registration
       // only owns the user PATH entry; rewriting the asset makes it recurse.
     } else {
       // Why: mkdir stays here for the Windows wrapper path — the target dir is
@@ -356,7 +356,9 @@ export class CliInstaller {
     }
 
     if (this.platform === 'win32') {
-      return join(this.localAppDataPath, 'Programs', 'Orca', 'resources', 'bin', 'orca.cmd')
+      // Why: NSIS /D installs can live outside LOCALAPPDATA. The packaged
+      // resources directory is the authoritative native launcher location.
+      return getBundledLauncherPath(this.platform, this.resourcesPath)
     }
 
     return null
@@ -823,7 +825,7 @@ export class CliInstaller {
       return
     }
     entries.push(pathDirectory)
-    await this.userPathWriter(entries.join(';'))
+    await this.writeWindowsUserPathEntry(entries.join(';'), pathDirectory, 'add')
   }
 
   private async removeWindowsPathEntry(pathDirectory: string): Promise<void> {
@@ -831,10 +833,36 @@ export class CliInstaller {
       return
     }
     const current = await this.userPathReader()
-    const nextEntries = splitPathEntries('win32', current).filter(
-      (entry) => !samePathEntry('win32', entry, pathDirectory)
-    )
-    await this.userPathWriter(nextEntries.join(';'))
+    const entries = splitPathEntries('win32', current)
+    const nextEntries = entries.filter((entry) => !samePathEntry('win32', entry, pathDirectory))
+    if (nextEntries.length === entries.length) {
+      return
+    }
+    await this.writeWindowsUserPathEntry(nextEntries.join(';'), pathDirectory, 'remove')
+  }
+
+  // Why: raw PowerShell errors reach the UI, so translate denied PATH writes
+  // while preserving the original diagnostic as the error cause.
+  private async writeWindowsUserPathEntry(
+    value: string,
+    pathDirectory: string,
+    action: 'add' | 'remove'
+  ): Promise<void> {
+    try {
+      await this.userPathWriter(value)
+    } catch (error) {
+      if (!isWindowsUserPathPermissionError(error)) {
+        throw error
+      }
+      const guidance =
+        action === 'add'
+          ? `Add this folder to your PATH manually: ${pathDirectory}. Or run Orca as an administrator and try again.`
+          : `Remove this folder from your PATH manually: ${pathDirectory}. Or run Orca as an administrator and try again.`
+      throw new Error(
+        `Windows blocked updating your user PATH (access denied). This usually means your PATH environment variable is managed by Group Policy or your organization's device management. ${guidance}`,
+        { cause: error }
+      )
+    }
   }
 }
 
@@ -1038,6 +1066,26 @@ function isMissingError(error: unknown): boolean {
   )
 }
 
+// Why: localized permission errors retain these .NET/ACL markers even when
+// their human-readable PowerShell text is mojibake.
+function isWindowsUserPathPermissionError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+  const stderr =
+    'stderr' in error && typeof (error as { stderr?: unknown }).stderr === 'string'
+      ? (error as { stderr: string }).stderr
+      : ''
+  const haystack = `${error.message}\n${stderr}`
+  return (
+    haystack.includes('UnauthorizedAccessException') ||
+    haystack.includes('SecurityException') ||
+    haystack.includes('Requested registry access is not allowed') ||
+    haystack.includes('Access is denied') ||
+    haystack.includes('Access to the registry key')
+  )
+}
+
 function quoteShell(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`
 }
@@ -1137,7 +1185,7 @@ export function getBundledLauncherPath(
     return join(resourcesPath, 'bin', LINUX_COMMAND_NAME)
   }
   if (platform === 'win32') {
-    return join(resourcesPath, 'bin', 'orca.cmd')
+    return join(resourcesPath, 'bin', 'orca.exe')
   }
   return null
 }

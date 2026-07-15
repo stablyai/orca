@@ -1,4 +1,9 @@
 import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/types'
+import {
+  isNativeChatTabWideFallbackSafe,
+  resolveNativeChatActiveLayoutLeafId
+} from '../native-chat/native-chat-leaf-routing'
 
 /**
  * Project `agentStatusByPaneKey` down to the stable `{ terminalTabId: agentType }`
@@ -13,16 +18,34 @@ import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-statu
  * those transitions, so the strip re-renders only when a tab actually gains, loses,
  * or changes its agent.
  *
- * First matching pane per tab wins, mirroring `findTabAgentEntry` exactly (tab ids
- * are colon-free by construction, so the substring before the first `:` is the
- * tab id). A pane whose entry has no `agentType` still claims the tab and yields
- * `null`, identical to `findTabAgentEntry(...)?.agentType ?? null`.
+ * The active layout leaf wins when available because that is where a tab-level
+ * chat action opens. Before layout hydration, the first matching pane preserves
+ * the legacy lookup behavior (tab ids are colon-free by construction).
  */
 export function selectTabAgentTypesByTabId(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  agentStatusByPaneKey: Record<string, AgentStatusEntry>,
+  terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot> = {}
 ): Record<string, AgentType> {
   const byTabId: Record<string, AgentType> = {}
   const claimed = new Set<string>()
+  // Why: the tab action opens chat on the active split leaf, so that leaf's
+  // identity must outrank object insertion order from unrelated siblings.
+  for (const [tabId, layout] of Object.entries(terminalLayoutsByTabId)) {
+    // A rootless snapshot with no active leaf is hydration absence, not a
+    // topology decision; preserve the legacy tab lookup until a leaf exists.
+    if (!layout.root && !layout.activeLeafId) {
+      continue
+    }
+    claimed.add(tabId)
+    const activeLeafId = resolveNativeChatActiveLayoutLeafId(layout)
+    if (!activeLeafId) {
+      continue
+    }
+    const entry = agentStatusByPaneKey[`${tabId}:${activeLeafId}`]
+    if (entry?.agentType != null) {
+      byTabId[tabId] = entry.agentType
+    }
+  }
   for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
     const colon = paneKey.indexOf(':')
     if (colon <= 0) {
@@ -38,4 +61,18 @@ export function selectTabAgentTypesByTabId(
     }
   }
   return byTabId
+}
+
+export function selectNativeChatTabWideFallbackUnsafeTabsById(
+  terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot> = {}
+): Record<string, true> {
+  // Why: legacy and hydrating store shapes may not expose layout state yet;
+  // absence carries no unsafe split evidence and must not crash tab rendering.
+  const unsafeTabs: Record<string, true> = {}
+  for (const [tabId, layout] of Object.entries(terminalLayoutsByTabId)) {
+    if (!isNativeChatTabWideFallbackSafe(layout)) {
+      unsafeTabs[tabId] = true
+    }
+  }
+  return unsafeTabs
 }

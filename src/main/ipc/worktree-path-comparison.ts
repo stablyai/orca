@@ -33,6 +33,16 @@ export function areWorktreePathsEqual(
   return left === right
 }
 
+export function worktreePathComparisonKey(pathValue: string, platform = process.platform): string {
+  if (looksLikePosixAbsolutePath(pathValue)) {
+    return `posix:${normalizePosixWorktreePathForComparison(pathValue, platform)}`
+  }
+  if (platform === 'win32' || isWindowsAbsolutePathLike(pathValue)) {
+    return `windows:${normalizeWindowsWorktreePathForComparison(pathValue)}`
+  }
+  return `posix:${normalizePosixWorktreePathForComparison(pathValue, platform)}`
+}
+
 export function dedupeWorktreesByPath<T extends { path: string }>(
   worktrees: readonly T[],
   platform = process.platform

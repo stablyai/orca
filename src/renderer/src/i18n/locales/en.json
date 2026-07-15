@@ -73,6 +73,7 @@
     "matchLabel": {
       "comment": "Comment",
       "issue": "Issue",
+      "mr": "MR",
       "port": "Port",
       "pr": "PR"
     }
@@ -458,6 +459,13 @@
               "all": "No comments yet."
             }
           }
+        },
+        "bot": {
+          "author": {
+            "overrides": {
+              "6d5d52b53f": "Bot author override limit reached"
+            }
+          }
         }
       },
       "resume": {
@@ -691,7 +699,8 @@
         "devSearchKeywordToast": "toast",
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
-        "devSearchKeywordNotification": "notification"
+        "devSearchKeywordNotification": "notification",
+        "projectHostsSummary": "{{value0}} hosts"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Paste is too large."
@@ -722,6 +731,8 @@
       "GitHubItemDialog": {
         "3ab6ac0fc8": "Preview and edit the selected GitHub issue or pull request.",
         "3cd5ae5b7b": "No files changed.",
+        "filesUnavailable": "Couldn't load changed files.",
+        "filesRetry": "Retry",
         "999b5ad7d9": "Files",
         "4bd1f5b055": "Checks",
         "e30a5470c9": "Conversation",
@@ -1217,6 +1228,8 @@
         "2560588245": "Failed to request reviewer",
         "3450247584": "Comment",
         "6ad2c1ab9c": "No files changed.",
+        "filesUnavailable": "Couldn't load changed files.",
+        "filesRetry": "Retry",
         "4d18310d55": "Files changed",
         "94d95cf1f7": "Checks",
         "9e8d45700e": "Conversation",
@@ -2366,7 +2379,9 @@
             "failed": "Workspaces not removed: {{value0}}",
             "error": "Workspace cleanup failed",
             "skippedAncestor": "Skipped because a nested workspace could not be removed.",
-            "timedOut": "Removing {{value0}} is taking longer than expected. It will keep running in the background."
+            "timedOut": "Removing {{value0}} is taking longer than expected. It will keep running in the background.",
+            "stillRemoving": "Still removing workspaces: {{value0}}",
+            "skippedPendingAncestor": "Skipped because a nested workspace has not finished removing."
           },
           "candidateRow": {
             "gitLabel": "Git",
@@ -2579,7 +2594,7 @@
               "blocked": {
                 "toast": {
                   "97c98f1afe": "Open Setting",
-                  "7cf51f74fd": "Enable TUI clipboard writes in Terminal settings to copy from SSH, tmux, Neovim, or fzf.",
+                  "7cf51f74fd": "Enable TUI clipboard writes in Terminal settings to copy from SSH, tmux, Neovim, fzf, or Grok.",
                   "89eaa3e80b": "Terminal clipboard write blocked"
                 }
               }
@@ -2874,6 +2889,9 @@
           },
           "TerminalTabSplitMenuSection": {
             "splitTerminal": "Split terminal"
+          },
+          "TerminalTabLeadingIcon": {
+            "7ab2964bea": "Unread agent completion"
           }
         }
       },
@@ -3209,6 +3227,17 @@
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
+          },
+          "usagePercentageLabel": {
+            "used": "{{value0}}% used",
+            "remaining": "{{value0}}% left"
+          },
+          "UsagePercentageDisplayChangeNotice": {
+            "title": "Usage now shows % used",
+            "body": "Prefer remaining? Change it in Settings.",
+            "dismiss": "Dismiss",
+            "openSettings": "Open Settings",
+            "gotIt": "Got it"
           }
         }
       },
@@ -5437,7 +5466,9 @@
           "bf16ef0af2": "Off",
           "3f6892f307": "On",
           "b82f86d7d2": "Rich Markdown Spellcheck",
-          "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown."
+          "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown.",
+          "7ddd66fede": "Editor Word Wrap",
+          "9b18de6eea": "Wrap long lines in file editors instead of requiring horizontal scrolling."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -6157,7 +6188,7 @@
           "26fef02bf3": "Project Icon",
           "c7ef4415de": "Display Name",
           "b0a0c14a1c": "Project-specific display details for the sidebar and tabs.",
-          "170624bdfb": "Remove this project from Orca.",
+          "removeProjectAllHosts": "Remove this project from Orca on all configured hosts.",
           "0909e5d650": "Remove Project",
           "ee5a290616": "Opened as folder. Git features are unavailable for this workspace.",
           "323debba71": "Type:",
@@ -6824,9 +6855,9 @@
           "348246b06f": "false",
           "5936387ddd": "auto",
           "adbafefe56": "custom",
-          "16753eea48": "On Windows, right-click pastes the clipboard. Ctrl+right-click opens the context menu.",
+          "16753eea48": "Right-click pastes the clipboard. Ctrl+right-click opens the context menu.",
           "9c178cf8aa": "Right-click to paste",
-          "af0c3b6e39": "On Windows, right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.",
+          "af0c3b6e39": "Right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.",
           "29154326bb": "on",
           "ab20575a8a": "off",
           "ab3a1f9068": "wsl.exe",
@@ -7298,7 +7329,9 @@
             "f8e2a1c4b6": "Grok Usage",
             "e7d1b0f3a5": "Show Grok weekly credit usage from Grok CLI OAuth.",
             "d6c0a9e2f4": "grok",
-            "c5b9f8d1e3": "xai"
+            "c5b9f8d1e3": "xai",
+            "usagePercentageDisplayTitle": "Usage percentages",
+            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining."
           }
         },
         "auto": {
@@ -7750,7 +7783,9 @@
             "defaultProjectRuntime": "Default Project Runtime",
             "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects.",
             "d2d2d929c0": "Rich Markdown Spellcheck",
-            "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown."
+            "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown.",
+            "e61157e926": "Editor Word Wrap",
+            "005be5c699": "Wrap long lines in file editors instead of requiring horizontal scrolling."
           }
         },
         "git": {
@@ -8550,7 +8585,7 @@
               "e55186fe2b": "right click",
               "28ff08ed35": "windows",
               "e7d2793b03": "terminal",
-              "8ba875c132": "On Windows, right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.",
+              "8ba875c132": "Right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.",
               "f0b8448570": "Right-click to paste",
               "04994f6929": "default",
               "fc564eadaf": "debian",
@@ -9053,7 +9088,67 @@
           "3325d996cb": "Refresh usage",
           "a8f3e2c1b4": "Weekly credits",
           "b7e2d9f0a3": "Same weekly credit % as the grok /usage screen in the terminal.",
-          "c6d1a8f4e2": "Resets {{when}}"
+          "c6d1a8f4e2": "Resets {{when}}",
+          "e6dadc1e2b": "Monthly usage",
+          "75e396bf42": "Included monthly usage for Grok unified-billing accounts."
+        },
+        "AppearanceWindowSidebarSection": {
+          "usagePercentageDisplayUsed": "Used",
+          "usagePercentageDisplayRemaining": "Remaining"
+        },
+        "TerminalInteractionSection": {
+          "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
+          "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
+        },
+        "MobileRelayStatusSection": {
+          "registered": "Registered",
+          "connecting": "Connecting",
+          "reconnecting": "Reconnecting",
+          "offline": "Offline",
+          "title": "Orca Relay",
+          "automatic": "Connect from anywhere when a phone is paired",
+          "signInPrompt": "Sign in on this desktop to connect from anywhere",
+          "directStillAvailable": "LAN and Tailscale connections remain available.",
+          "directNeedsNoAccount": "LAN and Tailscale pairing still work without an account.",
+          "signIn": "Sign in",
+          "unavailable": "Unavailable",
+          "standby": "Standby — no relay devices"
+        },
+        "MobilePairingConnectionOptions": {
+          "ready": "Ready",
+          "connecting": "Connecting",
+          "available": "Available",
+          "reconnecting": "Reconnecting",
+          "unavailable": "Unavailable",
+          "title": "How should the new phone connect?",
+          "anywhere": "Connect with Orca Relay",
+          "recommended": "Recommended",
+          "automaticDescription": "Orca uses a direct connection when available and Relay otherwise.",
+          "signInDescription": "Sign in on this desktop to use Orca Relay.",
+          "signIn": "Sign in",
+          "localOnly": "Local network only",
+          "localShort": "LAN or Tailscale",
+          "localDescription": "Uses LAN or Tailscale without connecting this phone through Orca Relay."
+        },
+        "MobilePairingSetupSection": {
+          "title": "Pair a phone",
+          "automaticDescription": "The pairing code includes direct access and encrypted Orca Relay fallback.",
+          "localDescription": "The pairing code connects only through the local network address below.",
+          "regenerate": "Regenerate",
+          "generate": "Generate QR Code",
+          "localSettings": "Local connection settings",
+          "localAddressDescription": "Choose the LAN or private-network address that Orca Mobile can use to reach this computer directly.",
+          "refresh": "Refresh network interfaces",
+          "tailnet": "Connect with your own tailnet",
+          "tailnetDescription": "Install Tailscale on this computer and your phone, sign in to the same tailnet, then select its 100.x.y.z address above.",
+          "getTailscale": "Get Tailscale"
+        },
+        "MobileRelayBetaAvailability": {
+          "about": "About the Orca Relay beta",
+          "beta": "Beta",
+          "availability": "Available on",
+          "testFlight": "TestFlight",
+          "androidApk": "Android APK"
         }
       },
       "right": {
@@ -9688,7 +9783,9 @@
                 "b13f85d75c": "Timeline",
                 "f5cf324efa": "Comment display options",
                 "5e6e5a13fa": "View",
-                "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
+                "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
+                "b3195cba33": "Unmark author as bot",
+                "f588b46a6c": "Mark author as bot"
               },
               "empty": {
                 "state": {
@@ -9921,7 +10018,11 @@
             "92276aceb7": "Delete",
             "7fb9435c86": "This permanently deletes the directory and its contents on the remote host. This cannot be undone.",
             "23e98f192f": "This permanently deletes the file on the remote host. This cannot be undone.",
-            "8b8ee9d22f": "Couldn't determine which host owns this file. Check the workspace connection and try again."
+            "8b8ee9d22f": "Couldn't determine which host owns this file. Check the workspace connection and try again.",
+            "af1270b90d": "Permanently delete {{count}} items?",
+            "dd029aa5cd": "This permanently deletes the selected items and any directory contents on the remote host. This cannot be undone.",
+            "77fdc36183": "Delete {{count}} items?",
+            "fca915a67a": "Remote items are permanently deleted and cannot be undone. Local items move to the {{value0}}."
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "Cannot open symlink target"
@@ -10659,6 +10760,17 @@
           "trigger-label": "Network address to advertise",
           "custom-option": "{{address}} (custom)",
           "add-custom": "Add custom address…"
+        },
+        "WindowsFirewallNotice": {
+          "repair-success": "Windows Firewall now allows Orca Mobile on private networks",
+          "repair-failed": "Could not add the Windows Firewall rule",
+          "public-title": "Windows marks this network as public",
+          "missing-title": "Allow phone connections through Windows Firewall",
+          "public-description": "Change this trusted Wi-Fi network to Private before allowing Orca Mobile connections.",
+          "missing-description": "Windows may block the pairing server. Add a rule for this Orca app and TCP port {{port}} on Private networks.",
+          "open-settings": "Open network settings",
+          "waiting": "Waiting for Windows…",
+          "allow": "Allow phone connections"
         }
       },
       "gitlab": {
@@ -11456,7 +11568,9 @@
           "c98ce191da": "This diff has no modified-side file to open",
           "9b80bbe1de": "Open file tab",
           "f0fd4174b5": "Open file tab to use rich markdown editing",
-          "a10d9b8337": "Open file"
+          "a10d9b8337": "Open file",
+          "2076ecfc9c": "Previous change",
+          "631dab0df3": "Next change"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "Export as PDF",
@@ -11655,7 +11769,8 @@
           "1c99b726e0": "Remove link",
           "cdfe166f6f": "Edit link",
           "bfc813e909": "Open link",
-          "7b0b945fdc": "Paste or type a link…"
+          "7b0b945fdc": "Paste or type a link…",
+          "copyLink": "Copy link"
         },
         "RichMarkdownReviewNoteLayer": {
           "f3ef92952b": "This note",
@@ -11682,7 +11797,8 @@
           "68d090241d": "Match whole word",
           "fd97c7e585": "Replace",
           "44682b4159": "Replace in rich markdown editor",
-          "c2884f5e95": "Replace all"
+          "c2884f5e95": "Replace all",
+          "preservedRichContentReadOnly": "Preserved rich content is read-only in rich mode."
         },
         "RichMarkdownSlashMenu": {
           "82c6816ff8": "No blocks found",
@@ -11899,6 +12015,24 @@
           "3fa2b8d417": "Reload from Disk",
           "a95d02c644": "Keep My Edits",
           "2c8f1e07b9": "Loading comparison..."
+        },
+        "RichMarkdownEditor": {
+          "citationLinkAvailable": "{{value0}}, link to {{value1}}. Press Enter to open or Tab for link actions.",
+          "citationFallbackLabel": "Citation",
+          "citationLinkUnavailable": "{{value0}}, citation link unavailable. {{value1}}",
+          "tabForCitationActions": "Tab for available actions.",
+          "noCitationActions": "No link actions are available."
+        },
+        "richMarkdownHtmlSuperscriptLink": {
+          "availableAriaLabel": "{{value0}}, link to {{value1}}",
+          "unavailableAriaLabel": "{{value0}}, citation link unavailable"
+        },
+        "richMarkdownLinkClipboard": {
+          "copiedLink": "Copied link",
+          "copyLinkFailed": "Failed to copy link"
+        },
+        "richMarkdownSourceOwningCutFeedback": {
+          "selectLessContent": "Select less content or use code mode to cut preserved HTML citations."
         }
       },
       "diff": {
@@ -12769,7 +12903,7 @@
         "profiles": {
           "switcher": {
             "cloud": {
-              "unavailable": "Cloud sign-in unavailable"
+              "unavailable": "Orca sign-in unavailable"
             },
             "account": "Account",
             "reconnect": "Reconnect profile",
@@ -12793,7 +12927,14 @@
             "c106c674fe": "New local profile",
             "org": {
               "members": "Organization members"
-            }
+            },
+            "signInWaiting": "Waiting for sign-in…",
+            "signInAgain": "Sign in again",
+            "signIn": "Sign in to Orca",
+            "accountTitle": "Orca account",
+            "accountSignedIn": "Signed in",
+            "accountSignInRequired": "Sign-in required",
+            "accountSignedOut": "Signed out"
           },
           "management": {
             "04e7bd2a23": "Transfer",
@@ -12836,8 +12977,8 @@
           },
           "signout": {
             "confirm": {
-              "title": "Sign out?",
-              "description": "Sign out of {{profileName}} and keep its projects, worktrees, and local metadata on this device.",
+              "title": "Sign out of Orca?",
+              "description": "You'll be signed out of Orca on this device. Your local projects and worktrees won't be affected.",
               "cancel": "Cancel",
               "action": "Sign out"
             }
@@ -12939,6 +13080,37 @@
         "searchLabels": "Filter labels…",
         "searchAssignee": "Filter assignee…",
         "back": "Back"
+      },
+      "browser-pane": {
+        "markup": {
+          "cancel": "Cancel",
+          "clear": "Clear all",
+          "copiedToast": "Markup copied — paste it into your agent ({{value0}})",
+          "copy": "Copy Markup",
+          "drawButton": "Draw on screenshot",
+          "drawHint": "Draw on the page, then copy the markup to paste into your agent.",
+          "drawHintBadge": "New",
+          "drawHintDismiss": "Got it",
+          "drawHintTry": "Try it",
+          "errorAttach": "Could not attach the markup screenshot.",
+          "errorCapture": "Could not capture the page to draw on.",
+          "errorUnavailable": "Screenshot markup is not available on this page.",
+          "fontSize": "Font size",
+          "hint": "Draw on the page, then copy the markup to paste into your agent.",
+          "redo": "Redo",
+          "style": "Color and thickness",
+          "textInput": "Annotation text",
+          "tool": {
+            "arrow": "Arrow",
+            "ellipse": "Ellipse",
+            "highlight": "Highlighter",
+            "pen": "Pen",
+            "rect": "Rectangle",
+            "text": "Text"
+          },
+          "undo": "Undo",
+          "widthOption": "{{value0}} px"
+        }
       }
     },
     "i18n": {
@@ -13020,7 +13192,8 @@
         "otherPlaceholder": "Type your answer",
         "cancel": "Cancel",
         "send": "Send answer",
-        "next": "Next"
+        "next": "Next",
+        "skip": "Skip"
       },
       "approval": {
         "title": "Allow {{value0}}?",

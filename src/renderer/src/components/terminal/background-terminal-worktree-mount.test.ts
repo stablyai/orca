@@ -1,11 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  COLD_ACTIVATION_TAB_DEFER_THRESHOLD,
   addBackgroundMountedTerminalWorktree,
   applyBackgroundMountTabRestriction,
+  canDeferColdActivationTabsForHost,
+  collectDeferredMountTabIds,
   hasRequestedBackgroundTerminalWorktreeMount,
+  planColdActivationTabDeferral,
   pruneClosedBackgroundMountTabs,
   requestBackgroundTerminalWorktreeMount,
+  revealActivationDeferredTabs,
   subscribeBackgroundTerminalWorktreeMountRequests,
   takeAllPendingBackgroundTerminalWorktreeMounts,
   shouldMountBackgroundWorktreeTab
@@ -140,5 +145,185 @@ describe('pruneClosedBackgroundMountTabs', () => {
 
     expect(pruneClosedBackgroundMountTabs(restrictions, mounted, {})).toBe(false)
     expect(mounted).toEqual(new Set(['wt-visited', 'wt-whole']))
+  })
+
+  it('keeps an activation mounted when its last allowed tab closes before deferred tabs', () => {
+    const restrictions = new Map<string, ReadonlySet<string>>([['wt-1', new Set(['tab-visible'])]])
+    const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>([
+      ['wt-1', new Set(['tab-deferred', 'tab-closed'])]
+    ])
+    const mounted = new Set(['wt-1'])
+
+    expect(
+      pruneClosedBackgroundMountTabs(
+        restrictions,
+        mounted,
+        { 'wt-1': [{ id: 'tab-deferred' }] },
+        deferredMountTabIdsByWorktree
+      )
+    ).toBe(true)
+    expect(restrictions.get('wt-1')).toEqual(new Set())
+    expect(deferredMountTabIdsByWorktree.get('wt-1')).toEqual(new Set(['tab-deferred']))
+    expect(mounted.has('wt-1')).toBe(true)
+  })
+})
+
+describe('cold activation tab deferral', () => {
+  const tabIds = (count: number): string[] =>
+    Array.from({ length: count }, (_, index) => `tab-${index + 1}`)
+
+  it('enables deferral only for a positively resolved local execution host', () => {
+    expect(canDeferColdActivationTabsForHost({ executionHostId: 'local' })).toBe(true)
+    expect(canDeferColdActivationTabsForHost({ executionHostId: 'ssh:ssh-1' })).toBe(false)
+    expect(canDeferColdActivationTabsForHost({ executionHostId: 'runtime:runtime-1' })).toBe(false)
+    expect(canDeferColdActivationTabsForHost({ executionHostId: null })).toBe(false)
+  })
+
+  it('mounts everything at once when few tabs would defer', () => {
+    const restrictions = new Map<string, ReadonlySet<string>>([['wt-1', new Set(['tab-1'])]])
+    const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
+    const deferring = planColdActivationTabDeferral({
+      restrictions,
+      deferredMountTabIdsByWorktree,
+      worktreeId: 'wt-1',
+      allTabIds: tabIds(COLD_ACTIVATION_TAB_DEFER_THRESHOLD + 1),
+      isTabLive: () => false,
+      isTabDeferrable: () => true,
+      immediateTabIds: new Set(['tab-1'])
+    })
+    expect(deferring).toBe(false)
+    expect(restrictions.has('wt-1')).toBe(false)
+    expect(deferredMountTabIdsByWorktree.has('wt-1')).toBe(false)
+  })
+
+  it('restricts a cold activation with many tabs to the immediate set', () => {
+    const restrictions = new Map<string, ReadonlySet<string>>()
+    const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
+    const deferring = planColdActivationTabDeferral({
+      restrictions,
+      deferredMountTabIdsByWorktree,
+      worktreeId: 'wt-1',
+      allTabIds: tabIds(10),
+      isTabLive: () => false,
+      isTabDeferrable: () => true,
+      immediateTabIds: new Set(['tab-3'])
+    })
+    expect(deferring).toBe(true)
+    expect(restrictions.get('wt-1')).toEqual(new Set(['tab-3']))
+    expect(deferredMountTabIdsByWorktree.get('wt-1')).toEqual(
+      new Set(['tab-1', 'tab-2', 'tab-4', 'tab-5', 'tab-6', 'tab-7', 'tab-8', 'tab-9', 'tab-10'])
+    )
+  })
+
+  it('keeps live, previously allowed, and non-deferrable tabs mounted', () => {
+    const restrictions = new Map<string, ReadonlySet<string>>([['wt-1', new Set(['tab-2'])]])
+    const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
+    const deferring = planColdActivationTabDeferral({
+      restrictions,
+      deferredMountTabIdsByWorktree,
+      worktreeId: 'wt-1',
+      allTabIds: tabIds(12),
+      isTabLive: (tabId) => tabId === 'tab-5',
+      // Why: a tab parked byte watchers cannot cover must mount immediately.
+      isTabDeferrable: (tabId) => tabId !== 'tab-9',
+      immediateTabIds: new Set(['tab-1'])
+    })
+    expect(deferring).toBe(true)
+    expect(restrictions.get('wt-1')).toEqual(new Set(['tab-1', 'tab-2', 'tab-5', 'tab-9']))
+  })
+
+  it('does not defer when most tabs are already live', () => {
+    const restrictions = new Map<string, ReadonlySet<string>>()
+    const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
+    const deferring = planColdActivationTabDeferral({
+      restrictions,
+      deferredMountTabIdsByWorktree,
+      worktreeId: 'wt-1',
+      allTabIds: tabIds(10),
+      isTabLive: (tabId) => tabId !== 'tab-10',
+      isTabDeferrable: () => true,
+      immediateTabIds: new Set()
+    })
+    expect(deferring).toBe(false)
+    expect(restrictions.has('wt-1')).toBe(false)
+  })
+
+  it('reveals newly visible tabs and lifts the restriction once all are revealed', () => {
+    const restrictions = new Map<string, ReadonlySet<string>>([['wt-1', new Set(['tab-1'])]])
+    const allTabIds = tabIds(3)
+    const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>([
+      ['wt-1', new Set(['tab-2', 'tab-3'])]
+    ])
+
+    revealActivationDeferredTabs({
+      restrictions,
+      deferredMountTabIdsByWorktree,
+      worktreeId: 'wt-1',
+      allTabIds,
+      immediateTabIds: new Set(['tab-2'])
+    })
+    expect(restrictions.get('wt-1')).toEqual(new Set(['tab-1', 'tab-2']))
+    expect(deferredMountTabIdsByWorktree.get('wt-1')).toEqual(new Set(['tab-3']))
+
+    const unchanged = restrictions.get('wt-1')
+    revealActivationDeferredTabs({
+      restrictions,
+      deferredMountTabIdsByWorktree,
+      worktreeId: 'wt-1',
+      allTabIds,
+      immediateTabIds: new Set(['tab-2'])
+    })
+    expect(restrictions.get('wt-1')).toBe(unchanged)
+
+    revealActivationDeferredTabs({
+      restrictions,
+      deferredMountTabIdsByWorktree,
+      worktreeId: 'wt-1',
+      allTabIds,
+      immediateTabIds: new Set(['tab-3'])
+    })
+    expect(restrictions.has('wt-1')).toBe(false)
+    expect(deferredMountTabIdsByWorktree.has('wt-1')).toBe(false)
+  })
+
+  it('does not reveal a targeted background restriction as activation deferral', () => {
+    const restrictions = new Map<string, ReadonlySet<string>>([['wt-1', new Set(['tab-1'])]])
+    const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
+    revealActivationDeferredTabs({
+      restrictions,
+      deferredMountTabIdsByWorktree,
+      worktreeId: 'wt-1',
+      allTabIds: tabIds(3),
+      immediateTabIds: new Set(['tab-2'])
+    })
+    expect(restrictions.get('wt-1')).toEqual(new Set(['tab-1']))
+    expect(deferredMountTabIdsByWorktree.has('wt-1')).toBe(false)
+  })
+
+  it('hands a targeted wake from activation watcher ownership to its pane', () => {
+    const restrictions = new Map<string, ReadonlySet<string>>([['wt-1', new Set(['tab-1'])]])
+    const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>([
+      ['wt-1', new Set(['tab-2', 'tab-3'])]
+    ])
+    const mounted = new Set(['wt-1'])
+
+    applyBackgroundMountTabRestriction(restrictions, mounted, 'wt-1', ['tab-2'])
+    revealActivationDeferredTabs({
+      restrictions,
+      deferredMountTabIdsByWorktree,
+      worktreeId: 'wt-1',
+      allTabIds: tabIds(3),
+      immediateTabIds: new Set(['tab-2'])
+    })
+
+    expect(restrictions.get('wt-1')).toEqual(new Set(['tab-1', 'tab-2']))
+    expect(deferredMountTabIdsByWorktree.get('wt-1')).toEqual(new Set(['tab-3']))
+  })
+
+  it('collects the tabs a restriction keeps unmounted', () => {
+    expect(collectDeferredMountTabIds(null, tabIds(3))).toEqual(new Set())
+    expect(collectDeferredMountTabIds(new Set(['tab-2']), tabIds(3))).toEqual(
+      new Set(['tab-1', 'tab-3'])
+    )
   })
 })

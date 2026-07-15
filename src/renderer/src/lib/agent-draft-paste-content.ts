@@ -2,7 +2,8 @@ import type { GlobalSettings } from '../../../shared/types'
 import {
   BRACKETED_PASTE_END,
   BRACKETED_PASTE_START,
-  sanitizeTerminalPasteText
+  normalizeTerminalPasteLineEndings,
+  wrapTerminalBracketedPasteText
 } from '@/components/terminal-pane/terminal-bracketed-paste'
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-inspection'
 
@@ -16,46 +17,51 @@ const AGENT_DRAFT_PASTE_ESCAPE_CODE_POINT = 0x1b
 const AGENT_DRAFT_PASTE_INERT_ESCAPE_CODE_POINT = 0x241b
 const AGENT_DRAFT_PASTE_INERT_ESCAPE = '\u241b'
 
+export type AgentDraftPtyInputWriter = (data: string) => boolean | Promise<boolean>
+
 export async function sendAgentDraftPasteContent(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string,
-  content: string
+  content: string,
+  writePty?: AgentDraftPtyInputWriter
 ): Promise<boolean> {
   if (content.length > AGENT_DRAFT_PASTE_MAX_BYTES) {
     return false
   }
 
-  const directMeasurement = measureSanitizedUtf8ByteLength(content, {
+  const terminalContent = normalizeTerminalPasteLineEndings(content)
+  const directMeasurement = measureSanitizedUtf8ByteLength(terminalContent, {
     stopAfterBytes: AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES
   })
   if (!directMeasurement.exceededLimit) {
-    return await sendRuntimePtyInputVerified(
+    return await writeAgentDraftPtyInput(
       settings,
       ptyId,
-      [BRACKETED_PASTE_START, sanitizeTerminalPasteText(content), BRACKETED_PASTE_END].join('')
+      wrapTerminalBracketedPasteText(terminalContent),
+      writePty
     )
   }
 
   // Why: generated prompts can be paste-sized; yield during accepted-size
   // preflight before starting any PTY writes so the renderer is not pinned.
-  if (await isSanitizedDraftPasteOverLimit(content, AGENT_DRAFT_PASTE_MAX_BYTES)) {
+  if (await isSanitizedDraftPasteOverLimit(terminalContent, AGENT_DRAFT_PASTE_MAX_BYTES)) {
     return false
   }
 
   let bracketedPasteOpen = false
-  for (const chunk of iterateAgentDraftPasteContentChunks(content)) {
+  for (const chunk of iterateAgentDraftPasteContentChunks(terminalContent)) {
     let accepted = false
     try {
-      accepted = await sendRuntimePtyInputVerified(settings, ptyId, chunk)
+      accepted = await writeAgentDraftPtyInput(settings, ptyId, chunk, writePty)
     } catch {
       if (bracketedPasteOpen && chunk !== BRACKETED_PASTE_END) {
-        await closeAgentDraftBracketedPaste(settings, ptyId)
+        await closeAgentDraftBracketedPaste(settings, ptyId, writePty)
       }
       return false
     }
     if (!accepted) {
       if (bracketedPasteOpen && chunk !== BRACKETED_PASTE_END) {
-        await closeAgentDraftBracketedPaste(settings, ptyId)
+        await closeAgentDraftBracketedPaste(settings, ptyId, writePty)
       }
       return false
     }
@@ -81,16 +87,19 @@ export function* iterateAgentDraftPasteContentChunks(
 ): Generator<string> {
   const safeMaxChunkBytes = Math.max(4, maxChunkBytes)
   yield BRACKETED_PASTE_START
+  // Why: normalize the complete draft before chunking so a CRLF pair cannot
+  // straddle chunks and leak its LF half to a Windows ConPTY agent.
+  const terminalContent = normalizeTerminalPasteLineEndings(content)
   let chunk = ''
   let chunkBytes = 0
 
-  for (let index = 0; index < content.length; index += 1) {
-    const codePoint = content.codePointAt(index) ?? 0
+  for (let index = 0; index < terminalContent.length; index += 1) {
+    const codePoint = terminalContent.codePointAt(index) ?? 0
     const codeUnitLength = codePoint > 0xffff ? 2 : 1
     const sanitizedEscape = codePoint === AGENT_DRAFT_PASTE_ESCAPE_CODE_POINT
     const sanitized = sanitizedEscape
       ? AGENT_DRAFT_PASTE_INERT_ESCAPE
-      : content.slice(index, index + codeUnitLength)
+      : terminalContent.slice(index, index + codeUnitLength)
     const characterBytes = getUtf8ByteLengthForCodePoint(
       sanitizedEscape ? AGENT_DRAFT_PASTE_INERT_ESCAPE_CODE_POINT : codePoint
     )
@@ -182,14 +191,24 @@ function yieldToAgentDraftPastePreflight(): Promise<void> {
   return new Promise((resolve) => globalThis.setTimeout(resolve, 0))
 }
 
+async function writeAgentDraftPtyInput(
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  ptyId: string,
+  data: string,
+  writePty?: AgentDraftPtyInputWriter
+): Promise<boolean> {
+  return writePty ? await writePty(data) : await sendRuntimePtyInputVerified(settings, ptyId, data)
+}
+
 async function closeAgentDraftBracketedPaste(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
-  ptyId: string
+  ptyId: string,
+  writePty?: AgentDraftPtyInputWriter
 ): Promise<void> {
   try {
     // Why: once the opener reached the PTY, a failed content chunk should not
     // leave the target TUI in bracketed-paste mode.
-    await sendRuntimePtyInputVerified(settings, ptyId, BRACKETED_PASTE_END)
+    await writeAgentDraftPtyInput(settings, ptyId, BRACKETED_PASTE_END, writePty)
   } catch {
     // The original write already failed; callers only need the paste to fail closed.
   }

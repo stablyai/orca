@@ -73,6 +73,7 @@
     "matchLabel": {
       "comment": "댓글",
       "issue": "이슈",
+      "mr": "MR",
       "port": "포트",
       "pr": "PR"
     }
@@ -458,6 +459,13 @@
               "all": "아직 댓글이 없습니다."
             }
           }
+        },
+        "bot": {
+          "author": {
+            "overrides": {
+              "6d5d52b53f": "봇 작성자 재정의 한도에 도달했습니다"
+            }
+          }
         }
       },
       "resume": {
@@ -691,7 +699,8 @@
         "devSearchKeywordToast": "toast",
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
-        "devSearchKeywordNotification": "notification"
+        "devSearchKeywordNotification": "notification",
+        "projectHostsSummary": "호스트 {{value0}}개"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "붙여넣기 내용이 너무 큽니다."
@@ -722,6 +731,8 @@
       "GitHubItemDialog": {
         "3ab6ac0fc8": "선택한 GitHub 이슈 또는 PR을 미리보기하고 편집합니다.",
         "3cd5ae5b7b": "변경된 파일이 없습니다.",
+        "filesUnavailable": "변경된 파일을 불러올 수 없습니다.",
+        "filesRetry": "재시도",
         "999b5ad7d9": "파일",
         "4bd1f5b055": "체크",
         "e30a5470c9": "대화",
@@ -1385,7 +1396,9 @@
         "1ff5d979df": "할당된 사람이 없음",
         "checkActionRequiredHint": "머지가 해제되려면 이 검사에 대해 GitHub에서 수동 작업(예: 워크플로우 실행 승인)이 필요합니다.",
         "dd5d9a4f17": "{{value0}}에 업데이트됨",
-        "71a3c0f9d2": "워크스페이스 시작"
+        "71a3c0f9d2": "워크스페이스 시작",
+        "filesUnavailable": "Couldn't load changed files.",
+        "filesRetry": "Retry"
       },
       "QuickOpen": {
         "1dbd3f59ff": "이동",
@@ -2366,7 +2379,9 @@
             "failed": "삭제되지 않은 워크스페이스: {{value0}}",
             "error": "워크스페이스 정리 실패",
             "skippedAncestor": "중첩된 워크스페이스를 제거할 수 없어 건너뛰었습니다.",
-            "timedOut": "{{value0}} 제거가 예상보다 오래 걸리고 있습니다. 백그라운드에서 계속 실행됩니다."
+            "timedOut": "{{value0}} 제거가 예상보다 오래 걸리고 있습니다. 백그라운드에서 계속 실행됩니다.",
+            "stillRemoving": "Still removing workspaces: {{value0}}",
+            "skippedPendingAncestor": "Skipped because a nested workspace has not finished removing."
           },
           "candidateRow": {
             "gitLabel": "Git",
@@ -2579,7 +2594,7 @@
               "blocked": {
                 "toast": {
                   "97c98f1afe": "설정 열기",
-                  "7cf51f74fd": "SSH, tmux, Neovim 또는 fzf에서 복사하려면 Terminal 설정에서 TUI 클립보드 쓰기를 활성화하세요.",
+                  "7cf51f74fd": "SSH, tmux, Neovim, fzf 또는 Grok에서 복사하려면 Terminal 설정에서 TUI 클립보드 쓰기를 활성화하세요.",
                   "89eaa3e80b": "Terminal 클립보드 쓰기가 차단되었습니다."
                 }
               }
@@ -2874,6 +2889,9 @@
           },
           "TerminalTabSplitMenuSection": {
             "splitTerminal": "터미널 분할"
+          },
+          "TerminalTabLeadingIcon": {
+            "7ab2964bea": "읽지 않은 에이전트 완료"
           }
         }
       },
@@ -3209,6 +3227,17 @@
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH 호스트"
+          },
+          "usagePercentageLabel": {
+            "used": "{{value0}}% 사용",
+            "remaining": "{{value0}}% 남음"
+          },
+          "UsagePercentageDisplayChangeNotice": {
+            "title": "Usage now shows % used",
+            "body": "Prefer remaining? Change it in Settings.",
+            "dismiss": "Dismiss",
+            "openSettings": "Open Settings",
+            "gotIt": "Got it"
           }
         }
       },
@@ -5422,7 +5451,9 @@
           "bf16ef0af2": "끄다",
           "3f6892f307": "~에",
           "b82f86d7d2": "Rich Markdown Spellcheck",
-          "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown."
+          "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown.",
+          "7ddd66fede": "편집기 자동 줄 바꿈",
+          "9b18de6eea": "가로 스크롤 대신 파일 편집기에서 긴 줄을 자동으로 줄 바꿈합니다."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "로컬호스트, 127.0.0.1, *.internal",
@@ -6105,7 +6136,7 @@
           "26fef02bf3": "프로젝트 아이콘",
           "c7ef4415de": "표시 이름",
           "b0a0c14a1c": "사이드바 및 탭에 대한 프로젝트별 표시 세부 정보입니다.",
-          "170624bdfb": "Orca에서 이 프로젝트를 제거하세요.",
+          "removeProjectAllHosts": "구성된 모든 호스트의 Orca에서 이 프로젝트를 제거합니다.",
           "0909e5d650": "프로젝트 제거",
           "ee5a290616": "폴더로 열렸습니다. 이 워크스페이스에서는 Git 기능을 사용할 수 없습니다.",
           "323debba71": "유형:",
@@ -6772,9 +6803,9 @@
           "348246b06f": "false",
           "5936387ddd": "자동",
           "adbafefe56": "custom",
-          "16753eea48": "Windows에서는 마우스 오른쪽 버튼을 클릭하여 클립보드를 붙여넣습니다. Ctrl+마우스 오른쪽 버튼을 클릭하면 컨텍스트 메뉴가 열립니다.",
+          "16753eea48": "마우스 오른쪽 버튼을 클릭하여 클립보드를 붙여넣습니다. Ctrl+마우스 오른쪽 버튼을 클릭하면 컨텍스트 메뉴가 열립니다.",
           "9c178cf8aa": "붙여넣으려면 마우스 오른쪽 버튼을 클릭하세요.",
-          "af0c3b6e39": "Windows에서는 마우스 오른쪽 버튼을 클릭하여 클립보드를 terminal에 붙여넣습니다. 컨텍스트 메뉴를 열려면 Ctrl+오른쪽 클릭을 사용하세요.",
+          "af0c3b6e39": "마우스 오른쪽 버튼을 클릭하여 클립보드를 terminal에 붙여넣습니다. 컨텍스트 메뉴를 열려면 Ctrl+오른쪽 클릭을 사용하세요.",
           "29154326bb": "켜기",
           "ab20575a8a": "끄기",
           "ab3a1f9068": "wsl.exe",
@@ -7246,7 +7277,9 @@
             "f8e2a1c4b6": "Grok 사용량",
             "e7d1b0f3a5": "Grok CLI OAuth에서 Grok 주간 크레딧 사용량을 표시합니다.",
             "d6c0a9e2f4": "grok",
-            "c5b9f8d1e3": "xai"
+            "c5b9f8d1e3": "xai",
+            "usagePercentageDisplayTitle": "사용량 백분율",
+            "usagePercentageDisplayDescription": "공급자 한도를 사용한 비율 또는 남은 비율로 표시할지 선택합니다."
           }
         },
         "auto": {
@@ -7698,7 +7731,9 @@
             "defaultProjectRuntime": "기본 프로젝트 런타임",
             "defaultProjectRuntimeDescription": "로컬 Windows 프로젝트가 상속할 런타임을 선택합니다.",
             "d2d2d929c0": "Rich Markdown Spellcheck",
-            "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown."
+            "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown.",
+            "e61157e926": "편집기 자동 줄 바꿈",
+            "005be5c699": "가로 스크롤 대신 파일 편집기에서 긴 줄을 자동으로 줄 바꿈합니다."
           }
         },
         "git": {
@@ -8498,7 +8533,7 @@
               "e55186fe2b": "오른쪽 클릭",
               "28ff08ed35": "창",
               "e7d2793b03": "터미널",
-              "8ba875c132": "Windows에서는 마우스 오른쪽 버튼을 클릭하여 클립보드를 terminal에 붙여넣습니다. 컨텍스트 메뉴를 열려면 Ctrl+오른쪽 클릭을 사용하세요.",
+              "8ba875c132": "마우스 오른쪽 버튼을 클릭하여 클립보드를 terminal에 붙여넣습니다. 컨텍스트 메뉴를 열려면 Ctrl+오른쪽 클릭을 사용하세요.",
               "f0b8448570": "붙여넣으려면 마우스 오른쪽 버튼을 클릭하세요.",
               "04994f6929": "기본값",
               "fc564eadaf": "데비안",
@@ -9053,7 +9088,67 @@
           "3325d996cb": "사용량 새로 고침",
           "a8f3e2c1b4": "주간 크레딧",
           "b7e2d9f0a3": "터미널의 grok /usage 화면과 같은 주간 크레딧 비율입니다.",
-          "c6d1a8f4e2": "{{when}}에 재설정"
+          "c6d1a8f4e2": "{{when}}에 재설정",
+          "e6dadc1e2b": "Monthly usage",
+          "75e396bf42": "Included monthly usage for Grok unified-billing accounts."
+        },
+        "AppearanceWindowSidebarSection": {
+          "usagePercentageDisplayUsed": "사용",
+          "usagePercentageDisplayRemaining": "남음"
+        },
+        "TerminalInteractionSection": {
+          "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
+          "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
+        },
+        "MobileRelayStatusSection": {
+          "registered": "Registered",
+          "connecting": "Connecting",
+          "reconnecting": "Reconnecting",
+          "offline": "Offline",
+          "title": "Orca Relay",
+          "automatic": "Connect from anywhere when a phone is paired",
+          "signInPrompt": "Sign in on this desktop to connect from anywhere",
+          "directStillAvailable": "LAN and Tailscale connections remain available.",
+          "directNeedsNoAccount": "LAN and Tailscale pairing still work without an account.",
+          "signIn": "Sign in",
+          "unavailable": "Unavailable",
+          "standby": "Standby — no relay devices"
+        },
+        "MobilePairingConnectionOptions": {
+          "ready": "준비됨",
+          "connecting": "연결 중",
+          "available": "사용 가능",
+          "reconnecting": "다시 연결 중",
+          "unavailable": "사용할 수 없음",
+          "title": "새 휴대폰을 어떻게 연결할까요?",
+          "anywhere": "Orca Relay로 연결",
+          "recommended": "권장",
+          "automaticDescription": "가능하면 직접 연결하고, 그렇지 않으면 Orca Relay를 사용합니다.",
+          "signInDescription": "Orca Relay를 사용하려면 이 데스크톱에서 로그인하세요.",
+          "signIn": "로그인",
+          "localOnly": "로컬 네트워크만",
+          "localShort": "LAN 또는 Tailscale",
+          "localDescription": "이 휴대폰을 Orca Relay에 연결하지 않고 LAN 또는 Tailscale을 사용합니다."
+        },
+        "MobilePairingSetupSection": {
+          "title": "휴대폰 페어링",
+          "automaticDescription": "페어링 코드에는 직접 연결과 암호화된 Orca Relay 대체 연결이 포함됩니다.",
+          "localDescription": "페어링 코드는 아래의 로컬 네트워크 주소로만 연결합니다.",
+          "regenerate": "다시 생성",
+          "generate": "QR 코드 생성",
+          "localSettings": "로컬 연결 설정",
+          "localAddressDescription": "Orca Mobile에서 이 컴퓨터에 직접 연결할 수 있는 LAN 또는 사설 네트워크 주소를 선택하세요.",
+          "refresh": "네트워크 인터페이스 새로 고침",
+          "tailnet": "내 tailnet으로 연결",
+          "tailnetDescription": "이 컴퓨터와 휴대폰에 Tailscale을 설치하고 같은 tailnet에 로그인한 다음 위에서 100.x.y.z 주소를 선택하세요.",
+          "getTailscale": "Tailscale 받기"
+        },
+        "MobileRelayBetaAvailability": {
+          "about": "Orca Relay 베타 정보",
+          "beta": "베타",
+          "availability": "이용 가능:",
+          "testFlight": "TestFlight",
+          "androidApk": "Android APK"
         }
       },
       "right": {
@@ -9688,7 +9783,9 @@
                 "b13f85d75c": "타임라인",
                 "f5cf324efa": "Comment display options",
                 "5e6e5a13fa": "보기",
-                "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
+                "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
+                "b3195cba33": "작성자의 봇 지정 해제",
+                "f588b46a6c": "작성자를 봇으로 지정"
               },
               "empty": {
                 "state": {
@@ -9921,7 +10018,11 @@
             "92276aceb7": "삭제",
             "7fb9435c86": "원격 호스트의 디렉터리와 그 안의 내용을 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다.",
             "23e98f192f": "원격 호스트의 파일을 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다.",
-            "8b8ee9d22f": "이 파일을 소유한 호스트를 확인할 수 없습니다. 워크스페이스 연결을 확인한 후 다시 시도하세요."
+            "8b8ee9d22f": "이 파일을 소유한 호스트를 확인할 수 없습니다. 워크스페이스 연결을 확인한 후 다시 시도하세요.",
+            "af1270b90d": "{{count}}개 항목을 영구적으로 삭제하시겠습니까?",
+            "dd029aa5cd": "원격 호스트의 선택한 항목과 디렉터리 내용을 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다.",
+            "77fdc36183": "Delete {{count}} items?",
+            "fca915a67a": "Remote items are permanently deleted and cannot be undone. Local items move to the {{value0}}."
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "심볼릭 링크 대상을 열 수 없습니다"
@@ -10659,6 +10760,17 @@
           "trigger-label": "알릴 네트워크 주소",
           "custom-option": "{{address}} (사용자 지정)",
           "add-custom": "사용자 지정 주소 추가…"
+        },
+        "WindowsFirewallNotice": {
+          "repair-success": "Windows Firewall now allows Orca Mobile on private networks",
+          "repair-failed": "Could not add the Windows Firewall rule",
+          "public-title": "Windows marks this network as public",
+          "missing-title": "Allow phone connections through Windows Firewall",
+          "public-description": "Change this trusted Wi-Fi network to Private before allowing Orca Mobile connections.",
+          "missing-description": "Windows may block the pairing server. Add a rule for this Orca app and TCP port {{port}} on Private networks.",
+          "open-settings": "Open network settings",
+          "waiting": "Waiting for Windows…",
+          "allow": "Allow phone connections"
         }
       },
       "gitlab": {
@@ -11456,7 +11568,9 @@
           "c98ce191da": "이 차이점에는 열 수 있는 수정된 측면 파일이 없습니다.",
           "9b80bbe1de": "파일 탭 열기",
           "f0fd4174b5": "풍부한 markdown 편집을 사용하려면 파일 탭을 엽니다.",
-          "a10d9b8337": "파일 열기"
+          "a10d9b8337": "파일 열기",
+          "2076ecfc9c": "이전 변경",
+          "631dab0df3": "다음 변경"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "PDF로 내보내기",
@@ -11655,7 +11769,8 @@
           "1c99b726e0": "링크 삭제",
           "cdfe166f6f": "링크 수정",
           "bfc813e909": "링크 열기",
-          "7b0b945fdc": "링크를 붙여넣거나 입력하세요…"
+          "7b0b945fdc": "링크를 붙여넣거나 입력하세요…",
+          "copyLink": "링크 복사"
         },
         "RichMarkdownReviewNoteLayer": {
           "f3ef92952b": "이 메모",
@@ -11682,7 +11797,8 @@
           "68d090241d": "전체 단어 일치",
           "fd97c7e585": "바꾸기",
           "44682b4159": "리치 markdown 편집기에서 바꾸기",
-          "c2884f5e95": "모두 바꾸기"
+          "c2884f5e95": "모두 바꾸기",
+          "preservedRichContentReadOnly": "보존된 리치 콘텐츠는 리치 모드에서 읽기 전용입니다."
         },
         "RichMarkdownSlashMenu": {
           "82c6816ff8": "블록을 찾을 수 없습니다.",
@@ -11899,6 +12015,24 @@
           "3fa2b8d417": "디스크에서 다시 로드",
           "a95d02c644": "편집 내용 유지",
           "2c8f1e07b9": "비교 로딩 중..."
+        },
+        "RichMarkdownEditor": {
+          "citationLinkAvailable": "{{value0}}, {{value1}} 링크. Enter 키로 열거나 Tab 키로 링크 작업으로 이동하세요.",
+          "citationFallbackLabel": "인용",
+          "citationLinkUnavailable": "{{value0}}, 인용 링크를 사용할 수 없습니다. {{value1}}",
+          "tabForCitationActions": "Tab 키로 사용 가능한 작업으로 이동하세요.",
+          "noCitationActions": "사용 가능한 링크 작업이 없습니다."
+        },
+        "richMarkdownHtmlSuperscriptLink": {
+          "availableAriaLabel": "{{value0}}, {{value1}} 링크",
+          "unavailableAriaLabel": "{{value0}}, 인용 링크를 사용할 수 없음"
+        },
+        "richMarkdownLinkClipboard": {
+          "copiedLink": "링크를 복사했습니다",
+          "copyLinkFailed": "링크를 복사하지 못했습니다"
+        },
+        "richMarkdownSourceOwningCutFeedback": {
+          "selectLessContent": "보존된 HTML 인용을 잘라내려면 더 적은 콘텐츠를 선택하거나 코드 모드를 사용하세요."
         }
       },
       "diff": {
@@ -12769,7 +12903,7 @@
         "profiles": {
           "switcher": {
             "cloud": {
-              "unavailable": "클라우드 로그인 사용 불가"
+              "unavailable": "Orca 로그인 사용 불가"
             },
             "reconnect": "프로필 다시 연결",
             "connect": "프로필 연결",
@@ -12793,7 +12927,14 @@
             "account": "계정",
             "org": {
               "members": "조직 구성원"
-            }
+            },
+            "signInWaiting": "로그인 대기 중…",
+            "signInAgain": "다시 로그인",
+            "signIn": "Orca에 로그인",
+            "accountTitle": "Orca 계정",
+            "accountSignedIn": "로그인됨",
+            "accountSignInRequired": "로그인 필요",
+            "accountSignedOut": "로그아웃됨"
           },
           "management": {
             "04e7bd2a23": "전송",
@@ -12836,8 +12977,8 @@
           },
           "signout": {
             "confirm": {
-              "title": "로그아웃하시겠습니까?",
-              "description": "{{profileName}}에서 로그아웃하고 프로젝트, 워크트리 및 로컬 메타데이터를 이 장치에 유지합니다.",
+              "title": "Orca에서 로그아웃할까요?",
+              "description": "이 기기의 Orca에서 로그아웃됩니다. 로컬 프로젝트와 워크트리에는 영향을 주지 않습니다.",
               "cancel": "취소",
               "action": "로그아웃"
             }
@@ -12939,6 +13080,37 @@
         "searchLabels": "레이블 필터…",
         "searchAssignee": "담당자 필터…",
         "back": "뒤로"
+      },
+      "browser-pane": {
+        "markup": {
+          "cancel": "취소",
+          "clear": "모두 지우기",
+          "copiedToast": "마크업을 복사했습니다 — 에이전트에 붙여넣으세요 ({{value0}})",
+          "copy": "마크업 복사",
+          "drawButton": "스크린샷에 그리기",
+          "drawHint": "페이지에 그린 다음 마크업을 복사해 에이전트에 붙여넣으세요.",
+          "drawHintBadge": "새 기능",
+          "drawHintDismiss": "확인",
+          "drawHintTry": "사용해 보기",
+          "errorAttach": "마크업 스크린샷을 첨부하지 못했습니다.",
+          "errorCapture": "그릴 페이지를 캡처하지 못했습니다.",
+          "errorUnavailable": "이 페이지에서는 스크린샷 마크업을 사용할 수 없습니다.",
+          "fontSize": "글자 크기",
+          "hint": "페이지에 그린 다음 마크업을 복사해 에이전트에 붙여넣으세요.",
+          "redo": "다시 실행",
+          "style": "색상 및 두께",
+          "textInput": "주석 텍스트",
+          "tool": {
+            "arrow": "화살표",
+            "ellipse": "타원",
+            "highlight": "형광펜",
+            "pen": "펜",
+            "rect": "사각형",
+            "text": "텍스트"
+          },
+          "undo": "실행 취소",
+          "widthOption": "{{value0}} px"
+        }
       }
     },
     "i18n": {
@@ -13020,7 +13192,8 @@
         "otherPlaceholder": "답변을 입력하세요",
         "cancel": "취소",
         "send": "답변 보내기",
-        "next": "다음"
+        "next": "다음",
+        "skip": "건너뛰기"
       },
       "approval": {
         "title": "{{value0}}을(를) 허용하시겠습니까?",

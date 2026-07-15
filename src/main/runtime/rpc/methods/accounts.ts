@@ -92,11 +92,11 @@ export const ACCOUNT_METHODS: readonly RpcAnyMethod[] = [
         )
 
         // Why: emit the current snapshot synchronously so the phone has
-        // something to render immediately, then kick a forced refresh that
-        // will broadcast a fresh snapshot through the listener once each
-        // provider fetch completes.
+        // something to render immediately, then refresh only stale data.
+        // Connection cutovers replay this subscription and must not turn the
+        // manual-force lane into an unbounded provider-fetch loop.
         emit({ type: 'ready', subscriptionId, snapshot: runtime.getAccountsSnapshot() })
-        void runtime.refreshAccountsForMobile()
+        void runtime.refreshAccountsForMobileSubscriber()
       })
     }
   }),

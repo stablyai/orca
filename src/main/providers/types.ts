@@ -117,6 +117,12 @@ export type PtySpawnResult = {
    *  writing the snapshot so ANSI cursor positions land correctly. */
   snapshotCols?: number
   snapshotRows?: number
+  /** Provider sequence at the attach boundary. `reset` starts a new provider
+   *  generation; `continued` resumes the existing absolute domain. */
+  providerSequence?: {
+    value: number
+    generation: 'continued' | 'reset'
+  }
   /** Kitty keyboard flags persisted in the daemon snapshot, threaded so the
    *  re-seeded runtime emulator answers hidden `CSI ? u` with the real flags
    *  (terminal-query-authority.md §kitty). Never replayed into a renderer
@@ -154,6 +160,8 @@ export type PtyProcessInfo = {
 
 export type IPtyProvider = {
   spawn(opts: PtySpawnOptions): Promise<PtySpawnResult>
+  /** Whether this spawn target can append the Git guard after its final env merge. */
+  supportsGitCredentialGuardHost?: (sessionId?: string) => boolean
   attach(id: string): Promise<void>
   hasPty?: (id: string) => boolean
   write(id: string, data: string): void
@@ -250,6 +258,7 @@ export type IFilesystemProvider = {
     options: TerminalArtifactAccessOptions
   ): Promise<FileReadResult>
   downloadFile?(sourcePath: string, destinationPath: string): Promise<void>
+  openFileUploadSession?(): Promise<FileUploadSession>
   getTempDir?(): Promise<string>
   writeFile(filePath: string, content: string): Promise<void>
   writeTerminalArtifact?(
@@ -278,7 +287,20 @@ export type IFilesystemProvider = {
     rootPath: string,
     options?: { signal?: AbortSignal }
   ): Promise<WorkspaceSpaceDirectoryScanResult>
-  watch(rootPath: string, callback: (events: FsChangeEvent[]) => void): Promise<() => void>
+  watch(
+    rootPath: string,
+    callback: (events: FsChangeEvent[]) => void,
+    options?: { signal?: AbortSignal }
+  ): Promise<() => void>
+}
+
+export type FileUploadSession = {
+  uploadFile(
+    sourcePath: string,
+    destinationPath: string,
+    options?: { exclusive?: boolean }
+  ): Promise<void>
+  close(): void
 }
 
 export type TerminalArtifactAccessOptions = {

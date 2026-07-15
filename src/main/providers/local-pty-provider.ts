@@ -15,7 +15,7 @@ import { resolveProcessCwd } from './process-cwd'
 import { existsSync } from 'node:fs'
 import * as pty from 'node-pty'
 import { parseWslPath, isWslAvailable } from '../wsl'
-import { splitWorktreeId } from '../../shared/worktree-id'
+import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
 import {
   injectHistoryEnv,
   updateHistFileForFallback,
@@ -58,6 +58,7 @@ import { readWindowsConptyProcessIds } from './windows-conpty-process-membership
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from './pty-default-cwd'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
+import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -154,7 +155,11 @@ function runPtyCleanup(id: string): void {
 function getWslContextFromWorktreeId(
   worktreeId: string | undefined
 ): { distro: string; treatPosixCwdAsWsl: true } | undefined {
-  const worktreePath = worktreeId ? splitWorktreeId(worktreeId)?.worktreePath : undefined
+  // Why: strip any synthetic `::workspace:<uuid>` folder-workspace suffix so WSL
+  // detection parses the real path, not a nonexistent identifier.
+  const worktreePath = worktreeId
+    ? splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
+    : undefined
   const wslInfo = worktreePath ? parseWslPath(worktreePath) : null
   return wslInfo ? { distro: wslInfo.distro, treatPosixCwdAsWsl: true } : undefined
 }
@@ -292,7 +297,13 @@ export type LocalPtyProviderOptions = {
   buildSpawnEnv?: (
     id: string,
     baseEnv: Record<string, string>,
-    ctx?: { command?: string; shellPath?: string; isWsl?: boolean; wslDistro?: string | null }
+    ctx?: {
+      command?: string
+      launchAgent?: PtySpawnOptions['launchAgent']
+      shellPath?: string
+      isWsl?: boolean
+      wslDistro?: string | null
+    }
   ) => Record<string, string>
   /** Whether worktree-scoped shell history is enabled. When true (or absent)
    *  and a worktreeId is provided, HISTFILE is scoped per-worktree. */
@@ -465,8 +476,7 @@ export class LocalPtyProvider implements IPtyProvider {
     validateWorkingDirectory(validationCwd)
 
     const spawnEnv: Record<string, string> = {
-      ...process.env,
-      ...args.env,
+      ...mergeGitConfigEnvProtocol(process.env, args.env),
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor',
       TERM_PROGRAM: 'Orca',
@@ -518,6 +528,7 @@ export class LocalPtyProvider implements IPtyProvider {
     const finalEnv = this.opts.buildSpawnEnv
       ? this.opts.buildSpawnEnv(id, spawnEnv, {
           command: args.command,
+          launchAgent: args.launchAgent,
           shellPath,
           isWsl: isWslShell,
           wslDistro: launchWslDistro

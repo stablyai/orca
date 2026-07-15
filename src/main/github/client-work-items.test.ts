@@ -189,7 +189,9 @@ describe('listWorkItems', () => {
         '--repo',
         'acme/widgets',
         '--assignee',
-        '@me'
+        '@me',
+        '--search',
+        'sort:updated-desc'
       ],
       { cwd: '/repo-root' }
     )
@@ -205,7 +207,9 @@ describe('listWorkItems', () => {
         '--repo',
         'acme/widgets',
         '--assignee',
-        '@me'
+        '@me',
+        '--search',
+        'sort:updated-desc'
       ],
       { cwd: '/repo-root' }
     )
@@ -406,7 +410,9 @@ describe('listWorkItems', () => {
         'acme/widgets',
         '--state',
         'open',
-        '--draft'
+        '--draft',
+        '--search',
+        'sort:updated-desc'
       ],
       { cwd: '/repo-root' }
     )
@@ -464,7 +470,9 @@ describe('listWorkItems', () => {
         '--repo',
         'acme/widgets',
         '--state',
-        'merged'
+        'merged',
+        '--search',
+        'sort:updated-desc'
       ],
       { cwd: '/repo-root' }
     )
@@ -528,7 +536,7 @@ describe('listWorkItems', () => {
     const { items } = await listWorkItems('/repo-root', 10, 'is:pr is:closed')
 
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      expect.arrayContaining(['--state', 'closed', '--search', '-is:merged']),
+      expect.arrayContaining(['--state', 'closed', '--search', '-is:merged sort:updated-desc']),
       { cwd: '/repo-root' }
     )
     expect(items).toMatchObject([{ id: 'pr:9', type: 'pr', state: 'closed' }])
@@ -597,12 +605,40 @@ describe('listWorkItems', () => {
 
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      expect.arrayContaining(['--search', 'review-requested:@me']),
+      expect.arrayContaining(['--search', 'review-requested:@me sort:updated-desc']),
       { cwd: '/repo-root' }
     )
     expect(ghExecFileAsyncMock).not.toHaveBeenCalledWith(
       expect.arrayContaining(['--review-requested']),
       expect.anything()
+    )
+  })
+
+  it('pins list ordering to updated-desc so the updatedAt cursor pages consistently', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+
+    await listWorkItems('/repo-root', 10, 'is:issue is:open')
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      expect.arrayContaining(['--search', 'sort:updated-desc']),
+      { cwd: '/repo-root' }
+    )
+  })
+
+  it('combines the inclusive updatedAt cursor with updated-desc ordering on later pages', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+
+    await listWorkItems('/repo-root', 10, 'is:issue is:open', '2026-07-01T00:00:00Z')
+
+    // Why: the bound is inclusive (`<=`) so boundary items sharing the cursor's
+    // exact updatedAt aren't skipped; the renderer dedupes the re-fetched rows.
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      expect.arrayContaining(['--search', 'updated:<=2026-07-01T00:00:00Z sort:updated-desc']),
+      { cwd: '/repo-root' }
     )
   })
 
@@ -652,7 +688,9 @@ describe('listWorkItems', () => {
         '--repo',
         'acme/widgets',
         '--state',
-        'open'
+        'open',
+        '--search',
+        'sort:updated-desc'
       ],
       { cwd: '/repo-root' }
     )
@@ -667,7 +705,9 @@ describe('listWorkItems', () => {
         '--repo',
         'acme/widgets',
         '--state',
-        'open'
+        'open',
+        '--search',
+        'sort:updated-desc'
       ],
       { cwd: '/repo-root' }
     )

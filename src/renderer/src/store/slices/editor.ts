@@ -10,7 +10,8 @@ import {
   getCheckRunDetailsTabLabel,
   type OpenCheckRunDetailsState
 } from '@/components/editor/check-run-details-tab'
-import { openHttpLink } from '@/lib/http-link-routing'
+import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { detectLanguage } from '@/lib/language-detect'
 import type {
@@ -62,7 +63,7 @@ import {
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
 import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
   addAdditionalValidWorkspaceKeys,
   type WorkspaceSessionHydrationOptions
@@ -334,9 +335,11 @@ function resolveDiffRuntimeEnvironmentId(
   if (explicitRuntimeEnvironmentId !== undefined) {
     return explicitRuntimeEnvironmentId
   }
-  // Why: Source Control callers often know only the worktree. Runtime-host
-  // diffs still need their owner stamped so content loads through runtime RPC.
-  return getRuntimeEnvironmentIdForWorktree(state, worktreeId) ?? undefined
+  // Why: route diffs by the worktree's EXPLICIT owner (#6957); owner-less/local
+  // resolves to null so the read is forced LOCAL. undefined would instead
+  // inherit the focused runtime in settingsForRuntimeOwner and read the diff
+  // from the wrong host — the exact bug in #8484.
+  return getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId) ?? null
 }
 
 export type PendingEditorReveal = {
@@ -500,6 +503,7 @@ export type EditorSlice = {
       worktreeId: string
       worktreeRoot: string | null
       runtimeEnvironmentId?: string | null
+      sourceOwner?: HttpLinkSourceOwner
     }
   ) => Promise<void>
   openMarkdownPreview: (
@@ -1335,13 +1339,6 @@ function shouldDeleteUntouchedUntitledFile(file: OpenFile | undefined, hasDraft:
   )
 }
 
-function getWorktreeConnectionId(state: AppState, worktreeId: string): string | undefined {
-  const worktree = findWorktreeById(state.worktreesByRepo ?? {}, worktreeId)
-  const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
-  const repo = (state.repos ?? []).find((candidate) => candidate.id === repoId)
-  return repo?.connectionId ?? undefined
-}
-
 export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (set, get) => ({
   editorDrafts: {},
   setEditorDraft: (fileId, content) =>
@@ -1410,11 +1407,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   markdownFrontmatterVisible: {},
   setMarkdownFrontmatterVisible: (fileId, visible) =>
     set((s) => {
-      // Why: default is hidden. Writing `false` explicitly when no entry exists
-      // would grow the record unnecessarily; delete instead so the shape stays
-      // minimal and hydration round-trips cleanly — same trade-off as
-      // setEditorViewMode above.
-      if (!visible) {
+      // Why: default is visible. Writing `true` explicitly when no entry exists
+      // would grow the record unnecessarily; delete instead so the map only
+      // carries hide overrides and hydration round-trips cleanly — same
+      // trade-off as setEditorViewMode above.
+      if (visible) {
         if (!(fileId in s.markdownFrontmatterVisible)) {
           return s
         }
@@ -1422,7 +1419,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         delete next[fileId]
         return { markdownFrontmatterVisible: next }
       }
-      return { markdownFrontmatterVisible: { ...s.markdownFrontmatterVisible, [fileId]: true } }
+      return { markdownFrontmatterVisible: { ...s.markdownFrontmatterVisible, [fileId]: false } }
     }),
 
   // Markdown table of contents visibility
@@ -4170,16 +4167,48 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   activateMarkdownLink: async (rawHref, ctx) => {
     const initialState = get()
+    let inferredRuntimeEnvironmentId: string | null | undefined
+    if (!ctx.sourceOwner && ctx.runtimeEnvironmentId === undefined) {
+      const inferredRuntimeOwners = new Set(
+        initialState.openFiles
+          .filter(
+            (file) => file.filePath === ctx.sourceFilePath && file.worktreeId === ctx.worktreeId
+          )
+          .map((file) => file.runtimeEnvironmentId?.trim() || null)
+      )
+      if (inferredRuntimeOwners.size > 1) {
+        return
+      }
+      inferredRuntimeEnvironmentId =
+        inferredRuntimeOwners.size === 1 ? [...inferredRuntimeOwners][0] : undefined
+    }
     const sourceRuntimeEnvironmentId =
-      ctx.runtimeEnvironmentId !== undefined
-        ? ctx.runtimeEnvironmentId
-        : initialState.openFiles.find((file) => file.filePath === ctx.sourceFilePath)
-            ?.runtimeEnvironmentId
-    const sourceSettings = settingsForRuntimeOwner(
-      initialState.settings,
-      sourceRuntimeEnvironmentId
-    )
-    const sourceConnectionId = getWorktreeConnectionId(initialState, ctx.worktreeId)
+      ctx.sourceOwner?.kind === 'runtime'
+        ? ctx.sourceOwner.runtimeEnvironmentId
+        : ctx.sourceOwner
+          ? null
+          : ctx.runtimeEnvironmentId !== undefined
+            ? ctx.runtimeEnvironmentId
+            : inferredRuntimeEnvironmentId
+    const runtimeOwnerId = sourceRuntimeEnvironmentId?.trim() || null
+    const sourceSettings = settingsForRuntimeOwner(initialState.settings, runtimeOwnerId)
+    const resolvedConnectionId =
+      ctx.sourceOwner || runtimeOwnerId
+        ? undefined
+        : getConnectionIdForFileFromState(initialState, ctx.worktreeId, ctx.sourceFilePath)
+    const sourceOwner: HttpLinkSourceOwner =
+      ctx.sourceOwner ??
+      (runtimeOwnerId
+        ? { kind: 'runtime', runtimeEnvironmentId: runtimeOwnerId }
+        : resolvedConnectionId === undefined
+          ? { kind: 'unknown' }
+          : resolvedConnectionId === null
+            ? { kind: 'local' }
+            : { kind: 'ssh', connectionId: resolvedConnectionId })
+    if (sourceOwner.kind === 'unknown') {
+      return
+    }
+    const sourceConnectionId = sourceOwner.kind === 'ssh' ? sourceOwner.connectionId : undefined
     const fileContext = {
       settings: sourceSettings,
       worktreeId: ctx.worktreeId,
@@ -4194,7 +4223,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return
     }
     if (target.kind === 'external') {
-      openHttpLink(target.url, { worktreeId: ctx.worktreeId })
+      openHttpLink(target.url, { worktreeId: ctx.worktreeId, sourceOwner })
       return
     }
     if (target.kind === 'file') {
@@ -4469,24 +4498,26 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const nextActiveTabType =
         nextActiveFileId || activeTabType !== 'editor' ? activeTabType : 'terminal'
       const openFileIds = new Set(openFiles.map((file) => file.id))
-      const visibleFrontmatterEntries = new Map<string, boolean>()
+      // Why: visible is the default, so only restore per-file hide overrides
+      // (`false`); legacy `true` entries collapse back to the default.
+      const hiddenFrontmatterEntries = new Map<string, boolean>()
       for (const [persistedFileId, visible] of Object.entries(
         persistedMarkdownFrontmatterVisible
       )) {
-        if (!visible) {
+        if (visible) {
           continue
         }
         if (openFileIds.has(persistedFileId)) {
-          visibleFrontmatterEntries.set(persistedFileId, true)
+          hiddenFrontmatterEntries.set(persistedFileId, false)
         }
         for (const migrations of Object.values(editorFileIdMigrationsByWorktree)) {
           const migratedFileId = migrations.get(persistedFileId)
           if (migratedFileId && openFileIds.has(migratedFileId)) {
-            visibleFrontmatterEntries.set(migratedFileId, true)
+            hiddenFrontmatterEntries.set(migratedFileId, false)
           }
         }
       }
-      const markdownFrontmatterVisible = Object.fromEntries(visibleFrontmatterEntries)
+      const markdownFrontmatterVisible = Object.fromEntries(hiddenFrontmatterEntries)
 
       return {
         openFiles,

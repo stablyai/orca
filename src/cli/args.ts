@@ -13,6 +13,9 @@ export type CommandSpec = {
   // or handler registrations.
   aliases?: string[][]
   argumentMode?: 'parsed' | 'passthrough'
+  // Why: irreversibly destroys persistent state — typo recovery must not steer a
+  // benign mistake into one of these via the agent nextSteps channel. #6303
+  destructive?: boolean
   summary: string
   usage: string
   allowedFlags: string[]
@@ -177,6 +180,7 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
       'note',
       'diagnostics',
       'linear',
+      'skills',
       'agent-context'
     ].includes(commandPath[0])
   ) {
@@ -232,6 +236,7 @@ export function isCommandGroup(commandPath: string[]): boolean {
         'environment',
         'diagnostics',
         'linear',
+        'skills',
         'vm'
       ].includes(commandPath[0])) ||
     (commandPath.length === 2 && commandPath[0] === 'agent' && commandPath[1] === 'hooks') ||

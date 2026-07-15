@@ -167,7 +167,9 @@ function MessageRow({
     // transcript caught up.)
     return (
       <div ref={rowRef} className="flex flex-col items-end gap-0.5">
-        <div className="max-w-[85%] rounded-xl rounded-tr-sm border border-border bg-card px-3 py-2 text-sm text-card-foreground">
+        {/* User turns get a distinct muted fill (not the card/canvas color) so
+            the prompt reads apart from the assistant's body copy. */}
+        <div className="max-w-[85%] rounded-lg rounded-tr-sm bg-muted px-3.5 py-2.5 text-sm text-foreground">
           {markdown ? (
             <>
               <ImageAttachmentRefs blocks={prose} />
@@ -213,7 +215,7 @@ function MessageRow({
         <AgentControls
           markdown={markdown}
           onScrollToTop={scrollToTop}
-          className="absolute -top-1 right-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+          className="absolute -top-8 right-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
         />
       ) : null}
       <ImageAttachmentRefs blocks={prose} />
@@ -251,6 +253,7 @@ export function NativeChatMessageList({
   failedDeliveryMessageIds?: ReadonlySet<string>
 }): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement | null>(null)
+  const contentRef = useRef<HTMLDivElement | null>(null)
   const [stuckToBottom, setStuckToBottom] = useState(true)
   const [showJump, setShowJump] = useState(false)
 
@@ -312,6 +315,11 @@ export function NativeChatMessageList({
     if (!container) {
       return
     }
+    // Detach synchronously (not just via the pending onScroll) so an in-place
+    // streaming growth can't re-pin to the bottom mid-flight and fight this
+    // deliberate scroll. The ref is what the resize observer reads.
+    stuckToBottomRef.current = false
+    setStuckToBottom(false)
     const delta = el.getBoundingClientRect().top - container.getBoundingClientRect().top
     container.scrollTo({ top: container.scrollTop + delta, behavior: 'smooth' })
   }, [])
@@ -334,17 +342,31 @@ export function NativeChatMessageList({
     }
   }, [messages.length, isWorking, showTypingIndicator, scrollToBottom])
 
-  // Keep the affordances in sync if the container resizes (e.g. composer mounts,
-  // viewport reflow) without a scroll event.
+  // Content growing without a message-count change (a streaming assistant turn
+  // extends its own message in place) never re-fires the layout effect above.
+  // Observe the container so those in-place growths still re-pin: stay glued to
+  // the bottom while stuck, otherwise just refresh the jump affordance. This is
+  // what removes most "Jump to latest" clicks during a live response.
   useEffect(() => {
     const el = scrollRef.current
     if (!el || typeof ResizeObserver === 'undefined') {
       return
     }
-    const observer = new ResizeObserver(handleScroll)
+    const observer = new ResizeObserver(() => {
+      if (stuckToBottomRef.current) {
+        scrollToBottom()
+      } else {
+        handleScroll()
+      }
+    })
+    // Observe the growing content, not just the fixed-height viewport, so an
+    // in-place streaming growth is seen; also watch the viewport for reflows.
     observer.observe(el)
+    if (contentRef.current) {
+      observer.observe(contentRef.current)
+    }
     return () => observer.disconnect()
-  }, [handleScroll])
+  }, [handleScroll, scrollToBottom])
 
   return (
     <div className="relative min-h-0 flex-1">
@@ -354,7 +376,8 @@ export function NativeChatMessageList({
         className="scrollbar-sleek h-full overflow-y-auto px-3 pt-10 pb-4 sm:px-4"
       >
         <div
-          className="mx-auto flex w-full max-w-3xl flex-col gap-3"
+          ref={contentRef}
+          className="mx-auto flex w-full max-w-4xl flex-col gap-5"
           // Why: `zoom` scales the chat transcript's text and layout together,
           // scoped to this container so the rest of the app is untouched. It's
           // the desktop analog of the mobile pinch-zoom (Chromium/Electron only).

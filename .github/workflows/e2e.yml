@@ -173,3 +173,59 @@ jobs:
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore
+
+  ssh-docker-watcher-isolation:
+    name: ssh docker watcher isolation
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Install native build and headless UI tools
+        run: sudo apt-get update && sudo apt-get install -y build-essential openssh-client python3 xvfb
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      # Why: same Linux-only node-gyp pin as build/e2e jobs so the workaround
+      # stays consistent across workflows even while this job is ubuntu-latest.
+      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          npm install -g node-gyp@11.5.0
+          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download E2E build output
+        uses: actions/download-artifact@v8
+        with:
+          name: e2e-build-out
+          path: out/
+
+      # Why: this is the release-path proof that the deployed Linux relay keeps
+      # its PTY and explorer live across a real watcher SIGSEGV.
+      - name: Run Docker SSH watcher isolation E2E
+        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker-watcher-isolation
+
+      - name: Upload watcher isolation traces
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-traces-ssh-docker-watcher-isolation
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
