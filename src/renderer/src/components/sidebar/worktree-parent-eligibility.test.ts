@@ -159,7 +159,7 @@ describe('canAssignWorktreeParent', () => {
     ).toBe(false)
   })
 
-  it('stays repo-agnostic while the picker candidate filter is repo and host scoped', () => {
+  it('includes eligible worktrees from other repos on the same runtime host', () => {
     const child = makeWorktree('child', 'repo-a')
     const sameRepo = makeWorktree('same-repo', 'repo-a')
     const otherRepo = makeWorktree('other-repo', 'repo-b')
@@ -184,13 +184,13 @@ describe('canAssignWorktreeParent', () => {
           { id: 'repo-b', connectionId: null, executionHostId: 'local' }
         ])
       }).map((worktree) => worktree.id)
-    ).toEqual([sameRepo.id])
+    ).toEqual([sameRepo.id, otherRepo.id])
   })
 
-  it('excludes same-repo candidates owned by a different runtime host', () => {
+  it('excludes cross-repo candidates owned by a different runtime host', () => {
     const child = makeWorktree('child', 'repo-a')
     const sameHost = makeWorktree('same-host', 'repo-a')
-    const otherHost = makeWorktree('other-host', 'repo-a')
+    const otherHost = makeWorktree('other-host', 'repo-b')
     child.hostId = 'runtime:env-a'
     sameHost.hostId = 'runtime:env-a'
     otherHost.hostId = 'runtime:env-b'
@@ -203,7 +203,8 @@ describe('canAssignWorktreeParent', () => {
         lineageById: {},
         worktreeMap: makeMap(worktrees),
         repoMap: makeRepoMap([
-          { id: 'repo-a', connectionId: null, executionHostId: 'runtime:env-a' }
+          { id: 'repo-a', connectionId: null, executionHostId: 'runtime:env-a' },
+          { id: 'repo-b', connectionId: null, executionHostId: 'runtime:env-b' }
         ])
       }).map((worktree) => worktree.id)
     ).toEqual([sameHost.id])

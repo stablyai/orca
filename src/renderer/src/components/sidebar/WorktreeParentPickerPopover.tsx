@@ -39,8 +39,8 @@ function getAnchorRect(anchorElement: HTMLElement | null): AnchorRect | null {
   return anchorElement?.getBoundingClientRect() ?? null
 }
 
-export function getWorktreeParentPickerItemValue(candidate: Worktree): string {
-  return `${candidate.displayName} ${branchDisplayName(candidate.branch)} ${candidate.path}`
+export function getWorktreeParentPickerItemValue(candidate: Worktree, repoName?: string): string {
+  return `${candidate.displayName} ${branchDisplayName(candidate.branch)} ${repoName ?? ''} ${candidate.path}`
 }
 
 export function selectWorktreeParent({
@@ -222,7 +222,10 @@ export function WorktreeParentPickerPopover({
             {candidates.map((candidate) => (
               <CommandItem
                 key={candidate.id}
-                value={getWorktreeParentPickerItemValue(candidate)}
+                value={getWorktreeParentPickerItemValue(
+                  candidate,
+                  repoMap.get(candidate.repoId)?.displayName
+                )}
                 onSelect={() => handleSelect(candidate.id)}
                 className="items-start px-2 py-2"
               >

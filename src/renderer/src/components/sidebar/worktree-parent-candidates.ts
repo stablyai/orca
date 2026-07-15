@@ -28,7 +28,6 @@ export function getEligibleWorktreeParents({
   const childHostId = getWorktreeOwnerHostId(child, repoMap)
   return worktrees.filter(
     (candidate) =>
-      candidate.repoId === child.repoId &&
       childHostId !== null &&
       getWorktreeOwnerHostId(candidate, repoMap) === childHostId &&
       !candidate.isArchived &&
