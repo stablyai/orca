@@ -172,7 +172,9 @@ function buildWindowsSetupCommand(setupCommand: string, markerPath: string, nonc
     'del /f /q "!ORCA_SETUP_MARKER!" "!ORCA_SETUP_MARKER!.tmp" 2>nul',
     `call ${setupCommand}`,
     'set "ORCA_SETUP_STATUS=!ERRORLEVEL!"',
-    '> "!ORCA_SETUP_MARKER!.tmp" echo !ORCA_SETUP_NONCE!:!ORCA_SETUP_STATUS!',
+    // Why: separator-adjacent whitespace becomes part of cmd.exe's echo output,
+    // which would fail the startup poller's exact marker parser.
+    'echo !ORCA_SETUP_NONCE!:!ORCA_SETUP_STATUS!>"!ORCA_SETUP_MARKER!.tmp"',
     'move /y "!ORCA_SETUP_MARKER!.tmp" "!ORCA_SETUP_MARKER!" >nul',
     'exit /b !ORCA_SETUP_STATUS!'
   ])
@@ -188,6 +190,10 @@ function buildWindowsStartupCommand(
   // gives us safe bounded file polling/parsing without a fragile batch label loop.
   const script = [
     '$marker = $env:ORCA_SETUP_MARKER',
+    'if ([string]::IsNullOrWhiteSpace($marker)) {',
+    '  [Console]::Error.WriteLine("Missing setup marker path.")',
+    '  exit 1',
+    '}',
     '$tmp = $marker + ".tmp"',
     '$nonce = $env:ORCA_SETUP_NONCE',
     `$deadline = (Get-Date).AddSeconds(${timeout})`,
@@ -224,14 +230,28 @@ function buildWindowsStartupCommand(
     `set "ORCA_SETUP_MARKER=${escapeCmdSetValue(markerPath)}"`,
     `set "ORCA_SETUP_NONCE=${escapeCmdSetValue(nonce)}"`,
     'echo Waiting for setup to finish before starting agent... 1>&2',
-    `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ${quoteWindowsArg(script)}`,
+    `powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodePowerShellScript(script)}`,
     'set "ORCA_SETUP_STATUS=!ERRORLEVEL!"',
     'exit /b !ORCA_SETUP_STATUS!'
   ])
 }
 
 function wrapCmd(parts: string[]): string {
-  return `cmd.exe /d /s /v:on /c ${quoteWindowsArg(parts.join(' & '))}`
+  // Why: /s strips this outer quote pair itself. Doubling the nested quotes
+  // makes cmd.exe treat the quotes in `set "VAR=value"` as literal characters.
+  // Joining without spaces also keeps the setup marker's echo payload exact.
+  return `cmd.exe /d /s /v:on /c "${parts.join('&')}"`
+}
+
+function encodePowerShellScript(script: string): string {
+  // Why: this planner also runs in the sandboxed renderer, where Node's Buffer
+  // is unavailable; PowerShell requires its encoded command as UTF-16LE.
+  let bytes = ''
+  for (let index = 0; index < script.length; index += 1) {
+    const code = script.charCodeAt(index)
+    bytes += String.fromCharCode(code & 0xff, code >>> 8)
+  }
+  return btoa(bytes)
 }
 
 function quotePosixArg(value: string): string {
@@ -239,10 +259,6 @@ function quotePosixArg(value: string): string {
     return value
   }
   return `'${value.replace(/'/g, `'\\''`)}'`
-}
-
-function quoteWindowsArg(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`
 }
 
 function escapeCmdSetValue(value: string): string {

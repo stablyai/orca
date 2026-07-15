@@ -173,17 +173,21 @@ describe('createSequencedSetupAgentCommands', () => {
       nonce: 'nonce-win',
       waitTimeoutSeconds: 3
     })
+    const startupPowerShell = decodePowerShellScript(result.startupCommand)
 
     expect(result.setupCommand).toContain('cmd.exe /d /s /v:on /c')
-    expect(result.setupCommand).toContain('cmd.exe /c ""C:\\repo\\.git\\orca\\setup-runner.cmd""')
+    expect(result.setupCommand).toContain('cmd.exe /c "C:\\repo\\.git\\orca\\setup-runner.cmd"')
     expect(result.setupCommand).toContain('echo !ORCA_SETUP_NONCE!:!ORCA_SETUP_STATUS!')
     expect(result.startupCommand.match(/powershell\.exe/g)).toHaveLength(1)
-    expect(result.startupCommand).toContain('powershell.exe -NoProfile -ExecutionPolicy Bypass')
-    expect(result.startupCommand).toContain('AddSeconds(3)')
-    expect(result.startupCommand).toContain('!ORCA_SETUP_STATUS!')
-    expect(result.startupCommand).toContain('Timed out waiting for setup before starting agent.')
-    expect(result.startupCommand).toContain('Setup failed; skipping agent startup.')
     expect(result.startupCommand).toContain(
+      'powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand'
+    )
+    expect(startupPowerShell).toContain('AddSeconds(3)')
+    expect(startupPowerShell).toContain('Missing setup marker path.')
+    expect(result.startupCommand).toContain('!ORCA_SETUP_STATUS!')
+    expect(startupPowerShell).toContain('Timed out waiting for setup before starting agent.')
+    expect(startupPowerShell).toContain('Setup failed; skipping agent startup.')
+    expect(startupPowerShell).toContain(
       'Remove-Item -LiteralPath $marker, $tmp -Force -ErrorAction SilentlyContinue'
     )
     expect(result.startupCommand).not.toContain('%ERRORLEVEL%')
@@ -193,12 +197,62 @@ describe('createSequencedSetupAgentCommands', () => {
     expect(result.startupCommand).not.toContain(
       `call !${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}!`
     )
-    expect(result.startupCommand).toContain('Invoke-Expression')
+    expect(startupPowerShell).toContain('Invoke-Expression')
     expect(result.startupCommand).not.toContain('fix !PATH! & test')
     expect(result.startupEnv).toEqual({
       [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: "codex --model gpt-5 'fix !PATH! & test'"
     })
   })
+
+  it.skipIf(process.platform !== 'win32')(
+    'executes the native Windows setup-to-agent sequence through cmd.exe',
+    async () => {
+      const tempDir = makeTempDir()
+      const runnerScriptPath = join(tempDir, 'setup runner.cmd')
+      const startupScriptPath = join(tempDir, 'agent-startup.cmd')
+      const logPath = join(tempDir, 'sequence.log')
+
+      writeFileSync(
+        runnerScriptPath,
+        ['@echo off', `>> "${logPath}" echo setup-done`, 'exit /b 0'].join('\r\n'),
+        'utf8'
+      )
+      writeFileSync(
+        startupScriptPath,
+        ['@echo off', `>> "${logPath}" echo agent-start`, 'exit /b 0'].join('\r\n'),
+        'utf8'
+      )
+
+      const commands = createSequencedSetupAgentCommands({
+        runnerScriptPath,
+        startupCommand: `cmd.exe /d /s /c "${startupScriptPath}"`,
+        platform: 'windows',
+        nonce: 'windows-sequence',
+        waitTimeoutSeconds: 2
+      })
+
+      const setupExit = await waitForExit(
+        spawnWindowsCommand(tempDir, 'run-setup.cmd', commands.setupCommand)
+      )
+      expect(setupExit).toEqual({ code: 0, stderr: '' })
+      expect(readIfExists(`${runnerScriptPath}.windows-sequence.done`)).toBe(
+        'windows-sequence:0\r\n'
+      )
+
+      const startupExit = await waitForExit(
+        spawnWindowsCommand(
+          tempDir,
+          'run-startup.cmd',
+          commands.startupCommand,
+          commands.startupEnv
+        )
+      )
+
+      expect(startupExit.code).toBe(0)
+      expect(startupExit.stderr).toContain('Waiting for setup to finish before starting agent...')
+      expect(readFileSync(logPath, 'utf8')).toBe('setup-done\r\nagent-start\r\n')
+    }
+  )
 
   it.skipIf(process.platform === 'win32')(
     'ignores stale markers until the matching setup run finishes, even when startup launches first',
@@ -407,6 +461,30 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms)
   })
+}
+
+function spawnWindowsCommand(
+  dir: string,
+  filename: string,
+  command: string,
+  env: Record<string, string> = {}
+): ReturnType<typeof spawn> {
+  const scriptPath = join(dir, filename)
+  // Why: putting the generated command on a batch line exercises cmd.exe's
+  // native parser without Node/libuv adding another argument-quoting layer.
+  writeFileSync(scriptPath, `@echo off\r\n${command}\r\nexit /b %ERRORLEVEL%\r\n`, 'utf8')
+  return spawn('cmd.exe', ['/d', '/s', '/c', scriptPath], {
+    stdio: 'pipe',
+    env: { ...process.env, ...env }
+  })
+}
+
+function decodePowerShellScript(command: string): string {
+  const encoded = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/)?.[1]
+  if (!encoded) {
+    throw new Error('Missing PowerShell encoded command')
+  }
+  return Buffer.from(encoded, 'base64').toString('utf16le')
 }
 
 function waitForExit(
