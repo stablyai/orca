@@ -1062,6 +1062,30 @@ describe('LocalPtyProvider', () => {
       }
     })
 
+    it('keeps a gracefully closing Windows PTY visible to overlapping verified teardown', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const killSpy = vi.fn()
+      spawnMock.mockReturnValue({
+        ...mockProc,
+        kill: killSpy
+      })
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      const gracefulStop = provider.shutdown(id, { immediate: false })
+      await Promise.resolve()
+      expect((await provider.listProcesses()).some((session) => session.id === id)).toBe(true)
+
+      const verifiedStop = provider.shutdown(id, { immediate: true })
+      expect(killSpy).toHaveBeenCalledTimes(1)
+      exitCb?.({ exitCode: -1 })
+
+      await expect(Promise.all([gracefulStop, verifiedStop])).resolves.toEqual([
+        undefined,
+        undefined
+      ])
+      expect((await provider.listProcesses()).some((session) => session.id === id)).toBe(false)
+    })
+
     it('retains the ConPTY owner when the native Windows kill throws', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const killError = new Error('native close failed')

@@ -154,6 +154,23 @@ describe('DegradedDaemonPtyProvider', () => {
     expect(provider.canVerifyFullSessionTeardown(fresh.id)).toBe(true)
   })
 
+  it('restores a missing daemon route from the teardown inventory', async () => {
+    const ptyId = 'w1@@terminating-daemon-session'
+    const current = createDaemonAdapter('daemon', [], 21)
+    vi.mocked(current.listProcesses).mockResolvedValue([{ id: ptyId, cwd: '', title: 'shell' }])
+    const fallback = createProvider('fallback')
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+
+    await expect(provider.listProcesses()).resolves.toContainEqual({
+      id: ptyId,
+      cwd: '',
+      title: 'shell'
+    })
+
+    expect(provider.canVerifyFullSessionTeardown(ptyId)).toBe(false)
+    expect(current.canVerifyFullSessionTeardown).toHaveBeenCalledWith(ptyId)
+  })
+
   it('routes a previously daemon-backed id to fallback after daemon exit removes the mapping', async () => {
     const current = createDaemonAdapter('daemon', ['daemon-session'])
     const fallback = createProvider('fallback')

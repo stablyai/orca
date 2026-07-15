@@ -626,6 +626,24 @@
           ]
         },
         {
+          "file": "src/main/providers/local-pty-provider.test.ts",
+          "assertions": [
+            "a local Windows graceful close remains inventoried until native exit and an overlapping verified stop joins without issuing a second ConPTY close"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-pty-router.test.ts",
+          "assertions": [
+            "an already-paid daemon inventory restores a missing legacy route before full-session capability checks without letting a stale legacy snapshot replace a newer current owner"
+          ]
+        },
+        {
+          "file": "src/main/daemon/degraded-daemon-pty-provider.test.ts",
+          "assertions": [
+            "a terminating daemon session discovered by inventory cannot fall through to a successful local-fallback no-op"
+          ]
+        },
+        {
           "file": "src/main/ipc/worktrees.test.ts",
           "assertions": [
             "verified PTY shutdown precedes local watcher close, Git removal, and metadata cleanup",
@@ -643,6 +661,15 @@
           "result": "passed",
           "durationSeconds": 11.56,
           "summary": "15 files and 966 tests passed locally, including canonical POSIX ownership parsing, bounded exit-probe counts, ConPTY graceful-fallback retry retention, watcher-after-verification ordering, eight-worker stop bounds, and local/daemon/SSH fail-closed isolation."
+        },
+        {
+          "date": "2026-07-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/relay/pty-session-kill.test.ts src/relay/pty-handler.test.ts src/main/runtime/worktree-pty-admission.test.ts src/main/runtime/pty-stop-concurrency.test.ts src/main/runtime/worktree-teardown.test.ts src/main/providers/local-pty-provider.test.ts src/main/providers/ssh-pty-liveness.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/daemon/pty-subprocess.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/ipc/pty.test.ts src/main/ipc/worktrees.test.ts",
+          "result": "passed",
+          "durationSeconds": 12.02,
+          "summary": "15 files and 974 tests passed after merging current main, including local graceful-to-verified ConPTY overlap and missing degraded/legacy route restoration without extra provider calls or stale-route replacement."
         }
       ],
       "runtimeBudget": {
@@ -655,11 +682,11 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "The new malformed-child-inventory assertions reject the prior silent token filtering, and the graceful-fallback retry assertion rejects the prior deletion of an unverified ConPTY owner. Saved intentional-break or CI red artifacts remain pending."
+        "evidence": "The new malformed-child-inventory assertions reject the prior silent token filtering, the graceful-fallback retry assertion rejects deletion of an unverified ConPTY owner, the local overlap test failed while graceful close erased its pre-exit owner, and the degraded/legacy inventory tests failed while missing routes fell through to the wrong owner. Saved CI red artifacts remain pending."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Destructive teardown adds no polling or scans to typing, output, focus, startup, or ordinary render paths. Fifty snapshotted PTYs use exactly fifty stops with an eight-worker ceiling; current SSH uses one targeted liveness request per PTY while a legacy relay shares one bounded inventory; POSIX discovery caps the tree at 1,024 PIDs under one 2.5-second deadline, final verification at 500 ms, PID batches at 64, and signal-0 fast probes at two per PID before batched ps polling. A final-source local victim-root-plus-child teardown completed in 99 ms against the 8,000 ms total budget while an unrelated witness PTY stayed alive."
+        "evidence": "Destructive teardown adds no polling or scans to typing, output, focus, startup, or ordinary render paths. Fifty snapshotted PTYs use exactly fifty stops with an eight-worker ceiling; current SSH uses one targeted liveness request per PTY while a legacy relay shares one bounded inventory; missing daemon routes are restored with an O(returned sessions) pass over that existing inventory and no additional provider calls. POSIX discovery caps the tree at 1,024 PIDs under one 2.5-second deadline, final verification at 500 ms, PID batches at 64, and signal-0 fast probes at two per PID before batched ps polling. A final-source local victim-root-plus-child teardown completed in 99 ms against the 8,000 ms total budget while an unrelated witness PTY stayed alive."
       },
       "promotionCriteria": [
         "Run the focused gate for at least 100 consecutive passes or 14 days across required CI platforms.",

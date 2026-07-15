@@ -11,6 +11,7 @@ import type {
 import { ShutdownVerificationOwnerCache } from './shutdown-verification-owner-cache'
 import { reconcileDegradedDaemonSessions } from './degraded-daemon-session-reconciliation'
 import { subscribeToProviderReplay } from './provider-replay-subscription'
+import { listAndRestoreDaemonSessionRoutes } from './daemon-session-route-restoration'
 
 type ManagedPtyProvider = IPtyProvider & {
   disconnectOnly?: () => Promise<void>
@@ -190,10 +191,11 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   }
 
   async listProcesses(): Promise<PtyProcessInfo[]> {
-    const results = await Promise.all(
-      this.allProviders().map((provider) => provider.listProcesses())
+    return listAndRestoreDaemonSessionRoutes(
+      this.allProviders(),
+      this.sessionProviders,
+      this.shutdownVerificationProviders
     )
-    return results.flat()
   }
 
   async getDefaultShell(): Promise<string> {
@@ -320,11 +322,8 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   }
 
   private providerFor(sessionId: string): ManagedPtyProvider {
-    return (
-      this.sessionProviders.get(sessionId) ??
-      this.findProviderForExistingSession(sessionId) ??
-      this.fallback
-    )
+    const routed = this.sessionProviders.get(sessionId)
+    return routed ?? this.findProviderForExistingSession(sessionId) ?? this.fallback
   }
 
   private findProviderForExistingSession(sessionId: string): ManagedPtyProvider | null {

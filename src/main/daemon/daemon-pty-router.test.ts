@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DaemonPtyRouter } from './daemon-pty-router'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
-import type { PtyBackgroundStreamEvent, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type {
+  PtyBackgroundStreamEvent,
+  PtyProcessInfo,
+  PtySpawnOptions,
+  PtySpawnResult
+} from '../providers/types'
 import { GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION } from './daemon-protocol-capabilities'
 
 type AdapterMock = DaemonPtyAdapter & {
@@ -191,6 +196,46 @@ describe('DaemonPtyRouter', () => {
 
     expect(router.canVerifyFullSessionTeardown('legacy-session')).toBe(false)
     expect(router.canVerifyFullSessionTeardown('current-session')).toBe(true)
+  })
+
+  it('restores a missing legacy route from the teardown inventory', async () => {
+    const current = createAdapter('current', [], undefined, 22)
+    const legacy = createAdapter('legacy', [], undefined, 21)
+    vi.mocked(legacy.listProcesses).mockResolvedValue([
+      { id: 'legacy-terminating', cwd: '', title: 'shell' }
+    ])
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+    await expect(router.listProcesses()).resolves.toContainEqual({
+      id: 'legacy-terminating',
+      cwd: '',
+      title: 'shell'
+    })
+
+    expect(router.canVerifyFullSessionTeardown('legacy-terminating')).toBe(false)
+    expect(legacy.canVerifyFullSessionTeardown).toHaveBeenCalledWith('legacy-terminating')
+  })
+
+  it('does not let a stale legacy inventory replace a newer current route', async () => {
+    const current = createAdapter('current', [], undefined, 22)
+    const legacy = createAdapter('legacy', [], undefined, 21)
+    let resolveLegacyInventory = (_sessions: PtyProcessInfo[]): void => {}
+    vi.mocked(legacy.listProcesses).mockReturnValue(
+      new Promise((resolve) => {
+        resolveLegacyInventory = resolve
+      })
+    )
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+    const listing = router.listProcesses()
+    await vi.waitFor(() => expect(legacy.listProcesses).toHaveBeenCalledTimes(1))
+    await router.spawn({ sessionId: 'reused-session', cols: 80, rows: 24 })
+    resolveLegacyInventory([{ id: 'reused-session', cwd: '', title: 'old shell' }])
+    await listing
+
+    expect(router.canVerifyFullSessionTeardown('reused-session')).toBe(true)
+    expect(current.canVerifyFullSessionTeardown).toHaveBeenCalledWith('reused-session')
+    expect(legacy.canVerifyFullSessionTeardown).not.toHaveBeenCalledWith('reused-session')
   })
 
   it('routes background hints and authoritative snapshots to the session owner', async () => {

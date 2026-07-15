@@ -8,6 +8,7 @@ import type {
   PtySpawnResult
 } from '../providers/types'
 import { ShutdownVerificationOwnerCache } from './shutdown-verification-owner-cache'
+import { listAndRestoreDaemonSessionRoutes } from './daemon-session-route-restoration'
 
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
@@ -188,8 +189,11 @@ export class DaemonPtyRouter implements IPtyProvider {
   async listProcesses(): Promise<PtyProcessInfo[]> {
     // Why: runtime exact-stop/liveness flows must fail closed if any adapter
     // cannot provide a trustworthy process list.
-    const results = await Promise.all(this.allAdapters().map((adapter) => adapter.listProcesses()))
-    return results.flat()
+    return listAndRestoreDaemonSessionRoutes(
+      this.allAdapters(),
+      this.sessionAdapters,
+      this.shutdownVerificationAdapters
+    )
   }
 
   async getDefaultShell(): Promise<string> {
