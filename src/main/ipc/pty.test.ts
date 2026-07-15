@@ -4210,6 +4210,28 @@ describe('registerPtyHandlers', () => {
     })
   })
 
+  it('reports authoritative snapshot capability with the owning provider context', () => {
+    const capabilityProvider = {
+      authoritativeIds: new Set(['current-pty']),
+      canProvideAuthoritativeBufferSnapshot(id: string) {
+        return this.authoritativeIds.has(id)
+      }
+    }
+    registerPtyHandlers(mainWindow as never)
+    setLocalPtyProvider(capabilityProvider as never)
+    const listener = onMock.mock.calls.find(
+      ([channel]) => channel === 'pty:getAuthoritativeBufferSnapshotCapabilitiesSync'
+    )?.[1] as ((event: { returnValue?: unknown }, args: { ids: unknown[] }) => void) | undefined
+    const event: { returnValue?: unknown } = {}
+
+    listener?.(event, { ids: ['current-pty', 'legacy-pty', 'current-pty', 42] })
+
+    expect(event.returnValue).toEqual([
+      { id: 'current-pty', authoritative: true },
+      { id: 'legacy-pty', authoritative: false }
+    ])
+  })
+
   it('checks single-PTY liveness without listing every session', async () => {
     const hasPty = vi.fn((id: string) => id === 'live-pty')
     const listProcesses = vi.fn(async () => {
@@ -10886,6 +10908,44 @@ describe('registerPtyHandlers', () => {
     expect(mockProc.proc.write).not.toHaveBeenCalled()
   })
 
+  it('synchronizes runtime output sequencing from a provider reattach snapshot', async () => {
+    setLocalPtyProvider({
+      spawn: vi.fn(async () => ({
+        id: 'pty-restored',
+        isReattach: true,
+        providerSequence: { value: 900, generation: 'continued' as const }
+      })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => []),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+    const runtime = {
+      setPtyController: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      getPtyOutputSequence: vi.fn().mockReturnValue(7),
+      synchronizePtyOutputSequenceFromProvider: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn(),
+      createPreAllocatedTerminalHandle: vi.fn(() => null),
+      preAllocateHandleForPty: vi.fn()
+    }
+    registerPtyHandlers(mainWindow as never, runtime as never)
+
+    await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+    expect(runtime.synchronizePtyOutputSequenceFromProvider).toHaveBeenCalledWith(
+      'pty-restored',
+      { value: 900, generation: 'continued' },
+      7
+    )
+  })
+
   it('seeds headless terminal state with cold-restore cwd metadata', async () => {
     const oscLinks = [{ row: 0, startCol: 0, endCol: 8, uri: 'https://example.com/restored' }]
     const coldRestore = {
@@ -10923,7 +10983,7 @@ describe('registerPtyHandlers', () => {
       'pty-cold-restore',
       'restored history\r\n',
       undefined,
-      { cwd: '/projects/restored', oscLinks }
+      { cwd: '/projects/restored', oscLinks, preferProviderIfExisting: true }
     )
   })
 
@@ -11738,6 +11798,42 @@ describe('registerPtyHandlers', () => {
       const requestId = getSentRequestIds()[0]
       listener(null, { requestId, snapshot: { data: 'ok', cols: 'not-a-number' } })
       await expect(pending).resolves.toBeNull()
+    })
+  })
+
+  describe('provider buffer snapshot dispatch', () => {
+    it('exposes daemon history when no renderer pane is mounted', async () => {
+      const provider = installObservableDaemonTestProvider()
+      provider.getBufferSnapshot.mockResolvedValue({
+        data: 'restored screen\r\n',
+        scrollbackAnsi: 'restored history\r\n',
+        cols: 120,
+        rows: 40,
+        cwd: '/projects/restored',
+        seq: 900,
+        source: 'headless'
+      })
+      const runtime = { setPtyController: vi.fn() }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+        serializeProviderBuffer(ptyId: string, opts?: { scrollbackRows?: number }): Promise<unknown>
+      }
+
+      await expect(
+        controller.serializeProviderBuffer('daemon-restored', { scrollbackRows: 5000 })
+      ).resolves.toEqual({
+        data: 'restored screen\r\n',
+        scrollbackAnsi: 'restored history\r\n',
+        cols: 120,
+        rows: 40,
+        cwd: '/projects/restored',
+        seq: 900,
+        source: 'headless'
+      })
+      expect(provider.getBufferSnapshot).toHaveBeenCalledWith('daemon-restored', {
+        scrollbackRows: 5000
+      })
     })
   })
 

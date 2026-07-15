@@ -117,6 +117,12 @@ export type PtySpawnResult = {
    *  writing the snapshot so ANSI cursor positions land correctly. */
   snapshotCols?: number
   snapshotRows?: number
+  /** Provider sequence at the attach boundary. `reset` starts a new provider
+   *  generation; `continued` resumes the existing absolute domain. */
+  providerSequence?: {
+    value: number
+    generation: 'continued' | 'reset'
+  }
   /** Kitty keyboard flags persisted in the daemon snapshot, threaded so the
    *  re-seeded runtime emulator answers hidden `CSI ? u` with the real flags
    *  (terminal-query-authority.md §kitty). Never replayed into a renderer
@@ -192,6 +198,8 @@ export type IPtyProvider = {
     id: string,
     opts?: { scrollbackRows?: number }
   ) => Promise<PtyProviderBufferSnapshot | null>
+  /** Whether this exact PTY can return a sequence-safe provider snapshot. */
+  canProvideAuthoritativeBufferSnapshot?: (id: string) => boolean
   /**
    * The size the PTY has ACTUALLY applied, not the last size requested.
    * resize() is fire-and-forget for remote providers (daemon/SSH `notify`),

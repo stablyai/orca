@@ -11,6 +11,7 @@ import {
 import type { ConnectionLogEntry } from '../src/transport/types'
 import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
 import { ConnectionLog } from '../src/components/ConnectionLog'
+import { shouldPresentNotificationOptIn } from '../src/notifications/notification-opt-in-gate'
 
 type Status = 'awaiting-confirm' | 'connecting' | 'error'
 
@@ -103,7 +104,15 @@ export default function PairConfirmScreen() {
       if (!mountedRef.current || !attemptIsCurrent) {
         return
       }
-      router.replace(`/h/${hostId}`)
+      const showNotificationOptIn = await shouldPresentNotificationOptIn()
+      if (!mountedRef.current) {
+        return
+      }
+      router.replace(
+        showNotificationOptIn
+          ? { pathname: '/notification-opt-in', params: { hostId } }
+          : `/h/${hostId}`
+      )
     } catch (err) {
       const timedOut = attempt.timedOut
       const attemptIsCurrent = activePairingAttemptRef.current === attempt

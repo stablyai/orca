@@ -9028,7 +9028,9 @@
           "3325d996cb": "사용량 새로 고침",
           "a8f3e2c1b4": "주간 크레딧",
           "b7e2d9f0a3": "터미널의 grok /usage 화면과 같은 주간 크레딧 비율입니다.",
-          "c6d1a8f4e2": "{{when}}에 재설정"
+          "c6d1a8f4e2": "{{when}}에 재설정",
+          "e6dadc1e2b": "Monthly usage",
+          "75e396bf42": "Included monthly usage for Grok unified-billing accounts."
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "사용",
@@ -11845,7 +11847,13 @@
                 "5f9a0ed7c4": "제목 4",
                 "01a71dbbdd": "중첩된 섹션 제목.",
                 "8440fa4acf": "제목 5",
-                "b287b93c66": "깊은 섹션 제목."
+                "b287b93c66": "깊은 섹션 제목.",
+                "7a2c1f9b04": "토글 제목 2",
+                "b3e5d8a1c6": "중간 제목 요약이 포함된 접을 수 있는 섹션을 만듭니다.",
+                "2f9d6b4e10": "토글 제목 3",
+                "8c1a3e7d52": "작은 제목 요약이 포함된 접을 수 있는 섹션을 만듭니다.",
+                "5e0b9c2a71": "토글 제목 4",
+                "d4f16a8b39": "중첩된 제목 요약이 포함된 접을 수 있는 섹션을 만듭니다."
               }
             }
           }
@@ -13018,6 +13026,37 @@
         "searchLabels": "레이블 필터…",
         "searchAssignee": "담당자 필터…",
         "back": "뒤로"
+      },
+      "browser-pane": {
+        "markup": {
+          "cancel": "취소",
+          "clear": "모두 지우기",
+          "copiedToast": "마크업을 복사했습니다 — 에이전트에 붙여넣으세요 ({{value0}})",
+          "copy": "마크업 복사",
+          "drawButton": "스크린샷에 그리기",
+          "drawHint": "페이지에 그린 다음 마크업을 복사해 에이전트에 붙여넣으세요.",
+          "drawHintBadge": "새 기능",
+          "drawHintDismiss": "확인",
+          "drawHintTry": "사용해 보기",
+          "errorAttach": "마크업 스크린샷을 첨부하지 못했습니다.",
+          "errorCapture": "그릴 페이지를 캡처하지 못했습니다.",
+          "errorUnavailable": "이 페이지에서는 스크린샷 마크업을 사용할 수 없습니다.",
+          "fontSize": "글자 크기",
+          "hint": "페이지에 그린 다음 마크업을 복사해 에이전트에 붙여넣으세요.",
+          "redo": "다시 실행",
+          "style": "색상 및 두께",
+          "textInput": "주석 텍스트",
+          "tool": {
+            "arrow": "화살표",
+            "ellipse": "타원",
+            "highlight": "형광펜",
+            "pen": "펜",
+            "rect": "사각형",
+            "text": "텍스트"
+          },
+          "undo": "실행 취소",
+          "widthOption": "{{value0}} px"
+        }
       }
     },
     "i18n": {

@@ -36,6 +36,7 @@ import {
 } from '../src/transport/client-context'
 import { classifyConnection } from '../src/transport/connection-health'
 import { subscribeToDesktopNotifications } from '../src/notifications/mobile-notifications'
+import { shouldPresentNotificationOptIn } from '../src/notifications/notification-opt-in-gate'
 import type { ConnectionState, HostProfile } from '../src/transport/types'
 import { triggerMediumImpact } from '../src/platform/haptics'
 import { OrcaLogo } from '../src/components/OrcaLogo'
@@ -317,6 +318,7 @@ export default function HomeScreen() {
   const [lastVisited, setLastVisited] = useState<{ hostId: string; worktreeId: string } | null>(
     null
   )
+  const notificationOptInCheckedRef = useRef(false)
 
   // Why: read shared clients from the per-host store. Replaces the prior
   // pattern of opening N independent WebSockets here. See
@@ -395,9 +397,18 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       let stale = false
-      void loadHosts().then((h) => {
-        if (!stale) {
-          setHosts(h)
+      void loadHosts().then(async (h) => {
+        if (stale) {
+          return
+        }
+        setHosts(h)
+        if (h.length === 0 || notificationOptInCheckedRef.current) {
+          return
+        }
+        notificationOptInCheckedRef.current = true
+        const showNotificationOptIn = await shouldPresentNotificationOptIn()
+        if (!stale && showNotificationOptIn) {
+          router.replace('/notification-opt-in')
         }
       })
       void AsyncStorage.getItem('orca:last-visited-worktree').then((raw) => {
@@ -419,7 +430,7 @@ export default function HomeScreen() {
       return () => {
         stale = true
       }
-    }, [])
+    }, [router])
   )
 
   const sortedHosts = useMemo(

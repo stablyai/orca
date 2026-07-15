@@ -21,6 +21,7 @@ import type { ConnectionLogEntry, PairingOffer } from '../src/transport/types'
 import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
 import { TextInputModal } from '../src/components/TextInputModal'
 import { ConnectionLog } from '../src/components/ConnectionLog'
+import { shouldPresentNotificationOptIn } from '../src/notifications/notification-opt-in-gate'
 
 // Why: see pair-confirm.tsx — cap initial-pair "Connecting…" so a broken
 // route surfaces as a real error with the log visible instead of a
@@ -147,7 +148,15 @@ export default function PairScanScreen() {
       if (!mountedRef.current || !attemptIsCurrent) {
         return
       }
-      router.replace(`/h/${hostId}`)
+      const showNotificationOptIn = await shouldPresentNotificationOptIn()
+      if (!mountedRef.current) {
+        return
+      }
+      router.replace(
+        showNotificationOptIn
+          ? { pathname: '/notification-opt-in', params: { hostId } }
+          : `/h/${hostId}`
+      )
     } catch (err) {
       const timedOut = attempt.timedOut
       const attemptIsCurrent = activePairingAttemptRef.current === attempt

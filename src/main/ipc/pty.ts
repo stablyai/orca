@@ -1533,6 +1533,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:confirmForegroundProcess')
   ipcMain.removeHandler('pty:getCwd')
   ipcMain.removeHandler('pty:getSize')
+  ipcMain.removeAllListeners('pty:getAuthoritativeBufferSnapshotCapabilitiesSync')
   ipcMain.removeHandler('pty:declarePendingPaneSerializer')
   ipcMain.removeHandler('pty:settlePaneSerializer')
   ipcMain.removeHandler('pty:clearPendingPaneSerializer')
@@ -3168,7 +3169,18 @@ export function registerPtyHandlers(
           if (args.preAllocatedHandle) {
             trustedTerminalHandleEnv.add(args.preAllocatedHandle)
           }
+          const expectedPtyId = effectiveSessionAppId ?? sessionId
+          const sequenceBeforeProviderSpawn = expectedPtyId
+            ? (runtime?.getPtyOutputSequence?.(expectedPtyId) ?? 0)
+            : 0
           result = await provider.spawn(spawnOptions)
+          if (result.providerSequence) {
+            runtime?.synchronizePtyOutputSequenceFromProvider?.(
+              result.id,
+              result.providerSequence,
+              sequenceBeforeProviderSpawn
+            )
+          }
         } catch (err) {
           const rawMessage = err instanceof Error ? err.message : String(err)
           const spawnError = normalizeNodePtySpawnError(err)
@@ -3536,6 +3548,15 @@ export function registerPtyHandlers(
       // Why: mobile xterm must start from the desktop xterm's exact screen
       // state and dimensions before live TUI chunks can render correctly.
       return requestSerializedBuffer(ptyId, opts)
+    },
+    serializeProviderBuffer: async (ptyId, opts) => {
+      try {
+        // Why: restored daemon PTYs can be live while their desktop pane stays
+        // unmounted; query the provider model so phone-local navigation works.
+        return (await getProviderForPty(ptyId).getBufferSnapshot?.(ptyId, opts)) ?? null
+      } catch {
+        return null
+      }
     },
     hasRendererSerializer: (ptyId) => {
       // Why: the runtime needs a synchronous probe so it can decide whether to
@@ -4131,7 +4152,18 @@ export function registerPtyHandlers(
             )
           }
           spawnTiming.mark('options')
+          const expectedPtyId = effectiveSessionAppId ?? effectiveSessionId
+          const sequenceBeforeProviderSpawn = expectedPtyId
+            ? (runtime?.getPtyOutputSequence?.(expectedPtyId) ?? 0)
+            : 0
           result = await provider.spawn(spawnOptions)
+          if (result.providerSequence) {
+            runtime?.synchronizePtyOutputSequenceFromProvider?.(
+              result.id,
+              result.providerSequence,
+              sequenceBeforeProviderSpawn
+            )
+          }
           spawnTiming.mark('provider_spawn')
         } catch (err) {
           // Why: a failed spawn must not leave a stale hidden mark on a session
@@ -4366,7 +4398,8 @@ export function registerPtyHandlers(
           ) {
             runtime.seedHeadlessTerminal(result.id, result.coldRestore.scrollback, seedSize, {
               cwd: result.coldRestore.cwd,
-              oscLinks: result.coldRestore.oscLinks
+              oscLinks: result.coldRestore.oscLinks,
+              preferProviderIfExisting: true
             })
           }
         }
@@ -5119,6 +5152,40 @@ export function registerPtyHandlers(
         }
       }
       return Array.from(deduped.values())
+    }
+  )
+
+  ipcMain.on(
+    'pty:getAuthoritativeBufferSnapshotCapabilitiesSync',
+    (event, args: { ids?: unknown }) => {
+      const ids = Array.isArray(args?.ids) ? args.ids.slice(0, 512) : []
+      const capabilities: { id: string; authoritative: boolean | null }[] = []
+      const seen = new Set<string>()
+      for (const value of ids) {
+        if (
+          typeof value !== 'string' ||
+          value.length === 0 ||
+          value.length > 512 ||
+          seen.has(value)
+        ) {
+          continue
+        }
+        seen.add(value)
+        const provider = tryGetProviderForPty(value)
+        // Why: degraded routing mixes preserved daemons with an in-process
+        // fallback. Keep all of its panes mounted rather than guess ownership.
+        capabilities.push({
+          id: value,
+          authoritative: provider?.canProvideAuthoritativeBufferSnapshot
+            ? provider.canProvideAuthoritativeBufferSnapshot(value)
+            : provider && routesFreshSpawnsToLocalProvider(provider)
+              ? false
+              : null
+        })
+      }
+      // Why: cold deferral runs during render, before hidden panes mount. This
+      // batch is an in-memory route lookup so legacy PTYs can mount in that pass.
+      event.returnValue = capabilities
     }
   )
 

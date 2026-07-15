@@ -178,6 +178,10 @@ export default function RootLayout() {
           <Stack.Screen name="pair-scan" options={{ headerShown: false }} />
           <Stack.Screen name="pair" options={{ headerShown: false }} />
           <Stack.Screen name="pair-confirm" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="notification-opt-in"
+            options={{ headerShown: false, presentation: 'modal', gestureEnabled: false }}
+          />
           <Stack.Screen name="settings" options={{ headerShown: false }} />
           <Stack.Screen name="terminal-settings" options={{ headerShown: false }} />
           <Stack.Screen name="browser-settings" options={{ headerShown: false }} />

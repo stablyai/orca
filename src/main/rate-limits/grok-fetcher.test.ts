@@ -107,13 +107,95 @@ describe('fetchGrokRateLimits', () => {
     expect(netFetchMock).not.toHaveBeenCalled()
   })
 
-  it('returns unavailable when billing has no credit usage', async () => {
+  it('returns unavailable when neither billing view has usage', async () => {
     authState.file = freshAuthJson()
-    netFetchMock.mockResolvedValueOnce(jsonResponse({ config: { subscriptionTier: 'Enterprise' } }))
+    netFetchMock
+      .mockResolvedValueOnce(jsonResponse({ config: { subscriptionTier: 'Enterprise' } }))
+      .mockResolvedValueOnce(jsonResponse({ config: { subscriptionTier: 'Enterprise' } }))
 
     const result = await fetchGrokRateLimits()
     expect(result.status).toBe('unavailable')
     expect(result.weekly).toBeNull()
+    expect(result.monthly).toBeUndefined()
+  })
+
+  it('maps monthly included usage for unified-billing accounts without weekly credits', async () => {
+    authState.file = freshAuthJson()
+    netFetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({
+          config: {
+            currentPeriod: {
+              type: 'USAGE_PERIOD_TYPE_WEEKLY',
+              start: '2026-07-10T19:38:56.948570+00:00',
+              end: '2026-07-17T19:38:56.948570+00:00'
+            },
+            isUnifiedBillingUser: true,
+            subscriptionTier: 'SuperGrok'
+          }
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          config: {
+            monthlyLimit: { val: 150000 },
+            used: { val: 837 },
+            billingPeriodStart: '2026-07-01T00:00:00+00:00',
+            billingPeriodEnd: '2026-08-01T00:00:00+00:00'
+          }
+        })
+      )
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('ok')
+    expect(result.error).toBeNull()
+    expect(result.weekly).toBeNull()
+    expect(result.monthly?.usedPercent).toBeCloseTo((837 / 150000) * 100, 5)
+    expect(result.monthly?.windowMinutes).toBe(43_200)
+    expect(result.monthly?.resetsAt).toBe(Date.parse('2026-08-01T00:00:00+00:00'))
+    expect(result.usageMetadata?.authProvenance).toContain('SuperGrok')
+
+    expect(netFetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://cli-chat-proxy.grok.com/v1/billing',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer access-token' })
+      })
+    )
+  })
+
+  // Why: 'unavailable' would make applyStalePolicy discard the last good
+  // monthly snapshot; transient fallback failures must present like transient
+  // credits-view failures so stale data survives.
+  it('surfaces an error when the monthly fallback request fails', async () => {
+    authState.file = freshAuthJson()
+    netFetchMock
+      .mockResolvedValueOnce(jsonResponse({ config: { isUnifiedBillingUser: true } }))
+      .mockResolvedValueOnce(jsonResponse({}, 500))
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('error')
+    expect(result.error).toBe('Grok usage request failed (HTTP 500)')
+  })
+
+  it('surfaces an error when the monthly fallback request throws', async () => {
+    authState.file = freshAuthJson()
+    netFetchMock
+      .mockResolvedValueOnce(jsonResponse({ config: { isUnifiedBillingUser: true } }))
+      .mockRejectedValueOnce(new Error('network down'))
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('error')
+    expect(result.error).toBe('network down')
+  })
+
+  it('does not request the default billing view when weekly credits are present', async () => {
+    authState.file = freshAuthJson()
+    netFetchMock.mockResolvedValueOnce(jsonResponse(BILLING_RESPONSE))
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('ok')
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('returns unavailable when billing response has no config', async () => {

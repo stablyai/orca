@@ -9028,7 +9028,9 @@
           "3325d996cb": "刷新使用量",
           "a8f3e2c1b4": "每周额度",
           "b7e2d9f0a3": "与终端中 grok /usage 屏幕显示的每周额度百分比相同。",
-          "c6d1a8f4e2": "{{when}} 重置"
+          "c6d1a8f4e2": "{{when}} 重置",
+          "e6dadc1e2b": "Monthly usage",
+          "75e396bf42": "Included monthly usage for Grok unified-billing accounts."
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "已用",
@@ -11845,7 +11847,13 @@
                 "5f9a0ed7c4": "标题 4",
                 "01a71dbbdd": "嵌套小节标题。",
                 "8440fa4acf": "标题 5",
-                "b287b93c66": "深层小节标题。"
+                "b287b93c66": "深层小节标题。",
+                "7a2c1f9b04": "切换标题 2",
+                "b3e5d8a1c6": "创建一个带有中等标题摘要的可折叠部分。",
+                "2f9d6b4e10": "切换标题 3",
+                "8c1a3e7d52": "创建一个带有小标题摘要的可折叠部分。",
+                "5e0b9c2a71": "切换标题 4",
+                "d4f16a8b39": "创建一个带有嵌套标题摘要的可折叠部分。"
               }
             }
           }
@@ -13018,6 +13026,37 @@
         "searchLabels": "筛选标签…",
         "searchAssignee": "筛选负责人…",
         "back": "返回"
+      },
+      "browser-pane": {
+        "markup": {
+          "cancel": "取消",
+          "clear": "全部清除",
+          "copiedToast": "已复制标注 — 粘贴到你的智能体（{{value0}}）",
+          "copy": "复制标注",
+          "drawButton": "在截图上绘制",
+          "drawHint": "在页面上绘制，然后复制标记并粘贴到你的智能体。",
+          "drawHintBadge": "新功能",
+          "drawHintDismiss": "知道了",
+          "drawHintTry": "试一试",
+          "errorAttach": "无法附加标注后的截图。",
+          "errorCapture": "无法捕获页面进行绘制。",
+          "errorUnavailable": "此页面无法使用截图标注。",
+          "fontSize": "字号",
+          "hint": "在页面上绘制，然后复制标注以粘贴到你的智能体。",
+          "redo": "重做",
+          "style": "颜色和粗细",
+          "textInput": "标注文字",
+          "tool": {
+            "arrow": "箭头",
+            "ellipse": "椭圆",
+            "highlight": "高亮",
+            "pen": "画笔",
+            "rect": "矩形",
+            "text": "文字"
+          },
+          "undo": "撤销",
+          "widthOption": "{{value0}} px"
+        }
       }
     },
     "i18n": {

@@ -9028,7 +9028,9 @@
           "3325d996cb": "使用状況を更新",
           "a8f3e2c1b4": "週次クレジット",
           "b7e2d9f0a3": "ターミナルの grok /usage 画面と同じ週次クレジット率です。",
-          "c6d1a8f4e2": "{{when}} にリセット"
+          "c6d1a8f4e2": "{{when}} にリセット",
+          "e6dadc1e2b": "Monthly usage",
+          "75e396bf42": "Included monthly usage for Grok unified-billing accounts."
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "使用済み",
@@ -11845,7 +11847,13 @@
                 "5f9a0ed7c4": "見出し 4",
                 "01a71dbbdd": "ネストされたセクション見出し。",
                 "8440fa4acf": "見出し 5",
-                "b287b93c66": "深いセクションの見出し。"
+                "b287b93c66": "深いセクションの見出し。",
+                "7a2c1f9b04": "見出し 2 を切り替えます",
+                "b3e5d8a1c6": "中程度の見出しの概要を含む折りたたみ可能なセクションを作成します。",
+                "2f9d6b4e10": "見出し 3 を切り替えます",
+                "8c1a3e7d52": "小さな見出しの概要を含む折りたたみ可能なセクションを作成します。",
+                "5e0b9c2a71": "見出し 4 を切り替えます",
+                "d4f16a8b39": "入れ子の見出しの概要を含む折りたたみ可能なセクションを作成します。"
               }
             }
           }
@@ -13018,6 +13026,37 @@
         "searchLabels": "ラベルをフィルター…",
         "searchAssignee": "担当者をフィルター…",
         "back": "戻る"
+      },
+      "browser-pane": {
+        "markup": {
+          "cancel": "キャンセル",
+          "clear": "すべて消去",
+          "copiedToast": "注釈をコピーしました — エージェントに貼り付けてください（{{value0}}）",
+          "copy": "注釈をコピー",
+          "drawButton": "スクリーンショットに描き込み",
+          "drawHint": "ページに描き込み、マークアップをコピーしてエージェントに貼り付けられます。",
+          "drawHintBadge": "新機能",
+          "drawHintDismiss": "了解",
+          "drawHintTry": "試してみる",
+          "errorAttach": "注釈付きスクリーンショットを添付できませんでした。",
+          "errorCapture": "描画用にページを取得できませんでした。",
+          "errorUnavailable": "このページではスクリーンショット注釈を利用できません。",
+          "fontSize": "文字サイズ",
+          "hint": "ページに描き込み、注釈をコピーしてエージェントに貼り付けてください。",
+          "redo": "やり直し",
+          "style": "色と太さ",
+          "textInput": "注釈テキスト",
+          "tool": {
+            "arrow": "矢印",
+            "ellipse": "楕円",
+            "highlight": "ハイライト",
+            "pen": "ペン",
+            "rect": "四角形",
+            "text": "テキスト"
+          },
+          "undo": "元に戻す",
+          "widthOption": "{{value0}} px"
+        }
       }
     },
     "i18n": {

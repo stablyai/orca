@@ -9028,7 +9028,9 @@
           "3325d996cb": "Actualizar uso",
           "a8f3e2c1b4": "Créditos semanales",
           "b7e2d9f0a3": "El mismo porcentaje de créditos semanales que la pantalla grok /usage en la terminal.",
-          "c6d1a8f4e2": "Se restablece {{when}}"
+          "c6d1a8f4e2": "Se restablece {{when}}",
+          "e6dadc1e2b": "Monthly usage",
+          "75e396bf42": "Included monthly usage for Grok unified-billing accounts."
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Usado",
@@ -11845,7 +11847,13 @@
                 "5f9a0ed7c4": "Título 4",
                 "01a71dbbdd": "Encabezado de sección anidada.",
                 "8440fa4acf": "Título 5",
-                "b287b93c66": "Encabezado de sección profunda."
+                "b287b93c66": "Encabezado de sección profunda.",
+                "7a2c1f9b04": "Alternar título 2",
+                "b3e5d8a1c6": "Cree una sección plegable con un resumen de encabezado mediano.",
+                "2f9d6b4e10": "Alternar título 3",
+                "8c1a3e7d52": "Cree una sección plegable con un resumen de encabezado pequeño.",
+                "5e0b9c2a71": "Alternar título 4",
+                "d4f16a8b39": "Cree una sección plegable con un resumen de encabezado anidado."
               }
             }
           }
@@ -13018,6 +13026,37 @@
         "searchLabels": "Filtrar etiquetas…",
         "searchAssignee": "Filtrar asignatario…",
         "back": "Atrás"
+      },
+      "browser-pane": {
+        "markup": {
+          "cancel": "Cancelar",
+          "clear": "Borrar todo",
+          "copiedToast": "Marcado copiado: pégalo en tu agente ({{value0}})",
+          "copy": "Copiar marcado",
+          "drawButton": "Dibujar en la captura",
+          "drawHint": "Dibuja en la página y copia el markup para pegarlo en tu agente.",
+          "drawHintBadge": "Nuevo",
+          "drawHintDismiss": "Entendido",
+          "drawHintTry": "Probar",
+          "errorAttach": "No se pudo adjuntar la captura de pantalla con marcado.",
+          "errorCapture": "No se pudo capturar la página para dibujar.",
+          "errorUnavailable": "El marcado de captura de pantalla no está disponible en esta página.",
+          "fontSize": "Tamaño de letra",
+          "hint": "Dibuja en la página y luego copia el marcado para pegarlo en tu agente.",
+          "redo": "Rehacer",
+          "style": "Color y grosor",
+          "textInput": "Texto de anotación",
+          "tool": {
+            "arrow": "Flecha",
+            "ellipse": "Elipse",
+            "highlight": "Resaltador",
+            "pen": "Lápiz",
+            "rect": "Rectángulo",
+            "text": "Texto"
+          },
+          "undo": "Deshacer",
+          "widthOption": "{{value0}} px"
+        }
       }
     },
     "i18n": {

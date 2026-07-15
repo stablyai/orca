@@ -9028,7 +9028,9 @@
           "3325d996cb": "Refresh usage",
           "a8f3e2c1b4": "Weekly credits",
           "b7e2d9f0a3": "Same weekly credit % as the grok /usage screen in the terminal.",
-          "c6d1a8f4e2": "Resets {{when}}"
+          "c6d1a8f4e2": "Resets {{when}}",
+          "e6dadc1e2b": "Monthly usage",
+          "75e396bf42": "Included monthly usage for Grok unified-billing accounts."
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Used",
@@ -11845,7 +11847,13 @@
                 "5f9a0ed7c4": "Heading 4",
                 "01a71dbbdd": "Nested section heading.",
                 "8440fa4acf": "Heading 5",
-                "b287b93c66": "Deep section heading."
+                "b287b93c66": "Deep section heading.",
+                "7a2c1f9b04": "Toggle Heading 2",
+                "b3e5d8a1c6": "Create a collapsible section with a medium heading summary.",
+                "2f9d6b4e10": "Toggle Heading 3",
+                "8c1a3e7d52": "Create a collapsible section with a small heading summary.",
+                "5e0b9c2a71": "Toggle Heading 4",
+                "d4f16a8b39": "Create a collapsible section with a nested heading summary."
               }
             }
           }
@@ -13018,6 +13026,37 @@
         "searchLabels": "Filter labels…",
         "searchAssignee": "Filter assignee…",
         "back": "Back"
+      },
+      "browser-pane": {
+        "markup": {
+          "cancel": "Cancel",
+          "clear": "Clear all",
+          "copiedToast": "Markup copied — paste it into your agent ({{value0}})",
+          "copy": "Copy Markup",
+          "drawButton": "Draw on screenshot",
+          "drawHint": "Draw on the page, then copy the markup to paste into your agent.",
+          "drawHintBadge": "New",
+          "drawHintDismiss": "Got it",
+          "drawHintTry": "Try it",
+          "errorAttach": "Could not attach the markup screenshot.",
+          "errorCapture": "Could not capture the page to draw on.",
+          "errorUnavailable": "Screenshot markup is not available on this page.",
+          "fontSize": "Font size",
+          "hint": "Draw on the page, then copy the markup to paste into your agent.",
+          "redo": "Redo",
+          "style": "Color and thickness",
+          "textInput": "Annotation text",
+          "tool": {
+            "arrow": "Arrow",
+            "ellipse": "Ellipse",
+            "highlight": "Highlighter",
+            "pen": "Pen",
+            "rect": "Rectangle",
+            "text": "Text"
+          },
+          "undo": "Undo",
+          "widthOption": "{{value0}} px"
+        }
       }
     },
     "i18n": {

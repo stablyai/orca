@@ -45,6 +45,9 @@ export {
 export type { ParkedTerminalPaneCapture } from './terminal-parked-watcher-registry'
 
 export type ParkableTerminalTabModel = Pick<TerminalTab, 'id' | 'ptyId'>
+export type ParkedTerminalPtyEligibility = (ptyId: string) => boolean
+
+const allowSnapshotBackedPty = (): boolean => true
 
 type ParkedPaneFallbackState = {
   terminalLayoutsByTabId: ReturnType<typeof useAppStore.getState>['terminalLayoutsByTabId']
@@ -103,7 +106,10 @@ function resolveParkedTerminalPaneCandidates(
  */
 export function canWatcherCoverParkedTerminalTab(
   worktreeId: string,
-  tab: ParkableTerminalTabModel
+  tab: ParkableTerminalTabModel,
+  // Why: cold activation needs stronger provider snapshot support because the
+  // view has never mounted; ordinary parking can reattach a previously mounted v19 view.
+  isPtyEligible: ParkedTerminalPtyEligibility = allowSnapshotBackedPty
 ): boolean {
   const panes = resolveParkedTerminalPaneCandidates(tab, useAppStore.getState())
   return (
@@ -112,7 +118,8 @@ export function canWatcherCoverParkedTerminalTab(
       (pane) =>
         pane.ptyId !== null &&
         isTerminalLeafId(pane.leafId) &&
-        isSnapshotBackedTerminalPty(pane.ptyId, worktreeId)
+        isSnapshotBackedTerminalPty(pane.ptyId, worktreeId) &&
+        isPtyEligible(pane.ptyId)
     )
   )
 }

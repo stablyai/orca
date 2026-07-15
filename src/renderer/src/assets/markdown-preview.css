@@ -556,6 +556,22 @@
   line-height: 1.3;
 }
 
+/* Heading toggle sizes mirror the plain h2–h4 scales (1.4 / 1.15 / 1em). */
+.markdown-body details.orca-details[data-orca-toggle='heading-2'] > summary {
+  font-size: 1.4em;
+  line-height: 1.3;
+}
+
+.markdown-body details.orca-details[data-orca-toggle='heading-3'] > summary {
+  font-size: 1.15em;
+  line-height: 1.3;
+}
+
+.markdown-body details.orca-details[data-orca-toggle='heading-4'] > summary {
+  font-size: 1em;
+  line-height: 1.3;
+}
+
 .markdown-body details.orca-details > :not(summary) {
   margin-left: 0.15em;
 }
