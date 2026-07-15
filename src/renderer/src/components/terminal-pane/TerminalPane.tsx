@@ -1004,6 +1004,9 @@ export default function TerminalPane({
   const effectiveMacOptionAsAlt = useEffectiveMacOptionAsAlt(settings?.terminalMacOptionAsAlt)
   const macOptionAsAltRef = useRef<MacOptionAsAlt>(effectiveMacOptionAsAlt)
   macOptionAsAltRef.current = effectiveMacOptionAsAlt
+  const optionAsAltIsExplicit = (settings?.terminalMacOptionAsAlt ?? 'auto') !== 'auto'
+  const optionAsAltIsExplicitRef = useRef(optionAsAltIsExplicit)
+  optionAsAltIsExplicitRef.current = optionAsAltIsExplicit
   const onPtyExitRef = useRef(onPtyExit)
   onPtyExitRef.current = onPtyExit
 
@@ -1839,6 +1842,7 @@ export default function TerminalPane({
     searchOpenRef,
     searchStateRef,
     macOptionAsAltRef,
+    optionAsAltIsExplicitRef,
     paneKittyKeyboardModesRef,
     keybindings,
     terminalShortcutPolicy: settings?.terminalShortcutPolicy ?? 'orca-first'

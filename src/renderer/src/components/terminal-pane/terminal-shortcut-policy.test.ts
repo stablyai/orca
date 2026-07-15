@@ -684,7 +684,8 @@ describe('kitty keyboard protocol panes', () => {
     input: TerminalShortcutEvent,
     macOptionAsAlt: 'true' | 'false' | 'left' | 'right' = 'false',
     optionKeyLocation = 0,
-    active: () => boolean = kittyActive
+    active: () => boolean = kittyActive,
+    optionAsAltIsExplicit = false
   ) =>
     resolveTerminalShortcutAction(
       input,
@@ -694,8 +695,72 @@ describe('kitty keyboard protocol panes', () => {
       false,
       undefined,
       undefined,
-      active
+      active,
+      undefined,
+      undefined,
+      undefined,
+      optionAsAltIsExplicit
     )
+
+  it('lets explicit Option Off compose punctuation in kitty panes', () => {
+    expect(
+      resolveKitty(event({ key: '{', code: 'Quote', altKey: true }), 'false', 0, kittyActive, true)
+    ).toEqual({ type: 'sendInput', data: '{' })
+  })
+
+  it('keeps auto-resolved Off encoded for kitty panes', () => {
+    expect(resolveKitty(event({ key: '{', code: 'Quote', altKey: true }))).toEqual({
+      type: 'sendInput',
+      data: '\x1b[39;3u'
+    })
+  })
+
+  it('preserves readline and explicit Meta modes with explicit Off', () => {
+    expect(
+      resolveKitty(event({ key: '∫', code: 'KeyB', altKey: true }), 'false', 0, kittyActive, true)
+    ).toEqual({ type: 'sendInput', data: '\x1bb' })
+    expect(
+      resolveKitty(event({ key: '¬', code: 'KeyL', altKey: true }), 'left', 1, kittyActive, true)
+    ).toEqual({ type: 'sendInput', data: '\x1b[108;3u' })
+    expect(
+      resolveKitty(event({ key: '¬', code: 'KeyL', altKey: true }), 'right', 2, kittyActive, true)
+    ).toEqual({ type: 'sendInput', data: '\x1b[108;3u' })
+    expect(
+      resolveKitty(event({ key: '¬', code: 'KeyL', altKey: true }), 'false', 0, kittyInactive, true)
+    ).toBeNull()
+  })
+  it('keeps the compose-side Option key literal in explicit left/right kitty modes', () => {
+    expect(
+      resolveKitty(event({ key: '{', code: 'Quote', altKey: true }), 'left', 2, kittyActive, true)
+    ).toEqual({
+      type: 'sendInput',
+      data: '{'
+    })
+    expect(
+      resolveKitty(event({ key: '{', code: 'Quote', altKey: true }), 'right', 1, kittyActive, true)
+    ).toEqual({
+      type: 'sendInput',
+      data: '{'
+    })
+  })
+
+  it('keeps shifted compose-side Option characters literal in explicit kitty modes', () => {
+    for (const [mode, location] of [
+      ['false', 0],
+      ['left', 2],
+      ['right', 1]
+    ] as const) {
+      expect(
+        resolveKitty(
+          event({ key: '∏', code: 'KeyP', altKey: true, shiftKey: true }),
+          mode,
+          location,
+          kittyActive,
+          true
+        )
+      ).toEqual({ type: 'sendInput', data: '∏' })
+    }
+  })
 
   it('encodes Option+letter as kitty CSI-u with the physical base key in compose mode', () => {
     // macOS composition reports key='π' for Option+P on ABC/compose layouts;
@@ -824,8 +889,7 @@ describe('kitty keyboard protocol panes', () => {
         layoutBaseCharacterForCode
       )
 
-    // AZERTY types M at the physical Semicolon position; the layout map must
-    // win over the US punctuation table so the chord reports alt+m, not alt+;.
+    // AZERTY types M at Semicolon, so the layout map must beat the US table and report alt+m, not alt+;.
     const azerty = (code: string): string | undefined => (code === 'Semicolon' ? 'm' : undefined)
     expect(resolveWithLayout(event({ key: 'µ', code: 'Semicolon', altKey: true }), azerty)).toEqual(
       { type: 'sendInput', data: '\x1b[109;3u' }

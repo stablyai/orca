@@ -93,7 +93,8 @@ export function resolveTerminalShortcutAction(
   getWindowsShiftEnterEncoding?: () => WindowsShiftEnterEncoding,
   // Why: keybindings follow the client OS, but terminal byte protocols follow
   // the PTY host. They differ for macOS clients attached to Windows runtimes.
-  isWindowsTerminalHost: () => boolean = () => isWindows
+  isWindowsTerminalHost: () => boolean = () => isWindows,
+  optionAsAltIsExplicit = false
 ): TerminalShortcutAction | null {
   const platform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
   if (!event.repeat) {
@@ -290,18 +291,26 @@ export function resolveTerminalShortcutAction(
   //
   // The handling depends on the macOptionAsAlt setting (mirrors Ghostty):
   // - 'true':  xterm handles all Option as Meta natively; nothing to do here.
-  // - kitty-protocol pane (any other mode): the TUI asked for modifier-accurate
-  //   keys, so every Option chord is encoded as kitty CSI-u with the physical
-  //   base key (Option+P → \x1b[112;3u). Without this, xterm's kitty encoder
-  //   reports the composed codepoint (alt+π), which no TUI binds — the chord
-  //   neither triggers the hotkey nor types the character (issue: OMP Alt+P /
-  //   Alt+M dead on compose layouts). Dead keys are exempt so composition
-  //   (Option+E → ´) keeps working.
+  // - kitty-protocol pane: auto-resolved compose mode and explicit Meta-side
+  //   modes defer to the TUI's modifier-accurate encoding. An explicitly chosen
+  //   compose side keeps literal composed input instead; dead keys are exempt
+  //   so composition (Option+E → ´) keeps working.
   // - 'false': compensate the three most critical readline shortcuts (B/F/D).
   // - 'left'/'right': the designated Option key acts as full Meta (emit Esc+
   //   for any single letter); the other key composes, with B/F/D compensated.
   if (isMac && !event.metaKey && !event.ctrlKey && event.altKey && macOptionAsAlt !== 'true') {
-    if (event.key !== 'Dead' && isKittyKeyboardActivePane?.()) {
+    const isLeftOption = optionKeyLocation === 1
+    const isRightOption = optionKeyLocation === 2
+    const shouldActAsMeta =
+      (macOptionAsAlt === 'left' && isLeftOption) || (macOptionAsAlt === 'right' && isRightOption)
+    const kittyActive = event.key !== 'Dead' && isKittyKeyboardActivePane?.() === true
+    const explicitComposeSide = optionAsAltIsExplicit && !shouldActAsMeta
+    const needsReadlineComposeCompensation =
+      !shouldActAsMeta &&
+      !event.shiftKey &&
+      (event.code === 'KeyB' || event.code === 'KeyF' || event.code === 'KeyD')
+
+    if (kittyActive && !explicitComposeSide) {
       const baseCharacter =
         (event.code ? layoutBaseCharacterForCode?.(event.code) : undefined) ??
         resolveUnshiftedCharacterForCode(event.code)
@@ -313,17 +322,16 @@ export function resolveTerminalShortcutAction(
       }
     }
 
+    if (
+      kittyActive &&
+      explicitComposeSide &&
+      event.key.length === 1 &&
+      !needsReadlineComposeCompensation
+    ) {
+      return { type: 'sendInput', data: event.key }
+    }
+
     if (!event.shiftKey) {
-      // Why: event.location on a character key reports that key's position
-      // (always 0 for standard keys), NOT which modifier is held. The caller
-      // must track the Option key's own keydown location and pass it as
-      // optionKeyLocation.
-      const isLeftOption = optionKeyLocation === 1
-      const isRightOption = optionKeyLocation === 2
-
-      const shouldActAsMeta =
-        (macOptionAsAlt === 'left' && isLeftOption) || (macOptionAsAlt === 'right' && isRightOption)
-
       if (shouldActAsMeta) {
         // Emit Esc+key (e.g. Option+B → \x1bb) for letters, digits, and
         // mapped punctuation.

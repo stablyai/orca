@@ -49,7 +49,8 @@ export function resolveTerminalKeyboardShortcutAction(
   isKittyKeyboardActivePane: Parameters<typeof resolveTerminalShortcutAction>[7],
   layoutBaseCharacterForCode: Parameters<typeof resolveTerminalShortcutAction>[8],
   getWindowsShiftEnterEncoding: Parameters<typeof resolveTerminalShortcutAction>[9],
-  isWindowsTerminalHost: NonNullable<Parameters<typeof resolveTerminalShortcutAction>[10]>
+  isWindowsTerminalHost: NonNullable<Parameters<typeof resolveTerminalShortcutAction>[10]>,
+  optionAsAltIsExplicit: Parameters<typeof resolveTerminalShortcutAction>[11] = false
 ): ReturnType<typeof resolveTerminalShortcutAction> {
   // Why: keep the host callback required at the production boundary so a
   // caller cannot silently fall back to client-OS byte routing.
@@ -64,7 +65,8 @@ export function resolveTerminalKeyboardShortcutAction(
     isKittyKeyboardActivePane,
     layoutBaseCharacterForCode,
     getWindowsShiftEnterEncoding,
-    isWindowsTerminalHost
+    isWindowsTerminalHost,
+    optionAsAltIsExplicit
   )
 }
 
@@ -201,6 +203,7 @@ type KeyboardHandlersDeps = {
   searchOpenRef: React.RefObject<boolean>
   searchStateRef: React.RefObject<SearchState>
   macOptionAsAltRef: React.RefObject<MacOptionAsAlt>
+  optionAsAltIsExplicitRef: React.RefObject<boolean>
   paneKittyKeyboardModesRef?: React.RefObject<Map<number, TerminalKittyKeyboardModeTracker>>
   keybindings?: KeybindingOverrides
   terminalShortcutPolicy?: TerminalShortcutPolicy
@@ -236,6 +239,7 @@ export function useTerminalKeyboardShortcuts({
   searchOpenRef,
   searchStateRef,
   macOptionAsAltRef,
+  optionAsAltIsExplicitRef,
   paneKittyKeyboardModesRef,
   keybindings,
   terminalShortcutPolicy = 'orca-first'
@@ -392,7 +396,8 @@ export function useTerminalKeyboardShortcuts({
         isKittyKeyboardActivePane,
         getLayoutBaseCharacterForCode,
         getActivePaneWindowsShiftEnterEncoding,
-        isActivePaneWindowsTerminalHost
+        isActivePaneWindowsTerminalHost,
+        optionAsAltIsExplicitRef.current
       )
       if (!action) {
         return
@@ -637,6 +642,7 @@ export function useTerminalKeyboardShortcuts({
     searchOpenRef,
     searchStateRef,
     macOptionAsAltRef,
+    optionAsAltIsExplicitRef,
     paneKittyKeyboardModesRef,
     keybindings,
     terminalShortcutPolicy,
