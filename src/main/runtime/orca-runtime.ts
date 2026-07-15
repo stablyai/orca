@@ -20738,7 +20738,11 @@ export class OrcaRuntimeService {
     this.worktreeScanInFlight.set(repo.id, { generation, runtimeKey, promise })
     try {
       const result = await promise
-      if (result.ok && generation === this.resolvedWorktreeGeneration) {
+      if (
+        result.ok &&
+        generation === this.resolvedWorktreeGeneration &&
+        this.worktreeScanInFlight.get(repo.id)?.promise === promise
+      ) {
         this.worktreeScanCache.set(repo.id, {
           generation,
           runtimeKey,
