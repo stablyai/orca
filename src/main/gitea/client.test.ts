@@ -14,6 +14,7 @@ import {
   normalizeGiteaApiBaseUrl
 } from './client'
 import { _resetGiteaRepoRefCache } from './repository-ref'
+import { _resetGiteaPullRequestScanCache } from './pull-request-scan-cache'
 
 const OLD_ENV = process.env
 
@@ -44,6 +45,7 @@ describe('Gitea client', () => {
       stderr: ''
     })
     _resetGiteaRepoRefCache()
+    _resetGiteaPullRequestScanCache()
     vi.unstubAllGlobals()
   })
 
@@ -90,6 +92,49 @@ describe('Gitea client', () => {
     expect(listUrl.searchParams.get('sort')).toBe('recentupdate')
     expect(listUrl.searchParams.get('page')).toBe('1')
     expect(listUrl.searchParams.get('limit')).toBe('50')
+  })
+
+  it('shares one /pulls scan across concurrent branch lookups (#8807)', async () => {
+    let listCalls = 0
+    const fetchMock = vi.fn(async (url: string) => {
+      const parsed = new URL(url)
+      if (parsed.pathname.endsWith('/status')) {
+        return Response.json({ state: 'success' })
+      }
+      listCalls++
+      return Response.json([giteaPr(7, 'feature/a'), giteaPr(8, 'feature/b')])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const [a, b, missing] = await Promise.all([
+      getGiteaPullRequestForBranch('/repo', 'feature/a'),
+      getGiteaPullRequestForBranch('/repo', 'feature/b'),
+      getGiteaPullRequestForBranch('/repo', 'feature/none')
+    ])
+
+    expect(a?.number).toBe(7)
+    expect(b?.number).toBe(8)
+    expect(missing).toBeNull()
+    expect(listCalls).toBe(1)
+  })
+
+  it('reuses the cached /pulls scan for lookups inside the TTL', async () => {
+    let listCalls = 0
+    const fetchMock = vi.fn(async (url: string) => {
+      const parsed = new URL(url)
+      if (parsed.pathname.endsWith('/status')) {
+        return Response.json({ state: 'success' })
+      }
+      listCalls++
+      return Response.json([giteaPr()])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getGiteaPullRequestForBranch('/repo', 'feature/gitea')
+    await getGiteaPullRequestForBranch('/repo', 'feature/gitea')
+    await getGiteaPullRequestForBranch('/repo', 'no-pr-branch')
+
+    expect(listCalls).toBe(1)
   })
 
   it('uses an API base URL override for subpath or non-standard deployments', async () => {
