@@ -102,8 +102,15 @@ Common commands:
 ORCA repo list --json
 ORCA repo show --repo id:<repoId> --json
 ORCA repo add --path /abs/repo --json
+ORCA repo set --repo id:<repoId> --group name:<groupName> --json
+ORCA repo set --repo id:<repoId> --ungroup --json
+ORCA repo rm --repo id:<repoId> --json
 ORCA repo set-base-ref --repo id:<repoId> --ref origin/main --json
 ORCA repo search-refs --repo id:<repoId> --query main --limit 10 --json
+ORCA repo group list --json
+ORCA repo group create --name <groupName> --json
+ORCA repo group set --group name:<groupName> --name <newName> --json
+ORCA repo group rm --group name:<groupName> --json
 ORCA worktree list --repo id:<repoId> --json
 ORCA worktree ps --json
 ORCA worktree current --json
