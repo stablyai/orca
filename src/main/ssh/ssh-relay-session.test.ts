@@ -167,6 +167,21 @@ describe('SshRelaySession', () => {
     }) => void
 
     onData({
+    markHiddenRendererPty('ssh-pty-1')
+    onData({ id: 'ssh-pty-1', data: 'hidden ssh output' })
+
+    // Runtime ingestion still ran; renderer delivery shrank to one marker.
+    expect(runtime.onPtyData).toHaveBeenCalledWith(
+      'ssh-pty-1',
+      'hidden ssh output',
+      expect.any(Number),
+      17,
+      undefined
+    )
+    expect(mockWindow.webContents.send).toHaveBeenCalledTimes(1)
+    // Why out-of-band: an in-band empty pty:data sentinel is ambiguous with
+    // chunks fully consumed by renderer OSC-9999 stripping.
+    expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
       id: 'ssh-pty-1',
       data: 'ssh output',
       providerGeneration: 41,

@@ -1722,6 +1722,14 @@ describe('SSH IPC handlers', () => {
     })
     expect(runtime.onPtyData).not.toHaveBeenCalled()
     expect(runtime.onPtyExit).not.toHaveBeenCalled()
+    expect(runtime.onPtyData).toHaveBeenCalledWith(
+      'remote-pty',
+      'hello',
+      expect.any(Number),
+      5,
+      undefined
+    )
+    expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', 7, undefined)
   })
 
   it('mirrors SSH state broadcasts onto the runtime client-event stream', async () => {
@@ -2111,6 +2119,14 @@ describe('SSH IPC handlers', () => {
     })
     expect(secondRuntime.onPtyData).not.toHaveBeenCalled()
     expect(secondRuntime.onPtyExit).not.toHaveBeenCalled()
+    expect(secondRuntime.onPtyData).toHaveBeenCalledWith(
+      'remote-pty',
+      'hello',
+      expect.any(Number),
+      5,
+      undefined
+    )
+    expect(secondRuntime.onPtyExit).toHaveBeenCalledWith('remote-pty', 9, undefined)
     expect(firstRuntime.onPtyData).not.toHaveBeenCalled()
     expect(firstRuntime.onPtyExit).not.toHaveBeenCalled()
   })

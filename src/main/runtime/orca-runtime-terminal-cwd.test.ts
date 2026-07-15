@@ -111,6 +111,11 @@ describe('OrcaRuntimeService terminal startup cwd', () => {
     const store = {
       // wt-1 is a worktree id, not a registered repo, so getRepo returns undefined.
       getRepo: () => undefined,
+      // wt-1 is a worktree id, not a registered repo, so getRepo returns null;
+      // the selector validator calls it to reject repo ids passed as worktree ids.
+      getRepo: () => null,
+      getRepos: () => [],
+      getWorktreeMeta: () => undefined,
       getWorkspaceSession: () => ({
         activeRepoId: null,
         activeWorktreeId: 'wt-1',
