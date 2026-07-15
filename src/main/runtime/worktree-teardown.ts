@@ -116,6 +116,12 @@ async function sweepLocalProvider(
   const stopped = new Set<string>()
   await mapPtyStopsWithConcurrency([...targets.keys()], async (ptyId) => {
     try {
+      if (provider.canVerifyFullSessionTeardown?.(ptyId) === false) {
+        // Why: provider-only sessions bypass runtime.stopAndWait. Preserve a
+        // legacy daemon PTY whose leader-only acknowledgement cannot prove safety.
+        failedShutdowns.set(ptyId, new Error('Provider cannot verify full PTY teardown'))
+        return
+      }
       await provider.shutdown(ptyId, { immediate: true })
       stopped.add(ptyId)
       retirePty?.(ptyId)

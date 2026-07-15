@@ -122,6 +122,23 @@ describe('killAllProcessesForWorktree', () => {
     await expect(killAllProcessesForWorktree('w1', { localProvider })).rejects.toThrow('boom')
   })
 
+  it('preserves provider-only sessions when their owner cannot verify full teardown', async () => {
+    const ptyId = 'w1@@legacy-daemon'
+    const localProvider = createProviderStub(async () => [
+      { id: ptyId, cwd: '/tmp/w1', title: 'shell' }
+    ])
+    localProvider.canVerifyFullSessionTeardown = vi.fn(() => false)
+    listRegisteredPtysMock.mockReturnValue([])
+
+    await expect(killAllProcessesForWorktree('w1', { localProvider })).rejects.toThrow(
+      "This workspace still has a terminal running that Orca couldn't stop. Try again, or close the terminal and retry."
+    )
+
+    expect(localProvider.canVerifyFullSessionTeardown).toHaveBeenCalledWith(ptyId)
+    expect(localProvider.shutdown).not.toHaveBeenCalled()
+    expect(localProvider.listProcesses).toHaveBeenCalledTimes(2)
+  })
+
   it('does not let cleanup hook failures abort teardown', async () => {
     const localProvider = createProviderStub(async () => [
       { id: 'w1@@aaaa', cwd: '/tmp/w1', title: 'shell' }

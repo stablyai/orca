@@ -17558,9 +17558,6 @@ export class OrcaRuntimeService {
       let removalResult: RemoveWorktreeResult | undefined
       try {
         const localProvider = this.getLocalProvider()
-        await closeLocalWatcherForWorktreePath(canonicalWorktreePath).catch((err) => {
-          console.warn(`[filesystem-watcher] failed to close ${canonicalWorktreePath}:`, err)
-        })
         if (localProvider) {
           // Why: kill PTYs before git-level removal so Windows handles cannot
           // keep the directory busy and deleted-cwd shells cannot survive recovery.
@@ -17583,6 +17580,11 @@ export class OrcaRuntimeService {
             }
           })
         }
+        // Why: a failed verified teardown leaves this workspace usable. Keep
+        // its watcher alive until terminals are proven stopped for deletion.
+        await closeLocalWatcherForWorktreePath(canonicalWorktreePath).catch((err) => {
+          console.warn(`[filesystem-watcher] failed to close ${canonicalWorktreePath}:`, err)
+        })
 
         try {
           const removeOptions = {

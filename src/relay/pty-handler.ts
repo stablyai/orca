@@ -445,6 +445,10 @@ export class PtyHandler {
     managed.pty.onExit(({ exitCode }: { exitCode: number }) => {
       this.resolveExitWaiters(managed.id)
       if (managed.disposed) {
+        // Why: a Windows graceful-close fallback retains the disposed owner so
+        // retries cannot mistake an unverified ConPTY for an absent session.
+        this.ptys.delete(managed.id)
+        this.clearPtyFlowState(managed.id)
         return
       }
       // Why: neutralize managed.pty.kill synchronously BEFORE anything else
@@ -1027,16 +1031,15 @@ export class PtyHandler {
           // without this notify the renderer never learns the pane is dead
           // when the SIGKILL fallback fires for a SIGTERM-ignoring child.
           this.dispatcher.notify('pty.exit', { id, code: -1 })
-          // Why: if SIGKILL's onExit never fires (kernel edge case,
-          // uninterruptible sleep, child wedged on a bad NFS mount), the
-          // fd and map entry would leak forever. Dispose synchronously so
-          // graceful-shutdown's SIGKILL fallback is a hard guarantee, not
-          // "hopefully onExit will run". The disposed guard inside
-          // disposeManagedPty makes a later onExit's dispose a no-op.
+          // Why: POSIX SIGKILL may never emit onExit for a D-state child, so
+          // dispose and delete it synchronously. Windows must retain the owner
+          // until native exit proves the already-issued ConPTY close completed.
           this.notifyExitListener(still)
           disposeManagedPty(still)
-          this.ptys.delete(id)
-          this.clearPtyFlowState(id)
+          if (process.platform !== 'win32' || !still.windowsImmediateKillIssued) {
+            this.ptys.delete(id)
+            this.clearPtyFlowState(id)
+          }
         }
       }, 5000)
     }
@@ -1294,17 +1297,15 @@ export class PtyHandler {
         managed.killTimer = undefined
       }
       this.clearStartupCommandTimer(managed)
-      // Why: SIGKILL (not SIGTERM) before destroy. The relay process is
-      // exiting; any SIGTERM-ignoring remote shell (editor with unsaved
-      // buffers, a hung child with a bad handler, a process in
-      // uninterruptible sleep) would survive SIGTERM + immediate destroy()
-      // as an orphan on the remote host. SIGKILL is not ignorable and the
-      // ptmx fd release via disposeManagedPty is synchronous, so there is
-      // no graceful-shutdown window to preserve at this point.
-      try {
-        killPtyProcess(managed.pty, 'SIGKILL')
-      } catch {
-        /* child may already be dead */
+      // Why: POSIX relay exit uses SIGKILL before destroy so resistant children
+      // cannot become orphans. A Windows close is already force-capable; issuing
+      // it again can corrupt an unrelated ConPTY pipe pairing.
+      if (process.platform !== 'win32' || !managed.windowsImmediateKillIssued) {
+        try {
+          killPtyProcess(managed.pty, 'SIGKILL')
+        } catch {
+          /* child may already be dead */
+        }
       }
       this.notifyExitListener(managed)
       disposeManagedPty(managed)

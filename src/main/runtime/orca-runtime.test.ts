@@ -97,10 +97,15 @@ const ORIGINAL_PLATFORM = process.platform
 const ORIGINAL_PLATFORM_DESCRIPTOR = Object.getOwnPropertyDescriptor(process, 'platform')
 const removeWorktreeLinkedPathsMock = vi.hoisted(() => vi.fn())
 const resolveLocalGitUsernameMock = vi.hoisted(() => vi.fn(async () => ''))
+const closeLocalWatcherForWorktreePathMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../ipc/worktree-symlinks', () => ({
   createWorktreeLinkedPaths: vi.fn(),
   removeWorktreeLinkedPaths: removeWorktreeLinkedPathsMock
+}))
+
+vi.mock('../ipc/filesystem-watcher', () => ({
+  closeLocalWatcherForWorktreePath: closeLocalWatcherForWorktreePathMock
 }))
 
 async function waitForMobileSessionTabsEvents(
@@ -565,6 +570,8 @@ function resetRuntimeTestMocks(): void {
   vi.mocked(assertWorktreeCleanForRemoval).mockResolvedValue(undefined)
   vi.mocked(removeWorktree).mockReset()
   removeWorktreeLinkedPathsMock.mockReset()
+  closeLocalWatcherForWorktreePathMock.mockReset()
+  closeLocalWatcherForWorktreePathMock.mockResolvedValue(undefined)
   resolveLocalGitUsernameMock.mockReset().mockResolvedValue('')
   vi.mocked(forceDeleteLocalBranchMock).mockReset()
   vi.mocked(forceDeleteLocalBranchMock).mockResolvedValue(undefined)
@@ -30613,6 +30620,12 @@ describe('OrcaRuntimeService', () => {
       expect(killIdx).toBeGreaterThan(preflightIdx)
       expect(killIdx).toBeGreaterThanOrEqual(0)
       expect(gitIdx).toBeGreaterThan(killIdx)
+      expect(killSpy.mock.invocationCallOrder[0]).toBeLessThan(
+        closeLocalWatcherForWorktreePathMock.mock.invocationCallOrder[0]
+      )
+      expect(closeLocalWatcherForWorktreePathMock.mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(removeWorktree).mock.invocationCallOrder[0]
+      )
     })
 
     it('does not invoke Git removal when local provider teardown remains unverified', async () => {
@@ -30630,6 +30643,7 @@ describe('OrcaRuntimeService', () => {
       )
 
       expect(removeWorktree).not.toHaveBeenCalled()
+      expect(closeLocalWatcherForWorktreePathMock).not.toHaveBeenCalled()
     })
 
     it('keeps spawn admission closed through post-Git metadata cleanup', async () => {

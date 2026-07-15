@@ -1239,14 +1239,48 @@ describe('PtyHandler', () => {
       })
     })
 
-    it('does not double-close ConPTY on the graceful-shutdown fallback', async () => {
+    it('retains an unverified ConPTY across graceful-fallback teardown retries', async () => {
       await withWindowsPlatform(async () => {
-        const mockKill = mockKillablePty()
+        let onExitCb: ((evt: { exitCode: number }) => void) | undefined
+        const mockKill = vi.fn()
+        mockPtySpawn.mockReturnValue({
+          ...mockPtyInstance,
+          kill: mockKill,
+          onData: vi.fn(),
+          onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+            onExitCb = cb
+          })
+        })
         await dispatcher.callRequest('pty.spawn', {})
         await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: false })
         expectBareKills(mockKill, 1)
-        vi.advanceTimersByTime(5000)
+        await vi.advanceTimersByTimeAsync(5000)
+
+        expect(handler.activePtyCount).toBe(1)
+        const firstRetry = dispatcher.callRequest('pty.shutdown', {
+          id: 'pty-1',
+          immediate: true
+        })
+        const firstRejection = expect(firstRetry).rejects.toThrow(
+          'Timed out waiting for Windows PTY teardown: pty-1'
+        )
+        await vi.advanceTimersByTimeAsync(RELAY_PTY_IMMEDIATE_SHUTDOWN_TIMEOUT_MS)
+        await firstRejection
+
+        const secondRetry = dispatcher.callRequest('pty.shutdown', {
+          id: 'pty-1',
+          immediate: true
+        })
+        const secondRejection = expect(secondRetry).rejects.toThrow(
+          'Timed out waiting for Windows PTY teardown: pty-1'
+        )
+        await vi.advanceTimersByTimeAsync(RELAY_PTY_IMMEDIATE_SHUTDOWN_TIMEOUT_MS)
+        await secondRejection
+
         expectBareKills(mockKill, 1)
+        expect(handler.activePtyCount).toBe(1)
+        onExitCb!({ exitCode: 0 })
+        expect(handler.activePtyCount).toBe(0)
       })
     })
 

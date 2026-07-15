@@ -1866,8 +1866,6 @@ export function registerWorktreeHandlers(
         )
         let removalResult: RemoveWorktreeResult | undefined
         try {
-          await closeLocalWatcherForRemoval(canonicalWorktreePath)
-
           await killAllProcessesForWorktree(args.worktreeId, {
             runtime,
             localProvider: getLocalPtyProvider(),
@@ -1881,6 +1879,9 @@ export function registerWorktreeHandlers(
               )
             }
           })
+          // Why: a failed verified teardown leaves this workspace usable. Keep
+          // its watcher alive until terminals are proven stopped for deletion.
+          await closeLocalWatcherForRemoval(canonicalWorktreePath)
 
           try {
             const removeOptions = {

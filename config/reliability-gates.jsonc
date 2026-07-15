@@ -551,6 +551,130 @@
       "demotionRule": "Demote or quarantine if the gate flakes once without a product bug or harness bug filed to the owner."
     },
     {
+      "id": "terminal-session.worktree-removal-isolation",
+      "title": "Worktree removal verifies target PTYs without disturbing unrelated sessions",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "main-daemon-relay-contract",
+      "surfaces": [
+        "destructive worktree removal",
+        "terminal spawn admission",
+        "daemon and relay PTY teardown",
+        "local filesystem watcher ownership"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "daemon", "ssh"],
+      "coverageNotes": "Deterministic tests force Linux, Darwin, and Windows teardown semantics and cover local, current/legacy daemon, degraded-daemon, current/legacy SSH relay, disconnected SSH, runtime/headless, desktop IPC, duplicate removal, and watcher ordering. A local macOS live PTY harness verifies victim-tree death and unrelated-witness survival. Exact-head physical Windows, WSL, and live SSH runs remain explicit gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/8275",
+        "https://github.com/stablyai/orca/pull/8284"
+      ],
+      "invariant": "Once worktree removal owns terminal-session.worktree-removal-isolation, no PTY for that host/worktree may enter or finish registration; every already-admitted target PTY must be stopped with full-session evidence before Git, recursive filesystem, registry, or metadata removal; failed or ambiguous teardown preserves the worktree, its watcher, and every unrelated PTY/daemon/relay session.",
+      "oracle": "Race renderer/runtime spawns, duplicate remove/forget calls, and bounded target shutdowns across local, daemon, and SSH ownership; require Git and metadata mutation to begin only after admission drains and every exact stop settles; inject legacy protocols, disconnects, malformed process inventories, PID/TTY ownership changes, ConPTY exit timeouts, graceful-to-immediate overlap, and retry; then assert deletion fails closed, the target owner remains retryable, no second ConPTY close occurs, and unrelated sessions are never signaled or retired.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/relay/pty-session-kill.test.ts src/relay/pty-handler.test.ts src/main/runtime/worktree-pty-admission.test.ts src/main/runtime/pty-stop-concurrency.test.ts src/main/runtime/worktree-teardown.test.ts src/main/providers/local-pty-provider.test.ts src/main/providers/ssh-pty-liveness.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/daemon/pty-subprocess.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/ipc/pty.test.ts src/main/ipc/worktrees.test.ts"
+      ],
+      "testFiles": [
+        "src/relay/pty-session-kill.test.ts",
+        "src/relay/pty-handler.test.ts",
+        "src/main/runtime/worktree-pty-admission.test.ts",
+        "src/main/runtime/pty-stop-concurrency.test.ts",
+        "src/main/runtime/worktree-teardown.test.ts",
+        "src/main/providers/local-pty-provider.test.ts",
+        "src/main/providers/ssh-pty-liveness.test.ts",
+        "src/main/providers/ssh-pty-provider.test.ts",
+        "src/main/daemon/pty-subprocess.test.ts",
+        "src/main/daemon/session.test.ts",
+        "src/main/daemon/terminal-host.test.ts",
+        "src/main/daemon/daemon-pty-router.test.ts",
+        "src/main/daemon/degraded-daemon-pty-provider.test.ts",
+        "src/main/ipc/pty.test.ts",
+        "src/main/ipc/worktrees.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/worktree-pty-admission.test.ts",
+          "assertions": [
+            "already-admitted spawns drain before teardown while later spawns reject until mutation settles",
+            "different worktrees remain independent, duplicate owners reject, and a timed-out drain reopens admission without leaking its waiter"
+          ]
+        },
+        {
+          "file": "src/main/runtime/worktree-teardown.test.ts",
+          "assertions": [
+            "runtime, provider, and registry targets are deduplicated while unrelated and cross-host sessions survive",
+            "unverified local, legacy-daemon, disconnected-SSH, and provider-only sessions block destructive removal",
+            "50-session success and failure sweeps peak at eight workers and settle every snapshotted stop before returning"
+          ]
+        },
+        {
+          "file": "src/relay/pty-session-kill.test.ts",
+          "assertions": [
+            "root PID, TTY, session, child-parent, and final-exit evidence use canonical bounded inventories and fail closed on malformed or changed ownership",
+            "Linux and Darwin descendant-first teardown captures reparented/session-escaped members without broad process scans",
+            "a stuck process tree performs at most two signal-0 probes per PID before bounded batched ps polling"
+          ]
+        },
+        {
+          "file": "src/relay/pty-handler.test.ts",
+          "assertions": [
+            "Windows immediate teardown waits for native exit and never double-closes ConPTY after graceful or previous immediate shutdown",
+            "a graceful-fallback ConPTY without an exit event remains an unverified owner across repeated teardown timeouts until native exit arrives"
+          ]
+        },
+        {
+          "file": "src/main/ipc/worktrees.test.ts",
+          "assertions": [
+            "verified PTY shutdown precedes local watcher close, Git removal, and metadata cleanup",
+            "failed verification leaves Git, metadata, and the local watcher untouched",
+            "identical cross-surface removals join while conflicting remove/forget ownership cannot mutate twice"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/relay/pty-session-kill.test.ts src/relay/pty-handler.test.ts src/main/runtime/worktree-pty-admission.test.ts src/main/runtime/pty-stop-concurrency.test.ts src/main/runtime/worktree-teardown.test.ts src/main/providers/local-pty-provider.test.ts src/main/providers/ssh-pty-liveness.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/daemon/pty-subprocess.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/ipc/pty.test.ts src/main/ipc/worktrees.test.ts",
+          "result": "passed",
+          "durationSeconds": 11.56,
+          "summary": "15 files and 966 tests passed locally, including canonical POSIX ownership parsing, bounded exit-probe counts, ConPTY graceful-fallback retry retention, watcher-after-verification ordering, eight-worker stop bounds, and local/daemon/SSH fail-closed isolation."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "focused main/daemon/provider/relay worktree-removal contract tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The focused slice passes locally but has not accumulated exact-head CI or soak history."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The new malformed-child-inventory assertions reject the prior silent token filtering, and the graceful-fallback retry assertion rejects the prior deletion of an unverified ConPTY owner. Saved intentional-break or CI red artifacts remain pending."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Destructive teardown adds no polling or scans to typing, output, focus, startup, or ordinary render paths. Fifty snapshotted PTYs use exactly fifty stops with an eight-worker ceiling; current SSH uses one targeted liveness request per PTY while a legacy relay shares one bounded inventory; POSIX discovery caps the tree at 1,024 PIDs under one 2.5-second deadline, final verification at 500 ms, PID batches at 64, and signal-0 fast probes at two per PID before batched ps polling. A final-source local victim-root-plus-child teardown completed in 99 ms against the 8,000 ms total budget while an unrelated witness PTY stayed alive."
+      },
+      "promotionCriteria": [
+        "Run the focused gate for at least 100 consecutive passes or 14 days across required CI platforms.",
+        "Attach exact-head physical Windows evidence for repeated target removals, ConPTY timeout/retry, stable daemon PID, and unrelated split-pane survival.",
+        "Attach live Linux SSH evidence for foreground/background target groups, disconnected fail-closed behavior, and unrelated relay witness survival.",
+        "Exercise native WSL worktree removal and retain explicit provider identity/path coverage."
+      ],
+      "knownGaps": [
+        "Exact-head physical Windows and native WSL evidence is not available from this macOS review run.",
+        "SSH and remote-runtime behavior is deterministic contract coverage here; the retained live SSH evidence predates the final review fixes.",
+        "Daemon-crash restoration/reporting remains defense in depth outside this removal-path root-cause fix."
+      ],
+      "demotionRule": "Keep experimental or demote if the gate flakes without a product/harness issue, if any destructive mutation precedes verified stop settlement, if an unverified owner disappears across retry, if stop concurrency exceeds eight, or if an unrelated PTY receives a shutdown or exit transition."
+    },
+    {
       "id": "terminal-session.kill-all-surface-cleanup",
       "title": "Kill all sessions removes only the confirmed terminal surfaces and current bindings",
       "maturity": "experimental",

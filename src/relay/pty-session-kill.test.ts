@@ -10,12 +10,97 @@ function emptySelection(): Error & { code: number; stdout: string } {
 }
 
 describe('killPosixPtySession', () => {
+  it('kills a reparented Linux member that no longer appears in the root PPID tree', async () => {
+    const run = vi.fn(async (file: string, args: string[]) => {
+      if (file === 'ps' && args[1] === '4242' && args.includes('sid=')) {
+        return { stdout: '4242 pts/7\n' }
+      }
+      if (file === 'pgrep' && args[0] === '-s') {
+        return { stdout: '4242\n4243\n' }
+      }
+      if (file === 'pgrep' && args[0] === '-P') {
+        throw emptySelection()
+      }
+      if (file === 'ps' && args.includes('sid=') && args.includes('tty=')) {
+        return { stdout: '4243 4242 pts/7\n' }
+      }
+      if (file === 'ps' && args.includes('stat=')) {
+        return { stdout: '4242 Z\n4243 Z\n' }
+      }
+      throw new Error(`Unexpected command: ${file} ${args.join(' ')}`)
+    })
+    const killProcess = vi.fn()
+
+    await expect(killPosixPtySession(4242, '/dev/pts/7', 'linux', run, killProcess)).resolves.toBe(
+      true
+    )
+
+    expect(killProcess).toHaveBeenCalledWith(4243, 'SIGSTOP')
+    expect(killProcess).toHaveBeenCalledWith(4243, 'SIGKILL')
+  })
+
+  it('kills a reparented Darwin member selected by its exact controlling TTY', async () => {
+    const run = vi.fn(async (file: string, args: string[]) => {
+      if (file === 'ps' && args[1] === '4242' && args.includes('pgid=')) {
+        return { stdout: '4242 ttys042\n' }
+      }
+      if (file === 'pgrep' && args[0] === '-P') {
+        throw emptySelection()
+      }
+      if (file === 'ps' && args[0] === '-t') {
+        return { stdout: '4242\n4243\n' }
+      }
+      if (file === 'ps' && args.includes('tty=') && !args.includes('pgid=')) {
+        return { stdout: '4243 ttys042\n' }
+      }
+      if (file === 'ps' && args.includes('stat=')) {
+        throw emptySelection()
+      }
+      throw new Error(`Unexpected command: ${file} ${args.join(' ')}`)
+    })
+    const killProcess = vi.fn()
+
+    await expect(
+      killPosixPtySession(4242, '/dev/ttys042', 'darwin', run, killProcess)
+    ).resolves.toBe(true)
+
+    expect(killProcess).toHaveBeenCalledWith(4243, 'SIGSTOP')
+    expect(killProcess).toHaveBeenCalledWith(4243, 'SIGKILL')
+  })
+
+  it('fails closed when the targeted membership inventory omits the frozen root', async () => {
+    const run = vi.fn(async (file: string, args: string[]) => {
+      if (file === 'ps' && args.includes('sid=')) {
+        return { stdout: '4242 pts/7\n' }
+      }
+      if (file === 'pgrep' && args[0] === '-P') {
+        throw emptySelection()
+      }
+      if (file === 'pgrep' && args[0] === '-s') {
+        return { stdout: '4243\n' }
+      }
+      throw new Error(`Unexpected command: ${file} ${args.join(' ')}`)
+    })
+    const killProcess = vi.fn()
+
+    await expect(killPosixPtySession(4242, '/dev/pts/7', 'linux', run, killProcess)).resolves.toBe(
+      false
+    )
+    expect(killProcess.mock.calls.filter(([, signal]) => signal !== 0)).toEqual([
+      [4242, 'SIGSTOP'],
+      [4242, 'SIGCONT']
+    ])
+  })
+
   it('freezes and kills a Linux descendant that escaped into a new session', async () => {
     const run = vi.fn(async (file: string, args: string[]) => {
       if (file === 'ps' && args.includes('sid=')) {
         return { stdout: '4242 pts/7\n' }
       }
       if (file === 'pgrep') {
+        if (args[0] === '-s') {
+          return { stdout: '4242\n4243\n4244\n4245\n' }
+        }
         const parents = new Set(args[1]?.split(','))
         if (parents.has('4242')) {
           return { stdout: '4243\n4244\n' }
@@ -45,7 +130,7 @@ describe('killPosixPtySession', () => {
       true
     )
 
-    expect(killProcess.mock.calls).toEqual([
+    expect(killProcess.mock.calls.filter(([, signal]) => signal !== 0)).toEqual([
       [4242, 'SIGSTOP'],
       [4243, 'SIGSTOP'],
       [4244, 'SIGSTOP'],
@@ -56,7 +141,7 @@ describe('killPosixPtySession', () => {
       [4242, 'SIGKILL']
     ])
     expect(run).not.toHaveBeenCalledWith('ps', expect.arrayContaining(['-e']), expect.anything())
-    expect(run.mock.calls.filter(([file]) => file === 'pgrep')).toHaveLength(3)
+    expect(run.mock.calls.filter(([file]) => file === 'pgrep')).toHaveLength(4)
   })
 
   it('validates Darwin root ownership before targeted descendant teardown', async () => {
@@ -69,6 +154,9 @@ describe('killPosixPtySession', () => {
           return { stdout: '4243\n' }
         }
         throw emptySelection()
+      }
+      if (file === 'ps' && args[0] === '-t') {
+        return { stdout: '4242\n4243\n' }
       }
       if (file === 'ps' && args.includes('ppid=')) {
         return { stdout: '4243 4242\n' }
@@ -83,7 +171,7 @@ describe('killPosixPtySession', () => {
     await expect(
       killPosixPtySession(4242, '/dev/ttys042', 'darwin', run, killProcess)
     ).resolves.toBe(true)
-    expect(run).toHaveBeenCalledTimes(6)
+    expect(run).toHaveBeenCalledTimes(7)
     expect(run).toHaveBeenNthCalledWith(1, 'ps', ['-p', '4242', '-o', 'pgid=', '-o', 'tty='], {
       timeout: PTY_SESSION_COMMAND_TIMEOUT_MS
     })
@@ -93,7 +181,7 @@ describe('killPosixPtySession', () => {
     expect(run).toHaveBeenLastCalledWith('ps', ['-p', '4242,4243', '-o', 'pid=', '-o', 'stat='], {
       timeout: expect.any(Number)
     })
-    expect(killProcess.mock.calls).toEqual([
+    expect(killProcess.mock.calls.filter(([, signal]) => signal !== 0)).toEqual([
       [4242, 'SIGSTOP'],
       [4243, 'SIGSTOP'],
       [4243, 'SIGKILL'],
@@ -110,6 +198,16 @@ describe('killPosixPtySession', () => {
 
   it('does not signal a root whose session identity no longer matches', async () => {
     const run = vi.fn().mockResolvedValue({ stdout: '9999 pts/7\n' })
+    const killProcess = vi.fn()
+
+    await expect(killPosixPtySession(4242, '/dev/pts/7', 'linux', run, killProcess)).resolves.toBe(
+      false
+    )
+    expect(killProcess).not.toHaveBeenCalled()
+  })
+
+  it('does not signal a root whose ownership output uses a non-canonical PID', async () => {
+    const run = vi.fn().mockResolvedValue({ stdout: '+4242 pts/7\n' })
     const killProcess = vi.fn()
 
     await expect(killPosixPtySession(4242, '/dev/pts/7', 'linux', run, killProcess)).resolves.toBe(
@@ -161,7 +259,7 @@ describe('killPosixPtySession', () => {
       .mockResolvedValueOnce({ stdout: '4242 pts/7\n' })
       .mockResolvedValueOnce({ stdout: '4242 pts/7\n' })
       .mockResolvedValueOnce({ stdout: '4243\n' })
-    const killProcess = vi.fn((pid: number, signal: NodeJS.Signals) => {
+    const killProcess = vi.fn((pid: number, signal: NodeJS.Signals | 0) => {
       if (pid === 4243 && signal === 'SIGSTOP') {
         throw Object.assign(new Error('gone'), { code: 'ESRCH' })
       }
@@ -194,10 +292,56 @@ describe('killPosixPtySession', () => {
     ])
   })
 
+  it('fails closed when descendant discovery returns a malformed PID token', async () => {
+    const run = vi
+      .fn()
+      .mockResolvedValueOnce({ stdout: '4242 pts/7\n' })
+      .mockResolvedValueOnce({ stdout: '4242 pts/7\n' })
+      .mockResolvedValueOnce({ stdout: 'not-a-pid\n' })
+    const killProcess = vi.fn()
+
+    await expect(killPosixPtySession(4242, '/dev/pts/7', 'linux', run, killProcess)).resolves.toBe(
+      false
+    )
+    expect(killProcess.mock.calls).toEqual([
+      [4242, 'SIGSTOP'],
+      [4242, 'SIGCONT']
+    ])
+  })
+
+  it('resumes a frozen child when parent verification has extra columns', async () => {
+    const run = vi.fn(async (file: string, args: string[]) => {
+      if (file === 'ps' && args.includes('sid=')) {
+        return { stdout: '4242 pts/7\n' }
+      }
+      if (file === 'pgrep') {
+        return { stdout: '4243\n' }
+      }
+      if (file === 'ps' && args.includes('ppid=')) {
+        return { stdout: '4243 4242 unexpected\n' }
+      }
+      throw new Error(`Unexpected command: ${file} ${args.join(' ')}`)
+    })
+    const killProcess = vi.fn()
+
+    await expect(killPosixPtySession(4242, '/dev/pts/7', 'linux', run, killProcess)).resolves.toBe(
+      false
+    )
+    expect(killProcess.mock.calls).toEqual([
+      [4242, 'SIGSTOP'],
+      [4243, 'SIGSTOP'],
+      [4242, 'SIGCONT'],
+      [4243, 'SIGCONT']
+    ])
+  })
+
   it('fails closed when a captured process remains runnable after SIGKILL', async () => {
     let verificationChecks = 0
     const run = vi.fn(async (file: string, args: string[]) => {
       if (file === 'pgrep') {
+        if (args[0] === '-s') {
+          return { stdout: '4242\n' }
+        }
         throw emptySelection()
       }
       if (file === 'ps' && args.includes('sid=')) {
@@ -214,12 +358,16 @@ describe('killPosixPtySession', () => {
     // Initial 10ms backoff doubling to 100ms permits at most nine ps rounds
     // inside the shared 500ms verification deadline.
     expect(verificationChecks).toBeLessThanOrEqual(9)
+    expect(killProcess.mock.calls.filter(([, signal]) => signal === 0)).toHaveLength(2)
   })
 
   it('waits for a captured process to finish exiting after SIGKILL', async () => {
     let verificationChecks = 0
     const run = vi.fn(async (file: string, args: string[]) => {
       if (file === 'pgrep') {
+        if (args[0] === '-s') {
+          return { stdout: '4242\n' }
+        }
         throw emptySelection()
       }
       if (file === 'ps' && args.includes('sid=')) {
@@ -237,6 +385,33 @@ describe('killPosixPtySession', () => {
 
     await expect(killPosixPtySession(4242, '/dev/pts/7', 'linux', run, vi.fn())).resolves.toBe(true)
     expect(verificationChecks).toBe(2)
+  })
+
+  it('lets node-pty reap killed processes before invoking final ps verification', async () => {
+    const run = vi.fn(async (file: string, args: string[]) => {
+      if (file === 'pgrep' && args[0] === '-P') {
+        throw emptySelection()
+      }
+      if (file === 'pgrep' && args[0] === '-s') {
+        return { stdout: '4242\n' }
+      }
+      if (file === 'ps' && args.includes('sid=')) {
+        return { stdout: '4242 pts/7\n' }
+      }
+      throw new Error(`Unexpected command: ${file} ${args.join(' ')}`)
+    })
+    let absenceProbes = 0
+    const killProcess = vi.fn((_pid: number, signal: NodeJS.Signals | 0) => {
+      if (signal === 0 && ++absenceProbes > 1) {
+        throw Object.assign(new Error('gone'), { code: 'ESRCH' })
+      }
+    })
+
+    await expect(killPosixPtySession(4242, '/dev/pts/7', 'linux', run, killProcess)).resolves.toBe(
+      true
+    )
+    expect(absenceProbes).toBe(2)
+    expect(run).not.toHaveBeenCalledWith('ps', expect.arrayContaining(['stat=']), expect.anything())
   })
 
   it('fails closed when verification returns a non-canonical PID token', async () => {
@@ -261,6 +436,9 @@ describe('killPosixPtySession', () => {
   it('uses bounded targeted command timeouts for ownership, children, and verification', async () => {
     const run = vi.fn(async (file: string, args?: string[], _options?: { timeout: number }) => {
       if (file === 'pgrep') {
+        if (args?.[0] === '-s') {
+          return { stdout: '4242\n' }
+        }
         throw emptySelection()
       }
       if (args?.includes('sid=')) {
@@ -280,10 +458,13 @@ describe('killPosixPtySession', () => {
       timeout: expect.any(Number)
     })
     expect(run.mock.calls[2]?.[2]?.timeout).toBeLessThanOrEqual(PTY_SESSION_COMMAND_TIMEOUT_MS)
-    expect(run).toHaveBeenNthCalledWith(4, 'ps', ['-p', '4242', '-o', 'pid=', '-o', 'stat='], {
+    expect(run).toHaveBeenNthCalledWith(4, 'pgrep', ['-s', '4242'], {
       timeout: expect.any(Number)
     })
-    expect(run.mock.calls[3]?.[2]?.timeout).toBeLessThanOrEqual(PTY_SESSION_VERIFY_TIMEOUT_MS)
+    expect(run).toHaveBeenNthCalledWith(5, 'ps', ['-p', '4242', '-o', 'pid=', '-o', 'stat='], {
+      timeout: expect.any(Number)
+    })
+    expect(run.mock.calls[4]?.[2]?.timeout).toBeLessThanOrEqual(PTY_SESSION_VERIFY_TIMEOUT_MS)
   })
 
   it('resumes every frozen process when a stopped child was reparented', async () => {
@@ -330,6 +511,9 @@ describe('killPosixPtySession', () => {
           return { stdout: childPids.join('\n') }
         }
         throw emptySelection()
+      }
+      if (file === 'ps' && args[0] === '-t') {
+        return { stdout: [rootPid, ...childPids].join('\n') }
       }
       if (file === 'ps' && args.includes('ppid=')) {
         return {

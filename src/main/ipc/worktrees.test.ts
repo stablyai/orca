@@ -9,6 +9,7 @@ import * as localWorktreeFilesystem from '../local-worktree-filesystem'
 
 const ORIGINAL_PLATFORM = process.platform
 const removeWorktreeLinkedPathsMock = vi.hoisted(() => vi.fn())
+const closeLocalWatcherForWorktreePathMock = vi.hoisted(() => vi.fn())
 
 function setPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', {
@@ -176,6 +177,10 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 vi.mock('./worktree-symlinks', () => ({
   createWorktreeLinkedPaths: vi.fn(),
   removeWorktreeLinkedPaths: removeWorktreeLinkedPathsMock
+}))
+
+vi.mock('./filesystem-watcher', () => ({
+  closeLocalWatcherForWorktreePath: closeLocalWatcherForWorktreePathMock
 }))
 
 vi.mock('./ssh', () => ({
@@ -356,7 +361,8 @@ describe('registerWorktreeHandlers', () => {
       getLocalPtyProviderMock,
       deleteWorktreeHistoryDirMock,
       advertisedUrlWatcherForgetWorktreeMock,
-      removeWorktreeLinkedPathsMock
+      removeWorktreeLinkedPathsMock,
+      closeLocalWatcherForWorktreePathMock
     ]) {
       m.mockReset()
     }
@@ -367,6 +373,7 @@ describe('registerWorktreeHandlers', () => {
     })
     assertWorktreeCleanForRemovalMock.mockResolvedValue(undefined)
     getLocalPtyProviderMock.mockReturnValue({} as never)
+    closeLocalWatcherForWorktreePathMock.mockResolvedValue(undefined)
 
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
@@ -6779,6 +6786,7 @@ describe('registerWorktreeHandlers', () => {
 
     expect(removeWorktreeMock).not.toHaveBeenCalled()
     expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+    expect(closeLocalWatcherForWorktreePathMock).not.toHaveBeenCalled()
   })
 
   it('holds PTY admission until Git and metadata removal both complete', async () => {
@@ -6791,6 +6799,12 @@ describe('registerWorktreeHandlers', () => {
 
     await handlers['worktrees:remove'](null, { worktreeId })
 
+    expect(killAllProcessesForWorktreeMock.mock.invocationCallOrder[0]).toBeLessThan(
+      closeLocalWatcherForWorktreePathMock.mock.invocationCallOrder[0]
+    )
+    expect(closeLocalWatcherForWorktreePathMock.mock.invocationCallOrder[0]).toBeLessThan(
+      removeWorktreeMock.mock.invocationCallOrder[0]
+    )
     expect(removeWorktreeMock.mock.invocationCallOrder[0]).toBeLessThan(
       store.removeWorktreeMeta.mock.invocationCallOrder[0]
     )
