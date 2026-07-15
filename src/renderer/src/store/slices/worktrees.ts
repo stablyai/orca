@@ -27,6 +27,7 @@ import {
 } from './worktree-helpers'
 import { findRepoForHost } from './repo-host-identity'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { disposeRemovedWorktreeParkedTerminalWatchers } from '../../components/terminal-pane/terminal-parked-watcher-registry'
@@ -3635,7 +3636,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // Why: git refusing a non-force delete for dirty/untracked files is a
       // handled user decision point surfaced by the delete toast, not an app error.
       console.warn('Failed to remove worktree:', err)
-      const error = err instanceof Error ? err.message : String(err)
+      // Why: strip Electron's "Error invoking remote method '…': Error:" wrapper
+      // so the delete toast shows the main-process message, not IPC plumbing.
+      const error = extractIpcErrorMessage(err, String(err))
       const forceDeleteReason = classifyWorktreeForceDeleteReason(error, force)
       const locked = isLockedWorktreeRemovalError(error)
       set((s) => ({

@@ -30626,7 +30626,7 @@ describe('OrcaRuntimeService', () => {
       })
 
       await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).rejects.toThrow(
-        `Failed to stop local worktree terminals: ${ptyId}`
+        "This workspace still has a terminal running that Orca couldn't stop. Try again, or close the terminal and retry."
       )
 
       expect(removeWorktree).not.toHaveBeenCalled()
@@ -30867,7 +30867,7 @@ describe('OrcaRuntimeService', () => {
 
       try {
         await expect(runtime.removeManagedWorktree(remoteWorktreeId)).rejects.toThrow(
-          'Failed to stop remote worktree terminals: ssh:ssh-1@@survivor'
+          "Orca couldn't stop this workspace's terminals on the remote host. Reconnect the host and try again."
         )
         expect(gitProvider.removeWorktree).not.toHaveBeenCalled()
       } finally {
@@ -30936,7 +30936,7 @@ describe('OrcaRuntimeService', () => {
 
       try {
         await expect(runtime.removeManagedWorktree(remoteWorktreeId)).rejects.toThrow(
-          'Failed to stop remote worktree terminals: ssh:ssh-1@@detached-survivor'
+          "Orca couldn't stop this workspace's terminals on the remote host. Reconnect the host and try again."
         )
         expect(stopAndWait).toHaveBeenCalledWith('ssh:ssh-1@@detached-survivor')
         expect(gitProvider.removeWorktree).not.toHaveBeenCalled()

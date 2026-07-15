@@ -188,7 +188,7 @@ describe('killAllProcessesForWorktree', () => {
     listRegisteredPtysMock.mockReturnValue([])
 
     await expect(killAllProcessesForWorktree('w1', { runtime, localProvider })).rejects.toThrow(
-      'Failed to stop remote worktree terminals: ssh:ssh-1@@relay-pty'
+      "Orca couldn't stop this workspace's terminals on the remote host. Reconnect the host and try again."
     )
     expect(localProvider.listProcesses).toHaveBeenCalledTimes(1)
   })
@@ -231,7 +231,7 @@ describe('killAllProcessesForWorktree', () => {
     listRegisteredPtysMock.mockReturnValue([])
 
     await expect(killAllProcessesForWorktree('w1', { runtime, localProvider })).rejects.toThrow(
-      'Failed to stop local worktree terminals: w1@@daemon'
+      "This workspace still has a terminal running that Orca couldn't stop. Try again, or close the terminal and retry."
     )
   })
 
@@ -377,7 +377,9 @@ describe('killAllProcessesForWorktree', () => {
       sessions.length
     )
 
-    await expect(teardown).rejects.toThrow('Failed to stop local worktree terminals')
+    await expect(teardown).rejects.toThrow(
+      "This workspace still has a terminal running that Orca couldn't stop. Try again, or close the terminal and retry."
+    )
     expect(localProvider.listProcesses).toHaveBeenCalledTimes(2)
     expect(peak).toBe(8)
     expect(waves).toBe(7)

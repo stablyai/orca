@@ -6768,11 +6768,13 @@ describe('registerWorktreeHandlers', () => {
     mockKnownFeatureWorktree()
     store.getWorktreeMeta.mockReturnValue(makeWorktreeMeta())
     killAllProcessesForWorktreeMock.mockRejectedValue(
-      new Error(`Failed to stop local worktree terminals: ${worktreeId}@@daemon`)
+      new Error(
+        "This workspace still has a terminal running that Orca couldn't stop. Try again, or close the terminal and retry."
+      )
     )
 
     await expect(handlers['worktrees:remove'](null, { worktreeId })).rejects.toThrow(
-      'Failed to stop local worktree terminals'
+      "This workspace still has a terminal running that Orca couldn't stop. Try again, or close the terminal and retry."
     )
 
     expect(removeWorktreeMock).not.toHaveBeenCalled()
@@ -8766,7 +8768,9 @@ describe('registerWorktreeHandlers', () => {
         connectionId: 'removed-ssh-target'
       })
       killAllProcessesForWorktreeMock.mockRejectedValue(
-        new Error('Failed to stop remote worktree terminals')
+        new Error(
+          "Orca couldn't stop this workspace's terminals on the remote host. Reconnect the host and try again."
+        )
       )
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
@@ -8775,7 +8779,10 @@ describe('registerWorktreeHandlers', () => {
 
         expect(warn).toHaveBeenCalledWith(
           `[worktree-teardown] forget-local failed for ${worktreeId}:`,
-          expect.objectContaining({ message: 'Failed to stop remote worktree terminals' })
+          expect.objectContaining({
+            message:
+              "Orca couldn't stop this workspace's terminals on the remote host. Reconnect the host and try again."
+          })
         )
         expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId)
         expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)

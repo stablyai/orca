@@ -74,8 +74,14 @@ export async function killAllProcessesForWorktree(
 
   if (failedRemotePtyIds.length > 0) {
     // Why: the local provider cannot prove an SSH-owned PTY dead; remote Git
-    // removal must not proceed after an unverified exact stop.
-    throw new Error(`Failed to stop remote worktree terminals: ${failedRemotePtyIds.join(', ')}`)
+    // removal must not proceed after an unverified exact stop. The pty ids are
+    // logged for triage; the thrown text is what the user reads in a toast/CLI.
+    console.warn(
+      `[worktree-teardown] unverified remote terminals for ${worktreeId}: ${failedRemotePtyIds.join(', ')}`
+    )
+    throw new Error(
+      "Orca couldn't stop this workspace's terminals on the remote host. Reconnect the host and try again."
+    )
   }
 
   return result
@@ -125,7 +131,13 @@ async function sweepLocalProvider(
     const remainingIds = new Set((await provider.listProcesses()).map((session) => session.id))
     const unverified = [...failedShutdowns.keys()].filter((ptyId) => remainingIds.has(ptyId))
     if (unverified.length > 0) {
-      throw new Error(`Failed to stop local worktree terminals: ${unverified.join(', ')}`)
+      // Why: pty ids logged for triage; the thrown text is user-facing.
+      console.warn(
+        `[worktree-teardown] unverified local terminals for ${worktreeId}: ${unverified.join(', ')}`
+      )
+      throw new Error(
+        "This workspace still has a terminal running that Orca couldn't stop. Try again, or close the terminal and retry."
+      )
     }
     for (const ptyId of failedShutdowns.keys()) {
       retirePty?.(ptyId)

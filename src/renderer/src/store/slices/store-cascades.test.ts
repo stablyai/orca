@@ -364,10 +364,12 @@ describe('removeWorktree cascade', () => {
   it('offers force delete for Electron-wrapped local dirty preflight errors', async () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/workspace/feature-wt'
-    const error =
+    const wrapped =
       "Error invoking remote method 'worktrees:remove': Error: Failed to delete worktree at /workspace/feature-wt. ?? scratch.txt"
+    // Why: the store now strips Electron's IPC wrapper; assert on the clean body.
+    const error = 'Failed to delete worktree at /workspace/feature-wt. ?? scratch.txt'
 
-    mockApi.worktrees.remove.mockRejectedValueOnce(new Error(error))
+    mockApi.worktrees.remove.mockRejectedValueOnce(new Error(wrapped))
 
     seedStore(store, {
       worktreesByRepo: {
@@ -449,10 +451,11 @@ describe('removeWorktree cascade', () => {
   it('offers force delete when Git already removed an unregistered worktree', async () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/workspace/deleted-wt'
-    const error =
+    const wrapped =
       "Error invoking remote method 'worktrees:remove': Error: Worktree is no longer registered with Git and its directory is already gone."
+    const error = 'Worktree is no longer registered with Git and its directory is already gone.'
 
-    mockApi.worktrees.remove.mockRejectedValueOnce(new Error(error))
+    mockApi.worktrees.remove.mockRejectedValueOnce(new Error(wrapped))
 
     seedStore(store, {
       worktreesByRepo: {
@@ -564,10 +567,11 @@ describe('removeWorktree cascade', () => {
   it('does not offer force delete when Electron wraps SSH filesystem provider failures', async () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
-    const error =
+    const wrapped =
       "Error invoking remote method 'worktrees:remove': Error: SSH filesystem provider unavailable"
+    const error = 'SSH filesystem provider unavailable'
 
-    mockApi.worktrees.remove.mockRejectedValueOnce(new Error(error))
+    mockApi.worktrees.remove.mockRejectedValueOnce(new Error(wrapped))
 
     seedStore(store, {
       worktreesByRepo: {
@@ -598,7 +602,8 @@ describe('removeWorktree cascade', () => {
     async (runtimeFailure) => {
       const store = createTestStore()
       const worktreeId = 'repo1::/path/wt1'
-      const error = `Error invoking remote method 'runtime-environments:call': Error: ${runtimeFailure}`
+      const wrapped = `Error invoking remote method 'runtime-environments:call': Error: ${runtimeFailure}`
+      const error = runtimeFailure
 
       mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
         const compatibility = createCompatibleRuntimeStatusResponseIfNeeded(args)
@@ -613,7 +618,7 @@ describe('removeWorktree cascade', () => {
             _meta: { runtimeId: 'remote-runtime' }
           })
         }
-        return Promise.reject(new Error(error))
+        return Promise.reject(new Error(wrapped))
       })
 
       seedStore(store, {
