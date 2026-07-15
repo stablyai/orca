@@ -42,16 +42,18 @@ describe('useMobileNativeChatDrafts', () => {
 
   function Harness({
     tabId,
+    sessionId = `session-${tabId}`,
     messages = []
   }: {
     tabId: string
+    sessionId?: string | null
     messages?: NativeChatMessage[]
   }): null {
     state = useMobileNativeChatDrafts({
       hostId: 'host',
       worktreeId: 'worktree',
       tabId,
-      sessionId: `session-${tabId}`,
+      sessionId,
       messages
     })
     return null
@@ -169,5 +171,22 @@ describe('useMobileNativeChatDrafts', () => {
     })
 
     expect(state?.composerText).toBe('new edit')
+  })
+
+  it('accepts and clears the first send before a provider session id exists', async () => {
+    await mount('a')
+    await act(async () => renderer?.update(createElement(Harness, { tabId: 'a', sessionId: null })))
+    act(() => state?.setComposerText('start the session'))
+
+    const origin = state?.captureSendOrigin('start the session')
+    expect(origin).toMatchObject({ pendingKey: null })
+    act(() => {
+      if (origin) {
+        state?.acceptSend(origin, 'start the session')
+      }
+    })
+
+    expect(state?.composerText).toBe('')
+    expect(state?.pending).toEqual([])
   })
 })

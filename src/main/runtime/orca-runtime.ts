@@ -2399,7 +2399,12 @@ export class OrcaRuntimeService {
   private currentDriver = new Map<string, DriverState>()
   private mobileInputFloorClaims = new Map<
     string,
-    { base: DriverState; pending: Map<symbol, string> }
+    {
+      base: DriverState
+      generation: number
+      committedGeneration: number
+      pending: Map<symbol, { clientId: string; generation: number }>
+    }
   >()
   private currentBrowserDriver = new Map<string, RuntimeBrowserDriverState>()
 
@@ -9130,11 +9135,14 @@ export class OrcaRuntimeService {
     }
     const state = this.mobileInputFloorClaims.get(ptyId) ?? {
       base: this.getDriver(ptyId),
-      pending: new Map<symbol, string>()
+      generation: 0,
+      committedGeneration: 0,
+      pending: new Map<symbol, { clientId: string; generation: number }>()
     }
     this.mobileInputFloorClaims.set(ptyId, state)
     const token = Symbol('mobile-input-floor')
-    state.pending.set(token, clientId)
+    const generation = ++state.generation
+    state.pending.set(token, { clientId, generation })
     this.setDriver(ptyId, { kind: 'mobile', clientId })
     let settled = false
     return {
@@ -9144,11 +9152,27 @@ export class OrcaRuntimeService {
         }
         settled = true
         state.pending.delete(token)
+        // Why: a newer accepted write owns the floor; an older claim that was
+        // delayed before commit must not replace its rollback baseline or driver.
+        if (generation < state.committedGeneration) {
+          if (state.pending.size === 0 && this.mobileInputFloorClaims.get(ptyId) === state) {
+            this.mobileInputFloorClaims.delete(ptyId)
+          }
+          return
+        }
         const previousFloor = state.base
         // Why: a successful write becomes the rollback baseline for any
         // overlapping reservations that have not reached the PTY yet.
+        state.committedGeneration = generation
         state.base = { kind: 'mobile', clientId }
-        await this.mobileTookFloor(ptyId, clientId, previousFloor)
+        await this.mobileTookFloor(
+          ptyId,
+          clientId,
+          previousFloor,
+          () =>
+            this.mobileInputFloorClaims.get(ptyId) === state &&
+            state.committedGeneration === generation
+        )
         if (state.pending.size === 0 && this.mobileInputFloorClaims.get(ptyId) === state) {
           this.mobileInputFloorClaims.delete(ptyId)
         }
@@ -9164,7 +9188,7 @@ export class OrcaRuntimeService {
         }
         const current = this.getDriver(ptyId)
         if (current.kind === 'mobile' && current.clientId === clientId) {
-          const pendingClientId = Array.from(state.pending.values()).at(-1)
+          const pendingClientId = Array.from(state.pending.values()).at(-1)?.clientId
           this.setDriver(
             ptyId,
             pendingClientId ? { kind: 'mobile', clientId: pendingClientId } : state.base
@@ -9185,7 +9209,8 @@ export class OrcaRuntimeService {
   async mobileTookFloor(
     ptyId: string,
     clientId: string,
-    previousFloor?: DriverState
+    previousFloor?: DriverState,
+    isCurrent: () => boolean = () => true
   ): Promise<void> {
     const inner = this.mobileSubscribers.get(ptyId)
     const sub = inner?.get(clientId)
@@ -9209,6 +9234,11 @@ export class OrcaRuntimeService {
         this.mobileDisplayModes.delete(ptyId)
       }
       await this.applyMobileDisplayMode(ptyId)
+    }
+    // Why: display changes are async; a later PTY write must keep the floor
+    // when an older phone-fit operation eventually completes.
+    if (!isCurrent()) {
+      return
     }
     this.setDriver(ptyId, { kind: 'mobile', clientId })
   }

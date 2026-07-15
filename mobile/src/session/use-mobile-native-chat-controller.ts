@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type Dispatch,
@@ -11,13 +10,12 @@ import {
 import { loadNativeChatTabIds, saveNativeChatTabIds } from '../storage/preferences'
 import type { RpcClient } from '../transport/rpc-client'
 import {
-  extractPendingAsk,
   parseAskFromStatus,
   type AskAnswerSelection,
   type AskPrompt
 } from './mobile-native-chat-ask'
 import { type MobileNativeChatTab, resolveMobileNativeChat } from './mobile-native-chat-eligibility'
-import { detectAgentPermission, parseApprovalFromStatus } from './mobile-native-chat-permission'
+import { detectAgentPermission } from './mobile-native-chat-permission'
 import { parseAgentQuestion } from './mobile-native-chat-question'
 import { openMobileNativeChatFile } from './mobile-native-chat-open-file'
 import { useMobileNativeChatPermissionSend } from './mobile-native-chat-permission-send'
@@ -26,6 +24,7 @@ import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-s
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { useMobileNativeChatFileSearch } from './use-mobile-native-chat-file-search'
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
+import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
 import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
 import { useThrottledLatestValue } from './use-throttled-latest-value'
 
@@ -163,30 +162,15 @@ export function useMobileNativeChatController(args: {
     nativeChatAgentWorking ? nativeChatStatus?.lastAssistantMessage : undefined,
     NATIVE_CHAT_STREAM_THROTTLE_MS
   )
-  const nativeChatBlocked =
-    nativeChatStatus?.state === 'waiting' || nativeChatStatus?.state === 'blocked'
-  const nativeChatPermission =
-    (nativeChatBlocked && nativeChatStatus
-      ? detectAgentPermission({
-          state: nativeChatStatus.state,
-          lastAssistantMessage: nativeChatStatus.lastAssistantMessage,
-          toolName: nativeChatStatus.toolName,
-          toolInput: nativeChatStatus.toolInput
-        })
-      : null) ?? parseApprovalFromStatus(nativeChatStatus?.interactivePrompt)
-  const nativeChatQuestion =
-    nativeChatBlocked && nativeChatStatus && !nativeChatPermission
-      ? parseAgentQuestion(nativeChatStatus.lastAssistantMessage ?? '')
-      : null
-  const askFromStatus = useMemo(
-    () => parseAskFromStatus(nativeChatStatus?.interactivePrompt, nativeChatStatus?.toolName),
-    [nativeChatStatus?.interactivePrompt, nativeChatStatus?.toolName]
-  )
-  const askFromMessages = useMemo(
-    () => (askFromStatus ? null : extractPendingAsk(nativeChatSession.messages)),
-    [askFromStatus, nativeChatSession.messages]
-  )
-  const nativeChatAsk = activeChatResolution ? (askFromStatus ?? askFromMessages) : null
+  const {
+    permission: nativeChatPermission,
+    question: nativeChatQuestion,
+    ask: nativeChatAsk
+  } = useMobileNativeChatPrompts({
+    enabled: activeChatResolution != null,
+    status: nativeChatStatus,
+    messages: nativeChatSession.messages
+  })
 
   const handleNativeChatOpenFile = useCallback(
     (pathText: string) => {

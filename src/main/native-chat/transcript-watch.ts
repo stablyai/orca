@@ -1,3 +1,4 @@
+import { extname } from 'node:path'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import { resolveSessionFilePath } from './session-file-resolver'
 import {
@@ -30,11 +31,17 @@ async function attemptInstall(
 
 // Why: Claude Code (and other agents) can take from ~3s to minutes to flush a
 // brand-new session's first JSONL line (#8401) — resolveSessionFilePath
-// genuinely has nothing to find yet. Poll for it instead of going deaf; each
-// attempt is a cheap glob, so the cost of polling is negligible next to the
-// gap it covers.
+// genuinely has nothing to find yet. Poll for it instead of going deaf. Exact
+// hook paths are probed on every retry; the recursive
+// session-id fallback runs less often because a large Claude tree is expensive.
 const INITIAL_RESOLVE_POLL_MS = 500
 const MAX_RESOLVE_POLL_MS = 5_000
+const FALLBACK_RESOLVE_POLL_MS = 5_000
+
+function exactTranscriptPath(args: SubscribeNativeChatTranscriptArgs): string | null {
+  const path = args.transcriptPath?.trim()
+  return path && extname(path) === '.jsonl' ? path : null
+}
 
 /**
  * Background retry loop for a transcript that hasn't been resolvable yet.
@@ -52,15 +59,23 @@ function subscribeViaResolvePoll(
   let installed: NativeChatTranscriptSubscription | null = null
   let pollTimer: ReturnType<typeof setTimeout> | null = null
   let delay = args.resolvePollIntervalMs ?? INITIAL_RESOLVE_POLL_MS
+  let lastFallbackResolveAt = Date.now()
+  const exactPath = exactTranscriptPath(args)
 
   function scheduleAttempt(): void {
     if (closed) {
       return
     }
-    pollTimer = setTimeout(() => {
-      pollTimer = null
-      void runAttempt()
-    }, delay)
+    const untilFallbackResolve = exactPath
+      ? Math.max(0, FALLBACK_RESOLVE_POLL_MS - (Date.now() - lastFallbackResolveAt))
+      : delay
+    pollTimer = setTimeout(
+      () => {
+        pollTimer = null
+        void runAttempt()
+      },
+      Math.min(delay, untilFallbackResolve)
+    )
     // Why: never hold the event loop open (headless `orca serve` shutdown) for
     // a session that may genuinely never resolve.
     pollTimer.unref?.()
@@ -77,7 +92,14 @@ function subscribeViaResolvePoll(
     }
     let result: NativeChatTranscriptSubscription | null
     try {
-      result = await attemptInstall(args, decode)
+      result = exactPath ? await attemptInstall({ ...args, filePath: exactPath }, decode) : null
+      if (
+        !result &&
+        (!exactPath || Date.now() - lastFallbackResolveAt >= FALLBACK_RESOLVE_POLL_MS)
+      ) {
+        lastFallbackResolveAt = Date.now()
+        result = await attemptInstall(args, decode)
+      }
     } catch {
       // Why: a transient resolve failure (EACCES/EIO during the glob) must not
       // kill the poll loop with an unhandled rejection — retry like a miss.

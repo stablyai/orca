@@ -8,7 +8,7 @@ export type MobileNativeChatPendingMessage = {
 }
 export type MobileNativeChatSendOrigin = {
   draftKey: string
-  pendingKey: string
+  pendingKey: string | null
   normalizedText: string
   baselineOccurrences: number
 }
@@ -77,7 +77,7 @@ export function useMobileNativeChatDrafts(args: {
 
   const captureSendOrigin = useCallback(
     (text: string) => {
-      if (!draftKey || !pendingKey) {
+      if (!draftKey) {
         return null
       }
       const normalizedText = text.trim()
@@ -99,9 +99,15 @@ export function useMobileNativeChatDrafts(args: {
         ? { ...previous, [origin.draftKey]: '' }
         : previous
     )
+    // Why: the first prompt can be sent before the provider reports a session
+    // id; clear its draft, but wait for an id before keying an optimistic echo.
+    if (!origin.pendingKey) {
+      return
+    }
+    const pendingKey = origin.pendingKey
     pendingCounterRef.current += 1
     setPendingBySession((previous) => {
-      const current = previous[origin.pendingKey] ?? NO_PENDING_MESSAGES
+      const current = previous[pendingKey] ?? NO_PENDING_MESSAGES
       const earlierOutstanding = current.filter(
         (pending) =>
           pending.text.trim() === origin.normalizedText &&
@@ -112,7 +118,7 @@ export function useMobileNativeChatDrafts(args: {
         text,
         expectedOccurrence: origin.baselineOccurrences + earlierOutstanding + 1
       }
-      return { ...previous, [origin.pendingKey]: [...current, pending] }
+      return { ...previous, [pendingKey]: [...current, pending] }
     })
   }, [])
 

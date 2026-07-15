@@ -221,6 +221,32 @@ describe('mobile presence lock — driver state machine', () => {
     expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
   })
 
+  it('does not let an older phone-fit completion retake a newer writer floor', async () => {
+    const { runtime } = createRuntime()
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
+    await runtime.handleMobileSubscribe('pty-1', 'phone-B', { cols: 38, rows: 18 })
+    await runtime.reclaimTerminalForDesktop('pty-1')
+
+    let releaseFirstLayout!: () => void
+    vi.spyOn(runtime, 'applyMobileDisplayMode').mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          releaseFirstLayout = () => resolve(true)
+        })
+    )
+    const first = runtime.beginMobileInputFloor('pty-1', 'phone-A')!
+    const firstCommit = first.commit()
+    await vi.waitFor(() => expect(releaseFirstLayout).toBeTypeOf('function'))
+
+    const second = runtime.beginMobileInputFloor('pty-1', 'phone-B')!
+    await second.commit()
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-B' })
+
+    releaseFirstLayout()
+    await firstCommit
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-B' })
+  })
+
   it('mobile input without an active subscriber cannot create an orphaned floor lock', async () => {
     const { runtime } = createRuntime()
     await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
