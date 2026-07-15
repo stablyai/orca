@@ -2860,6 +2860,7 @@ describe('OrcaRuntimeService', () => {
       .mockImplementationOnce(() => staleScan.promise)
       .mockResolvedValueOnce([createdWorktree])
       .mockResolvedValueOnce([...MOCK_GIT_WORKTREES, createdWorktree])
+      .mockResolvedValueOnce([...MOCK_GIT_WORKTREES, createdWorktree])
 
     const staleLookup = runtime.showManagedWorktree(TEST_WORKTREE_ID)
     const result = await runtime.createManagedWorktree({
@@ -2875,6 +2876,11 @@ describe('OrcaRuntimeService', () => {
       id: result.worktree.id,
       path: createdWorktree.path
     })
+    await expect(runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)).resolves.toMatchObject(
+      {
+        worktrees: expect.arrayContaining([expect.objectContaining({ path: createdWorktree.path })])
+      }
+    )
   })
 
   it('creates additional workspace metadata for folder-mode repos through runtime create', async () => {
@@ -25170,7 +25176,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('bounds repeated detected worktree scans across the reported 15-repo shape', async () => {
-    vi.mocked(listWorktrees).mockClear()
+    vi.mocked(listWorktrees).mockReset()
     const repos = Array.from({ length: 15 }, (_, index) => ({
       id: `repo-${index + 1}`,
       path: `/tmp/repo-${index + 1}`,
