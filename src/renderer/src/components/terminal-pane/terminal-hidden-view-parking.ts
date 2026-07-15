@@ -2,7 +2,6 @@ import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
 import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import type { TerminalTab } from '../../../../shared/types'
-import { terminalProviderHasAuthoritativeSnapshot } from '../terminal/terminal-provider-snapshot-capability'
 
 // Why: cold-park hysteresis keeps a hidden pane mounted for 30s so quick tab
 // flips never pay a re-hydrate; hot-retain keeps a bounded recently-visible
@@ -52,8 +51,8 @@ function getPendingActivationSpawnCount(value: boolean | number | undefined): nu
 }
 
 // Why: parking relies on the daemon model snapshot to re-hydrate. Remote
-// runtime, SSH, fail-open, and pre-v20 daemon PTYs cannot provide the required
-// sequence-safe state, even when their ids look like daemon sessions.
+// runtime and SSH PTYs have no local snapshot in this phase, and a session id
+// minted for another worktree reattaches through a path parking cannot replay.
 export function isSnapshotBackedTerminalPty(ptyId: string | null, worktreeId: string): boolean {
   if (!ptyId) {
     return false
@@ -65,11 +64,7 @@ export function isSnapshotBackedTerminalPty(ptyId: string | null, worktreeId: st
   // they have no daemon session model, so revealing a parked pane would
   // silently respawn a fresh shell instead of restoring the snapshot.
   const separatorIdx = ptyId.lastIndexOf(PTY_SESSION_ID_SEPARATOR)
-  return (
-    separatorIdx !== -1 &&
-    ptyId.slice(0, separatorIdx) === worktreeId &&
-    terminalProviderHasAuthoritativeSnapshot(ptyId)
-  )
+  return separatorIdx !== -1 && ptyId.slice(0, separatorIdx) === worktreeId
 }
 
 export function canParkTerminalWorktreeRenderers(args: {

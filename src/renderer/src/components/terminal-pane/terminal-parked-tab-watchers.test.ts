@@ -96,10 +96,6 @@ import {
   shouldDeferParkedPtyExitTabClose,
   syncParkedTerminalTabWatchers
 } from './terminal-parked-tab-watchers'
-import {
-  clearTerminalProviderSnapshotCapabilities,
-  synchronizeTerminalProviderSnapshotCapabilities
-} from '../terminal/terminal-provider-snapshot-capability'
 
 const ptyWrite = vi.fn()
 const originalWindow = (globalThis as { window?: unknown }).window
@@ -129,16 +125,6 @@ function syncParked(args?: {
 
 describe('terminal-parked-tab-watchers', () => {
   beforeEach(() => {
-    clearTerminalProviderSnapshotCapabilities()
-    synchronizeTerminalProviderSnapshotCapabilities(
-      [
-        PTY_ID,
-        SECOND_PTY_ID,
-        `${WORKTREE_ID}@@session-after-wake`,
-        `${OTHER_WORKTREE_ID}@@session-9`
-      ],
-      (ids) => ids.map((id) => ({ id, authoritative: true }))
-    )
     mockStoreState = {
       tabsByWorktree: {},
       terminalLayoutsByTabId: {},
@@ -639,6 +625,23 @@ describe('terminal-parked-tab-watchers', () => {
       expect(canWatcherCoverParkedTerminalTab(WORKTREE_ID, { id: TAB_ID, ptyId: PTY_ID })).toBe(
         true
       )
+    })
+
+    it('lets cold activation add stricter eligibility without changing ordinary parking', () => {
+      capturePanes([{ ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
+      const providerCanSnapshotWithoutRenderer = vi.fn(() => false)
+
+      expect(canWatcherCoverParkedTerminalTab(WORKTREE_ID, { id: TAB_ID, ptyId: PTY_ID })).toBe(
+        true
+      )
+      expect(
+        canWatcherCoverParkedTerminalTab(
+          WORKTREE_ID,
+          { id: TAB_ID, ptyId: PTY_ID },
+          providerCanSnapshotWithoutRenderer
+        )
+      ).toBe(false)
+      expect(providerCanSnapshotWithoutRenderer).toHaveBeenCalledWith(PTY_ID)
     })
 
     it('rejects a capture containing a legacy non-UUID leaf id', () => {

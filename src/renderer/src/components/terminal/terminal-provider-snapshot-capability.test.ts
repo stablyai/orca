@@ -36,6 +36,39 @@ describe('terminal provider snapshot capabilities', () => {
     expect(terminalProviderHasAuthoritativeSnapshot('pty-3')).toBe(true)
   })
 
+  it('does not rescan an unchanged fully resolved PTY collection on later renders', () => {
+    let indexedReads = 0
+    const ids = new Proxy(['pty-1', 'pty-2'], {
+      get(target, property, receiver) {
+        if (typeof property === 'string' && /^\d+$/.test(property)) {
+          indexedReads += 1
+        }
+        return Reflect.get(target, property, receiver)
+      }
+    })
+    const resolve = vi.fn((batch: string[]) =>
+      batch.map((id) => ({ id, authoritative: true as boolean | null }))
+    )
+
+    synchronizeTerminalProviderSnapshotCapabilities(ids, resolve)
+    indexedReads = 0
+    synchronizeTerminalProviderSnapshotCapabilities(ids, resolve)
+
+    expect(indexedReads).toBe(0)
+    expect(resolve).toHaveBeenCalledOnce()
+  })
+
+  it('bounds initial capability IPC to batches of 512 PTYs', () => {
+    const ids = Array.from({ length: 1_025 }, (_, index) => `pty-${index}`)
+    const resolve = vi.fn((batch: string[]) =>
+      batch.map((id) => ({ id, authoritative: true as boolean | null }))
+    )
+
+    synchronizeTerminalProviderSnapshotCapabilities(ids, resolve)
+
+    expect(resolve.mock.calls.map(([batch]) => batch.length)).toEqual([512, 512, 1])
+  })
+
   it('retries capabilities that are still unknown during daemon startup', () => {
     const resolve = vi
       .fn()

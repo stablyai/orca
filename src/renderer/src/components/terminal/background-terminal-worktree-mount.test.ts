@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { isSnapshotBackedTerminalPty } from '../terminal-pane/terminal-hidden-view-parking'
 import {
   clearTerminalProviderSnapshotCapabilities,
-  synchronizeTerminalProviderSnapshotCapabilities
+  synchronizeTerminalProviderSnapshotCapabilities,
+  terminalProviderHasAuthoritativeSnapshot
 } from './terminal-provider-snapshot-capability'
 
 import {
@@ -257,8 +258,14 @@ describe('cold activation tab deferral', () => {
       worktreeId,
       allTabIds,
       isTabLive: () => false,
-      isTabDeferrable: (tabId) =>
-        isSnapshotBackedTerminalPty(ptyIdByTabId.get(tabId) ?? null, worktreeId),
+      isTabDeferrable: (tabId) => {
+        const ptyId = ptyIdByTabId.get(tabId) ?? null
+        return (
+          isSnapshotBackedTerminalPty(ptyId, worktreeId) &&
+          ptyId !== null &&
+          terminalProviderHasAuthoritativeSnapshot(ptyId)
+        )
+      },
       immediateTabIds: new Set(['tab-1'])
     })
 
@@ -267,6 +274,45 @@ describe('cold activation tab deferral', () => {
     expect(deferredMountTabIdsByWorktree.get(worktreeId)).toEqual(
       new Set(['tab-3', 'tab-4', 'tab-5', 'tab-6', 'tab-7'])
     )
+  })
+
+  it('preserves cold-activation deferral for an all-current daemon worktree', () => {
+    const worktreeId = 'wt-current'
+    const allTabIds = tabIds(7)
+    const ptyIdByTabId = new Map(
+      allTabIds.map((tabId) => [tabId, `${worktreeId}@@${tabId}-session`])
+    )
+    const resolve = vi.fn((ids: string[]) =>
+      ids.map((id) => ({ id, authoritative: true as boolean | null }))
+    )
+    clearTerminalProviderSnapshotCapabilities()
+    synchronizeTerminalProviderSnapshotCapabilities([...ptyIdByTabId.values()], resolve)
+    const restrictions = new Map<string, ReadonlySet<string>>()
+    const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
+
+    const deferring = planColdActivationTabDeferral({
+      restrictions,
+      deferredMountTabIdsByWorktree,
+      worktreeId,
+      allTabIds,
+      isTabLive: () => false,
+      isTabDeferrable: (tabId) => {
+        const ptyId = ptyIdByTabId.get(tabId) ?? null
+        return (
+          isSnapshotBackedTerminalPty(ptyId, worktreeId) &&
+          ptyId !== null &&
+          terminalProviderHasAuthoritativeSnapshot(ptyId)
+        )
+      },
+      immediateTabIds: new Set(['tab-1'])
+    })
+
+    expect(deferring).toBe(true)
+    expect(restrictions.get(worktreeId)).toEqual(new Set(['tab-1']))
+    expect(deferredMountTabIdsByWorktree.get(worktreeId)).toEqual(
+      new Set(['tab-2', 'tab-3', 'tab-4', 'tab-5', 'tab-6', 'tab-7'])
+    )
+    expect(resolve).toHaveBeenCalledOnce()
   })
 
   it('does not defer when most tabs are already live', () => {

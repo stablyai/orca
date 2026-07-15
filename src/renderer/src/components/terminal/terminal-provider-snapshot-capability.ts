@@ -3,12 +3,34 @@ type SnapshotCapability = { id: string; authoritative: boolean | null }
 const authoritativeSnapshotByPtyId = new Map<string, boolean>()
 const unknownCapabilityRetryAtByPtyId = new Map<string, number>()
 const UNKNOWN_CAPABILITY_RETRY_MS = 1_000
+let lastSynchronizedLivePtyIds: readonly string[] | null = null
+let earliestUnknownCapabilityRetryAtMs = Number.POSITIVE_INFINITY
+
+function refreshEarliestUnknownCapabilityRetry(): void {
+  earliestUnknownCapabilityRetryAtMs = Number.POSITIVE_INFINITY
+  for (const retryAtMs of unknownCapabilityRetryAtByPtyId.values()) {
+    earliestUnknownCapabilityRetryAtMs = Math.min(earliestUnknownCapabilityRetryAtMs, retryAtMs)
+  }
+}
 
 export function synchronizeTerminalProviderSnapshotCapabilities(
   livePtyIds: readonly string[],
   resolveCapabilities?: (ids: string[]) => SnapshotCapability[],
-  nowMs = Date.now()
+  observedAtMs?: number
 ): void {
+  // Why: Terminal can re-render for unrelated UI state. A stable binding list
+  // must add no repeated all-PTY scan or IPC work to that render path.
+  if (
+    livePtyIds === lastSynchronizedLivePtyIds &&
+    earliestUnknownCapabilityRetryAtMs === Number.POSITIVE_INFINITY
+  ) {
+    return
+  }
+  const nowMs = observedAtMs ?? Date.now()
+  if (livePtyIds === lastSynchronizedLivePtyIds && nowMs < earliestUnknownCapabilityRetryAtMs) {
+    return
+  }
+  lastSynchronizedLivePtyIds = livePtyIds
   const live = new Set(livePtyIds.filter((id) => id.length > 0))
   for (const cachedId of authoritativeSnapshotByPtyId.keys()) {
     if (!live.has(cachedId)) {
@@ -31,6 +53,7 @@ export function synchronizeTerminalProviderSnapshotCapabilities(
     for (const id of missing) {
       unknownCapabilityRetryAtByPtyId.set(id, nowMs + UNKNOWN_CAPABILITY_RETRY_MS)
     }
+    refreshEarliestUnknownCapabilityRetry()
     return
   }
   for (let offset = 0; offset < missing.length; offset += 512) {
@@ -57,6 +80,7 @@ export function synchronizeTerminalProviderSnapshotCapabilities(
       }
     }
   }
+  refreshEarliestUnknownCapabilityRetry()
 }
 
 export function terminalProviderHasAuthoritativeSnapshot(ptyId: string): boolean {
@@ -66,4 +90,6 @@ export function terminalProviderHasAuthoritativeSnapshot(ptyId: string): boolean
 export function clearTerminalProviderSnapshotCapabilities(): void {
   authoritativeSnapshotByPtyId.clear()
   unknownCapabilityRetryAtByPtyId.clear()
+  lastSynchronizedLivePtyIds = null
+  earliestUnknownCapabilityRetryAtMs = Number.POSITIVE_INFINITY
 }

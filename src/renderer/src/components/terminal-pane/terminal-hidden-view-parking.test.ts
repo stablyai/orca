@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   clearTerminalProviderSnapshotCapabilities,
   synchronizeTerminalProviderSnapshotCapabilities
@@ -16,55 +16,10 @@ import {
   selectColdParkedTerminalWorktrees
 } from './terminal-hidden-view-parking'
 
-const AUTHORITATIVE_TEST_PTYS = [
-  'repo::/worktree@@session-1',
-  'repo::/other@@session-1',
-  'wt-1@@session-1',
-  'wt-2@@session-1',
-  'wt-3@@session-1',
-  'wt-recent@@session-1',
-  'wt-local@@session-1',
-  'wt-visible@@session-1',
-  'wt-measuring@@session-1',
-  'wt-portal@@session-1',
-  'wt-activation@@session-1',
-  'wt-startup@@session-1',
-  ...[
-    'tab-1',
-    'tab-2',
-    'tab-3',
-    'tab-activation',
-    'tab-local',
-    'tab-portal',
-    'tab-recent',
-    'tab-recent-1',
-    'tab-recent-2',
-    'tab-startup',
-    'tab-visible'
-  ].map((tabId) => `wt-1@@session-${tabId}`)
-]
-
-beforeEach(() => {
-  clearTerminalProviderSnapshotCapabilities()
-  synchronizeTerminalProviderSnapshotCapabilities(AUTHORITATIVE_TEST_PTYS, (ids) =>
-    ids.map((id) => ({ id, authoritative: true }))
-  )
-})
-
 describe('isSnapshotBackedTerminalPty', () => {
   it('allows local daemon sessions owned by the worktree', () => {
     expect(isSnapshotBackedTerminalPty('repo::/worktree@@session-1', 'repo::/worktree')).toBe(true)
     expect(isSnapshotBackedTerminalPty('wt-1@@session-1', 'wt-1')).toBe(true)
-  })
-
-  it('rejects a structurally valid legacy daemon session without authoritative snapshots', () => {
-    synchronizeTerminalProviderSnapshotCapabilities(['repo::/worktree@@legacy-session'], (ids) =>
-      ids.map((id) => ({ id, authoritative: false }))
-    )
-
-    expect(isSnapshotBackedTerminalPty('repo::/worktree@@legacy-session', 'repo::/worktree')).toBe(
-      false
-    )
   })
 
   // Why: separator-less ids ('1', '2', 'pty-local-detached') come from the
@@ -107,6 +62,16 @@ describe('canParkTerminalWorktreeRenderers', () => {
   }
 
   it('parks hidden local terminal renderers after the idle delay', () => {
+    expect(canParkTerminalWorktreeRenderers(base)).toBe(true)
+  })
+
+  it('keeps a previously mounted v19 terminal eligible for ordinary parking', () => {
+    const legacyPtyId = 'repo::/worktree@@session-1'
+    clearTerminalProviderSnapshotCapabilities()
+    synchronizeTerminalProviderSnapshotCapabilities([legacyPtyId], (ids) =>
+      ids.map((id) => ({ id, authoritative: false }))
+    )
+
     expect(canParkTerminalWorktreeRenderers(base)).toBe(true)
   })
 
@@ -157,16 +122,6 @@ describe('canParkTerminalWorktreeRenderers', () => {
         ]
       })
     ).toBe(false)
-  })
-
-  it('keeps a preserved v19 terminal mounted after the cold-park delay', () => {
-    const legacyPtyId = 'repo::/worktree@@session-1'
-    clearTerminalProviderSnapshotCapabilities()
-    synchronizeTerminalProviderSnapshotCapabilities([legacyPtyId], (ids) =>
-      ids.map((id) => ({ id, authoritative: false }))
-    )
-
-    expect(canParkTerminalWorktreeRenderers(base)).toBe(false)
   })
 
   it('keeps renderers mounted while a tab has startup or activation work pending', () => {
