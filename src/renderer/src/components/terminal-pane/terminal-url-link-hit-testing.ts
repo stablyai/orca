@@ -1,4 +1,4 @@
-import type { IBufferLine, IBufferRange, IDisposable, Terminal } from '@xterm/xterm'
+import type { IBufferLine, IDisposable, Terminal } from '@xterm/xterm'
 import { openHttpLink } from '@/lib/http-link-routing'
 import {
   buildCandidateLogicalLinesForBufferPosition,
@@ -9,6 +9,10 @@ import { isTerminalHttpLinkActivation } from './terminal-http-link-activation'
 import { installTerminalLinkPtyMouseSuppression } from './terminal-link-pty-mouse-suppression'
 import { getTerminalBufferPositionForMouseEvent } from './terminal-mouse-buffer-position'
 import { TERMINAL_HTTP_URL_MAX_LENGTH } from './terminal-http-link-limits'
+import {
+  linkCrossesImplausibleWrapBoundary,
+  rangeContainsBufferPosition
+} from './terminal-link-row-boundaries'
 import { buildWrappedLogicalLine, rangeForParsedFileLink } from './wrapped-terminal-link-ranges'
 
 type UrlLinkHitTestDeps = {
@@ -266,11 +270,17 @@ function findHttpLinkAtBufferPosition(
   terminalColumns: number
 ): string | null {
   const nativeWrappedLogicalLine = buildWrappedLogicalLine(buffer, position.y)
-  const logicalLines = dedupeLogicalLines([
+  // Why: frame-scoped candidates wrap at their TUI frame column, so they skip
+  // the row-edge plausibility check that path-fragment candidates need (#8832).
+  const frameScopedLines = dedupeLogicalLines([
     ...(nativeWrappedLogicalLine && nativeWrappedLogicalLine.rows.length > 1
       ? [nativeWrappedLogicalLine]
       : []),
-    ...buildHardWrappedHttpLogicalLineCandidates(buffer, position.y),
+    ...buildHardWrappedHttpLogicalLineCandidates(buffer, position.y)
+  ])
+  const frameScopedFingerprints = new Set(frameScopedLines.map((line) => line.fingerprint))
+  const logicalLines = dedupeLogicalLines([
+    ...frameScopedLines,
     ...buildCandidateLogicalLinesForBufferPosition(buffer, position.y)
   ])
   if (logicalLines.length === 0) {
@@ -278,7 +288,14 @@ function findHttpLinkAtBufferPosition(
   }
 
   for (const logicalLine of logicalLines) {
+    const requirePlausibleWrapBoundaries = !frameScopedFingerprints.has(logicalLine.fingerprint)
     for (const parsed of extractTerminalHttpLinks(logicalLine.text)) {
+      if (
+        requirePlausibleWrapBoundaries &&
+        linkCrossesImplausibleWrapBoundary(logicalLine, parsed.startIndex, parsed.endIndex)
+      ) {
+        continue
+      }
       const range = rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
       if (!range || !rangeContainsBufferPosition(range, position, terminalColumns)) {
         continue
@@ -315,15 +332,4 @@ export function openTerminalHttpLink(url: string, deps: UrlLinkHitTestDeps): voi
     .catch(() => {
       openHttpLink(url, { worktreeId: deps.worktreeId, forceSystemBrowser: true })
     })
-}
-
-function rangeContainsBufferPosition(
-  range: IBufferRange,
-  position: { x: number; y: number },
-  terminalColumns: number
-): boolean {
-  const lower = range.start.y * terminalColumns + range.start.x
-  const upper = range.end.y * terminalColumns + range.end.x
-  const current = position.y * terminalColumns + position.x
-  return lower <= current && current <= upper
 }
