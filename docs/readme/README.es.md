@@ -17,7 +17,7 @@
 
 <p align="center">
   <strong>El orquestador de IA para desarrolladores 100x.</strong><br/>
-  Ejecuta Claude Code, OpenClaude, Codex u OpenCode en paralelo — cada uno en su propio worktree, supervisados desde un solo lugar.
+  Ejecuta Codex, Claude Code, OpenCode u Pi en paralelo — cada uno en su propio worktree, supervisados desde un solo lugar.
 </p>
 
 <h3 align="center"><a href="https://onorca.dev/download"><ins>Descargar Orca</ins></a></h3>

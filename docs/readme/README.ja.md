@@ -17,7 +17,7 @@
 
 <p align="center">
   <strong>100x ビルダーのための AI オーケストレーター。</strong><br/>
-  Claude Code、OpenClaude、Codex、OpenCode を並べて実行 — それぞれを専用のワークツリーで動かし、1 か所で追跡できます。
+  Codex、Claude Code、OpenCode、Pi を並べて実行 — それぞれを専用のワークツリーで動かし、1 か所で追跡できます。
 </p>
 
 <h3 align="center"><a href="https://onorca.dev/download"><ins>Orca をダウンロード</ins></a></h3>
