@@ -58,8 +58,7 @@ const {
   setMigrationUnsupportedPtyMock,
   clearMigrationUnsupportedPtyMock,
   clearMigrationUnsupportedPtysForPaneKeyMock,
-  clearPaneKeyAliasesForPtyMock,
-  killPosixPtySessionMock
+  clearPaneKeyAliasesForPtyMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   onMock: vi.fn(),
@@ -90,8 +89,7 @@ const {
   setMigrationUnsupportedPtyMock: vi.fn(),
   clearMigrationUnsupportedPtyMock: vi.fn(),
   clearMigrationUnsupportedPtysForPaneKeyMock: vi.fn(),
-  clearPaneKeyAliasesForPtyMock: vi.fn(),
-  killPosixPtySessionMock: vi.fn()
+  clearPaneKeyAliasesForPtyMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -129,10 +127,6 @@ vi.mock('fs', () => ({
 
 vi.mock('node-pty', () => ({
   spawn: spawnMock
-}))
-
-vi.mock('../../relay/pty-session-kill', () => ({
-  killPosixPtySession: killPosixPtySessionMock
 }))
 
 vi.mock('../opencode/hook-service', () => ({
@@ -334,8 +328,6 @@ describe('registerPtyHandlers', () => {
     chmodSyncMock.mockReset()
     getPathMock.mockReset()
     spawnMock.mockReset()
-    killPosixPtySessionMock.mockReset()
-    killPosixPtySessionMock.mockResolvedValue(true)
     openCodeBuildPtyEnvMock.mockReset()
     mimoCodeBuildPtyEnvMock.mockReset()
     openCodeClearPtyMock.mockReset()
@@ -11184,7 +11176,7 @@ describe('registerPtyHandlers', () => {
     expect(piClearPtyMock).toHaveBeenCalledWith(spawnResult.id)
   })
 
-  it('keeps the retryable owner until manual kill IPC verifies session death', async () => {
+  it('disposes PTY listeners before force-killing the leader on manual kill IPC', async () => {
     const onDataDisposable = makeDisposable()
     const onExitDisposable = makeDisposable()
     // Why: hold a stable reference to the kill spy. On POSIX, destroyPtyProcess
@@ -11211,13 +11203,16 @@ describe('registerPtyHandlers', () => {
 
     await handlers.get('pty:kill')!(null, { id: spawnResult.id })
 
-    expect(killPosixPtySessionMock.mock.invocationCallOrder[0]).toBeLessThan(
-      onDataDisposable.dispose.mock.invocationCallOrder[0]
+    // Why: #8706 POSIX teardown disposes the node-pty listeners before killing
+    // the forkpty leader, so the natural onExit path cannot race the sweep. The
+    // old session-kill-before-dispose ordering (killPosixPtySession) is gone.
+    expect(onDataDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
+      killSpy.mock.invocationCallOrder[0]
     )
-    expect(killPosixPtySessionMock.mock.invocationCallOrder[0]).toBeLessThan(
-      onExitDisposable.dispose.mock.invocationCallOrder[0]
+    expect(onExitDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
+      killSpy.mock.invocationCallOrder[0]
     )
-    expect(killSpy).not.toHaveBeenCalled()
+    expect(killSpy).toHaveBeenCalledTimes(1)
   })
 
   it('disposes PTY listeners before runtime controller kill', async () => {

@@ -47,7 +47,10 @@ import {
 } from '../pty/powerlevel10k-wizard-env'
 import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
-import { WINDOWS_PTY_EXIT_TIMEOUT_MS } from '../../shared/terminal-teardown-timeouts'
+import {
+  POSIX_PTY_EXIT_TIMEOUT_MS,
+  WINDOWS_PTY_EXIT_TIMEOUT_MS
+} from '../../shared/terminal-teardown-timeouts'
 import { resolveAgentForegroundProcessWithAvailability } from '../providers/agent-foreground-process'
 import { readWindowsConptyProcessIds } from '../providers/windows-conpty-process-membership'
 import {
@@ -64,7 +67,6 @@ import { parsePtySessionId } from './pty-session-id'
 import { getAgentForegroundContextPaths } from '../providers/agent-foreground-context-paths'
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
-import { killPosixPtySession } from '../../relay/pty-session-kill'
 import type { TuiAgent } from '../../shared/types'
 
 const PANE_IDENTITY_ENV_KEYS = [
@@ -1239,7 +1241,30 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         return true
       }
       if (process.platform !== 'win32') {
-        return killPosixPtySession(proc.pid, (proc as unknown as { ptsName?: unknown }).ptsName)
+        // Why: SIGKILL the forkpty leader; an agent session's detached tool
+        // children are reaped by the Session-level descendant sweep (#8706).
+        // Await the native exit — not a bare kill — so worktree-delete
+        // fail-closed verification observes a real teardown, and a zombie
+        // (killed but unreaped) is never mistaken for a live survivor.
+        try {
+          process.kill(proc.pid, 'SIGKILL')
+        } catch {
+          // Process may already be dead.
+        }
+        if (dead) {
+          return true
+        }
+        return new Promise<boolean>((resolve) => {
+          const onExit = (): void => {
+            clearTimeout(timeout)
+            resolve(true)
+          }
+          const timeout = setTimeout(() => {
+            exitWaiters.delete(onExit)
+            resolve(false)
+          }, POSIX_PTY_EXIT_TIMEOUT_MS)
+          exitWaiters.add(onExit)
+        })
       }
       if (!nodePtyKillIssued) {
         try {

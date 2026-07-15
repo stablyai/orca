@@ -28,16 +28,8 @@ const { mockPtySpawn, mockPtyInstance } = vi.hoisted(() => ({
   }
 }))
 
-const { mockKillPosixPtySession } = vi.hoisted(() => ({
-  mockKillPosixPtySession: vi.fn().mockResolvedValue(false)
-}))
-
 vi.mock('node-pty', () => ({
   spawn: mockPtySpawn
-}))
-
-vi.mock('./pty-session-kill', () => ({
-  killPosixPtySession: mockKillPosixPtySession
 }))
 
 import { PtyHandler, attachIdentityMismatches } from './pty-handler'
@@ -118,8 +110,6 @@ describe('PtyHandler', () => {
     mockPtyInstance.resize.mockReset()
     mockPtyInstance.kill.mockReset()
     mockPtyInstance.clear.mockReset()
-    mockKillPosixPtySession.mockReset()
-    mockKillPosixPtySession.mockResolvedValue(true)
 
     mockPtySpawn.mockReturnValue({ ...mockPtyInstance })
 
@@ -852,7 +842,8 @@ describe('PtyHandler', () => {
 
     expect(handler.retainedStartupCommandCount).toBe(0)
     expect(term.write).not.toHaveBeenCalled()
-    expect(killSpy).not.toHaveBeenCalledWith('SIGKILL')
+    // Why: destructive POSIX teardown force-kills the forkpty leader with SIGKILL.
+    expect(killSpy).toHaveBeenCalledWith('SIGKILL')
   })
 
   it('increments PTY ids on each spawn', async () => {
@@ -1320,7 +1311,8 @@ describe('PtyHandler', () => {
       id: 'pty-1',
       data: 'last words'
     })
-    expect(mockKill).not.toHaveBeenCalledWith('SIGKILL')
+    // Why: destructive POSIX teardown force-kills the forkpty leader with SIGKILL.
+    expect(mockKill).toHaveBeenCalledWith('SIGKILL')
   })
 
   it('notifies pty.exit when graceful shutdown falls back to SIGKILL', async () => {
@@ -1349,7 +1341,7 @@ describe('PtyHandler', () => {
     expect(handler.activePtyCount).toBe(0)
   })
 
-  it('kills the full POSIX PTY session through the capability method', async () => {
+  it('SIGKILLs the forkpty leader through the shutdownSession capability method', async () => {
     const mockKill = vi.fn()
     mockPtySpawn.mockReturnValue({
       ...mockPtyInstance,
@@ -1360,8 +1352,9 @@ describe('PtyHandler', () => {
 
     await dispatcher.callRequest('pty.spawn', {})
     await dispatcher.callRequest('pty.shutdownSession', { id: 'pty-1' })
-    expect(mockKillPosixPtySession).toHaveBeenCalledWith(process.pid, undefined)
-    expect(mockKill).not.toHaveBeenCalledWith('SIGKILL')
+    // Why: shutdownSession routes to the destructive POSIX teardown, which now
+    // force-kills the leader directly via pty.kill('SIGKILL').
+    expect(mockKill).toHaveBeenCalledWith('SIGKILL')
   })
 
   it('awaits Windows ConPTY exit after immediate shutdown without a signal argument', async () => {
@@ -1483,11 +1476,10 @@ describe('PtyHandler', () => {
     }
   })
 
-  it('fails closed when full POSIX PTY session teardown cannot be verified', async () => {
+  it('issues a single SIGKILL and resolves on the immediate POSIX teardown path', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     const mockKill = vi.fn()
-    mockKillPosixPtySession.mockResolvedValue(false)
     mockPtySpawn.mockReturnValue({
       ...mockPtyInstance,
       kill: mockKill,
@@ -1498,31 +1490,20 @@ describe('PtyHandler', () => {
     try {
       await dispatcher.callRequest('pty.spawn', {})
 
+      // Why: POSIX destructive teardown no longer verifies through a session-kill
+      // helper (worktree-delete fail-closed lives in the SSH liveness layer now).
+      // It force-kills the leader exactly once and disposes synchronously, so the
+      // request resolves and the managed entry is released with no recycled-pid
+      // double signal (disposeManagedPty neutralizes any later pty.kill).
       await expect(
         dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
-      ).rejects.toThrow('Unable to verify full PTY session teardown: pty-1')
-      expect(mockKill).not.toHaveBeenCalled()
-      expect(handler.activePtyCount).toBe(1)
+      ).resolves.toBeUndefined()
+      expect(mockKill).toHaveBeenCalledWith('SIGKILL')
+      expect(mockKill).toHaveBeenCalledTimes(1)
+      expect(handler.activePtyCount).toBe(0)
     } finally {
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
-  })
-
-  it('does not signal a recycled root pid after the POSIX session kill succeeds', async () => {
-    const mockKill = vi.fn()
-    mockKillPosixPtySession.mockResolvedValue(true)
-    mockPtySpawn.mockReturnValue({
-      ...mockPtyInstance,
-      kill: mockKill,
-      onData: vi.fn(),
-      onExit: vi.fn()
-    })
-
-    await dispatcher.callRequest('pty.spawn', {})
-    await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
-
-    expect(mockKillPosixPtySession).toHaveBeenCalledWith(process.pid, undefined)
-    expect(mockKill).not.toHaveBeenCalled()
   })
 
   it('throws for attach on nonexistent PTY', async () => {
@@ -2248,7 +2229,8 @@ describe('PtyHandler', () => {
     await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
     onExitCb!({ exitCode: 0 })
 
-    expect(mockKill).not.toHaveBeenCalledWith('SIGKILL')
+    // Why: destructive POSIX teardown force-kills the forkpty leader with SIGKILL.
+    expect(mockKill).toHaveBeenCalledWith('SIGKILL')
     expect(exits).toEqual([{ id: 'pty-1', paneKey: 'tab-shutdown:0' }])
     expect(handler.activePtyCount).toBe(0)
   })

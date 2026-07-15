@@ -22,6 +22,8 @@ type RichMarkdownProgrammaticSyncOptions = {
   filePath: string
   isApplyingProgrammaticUpdateRef: MutableRefObject<boolean>
   lastCommittedMarkdownRef: MutableRefObject<string>
+  originalSourceRef: MutableRefObject<string>
+  baseCanonicalRef: MutableRefObject<string>
   markdownDocuments?: MarkdownDocument[]
   rootRef: MutableRefObject<HTMLDivElement | null>
   runtimeEnvironmentId?: string | null
@@ -46,6 +48,8 @@ export function useRichMarkdownProgrammaticSync({
   filePath,
   isApplyingProgrammaticUpdateRef,
   lastCommittedMarkdownRef,
+  originalSourceRef,
+  baseCanonicalRef,
   markdownDocuments,
   rootRef,
   runtimeEnvironmentId,
@@ -101,12 +105,29 @@ export function useRichMarkdownProgrammaticSync({
     if (!editor) {
       return
     }
-    if (content === lastCommittedMarkdownRef.current || editor.getMarkdown() === content) {
+    if (content === lastCommittedMarkdownRef.current) {
+      return
+    }
+    if (editor.getMarkdown() === content) {
+      // Why: disk bytes changed but already render-equal to the current doc (e.g.
+      // an external tool canonicalized byte-level style). Skip the disruptive
+      // reload, but adopt the new bytes as the reconciliation baseline so the next
+      // edit patches onto the fresh source, not the stale pre-change source.
+      lastCommittedMarkdownRef.current = content
+      originalSourceRef.current = content
+      baseCanonicalRef.current = content
       return
     }
     isApplyingProgrammaticUpdateRef.current = true
     try {
-      applyExternalRichMarkdownContent(editor, content, lastCommittedMarkdownRef, codec)
+      applyExternalRichMarkdownContent(
+        editor,
+        content,
+        lastCommittedMarkdownRef,
+        originalSourceRef,
+        baseCanonicalRef,
+        codec
+      )
     } finally {
       isApplyingProgrammaticUpdateRef.current = false
     }
@@ -120,6 +141,8 @@ export function useRichMarkdownProgrammaticSync({
     fileId,
     isApplyingProgrammaticUpdateRef,
     lastCommittedMarkdownRef,
+    originalSourceRef,
+    baseCanonicalRef,
     rootRef,
     slashMenuSetter
   ])
@@ -129,6 +152,8 @@ function applyExternalRichMarkdownContent(
   editor: Editor,
   content: string,
   lastCommittedMarkdownRef: MutableRefObject<string>,
+  originalSourceRef: MutableRefObject<string>,
+  baseCanonicalRef: MutableRefObject<string>,
   codec: RichMarkdownEditorCodec
 ): void {
   try {
@@ -145,6 +170,10 @@ function applyExternalRichMarkdownContent(
     // external content, matching onCreate's single-paragraph reflow behavior.
     normalizeEmptyListItems(editor)
     lastCommittedMarkdownRef.current = content
+    // Why: reset the reconciliation baseline to the freshly loaded external bytes
+    // so subsequent edits preserve the new source style, not the pre-reload one.
+    originalSourceRef.current = content
+    baseCanonicalRef.current = editor.getMarkdown()
     if (hadFocus) {
       const docSize = editor.state.doc.content.size
       editor

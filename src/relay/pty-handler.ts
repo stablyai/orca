@@ -25,7 +25,6 @@ import {
   scanForShellReady,
   type ShellReadyScanState
 } from '../main/shell-ready-marker-scanner'
-import { killPosixPtySession } from './pty-session-kill'
 import { applyTerminalGitCredentialPromptGuard } from '../shared/terminal-git-credential-guard'
 import {
   gitCredentialPromptGuardEnv,
@@ -963,14 +962,13 @@ export class PtyHandler {
         }
         return
       }
-      const killedSession = await killPosixPtySession(
-        managed.pty.pid,
-        (managed.pty as unknown as { ptsName?: unknown }).ptsName
-      )
-      if (!killedSession && !managed.disposed) {
-        // Why: killing only the forkpty leader can strand HUP-resistant job
-        // groups in a deleted cwd. Fail closed so worktree removal is aborted.
-        throw new Error(`Unable to verify full PTY session teardown: ${id}`)
+      // Why: SIGKILL the forkpty leader on the destructive path. Remote agent
+      // descendant reaping is a documented follow-up; worktree-delete fail-
+      // closed verification is enforced by the runtime SSH liveness layer.
+      try {
+        killPtyProcess(managed.pty, 'SIGKILL')
+      } catch {
+        /* child may already be dead */
       }
       if (managed.disposed) {
         return

@@ -10,6 +10,11 @@ export const POSIX_PTY_SESSION_TEARDOWN_TIMEOUT_MS =
 // its fallback runs; leave bounded headroom for the native exit event to land.
 export const WINDOWS_PTY_EXIT_TIMEOUT_MS = 8_000
 
+// Why: a SIGKILL'd POSIX leader is reaped quickly, but await the native exit
+// (not a bare kill) so worktree-delete fail-closed verification observes a real
+// teardown; keep bounded headroom for reaping under load.
+export const POSIX_PTY_EXIT_TIMEOUT_MS = 2_000
+
 export const RELAY_PTY_IMMEDIATE_SHUTDOWN_TIMEOUT_MS = Math.max(
   POSIX_PTY_SESSION_TEARDOWN_TIMEOUT_MS,
   WINDOWS_PTY_EXIT_TIMEOUT_MS

@@ -54,11 +54,14 @@ import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 import { resolveAgentForegroundProcessWithAvailability } from './agent-foreground-process'
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+import {
+  captureDescendantSnapshot,
+  terminateDescendantSnapshot
+} from '../pty-descendant-termination'
 import { readWindowsConptyProcessIds } from './windows-conpty-process-membership'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from './pty-default-cwd'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
-import { killPosixPtySession } from '../../relay/pty-session-kill'
 import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
 
 const PANE_IDENTITY_ENV_KEYS = [
@@ -70,6 +73,14 @@ const PANE_IDENTITY_ENV_KEYS = [
 
 let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()
+// Why: only agent sessions get descendant tree-kill on shutdown. Agent CLIs
+// spawn tool children in detached process groups the PTY's SIGHUP can never
+// reach; plain user terminals keep classic semantics where deliberately
+// detached (nohup-style) children survive the pane.
+const ptyAgentSessionIds = new Set<string>()
+// Why: descendant capture is async. Reattach and duplicate shutdown must wait
+// for the original owner instead of returning a PTY that is about to die.
+const ptyShutdownPromises = new Map<string, Promise<void>>()
 const ptyShellName = new Map<string, string>()
 const ptyAgentForegroundContextPaths = new Map<string, string[]>()
 const ptyTerminalHandle = new Map<string, string>()
@@ -187,6 +198,7 @@ function clearPtyState(id: string): void {
   runPtyCleanup(id)
   disposePtyListeners(id)
   ptyProcesses.delete(id)
+  ptyAgentSessionIds.delete(id)
   ptyShellName.delete(id)
   ptyAgentForegroundContextPaths.delete(id)
   ptyTerminalHandle.delete(id)
@@ -385,6 +397,10 @@ export class LocalPtyProvider implements IPtyProvider {
   async spawn(args: PtySpawnOptions): Promise<PtySpawnResult> {
     const reattachId = normalizeLocalCallerSessionId(args.sessionId)
     if (reattachId) {
+      const pendingShutdown = ptyShutdownPromises.get(reattachId)
+      if (pendingShutdown) {
+        await pendingShutdown
+      }
       const existing = ptyProcesses.get(reattachId)
       if (existing) {
         try {
@@ -740,6 +756,12 @@ export class LocalPtyProvider implements IPtyProvider {
 
     const proc = spawnResult.process
     ptyProcesses.set(id, proc)
+    // Why both signals: launchAgent is the caller's explicit intent and
+    // survives command rewriting (e.g. auth env prefixes); recognition covers
+    // callers that pass a bare agent command line without the flag.
+    if (args.launchAgent || startupAgentRecognition) {
+      ptyAgentSessionIds.add(id)
+    }
     ptyShellName.set(id, getSpawnedShellName(shellPath))
     if (finalEnv.ORCA_TERMINAL_HANDLE) {
       ptyTerminalHandle.set(id, finalEnv.ORCA_TERMINAL_HANDLE)
@@ -937,7 +959,7 @@ export class LocalPtyProvider implements IPtyProvider {
     return { cols: proc.cols, rows: proc.rows }
   }
 
-  async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+  async shutdown(id: string, _opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
     const proc = ptyProcesses.get(id)
     if (!proc) {
       return
@@ -963,36 +985,59 @@ export class LocalPtyProvider implements IPtyProvider {
       }
       return
     }
-    let alreadyKilled = false
-    if (opts.immediate) {
-      const killedSession = await killPosixPtySession(
-        proc.pid,
-        (proc as unknown as { ptsName?: unknown }).ptsName
-      )
-      if (!killedSession) {
-        throw new Error(`Unable to verify full PTY session teardown: ${id}`)
-      }
-      alreadyKilled = true
+    // Why: POSIX teardown reaps detached agent descendants (#8706) and is
+    // deduplicated so an overlapping graceful+immediate shutdown shares one
+    // process pass. Worktree-delete fail-closed verification (leader-level on
+    // POSIX) is enforced by the caller's post-sweep listProcesses() re-check.
+    const pending = ptyShutdownPromises.get(id)
+    if (pending) {
+      await pending
+      return
     }
-    // Why: disposePtyListeners removes the onExit callback, so the natural
-    // exit cleanup path from node-pty won't fire. Cleanup and notification
-    // must happen unconditionally after the try/catch.
-    // Timer/writer cleanup must happen here too: disposing listeners prevents
-    // the natural onExit callback from running the usual clearPtyState path.
-    runPtyCleanup(id)
-    disposePtyListeners(id)
-    if (!alreadyKilled) {
+    const operation = this.shutdownTrackedPty(id, proc)
+    ptyShutdownPromises.set(id, operation)
+    try {
+      await operation
+    } finally {
+      if (ptyShutdownPromises.get(id) === operation) {
+        ptyShutdownPromises.delete(id)
+      }
+    }
+  }
+
+  private async shutdownTrackedPty(id: string, proc: pty.IPty): Promise<void> {
+    // Why: the snapshot must precede any signal/destroy — once the shell dies,
+    // surviving descendants reparent to pid 1 and a ppid walk can't find them.
+    const descendants = ptyAgentSessionIds.has(id)
+      ? await captureDescendantSnapshot(proc.pid)
+      : null
+    // Why the handle re-check: the snapshot is this method's only await, and a
+    // natural exit may have raced it. Signalling after ownership is lost could
+    // apply the old numeric PID's snapshot to a recycled, unrelated process.
+    if (ptyProcesses.get(id) === proc) {
+      if (descendants) {
+        // Signal captured children before killing the root so parent links do
+        // not disappear during the sweep.
+        terminateDescendantSnapshot(descendants)
+      }
+      // Why: disposePtyListeners removes the onExit callback, so the natural
+      // exit cleanup path from node-pty won't fire. Cleanup and notification
+      // must happen unconditionally after the try/catch.
+      // Timer/writer cleanup must happen here too: disposing listeners prevents
+      // the natural onExit callback from running the usual clearPtyState path.
+      runPtyCleanup(id)
+      disposePtyListeners(id)
       try {
         proc.kill()
       } catch {
-        /* Generic terminal close preserves the previous already-dead behavior. */
+        /* Process may already be dead */
       }
-    }
-    destroyPtyProcess(proc, { alreadyKilled: true })
-    clearPtyState(id)
-    this.opts.onExit?.(id, -1)
-    for (const cb of exitListeners) {
-      cb({ id, code: -1 })
+      destroyPtyProcess(proc, { alreadyKilled: true })
+      clearPtyState(id)
+      this.opts.onExit?.(id, -1)
+      for (const cb of exitListeners) {
+        cb({ id, code: -1 })
+      }
     }
   }
 

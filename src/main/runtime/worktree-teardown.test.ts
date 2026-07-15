@@ -176,6 +176,34 @@ describe('killAllProcessesForWorktree', () => {
     expect(r2.providerStopped).toBe(1)
   })
 
+  it('starts owned provider shutdowns together so agent snapshots can coalesce', async () => {
+    const localProvider = createProviderStub(async () => [
+      { id: 'w1@@aaaa', cwd: '/tmp', title: 'shell' },
+      { id: 'w1@@bbbb', cwd: '/tmp', title: 'shell' }
+    ])
+    listRegisteredPtysMock.mockReturnValue([])
+    const releases: (() => void)[] = []
+    ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releases.push(resolve)
+        })
+    )
+
+    const teardown = killAllProcessesForWorktree('w1', { localProvider })
+    await vi.waitFor(() => expect(localProvider.shutdown).toHaveBeenCalledTimes(2))
+    expect(releases).toHaveLength(2)
+
+    for (const release of releases) {
+      release()
+    }
+    await expect(teardown).resolves.toEqual({
+      runtimeStopped: 0,
+      providerStopped: 2,
+      registryStopped: 0
+    })
+  })
+
   it('invokes runtime.stopTerminalsForWorktree when runtime is provided', async () => {
     const stopTerminalsForWorktree = vi.fn().mockResolvedValue({ stopped: 3 })
     const runtime = {

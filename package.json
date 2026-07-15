@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.142-rc.5",
+  "version": "1.4.142-rc.7",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -131,6 +131,7 @@
     "@electron/rebuild": "^4.2.0",
     "@monaco-editor/react": "^4.7.0",
     "@playwright/test": "^1.59.1",
+    "@sanity/diff-match-patch": "^3.2.0",
     "@stablyai/playwright-test": "^2.1.14",
     "@tailwindcss/vite": "^4.2.4",
     "@tanstack/react-virtual": "^3.13.24",

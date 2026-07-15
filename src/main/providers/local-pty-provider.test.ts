@@ -10,7 +10,8 @@ const {
   writeFileSyncMock,
   spawnMock,
   resolveAgentForegroundProcessMock,
-  killPosixPtySessionMock
+  captureDescendantSnapshotMock,
+  terminateDescendantSnapshotMock
 } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
   statSyncMock: vi.fn(),
@@ -19,7 +20,8 @@ const {
   writeFileSyncMock: vi.fn(),
   spawnMock: vi.fn(),
   resolveAgentForegroundProcessMock: vi.fn(),
-  killPosixPtySessionMock: vi.fn()
+  captureDescendantSnapshotMock: vi.fn(),
+  terminateDescendantSnapshotMock: vi.fn()
 }))
 
 vi.mock('fs', () => ({
@@ -42,8 +44,9 @@ vi.mock('node-pty', () => ({
   spawn: spawnMock
 }))
 
-vi.mock('../../relay/pty-session-kill', () => ({
-  killPosixPtySession: killPosixPtySessionMock
+vi.mock('../pty-descendant-termination', () => ({
+  captureDescendantSnapshot: captureDescendantSnapshotMock,
+  terminateDescendantSnapshot: terminateDescendantSnapshotMock
 }))
 
 // Resolve PowerShell family names to deterministic absolute paths (the fs mock
@@ -129,8 +132,9 @@ describe('LocalPtyProvider', () => {
     accessSyncMock.mockReturnValue(undefined)
     mkdirSyncMock.mockReset()
     writeFileSyncMock.mockReset()
-    killPosixPtySessionMock.mockReset()
-    killPosixPtySessionMock.mockResolvedValue(true)
+    captureDescendantSnapshotMock.mockReset()
+    captureDescendantSnapshotMock.mockResolvedValue(null)
+    terminateDescendantSnapshotMock.mockReset()
     resolveAgentForegroundProcessMock.mockReset()
     resolveAgentForegroundProcessMock.mockImplementation(
       async (_pid: number, fallbackProcess: string | null) => fallbackProcess
@@ -992,16 +996,19 @@ describe('LocalPtyProvider', () => {
   })
 
   describe('shutdown', () => {
-    it('kills the complete POSIX PTY session', async () => {
-      // Why: capture the spy reference before shutdown triggers onExit →
-      // POSIX kill neutralization. After neutralization, mockProc.kill is
-      // replaced with a non-spy no-op to close the UnixTerminal.destroy() →
+    it('kills the POSIX forkpty leader without capturing descendants for a non-agent session', async () => {
+      // Why: capture the spy reference before shutdown triggers the POSIX kill
+      // neutralization in destroyPtyProcess. After neutralization, mockProc.kill
+      // is replaced with a non-spy no-op to close the UnixTerminal.destroy() →
       // socket-close → SIGHUP-to-recycled-pid race (see docs/fix-pty-fd-leak.md).
       const killSpy = mockProc.kill
       const { id } = await provider.spawn({ cols: 80, rows: 24 })
       await provider.shutdown(id, { immediate: true })
-      expect(killPosixPtySessionMock).toHaveBeenCalledWith(12345, undefined)
-      expect(killSpy).not.toHaveBeenCalled()
+      // #8706: only launchAgent sessions capture a descendant snapshot; a plain
+      // shell session just force-kills the forkpty leader.
+      expect(captureDescendantSnapshotMock).not.toHaveBeenCalled()
+      expect(terminateDescendantSnapshotMock).not.toHaveBeenCalled()
+      expect(killSpy).toHaveBeenCalledTimes(1)
     })
 
     it('invokes onExit callback via the node-pty exit handler', async () => {
@@ -1103,7 +1110,6 @@ describe('LocalPtyProvider', () => {
         true
       )
       Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
-      killPosixPtySessionMock.mockResolvedValue(true)
       await provider.shutdown(id, { immediate: true })
     })
 
@@ -1127,19 +1133,77 @@ describe('LocalPtyProvider', () => {
       expect(mockProc.kill).not.toHaveBeenCalled()
     })
 
-    it('retains the PTY owner when complete POSIX teardown is unverified', async () => {
-      killPosixPtySessionMock.mockResolvedValue(false)
-      const { id } = await provider.spawn({ cols: 80, rows: 24 })
-
-      await expect(provider.shutdown(id, { immediate: true })).rejects.toThrow(
-        `Unable to verify full PTY session teardown: ${id}`
+    it('waits for an in-flight agent shutdown before reusing the same session id', async () => {
+      let resolveSnapshot!: (value: null) => void
+      captureDescendantSnapshotMock.mockReturnValue(
+        new Promise<null>((resolve) => {
+          resolveSnapshot = resolve
+        })
       )
+      const spawnArgs = {
+        cols: 80,
+        rows: 24,
+        sessionId: 'stable-agent-session',
+        launchAgent: 'claude' as const
+      }
+      const spawnCallsBefore = spawnMock.mock.calls.length
+      const { id } = await provider.spawn(spawnArgs)
 
-      expect((await provider.listProcesses()).some((session) => session.id === String(id))).toBe(
-        true
+      const shutdown = provider.shutdown(id, { immediate: true })
+      const respawn = provider.spawn(spawnArgs)
+      await Promise.resolve()
+      expect(spawnMock).toHaveBeenCalledTimes(spawnCallsBefore + 1)
+
+      resolveSnapshot(null)
+      await shutdown
+      await respawn
+      expect(spawnMock).toHaveBeenCalledTimes(spawnCallsBefore + 2)
+    })
+
+    it('coalesces duplicate shutdown while descendant capture is pending', async () => {
+      let resolveSnapshot!: (value: null) => void
+      captureDescendantSnapshotMock.mockReturnValue(
+        new Promise<null>((resolve) => {
+          resolveSnapshot = resolve
+        })
       )
-      killPosixPtySessionMock.mockResolvedValue(true)
-      await provider.shutdown(id, { immediate: true })
+      const { id } = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        launchAgent: 'claude'
+      })
+
+      const first = provider.shutdown(id, { immediate: true })
+      const second = provider.shutdown(id, { immediate: true })
+      expect(captureDescendantSnapshotMock).toHaveBeenCalledOnce()
+      resolveSnapshot(null)
+      await Promise.all([first, second])
+      expect(captureDescendantSnapshotMock).toHaveBeenCalledOnce()
+    })
+
+    it('does not signal a captured tree after the tracked root exits naturally', async () => {
+      let resolveSnapshot!: (value: {
+        rootPgid: number
+        descendants: []
+        capturedAtMs: number
+      }) => void
+      captureDescendantSnapshotMock.mockReturnValue(
+        new Promise((resolve) => {
+          resolveSnapshot = resolve
+        })
+      )
+      const { id } = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        launchAgent: 'claude'
+      })
+
+      const shutdown = provider.shutdown(id, { immediate: true })
+      exitCb?.({ exitCode: 0 })
+      resolveSnapshot({ rootPgid: mockProc.pid, descendants: [], capturedAtMs: Date.now() })
+      await shutdown
+
+      expect(terminateDescendantSnapshotMock).not.toHaveBeenCalled()
     })
   })
 

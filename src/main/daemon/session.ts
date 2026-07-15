@@ -9,6 +9,11 @@ import {
   type ShellReadyScanState
 } from '../shell-ready-marker-scanner'
 import { isPowerShellProcess } from '../../shared/shell-process-detection'
+import {
+  captureDescendantSnapshot,
+  killWithDescendantSweep,
+  terminateDescendantSnapshot
+} from '../pty-descendant-termination'
 import type { TuiAgent } from '../../shared/types'
 import type {
   PendingOutputRecord,
@@ -188,6 +193,19 @@ export class Session {
     return this._isTerminating
   }
 
+  /** Claims termination synchronously so attach/re-entry cannot race async
+   * teardown preparation. Returns false when another owner already claimed it. */
+  beginTermination(): boolean {
+    if (this._state === 'exited' || this._isTerminating) {
+      return false
+    }
+    this._isTerminating = true
+    // Why: a paused child can be blocked inside write(); resume before any
+    // async snapshot so it can handle termination promptly.
+    this.releaseProducerPause({ resume: true })
+    return true
+  }
+
   get pid(): number {
     return this.subprocess.pid
   }
@@ -261,16 +279,44 @@ export class Session {
   }
 
   kill(): void {
-    if (this._state === 'exited' || this._isTerminating) {
+    if (!this.beginTermination()) {
       return
     }
-    this._isTerminating = true
+    if (!this.launchAgent) {
+      this.subprocess.kill()
+    } else {
+      // Why: agent tool children live in detached process groups a dying
+      // shell's SIGHUP never reaches. The bounded snapshot briefly defers the
+      // signal; the kill timer below starts now, so force-dispose timing is
+      // unaffected.
+      void killWithDescendantSweep(
+        this.subprocess.pid,
+        () => {
+          this.signalTerminationRoot()
+        },
+        {
+          // Why: if the root exits during ps, its numeric PID can be recycled.
+          // Never apply that stale snapshot to a different process tree.
+          ownsRoot: () => this.isAlive
+        }
+      )
+    }
+    this.scheduleForceDisposeFallback()
+  }
 
-    // Why: a paused child can be blocked inside write(); resume before
-    // signalling so it can run signal handlers and actually exit.
-    this.releaseProducerPause({ resume: true })
-    this.subprocess.kill()
+  /** Signals a root whose descendant snapshot has completed. */
+  signalTerminationRoot(): void {
+    if (this._state !== 'exited') {
+      this.subprocess.kill()
+    }
+  }
 
+  /** Starts the existing graceful-kill deadline when a coordinator owns the
+   * snapshot-first portion of teardown. */
+  scheduleForceDisposeFallback(): void {
+    if (this.killTimer) {
+      return
+    }
     this.killTimer = setTimeout(() => {
       if (this._state !== 'exited') {
         this.forceDispose()
@@ -491,12 +537,23 @@ export class Session {
     }
     this.#teardownSubprocess()
     this._state = 'exited'
+    this._isTerminating = false
     // Why: free the headless emulator's scrollback here too (this path skips
     // dispose()). Matches forceDispose(); reaping just drops the map entry.
     this.emulator.dispose()
   }
 
   async forceKillAndDisposeSubprocessAndWait(): Promise<void> {
+    // Why: a root-only force-kill leaves an agent's detached tool children as
+    // orphans (#8706). Snapshot BEFORE the kill — once the root dies its
+    // descendants reparent to pid 1 and a ppid walk can't find them — then
+    // SIGTERM/grace/SIGKILL them while the verified root teardown proceeds.
+    const descendants = this.launchAgent
+      ? await captureDescendantSnapshot(this.subprocess.pid)
+      : null
+    if (descendants) {
+      terminateDescendantSnapshot(descendants)
+    }
     let stopped: boolean
     if (this.subprocess.forceKillAndWait) {
       stopped = await this.subprocess.forceKillAndWait()

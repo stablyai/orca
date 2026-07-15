@@ -20,15 +20,15 @@
         "spanish": "Español"
       },
       "statusBar": {
-        "claudeToggleDescription": "显示当前工作区的 Claude token和成本使用情况。",
-        "codexToggleDescription": "显示当前工作区的 Codex token和成本使用情况。",
-        "geminiToggleDescription": "显示当前工作区的 Gemini token和成本使用情况。",
-        "opencodeGoToggleDescription": "显示当前工作区的 OpenCode Go token和成本使用情况。",
+        "claudeToggleDescription": "显示当前工作区的 Claude Token 与费用消耗情况。",
+        "codexToggleDescription": "显示当前工作区的 Codex Token 与费用消耗情况。",
+        "geminiToggleDescription": "显示当前工作区的 Gemini Token 与费用消耗情况。",
+        "opencodeGoToggleDescription": "显示当前工作区的 OpenCode Go Token 与费用消耗情况。",
         "kimiToggleDescription": "显示当前工作区的 Kimi 订阅使用情况。",
         "minimaxToggleDescription": "显示当前工作区的 MiniMax 订阅使用情况。",
         "sshToggleDescription": "当有可用的 SSH 和远程 Orca 主机时显示它们。",
         "resourceUsageToggleDescription": "显示资源管理器。点击可查看 CPU、内存、会话、守护进程控制和工作区磁盘扫描。",
-        "portsToggleDescription": "显示实时工作区端口。单击它可获取工作区范围的端口和外部侦听器。",
+        "portsToggleDescription": "显示实时工作区端口。单击可查看工作区范围的端口和外部监听器。",
         "antigravityToggleDescription": "显示当前工作区的 Antigravity 订阅使用量。",
         "grokToggleDescription": "通过 Grok CLI 登录后显示 Grok 订阅额度使用量。"
       }
@@ -1514,7 +1514,7 @@
         "cc8795e07c": "无法加载 Linear 议题",
         "f362667d55": "已更新",
         "b1eaa18ace": "议题",
-        "37e7ee311e": "钥匙",
+        "37e7ee311e": "标识",
         "b7bae28b6a": "显示",
         "a26a48252e": "显示属性",
         "5d2d835467": "排序",
@@ -2381,7 +2381,7 @@
             "skippedAncestor": "由于无法删除嵌套工作区，已跳过。",
             "timedOut": "删除 {{value0}} 的时间比预期长。它将在后台继续运行。",
             "stillRemoving": "Still removing workspaces: {{value0}}",
-            "skippedPendingAncestor": "Skipped because a nested workspace has not finished removing."
+            "skippedPendingAncestor": "已跳过，因为嵌套的工作区尚未完成移除。"
           },
           "candidateRow": {
             "gitLabel": "Git",
@@ -2537,15 +2537,15 @@
           },
           "TerminalAgentSessionForkDialog": {
             "17fc841e59": "复制上下文",
-            "0c8a8629b1": "Fork 会显示为独立工作区，而非嵌套子项。新智能体会收到一份有界转录稿，可作为可编辑草稿。",
-            "620461df22": "顶级分叉",
+            "0c8a8629b1": "派生会话会显示为独立工作区，而非嵌套子项。新智能体会收到一份有界转录稿，可作为可编辑草稿。",
+            "620461df22": "顶级派生",
             "619b5a35d2": "创建一个顶级工作区分支并使用捕获的上下文启动一个新的智能体选项卡。",
-            "64e292e8e3": "分叉智能体会话",
-            "9d25de2920": "创建分叉",
+            "64e292e8e3": "派生智能体会话",
+            "9d25de2920": "创建派生",
             "2b10412cfc": "创建中..."
           },
           "TerminalContextMenu": {
-            "b4cdd9314e": "清晰的屏幕",
+            "b4cdd9314e": "清屏",
             "8c17d6786d": "关闭窗格",
             "copyTerminalId": "复制终端 ID",
             "2cf85a6a55": "复制窗格 ID",
@@ -2554,7 +2554,7 @@
             "06c2b0f043": "均衡窗格大小",
             "98bccf4fa2": "向下拆分终端",
             "20e565d865": "向右拆分终端",
-            "8a7ddb8b8a": "分叉智能体会话...",
+            "8a7ddb8b8a": "派生智能体会话...",
             "0a82b0608c": "添加快捷命令...",
             "9528a65ef8": "没有快捷命令",
             "3ce594a4a0": "全局的",
@@ -2570,7 +2570,7 @@
             "e4aa243f8c": "重新启动守护进程",
             "a7e2fd2699": "提交议题",
             "5c8ce20be6": "如果这种情况持续存在，请",
-            "cc6d997c65": "从此处重新启动终端守护程序以清除过时的守护程序状态。"
+            "cc6d997c65": "从此处重新启动终端守护进程以清除失效的守护进程状态。"
           },
           "TerminalPane": {
             "ac112e9036": "删除标题",
@@ -2608,13 +2608,13 @@
             "agent": {
               "session": {
                 "fork": {
-                  "2317900211": "无法复制 fork 上下文。",
+                  "2317900211": "无法复制派生上下文。",
                   "88e34d00eb": "顶级会话分支在新工作区中打开",
-                  "fd3d12a1e1": "无法创建 fork 工作区。",
-                  "38e41edc6e": "该工作区无法分叉为 git 工作树。",
-                  "f867385bb5": "找不到此 fork 的源工作区。",
-                  "046e8d853c": "没有要 fork 的终端上下文",
-                  "c00421d320": "已复制分叉上下文。启动智能体并粘贴它以启动分叉。",
+                  "fd3d12a1e1": "无法创建派生工作区。",
+                  "38e41edc6e": "该工作区无法派生为 Git 工作树。",
+                  "f867385bb5": "找不到此派生的源工作区。",
+                  "046e8d853c": "没有要派生的终端上下文",
+                  "c00421d320": "已复制派生上下文。启动智能体并粘贴它以开始派生。",
                   "f62b40e2c7": "没有可复制的终端上下文",
                   "373a3103e7": "已复制上下文",
                   "3fc568a49d": "无法复制上下文。"
@@ -4691,7 +4691,7 @@
           "28c8e53176": "这会强制退出所有工作区中每个正在运行的终端窗格。这些会话中所有未保存的工作都会丢失。守护进程本身保持运行，并且可以立即打开新终端。这无法撤销。",
           "1bbea41a77": "杀死所有终端会话？",
           "01d6b7c64e": "终止每个正在运行的终端窗格并重新启动守护进程。窗格显示“进程已退出”并且可以立即重新打开。先前应用程序版本的旧协议会话将被保留。这无法撤销。",
-          "922548bc66": "重新启动终端守护程序？",
+          "922548bc66": "重新启动终端守护进程？",
           "2b4efdc162": "无法终止会话。",
           "d18f3005c2": "{{value0}} 会话{{value1}} 拒绝退出。",
           "baad8cd651": "没有正在运行的会话。",
@@ -5219,7 +5219,7 @@
           "d8b6764d79": "可用时使用评审模板",
           "e001734396": "除非在编辑器中更改，否则将托管评审创建为草稿。",
           "6ba48f07a4": "默认草稿",
-          "15b60d54b2": "例如ollama 运行 llama3.1 {提示}",
+          "15b60d54b2": "例如 ollama run llama3.1 {prompt}",
           "3f1b26cc91": "将提示词输入作为参数传递；否则 Orca 会通过标准输入传递。",
           "4f722a5f53": "由选择自定义命令的 commit 消息、PR 和分支名称预设使用。使用",
           "47e45cbd5a": "自定义命令",
@@ -5510,7 +5510,7 @@
           "aa204f185f": "当前 GitHub CLI REST、搜索和 GraphQL 速率限制。",
           "612a440e57": "GitHub API 预算",
           "2cde9044a8": "graphql",
-          "36e3de3619": "通过与陈旧的历史进行比较。如果该分支有未 commits 的更改或仅限本地 commits，Orca 会跳过更新。",
+          "36e3de3619": "避免与过时的历史记录进行比较。如果该分支有未提交的更改或仅在本地的提交，Orca 会跳过更新。",
           "d072a12995": "git diff main...HEAD",
           "db3a127eb1": "。这使得命令像",
           "3ae3de8898": "master",
@@ -6147,7 +6147,7 @@
           "e56668c291": "使用全局",
           "fbb77e122a": "选择自定义命令的文本操作的 Repo 回退。",
           "ebffc5a28c": "自定义命令",
-          "f9941f0caf": "例如ollama 运行 llama3.1 {提示}"
+          "f9941f0caf": "例如 ollama run llama3.1 {prompt}"
         },
         "RepositorySourceControlAiEnablement": {
           "84233d1bb3": "关",
@@ -7332,7 +7332,7 @@
               "a1414dcefb": "安装浏览器使用技能",
               "e56c7b55c9": "设置",
               "034c5e8d7f": "启用",
-              "7e0dcb257a": "壳",
+              "7e0dcb257a": "Shell",
               "3ffafc9b95": "命令",
               "30c74aaa1f": "路径",
               "ff05cbc344": "orca",
@@ -7709,7 +7709,7 @@
             "564942ffc5": "origin/main",
             "28192e3a63": "master",
             "e3e9adde59": "main",
-            "0e993bf00f": "当您创建工作区时，Orca 会刷新远程库并安全地快进匹配的本地分支，例如 main 或 master。这使得像 git diff main...HEAD 这样的命令无法与过时的历史记录进行比较。如果该分支有未 commits 的更改或仅限本地 commits，Orca 会跳过更新。",
+            "0e993bf00f": "当您创建工作区时，Orca 会刷新远程基准并安全地快进匹配的本地分支，例如 main 或 master。这可以防止像 git diff main...HEAD 这样的命令对比过时的历史记录。如果该分支有未提交的更改或仅在本地的提交，Orca 会跳过更新。",
             "f8bda25f29": "保持本地 main 最新",
             "769ddd7f81": "风俗",
             "1d2fae1fa2": "git 用户名",
@@ -8196,7 +8196,7 @@
             "afda131738": "Orca 优先",
             "0ecfc47434": "冲突",
             "0f8cb15582": "智能体",
-            "f1adebbe8c": "壳",
+            "f1adebbe8c": "Shell",
             "7f1b38f59a": "推",
             "7e3fc707aa": "终端",
             "0ecba9aa5f": "键盘",
@@ -8330,7 +8330,7 @@
             "d802a578bf": "会话",
             "9f2dda133c": "普蒂",
             "f35400f7e8": "守护进程",
-            "f72abc493c": "通过终止会话、清除保存的回滚或重新启动守护程序，从冻结的终端中恢复。",
+            "f72abc493c": "通过终止会话、清除保存的回滚缓冲区或重新启动守护进程，从冻结的终端中恢复。",
             "6f5d486a68": "管理会话",
             "10f9fb6fea": "设置",
             "2ade3ea490": "配置",
@@ -8353,7 +8353,7 @@
             "dd4f6cb541": "德语",
             "983d45cf4c": "撰写",
             "7ace5beec9": "元",
-            "38f1b4f4cb": "钥匙",
+            "38f1b4f4cb": "按键",
             "c4427dc5ff": "替代",
             "b37edfc65a": "选项",
             "1f8b00f5ce": "控制 macOS Option 键是发送 Alt/Esc 序列还是组合字符。反映 Ghostty 的 macos-option-as-alt。",
@@ -8537,7 +8537,7 @@
             "action": {
               "recipe": {
                 "options": {
-                  "commitMessage": "从分阶段更改生成 commit 消息。",
+                  "commitMessage": "根据已暂存的更改生成提交信息。",
                   "pullRequest": "生成托管评论标题和描述。",
                   "branchName": "重命名 Orca 从初始智能体任务创建的分支。",
                   "fixCommitFailure": "当 commit 挂钩或 git commit 失败时启动智能体。",
@@ -9037,22 +9037,22 @@
           "usagePercentageDisplayRemaining": "剩余"
         },
         "TerminalInteractionSection": {
-          "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
-          "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
+          "567633ff50": "右键点击将剪贴板内容粘贴到终端。按住 Control 键点击以打开上下文菜单。",
+          "c64497148a": "右键点击粘贴剪贴板内容。按住 Control 键点击打开上下文菜单。"
         },
         "MobileRelayStatusSection": {
-          "registered": "Registered",
-          "connecting": "Connecting",
-          "reconnecting": "Reconnecting",
-          "offline": "Offline",
+          "registered": "已注册",
+          "connecting": "正在连接",
+          "reconnecting": "正在重新连接",
+          "offline": "离线",
           "title": "Orca Relay",
-          "automatic": "Connect from anywhere when a phone is paired",
-          "signInPrompt": "Sign in on this desktop to connect from anywhere",
-          "directStillAvailable": "LAN and Tailscale connections remain available.",
-          "directNeedsNoAccount": "LAN and Tailscale pairing still work without an account.",
-          "signIn": "Sign in",
-          "unavailable": "Unavailable",
-          "standby": "Standby — no relay devices"
+          "automatic": "手机配对后可从任何地方连接",
+          "signInPrompt": "在此桌面端登录以从任何地方连接",
+          "directStillAvailable": "局域网和 Tailscale 连接仍然可用。",
+          "directNeedsNoAccount": "无需账户即可使用局域网和 Tailscale 配对。",
+          "signIn": "登录",
+          "unavailable": "不可用",
+          "standby": "待机 — 无 Relay 设备"
         },
         "MobilePairingConnectionOptions": {
           "ready": "已就绪",
@@ -9225,17 +9225,17 @@
             "c76693e456": "无法加载此工作区的文件："
           },
           "GitHistoryPanel": {
-            "cf7cad58d2": "还没有 commits",
+            "cf7cad58d2": "尚无提交",
             "781a8bcf7b": "正在加载图表...",
-            "d0fb0f4bf2": "刷新 commits",
-            "9f7535d22b": "引用是指向该确切 commit 的分支或标记名称。它们仅出现在 Git 具有 commit 的命名引用的地方。",
+            "d0fb0f4bf2": "刷新提交记录",
+            "9f7535d22b": "引用是指向该确切提交的分支或标签名称。它们仅出现在 Git 具有该提交的命名引用的位置。",
             "9289ba0cb9": "什么是参考文献？",
             "d836037d02": "提交",
             "8232c8b2f2": "打开 commit {{value0}}: {{value1}}",
             "9a8b85882d": "加载中",
             "62e685d5ec": "空闲",
             "111e1d0db4": "错误",
-            "e5e81e59a6": "调整 commits 大小",
+            "e5e81e59a6": "调整提交记录高度",
             "6d1e0a7c3b": "无法加载提交文件"
           },
           "HostedReviewActions": {
@@ -9381,22 +9381,22 @@
             "3278b2767b": "前面",
             "11b5dd8e41": "比较",
             "783a808870": "关闭",
-            "a9bf7c171a": "Commit 失败",
+            "a9bf7c171a": "提交失败",
             "03d238218c": "细节",
-            "011f9713fc": "Commit 被阻止",
-            "cc199ccc5f": "更多 commit 和远程操作",
+            "011f9713fc": "提交被阻止",
+            "cc199ccc5f": "更多提交和远程操作",
             "4d6e1fd7f3": "更多操作",
-            "37a81f29ad": "生成 commit 消息。单击停止。",
-            "b94112eb9e": "Commit 消息",
+            "37a81f29ad": "正在生成提交信息。单击停止。",
+            "b94112eb9e": "提交信息",
             "0d0a8359d3": "信息",
             "15b7f210d7": "启动智能体前请查看并编辑完整提示词。",
-            "054ead86b1": "使用 AI 修复 Commit 失败",
-            "9e5ccd00aa": "Commit 失败上下文不可用",
+            "054ead86b1": "使用 AI 修复提交失败",
+            "9e5ccd00aa": "提交失败的上下文不可用",
             "f0a2dc9e46": "自定义启动...",
-            "ec7bfced55": "选择智能体来修复 commit 失败",
-            "dd43c47089": "选择针对此 commit 失败的智能体",
-            "30b8d4f181": "使用 AI 修复 commit 失败",
-            "4b37ae99b0": "启动默认 AI 智能体来修复此 commit 失败",
+            "ec7bfced55": "选择智能体来修复提交失败",
+            "dd43c47089": "选择针对此提交失败的智能体",
+            "30b8d4f181": "使用 AI 修复提交失败",
+            "4b37ae99b0": "启动默认 AI 智能体来修复此提交失败",
             "ae743199cd": "在创建 {{value0}} 之前，请选择其他基础分支。",
             "318e2a7f88": "请等待 AI 生成完成。",
             "f76307c1f7": "请选择基础分支。",
@@ -9419,7 +9419,7 @@
             "e1970d327d": "新建 {{value0}}",
             "f4c766f1ca": "为此运行选择智能体和提示词模板。",
             "1a6a6e0bc5": "生成托管评论详细信息",
-            "6b122529d4": "生成 Commit 消息",
+            "6b122529d4": "生成提交信息",
             "e48caaf0dd": "已启动 AI 智能体处理冲突。",
             "901140f47d": "启动智能体前请查看并编辑完整提示词。",
             "19652ddd76": "用 AI 解决冲突",
@@ -9438,7 +9438,7 @@
             "dc5a6465fc": "{{value0}}（例如 {{value1}}{{value2}}）",
             "8eb3782a0c": "无法丢弃 {{value0}} 文件{{value1}}",
             "a5e5a11090": "放弃所有失败 - 无法在放弃之前取消暂存文件",
-            "8a5ba6a988": "无法加载 commit 差异",
+            "8a5ba6a988": "无法加载提交差异",
             "fe5bd1a610": "创建 {{value0}}...",
             "812cb992ee": "打开于 {{value0}}",
             "eef5446523": "{{value0}} #{{value1}} 已开放",
@@ -9471,9 +9471,9 @@
             "424ee0e5bf": "错误",
             "834cb3f23d": "用 AI 修复",
             "60bd988f0b": "AI 修复",
-            "461575b9bc": "使用 AI 生成 commit 消息",
-            "b16b8f0e4b": "AI commit 消息",
-            "ddc1fbd690": "停止生成 commit 消息",
+            "461575b9bc": "使用 AI 生成提交信息",
+            "b16b8f0e4b": "AI 提交信息",
+            "ddc1fbd690": "停止生成提交信息",
             "5acbcedc1a": "创建 {{value0}}",
             "aaf1451654": "创建草稿 {{value0}}",
             "26511c22b4": "创建中...",
@@ -9527,20 +9527,20 @@
             "04a5d7239b": "此仓库没有受支持的网页远程库",
             "15b6e834ac": "无法在浏览器中打开提交",
             "d37e68f61d": "正在准备分支以供评审…",
-            "8d8f5c6c94": "正在生成 commit 消息…",
-            "fda060d6ce": "请先检查 commit 消息，然后重试创建 PR。",
+            "8d8f5c6c94": "正在生成提交信息…",
+            "fda060d6ce": "请先检查提交信息，然后重试创建 PR。",
             "b75cb1fd0c": "正在提交更改…",
             "995c5e67ec": "评审设置需要处理。",
             "d7492cafce": "无法刷新 Source Control。请重试创建 PR。",
             "473f18758e": "Source Control AI 设置",
-            "createPrIntentConfigureAi": "请添加 commit 消息或配置 Source Control AI 设置。",
-            "createPrIntentGenerateFailed": "无法生成 commit 消息。请添加一条消息后重试。",
+            "createPrIntentConfigureAi": "请添加提交信息或配置源代码管理 AI 设置。",
+            "createPrIntentGenerateFailed": "无法生成提交信息。请添加一条信息后重试。",
             "createPrIntentCommitFailed": "无法提交更改。请修复问题后重试创建 PR。",
             "createPrIntentNeedsSync": "创建评审前请先同步此分支。",
             "createPrIntentBranchNotReady": "分支尚未准备好创建评审。",
             "createPrIntentPublishing": "正在发布分支…",
             "createPrIntentForcePushing": "正在使用 lease 强制推送…",
-            "createPrIntentPushing": "正在推送 commits…",
+            "createPrIntentPushing": "正在推送提交…",
             "createPrIntentRemoteFailed": "无法更新远程分支。请重试创建 PR。",
             "createPrIntentGeneratingDetails": "正在生成审查详情…",
             "createPrIntentBranchChangedDuringDetails": "生成审查详情时分支已更改。请重试创建 PR。",
@@ -9634,7 +9634,7 @@
           "checks": {
             "panel": {
               "content": {
-                "3916814392": "落后（基本 commit：",
+                "3916814392": "落后（基础提交：",
                 "755be805f6": "暂无评论",
                 "751f7c6e5c": "显示每个来源的前 100 条评论",
                 "94557d68e2": "评论",
@@ -9740,7 +9740,7 @@
                   "2bdd7aaf2d": "GitHub 状态无法刷新。现有的缓存数据被保留。",
                   "5f478ab3d3": "无法刷新PR",
                   "6ce9d4e069": "在创建 {{value0}} 之前推送您的分支。",
-                  "76e15946a9": "分支有未推送的 commits",
+                  "76e15946a9": "分支有未推送的提交",
                   "f8543140cc": "在创建 {{value0}} 之前发布此分支。",
                   "41252bc53f": "分支未发布",
                   "05e4aec17b": "{{value0}} 检查将在操作完成后可用",
@@ -9815,11 +9815,11 @@
                 "commit": {
                   "failure": {
                     "launch": {
-                      "a8b97d2318": "针对 commit 失败启动了 AI 智能体。",
+                      "a8b97d2318": "针对提交失败启动了 AI 智能体。",
                       "5540ff50cc": "无法构建智能体启动命令。",
                       "9bbd9077a2": "没有启用的 AI 智能体。在“设置”中配置智能体。",
                       "d481ab22f9": "已保存的 AI 智能体不可用。使用自定义启动来选择另一个智能体。",
-                      "f2b47026e8": "Commit 失败提示为空。更新源代码管理 AI 设置。",
+                      "f2b47026e8": "提交失败的提示为空。请更新源代码管理 AI 设置。",
                       "4f4e0418a0": "无法构建智能体提示符。",
                       "216f762bd7": "无法解析工作区连接。"
                     }
@@ -9859,7 +9859,7 @@
                 "confirmation": {
                   "2ae5a785b3": "放弃所有未暂存的更改？",
                   "ddf36f291c": "这将取消暂存并恢复所有已暂存的更改。暂存的新文件将被删除。此操作无法撤销。",
-                  "5ddd8cac7f": "放弃所有分阶段的更改？",
+                  "5ddd8cac7f": "放弃所有已暂存的更改？",
                   "1426c2efff": "这将恢复对此文件的所有更改。此操作无法撤销。",
                   "d4df3a61df": "放弃对“{{value0}}”的更改？",
                   "40e9357b2a": "这将从 HEAD 恢复文件并放弃删除。此操作无法撤销。",
@@ -9883,7 +9883,7 @@
                   "7aad2c0240": "托管评审操作进行中…",
                   "9e779995dd": "创建 {{value0}}",
                   "226b85a3a7": "fetch",
-                  "323bb614aa": "Commit 并同步",
+                  "323bb614aa": "提交并同步",
                   "2b8e6595fd": "提交",
                   "04d709801d": "从远程获取但不合并"
                 }
@@ -9899,22 +9899,22 @@
                   "390abeab93": "强力推",
                   "1884cf34af": "将此分支发布到 origin",
                   "7b4d02e6b8": "发布分支",
-                  "3d5dccef0b": "没有可 commit 的内容。PR 已合并。",
+                  "3d5dccef0b": "没有可提交的内容。PR 已合并。",
                   "41d4bcf157": "检查 PR 状态...",
-                  "acce237921": "没有可 commit 的内容。分支没有可发布的更改。",
-                  "fa3bd4f40c": "暂存至少一个要 commit 的文件",
+                  "acce237921": "没有可提交的内容。分支没有可发布的更改。",
+                  "fa3bd4f40c": "暂存至少一个要提交的文件",
                   "5a477d80cb": "暂存所有更改",
                   "18a0fca877": "暂存全部",
-                  "f01f16d77f": "输入 commit 消息以 commit",
-                  "ab41fb926b": "Commit 分阶段更改",
+                  "f01f16d77f": "输入提交信息以进行提交",
+                  "ab41fb926b": "提交已暂存的更改",
                   "2d8f185fbc": "在提交部分暂存的文件之前暂存所有更改",
                   "a6457b46a7": "提交前解决冲突",
                   "484f45c439": "{{value0}} 正在进行中...",
                   "6f7a8b9c0d": "远程操作进行中…",
                   "7f8a9b0c1d": "远程操作进行中——请等它完成后重试",
                   "74fc171e99": "强制推送正在进行中...",
-                  "16aee3a5c1": "正在进行中……",
-                  "e61b0d7a3c": "请先检出分支再发布 commits。",
+                  "16aee3a5c1": "正在提交…",
+                  "e61b0d7a3c": "请先检出分支再发布提交。",
                   "1d47e850cf": "将更新推送到已关联的评审分支",
                   "c39d0c75c3": "已关联的评审分支目标不可用。",
                   "8c6d15a07d": "创建 PR",
@@ -10043,7 +10043,7 @@
             "projectScope": "项目",
             "currentProjectLower": "当前项目",
             "project": "项目",
-            "hostScopeAriaLabel": "Session History host: {{value0}}",
+            "hostScopeAriaLabel": "会话历史主机：{{value0}}",
             "host": "主机"
           },
           "AiVaultSessionDetails": {
@@ -10193,9 +10193,9 @@
             "viewLog": "查看日志"
           },
           "aiVaultSessionLogOpen": {
-            "workspaceGone": "Couldn't open log — workspace is no longer available.",
-            "notAuthorized": "Couldn't open log — path not authorized.",
-            "alreadyEditable": "Log is already open for editing."
+            "workspaceGone": "无法打开日志 — 工作区已不可用。",
+            "notAuthorized": "无法打开日志 — 路径未授权。",
+            "alreadyEditable": "日志已处于编辑状态。"
           }
         }
       },
@@ -10669,7 +10669,7 @@
             "e0f98be657": "Orca/壮举-手机页面",
             "2defc05141": "开发@mac",
             "da121ba48d": "计划.md",
-            "e4befee569": "壳",
+            "e4befee569": "Shell",
             "606aa93192": "文件",
             "94febb0976": "源头控制",
             "8d6516312d": "2 个终端 · Claude 活跃",
@@ -10702,15 +10702,19 @@
           "add-custom": "添加自定义地址…"
         },
         "WindowsFirewallNotice": {
-          "repair-success": "Windows Firewall now allows Orca Mobile on private networks",
-          "repair-failed": "Could not add the Windows Firewall rule",
-          "public-title": "Windows marks this network as public",
-          "missing-title": "Allow phone connections through Windows Firewall",
-          "public-description": "Change this trusted Wi-Fi network to Private before allowing Orca Mobile connections.",
-          "missing-description": "Windows may block the pairing server. Add a rule for this Orca app and TCP port {{port}} on Private networks.",
-          "open-settings": "Open network settings",
-          "waiting": "Waiting for Windows…",
-          "allow": "Allow phone connections"
+          "repair-success": "Windows 防火墙现已允许 Orca Mobile 在专用网络上通信",
+          "repair-failed": "无法更新 Windows 防火墙规则",
+          "public-title": "Windows 将此网络标记为公用",
+          "missing-title": "允许手机连接通过 Windows 防火墙",
+          "public-description": "请先将此受信任的 Wi-Fi 网络更改为专用网络，然后再允许 Orca Mobile 连接。",
+          "missing-description": "Windows 可能会阻止配对服务器。请为此 Orca 应用和专用网络上的 TCP 端口 {{port}} 添加规则。",
+          "open-settings": "打开网络设置",
+          "waiting": "正在等待 Windows…",
+          "allow": "允许手机连接",
+          "repair-unverified": "无法验证 Windows 防火墙访问权限",
+          "blocked-title": "Windows 可能正在阻止 Orca Mobile",
+          "blocked-description": "现有的入站阻止规则可能会覆盖配对例外。修复将移除此 Orca 应用的冲突 TCP 规则，然后在专用网络上允许端口 {{port}}。",
+          "repair": "修复防火墙访问权限"
         }
       },
       "gitlab": {
@@ -10834,7 +10838,7 @@
             "eb88125c6f": "✓ 已验证 — 免费试用仍然有效。",
             "051c97d15a": ".pp-card[data-card=\"starter\"] .pp-cta",
             "4fa59ca545": "✓ 更新",
-            "1bec24acc1": "@keyframes browserFlash { 0% { 不透明度：0; } 20% { 不透明度: 0.85; } 100% { 不透明度: 0; } } @keyframes browserTabIn { 来自 { 不透明度：0;变换：translateY(-2px); } 到 { 不透明度：1；变换：无； } } @keyframes browserViewIn { 来自 { 不透明度：0;变换：翻译Y（4px）； } 到 { 不透明度：1；变换：无； } }",
+            "1bec24acc1": "@keyframes browserFlash { 0% { opacity: 0; } 20% { opacity: 0.85; } 100% { opacity: 0; } } @keyframes browserTabIn { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } } @keyframes browserViewIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }",
             "73bbb46073": "/定价",
             "f39be6ca14": "/报名"
           },
@@ -10875,7 +10879,7 @@
             "5a55c00a81": "推出计划",
             "218503f9f3": "自动保存",
             "cda56c5915": "笔记/launch-plan.md",
-            "e16479c1c5": "[data-slash-menu] [data-slash-row].slash-active { 背景：rgba(24,24,27,0.07);框阴影：插入 0 0 0 1px rgba(24,24,27,0.06); } [data-md-active-line][data-role=\"active\"] { 颜色：rgb(113 113 122);字体系列：ui-monospace、SFMono-Regular、Menlo、等宽字体；字体大小：12.5px； } [data-md-active-line][data-role=\"h1\"] { 颜色：继承；字体系列：继承；字体大小：18px；字体粗细：700；字母间距：-0.01em；行高：1.2；顶部边距：6px； } [data-md-caret] { 显示：内联块；宽度：1.5px；高度：1em；背景：当前颜色；垂直对齐：-2px；左边距：1px；动画： md-caret-blink 1.05s steps(1) 无限； } @keyframes md-caret-blink { 0%, 50% { 不透明度: 1 } 51%, 100% { 不透明度: 0 } } @keyframes md-block-in { 来自 { 不透明度: 0; }变换：translateY(-2px); } 到 { 不透明度：1；变换：无； } } @keyframes md-cursor-ripple { 0% { 变换：缩放（0.4）;不透明度：0.9； } 100% { 变换：缩放（1.4）；不透明度：0； [data-clicking=\"1\"] [data-cursor-ripple] { 动画：md-cursor-ripple 460ms 向前缓出； }"
+            "e16479c1c5": "[data-slash-menu] [data-slash-row].slash-active { background: rgba(24,24,27,0.07); box-shadow: inset 0 0 0 1px rgba(24,24,27,0.06); } [data-md-active-line][data-role=\"active\"] { color: rgb(113 113 122); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; } [data-md-active-line][data-role=\"h1\"] { color: inherit; font-family: inherit; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; margin-top: 6px; } [data-md-caret] { display: inline-block; width: 1.5px; height: 1em; background: currentColor; vertical-align: -2px; margin-left: 1px; animation: md-caret-blink 1.05s steps(1) infinite; } @keyframes md-caret-blink { 0%, 50% { opacity: 1 } 51%, 100% { opacity: 0 } } @keyframes md-block-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } } @keyframes md-cursor-ripple { 0% { transform: scale(0.4); opacity: 0.9; } 100% { transform: scale(1.4); opacity: 0; } } [data-clicking=\"1\"] [data-cursor-ripple] { animation: md-cursor-ripple 460ms ease-out forwards; }"
           },
           "FeatureTourPreview": {
             "1170621527": ">",
@@ -10997,18 +11001,18 @@
             "e4473d438f": "用 AI 生成",
             "c30cd930ff": "创建PR",
             "ea0100dd15": "查看全部",
-            "e725000cd7": "变化",
+            "e725000cd7": "更改",
             "a079083a6c": "提交",
             "7347fa5839": "信息",
-            "d1a7f15876": "使用 AI 生成 commit 消息",
-            "cd8a3a39d7": "提前 3 次 commits"
+            "d1a7f15876": "使用 AI 生成提交信息",
+            "cd8a3a39d7": "领先 3 个提交"
           },
           "TasksAnimatedVisual": {
             "efba6f77eb": "阅读议题 #",
             "b68c92fbdc": "启动工作区",
-            "4331c4d0f8": "开放",
+            "4331c4d0f8": "打开",
             "b13375617e": "工作树选择器截断名称",
-            "72f9e516a3": "紧迫",
+            "72f9e516a3": "按下",
             "fe47c9c9e8": "工作区准备就绪",
             "61ffda7601": "创建工作区"
           },
@@ -11191,7 +11195,7 @@
             "fa809e8ada": "已打开 macOS 隐私与安全性",
             "bfa3402305": "无法请求权限",
             "c566bca278": "完全磁盘访问权限",
-            "0d6efe9cf4": "当项目或 worktree 位于受保护文件夹时，建议在 macOS 上开启。",
+            "0d6efe9cf4": "当项目或工作树位于受保护文件夹时，建议在 macOS 上开启。",
             "dac08ec03e": "正在打开...",
             "6e3d62b816": "打开完全磁盘访问权限"
           }
@@ -12052,14 +12056,14 @@
           },
           "submit": {
             "notice": {
-              "unknownError": "The crash report request failed before it returned a reason.",
-              "ticketUploaded": "Diagnostic ticket {{value0}} was uploaded but not linked.",
-              "uncheckDiagnostics": "Uncheck \"Attach recent diagnostic logs\" and try again, or copy the details.",
-              "checkConnection": "Check your connection and try again, or copy the details.",
-              "notSent": "Crash report wasn't sent",
+              "unknownError": "崩溃报告请求在返回原因之前失败。",
+              "ticketUploaded": "诊断工单 {{value0}} 已上传但未关联。",
+              "uncheckDiagnostics": "取消勾选\"附加最近的诊断日志\"并重试，或复制详细信息。",
+              "checkConnection": "请检查网络连接并重试，或复制详细信息。",
+              "notSent": "崩溃报告未发送",
               "copyDetails": "Copy Details",
-              "sentWithoutDiagnostics": "Crash report sent without diagnostic logs",
-              "diagnosticsReason": "Diagnostic logs were not attached: {{value0}}"
+              "sentWithoutDiagnostics": "崩溃报告已发送，但未附带诊断日志",
+              "diagnosticsReason": "诊断日志未附加：{{value0}}"
             }
           },
           "copy": {
@@ -13091,7 +13095,7 @@
         "removeAttachment": "移除附件",
         "pastedImageLabel": "粘贴的图片",
         "imagePasteFailed": "图片粘贴失败。",
-        "worktreeNotReady": "Worktree 未就绪 — 请稍后重试。",
+        "worktreeNotReady": "工作树未就绪 — 请稍后重试。",
         "uploadingAttachments": "正在上传 {{value0}} 个文件到远程…"
       },
       "tool": {
@@ -13139,7 +13143,8 @@
         "cancel": "取消",
         "send": "发送回答",
         "next": "下一步",
-        "skip": "跳过"
+        "skip": "跳过",
+        "sending": "正在发送…"
       },
       "approval": {
         "title": "允许 {{value0}}？",

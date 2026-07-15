@@ -9,6 +9,7 @@ import {
 } from './ssh-remote-node-install-guidance'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
+import { buildSshLoginShellCommand } from './ssh-login-shell-command'
 
 // Why: the relay requires Node.js 18+. Version managers like nvm keep every
 // installed version on disk, so a naive "highest version" glob can hand back
@@ -150,7 +151,7 @@ async function tryResolveViaLoginShell(
 
     const nodePath = await execCommand(
       conn,
-      buildCommandInShell(shell, 'command -v node'),
+      buildSshLoginShellCommand(shell, 'command -v node'),
       commandOptions({ wrapCommand: false, timeoutMs: LOGIN_SHELL_PROBE_TIMEOUT_MS }, options)
     )
     const candidate = nodePath.trim().split('\n')[0]
@@ -169,14 +170,6 @@ async function tryResolveViaLoginShell(
     // Fall through.
   }
   return null
-}
-
-function buildCommandInShell(shell: string, command: string): string {
-  const shellName = shell.split('/').at(-1)
-  // Why: dash and POSIX sh do not require `-l`; when $SHELL falls back to
-  // /bin/sh, prefer a portable command over login-shell semantics.
-  const mode = shellName === 'sh' || shellName === 'dash' ? '-c' : '-lc'
-  return `${shellEscape(shell)} ${mode} ${shellEscape(command)}`
 }
 
 // Returns true if `nodePath` runs and reports Node >= MIN_NODE_MAJOR.

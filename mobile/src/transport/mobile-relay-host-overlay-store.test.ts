@@ -9,6 +9,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStor
 
 import {
   loadMobileRelayHostOverlays,
+  removeMobileRelayHostOverlays,
   resetMobileRelayHostOverlayStoreForTests,
   saveMobileRelayHostOverlay
 } from './mobile-relay-host-overlay-store'
@@ -75,6 +76,26 @@ describe('mobile relay host overlay store', () => {
     stored = '{'
 
     await expect(saveMobileRelayHostOverlay(OVERLAY)).rejects.toThrow(/unreadable/)
+    expect(asyncStorage.setItem).not.toHaveBeenCalled()
+  })
+
+  it('removes requested overlays in one storage write', async () => {
+    const second = { ...OVERLAY, hostId: 'host-2' }
+    stored = JSON.stringify([OVERLAY, second])
+
+    await expect(removeMobileRelayHostOverlays(['host-1', 'host-missing'])).resolves.toBeUndefined()
+
+    expect(JSON.parse(stored!)).toEqual([second])
+    expect(asyncStorage.getItem).toHaveBeenCalledOnce()
+    expect(asyncStorage.setItem).toHaveBeenCalledOnce()
+  })
+
+  it('skips the storage write when no requested overlay exists', async () => {
+    stored = JSON.stringify([OVERLAY])
+
+    await expect(removeMobileRelayHostOverlays(['host-missing'])).resolves.toBeUndefined()
+
+    expect(asyncStorage.getItem).toHaveBeenCalledOnce()
     expect(asyncStorage.setItem).not.toHaveBeenCalled()
   })
 })

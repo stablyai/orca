@@ -10,14 +10,12 @@ const {
   isPwshAvailableMock,
   validateWorkingDirectoryMock,
   resolveUnixShellPathMock,
-  resolveAgentForegroundProcessMock,
-  killPosixPtySessionMock
+  resolveAgentForegroundProcessMock
 } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
   isPwshAvailableMock: vi.fn(),
   resolveUnixShellPathMock: vi.fn((shellPath: string) => shellPath),
   resolveAgentForegroundProcessMock: vi.fn(),
-  killPosixPtySessionMock: vi.fn(),
   validateWorkingDirectoryMock: vi.fn((cwd: string) => {
     if (cwd.includes('definitely-missing')) {
       throw new Error(
@@ -29,10 +27,6 @@ const {
 
 vi.mock('node-pty', () => ({
   spawn: spawnMock
-}))
-
-vi.mock('../../relay/pty-session-kill', () => ({
-  killPosixPtySession: killPosixPtySessionMock
 }))
 
 vi.mock('../pwsh', () => ({
@@ -76,6 +70,7 @@ vi.mock('../providers/agent-foreground-process', () => ({
 import { createPtySubprocess, checkPtySpawnHealth } from './pty-subprocess'
 import { PREVIOUS_DAEMON_PROTOCOL_VERSIONS, PROTOCOL_VERSION } from './types'
 import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../shared/terminal-git-credential-guard'
+import { POSIX_PTY_EXIT_TIMEOUT_MS } from '../../shared/terminal-teardown-timeouts'
 
 const ORCA_SHELL_WRAPPER_ENV = [
   'ORCA_ATTRIBUTION_SHIM_DIR',
@@ -121,8 +116,6 @@ describe('createPtySubprocess', () => {
 
   beforeEach(() => {
     spawnMock.mockReset()
-    killPosixPtySessionMock.mockReset()
-    killPosixPtySessionMock.mockResolvedValue(true)
     isPwshAvailableMock.mockReset()
     resolveAgentForegroundProcessMock.mockReset()
     resolveAgentForegroundProcessMock.mockImplementation(
@@ -1402,25 +1395,45 @@ describe('createPtySubprocess', () => {
     killSpy.mockRestore()
   })
 
-  itOnPosixHost('proves the complete POSIX PTY session stopped before acknowledging', async () => {
-    const proc = mockPtyProcess(77)
-    Object.assign(proc, { ptsName: '/dev/ttys042' })
-    spawnMock.mockReturnValue(proc)
-    const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+  itOnPosixHost(
+    'SIGKILLs the forkpty leader and resolves true when the native exit fires',
+    async () => {
+      const proc = mockPtyProcess(77)
+      spawnMock.mockReturnValue(proc)
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+      const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
 
-    await expect(handle.forceKillAndWait?.()).resolves.toBe(true)
+      // Why: forceKillAndWait awaits the native onExit before resolving true, so
+      // a zombie (killed but unreaped) is never mistaken for a verified teardown.
+      const stopped = handle.forceKillAndWait?.()
+      proc._simulateExit(0)
 
-    expect(killPosixPtySessionMock).toHaveBeenCalledWith(77, '/dev/ttys042')
-  })
+      await expect(stopped).resolves.toBe(true)
+      expect(killSpy).toHaveBeenCalledWith(77, 'SIGKILL')
+      killSpy.mockRestore()
+    }
+  )
 
-  itOnPosixHost('fails closed when complete POSIX PTY session death is unverified', async () => {
-    const proc = mockPtyProcess(77)
-    spawnMock.mockReturnValue(proc)
-    killPosixPtySessionMock.mockResolvedValue(false)
-    const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+  itOnPosixHost(
+    'fails closed with false when the native exit is not observed before the timeout',
+    async () => {
+      vi.useFakeTimers()
+      const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+      try {
+        const proc = mockPtyProcess(77)
+        spawnMock.mockReturnValue(proc)
+        const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
 
-    await expect(handle.forceKillAndWait?.()).resolves.toBe(false)
-  })
+        const stopped = handle.forceKillAndWait?.()
+        await vi.advanceTimersByTimeAsync(POSIX_PTY_EXIT_TIMEOUT_MS)
+
+        await expect(stopped).resolves.toBe(false)
+      } finally {
+        killSpy.mockRestore()
+        vi.useRealTimers()
+      }
+    }
+  )
 
   it('routes onData events', () => {
     const proc = mockPtyProcess()

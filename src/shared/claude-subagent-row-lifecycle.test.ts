@@ -2,17 +2,20 @@
  * Regression spec for the two reported sidebar symptoms (live-reproduced in a
  * dev instance before the fix):
  *
- *  1. "Really long idle list" under ultracode: finished workflow subagents
- *     left permanent `Idle - general-purpose` child rows for the rest of the
- *     session. Fixed: SubagentStop removes a one-shot subagent from the
- *     roster; only alive-but-idle teammates keep an idle row.
+ *  1. "Really long idle list" under ultracode/orchestration: finished
+ *     subagents left permanent `Idle - <type>` child rows for the rest of the
+ *     session — including named/workflow agents, whose background_tasks
+ *     entries report `type: "teammate"` and never stop reading "running"
+ *     (captured live on 2.1.210). Fixed: the roster tracks ONLY working
+ *     children; SubagentStop (and its TeammateIdle fallback) removes a
+ *     finished child outright, so no idle rows can accumulate.
  *
  *  2. "Never disappear even when killed from Orca": a subagent killed without
  *     its SubagentStop hook (SIGKILL'd process tree / lost event) stayed
  *     `working` forever and pinned the pane working. Fixed: a lead Stop's
- *     background_tasks is authoritative for non-teammate children — running
- *     ones are always listed id-exact (verified against live hook captures),
- *     so an unlisted non-teammate is finished/dead and is removed.
+ *     background_tasks reaps unlisted children — hyphen-free one-shots always,
+ *     and teammate-shaped rows once a complete inventory shows no
+ *     teammate-typed task at all.
  *
  * Drives the real production pipeline (normalizeHookPayload) whose
  * `payload.subagents` snapshots the sidebar renders 1:1 as child rows.
@@ -108,90 +111,92 @@ describe('claude subagent sidebar row lifecycle', () => {
     expect(finalStop?.payload.subagents).toBeUndefined()
   })
 
-  it('keeps an alive-but-idle teammate row while dropping finished one-shots', () => {
-    claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'teams session' })
+  it('removes finished named agents on SubagentStop even while their teammate task stays "running"', () => {
+    // Exact shape captured live (claude 2.1.210): named background agents get
+    // teammate-shaped ids (a<name>-<hex>) AND appear in background_tasks as
+    // `type: "teammate"` entries (unrelated ids) that report "running"
+    // forever — even after the agent finished. Pre-fix these squatted as
+    // permanent idle rows (the 11-row gar "Orchestration Messages" pile).
     claudeEvent({
-      hook_event_name: 'SubagentStart',
-      agent_id: 'areviewer-6d3cb5b52120b7bf',
-      agent_type: 'security-reviewer'
+      hook_event_name: 'UserPromptSubmit',
+      prompt: '--- Orchestration Messages (1) --- (ultracode)'
     })
     claudeEvent({
       hook_event_name: 'SubagentStart',
-      agent_id: 'aoneshot000000001',
-      agent_type: 'general-purpose'
+      agent_id: 'aweb-research-8a76b7d7595ce04e',
+      agent_type: 'web-research'
+    })
+    claudeEvent({
+      hook_event_name: 'SubagentStart',
+      agent_id: 'aoss-hunt-95a28c160dc99e5e',
+      agent_type: 'oss-hunt'
     })
 
-    claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'aoneshot000000001' })
-    claudeEvent({
+    // The lead's turn ends while both are still working — the pane must not
+    // read done, and the two rows show as working.
+    const teammateTasks = [
+      { id: 'tws2g167l', type: 'teammate', status: 'running', description: 'web research' },
+      { id: 't6s2brfv7', type: 'teammate', status: 'running', description: 'oss hunt' }
+    ]
+    const midStop = claudeEvent({ hook_event_name: 'Stop', background_tasks: teammateTasks })
+    expect(midStop?.payload.state).toBe('working')
+    expect(midStop?.payload.subagents).toHaveLength(2)
+
+    // web-research finishes. Its SubagentStop still lists both teammate tasks
+    // as "running", but the finished row must leave immediately.
+    const afterFirst = claudeEvent({
       hook_event_name: 'SubagentStop',
-      agent_id: 'areviewer-6d3cb5b52120b7bf',
-      agent_type: 'security-reviewer'
+      agent_id: 'aweb-research-8a76b7d7595ce04e',
+      background_tasks: teammateTasks
     })
-    const idled = claudeEvent({
-      hook_event_name: 'TeammateIdle',
-      teammate_name: 'reviewer',
-      team_name: 'session-repro'
-    })
-    // Teammate stays (alive + resumable); the finished one-shot is gone.
-    expect(idled?.payload.subagents).toEqual([
-      expect.objectContaining({ id: 'areviewer-6d3cb5b52120b7bf', state: 'idle' })
+    expect(afterFirst?.payload.subagents).toEqual([
+      expect.objectContaining({ id: 'aoss-hunt-95a28c160dc99e5e', state: 'working' })
     ])
 
-    // Teams Stops list teammate tasks under unrelated ids and never send an
-    // empty list; the teammate row must survive them.
-    const stop = claudeEvent({
-      hook_event_name: 'Stop',
-      background_tasks: [{ id: 'tlkjjs0jv', type: 'teammate', status: 'running' }]
-    })
-    expect(stop?.payload.state).toBe('done')
-    expect(stop?.payload.subagents).toEqual([
-      expect.objectContaining({ id: 'areviewer-6d3cb5b52120b7bf', state: 'idle' })
-    ])
+    // oss-hunt finishes too — roster empties and the pane resolves done, even
+    // though background_tasks STILL reports both teammate tasks running.
+    claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'aoss-hunt-95a28c160dc99e5e' })
+    const finalStop = claudeEvent({ hook_event_name: 'Stop', background_tasks: teammateTasks })
+    expect(finalStop?.payload.state).toBe('done')
+    expect(finalStop?.payload.subagents).toBeUndefined()
   })
 
-  it('drops named workflow lanes instead of retaining them as phantom idle teammates', () => {
-    // Regression for the live-observed 32-row pile: workflow lanes report
-    // name-embedding ids (afinder-C-<hex>, agent_type = the label), which
-    // share the teammate id shape but are one-shots.
-    claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'native chat review (ultracode)' })
+  it('reaps a named agent via its TeammateIdle fallback when SubagentStop is lost', () => {
+    claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'orchestration (ultracode)' })
     claudeEvent({
       hook_event_name: 'SubagentStart',
-      agent_id: 'afinder-C-5d713c0781b7f8d2',
-      agent_type: 'finder-C'
+      agent_id: 'areview-standards-2750dacd',
+      agent_type: 'review-standards'
     })
+
+    // No SubagentStop arrives (lost/interrupt race), but claude still emits
+    // TeammateIdle keyed by name once the agent goes idle — the row must go.
+    const idled = claudeEvent({
+      hook_event_name: 'TeammateIdle',
+      teammate_name: 'review-standards',
+      team_name: 'orchestration'
+    })
+    expect(idled?.payload.subagents).toBeUndefined()
+
+    const stop = claudeEvent({
+      hook_event_name: 'Stop',
+      background_tasks: [{ id: 'tstd', type: 'teammate', status: 'running' }]
+    })
+    expect(stop?.payload.state).toBe('done')
+    expect(stop?.payload.subagents).toBeUndefined()
+  })
+
+  it('reaps a killed named agent at the lead Stop when no teammate task remains', () => {
+    // A named agent dies with neither SubagentStop nor TeammateIdle. Its
+    // teammate-shaped id never appears as a task id, so it can only be reaped
+    // when a complete inventory shows no teammate-typed task at all.
+    claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'orchestration (ultracode)' })
     claudeEvent({
       hook_event_name: 'SubagentStart',
       agent_id: 'acr-triage-1-c5a0588e7a2e4151',
       agent_type: 'cr-triage-1'
     })
 
-    // finder-C finishes; its SubagentStop carries the task inventory that
-    // lists it id-exact as a subagent — proof it is not a teammate.
-    const stopped = claudeEvent({
-      hook_event_name: 'SubagentStop',
-      agent_id: 'afinder-C-5d713c0781b7f8d2',
-      agent_type: 'finder-C',
-      background_tasks: [
-        {
-          id: 'afinder-C-5d713c0781b7f8d2',
-          type: 'subagent',
-          status: 'running',
-          agent_type: 'finder-C'
-        },
-        {
-          id: 'acr-triage-1-c5a0588e7a2e4151',
-          type: 'subagent',
-          status: 'running',
-          agent_type: 'cr-triage-1'
-        }
-      ]
-    })
-    expect(stopped?.payload.subagents).toEqual([
-      expect.objectContaining({ id: 'acr-triage-1-c5a0588e7a2e4151', state: 'working' })
-    ])
-
-    // cr-triage-1 is killed (SubagentStop lost). The lead Stop's complete
-    // inventory lists no teammate-typed task, so the leftover is removed.
     const stop = claudeEvent({
       hook_event_name: 'Stop',
       background_tasks: [
