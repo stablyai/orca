@@ -395,7 +395,12 @@ export default function GitLabItemDialog({
     setLoading(true)
     setError(null)
     void window.api.gl
-      .workItemDetails({ ...repoSelector, iid: item.number, type: item.type })
+      .workItemDetails({
+        ...repoSelector,
+        iid: item.number,
+        type: item.type,
+        projectRef: item.projectRef ?? null
+      })
       .then((data) => {
         if (stale) {
           return
@@ -546,7 +551,12 @@ export default function GitLabItemDialog({
 
     setDetailsSaving(true)
     try {
-      const res = await window.api.gl.updateMR({ ...repoSelector, iid: item.number, updates })
+      const res = await window.api.gl.updateMR({
+        ...repoSelector,
+        iid: item.number,
+        updates,
+        projectRef: item.projectRef ?? null
+      })
       if (res.ok) {
         if (mountedRef.current) {
           setDetails((current) =>
@@ -811,7 +821,11 @@ export default function GitLabItemDialog({
     }
     setActionInFlight('close')
     try {
-      const res = await window.api.gl.closeMR({ ...repoSelector, iid: item.number })
+      const res = await window.api.gl.closeMR({
+        ...repoSelector,
+        iid: item.number,
+        projectRef: item.projectRef ?? null
+      })
       if (res.ok) {
         if (mountedRef.current) {
           useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
@@ -840,7 +854,11 @@ export default function GitLabItemDialog({
     }
     setActionInFlight('reopen')
     try {
-      const res = await window.api.gl.reopenMR({ ...repoSelector, iid: item.number })
+      const res = await window.api.gl.reopenMR({
+        ...repoSelector,
+        iid: item.number,
+        projectRef: item.projectRef ?? null
+      })
       if (res.ok) {
         if (mountedRef.current) {
           useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
@@ -869,7 +887,11 @@ export default function GitLabItemDialog({
     }
     setActionInFlight('merge')
     try {
-      const res = await window.api.gl.mergeMR({ ...repoSelector, iid: item.number })
+      const res = await window.api.gl.mergeMR({
+        ...repoSelector,
+        iid: item.number,
+        projectRef: item.projectRef ?? null
+      })
       if (res.ok) {
         if (mountedRef.current) {
           useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
@@ -915,12 +937,14 @@ export default function GitLabItemDialog({
           ? await window.api.gl.addMRComment({
               ...repoSelector,
               iid: item.number,
-              body: bodyState.body
+              body: bodyState.body,
+              projectRef: item.projectRef ?? null
             })
           : await window.api.gl.addIssueComment({
               ...repoSelector,
               number: item.number,
-              body: bodyState.body
+              body: bodyState.body,
+              projectRef: item.projectRef ?? null
             })
       if (res.ok) {
         if (mountedRef.current) {
@@ -955,7 +979,8 @@ export default function GitLabItemDialog({
           ...repoSelector,
           iid: item.number,
           discussionId: threadId,
-          resolved
+          resolved,
+          projectRef: item.projectRef ?? null
         })
         if (res.ok) {
           if (mountedRef.current) {

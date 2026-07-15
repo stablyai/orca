@@ -53,12 +53,16 @@ describe('task drawer source boundaries', () => {
       'const repoSelector = useMemo',
       'const updateCommentDraft'
     )
+    const detailsRead = sourceBetween(source, '.workItemDetails({', '.then((data)')
+    const mrUpdate = sourceBetween(source, '.updateMR({', 'if (res.ok)')
 
     expect(selector).toContain('...(repoId ? { repoId } : {})')
     expect(selector).toContain('...(sourceContext ? { sourceContext } : {})')
     expect(selector).toContain('}, [repoId, repoPath, sourceContext])')
-    expect(source).toContain('workItemDetails({ ...repoSelector')
-    expect(source).toContain('updateMR({ ...repoSelector')
+    expect(detailsRead).toContain('...repoSelector')
+    expect(detailsRead).toContain('projectRef: item.projectRef ?? null')
+    expect(mrUpdate).toContain('...repoSelector')
+    expect(mrUpdate).toContain('projectRef: item.projectRef ?? null')
     expect(source).toContain('addMRComment({')
     expect(source).toContain('addIssueComment({')
     expect(source).toContain('...repoSelector')

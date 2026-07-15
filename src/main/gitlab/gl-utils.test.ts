@@ -12,6 +12,7 @@ vi.mock('../git/runner', () => ({
 }))
 
 import {
+  _getKnownHostsCacheSize,
   _getProjectRefCacheSize,
   _resetKnownHostsCache,
   _resetProjectRefCache,
@@ -153,13 +154,74 @@ describe('gitlab project ref resolution', () => {
     sshExecMock.mockResolvedValueOnce({ stdout: 'git@gitlab.com:remote/orca.git\n', stderr: '' })
     registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
 
-    await expect(getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')).resolves.toEqual({
+    await expect(
+      getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')
+    ).resolves.toMatchObject({
       host: 'gitlab.com',
       path: 'remote/orca'
     })
 
     expect(sshExecMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/repo')
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('does not reuse a cached project ref after an SSH connection id is reused', async () => {
+    sshExecMock
+      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:old/orca.git\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:new/orca.git\n', stderr: '' })
+    const provider = { exec: sshExecMock } as never
+    registerSshGitProvider('conn-1', provider)
+
+    await expect(
+      getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')
+    ).resolves.toMatchObject({
+      host: 'gitlab.com',
+      path: 'old/orca'
+    })
+    unregisterSshGitProvider('conn-1')
+    registerSshGitProvider('conn-1', provider)
+
+    await expect(
+      getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')
+    ).resolves.toMatchObject({
+      host: 'gitlab.com',
+      path: 'new/orca'
+    })
+    expect(sshExecMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not let a removed SSH provider finish project-ref work for its replacement', async () => {
+    let resolveOldProbe: (value: { stdout: string; stderr: string }) => void = () => {}
+    sshExecMock
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveOldProbe = resolve
+          })
+      )
+      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:new/orca.git\n', stderr: '' })
+    const provider = { exec: sshExecMock } as never
+    registerSshGitProvider('conn-1', provider)
+    const oldProbe = getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')
+
+    unregisterSshGitProvider('conn-1')
+    registerSshGitProvider('conn-1', provider)
+    await expect(
+      getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')
+    ).resolves.toMatchObject({
+      host: 'gitlab.com',
+      path: 'new/orca'
+    })
+    resolveOldProbe({ stdout: 'git@gitlab.com:old/orca.git\n', stderr: '' })
+    await expect(oldProbe).resolves.toBeNull()
+
+    await expect(
+      getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')
+    ).resolves.toMatchObject({
+      host: 'gitlab.com',
+      path: 'new/orca'
+    })
+    expect(sshExecMock).toHaveBeenCalledTimes(2)
   })
 
   it('bounds cached project refs for distinct repo paths', async () => {
@@ -184,7 +246,9 @@ describe('gitlab project ref resolution', () => {
     })
     registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
 
-    await expect(getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')).resolves.toEqual({
+    await expect(
+      getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')
+    ).resolves.toMatchObject({
       host: 'gitlab.com',
       path: 'remote/orca'
     })
@@ -197,7 +261,9 @@ describe('gitlab project ref resolution', () => {
     registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
 
     await expect(getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')).resolves.toBeNull()
-    await expect(getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')).resolves.toEqual({
+    await expect(
+      getProjectRefForRemote('/repo', 'origin', undefined, 'conn-1')
+    ).resolves.toMatchObject({
       host: 'gitlab.com',
       path: 'remote/orca'
     })
@@ -425,7 +491,10 @@ describe('getGlabKnownHosts', () => {
   beforeEach(() => {
     glabExecFileAsyncMock.mockReset()
     _resetKnownHostsCache()
+    unregisterSshGitProvider('conn-reused')
   })
+
+  afterEach(() => unregisterSshGitProvider('conn-reused'))
 
   it('returns gitlab.com plus auth-status hosts, deduped', async () => {
     glabExecFileAsyncMock.mockResolvedValueOnce({
@@ -481,6 +550,126 @@ describe('getGlabKnownHosts', () => {
       'gitlab.example.com:8080'
     ])
     expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('bounds known-host caches by connection and refreshes recency', async () => {
+    glabExecFileAsyncMock.mockResolvedValue({
+      stdout: '✓ Logged in to gitlab.com as user\n',
+      stderr: ''
+    })
+
+    for (let i = 0; i < 128; i += 1) {
+      await getGlabKnownHosts(`conn-${i}`)
+    }
+
+    await getGlabKnownHosts('conn-0')
+    await getGlabKnownHosts('conn-128')
+
+    expect(_getKnownHostsCacheSize()).toBe(128)
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(129)
+
+    await getGlabKnownHosts('conn-0')
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(129)
+
+    await getGlabKnownHosts('conn-1')
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(130)
+  })
+
+  it('stays bounded through prolonged connection churn without evicting local auth', async () => {
+    glabExecFileAsyncMock.mockResolvedValue({
+      stdout: '✓ Logged in to gitlab.com as user\n',
+      stderr: ''
+    })
+
+    await getGlabKnownHosts()
+    for (let i = 0; i < 5_000; i += 1) {
+      await getGlabKnownHosts(`churn-${i}`)
+      expect(_getKnownHostsCacheSize()).toBeLessThanOrEqual(129)
+    }
+
+    await getGlabKnownHosts()
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(5_001)
+    await getGlabKnownHosts('churn-4999')
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(5_001)
+    await getGlabKnownHosts('churn-0')
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(5_002)
+  })
+
+  it('invalidates cached auth when an SSH connection id is reused', async () => {
+    glabExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'Logged in to old.gitlab.test as user\n', stderr: '' })
+      .mockResolvedValueOnce({ stdout: 'Logged in to new.gitlab.test as user\n', stderr: '' })
+    const provider = { exec: vi.fn() } as never
+    registerSshGitProvider('conn-reused', provider)
+
+    await expect(getGlabKnownHosts('conn-reused')).resolves.toContain('old.gitlab.test')
+    unregisterSshGitProvider('conn-reused')
+    registerSshGitProvider('conn-reused', provider)
+
+    await expect(getGlabKnownHosts('conn-reused')).resolves.toContain('new.gitlab.test')
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('aborts a chained lookup when its auth probe outlives the SSH registration', async () => {
+    let resolveOldProbe: (value: { stdout: string; stderr: string }) => void = () => {}
+    glabExecFileAsyncMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveOldProbe = resolve
+        })
+    )
+    const oldProviderExec = vi.fn()
+    const replacementProviderExec = vi.fn()
+    registerSshGitProvider('conn-reused', { exec: oldProviderExec } as never)
+    const oldOperation = getGlabKnownHosts('conn-reused').then((knownHosts) =>
+      getProjectRefForRemote('/repo', 'origin', knownHosts, 'conn-reused')
+    )
+
+    unregisterSshGitProvider('conn-reused')
+    registerSshGitProvider('conn-reused', { exec: replacementProviderExec } as never)
+    resolveOldProbe({ stdout: 'Logged in to old.gitlab.test as user\n', stderr: '' })
+
+    await expect(oldOperation).rejects.toThrow('changed while GitLab auth was resolving')
+    expect(oldProviderExec).not.toHaveBeenCalled()
+    expect(replacementProviderExec).not.toHaveBeenCalled()
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('aborts a chained lookup when SSH changes after auth resolves', async () => {
+    let resolveAuthProbe: (value: { stdout: string; stderr: string }) => void = () => {}
+    let continueProjectRef: () => void = () => {}
+    let reachedProjectBarrier: () => void = () => {}
+    const projectBarrier = new Promise<void>((resolve) => {
+      continueProjectRef = resolve
+    })
+    const atProjectBarrier = new Promise<void>((resolve) => {
+      reachedProjectBarrier = resolve
+    })
+    glabExecFileAsyncMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveAuthProbe = resolve
+        })
+    )
+    const oldProviderExec = vi.fn()
+    const replacementProviderExec = vi.fn()
+    registerSshGitProvider('conn-reused', { exec: oldProviderExec } as never)
+    const oldOperation = getGlabKnownHosts('conn-reused').then(async (knownHosts) => {
+      reachedProjectBarrier()
+      await projectBarrier
+      return getProjectRefForRemote('/repo', 'origin', knownHosts, 'conn-reused')
+    })
+
+    resolveAuthProbe({ stdout: 'Logged in to old.gitlab.test as user\n', stderr: '' })
+    await atProjectBarrier
+    unregisterSshGitProvider('conn-reused')
+    registerSshGitProvider('conn-reused', { exec: replacementProviderExec } as never)
+    continueProjectRef()
+
+    await expect(oldOperation).resolves.toBeNull()
+    expect(oldProviderExec).not.toHaveBeenCalled()
+    expect(replacementProviderExec).not.toHaveBeenCalled()
+    expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
   it('does not permanently cache the failure fallback — a later probe can re-discover hosts', async () => {

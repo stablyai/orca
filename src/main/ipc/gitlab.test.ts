@@ -521,11 +521,17 @@ describe('GitLab IPC handlers', () => {
     getWorkItemByProjectRefMock.mockResolvedValue({ type: 'mr', number: 8 })
     registerGitLabHandlers(storeWithRepos([repo()], projects) as Store)
     const localGitOptions = { wslDistro: 'Ubuntu' }
+    const projectRef = {
+      host: 'gitlab.example.com',
+      path: 'group/project',
+      sshConnectionLease: { connectionId: 'ssh-1', providerRegistrationId: 42 }
+    }
 
     await ipcHandlers.get('gitlab:workItemDetails')?.(null, {
       repoPath: '/local/orca',
       iid: 8,
-      type: 'mr'
+      type: 'mr',
+      projectRef
     })
     await ipcHandlers.get('gitlab:closeMR')?.(null, { repoPath: '/local/orca', iid: 8 })
     await ipcHandlers.get('gitlab:reopenMR')?.(null, { repoPath: '/local/orca', iid: 8 })
@@ -537,7 +543,8 @@ describe('GitLab IPC handlers', () => {
     await ipcHandlers.get('gitlab:updateMR')?.(null, {
       repoPath: '/local/orca',
       iid: 8,
-      updates: { title: 'Renamed' }
+      updates: { title: 'Renamed' },
+      projectRef
     })
     await ipcHandlers.get('gitlab:updateMRReviewers')?.(null, {
       repoPath: '/local/orca',
@@ -576,7 +583,7 @@ describe('GitLab IPC handlers', () => {
       'mr',
       undefined,
       null,
-      undefined,
+      projectRef,
       localGitOptions
     )
     expect(closeMRMock).toHaveBeenCalledWith(
@@ -610,7 +617,7 @@ describe('GitLab IPC handlers', () => {
       { title: 'Renamed' },
       undefined,
       null,
-      undefined,
+      projectRef,
       localGitOptions
     )
     expect(updateMRReviewersMock).toHaveBeenCalledWith(

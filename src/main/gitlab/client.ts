@@ -41,6 +41,7 @@ import {
   type LocalGitExecOptions,
   type ProjectRef
 } from './gl-utils'
+import { assertProjectRefCurrentForConnection } from './gitlab-project-ref-lifecycle'
 import type { IssueListState } from './issues'
 import {
   hasHostedReviewLocalGitOptions,
@@ -272,6 +273,11 @@ export async function getMergeRequest(
   const localGitArgs = hostedReviewLocalGitOptionArgs(options)
   const localGitOptions = localGitArgs[0] ?? {}
   const projectRef = await getProjectRef(repoPath, knownHosts, connectionId, ...localGitArgs)
+  if (connectionId && !projectRef) {
+    // Why: SSH repos have no safe cwd-inferred fallback after lifecycle
+    // resolution expires; glab could otherwise inspect an unrelated local repo.
+    return null
+  }
   await acquire()
   try {
     const args = projectRef
@@ -551,6 +557,7 @@ export async function getWorkItemByProjectRef(
 ): Promise<GitLabWorkItem | null> {
   await acquire()
   try {
+    assertProjectRefCurrentForConnection(projectRef, connectionId)
     const resource = type === 'mr' ? 'merge_requests' : 'issues'
     const { stdout } = await glabExecFileAsync(
       [

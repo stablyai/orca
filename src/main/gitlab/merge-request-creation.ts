@@ -20,6 +20,7 @@ import {
   glabRepoExecOptions,
   release
 } from './gl-utils'
+import { assertProjectRefCurrentForConnection } from './gitlab-project-ref-lifecycle'
 import { findOpenMRByHeadBase, parseMergeRequestPayload } from './merge-request-creation-lookup'
 
 function execErrorMessage(error: unknown): string {
@@ -168,6 +169,7 @@ export async function createGitLabMergeRequest(
 
   await acquire()
   try {
+    assertProjectRefCurrentForConnection(projectRef, connectionId)
     const body =
       input.useTemplate && !input.body?.trim()
         ? await readMergeRequestTemplate(repoPath, connectionId)

@@ -211,6 +211,14 @@ describe('gitlab client — MR operations', () => {
       })
     })
 
+    it('does not run cwd-inferred glab for an unresolved SSH project', async () => {
+      getProjectRefMock.mockResolvedValueOnce(null)
+
+      await expect(getMergeRequest('/remote/repo', 5, 'ssh-1')).resolves.toBeNull()
+
+      expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
+    })
+
     it('returns null when glab errors', async () => {
       getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
       glabExecFileAsyncMock.mockRejectedValueOnce(new Error('not found'))

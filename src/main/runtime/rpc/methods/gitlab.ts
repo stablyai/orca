@@ -19,7 +19,13 @@ const GitLabRateLimit = z
 const GitLabProjectRef = z
   .object({
     host: requiredString('Missing GitLab host'),
-    path: requiredString('Missing GitLab project path')
+    path: requiredString('Missing GitLab project path'),
+    sshConnectionLease: z
+      .object({
+        connectionId: requiredString('Missing SSH connection id'),
+        providerRegistrationId: z.number().int().positive()
+      })
+      .optional()
   })
   .optional()
 

@@ -263,7 +263,11 @@ export function registerGitLabHandlers(store: Store): void {
     'gitlab:updateIssue',
     async (
       _event,
-      args: GitLabRepoSelectorArgs & { number: number; updates: GitLabIssueUpdate }
+      args: GitLabRepoSelectorArgs & {
+        number: number
+        updates: GitLabIssueUpdate
+        projectRef?: ProjectRef | null
+      }
     ) => {
       const repo = assertRegisteredRepo(args, store)
       return updateIssue(
@@ -272,7 +276,7 @@ export function registerGitLabHandlers(store: Store): void {
         args.updates,
         repo.issueSourcePreference,
         repoConnectionId(repo),
-        undefined,
+        args.projectRef,
         ...localGitOptionArgs(store, repo)
       )
     }
@@ -280,7 +284,14 @@ export function registerGitLabHandlers(store: Store): void {
 
   ipcMain.handle(
     'gitlab:addIssueComment',
-    async (_event, args: GitLabRepoSelectorArgs & { number: number; body: string }) => {
+    async (
+      _event,
+      args: GitLabRepoSelectorArgs & {
+        number: number
+        body: string
+        projectRef?: ProjectRef | null
+      }
+    ) => {
       const repo = assertRegisteredRepo(args, store)
       return addIssueComment(
         repo.path,
@@ -288,7 +299,7 @@ export function registerGitLabHandlers(store: Store): void {
         args.body,
         repo.issueSourcePreference,
         repoConnectionId(repo),
-        undefined,
+        args.projectRef,
         ...localGitOptionArgs(store, repo)
       )
     }
@@ -349,7 +360,14 @@ export function registerGitLabHandlers(store: Store): void {
   // Powers GitLabItemDialog's tabs.
   ipcMain.handle(
     'gitlab:workItemDetails',
-    async (_event, args: GitLabRepoSelectorArgs & { iid: number; type: 'issue' | 'mr' }) => {
+    async (
+      _event,
+      args: GitLabRepoSelectorArgs & {
+        iid: number
+        type: 'issue' | 'mr'
+        projectRef?: ProjectRef | null
+      }
+    ) => {
       const repo = assertRegisteredRepo(args, store)
       return getWorkItemDetails(
         repo.path,
@@ -357,7 +375,7 @@ export function registerGitLabHandlers(store: Store): void {
         args.type,
         repo.issueSourcePreference,
         repoConnectionId(repo),
-        undefined,
+        args.projectRef,
         ...localGitOptionArgs(store, repo)
       )
     }
@@ -365,14 +383,17 @@ export function registerGitLabHandlers(store: Store): void {
 
   ipcMain.handle(
     'gitlab:closeMR',
-    async (_event, args: GitLabRepoSelectorArgs & { iid: number }) => {
+    async (
+      _event,
+      args: GitLabRepoSelectorArgs & { iid: number; projectRef?: ProjectRef | null }
+    ) => {
       const repo = assertRegisteredRepo(args, store)
       return closeMR(
         repo.path,
         args.iid,
         repo.issueSourcePreference,
         repoConnectionId(repo),
-        undefined,
+        args.projectRef,
         ...localGitOptionArgs(store, repo)
       )
     }
@@ -380,14 +401,17 @@ export function registerGitLabHandlers(store: Store): void {
 
   ipcMain.handle(
     'gitlab:reopenMR',
-    async (_event, args: GitLabRepoSelectorArgs & { iid: number }) => {
+    async (
+      _event,
+      args: GitLabRepoSelectorArgs & { iid: number; projectRef?: ProjectRef | null }
+    ) => {
       const repo = assertRegisteredRepo(args, store)
       return reopenMR(
         repo.path,
         args.iid,
         repo.issueSourcePreference,
         repoConnectionId(repo),
-        undefined,
+        args.projectRef,
         ...localGitOptionArgs(store, repo)
       )
     }
@@ -397,7 +421,11 @@ export function registerGitLabHandlers(store: Store): void {
     'gitlab:mergeMR',
     async (
       _event,
-      args: GitLabRepoSelectorArgs & { iid: number; method?: 'merge' | 'squash' | 'rebase' }
+      args: GitLabRepoSelectorArgs & {
+        iid: number
+        method?: 'merge' | 'squash' | 'rebase'
+        projectRef?: ProjectRef | null
+      }
     ) => {
       const repo = assertRegisteredRepo(args, store)
       return mergeMR(
@@ -406,7 +434,7 @@ export function registerGitLabHandlers(store: Store): void {
         args.method ?? 'merge',
         repo.issueSourcePreference,
         repoConnectionId(repo),
-        undefined,
+        args.projectRef,
         ...localGitOptionArgs(store, repo)
       )
     }
@@ -414,7 +442,14 @@ export function registerGitLabHandlers(store: Store): void {
 
   ipcMain.handle(
     'gitlab:updateMR',
-    async (_event, args: GitLabRepoSelectorArgs & { iid: number; updates: GitLabMRUpdate }) => {
+    async (
+      _event,
+      args: GitLabRepoSelectorArgs & {
+        iid: number
+        updates: GitLabMRUpdate
+        projectRef?: ProjectRef | null
+      }
+    ) => {
       const repo = assertRegisteredRepo(args, store)
       return updateMR(
         repo.path,
@@ -422,7 +457,7 @@ export function registerGitLabHandlers(store: Store): void {
         args.updates,
         repo.issueSourcePreference,
         repoConnectionId(repo),
-        undefined,
+        args.projectRef,
         ...localGitOptionArgs(store, repo)
       )
     }
@@ -456,7 +491,14 @@ export function registerGitLabHandlers(store: Store): void {
 
   ipcMain.handle(
     'gitlab:addMRComment',
-    async (_event, args: GitLabRepoSelectorArgs & { iid: number; body: string }) => {
+    async (
+      _event,
+      args: GitLabRepoSelectorArgs & {
+        iid: number
+        body: string
+        projectRef?: ProjectRef | null
+      }
+    ) => {
       const repo = assertRegisteredRepo(args, store)
       return addMRComment(
         repo.path,
@@ -464,7 +506,7 @@ export function registerGitLabHandlers(store: Store): void {
         args.body,
         repo.issueSourcePreference,
         repoConnectionId(repo),
-        undefined,
+        args.projectRef,
         ...localGitOptionArgs(store, repo)
       )
     }
@@ -500,7 +542,12 @@ export function registerGitLabHandlers(store: Store): void {
     'gitlab:resolveMRDiscussion',
     async (
       _event,
-      args: GitLabRepoSelectorArgs & { iid: number; discussionId: string; resolved: boolean }
+      args: GitLabRepoSelectorArgs & {
+        iid: number
+        discussionId: string
+        resolved: boolean
+        projectRef?: ProjectRef | null
+      }
     ) => {
       const repo = assertRegisteredRepo(args, store)
       return resolveMRDiscussion(
@@ -510,7 +557,7 @@ export function registerGitLabHandlers(store: Store): void {
         args.resolved,
         repo.issueSourcePreference,
         repoConnectionId(repo),
-        undefined,
+        args.projectRef,
         ...localGitOptionArgs(store, repo)
       )
     }

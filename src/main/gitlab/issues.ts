@@ -298,14 +298,7 @@ export async function updateIssue(
   }
 
   // Field edits via `glab issue update`.
-  const editArgs: string[] = [
-    'issue',
-    'update',
-    String(issueNumber),
-    '-R',
-    repoFlag,
-    ...glabHostnameArgs(projectRef, connectionId)
-  ]
+  const editArgs: string[] = ['issue', 'update', String(issueNumber), '-R', repoFlag]
   let hasEditArgs = false
 
   if (updates.title) {
@@ -333,7 +326,7 @@ export async function updateIssue(
     await acquire()
     try {
       await glabExecFileAsync(
-        editArgs,
+        [...editArgs, ...glabHostnameArgs(projectRef, connectionId)],
         glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )
     } catch (err) {

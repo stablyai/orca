@@ -13,7 +13,15 @@ import type { CheckStatus, ClassifiedError, PRConflictSummary } from './types'
 // (b) self-hosted instances live on hostnames other than gitlab.com so the
 // host has to travel with the path for URL construction and glab host
 // targeting. Aliased as `ProjectRef` in `src/main/gitlab/gl-utils.ts`.
-export type GitLabProjectRef = { host: string; path: string }
+export type GitLabProjectRef = {
+  host: string
+  path: string
+  /** Why: renderer/RPC round trips must retain the SSH registration that resolved this ref. */
+  sshConnectionLease?: {
+    connectionId: string
+    providerRegistrationId: number
+  }
+}
 
 // ── GitLab MR / issue / work-item shapes ────────────────────────────
 // Why: parallel to the GitHub PR/Issue/WorkItem types above. Native

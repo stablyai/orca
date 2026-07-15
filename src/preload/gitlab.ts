@@ -3,6 +3,7 @@
    conflict on every upstream sync of the much larger central preload
    file. Composed back into `api.gl` from `index.ts`. */
 import { ipcRenderer } from 'electron'
+import type { GitLabProjectRef } from '../shared/gitlab-types'
 import type { TaskSourceContext } from '../shared/task-source-context'
 
 type GitLabRepoSelectorArgs = {
@@ -72,12 +73,17 @@ export const glApi = {
     args: GitLabRepoSelectorArgs & {
       number: number
       updates: unknown
+      projectRef?: GitLabProjectRef | null
     }
   ): Promise<{ ok: true } | { ok: false; error: string }> =>
     ipcRenderer.invoke('gitlab:updateIssue', args),
 
   addIssueComment: (
-    args: GitLabRepoSelectorArgs & { number: number; body: string }
+    args: GitLabRepoSelectorArgs & {
+      number: number
+      body: string
+      projectRef?: GitLabProjectRef | null
+    }
   ): Promise<unknown> => ipcRenderer.invoke('gitlab:addIssueComment', args),
 
   listLabels: (args: GitLabRepoSelectorArgs): Promise<string[]> =>
@@ -93,12 +99,14 @@ export const glApi = {
     args: GitLabRepoSelectorArgs & {
       iid: number
       type: 'issue' | 'mr'
+      projectRef?: GitLabProjectRef | null
     }
   ): Promise<unknown> => ipcRenderer.invoke('gitlab:workItemDetails', args),
 
   closeMR: (
     args: GitLabRepoSelectorArgs & {
       iid: number
+      projectRef?: GitLabProjectRef | null
     }
   ): Promise<{ ok: true } | { ok: false; error: string }> =>
     ipcRenderer.invoke('gitlab:closeMR', args),
@@ -106,6 +114,7 @@ export const glApi = {
   reopenMR: (
     args: GitLabRepoSelectorArgs & {
       iid: number
+      projectRef?: GitLabProjectRef | null
     }
   ): Promise<{ ok: true } | { ok: false; error: string }> =>
     ipcRenderer.invoke('gitlab:reopenMR', args),
@@ -114,6 +123,7 @@ export const glApi = {
     args: GitLabRepoSelectorArgs & {
       iid: number
       method?: 'merge' | 'squash' | 'rebase'
+      projectRef?: GitLabProjectRef | null
     }
   ): Promise<{ ok: true } | { ok: false; error: string }> =>
     ipcRenderer.invoke('gitlab:mergeMR', args),
@@ -122,6 +132,7 @@ export const glApi = {
     args: GitLabRepoSelectorArgs & {
       iid: number
       updates: unknown
+      projectRef?: GitLabProjectRef | null
     }
   ): Promise<{ ok: true } | { ok: false; error: string }> =>
     ipcRenderer.invoke('gitlab:updateMR', args),
@@ -134,8 +145,13 @@ export const glApi = {
     }
   ): Promise<unknown> => ipcRenderer.invoke('gitlab:updateMRReviewers', args),
 
-  addMRComment: (args: GitLabRepoSelectorArgs & { iid: number; body: string }): Promise<unknown> =>
-    ipcRenderer.invoke('gitlab:addMRComment', args),
+  addMRComment: (
+    args: GitLabRepoSelectorArgs & {
+      iid: number
+      body: string
+      projectRef?: GitLabProjectRef | null
+    }
+  ): Promise<unknown> => ipcRenderer.invoke('gitlab:addMRComment', args),
 
   addMRInlineComment: (
     args: GitLabRepoSelectorArgs & {
@@ -150,6 +166,7 @@ export const glApi = {
       iid: number
       discussionId: string
       resolved: boolean
+      projectRef?: GitLabProjectRef | null
     }
   ): Promise<unknown> => ipcRenderer.invoke('gitlab:resolveMRDiscussion', args),
 

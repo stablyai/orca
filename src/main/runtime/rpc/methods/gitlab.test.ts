@@ -35,7 +35,11 @@ describe('gitlab RPC methods', () => {
       getGitLabRepoWorkItemByPath: vi.fn().mockResolvedValue({ id: 'gitlab-issue-7' })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: GITLAB_METHODS })
-    const projectRef = { host: 'gitlab.example.com', path: 'group/project' }
+    const projectRef = {
+      host: 'gitlab.example.com',
+      path: 'group/project',
+      sshConnectionLease: { connectionId: 'ssh-1', providerRegistrationId: 42 }
+    }
 
     await dispatcher.dispatch(makeRequest('gitlab.diagnoseAuth'))
     await dispatcher.dispatch(
