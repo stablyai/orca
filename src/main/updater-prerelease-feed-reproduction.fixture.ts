@@ -5,6 +5,7 @@ export const publishingIncident = {
   missingManifestStatus: 404,
   missingWindowsAssetStatus: 404,
   releaseWorkflow: 'https://github.com/stablyai/orca/actions/runs/29386068902',
+  releaseWorkflowConclusion: 'cancelled',
   network: 'healthy',
   expectedState: 'not-ready' as const
 }

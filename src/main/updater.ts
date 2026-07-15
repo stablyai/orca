@@ -1136,9 +1136,9 @@ async function pinDefaultReleaseFeed(
       return 'ready'
     }
     clearPublishingWindowLastGoodCheck()
-    if (isPerfCheck) {
-      // Why: perf checks retain their legacy generic retry path; publishing
-      // copy is reserved for the stable release publication classifier.
+    if (isPerfCheck || includePrerelease) {
+      // Why: prerelease channels retain their legacy generic retry path;
+      // publishing copy is reserved for the stable release classifier.
       throw new Error('Unable to find latest version on GitHub')
     }
     console.info(

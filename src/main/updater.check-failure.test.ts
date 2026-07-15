@@ -219,6 +219,8 @@ describe('updater check failure handling', () => {
   })
 
   it('maps the captured release incident through readiness into publishing copy', async () => {
+    expect(publishingIncident.releaseWorkflowConclusion).toBe('cancelled')
+    expect(publishingIncident.network).toBe('healthy')
     appMock.getVersion.mockReturnValue(publishingIncident.installedVersion)
     const atom = `<feed>${publishingIncident.atomTags
       .map(

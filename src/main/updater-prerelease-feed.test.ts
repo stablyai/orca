@@ -34,10 +34,12 @@ function buildManifest(tag: string): string {
 function respondWithAtom(
   tags: string[],
   missingManifestTags: string[] = [],
-  missingAssetTags: string[] = []
+  missingAssetTags: string[] = [],
+  unavailableManifestTags: string[] = []
 ): void {
   const missingManifests = new Set(missingManifestTags)
   const missingAssets = new Set(missingAssetTags)
+  const unavailableManifests = new Set(unavailableManifestTags)
   netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
     if (url === 'https://github.com/stablyai/orca/releases.atom') {
       return Promise.resolve({
@@ -49,8 +51,16 @@ function respondWithAtom(
     const manifestMatch = url.match(/\/releases\/download\/([^/]+)\/latest(?:-[a-z]+)?\.yml$/)
     if (manifestMatch) {
       const tag = decodeURIComponent(manifestMatch[1])
+      if (unavailableManifests.has(tag)) {
+        return Promise.resolve({
+          ok: false,
+          status: 503,
+          text: () => Promise.resolve('')
+        })
+      }
       return Promise.resolve({
         ok: !missingManifests.has(tag),
+        status: missingManifests.has(tag) ? 404 : 200,
         text: () => Promise.resolve(buildManifest(tag))
       })
     }
@@ -291,7 +301,7 @@ describe('fetchNewerReleaseTag', () => {
   })
 
   it('reports manifest transport failures as unavailable', async () => {
-    respondWithAtom(['v1.4.2'], ['v1.4.2'])
+    respondWithAtom(['v1.4.2'], [], [], ['v1.4.2'])
 
     const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
 
