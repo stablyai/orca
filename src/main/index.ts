@@ -101,6 +101,7 @@ import {
 } from './startup/single-instance-lock'
 import { startEventLoopStallProbe } from './startup/event-loop-stall-probe'
 import { startMainThreadChurnProbe } from './diagnostics/main-thread-churn-probe'
+import { startMainThreadStallDetector } from './diagnostics/main-thread-stall-detector'
 import {
   isStartupDiagnosticsEnabled,
   logStartupDiagnostic,
@@ -1734,6 +1735,10 @@ app.whenReady().then(async () => {
   // Honors DO_NOT_TRACK / ORCA_TELEMETRY_DISABLED / ORCA_DIAGNOSTICS_DISABLED
   // / CI internally; those gates do not need to be re-checked here.
   initObservability()
+  // Why: beachballs leave no trace today — the churn probe is env-gated and
+  // stderr-only. This emits a `main-thread.stall` span for any >=1s block, so
+  // a freeze lands in the diagnostic bundle without a terminal relaunch.
+  startMainThreadStallDetector()
   // Why: cohort-classifier reads the repo count synchronously at every emit
   // for cohort-extended events. The Store has been sync-loaded above, and
   // this init runs before any IPC handler is registered and before any
