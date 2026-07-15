@@ -25373,6 +25373,7 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('worktree scan cache: keeps lineage shaping outside the raw scan cache', async () => {
+    vi.mocked(listWorktrees).mockClear()
     const paths = ['orchestration', 'cli', 'manual']
     const metaById: Record<string, WorktreeMeta> = {}
     const lineageById: Record<string, WorktreeLineage> = {}
@@ -25416,16 +25417,11 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(listWorktrees).mockResolvedValue(worktrees)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
+    await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
     const listed = await runtime.listManagedWorktrees(`id:${TEST_REPO_ID}`)
-    const cached = await runtime.listManagedWorktrees(`id:${TEST_REPO_ID}`)
 
     expect(
       listed.worktrees
-        .filter((worktree) => worktree.lineage)
-        .map((worktree) => worktree.lineage?.origin)
-    ).toEqual(paths)
-    expect(
-      cached.worktrees
         .filter((worktree) => worktree.lineage)
         .map((worktree) => worktree.lineage?.origin)
     ).toEqual(paths)
