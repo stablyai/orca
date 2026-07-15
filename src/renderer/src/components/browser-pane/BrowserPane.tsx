@@ -59,15 +59,26 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { useAppStore } from '@/store'
+import {
+  getWebAiBrowserProfileOperationOwner,
+  type BrowserProfileOperationOwner
+} from '@/lib/browser-profile-operation-owner'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { ORCA_BROWSER_BLANK_URL, ORCA_BROWSER_PARTITION } from '../../../../shared/constants'
 import { getOrcaProfileBrowserDefaultPartition } from '../../../../shared/orca-profiles'
 import type {
   BrowserCertificateProceedResult,
+  BrowserCookieImportScope,
   BrowserLoadError,
   BrowserPage as BrowserPageState,
-  BrowserWorkspace as BrowserWorkspaceState
+  BrowserWorkspace as BrowserWorkspaceState,
+  WebAiProvider
 } from '../../../../shared/types'
+import {
+  getWebAiAccountCookieImportScope,
+  normalizeWebAiAccounts,
+  webAiAccountMatchesWorkspace
+} from '../../../../shared/web-ai-accounts'
 import {
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl,
@@ -774,6 +785,22 @@ export default function BrowserPane({
   const browserPages = useAppStore((s) =>
     getBrowserPagesForWorkspace(s.browserPagesByWorkspace, browserTab.id)
   )
+  const savedWebAiAccounts = useAppStore((s) => s.settings?.webAiAccounts)
+  const webAiAccount = useMemo(() => {
+    if (!browserTab.webAiAccountId) {
+      return null
+    }
+    return (
+      normalizeWebAiAccounts(savedWebAiAccounts).find(
+        (account) =>
+          account.id === browserTab.webAiAccountId &&
+          webAiAccountMatchesWorkspace(account, browserTab)
+      ) ?? null
+    )
+  }, [browserTab, savedWebAiAccounts])
+  const webAiProvider =
+    webAiAccount && webAiAccount.provider !== 'custom' ? webAiAccount.provider : null
+  const cookieImportScope = webAiAccount ? getWebAiAccountCookieImportScope(webAiAccount) : null
   const activeBrowserPage =
     browserPages.find((page) => page.id === browserTab.activePageId) ?? browserPages[0] ?? null
   const updateBrowserPageState = useAppStore((s) => s.updateBrowserPageState)
@@ -781,6 +808,7 @@ export default function BrowserPane({
   const activeBrowserRuntimeEnvironmentId = activeBrowserPage
     ? getBrowserPageRuntimeEnvironmentId(activeBrowserPage, activeRuntimeEnvironmentId)
     : null
+  const browserProfileOperationOwner = getWebAiBrowserProfileOperationOwner(webAiAccount)
   const runtimeEnvironmentActive = Boolean(activeBrowserRuntimeEnvironmentId)
   const activeBrowserPageId = activeBrowserPage?.id ?? null
   const browserPageIds = useMemo(() => browserPages.map((page) => page.id), [browserPages])
@@ -861,6 +889,10 @@ export default function BrowserPane({
               worktreeId={browserTab.worktreeId}
               sessionProfileId={browserTab.sessionProfileId ?? null}
               sessionPartition={browserTab.sessionPartition ?? null}
+              webAiProvider={webAiProvider}
+              cookieImportScope={cookieImportScope}
+              browserProfileOperationOwner={browserProfileOperationOwner}
+              profileSelectionLocked={webAiAccount !== null}
               isActive={isActive && page.id === activeBrowserPage?.id}
               isAutomationVisible={automationVisiblePageIds.has(page.id)}
               isMobileDriven={mobileDrivenPageIds.has(page.id)}
@@ -943,6 +975,7 @@ function RemoteBrowserPagePane({
     (s) => s.remoteBrowserPageHandlesByPageId[browserTab.id] ?? null
   )
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
+  const openBrowserLinkInNewTab = useAppStore((s) => s.openBrowserLinkInNewTab)
   const closeBrowserPage = useAppStore((s) => s.closeBrowserPage)
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
   const keybindings = useAppStore((state) => state.keybindings)
@@ -2436,9 +2469,7 @@ function RemoteBrowserPagePane({
                       role="menuitem"
                       className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
                       onClick={() => {
-                        createBrowserTab(worktreeId, contextMenu.linkUrl!, {
-                          title: contextMenu.linkUrl!
-                        })
+                        openBrowserLinkInNewTab(browserTab.id, contextMenu.linkUrl!)
                         setContextMenu(null)
                       }}
                     >
@@ -2754,6 +2785,10 @@ function BrowserPagePane({
   worktreeId,
   sessionProfileId,
   sessionPartition,
+  webAiProvider,
+  cookieImportScope,
+  browserProfileOperationOwner,
+  profileSelectionLocked,
   isActive,
   isAutomationVisible,
   isMobileDriven,
@@ -2766,6 +2801,10 @@ function BrowserPagePane({
   worktreeId: string
   sessionProfileId: string | null
   sessionPartition: string | null
+  webAiProvider: WebAiProvider | null
+  cookieImportScope: BrowserCookieImportScope | null
+  browserProfileOperationOwner?: BrowserProfileOperationOwner
+  profileSelectionLocked: boolean
   isActive: boolean
   isAutomationVisible: boolean
   isMobileDriven: boolean
@@ -2936,7 +2975,7 @@ function BrowserPagePane({
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const clearBrowserPageAnnotationsRef = useRef(clearBrowserPageAnnotations)
   clearBrowserPageAnnotationsRef.current = clearBrowserPageAnnotations
-  const createBrowserTab = useAppStore((s) => s.createBrowserTab)
+  const openBrowserLinkInNewTab = useAppStore((s) => s.openBrowserLinkInNewTab)
   const consumeAddressBarFocusRequest = useAppStore((s) => s.consumeAddressBarFocusRequest)
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
   const activeOrcaProfileId = useAppStore((s) => s.activeOrcaProfileId)
@@ -4103,7 +4142,7 @@ function BrowserPagePane({
     slotViewportReady,
     webviewPartition,
     worktreeId,
-    createBrowserTab,
+    openBrowserLinkInNewTab,
     focusAddressBarNow,
     focusWebviewNow,
     syncNavigationState,
@@ -4915,9 +4954,7 @@ function BrowserPagePane({
                       role="menuitem"
                       className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
                       onClick={() => {
-                        createBrowserTab(worktreeId, contextMenu.linkUrl!, {
-                          title: contextMenu.linkUrl!
-                        })
+                        openBrowserLinkInNewTab(browserTab.id, contextMenu.linkUrl!)
                         setContextMenu(null)
                       }}
                     >
@@ -5109,7 +5146,12 @@ function BrowserPagePane({
             dismissSuggestionsRef={dismissAddressBarSuggestionsRef}
           />
 
-          <BrowserImportHintButton profileId={sessionProfileId} />
+          <BrowserImportHintButton
+            profileId={sessionProfileId}
+            webAiProvider={webAiProvider}
+            cookieImportScope={cookieImportScope}
+            owner={browserProfileOperationOwner}
+          />
 
           <Tooltip>
             <TooltipTrigger asChild>
@@ -5231,6 +5273,10 @@ function BrowserPagePane({
             viewportPresetId={browserTab.viewportPresetId ?? null}
             onDestroyWebview={() => destroyPersistentWebview(browserTab.id)}
             isActive={isActive}
+            webAiProvider={webAiProvider}
+            cookieImportScope={cookieImportScope}
+            owner={browserProfileOperationOwner}
+            profileSelectionLocked={profileSelectionLocked}
           />
         </div>
         {visibleDownloads.length > 0 ? (

@@ -69,6 +69,11 @@ vi.mock('zustand/react/shallow', () => ({
   useShallow: (selector: unknown) => selector
 }))
 
+vi.mock('@/hooks/useShortcutLabel', () => ({
+  useShortcutLabel: (actionId: string) => actionId,
+  useOptionalShortcutLabel: () => null
+}))
+
 vi.mock('lucide-react', () => ({
   FilePlus: function FilePlus() {
     return null
@@ -478,6 +483,28 @@ describe('TabBar context menu wiring', () => {
     expect(menuLabels[1]).toContain('Open Markdown...')
     expect(menuLabels[2]).toContain('New Terminal')
     expect(menuLabels[3]).toContain('New Browser Tab')
+  })
+
+  it('shows only browser creation in a browser-only synthetic workspace', async () => {
+    const element = await renderTabBar({
+      tabs: [],
+      browserTabs: [],
+      browserOnly: true,
+      onNewFileTab: () => {},
+      onOpenFileTab: () => {},
+      onNewSimulatorTab: () => {},
+      onOpenEntry: async () => {}
+    })
+
+    const menuLabels = findChildrenByType(element, 'DropdownMenuItem').map((item) =>
+      extractText(item.props.children)
+    )
+
+    expect(menuLabels).toHaveLength(1)
+    expect(menuLabels[0]).toContain('New Browser Tab')
+    expect(menuLabels[0]).toContain('tab.newTerminal')
+    expect(menuLabels[0]).not.toContain('tab.newBrowser')
+    expect(findChildrenByType(element, 'TabBarCreateEntry')).toHaveLength(0)
   })
 
   it('turns New Mobile Emulator into a go-to action when the workspace already has one', async () => {

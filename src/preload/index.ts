@@ -17,6 +17,7 @@ import type { MobilePairingConnectionMode } from '../shared/mobile-pairing-conne
 import type {
   BaseRefSearchResult,
   BaseRefDefaultResult,
+  BrowserCookieImportScope,
   BrowserViewportOverride,
   CustomPet,
   FsChangedPayload,
@@ -56,7 +57,8 @@ import type {
   WorktreeBaseStatusEvent,
   WorktreeDefaultTabsLaunch,
   WorktreeHeadIdentity,
-  WorktreeRemoteBranchConflictEvent
+  WorktreeRemoteBranchConflictEvent,
+  WebAiProvider
 } from '../shared/types'
 import type { PtyModelRestoreNeededEvent } from '../shared/pty-model-restore-marker'
 import type {
@@ -2530,6 +2532,8 @@ const api = {
 
     sessionImportCookies: (args: {
       profileId: string
+      webAiProvider?: WebAiProvider
+      cookieImportScope?: BrowserCookieImportScope
     }): Promise<
       { ok: true; profileId: string; summary: unknown } | { ok: false; reason: string }
     > => ipcRenderer.invoke('browser:session:importCookies', args),
@@ -2543,6 +2547,9 @@ const api = {
     sessionImportFromBrowser: (args: {
       profileId: string
       browserFamily: string
+      browserProfile?: string
+      webAiProvider?: WebAiProvider
+      cookieImportScope?: BrowserCookieImportScope
     }): Promise<
       { ok: true; profileId: string; summary: unknown } | { ok: false; reason: string }
     > => ipcRenderer.invoke('browser:session:importFromBrowser', args),

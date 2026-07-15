@@ -8,6 +8,8 @@ import {
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseWebAiAccountWorkspaceId } from '../../../../shared/constants'
+import { normalizeWebAiAccounts } from '../../../../shared/web-ai-accounts'
 
 // Why: cap the per-session history so a long-lived workspace with many
 // worktree jumps cannot grow the array unbounded. 50 is generous enough
@@ -136,6 +138,14 @@ function getHistoryEntryKey(entry: WorktreeNavHistoryEntry): string {
 function isLiveEntry(entry: WorktreeNavHistoryEntry, state: AppState): boolean {
   if (isViewEntry(entry)) {
     return true
+  }
+  const accountId = parseWebAiAccountWorkspaceId(entry)
+  if (accountId) {
+    // Why: closing the final tab must not erase a valid account from browser
+    // history; activating it can recreate the provider's home surface.
+    return normalizeWebAiAccounts(state.settings?.webAiAccounts).some(
+      (account) => account.id === accountId
+    )
   }
   const workspaceScope = parseWorkspaceKey(entry)
   if (workspaceScope?.type === 'folder') {

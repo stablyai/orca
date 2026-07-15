@@ -35,7 +35,8 @@ import {
   getDefaultPersistedState,
   getDefaultWorkspaceSession,
   ONBOARDING_FINAL_STEP,
-  ONBOARDING_FLOW_VERSION
+  ONBOARDING_FLOW_VERSION,
+  WEB_AI_BROWSER_WORKSPACE_ID
 } from '../shared/constants'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../shared/execution-host'
@@ -4699,6 +4700,115 @@ describe('Store', () => {
     expect(updated.prBotAuthorOverrides[499]).toBe('bot-0499')
   })
 
+  it('normalizes Web AI accounts on load, every settings write, and reload', async () => {
+    writeDataFile({
+      settings: {
+        webAiAccounts: [
+          {
+            id: 'account-1',
+            provider: 'chatgpt',
+            label: ' Personal ',
+            profileId: 'profile-1',
+            sessionPartition: 'persist:profile-1',
+            lastWorktreeId: 'deleted-worktree',
+            createdAt: 1
+          },
+          { id: 'invalid-account', provider: 'unknown' }
+        ]
+      }
+    })
+    const store = await createStore()
+
+    expect(store.getSettings().webAiAccounts).toEqual([
+      {
+        id: 'account-1',
+        provider: 'chatgpt',
+        label: 'Personal',
+        executionHostId: 'local',
+        profileId: 'profile-1',
+        sessionPartition: 'persist:profile-1',
+        createdAt: 1
+      }
+    ])
+
+    const updated = store.updateSettings({
+      webAiAccounts: [
+        {
+          id: 'account-2',
+          provider: 'claude',
+          label: ' Work ',
+          executionHostId: 'local',
+          profileId: 'profile-2',
+          sessionPartition: 'persist:profile-2',
+          createdAt: 2
+        },
+        {
+          id: 'account-2',
+          provider: 'deepseek',
+          label: 'Duplicate',
+          executionHostId: 'local',
+          profileId: 'profile-3',
+          sessionPartition: 'persist:profile-3',
+          createdAt: 3
+        }
+      ]
+    })
+    expect(updated.webAiAccounts).toEqual([
+      {
+        id: 'account-2',
+        provider: 'claude',
+        label: 'Work',
+        executionHostId: 'local',
+        profileId: 'profile-2',
+        sessionPartition: 'persist:profile-2',
+        createdAt: 2
+      }
+    ])
+
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getSettings().webAiAccounts).toEqual(updated.webAiAccounts)
+  })
+
+  it('retains Custom Web AI navigation and cookie scope metadata across reload', async () => {
+    const store = await createStore()
+    const updated = store.updateSettings({
+      webAiAccounts: [
+        {
+          id: 'account-doubao',
+          provider: 'custom',
+          label: 'Personal Doubao',
+          executionHostId: 'local',
+          profileId: 'profile-doubao',
+          sessionPartition: 'persist:profile-doubao',
+          customServiceLabel: ' Doubao ',
+          customHomeUrl: 'https://www.doubao.com/chat/?code=secret#new',
+          customCookieDomains: [],
+          createdAt: 4
+        }
+      ]
+    })
+
+    expect(updated.webAiAccounts).toEqual([
+      {
+        id: 'account-doubao',
+        provider: 'custom',
+        label: 'Personal Doubao',
+        executionHostId: 'local',
+        profileId: 'profile-doubao',
+        sessionPartition: 'persist:profile-doubao',
+        customServiceLabel: 'Doubao',
+        customHomeUrl: 'https://www.doubao.com/chat/',
+        customCookieDomains: ['doubao.com'],
+        createdAt: 4
+      }
+    ])
+
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getSettings().webAiAccounts).toEqual(updated.webAiAccounts)
+  })
+
   it('notifies settings listeners with changed keys only', async () => {
     const store = await createStore()
     const listener = vi.fn()
@@ -6839,6 +6949,110 @@ describe('Store', () => {
     }
     store.setWorkspaceSession(session)
     expect(store.getWorkspaceSession()).toEqual(session)
+  })
+
+  it('persists the projectless Web AI browser workspace across a disk reload', async () => {
+    const store = await createStore()
+    const workspaceId = 'web-ai-workspace-1'
+    const pageId = 'web-ai-page-1'
+    const unifiedTabId = 'web-ai-unified-1'
+    const groupId = 'web-ai-group-1'
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: null,
+      activeWorktreeId: WEB_AI_BROWSER_WORKSPACE_ID,
+      activeWorkspaceKey: worktreeWorkspaceKey(WEB_AI_BROWSER_WORKSPACE_ID),
+      browserTabsByWorktree: {
+        [WEB_AI_BROWSER_WORKSPACE_ID]: [
+          {
+            id: workspaceId,
+            worktreeId: WEB_AI_BROWSER_WORKSPACE_ID,
+            sessionProfileId: 'profile-1',
+            sessionPartition: 'persist:profile-1',
+            webAiAccountId: 'account-1',
+            activePageId: pageId,
+            pageIds: [pageId],
+            url: 'https://chatgpt.com/c/example',
+            title: 'ChatGPT',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1
+          }
+        ]
+      },
+      browserPagesByWorkspace: {
+        [workspaceId]: [
+          {
+            id: pageId,
+            workspaceId,
+            worktreeId: WEB_AI_BROWSER_WORKSPACE_ID,
+            url: 'https://chatgpt.com/c/example',
+            title: 'ChatGPT',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1
+          }
+        ]
+      },
+      activeBrowserTabIdByWorktree: {
+        [WEB_AI_BROWSER_WORKSPACE_ID]: workspaceId
+      },
+      activeTabTypeByWorktree: { [WEB_AI_BROWSER_WORKSPACE_ID]: 'browser' },
+      unifiedTabs: {
+        [WEB_AI_BROWSER_WORKSPACE_ID]: [
+          {
+            id: unifiedTabId,
+            entityId: workspaceId,
+            groupId,
+            worktreeId: WEB_AI_BROWSER_WORKSPACE_ID,
+            contentType: 'browser',
+            label: 'ChatGPT',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      tabGroups: {
+        [WEB_AI_BROWSER_WORKSPACE_ID]: [
+          {
+            id: groupId,
+            worktreeId: WEB_AI_BROWSER_WORKSPACE_ID,
+            activeTabId: unifiedTabId,
+            tabOrder: [unifiedTabId],
+            recentTabIds: [unifiedTabId]
+          }
+        ]
+      },
+      tabGroupLayouts: {
+        [WEB_AI_BROWSER_WORKSPACE_ID]: { type: 'leaf', groupId }
+      },
+      activeGroupIdByWorktree: { [WEB_AI_BROWSER_WORKSPACE_ID]: groupId }
+    })
+    store.flush()
+
+    const reloaded = await createStore()
+    const restored = reloaded.getWorkspaceSession()
+
+    expect(restored.activeWorktreeId).toBe(WEB_AI_BROWSER_WORKSPACE_ID)
+    expect(restored.browserTabsByWorktree?.[WEB_AI_BROWSER_WORKSPACE_ID]?.[0]).toMatchObject({
+      id: workspaceId,
+      webAiAccountId: 'account-1',
+      sessionProfileId: 'profile-1',
+      sessionPartition: 'persist:profile-1'
+    })
+    expect(restored.browserPagesByWorkspace?.[workspaceId]?.[0]?.url).toBe(
+      'https://chatgpt.com/c/example'
+    )
+    expect(restored.unifiedTabs?.[WEB_AI_BROWSER_WORKSPACE_ID]?.[0]?.entityId).toBe(workspaceId)
+    expect(restored.tabGroups?.[WEB_AI_BROWSER_WORKSPACE_ID]?.[0]?.activeTabId).toBe(unifiedTabId)
   })
 
   it('patches workspace session without replacing unchanged slices', async () => {

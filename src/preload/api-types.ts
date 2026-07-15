@@ -66,6 +66,7 @@ import type {
 import type {
   BaseRefDefaultResult,
   BaseRefSearchResult,
+  BrowserCookieImportScope,
   BrowserCookieImportResult,
   BrowserCertificateFailure,
   BrowserCertificateProceedResult,
@@ -74,6 +75,7 @@ import type {
   BrowserSessionProfileScope,
   BrowserSessionProfileSource,
   BrowserViewportOverride,
+  WebAiProvider,
   ClaudeRateLimitAccountsState,
   ClassifiedError,
   CodexRateLimitAccountsState,
@@ -540,13 +542,19 @@ export type BrowserApi = {
     label: string
   }) => Promise<BrowserSessionProfile | null>
   sessionDeleteProfile: (args: { profileId: string }) => Promise<boolean>
-  sessionImportCookies: (args: { profileId: string }) => Promise<BrowserCookieImportResult>
+  sessionImportCookies: (args: {
+    profileId: string
+    webAiProvider?: WebAiProvider
+    cookieImportScope?: BrowserCookieImportScope
+  }) => Promise<BrowserCookieImportResult>
   sessionResolvePartition: (args: { profileId: string | null }) => Promise<string | null>
   sessionDetectBrowsers: () => Promise<DetectedBrowserInfo[]>
   sessionImportFromBrowser: (args: {
     profileId: string
     browserFamily: string
     browserProfile?: string
+    webAiProvider?: WebAiProvider
+    cookieImportScope?: BrowserCookieImportScope
   }) => Promise<BrowserCookieImportResult>
   sessionClearDefaultCookies: () => Promise<boolean>
   notifyActiveTabChanged: (args: { browserPageId: string }) => Promise<boolean>

@@ -42,6 +42,8 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import { useAppStore } from './store'
+import { isWebAiBrowserWorkspaceId } from '../../shared/constants'
+import { normalizeWebAiAccounts } from '../../shared/web-ai-accounts'
 import { useShallow } from 'zustand/react/shallow'
 import { isRemoteWorkspaceSnapshotApplyInProgress, useIpcEvents } from './hooks/useIpcEvents'
 import { useAutomationDispatchEvents } from './hooks/useAutomationDispatchEvents'
@@ -121,6 +123,7 @@ import {
   persistWorkspaceSessionByHostSync
 } from './lib/workspace-session-host-persistence'
 import { collectFolderWorkspaceKeysFromSession } from './lib/workspace-session-hydration-keys'
+import { migrateLegacyWebAiWorkspaceSession } from './lib/web-ai-workspace-session-migration'
 import {
   getStartupErrorFallbackUI,
   hydratePersistedUIAfterStartupRead
@@ -969,17 +972,21 @@ function App(): React.JSX.Element {
         )
         await keybindingsPromise
         if (!cancelled) {
+          const migratedSession = migrateLegacyWebAiWorkspaceSession(
+            sessionRead.session,
+            normalizeWebAiAccounts(useAppStore.getState().settings?.webAiAccounts)
+          )
           const sessionHydrationOptions = {
-            additionalValidWorkspaceKeys: collectFolderWorkspaceKeysFromSession(sessionRead.session)
+            additionalValidWorkspaceKeys: collectFolderWorkspaceKeysFromSession(migratedSession)
           }
           timeRendererStartupSyncStep('hydrate-session-stores', () => {
-            actions.hydrateWorkspaceSession(sessionRead.session, {
+            actions.hydrateWorkspaceSession(migratedSession, {
               ...sessionHydrationOptions,
               runtimeHostIdByWorkspaceSessionKey: sessionRead.runtimeHostIdByWorkspaceSessionKey
             })
-            actions.hydrateTabsSession(sessionRead.session, sessionHydrationOptions)
-            actions.hydrateEditorSession(sessionRead.session, sessionHydrationOptions)
-            actions.hydrateBrowserSession(sessionRead.session, sessionHydrationOptions)
+            actions.hydrateTabsSession(migratedSession, sessionHydrationOptions)
+            actions.hydrateEditorSession(migratedSession, sessionHydrationOptions)
+            actions.hydrateBrowserSession(migratedSession, sessionHydrationOptions)
           })
           // Why: prune lastVisitedAtByWorktreeId entries whose worktrees
           // no longer exist. Must run AFTER hydration — before this point,
@@ -1011,7 +1018,7 @@ function App(): React.JSX.Element {
           // the renderer — ssh.connect would dispose the runtime layer's live
           // relay session. Main's windowless-promotion path can persist such
           // ids into this list, so filter at the consumption boundary too.
-          const connectionIds = (sessionRead.session.activeConnectionIdsAtShutdown ?? []).filter(
+          const connectionIds = (migratedSession.activeConnectionIdsAtShutdown ?? []).filter(
             (targetId) => !isRuntimeOwnedSshTargetId(targetId)
           )
           if (connectionIds.length > 0) {
@@ -1554,7 +1561,10 @@ function App(): React.JSX.Element {
   })
   // Why: suppress right sidebar controls on full-page navigation surfaces
   // since those surfaces intentionally own the full content area.
-  const showRightSidebarControls = !creationLayoutActive && canShowRightSidebarForView(activeView)
+  const showRightSidebarControls =
+    !creationLayoutActive &&
+    !isWebAiBrowserWorkspaceId(activeWorktreeId) &&
+    canShowRightSidebarForView(activeView)
   const showProfileSwitcherInSidebarFooter = showSidebar && sidebarOpen
   const showProfileSwitcherInTopRight = !showProfileSwitcherInSidebarFooter
 

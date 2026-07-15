@@ -216,6 +216,7 @@ import { normalizeTerminalCursorStyleDefault } from '../shared/terminal-cursor-s
 import { normalizeTerminalLineHeight } from '../shared/terminal-line-height-settings'
 import { normalizeUiLanguage } from '../shared/ui-language'
 import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
+import { normalizeWebAiAccounts } from '../shared/web-ai-accounts'
 import { persistedUIValuesEqual } from '../shared/persisted-ui-equality'
 import {
   normalizeFolderWorkspaceName,
@@ -3143,6 +3144,7 @@ export class Store {
             // product intent was only to change the default, and the setting
             // stays user-toggleable.
             ...stripLegacyTerminalScrollbackBytes(parsed.settings),
+            webAiAccounts: normalizeWebAiAccounts(parsed.settings?.webAiAccounts),
             prBotAuthorOverrides: normalizePRBotAuthorOverrides(
               parsed.settings?.prBotAuthorOverrides
             ),
@@ -5348,6 +5350,11 @@ export class Store {
       sanitizedUpdates.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
         updates.prBotAuthorOverrides
       )
+    }
+    if ('webAiAccounts' in updates) {
+      // Why: paired web/runtime writers and migrations bypass desktop IPC. Keep
+      // account metadata well-formed at the shared persistence boundary too.
+      sanitizedUpdates.webAiAccounts = normalizeWebAiAccounts(updates.webAiAccounts)
     }
     const historyWithPreviousLayout = buildWorkspaceDirHistoryForUpdate(
       this.state.settings,

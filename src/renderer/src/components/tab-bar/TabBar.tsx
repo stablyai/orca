@@ -126,6 +126,8 @@ type TabBarProps = {
   onNewSimulatorTab?: () => void
   onOpenEntry?: (args: TabCreateEntryArgs) => Promise<void>
   terminalOnly?: boolean
+  /** Synthetic browser surfaces allow browser creation without terminal/editor actions. */
+  browserOnly?: boolean
   showAgentLaunchItems?: boolean
   onNewFileTab?: () => void
   onOpenFileTab?: () => void
@@ -251,6 +253,7 @@ function TabBarInner({
   onNewSimulatorTab,
   onOpenEntry,
   terminalOnly = false,
+  browserOnly = false,
   showAgentLaunchItems = true,
   onNewFileTab,
   onOpenFileTab,
@@ -693,52 +696,51 @@ function TabBarInner({
   }
   const clearPendingNewTabMenuFocusOnUnmount = clearPendingNewTabMenuFocusOnUnmountRef.current
 
-  const defaultTerminalMenuItems =
-    windowsShellEntries && onNewTerminalWithShell ? (
-      windowsShellEntries.map((entry, idx) => {
-        const isDefault = idx === 0
-        return (
-          <DropdownMenuItem
-            key={entry.shell}
-            onSelect={() => {
-              // Why: the top-level Windows shell menu models shell
-              // categories, not concrete executables. When the user
-              // picked PowerShell 7+ in advanced settings, launching the
-              // "PowerShell" menu item must preserve that implementation
-              // instead of forcing inbox powershell.exe.
-              queueNewActiveTerminalFocusAfterNewTabMenuClose()
-              onNewTerminalWithShell(
-                resolveWindowsShellLaunchTarget(
-                  entry.shell,
-                  defaultWindowsPowerShellImplementation,
-                  windowsTerminalCapabilities.pwshAvailable
-                )
+  const defaultTerminalMenuItems = browserOnly ? null : windowsShellEntries &&
+    onNewTerminalWithShell ? (
+    windowsShellEntries.map((entry, idx) => {
+      const isDefault = idx === 0
+      return (
+        <DropdownMenuItem
+          key={entry.shell}
+          onSelect={() => {
+            // Why: the top-level Windows shell menu models shell
+            // categories, not concrete executables. When the user
+            // picked PowerShell 7+ in advanced settings, launching the
+            // "PowerShell" menu item must preserve that implementation
+            // instead of forcing inbox powershell.exe.
+            queueNewActiveTerminalFocusAfterNewTabMenuClose()
+            onNewTerminalWithShell(
+              resolveWindowsShellLaunchTarget(
+                entry.shell,
+                defaultWindowsPowerShellImplementation,
+                windowsTerminalCapabilities.pwshAvailable
               )
-            }}
-            className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-          >
-            <ShellIcon shell={entry.shell} size={14} />
-            <span className="flex-1">
-              {translate('auto.components.tab.bar.TabBar.7c1313d237', 'New Terminal:')}{' '}
-              {entry.label}
-            </span>
-            {isDefault ? <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut> : null}
-          </DropdownMenuItem>
-        )
-      })
-    ) : (
-      <DropdownMenuItem
-        onSelect={() => {
-          queueNewActiveTerminalFocusAfterNewTabMenuClose()
-          onNewTerminalTab()
-        }}
-        className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-      >
-        <TerminalSquare className="size-4 text-muted-foreground" />
-        {translate('auto.components.tab.bar.TabBar.d364f3c8d4', 'New Terminal')}
-        <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
-      </DropdownMenuItem>
-    )
+            )
+          }}
+          className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+        >
+          <ShellIcon shell={entry.shell} size={14} />
+          <span className="flex-1">
+            {translate('auto.components.tab.bar.TabBar.7c1313d237', 'New Terminal:')} {entry.label}
+          </span>
+          {isDefault ? <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut> : null}
+        </DropdownMenuItem>
+      )
+    })
+  ) : (
+    <DropdownMenuItem
+      onSelect={() => {
+        queueNewActiveTerminalFocusAfterNewTabMenuClose()
+        onNewTerminalTab()
+      }}
+      className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+    >
+      <TerminalSquare className="size-4 text-muted-foreground" />
+      {translate('auto.components.tab.bar.TabBar.d364f3c8d4', 'New Terminal')}
+      <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
+    </DropdownMenuItem>
+  )
   const newBrowserMenuItem = !terminalOnly ? (
     <DropdownMenuItem
       onSelect={onNewBrowserTab}
@@ -746,11 +748,13 @@ function TabBarInner({
     >
       <Globe className="size-4 text-muted-foreground" />
       {translate('auto.components.tab.bar.TabBar.4833fb2cbe', 'New Browser Tab')}
-      <DropdownMenuShortcut>{newBrowserShortcut}</DropdownMenuShortcut>
+      <DropdownMenuShortcut>
+        {browserOnly ? newTerminalShortcut : newBrowserShortcut}
+      </DropdownMenuShortcut>
     </DropdownMenuItem>
   ) : null
   const newSimulatorMenuItem =
-    !terminalOnly && mobileEmulatorEnabled && onNewSimulatorTab ? (
+    !terminalOnly && !browserOnly && mobileEmulatorEnabled && onNewSimulatorTab ? (
       workspaceHasSimulatorTab ? (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -782,7 +786,7 @@ function TabBarInner({
       )
     ) : null
   const newMarkdownMenuItem =
-    !terminalOnly && onNewFileTab ? (
+    !terminalOnly && !browserOnly && onNewFileTab ? (
       <DropdownMenuItem
         onSelect={onNewFileTab}
         className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
@@ -793,7 +797,7 @@ function TabBarInner({
       </DropdownMenuItem>
     ) : null
   const openMarkdownMenuItem =
-    !terminalOnly && onOpenFileTab ? (
+    !terminalOnly && !browserOnly && onOpenFileTab ? (
       <DropdownMenuItem
         onSelect={onOpenFileTab}
         className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
@@ -808,6 +812,7 @@ function TabBarInner({
   const mobileEmulatorIntroMenuBlock =
     showMobileEmulatorIntroCallout &&
     !terminalOnly &&
+    !browserOnly &&
     isMacOs &&
     mobileEmulatorEnabled &&
     onNewSimulatorTab ? (
@@ -1311,7 +1316,7 @@ function TabBarInner({
             runPendingNewTabMenuFocusAfterClose()
           }}
         >
-          {!terminalOnly && onOpenEntry ? (
+          {!terminalOnly && !browserOnly && onOpenEntry ? (
             <>
               <TabBarCreateEntry
                 worktreeId={worktreeId}
@@ -1333,7 +1338,7 @@ function TabBarInner({
             </>
           ) : null}
           {showStaticCreateMenuItems ? standardCreateMenuItems : null}
-          {showStaticCreateMenuItems && showAgentLaunchItems ? (
+          {showStaticCreateMenuItems && showAgentLaunchItems && !browserOnly ? (
             <>
               <DropdownMenuSeparator />
               <QuickLaunchAgentMenuItems

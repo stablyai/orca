@@ -132,6 +132,56 @@ export const ORPHAN_WORKTREE_ID = '__orphan__'
 // pruning must classify it without consulting the repo catalog.
 export const FLOATING_TERMINAL_WORKTREE_ID = 'global-floating-terminal'
 
+// Why: retained as the read-side sentinel for sessions written before each Web
+// AI account received its own synthetic workspace.
+export const WEB_AI_BROWSER_WORKSPACE_ID = 'global-web-ai-browser'
+
+export const WEB_AI_ACCOUNT_WORKSPACE_ID_PREFIX = 'global-web-ai-account:'
+
+export function getWebAiAccountWorkspaceId(accountId: string): string {
+  return `${WEB_AI_ACCOUNT_WORKSPACE_ID_PREFIX}${accountId.length}:${accountId}`
+}
+
+export function parseWebAiAccountWorkspaceId(value: string | null | undefined): string | null {
+  if (!value?.startsWith(WEB_AI_ACCOUNT_WORKSPACE_ID_PREFIX)) {
+    return null
+  }
+  const suffix = value.slice(WEB_AI_ACCOUNT_WORKSPACE_ID_PREFIX.length)
+  const separatorIndex = suffix.indexOf(':')
+  if (separatorIndex <= 0) {
+    return null
+  }
+  const lengthText = suffix.slice(0, separatorIndex)
+  if (!/^(0|[1-9]\d*)$/.test(lengthText)) {
+    return null
+  }
+  const expectedLength = Number(lengthText)
+  const accountId = suffix.slice(separatorIndex + 1)
+  return Number.isSafeInteger(expectedLength) && accountId.length === expectedLength && accountId
+    ? accountId
+    : null
+}
+
+export function isWebAiAccountWorkspaceId(value: string | null | undefined): boolean {
+  return parseWebAiAccountWorkspaceId(value) !== null
+}
+
+export function isWebAiBrowserWorkspaceId(value: string | null | undefined): boolean {
+  return value === WEB_AI_BROWSER_WORKSPACE_ID || isWebAiAccountWorkspaceId(value)
+}
+
+export const PERSISTENT_LOCAL_WORKSPACE_IDS = [
+  FLOATING_TERMINAL_WORKTREE_ID,
+  WEB_AI_BROWSER_WORKSPACE_ID
+] as const
+
+export function isPersistentLocalWorkspaceId(value: string | null | undefined): boolean {
+  return (
+    PERSISTENT_LOCAL_WORKSPACE_IDS.some((workspaceId) => workspaceId === value) ||
+    isWebAiAccountWorkspaceId(value)
+  )
+}
+
 export const REPO_COLORS = [
   '#737373', // neutral
   '#ef4444', // red
@@ -282,6 +332,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     httpProxyBypassRules: '',
     electronHttp1CompatibilityMode: false,
     openLinksInApp: false,
+    webAiAccounts: [],
     localhostWorktreeLabelsEnabled: false,
     openLinksInAppPreferencePrompted: false,
     openAgentTabsInChatByDefault: false,
@@ -518,6 +569,7 @@ export function getDefaultUIState(): PersistedUIState {
     setupGuideBrowserMilestoneMigrated: true,
     setupGuideBrowserMilestoneLegacyComplete: false,
     browserImportHintHidden: false,
+    webAiAccountsCollapsed: false,
     trayMinimizeNoticeShown: false,
     mobileEmulatorTabIntroDismissed: false,
     mobileEmulatorAgentSetupDismissed: false,

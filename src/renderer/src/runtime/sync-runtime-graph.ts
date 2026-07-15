@@ -32,6 +32,7 @@ import type {
   TerminalLayoutSnapshot,
   TerminalTab
 } from '../../../shared/types'
+import { isWebAiBrowserWorkspaceId } from '../../../shared/constants'
 import { resolveTerminalTabTitle } from '../../../shared/tab-title-resolution'
 import {
   getActiveTabNavOrder,
@@ -700,6 +701,11 @@ export function buildMobileSessionTabSnapshots(
 
   const snapshots: RuntimeMobileSessionTabsSnapshot[] = []
   for (const worktreeId of worktreeIds) {
+    // Why: Web AI accounts are Electron-local authenticated surfaces. Paired
+    // clients must not receive their account IDs, page titles, or full URLs.
+    if (isWebAiBrowserWorkspaceId(worktreeId)) {
+      continue
+    }
     const activeGroupId = state.activeGroupIdByWorktree[worktreeId] ?? null
     const terminalTabByIdForWorktree = new Map(
       (state.tabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])

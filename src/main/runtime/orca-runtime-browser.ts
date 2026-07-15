@@ -49,7 +49,11 @@ import type {
   BrowserViewportResult,
   BrowserWaitResult
 } from '../../shared/runtime-types'
-import type { BrowserCertificateProceedResult } from '../../shared/types'
+import type {
+  BrowserCertificateProceedResult,
+  BrowserCookieImportScope,
+  WebAiProvider
+} from '../../shared/types'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { BrowserBackend } from '../browser/browser-backend'
 import { browserCertificateTrustController, browserManager } from '../browser/browser-manager'
@@ -62,7 +66,8 @@ import { browserSessionRegistry } from '../browser/browser-session-registry'
 import {
   detectInstalledBrowsers,
   importCookiesFromBrowser,
-  selectBrowserProfile
+  selectBrowserProfile,
+  validateBrowserCookieImportScopeRequest
 } from '../browser/browser-cookie-import'
 import { waitForTabRegistration, waitForWorktreeTabRegistration } from '../ipc/browser'
 
@@ -1595,7 +1600,16 @@ export class RuntimeBrowserCommands {
     profileId: string
     browserFamily: string
     browserProfile?: string
+    webAiProvider?: WebAiProvider
+    cookieImportScope?: BrowserCookieImportScope
   }): Promise<BrowserProfileImportFromBrowserResult> {
+    const invalidScopeReason = validateBrowserCookieImportScopeRequest(
+      params.webAiProvider,
+      params.cookieImportScope
+    )
+    if (invalidScopeReason) {
+      return { ok: false, reason: invalidScopeReason }
+    }
     const profile = browserSessionRegistry.getProfile(params.profileId)
     if (!profile) {
       return { ok: false, reason: 'Session profile not found.' }
@@ -1624,7 +1638,12 @@ export class RuntimeBrowserCommands {
       browser = reselected
     }
 
-    const result = await importCookiesFromBrowser(browser, profile.partition)
+    const result = await importCookiesFromBrowser(
+      browser,
+      profile.partition,
+      params.webAiProvider,
+      params.cookieImportScope
+    )
     if (!result.ok) {
       return result
     }

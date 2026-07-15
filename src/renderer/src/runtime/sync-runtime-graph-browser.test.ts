@@ -5,6 +5,7 @@ import {
   runtimeMobileSessionSyncKeysEqual
 } from './sync-runtime-graph'
 import type { AppState } from '../store/types'
+import { getWebAiAccountWorkspaceId, WEB_AI_BROWSER_WORKSPACE_ID } from '../../../shared/constants'
 
 function makeState(overrides: Partial<AppState> = {}): AppState {
   return {
@@ -178,4 +179,81 @@ describe('browser mobile session sync', () => {
       }
     ])
   })
+
+  it.each([getWebAiAccountWorkspaceId('private-account'), WEB_AI_BROWSER_WORKSPACE_ID])(
+    'excludes Electron-local Web AI workspace %s while preserving ordinary browser publication',
+    (webAiWorkspaceId) => {
+      const ordinaryWorkspace = makeBrowserWorkspace('Ordinary Browser')
+      const webAiWorkspace = {
+        ...makeBrowserWorkspace('Private Chat'),
+        id: 'web-ai-browser',
+        worktreeId: webAiWorkspaceId,
+        activePageId: 'web-ai-page',
+        pageIds: ['web-ai-page'],
+        url: 'https://chatgpt.com/c/private-conversation',
+        webAiAccountId: 'private-account'
+      }
+      const state = makeState({
+        activeBrowserTabIdByWorktree: {
+          'wt-1': ordinaryWorkspace.id,
+          [webAiWorkspaceId]: webAiWorkspace.id
+        },
+        browserTabsByWorktree: {
+          'wt-1': [ordinaryWorkspace],
+          [webAiWorkspaceId]: [webAiWorkspace]
+        },
+        browserPagesByWorkspace: {
+          [ordinaryWorkspace.id]: [
+            {
+              id: 'page-1',
+              workspaceId: ordinaryWorkspace.id,
+              worktreeId: 'wt-1',
+              url: 'https://runtime-browser.example/session',
+              title: 'Web Runtime Browser',
+              loading: false,
+              faviconUrl: null,
+              canGoBack: true,
+              canGoForward: false,
+              loadError: null,
+              createdAt: 1,
+              browserRuntimeEnvironmentId: 'runtime-1'
+            }
+          ],
+          [webAiWorkspace.id]: [
+            {
+              id: 'web-ai-page',
+              workspaceId: webAiWorkspace.id,
+              worktreeId: webAiWorkspaceId,
+              url: 'https://chatgpt.com/c/private-conversation',
+              title: 'Private Chat Title',
+              loading: false,
+              faviconUrl: null,
+              canGoBack: false,
+              canGoForward: false,
+              loadError: null,
+              createdAt: 1
+            }
+          ]
+        } as unknown as AppState['browserPagesByWorkspace']
+      })
+
+      const snapshots = buildMobileSessionTabSnapshots(state)
+
+      expect(snapshots).toHaveLength(1)
+      expect(snapshots[0]).toMatchObject({
+        worktree: 'wt-1',
+        tabs: [
+          {
+            type: 'browser',
+            browserWorkspaceId: ordinaryWorkspace.id,
+            title: 'Web Runtime Browser',
+            url: 'https://runtime-browser.example/session'
+          }
+        ]
+      })
+      expect(JSON.stringify(snapshots)).not.toContain('private-account')
+      expect(JSON.stringify(snapshots)).not.toContain('Private Chat Title')
+      expect(JSON.stringify(snapshots)).not.toContain('private-conversation')
+    }
+  )
 })

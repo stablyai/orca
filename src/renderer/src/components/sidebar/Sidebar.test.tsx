@@ -32,6 +32,10 @@ vi.mock('./SidebarNav', () => ({
   default: () => <div data-testid="sidebar-nav" />
 }))
 
+vi.mock('./WebAiAccountsSection', () => ({
+  default: () => <div data-testid="web-ai-accounts" />
+}))
+
 vi.mock('./SetupScriptPromptCard', () => ({
   default: () => <div data-testid="setup-script-prompt-card" />
 }))

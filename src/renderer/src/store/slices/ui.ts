@@ -869,6 +869,8 @@ export type UISlice = {
   markSetupGuideBrowserMilestoneMigrated: (legacyComplete: boolean) => void
   browserImportHintHidden: boolean
   setBrowserImportHintHidden: (hidden: boolean) => void
+  webAiAccountsCollapsed: boolean
+  setWebAiAccountsCollapsed: (collapsed: boolean) => void
   mobileEmulatorTabIntroDismissed: boolean
   dismissMobileEmulatorTabIntro: () => void
   mobileEmulatorAgentSetupDismissed: boolean
@@ -1963,6 +1965,15 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       window.api.ui.set({ browserImportHintHidden: hidden }).catch(console.error)
       return { browserImportHintHidden: hidden }
     }),
+  webAiAccountsCollapsed: false,
+  setWebAiAccountsCollapsed: (collapsed) =>
+    set((s) => {
+      if (s.webAiAccountsCollapsed === collapsed) {
+        return s
+      }
+      window.api.ui.set({ webAiAccountsCollapsed: collapsed }).catch(console.error)
+      return { webAiAccountsCollapsed: collapsed }
+    }),
   mobileEmulatorTabIntroDismissed: false,
   dismissMobileEmulatorTabIntro: () =>
     set((s) => {
@@ -2559,6 +2570,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         setupGuideBrowserMilestoneLegacyComplete:
           ui.setupGuideBrowserMilestoneLegacyComplete === true,
         browserImportHintHidden: ui.browserImportHintHidden === true,
+        webAiAccountsCollapsed: ui.webAiAccountsCollapsed === true,
         mobileEmulatorTabIntroDismissed: ui.mobileEmulatorTabIntroDismissed === true,
         mobileEmulatorAgentSetupDismissed: ui.mobileEmulatorAgentSetupDismissed === true,
         projectOrderManualDefaultNoticeDismissed:

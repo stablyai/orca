@@ -1,8 +1,9 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AppState } from '../types'
-import type { FolderWorkspace, Worktree } from '../../../../shared/types'
+import type { FolderWorkspace, WebAiAccount, Worktree } from '../../../../shared/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { getWebAiAccountWorkspaceId } from '../../../../shared/constants'
 import {
   canGoBackWorktreeHistory,
   canGoForwardWorktreeHistory,
@@ -21,6 +22,8 @@ type MinimalState = Pick<
   | 'goForwardWorktree'
   | 'worktreesByRepo'
   | 'folderWorkspaces'
+  | 'browserTabsByWorktree'
+  | 'settings'
 >
 
 function makeWorktree(id: string): Worktree {
@@ -47,6 +50,18 @@ function makeFolderWorkspace(id: string): FolderWorkspace {
   }
 }
 
+function makeWebAiAccount(id: string): WebAiAccount {
+  return {
+    id,
+    provider: 'chatgpt',
+    label: id,
+    executionHostId: 'local',
+    profileId: `profile-${id}`,
+    sessionPartition: `persist:${id}`,
+    createdAt: 1
+  }
+}
+
 function createHistoryStore(
   worktreeIds: string[] = [],
   folderWorkspaceIds: string[] = []
@@ -57,6 +72,8 @@ function createHistoryStore(
       'repo-1': worktreeIds.map(makeWorktree)
     },
     folderWorkspaces: folderWorkspaceIds.map(makeFolderWorkspace),
+    browserTabsByWorktree: {},
+    settings: { webAiAccounts: [] } as unknown as AppState['settings'],
     ...createWorktreeNavHistorySlice(
       set as Parameters<typeof createWorktreeNavHistorySlice>[0],
       get as Parameters<typeof createWorktreeNavHistorySlice>[1],
@@ -188,6 +205,48 @@ describe('worktree-nav-history slice: goBack / goForward', () => {
 
     store.getState().goBackWorktree()
     expect(activated).toEqual([folderKey])
+    expect(store.getState().worktreeNavHistoryIndex).toBe(0)
+  })
+
+  it('treats a configured Web AI account as live after its final tab closes', () => {
+    const account = makeWebAiAccount('chatgpt-main')
+    const workspaceId = getWebAiAccountWorkspaceId(account.id)
+    const store = createHistoryStore(['child'])
+    const activated: string[] = []
+    setWorktreeNavActivator((id) => {
+      activated.push(id as string)
+      return true
+    })
+    store.setState({
+      settings: { webAiAccounts: [account] } as unknown as AppState['settings'],
+      worktreeNavHistory: ['child', workspaceId],
+      worktreeNavHistoryIndex: 0
+    })
+
+    expect(canGoForwardWorktreeHistory(store.getState() as AppState)).toBe(true)
+    store.getState().goForwardWorktree()
+
+    expect(activated).toEqual([workspaceId])
+    expect(store.getState().worktreeNavHistoryIndex).toBe(1)
+  })
+
+  it('skips a Web AI workspace after its account is removed', () => {
+    const workspaceId = getWebAiAccountWorkspaceId('removed-account')
+    const store = createHistoryStore(['child'])
+    const activated: string[] = []
+    setWorktreeNavActivator((id) => {
+      activated.push(id as string)
+      return true
+    })
+    store.setState({
+      worktreeNavHistory: ['child', workspaceId],
+      worktreeNavHistoryIndex: 0
+    })
+
+    expect(canGoForwardWorktreeHistory(store.getState() as AppState)).toBe(false)
+    store.getState().goForwardWorktree()
+
+    expect(activated).toEqual([])
     expect(store.getState().worktreeNavHistoryIndex).toBe(0)
   })
 

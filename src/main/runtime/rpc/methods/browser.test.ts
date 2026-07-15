@@ -10,7 +10,13 @@ import {
 import { BROWSER_CORE_METHODS } from './browser-core'
 import { BROWSER_EXTRA_METHODS } from './browser-extras'
 import { BROWSER_SCREENCAST_METHODS } from './browser-screencast'
-import { ClipboardWrite, Fill, KeyboardInsert, Type } from './browser-schemas'
+import {
+  ClipboardWrite,
+  Fill,
+  KeyboardInsert,
+  ProfileImportFromBrowser,
+  Type
+} from './browser-schemas'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
@@ -56,7 +62,19 @@ describe('browser RPC methods', () => {
       makeRequest('browser.profileImportFromBrowser', {
         profileId: 'profile-1',
         browserFamily: 'chrome',
-        browserProfile: 'Default'
+        browserProfile: 'Default',
+        webAiProvider: 'chatgpt'
+      })
+    )
+    await dispatcher.dispatch(
+      makeRequest('browser.profileImportFromBrowser', {
+        profileId: 'profile-custom',
+        browserFamily: 'chrome',
+        cookieImportScope: {
+          label: 'Example AI',
+          domains: ['example.com'],
+          sourceHostname: 'chat.example.com'
+        }
       })
     )
 
@@ -80,8 +98,58 @@ describe('browser RPC methods', () => {
     expect(runtime.browserProfileImportFromBrowser).toHaveBeenCalledWith({
       profileId: 'profile-1',
       browserFamily: 'chrome',
-      browserProfile: 'Default'
+      browserProfile: 'Default',
+      webAiProvider: 'chatgpt'
     })
+    expect(runtime.browserProfileImportFromBrowser).toHaveBeenCalledWith({
+      profileId: 'profile-custom',
+      browserFamily: 'chrome',
+      cookieImportScope: {
+        label: 'Example AI',
+        domains: ['example.com'],
+        sourceHostname: 'chat.example.com'
+      }
+    })
+  })
+
+  it('accepts AI Studio and Custom scope RPC inputs but rejects mixed or Custom provider routes', () => {
+    expect(
+      ProfileImportFromBrowser.safeParse({
+        profileId: 'profile-aistudio',
+        browserFamily: 'chrome',
+        webAiProvider: 'aistudio'
+      }).success
+    ).toBe(true)
+    expect(
+      ProfileImportFromBrowser.safeParse({
+        profileId: 'profile-custom',
+        browserFamily: 'chrome',
+        cookieImportScope: {
+          label: 'Example AI',
+          domains: ['example.com'],
+          sourceHostname: 'chat.example.com'
+        }
+      }).success
+    ).toBe(true)
+    expect(
+      ProfileImportFromBrowser.safeParse({
+        profileId: 'profile-custom',
+        browserFamily: 'chrome',
+        webAiProvider: 'custom'
+      }).success
+    ).toBe(false)
+    expect(
+      ProfileImportFromBrowser.safeParse({
+        profileId: 'profile-mixed',
+        browserFamily: 'chrome',
+        webAiProvider: 'chatgpt',
+        cookieImportScope: {
+          label: 'Example AI',
+          domains: ['example.com'],
+          sourceHostname: 'chat.example.com'
+        }
+      }).success
+    ).toBe(false)
   })
 
   it('routes browser screencast over the streaming dispatcher', async () => {

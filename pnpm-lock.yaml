@@ -79,6 +79,9 @@ importers:
       ssh2:
         specifier: ^1.17.0
         version: 1.17.0
+      tldts:
+        specifier: 7.0.30
+        version: 7.0.30
       tweetnacl:
         specifier: ^1.0.3
         version: 1.0.3

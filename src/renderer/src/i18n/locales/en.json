@@ -656,7 +656,11 @@
         "2fe88c2e06": "Remote workspace sync unavailable",
         "2ec42e1c52": "No remote workspace yet",
         "88214a785b": "Workspace sync waited for local session hydration and timed out",
-        "4f78ba5885": "Workspace synced"
+        "4f78ba5885": "Workspace synced",
+        "webAiAccountRequired": "No active Web AI account",
+        "webAiProfileMismatch": "The requested profile does not match the active Web AI account",
+        "webAiCreateFailed": "Failed to create a Web AI browser tab",
+        "webAiProfileLocked": "This tab's profile is fixed by its Web AI account"
       },
       "useSettingsNavigationMetadata": {
         "4a728cd56b": "New features that are still taking shape. Give them a try.",
@@ -4773,6 +4777,46 @@
           "cancel": "Cancel",
           "forget": "Remove from Orca",
           "reconnectAndDelete": "Reconnect & Delete"
+        },
+        "WebAiAccountDialog": {
+          "title": "Add Web AI Account",
+          "provider": "Service",
+          "accountName": "Account name",
+          "customServiceLabel": "Service name",
+          "customServiceLabelPlaceholder": "Doubao",
+          "customHomeUrl": "Home URL",
+          "customHomeUrlPlaceholder": "https://www.doubao.com/",
+          "customHomeUrlInvalid": "Enter an HTTPS URL without a username or password.",
+          "customHomeUrlHint": "This reusable home page is saved without query parameters or fragments.",
+          "customCookieDomains": "Cookie domains",
+          "customCookieDomainsPlaceholder": "doubao.com",
+          "customCookieDomainsInvalid": "Use comma-separated domains that are the home hostname or one of its parent domains.",
+          "customCookieDomainsDerived": "Leave blank to use {{value0}}. Separate multiple domains with commas.",
+          "customCookieDomainsHint": "Separate multiple domains with commas. Protocols, paths, and wildcards are not allowed.",
+          "browserProfile": "Browser profile",
+          "createProfile": "Create a new isolated profile",
+          "sharedGoogleCookiesWarning": "{{value0}} uses shared google.com sign-in cookies. Google sign-in may reject embedded browsers, and importing cookies can change the Google account used by other Google services in this browser profile.",
+          "cancel": "Cancel",
+          "addAndOpen": "Add and open"
+        },
+        "WebAiAccountsSection": {
+          "profileMissing": "This browser profile no longer exists.",
+          "createProfileFailed": "Failed to create browser profile.",
+          "addFailed": "Failed to add Web AI account.",
+          "removed": "Removed {{value0}} from the sidebar. The browser profile was kept.",
+          "toggle": "Toggle Web AI Accounts",
+          "title": "Web AI Accounts",
+          "add": "Add Web AI account",
+          "addFirst": "Add an account",
+          "openNewTab": "Open another browser tab",
+          "manageProfile": "Manage browser profile",
+          "remove": "Remove from sidebar",
+          "profileCheckFailed": "Could not verify browser profiles. Try again.",
+          "launchFailed": "Failed to open this Web AI account.",
+          "openProfilesFailed": "Could not open local browser profile settings.",
+          "removeFailed": "Failed to remove Web AI account.",
+          "openNewTabForAccount": "Open another browser tab for {{value0}}",
+          "moreActionsForAccount": "More actions for {{value0}}"
         }
       },
       "shared": {
@@ -12273,7 +12317,13 @@
             "4f5ffaa6a1": "Import browser data",
             "b24fef25be": "Import",
             "02e89014c5": "Imported {{value0}} cookies from {{value1}}{{value2}}.",
-            "d40d584769": "Imported {{value0}} cookies from file."
+            "d40d584769": "Imported {{value0}} cookies from file.",
+            "webAiImport": "Import {{value0}}",
+            "webAiTitle": "Import {{value0}} cookies",
+            "webAiScope": "Only cookies used by {{value0}} will be copied into this profile.",
+            "geminiScope": "Gemini uses your shared Google sign-in, so this copies Google account cookies but skips unrelated sites.",
+            "googleScope": "{{value0}} uses your shared Google sign-in, so this copies Google account cookies but skips unrelated sites.",
+            "webAiMenuHint": "Import for this service is also available in the browser menu."
           },
           "BrowserMobileDriverOverlay": {
             "a6914ee43f": "Take back",
@@ -12390,7 +12440,8 @@
             "bf648471c5": "Creating…",
             "53bbe3dab4": "Imported {{value0}} cookies from file.",
             "c5f0e4d3b2a1": "Imported {{value0}} cookies from {{value1}} ({{value2}}).",
-            "d6a1f5e4c3b2": "Imported {{value0}} cookies from {{value1}}."
+            "d6a1f5e4c3b2": "Imported {{value0}} cookies from {{value1}}.",
+            "importProviderCookies": "Import {{value0}} Cookies"
           },
           "GrabConfirmationSheet": {
             "314a0aaa5b": "Attach to AI",

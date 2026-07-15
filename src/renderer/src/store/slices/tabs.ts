@@ -33,7 +33,11 @@ import { buildHydratedTabState, pruneTabGroupLayoutForGroups } from './tabs-hydr
 import { buildOrphanTerminalCleanupPatch, getOrphanTerminalIds } from './terminal-orphan-helpers'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { PERSISTENT_LOCAL_WORKSPACE_IDS } from '../../../../shared/constants'
+import {
+  getWebAiAccountWorkspaceId,
+  normalizeWebAiAccounts
+} from '../../../../shared/web-ai-accounts'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   addAdditionalValidWorkspaceKeys,
@@ -2069,7 +2073,12 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         .flat()
         .map((w) => w.id)
     )
-    validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
+    for (const workspaceId of PERSISTENT_LOCAL_WORKSPACE_IDS) {
+      validWorktreeIds.add(workspaceId)
+    }
+    for (const account of normalizeWebAiAccounts(state.settings?.webAiAccounts)) {
+      validWorktreeIds.add(getWebAiAccountWorkspaceId(account.id))
+    }
     for (const workspace of state.folderWorkspaces) {
       validWorktreeIds.add(folderWorkspaceKey(workspace.id))
     }

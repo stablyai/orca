@@ -36,6 +36,7 @@ vi.mock('electron', () => ({
 
 import {
   buildChromiumCookieInsertParams,
+  cookieDomainMatchesWebAiProvider,
   importCookiesFromFile,
   importCookiesFromBrowser,
   detectInstalledBrowsers,
@@ -50,6 +51,7 @@ import {
 import { existsSync, writeFileSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { DatabaseSync } from 'node:sqlite'
 
 function chromeBrowser(cookiesPath: string): DetectedBrowser {
   return {
@@ -64,6 +66,17 @@ function chromeBrowser(cookiesPath: string): DetectedBrowser {
 }
 
 const LARGE_SAFARI_COOKIE_COUNT = 150_000
+
+describe('cookieDomainMatchesWebAiProvider', () => {
+  it('matches provider base domains and subdomains without suffix collisions', () => {
+    expect(cookieDomainMatchesWebAiProvider('.chatgpt.com', 'chatgpt')).toBe(true)
+    expect(cookieDomainMatchesWebAiProvider('auth.openai.com', 'chatgpt')).toBe(true)
+    expect(cookieDomainMatchesWebAiProvider('notopenai.com', 'chatgpt')).toBe(false)
+    expect(cookieDomainMatchesWebAiProvider('openai.com.evil.test', 'chatgpt')).toBe(false)
+    expect(cookieDomainMatchesWebAiProvider('.google.com', 'gemini')).toBe(true)
+    expect(cookieDomainMatchesWebAiProvider('accounts.google.com', 'aistudio')).toBe(true)
+  })
+})
 
 describe('summarizeCookieImportError', () => {
   it('folds a bounded error preview without full-string whitespace replacement', () => {
@@ -141,13 +154,17 @@ function buildExpiredSafariCookie(index: number): Buffer {
 describe('importCookiesFromFile', () => {
   let tmpDir: string
   let cookiesSetMock: ReturnType<typeof vi.fn>
+  let cookiesGetMock: ReturnType<typeof vi.fn>
+  let cookiesRemoveMock: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'orca-cookie-test-'))
     cookiesSetMock = vi.fn().mockResolvedValue(undefined)
+    cookiesGetMock = vi.fn().mockResolvedValue([])
+    cookiesRemoveMock = vi.fn().mockResolvedValue(undefined)
     sessionFromPartitionMock.mockReset()
     sessionFromPartitionMock.mockReturnValue({
-      cookies: { set: cookiesSetMock }
+      cookies: { get: cookiesGetMock, remove: cookiesRemoveMock, set: cookiesSetMock }
     })
   })
 
@@ -329,6 +346,36 @@ describe('importCookiesFromFile', () => {
     expect(result.summary.importedCookies).toBe(1)
     expect(result.summary.skippedCookies).toBe(1)
   })
+
+  it('imports only the selected Web AI provider and replaces only matching target cookies', async () => {
+    cookiesGetMock.mockResolvedValue([
+      { domain: '.chatgpt.com', name: 'old-chatgpt', path: '/', secure: true },
+      { domain: '.claude.ai', name: 'keep-claude', path: '/', secure: true }
+    ])
+    const filePath = writeCookieFile([
+      { domain: '.chatgpt.com', name: 'new-chatgpt', value: 'chat', secure: true },
+      { domain: '.claude.ai', name: 'claude', value: 'claude', secure: true }
+    ])
+
+    const result = await importCookiesFromFile(filePath, 'persist:test', 'chatgpt')
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+    expect(result.summary).toMatchObject({
+      totalCookies: 2,
+      importedCookies: 1,
+      skippedCookies: 1,
+      domains: ['chatgpt.com']
+    })
+    expect(cookiesRemoveMock).toHaveBeenCalledTimes(1)
+    expect(cookiesRemoveMock).toHaveBeenCalledWith('https://chatgpt.com/', 'old-chatgpt')
+    expect(cookiesSetMock).toHaveBeenCalledTimes(1)
+    expect(cookiesSetMock).toHaveBeenCalledWith(
+      expect.objectContaining({ domain: '.chatgpt.com', name: 'new-chatgpt' })
+    )
+  })
 })
 
 describe('importCookiesFromBrowser Safari', () => {
@@ -366,8 +413,82 @@ describe('importCookiesFromBrowser Safari', () => {
   })
 })
 
+describe('importCookiesFromBrowser Firefox', () => {
+  let tmpDir: string
+  let cookiesSetMock: ReturnType<typeof vi.fn>
+  let cookiesRemoveMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'orca-firefox-cookie-test-'))
+    cookiesSetMock = vi.fn().mockResolvedValue(undefined)
+    cookiesRemoveMock = vi.fn().mockResolvedValue(undefined)
+    sessionFromPartitionMock.mockReset()
+    sessionFromPartitionMock.mockReturnValue({
+      cookies: {
+        get: vi.fn().mockResolvedValue([
+          { domain: '.chatgpt.com', name: 'old-chatgpt', path: '/', secure: true },
+          { domain: '.claude.ai', name: 'keep-claude', path: '/', secure: true }
+        ]),
+        remove: cookiesRemoveMock,
+        set: cookiesSetMock
+      }
+    })
+  })
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  it('imports only matching provider domains', async () => {
+    const cookiesPath = join(tmpDir, 'cookies.sqlite')
+    const database = new DatabaseSync(cookiesPath)
+    database.exec(`
+      CREATE TABLE moz_cookies (
+        name TEXT,
+        value TEXT,
+        host TEXT,
+        path TEXT,
+        expiry INTEGER,
+        isSecure INTEGER,
+        isHttpOnly INTEGER,
+        sameSite INTEGER
+      )
+    `)
+    const insert = database.prepare('INSERT INTO moz_cookies VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    insert.run('chatgpt-session', 'chat', '.chatgpt.com', '/', 0, 1, 1, 1)
+    insert.run('claude-session', 'claude', '.claude.ai', '/', 0, 1, 1, 1)
+    database.close()
+    const browser: DetectedBrowser = {
+      family: 'firefox',
+      label: 'Firefox',
+      cookiesPath,
+      profiles: [{ name: 'Default', directory: 'default-release' }],
+      selectedProfile: 'default-release'
+    }
+
+    const result = await importCookiesFromBrowser(browser, 'persist:test', 'chatgpt')
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+    expect(result.summary).toMatchObject({
+      totalCookies: 2,
+      importedCookies: 1,
+      skippedCookies: 1,
+      domains: ['chatgpt.com']
+    })
+    expect(cookiesRemoveMock).toHaveBeenCalledTimes(1)
+    expect(cookiesSetMock).toHaveBeenCalledTimes(1)
+    expect(cookiesSetMock).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'chatgpt-session' })
+    )
+  })
+})
+
 describe('importCookiesFromBrowser Chromium', () => {
   let tmpDir: string
+  let cookiesGetMock: ReturnType<typeof vi.fn>
   let cookiesSetMock: ReturnType<typeof vi.fn>
   let cookiesRemoveMock: ReturnType<typeof vi.fn>
   let cookiesFlushStoreMock: ReturnType<typeof vi.fn>
@@ -375,6 +496,7 @@ describe('importCookiesFromBrowser Chromium', () => {
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'orca-chromium-cookie-test-'))
+    cookiesGetMock = vi.fn().mockResolvedValue([])
     cookiesSetMock = vi.fn().mockResolvedValue(undefined)
     cookiesRemoveMock = vi.fn().mockResolvedValue(undefined)
     cookiesFlushStoreMock = vi.fn().mockResolvedValue(undefined)
@@ -389,6 +511,7 @@ describe('importCookiesFromBrowser Chromium', () => {
     sessionFromPartitionMock.mockReset()
     sessionFromPartitionMock.mockReturnValue({
       cookies: {
+        get: cookiesGetMock,
         set: cookiesSetMock,
         remove: cookiesRemoveMock,
         flushStore: cookiesFlushStoreMock
@@ -529,6 +652,125 @@ describe('importCookiesFromBrowser Chromium', () => {
 
     expect(result).toEqual({ ok: false, reason: 'Could not create staging cookie database.' })
     expect(readdirSync(join(tmpDir, 'userData', 'cookie-import-staging'))).toEqual([])
+  })
+
+  it('replaces only matching provider cookies in the live session', async () => {
+    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
+    const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
+    createChromiumCookieTestDatabase(sourceCookiesPath, [
+      { name: 'chatgpt-new', value: 'chat', hostKey: '.chatgpt.com', secure: true },
+      { name: 'claude-source', value: 'claude', hostKey: '.claude.ai', secure: true }
+    ]).close()
+    createChromiumCookieTestDatabase(targetCookiesPath, [
+      { name: 'chatgpt-old', value: 'old', hostKey: '.chatgpt.com', secure: true },
+      { name: 'claude-keep', value: 'keep', hostKey: '.claude.ai', secure: true }
+    ]).close()
+    cookiesGetMock.mockResolvedValue([
+      { domain: '.chatgpt.com', name: 'chatgpt-old', path: '/', secure: true },
+      { domain: '.claude.ai', name: 'claude-keep', path: '/', secure: true }
+    ])
+    const result = await importCookiesFromBrowser(
+      chromeBrowser(sourceCookiesPath),
+      'persist:test',
+      'chatgpt'
+    )
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+    expect(result.summary).toMatchObject({
+      totalCookies: 2,
+      importedCookies: 1,
+      skippedCookies: 1,
+      domains: ['chatgpt.com']
+    })
+    expect(clearStorageDataMock).not.toHaveBeenCalled()
+    expect(cookiesRemoveMock).toHaveBeenCalledTimes(1)
+    expect(cookiesRemoveMock).toHaveBeenCalledWith('https://chatgpt.com/', 'chatgpt-old')
+    expect(cookiesSetMock).toHaveBeenCalledTimes(1)
+
+    expect(readdirSync(join(tmpDir, 'userData', 'cookie-import-staging'))).toEqual([])
+  })
+
+  it('does not mutate the target profile when the provider has no source cookies', async () => {
+    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
+    const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
+    createChromiumCookieTestDatabase(sourceCookiesPath, [
+      { name: 'claude', value: 'claude', hostKey: '.claude.ai' }
+    ]).close()
+    createChromiumCookieTestDatabase(targetCookiesPath, [
+      { name: 'chatgpt-existing', value: 'keep', hostKey: '.chatgpt.com' }
+    ]).close()
+
+    const result = await importCookiesFromBrowser(
+      chromeBrowser(sourceCookiesPath),
+      'persist:test',
+      'chatgpt'
+    )
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'No ChatGPT cookies found in Google Chrome.'
+    })
+    expect(cookiesGetMock).not.toHaveBeenCalled()
+    expect(cookiesRemoveMock).not.toHaveBeenCalled()
+    expect(cookiesSetMock).not.toHaveBeenCalled()
+    expect(clearStorageDataMock).not.toHaveBeenCalled()
+    expect(readdirSync(join(tmpDir, 'userData', 'cookie-import-staging'))).toEqual([])
+  })
+
+  it('skips Google integrity cookies and preserves host-only cookie semantics', async () => {
+    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
+    const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
+    createChromiumCookieTestDatabase(sourceCookiesPath, [
+      { name: 'SIDCC', value: 'bound', hostKey: '.google.com', secure: true },
+      { name: 'SID', value: 'session', hostKey: '.google.com', secure: true }
+    ]).close()
+    createChromiumCookieTestDatabase(targetCookiesPath, []).close()
+
+    cookiesGetMock.mockResolvedValue([
+      { domain: '.google.com', name: 'SIDCC', value: 'bound-target', path: '/', secure: true }
+    ])
+    const geminiResult = await importCookiesFromBrowser(
+      chromeBrowser(sourceCookiesPath),
+      'persist:test',
+      'aistudio'
+    )
+
+    expect(geminiResult.ok).toBe(true)
+    if (!geminiResult.ok) {
+      return
+    }
+    expect(geminiResult.summary).toMatchObject({
+      totalCookies: 2,
+      importedCookies: 1,
+      skippedCookies: 1
+    })
+    expect(cookiesSetMock).toHaveBeenCalledTimes(1)
+    expect(cookiesSetMock).toHaveBeenCalledWith(expect.objectContaining({ name: 'SID' }))
+    expect(cookiesRemoveMock).not.toHaveBeenCalledWith(expect.any(String), 'SIDCC')
+
+    cookiesSetMock.mockClear()
+    const deepSeekSourcePath = join(tmpDir, 'Chrome', 'DeepSeek', 'Network', 'Cookies')
+    createChromiumCookieTestDatabase(deepSeekSourcePath, [
+      {
+        name: 'ds_session_id',
+        value: 'deepseek-session',
+        hostKey: 'chat.deepseek.com',
+        secure: true
+      }
+    ]).close()
+    const deepSeekResult = await importCookiesFromBrowser(
+      chromeBrowser(deepSeekSourcePath),
+      'persist:test',
+      'deepseek'
+    )
+
+    expect(deepSeekResult.ok).toBe(true)
+    expect(cookiesSetMock).toHaveBeenCalledWith(
+      expect.not.objectContaining({ domain: expect.anything() })
+    )
   })
 })
 

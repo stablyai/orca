@@ -4,6 +4,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import SidebarHeader from './SidebarHeader'
 import SidebarNav from './SidebarNav'
+import WebAiAccountsSection from './WebAiAccountsSection'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './WorktreeList'
 import SidebarToolbar from './SidebarToolbar'
@@ -16,6 +17,7 @@ import { useWorkspaceBoardPanel } from './useWorkspaceBoardPanel'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import { isWebClientLocation } from '@/lib/web-client-location'
 
 const WorktreeMetaDialog = lazyWithRetry(() => import('./WorktreeMetaDialog'))
 const RemoveFolderDialog = lazyWithRetry(() => import('./RemoveFolderDialog'))
@@ -50,6 +52,7 @@ function Sidebar({
   const activeModal = useAppStore((s) => s.activeModal)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const systemPrefersDark = useSystemPrefersDark()
+  const isWebClient = isWebClientLocation()
   const leftSidebarStyle = useMemo(
     () => resolveLeftSidebarStyleVariables(settings, systemPrefersDark),
     [settings, systemPrefersDark]
@@ -143,6 +146,7 @@ function Sidebar({
           <>
             {/* Fixed controls */}
             <SidebarNav />
+            {isWebClient ? null : <WebAiAccountsSection />}
             <SidebarHeader onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen} />
 
             <WorktreeList

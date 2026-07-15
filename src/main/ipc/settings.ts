@@ -22,6 +22,7 @@ import { normalizeTerminalLineHeight } from '../../shared/terminal-line-height-s
 import { prepareLocalWorktreeRootsForRepos } from '../worktree-root-preparation'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
 import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
+import { normalizeWebAiAccounts } from '../../shared/web-ai-accounts'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
 // to a Set once at module load lets the IPC handler's per-key membership
@@ -36,6 +37,9 @@ function sanitizeRendererSettingsUpdate(args: Partial<GlobalSettings>): Partial<
   const { terminalScrollbackBytes: _legacyScrollbackBytes, ...sanitizedArgs } =
     args as LegacyTerminalScrollbackSettingsUpdate
   void _legacyScrollbackBytes
+  if ('webAiAccounts' in args) {
+    sanitizedArgs.webAiAccounts = normalizeWebAiAccounts(args.webAiAccounts)
+  }
   return sanitizedArgs
 }
 

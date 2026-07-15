@@ -19,6 +19,7 @@ import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
 import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDragSplit'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 import { translate } from '@/i18n/i18n'
+import { isWebAiBrowserWorkspaceId } from '../../../../shared/constants'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 
@@ -55,6 +56,7 @@ export default function TabGroupPanel({
 }): React.JSX.Element {
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
+  const isWebAiBrowserWorkspace = isWebAiBrowserWorkspaceId(worktreeId)
 
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   const { activeTab, browserItems, commands, editorItems, tabBarOrder, terminalTabs } = model
@@ -123,6 +125,7 @@ export default function TabGroupPanel({
       onNewBrowserTab={commands.newBrowserTab}
       onNewSimulatorTab={commands.newSimulatorTab}
       onOpenEntry={commands.openEntry}
+      browserOnly={isWebAiBrowserWorkspace}
       onNewFileTab={commands.newFileTab}
       onSetCustomTitle={commands.setTabCustomTitle}
       onSetTabColor={commands.setTabColor}
@@ -267,7 +270,7 @@ export default function TabGroupPanel({
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
             <div className={focusedActionChromeClassName}>
-              {isFocused ? (
+              {isFocused && !isWebAiBrowserWorkspace ? (
                 <TabBarQuickCommandsButton worktreeId={worktreeId} groupId={groupId} />
               ) : null}
               {isFocused && hasSplitGroups ? (

@@ -3,7 +3,12 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { shouldShowBrowserImportHint } from './browser-import-hint-visibility'
-import type { BrowserViewportPresetId } from '../../../../shared/types'
+import type {
+  BrowserCookieImportScope,
+  BrowserViewportPresetId,
+  WebAiProvider
+} from '../../../../shared/types'
+import { getWebAiProvider } from '../../../../shared/web-ai-accounts'
 import {
   browserViewportPresetToOverride,
   getBrowserViewportPreset
@@ -11,6 +16,7 @@ import {
 import { BrowserToolbarMenuDropdown } from './browser-toolbar-menu-dropdown'
 import { BrowserToolbarProfileDialogs } from './browser-toolbar-profile-dialogs'
 import { translate } from '@/i18n/i18n'
+import type { BrowserProfileOperationOwner } from '@/lib/browser-profile-operation-owner'
 
 type BrowserToolbarMenuProps = {
   currentProfileId: string | null
@@ -19,6 +25,10 @@ type BrowserToolbarMenuProps = {
   viewportPresetId: BrowserViewportPresetId | null
   onDestroyWebview: () => void
   isActive: boolean
+  webAiProvider?: WebAiProvider | null
+  cookieImportScope?: BrowserCookieImportScope | null
+  owner?: BrowserProfileOperationOwner
+  profileSelectionLocked?: boolean
 }
 
 export function BrowserToolbarMenu({
@@ -27,7 +37,11 @@ export function BrowserToolbarMenu({
   browserPageId,
   viewportPresetId,
   onDestroyWebview,
-  isActive
+  isActive,
+  webAiProvider = null,
+  cookieImportScope = null,
+  owner,
+  profileSelectionLocked = false
 }: BrowserToolbarMenuProps): React.JSX.Element {
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
   const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
@@ -90,6 +104,9 @@ export function BrowserToolbarMenu({
     : browserSessionProfiles
 
   const handleSwitchProfile = (profileId: string | null): void => {
+    if (profileSelectionLocked) {
+      return
+    }
     const targetId = profileId ?? 'default'
     if (targetId === effectiveProfileId) {
       return
@@ -121,6 +138,9 @@ export function BrowserToolbarMenu({
   }
 
   const handleCreateProfile = async (): Promise<void> => {
+    if (profileSelectionLocked) {
+      return
+    }
     const trimmed = newProfileName.trim()
     if (!trimmed) {
       return
@@ -168,7 +188,14 @@ export function BrowserToolbarMenu({
     browserFamily: string,
     browserProfile?: string
   ): Promise<void> => {
-    const result = await importCookiesFromBrowser(effectiveProfileId, browserFamily, browserProfile)
+    const result = await importCookiesFromBrowser(
+      effectiveProfileId,
+      browserFamily,
+      browserProfile,
+      webAiProvider ?? undefined,
+      cookieImportScope ?? undefined,
+      owner
+    )
     if (result.ok) {
       const browser = detectedBrowsers.find((b) => b.family === browserFamily)
       toast.success(
@@ -197,7 +224,12 @@ export function BrowserToolbarMenu({
   }
 
   const handleImportFromFile = async (): Promise<void> => {
-    const result = await importCookiesToProfile(effectiveProfileId)
+    const result = await importCookiesToProfile(
+      effectiveProfileId,
+      webAiProvider ?? undefined,
+      cookieImportScope ?? undefined,
+      owner
+    )
     if (result.ok) {
       toast.success(
         translate(
@@ -221,14 +253,20 @@ export function BrowserToolbarMenu({
         onSwitchProfile={handleSwitchProfile}
         onNewProfile={() => setNewProfileDialogOpen(true)}
         detectedBrowsers={detectedBrowsers}
-        onFetchDetectedBrowsers={() => void fetchDetectedBrowsers()}
+        onFetchDetectedBrowsers={() => void fetchDetectedBrowsers(owner)}
         browserSessionImportState={browserSessionImportState}
+        cookieImportProviderLabel={
+          webAiProvider
+            ? getWebAiProvider(webAiProvider).label
+            : (cookieImportScope?.label ?? undefined)
+        }
         onImportFromBrowser={(browserFamily, browserProfile) =>
           void handleImportFromBrowser(browserFamily, browserProfile)
         }
         onImportFromFile={() => void handleImportFromFile()}
         viewportPresetId={viewportPresetId}
         onApplyViewportPreset={applyViewportPreset}
+        profileSelectionLocked={profileSelectionLocked}
       />
 
       <BrowserToolbarProfileDialogs

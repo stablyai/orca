@@ -70,7 +70,14 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import {
+  isPersistentLocalWorkspaceId,
+  PERSISTENT_LOCAL_WORKSPACE_IDS
+} from '../../../../shared/constants'
+import {
+  getWebAiAccountWorkspaceId,
+  normalizeWebAiAccounts
+} from '../../../../shared/web-ai-accounts'
 import {
   folderWorkspaceKey,
   getActiveSidebarWorkspaceId,
@@ -2705,9 +2712,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       return
     }
     const validIds = new Set<string>()
-    // Why: floating is persisted renderer state, but not a repo worktree that
-    // authoritative runtime scans can return.
-    validIds.add(FLOATING_TERMINAL_WORKTREE_ID)
+    // Why: local synthetic workspaces are persisted renderer state, but not repo
+    // worktrees that authoritative runtime scans can return.
+    for (const workspaceId of PERSISTENT_LOCAL_WORKSPACE_IDS) {
+      validIds.add(workspaceId)
+    }
+    for (const account of normalizeWebAiAccounts(get().settings?.webAiAccounts)) {
+      validIds.add(getWebAiAccountWorkspaceId(account.id))
+    }
     // Why: folder workspaces persist terminal tabs under `folder:<id>` keys,
     // but authoritative repo scans can never return those synthetic ids.
     for (const workspace of get().folderWorkspaces ?? []) {
@@ -4753,6 +4765,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       }
 
       return {
+        ...(isPersistentLocalWorkspaceId(worktreeId) ? { activeRepoId: null } : {}),
         activeWorktreeId: worktreeId,
         activeWorkspaceKey: worktreeWorkspaceKey(worktreeId),
         activePendingCreationId: null,
@@ -4823,7 +4836,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
     // Why: activation is explicit enough to revalidate PR state immediately;
     // the GitHub coordinator still coalesces requests and applies rate guards.
-    if (worktreeId) {
+    if (worktreeId && !isPersistentLocalWorkspaceId(worktreeId)) {
       get().refreshGitHubForWorktreeIfStale(worktreeId)
     }
 
@@ -4966,7 +4979,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   getKnownWorktreeById: (worktreeId) => findKnownWorktreeById(get(), worktreeId),
 
   purgeWorktreeTerminalState: (worktreeIds: string[]) => {
-    const purgeableWorktreeIds = worktreeIds.filter((id) => id !== FLOATING_TERMINAL_WORKTREE_ID)
+    const purgeableWorktreeIds = worktreeIds.filter((id) => !isPersistentLocalWorkspaceId(id))
     if (purgeableWorktreeIds.length === 0) {
       return
     }

@@ -13,7 +13,13 @@ const {
   cancelDownloadMock,
   proceedCertificateMock,
   browserWindowFromWebContentsMock,
-  webContentsFromIdMock
+  webContentsFromIdMock,
+  browserSessionGetProfileMock,
+  browserSessionUpdateProfileSourceMock,
+  detectInstalledBrowsersMock,
+  importCookiesFromBrowserMock,
+  importCookiesFromFileMock,
+  pickCookieFileMock
 } = vi.hoisted(() => ({
   removeHandlerMock: vi.fn(),
   handleMock: vi.fn(),
@@ -27,7 +33,13 @@ const {
   cancelDownloadMock: vi.fn(),
   proceedCertificateMock: vi.fn(),
   browserWindowFromWebContentsMock: vi.fn(),
-  webContentsFromIdMock: vi.fn()
+  webContentsFromIdMock: vi.fn(),
+  browserSessionGetProfileMock: vi.fn(),
+  browserSessionUpdateProfileSourceMock: vi.fn(),
+  detectInstalledBrowsersMock: vi.fn(),
+  importCookiesFromBrowserMock: vi.fn(),
+  importCookiesFromFileMock: vi.fn(),
+  pickCookieFileMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -59,6 +71,30 @@ vi.mock('../browser/browser-manager', () => ({
   }
 }))
 
+vi.mock('../browser/browser-session-registry', () => ({
+  browserSessionRegistry: {
+    listProfiles: vi.fn().mockReturnValue([]),
+    createProfile: vi.fn().mockReturnValue(null),
+    deleteProfile: vi.fn().mockResolvedValue(false),
+    getProfile: browserSessionGetProfileMock,
+    updateProfileSource: browserSessionUpdateProfileSourceMock,
+    resolvePartition: vi.fn().mockReturnValue(null),
+    clearDefaultSessionCookies: vi.fn().mockResolvedValue(false)
+  }
+}))
+
+vi.mock('../browser/browser-cookie-import', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>
+  return {
+    ...actual,
+    pickCookieFile: pickCookieFileMock,
+    importCookiesFromFile: importCookiesFromFileMock,
+    detectInstalledBrowsers: detectInstalledBrowsersMock,
+    selectBrowserProfile: vi.fn(),
+    importCookiesFromBrowser: importCookiesFromBrowserMock
+  }
+})
+
 import {
   registerBrowserHandlers,
   setAgentBrowserBridgeRef,
@@ -89,6 +125,13 @@ describe('registerBrowserHandlers', () => {
     webContentsFromIdMock.mockReturnValue({ isDestroyed: () => false })
     openDevToolsMock.mockResolvedValue(true)
     setAnnotationViewportBridgeMock.mockResolvedValue(true)
+    browserSessionGetProfileMock.mockReset()
+    browserSessionUpdateProfileSourceMock.mockReset()
+    detectInstalledBrowsersMock.mockReset()
+    detectInstalledBrowsersMock.mockReturnValue([])
+    importCookiesFromBrowserMock.mockReset()
+    importCookiesFromFileMock.mockReset()
+    pickCookieFileMock.mockReset()
     setAgentBrowserBridgeRef(null)
   })
 
@@ -241,6 +284,7 @@ describe('registerBrowserHandlers', () => {
     const proceedHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:proceedCertificate'
     )?.[1] as (event: { sender: Electron.WebContents }, args: unknown) => unknown
+
     const sender = {
       id: 91,
       isDestroyed: () => false,
@@ -252,6 +296,177 @@ describe('registerBrowserHandlers', () => {
       expect(proceedHandler({ sender }, args)).toEqual({ ok: false, reason: 'missing' })
     }
     expect(proceedCertificateMock).not.toHaveBeenCalled()
+  })
+
+  it('forwards a validated Web AI provider to browser cookie import', async () => {
+    const profile = {
+      id: 'profile-1',
+      partition: 'persist:profile-1',
+      label: 'ChatGPT',
+      scope: 'isolated',
+      source: null
+    }
+    const browser = {
+      family: 'chrome',
+      label: 'Google Chrome',
+      cookiesPath: '/cookies',
+      profiles: [{ name: 'Default', directory: 'Default' }],
+      selectedProfile: 'Default'
+    }
+    browserSessionGetProfileMock.mockReturnValue(profile)
+    detectInstalledBrowsersMock.mockReturnValue([browser])
+    importCookiesFromBrowserMock.mockResolvedValue({
+      ok: true,
+      profileId: '',
+      summary: { totalCookies: 1, importedCookies: 1, skippedCookies: 0, domains: [] }
+    })
+    registerBrowserHandlers()
+    const importHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:session:importFromBrowser'
+    )?.[1] as (event: { sender: Electron.WebContents }, args: unknown) => Promise<unknown>
+    const sender = {
+      id: 91,
+      isDestroyed: () => false,
+      getType: () => 'window',
+      getURL: () => 'file:///renderer/index.html'
+    } as Electron.WebContents
+
+    const result = await importHandler(
+      { sender },
+      {
+        profileId: 'profile-1',
+        browserFamily: 'chrome',
+        webAiProvider: 'chatgpt'
+      }
+    )
+
+    expect(importCookiesFromBrowserMock).toHaveBeenCalledWith(
+      browser,
+      'persist:profile-1',
+      'chatgpt',
+      undefined
+    )
+    expect(result).toMatchObject({ ok: true, profileId: 'profile-1' })
+  })
+
+  it('rejects unknown Web AI providers before reading browser cookies', async () => {
+    browserSessionGetProfileMock.mockReturnValue({
+      id: 'profile-1',
+      partition: 'persist:profile-1'
+    })
+    registerBrowserHandlers()
+    const importHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:session:importFromBrowser'
+    )?.[1] as (event: { sender: Electron.WebContents }, args: unknown) => Promise<unknown>
+    const sender = {
+      id: 91,
+      isDestroyed: () => false,
+      getType: () => 'window',
+      getURL: () => 'file:///renderer/index.html'
+    } as Electron.WebContents
+
+    const result = await importHandler(
+      { sender },
+      {
+        profileId: 'profile-1',
+        browserFamily: 'chrome',
+        webAiProvider: 'unknown-provider'
+      }
+    )
+
+    expect(result).toEqual({ ok: false, reason: 'Invalid Web AI provider.' })
+    expect(detectInstalledBrowsersMock).not.toHaveBeenCalled()
+    expect(importCookiesFromBrowserMock).not.toHaveBeenCalled()
+  })
+
+  it('forwards a validated Custom cookie scope to browser import', async () => {
+    const profile = {
+      id: 'profile-1',
+      partition: 'persist:profile-1',
+      label: 'Custom AI',
+      scope: 'isolated',
+      source: null
+    }
+    const browser = {
+      family: 'chrome',
+      label: 'Google Chrome',
+      cookiesPath: '/cookies',
+      profiles: [{ name: 'Default', directory: 'Default' }],
+      selectedProfile: 'Default'
+    }
+    const cookieImportScope = {
+      label: 'Example AI',
+      domains: ['example.com'],
+      sourceHostname: 'chat.example.com'
+    }
+    browserSessionGetProfileMock.mockReturnValue(profile)
+    detectInstalledBrowsersMock.mockReturnValue([browser])
+    importCookiesFromBrowserMock.mockResolvedValue({
+      ok: true,
+      profileId: '',
+      summary: { totalCookies: 1, importedCookies: 1, skippedCookies: 0, domains: [] }
+    })
+    registerBrowserHandlers()
+    const importHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:session:importFromBrowser'
+    )?.[1] as (event: { sender: Electron.WebContents }, args: unknown) => Promise<unknown>
+    const sender = {
+      id: 91,
+      isDestroyed: () => false,
+      getType: () => 'window',
+      getURL: () => 'file:///renderer/index.html'
+    } as Electron.WebContents
+
+    const result = await importHandler(
+      { sender },
+      {
+        profileId: 'profile-1',
+        browserFamily: 'chrome',
+        cookieImportScope
+      }
+    )
+
+    expect(importCookiesFromBrowserMock).toHaveBeenCalledWith(
+      browser,
+      'persist:profile-1',
+      undefined,
+      cookieImportScope
+    )
+    expect(result).toMatchObject({ ok: true, profileId: 'profile-1' })
+  })
+
+  it('rejects a public-suffix Custom scope before detecting browsers', async () => {
+    browserSessionGetProfileMock.mockReturnValue({
+      id: 'profile-1',
+      partition: 'persist:profile-1'
+    })
+    registerBrowserHandlers()
+    const importHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:session:importFromBrowser'
+    )?.[1] as (event: { sender: Electron.WebContents }, args: unknown) => Promise<unknown>
+    const sender = {
+      id: 91,
+      isDestroyed: () => false,
+      getType: () => 'window',
+      getURL: () => 'file:///renderer/index.html'
+    } as Electron.WebContents
+
+    const result = await importHandler(
+      { sender },
+      {
+        profileId: 'profile-1',
+        browserFamily: 'chrome',
+        cookieImportScope: {
+          label: 'Unsafe',
+          domains: ['co.uk'],
+          sourceHostname: 'chat.example.co.uk'
+        }
+      }
+    )
+
+    expect(result).toEqual({ ok: false, reason: 'Invalid cookie import scope.' })
+    expect(detectInstalledBrowsersMock).not.toHaveBeenCalled()
+    expect(importCookiesFromBrowserMock).not.toHaveBeenCalled()
   })
 
   it('updates the bridge active tab for the owning worktree', async () => {

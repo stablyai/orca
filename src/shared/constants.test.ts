@@ -64,6 +64,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').richMarkdownSpellcheckEnabled).toBe(true)
   })
 
+  it('starts with no saved Web AI accounts', () => {
+    expect(getDefaultSettings('/tmp').webAiAccounts).toEqual([])
+  })
+
   it('enables Source Control AI by default without pinning a separate agent', () => {
     expect(getDefaultSettings('/tmp').commitMessageAi).toMatchObject({
       enabled: true,

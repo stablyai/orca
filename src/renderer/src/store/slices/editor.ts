@@ -37,7 +37,15 @@ import type {
   WorkspaceSessionState,
   WorkspaceVisibleTabType
 } from '../../../../shared/types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import {
+  FLOATING_TERMINAL_WORKTREE_ID,
+  PERSISTENT_LOCAL_WORKSPACE_IDS
+} from '../../../../shared/constants'
+import {
+  getWebAiAccountWorkspaceId,
+  isWebAiBrowserWorkspaceId,
+  normalizeWebAiAccounts
+} from '../../../../shared/web-ai-accounts'
 import { clampMarkdownTocPanelWidth } from '../../../../shared/markdown-toc-panel-width'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { RemoteOpKind } from '@/components/right-sidebar/source-control-primary-action'
@@ -4372,7 +4380,12 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           .flat()
           .map((w) => w.id)
       )
-      validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
+      for (const workspaceId of PERSISTENT_LOCAL_WORKSPACE_IDS) {
+        validWorktreeIds.add(workspaceId)
+      }
+      for (const account of normalizeWebAiAccounts(s.settings?.webAiAccounts)) {
+        validWorktreeIds.add(getWebAiAccountWorkspaceId(account.id))
+      }
       for (const workspace of s.folderWorkspaces) {
         validWorktreeIds.add(folderWorkspaceKey(workspace.id))
       }
@@ -4384,7 +4397,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const legacyHydratedOpenFiles: LegacyHydratedEditorFile[] = []
       const editorFileIdMigrationsByWorktree: Record<string, Map<string, string>> = {}
       for (const [worktreeId, files] of Object.entries(openFilesByWorktree)) {
-        if (!validWorktreeIds.has(worktreeId)) {
+        if (isWebAiBrowserWorkspaceId(worktreeId) || !validWorktreeIds.has(worktreeId)) {
           continue
         }
         for (const pf of files) {
