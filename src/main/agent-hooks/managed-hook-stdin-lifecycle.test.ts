@@ -2,7 +2,7 @@
 // matrix catches an unread early exit without duplicating template assertions.
 import { describe, expect, it, vi } from 'vitest'
 import { spawn } from 'node:child_process'
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
@@ -155,6 +155,24 @@ function hookEnvironment(extraEnv: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   }
 }
 
+/** Prefer a real Git Bash on Windows; Store `bash.exe` stubs often exit 127. */
+function resolveWindowsTestBash(): string {
+  if (process.env.KIMI_SHELL_PATH) {
+    return process.env.KIMI_SHELL_PATH
+  }
+  const candidates = [
+    join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'bin', 'bash.exe'),
+    join(process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)', 'Git', 'bin', 'bash.exe'),
+    'D:\\DevelopmentEnvironment\\Git\\bin\\bash.exe'
+  ]
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate
+    }
+  }
+  return 'bash.exe'
+}
+
 function runPosixHook(command: string, extraEnv: NodeJS.ProcessEnv = {}): Promise<HookRun> {
   return runHookProcess('/bin/sh', ['-c', command], hookEnvironment(extraEnv))
 }
@@ -279,7 +297,7 @@ describe('Windows managed hook stdin structure', () => {
                   'v1.0',
                   'powershell.exe'
                 )
-              : process.env.KIMI_SHELL_PATH || 'bash.exe'
+              : resolveWindowsTestBash()
           const args = fileName.endsWith('.cmd')
             ? ['/d', '/c', scriptPath]
             : fileName.endsWith('.ps1')
@@ -290,27 +308,29 @@ describe('Windows managed hook stdin structure', () => {
           expect(result.stdinErrors, `${fileName} stdin errors`).toHaveLength(0)
         }
 
-        const missingScript = 'C:\\missing\\orca-hook.cmd'
-        // Why: the cmd fast path is intentionally a bare, directly-spawnable .cmd
-        // path (Codex/Antigravity/Devin launch it as argv[0], not via cmd.exe), so
-        // it cannot own stdin for a missing script — a cmd-builtin drain would make
-        // argv[0] unspawnable and fail every hook (#8430 regression). Only launchers
-        // that already require a real interpreter (encoded PowerShell, Git Bash)
-        // drain a missing script; the bare path's missing-script behavior is a
-        // normal launch failure, covered in installer-utils.test.ts.
+        // Why: cmd + Claude Git Bash *safe-path* fast paths are bare, directly
+        // spawnable `.cmd` paths (argv[0] / Grok CreateProcess / Claude Git Bash).
+        // A shell-builtin `if` drain is unspawnable or non-portable (#8430 / Grok
+        // compat loading Claude settings), so missing-script drain lives only on
+        // launchers that already require a real interpreter (encoded PowerShell).
+        // Use a spaced path so wrapWindowsGitBashHookCommand takes that fallback.
+        const missingUnsafeScript = 'C:\\missing path\\orca-hook.cmd'
         const launcherCases = [
           {
             name: 'encoded PowerShell',
             executable: 'cmd.exe',
-            args: ['/d', '/c', wrapWindowsHookCommand(missingScript)]
+            args: ['/d', '/c', wrapWindowsHookCommand(missingUnsafeScript)]
           },
           {
-            name: 'Git Bash fast path',
-            executable: process.env.KIMI_SHELL_PATH || 'bash.exe',
-            args: ['-lc', wrapWindowsGitBashHookCommand(missingScript)]
+            name: 'Git Bash unsafe-path encoded fallback',
+            executable: 'cmd.exe',
+            args: ['/d', '/c', wrapWindowsGitBashHookCommand(missingUnsafeScript)]
           }
         ]
         for (const launcher of launcherCases) {
+          expect(launcher.args[2], `${launcher.name} uses encoded launcher`).toMatch(
+            /powershell\.exe/i
+          )
           const result = await runHookProcess(launcher.executable, launcher.args, hookEnvironment())
           expect(result.exitCode, `${launcher.name} exit code`).toBe(0)
           expect(result.stdinErrors, `${launcher.name} stdin errors`).toHaveLength(0)

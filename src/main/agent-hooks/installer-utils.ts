@@ -191,11 +191,15 @@ export const WINDOWS_GIT_BASH_SAFE_PATH = /^[A-Za-z0-9_.:/~-]+$/
 
 export function wrapWindowsGitBashHookCommand(scriptPath: string): string {
   const bashPath = scriptPath.replaceAll('\\', '/')
-  // Why: Claude's Git Bash runner can execute a forward-slash .cmd directly;
-  // unsafe paths stay encoded and the fast path gains a missing-file drain.
-  return WINDOWS_GIT_BASH_SAFE_PATH.test(bashPath)
-    ? `if [ -f ${quotePosixShellString(bashPath)} ]; then ${quotePosixShellString(bashPath)}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
-    : wrapWindowsHookCommand(scriptPath)
+  // Why: Claude's Git Bash runner can execute a forward-slash .cmd directly.
+  // The safe-path fast path must remain a single spawnable token (bare path),
+  // not a bash `if [ -f … ]` compound: Grok (and any CreateProcess-style runner)
+  // loads ~/.claude/settings.json hooks via [compat.claude] and launches the
+  // command without Git Bash, so a bash guard fails every hook with exit 1
+  // ("-f was unexpected"). Same trade-off as wrapWindowsCmdHookCommand / #8737:
+  // missing-script stdin drain lives on the encoded-PowerShell fallback used for
+  // spaced/metacharacter paths.
+  return WINDOWS_GIT_BASH_SAFE_PATH.test(bashPath) ? bashPath : wrapWindowsHookCommand(scriptPath)
 }
 
 export function buildWindowsAgentHookPostCommand(source: AgentHookSource): string {

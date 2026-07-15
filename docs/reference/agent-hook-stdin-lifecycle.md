@@ -117,11 +117,15 @@ path. This mirrors POSIX ownership without starting an additional process.
   (argv[0]), not through cmd.exe, so the launcher cannot lead with a cmd builtin
   such as `if` — that argv[0] is unspawnable and fails every hook. A missing
   script therefore surfaces a normal launch failure on this fast path; only
-  launchers that already require a real interpreter (encoded PowerShell, Git
-  Bash) drain a missing script. Paths cmd.exe cannot invoke verbatim fall back to
-  the encoded PowerShell launcher, which owns stdin for the missing case.
-- Claude's Git Bash fast path uses a POSIX file guard and drain while continuing
-  to execute the `.cmd` directly rather than interpreting it as shell source.
+  launchers that already require a real interpreter (encoded PowerShell) drain a
+  missing script. Paths cmd.exe cannot invoke verbatim fall back to the encoded
+  PowerShell launcher, which owns stdin for the missing case.
+- Claude's Git Bash fast path is likewise a bare forward-slash `.cmd` path.
+  Claude Code can execute it under Git Bash; Grok may also load the same
+  `~/.claude/settings.json` command via harness compatibility and must
+  CreateProcess a single spawnable token — a bash `if [ -f … ]` guard fails under
+  cmd/direct spawn. Spaced or metacharacter paths fall back to encoded
+  PowerShell (which drains a missing script).
 - Agent-specific direct launchers, including Antigravity event wrappers and
   Copilot's PowerShell-file command, adopt the same missing-file behavior.
 

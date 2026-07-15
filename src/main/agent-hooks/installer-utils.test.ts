@@ -492,12 +492,16 @@ describe('wrapWindowsCmdHookCommand', () => {
 })
 
 describe('wrapWindowsGitBashHookCommand', () => {
-  it('guards the forward-slash fast path and drains when missing', () => {
+  it('returns a bare forward-slash path for a bash-safe managed script', () => {
+    // Why: Claude Git Bash can run the bare .cmd; Grok compat-loads the same
+    // settings.json command and must CreateProcess a single spawnable token —
+    // not a bash `if [ -f … ]` compound (exit 1 under cmd / direct spawn).
     expect(
       wrapWindowsGitBashHookCommand('C:\\Users\\alice\\.orca\\agent-hooks\\claude-hook.cmd')
-    ).toBe(
-      "if [ -f 'C:/Users/alice/.orca/agent-hooks/claude-hook.cmd' ]; then 'C:/Users/alice/.orca/agent-hooks/claude-hook.cmd'; else cat >/dev/null 2>&1 || :; fi"
-    )
+    ).toBe('C:/Users/alice/.orca/agent-hooks/claude-hook.cmd')
+    expect(
+      wrapWindowsGitBashHookCommand('C:\\Users\\alice\\.orca\\agent-hooks\\claude-hook.cmd')
+    ).not.toMatch(/^if\b/)
   })
 
   it('falls back to the encoded launcher when bash would split the path', () => {
