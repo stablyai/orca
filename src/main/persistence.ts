@@ -4360,6 +4360,13 @@ export class Store {
     return repo ? this.hydrateRepo(repo) : undefined
   }
 
+  getRepoForHost(id: string, hostId: ExecutionHostId): Repo | undefined {
+    const repo = this.state.repos.find(
+      (candidate) => candidate.id === id && getRepoExecutionHostId(candidate) === hostId
+    )
+    return repo ? this.hydrateRepo(repo) : undefined
+  }
+
   /**
    * Record a background-resolved git username; kept out of updateRepo's whitelist so the renderer can't write it directly.
    * @returns true when the hydrated value changed.
@@ -6357,18 +6364,10 @@ export class Store {
     return this.state.workspaceSessionsByHostId?.[resolved] ?? getDefaultWorkspaceSession()
   }
 
-  /** Whether a partition was ever written; `getWorkspaceSession` defaults absent ones and cannot tell them apart. */
-  private hasPersistedWorkspaceSession(hostId: ExecutionHostId): boolean {
-    return (
-      hostId === LOCAL_EXECUTION_HOST_ID ||
-      this.state.workspaceSessionsByHostId?.[hostId] !== undefined
-    )
-  }
-
   getWorkspaceSessionHostIds(): ExecutionHostId[] {
     const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
-    for (const key of Object.keys(this.state.workspaceSessionsByHostId ?? {})) {
-      const hostId = normalizeExecutionHostId(key)
+    for (const rawHostId of Object.keys(this.state.workspaceSessionsByHostId ?? {})) {
+      const hostId = normalizeExecutionHostId(rawHostId)
       if (hostId) {
         hostIds.add(hostId)
       }

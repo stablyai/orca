@@ -1636,6 +1636,88 @@ function makeWorkspaceSessionWithHeadlessTerminal(
   }
 }
 
+function makeWorkspaceSessionForHeadlessWorktree(args: {
+  worktreeId: string
+  tabId: string
+  ptyId: string
+}): WorkspaceSessionState {
+  return makeWorkspaceSessionWithHeadlessTerminal({
+    activeWorktreeId: args.worktreeId,
+    activeTabId: args.tabId,
+    activeTabIdByWorktree: { [args.worktreeId]: args.tabId },
+    tabsByWorktree: {
+      [args.worktreeId]: [
+        {
+          id: args.tabId,
+          ptyId: args.ptyId,
+          worktreeId: args.worktreeId,
+          title: 'Persisted Terminal',
+          customTitle: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 1
+        }
+      ]
+    },
+    terminalLayoutsByTabId: {
+      [args.tabId]: makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: args.ptyId })
+    }
+  })
+}
+
+function makeDuplicateHostGridRuntime(): {
+  runtime: OrcaRuntimeService
+  worktreeId: string
+  tabId: string
+  leafId: string
+  sessions: Map<string, WorkspaceSessionState>
+  setWorkspaceSession: ReturnType<typeof vi.fn>
+} {
+  const worktreeId = 'shared-repo::/srv/orca/shared-grid'
+  const tabId = 'shared-grid-tab'
+  const leafId = HEADLESS_LEAF_ID
+  const makeGridSession = (ptyId: string, title: string): WorkspaceSessionState => {
+    const session = makeWorkspaceSessionForHeadlessWorktree({ worktreeId, tabId, ptyId })
+    session.terminalLayoutsByTabId[tabId] = {
+      ...session.terminalLayoutsByTabId[tabId]!,
+      layoutMode: 'orchestration-grid',
+      titlesByLeafId: { [leafId]: title }
+    }
+    return session
+  }
+  const sessions = new Map<string, WorkspaceSessionState>([
+    ['local', makeGridSession('serve-local-grid', 'Local grid')],
+    ['ssh:ssh-shared', makeGridSession('ssh:ssh-shared@@remote-grid', 'Remote grid')]
+  ])
+  const localRepo = {
+    ...store.getRepo(TEST_REPO_ID)!,
+    id: 'shared-repo',
+    path: '/Users/me/shared-repo'
+  }
+  const remoteRepo = {
+    ...localRepo,
+    path: '/srv/orca/shared-repo',
+    connectionId: 'ssh-shared',
+    executionHostId: 'ssh:ssh-shared' as const
+  }
+  const setWorkspaceSession = vi.fn((session: WorkspaceSessionState, hostId: string = 'local') => {
+    sessions.set(hostId, session)
+  })
+  const runtime = new OrcaRuntimeService({
+    ...store,
+    getRepo: () => localRepo,
+    getRepos: () => [localRepo, remoteRepo],
+    getWorktreeMeta: (candidate: string) =>
+      candidate === worktreeId
+        ? { ...makeWorktreeMeta(), displayName: 'Remote grid', hostId: 'ssh:ssh-shared' }
+        : store.getWorktreeMeta(candidate),
+    getWorkspaceSessionHostIds: () => ['local', 'ssh:ssh-shared'],
+    getWorkspaceSession: (hostId: string = 'local') => sessions.get(hostId)!,
+    setWorkspaceSession
+  } as never)
+  return { runtime, worktreeId, tabId, leafId, sessions, setWorkspaceSession }
+}
+
 function makePersistedOrchestrationGridSession(args: {
   tabId: string
   leafIds: readonly string[]
@@ -31157,6 +31239,104 @@ describe('OrcaRuntimeService', () => {
     const right = rehydrated.tabGroups!.find((g) => g.id === 'group-right')!
     expect(left.tabOrder).toEqual(['host-tab'])
     expect(right.tabOrder).toEqual(['host-tab-2'])
+  })
+
+  it('hydrates cold mobile-session tabs from every persisted execution-host partition', async () => {
+    const remoteWorktreeId = 'repo-remote::/srv/orca/remote-grid'
+    const sessions = new Map<string, WorkspaceSessionState>([
+      [
+        'local',
+        makeWorkspaceSessionForHeadlessWorktree({
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'local-tab',
+          ptyId: 'serve-local-cold'
+        })
+      ],
+      [
+        'ssh:ssh-cold',
+        makeWorkspaceSessionForHeadlessWorktree({
+          worktreeId: remoteWorktreeId,
+          tabId: 'remote-tab',
+          ptyId: 'ssh:ssh-cold@@remote-grid-pty'
+        })
+      ]
+    ])
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getWorkspaceSessionHostIds: () => ['local', 'ssh:ssh-cold'],
+      getWorkspaceSession: (hostId: string = 'local') => sessions.get(hostId)!
+    } as never)
+
+    const listed = await runtime.listAllMobileSessionTabs()
+
+    expect(listed.map((snapshot) => snapshot.worktree).sort()).toEqual(
+      [TEST_WORKTREE_ID, remoteWorktreeId].sort()
+    )
+  })
+
+  it('preserves a cold SSH mobile-session grid while a renderer window is attached', async () => {
+    const remoteWorktreeId = 'repo-remote::/srv/orca/remote-grid'
+    const remoteSession = makeWorkspaceSessionForHeadlessWorktree({
+      worktreeId: remoteWorktreeId,
+      tabId: 'remote-tab',
+      ptyId: 'ssh:ssh-cold@@remote-grid-pty'
+    })
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getWorkspaceSessionHostIds: () => ['local', 'ssh:ssh-cold'],
+      getWorkspaceSession: (hostId: string = 'local') =>
+        hostId === 'ssh:ssh-cold' ? remoteSession : getDefaultWorkspaceSession()
+    } as never)
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents: { send: vi.fn() }
+    })
+    runtime.attachWindow(1)
+
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
+
+    const listed = await runtime.listMobileSessionTabs(`id:${remoteWorktreeId}`)
+    expect(listed.tabs).toEqual([
+      expect.objectContaining({
+        type: 'terminal',
+        parentTabId: 'remote-tab',
+        ptyId: 'ssh:ssh-cold@@remote-grid-pty'
+      })
+    ])
+  })
+
+  it('lists the remote grid partition when local and SSH repos share an id', async () => {
+    const { runtime, worktreeId } = makeDuplicateHostGridRuntime()
+
+    const listed = await runtime.listMobileSessionTabs(`id:${worktreeId}`)
+
+    expect(listed.tabs).toEqual([
+      expect.objectContaining({
+        type: 'terminal',
+        ptyId: 'ssh:ssh-shared@@remote-grid'
+      })
+    ])
+  })
+
+  it('mutates only the remote grid partition when local and SSH repos share an id', async () => {
+    const { runtime, worktreeId, tabId, leafId, sessions, setWorkspaceSession } =
+      makeDuplicateHostGridRuntime()
+
+    await runtime.updateMobileSessionPaneLayout(`id:${worktreeId}`, {
+      tabId,
+      root: { type: 'leaf', leafId },
+      expandedLeafId: null,
+      layoutMode: 'orchestration-grid',
+      titlesByLeafId: { [leafId]: 'Remote grid updated' }
+    })
+
+    expect(setWorkspaceSession).toHaveBeenCalledWith(expect.any(Object), 'ssh:ssh-shared')
+    expect(sessions.get('ssh:ssh-shared')?.terminalLayoutsByTabId[tabId]?.titlesByLeafId).toEqual({
+      [leafId]: 'Remote grid updated'
+    })
+    expect(sessions.get('local')?.terminalLayoutsByTabId[tabId]?.titlesByLeafId).toEqual({
+      [leafId]: 'Local grid'
+    })
   })
 
   it('persists a headless terminal rename so it survives a cold rehydrate', async () => {

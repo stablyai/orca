@@ -1099,6 +1099,7 @@ export type CodexRateLimitResetRpcResult = {
 type RuntimeStore = {
   getRepos: Store['getRepos']
   getRepo: Store['getRepo']
+  getRepoForHost?: Store['getRepoForHost']
   addRepo: Store['addRepo']
   updateRepo: Store['updateRepo']
   getProjects?: Store['getProjects']
@@ -5928,16 +5929,8 @@ export class OrcaRuntimeService {
     return this.getMobileSessionTabsForWorktree(worktree.id, clientNavigationId)
   }
 
-  async listAllMobileSessionTabs(
-    clientNavigationId?: string
-  ): Promise<RuntimeMobileSessionTabsResult[]> {
-    for (const worktreeId of this.getKnownWorkspaceSessionWorktreeIds()) {
-      this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
-        allowAttachedWindow: true,
-        onlyRuntimeOwnedTerminals: true
-      })
-    }
-    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession()
+  async listAllMobileSessionTabs(): Promise<RuntimeMobileSessionTabsResult[]> {
+    this.hydrateHeadlessMobileSessionTabsAcrossWorkspaceHosts()
     await this.refreshMobileSessionPtyRecords()
     return [...this.mobileSessionTabsByWorktree.values()].map((snapshot) =>
       this.clientSessionTabSelections.project(
@@ -5945,6 +5938,22 @@ export class OrcaRuntimeService {
         clientNavigationId
       )
     )
+  }
+
+  private hydrateHeadlessMobileSessionTabsAcrossWorkspaceHosts(
+    options: {
+      force?: boolean
+      allowAttachedWindow?: boolean
+      onlyServeOwnedTerminals?: boolean
+    } = {}
+  ): void {
+    const hostIds = this.store?.getWorkspaceSessionHostIds?.() ?? [LOCAL_EXECUTION_HOST_ID]
+    for (const hostId of hostIds) {
+      this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(undefined, {
+        ...options,
+        hostId
+      })
+    }
   }
 
   private hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
@@ -6040,10 +6049,7 @@ export class OrcaRuntimeService {
         persistedTabs,
         session
       ).filter(
-        (tab) =>
-          options.onlyRuntimeOwnedTerminals !== true ||
-          this.hasServeOrSshOwnedBinding(tab) ||
-          this.hasRecentExpiredSshLeasePane(entryWorktreeId, tab)
+        (tab) => options.onlyServeOwnedTerminals !== true || this.hasServeOrSshOwnedBinding(tab)
       )
       // Why: offscreen browser panes are live-only (no persisted session entry),
       // so include them on every hydrate regardless of the onlyRuntimeOwnedTerminals
@@ -28659,7 +28665,19 @@ export class OrcaRuntimeService {
       return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
     }
     const repoId = splitWorktreeId(worktreeId)?.repoId ?? worktreeId
-    const repo = this.store?.getRepo(repoId)
+    const metaHostId = this.store?.getWorktreeMeta(worktreeId)?.hostId
+    if (metaHostId) {
+      const repo = this.store?.getRepoForHost?.(repoId, metaHostId)
+      return repo ? getRepoExecutionHostId(repo) : metaHostId
+    }
+    const persistedHostIds = (this.store?.getWorkspaceSessionHostIds?.() ?? []).filter(
+      (hostId) => this.store?.getWorkspaceSession?.(hostId).tabsByWorktree[worktreeId] !== undefined
+    )
+    if (persistedHostIds.length === 1) {
+      return persistedHostIds[0]!
+    }
+    const matchingRepos = (this.store?.getRepos() ?? []).filter((repo) => repo.id === repoId)
+    const repo = matchingRepos.length === 1 ? matchingRepos[0] : this.store?.getRepo(repoId)
     return repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
   }
 
@@ -30358,14 +30376,11 @@ export class OrcaRuntimeService {
     if (snapshots === undefined) {
       return changedWorktreeIds
     }
-    // Why: snapshots are immutable — every writer replaces the map entry with a
-    // new object, and the accept gate below drops semantically-unchanged
-    // renderer resends before they replace an entry — so reference identity
-    // before/after detects exactly the entries that actually changed.
-    const before = new Map(this.mobileSessionTabsByWorktree)
-    this.restoreLivePairedRendererSessionOwnedMobileTerminals(null, {
-      missingSnapshotOnly: true,
-      notify: false
+    // Why: renderer graphs are authoritative for renderer tabs, but headless
+    // serve terminals never enter that graph unless we preserve their bindings.
+    this.hydrateHeadlessMobileSessionTabsAcrossWorkspaceHosts({
+      allowAttachedWindow: true,
+      onlyServeOwnedTerminals: true
     })
     // Why: graph sync must scan each persisted host session once, not once per workspace.
     const worktreeSessionsToHydrate = new Map<string, WorkspaceSessionState | null>(

@@ -3633,6 +3633,22 @@ describe('Store', () => {
     expect(store.getRepo('nonexistent')).toBeUndefined()
   })
 
+  it('getRepoForHost selects the SSH row when repo ids overlap across hosts', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'shared', path: '/local/repo' }))
+    store.addRepo(
+      makeRepo({
+        id: 'shared',
+        path: '/remote/repo',
+        connectionId: 'ssh-shared',
+        executionHostId: 'ssh:ssh-shared'
+      })
+    )
+
+    expect(store.getRepoForHost('shared', 'local')?.path).toBe('/local/repo')
+    expect(store.getRepoForHost('shared', 'ssh:ssh-shared')?.path).toBe('/remote/repo')
+  })
+
   // ── 6. removeProject cleans up worktree meta ──────────────────────────
 
   it('removeProject deletes the repo and its worktree meta', async () => {
