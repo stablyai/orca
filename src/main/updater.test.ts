@@ -2833,6 +2833,12 @@ describe('updater', () => {
       candidateLimit: 2,
       includePrerelease: true,
       result: { tags: [], state: 'not-ready' as const }
+    },
+    {
+      version: '1.4.26',
+      candidateLimit: 1,
+      includePrerelease: false,
+      result: { tags: [], state: 'unavailable' as const, unavailableReason: 'manifest' as const }
     }
   ])(
     'keeps a nudge campaign pending for $version',
