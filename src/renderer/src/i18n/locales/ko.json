@@ -13087,7 +13087,25 @@
       },
       "tool": {
         "running": "실행 중…",
-        "result": "결과"
+        "result": "결과",
+        "failed": "실패",
+        "completed": "완료",
+        "incomplete": "미완료",
+        "input": "입력",
+        "output": "출력",
+        "fileAdded": "추가됨",
+        "fileModified": "수정됨",
+        "fileDeleted": "삭제됨",
+        "fileRenamed": "이름 변경됨",
+        "showFileDiff": "{{path}}의 차이점 표시",
+        "hideFileDiff": "{{path}}의 차이점 숨기기",
+        "diffTruncated": "차이점이 잘렸습니다",
+        "partial": "일부",
+        "binary": "바이너리",
+        "activityOne": "활동 1개",
+        "activityMany": "활동 {{count}}개",
+        "reportedFileOne": "보고된 파일 1개",
+        "reportedFileMany": "보고된 파일 {{count}}개"
       },
       "status": {
         "responding": "Agent이 응답 중입니다."

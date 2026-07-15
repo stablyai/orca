@@ -13087,7 +13087,25 @@
       },
       "tool": {
         "running": "Ejecutando…",
-        "result": "Resultado"
+        "result": "Resultado",
+        "failed": "Falló",
+        "completed": "Completado",
+        "incomplete": "Incompleto",
+        "input": "Entrada",
+        "output": "Salida",
+        "fileAdded": "Añadido",
+        "fileModified": "Modificado",
+        "fileDeleted": "Eliminado",
+        "fileRenamed": "Renombrado",
+        "showFileDiff": "Mostrar diferencias de {{path}}",
+        "hideFileDiff": "Ocultar diferencias de {{path}}",
+        "diffTruncated": "Diferencias truncadas",
+        "partial": "Parcial",
+        "binary": "Binario",
+        "activityOne": "1 actividad",
+        "activityMany": "{{count}} actividades",
+        "reportedFileOne": "1 archivo reportado",
+        "reportedFileMany": "{{count}} archivos reportados"
       },
       "status": {
         "responding": "El agente está respondiendo"

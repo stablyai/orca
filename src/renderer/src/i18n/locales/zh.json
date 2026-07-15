@@ -13087,7 +13087,25 @@
       },
       "tool": {
         "running": "正在运行…",
-        "result": "结果"
+        "result": "结果",
+        "failed": "失败",
+        "completed": "已完成",
+        "incomplete": "未完成",
+        "input": "输入",
+        "output": "输出",
+        "fileAdded": "已添加",
+        "fileModified": "已修改",
+        "fileDeleted": "已删除",
+        "fileRenamed": "已重命名",
+        "showFileDiff": "显示 {{path}} 的差异",
+        "hideFileDiff": "隐藏 {{path}} 的差异",
+        "diffTruncated": "差异已截断",
+        "partial": "部分",
+        "binary": "二进制",
+        "activityOne": "1 项活动",
+        "activityMany": "{{count}} 项活动",
+        "reportedFileOne": "1 个报告文件",
+        "reportedFileMany": "{{count}} 个报告文件"
       },
       "status": {
         "responding": "智能体正在回复"

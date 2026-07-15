@@ -13087,7 +13087,25 @@
       },
       "tool": {
         "running": "Running…",
-        "result": "Result"
+        "result": "Result",
+        "failed": "Failed",
+        "completed": "Completed",
+        "incomplete": "Incomplete",
+        "input": "Input",
+        "output": "Output",
+        "fileAdded": "Added",
+        "fileModified": "Modified",
+        "fileDeleted": "Deleted",
+        "fileRenamed": "Renamed",
+        "showFileDiff": "Show diff for {{path}}",
+        "hideFileDiff": "Hide diff for {{path}}",
+        "diffTruncated": "Diff truncated",
+        "partial": "Partial",
+        "binary": "Binary",
+        "activityOne": "1 activity",
+        "activityMany": "{{count}} activities",
+        "reportedFileOne": "1 reported file",
+        "reportedFileMany": "{{count}} reported files"
       },
       "status": {
         "responding": "Agent is responding"

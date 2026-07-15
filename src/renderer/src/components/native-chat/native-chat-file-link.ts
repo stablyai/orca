@@ -129,15 +129,21 @@ function hasNonFileUriProtocol(value: string): boolean {
 function resolvePathText(
   pathText: string,
   fallbackLine: number | null,
-  context: NativeChatFileLinkContext
+  context: NativeChatFileLinkContext,
+  decodeHrefPath = false
 ): NativeChatResolvedFileLink | null {
   const parsed = parseExplicitFileLinkTarget(pathText, { allowRelativeDirectoryPath: true })
   if (!parsed) {
     return null
   }
+  // Why: parse location suffixes before decoding so an encoded literal `:12`
+  // remains part of a reported filename instead of becoming a line number.
+  const decoded = decodeHrefPath
+    ? { ...parsed, pathText: maybeDecodeHrefPath(parsed.pathText) }
+    : parsed
   // Native chat hrefs are explicit agent-authored links, so avoid the terminal
   // detector's conservative extension/filename filters.
-  const resolved = resolveExplicitFileLinkTarget(parsed, context.worktreePath)
+  const resolved = resolveExplicitFileLinkTarget(decoded, context.worktreePath)
   if (!resolved) {
     return null
   }
@@ -185,6 +191,5 @@ export function resolveNativeChatFileLink(
   }
 
   const { pathText, line } = stripQueryAndHash(rawHref)
-  const decodedPathText = maybeDecodeHrefPath(pathText)
-  return resolvePathText(decodedPathText, line, context)
+  return resolvePathText(pathText, line, context, true)
 }
