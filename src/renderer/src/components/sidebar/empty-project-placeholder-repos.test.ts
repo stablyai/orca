@@ -38,6 +38,7 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
           groupBy: 'repo',
           repos: [repo],
           worktreesByRepo: { [repo.id]: [] },
+          visibleWorktrees: [],
           filterRepoIds: []
         })
       )
@@ -51,6 +52,7 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
           groupBy: 'repo',
           repos: [repo],
           worktreesByRepo: {},
+          visibleWorktrees: [],
           filterRepoIds: []
         })
       )
@@ -67,6 +69,7 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
           groupBy: 'repo',
           repos: [selectedRepo, hiddenRepo],
           worktreesByRepo: { [selectedRepo.id]: [], [hiddenRepo.id]: [] },
+          visibleWorktrees: [],
           filterRepoIds: [selectedRepo.id]
         })
       )
@@ -79,6 +82,7 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
         groupBy: 'none',
         repos: [repo],
         worktreesByRepo: { [repo.id]: [] },
+        visibleWorktrees: [],
         filterRepoIds: []
       }).size
     ).toBe(0)
@@ -90,6 +94,39 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
         groupBy: 'repo',
         repos: [repo],
         worktreesByRepo: { [repo.id]: [worktree] },
+        visibleWorktrees: [],
+        filterRepoIds: []
+      }).size
+    ).toBe(0)
+  })
+
+  it('keeps grouped repos visible when workspace filters hide all of their rows', () => {
+    const groupedRepo: Repo = { ...repo, projectGroupId: 'group-1' }
+    const groupedWorktree: Worktree = { ...worktree, repoId: groupedRepo.id }
+
+    expect(
+      Array.from(
+        getEmptyProjectPlaceholderRepoIds({
+          groupBy: 'repo',
+          repos: [groupedRepo],
+          worktreesByRepo: { [groupedRepo.id]: [groupedWorktree] },
+          visibleWorktrees: [],
+          filterRepoIds: []
+        })
+      )
+    ).toEqual([groupedRepo.id])
+  })
+
+  it('does not create a grouped repo placeholder when one of its workspaces is visible', () => {
+    const groupedRepo: Repo = { ...repo, projectGroupId: 'group-1' }
+    const groupedWorktree: Worktree = { ...worktree, repoId: groupedRepo.id }
+
+    expect(
+      getEmptyProjectPlaceholderRepoIds({
+        groupBy: 'repo',
+        repos: [groupedRepo],
+        worktreesByRepo: { [groupedRepo.id]: [groupedWorktree] },
+        visibleWorktrees: [groupedWorktree],
         filterRepoIds: []
       }).size
     ).toBe(0)
