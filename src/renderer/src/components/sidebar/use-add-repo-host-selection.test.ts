@@ -14,8 +14,7 @@ const mocks = vi.hoisted(() => ({
     switchRuntimeEnvironment: vi.fn(),
     setSshConnectionState: vi.fn(),
     sshConnectionStates: new Map(),
-    runtimeEnvironments: [] as { id: string; name: string; source?: 'manual' | 'ephemeral-vm' }[],
-    sshCredentialQueue: [] as { requestId: string; targetId: string }[]
+    runtimeEnvironments: [] as { id: string; name: string; source?: 'manual' | 'ephemeral-vm' }[]
   },
   sshConnect: vi.fn(),
   sshGetState: vi.fn()
@@ -102,7 +101,6 @@ describe('useAddRepoHostSelection', () => {
     mocks.storeState.switchRuntimeEnvironment.mockResolvedValue(true)
     mocks.storeState.sshConnectionStates = new Map()
     mocks.storeState.runtimeEnvironments = []
-    mocks.storeState.sshCredentialQueue = []
     mocks.sshConnect.mockReset()
     mocks.sshGetState.mockReset()
     vi.stubGlobal('window', {
@@ -214,25 +212,6 @@ describe('useAddRepoHostSelection', () => {
     expect(mocks.stateSetters[0]).toHaveBeenCalledWith('ssh:ssh-1')
     expect(mocks.stateSetters[1]).toHaveBeenCalledWith(false)
     expect(setStep).toHaveBeenCalledWith('add')
-  })
-
-  it('closes the host selector when an SSH credential prompt appears', async () => {
-    mocks.stateValues = ['local', true]
-    mocks.storeState.sshCredentialQueue = [{ requestId: 'req-1', targetId: 'ssh-1' }]
-    const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
-
-    useAddRepoHostSelection({ isOpen: true, setStep: vi.fn() })
-
-    expect(mocks.stateSetters[1]).toHaveBeenCalledWith(false)
-  })
-
-  it('keeps the host selector open while no credential prompt is pending', async () => {
-    mocks.stateValues = ['local', true]
-    const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
-
-    useAddRepoHostSelection({ isOpen: true, setStep: vi.fn() })
-
-    expect(mocks.stateSetters[1]).not.toHaveBeenCalled()
   })
 
   it('does not auto-select the active runtime host while it is unavailable', async () => {
