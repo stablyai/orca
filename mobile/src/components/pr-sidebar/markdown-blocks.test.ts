@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseInline, parseMarkdownBlocks } from './markdown-blocks'
+import { parseInline, parseMarkdownBlocks, splitInlineImages } from './markdown-blocks'
 
 describe('parseMarkdownBlocks', () => {
   it('classifies headings, fenced code, quotes, lists, hr, and paragraphs', () => {
@@ -170,5 +170,64 @@ describe('parseInline', () => {
 
   it('leaves unbalanced markers as literal text', () => {
     expect(parseInline('a * b')).toEqual([{ kind: 'text', text: 'a * b' }])
+  })
+
+  it('tokenizes images (![alt](url)) without splitting off a stray "!" or a link', () => {
+    expect(parseInline('![shot](https://x.y/a.png)')).toEqual([
+      { kind: 'image', alt: 'shot', url: 'https://x.y/a.png' }
+    ])
+    // Empty alt is valid.
+    expect(parseInline('![](https://x.y/a.png)')).toEqual([
+      { kind: 'image', alt: '', url: 'https://x.y/a.png' }
+    ])
+    // Image surrounded by prose stays an image, not a "!" + link.
+    expect(parseInline('see ![s](https://x.y/a.png) here')).toEqual([
+      { kind: 'text', text: 'see ' },
+      { kind: 'image', alt: 's', url: 'https://x.y/a.png' },
+      { kind: 'text', text: ' here' }
+    ])
+  })
+
+  it('still tokenizes a plain link alongside an image (no regression)', () => {
+    expect(parseInline('![img](https://x.y/a.png) and [link](https://x.y)')).toEqual([
+      { kind: 'image', alt: 'img', url: 'https://x.y/a.png' },
+      { kind: 'text', text: ' and ' },
+      { kind: 'link', text: 'link', url: 'https://x.y' }
+    ])
+  })
+
+  it('renders a linked image ([![alt](img)](href)) as the image, dropping the wrapper', () => {
+    expect(parseInline('[![shot](https://x.y/a.png)](https://x.y/full.png)')).toEqual([
+      { kind: 'image', alt: 'shot', url: 'https://x.y/a.png' }
+    ])
+    // A plain link (not wrapping an image) is unaffected.
+    expect(parseInline('[docs](https://x.y)')).toEqual([
+      { kind: 'link', text: 'docs', url: 'https://x.y' }
+    ])
+  })
+})
+
+describe('splitInlineImages', () => {
+  it('hoists images into their own parts, keeping surrounding prose as runs', () => {
+    const tokens = parseInline('before ![a](https://x.y/a.png) after')
+    expect(splitInlineImages(tokens)).toEqual([
+      { kind: 'run', tokens: [{ kind: 'text', text: 'before ' }] },
+      { kind: 'image', alt: 'a', url: 'https://x.y/a.png' },
+      { kind: 'run', tokens: [{ kind: 'text', text: ' after' }] }
+    ])
+  })
+
+  it('returns a single run when there is no image', () => {
+    expect(splitInlineImages(parseInline('just text'))).toEqual([
+      { kind: 'run', tokens: [{ kind: 'text', text: 'just text' }] }
+    ])
+  })
+
+  it('keeps consecutive images as separate blocks with no empty runs', () => {
+    const tokens = parseInline('![a](https://x.y/a.png)![b](https://x.y/b.png)')
+    expect(splitInlineImages(tokens)).toEqual([
+      { kind: 'image', alt: 'a', url: 'https://x.y/a.png' },
+      { kind: 'image', alt: 'b', url: 'https://x.y/b.png' }
+    ])
   })
 })

@@ -4,9 +4,11 @@ import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { MermaidDiagram } from './MermaidDiagram'
 import { isAllowedMarkdownLinkUrl } from './markdown-link-scheme'
+import { MarkdownImage } from './MarkdownImage'
 import {
   parseInline,
   parseMarkdownBlocks,
+  splitInlineImages,
   type CellAlign,
   type InlineToken,
   type MarkdownBlock
@@ -133,12 +135,48 @@ function BlockView({ block, base }: { block: MarkdownBlock; base: number }) {
         </View>
       )
     case 'paragraph':
-      return (
-        <Text style={[styles.paragraph, { fontSize: base, lineHeight: base + 7 }]}>
-          <Inline text={block.text} base={base} />
-        </Text>
-      )
+      return <Paragraph text={block.text} base={base} />
   }
+}
+
+// A paragraph can carry block images (PR screenshots). RN forbids a responsive <Image>
+// inside <Text>, so hoist images into their own blocks and keep the surrounding prose as
+// <Text> runs. The common all-text case still renders as a single <Text>.
+function Paragraph({ text, base }: { text: string; base: number }) {
+  const parts = useMemo(() => {
+    try {
+      return splitInlineImages(parseInline(text))
+    } catch {
+      return [{ kind: 'run' as const, tokens: [{ kind: 'text' as const, text }] }]
+    }
+  }, [text])
+
+  if (parts.length === 1 && parts[0].kind === 'run') {
+    return (
+      <Text style={[styles.paragraph, { fontSize: base, lineHeight: base + 7 }]}>
+        <InlineTokens tokens={parts[0].tokens} base={base} />
+      </Text>
+    )
+  }
+
+  return (
+    <View>
+      {parts.map((part, i) =>
+        part.kind === 'image' ? (
+          // Key by uri so a changed image (edited/refetched body) remounts and resets
+          // the loaded aspect ratio / error state instead of reusing the stale one.
+          <MarkdownImage key={`img-${i}-${part.url}`} uri={part.url} alt={part.alt} base={base} />
+        ) : (
+          <Text
+            key={`run-${i}`}
+            style={[styles.paragraph, { fontSize: base, lineHeight: base + 7 }]}
+          >
+            <InlineTokens tokens={part.tokens} base={base} />
+          </Text>
+        )
+      )}
+    </View>
+  )
 }
 
 function openMarkdownLink(url: string): void {
@@ -210,6 +248,10 @@ function Inline({ text, base }: { text: string; base: number }) {
       return [{ kind: 'text', text }]
     }
   }, [text])
+  return <InlineTokens tokens={tokens} base={base} />
+}
+
+function InlineTokens({ tokens, base }: { tokens: InlineToken[]; base: number }) {
   return (
     <>
       {tokens.map((token, i) => {
@@ -238,6 +280,16 @@ function Inline({ text, base }: { text: string; base: number }) {
           return (
             <Text key={i} style={styles.link} onPress={() => openMarkdownLink(token.url)}>
               {token.text}
+            </Text>
+          )
+        }
+        if (token.kind === 'image') {
+          // Inside a <Text> context (heading, list, quote, table cell) a responsive
+          // image can't render, so degrade to a tappable link like a normal link.
+          // Standalone paragraph images render as real blocks via <Paragraph>.
+          return (
+            <Text key={i} style={styles.link} onPress={() => openMarkdownLink(token.url)}>
+              {token.alt || token.url}
             </Text>
           )
         }
