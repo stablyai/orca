@@ -25413,16 +25413,23 @@ describe('OrcaRuntimeService', () => {
       },
       getAllWorktreeLineage: () => lineageById
     }
-    vi.mocked(listWorktrees).mockResolvedValueOnce(worktrees)
+    vi.mocked(listWorktrees).mockResolvedValue(worktrees)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     const listed = await runtime.listManagedWorktrees(`id:${TEST_REPO_ID}`)
+    const cached = await runtime.listManagedWorktrees(`id:${TEST_REPO_ID}`)
 
     expect(
       listed.worktrees
         .filter((worktree) => worktree.lineage)
         .map((worktree) => worktree.lineage?.origin)
     ).toEqual(paths)
+    expect(
+      cached.worktrees
+        .filter((worktree) => worktree.lineage)
+        .map((worktree) => worktree.lineage?.origin)
+    ).toEqual(paths)
+    expect(listWorktrees).toHaveBeenCalledTimes(1)
   })
 
   it('does not prune lineage when an SSH runtime provider is unavailable', async () => {
