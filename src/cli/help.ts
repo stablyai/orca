@@ -22,6 +22,10 @@ Skills:
   skills list               List version-matched skill guides bundled with this Orca CLI
   skills get                Print a version-matched skill guide as Markdown
 
+Accounts:
+  account list              List managed Claude accounts
+  account use               Select a managed Claude account
+
 Environments:
   environment add           Save a remote Orca runtime from a pairing code
   environment list          List saved remote Orca runtimes
@@ -201,6 +205,8 @@ Common Commands:
   orca status [--json]
   orca diagnostics memory [--json]
   orca agent-context [--json]
+  orca account list [--json]
+  orca account use --account <id|email|null> [--json]
   orca environment add --name <name> --pairing-code <code> [--json]
   orca environment list [--json]
   orca environment show --environment <selector> [--json]
@@ -470,6 +476,8 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
 export function formatFlagHelp(flag: string): string {
   const helpByFlag: Record<string, string> = {
     agent: '--agent <id>          Launch a known TUI agent in the first terminal',
+    account:
+      '--account <id|email|null> Select a managed Claude account or clear the current target',
     'base-branch': '--base-branch <ref>    Base branch/ref to create the worktree from',
     command: '--command <text>       Command to run in the terminal on startup',
     comment: '--comment <text>       Comment stored in Orca metadata',

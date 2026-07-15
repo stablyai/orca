@@ -229,16 +229,26 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       }
     }
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
+    const repo = await getCreateRepoSelector(flags, cwdParentWorktree, client)
+    const name = getRequiredStringFlag(flags, 'name')
+    const baseBranch = getOptionalStringFlag(flags, 'base-branch')
+    const linkedIssue = getOptionalNumberFlag(flags, 'issue')
+    const comment = getOptionalStringFlag(flags, 'comment')
+    const runHooks = flags.get('run-hooks') === true
+    const activate = flags.get('activate') === true || runHooks || Boolean(startupAgent)
+    const startupPrompt =
+      startupAgent !== undefined
+        ? (getPresentStringFlag(flags, 'prompt', { allowEmpty: true }) ?? '')
+        : undefined
     const result = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
-      repo: await getCreateRepoSelector(flags, cwdParentWorktree, client),
-      name: getRequiredStringFlag(flags, 'name'),
-      baseBranch: getOptionalStringFlag(flags, 'base-branch'),
-      linkedIssue: getOptionalNumberFlag(flags, 'issue'),
+      repo,
+      name,
+      baseBranch,
+      linkedIssue,
       ...linearIssueLink,
-      comment: getOptionalStringFlag(flags, 'comment'),
-      runHooks: flags.get('run-hooks') === true,
-      activate:
-        flags.get('activate') === true || flags.get('run-hooks') === true || Boolean(startupAgent),
+      comment,
+      runHooks,
+      activate,
       ...(setupDecision ? { setupDecision } : {}),
       parentWorktree: explicitParentWorktree,
       ...(explicitParentWorkspace ? { parentWorkspace: explicitParentWorkspace } : {}),
@@ -249,7 +259,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       ...(startupAgent
         ? {
             startupAgent,
-            startupPrompt: getPresentStringFlag(flags, 'prompt', { allowEmpty: true }) ?? ''
+            startupPrompt
           }
         : {})
     })

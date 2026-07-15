@@ -314,6 +314,10 @@ describe('orca root help', () => {
     await main([], '/tmp/repo')
 
     expect(logSpy.mock.calls.flat().join('\n')).toContain('agent-context')
+    expect(logSpy.mock.calls.flat().join('\n')).toContain('Accounts:')
+    expect(logSpy.mock.calls.flat().join('\n')).toContain(
+      'account list              List managed Claude accounts'
+    )
     logSpy.mockRestore()
   })
 
@@ -351,6 +355,53 @@ describe('orca root help', () => {
       'orca terminal create --worktree active --command "codex"'
     )
     expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['account --help', ['account', '--help']],
+    ['help account', ['help', 'account']]
+  ])('prints account group help for %s', async (_label, argv) => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(argv, '/tmp/repo')
+
+    const help = String(logSpy.mock.calls[0][0])
+    expect(help).toContain('orca account')
+    expect(help).toContain('list')
+    expect(help).toContain('use')
+    expect(process.exitCode).not.toBe(1)
+    expect(callMock).not.toHaveBeenCalled()
+    logSpy.mockRestore()
+  })
+
+  it.each([
+    ['account list', ['account', 'list', '--page', 'page_123']],
+    ['account use', ['account', 'use', '--account', 'work', '--page', 'page_123']]
+  ])('rejects browser page targeting on %s', async (_label, argv) => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(argv, '/tmp/repo')
+
+    const stderr = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(process.exitCode).toBe(1)
+    expect(stderr).toContain('Unknown flag --page')
+    errorSpy.mockRestore()
+    process.exitCode = 0
+  })
+
+  it('rejects worktree account selection', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'create', '--name', 'task', '--agent', 'claude', '--account', 'work'],
+      '/tmp/repo'
+    )
+
+    const stderr = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(process.exitCode).toBe(1)
+    expect(stderr).toContain('Unknown flag --account')
+    errorSpy.mockRestore()
+    process.exitCode = 0
   })
 
   it('progressively discloses Linear commands', async () => {

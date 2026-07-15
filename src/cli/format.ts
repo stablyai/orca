@@ -4,6 +4,8 @@ import { prepareComputerCliJsonResult } from './computer-format'
 import type { RuntimeRpcFailure, RuntimeRpcSuccess } from './runtime-client'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
 
+export { formatClaudeAccountList } from './account-format'
+
 export {
   formatBrowserProfileList,
   formatScreenshot,
