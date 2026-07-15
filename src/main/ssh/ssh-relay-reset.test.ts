@@ -18,8 +18,20 @@ describe('forceStopRelayForTarget', () => {
     const command = vi.mocked(execCommand).mock.calls[0]?.[1] ?? ''
     expect(execCommand).toHaveBeenCalledWith(conn, expect.any(String))
     expect(command).toContain(`sock_name='${relaySocketNameForInstanceId('ssh-1')}'`)
-    expect(command).toContain('lsof -t -U "$sock"')
+    expect(command).toContain('lsof -t -a -U "$sock"')
     expect(command).toContain('pgrep -f "$sock_name"')
     expect(command).toContain('rm -f "$sock"')
+  })
+
+  it('never ORs the unix-socket selector with the path selector', async () => {
+    const conn = {} as SshConnection
+
+    await forceStopRelayForTarget(conn, 'ssh-1')
+
+    const command = vi.mocked(execCommand).mock.calls[0]?.[1] ?? ''
+    // Why: without -a, lsof ORs its selectors, so `-U "$sock"` returns every
+    // process holding ANY unix socket (systemd --user included) and the
+    // TERM+KILL sweep kills the whole remote session (#8762).
+    expect(command).not.toContain('lsof -t -U')
   })
 })

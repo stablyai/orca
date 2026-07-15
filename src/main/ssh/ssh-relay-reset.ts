@@ -16,8 +16,14 @@ export async function forceStopRelayForTarget(
     '  for sock in "$base"/relay-*/"$sock_name" "$base"/"$sock_name"; do',
     '    [ -S "$sock" ] || continue',
     '    pid=""',
+    // Why: lsof ORs its selectors by default, so `-U "$sock"` means "any
+    // unix-socket holder OR $sock opener" — on hosts where lsof cannot match
+    // AF_UNIX sockets by path that degrades to every unix-socket holder,
+    // including systemd --user, and the sweep kills the whole session
+    // (#8762). `-a` ANDs the selectors; where path matching is unsupported
+    // it yields nothing and the cmdline-scoped pgrep fallback takes over.
     '    if command -v lsof >/dev/null 2>&1; then',
-    '      pid=$(lsof -t -U "$sock" 2>/dev/null | tr "\\n" " ")',
+    '      pid=$(lsof -t -a -U "$sock" 2>/dev/null | tr "\\n" " ")',
     '    fi',
     '    if [ -z "$pid" ] && command -v pgrep >/dev/null 2>&1; then',
     '      pid=$(pgrep -f "$sock_name" 2>/dev/null | ' +
