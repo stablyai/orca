@@ -35,7 +35,6 @@ import {
   isAgentFallbackError,
   sleep,
   shellEscape,
-  wrapRemoteCommandForPosixShell,
   findDefaultKeyFile,
   buildConnectConfig,
   resolveAgentSocket,
@@ -242,34 +241,6 @@ describe('shellEscape', () => {
 
   it('handles special characters', () => {
     expect(shellEscape('foo bar; rm -rf /')).toBe("'foo bar; rm -rf /'")
-  })
-})
-
-// ── wrapRemoteCommandForPosixShell ───────────────────────────────────
-
-describe('wrapRemoteCommandForPosixShell', () => {
-  it('emits a single physical line so csh/tcsh login shells cannot re-parse it', () => {
-    // Why: sshd hands this to the user's LOGIN shell. A multiline single-quoted
-    // argument is re-parsed line by line by csh and errors out (issue #8701).
-    const wrapped = wrapRemoteCommandForPosixShell("printf 'a\\n'\nprintf 'b\\n'")
-    expect(wrapped).not.toContain('\n')
-  })
-
-  it('base64-encodes the command so decoding restores the exact script', () => {
-    const original = "cd '/tmp' && ('/usr/bin/node' -e 'console.log(1)' || echo MISSING)"
-    const wrapped = wrapRemoteCommandForPosixShell(original)
-    const encoded = wrapped.match(/echo ([A-Za-z0-9+/=]+) \| base64 -d/)?.[1]
-    expect(encoded).toBeDefined()
-    expect(Buffer.from(encoded!, 'base64').toString('utf8')).toBe(original)
-  })
-
-  it('passes the payload via command substitution so stdin stays free for the relay', () => {
-    // Why: the relay reads its framed protocol from stdin (the ssh channel), so
-    // the reconstructed script must NOT be piped into /bin/sh. Using
-    // `-c "$(... | base64 -d)"` keeps stdin untouched.
-    const wrapped = wrapRemoteCommandForPosixShell('echo hi')
-    expect(wrapped).toContain('base64 -d)"')
-    expect(wrapped).not.toMatch(/base64 -d \| \/bin\/sh/)
   })
 })
 

@@ -642,7 +642,7 @@ describe('SshConnection', () => {
     }
   })
 
-  it('wraps exec commands as a single base64 line that csh/tcsh login shells cannot break', async () => {
+  it('wraps exec commands as a single line that csh/tcsh login shells cannot break', async () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()
 
@@ -650,16 +650,11 @@ describe('SshConnection', () => {
     await conn.exec(original)
 
     const wrapped = clientInstances[0].lastExecCommand!
-    // Why: sshd runs this via the user's LOGIN shell. csh/tcsh only keep a
-    // single-line single-quoted argument intact, so the wrapper must never emit
-    // a raw newline (issue #8701).
+    // Why: sshd lets the login shell parse this first, so raw newlines let
+    // csh/tcsh split the command before /bin/sh receives it (issue #8701).
     expect(wrapped).not.toContain('\n')
-    // The login shell still runs an outer `exec /bin/sh -c`, and the payload is
-    // reconstructed via `base64 -d` command substitution so stdin stays free.
-    expect(wrapped).toMatch(/^exec \/bin\/sh -c '.*base64 -d.*'$/)
-    const encoded = wrapped.match(/echo ([A-Za-z0-9+/=]+) \| base64 -d/)?.[1]
-    expect(encoded).toBeDefined()
-    expect(Buffer.from(encoded!, 'base64').toString('utf8')).toBe(original)
+    expect(wrapped).toMatch(/^exec \/bin\/sh -c '.*printf %b .*' orca-command /)
+    expect(wrapped).not.toContain('base64')
   })
 
   it('can execute native remote commands without the POSIX shell wrapper', async () => {
