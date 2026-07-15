@@ -2632,6 +2632,7 @@ function RemoteBrowserPagePane({
           onClick={() => (markup.isActive ? markup.cancel() : void markup.start())}
           disabled={!frameUrl}
           active={markup.isActive}
+          surfaceActive={isActive}
           className="h-7 w-7"
         />
       </div>
@@ -5122,6 +5123,7 @@ function BrowserPagePane({
             onClick={() => (markup.isActive ? markup.cancel() : void markup.start())}
             disabled={isBlankTab || grab.state !== 'idle'}
             active={markup.isActive}
+            surfaceActive={isActive}
           />
 
           <Button
