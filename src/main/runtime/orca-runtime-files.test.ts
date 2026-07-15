@@ -248,6 +248,7 @@ describe('RuntimeFileCommands', () => {
   it('opens text files through the renderer host (inheriting active runtime env)', async () => {
     const openFile = vi.fn()
     const { commands } = createRuntimeFileCommands({ openFile })
+    statMock.mockResolvedValue({ isDirectory: () => false })
 
     const result = await commands.openMobileFile('id:wt-1', 'docs/readme.md')
 
@@ -268,6 +269,7 @@ describe('RuntimeFileCommands', () => {
   it('opens previewable images through the renderer host as an image tab', async () => {
     const openFile = vi.fn()
     const { commands } = createRuntimeFileCommands({ openFile })
+    statMock.mockResolvedValue({ isDirectory: () => false })
 
     const result = await commands.openMobileFile('id:wt-1', 'assets/logo.png')
 
@@ -283,6 +285,43 @@ describe('RuntimeFileCommands', () => {
       kind: 'image',
       opened: true
     })
+  })
+
+  it('fails the open when the resolved local file does not exist', async () => {
+    const openFile = vi.fn()
+    const { commands } = createRuntimeFileCommands({ openFile })
+    statMock.mockRejectedValue(enoent())
+
+    await expect(commands.openMobileFile('id:wt-1', 'spec/does-not-exist.md')).rejects.toThrow(
+      'file_not_found'
+    )
+    expect(openFile).not.toHaveBeenCalled()
+  })
+
+  it('fails the open when the resolved path is a directory', async () => {
+    const openFile = vi.fn()
+    const { commands } = createRuntimeFileCommands({ openFile })
+    statMock.mockResolvedValue({ isDirectory: () => true })
+
+    await expect(commands.openMobileFile('id:wt-1', 'docs')).rejects.toThrow('file_not_found')
+    expect(openFile).not.toHaveBeenCalled()
+  })
+
+  it('fails the open when the remote SSH file does not exist', async () => {
+    const openFile = vi.fn()
+    const resolveRuntimeFileTarget = vi.fn(async () => ({
+      worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo' },
+      connectionId: 'ssh-1'
+    }))
+    const { commands } = createRuntimeFileCommands({ openFile, resolveRuntimeFileTarget })
+    vi.mocked(getSshFilesystemProvider).mockReturnValue({
+      stat: vi.fn().mockRejectedValue(new Error('No such file or directory'))
+    } as never)
+
+    await expect(commands.openMobileFile('id:wt-1', 'spec/does-not-exist.md')).rejects.toThrow(
+      'file_not_found'
+    )
+    expect(openFile).not.toHaveBeenCalled()
   })
 
   it('leaves non-previewable binaries unavailable on mobile', async () => {

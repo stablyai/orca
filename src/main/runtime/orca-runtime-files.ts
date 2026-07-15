@@ -248,7 +248,7 @@ export class RuntimeFileCommands {
     worktreeSelector: string,
     relativePath: string
   ): Promise<RuntimeFileOpenResult> {
-    const { worktree } = await this.host.resolveRuntimeFileTarget(worktreeSelector)
+    const { worktree, connectionId } = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     if (!isSafeMobileRelativePath(relativePath)) {
       throw new Error('invalid_relative_path')
     }
@@ -265,6 +265,12 @@ export class RuntimeFileCommands {
       return { worktree: worktree.id, relativePath, kind, opened: false }
     }
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
+    // Why: a missing (or directory) path used to report opened:true / exit 0
+    // and create a ghost tab that only failed at render time, misleading
+    // CLI-driving agents into trusting the open succeeded (#8844).
+    if (!(await this.resolvedOpenTargetIsFile(filePath, connectionId))) {
+      throw new Error('file_not_found')
+    }
     // Why: the service's internal runtimeId is not a registered runtime env selector
     // (those live in orca-environments.json). Passing it caused Unknown environment
     // errors on content load for CLI-initiated opens (via files.open from orca cli
@@ -480,6 +486,29 @@ export class RuntimeFileCommands {
   private static isRemoteNotFoundErrorMessage(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error)
     return /\bENOENT\b|no such file|not found|does not exist/i.test(message)
+  }
+
+  // Existence probe for files.open across local and SSH worktrees. Genuine
+  // not-found (or a directory) → false; transport/permission failures still
+  // throw so a dropped remote session doesn't read as "file missing".
+  private async resolvedOpenTargetIsFile(
+    filePath: string,
+    connectionId: string | undefined
+  ): Promise<boolean> {
+    try {
+      const stats = connectionId
+        ? await this.statRemoteTerminalPath(filePath, connectionId)
+        : await stat(filePath)
+      return !stats.isDirectory()
+    } catch (error) {
+      if (
+        isENOENT(error) ||
+        (connectionId !== undefined && RuntimeFileCommands.isRemoteNotFoundErrorMessage(error))
+      ) {
+        return false
+      }
+      throw error
+    }
   }
 
   private async statRemoteTerminalPath(
