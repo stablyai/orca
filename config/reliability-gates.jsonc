@@ -711,15 +711,18 @@
         "ssh",
         "runtime"
       ],
-      "coverageNotes": "A live macOS Electron test proves exact local PTY disappearance after a parked-tab close. Deterministic unit/store tests cover daemon and SSH routing, ordinary runtime close ownership, unified-only hydration, split ownership, pane detach transfer, restart alias hydration, and late-hook suppression; live Linux, Windows, WSL, SSH, and remote-runtime process evidence remains pending.",
+      "coverageNotes": "Live macOS Electron tests prove exact local PTY disappearance after parked-tab close and detached-pgid descendant death after agent close. Deterministic tests cover daemon and SSH routing, local/daemon pending-snapshot ownership across natural exit, stale-root descendant-signal suppression, graceful-to-immediate kill upgrades, duplicate-kill completion sharing, locale-stable bounded/fresh/coalesced process-table reads, deadline-safe successor scans, cycle-safe linear descendant traversal, target-only escalation indexing, 32-wide bulk teardown, source-scan timestamp identity, same-second PID ambiguity, ordinary runtime close ownership, unified-only hydration, split ownership, pane detach transfer, restart alias hydration, and late-hook suppression; live Linux, Windows, WSL, SSH, and remote-runtime process evidence remains pending.",
       "motivatingLinks": [
-        "https://github.com/stablyai/orca/pull/8628"
+        "https://github.com/stablyai/orca/pull/8628",
+        "https://github.com/stablyai/orca/pull/8706"
       ],
-      "invariant": "Close permanently removes the owned provider session and resume authority even when no TerminalPane is mounted; detach and park preserve both; aliases prevent a detached agent's immutable physical pane key from being retired with its former tab.",
-      "oracle": "Capture the exact PTY before parking, prove it remains listed while the view is absent, close through the product state boundary, and poll the provider inventory until that exact ID disappears; unit tests assert canonical owner dedupe, one teardown owner, exact pane tombstones, chained detach transfer, and restart alias restoration.",
+      "invariant": "Close permanently removes the owned provider session, agent descendants, and resume authority even when no TerminalPane is mounted; a terminating id remains reserved through natural exit, duplicate callers await the same completion, and immediate teardown upgrades any graceful request without signalling a recycled PID or a descendant tree after root ownership is lost; process-table work is locale-stable, bounded, fresh for each post-start request, same-turn coalesced, and begins within the requesting caller's deadline, including bulk worktree cleanup; detach and park preserve ownership; aliases prevent a detached agent's immutable physical pane key from being retired with its former tab.",
+      "oracle": "Capture the exact PTY before parking, prove it remains listed while the view is absent, close through the product state boundary, and poll the provider inventory until that exact ID disappears; an agent-marked PTY's detached-pgid child is alive before close and absent afterward; unit tests keep a naturally exited id reserved without re-killing its PID or signalling its captured tree, upgrade pending and post-snapshot graceful kills to immediate, force ps into the C locale, coalesce each bounded bulk-shutdown batch, share duplicate teardown completion, coalesce 20 same-turn process-table requests, start one shared successor without waiting for the prior scan, terminate cyclic-looking traversal, retain the source scan's timestamp, bound both read phases, avoid ambiguous SIGKILL, and assert canonical owner dedupe, exact pane tombstones, chained detach transfer, and restart alias restoration.",
       "commands": [
         "pnpm dlx node@24 ./node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server-pane-authority.test.ts src/main/ipc/agent-hooks.test.ts src/main/ipc/agent-pane-authority-ownership.test.ts src/main/ipc/pty-management.test.ts src/main/persistence.test.ts src/renderer/src/store/slices/agent-pane-authority.test.ts src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts src/renderer/src/store/slices/terminal-tab-retirement.test.ts src/renderer/src/store/slices/terminal-tab-retirement-store.test.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
-        "pnpm run test:e2e -- tests/e2e/terminal-parked-close-retirement.spec.ts --workers=1"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/pty-descendant-termination.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/providers/local-pty-provider.test.ts src/main/runtime/worktree-teardown.test.ts",
+        "pnpm run test:e2e -- tests/e2e/terminal-parked-close-retirement.spec.ts --workers=1",
+        "pnpm run test:e2e -- tests/e2e/agent-descendant-process-kill.spec.ts --workers=1"
       ],
       "testFiles": [
         "src/main/agent-hooks/server-pane-authority.test.ts",
@@ -727,12 +730,18 @@
         "src/main/ipc/agent-pane-authority-ownership.test.ts",
         "src/main/ipc/pty-management.test.ts",
         "src/main/persistence.test.ts",
+        "src/main/pty-descendant-termination.test.ts",
+        "src/main/daemon/session.test.ts",
+        "src/main/daemon/terminal-host.test.ts",
+        "src/main/providers/local-pty-provider.test.ts",
+        "src/main/runtime/worktree-teardown.test.ts",
         "src/renderer/src/store/slices/agent-pane-authority.test.ts",
         "src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts",
         "src/renderer/src/store/slices/terminal-tab-retirement.test.ts",
         "src/renderer/src/store/slices/terminal-tab-retirement-store.test.ts",
         "src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
-        "tests/e2e/terminal-parked-close-retirement.spec.ts"
+        "tests/e2e/terminal-parked-close-retirement.spec.ts",
+        "tests/e2e/agent-descendant-process-kill.spec.ts"
       ],
       "assertionRefs": [
         {
@@ -754,6 +763,39 @@
             "exact pane retirement removes resume and launch authority while preserving siblings",
             "chained detach keeps physical hooks and resume authority routed to the current owner until that owner closes"
           ]
+        },
+        {
+          "file": "src/main/pty-descendant-termination.test.ts",
+          "assertions": [
+            "20 same-turn process-table requests execute one fresh scan while later arrivals start one shared successor inside their own deadline",
+            "snapshot and escalation readers stop at their deadline",
+            "production ps reads force locale-independent C timestamps",
+            "the source scan timestamp survives request resolution and capture-second identities are never escalated with SIGKILL",
+            "cyclic-looking duplicate PID rows terminate with each descendant visited once and duplicate escalation identities stay unsignalled",
+            "descendant signals are suppressed after the caller loses root ownership"
+          ]
+        },
+        {
+          "file": "src/main/daemon/terminal-host.test.ts",
+          "assertions": [
+            "agent immediate kill rejects reattach while descendant capture is pending",
+            "a naturally exited session id remains reserved until capture finishes without force-killing its retired PID",
+            "graceful teardown upgrades to immediate both during and after descendant capture",
+            "duplicate immediate kill starts one descendant sweep"
+          ]
+        },
+        {
+          "file": "src/main/runtime/worktree-teardown.test.ts",
+          "assertions": [
+            "owned provider shutdowns start together so process-table snapshots can coalesce within a batch",
+            "inventories above 32 sessions never exceed 32 concurrent provider shutdowns"
+          ]
+        },
+        {
+          "file": "tests/e2e/agent-descendant-process-kill.spec.ts",
+          "assertions": [
+            "a detached-pgid descendant is alive before agent PTY kill and absent afterward"
+          ]
         }
       ],
       "evidenceRuns": [
@@ -765,11 +807,29 @@
           "result": "passed",
           "durationSeconds": 40.3,
           "summary": "A fresh E2E build launched an isolated Electron profile, parked a live terminal, closed it through closeTab, and observed its exact PTY disappear."
+        },
+        {
+          "date": "2026-07-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run test:e2e -- tests/e2e/agent-descendant-process-kill.spec.ts --workers=1",
+          "result": "passed",
+          "durationSeconds": 37.7,
+          "summary": "A current-main integrated fresh-build run proved a detached-pgid child was alive before agent PTY kill and absent afterward on the deadline-safe, root-ownership-gated implementation."
+        },
+        {
+          "date": "2026-07-15",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run test:e2e -- tests/e2e/agent-descendant-process-kill.spec.ts --workers=1",
+          "result": "passed",
+          "durationSeconds": 78,
+          "summary": "The cycle-safe, target-indexed, bounded-fanout review head passed from a cold full build; the live detached-pgid descendant test body completed in 4.8 seconds."
         }
       ],
       "runtimeBudget": {
         "p95Seconds": 60,
-        "scope": "fresh E2E build plus one isolated local Electron parked-close test"
+        "scope": "fresh E2E build plus isolated local Electron parked-close and descendant-kill tests"
       },
       "flakeHistory": {
         "status": "unknown",
@@ -780,8 +840,8 @@
         "evidence": "The test exercises the original parked-view failure shape and passed with the retirement boundary; an archived intentional-break run is not yet attached."
       },
       "performanceBudget": {
-        "required": false,
-        "evidence": "The close path is user-triggered and bounded by canonical live-owner indexing; kill-all scale remains covered by terminal-session.kill-all-surface-cleanup."
+        "required": true,
+        "evidence": "The close path is user-triggered and bounded by canonical live-owner indexing. Production ps has a 1s kill timeout; 20 same-turn requests execute one fresh process-table read, while requests arriving after a scan starts immediately share one successor so their deadline is not consumed waiting and no unusable ps starts after timeout. Completed tables are never reused. Bulk worktree shutdown runs in 32-wide batches so each batch can coalesce its initial scan without unbounded provider fanout. Descendant traversal uses a visited set and index cursor; a Node 24 local 100,000-wide synthetic tree fell from 861ms to 16.7ms, and escalation indexes only the requested descendant PIDs instead of duplicating the full process table. Escalation uses the same bounded coordinator, and kill-all store scale remains covered by terminal-session.kill-all-surface-cleanup."
       },
       "promotionCriteria": [
         "Accumulate 100 clean runs or 14 days on required CI platforms.",
@@ -791,7 +851,10 @@
       "knownGaps": [
         "The live Electron proof currently covers macOS local PTYs only.",
         "Disconnected SSH relay death still requires reconnect-aware provider ownership.",
-        "Daemon owner leases and durable retry inventory remain follow-up hardening."
+        "Daemon owner leases and durable retry inventory remain follow-up hardening.",
+        "Windows ConPTY, SSH-hosted PTYs, app-quit killAll, and daemon dispose retain foreground-tree-only teardown.",
+        "A process born in the capture second is SIGTERMed but not SIGKILLed because ps cannot prove its recycled-PID identity.",
+        "A descendant orphaned before or during root ownership loss requires the separate crash-orphan sweep and is not recovered from a stale kill-time snapshot."
       ],
       "demotionRule": "Keep experimental or demote to protection none if exact PTY disappearance flakes, a sibling/detached pane is retired, or late hooks can recreate closed authority."
     },

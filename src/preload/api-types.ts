@@ -971,6 +971,10 @@ export type PreloadApi = {
     // other hosts (local or a re-added SSH target) intact.
     removeForHost: (args: { repoId: string; hostId: string }) => Promise<void>
     reorder: (args: { orderedIds: string[] }) => Promise<{ status: 'applied' | 'rejected' }>
+    reorderForHost: (args: {
+      orderedIds: string[]
+      hostId: string
+    }) => Promise<{ status: 'applied' | 'rejected' }>
     update: (args: {
       repoId: string
       updates: Partial<

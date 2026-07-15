@@ -657,15 +657,19 @@ describe('SshConnection', () => {
     }
   })
 
-  it('wraps exec commands in /bin/sh so non-POSIX login shells do not parse relay snippets', async () => {
+  it('wraps exec commands as a single line that csh/tcsh login shells cannot break', async () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()
 
-    await conn.exec("cd '/tmp' && ('/usr/bin/node' -e 'console.log(1)' || echo MISSING)")
+    const original = "cd '/tmp' && ('/usr/bin/node' -e 'console.log(1)' || echo MISSING)"
+    await conn.exec(original)
 
-    expect(clientInstances[0].lastExecCommand).toBe(
-      "exec /bin/sh -c 'cd '\\''/tmp'\\'' && ('\\''/usr/bin/node'\\'' -e '\\''console.log(1)'\\'' || echo MISSING)'"
-    )
+    const wrapped = clientInstances[0].lastExecCommand!
+    // Why: sshd lets the login shell parse this first, so raw newlines let
+    // csh/tcsh split the command before /bin/sh receives it (issue #8701).
+    expect(wrapped).not.toContain('\n')
+    expect(wrapped).toMatch(/^exec \/bin\/sh -c '.*printf %b .*' orca-command /)
+    expect(wrapped).not.toContain('base64')
   })
 
   it('can execute native remote commands without the POSIX shell wrapper', async () => {

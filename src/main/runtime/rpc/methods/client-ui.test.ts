@@ -269,7 +269,8 @@ describe('client UI RPC methods', () => {
       contextualToursSeenIds: ['tasks'],
       contextualToursAutoEligible: true,
       usageEmptyStateDismissed: true,
-      browserDefaultZoomLevel: 1.5
+      browserDefaultZoomLevel: 1.5,
+      manualRepoOrder: [{ hostId: 'runtime:node-b', repoId: 'repo-b' }]
     }
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -310,7 +311,8 @@ describe('client UI RPC methods', () => {
       contextualToursSeenIds: ['tasks'],
       contextualToursAutoEligible: true,
       usageEmptyStateDismissed: true,
-      browserDefaultZoomLevel: 1.5
+      browserDefaultZoomLevel: 1.5,
+      manualRepoOrder: [{ hostId: 'runtime:node-b', repoId: 'repo-b' }]
     }
     const response = await dispatcher.dispatch(makeRequest('ui.set', payload))
 

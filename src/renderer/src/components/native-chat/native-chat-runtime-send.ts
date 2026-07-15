@@ -4,9 +4,8 @@
 
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import type { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
+import type { AskAnswerKeyGroup } from './native-chat-interactive-prompt'
 import {
-  nativeChatQuestionOffsets,
-  scheduleNativeChatAnswer,
   NATIVE_CHAT_ADVANCE_BUFFER_MS,
   NATIVE_CHAT_QUESTION_STEP_MS,
   NATIVE_CHAT_SUBMIT_DELAY_MS
@@ -17,14 +16,10 @@ import {
   NATIVE_CHAT_SUBMIT
 } from './native-chat-send'
 
-export {
-  nativeChatQuestionOffsets,
-  NATIVE_CHAT_ADVANCE_BUFFER_MS,
-  NATIVE_CHAT_QUESTION_STEP_MS,
-  NATIVE_CHAT_SUBMIT_DELAY_MS
-}
+export { NATIVE_CHAT_ADVANCE_BUFFER_MS, NATIVE_CHAT_QUESTION_STEP_MS, NATIVE_CHAT_SUBMIT_DELAY_MS }
 
 export const NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS = 300
+
 
 /** Cancels an in-flight send's pending pty writes (the delayed Enter, and any
  *  later question bodies/Enters). Safe to call after the send completes. */
@@ -106,34 +101,39 @@ export function submitNativeChatPrompt(
 }
 
 /**
- * Send an AskUserQuestion answer that may span multiple questions. Each line is
- * one question's answer (exactly how `formatAskAnswer` builds it). A single line
- * is just `sendNativeChatMessage` (no behavior change). For multiple lines we
- * write each question's framed body then its Enter as a per-question sequence,
- * paced by `NATIVE_CHAT_QUESTION_STEP_MS` so each Enter lands on its own
- * rendered question and the LAST Enter submits — exactly N Enters for N lines,
- * never a trailing one. Returns a cancel handle that clears every pending timer
- * so a detached sequence can't keep writing PTY bytes after unmount/stop.
+ * Answer Claude's AskUserQuestion by writing its keystroke groups (built by
+ * `buildAskAnswerKeys`) to the PTY, one group per `NATIVE_CHAT_QUESTION_STEP_MS`
+ * step so the arrow-navigate selector applies each before the next — a
+ * navigation/number keystroke batched with the Enter that follows would commit
+ * the wrong (default) option. `raw` groups are written verbatim as keystrokes;
+ * `text` groups (a free-text answer) go through the composer's paste framing.
+ * Returns a cancel handle clearing every pending timer so a detached sequence
+ * can't keep writing PTY bytes after unmount/stop.
  */
-export function sendNativeChatAnswer(
+export function sendNativeChatAskAnswer(
   settings: ReturnType<typeof getSettingsForAgentTabRuntimeOwner>,
   ptyId: string,
-  lines: string[]
+  groups: AskAnswerKeyGroup[]
 ): NativeChatSendHandle {
-  if (lines.length <= 1) {
-    return sendNativeChatMessage(settings, ptyId, lines[0] ?? '')
+  if (groups.length === 0) {
+    return { cancel: () => {}, settleAfterMs: 0 }
   }
-  const timers = scheduleNativeChatAnswer(
-    lines,
-    (line) => sendRuntimePtyInput(settings, ptyId, buildNativeChatPasteBytes(line)),
-    () => sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
-  )
+  const timers: ReturnType<typeof setTimeout>[] = []
+  groups.forEach((group, index) => {
+    timers.push(
+      setTimeout(() => {
+        const bytes = 'raw' in group ? group.raw : buildNativeChatPasteBytes(group.text)
+        sendRuntimePtyInput(settings, ptyId, bytes)
+      }, index * NATIVE_CHAT_QUESTION_STEP_MS)
+    )
+  })
   return {
     cancel: () => {
       for (const timer of timers) {
         clearTimeout(timer)
       }
     },
-    settleAfterMs: nativeChatQuestionOffsets(lines.length - 1).enterAt
+    // Hold the card until the last keystroke has fired and its submit gap passed.
+    settleAfterMs: (groups.length - 1) * NATIVE_CHAT_QUESTION_STEP_MS + NATIVE_CHAT_SUBMIT_DELAY_MS
   }
 }

@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PRODUCER_PAUSE_FAILSAFE_MS, Session } from './session'
 import type { SessionState, ShellReadyState } from './types'
+import type { TuiAgent } from '../../shared/types'
+
+const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
+vi.mock('../pty-descendant-termination', () => ({
+  killWithDescendantSweep: killWithDescendantSweepMock
+}))
 
 // Stub the subprocess — Session talks to it via an interface, not child_process directly.
 function createMockSubprocess() {
@@ -86,6 +92,7 @@ describe('Session', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     subprocess = createMockSubprocess()
+    killWithDescendantSweepMock.mockReset()
   })
 
   afterEach(() => {
@@ -98,11 +105,13 @@ describe('Session', () => {
     shellReadyTimeoutMs?: number
     cols?: number
     rows?: number
+    launchAgent?: TuiAgent
   }): Session {
     session = new Session({
       sessionId: 'test-session',
       cols: opts?.cols ?? 80,
       rows: opts?.rows ?? 24,
+      ...(opts?.launchAgent ? { launchAgent: opts.launchAgent } : {}),
       subprocess,
       shellReadySupported: opts?.shellReadySupported ?? false,
       ...(opts?.shellReadyTimeoutMs !== undefined
@@ -404,6 +413,37 @@ describe('Session', () => {
       session.kill()
       expect(subprocess.killed).toBe(true)
       expect(session.isTerminating).toBe(true)
+    })
+
+    it('non-agent kill stays synchronous and never routes through the descendant sweep', () => {
+      createSession()
+      session.kill()
+      expect(subprocess.killed).toBe(true)
+      expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
+    })
+
+    it('agent kill routes through the descendant sweep with the subprocess as root', () => {
+      createSession({ launchAgent: 'claude' })
+      session.kill()
+      expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
+        subprocess.pid,
+        expect.any(Function),
+        expect.objectContaining({ ownsRoot: expect.any(Function) })
+      )
+      // The root kill is deferred to the sweep's snapshot-first sequencing.
+      expect(subprocess.killed).toBe(false)
+      const killRoot = killWithDescendantSweepMock.mock.calls[0][1] as () => void
+      killRoot()
+      expect(subprocess.killed).toBe(true)
+    })
+
+    it('agent kill root callback is a no-op after the session already exited', () => {
+      createSession({ launchAgent: 'claude' })
+      session.kill()
+      const killRoot = killWithDescendantSweepMock.mock.calls[0][1] as () => void
+      subprocess.simulateExit(0)
+      killRoot()
+      expect(subprocess.killed).toBe(false)
     })
 
     it('notifies attached clients on exit after kill', async () => {

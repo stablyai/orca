@@ -13144,7 +13144,8 @@
         "cancel": "Cancel",
         "send": "Send answer",
         "next": "Next",
-        "skip": "Skip"
+        "skip": "Skip",
+        "sending": "Sending…"
       },
       "approval": {
         "title": "Allow {{value0}}?",

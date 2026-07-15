@@ -113,7 +113,7 @@ describe('formatAskAnswer', () => {
         { question: 'q2', multiSelect: false, options: [{ label: 'C' }] }
       ]
     }
-    expect(formatAskAnswer(prompt, [['A', 'B'], ['C']])).toBe('A, B\nC')
+    expect(formatAskAnswer(prompt, [{ indices: [0, 1] }, { indices: [0] }])).toBe('A, B\nC')
   })
 
   it('keeps one line per question with a blank middle answer (3 questions)', () => {
@@ -124,7 +124,7 @@ describe('formatAskAnswer', () => {
         { question: 'q3', multiSelect: false, options: [{ label: 'C' }] }
       ]
     }
-    const answer = formatAskAnswer(prompt, [['A'], [], ['C']])
+    const answer = formatAskAnswer(prompt, [{ indices: [0] }, { indices: [] }, { indices: [0] }])
     expect(answer).toBe('A\n\nC')
     expect(answer.split('\n')).toHaveLength(3)
   })

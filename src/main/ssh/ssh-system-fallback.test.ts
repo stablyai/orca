@@ -441,9 +441,18 @@ describe('spawnSystemSsh', () => {
   it('spawns a remote command through the system ssh target', () => {
     spawnSystemSshCommand(createTarget({ configHost: 'fdpass-host' }), 'echo hello')
 
+    // Why: the remote command stays on one line so csh/tcsh login shells cannot
+    // split it before /bin/sh receives it.
+    const args = spawnMock.mock.calls[0][1] as string[]
+    expect(args).toContain('--')
+    expect(args).toContain('deploy@fdpass-host')
+    const wrapped = args.at(-1)!
+    expect(wrapped).not.toContain('\n')
+    expect(wrapped).toContain('printf %b "$@"')
+    expect(wrapped).not.toContain('base64')
     expect(spawnMock).toHaveBeenCalledWith(
       SYSTEM_SSH_PATH,
-      expect.arrayContaining(['--', 'deploy@fdpass-host', "exec /bin/sh -c 'echo hello'"]),
+      expect.any(Array),
       expect.objectContaining({ stdio: ['pipe', 'pipe', 'pipe'] })
     )
   })

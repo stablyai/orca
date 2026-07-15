@@ -22,6 +22,7 @@ import {
   type RichMarkdownRuntimeSettings
 } from './rich-markdown-editor-click-routing'
 import { createRichMarkdownKeyHandler } from './rich-markdown-key-handler'
+import { commitRichMarkdownSerialization } from './rich-markdown-serialization-commit'
 import {
   createRichMarkdownImageResolverContext,
   setRichMarkdownImageResolverContext
@@ -51,6 +52,9 @@ export type EditorConfigParams = {
   rootRef: MutableRefObject<HTMLDivElement | null>
   editorRef: MutableRefObject<Editor | null>
   lastCommittedMarkdownRef: MutableRefObject<string>
+  originalSourceRef: MutableRefObject<string>
+  baseCanonicalRef: MutableRefObject<string>
+  reconcileRoundTripRef: MutableRefObject<(markdown: string) => string | null>
   onContentChangeRef: MutableRefObject<(content: string) => void>
   onDirtyStateHintRef: MutableRefObject<(dirty: boolean) => void>
   onSaveRef: MutableRefObject<(content: string) => void>
@@ -100,6 +104,9 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     rootRef,
     editorRef,
     lastCommittedMarkdownRef,
+    originalSourceRef,
+    baseCanonicalRef,
+    reconcileRoundTripRef,
     onContentChangeRef,
     onDirtyStateHintRef,
     onSaveRef,
@@ -170,6 +177,9 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
         editorRef,
         rootRef,
         lastCommittedMarkdownRef,
+        originalSourceRef,
+        baseCanonicalRef,
+        reconcileRoundTripRef,
         onContentChangeRef,
         onSaveRef,
         isEditingLinkRef,
@@ -236,6 +246,11 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
       // split on load.
       normalizeEmptyListItems(nextEditor)
       lastCommittedMarkdownRef.current = content
+      // Why: seed the source-preserving reconciliation baseline — the raw loaded
+      // bytes and their canonical serialization — so the first edit patches onto
+      // the original style instead of re-canonicalizing the whole file.
+      originalSourceRef.current = content
+      baseCanonicalRef.current = nextEditor.getMarkdown()
       isInitializingRef.current = false
       cancelAutoFocusRef.current?.()
       cancelAutoFocusRef.current = autoFocusRichEditor(nextEditor, rootRef.current)
@@ -268,9 +283,14 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
       serializeTimerRef.current = window.setTimeout(() => {
         serializeTimerRef.current = null
         try {
-          const markdown = nextEditor.getMarkdown()
-          lastCommittedMarkdownRef.current = markdown
-          onContentChangeRef.current(markdown)
+          const { markdown, didSerialize } = commitRichMarkdownSerialization(
+            nextEditor,
+            { originalSourceRef, baseCanonicalRef, lastCommittedMarkdownRef },
+            reconcileRoundTripRef.current
+          )
+          if (didSerialize) {
+            onContentChangeRef.current(markdown)
+          }
         } catch {
           // Why: save/restart flows should never crash the UI just because
           // the editor was torn down between scheduling and serializing.

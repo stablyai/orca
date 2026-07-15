@@ -568,6 +568,8 @@ const api = {
 
     reorder: (args) => ipcRenderer.invoke('repos:reorder', args),
 
+    reorderForHost: (args) => ipcRenderer.invoke('repos:reorderForHost', args),
+
     update: (args) => ipcRenderer.invoke('repos:update', args),
 
     pickFolder: () => ipcRenderer.invoke('repos:pickFolder'),

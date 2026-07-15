@@ -13144,7 +13144,8 @@
         "cancel": "キャンセル",
         "send": "回答を送信する",
         "next": "次へ",
-        "skip": "スキップ"
+        "skip": "スキップ",
+        "sending": "送信中…"
       },
       "approval": {
         "title": "{{value0}} を許可しますか?",

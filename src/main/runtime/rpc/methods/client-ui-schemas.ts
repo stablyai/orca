@@ -191,6 +191,9 @@ export const UiUpdate = z
     workspaceHostScope: z.string().optional(),
     visibleWorkspaceHostIds: z.array(z.string()).nullable().optional(),
     workspaceHostOrder: z.array(z.string()).optional(),
+    manualRepoOrder: z
+      .array(z.object({ hostId: z.string(), repoId: z.string() }).strict())
+      .optional(),
     hideDefaultBranchWorkspace: z.boolean().optional(),
     hideAutomationGeneratedWorkspaces: z.boolean().optional(),
     filterRepoIds: StringArray.optional(),

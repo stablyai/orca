@@ -1,6 +1,11 @@
 import type { IPtyProvider } from '../providers/types'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { listRegisteredPtys } from '../memory/pty-registry'
+import { mapWithConcurrency } from '../../shared/map-with-concurrency'
+
+// Why: normal inventories still coalesce into one process scan, while a stale
+// or pathological inventory cannot fan out unbounded provider/RPC shutdowns.
+const WORKTREE_TEARDOWN_CONCURRENCY = 32
 
 export type WorktreeTeardownDeps = {
   runtime?: OrcaRuntimeService
@@ -72,21 +77,18 @@ async function sweepProviderByPrefix(
 ): Promise<number> {
   const prefix = `${worktreeId}@@`
   const sessions = await provider.listProcesses().catch(() => [])
-  let killed = 0
-  for (const s of sessions) {
-    if (!s.id.startsWith(prefix)) {
-      continue
-    }
+  const ownedSessions = sessions.filter((session) => session.id.startsWith(prefix))
+  // Why: agent shutdown snapshots coalesce only when requests begin together;
+  // serial awaits multiply process-table scans and worktree-delete latency.
+  await mapWithConcurrency(ownedSessions, WORKTREE_TEARDOWN_CONCURRENCY, async (session) => {
     try {
-      await provider.shutdown(s.id, { immediate: true })
-      clearStoppedPtyState(s.id, onPtyStopped)
-      killed += 1
+      await provider.shutdown(session.id, { immediate: true })
+      clearStoppedPtyState(session.id, onPtyStopped)
     } catch {
       // Already dead, or the backend dropped the session — treat as success.
-      killed += 1
     }
-  }
-  return killed
+  })
+  return ownedSessions.length
 }
 
 async function sweepRegistryForWorktree(
@@ -95,17 +97,20 @@ async function sweepRegistryForWorktree(
   onPtyStopped?: (ptyId: string) => void
 ): Promise<number> {
   const entries = listRegisteredPtys().filter((r) => r.worktreeId === worktreeId)
-  let killed = 0
-  for (const entry of entries) {
-    try {
-      await localProvider.shutdown(entry.ptyId, { immediate: true })
-      clearStoppedPtyState(entry.ptyId, onPtyStopped)
-      killed += 1
-    } catch {
-      /* ignore — best-effort */
+  const stopped = await mapWithConcurrency(
+    entries,
+    WORKTREE_TEARDOWN_CONCURRENCY,
+    async (entry) => {
+      try {
+        await localProvider.shutdown(entry.ptyId, { immediate: true })
+        clearStoppedPtyState(entry.ptyId, onPtyStopped)
+        return 1
+      } catch {
+        return 0
+      }
     }
-  }
-  return killed
+  )
+  return stopped.reduce<number>((count, value) => count + value, 0)
 }
 
 function clearStoppedPtyState(ptyId: string, onPtyStopped?: (ptyId: string) => void): void {

@@ -13144,7 +13144,8 @@
         "cancel": "취소",
         "send": "답변 보내기",
         "next": "다음",
-        "skip": "건너뛰기"
+        "skip": "건너뛰기",
+        "sending": "전송 중…"
       },
       "approval": {
         "title": "{{value0}}을(를) 허용하시겠습니까?",

@@ -9,7 +9,9 @@ const {
   mkdirSyncMock,
   writeFileSyncMock,
   spawnMock,
-  resolveAgentForegroundProcessMock
+  resolveAgentForegroundProcessMock,
+  captureDescendantSnapshotMock,
+  terminateDescendantSnapshotMock
 } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
   statSyncMock: vi.fn(),
@@ -17,7 +19,9 @@ const {
   mkdirSyncMock: vi.fn(),
   writeFileSyncMock: vi.fn(),
   spawnMock: vi.fn(),
-  resolveAgentForegroundProcessMock: vi.fn()
+  resolveAgentForegroundProcessMock: vi.fn(),
+  captureDescendantSnapshotMock: vi.fn(),
+  terminateDescendantSnapshotMock: vi.fn()
 }))
 
 vi.mock('fs', () => ({
@@ -38,6 +42,11 @@ vi.mock('electron', () => ({
 
 vi.mock('node-pty', () => ({
   spawn: spawnMock
+}))
+
+vi.mock('../pty-descendant-termination', () => ({
+  captureDescendantSnapshot: captureDescendantSnapshotMock,
+  terminateDescendantSnapshot: terminateDescendantSnapshotMock
 }))
 
 // Resolve PowerShell family names to deterministic absolute paths (the fs mock
@@ -123,6 +132,9 @@ describe('LocalPtyProvider', () => {
     accessSyncMock.mockReturnValue(undefined)
     mkdirSyncMock.mockReset()
     writeFileSyncMock.mockReset()
+    captureDescendantSnapshotMock.mockReset()
+    captureDescendantSnapshotMock.mockResolvedValue(null)
+    terminateDescendantSnapshotMock.mockReset()
     resolveAgentForegroundProcessMock.mockReset()
     resolveAgentForegroundProcessMock.mockImplementation(
       async (_pid: number, fallbackProcess: string | null) => fallbackProcess
@@ -1040,6 +1052,79 @@ describe('LocalPtyProvider', () => {
     it('is a no-op for unknown PTY ids', async () => {
       await provider.shutdown('nonexistent', { immediate: true })
       expect(mockProc.kill).not.toHaveBeenCalled()
+    })
+
+    it('waits for an in-flight agent shutdown before reusing the same session id', async () => {
+      let resolveSnapshot!: (value: null) => void
+      captureDescendantSnapshotMock.mockReturnValue(
+        new Promise<null>((resolve) => {
+          resolveSnapshot = resolve
+        })
+      )
+      const spawnArgs = {
+        cols: 80,
+        rows: 24,
+        sessionId: 'stable-agent-session',
+        launchAgent: 'claude' as const
+      }
+      const spawnCallsBefore = spawnMock.mock.calls.length
+      const { id } = await provider.spawn(spawnArgs)
+
+      const shutdown = provider.shutdown(id, { immediate: true })
+      const respawn = provider.spawn(spawnArgs)
+      await Promise.resolve()
+      expect(spawnMock).toHaveBeenCalledTimes(spawnCallsBefore + 1)
+
+      resolveSnapshot(null)
+      await shutdown
+      await respawn
+      expect(spawnMock).toHaveBeenCalledTimes(spawnCallsBefore + 2)
+    })
+
+    it('coalesces duplicate shutdown while descendant capture is pending', async () => {
+      let resolveSnapshot!: (value: null) => void
+      captureDescendantSnapshotMock.mockReturnValue(
+        new Promise<null>((resolve) => {
+          resolveSnapshot = resolve
+        })
+      )
+      const { id } = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        launchAgent: 'claude'
+      })
+
+      const first = provider.shutdown(id, { immediate: true })
+      const second = provider.shutdown(id, { immediate: true })
+      expect(captureDescendantSnapshotMock).toHaveBeenCalledOnce()
+      resolveSnapshot(null)
+      await Promise.all([first, second])
+      expect(captureDescendantSnapshotMock).toHaveBeenCalledOnce()
+    })
+
+    it('does not signal a captured tree after the tracked root exits naturally', async () => {
+      let resolveSnapshot!: (value: {
+        rootPgid: number
+        descendants: []
+        capturedAtMs: number
+      }) => void
+      captureDescendantSnapshotMock.mockReturnValue(
+        new Promise((resolve) => {
+          resolveSnapshot = resolve
+        })
+      )
+      const { id } = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        launchAgent: 'claude'
+      })
+
+      const shutdown = provider.shutdown(id, { immediate: true })
+      exitCb?.({ exitCode: 0 })
+      resolveSnapshot({ rootPgid: mockProc.pid, descendants: [], capturedAtMs: Date.now() })
+      await shutdown
+
+      expect(terminateDescendantSnapshotMock).not.toHaveBeenCalled()
     })
   })
 

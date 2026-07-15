@@ -1,8 +1,12 @@
 import { translate } from '@/i18n/i18n'
 import {
+  buildAskAnswerKeys,
   formatAskAnswer,
+  hasAskAnswer,
   parseAskFromStatus,
   registerQuestionTool,
+  type AskAnswerKeyGroup,
+  type AskAnswerSelection,
   type AskOption,
   type AskPrompt,
   type AskQuestion,
@@ -10,9 +14,13 @@ import {
 } from '../../../../shared/native-chat-ask'
 
 export {
+  buildAskAnswerKeys,
   formatAskAnswer,
+  hasAskAnswer,
   parseAskFromStatus,
   registerQuestionTool,
+  type AskAnswerKeyGroup,
+  type AskAnswerSelection,
   type AskOption,
   type AskPrompt,
   type AskQuestion,

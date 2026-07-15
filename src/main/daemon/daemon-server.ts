@@ -498,7 +498,7 @@ export class DaemonServer {
           sessionId: request.payload.sessionId,
           immediate: request.payload.immediate === true
         })
-        this.host.kill(request.payload.sessionId, { immediate: request.payload.immediate })
+        await this.host.kill(request.payload.sessionId, { immediate: request.payload.immediate })
         return {}
 
       case 'signal':
