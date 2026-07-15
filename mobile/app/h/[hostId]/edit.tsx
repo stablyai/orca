@@ -37,10 +37,8 @@ export default function EditHostScreen() {
   const [address, setAddress] = useState('')
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  // Why: setSaving(true) doesn't take effect until React commits a
-  // re-render, so a second trigger (Save button + Address onSubmitEditing)
-  // dispatched before that commit would still read stale `saving` state and
-  // re-enter handleSave. A ref mutates synchronously and closes that race.
+  // Why: setSaving is async, so a second trigger before the re-render could
+  // still read stale state and re-enter handleSave; the ref closes that race.
   const savingRef = useRef(false)
 
   const load = useCallback(async () => {
@@ -52,7 +50,7 @@ export default function EditHostScreen() {
       const hosts = await loadHosts()
       const found = hosts.find((h) => h.id === hostId) ?? null
       if (!found) {
-        setLoadError('This host is no longer saved on this phone.')
+        setLoadError('This host was removed from this phone.')
         setHost(null)
         return
       }

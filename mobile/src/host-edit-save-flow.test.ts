@@ -307,7 +307,7 @@ describe('edit host load() error states', () => {
     dependencies.loadHosts.mockReset().mockResolvedValue([])
     const renderer = await renderEditHostRoute()
 
-    expect(findText(renderer, 'This host is no longer saved on this phone.')).toBe(true)
+    expect(findText(renderer, 'This host was removed from this phone.')).toBe(true)
     expect(renderer.root.findAllByType('TextInput')).toHaveLength(0)
 
     act(() => renderer.unmount())
