@@ -10,6 +10,7 @@ import {
   getPreviousVisibleForTerminalPane,
   isTerminalPaneVisibilityResume,
   mapRestoredPaneTitlesByPaneId,
+  resolveTerminalMountLayout,
   resolvePaneLinkCwd,
   resolvePaneSeedCwd,
   resolveQueuedInitialCwd,
@@ -19,6 +20,7 @@ import {
   splitPaneWithOneShotStartup,
   suppressIntentionalPaneCloseExit
 } from './use-terminal-pane-lifecycle'
+import type { TerminalLayoutSnapshot } from '../../../../shared/types'
 import {
   SPLIT_TERMINAL_PANE_EVENT,
   type SplitTerminalPaneAcknowledgement,
@@ -254,6 +256,35 @@ describe('splitPaneWithOneShotStartup', () => {
 
     expect(splitPane).toHaveBeenCalledTimes(1)
     expect(deps.startup).toBeNull()
+  })
+})
+
+describe('resolveTerminalMountLayout', () => {
+  it('uses the lifecycle-time store commit when a cold append lands after render', () => {
+    const capturedLayout: TerminalLayoutSnapshot = {
+      root: { type: 'leaf', leafId: '11111111-1111-4111-8111-111111111111' },
+      activeLeafId: '11111111-1111-4111-8111-111111111111',
+      expandedLeafId: null,
+      layoutMode: 'orchestration-grid'
+    }
+    const committedLayout: TerminalLayoutSnapshot = {
+      root: {
+        type: 'split',
+        direction: 'vertical',
+        first: capturedLayout.root,
+        second: { type: 'leaf', leafId: '22222222-2222-4222-8222-222222222222' }
+      },
+      activeLeafId: capturedLayout.activeLeafId,
+      expandedLeafId: null,
+      layoutMode: 'orchestration-grid',
+      ptyIdsByLeafId: {
+        '11111111-1111-4111-8111-111111111111': 'pty-one',
+        '22222222-2222-4222-8222-222222222222': 'pty-two'
+      }
+    }
+
+    expect(resolveTerminalMountLayout(capturedLayout, committedLayout)).toBe(committedLayout)
+    expect(resolveTerminalMountLayout(capturedLayout, undefined)).toBe(capturedLayout)
   })
 })
 
