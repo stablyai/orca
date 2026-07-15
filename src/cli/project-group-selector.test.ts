@@ -44,6 +44,7 @@ describe('resolveProjectGroupFromList', () => {
     )
     try {
       resolveProjectGroupFromList(GROUPS, 'Clients')
+      expect.unreachable('Expected the duplicated bare name to be ambiguous')
     } catch (error) {
       expect((error as RuntimeClientError).code).toBe('selector_ambiguous')
     }
