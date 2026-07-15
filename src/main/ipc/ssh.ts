@@ -245,7 +245,7 @@ function broadcastSshState(
   // has no surface for them. Broadcasting their state would make the renderer fire
   // a listTargets() lookup per event (incl. each relay-lost reconnect) for nothing.
   if (isRuntimeOwnedSshTargetId(targetId)) {
-    currentRuntime?.notifySshStateChanged?.(targetId, enrichedState)
+    currentRuntime?.invalidateSshWorktreeScanCache?.(targetId)
     return
   }
   const win = getMainWindow()
@@ -934,7 +934,11 @@ export function registerSshHandlers(
           state: connectedState
         })
       }
-      currentRuntime?.notifySshStateChanged?.(targetId, connectedState)
+      if (isRuntimeOwnedSshTargetId(targetId)) {
+        currentRuntime?.invalidateSshWorktreeScanCache?.(targetId)
+      } else {
+        currentRuntime?.notifySshStateChanged?.(targetId, connectedState)
+      }
     } catch (err) {
       // Relay deployment failed — disconnect SSH
       activeSessions.delete(targetId)

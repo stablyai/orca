@@ -844,10 +844,11 @@ describe('SSH IPC handlers', () => {
     )
   })
 
-  it('keeps runtime-owned SSH state off the renderer while notifying runtime consumers', async () => {
+  it('keeps runtime-owned SSH state off the renderer while invalidating runtime scans', async () => {
     const runtime = {
       onPtyData: vi.fn(),
       onPtyExit: vi.fn(),
+      invalidateSshWorktreeScanCache: vi.fn(),
       notifySshStateChanged: vi.fn()
     }
     registerSshHandlers(mockStore as never, () => mockWindow as never, runtime as never)
@@ -872,16 +873,15 @@ describe('SSH IPC handlers', () => {
       'ssh:state-changed',
       expect.anything()
     )
-    expect(runtime.notifySshStateChanged).toHaveBeenCalledWith(
-      'runtime-ssh-1',
-      expect.objectContaining({ targetId: 'runtime-ssh-1', status: 'connected' })
-    )
+    expect(runtime.invalidateSshWorktreeScanCache).toHaveBeenCalledWith('runtime-ssh-1')
+    expect(runtime.notifySshStateChanged).not.toHaveBeenCalled()
   })
 
-  it('notifies runtime consumers from hidden SSH state broadcasts', () => {
+  it('invalidates runtime scans from hidden SSH state broadcasts', () => {
     const runtime = {
       onPtyData: vi.fn(),
       onPtyExit: vi.fn(),
+      invalidateSshWorktreeScanCache: vi.fn(),
       notifySshStateChanged: vi.fn()
     }
     registerSshHandlers(mockStore as never, () => mockWindow as never, runtime as never)
@@ -896,10 +896,8 @@ describe('SSH IPC handlers', () => {
       reconnectAttempt: 1
     })
 
-    expect(runtime.notifySshStateChanged).toHaveBeenCalledWith(
-      'runtime-ssh-1',
-      expect.objectContaining({ targetId: 'runtime-ssh-1', status: 'disconnected' })
-    )
+    expect(runtime.invalidateSshWorktreeScanCache).toHaveBeenCalledWith('runtime-ssh-1')
+    expect(runtime.notifySshStateChanged).not.toHaveBeenCalled()
     expect(mockWindow.webContents.send).not.toHaveBeenCalledWith(
       'ssh:state-changed',
       expect.anything()
