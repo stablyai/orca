@@ -28,12 +28,12 @@ describe('markupCanvasSize', () => {
   })
 
   it('keeps the composite within the pixel budget (never over)', () => {
-    // A large HiDPI pane: 3840×2160 CSS × dpr 2 = 33.2M px > the 32M ceiling.
+    // A large HiDPI pane: 4000×3000 CSS × dpr 2 = 48M px > the ~33.55M (32×1024×1024) ceiling.
     const maxPixels = 32 * 1024 * 1024
-    const size = markupCanvasSize(3840, 2160, 2, maxPixels)
+    const size = markupCanvasSize(4000, 3000, 2, maxPixels)
     expect(size.width * size.height).toBeLessThanOrEqual(maxPixels)
     // Aspect ratio is preserved (one uniform scale).
-    expect(size.width / size.height).toBeCloseTo(3840 / 2160, 3)
+    expect(size.width / size.height).toBeCloseTo(4000 / 3000, 3)
   })
 })
 
@@ -43,9 +43,9 @@ describe('effectiveMarkupScale', () => {
   })
 
   it('reduces the scale so area stays within the pixel budget', () => {
-    const scale = effectiveMarkupScale(3840, 2160, 2, 32 * 1024 * 1024)
+    const scale = effectiveMarkupScale(4000, 3000, 2, 32 * 1024 * 1024)
     expect(scale).toBeLessThan(2)
-    expect(3840 * scale * (2160 * scale)).toBeLessThanOrEqual(32 * 1024 * 1024 + 1)
+    expect(4000 * scale * (3000 * scale)).toBeLessThanOrEqual(32 * 1024 * 1024 + 1)
   })
 
   it('defaults to the clamped scale with no pixel budget', () => {
