@@ -95,6 +95,9 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   if (provider === 'grok') {
     return <AgentIcon agent="grok" size={13} />
   }
+  if (provider === 'cursor') {
+    return <AgentIcon agent="cursor" size={13} />
+  }
   return <ClaudeIcon size={13} />
 }
 
@@ -141,14 +144,10 @@ export function getWindowSections(
   p: ProviderRateLimits
 ): { label: string; window: RateLimitWindow | null }[] {
   if (p.buckets?.length) {
-    const bucketSections = p.buckets.map((b) => ({ label: b.name, window: b as RateLimitWindow }))
-    return [
-      ...bucketSections,
-      {
-        label: translate('auto.components.status.bar.tooltip.252c096536', 'Weekly'),
-        window: p.weekly
-      }
-    ]
+    // Why: Cursor (and Gemini) already encode every visible meter as a named
+    // bucket. Appending an empty Weekly section would paint a blank row in the
+    // detail popover.
+    return p.buckets.map((b) => ({ label: b.name, window: b as RateLimitWindow }))
   }
   const sections: { label: string; window: RateLimitWindow | null }[] = [
     {
@@ -241,21 +240,23 @@ export function ProviderPanel({
   }
 
   if (p.status === 'error' && !p.session && !p.weekly && !p.fableWeekly && !p.monthly) {
-    return (
-      <div className={`text-xs ${className ?? 'w-full'}`}>
-        <div className={`flex items-center gap-1.5 font-medium ${textClass}`}>
-          <ProviderIcon provider={p.provider} />
-          {name}
+    if (!(p.buckets && p.buckets.length > 0)) {
+      return (
+        <div className={`text-xs ${className ?? 'w-full'}`}>
+          <div className={`flex items-center gap-1.5 font-medium ${textClass}`}>
+            <ProviderIcon provider={p.provider} />
+            {name}
+          </div>
+          <div className="mt-2">
+            <ErrorMessage
+              label={getProviderUsageStatusLabel(p)}
+              message={getProviderUsageErrorMessage(p)}
+              inverted={inverted}
+            />
+          </div>
         </div>
-        <div className="mt-2">
-          <ErrorMessage
-            label={getProviderUsageStatusLabel(p)}
-            message={getProviderUsageErrorMessage(p)}
-            inverted={inverted}
-          />
-        </div>
-      </div>
-    )
+      )
+    }
   }
 
   const updatedAgo = p.updatedAt ? `Updated ${formatTimeAgo(p.updatedAt)}` : 'Not yet updated'
@@ -334,7 +335,15 @@ export function ProviderPanel({
       {p.error ? (
         <ErrorMessage
           message={p.error}
-          stale={!!(p.session || p.weekly || p.fableWeekly || p.monthly)}
+          stale={
+            !!(
+              p.session ||
+              p.weekly ||
+              p.fableWeekly ||
+              p.monthly ||
+              (p.buckets && p.buckets.length > 0)
+            )
+          }
           inverted={inverted}
         />
       ) : null}

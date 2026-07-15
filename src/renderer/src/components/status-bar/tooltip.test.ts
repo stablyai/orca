@@ -303,8 +303,7 @@ describe('getWindowSections', () => {
     const sections = getWindowSections(p)
     expect(sections).toEqual([
       { label: 'Pro', window: p.buckets![0] },
-      { label: 'Flash', window: p.buckets![1] },
-      { label: 'Weekly', window: null }
+      { label: 'Flash', window: p.buckets![1] }
     ])
   })
 
@@ -422,7 +421,7 @@ describe('getWindowSections', () => {
       status: 'ok'
     }
     const sections = getWindowSections(p)
-    expect(sections).toHaveLength(2)
+    expect(sections).toHaveLength(1)
     expect(sections[0].label).toBe('Pro')
     expect(sections[0].window!.resetsAt).toBe(18000000)
     expect(sections[0].window!.resetDescription).toBe('5:00 PM')

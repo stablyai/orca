@@ -3,7 +3,9 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { getAntigravityStatusBarToggleSearchEntry } from './appearance-status-bar-antigravity-toggle-search'
+import { getCursorStatusBarToggleSearchEntry } from './appearance-status-bar-cursor-toggle-search'
 import { getGrokStatusBarToggleSearchEntry } from './appearance-status-bar-grok-toggle-search'
+import { getPortsStatusBarToggleSearchEntry } from './appearance-status-bar-ports-toggle-search'
 
 export const getStatusBarToggles = createLocalizedCatalog(
   (): readonly {
@@ -200,6 +202,7 @@ export const getStatusBarToggles = createLocalizedCatalog(
       )
     },
     getGrokStatusBarToggleSearchEntry(),
+    getCursorStatusBarToggleSearchEntry(),
     {
       id: 'ssh',
       title: translate('auto.components.settings.appearance.search.57fb424c56', 'Remote Hosts'),
@@ -265,36 +268,6 @@ export const getStatusBarToggles = createLocalizedCatalog(
         'Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.'
       )
     },
-    {
-      id: 'ports',
-      title: translate('auto.components.settings.appearance.search.cf409b6c4d', 'Ports'),
-      description: translate(
-        'auto.components.settings.appearance.search.0ececfa190',
-        'Show live workspace ports in the status bar.'
-      ),
-      keywords: [
-        ...translateSearchKeyword(
-          'auto.components.settings.appearance.search.896eb53fd4',
-          'status bar'
-        ),
-        ...translateSearchKeyword('auto.components.settings.appearance.search.006e67b279', 'ports'),
-        ...translateSearchKeyword(
-          'auto.components.settings.appearance.search.46d21eef62',
-          'localhost'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.appearance.search.43cfba3b95',
-          'server'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.appearance.search.dc02c8759d',
-          'workspace'
-        )
-      ],
-      toggleDescription: translate(
-        'settings.appearance.statusBar.portsToggleDescription',
-        'Show live workspace ports. Click it for workspace-scoped ports and external listeners.'
-      )
-    }
+    getPortsStatusBarToggleSearchEntry()
   ]
 )

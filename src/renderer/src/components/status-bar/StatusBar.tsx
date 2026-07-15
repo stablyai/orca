@@ -974,29 +974,40 @@ export function InlineUsageBars({
   )
   // Why: the preference changes copy, while bar fill stays consumption-based
   // so empty/green and full/red keep the meter semantics introduced in #8167.
-  const usageWindows = [
-    limits.session
-      ? {
-          key: 'session',
-          used: clampUsedPercent(limits.session.usedPercent),
-          label: translate('auto.components.status.bar.StatusBar.d79c3362c4', '5h')
-        }
-      : null,
-    limits.weekly
-      ? {
-          key: 'weekly',
-          used: clampUsedPercent(limits.weekly.usedPercent),
-          label: translate('auto.components.status.bar.StatusBar.5c938d39ac', 'wk')
-        }
-      : null,
-    limits.fableWeekly
-      ? {
-          key: 'fableWeekly',
-          used: clampUsedPercent(limits.fableWeekly.usedPercent),
-          label: translate('auto.components.status.bar.StatusBar.54e8d6bb2d', 'Fable')
-        }
-      : null
-  ].filter((window): window is { key: string; used: number; label: string } => window !== null)
+  const bucketWindows =
+    limits.buckets?.map((bucket) => ({
+      key: `bucket:${bucket.name}`,
+      used: clampUsedPercent(bucket.usedPercent),
+      label: bucket.name
+    })) ?? []
+  const usageWindows =
+    bucketWindows.length > 0
+      ? bucketWindows
+      : [
+          limits.session
+            ? {
+                key: 'session',
+                used: clampUsedPercent(limits.session.usedPercent),
+                label: translate('auto.components.status.bar.StatusBar.d79c3362c4', '5h')
+              }
+            : null,
+          limits.weekly
+            ? {
+                key: 'weekly',
+                used: clampUsedPercent(limits.weekly.usedPercent),
+                label: translate('auto.components.status.bar.StatusBar.5c938d39ac', 'wk')
+              }
+            : null,
+          limits.fableWeekly
+            ? {
+                key: 'fableWeekly',
+                used: clampUsedPercent(limits.fableWeekly.usedPercent),
+                label: translate('auto.components.status.bar.StatusBar.54e8d6bb2d', 'Fable')
+              }
+            : null
+        ].filter(
+          (window): window is { key: string; used: number; label: string } => window !== null
+        )
 
   return (
     <div
@@ -1028,7 +1039,13 @@ export function InlineUsageBars({
 }
 
 function isUnavailableInactiveUsage(limits: ProviderRateLimits | null | undefined): boolean {
-  return limits?.status === 'error' && !limits.session && !limits.weekly && !limits.fableWeekly
+  return (
+    limits?.status === 'error' &&
+    !limits.session &&
+    !limits.weekly &&
+    !limits.fableWeekly &&
+    !(limits.buckets && limits.buckets.length > 0)
+  )
 }
 
 function InlineUsageSignInAction({
@@ -1112,7 +1129,14 @@ function WindowLabel({
 
 // Why: only Flash and the latest Pro are shown in the status bar —
 // the rest (Flash Lite, experimental) are secondary and would clutter the bar.
-const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
+const STATUS_BAR_BUCKET_NAMES = new Set([
+  'Flash',
+  'Pro',
+  '1.5 Pro',
+  'Included',
+  'Auto',
+  'On-demand'
+])
 
 export function ProviderSegment({
   p,
@@ -1137,7 +1161,14 @@ export function ProviderSegment({
   }
 
   // Fetching with no prior data
-  if (p.status === 'fetching' && !p.session && !p.weekly && !p.fableWeekly && !p.monthly) {
+  if (
+    p.status === 'fetching' &&
+    !p.session &&
+    !p.weekly &&
+    !p.fableWeekly &&
+    !p.monthly &&
+    !(p.buckets && p.buckets.length > 0)
+  ) {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
@@ -1156,7 +1187,14 @@ export function ProviderSegment({
   }
 
   // Error with no data
-  if (p.status === 'error' && !p.session && !p.weekly && !p.fableWeekly && !p.monthly) {
+  if (
+    p.status === 'error' &&
+    !p.session &&
+    !p.weekly &&
+    !p.fableWeekly &&
+    !p.monthly &&
+    !(p.buckets && p.buckets.length > 0)
+  ) {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
@@ -1793,7 +1831,7 @@ export function ProviderDetailsMenu({
           {iconOnly ? (
             <span className="inline-flex items-center gap-1">
               <span
-                className={`inline-block h-2 w-2 rounded-full ${provider.session || provider.weekly || provider.fableWeekly || provider.monthly ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
+                className={`inline-block h-2 w-2 rounded-full ${provider.session || provider.weekly || provider.fableWeekly || provider.monthly || (provider.buckets && provider.buckets.length > 0) ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
               />
               <span className="text-muted-foreground">
                 {provider.provider === 'claude'
@@ -1810,7 +1848,9 @@ export function ProviderDetailsMenu({
                             ? 'M'
                             : provider.provider === 'grok'
                               ? 'R'
-                              : 'X'}
+                              : provider.provider === 'cursor'
+                                ? 'U'
+                                : 'X'}
               </span>
             </span>
           ) : (
@@ -1960,7 +2000,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok } = rateLimits
+  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor } = rateLimits
 
   // Why: a provider earns a bar from either a usable live snapshot or durable
   // setup in Settings. The durable path keeps account switchers visible while
@@ -1981,7 +2021,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     ...settings,
     antigravityUsageConfigured,
     minimaxCookieConfigured: rateLimits.minimaxCookieConfigured,
-    grokAuthConfigured: rateLimits.grokAuthConfigured
+    grokAuthConfigured: rateLimits.grokAuthConfigured,
+    cursorAuthConfigured: rateLimits.cursorAuthConfigured
   }
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
   const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
@@ -1990,6 +2031,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const visibleAntigravity = getVisibleUsageProvider('antigravity', antigravity, usageSettings)
   const visibleMiniMax = getVisibleUsageProvider('minimax', minimax, usageSettings)
   const visibleGrok = getVisibleUsageProvider('grok', grok, usageSettings)
+  const visibleCursor = getVisibleUsageProvider('cursor', cursor, usageSettings)
   const showClaude =
     visibleClaude !== null &&
     statusBarItems.includes('claude') &&
@@ -2017,6 +2059,10 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     visibleGrok !== null &&
     statusBarItems.includes('grok') &&
     isStatusBarItemAvailable('grok', detectedAgentIds)
+  const showCursor =
+    visibleCursor !== null &&
+    statusBarItems.includes('cursor') &&
+    isStatusBarItemAvailable('cursor', detectedAgentIds)
   // Why: OpenCode Go is a web/cookie-auth provider, not a CLI on PATH, so
   // detection-gating doesn't apply.
   const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, usageSettings)
@@ -2037,14 +2083,15 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     showKimi ||
     showAntigravity ||
     showMiniMax ||
-    showGrok
+    showGrok ||
+    showCursor
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: a brand-new user with no provider configured would otherwise see an
   // empty left side of the status bar and wonder what's missing. Settings are
   // included because managed accounts are durable even when live usage
   // snapshots are still hydrating or unavailable after an update.
   const isEmptyUsageState = isUsageEmptyState(
-    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok },
+    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor },
     usageSettings
   )
   // Why: the teaching CTA is a one-time nudge — once the user hides it, keep it
@@ -2058,7 +2105,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     kimi?.status === 'fetching' ||
     antigravity?.status === 'fetching' ||
     minimax?.status === 'fetching' ||
-    grok?.status === 'fetching'
+    grok?.status === 'fetching' ||
+    cursor?.status === 'fetching'
 
   const compact = containerWidth < 900
   const iconOnly = containerWidth < 500
@@ -2168,6 +2216,17 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                 ariaLabel={translate(
                   'auto.components.status.bar.StatusBar.grokUsageAria',
                   'Open Grok usage details'
+                )}
+              />
+            )}
+            {showCursor && (
+              <ProviderDetailsMenu
+                provider={visibleCursor}
+                compact={compact}
+                iconOnly={iconOnly}
+                ariaLabel={translate(
+                  'auto.components.status.bar.StatusBar.cursorUsageAria',
+                  'Open Cursor usage details'
                 )}
               />
             )}
@@ -2349,6 +2408,18 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             >
               <AgentIcon agent="grok" size={14} />
               {translate('auto.components.status.bar.StatusBar.grokUsageMenu', 'Grok Usage')}
+            </DropdownMenuCheckboxItem>
+          )}
+          {isStatusBarItemAvailable('cursor', detectedAgentIds) && (
+            <DropdownMenuCheckboxItem
+              checked={statusBarItems.includes('cursor')}
+              onCheckedChange={() => {
+                recordFeatureInteraction('usage-tracking')
+                toggleStatusBarItem('cursor')
+              }}
+            >
+              <AgentIcon agent="cursor" size={14} />
+              {translate('auto.components.status.bar.StatusBar.cursorUsageMenu', 'Cursor Usage')}
             </DropdownMenuCheckboxItem>
           )}
           <DropdownMenuCheckboxItem

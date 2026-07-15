@@ -25,4 +25,5 @@ export function registerRateLimitHandlers(rateLimits: RateLimitService): void {
   )
   ipcMain.handle('rateLimits:refreshMiniMax', () => rateLimits.refresh())
   ipcMain.handle('rateLimits:refreshGrok', () => rateLimits.refreshGrok())
+  ipcMain.handle('rateLimits:refreshCursor', () => rateLimits.refreshCursor())
 }
