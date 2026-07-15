@@ -196,9 +196,9 @@ describe('parseInline', () => {
     ])
   })
 
-  it('renders a linked image ([![alt](img)](href)) as the image, dropping the wrapper', () => {
+  it('renders a linked image ([![alt](img)](href)) as the image, keeping the href', () => {
     expect(parseInline('[![shot](https://x.y/a.png)](https://x.y/full.png)')).toEqual([
-      { kind: 'image', alt: 'shot', url: 'https://x.y/a.png' }
+      { kind: 'image', alt: 'shot', url: 'https://x.y/a.png', href: 'https://x.y/full.png' }
     ])
     // A plain link (not wrapping an image) is unaffected.
     expect(parseInline('[docs](https://x.y)')).toEqual([
@@ -228,6 +228,13 @@ describe('splitInlineImages', () => {
     expect(splitInlineImages(tokens)).toEqual([
       { kind: 'image', alt: 'a', url: 'https://x.y/a.png' },
       { kind: 'image', alt: 'b', url: 'https://x.y/b.png' }
+    ])
+  })
+
+  it('preserves the outer href of a linked image when hoisting', () => {
+    const tokens = parseInline('[![a](https://x.y/a.png)](https://x.y/full)')
+    expect(splitInlineImages(tokens)).toEqual([
+      { kind: 'image', alt: 'a', url: 'https://x.y/a.png', href: 'https://x.y/full' }
     ])
   })
 })

@@ -1,4 +1,5 @@
 import { createElement } from 'react'
+import { Linking } from 'react-native'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MarkdownImage } from './MarkdownImage'
@@ -31,12 +32,12 @@ function suppressDeprecationWarning(): () => void {
   return () => spy.mockRestore()
 }
 
-function render(uri: string): ReactTestRenderer {
+function render(uri: string, extra?: { href?: string }): ReactTestRenderer {
   let renderer: ReactTestRenderer | null = null
   const restore = suppressDeprecationWarning()
   try {
     act(() => {
-      renderer = create(createElement(MarkdownImage, { uri, alt: 'shot', base: 14 }))
+      renderer = create(createElement(MarkdownImage, { uri, alt: 'shot', base: 14, ...extra }))
     })
   } finally {
     restore()
@@ -76,5 +77,14 @@ describe('MarkdownImage', () => {
     })
     expect(renderer.root.findAllByType('Image')).toHaveLength(0)
     expect(renderer.root.findAllByType('Text')).toHaveLength(1)
+  })
+
+  it('taps a linked image through to its href, not the image url', () => {
+    vi.mocked(Linking.openURL).mockClear()
+    renderer = render('https://x.y/a.png', { href: 'https://x.y/full' })
+    act(() => {
+      renderer?.root.findByType('Pressable').props.onPress()
+    })
+    expect(Linking.openURL).toHaveBeenCalledWith('https://x.y/full')
   })
 })

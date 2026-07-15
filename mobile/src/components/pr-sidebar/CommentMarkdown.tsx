@@ -165,7 +165,13 @@ function Paragraph({ text, base }: { text: string; base: number }) {
         part.kind === 'image' ? (
           // Key by uri so a changed image (edited/refetched body) remounts and resets
           // the loaded aspect ratio / error state instead of reusing the stale one.
-          <MarkdownImage key={`img-${i}-${part.url}`} uri={part.url} alt={part.alt} base={base} />
+          <MarkdownImage
+            key={`img-${i}-${part.url}`}
+            uri={part.url}
+            alt={part.alt}
+            href={part.href}
+            base={base}
+          />
         ) : (
           <Text
             key={`run-${i}`}
@@ -288,7 +294,11 @@ function InlineTokens({ tokens, base }: { tokens: InlineToken[]; base: number })
           // image can't render, so degrade to a tappable link like a normal link.
           // Standalone paragraph images render as real blocks via <Paragraph>.
           return (
-            <Text key={i} style={styles.link} onPress={() => openMarkdownLink(token.url)}>
+            <Text
+              key={i}
+              style={styles.link}
+              onPress={() => openMarkdownLink(token.href ?? token.url)}
+            >
               {token.alt || token.url}
             </Text>
           )

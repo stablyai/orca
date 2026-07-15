@@ -10,7 +10,9 @@ export type InlineToken =
   | { kind: 'italic'; text: string }
   | { kind: 'code'; text: string }
   | { kind: 'link'; text: string; url: string }
-  | { kind: 'image'; alt: string; url: string }
+  // `href` is the outer link target of a linked image `[![alt](url)](href)`; absent for a
+  // plain `![alt](url)`. Tapping navigates to `href` when present, else to `url`.
+  | { kind: 'image'; alt: string; url: string; href?: string }
 
 export type CellAlign = 'left' | 'center' | 'right'
 
@@ -261,13 +263,15 @@ export function parseInline(text: string): InlineToken[] {
     const token = m[0]
     if (token.startsWith('[![')) {
       // Linked image `[![alt](img)](href)` (a clickable thumbnail): render the image and
-      // drop the outer link wrapper — showing the image is what matters here.
+      // keep the outer link's href so tapping navigates to it (e.g. a full-size page).
       const altClose = token.indexOf('](')
       const urlStart = altClose + 2
+      const imgUrlEnd = token.indexOf(')', urlStart)
       tokens.push({
         kind: 'image',
         alt: token.slice(3, altClose),
-        url: token.slice(urlStart, token.indexOf(')', urlStart))
+        url: token.slice(urlStart, imgUrlEnd),
+        href: token.slice(imgUrlEnd + 3, -1)
       })
     } else if (token.startsWith('![')) {
       const close = token.indexOf('](')
@@ -298,7 +302,7 @@ export function parseInline(text: string): InlineToken[] {
 // A paragraph's inline tokens split into standalone image blocks and runs of the
 // surrounding inline tokens, in order.
 export type ParagraphPart =
-  | { kind: 'image'; alt: string; url: string }
+  | { kind: 'image'; alt: string; url: string; href?: string }
   | { kind: 'run'; tokens: InlineToken[] }
 
 // Hoists images out of a paragraph's inline flow: RN can't render a responsive <Image>
@@ -316,7 +320,7 @@ export function splitInlineImages(tokens: InlineToken[]): ParagraphPart[] {
   for (const token of tokens) {
     if (token.kind === 'image') {
       flushRun()
-      parts.push({ kind: 'image', alt: token.alt, url: token.url })
+      parts.push({ kind: 'image', alt: token.alt, url: token.url, href: token.href })
     } else {
       run.push(token)
     }
