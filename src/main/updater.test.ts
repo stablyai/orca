@@ -1493,6 +1493,36 @@ describe('updater', () => {
     })
   })
 
+  it('keeps perf manifest outages benign without recording a completed check', async () => {
+    appMock.getVersion.mockReturnValue('1.4.120')
+    fetchNewerReleaseTagsMock.mockResolvedValue({
+      tags: [],
+      state: 'unavailable',
+      unavailableReason: 'manifest'
+    })
+    const setLastUpdateCheckAt = vi.fn()
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, {
+      getLastUpdateCheckAt: () => Date.now(),
+      setLastUpdateCheckAt
+    })
+    checkForUpdatesFromMenu({ includePerfPrerelease: true })
+
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'error',
+        message: "Couldn't reach the update server. Try again in a few minutes.",
+        userInitiated: true
+      })
+    })
+    expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
+    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+  })
+
   it('keeps prerelease publishing-window misses on the generic retry path', async () => {
     appMock.getVersion.mockReturnValue('1.4.120-rc.5')
     fetchNewerReleaseTagsMock.mockResolvedValue({ tags: [], state: 'not-ready' })
@@ -2821,65 +2851,85 @@ describe('updater', () => {
     })
   })
 
-  it('keeps a nudge campaign pending when release assets are still publishing', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-05-24T21:40:00Z'))
-    appMock.getVersion.mockReturnValue('1.4.26-rc.1')
-    fetchNudgeMock.mockResolvedValueOnce({ id: 'campaign-1', minVersion: '1.0.0' })
-    fetchNudgeMock.mockResolvedValue(null)
-    shouldApplyNudgeMock.mockReturnValue(true)
-    fetchNewerReleaseTagsMock
-      .mockResolvedValueOnce({ tags: [], state: 'not-ready' })
-      .mockResolvedValueOnce(['v1.4.27'])
-    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
-      autoUpdaterMock.emit('checking-for-update')
-      return Promise.resolve(undefined)
-    })
-    let pendingNudgeId: string | null = null
-    const setPendingUpdateNudgeId = vi.fn((id: string | null) => {
-      pendingNudgeId = id
-    })
-    const setDismissedUpdateNudgeId = vi.fn()
-    const sendMock = vi.fn()
-    const mainWindow = { webContents: { send: sendMock } }
+  it.each([
+    {
+      version: '1.4.26',
+      candidateLimit: 1,
+      includePrerelease: false,
+      result: { tags: [], state: 'not-ready' as const }
+    },
+    {
+      version: '1.4.26-rc.1',
+      candidateLimit: 2,
+      includePrerelease: true,
+      result: { tags: [], state: 'not-ready' as const }
+    },
+    {
+      version: '1.4.26',
+      candidateLimit: 1,
+      includePrerelease: false,
+      result: { tags: [], state: 'unavailable' as const, unavailableReason: 'manifest' as const }
+    }
+  ])(
+    'keeps a nudge campaign pending across release channels',
+    async ({ version, candidateLimit, includePrerelease, result }) => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-05-24T21:40:00Z'))
+      appMock.getVersion.mockReturnValue(version)
+      fetchNudgeMock.mockResolvedValueOnce({ id: 'campaign-1', minVersion: '1.0.0' })
+      fetchNudgeMock.mockResolvedValue(null)
+      shouldApplyNudgeMock.mockReturnValue(true)
+      fetchNewerReleaseTagsMock.mockResolvedValueOnce(result).mockResolvedValueOnce(['v1.4.27'])
+      autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+        autoUpdaterMock.emit('checking-for-update')
+        return Promise.resolve(undefined)
+      })
+      let pendingNudgeId: string | null = null
+      const setPendingUpdateNudgeId = vi.fn((id: string | null) => {
+        pendingNudgeId = id
+      })
+      const setDismissedUpdateNudgeId = vi.fn()
+      const sendMock = vi.fn()
+      const mainWindow = { webContents: { send: sendMock } }
 
-    const { setupAutoUpdater } = await import('./updater')
+      const { setupAutoUpdater } = await import('./updater')
 
-    setupAutoUpdater(mainWindow as never, {
-      getLastUpdateCheckAt: () => Date.now(),
-      getPendingUpdateNudgeId: () => pendingNudgeId,
-      getDismissedUpdateNudgeId: () => null,
-      setPendingUpdateNudgeId,
-      setDismissedUpdateNudgeId
-    })
+      setupAutoUpdater(mainWindow as never, {
+        getLastUpdateCheckAt: () => Date.now(),
+        getPendingUpdateNudgeId: () => pendingNudgeId,
+        getDismissedUpdateNudgeId: () => null,
+        setPendingUpdateNudgeId,
+        setDismissedUpdateNudgeId
+      })
 
-    await vi.waitFor(() => {
-      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledTimes(1)
-    })
-    expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith('1.4.26-rc.1', 2, {
-      includePrerelease: true
-    })
-    expect(setPendingUpdateNudgeId).toHaveBeenCalledWith('campaign-1')
-    expect(setPendingUpdateNudgeId).not.toHaveBeenCalledWith(null)
-    expect(setDismissedUpdateNudgeId).not.toHaveBeenCalled()
-    expect(pendingNudgeId).toBe('campaign-1')
+      await vi.waitFor(() => {
+        expect(fetchNewerReleaseTagsMock).toHaveBeenCalledTimes(1)
+      })
+      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith(version, candidateLimit, {
+        includePrerelease
+      })
+      expect(setPendingUpdateNudgeId).toHaveBeenCalledWith('campaign-1')
+      expect(setPendingUpdateNudgeId).not.toHaveBeenCalledWith(null)
+      expect(setDismissedUpdateNudgeId).not.toHaveBeenCalled()
+      expect(pendingNudgeId).toBe('campaign-1')
 
-    await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
+      await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
 
-    await vi.waitFor(() => {
-      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
-    })
-    autoUpdaterMock.emit('update-available', { version: '1.4.27' })
-    await vi.advanceTimersByTimeAsync(0)
+      await vi.waitFor(() => {
+        expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+      })
+      autoUpdaterMock.emit('update-available', { version: '1.4.27' })
+      await vi.advanceTimersByTimeAsync(0)
 
-    expect(sendMock).toHaveBeenCalledWith('updater:status', {
-      state: 'available',
-      version: '1.4.27',
-      changelog: null,
-      activeNudgeId: 'campaign-1'
-    })
-    expect(setDismissedUpdateNudgeId).not.toHaveBeenCalled()
-  })
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'available',
+        version: '1.4.27',
+        changelog: null,
+        activeNudgeId: 'campaign-1'
+      })
+      expect(setDismissedUpdateNudgeId).not.toHaveBeenCalled()
+    }
+  )
 
   it('does not dismiss a nudge when last-good fallback is current during publishing', async () => {
     vi.useFakeTimers()
