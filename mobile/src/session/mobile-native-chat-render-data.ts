@@ -6,7 +6,9 @@ import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 export function statusHint(status: MobileNativeChatStatus, error?: string): string | null {
   switch (status) {
     case 'waiting-session':
-      return 'Waiting for the agent to start its session…'
+      // A live agent with no transcript yet is ready to chat — invite the first
+      // message instead of implying the agent is still starting up.
+      return 'Send a message to get started'
     case 'error':
       return error ?? 'Could not load the conversation.'
     default:

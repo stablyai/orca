@@ -32,6 +32,11 @@ import { MobileNativeChatQuestion } from './MobileNativeChatQuestion'
 import { mobileChatQuestionKey, type MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 
+/** Why the composer input is locked: `disconnected` (transport not connected)
+ *  vs `other-client` (another client holds the input lease). Kept distinct so the
+ *  placeholder never mislabels a mere reconnect as "locked by another client". */
+export type MobileNativeChatInputLockReason = 'disconnected' | 'other-client'
+
 type Props = {
   messages: NativeChatMessage[]
   status: MobileNativeChatStatus
@@ -58,7 +63,7 @@ type Props = {
   dictationMode?: 'toggle' | 'hold'
   onMicPressIn?: () => void
   onMicPressOut?: () => void
-  inputLocked?: boolean
+  inputLockReason?: MobileNativeChatInputLockReason | null
   filePaths?: string[]
   onNeedFiles?: (query: string) => void
   /** A pending agent question/permission detected from live status, shown as a
@@ -100,7 +105,7 @@ export function MobileNativeChatView({
   dictationMode,
   onMicPressIn,
   onMicPressOut,
-  inputLocked,
+  inputLockReason,
   filePaths,
   onNeedFiles,
   ask,
@@ -126,6 +131,16 @@ export function MobileNativeChatView({
   const [atBottom, setAtBottom] = useState(true)
   const sendScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
+  // Surface a rejected send inline above the composer — a bottom toast gets hidden
+  // behind the keyboard (the case that prompted this). Auto-dismisses after a beat.
+  const [sendFailed, setSendFailed] = useState(false)
+  useEffect(() => {
+    if (!sendFailed) {
+      return
+    }
+    const t = setTimeout(() => setSendFailed(false), 4000)
+    return () => clearTimeout(t)
+  }, [sendFailed])
 
   useEffect(
     () => () => {
@@ -162,8 +177,10 @@ export function MobileNativeChatView({
     async (text: string): Promise<boolean> => {
       const accepted = await onSend(text)
       if (!accepted) {
+        setSendFailed(true)
         return false
       }
+      setSendFailed(false)
       // Always jump to the newest message when the user sends.
       setAtBottom(true)
       if (sendScrollTimerRef.current) {
@@ -213,6 +230,21 @@ export function MobileNativeChatView({
 
   const hint = statusHint(status, error)
   const showLoading = status === 'loading' && messages.length === 0
+
+  // Composer-lock flicker guard: on a remote link, brief connState blips or lease
+  // hand-offs would otherwise toggle the lock placeholder on and off. Only surface
+  // a lock once it has held ~600ms; drop it instantly so unlocking stays snappy.
+  const rawLockReason = inputLockReason ?? null
+  const [lockHeld, setLockHeld] = useState(false)
+  useEffect(() => {
+    if (rawLockReason === null) {
+      setLockHeld(false)
+      return
+    }
+    const timer = setTimeout(() => setLockHeld(true), 600)
+    return () => clearTimeout(timer)
+  }, [rawLockReason])
+  const lockReason = lockHeld ? rawLockReason : null
 
   return (
     <View style={[styles.root, { paddingBottom: bottomPad }]}>
@@ -356,6 +388,15 @@ export function MobileNativeChatView({
           </Pressable>
         ) : null}
       </View>
+      {sendFailed ? (
+        <View style={styles.sendError}>
+          <Text style={styles.sendErrorText}>
+            {rawLockReason === 'disconnected'
+              ? 'Message not sent — reconnecting…'
+              : 'Message not sent'}
+          </Text>
+        </View>
+      ) : null}
       <MobileNativeChatComposer
         value={composerText}
         onChangeText={onComposerTextChange}
@@ -367,9 +408,13 @@ export function MobileNativeChatView({
         dictationMode={dictationMode}
         onMicPressIn={onMicPressIn}
         onMicPressOut={onMicPressOut}
-        disabled={inputLocked}
+        disabled={lockReason !== null}
         placeholder={
-          inputLocked ? 'Input is locked by another client' : 'Message, @files, /commands'
+          lockReason === 'disconnected'
+            ? 'Reconnecting…'
+            : lockReason === 'other-client'
+              ? 'Input is locked by another client'
+              : 'Message, @files, /commands'
         }
         filePaths={filePaths}
         onNeedFiles={onNeedFiles}

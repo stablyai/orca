@@ -29,6 +29,16 @@ export const styles = StyleSheet.create({
     fontSize: typography.metaSize,
     fontWeight: '700'
   },
+  sendError: {
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.xs
+  },
+  sendErrorText: {
+    color: colors.statusRed,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  },
   chromeToggle: {
     flexDirection: 'row',
     alignItems: 'center',

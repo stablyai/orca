@@ -1,5 +1,5 @@
 import { StyleSheet, View } from 'react-native'
-import { MobileNativeChatView } from './MobileNativeChatView'
+import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
 
 type Props = {
@@ -11,7 +11,7 @@ type Props = {
   dictationMode: 'toggle' | 'hold'
   onMicPressIn: () => void
   onMicPressOut: () => void
-  inputLocked: boolean
+  inputLockReason: MobileNativeChatInputLockReason | null
   keyboardInset: number
 }
 
@@ -26,7 +26,7 @@ export function MobileNativeChatOverlay({
   dictationMode,
   onMicPressIn,
   onMicPressOut,
-  inputLocked,
+  inputLockReason,
   keyboardInset
 }: Props): React.JSX.Element | null {
   if (!controller.showNativeChat) {
@@ -64,7 +64,7 @@ export function MobileNativeChatOverlay({
         dictationMode={dictationMode}
         onMicPressIn={onMicPressIn}
         onMicPressOut={onMicPressOut}
-        inputLocked={inputLocked}
+        inputLockReason={inputLockReason}
         filePaths={controller.nativeChatFilePaths}
         onNeedFiles={controller.loadNativeChatFiles}
         keyboardInset={keyboardInset}

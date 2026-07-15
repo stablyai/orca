@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { MobileNativeChatInputLockReason } from './MobileNativeChatView'
 
 export function useMobileNativeChatInputLease(args: {
   activeHandle: string | null
@@ -6,11 +7,19 @@ export function useMobileNativeChatInputLease(args: {
 }): {
   ready: boolean
   readyRef: { readonly current: boolean }
+  lockReason: MobileNativeChatInputLockReason | null
   markReady: (handle: string) => void
   clear: (handle?: string) => void
 } {
   const [readyHandles, setReadyHandles] = useState<Set<string>>(new Set())
   const ready = args.activeHandle != null && readyHandles.has(args.activeHandle)
+  // Distinguish a transport drop from a genuine other-client hold so the composer
+  // never mislabels a reconnect as "locked by another client".
+  const lockReason: MobileNativeChatInputLockReason | null = !args.connected
+    ? 'disconnected'
+    : ready
+      ? null
+      : 'other-client'
   const readyRef = useRef(ready)
   readyRef.current = ready
   useEffect(() => {
@@ -37,6 +46,7 @@ export function useMobileNativeChatInputLease(args: {
   return {
     ready,
     readyRef,
+    lockReason,
     markReady,
     clear
   }

@@ -1178,6 +1178,7 @@ export default function SessionScreen() {
   const {
     ready: nativeChatInputLeaseReady,
     readyRef: nativeChatInputLeaseReadyRef,
+    lockReason: nativeChatInputLockReason,
     markReady: markNativeChatInputLeaseReady,
     clear: clearNativeChatInputLease
   } = useMobileNativeChatInputLease({
@@ -4922,7 +4923,7 @@ export default function SessionScreen() {
                   dictationMode={dictationMode}
                   onMicPressIn={handleDictationPressIn}
                   onMicPressOut={handleDictationPressOut}
-                  inputLocked={connState !== 'connected' || !nativeChatInputLeaseReady}
+                  inputLockReason={nativeChatInputLockReason}
                   keyboardInset={keyboardLift}
                 />
                 {toastMessage && (

@@ -17,8 +17,8 @@ function user(id: string, text: string): NativeChatMessage {
 }
 
 describe('statusHint', () => {
-  it('describes the waiting-session state', () => {
-    expect(statusHint('waiting-session')).toMatch(/Waiting for the agent/)
+  it('invites a first message in the waiting-session state', () => {
+    expect(statusHint('waiting-session')).toMatch(/Send a message/)
   })
 
   it('prefers the provided error message, falling back to a default', () => {
