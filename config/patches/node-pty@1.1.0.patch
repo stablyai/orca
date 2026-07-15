@@ -1,5 +1,5 @@
 diff --git a/binding.gyp b/binding.gyp
-index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc835f1479ab 100644
+index 5f63978..837360b 100644
 --- a/binding.gyp
 +++ b/binding.gyp
 @@ -1,13 +1,18 @@
@@ -8,7 +8,7 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
      'dependencies': [
 -      "<!(node -p \"require('node-addon-api').targets\"):node_addon_api_except",
 +      "<!(node -p \"require.resolve('node-addon-api/node_addon_api.gyp')\"):node_addon_api_except",
-     ],
++    ],
 +    # Orca: GCC 9 (Ubuntu 20.04 floor) accepts C++20 as gnu++2a, but rejects
 +    # the newer gnu++20 spelling emitted by Node 24's gyp flags.
 +    'cflags_cc!': [
@@ -16,7 +16,7 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
 +    ],
 +    'cflags_cc': [
 +      '-std=gnu++2a'
-+    ],
+     ],
      'conditions': [
        ['OS=="win"', {
 -        'msvs_configuration_attributes': {
@@ -25,7 +25,7 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
          'msvs_settings': {
              'VCCLCompilerTool': {
                'AdditionalOptions': [
-@@ -42,32 +39,6 @@
+@@ -42,32 +47,6 @@
              '-lshlwapi'
            ],
          },
@@ -58,7 +58,7 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
        ]
      }, { # OS!="win"
        'targets': [
-@@ -88,6 +85,16 @@
+@@ -88,6 +67,16 @@
                'libraries!': [
                  '-lutil'
                ]
@@ -76,7 +76,7 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
            ]
          }
 diff --git a/deps/winpty/src/winpty.gyp b/deps/winpty/src/winpty.gyp
-index 1ac5758bedd8cf54f32280dea4e4aeb5afdee30d..e619813759c6f14694838bdfbd0ea5f8360130ef 100644
+index 1ac5758..e619813 100644
 --- a/deps/winpty/src/winpty.gyp
 +++ b/deps/winpty/src/winpty.gyp
 @@ -10,7 +10,7 @@
@@ -118,7 +118,7 @@ index 1ac5758bedd8cf54f32280dea4e4aeb5afdee30d..e619813759c6f14694838bdfbd0ea5f8
                  # Specify this setting here to override a setting from somewhere
                  # else, such as node's common.gypi.
 diff --git a/lib/conpty_console_list_agent.js b/lib/conpty_console_list_agent.js
-index 8c4fca9022a6d6f015bca87f61625cde2278f428..0a01730616488119aa21ef441cf3c441e02a974c 100644
+index 8c4fca9..0a01730 100644
 --- a/lib/conpty_console_list_agent.js
 +++ b/lib/conpty_console_list_agent.js
 @@ -10,7 +10,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
@@ -139,7 +139,7 @@ index 8c4fca9022a6d6f015bca87f61625cde2278f428..0a01730616488119aa21ef441cf3c441
  //# sourceMappingURL=conpty_console_list_agent.js.map
 \ No newline at end of file
 diff --git a/lib/unixTerminal.js b/lib/unixTerminal.js
-index 1ec12f796a822c78fba9ad7f6448c3987e325c23..cec8b67aef02f8199e5606a0d257088bf1865877 100644
+index 1ec12f7..cec8b67 100644
 --- a/lib/unixTerminal.js
 +++ b/lib/unixTerminal.js
 @@ -28,8 +28,12 @@ var native = utils_1.loadNativeModule('pty');
@@ -158,7 +158,7 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..cec8b67aef02f8199e5606a0d257088b
  var DEFAULT_NAME = 'xterm';
  var DESTROY_SOCKET_TIMEOUT_MS = 200;
 diff --git a/src/conpty_console_list_agent.ts b/src/conpty_console_list_agent.ts
-index 181ccabbbe9c4948a9725fb1db907a68e9de01fc..67f31facf85562b67adbfbd04ce28ddd8eeb4a79 100644
+index 181ccab..67f31fa 100644
 --- a/src/conpty_console_list_agent.ts
 +++ b/src/conpty_console_list_agent.ts
 @@ -10,6 +10,12 @@ import { loadNativeModule } from './utils';
@@ -176,7 +176,7 @@ index 181ccabbbe9c4948a9725fb1db907a68e9de01fc..67f31facf85562b67adbfbd04ce28ddd
  process.send!({ consoleProcessList });
  process.exit(0);
 diff --git a/src/unix/pty.cc b/src/unix/pty.cc
-index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d15c4dd44 100644
+index 7b4b9e1..43d2057 100644
 --- a/src/unix/pty.cc
 +++ b/src/unix/pty.cc
 @@ -23,7 +23,9 @@
@@ -215,7 +215,17 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
  /* Some platforms name VWERASE and VDISCARD differently */
  #if !defined(VWERASE) && defined(VWERSE)
  #define VWERASE	VWERSE
-@@ -237,13 +258,23 @@ pty_getproc(int, char *);
+@@ -228,6 +249,9 @@ Napi::Value PtyGetProc(const Napi::CallbackInfo& info);
+ static int
+ pty_nonblock(int);
+
++static int
++pty_cloexec(int);
++
+ #if defined(__APPLE__)
+ static char *
+ pty_getproc(int);
+@@ -237,13 +261,23 @@ pty_getproc(int, char *);
  #endif
  
  #if defined(__APPLE__) || defined(__OpenBSD__)
@@ -240,7 +250,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
  #endif
  
  struct DelBuf {
-@@ -367,10 +398,11 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+@@ -367,10 +401,11 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
      argv[i + 3] = strdup(arg.c_str());
    }
  
@@ -256,7 +266,31 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
    }
    if (pty_nonblock(master) == -1) {
      throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
-@@ -684,15 +716,73 @@ pty_getproc(int fd, char *tty) {
+@@ -445,6 +480,9 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+       if (pty_nonblock(master) == -1) {
+         throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
+       }
++      // forkpty(3) cannot open the master with O_CLOEXEC. Best-effort: the
++      // child is already running, so fd hygiene must not fail the spawn.
++      pty_cloexec(master);
+   }
+ #endif
+
+@@ -586,6 +624,13 @@ pty_nonblock(int fd) {
+   return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+ }
+
++static int
++pty_cloexec(int fd) {
++  int flags = fcntl(fd, F_GETFD, 0);
++  if (flags == -1) return -1;
++  return fcntl(fd, F_SETFD, flags | FD_CLOEXEC);
++}
++
+ /**
+  * pty_getproc
+  * Taken from tmux.
+@@ -684,15 +729,73 @@ pty_getproc(int fd, char *tty) {
  #endif
  
  #if defined(__APPLE__)
@@ -332,25 +366,29 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
  
    for (; count < 3; count++) {
      low_fds[count] = posix_openpt(O_RDWR);
-@@ -706,80 +796,118 @@ pty_posix_spawn(char** argv, char** env,
+@@ -706,80 +809,122 @@ pty_posix_spawn(char** argv, char** env,
                POSIX_SPAWN_SETSID;
    *master = posix_openpt(O_RDWR);
    if (*master == -1) {
 -    return;
 +    pty_set_spawn_error(err, "posix_openpt", errno);
 +    goto done;
++  }
++
++  // POSIX_SPAWN_CLOEXEC_DEFAULT applies to this child, not future children
++  // of the parent process that retains the master.
++  pty_cloexec(*master);
++
++  res = grantpt(*master);
++  if (res == -1) {
++    pty_set_spawn_error(err, "grantpt", errno);
++    goto done;
    }
  
 -  int res = grantpt(*master) || unlockpt(*master);
-+  res = grantpt(*master);
++  res = unlockpt(*master);
    if (res == -1) {
 -    return;
-+    pty_set_spawn_error(err, "grantpt", errno);
-+    goto done;
-+  }
-+
-+  res = unlockpt(*master);
-+  if (res == -1) {
 +    pty_set_spawn_error(err, "unlockpt", errno);
 +    goto done;
    }
@@ -476,7 +514,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
  }
  #endif
 diff --git a/src/win/conpty.cc b/src/win/conpty.cc
-index 7b286d3d644c26141df516929703aa6e129df4b2..ec6bf3932c65b89c013ff133dc6bf46a6a4082ce 100644
+index 7b286d3..ec6bf39 100644
 --- a/src/win/conpty.cc
 +++ b/src/win/conpty.cc
 @@ -18,6 +18,7 @@
