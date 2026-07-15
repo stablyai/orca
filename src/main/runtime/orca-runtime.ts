@@ -2021,12 +2021,14 @@ type RuntimeWorktreeScanResult =
 
 type RuntimeWorktreeScanCache = {
   generation: number
+  runtimeKey: string
   result: Extract<RuntimeWorktreeScanResult, { ok: true }>
   expiresAt: number
 }
 
 type RuntimeWorktreeScanInFlight = {
   generation: number
+  runtimeKey: string
   promise: Promise<RuntimeWorktreeScanResult>
 }
 
@@ -20708,21 +20710,38 @@ export class OrcaRuntimeService {
   ): Promise<RuntimeWorktreeScanResult> {
     const now = Date.now()
     const generation = this.resolvedWorktreeGeneration
+    const projectRuntime =
+      projectRuntimeByRepoId?.get(repo.id) ??
+      (!repo.connectionId
+        ? resolveLocalProjectRuntimeForRepo(this.requireStore(), repo)
+        : undefined)
+    const runtimeKey = projectRuntime
+      ? projectRuntime.status === 'resolved'
+        ? projectRuntime.runtime.cacheKey
+        : projectRuntime.repair.cacheKey
+      : repo.connectionId
+        ? `ssh:${repo.connectionId}`
+        : 'local:default'
     const cached = this.worktreeScanCache.get(repo.id)
-    if (cached?.generation === generation && cached.expiresAt > now) {
+    if (
+      cached?.generation === generation &&
+      cached.runtimeKey === runtimeKey &&
+      cached.expiresAt > now
+    ) {
       return cached.result
     }
     const inFlight = this.worktreeScanInFlight.get(repo.id)
-    if (inFlight?.generation === generation) {
+    if (inFlight?.generation === generation && inFlight.runtimeKey === runtimeKey) {
       return inFlight.promise
     }
-    const promise = this.listRepoWorktreesForResolutionUncached(repo, projectRuntimeByRepoId)
-    this.worktreeScanInFlight.set(repo.id, { generation, promise })
+    const promise = this.listRepoWorktreesForResolutionUncached(repo, projectRuntime)
+    this.worktreeScanInFlight.set(repo.id, { generation, runtimeKey, promise })
     try {
       const result = await promise
       if (result.ok && generation === this.resolvedWorktreeGeneration) {
         this.worktreeScanCache.set(repo.id, {
           generation,
+          runtimeKey,
           result,
           expiresAt: Date.now() + WORKTREE_SCAN_CACHE_TTL_MS
         })
@@ -20737,12 +20756,9 @@ export class OrcaRuntimeService {
 
   private async listRepoWorktreesForResolutionUncached(
     repo: Repo,
-    projectRuntimeByRepoId: ReadonlyMap<string, ProjectExecutionRuntimeResolution> | undefined
+    projectRuntime: ProjectExecutionRuntimeResolution | undefined
   ): Promise<RuntimeWorktreeScanResult> {
     if (!repo.connectionId) {
-      const projectRuntime = projectRuntimeByRepoId
-        ? projectRuntimeByRepoId.get(repo.id)
-        : resolveLocalProjectRuntimeForRepo(this.requireStore(), repo)
       return {
         ok: true,
         worktrees: await listRepoWorktrees(
