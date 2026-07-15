@@ -10,9 +10,11 @@ import {
 } from '@/runtime/runtime-repo-client'
 import { isRuntimeRepoRefSearchQueryWithinLimit } from '@/runtime/runtime-repo-search-bounds'
 import { translate } from '@/i18n/i18n'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 
 type BaseRefPickerProps = {
   repoId: string
+  hostId?: ExecutionHostId
   currentBaseRef?: string
   onSelect: (ref: string) => void
   onUsePrimary?: () => void
@@ -20,13 +22,20 @@ type BaseRefPickerProps = {
 
 export function BaseRefPicker({
   repoId,
+  hostId,
   currentBaseRef,
   onSelect,
   onUsePrimary
 }: BaseRefPickerProps): React.JSX.Element {
-  const activeRuntimeEnvironmentId = useAppStore((state) =>
+  const focusedRuntimeEnvironmentId = useAppStore((state) =>
     getRuntimeEnvironmentIdForRepo(state, repoId)
   )
+  const selectedHost = parseExecutionHostId(hostId)
+  const activeRuntimeEnvironmentId = hostId
+    ? selectedHost?.kind === 'runtime'
+      ? selectedHost.environmentId
+      : null
+    : focusedRuntimeEnvironmentId
   // Why: null until the IPC resolves (or when the repo has no default base ref
   // available). We avoid seeding with 'origin/main' because that would display
   // a fabricated default in repos that don't actually have origin/main.
@@ -64,7 +73,11 @@ export function BaseRefPicker({
 
     const loadDefaultBaseRef = async (): Promise<void> => {
       try {
-        const result = await getRuntimeRepoBaseRefDefault({ activeRuntimeEnvironmentId }, repoId)
+        const result = await getRuntimeRepoBaseRefDefault(
+          { activeRuntimeEnvironmentId },
+          repoId,
+          hostId
+        )
         if (!stale) {
           setDefaultBaseRef(result.defaultBaseRef)
           setRemoteCount(result.remoteCount)
@@ -90,7 +103,7 @@ export function BaseRefPicker({
     return () => {
       stale = true
     }
-  }, [activeRuntimeEnvironmentId, repoId])
+  }, [activeRuntimeEnvironmentId, hostId, repoId])
 
   useEffect(() => {
     if (!isRuntimeRepoRefSearchQueryWithinLimit(baseRefQuery)) {
@@ -109,7 +122,13 @@ export function BaseRefPicker({
     setIsSearchingBaseRefs(true)
 
     const timer = window.setTimeout(() => {
-      void searchRuntimeRepoBaseRefs({ activeRuntimeEnvironmentId }, repoId, trimmedQuery, 20)
+      void searchRuntimeRepoBaseRefs(
+        { activeRuntimeEnvironmentId },
+        repoId,
+        trimmedQuery,
+        20,
+        hostId
+      )
         .then((results) => {
           if (!stale) {
             setBaseRefResults(results)
@@ -132,7 +151,7 @@ export function BaseRefPicker({
       stale = true
       window.clearTimeout(timer)
     }
-  }, [activeRuntimeEnvironmentId, baseRefQuery, repoId])
+  }, [activeRuntimeEnvironmentId, baseRefQuery, hostId, repoId])
 
   const effectiveBaseRef = currentBaseRef ?? defaultBaseRef
 

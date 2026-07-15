@@ -772,6 +772,14 @@ export type UISlice = {
   openSettingsTarget: (target: NonNullable<UISlice['settingsNavigationTarget']>) => void
   clearSettingsTarget: () => void
   /**
+   * Which host the Projects Settings pane shows for each project, keyed by
+   * projectId. Set by the pane's "Available Hosts" switcher. Ephemeral on
+   * purpose — never persisted, so a reload reopens on the project's effective
+   * host rather than a possibly-dangling selection.
+   */
+  settingsProjectHostSelection: Record<string, ExecutionHostId>
+  setSettingsProjectHostSelection: (projectId: string, hostId: ExecutionHostId) => void
+  /**
    * One-shot Appearance accordion to expand for nested Settings deep links
    * (e.g. Usage percentages lives under Window & Sidebar). Cleared when
    * Appearance consumes it.
@@ -1533,6 +1541,20 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   settingsNavigationTarget: null,
   openSettingsTarget: (target) => set({ settingsNavigationTarget: target }),
   clearSettingsTarget: () => set({ settingsNavigationTarget: null }),
+  settingsProjectHostSelection: {},
+  // Why: renderer-only, never persisted — no window.api.ui.set here and this
+  // field is intentionally absent from the debounced UI writer in App.tsx.
+  setSettingsProjectHostSelection: (projectId, hostId) =>
+    set((s) =>
+      s.settingsProjectHostSelection[projectId] === hostId
+        ? s
+        : {
+            settingsProjectHostSelection: {
+              ...s.settingsProjectHostSelection,
+              [projectId]: hostId
+            }
+          }
+    ),
   appearanceAccordionDeepLink: null,
   setAppearanceAccordionDeepLink: (section) => set({ appearanceAccordionDeepLink: section }),
   clearAppearanceAccordionDeepLink: () => set({ appearanceAccordionDeepLink: null }),

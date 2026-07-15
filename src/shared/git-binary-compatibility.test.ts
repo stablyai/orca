@@ -13,6 +13,7 @@ import {
   hasUnsupportedRevParsePathFormatEcho,
   isUnsupportedWorktreeListZError
 } from './git-worktree-command-capabilities'
+import { gitCredentialPromptGuardEnv } from './git-credential-prompt-env'
 
 const execFileAsync = promisify(execFile)
 const image = process.env.ORCA_GIT_COMPAT_IMAGE
@@ -26,7 +27,7 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
   let repoPath = ''
   let version = { major: 0, minor: 0 }
 
-  async function runGit(args: string[]): Promise<GitResult> {
+  async function runGit(args: string[], env?: NodeJS.ProcessEnv): Promise<GitResult> {
     if (image) {
       const dockerUser =
         typeof process.getuid === 'function' && typeof process.getgid === 'function'
@@ -39,6 +40,9 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
           '--rm',
           '--network=none',
           ...dockerUser,
+          ...Object.entries(env ?? {}).flatMap(([key, value]) =>
+            value === undefined ? [] : ['--env', `${key}=${value}`]
+          ),
           '-v',
           `${repoPath}:/repo`,
           '-w',
@@ -51,7 +55,11 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
         { maxBuffer: 2 * 1024 * 1024 }
       )
     }
-    return execFileAsync(binary!, args, { cwd: repoPath, maxBuffer: 2 * 1024 * 1024 })
+    return execFileAsync(binary!, args, {
+      cwd: repoPath,
+      env: env ? { ...process.env, ...env } : undefined,
+      maxBuffer: 2 * 1024 * 1024
+    })
   }
 
   function supports(major: number, minor: number): boolean {
@@ -140,6 +148,21 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
         isUnsupportedMergeTreeMergeBaseError
       )
       await expect(runGit([...legacyArgs, head, head])).resolves.toBeDefined()
+    }
+  })
+
+  it('degrades indexed credential config safely at the Git 2.31 boundary', async () => {
+    const guardEnv = gitCredentialPromptGuardEnv({}, 'linux')
+    await expect(runGit(['status', '--short'], guardEnv)).resolves.toBeDefined()
+
+    try {
+      const result = await runGit(['config', '--get', 'credential.interactive'], guardEnv)
+      expect(supports(2, 31)).toBe(true)
+      expect(result.stdout.trim()).toBe('false')
+    } catch {
+      // Git 2.25 ignores the indexed variables rather than rejecting commands;
+      // the scalar prompt guards still provide the baseline fail-fast behavior.
+      expect(supports(2, 31)).toBe(false)
     }
   })
 })

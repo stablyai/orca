@@ -131,6 +131,12 @@ function ensureSerializerListener(): void {
     const entry = serializersByPtyId.get(request.ptyId)
     void Promise.resolve(entry?.fn(request.opts) ?? null)
       .then((result) => {
+        // Why: cold parking and remounts can replace the serializer while its
+        // parse wait is in flight; never publish a fossil from the old xterm.
+        if (serializersByPtyId.get(request.ptyId) !== entry) {
+          window.api.pty.sendSerializedBuffer(request.requestId, null)
+          return
+        }
         if (!result) {
           window.api.pty.sendSerializedBuffer(request.requestId, null)
           return

@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   _resetTerminalPaneRecoveryForTests,
+  captureTerminalPaneRecoveryGeneration,
+  registerTerminalPaneRecoveryInstance,
   requestTerminalPaneRecovery
 } from './terminal-pane-recovery'
 
@@ -57,6 +59,31 @@ describe('requestTerminalPaneRecovery', () => {
     )
     // Pipeline-death reasons are already probe-certified — no liveness gate.
     expect(mocks.hasPty).not.toHaveBeenCalled()
+  })
+
+  it('records a breadcrumb when the tab cannot be remounted, without consuming budget', async () => {
+    mocks.remountTerminalTabForRecovery.mockReturnValue(false)
+
+    const result = await requestTerminalPaneRecovery({
+      tabId: 'tab-gone',
+      ptyId: 'pty-1',
+      reason: 'restore-blocked'
+    })
+
+    expect(result).toBe(false)
+    expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
+      'terminal_pane_recovery_remount_unavailable',
+      { tabId: 'tab-gone', reason: 'restore-blocked' }
+    )
+    // Budget untouched: a later request for the same tab may still remount.
+    mocks.remountTerminalTabForRecovery.mockReturnValue(true)
+    expect(
+      await requestTerminalPaneRecovery({
+        tabId: 'tab-gone',
+        ptyId: 'pty-1',
+        reason: 'restore-blocked'
+      })
+    ).toBe(true)
   })
 
   it('coalesces repeat requests inside the cooldown window', async () => {
@@ -123,16 +150,196 @@ describe('requestTerminalPaneRecovery', () => {
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(4)
   })
 
-  it('a cooldown decline schedules no retry (the tab remount already covers it)', async () => {
+  it('does not retry a cooldown decline from the xterm replaced by the remount', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(0)
-    await requestTerminalPaneRecovery({ tabId: 'tab-1', ptyId: 'pty-1', reason: 'write-stalled' })
+    const replacedGeneration = captureTerminalPaneRecoveryGeneration('tab-1')
+    await requestTerminalPaneRecovery({
+      tabId: 'tab-1',
+      ptyId: 'pty-1',
+      reason: 'write-stalled',
+      terminalRecoveryGeneration: replacedGeneration
+    })
     expect(
-      await requestTerminalPaneRecovery({ tabId: 'tab-1', ptyId: 'pty-1', reason: 'replay-wedged' })
+      await requestTerminalPaneRecovery({
+        tabId: 'tab-1',
+        ptyId: 'pty-1',
+        reason: 'replay-wedged',
+        terminalRecoveryGeneration: replacedGeneration
+      })
     ).toBe(false)
 
     await vi.advanceTimersByTimeAsync(600_000)
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries a fresh replacement xterm that wedges during the cooldown', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    await requestTerminalPaneRecovery({
+      tabId: 'tab-1',
+      ptyId: 'pty-1',
+      reason: 'write-stalled',
+      terminalRecoveryGeneration: captureTerminalPaneRecoveryGeneration('tab-1')
+    })
+    const replacementGeneration = captureTerminalPaneRecoveryGeneration('tab-1')
+
+    expect(
+      await requestTerminalPaneRecovery({
+        tabId: 'tab-1',
+        ptyId: 'pty-1',
+        reason: 'replay-wedged',
+        terminalRecoveryGeneration: replacementGeneration
+      })
+    ).toBe(false)
+    await vi.advanceTimersByTimeAsync(14_999)
+    expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not let an awaited scheduled retry remount a newer generation', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    await requestTerminalPaneRecovery({
+      tabId: 'tab-1',
+      ptyId: 'pty-1',
+      reason: 'write-stalled',
+      terminalRecoveryGeneration: captureTerminalPaneRecoveryGeneration('tab-1')
+    })
+    const replacementGeneration = captureTerminalPaneRecoveryGeneration('tab-1')
+    let resolveLiveness: ((live: boolean) => void) | undefined
+    mocks.hasPty.mockImplementation(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveLiveness = resolve
+        })
+    )
+    await requestTerminalPaneRecovery({
+      tabId: 'tab-1',
+      ptyId: 'pty-1',
+      reason: 'input-undeliverable',
+      terminalRecoveryGeneration: replacementGeneration
+    })
+
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(mocks.hasPty).toHaveBeenCalledTimes(1)
+    expect(
+      await requestTerminalPaneRecovery({
+        tabId: 'tab-1',
+        ptyId: 'pty-1',
+        reason: 'write-stalled',
+        terminalRecoveryGeneration: replacementGeneration
+      })
+    ).toBe(true)
+    resolveLiveness?.(true)
+    await Promise.resolve()
+
+    expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(2)
+  })
+
+  it('cancels a retry when a non-recovery lifecycle replaces its xterm', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    const originalInstance = registerTerminalPaneRecoveryInstance('tab-1')
+    await requestTerminalPaneRecovery({
+      tabId: 'tab-1',
+      ptyId: 'pty-1',
+      reason: 'write-stalled',
+      terminalRecoveryGeneration: captureTerminalPaneRecoveryGeneration('tab-1'),
+      terminalRecoveryInstanceId: originalInstance.id
+    })
+    originalInstance.unregister()
+
+    const wedgedReplacement = registerTerminalPaneRecoveryInstance('tab-1')
+    await requestTerminalPaneRecovery({
+      tabId: 'tab-1',
+      ptyId: 'pty-1',
+      reason: 'replay-wedged',
+      terminalRecoveryGeneration: captureTerminalPaneRecoveryGeneration('tab-1'),
+      terminalRecoveryInstanceId: wedgedReplacement.id
+    })
+    expect(vi.getTimerCount()).toBe(1)
+
+    // Cold parking, SSH reconnect, and ordinary remounts dispose the binding
+    // without changing the recovery epoch; disposal owns timer invalidation.
+    wedgedReplacement.unregister()
+    const healthySuccessor = registerTerminalPaneRecoveryInstance('tab-1')
+    expect(vi.getTimerCount()).toBe(0)
+    await vi.advanceTimersByTimeAsync(600_000)
+
+    expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(1)
+    healthySuccessor.unregister()
+  })
+
+  it('keeps a sibling pane retry when the first requesting split is disposed', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    await requestTerminalPaneRecovery({
+      tabId: 'tab-1',
+      ptyId: 'pty-1',
+      reason: 'write-stalled'
+    })
+    const recoveryGeneration = captureTerminalPaneRecoveryGeneration('tab-1')
+    const firstSplit = registerTerminalPaneRecoveryInstance('tab-1')
+    const secondSplit = registerTerminalPaneRecoveryInstance('tab-1')
+    for (const instance of [firstSplit, secondSplit]) {
+      await requestTerminalPaneRecovery({
+        tabId: 'tab-1',
+        ptyId: `pty-${instance.id}`,
+        reason: 'replay-wedged',
+        terminalRecoveryGeneration: recoveryGeneration,
+        terminalRecoveryInstanceId: instance.id
+      })
+    }
+
+    firstSplit.unregister()
+    expect(vi.getTimerCount()).toBe(1)
+    await vi.advanceTimersByTimeAsync(15_000)
+
+    expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(2)
+    secondSplit.unregister()
+  })
+
+  it('does not abandon a certified sibling behind a failed liveness retry', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    await requestTerminalPaneRecovery({
+      tabId: 'tab-1',
+      ptyId: 'pty-initial',
+      reason: 'write-stalled'
+    })
+    const recoveryGeneration = captureTerminalPaneRecoveryGeneration('tab-1')
+    const livenessSplit = registerTerminalPaneRecoveryInstance('tab-1')
+    const certifiedSplit = registerTerminalPaneRecoveryInstance('tab-1')
+    mocks.hasPty.mockResolvedValue(false)
+
+    await requestTerminalPaneRecovery({
+      tabId: 'tab-1',
+      ptyId: 'pty-not-live',
+      reason: 'input-undeliverable',
+      terminalRecoveryGeneration: recoveryGeneration,
+      terminalRecoveryInstanceId: livenessSplit.id,
+      requireAuthoritativeLiveness: true
+    })
+    await requestTerminalPaneRecovery({
+      tabId: 'tab-1',
+      ptyId: 'pty-certified-dead',
+      reason: 'write-stalled',
+      terminalRecoveryGeneration: recoveryGeneration,
+      terminalRecoveryInstanceId: certifiedSplit.id
+    })
+
+    await vi.advanceTimersByTimeAsync(15_000)
+
+    expect(mocks.hasPty).toHaveBeenCalledWith('pty-not-live')
+    expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(2)
+    expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenLastCalledWith(
+      'terminal_pane_recovery_remount',
+      { tabId: 'tab-1', reason: 'write-stalled' }
+    )
+    livenessSplit.unregister()
+    certifiedSplit.unregister()
   })
 
   it('budgets tabs independently', async () => {
@@ -264,6 +471,11 @@ describe('requestTerminalPaneRecovery', () => {
     })
 
     expect(result).toBe(false)
-    expect(mocks.recordRendererCrashBreadcrumb).not.toHaveBeenCalled()
+    // Not silent anymore: the missing-tab outcome is breadcrumbed (see the
+    // dedicated test above), but no remount breadcrumb may fire.
+    expect(mocks.recordRendererCrashBreadcrumb).not.toHaveBeenCalledWith(
+      'terminal_pane_recovery_remount',
+      expect.anything()
+    )
   })
 })

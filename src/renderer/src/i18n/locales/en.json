@@ -699,7 +699,8 @@
         "devSearchKeywordToast": "toast",
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
-        "devSearchKeywordNotification": "notification"
+        "devSearchKeywordNotification": "notification",
+        "projectHostsSummary": "{{value0}} hosts"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Paste is too large."
@@ -6127,7 +6128,7 @@
           "26fef02bf3": "Project Icon",
           "c7ef4415de": "Display Name",
           "b0a0c14a1c": "Project-specific display details for the sidebar and tabs.",
-          "170624bdfb": "Remove this project from Orca.",
+          "removeProjectAllHosts": "Remove this project from Orca on all configured hosts.",
           "0909e5d650": "Remove Project",
           "ee5a290616": "Opened as folder. Git features are unavailable for this workspace.",
           "323debba71": "Type:",
@@ -9027,7 +9028,9 @@
           "3325d996cb": "Refresh usage",
           "a8f3e2c1b4": "Weekly credits",
           "b7e2d9f0a3": "Same weekly credit % as the grok /usage screen in the terminal.",
-          "c6d1a8f4e2": "Resets {{when}}"
+          "c6d1a8f4e2": "Resets {{when}}",
+          "e6dadc1e2b": "Monthly usage",
+          "75e396bf42": "Included monthly usage for Grok unified-billing accounts."
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Used",
@@ -9036,6 +9039,56 @@
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
           "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
+        },
+        "MobileRelayStatusSection": {
+          "registered": "Registered",
+          "connecting": "Connecting",
+          "reconnecting": "Reconnecting",
+          "offline": "Offline",
+          "title": "Orca Relay",
+          "automatic": "Connect from anywhere when a phone is paired",
+          "signInPrompt": "Sign in on this desktop to connect from anywhere",
+          "directStillAvailable": "LAN and Tailscale connections remain available.",
+          "directNeedsNoAccount": "LAN and Tailscale pairing still work without an account.",
+          "signIn": "Sign in",
+          "unavailable": "Unavailable",
+          "standby": "Standby — no relay devices"
+        },
+        "MobilePairingConnectionOptions": {
+          "ready": "Ready",
+          "connecting": "Connecting",
+          "available": "Available",
+          "reconnecting": "Reconnecting",
+          "unavailable": "Unavailable",
+          "title": "How should the new phone connect?",
+          "anywhere": "Connect with Orca Relay",
+          "recommended": "Recommended",
+          "automaticDescription": "Orca uses a direct connection when available and Relay otherwise.",
+          "signInDescription": "Sign in on this desktop to use Orca Relay.",
+          "signIn": "Sign in",
+          "localOnly": "Local network only",
+          "localShort": "LAN or Tailscale",
+          "localDescription": "Uses LAN or Tailscale without connecting this phone through Orca Relay."
+        },
+        "MobilePairingSetupSection": {
+          "title": "Pair a phone",
+          "automaticDescription": "The pairing code includes direct access and encrypted Orca Relay fallback.",
+          "localDescription": "The pairing code connects only through the local network address below.",
+          "regenerate": "Regenerate",
+          "generate": "Generate QR Code",
+          "localSettings": "Local connection settings",
+          "localAddressDescription": "Choose the LAN or private-network address that Orca Mobile can use to reach this computer directly.",
+          "refresh": "Refresh network interfaces",
+          "tailnet": "Connect with your own tailnet",
+          "tailnetDescription": "Install Tailscale on this computer and your phone, sign in to the same tailnet, then select its 100.x.y.z address above.",
+          "getTailscale": "Get Tailscale"
+        },
+        "MobileRelayBetaAvailability": {
+          "about": "About the Orca Relay beta",
+          "beta": "Beta",
+          "availability": "Available on",
+          "testFlight": "TestFlight",
+          "androidApk": "Android APK"
         }
       },
       "right": {
@@ -12790,7 +12843,7 @@
         "profiles": {
           "switcher": {
             "cloud": {
-              "unavailable": "Cloud sign-in unavailable"
+              "unavailable": "Orca sign-in unavailable"
             },
             "account": "Account",
             "reconnect": "Reconnect profile",
@@ -12814,7 +12867,14 @@
             "c106c674fe": "New local profile",
             "org": {
               "members": "Organization members"
-            }
+            },
+            "signInWaiting": "Waiting for sign-in…",
+            "signInAgain": "Sign in again",
+            "signIn": "Sign in to Orca",
+            "accountTitle": "Orca account",
+            "accountSignedIn": "Signed in",
+            "accountSignInRequired": "Sign-in required",
+            "accountSignedOut": "Signed out"
           },
           "management": {
             "04e7bd2a23": "Transfer",
@@ -12857,8 +12917,8 @@
           },
           "signout": {
             "confirm": {
-              "title": "Sign out?",
-              "description": "Sign out of {{profileName}} and keep its projects, worktrees, and local metadata on this device.",
+              "title": "Sign out of Orca?",
+              "description": "You'll be signed out of Orca on this device. Your local projects and worktrees won't be affected.",
               "cancel": "Cancel",
               "action": "Sign out"
             }
@@ -12960,6 +13020,34 @@
         "searchLabels": "Filter labels…",
         "searchAssignee": "Filter assignee…",
         "back": "Back"
+      },
+      "browser-pane": {
+        "markup": {
+          "cancel": "Cancel",
+          "clear": "Clear all",
+          "copiedToast": "Markup copied — paste it into your agent ({{value0}})",
+          "copy": "Copy Markup",
+          "drawButton": "Draw on screenshot",
+          "drawHint": "New — draw on the page, then copy it to your agent",
+          "errorAttach": "Could not attach the markup screenshot.",
+          "errorCapture": "Could not capture the page to draw on.",
+          "errorUnavailable": "Screenshot markup is not available on this page.",
+          "fontSize": "Font size",
+          "hint": "Draw on the page, then copy the markup to paste into your agent.",
+          "redo": "Redo",
+          "style": "Color and thickness",
+          "textInput": "Annotation text",
+          "tool": {
+            "arrow": "Arrow",
+            "ellipse": "Ellipse",
+            "highlight": "Highlighter",
+            "pen": "Pen",
+            "rect": "Rectangle",
+            "text": "Text"
+          },
+          "undo": "Undo",
+          "widthOption": "{{value0}} px"
+        }
       }
     },
     "i18n": {

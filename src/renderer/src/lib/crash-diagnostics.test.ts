@@ -116,6 +116,20 @@ describe('renderer crash diagnostics', () => {
     })
   })
 
+  it('suppresses benign ResizeObserver loop errors instead of recording them', () => {
+    diagnostics.installRendererCrashDiagnostics()
+    recordBreadcrumbMock.mockClear()
+
+    const preventDefault = vi.fn()
+    listeners.get('error')?.[0]?.({
+      message: 'ResizeObserver loop completed with undelivered notifications.',
+      preventDefault
+    })
+
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(recordBreadcrumbMock).not.toHaveBeenCalled()
+  })
+
   it('disposes global listeners and the memory interval', () => {
     diagnostics.installRendererCrashDiagnostics()
 

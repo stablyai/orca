@@ -699,7 +699,8 @@
         "devSearchKeywordToast": "toast",
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
-        "devSearchKeywordNotification": "notification"
+        "devSearchKeywordNotification": "notification",
+        "projectHostsSummary": "{{value0}} hosts"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "El contenido pegado es demasiado grande."
@@ -6090,7 +6091,7 @@
           "26fef02bf3": "Icono de proyecto",
           "c7ef4415de": "Nombre para mostrar",
           "b0a0c14a1c": "Detalles de visualización específicos del proyecto para la barra lateral y las pestañas.",
-          "170624bdfb": "Eliminar este proyecto de Orca.",
+          "removeProjectAllHosts": "Eliminar este proyecto de Orca en todos los hosts configurados.",
           "0909e5d650": "Eliminar proyecto",
           "ee5a290616": "Abierto como carpeta. Las funciones de Git no están disponibles para este espacio de trabajo.",
           "323debba71": "Tipo:",
@@ -9027,7 +9028,9 @@
           "3325d996cb": "Actualizar uso",
           "a8f3e2c1b4": "Créditos semanales",
           "b7e2d9f0a3": "El mismo porcentaje de créditos semanales que la pantalla grok /usage en la terminal.",
-          "c6d1a8f4e2": "Se restablece {{when}}"
+          "c6d1a8f4e2": "Se restablece {{when}}",
+          "e6dadc1e2b": "Monthly usage",
+          "75e396bf42": "Included monthly usage for Grok unified-billing accounts."
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Usado",
@@ -9036,6 +9039,56 @@
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
           "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
+        },
+        "MobileRelayStatusSection": {
+          "registered": "Registered",
+          "connecting": "Connecting",
+          "reconnecting": "Reconnecting",
+          "offline": "Offline",
+          "title": "Orca Relay",
+          "automatic": "Connect from anywhere when a phone is paired",
+          "signInPrompt": "Sign in on this desktop to connect from anywhere",
+          "directStillAvailable": "LAN and Tailscale connections remain available.",
+          "directNeedsNoAccount": "LAN and Tailscale pairing still work without an account.",
+          "signIn": "Sign in",
+          "unavailable": "Unavailable",
+          "standby": "Standby — no relay devices"
+        },
+        "MobilePairingConnectionOptions": {
+          "ready": "Listo",
+          "connecting": "Conectando",
+          "available": "Disponible",
+          "reconnecting": "Reconectando",
+          "unavailable": "No disponible",
+          "title": "¿Cómo debe conectarse el teléfono nuevo?",
+          "anywhere": "Conectar con Orca Relay",
+          "recommended": "Recomendado",
+          "automaticDescription": "Orca usa una conexión directa cuando está disponible y Relay en caso contrario.",
+          "signInDescription": "Inicia sesión en este ordenador para usar Orca Relay.",
+          "signIn": "Iniciar sesión",
+          "localOnly": "Solo red local",
+          "localShort": "LAN o Tailscale",
+          "localDescription": "Usa LAN o Tailscale sin conectar este teléfono mediante Orca Relay."
+        },
+        "MobilePairingSetupSection": {
+          "title": "Vincular un teléfono",
+          "automaticDescription": "El código de vinculación incluye acceso directo y Orca Relay cifrado como respaldo.",
+          "localDescription": "El código de vinculación solo se conecta mediante la dirección de red local indicada abajo.",
+          "regenerate": "Regenerar",
+          "generate": "Generar código QR",
+          "localSettings": "Configuración de conexión local",
+          "localAddressDescription": "Elige la dirección LAN o de red privada que Orca Mobile puede usar para acceder directamente a este ordenador.",
+          "refresh": "Actualizar interfaces de red",
+          "tailnet": "Conectarse con tu propia tailnet",
+          "tailnetDescription": "Instala Tailscale en este ordenador y en tu teléfono, inicia sesión en la misma tailnet y selecciona arriba su dirección 100.x.y.z.",
+          "getTailscale": "Obtener Tailscale"
+        },
+        "MobileRelayBetaAvailability": {
+          "about": "Acerca de la beta de Orca Relay",
+          "beta": "Beta",
+          "availability": "Disponible en",
+          "testFlight": "TestFlight",
+          "androidApk": "APK de Android"
         }
       },
       "right": {
@@ -12790,7 +12843,7 @@
         "profiles": {
           "switcher": {
             "cloud": {
-              "unavailable": "Inicio de sesión en la nube no disponible"
+              "unavailable": "Inicio de sesión en Orca no disponible"
             },
             "account": "Cuenta",
             "reconnect": "Reconectar perfil",
@@ -12814,7 +12867,14 @@
             "c106c674fe": "Nuevo perfil local",
             "org": {
               "members": "Miembros de la organización"
-            }
+            },
+            "signInWaiting": "Esperando el inicio de sesión…",
+            "signInAgain": "Volver a iniciar sesión",
+            "signIn": "Iniciar sesión en Orca",
+            "accountTitle": "Cuenta de Orca",
+            "accountSignedIn": "Sesión iniciada",
+            "accountSignInRequired": "Inicio de sesión requerido",
+            "accountSignedOut": "Sesión cerrada"
           },
           "management": {
             "04e7bd2a23": "Transferir",
@@ -12857,8 +12917,8 @@
           },
           "signout": {
             "confirm": {
-              "title": "¿Cerrar sesión?",
-              "description": "Cerrar sesión de {{profileName}} y mantener sus proyectos, worktrees y metadatos locales en este dispositivo.",
+              "title": "¿Cerrar sesión en Orca?",
+              "description": "Se cerrará tu sesión de Orca en este dispositivo. Tus proyectos y worktrees locales no se verán afectados.",
               "cancel": "Cancelar",
               "action": "Cerrar sesión"
             }
@@ -12960,6 +13020,34 @@
         "searchLabels": "Filtrar etiquetas…",
         "searchAssignee": "Filtrar asignatario…",
         "back": "Atrás"
+      },
+      "browser-pane": {
+        "markup": {
+          "cancel": "Cancelar",
+          "clear": "Borrar todo",
+          "copiedToast": "Marcado copiado: pégalo en tu agente ({{value0}})",
+          "copy": "Copiar marcado",
+          "drawButton": "Dibujar en la captura",
+          "drawHint": "Nuevo: dibuja en la página y cópialo en tu agente",
+          "errorAttach": "No se pudo adjuntar la captura de pantalla con marcado.",
+          "errorCapture": "No se pudo capturar la página para dibujar.",
+          "errorUnavailable": "El marcado de captura de pantalla no está disponible en esta página.",
+          "fontSize": "Tamaño de letra",
+          "hint": "Dibuja en la página y luego copia el marcado para pegarlo en tu agente.",
+          "redo": "Rehacer",
+          "style": "Color y grosor",
+          "textInput": "Texto de anotación",
+          "tool": {
+            "arrow": "Flecha",
+            "ellipse": "Elipse",
+            "highlight": "Resaltador",
+            "pen": "Lápiz",
+            "rect": "Rectángulo",
+            "text": "Texto"
+          },
+          "undo": "Deshacer",
+          "widthOption": "{{value0}} px"
+        }
       }
     },
     "i18n": {

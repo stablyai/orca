@@ -133,6 +133,62 @@ describe('repo slice host identity routing', () => {
     )
   })
 
+  it('updateRepo with an explicit hostId routes to that host, not the focused one', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-explicit-update',
+      ok: true,
+      result: { repo: { ...remoteDuplicate, displayName: 'Remote via host' } },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const store = createTestStore()
+    // Focus is local (no active runtime env); without the explicit hostId this
+    // would route to the focused (local) row.
+    store.setState({ repos: [localDuplicate, remoteDuplicate] })
+
+    await store
+      .getState()
+      .updateRepo('same-repo', { displayName: 'Remote via host' }, { hostId: 'runtime:env-1' })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'repo.update',
+      params: { repo: 'same-repo', updates: { displayName: 'Remote via host' } },
+      timeoutMs: 15_000
+    })
+    expect(reposUpdate).not.toHaveBeenCalled()
+    expect(store.getState().repos).toEqual([
+      localDuplicate,
+      { ...remoteDuplicate, displayName: 'Remote via host' }
+    ])
+  })
+
+  it('updateRepo with an explicit local hostId stays local even when a runtime is focused', async () => {
+    // The self-pair case: a repo id exists on both local and a focused runtime.
+    // An explicit local hostId must route to local IPC, not the runtime RPC.
+    reposUpdate.mockResolvedValue(undefined)
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [localDuplicate, remoteDuplicate]
+    })
+
+    await store
+      .getState()
+      .updateRepo('same-repo', { displayName: 'Local via host' }, { hostId: 'local' })
+
+    expect(reposUpdate).toHaveBeenCalledWith({
+      repoId: 'same-repo',
+      updates: { displayName: 'Local via host' }
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'repo.update' })
+    )
+    expect(store.getState().repos).toEqual([
+      { ...localDuplicate, displayName: 'Local via host' },
+      remoteDuplicate
+    ])
+  })
+
   it('keeps queued focused-host repo updates pinned when focus changes', async () => {
     const firstUpdate = deferred<{
       id: string

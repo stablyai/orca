@@ -590,7 +590,7 @@
         "https://github.com/stablyai/orca/issues/8001"
       ],
       "invariant": "Every terminal surface confirmed in the invoking renderer is force-closed exactly once after daemon management settles, later-created surfaces and non-terminal tabs survive, and exact shutdown requests are limited to deduplicated current non-runtime PTY bindings of the confirmed surfaces.",
-      "oracle": "Snapshot terminal entity IDs before the first await; mutate ownership, active selection, bindings, and tab presence while daemon management is pending; then assert only the immutable targets disappear from both terminal stores, active targets close last with valid editor/browser/deactivated post-state, every captured exact PTY promise settles before callbacks, and no provider inventory sweep or late-tab kill occurs.",
+      "oracle": "Snapshot terminal entity IDs before the first await; mutate ownership, active selection, bindings, and tab presence while daemon management is pending and between bounded close batches; then assert only the immutable targets disappear from both terminal stores, active targets close last with valid editor/browser/deactivated post-state, every captured exact PTY promise settles before callbacks, and no provider inventory sweep or late-tab kill occurs.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts src/renderer/src/components/shared/useDaemonActions.test.tsx src/renderer/src/components/terminal/terminal-tab-actions-kill-all.test.ts src/main/ipc/pty-management.test.ts"
       ],
@@ -609,7 +609,7 @@
             "current exact PTY bindings are deduplicated, remote runtime IDs and stale/late bindings are excluded, and all per-PTY settlements finish before completion",
             "the production dependency path calls daemon management exactly once and never invokes listSessions for a post-kill sweep",
             "management rejection and per-close/provider failures do not stop remaining cleanup and produce bounded count/latency diagnostics",
-            "a real 100-tab Zustand fixture records 100 close attempts and exact kills, at least 100 writes, 49 event-loop yields, and no close batch over 50 ms"
+            "a real 100-tab Zustand fixture records 100 close attempts and exact kills, at least 100 writes, and 49 event-loop yields; ownership is revalidated at most once after each yield when the store changed"
           ]
         },
         {
@@ -658,11 +658,11 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "The initial 100-tab implementation exposed a 145.82 ms close batch and failed the 50 ms budget; two-close event-loop batching reduced the focused run below the budget. Saved CI artifacts and intentional-break evidence for the confirmation-boundary assertions are still needed."
+        "evidence": "The initial 100-tab implementation exposed an oversized close batch; two-close event-loop batching fixed the structural issue. The gate now uses deterministic batch instrumentation because full-suite CPU saturation made wall-clock assertions flaky; saved CI artifacts and intentional-break evidence are still needed."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "The coordinator performs one existing management call, zero provider inventory sweeps, one close per present unique target, and at most one exact kill per unique current non-runtime PTY binding. A real 100-tab Zustand fixture asserts 100 close attempts, 100 exact kill calls, at least 100 store writes, 49 event-loop yields, and a maximum two-close batch at or below 50 ms."
+        "evidence": "The coordinator performs one management sweep, builds an initial live-owner index, and revalidates at most once after each two-close yield when the Zustand state changed (at most 49 replans for the 100-tab fixture). It closes each present unique target once and sends at most one exact kill per unique current non-runtime PTY not already settled by daemon management. The fixture asserts 100 close attempts, 100 local kill calls, at least 100 store writes, and 49 yields; planner-level tests prove each individual plan build scans terminal and unified ownership stores once. Production diagnostics report measured close-batch duration, while the deterministic gate makes no machine-load-sensitive latency claim."
       },
       "promotionCriteria": [
         "Run the focused gate for at least 100 consecutive passes or 14 days across required CI platforms.",
@@ -676,7 +676,124 @@
         "Runtime-host terminal close is best-effort because closeTerminalTab still discards the existing async host result and its close-intent lifetime is shorter than the possible RPC flow.",
         "Daemon adapter listing failures remain suppressed by the existing management API, so reported daemon counts are not authoritative verification of every process."
       ],
-      "demotionRule": "Keep experimental or demote to protection none if the gate flakes, permits a late-created tab or unrelated PTY to close, or exceeds the 50 ms maximum close-batch budget without a tracked product or harness bug."
+      "demotionRule": "Keep experimental or demote to protection none if the gate flakes, permits a late-created tab or unrelated PTY to close, duplicates provider shutdown, or performs more than one ownership replan per bounded yield."
+    },
+    {
+      "id": "terminal-session.explicit-close-retirement",
+      "title": "Explicit terminal close retires parked PTYs and agent authority exactly once",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "main-preload-renderer-electron-contract",
+      "surfaces": [
+        "terminal tab close",
+        "split pane close and detach",
+        "hidden terminal parking",
+        "agent resume authority"
+      ],
+      "platforms": [
+        "macos",
+        "linux",
+        "windows"
+      ],
+      "providers": [
+        "local",
+        "daemon",
+        "ssh",
+        "runtime"
+      ],
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "local",
+        "daemon",
+        "ssh",
+        "runtime"
+      ],
+      "coverageNotes": "A live macOS Electron test proves exact local PTY disappearance after a parked-tab close. Deterministic unit/store tests cover daemon and SSH routing, ordinary runtime close ownership, unified-only hydration, split ownership, pane detach transfer, restart alias hydration, and late-hook suppression; live Linux, Windows, WSL, SSH, and remote-runtime process evidence remains pending.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/8628"
+      ],
+      "invariant": "Close permanently removes the owned provider session and resume authority even when no TerminalPane is mounted; detach and park preserve both; aliases prevent a detached agent's immutable physical pane key from being retired with its former tab.",
+      "oracle": "Capture the exact PTY before parking, prove it remains listed while the view is absent, close through the product state boundary, and poll the provider inventory until that exact ID disappears; unit tests assert canonical owner dedupe, one teardown owner, exact pane tombstones, chained detach transfer, and restart alias restoration.",
+      "commands": [
+        "pnpm dlx node@24 ./node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server-pane-authority.test.ts src/main/ipc/agent-hooks.test.ts src/main/ipc/agent-pane-authority-ownership.test.ts src/main/ipc/pty-management.test.ts src/main/persistence.test.ts src/renderer/src/store/slices/agent-pane-authority.test.ts src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts src/renderer/src/store/slices/terminal-tab-retirement.test.ts src/renderer/src/store/slices/terminal-tab-retirement-store.test.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
+        "pnpm run test:e2e -- tests/e2e/terminal-parked-close-retirement.spec.ts --workers=1"
+      ],
+      "testFiles": [
+        "src/main/agent-hooks/server-pane-authority.test.ts",
+        "src/main/ipc/agent-hooks.test.ts",
+        "src/main/ipc/agent-pane-authority-ownership.test.ts",
+        "src/main/ipc/pty-management.test.ts",
+        "src/main/persistence.test.ts",
+        "src/renderer/src/store/slices/agent-pane-authority.test.ts",
+        "src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts",
+        "src/renderer/src/store/slices/terminal-tab-retirement.test.ts",
+        "src/renderer/src/store/slices/terminal-tab-retirement-store.test.ts",
+        "src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
+        "tests/e2e/terminal-parked-close-retirement.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/terminal-parked-close-retirement.spec.ts",
+          "assertions": [
+            "a long-lived exact PTY remains alive after its terminal view is parked",
+            "closing the parked tab removes the exact PTY from the provider inventory and the visible tab model"
+          ]
+        },
+        {
+          "file": "src/main/ipc/agent-pane-authority-ownership.test.ts",
+          "assertions": [
+            "pane authority transfer accepts only the PTY bound to the physical local pane or the canonical legacy/scoped runtime handle"
+          ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/agent-pane-authority.test.ts",
+          "assertions": [
+            "exact pane retirement removes resume and launch authority while preserving siblings",
+            "chained detach keeps physical hooks and resume authority routed to the current owner until that owner closes"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run test:e2e -- tests/e2e/terminal-parked-close-retirement.spec.ts --workers=1",
+          "result": "passed",
+          "durationSeconds": 40.3,
+          "summary": "A fresh E2E build launched an isolated Electron profile, parked a live terminal, closed it through closeTab, and observed its exact PTY disappear."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 60,
+        "scope": "fresh E2E build plus one isolated local Electron parked-close test"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The Electron gate passed three times locally, including the final review-fix head through the registered fresh-build command; CI and soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The test exercises the original parked-view failure shape and passed with the retirement boundary; an archived intentional-break run is not yet attached."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "The close path is user-triggered and bounded by canonical live-owner indexing; kill-all scale remains covered by terminal-session.kill-all-surface-cleanup."
+      },
+      "promotionCriteria": [
+        "Accumulate 100 clean runs or 14 days on required CI platforms.",
+        "Add live Windows/ConPTY, Linux, WSL, SSH, and ordinary runtime process-absence evidence.",
+        "Add restart/no-resurrection and repeated park-close soak coverage."
+      ],
+      "knownGaps": [
+        "The live Electron proof currently covers macOS local PTYs only.",
+        "Disconnected SSH relay death still requires reconnect-aware provider ownership.",
+        "Daemon owner leases and durable retry inventory remain follow-up hardening."
+      ],
+      "demotionRule": "Keep experimental or demote to protection none if exact PTY disappearance flakes, a sibling/detached pane is retired, or late hooks can recreate closed authority."
     },
     {
       "id": "terminal-session.startup-cwd-missing-dir-recovery",
@@ -1992,7 +2109,7 @@
       "id": "terminal-provider.ssh-remote-reattach-contract",
       "title": "SSH and remote terminal restore never turn unknown liveness into destructive cleanup",
       "maturity": "experimental",
-      "protection": "none",
+      "protection": "partial",
       "owner": "terminal-provider",
       "layer": "provider-contract",
       "surfaces": [
@@ -2012,28 +2129,79 @@
         "remote-runtime",
         "wsl"
       ],
-      "coveredPlatforms": [],
-      "coveredProviders": [],
-      "coverageNotes": "Registered gap on main. The SSH unknown-liveness hardening and deferred-reattach contracts exist only on the pending reliability stack. It registers here with its owning split PR.",
+      "coveredPlatforms": [
+        "macos"
+      ],
+      "coveredProviders": [
+        "ssh"
+      ],
+      "coverageNotes": "Deterministic renderer coverage proves startup publishes the state returned by ssh.connect, remote or unresolved hosts cannot enter local-daemon cold activation deferral, and stale cleanup cannot unregister a replacement runtime terminal. A macOS Electron journey connects to a real Linux SSH relay in Docker, persists six terminals, reloads the renderer, and verifies all six original relay PTYs remount eagerly and still execute remote input. Linux and Windows desktop clients, WSL, and remote-runtime restore remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6951",
         "https://github.com/stablyai/orca/pull/6955",
         "https://github.com/stablyai/orca/pull/6979",
-        "https://github.com/stablyai/orca/pull/7009"
+        "https://github.com/stablyai/orca/pull/7009",
+        "https://github.com/stablyai/orca/pull/8597"
       ],
-      "invariant": "SSH, WSL, and remote-runtime restore paths must treat provider listing failures and unknown liveness as unknown, not dead, while still avoiding duplicate spawn and clearing expired relay leases exactly once.",
-      "oracle": "The current executable slice asserts saved SSH sessions use relay attach, expired relay attach does not silently fresh-spawn inside the provider, provider listing and targeted-liveness failures are unknown rather than dead, deferred passphrase cancellation does not auto-reconnect, deferred SSH attach uses saved leaf/tab session ids once connected, transient deferred reattach failure preserves the saved restore id without fresh-spawning, deferred SSH no-result cleanup clears the pending serializer without consuming the saved restore id, disconnected SSH relay ids are retained as deferred reconnect metadata and sidebar wake hints rather than attached PTY proof, and expired deferred relay state clears stale pane/tab bindings before one fresh replacement spawn. WSL and remote-runtime mirror polling require separate follow-up contracts.",
-      "commands": [],
-      "testFiles": [],
-      "assertionRefs": [],
-      "evidenceRuns": [],
+      "invariant": "SSH, WSL, and remote-runtime restore paths must treat provider listing failures and unknown liveness as unknown, not dead, while still avoiding duplicate spawn and clearing expired relay leases exactly once. Snapshot-backed cold activation deferral is local-daemon-only; every restored remote terminal must mount a manager eagerly and preserve its provider PTY identity.",
+      "oracle": "Deterministic tests assert startup publishes ssh.connect's authoritative state before terminal reconnect, only an explicit local execution host can defer cold activation, host ownership changes clear old restrictions, and replacement runtime registrations survive stale cleanup. The live Docker SSH journey commits six terminal records to the relay, reloads Electron, requires the exact six manager ids with no parked tabs, compares all restored PTY ids to their pre-reload identities, and sends a marker through the restored terminal to a proof file on the Linux host.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/startup/ssh-startup-reconnect.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts src/renderer/src/runtime/sync-runtime-graph-scheduling.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+        "pnpm exec electron-vite build --mode e2e",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-cold-activation-deferral.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-cold-activation-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": [
+        "src/renderer/src/startup/ssh-startup-reconnect.test.ts",
+        "src/renderer/src/lib/resolved-worktree-execution-host.test.ts",
+        "src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts",
+        "src/renderer/src/runtime/sync-runtime-graph-scheduling.test.ts",
+        "src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+        "tests/e2e/terminal-cold-activation-deferral.spec.ts",
+        "tests/e2e/ssh-cold-activation-restore.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/startup/ssh-startup-reconnect.test.ts",
+          "assertions": [
+            "the state returned by ssh.connect is published before persisted terminals reconnect"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts",
+          "assertions": [
+            "only an explicit local execution host can defer cold activation",
+            "SSH, remote-runtime, and unresolved owners remain eager"
+          ]
+        },
+        {
+          "file": "tests/e2e/ssh-cold-activation-restore.spec.ts",
+          "assertions": [
+            "six relay-backed tabs retain the same six PTY ids across renderer reload",
+            "all six SSH managers mount eagerly and none is parked",
+            "restored terminal input reaches a proof file on the Linux SSH host"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-cold-activation-restore.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 128,
+          "summary": "Six focused files and 475 tests passed; the local cold-activation journey passed; the Docker/Linux SSH journey restored six of six original relay PTYs, mounted six of six managers without parking, and executed remote input through the restored terminal."
+        }
+      ],
       "runtimeBudget": {
         "p95Seconds": 45,
         "scope": "provider contract plus optional SSH soak"
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "Focused provider/main/renderer SSH contract tests now run locally; needs soak history before promotion."
+        "evidence": "Focused renderer contracts and one clean Docker/Linux SSH Electron run pass locally; the live journey needs CI soak history before promotion."
       },
       "redGreenEvidence": {
         "status": "partial",
@@ -2041,7 +2209,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Provider listing and polling must be bounded, targeted where possible, and absent from typing/focus hot paths."
+        "evidence": "Host eligibility is resolved from existing store metadata during activation and adds no provider listing or polling. The local journey preserves cold deferral, while SSH eagerly mounts six managers as required; no work is added to typing or terminal-output hot paths."
       },
       "promotionCriteria": [
         "Use deterministic fake providers for failure and unknown-liveness cases.",
@@ -2049,12 +2217,10 @@
         "Include reconnect/polling artifacts that identify provider, connection id, and lease state."
       ],
       "knownGaps": [
-        "No executable coverage on main yet; the slice lives on the pending fix-terminal-reliability stack.",
         "Current command covers store wake-hint metadata, main-process SSH provider failure semantics, provider attach/expired-attach behavior, and renderer deferred SSH reconnect/transient-failure/expired-relay fallback with mocked transports.",
-        "The store coverage asserts recoverability metadata, not a live attached PTY or user-visible connected state.",
-        "Live SSH/remote coverage remains environment-dependent.",
+        "The live SSH journey is environment-dependent and currently runs from a macOS Electron client against a Linux Docker host.",
         "WSL and remote-runtime mirror polling contracts are not wired yet.",
-        "The deferred SSH coverage does not boot Electron against a real SSH relay or exercise real network reconnect timing."
+        "Linux and Windows desktop-client journeys are not yet collected."
       ],
       "demotionRule": "Cannot promote if provider failure can close panes or if the oracle is screenshot-only."
     },

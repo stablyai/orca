@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Session, type SubprocessHandle } from './session'
 import { TerminalHost } from './terminal-host'
+import type { TuiAgent } from '../../shared/types'
 
 function createMockSubprocess(
   options: { startupCommandDeliveredInShellArgs?: boolean; shellPath?: string } = {}
@@ -45,6 +46,7 @@ type MockSpawnFn = (opts: {
   cwd?: string
   env?: Record<string, string>
   command?: string
+  launchAgent?: TuiAgent
 }) => SubprocessHandle
 
 describe('TerminalHost', () => {
@@ -124,13 +126,14 @@ describe('TerminalHost', () => {
       expect(result.snapshot?.cols).toBe(80)
     })
 
-    it('passes cwd and env to spawn', async () => {
+    it('passes cwd, env, and trusted agent identity to spawn', async () => {
       await host.createOrAttach({
         sessionId: 'session-1',
         cols: 80,
         rows: 24,
         cwd: '/home/user',
         env: { FOO: 'bar' },
+        launchAgent: 'claude',
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
 
@@ -138,7 +141,8 @@ describe('TerminalHost', () => {
         expect.objectContaining({
           sessionId: 'session-1',
           cwd: '/home/user',
-          env: { FOO: 'bar' }
+          env: { FOO: 'bar' },
+          launchAgent: 'claude'
         })
       )
     })

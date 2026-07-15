@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: hook parsing, shell selection, and execution-path regressions are tightly coupled, so these cases stay in one file to preserve the behavior matrix across platforms. */
 import type { Repo } from '../shared/types'
+import type * as GitRunner from './git/runner'
 
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -29,7 +30,8 @@ vi.mock('child_process', () => ({
   spawn: vi.fn()
 }))
 
-vi.mock('./git/runner', () => ({
+vi.mock('./git/runner', async () => ({
+  ...(await vi.importActual<typeof GitRunner>('./git/runner')),
   gitExecFileSync: gitExecFileSyncMock
 }))
 
@@ -892,7 +894,13 @@ describe('runHook', () => {
         'echo hello',
         expect.objectContaining({
           cwd: '/repo/worktree',
-          shell: '/bin/bash'
+          shell: '/bin/bash',
+          // Setup hooks run unattended: git in them must not pop the OS
+          // credential helper's OAuth window and loop it (issue #7652).
+          env: expect.objectContaining({
+            GIT_TERMINAL_PROMPT: '0',
+            GCM_INTERACTIVE: 'never'
+          })
         }),
         expect.any(Function)
       )
@@ -948,7 +956,15 @@ describe('runHook', () => {
       expect(execFileMock).toHaveBeenCalledWith(
         'wsl.exe',
         ['-d', 'Ubuntu', '--', 'bash', '-c', "cd '/home/jin/feature' && echo hello"],
-        expect.any(Object),
+        // #7652 regression: the unattended WSL hook branch must carry the
+        // credential guard, and WSLENV is what carries it into the distro.
+        expect.objectContaining({
+          env: expect.objectContaining({
+            GIT_TERMINAL_PROMPT: '0',
+            GCM_INTERACTIVE: 'never',
+            WSLENV: expect.stringContaining('GIT_TERMINAL_PROMPT')
+          })
+        }),
         expect.any(Function)
       )
       expect(execMock).not.toHaveBeenCalled()
@@ -1152,6 +1168,20 @@ describe('createSetupRunnerScript', () => {
       createSetupRunnerScript(makeRepo('wait-for-setup'), '/test/worktree', 'echo setup')
         .waitForAgentStartup
     ).toBe(true)
+  })
+
+  it('marks setup-runner terminals for the always-on credential guard', async () => {
+    gitExecFileSyncMock.mockReset()
+    gitExecFileSyncMock.mockReturnValue('/test/repo/.git/orca/setup-runner.sh\n')
+    const { createSetupRunnerScript } = await import('./hooks')
+
+    const setup = createSetupRunnerScript(makeRepo(), '/test/worktree', 'git fetch')
+
+    expect(setup.envVars).toMatchObject({
+      ORCA_ROOT_PATH: '/test/repo',
+      ORCA_WORKTREE_PATH: '/test/worktree',
+      ORCA_INTERNAL_TERMINAL_GIT_CREDENTIAL_GUARD_POLICY: 'guard'
+    })
   })
 })
 

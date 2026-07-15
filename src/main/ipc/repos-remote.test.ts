@@ -9,6 +9,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type * as GitRunner from '../git/runner'
 import type * as RepoModule from '../git/repo'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { getGitRepoRoot, isGitRepo } from '../git/repo'
@@ -104,15 +105,15 @@ vi.mock('../git/repo', async () => {
   }
 })
 
-vi.mock('../git/runner', () => ({
+vi.mock('../git/runner', async () => ({
+  // Why: keep the real env builders (nonInteractiveGitEnv,
+  // gitOptionalLocksDisabledEnv) so the clone regression test (#7652) asserts
+  // the actual guard's markers, not a mock echoing itself.
+  ...(await vi.importActual<typeof GitRunner>('../git/runner')),
   gitExecFileAsync: gitExecFileAsyncMock,
   gitExecFileAsyncBuffer: vi.fn(),
   gitStreamStdout: vi.fn(),
-  gitSpawn: gitSpawnMock,
-  gitOptionalLocksDisabledEnv: (env: NodeJS.ProcessEnv = process.env) => ({
-    ...env,
-    GIT_OPTIONAL_LOCKS: '0'
-  })
+  gitSpawn: gitSpawnMock
 }))
 
 vi.mock('../git/worktree', () => ({
@@ -2116,6 +2117,28 @@ describe('repos:add + repos:clone', () => {
       expect.objectContaining({ cwd: destination })
     )
     expect(result).toHaveProperty('path', join(destination, 'orca'))
+  })
+
+  it('clones with the non-interactive credential guard so Git Credential Manager cannot pop its OAuth window (#7652)', async () => {
+    const destination = await createTempRoot()
+
+    await handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination
+    })
+
+    // Without this env, a clone that needs GitHub auth makes Git Credential
+    // Manager pop its "Connect to GitHub" OAuth window on Windows and loop it
+    // when the network cannot complete the flow.
+    expect(gitSpawnMock).toHaveBeenCalledWith(
+      ['clone', '--progress', '--', 'https://example.com/orca.git', join(destination, 'orca')],
+      expect.objectContaining({
+        env: expect.objectContaining({
+          GIT_TERMINAL_PROMPT: '0',
+          GCM_INTERACTIVE: 'never'
+        })
+      })
+    )
   })
 
   it('treats cloneAbort with no active clone as a no-op', async () => {

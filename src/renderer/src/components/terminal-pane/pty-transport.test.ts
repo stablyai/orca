@@ -342,6 +342,54 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('mints a fresh id instead of reopening a discarded same-id session', async () => {
+    const { discardPreHandlerPtyState, clearPreHandlerPtyState } =
+      await import('./pty-pre-handler-buffer')
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const discardedId = 'removed-worktree@@discarded-session'
+    discardPreHandlerPtyState(discardedId)
+
+    await createIpcPtyTransport({ cwdFallback: 'worktree' }).connect({
+      url: '',
+      sessionId: discardedId,
+      callbacks: {}
+    })
+
+    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ cwdFallback: 'worktree' }))
+    expect(spawn).toHaveBeenCalledWith(expect.not.objectContaining({ sessionId: discardedId }))
+    clearPreHandlerPtyState(discardedId)
+  })
+
+  it('delivers a buffered dead-session exit without respawning the same session id', async () => {
+    const { bufferPreHandlerPtyData, bufferPreHandlerPtyExit } =
+      await import('./pty-pre-handler-buffer')
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const onDataCallback = vi.fn()
+    const onExitCallback = vi.fn()
+    const onDisconnect = vi.fn()
+    const onPtyExit = vi.fn()
+    const sessionId = 'dead-parked-session'
+    bufferPreHandlerPtyData(sessionId, 'final output')
+    bufferPreHandlerPtyExit(sessionId, 17)
+
+    const transport = createIpcPtyTransport({ onPtyExit })
+    const result = await transport.connect({
+      url: '',
+      sessionId,
+      callbacks: { onData: onDataCallback, onExit: onExitCallback, onDisconnect }
+    })
+
+    expect(result).toEqual({ id: sessionId, exitedBeforeAttach: true })
+    expect(spawn).not.toHaveBeenCalled()
+    expect(onDataCallback).toHaveBeenCalledWith('final output')
+    expect(onExitCallback).toHaveBeenCalledWith(17)
+    expect(onDisconnect).toHaveBeenCalledTimes(1)
+    expect(onPtyExit).toHaveBeenCalledWith(sessionId)
+    expect(transport.isConnected()).toBe(false)
+  })
+
   it('returns startup cwd fallback metadata to the connection layer', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
@@ -858,7 +906,7 @@ describe('createIpcPtyTransport', () => {
     onExit?.({ id: 'pty-restored', code: 0 })
 
     expect(eagerExit).not.toHaveBeenCalled()
-    expect(sidecarExit).toHaveBeenCalledWith(0)
+    expect(sidecarExit).toHaveBeenCalledWith(0, { hadPrimary: true })
   })
 
   it('fires onBell for bare BELs but ignores BELs inside OSC sequences', async () => {

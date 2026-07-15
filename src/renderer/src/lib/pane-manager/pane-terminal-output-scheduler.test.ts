@@ -179,9 +179,12 @@ describe('pane terminal output scheduler', () => {
     it('credits when queued output is discarded', async () => {
       vi.useFakeTimers()
       const { writeTerminalOutput, discardTerminalOutput } = await loadScheduler()
+      const { captureTerminalParseProgressGeneration, hasTerminalParseProgressSince } =
+        await import('./terminal-write-pipeline-health')
       const terminal = createTerminal()
       terminal.write.mockImplementation(() => {})
       const credit = makeCredit()
+      const parseGeneration = captureTerminalParseProgressGeneration(terminal)
 
       writeTerminalOutput(terminal, 'doomed', {
         foreground: true,
@@ -191,6 +194,117 @@ describe('pane terminal output scheduler', () => {
       expect(credit.count()).toBe(0)
       discardTerminalOutput(terminal)
       expect(credit.count()).toBe(1)
+      // Discard settles delivery ownership, not xterm parsing; replay wedge
+      // deadlines must not treat cleanup as evidence that the parser is alive.
+      expect(hasTerminalParseProgressSince(terminal, parseGeneration)).toBe(false)
+    })
+
+    it('discards queued output when replay certification precedes the drain', async () => {
+      vi.useFakeTimers()
+      const { writeTerminalOutput } = await loadScheduler()
+      const { _resetWritePipelineHealthForTests, notifyUndeliverableWrite } =
+        await import('./terminal-write-pipeline-health')
+      const terminal = createTerminal()
+      const credits = [vi.fn(), vi.fn(), vi.fn()]
+      try {
+        for (const [index, credit] of credits.entries()) {
+          writeTerminalOutput(terminal, `queued-${index}`, {
+            foreground: false,
+            ackCredit: credit
+          })
+        }
+
+        notifyUndeliverableWrite(terminal, 'replay-wedged')
+        vi.advanceTimersByTime(100)
+
+        expect(terminal.write).not.toHaveBeenCalled()
+        for (const credit of credits) {
+          expect(credit).toHaveBeenCalledTimes(1)
+        }
+      } finally {
+        _resetWritePipelineHealthForTests(terminal)
+      }
+    })
+
+    it('discards queued output when a certified terminal is flushed', async () => {
+      vi.useFakeTimers()
+      const { flushTerminalOutput, writeTerminalOutput } = await loadScheduler()
+      const { _resetWritePipelineHealthForTests, notifyUndeliverableWrite } =
+        await import('./terminal-write-pipeline-health')
+      const terminal = createTerminal()
+      const credit = vi.fn()
+      try {
+        writeTerminalOutput(terminal, 'queued', {
+          foreground: false,
+          ackCredit: credit
+        })
+        notifyUndeliverableWrite(terminal, 'replay-wedged')
+
+        flushTerminalOutput(terminal)
+
+        expect(terminal.write).not.toHaveBeenCalled()
+        expect(credit).toHaveBeenCalledTimes(1)
+      } finally {
+        _resetWritePipelineHealthForTests(terminal)
+      }
+    })
+
+    it('does not probe a certified terminal while waiting for parsed output', async () => {
+      const { waitForTerminalOutputParsed } = await loadScheduler()
+      const { _resetWritePipelineHealthForTests, notifyUndeliverableWrite } =
+        await import('./terminal-write-pipeline-health')
+      const terminal = createTerminal()
+      try {
+        notifyUndeliverableWrite(terminal, 'replay-wedged')
+
+        await waitForTerminalOutputParsed(terminal)
+
+        expect(terminal.write).not.toHaveBeenCalled()
+      } finally {
+        _resetWritePipelineHealthForTests(terminal)
+      }
+    })
+
+    it('records parse progress when the parsed-output probe completes', async () => {
+      const { waitForTerminalOutputParsed } = await loadScheduler()
+      const {
+        _resetWritePipelineHealthForTests,
+        captureTerminalParseProgressGeneration,
+        hasTerminalParseProgressSince
+      } = await import('./terminal-write-pipeline-health')
+      const terminal = createTerminal()
+      let parsed: (() => void) | undefined
+      terminal.write.mockImplementation((_data: string, callback?: () => void) => {
+        parsed = callback
+      })
+      try {
+        const generation = captureTerminalParseProgressGeneration(terminal)
+        const wait = waitForTerminalOutputParsed(terminal)
+
+        parsed?.()
+        await wait
+
+        expect(hasTerminalParseProgressSince(terminal, generation)).toBe(true)
+      } finally {
+        _resetWritePipelineHealthForTests(terminal)
+      }
+    })
+
+    it('certifies a terminal whose parsed-output probe throws synchronously', async () => {
+      const { waitForTerminalOutputParsed } = await loadScheduler()
+      const { _resetWritePipelineHealthForTests, isTerminalWritePipelineCertifiedDead } =
+        await import('./terminal-write-pipeline-health')
+      const terminal = createTerminal()
+      terminal.write.mockImplementation(() => {
+        throw new Error('disposed')
+      })
+      try {
+        await waitForTerminalOutputParsed(terminal)
+
+        expect(isTerminalWritePipelineCertifiedDead(terminal)).toBe(true)
+      } finally {
+        _resetWritePipelineHealthForTests(terminal)
+      }
     })
 
     it('credits an empty write immediately', async () => {
@@ -1495,6 +1609,52 @@ describe('pane terminal output scheduler', () => {
     expect(terminal.write).not.toHaveBeenCalled()
   })
 
+  it('does not feed a replay quiet window when foreground writes are rejected', async () => {
+    const { writeTerminalOutput } = await loadScheduler()
+    const {
+      _resetWritePipelineHealthForTests,
+      captureTerminalParseProgressGeneration,
+      hasTerminalParseProgressSince,
+      isTerminalWritePipelineCertifiedDead,
+      registerUndeliverableWriteHandler
+    } = await import('./terminal-write-pipeline-health')
+    const terminal = createForegroundTerminal()
+    terminal.write.mockImplementation(() => {
+      throw new Error('terminal disposed')
+    })
+    const recoveryReasons: string[] = []
+    const unregister = registerUndeliverableWriteHandler(terminal, (reason) => {
+      recoveryReasons.push(reason)
+    })
+    const generation = captureTerminalParseProgressGeneration(terminal)
+    const ackCredits = [vi.fn(), vi.fn(), vi.fn()]
+    const onParsed = vi.fn()
+    try {
+      for (const [index, ackCredit] of ackCredits.entries()) {
+        writeTerminalOutput(terminal, `rejected-${index}`, {
+          foreground: true,
+          ackCredit,
+          onParsed
+        })
+      }
+
+      // This generation is exactly what a pending replay guard consults.
+      expect(hasTerminalParseProgressSince(terminal, generation)).toBe(false)
+      expect(recoveryReasons).toEqual(['write-stalled'])
+      expect(isTerminalWritePipelineCertifiedDead(terminal)).toBe(true)
+      // Only the first rejection touches xterm; later PTY deliveries credit
+      // directly while recovery owns the certified-dead instance.
+      expect(terminal.write).toHaveBeenCalledTimes(1)
+      expect(onParsed).not.toHaveBeenCalled()
+      for (const ackCredit of ackCredits) {
+        expect(ackCredit).toHaveBeenCalledTimes(1)
+      }
+    } finally {
+      unregister()
+      _resetWritePipelineHealthForTests(terminal)
+    }
+  })
+
   it('survives a write to a disposed terminal during background drain', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()
@@ -1504,7 +1664,9 @@ describe('pane terminal output scheduler', () => {
       })
     }
 
-    writeTerminalOutput(throwing, 'late-ping', { foreground: false })
+    // More than two drain slices: rejection must abandon the detached tail
+    // instead of synchronously retrying the same certified-dead xterm.
+    writeTerminalOutput(throwing, 'x'.repeat(40 * 1024), { foreground: false })
 
     // Why: drain runs inside setTimeout; if the throw escapes drainQueuedOutput
     // it would crash the timer callback and leave the scheduler poisoned.

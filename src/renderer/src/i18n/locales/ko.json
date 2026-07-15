@@ -699,7 +699,8 @@
         "devSearchKeywordToast": "toast",
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
-        "devSearchKeywordNotification": "notification"
+        "devSearchKeywordNotification": "notification",
+        "projectHostsSummary": "호스트 {{value0}}개"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "붙여넣기 내용이 너무 큽니다."
@@ -6075,7 +6076,7 @@
           "26fef02bf3": "프로젝트 아이콘",
           "c7ef4415de": "표시 이름",
           "b0a0c14a1c": "사이드바 및 탭에 대한 프로젝트별 표시 세부 정보입니다.",
-          "170624bdfb": "Orca에서 이 프로젝트를 제거하세요.",
+          "removeProjectAllHosts": "구성된 모든 호스트의 Orca에서 이 프로젝트를 제거합니다.",
           "0909e5d650": "프로젝트 제거",
           "ee5a290616": "폴더로 열렸습니다. 이 워크스페이스에서는 Git 기능을 사용할 수 없습니다.",
           "323debba71": "유형:",
@@ -9027,7 +9028,9 @@
           "3325d996cb": "사용량 새로 고침",
           "a8f3e2c1b4": "주간 크레딧",
           "b7e2d9f0a3": "터미널의 grok /usage 화면과 같은 주간 크레딧 비율입니다.",
-          "c6d1a8f4e2": "{{when}}에 재설정"
+          "c6d1a8f4e2": "{{when}}에 재설정",
+          "e6dadc1e2b": "Monthly usage",
+          "75e396bf42": "Included monthly usage for Grok unified-billing accounts."
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "사용",
@@ -9036,6 +9039,56 @@
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
           "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
+        },
+        "MobileRelayStatusSection": {
+          "registered": "Registered",
+          "connecting": "Connecting",
+          "reconnecting": "Reconnecting",
+          "offline": "Offline",
+          "title": "Orca Relay",
+          "automatic": "Connect from anywhere when a phone is paired",
+          "signInPrompt": "Sign in on this desktop to connect from anywhere",
+          "directStillAvailable": "LAN and Tailscale connections remain available.",
+          "directNeedsNoAccount": "LAN and Tailscale pairing still work without an account.",
+          "signIn": "Sign in",
+          "unavailable": "Unavailable",
+          "standby": "Standby — no relay devices"
+        },
+        "MobilePairingConnectionOptions": {
+          "ready": "준비됨",
+          "connecting": "연결 중",
+          "available": "사용 가능",
+          "reconnecting": "다시 연결 중",
+          "unavailable": "사용할 수 없음",
+          "title": "새 휴대폰을 어떻게 연결할까요?",
+          "anywhere": "Orca Relay로 연결",
+          "recommended": "권장",
+          "automaticDescription": "가능하면 직접 연결하고, 그렇지 않으면 Orca Relay를 사용합니다.",
+          "signInDescription": "Orca Relay를 사용하려면 이 데스크톱에서 로그인하세요.",
+          "signIn": "로그인",
+          "localOnly": "로컬 네트워크만",
+          "localShort": "LAN 또는 Tailscale",
+          "localDescription": "이 휴대폰을 Orca Relay에 연결하지 않고 LAN 또는 Tailscale을 사용합니다."
+        },
+        "MobilePairingSetupSection": {
+          "title": "휴대폰 페어링",
+          "automaticDescription": "페어링 코드에는 직접 연결과 암호화된 Orca Relay 대체 연결이 포함됩니다.",
+          "localDescription": "페어링 코드는 아래의 로컬 네트워크 주소로만 연결합니다.",
+          "regenerate": "다시 생성",
+          "generate": "QR 코드 생성",
+          "localSettings": "로컬 연결 설정",
+          "localAddressDescription": "Orca Mobile에서 이 컴퓨터에 직접 연결할 수 있는 LAN 또는 사설 네트워크 주소를 선택하세요.",
+          "refresh": "네트워크 인터페이스 새로 고침",
+          "tailnet": "내 tailnet으로 연결",
+          "tailnetDescription": "이 컴퓨터와 휴대폰에 Tailscale을 설치하고 같은 tailnet에 로그인한 다음 위에서 100.x.y.z 주소를 선택하세요.",
+          "getTailscale": "Tailscale 받기"
+        },
+        "MobileRelayBetaAvailability": {
+          "about": "Orca Relay 베타 정보",
+          "beta": "베타",
+          "availability": "이용 가능:",
+          "testFlight": "TestFlight",
+          "androidApk": "Android APK"
         }
       },
       "right": {
@@ -12790,7 +12843,7 @@
         "profiles": {
           "switcher": {
             "cloud": {
-              "unavailable": "클라우드 로그인 사용 불가"
+              "unavailable": "Orca 로그인 사용 불가"
             },
             "reconnect": "프로필 다시 연결",
             "connect": "프로필 연결",
@@ -12814,7 +12867,14 @@
             "account": "계정",
             "org": {
               "members": "조직 구성원"
-            }
+            },
+            "signInWaiting": "로그인 대기 중…",
+            "signInAgain": "다시 로그인",
+            "signIn": "Orca에 로그인",
+            "accountTitle": "Orca 계정",
+            "accountSignedIn": "로그인됨",
+            "accountSignInRequired": "로그인 필요",
+            "accountSignedOut": "로그아웃됨"
           },
           "management": {
             "04e7bd2a23": "전송",
@@ -12857,8 +12917,8 @@
           },
           "signout": {
             "confirm": {
-              "title": "로그아웃하시겠습니까?",
-              "description": "{{profileName}}에서 로그아웃하고 프로젝트, 워크트리 및 로컬 메타데이터를 이 장치에 유지합니다.",
+              "title": "Orca에서 로그아웃할까요?",
+              "description": "이 기기의 Orca에서 로그아웃됩니다. 로컬 프로젝트와 워크트리에는 영향을 주지 않습니다.",
               "cancel": "취소",
               "action": "로그아웃"
             }
@@ -12960,6 +13020,34 @@
         "searchLabels": "레이블 필터…",
         "searchAssignee": "담당자 필터…",
         "back": "뒤로"
+      },
+      "browser-pane": {
+        "markup": {
+          "cancel": "취소",
+          "clear": "모두 지우기",
+          "copiedToast": "마크업을 복사했습니다 — 에이전트에 붙여넣으세요 ({{value0}})",
+          "copy": "마크업 복사",
+          "drawButton": "스크린샷에 그리기",
+          "drawHint": "새 기능 — 페이지에 그린 다음 에이전트에 붙여넣으세요",
+          "errorAttach": "마크업 스크린샷을 첨부하지 못했습니다.",
+          "errorCapture": "그릴 페이지를 캡처하지 못했습니다.",
+          "errorUnavailable": "이 페이지에서는 스크린샷 마크업을 사용할 수 없습니다.",
+          "fontSize": "글자 크기",
+          "hint": "페이지에 그린 다음 마크업을 복사해 에이전트에 붙여넣으세요.",
+          "redo": "다시 실행",
+          "style": "색상 및 두께",
+          "textInput": "주석 텍스트",
+          "tool": {
+            "arrow": "화살표",
+            "ellipse": "타원",
+            "highlight": "형광펜",
+            "pen": "펜",
+            "rect": "사각형",
+            "text": "텍스트"
+          },
+          "undo": "실행 취소",
+          "widthOption": "{{value0}} px"
+        }
       }
     },
     "i18n": {

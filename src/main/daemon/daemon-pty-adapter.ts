@@ -11,6 +11,7 @@ import { mintPtySessionId, parsePtySessionId } from './pty-session-id'
 import { supportsPtyStartupBarrier } from './shell-ready'
 import { CODEX_SHELL_READY_TIMEOUT_MS } from './session'
 import {
+  GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
   type CreateOrAttachResult,
   type DaemonEvent,
@@ -44,6 +45,17 @@ function getRecoveredHistorySeed(restoreInfo: ColdRestoreInfo): string | null {
   return restoreInfo.modes.alternateScreen
     ? restoreInfo.scrollbackAnsi || restoreInfo.snapshotAnsi || null
     : restoreInfo.rehydrateSequences + restoreInfo.snapshotAnsi
+}
+
+function providerSequenceForSpawn(
+  result: CreateOrAttachResult
+): PtySpawnResult['providerSequence'] {
+  if (result.isNew) {
+    return { value: 0, generation: 'reset' }
+  }
+  return typeof result.snapshot?.outputSequence === 'number'
+    ? { value: result.snapshot.outputSequence, generation: 'continued' }
+    : undefined
 }
 
 export type DaemonPtyAdapterOptions = {
@@ -139,6 +151,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
   // unaffected and bypass this) for a ~9x cut in worst-case write volume.
   private static FULL_CHECKPOINT_COOLDOWN_MS = 45_000
   private lastFullCheckpointAt = new Map<string, number>()
+
+  supportsGitCredentialGuardHost(): boolean {
+    return this.protocolVersion >= GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION
+  }
 
   constructor(opts: DaemonPtyAdapterOptions) {
     this.protocolVersion = opts.protocolVersion ?? PROTOCOL_VERSION
@@ -317,6 +333,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
     const wasAlreadyManaged = this.activeSessionIds.has(sessionId)
     this.activeSessionIds.add(sessionId)
+    const providerSequence = providerSequenceForSpawn(result)
 
     // Cold restore: daemon created a new session but disk history shows
     // an unclean shutdown → return saved scrollback so the renderer can
@@ -348,10 +365,16 @@ export class DaemonPtyAdapter implements IPtyProvider {
           pid,
           ...launchIdentity(),
           coldRestore,
+          ...(providerSequence ? { providerSequence } : {}),
           ...(!result.isNew ? { isReattach: true } : {})
         }
       }
-      return { id: sessionId, pid, ...launchIdentity() }
+      return {
+        id: sessionId,
+        pid,
+        ...launchIdentity(),
+        ...(providerSequence ? { providerSequence } : {})
+      }
     }
 
     if (this.historyManager && result.isNew) {
@@ -389,6 +412,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         id: sessionId,
         pid,
         ...launchIdentity(),
+        ...(providerSequence ? { providerSequence } : {}),
         ...(isReattach ? { isReattach: true } : {})
       }
     }
@@ -410,6 +434,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       snapshot: snapshotPayload,
       snapshotCols: result.snapshot.cols,
       snapshotRows: result.snapshot.rows,
+      ...(providerSequence ? { providerSequence } : {}),
       ...(typeof kittyKeyboardFlags === 'number' && kittyKeyboardFlags > 0
         ? { snapshotKittyKeyboardFlags: kittyKeyboardFlags }
         : {}),
@@ -1354,8 +1379,12 @@ export class DaemonPtyAdapter implements IPtyProvider {
 // unreachable (daemon died). Checking syscall avoids false positives from
 // token-file ENOENT (readFileSync), which has no syscall or syscall='open'.
 // "Connection lost" / "Not connected" mean the daemon died while we had an
-// active or stale connection. All indicate the daemon is gone and a respawn
-// should be attempted.
+// active or stale connection. "Hello response timed out" means we reconnected
+// to a daemon whose socket accepts connections but whose event loop never
+// answers the handshake (a wedged daemon, #8689) — respawning re-enters the
+// grace-bounded launcher, which drains a transient wedge or replaces a
+// permanent one instead of failing every terminal forever. All indicate the
+// daemon is unusable and a respawn should be attempted.
 function isDaemonGoneError(err: unknown): boolean {
   if (!(err instanceof Error)) {
     return false
@@ -1365,5 +1394,5 @@ function isDaemonGoneError(err: unknown): boolean {
     return true
   }
   const msg = err.message
-  return msg === 'Connection lost' || msg === 'Not connected'
+  return msg === 'Connection lost' || msg === 'Not connected' || msg === 'Hello response timed out'
 }

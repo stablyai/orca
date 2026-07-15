@@ -3,8 +3,11 @@ import { writeForegroundTerminalChunk } from '@/lib/pane-manager/pane-terminal-f
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { ensureArabicShapingJoinerForText } from '@/lib/pane-manager/terminal-arabic-shaping-joiner'
 import {
+  captureTerminalParseProgressGeneration,
+  hasTerminalParseProgressSince,
   isTerminalWritePipelineCertifiedDead,
-  notifyUndeliverableWrite
+  notifyUndeliverableWrite,
+  recordTerminalParseProgress
 } from '@/lib/pane-manager/terminal-write-pipeline-health'
 
 // Why: xterm.js auto-responds to terminal query sequences (DA1 `CSI c`,
@@ -50,10 +53,12 @@ export type ReplayingPanesRef = React.RefObject<Map<number, number>>
 //   2. probe completes, replay callback never ran     → every replay byte has
 //      parsed (FIFO), so no further auto-replies can exist; the completion
 //      was genuinely lost. Release.
-//   3. probe never completes                          → the pipeline is
-//      wedged; a dead parser can never emit auto-replies, so releasing after
-//      a bounded wait cannot leak anything — and the pane needs recovery,
-//      which the breadcrumb reports.
+//   3. probe never completes                          → wedged OR merely
+//      behind. Other completions parsing after the probe was queued prove
+//      "behind" — the deadline extends until a fully quiet window passes.
+//      Only a quiet window certifies wedged: a dead parser can never emit
+//      auto-replies, so releasing then cannot leak anything — and the pane
+//      needs recovery, which the breadcrumb reports.
 // While the probe is pending (slow-but-alive replay), the guard HOLDS.
 const REPLAY_GUARD_STALL_CHECK_MS = 10_000
 
@@ -67,9 +72,13 @@ export function isPaneReplaying(ref: ReplayingPanesRef, paneId: number): boolean
 }
 
 type ReplayGuardWriteTarget = Pick<ManagedPane['terminal'], 'write'>
+type ReplayGuardWriteCallbacks = {
+  onParsed: () => void
+  onWriteFailure: () => void
+}
 
 /**
- * Engage the replay counter for one write and return the release function.
+ * Engage the replay counter for one write and return its settlement callbacks.
  * Release runs exactly once — from xterm's write completion or, failing
  * that, from the probe-certified stall path — so a lost completion cannot
  * latch the guard.
@@ -80,7 +89,7 @@ function engageReplayGuard(
   terminal: ReplayGuardWriteTarget,
   stallCheckMs: number,
   onRelease?: () => void
-): () => void {
+): ReplayGuardWriteCallbacks {
   map.set(paneId, (map.get(paneId) ?? 0) + 1)
   let released = false
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -106,33 +115,64 @@ function engageReplayGuard(
       recordRendererCrashBreadcrumb('terminal_replay_guard_lost_completion', { paneId })
     } else if (reason === 'wedged') {
       console.error(
-        `[terminal] replay guard released for pane ${paneId} — the probe write never parsed (wedged xterm write pipeline; pane likely needs recovery)`
+        `[terminal] replay guard released for pane ${paneId} — xterm rejected the replay write or its probe never parsed (undeliverable write pipeline; pane likely needs recovery)`
       )
       recordRendererCrashBreadcrumb('terminal_replay_guard_wedged_release', { paneId })
-      // Why: the probe already certified the pipeline dead — hand the pane to
-      // recovery instead of leaving a fossil frame that eats keystrokes.
+      // Why: a rejected replay or silent probe makes the pipeline
+      // undeliverable — recover instead of leaving a fossil that eats input.
       notifyUndeliverableWrite(terminal, 'replay-wedged')
     }
     onRelease?.()
+  }
+  const armWedgeDeadline = (quietSinceGeneration: number): void => {
+    timer = setTimeout(() => {
+      if (released) {
+        return
+      }
+      // Why: completions parsed after the probe was queued prove the FIFO is
+      // alive and merely behind (hidden-restore backlogs parse slowly). A
+      // wedge verdict here would open the guard while replay bytes are still
+      // parsing — leaking auto-replies into the agent's stdin — and hand a
+      // healthy pane to recovery. Certify only after a fully quiet window.
+      if (hasTerminalParseProgressSince(terminal, quietSinceGeneration)) {
+        armWedgeDeadline(captureTerminalParseProgressGeneration(terminal))
+        return
+      }
+      release('wedged')
+    }, stallCheckMs)
   }
   const probeForStall = (): void => {
     if (released) {
       return
     }
+    const probeQueuedAtGeneration = captureTerminalParseProgressGeneration(terminal)
     try {
       // FIFO certification: this callback can only run after every replay
       // byte queued before it has parsed (state 2 above).
-      terminal.write('', () => release('lost-completion'))
+      terminal.write('', () => {
+        recordTerminalParseProgress(terminal)
+        release('lost-completion')
+      })
     } catch {
       // write threw (terminal disposed mid-replay): nothing will ever parse,
       // so no auto-replies can leak.
       release('wedged')
       return
     }
-    timer = setTimeout(() => release('wedged'), stallCheckMs)
+    armWedgeDeadline(probeQueuedAtGeneration)
   }
   timer = setTimeout(probeForStall, stallCheckMs)
-  return () => release('parsed')
+  return {
+    onParsed: () => {
+      // Why recorded even after release: a late completion is still parse
+      // progress, and sibling guards' wedge deadlines consult it.
+      recordTerminalParseProgress(terminal)
+      release('parsed')
+    },
+    // A rejected write produced no replay auto-replies, so release immediately
+    // and recover without recording fake parser progress.
+    onWriteFailure: () => release('wedged')
+  }
 }
 
 /** Writes `data` into the pane's terminal with the replay guard engaged,
@@ -156,7 +196,7 @@ export function replayIntoTerminal(
     return
   }
   ensureArabicShapingJoinerForText(pane.terminal, data)
-  const releaseParsed = engageReplayGuard(
+  const guardCallbacks = engageReplayGuard(
     replayingPanesRef.current,
     pane.id,
     pane.terminal,
@@ -168,7 +208,8 @@ export function replayIntoTerminal(
     forceViewportRefresh: true,
     followupViewportRefresh: true,
     shouldRefreshViewportSynchronously: options.shouldRefreshViewportSynchronously,
-    onParsed: releaseParsed
+    onParsed: guardCallbacks.onParsed,
+    onWriteFailure: guardCallbacks.onWriteFailure
   })
 }
 
@@ -190,7 +231,7 @@ export function replayIntoTerminalAsync(
   return new Promise((resolve) => {
     // Why resolve on either release path: callers await this to sequence
     // restore steps; a lost write completion must not hang the restore chain.
-    const releaseParsed = engageReplayGuard(
+    const guardCallbacks = engageReplayGuard(
       replayingPanesRef.current,
       pane.id,
       pane.terminal,
@@ -201,7 +242,8 @@ export function replayIntoTerminalAsync(
       forceViewportRefresh: true,
       followupViewportRefresh: true,
       shouldRefreshViewportSynchronously: options.shouldRefreshViewportSynchronously,
-      onParsed: releaseParsed
+      onParsed: guardCallbacks.onParsed,
+      onWriteFailure: guardCallbacks.onWriteFailure
     })
   })
 }

@@ -174,6 +174,97 @@ describe('PtyHandler', () => {
     expect(handler.activePtyCount).toBe(1)
   })
 
+  it('guards SSH agent terminals after merging the relay inherited Git config', async () => {
+    const gitConfigKeys = [
+      'GIT_CONFIG_COUNT',
+      'GIT_CONFIG_KEY_0',
+      'GIT_CONFIG_VALUE_0',
+      'GIT_CONFIG_KEY_1',
+      'GIT_CONFIG_VALUE_1',
+      'GIT_CONFIG_KEY_2',
+      'GIT_CONFIG_VALUE_2'
+    ] as const
+    const saved = Object.fromEntries(gitConfigKeys.map((key) => [key, process.env[key]]))
+    process.env.GIT_CONFIG_COUNT = '3'
+    process.env.GIT_CONFIG_KEY_0 = 'core.quotePath'
+    process.env.GIT_CONFIG_VALUE_0 = 'false'
+    process.env.GIT_CONFIG_KEY_1 = 'base.one'
+    process.env.GIT_CONFIG_VALUE_1 = 'one'
+    process.env.GIT_CONFIG_KEY_2 = 'base.two'
+    process.env.GIT_CONFIG_VALUE_2 = 'two'
+
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        command: 'claude',
+        env: {
+          GIT_CONFIG_COUNT: '1',
+          GIT_CONFIG_KEY_0: 'http.proxy',
+          GIT_CONFIG_VALUE_0: 'http://proxy.invalid'
+        }
+      })
+
+      const spawnEnv = mockPtySpawn.mock.calls[0]?.[2]?.env as Record<string, string>
+      expect(spawnEnv.GIT_TERMINAL_PROMPT).toBe('0')
+      expect(spawnEnv.GCM_INTERACTIVE).toBe('never')
+      expect(spawnEnv.GIT_CONFIG_COUNT).toBe('3')
+      expect(spawnEnv.GIT_CONFIG_KEY_0).toBe('http.proxy')
+      expect(spawnEnv.GIT_CONFIG_KEY_1).toBe('credential.interactive')
+      expect(spawnEnv.GIT_CONFIG_KEY_2).toBe('credential.guiPrompt')
+      expect(spawnEnv.GIT_CONFIG_KEY_3).toBeUndefined()
+    } finally {
+      for (const key of gitConfigKeys) {
+        if (saved[key] === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = saved[key]
+        }
+      }
+    }
+  })
+
+  it('guards a trusted SSH agent when its command uses a custom wrapper', async () => {
+    await dispatcher.callRequest('pty.spawn', {
+      command: 'cd /repo && custom-agent-wrapper',
+      launchAgent: 'claude'
+    })
+
+    const spawnEnv = mockPtySpawn.mock.calls[0]?.[2]?.env as Record<string, string>
+    expect(spawnEnv.GIT_TERMINAL_PROMPT).toBe('0')
+    expect(spawnEnv.GCM_INTERACTIVE).toBe('never')
+    expect(Object.values(spawnEnv)).toContain('credential.interactive')
+    expect(Object.values(spawnEnv)).toContain('credential.guiPrompt')
+  })
+
+  it('leaves an ordinary Windows SSH user terminal unchanged', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        env: {
+          GIT_TERMINAL_PROMPT: '1',
+          GCM_INTERACTIVE: 'auto',
+          GIT_CONFIG_COUNT: '1',
+          GIT_CONFIG_KEY_0: 'core.quotePath',
+          GIT_CONFIG_VALUE_0: 'false'
+        }
+      })
+      const userEnv = mockPtySpawn.mock.calls[0]?.[2]?.env as Record<string, string>
+      expect(userEnv.GIT_TERMINAL_PROMPT).toBe('1')
+      expect(userEnv.GCM_INTERACTIVE).toBe('auto')
+      expect(userEnv.GIT_CONFIG_COUNT).toBe('1')
+      expect(userEnv.GIT_CONFIG_KEY_0).toBe('core.quotePath')
+      expect(userEnv.GIT_CONFIG_KEY_1).toBeUndefined()
+      const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+      expect(JSON.parse(state)[0]?.gitCredentialPromptGuarded).toBe(false)
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
   it('uses an explicit shell override and falls back to the default shell otherwise', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', {
@@ -1553,6 +1644,67 @@ describe('PtyHandler', () => {
     expect(callArgs.env.ORCA_AGENT_HOOK_TOKEN).toBe('abc-uuid')
     expect(callArgs.env.TERM).toBe('xterm-256color')
     expect(callArgs.env.TERM_PROGRAM).toBe('Orca')
+  })
+
+  it('revive preserves the credential guard chosen for an SSH agent terminal', async () => {
+    await dispatcher.callRequest('pty.spawn', {
+      command: 'claude'
+    })
+    const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+    expect(JSON.parse(state)[0]?.gitCredentialPromptGuarded).toBe(true)
+
+    handler.dispose()
+    mockPtySpawn.mockClear()
+    dispatcher = createMockDispatcher()
+    handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      await dispatcher.callRequest('pty.revive', { state })
+    } finally {
+      killSpy.mockRestore()
+    }
+
+    const revivedEnv = mockPtySpawn.mock.calls[0]?.[2]?.env as Record<string, string>
+    expect(revivedEnv.GIT_TERMINAL_PROMPT).toBe('0')
+    expect(revivedEnv.GCM_INTERACTIVE).toBe('never')
+    expect(Object.values(revivedEnv)).toContain('credential.interactive')
+    expect(Object.values(revivedEnv)).toContain('credential.guiPrompt')
+  })
+
+  it('revive treats legacy relay state as an ordinary unguarded terminal', async () => {
+    const savedTerminalPrompt = process.env.GIT_TERMINAL_PROMPT
+    const savedGcmInteractive = process.env.GCM_INTERACTIVE
+    delete process.env.GIT_TERMINAL_PROMPT
+    delete process.env.GCM_INTERACTIVE
+    const state = JSON.stringify([
+      {
+        id: 'pty-legacy',
+        pid: process.pid,
+        cols: 80,
+        rows: 24,
+        cwd: process.cwd()
+      }
+    ])
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
+    try {
+      await dispatcher.callRequest('pty.revive', { state })
+      const revivedEnv = mockPtySpawn.mock.calls[0]?.[2]?.env as Record<string, string>
+      expect(revivedEnv.GIT_TERMINAL_PROMPT).toBeUndefined()
+      expect(revivedEnv.GCM_INTERACTIVE).toBeUndefined()
+    } finally {
+      killSpy.mockRestore()
+      if (savedTerminalPrompt === undefined) {
+        delete process.env.GIT_TERMINAL_PROMPT
+      } else {
+        process.env.GIT_TERMINAL_PROMPT = savedTerminalPrompt
+      }
+      if (savedGcmInteractive === undefined) {
+        delete process.env.GCM_INTERACTIVE
+      } else {
+        process.env.GCM_INTERACTIVE = savedGcmInteractive
+      }
+    }
   })
 
   it('normalizes an explicit empty TERM and preserves sanitized env deletions on revive', async () => {

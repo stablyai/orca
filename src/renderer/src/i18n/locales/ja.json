@@ -699,7 +699,8 @@
         "devSearchKeywordToast": "toast",
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
-        "devSearchKeywordNotification": "notification"
+        "devSearchKeywordNotification": "notification",
+        "projectHostsSummary": "{{value0}} 台のホスト"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "貼り付け内容が大きすぎます。"
@@ -6112,7 +6113,7 @@
           "26fef02bf3": "プロジェクトアイコン",
           "c7ef4415de": "表示名",
           "b0a0c14a1c": "サイドバーとタブのプロジェクト固有の表示詳細。",
-          "170624bdfb": "このプロジェクトを Orca から削除します。",
+          "removeProjectAllHosts": "このプロジェクトを、設定済みのすべてのホストの Orca から削除します。",
           "0909e5d650": "プロジェクトの削除",
           "ee5a290616": "フォルダーとして開きます。このワークスペースでは Git 機能を使用できません。",
           "323debba71": "タイプ：",
@@ -9027,7 +9028,9 @@
           "3325d996cb": "使用状況を更新",
           "a8f3e2c1b4": "週次クレジット",
           "b7e2d9f0a3": "ターミナルの grok /usage 画面と同じ週次クレジット率です。",
-          "c6d1a8f4e2": "{{when}} にリセット"
+          "c6d1a8f4e2": "{{when}} にリセット",
+          "e6dadc1e2b": "Monthly usage",
+          "75e396bf42": "Included monthly usage for Grok unified-billing accounts."
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "使用済み",
@@ -9036,6 +9039,56 @@
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
           "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
+        },
+        "MobileRelayStatusSection": {
+          "registered": "Registered",
+          "connecting": "Connecting",
+          "reconnecting": "Reconnecting",
+          "offline": "Offline",
+          "title": "Orca Relay",
+          "automatic": "Connect from anywhere when a phone is paired",
+          "signInPrompt": "Sign in on this desktop to connect from anywhere",
+          "directStillAvailable": "LAN and Tailscale connections remain available.",
+          "directNeedsNoAccount": "LAN and Tailscale pairing still work without an account.",
+          "signIn": "Sign in",
+          "unavailable": "Unavailable",
+          "standby": "Standby — no relay devices"
+        },
+        "MobilePairingConnectionOptions": {
+          "ready": "準備完了",
+          "connecting": "接続中",
+          "available": "利用可能",
+          "reconnecting": "再接続中",
+          "unavailable": "利用不可",
+          "title": "新しいスマートフォンをどのように接続しますか？",
+          "anywhere": "Orca Relay で接続",
+          "recommended": "推奨",
+          "automaticDescription": "利用可能な場合は直接接続し、それ以外ではOrca Relayを使用します。",
+          "signInDescription": "Orca Relayを使用するには、このデスクトップでサインインしてください。",
+          "signIn": "サインイン",
+          "localOnly": "ローカルネットワークのみ",
+          "localShort": "LAN または Tailscale",
+          "localDescription": "このスマートフォンをOrca Relayに接続せず、LANまたはTailscaleを使用します。"
+        },
+        "MobilePairingSetupSection": {
+          "title": "スマートフォンをペアリング",
+          "automaticDescription": "ペアリングコードには、直接接続と暗号化されたOrca Relayのフォールバックが含まれます。",
+          "localDescription": "ペアリングコードは、下のローカルネットワークアドレスだけを使用します。",
+          "regenerate": "再生成",
+          "generate": "QRコードを生成",
+          "localSettings": "ローカル接続設定",
+          "localAddressDescription": "Orca Mobileからこのコンピューターへ直接接続できるLANまたはプライベートネットワークのアドレスを選択します。",
+          "refresh": "ネットワークインターフェースを更新",
+          "tailnet": "自分のtailnetで接続",
+          "tailnetDescription": "このコンピューターとスマートフォンにTailscaleをインストールし、同じtailnetにサインインして、上で100.x.y.zアドレスを選択します。",
+          "getTailscale": "Tailscaleを入手"
+        },
+        "MobileRelayBetaAvailability": {
+          "about": "Orca Relay ベータについて",
+          "beta": "ベータ",
+          "availability": "利用可能:",
+          "testFlight": "TestFlight",
+          "androidApk": "Android APK"
         }
       },
       "right": {
@@ -12790,7 +12843,7 @@
         "profiles": {
           "switcher": {
             "cloud": {
-              "unavailable": "クラウドログインを利用できません"
+              "unavailable": "Orcaへのサインインは利用できません"
             },
             "reconnect": "プロファイルを再接続",
             "connect": "プロファイルを接続",
@@ -12814,7 +12867,14 @@
             "account": "アカウント",
             "org": {
               "members": "組織メンバー"
-            }
+            },
+            "signInWaiting": "サインインを待機中…",
+            "signInAgain": "もう一度サインイン",
+            "signIn": "Orcaにサインイン",
+            "accountTitle": "Orcaアカウント",
+            "accountSignedIn": "サインイン済み",
+            "accountSignInRequired": "サインインが必要です",
+            "accountSignedOut": "サインアウト済み"
           },
           "management": {
             "04e7bd2a23": "転送",
@@ -12857,8 +12917,8 @@
           },
           "signout": {
             "confirm": {
-              "title": "ログアウトしますか？",
-              "description": "{{profileName}}からログアウトし、プロジェクト、ワークツリー、ローカルメタデータをこのデバイスに保持します。",
+              "title": "Orcaからログアウトしますか？",
+              "description": "このデバイスでOrcaからログアウトします。ローカルのプロジェクトとワークツリーには影響しません。",
               "cancel": "キャンセル",
               "action": "ログアウト"
             }
@@ -12960,6 +13020,34 @@
         "searchLabels": "ラベルをフィルター…",
         "searchAssignee": "担当者をフィルター…",
         "back": "戻る"
+      },
+      "browser-pane": {
+        "markup": {
+          "cancel": "キャンセル",
+          "clear": "すべて消去",
+          "copiedToast": "注釈をコピーしました — エージェントに貼り付けてください（{{value0}}）",
+          "copy": "注釈をコピー",
+          "drawButton": "スクリーンショットに描き込み",
+          "drawHint": "新機能 — ページに描き込み、エージェントに貼り付けられます",
+          "errorAttach": "注釈付きスクリーンショットを添付できませんでした。",
+          "errorCapture": "描画用にページを取得できませんでした。",
+          "errorUnavailable": "このページではスクリーンショット注釈を利用できません。",
+          "fontSize": "文字サイズ",
+          "hint": "ページに描き込み、注釈をコピーしてエージェントに貼り付けてください。",
+          "redo": "やり直し",
+          "style": "色と太さ",
+          "textInput": "注釈テキスト",
+          "tool": {
+            "arrow": "矢印",
+            "ellipse": "楕円",
+            "highlight": "ハイライト",
+            "pen": "ペン",
+            "rect": "四角形",
+            "text": "テキスト"
+          },
+          "undo": "元に戻す",
+          "widthOption": "{{value0}} px"
+        }
       }
     },
     "i18n": {

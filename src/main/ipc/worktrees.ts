@@ -2248,74 +2248,77 @@ export function registerWorktreeHandlers(
     )
   })
 
-  ipcMain.handle('hooks:readIssueCommand', async (_event, args: { repoId: string }) => {
-    const repo = store.getRepo(args.repoId)
-    if (!repo || isFolderRepo(repo)) {
-      return {
-        status: 'ok',
-        localContent: null,
-        sharedContent: null,
-        effectiveContent: null,
-        localFilePath: '',
-        source: 'none' as const
-      }
-    }
-    if (repo.connectionId) {
-      const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
-      const fsProvider = getSshFilesystemProvider(repo.connectionId)
-      if (!fsProvider) {
+  ipcMain.handle(
+    'hooks:readIssueCommand',
+    async (_event, args: { repoId: string; hostId?: ExecutionHostId }) => {
+      const repo = getRepoForWorktreeRemoval(store, args.repoId, args.hostId)
+      if (!repo || isFolderRepo(repo)) {
         return {
-          status: 'error',
+          status: 'ok',
           localContent: null,
           sharedContent: null,
           effectiveContent: null,
-          localFilePath: issueCommandPath,
+          localFilePath: '',
           source: 'none' as const
         }
       }
+      if (repo.connectionId) {
+        const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
+        const fsProvider = getSshFilesystemProvider(repo.connectionId)
+        if (!fsProvider) {
+          return {
+            status: 'error',
+            localContent: null,
+            sharedContent: null,
+            effectiveContent: null,
+            localFilePath: issueCommandPath,
+            source: 'none' as const
+          }
+        }
 
-      let status: 'ok' | 'error' = 'ok'
-      let localContent: string | null = null
-      let sharedContent: string | null = null
-      try {
-        const result = await fsProvider.readFile(issueCommandPath)
-        localContent = result.isBinary ? null : result.content.trim() || null
-      } catch (error) {
-        if (!isENOENT(error)) {
-          status = 'error'
+        let status: 'ok' | 'error' = 'ok'
+        let localContent: string | null = null
+        let sharedContent: string | null = null
+        try {
+          const result = await fsProvider.readFile(issueCommandPath)
+          localContent = result.isBinary ? null : result.content.trim() || null
+        } catch (error) {
+          if (!isENOENT(error)) {
+            status = 'error'
+          }
+        }
+        try {
+          const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
+          sharedContent = result.isBinary
+            ? null
+            : parseOrcaYaml(result.content)?.issueCommand?.trim() || null
+        } catch (error) {
+          if (!isENOENT(error)) {
+            status = 'error'
+          }
+        }
+        const effectiveContent = localContent ?? sharedContent
+        return {
+          status: localContent ? 'ok' : status,
+          localContent,
+          sharedContent,
+          effectiveContent,
+          localFilePath: issueCommandPath,
+          source: localContent
+            ? ('local' as const)
+            : sharedContent
+              ? ('shared' as const)
+              : ('none' as const)
         }
       }
-      try {
-        const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
-        sharedContent = result.isBinary
-          ? null
-          : parseOrcaYaml(result.content)?.issueCommand?.trim() || null
-      } catch (error) {
-        if (!isENOENT(error)) {
-          status = 'error'
-        }
-      }
-      const effectiveContent = localContent ?? sharedContent
-      return {
-        status: localContent ? 'ok' : status,
-        localContent,
-        sharedContent,
-        effectiveContent,
-        localFilePath: issueCommandPath,
-        source: localContent
-          ? ('local' as const)
-          : sharedContent
-            ? ('shared' as const)
-            : ('none' as const)
-      }
+      return readIssueCommand(repo.path)
     }
-    return readIssueCommand(repo.path)
-  })
+  )
 
   ipcMain.handle(
     'hooks:writeIssueCommand',
-    async (_event, args: { repoId: string; content: string }) => {
-      const repo = store.getRepo(args.repoId)
+    async (_event, args: { repoId: string; content: string; hostId?: ExecutionHostId }) => {
+      const repo = getRepoForWorktreeRemoval(store, args.repoId, args.hostId)
       if (!repo || isFolderRepo(repo)) {
         return
       }

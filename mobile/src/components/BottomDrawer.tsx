@@ -40,6 +40,7 @@ const TOP_SCROLL_EPSILON = 1
 type Props = {
   visible: boolean
   onClose: () => void
+  onAfterClose?: () => void
   children: ReactNode
   dragContentToDismiss?: boolean
   contentScrollable?: boolean
@@ -49,6 +50,7 @@ type Props = {
 export function BottomDrawer({
   visible,
   onClose,
+  onAfterClose,
   children,
   dragContentToDismiss = true,
   contentScrollable = true,
@@ -73,7 +75,10 @@ export function BottomDrawer({
     <MountedBottomDrawer
       visible={visible}
       onClose={onClose}
-      onHidden={() => setMounted(false)}
+      onHidden={() => {
+        setMounted(false)
+        onAfterClose?.()
+      }}
       dragContentToDismiss={dragContentToDismiss}
       contentScrollable={contentScrollable}
       zIndex={zIndex}

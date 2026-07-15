@@ -9,11 +9,16 @@ export type OrcaCloudAuthConfig = {
   profileEndpoint: string
   orgEndpoint: string
   logoutEndpoint: string
+  relayTokenEndpoint: string
+  relayDirectorUrl: string
   clientId: string
   scope: string
 }
 
 const DEFAULT_SCOPE = 'openid profile email offline_access'
+const PRODUCTION_API_BASE_URL = 'https://login.onorca.dev'
+const PRODUCTION_CLIENT_ID = 'orca-desktop'
+const PRODUCTION_RELAY_DIRECTOR_URL = 'https://relay.onorca.dev'
 
 // Why: packaged main bundles never define NODE_ENV, so packaged-ness is the
 // only reliable production signal for gating dev-only auth escape hatches.
@@ -49,6 +54,15 @@ function endpoint(baseUrl: string, path: string): string {
   return new URL(path, `${baseUrl}/`).toString()
 }
 
+function cleanOrigin(value: string | undefined, allowLoopbackHttp: boolean): string | null {
+  const cleaned = cleanUrl(value, allowLoopbackHttp)
+  if (!cleaned) {
+    return null
+  }
+  const parsed = new URL(cleaned)
+  return parsed.pathname === '/' && !parsed.search && !parsed.hash ? parsed.origin : null
+}
+
 export function getOrcaCloudAuthConfig(
   env: NodeJS.ProcessEnv = process.env,
   packaged: boolean = isPackagedOrcaBuild()
@@ -58,8 +72,15 @@ export function getOrcaCloudAuthConfig(
   const allowLoopbackHttp = !packaged
   const cleanEndpointUrl = (value: string | undefined): string | null =>
     cleanUrl(value, allowLoopbackHttp)
-  const apiBaseUrl = cleanEndpointUrl(env.ORCA_CLOUD_API_URL)
-  const clientId = env.ORCA_CLOUD_CLIENT_ID?.trim()
+  const configuredApiBaseUrl = env.ORCA_CLOUD_API_URL?.trim()
+  // Why: packaged releases cannot depend on launch-time environment injection;
+  // these first-party endpoints and the public OAuth client ID are not secrets.
+  const apiBaseUrl = configuredApiBaseUrl
+    ? cleanEndpointUrl(configuredApiBaseUrl)
+    : packaged
+      ? PRODUCTION_API_BASE_URL
+      : null
+  const clientId = env.ORCA_CLOUD_CLIENT_ID?.trim() || (packaged ? PRODUCTION_CLIENT_ID : undefined)
   if (!apiBaseUrl || !clientId) {
     return {
       configured: false,
@@ -92,6 +113,11 @@ export function getOrcaCloudAuthConfig(
       logoutEndpoint:
         cleanEndpointUrl(env.ORCA_CLOUD_LOGOUT_URL) ??
         endpoint(apiBaseUrl, '/v1/desktop/auth/logout'),
+      relayTokenEndpoint:
+        cleanEndpointUrl(env.ORCA_CLOUD_RELAY_TOKEN_URL) ??
+        endpoint(apiBaseUrl, '/v1/desktop/auth/relay-token'),
+      relayDirectorUrl:
+        cleanOrigin(env.ORCA_RELAY_URL, allowLoopbackHttp) ?? PRODUCTION_RELAY_DIRECTOR_URL,
       clientId,
       scope: env.ORCA_CLOUD_AUTH_SCOPE?.trim() || DEFAULT_SCOPE
     }

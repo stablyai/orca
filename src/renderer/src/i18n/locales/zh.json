@@ -699,7 +699,8 @@
         "devSearchKeywordToast": "toast",
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
-        "devSearchKeywordNotification": "notification"
+        "devSearchKeywordNotification": "notification",
+        "projectHostsSummary": "{{value0}} 个主机"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "粘贴内容过大。"
@@ -1602,9 +1603,9 @@
         "e9139db03f": "无法隐藏 {{value0}}。",
         "b73717af92": "下一步",
         "0c8df28045": "下一页",
-        "ae859c816b": "页{{value0}}",
+        "ae859c816b": "第{{value0}}页",
         "cd171f3391": "...",
-        "297a805b64": "以前的",
+        "297a805b64": "上一页",
         "6cd6b3ae6a": "上一页",
         "e65757a338": "分页",
         "37d60046e3": "打开 GitHub 合并框",
@@ -6075,7 +6076,7 @@
           "26fef02bf3": "项目图标",
           "c7ef4415de": "显示名称",
           "b0a0c14a1c": "侧边栏和选项卡的项目特定显示详细信息。",
-          "170624bdfb": "从 Orca 中删除该项目。",
+          "removeProjectAllHosts": "从所有已配置主机的 Orca 中删除该项目。",
           "0909e5d650": "删除项目",
           "ee5a290616": "作为文件夹打开。 Git 功能对此工作区不可用。",
           "323debba71": "类型：",
@@ -9027,7 +9028,9 @@
           "3325d996cb": "刷新使用量",
           "a8f3e2c1b4": "每周额度",
           "b7e2d9f0a3": "与终端中 grok /usage 屏幕显示的每周额度百分比相同。",
-          "c6d1a8f4e2": "{{when}} 重置"
+          "c6d1a8f4e2": "{{when}} 重置",
+          "e6dadc1e2b": "Monthly usage",
+          "75e396bf42": "Included monthly usage for Grok unified-billing accounts."
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "已用",
@@ -9036,6 +9039,56 @@
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
           "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
+        },
+        "MobileRelayStatusSection": {
+          "registered": "Registered",
+          "connecting": "Connecting",
+          "reconnecting": "Reconnecting",
+          "offline": "Offline",
+          "title": "Orca Relay",
+          "automatic": "Connect from anywhere when a phone is paired",
+          "signInPrompt": "Sign in on this desktop to connect from anywhere",
+          "directStillAvailable": "LAN and Tailscale connections remain available.",
+          "directNeedsNoAccount": "LAN and Tailscale pairing still work without an account.",
+          "signIn": "Sign in",
+          "unavailable": "Unavailable",
+          "standby": "Standby — no relay devices"
+        },
+        "MobilePairingConnectionOptions": {
+          "ready": "已就绪",
+          "connecting": "正在连接",
+          "available": "可用",
+          "reconnecting": "正在重新连接",
+          "unavailable": "不可用",
+          "title": "新手机应如何连接？",
+          "anywhere": "使用 Orca Relay 连接",
+          "recommended": "推荐",
+          "automaticDescription": "Orca 会优先使用直接连接，否则使用 Orca Relay。",
+          "signInDescription": "请在此桌面端登录以使用 Orca Relay。",
+          "signIn": "登录",
+          "localOnly": "仅限本地网络",
+          "localShort": "局域网或 Tailscale",
+          "localDescription": "使用局域网或 Tailscale，不通过 Orca Relay 连接这部手机。"
+        },
+        "MobilePairingSetupSection": {
+          "title": "配对手机",
+          "automaticDescription": "配对码包含直接访问方式和加密的 Orca Relay 备用连接。",
+          "localDescription": "配对码仅通过下方的本地网络地址连接。",
+          "regenerate": "重新生成",
+          "generate": "生成二维码",
+          "localSettings": "本地连接设置",
+          "localAddressDescription": "选择 Orca Mobile 可用于直接访问此电脑的局域网或专用网络地址。",
+          "refresh": "刷新网络接口",
+          "tailnet": "使用自己的 tailnet 连接",
+          "tailnetDescription": "在此电脑和手机上安装 Tailscale，登录同一个 tailnet，然后在上方选择其 100.x.y.z 地址。",
+          "getTailscale": "获取 Tailscale"
+        },
+        "MobileRelayBetaAvailability": {
+          "about": "关于 Orca Relay 测试版",
+          "beta": "测试版",
+          "availability": "可用平台：",
+          "testFlight": "TestFlight",
+          "androidApk": "Android APK"
         }
       },
       "right": {
@@ -11388,7 +11441,7 @@
           "d5edd81755": "重命名自",
           "6e459867ad": "会话本地连续性状态。 Git 不再将此文件报告为未合并。",
           "9c2901ef8a": "下一次冲突",
-          "41d9af2e7a": "以前的冲突",
+          "41d9af2e7a": "上一个冲突",
           "55d61a0ccd": "冲突 ·",
           "da539359b6": "对于此冲突，没有可编辑的工作树文件。"
         },
@@ -12790,7 +12843,7 @@
         "profiles": {
           "switcher": {
             "cloud": {
-              "unavailable": "云登录不可用"
+              "unavailable": "Orca 登录不可用"
             },
             "reconnect": "重新连接配置文件",
             "connect": "连接配置文件",
@@ -12814,7 +12867,14 @@
             "account": "帐户",
             "org": {
               "members": "组织成员"
-            }
+            },
+            "signInWaiting": "正在等待登录…",
+            "signInAgain": "重新登录",
+            "signIn": "登录 Orca",
+            "accountTitle": "Orca 帐户",
+            "accountSignedIn": "已登录",
+            "accountSignInRequired": "需要登录",
+            "accountSignedOut": "已退出登录"
           },
           "management": {
             "04e7bd2a23": "转移",
@@ -12857,8 +12917,8 @@
           },
           "signout": {
             "confirm": {
-              "title": "退出登录？",
-              "description": "退出 {{profileName}}，并在此设备上保留其项目、工作树和本地元数据。",
+              "title": "退出 Orca？",
+              "description": "你将在此设备上退出 Orca。本地项目和工作树不会受到影响。",
               "cancel": "取消",
               "action": "退出登录"
             }
@@ -12960,6 +13020,34 @@
         "searchLabels": "筛选标签…",
         "searchAssignee": "筛选负责人…",
         "back": "返回"
+      },
+      "browser-pane": {
+        "markup": {
+          "cancel": "取消",
+          "clear": "全部清除",
+          "copiedToast": "已复制标注 — 粘贴到你的智能体（{{value0}}）",
+          "copy": "复制标注",
+          "drawButton": "在截图上绘制",
+          "drawHint": "新功能 — 在页面上绘制，然后复制到你的智能体",
+          "errorAttach": "无法附加标注后的截图。",
+          "errorCapture": "无法捕获页面进行绘制。",
+          "errorUnavailable": "此页面无法使用截图标注。",
+          "fontSize": "字号",
+          "hint": "在页面上绘制，然后复制标注以粘贴到你的智能体。",
+          "redo": "重做",
+          "style": "颜色和粗细",
+          "textInput": "标注文字",
+          "tool": {
+            "arrow": "箭头",
+            "ellipse": "椭圆",
+            "highlight": "高亮",
+            "pen": "画笔",
+            "rect": "矩形",
+            "text": "文字"
+          },
+          "undo": "撤销",
+          "widthOption": "{{value0}} px"
+        }
       }
     },
     "i18n": {

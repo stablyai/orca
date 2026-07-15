@@ -1114,7 +1114,7 @@ function WindowLabel({
 // the rest (Flash Lite, experimental) are secondary and would clutter the bar.
 const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
 
-function ProviderSegment({
+export function ProviderSegment({
   p,
   compact,
   display
@@ -1137,7 +1137,7 @@ function ProviderSegment({
   }
 
   // Fetching with no prior data
-  if (p.status === 'fetching' && !p.session && !p.weekly && !p.fableWeekly) {
+  if (p.status === 'fetching' && !p.session && !p.weekly && !p.fableWeekly && !p.monthly) {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
@@ -1156,7 +1156,7 @@ function ProviderSegment({
   }
 
   // Error with no data
-  if (p.status === 'error' && !p.session && !p.weekly && !p.fableWeekly) {
+  if (p.status === 'error' && !p.session && !p.weekly && !p.fableWeekly && !p.monthly) {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
@@ -1214,6 +1214,16 @@ function ProviderSegment({
           key: 'fableWeekly',
           window: p.fableWeekly,
           label: translate('auto.components.status.bar.StatusBar.a79c64f87e', 'Fable')
+        }
+      : null,
+    // Why: monthly is chip-visible only when it's the sole window (Grok
+    // unified billing); providers with session/weekly data (OpenCode Go)
+    // keep monthly tooltip-only so the chip stays uncluttered.
+    p.monthly && !p.session && !p.weekly
+      ? {
+          key: 'monthly',
+          window: p.monthly,
+          label: formatWindowLabel(p.monthly.windowMinutes)
         }
       : null
   ].filter((w): w is { key: string; window: RateLimitWindow; label: string } => w !== null)
@@ -1783,7 +1793,7 @@ export function ProviderDetailsMenu({
           {iconOnly ? (
             <span className="inline-flex items-center gap-1">
               <span
-                className={`inline-block h-2 w-2 rounded-full ${provider.session || provider.weekly || provider.fableWeekly ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
+                className={`inline-block h-2 w-2 rounded-full ${provider.session || provider.weekly || provider.fableWeekly || provider.monthly ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
               />
               <span className="text-muted-foreground">
                 {provider.provider === 'claude'

@@ -29,6 +29,7 @@ import { findRepoForHost } from './repo-host-identity'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
+import { disposeRemovedWorktreeParkedTerminalWatchers } from '../../components/terminal-pane/terminal-parked-watcher-registry'
 import {
   callRuntimeRpc,
   getActiveRuntimeTarget,
@@ -3257,6 +3258,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const worktreeBeforeRemoval = get()
         .allWorktrees()
         .find((entry) => entry.id === worktreeId)
+      const terminalPtyIdsBeforeRemoval = (get().tabsByWorktree[worktreeId] ?? []).flatMap(
+        (tab) => get().ptyIdsByTabId[tab.id] ?? []
+      )
       const currentOwner = resolveWorktreeRemovalHost(get(), worktreeId)
       if (
         currentOwner.ambiguous ||
@@ -3344,6 +3348,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // batch) rather than only the context menu.
       requestVirtualizedScrollAnchorRecord('[data-worktree-sidebar]')
 
+      // Why: explicit deletion provenance is available here before child
+      // unmount cleanup; identity migration and recoverable remounts are not
+      // destructive and must keep their buffered live PTY state.
+      disposeRemovedWorktreeParkedTerminalWatchers(worktreeId, terminalPtyIdsBeforeRemoval)
       set((s) => {
         const next = { ...s.worktreesByRepo }
         for (const repoId of Object.keys(next)) {

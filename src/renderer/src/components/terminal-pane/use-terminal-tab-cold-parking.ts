@@ -53,6 +53,9 @@ export function useTerminalTabColdParking(args: {
    *  mounted for their first xterm fit, mirroring the worktree-level guard. */
   shouldMeasureHiddenWorktree: boolean
   activityTerminalPortals: ActivityTerminalPortalTarget[]
+  /** Tabs cold activation keeps unmounted — parked-equivalent for watcher
+   *  purposes. Targeted background restrictions intentionally stay bounded. */
+  activationDeferredMountTabIds?: ReadonlySet<string> | null
 }): ReadonlySet<string> {
   const {
     worktreeId,
@@ -61,7 +64,8 @@ export function useTerminalTabColdParking(args: {
     isWorktreeActive,
     coldParkTerminalPanes,
     shouldMeasureHiddenWorktree,
-    activityTerminalPortals
+    activityTerminalPortals,
+    activationDeferredMountTabIds
   } = args
   const pendingStartupByTabId = useAppStore((state) => state.pendingStartupByTabId)
   const terminalParkingEnabled = useAppStore(
@@ -212,6 +216,16 @@ export function useTerminalTabColdParking(args: {
       ) {
         parked.add(terminalTab.id)
       }
+      // Why: activation-deferred tabs render no pane regardless of the park
+      // policy, so watchers must own their side effects immediately. Targeted
+      // restrictions do not enter this set or add a new eager watcher burst.
+      if (
+        activationDeferredMountTabIds?.has(terminalTab.id) &&
+        !hasActivityTerminalPortal &&
+        canWatcherCoverParkedTerminalTab(worktreeId, terminalTab)
+      ) {
+        parked.add(terminalTab.id)
+      }
     }
     return parked
   }, [
@@ -219,6 +233,7 @@ export function useTerminalTabColdParking(args: {
     assignments,
     coldParkTerminalPanes,
     coldParkedTerminalTabIds,
+    activationDeferredMountTabIds,
     isWorktreeActive,
     shouldMeasureHiddenWorktree,
     terminalTabs,
@@ -233,9 +248,12 @@ export function useTerminalTabColdParking(args: {
     syncParkedTerminalTabWatchers({
       worktreeId,
       tabs: terminalTabs,
-      parkedTabIds: parkedTerminalTabIds
+      parkedTabIds: parkedTerminalTabIds,
+      // Why: activation-deferred tabs have no prior pane-owned title slot;
+      // pull main's title-only snapshot when their watcher starts.
+      restoreTitleOnStartTabIds: activationDeferredMountTabIds ?? undefined
     })
-  }, [parkedTerminalTabIds, terminalTabs, worktreeId])
+  }, [activationDeferredMountTabIds, parkedTerminalTabIds, terminalTabs, worktreeId])
 
   useEffect(() => () => disposeParkedTerminalWatchersForWorktree(worktreeId), [worktreeId])
 

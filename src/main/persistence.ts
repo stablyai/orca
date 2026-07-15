@@ -2264,9 +2264,32 @@ function normalizeLegacyPaneKeyAliasEntries(value: unknown): LegacyPaneKeyAliasE
       return false
     }
     const legacy = parseLegacyNumericPaneKey(candidate.legacyPaneKey)
+    const relocatedSource = parsePaneKey(candidate.legacyPaneKey)
     const stable = parsePaneKey(candidate.stablePaneKey)
-    return Boolean(legacy && stable && legacy.tabId === stable.tabId)
+    return Boolean(stable && ((legacy && legacy.tabId === stable.tabId) || relocatedSource))
   })
+}
+
+function registerPersistedPaneKeyAlias(entry: LegacyPaneKeyAliasEntry): void {
+  if (parseLegacyNumericPaneKey(entry.legacyPaneKey)) {
+    agentHookServer.registerPaneKeyAlias(
+      entry.legacyPaneKey,
+      entry.stablePaneKey,
+      entry.ptyId,
+      entry.updatedAt,
+      { overwriteExisting: false }
+    )
+    return
+  }
+  // Why: detached agents keep their original UUID pane key across restarts;
+  // restore the physical-to-current-owner mapping before hook replay begins.
+  agentHookServer.transferPaneAuthority(
+    entry.legacyPaneKey,
+    entry.stablePaneKey,
+    entry.ptyId,
+    entry.updatedAt,
+    { authorityVerified: false }
+  )
 }
 
 function mergeLegacyPaneKeyAliasEntries(
@@ -2648,13 +2671,7 @@ export class Store {
       setMigrationUnsupportedPty(entry)
     }
     for (const entry of normalized.legacyPaneKeyAliasEntries) {
-      agentHookServer.registerPaneKeyAlias(
-        entry.legacyPaneKey,
-        entry.stablePaneKey,
-        entry.ptyId,
-        entry.updatedAt,
-        { overwriteExisting: false }
-      )
+      registerPersistedPaneKeyAlias(entry)
     }
     setMigrationUnsupportedPtyPersistenceListener((entries) => {
       this.state.migrationUnsupportedPtyEntries = entries
@@ -5689,13 +5706,7 @@ export class Store {
       }
     }
     for (const entry of normalized.legacyPaneKeyAliasEntries) {
-      agentHookServer.registerPaneKeyAlias(
-        entry.legacyPaneKey,
-        entry.stablePaneKey,
-        entry.ptyId,
-        entry.updatedAt,
-        { overwriteExisting: false }
-      )
+      registerPersistedPaneKeyAlias(entry)
     }
     session = normalized.session
     const remappedLeases = remapSshRemotePtyLeaseLeafIds(

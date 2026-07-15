@@ -54,7 +54,11 @@ import {
   isTerminalWritePipelineCertifiedDead,
   registerUndeliverableWriteHandler
 } from '@/lib/pane-manager/terminal-write-pipeline-health'
-import { requestTerminalPaneRecovery } from './terminal-pane-recovery'
+import {
+  captureTerminalPaneRecoveryGeneration,
+  registerTerminalPaneRecoveryInstance,
+  requestTerminalPaneRecovery
+} from './terminal-pane-recovery'
 import {
   isDocumentVisibilityProvenStale,
   registerStaleDocumentVisibilityRecovery
@@ -948,6 +952,10 @@ export function connectPanePty(
   deps: PtyConnectionDeps
 ): PanePtyBinding {
   const shouldRefreshForegroundSynchronously = (): boolean => !manager.hasWebglRenderer(pane.id)
+  // Why: recovery ownership belongs to this xterm instance. A request that
+  // settles after remount must not remount its already-replaced successor.
+  const terminalRecoveryGeneration = captureTerminalPaneRecoveryGeneration(deps.tabId)
+  const terminalRecoveryInstance = registerTerminalPaneRecoveryInstance(deps.tabId)
   exposeE2eTerminalPtyOutputDebug()
   let disposed = false
   let connectFrame: number | null = null
@@ -3123,6 +3131,10 @@ export function connectPanePty(
   const hadExistingPaneTransportAtConnect = deps.paneTransportsRef.current.size > 0
   let lastTerminalInputAt = Number.NEGATIVE_INFINITY
   let hasReceivedPtyOutput = false
+  let deferredReattachLiveData: { data: string; meta?: PtyDataMeta }[] | null = null
+  let deferredReattachLiveDataChars = 0
+  const MAX_DEFERRED_REATTACH_LIVE_CHARS = 512 * 1024
+  const MAX_DEFERRED_REATTACH_LIVE_CHUNKS = 1_024
   const markTerminalInputSent = (): void => {
     lastTerminalInputAt = performance.now()
   }
@@ -3368,6 +3380,8 @@ export function connectPanePty(
       tabId: deps.tabId,
       ptyId: undeliverablePtyId,
       reason: 'input-undeliverable',
+      terminalRecoveryGeneration,
+      terminalRecoveryInstanceId: terminalRecoveryInstance.id,
       // Why: pty:hasPty answers null for ids the local registry doesn't own,
       // and a disconnected remote pane would otherwise remount-churn on every
       // cooldown window while typing. Local panes keep the lenient gate.
@@ -3382,11 +3396,16 @@ export function connectPanePty(
   const unregisterUndeliverableWriteHandler = registerUndeliverableWriteHandler(
     pane.terminal,
     (reason) => {
+      // Certification can arrive while this terminal still owns queued or
+      // detached scheduler work; release its delivery credits immediately.
+      discardTerminalOutput(pane.terminal)
       const storePtyId = useAppStore.getState().ptyIdsByTabId?.[deps.tabId]?.[0] ?? null
       void requestTerminalPaneRecovery({
         tabId: deps.tabId,
         ptyId: transport.getPtyId() ?? storePtyId,
-        reason
+        reason,
+        terminalRecoveryGeneration,
+        terminalRecoveryInstanceId: terminalRecoveryInstance.id
       })
     }
   )
@@ -3934,7 +3953,15 @@ export function connectPanePty(
         ptyId,
         async (opts) => {
           try {
+            if (isTerminalWritePipelineCertifiedDead(pane.terminal)) {
+              return null
+            }
             await waitForTerminalOutputParsed(pane.terminal)
+            // Certification can land while the serializer waits for an older
+            // write; never publish a fossil frame from a dead renderer.
+            if (isTerminalWritePipelineCertifiedDead(pane.terminal)) {
+              return null
+            }
             // Why: alt-screen TUIs (vim, claude-code) hold transient state in
             // the alternate screen. The hydration path requests
             // altScreenForcesZeroRows so normal-buffer scrollback isn't bled
@@ -4812,6 +4839,9 @@ export function connectPanePty(
     // Why: hidden recovery state belongs to one PTY stream. Reattach/restart
     // can reuse the pane object for a different session before visibility.
     let hiddenOutputRestorePtyId: string | null = null
+    // One recovery re-kick per xterm instance. Generation-aware cooldown and
+    // window-cap retries keep a fresh-but-wedged replacement from fossilizing.
+    let certifiedDeadRestoreRecoveryRequested = false
     let hiddenOutputRestoreGeneration = 0
     // Flood-backpressure suppression (HIDDEN_OUTPUT_RESTORE_FLOOD_SUPPRESS_MS).
     let hiddenOutputRestoreFloodSuppressedUntil = 0
@@ -6154,6 +6184,21 @@ export function connectPanePty(
       // in-flight bytes (~60s while idle). Recovery owns the pane now; the
       // remounted pane gets a fresh xterm and a fresh restore.
       if (isTerminalWritePipelineCertifiedDead(pane.terminal)) {
+        // Why the re-kick: certification's own recovery request can be
+        // budget-declined (or its scheduled retry cancelled by a sibling
+        // pane's remount). Without a fallback here, a revealed dead pane
+        // skips its restore forever and keeps the stale pre-death frame.
+        if (!certifiedDeadRestoreRecoveryRequested && !disposed) {
+          certifiedDeadRestoreRecoveryRequested = true
+          const storePtyId = useAppStore.getState().ptyIdsByTabId?.[deps.tabId]?.[0] ?? null
+          void requestTerminalPaneRecovery({
+            tabId: deps.tabId,
+            ptyId: transport.getPtyId() ?? storePtyId,
+            reason: 'restore-blocked',
+            terminalRecoveryGeneration,
+            terminalRecoveryInstanceId: terminalRecoveryInstance.id
+          })
+        }
         return false
       }
       resetHiddenOutputRestoreIfPtyChanged()
@@ -6372,6 +6417,26 @@ export function connectPanePty(
     }
 
     const dataCallback = (data: string, meta?: PtyDataMeta): void => {
+      if (deferredReattachLiveData !== null) {
+        deferredReattachLiveData.push({ data, ...(meta ? { meta } : {}) })
+        deferredReattachLiveDataChars += data.length
+        let dropped = false
+        while (
+          deferredReattachLiveData.length > MAX_DEFERRED_REATTACH_LIVE_CHUNKS ||
+          deferredReattachLiveDataChars > MAX_DEFERRED_REATTACH_LIVE_CHARS
+        ) {
+          const removed = deferredReattachLiveData.shift()
+          deferredReattachLiveDataChars -= removed?.data.length ?? 0
+          dropped = true
+        }
+        if (dropped && deferredReattachLiveData[0]) {
+          deferredReattachLiveData[0].meta = {
+            ...deferredReattachLiveData[0].meta,
+            droppedOutput: true
+          }
+        }
+        return
+      }
       if (data.length > 0) {
         hasReceivedPtyOutput = true
         recordAgentHibernationPaneOutput(cacheKey)
@@ -6561,16 +6626,43 @@ export function connectPanePty(
       }
     })
 
+    const beginReattachLiveDataDeferral = (): void => {
+      deferredReattachLiveData = []
+      deferredReattachLiveDataChars = 0
+    }
+
+    const finishReattachLiveDataDeferral = (deliver: boolean): void => {
+      const chunks = deferredReattachLiveData
+      deferredReattachLiveData = null
+      deferredReattachLiveDataChars = 0
+      if (!deliver || disposed || !chunks) {
+        return
+      }
+      // Why: createOrAttach snapshots precede bytes emitted before its IPC
+      // reply. Paint the authoritative replay first, then admit those live
+      // chunks so the replay clear cannot erase newer output.
+      for (const chunk of chunks) {
+        dataCallback(chunk.data, chunk.meta)
+      }
+    }
+
     const handleReattachResult = (
       result: PtyConnectResult | string | void,
       staleSessionId?: string | null,
       coldRestoreStartup?: ColdRestoreAgentResumeStartup | null
-    ): void => {
+    ): boolean => {
       if (disposed) {
-        return
+        return false
       }
       const connectResult =
         result && typeof result === 'object' && 'id' in result ? (result as PtyConnectResult) : null
+
+      if (connectResult?.exitedBeforeAttach) {
+        // Why: the transport already delivered the dead session's final frame
+        // and exit. Treat it as terminal state, not a failed reattach that
+        // should silently replace a cancelled pinned exit with a fresh shell.
+        return true
+      }
 
       const ptyId =
         connectResult?.id ?? (typeof result === 'string' ? result : transport.getPtyId())
@@ -6595,7 +6687,7 @@ export function connectPanePty(
         startFreshColdRestoreAgentResume(coldRestoreStartup, {
           forceBlankRestoredViewport: true
         })
-        return
+        return false
       }
       registerEffectiveLaunchConfig(connectResult?.launchConfig, {
         ...(coldRestoreStartup ? { launchToken: coldRestoreStartup.launchToken } : {}),
@@ -6620,7 +6712,7 @@ export function connectPanePty(
         startFreshColdRestoreAgentResume(coldRestoreStartup, {
           forceBlankRestoredViewport: true
         })
-        return
+        return false
       }
       setPanePtyFitBinding(ptyId)
       reportPanePtyVisibility(ptyId, deps.isVisibleRef.current)
@@ -6770,6 +6862,7 @@ export function connectPanePty(
       scheduleReattachIdleAgentCursorReset()
 
       scheduleRuntimeGraphSync()
+      return true
     }
 
     // Why: if this tab has a deferred SSH session ID, trigger the SSH
@@ -6964,6 +7057,7 @@ export function connectPanePty(
             const coldRestoreStartup = buildColdRestoreAgentResumeStartup()
             clearPaneMode2031State()
             clearHiddenOutputRestoreState()
+            beginReattachLiveDataDeferral()
             transportConnectInFlightSince = Date.now()
             const reattachPromise = transport.connect({
               url: '',
@@ -7011,6 +7105,7 @@ export function connectPanePty(
                     : 'undefined'
                 )
                 if (!result && expiredReattachError) {
+                  finishReattachLiveDataDeferral(false)
                   const gen = await preSignalPromise
                   if (typeof gen === 'number') {
                     void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
@@ -7025,7 +7120,8 @@ export function connectPanePty(
                   })
                   return
                 }
-                handleReattachResult(result, pendingSessionId, coldRestoreStartup)
+                const accepted = handleReattachResult(result, pendingSessionId, coldRestoreStartup)
+                finishReattachLiveDataDeferral(accepted)
                 const gen = await preSignalPromise
                 if (typeof gen === 'number') {
                   if (!isRemoteRuntimePtyId(pendingSessionId)) {
@@ -7034,6 +7130,7 @@ export function connectPanePty(
                 }
               })
               .catch(async (err) => {
+                finishReattachLiveDataDeferral(false)
                 const gen = await preSignalPromise
                 if (typeof gen === 'number') {
                   void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
@@ -7156,6 +7253,7 @@ export function connectPanePty(
 
       let expiredReattachError = false
       const coldRestoreStartup = buildColdRestoreAgentResumeStartup()
+      beginReattachLiveDataDeferral()
       transportConnectInFlightSince = Date.now()
       const reattachPromise = transport.connect({
         url: '',
@@ -7193,6 +7291,7 @@ export function connectPanePty(
       void Promise.resolve(reattachPromise)
         .then(async (result) => {
           if (!result && expiredReattachError) {
+            finishReattachLiveDataDeferral(false)
             const gen = await preSignalPromise
             if (typeof gen === 'number') {
               void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
@@ -7207,7 +7306,12 @@ export function connectPanePty(
             })
             return
           }
-          handleReattachResult(result, deferredReattachSessionId, coldRestoreStartup)
+          const accepted = handleReattachResult(
+            result,
+            deferredReattachSessionId,
+            coldRestoreStartup
+          )
+          finishReattachLiveDataDeferral(accepted)
           const gen = await preSignalPromise
           if (typeof gen === 'number') {
             if (!isRemoteRuntimePtyId(deferredReattachSessionId)) {
@@ -7216,6 +7320,7 @@ export function connectPanePty(
           }
         })
         .catch(async (err) => {
+          finishReattachLiveDataDeferral(false)
           const gen = await preSignalPromise
           if (typeof gen === 'number') {
             void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
@@ -7516,6 +7621,9 @@ export function connectPanePty(
     reconcileIfSessionMissing,
     dispose() {
       disposed = true
+      // A normal park/reconnect/remount does not advance the recovery epoch;
+      // invalidate this concrete xterm so its delayed retry cannot hit the next.
+      terminalRecoveryInstance.unregister()
       unregisterUndeliverableWriteHandler()
       // Why: the post-spawn reconcile polls across frames; cancel its pending
       // rAF so a torn-down pane cannot keep fitting/resizing after disposal.
