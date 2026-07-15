@@ -3939,7 +3939,8 @@
           "d2a0089e45": "Proyectos",
           "b6cd1198f2": "Espacios de trabajo",
           "ea1ec23452": "Misiones",
-          "60c23631f0": "Nueva misión"
+          "60c23631f0": "Nueva misión",
+          "52cff41bb2": "Añade un proyecto para crear una misión"
         },
         "SidebarNav": {
           "80611a8b10": "Buscar",
@@ -4697,10 +4698,10 @@
         "MissionAddProjectsDialog": {
           "6ec97cd26f": "Añadir proyectos",
           "02449d01cc": "Cada proyecto añadido recibe un espacio de trabajo en {{value0}}.",
-          "eb3a71b1fd": "Todos los proyectos ya están en esta misión.",
           "d5aae76bca": "Cancelar",
           "e81ed87ddd": "Añadiendo...",
-          "36cc45b3fb": "Añadir"
+          "36cc45b3fb": "Añadir",
+          "99e993fe93": "No hay proyectos aptos disponibles para añadir."
         },
         "MissionCreateDialog": {
           "0655a02f86": "Nueva misión",
@@ -4739,7 +4740,8 @@
           "d56fdff6c8": "Renombrar misión",
           "8d3abfb48a": "Nombre de la misión",
           "7f94e6c670": "Guardar",
-          "955a21f262": "Opciones de la misión"
+          "955a21f262": "Opciones de la misión",
+          "83e2a3cc38": "1 proyecto"
         },
         "MissionMemberErrorCopy": {
           "c8affe1f4b": "Este repositorio aún no tiene commits ni rama predeterminada. Crea un commit inicial (o define una rama predeterminada en la configuración del proyecto) y vuelve a intentarlo."

@@ -127,4 +127,31 @@ describe('MissionDeleteDialog', () => {
         ?.getAttribute('aria-checked')
     ).toBe('true')
   })
+
+  it('ignores a stale delete completion after the dialog switches missions', async () => {
+    // Mission A's delete stays pending; resolve it only after B has opened.
+    let resolveA: (result: MissionDeleteResult) => void = () => {}
+    mocks.deleteMission.mockReturnValueOnce(
+      new Promise<MissionDeleteResult>((resolve) => {
+        resolveA = resolve
+      })
+    )
+    let rendered = renderDialog(makeMission('m1', 'Referral'))
+    await act(async () => {
+      getDeleteButton(rendered).click()
+    })
+
+    // Cancel A (dialog stays mounted) and open B before A resolves.
+    renderDialog(null)
+    rendered = renderDialog(makeMission('m2', 'Demo'))
+
+    // A's delete now fails — the stale completion must not touch B.
+    await act(async () => {
+      resolveA({ deleted: false, memberResults: [] })
+    })
+
+    expect(rendered.textContent).not.toContain(FAILURE_COPY)
+    // B is still submittable (A's completion did not leave B stuck in "Deleting...").
+    expect(getDeleteButton(rendered).disabled).toBe(false)
+  })
 })

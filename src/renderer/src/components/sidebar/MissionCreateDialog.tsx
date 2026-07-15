@@ -227,7 +227,7 @@ export default function MissionCreateDialog(): React.JSX.Element {
                 </Label>
                 <Input
                   id={branchId}
-                  value={branchDirtyRef.current ? branch : effectiveBranch}
+                  value={branchDirtyRef.current && branch.trim() ? branch : effectiveBranch}
                   onChange={(event) => {
                     branchDirtyRef.current = true
                     setBranch(event.target.value)

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -27,13 +27,22 @@ export function MissionDeleteDialog({
   const [submitting, setSubmitting] = useState(false)
   const [failed, setFailed] = useState(false)
   const missionId = mission?.id ?? null
+  // Why: an in-flight delete may resolve after the dialog has switched to a
+  // different mission (cancel A → open B). The ref lets the completion detect
+  // that it is stale and skip touching the now-current mission's state.
+  const currentMissionIdRef = useRef(missionId)
+  useEffect(() => {
+    currentMissionIdRef.current = missionId
+  }, [missionId])
 
   // Why: the dialog stays mounted between opens, so a prior attempt's failure
-  // banner and checkbox choice must not leak into the next mission's delete.
+  // banner, checkbox choice, and in-progress state must not leak into the next
+  // mission's delete.
   useEffect(() => {
     if (missionId !== null) {
       setDeleteWorktrees(true)
       setFailed(false)
+      setSubmitting(false)
     }
   }, [missionId])
 
@@ -41,15 +50,24 @@ export function MissionDeleteDialog({
     if (!mission || submitting) {
       return
     }
+    const targetMissionId = mission.id
     setSubmitting(true)
     setFailed(false)
-    const result = await deleteMission(mission.id, deleteWorktrees)
-    setSubmitting(false)
-    if (result?.deleted) {
-      onOpenChange(false)
-      return
+    try {
+      const result = await deleteMission(targetMissionId, deleteWorktrees)
+      if (currentMissionIdRef.current !== targetMissionId) {
+        return
+      }
+      if (result?.deleted) {
+        onOpenChange(false)
+        return
+      }
+      setFailed(true)
+    } finally {
+      if (currentMissionIdRef.current === targetMissionId) {
+        setSubmitting(false)
+      }
     }
-    setFailed(true)
   }
 
   const repoNameById = new Map(repos.map((repo) => [repo.id, repo.displayName]))

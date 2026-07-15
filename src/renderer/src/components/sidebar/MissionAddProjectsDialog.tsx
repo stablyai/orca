@@ -84,8 +84,8 @@ export function MissionAddProjectsDialog({
         {candidates.length === 0 ? (
           <p className="text-xs text-muted-foreground">
             {translate(
-              'auto.components.sidebar.MissionAddProjectsDialog.eb3a71b1fd',
-              'All projects are already in this mission.'
+              'auto.components.sidebar.MissionAddProjectsDialog.99e993fe93',
+              'No eligible projects available to add.'
             )}
           </p>
         ) : (

@@ -83,7 +83,7 @@ function MissionMemberRows({ mission }: { mission: Mission }): React.JSX.Element
             <Button
               variant="ghost"
               size="icon-xs"
-              className="shrink-0 text-muted-foreground opacity-0 group-hover/mission-member:opacity-100"
+              className="shrink-0 text-muted-foreground can-hover:opacity-0 transition-opacity group-hover/mission-member:opacity-100 group-focus-within/mission-member:opacity-100 focus-visible:opacity-100"
               aria-label={translate(
                 'auto.components.sidebar.MissionList.edb3b75817',
                 'Remove from mission'
@@ -137,7 +137,7 @@ function MissionSection({
         <Button
           variant="ghost"
           size="icon-xs"
-          className="shrink-0 text-muted-foreground opacity-0 group-hover/mission:opacity-100 data-[state=open]:opacity-100"
+          className="shrink-0 text-muted-foreground can-hover:opacity-0 transition-opacity group-hover/mission:opacity-100 group-focus-within/mission:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100"
           aria-label={translate(
             'auto.components.sidebar.MissionList.955a21f262',
             'Mission options'
@@ -175,9 +175,13 @@ function MissionSection({
             <SquareTerminal className="size-3.5 shrink-0" />
             <span className="truncate">{mission.name}</span>
             <span className="shrink-0 text-[11px] text-muted-foreground/60">
-              {translate('auto.components.sidebar.MissionList.745def31cd', '{{value0}} projects', {
-                value0: mission.members.length
-              })}
+              {mission.members.length === 1
+                ? translate('auto.components.sidebar.MissionList.83e2a3cc38', '1 project')
+                : translate(
+                    'auto.components.sidebar.MissionList.745def31cd',
+                    '{{value0}} projects',
+                    { value0: mission.members.length }
+                  )}
             </span>
           </button>
           {missionMenu}

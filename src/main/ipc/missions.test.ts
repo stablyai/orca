@@ -84,7 +84,16 @@ function makeFakeStore() {
       mission = null
       return true
     }),
-    addMissionMembers: vi.fn(() => mission),
+    addMissionMembers: vi.fn((_id: string, repoIds: string[]) => {
+      if (mission) {
+        for (const repoId of repoIds) {
+          if (!mission.members.some((m) => m.repoId === repoId)) {
+            mission.members.push({ repoId, worktreeId: null, addedAt: 1 })
+          }
+        }
+      }
+      return mission
+    }),
     removeMissionMember: vi.fn((_id: string, repoId: string) => {
       if (mission) {
         mission.members = mission.members.filter((m) => m.repoId !== repoId)
@@ -234,5 +243,102 @@ describe('missions IPC', () => {
     )) as { deleted: boolean }
     expect(result.deleted).toBe(true)
     expect(runtime.removeManagedWorktree).not.toHaveBeenCalled()
+  })
+
+  it('addMembers only fans out new repos and syncs the mission root', async () => {
+    const store = makeFakeStore()
+    store.createMission({ name: 'Referral', repoIds: ['r1'] })
+    store.setMissionMemberWorktree('m1', 'r1', `r1::${wtPath}`)
+    store.setMissionRootPath('m1', referralRootPath)
+    const runtime = {
+      createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: `r2::${wtPath}` } }),
+      removeManagedWorktree: vi.fn()
+    }
+    registerMissionHandlers(makeFakeWindow() as never, store as never, runtime as never)
+
+    const result = (await handlers.get('missions:addMembers')!(
+      {},
+      // r1 is already a member; ghost has no repo — both are filtered out.
+      { missionId: 'm1', repoIds: ['r1', 'r2', 'ghost'] }
+    )) as { memberResults: unknown[] }
+
+    expect(runtime.createManagedWorktree).toHaveBeenCalledTimes(1)
+    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ repoSelector: 'id:r2' })
+    )
+    expect(result.memberResults).toEqual([{ repoId: 'r2', worktreeId: `r2::${wtPath}` }])
+    expect(store.setMissionMemberWorktree).toHaveBeenCalledWith('m1', 'r2', `r2::${wtPath}`)
+    // Root sync ran with the (now local) members that have worktrees.
+    expect(missionRootMocks.ensureMissionRoot).toHaveBeenCalled()
+  })
+
+  it('removeMember deletes the worktree and drops the member when asked', async () => {
+    const store = makeFakeStore()
+    store.createMission({ name: 'Referral', repoIds: ['r1'] })
+    store.setMissionMemberWorktree('m1', 'r1', `r1::${wtPath}`)
+    const runtime = {
+      createManagedWorktree: vi.fn(),
+      removeManagedWorktree: vi.fn().mockResolvedValue({})
+    }
+    registerMissionHandlers(makeFakeWindow() as never, store as never, runtime as never)
+
+    const result = (await handlers.get('missions:removeMember')!(
+      {},
+      { missionId: 'm1', repoId: 'r1', deleteWorktree: true }
+    )) as { deleted: boolean; memberResults: { repoId: string; worktreeId: string | null }[] }
+
+    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith(`id:r1::${wtPath}`, false, true)
+    expect(store.removeMissionMember).toHaveBeenCalledWith('m1', 'r1')
+    expect(result.deleted).toBe(false)
+    expect(result.memberResults).toEqual([{ repoId: 'r1', worktreeId: null }])
+  })
+
+  it('removeMember keeps the worktree when deleteWorktree is false', async () => {
+    const store = makeFakeStore()
+    store.createMission({ name: 'Referral', repoIds: ['r1'] })
+    store.setMissionMemberWorktree('m1', 'r1', `r1::${wtPath}`)
+    const runtime = { createManagedWorktree: vi.fn(), removeManagedWorktree: vi.fn() }
+    registerMissionHandlers(makeFakeWindow() as never, store as never, runtime as never)
+
+    await handlers.get('missions:removeMember')!(
+      {},
+      { missionId: 'm1', repoId: 'r1', deleteWorktree: false }
+    )
+
+    expect(runtime.removeManagedWorktree).not.toHaveBeenCalled()
+    expect(store.removeMissionMember).toHaveBeenCalledWith('m1', 'r1')
+  })
+
+  it('recreateMemberWorktree recreates the worktree for an existing member', async () => {
+    const store = makeFakeStore()
+    store.createMission({ name: 'Referral', repoIds: ['r1'] })
+    const runtime = {
+      createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: `r1::${wtPath}` } }),
+      removeManagedWorktree: vi.fn()
+    }
+    registerMissionHandlers(makeFakeWindow() as never, store as never, runtime as never)
+
+    const result = (await handlers.get('missions:recreateMemberWorktree')!(
+      {},
+      { missionId: 'm1', repoId: 'r1' }
+    )) as { repoId: string; worktreeId: string | null }
+
+    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ repoSelector: 'id:r1' })
+    )
+    expect(store.setMissionMemberWorktree).toHaveBeenCalledWith('m1', 'r1', `r1::${wtPath}`)
+    expect(result).toEqual({ repoId: 'r1', worktreeId: `r1::${wtPath}` })
+  })
+
+  it('recreateMemberWorktree rejects an unknown member', async () => {
+    const store = makeFakeStore()
+    store.createMission({ name: 'Referral', repoIds: ['r1'] })
+    const runtime = { createManagedWorktree: vi.fn(), removeManagedWorktree: vi.fn() }
+    registerMissionHandlers(makeFakeWindow() as never, store as never, runtime as never)
+
+    await expect(
+      handlers.get('missions:recreateMemberWorktree')!({}, { missionId: 'm1', repoId: 'ghost' })
+    ).rejects.toThrow('mission_member_not_found')
+    expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
   })
 })

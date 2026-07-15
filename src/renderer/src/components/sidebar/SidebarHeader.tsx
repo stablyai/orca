@@ -142,7 +142,12 @@ const SidebarHeader = React.memo(function SidebarHeader({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {translate('auto.components.sidebar.SidebarHeader.60c23631f0', 'New Mission')}
+              {canCreateWorkspace
+                ? translate('auto.components.sidebar.SidebarHeader.60c23631f0', 'New Mission')
+                : translate(
+                    'auto.components.sidebar.SidebarHeader.52cff41bb2',
+                    'Add a project to create a mission'
+                  )}
             </TooltipContent>
           </Tooltip>
         )}

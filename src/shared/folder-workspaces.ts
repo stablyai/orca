@@ -128,11 +128,10 @@ export function normalizeFolderWorkspaces(
     }
     // Why: mission session workspaces carry a sentinel projectGroupId; they
     // live and die with their mission, not with any project group.
-    const owningMission =
-      typeof raw.missionId === 'string' && raw.missionId.length > 0
-        ? missionsById.get(raw.missionId)
-        : undefined
-    if (typeof raw.missionId === 'string' && raw.missionId.length > 0) {
+    const missionId =
+      typeof raw.missionId === 'string' && raw.missionId.length > 0 ? raw.missionId : null
+    if (missionId) {
+      const owningMission = missionsById.get(missionId)
       const missionFolderPath =
         typeof raw.folderPath === 'string' && raw.folderPath.trim().length > 0
           ? raw.folderPath

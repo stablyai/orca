@@ -3954,7 +3954,8 @@
           "d2a0089e45": "Projects",
           "b6cd1198f2": "Workspaces",
           "ea1ec23452": "Missions",
-          "60c23631f0": "New Mission"
+          "60c23631f0": "New Mission",
+          "52cff41bb2": "Add a project to create a mission"
         },
         "SidebarNav": {
           "80611a8b10": "Search",
@@ -4697,10 +4698,10 @@
         "MissionAddProjectsDialog": {
           "6ec97cd26f": "Add Projects",
           "02449d01cc": "Each added project gets a workspace on {{value0}}.",
-          "eb3a71b1fd": "All projects are already in this mission.",
           "d5aae76bca": "Cancel",
           "e81ed87ddd": "Adding...",
-          "36cc45b3fb": "Add"
+          "36cc45b3fb": "Add",
+          "99e993fe93": "No eligible projects available to add."
         },
         "MissionCreateDialog": {
           "0655a02f86": "New Mission",
@@ -4739,7 +4740,8 @@
           "d56fdff6c8": "Rename Mission",
           "8d3abfb48a": "Mission Name",
           "7f94e6c670": "Save",
-          "955a21f262": "Mission options"
+          "955a21f262": "Mission options",
+          "83e2a3cc38": "1 project"
         },
         "MissionMemberErrorCopy": {
           "c8affe1f4b": "This repository has no commits or default branch yet. Make an initial commit (or set a default branch in Project Settings), then retry."
