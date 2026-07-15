@@ -290,6 +290,18 @@ describe('fetchNewerReleaseTag', () => {
     })
   })
 
+  it('reports manifest transport failures as unavailable', async () => {
+    respondWithAtom(['v1.4.2'], ['v1.4.2'])
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    await expect(fetchNewerReleaseTagsWithReadiness('1.4.0', 1)).resolves.toEqual({
+      tags: [],
+      state: 'unavailable',
+      unavailableReason: 'manifest'
+    })
+  })
+
   it('reports not-ready with last-good when newer manifest assets are not reachable yet', async () => {
     respondWithAtom(['v1.4.3', 'v1.4.2', 'v1.4.1'], [], ['v1.4.3'])
 
