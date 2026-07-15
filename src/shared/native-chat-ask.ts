@@ -225,12 +225,3 @@ export function buildAskAnswerKeys(
 export function hasAskAnswer(prompt: AskPrompt, selections: AskAnswerSelection[]): boolean {
   return prompt.questions.some((_, i) => isAnswered(selections[i]))
 }
-
-/** @deprecated Label-based join kept only for the mobile Ask card until its
- *  port to `AskAnswerSelection` lands; new callers use `formatAskAnswer`. */
-export function formatCompleteAskAnswer(answers: readonly string[]): string | null {
-  const normalized = answers.map((answer) => answer.trim())
-  return normalized.length > 0 && normalized.every((answer) => answer.length > 0)
-    ? normalized.join('\n')
-    : null
-}

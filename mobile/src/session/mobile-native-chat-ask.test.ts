@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
+  buildAskAnswerKeys,
   extractPendingAsk,
   formatAskAnswer,
-  formatCompleteAskAnswer,
   parseAskFromStatus
 } from './mobile-native-chat-ask'
 
@@ -130,12 +130,31 @@ describe('formatAskAnswer', () => {
   })
 })
 
-describe('formatCompleteAskAnswer', () => {
-  it('preserves question order when every answer is complete', () => {
-    expect(formatCompleteAskAnswer(['first', 'second'])).toBe('first\nsecond')
+describe('buildAskAnswerKeys', () => {
+  it('answers a single-select pick with its option number only', () => {
+    const prompt = {
+      questions: [
+        { question: 'q', multiSelect: false, options: [{ label: 'Tabs' }, { label: 'Spaces' }] }
+      ]
+    }
+    expect(buildAskAnswerKeys(prompt, [{ indices: [1] }])).toEqual([{ raw: '2' }])
   })
 
-  it('rejects a later answer when an earlier question is unanswered', () => {
-    expect(formatCompleteAskAnswer(['', 'second'])).toBeNull()
+  it('toggles multi-select numbers then steps to Submit and confirms', () => {
+    const prompt = {
+      questions: [
+        {
+          question: 'q',
+          multiSelect: true,
+          options: [{ label: 'A' }, { label: 'B' }, { label: 'C' }]
+        }
+      ]
+    }
+    expect(buildAskAnswerKeys(prompt, [{ indices: [0, 2] }])).toEqual([
+      { raw: '1' },
+      { raw: '3' },
+      { raw: '\x1b[C' },
+      { raw: '\r' }
+    ])
   })
 })

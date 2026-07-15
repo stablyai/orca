@@ -10,7 +10,12 @@ import {
 } from 'react'
 import { loadNativeChatTabIds, saveNativeChatTabIds } from '../storage/preferences'
 import type { RpcClient } from '../transport/rpc-client'
-import { extractPendingAsk, parseAskFromStatus } from './mobile-native-chat-ask'
+import {
+  extractPendingAsk,
+  parseAskFromStatus,
+  type AskAnswerSelection,
+  type AskPrompt
+} from './mobile-native-chat-ask'
 import { type MobileNativeChatTab, resolveMobileNativeChat } from './mobile-native-chat-eligibility'
 import { detectAgentPermission, parseApprovalFromStatus } from './mobile-native-chat-permission'
 import { parseAgentQuestion } from './mobile-native-chat-question'
@@ -41,7 +46,10 @@ export type MobileNativeChatController = {
   nativeChatQuestion: ReturnType<typeof parseAgentQuestion>
   nativeChatAsk: ReturnType<typeof parseAskFromStatus>
   handleNativeChatOpenFile: (relativePath: string) => void
-  handleNativeChatAnswerAsk: (text: string) => Promise<boolean>
+  handleNativeChatAnswerAsk: (
+    prompt: AskPrompt,
+    selections: AskAnswerSelection[]
+  ) => Promise<boolean>
   handleNativeChatCancelAsk: () => Promise<boolean>
   handleNativeChatRespondPermission: (text: string) => Promise<boolean>
   handleNativeChatStop: () => void

@@ -3,6 +3,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentType } from '../../../src/shared/native-chat-types'
 import type { RpcClient } from '../transport/rpc-client'
+import { MOBILE_NATIVE_CHAT_QUESTION_STEP_MS } from './mobile-native-chat-answer-stepping'
+import type { AskPrompt } from './mobile-native-chat-ask'
 import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
 
 type AnswerSend = ReturnType<typeof useMobileNativeChatAnswerSend>
@@ -14,6 +16,16 @@ function acceptedResponse() {
     result: { send: { accepted: true } },
     _meta: { runtimeId: 'runtime' }
   }
+}
+
+const TABS_OR_SPACES: AskPrompt = {
+  questions: [
+    {
+      question: 'Tabs or spaces?',
+      multiSelect: false,
+      options: [{ label: 'Tabs' }, { label: 'Spaces' }]
+    }
+  ]
 }
 
 describe('useMobileNativeChatAnswerSend', () => {
@@ -82,53 +94,105 @@ describe('useMobileNativeChatAnswerSend', () => {
     })
   }
 
-  it('paces every accepted Claude step and resolves true after the final Enter', async () => {
+  it('single-select: sends the picked option NUMBER (not the label), no trailing Enter', async () => {
     const sendRequest = vi.fn().mockResolvedValue(acceptedResponse())
     await mount({ sendRequest } as unknown as RpcClient, vi.fn())
 
-    let result: Promise<boolean> | undefined
-    await act(async () => {
-      result = answerSend?.answerAsk('first\nsecond')
-    })
+    // Spaces is option 2 — the STA-1860 case where label text committed Tabs.
+    await expect(answerSend?.answerAsk(TABS_OR_SPACES, [{ indices: [1] }])).resolves.toBe(true)
     expect(sendRequest).toHaveBeenCalledTimes(1)
-    expect(sendRequest.mock.calls[0]?.[1]).toMatchObject({ text: 'first', enter: false })
-
-    await act(async () => vi.advanceTimersByTimeAsync(500))
-    expect(sendRequest.mock.calls[1]?.[1]).toMatchObject({ text: '', enter: true })
-    await act(async () => vi.advanceTimersByTimeAsync(500))
-    expect(sendRequest.mock.calls[2]?.[1]).toMatchObject({ text: 'second', enter: false })
-    await act(async () => vi.advanceTimersByTimeAsync(500))
-    await expect(result).resolves.toBe(true)
-    expect(sendRequest.mock.calls[3]?.[1]).toMatchObject({ text: '', enter: true })
+    expect(sendRequest.mock.calls[0]?.[1]).toMatchObject({ text: '2', enter: false })
   })
 
-  it('paces OpenClaude Ask answers with Claude transcript semantics', async () => {
+  it('multi-select: toggles each option number, steps to Submit, confirms — paced apart', async () => {
     const sendRequest = vi.fn().mockResolvedValue(acceptedResponse())
-    await mount({ sendRequest } as unknown as RpcClient, vi.fn(), 'openclaude')
+    await mount({ sendRequest } as unknown as RpcClient, vi.fn())
 
+    const prompt: AskPrompt = {
+      questions: [
+        {
+          question: 'Pick fruits',
+          multiSelect: true,
+          options: [{ label: 'Apple' }, { label: 'Banana' }, { label: 'Cherry' }]
+        }
+      ]
+    }
     let result: Promise<boolean> | undefined
     await act(async () => {
-      result = answerSend?.answerAsk('first\nsecond')
+      result = answerSend?.answerAsk(prompt, [{ indices: [0, 2] }])
+    })
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+    expect(sendRequest.mock.calls[0]?.[1]).toMatchObject({ text: '1', enter: false })
+
+    await act(async () => vi.advanceTimersByTimeAsync(MOBILE_NATIVE_CHAT_QUESTION_STEP_MS))
+    expect(sendRequest.mock.calls[1]?.[1]).toMatchObject({ text: '3', enter: false })
+    await act(async () => vi.advanceTimersByTimeAsync(MOBILE_NATIVE_CHAT_QUESTION_STEP_MS))
+    expect(sendRequest.mock.calls[2]?.[1]).toMatchObject({ text: '\x1b[C', enter: false })
+    await act(async () => vi.advanceTimersByTimeAsync(MOBILE_NATIVE_CHAT_QUESTION_STEP_MS))
+    await expect(result).resolves.toBe(true)
+    expect(sendRequest.mock.calls[3]?.[1]).toMatchObject({ text: '\r', enter: false })
+  })
+
+  it('multi-question: option numbers auto-advance, one final submit Enter', async () => {
+    const sendRequest = vi.fn().mockResolvedValue(acceptedResponse())
+    await mount({ sendRequest } as unknown as RpcClient, vi.fn())
+
+    const prompt: AskPrompt = {
+      questions: [
+        { question: 'q1', multiSelect: false, options: [{ label: 'A' }, { label: 'B' }] },
+        { question: 'q2', multiSelect: false, options: [{ label: 'C' }, { label: 'D' }] }
+      ]
+    }
+    let result: Promise<boolean> | undefined
+    await act(async () => {
+      result = answerSend?.answerAsk(prompt, [{ indices: [1] }, { indices: [0] }])
     })
     await act(async () => vi.runAllTimersAsync())
 
     await expect(result).resolves.toBe(true)
     expect(sendRequest.mock.calls.map((call) => call[1])).toEqual([
-      expect.objectContaining({ text: 'first', enter: false }),
-      expect.objectContaining({ text: '', enter: true }),
-      expect.objectContaining({ text: 'second', enter: false }),
-      expect.objectContaining({ text: '', enter: true })
+      expect.objectContaining({ text: '2', enter: false }),
+      expect.objectContaining({ text: '1', enter: false }),
+      expect.objectContaining({ text: '\r', enter: false })
     ])
   })
 
-  it('submits a non-Claude multi-line answer with a single Enter', async () => {
+  it('free text: opens "Type something", types the sanitized answer, then Enter', async () => {
+    const sendRequest = vi.fn().mockResolvedValue(acceptedResponse())
+    await mount({ sendRequest } as unknown as RpcClient, vi.fn())
+
+    let result: Promise<boolean> | undefined
+    await act(async () => {
+      // A newline in raw keystrokes would submit early — must collapse to space.
+      result = answerSend?.answerAsk(TABS_OR_SPACES, [{ indices: [], other: 'zeta\nspaces' }])
+    })
+    await act(async () => vi.runAllTimersAsync())
+
+    await expect(result).resolves.toBe(true)
+    expect(sendRequest.mock.calls.map((call) => call[1])).toEqual([
+      expect.objectContaining({ text: '3', enter: false }),
+      expect.objectContaining({ text: 'zeta spaces', enter: false }),
+      expect.objectContaining({ text: '\r', enter: false })
+    ])
+  })
+
+  it('answers OpenClaude asks with Claude selector keystrokes', async () => {
+    const sendRequest = vi.fn().mockResolvedValue(acceptedResponse())
+    await mount({ sendRequest } as unknown as RpcClient, vi.fn(), 'openclaude')
+
+    await expect(answerSend?.answerAsk(TABS_OR_SPACES, [{ indices: [1] }])).resolves.toBe(true)
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+    expect(sendRequest.mock.calls[0]?.[1]).toMatchObject({ text: '2', enter: false })
+  })
+
+  it('submits a non-Claude answer as pasted label text with a single Enter', async () => {
     const sendRequest = vi.fn().mockResolvedValue(acceptedResponse())
     await mount({ sendRequest } as unknown as RpcClient, vi.fn(), 'codex')
 
-    await expect(answerSend?.answerAsk('first\nsecond')).resolves.toBe(true)
-    // Codex is not stepped: the whole answer goes in one write with a single Enter.
+    await expect(answerSend?.answerAsk(TABS_OR_SPACES, [{ indices: [1] }])).resolves.toBe(true)
+    // Codex's question tool commits the pasted answer: label text + one Enter.
     expect(sendRequest).toHaveBeenCalledTimes(1)
-    expect(sendRequest.mock.calls[0]?.[1]).toMatchObject({ text: 'first\nsecond', enter: true })
+    expect(sendRequest.mock.calls[0]?.[1]).toMatchObject({ text: 'Spaces', enter: true })
   })
 
   it('stops at the first rejected write and reports failure', async () => {
@@ -141,18 +205,32 @@ describe('useMobileNativeChatAnswerSend', () => {
     })
     await mount({ sendRequest } as unknown as RpcClient, onSendError)
 
-    await expect(answerSend?.answerAsk('first\nsecond')).resolves.toBe(false)
+    await expect(answerSend?.answerAsk(TABS_OR_SPACES, [{ indices: [1] }])).resolves.toBe(false)
     expect(sendRequest).toHaveBeenCalledTimes(1)
     expect(onSendError).toHaveBeenCalledWith('Answer not sent')
   })
 
-  it('cancels delayed Ask writes when the acknowledged input lease is lost', async () => {
+  it('rejects an empty selection without writing anything', async () => {
     const sendRequest = vi.fn().mockResolvedValue(acceptedResponse())
     await mount({ sendRequest } as unknown as RpcClient, vi.fn())
 
+    await expect(answerSend?.answerAsk(TABS_OR_SPACES, [{ indices: [] }])).resolves.toBe(false)
+    expect(sendRequest).not.toHaveBeenCalled()
+  })
+
+  it('cancels delayed keystrokes when the acknowledged input lease is lost', async () => {
+    const sendRequest = vi.fn().mockResolvedValue(acceptedResponse())
+    await mount({ sendRequest } as unknown as RpcClient, vi.fn())
+
+    const prompt: AskPrompt = {
+      questions: [
+        { question: 'q1', multiSelect: false, options: [{ label: 'A' }, { label: 'B' }] },
+        { question: 'q2', multiSelect: false, options: [{ label: 'C' }, { label: 'D' }] }
+      ]
+    }
     let result: Promise<boolean> | undefined
     await act(async () => {
-      result = answerSend?.answerAsk('first\nsecond')
+      result = answerSend?.answerAsk(prompt, [{ indices: [1] }, { indices: [0] }])
     })
     expect(sendRequest).toHaveBeenCalledTimes(1)
 

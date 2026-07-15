@@ -2,15 +2,19 @@ import { useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { formatCompleteAskAnswer, type AskPrompt } from './mobile-native-chat-ask'
+import type { AskAnswerSelection, AskPrompt } from './mobile-native-chat-ask'
 
 type Props = {
   prompt: AskPrompt
-  onAnswer: (text: string) => Promise<boolean>
+  /** Deliver the chosen answer (per-question option indices + free text) —
+   *  index-based so Claude's arrow-navigate selector can be driven by the
+   *  option's stable number instead of pasted label text (STA-1860). */
+  onAnswer: (selections: AskAnswerSelection[]) => Promise<boolean>
   onCancel?: () => Promise<boolean>
 }
 
-const OTHER = '__other__'
+// Sentinel index for the free-text "Other…" row (never a real option index).
+const OTHER = -1
 
 /** Native renderer for an agent's AskUserQuestion prompt as a wizard: one
  *  question per step with tabs across the top, a Next button that advances (Send
@@ -18,19 +22,19 @@ const OTHER = '__other__'
  *  with a subtle green accent on the active choice to match the rest of the app. */
 export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): React.JSX.Element {
   const [index, setIndex] = useState(0)
-  const [selections, setSelections] = useState<string[][]>(() => prompt.questions.map(() => []))
+  const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() => prompt.questions.map(() => ''))
   const [submitting, setSubmitting] = useState(false)
   const submittingRef = useRef(false)
 
-  const toggle = (qi: number, label: string, multi: boolean): void => {
+  const toggle = (qi: number, optIndex: number, multi: boolean): void => {
     setSelections((prev) => {
       const next = prev.map((s) => [...s])
       const cur = next[qi] ?? []
       if (multi) {
-        next[qi] = cur.includes(label) ? cur.filter((l) => l !== label) : [...cur, label]
+        next[qi] = cur.includes(optIndex) ? cur.filter((i) => i !== optIndex) : [...cur, optIndex]
       } else {
-        next[qi] = cur.includes(label) ? [] : [label]
+        next[qi] = cur.includes(optIndex) ? [] : [optIndex]
       }
       return next
     })
@@ -44,34 +48,39 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
     })
   }
 
-  const answerFor = (qi: number): string => {
-    const picked = (selections[qi] ?? []).filter((l) => l !== OTHER)
+  const selectionFor = (qi: number): AskAnswerSelection => {
+    const picked = (selections[qi] ?? []).filter((i) => i !== OTHER)
     const other = (selections[qi] ?? []).includes(OTHER) ? (otherText[qi] ?? '').trim() : ''
-    return [...picked, other].filter((p) => p.length > 0).join(', ')
+    return other ? { indices: picked, other } : { indices: picked }
+  }
+
+  const isAnswered = (qi: number): boolean => {
+    const sel = selectionFor(qi)
+    return sel.indices.length > 0 || (sel.other ?? '').length > 0
   }
 
   const total = prompt.questions.length
   const isLast = index === total - 1
   const currentAnswered = useMemo(
-    () => answerFor(index).length > 0,
+    () => isAnswered(index),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [selections, otherText, index]
   )
-  const completeAnswer = useMemo(
-    () => formatCompleteAskAnswer(prompt.questions.map((_, i) => answerFor(i))),
+  const allAnswered = useMemo(
+    () => prompt.questions.every((_, i) => isAnswered(i)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [otherText, prompt.questions, selections]
   )
-  const canAdvance = !submitting && (isLast ? completeAnswer !== null : currentAnswered)
+  const canAdvance = !submitting && (isLast ? allAnswered : currentAnswered)
 
   const submit = async (): Promise<void> => {
-    if (!completeAnswer || submittingRef.current) {
+    if (!allAnswered || submittingRef.current) {
       return
     }
     submittingRef.current = true
     setSubmitting(true)
     try {
-      await onAnswer(completeAnswer)
+      await onAnswer(prompt.questions.map((_, i) => selectionFor(i)))
     } finally {
       submittingRef.current = false
       setSubmitting(false)
@@ -108,9 +117,7 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
               <Text style={[styles.tabText, i === index && styles.tabTextActive]} numberOfLines={1}>
                 {qq.header || `Step ${i + 1}`}
               </Text>
-              {answerFor(i).length > 0 ? (
-                <Check size={11} color={colors.statusGreen} strokeWidth={3} />
-              ) : null}
+              {isAnswered(i) ? <Check size={11} color={colors.statusGreen} strokeWidth={3} /> : null}
             </Pressable>
           ))}
         </ScrollView>
@@ -123,9 +130,9 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
             key={`${optIndex}:${opt.label}`}
             label={opt.label}
             description={opt.description}
-            selected={(selections[index] ?? []).includes(opt.label)}
+            selected={(selections[index] ?? []).includes(optIndex)}
             multi={q.multiSelect}
-            onPress={() => toggle(index, opt.label, q.multiSelect)}
+            onPress={() => toggle(index, optIndex, q.multiSelect)}
           />
         ))}
         <OptionRow

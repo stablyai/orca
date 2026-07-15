@@ -1,29 +1,44 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
+import { MOBILE_NATIVE_CHAT_QUESTION_STEP_MS } from './mobile-native-chat-answer-stepping'
 import {
-  MOBILE_NATIVE_CHAT_ADVANCE_BUFFER_MS,
-  MOBILE_NATIVE_CHAT_SUBMIT_DELAY_MS
-} from './mobile-native-chat-answer-stepping'
+  buildAskAnswerKeys,
+  formatAskAnswer,
+  hasAskAnswer,
+  type AskAnswerSelection,
+  type AskPrompt
+} from './mobile-native-chat-ask'
 import { sendMobileNativeChatMessage } from './mobile-native-chat-send'
 import { shouldStepNativeChatAskAnswer } from '../../../src/shared/native-chat-agent-support'
 
-/** Sends an AskUserQuestion answer to the active chat pane, with Claude's
- *  multi-step stepping. Extracted from the session route to keep that file under
- *  its line cap and to own the pending-timer lifecycle in one place. */
+/** Sends an AskUserQuestion answer to the active chat pane. Claude's selector is
+ *  answered by option-number keystrokes; other agents get pasted label text.
+ *  Extracted from the session route to keep that file under its line cap and to
+ *  own the pending-timer lifecycle in one place. */
 export type MobileNativeChatAnswerSend = {
-  /** Answer the current question(s). Multi-line Claude answers step per question
-   *  (body then a delayed Enter); single-line / non-Claude send one body + Enter. */
-  answerAsk: (text: string) => Promise<boolean>
-  /** Drop any in-flight per-question writes (call on Stop). */
+  /** Answer the current question(s) from the card's per-question selections. */
+  answerAsk: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
+  /** Drop any in-flight per-keystroke writes (call on Stop). */
   cancelPending: () => void
 }
 
+// A free-text answer is written as raw keystrokes into Claude's "Type something"
+// input (terminal.send has no paste framing), so an embedded newline would
+// submit it early — collapse line breaks to spaces.
+function sanitizeAskFreeText(text: string): string {
+  return text.replace(/[\r\n]+/g, ' ')
+}
+
 /**
- * Owns the per-question answer-send sequence for the mobile native chat. Reads
- * the live pane/agent through refs (the route already keeps them current) so the
- * returned callbacks stay stable. The scheduled setTimeout chain is cancelled on
- * a new answer, on `cancelPending` (Stop), and on unmount / session swap — so a
- * detached chain can never write PTY bytes to a stale pane.
+ * Owns the ask-answer send sequence for the mobile native chat. Reads the live
+ * pane/agent through refs (the route already keeps them current) so the returned
+ * callbacks stay stable. Claude answers are delivered as `buildAskAnswerKeys`
+ * keystroke groups written one selector-step apart over the EXISTING
+ * `terminal.send` passthrough (raw text, no enter) — same contract the
+ * permission card already uses, so old runtimes replay them verbatim (no new
+ * RPC; keystrokes are built client-side). The scheduled wait chain is cancelled
+ * on a new answer, on `cancelPending` (Stop), and on unmount / session swap — so
+ * a detached chain can never write PTY bytes to a stale pane.
  */
 export function useMobileNativeChatAnswerSend(args: {
   client: RpcClient | null
@@ -71,13 +86,16 @@ export function useMobileNativeChatAnswerSend(args: {
   }, [client, enabled, sessionId, streamIdentity, cancelPending])
 
   const answerAsk = useCallback(
-    async (text: string): Promise<boolean> => {
+    async (prompt: AskPrompt, selections: AskAnswerSelection[]): Promise<boolean> => {
       const handle = handleRef.current
       if (!client || !handle || !enabled) {
         onSendError('Answer not sent (disconnected)')
         return false
       }
-      // A new answer supersedes any still-pending per-question writes.
+      if (!hasAskAnswer(prompt, selections)) {
+        return false
+      }
+      // A new answer supersedes any still-pending keystroke writes.
       cancelPending()
       const generation = generationRef.current
       const sendTerminal = (body: string, enter: boolean): Promise<boolean> => {
@@ -118,27 +136,28 @@ export function useMobileNativeChatAnswerSend(args: {
         }
         return false
       }
-      const lines = text.split('\n')
-      // Only Claude renders one question per step and advances on each Enter, so
-      // a multi-line answer is paced per question; non-Claude submits in one Enter.
-      if (!shouldStepNativeChatAskAnswer(agentRef.current) || lines.length <= 1) {
-        return (await sendTerminal(text, true)) || fail()
+      // Non-Claude question tools commit a pasted answer, so send the label text
+      // with one Enter. Claude's arrow-navigate selector ignores pasted labels
+      // (STA-1860): drive it by option-number keystrokes instead, one group per
+      // selector step so each renders before the next lands.
+      if (!shouldStepNativeChatAskAnswer(agentRef.current)) {
+        return (await sendTerminal(formatAskAnswer(prompt, selections), true)) || fail()
       }
-      for (let index = 0; index < lines.length; index += 1) {
-        if (generationRef.current !== generation || !(await sendTerminal(lines[index]!, false))) {
-          return fail()
-        }
-        if (!(await wait(MOBILE_NATIVE_CHAT_SUBMIT_DELAY_MS))) {
+      const groups = buildAskAnswerKeys(prompt, selections)
+      for (let index = 0; index < groups.length; index += 1) {
+        if (generationRef.current !== generation) {
           return false
         }
-        if (!(await sendTerminal('', true))) {
+        const group = groups[index]!
+        const body = 'raw' in group ? group.raw : sanitizeAskFreeText(group.text)
+        if (!(await sendTerminal(body, false))) {
           return fail()
         }
-        if (index < lines.length - 1 && !(await wait(MOBILE_NATIVE_CHAT_ADVANCE_BUFFER_MS))) {
+        if (index < groups.length - 1 && !(await wait(MOBILE_NATIVE_CHAT_QUESTION_STEP_MS))) {
           return false
         }
       }
-      return true
+      return groups.length > 0
     },
     [
       agentRef,

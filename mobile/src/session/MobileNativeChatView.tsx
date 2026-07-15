@@ -25,7 +25,7 @@ import { MobileAgentWorkingIndicator } from './MobileAgentWorkingIndicator'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
-import type { AskPrompt } from './mobile-native-chat-ask'
+import type { AskAnswerSelection, AskPrompt } from './mobile-native-chat-ask'
 import { MobileNativeChatPermission } from './MobileNativeChatPermission'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import { MobileNativeChatQuestion } from './MobileNativeChatQuestion'
@@ -70,7 +70,9 @@ type Props = {
   /** Structured AskUserQuestion prompt parsed from the transcript (preferred over
    *  the heuristic question card). */
   ask?: AskPrompt | null
-  onAnswerAsk?: (text: string) => Promise<boolean>
+  /** Deliver the ask answer as per-question selections; the send hook turns them
+   *  into selector keystrokes (Claude) or pasted label text (other agents). */
+  onAnswerAsk?: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
   onCancelAsk?: () => Promise<boolean>
   question?: MobileChatQuestion | null
   onAnswerQuestion?: (text: string) => Promise<boolean>
@@ -329,8 +331,8 @@ export function MobileNativeChatView({
         <MobileNativeChatAsk
           key={askKey ?? 'ask'}
           prompt={ask}
-          onAnswer={async (text) => {
-            const accepted = (await onAnswerAsk?.(text)) ?? false
+          onAnswer={async (selections) => {
+            const accepted = (await onAnswerAsk?.(ask, selections)) ?? false
             if (accepted) {
               dismissAsk()
             }
