@@ -1137,6 +1137,8 @@ async function pinDefaultReleaseFeed(
     }
     clearPublishingWindowLastGoodCheck()
     if (isPerfCheck) {
+      // Why: perf checks retain their legacy generic retry path; publishing
+      // copy is reserved for the stable release publication classifier.
       throw new Error('Unable to find latest version on GitHub')
     }
     console.info(
@@ -1152,7 +1154,7 @@ async function pinDefaultReleaseFeed(
       )
       return 'not-available'
     }
-    throw new Error('Unable to find latest version on GitHub')
+    throw new Error('Could not resolve perf update feed')
   } else if (
     releaseTagsResult.state === 'unavailable' &&
     releaseTagsResult.unavailableReason === 'manifest'

@@ -2535,6 +2535,33 @@ describe('updater', () => {
     ])
   })
 
+  it('keeps Atom feed outages on the existing moving-feed fallback', async () => {
+    appMock.getVersion.mockReturnValue('1.4.141')
+    fetchNewerReleaseTagsMock.mockResolvedValue({
+      tags: [],
+      state: 'unavailable',
+      unavailableReason: 'feed'
+    })
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+    expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
+      provider: 'generic',
+      url: 'https://github.com/stablyai/orca/releases/latest/download'
+    })
+    expect(sendMock).not.toHaveBeenCalledWith(
+      'updater:status',
+      expect.objectContaining({ state: 'error' })
+    )
+  })
+
   it('uses last-good concrete feed when a user-initiated check lands during publishing', async () => {
     appMock.getVersion.mockReturnValue('1.4.26')
     fetchNewerReleaseTagsMock.mockResolvedValue({

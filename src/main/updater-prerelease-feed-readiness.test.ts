@@ -243,6 +243,51 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
     })
   })
 
+  it('treats an explicit asset 404 as not-ready when another asset is unavailable', async () => {
+    netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
+      if (url === 'https://github.com/stablyai/orca/releases.atom') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve(buildAtomFeed(['v1.4.28']))
+        })
+      }
+      if (isPlatformManifestRequest(url)) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: () =>
+            Promise.resolve(
+              [
+                'version: 1.4.28',
+                'files:',
+                '  - url: orca-windows-setup.exe',
+                '    sha512: test',
+                '  - url: Orca-1.4.28-mac.zip',
+                '    sha512: test'
+              ].join('\n')
+            )
+        })
+      }
+      if (init?.method === 'HEAD') {
+        const isWindowsAsset = url.endsWith('/orca-windows-setup.exe')
+        return Promise.resolve({
+          ok: false,
+          status: isWindowsAsset ? publishingIncident.missingWindowsAssetStatus : 503,
+          text: () => Promise.resolve('')
+        })
+      }
+      return Promise.resolve({ ok: false, status: 503, text: () => Promise.resolve('') })
+    })
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    await expect(fetchNewerReleaseTagsWithReadiness('1.4.26', 1)).resolves.toEqual({
+      tags: [],
+      state: 'not-ready'
+    })
+  })
+
   it('accepts absolute manifest asset URLs without rewriting them to release asset paths', async () => {
     const assetUrls: string[] = []
     netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
