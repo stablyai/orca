@@ -49,6 +49,9 @@ function createMockSubprocess(): SubprocessHandle & {
 
 type DaemonServerPrivate = {
   server: Server | null
+  host: {
+    kill: (sessionId: string, opts?: { immediate?: boolean }) => void | Promise<void>
+  }
   clients: Map<
     string,
     {
@@ -287,6 +290,36 @@ describe('DaemonServer', () => {
       })
 
       expect(result).toBeDefined()
+    })
+
+    it('does not acknowledge kill until asynchronous teardown completes', async () => {
+      await startServer()
+      const daemon = server as unknown as DaemonServerPrivate
+      let finishKill!: () => void
+      const teardown = new Promise<void>((resolve) => {
+        finishKill = resolve
+      })
+      const kill = vi.spyOn(daemon.host, 'kill').mockReturnValue(teardown)
+
+      let acknowledged = false
+      const routed = daemon
+        .routeRequest('client-1', {
+          id: 'kill-1',
+          type: 'kill',
+          payload: { sessionId: 'agent-session', immediate: true }
+        })
+        .then((result) => {
+          acknowledged = true
+          return result
+        })
+
+      await Promise.resolve()
+      expect(kill).toHaveBeenCalledWith('agent-session', { immediate: true })
+      expect(acknowledged).toBe(false)
+
+      finishKill()
+      await expect(routed).resolves.toEqual({})
+      expect(acknowledged).toBe(true)
     })
 
     it('handles getCwd', async () => {

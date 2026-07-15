@@ -4,9 +4,14 @@ import { shellPathSupportsPtyStartupBarrier } from './shell-ready'
 import { resolveProcessCwd } from '../providers/process-cwd'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
-import type { SessionInfo, TakePendingOutputResult, TerminalSnapshot } from './types'
-import { SessionNotFoundError } from './types'
+import {
+  SessionNotFoundError,
+  type SessionInfo,
+  type TakePendingOutputResult,
+  type TerminalSnapshot
+} from './types'
 import type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
+import { TerminalSessionTeardown } from './terminal-session-teardown'
 
 export type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
 
@@ -41,6 +46,7 @@ export type TerminalHostOptions = {
 
 export class TerminalHost {
   private sessions = new Map<string, Session>()
+  private sessionTeardown = new TerminalSessionTeardown(this.sessions, (id) => this.reapSession(id))
   private killedTombstones = new Map<string, number>()
   private spawnSubprocess: TerminalHostOptions['spawnSubprocess']
   private onFinalCheckpoint: TerminalHostOptions['onFinalCheckpoint']
@@ -61,11 +67,13 @@ export class TerminalHost {
   async createOrAttach(opts: CreateOrAttachOptions): Promise<CreateOrAttachResult> {
     const existing = this.sessions.get(opts.sessionId)
 
-    // Why: a session that has been asked to terminate (kill() called but the
-    // subprocess hasn't exited yet) must not be reattached. Reattaching would
-    // hand the caller a handle that races with the in-flight exit, and any
-    // subsequent operation (write/kill/resize) would fail once the subprocess
-    // finally exits. Treat terminating sessions the same as fully-exited ones.
+    // Why: async descendant capture must finish before anyone can attach or
+    // dispose/recreate this id. Disposing here would kill the root before the
+    // snapshot and reattaching would hand out a doomed session.
+    if (this.sessionTeardown.get(opts.sessionId) || existing?.isTerminating) {
+      throw new SessionNotFoundError(opts.sessionId)
+    }
+
     if (existing && existing.isAlive && !existing.isTerminating) {
       const snapshot = existing.getSnapshot()
       existing.detachAllClients()
@@ -194,18 +202,14 @@ export class TerminalHost {
     this.sessions.get(sessionId)?.resumeProducer()
   }
 
-  kill(sessionId: string, opts: { immediate?: boolean } = {}): void {
+  kill(sessionId: string, opts: { immediate?: boolean } = {}): void | Promise<void> {
+    const pending = this.sessionTeardown.get(sessionId)
+    if (pending) {
+      return opts.immediate ? this.sessionTeardown.requestImmediate(sessionId) : pending
+    }
     const session = this.getAliveSession(sessionId)
     this.recordTombstone(sessionId)
-    if (opts.immediate) {
-      session.forceKillAndDisposeSubprocess()
-      // Why: the immediate path tears down synchronously without firing the
-      // session's onExit hook, so reap it here. The graceful path below funnels
-      // through Session.handleSubprocessExit -> onExit -> reapSession.
-      this.reapSession(sessionId)
-      return
-    }
-    session.kill()
+    return this.sessionTeardown.killSession(sessionId, session, opts.immediate === true)
   }
 
   // Why: dispose a dead session's headless emulator and drop it from the map so

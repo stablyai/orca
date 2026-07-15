@@ -146,6 +146,71 @@ describe('killAllProcessesForWorktree', () => {
     expect(r2.providerStopped).toBe(1)
   })
 
+  it('starts owned provider shutdowns together so agent snapshots can coalesce', async () => {
+    const localProvider = createProviderStub(async () => [
+      { id: 'w1@@aaaa', cwd: '/tmp', title: 'shell' },
+      { id: 'w1@@bbbb', cwd: '/tmp', title: 'shell' }
+    ])
+    listRegisteredPtysMock.mockReturnValue([])
+    const releases: (() => void)[] = []
+    ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releases.push(resolve)
+        })
+    )
+
+    const teardown = killAllProcessesForWorktree('w1', { localProvider })
+    await vi.waitFor(() => expect(localProvider.shutdown).toHaveBeenCalledTimes(2))
+    expect(releases).toHaveLength(2)
+
+    for (const release of releases) {
+      release()
+    }
+    await expect(teardown).resolves.toEqual({
+      runtimeStopped: 0,
+      providerStopped: 2,
+      registryStopped: 0
+    })
+  })
+
+  it('bounds provider shutdown fanout while preserving concurrent batches', async () => {
+    const sessions = Array.from({ length: 40 }, (_, index) => ({
+      id: `w1@@${index}`,
+      cwd: '/tmp',
+      title: 'shell'
+    }))
+    const localProvider = createProviderStub(async () => sessions)
+    listRegisteredPtysMock.mockReturnValue([])
+    let active = 0
+    let maxActive = 0
+    const releases: (() => void)[] = []
+    ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          active += 1
+          maxActive = Math.max(maxActive, active)
+          releases.push(() => {
+            active -= 1
+            resolve()
+          })
+        })
+    )
+
+    const teardown = killAllProcessesForWorktree('w1', { localProvider })
+    await vi.waitFor(() => expect(localProvider.shutdown).toHaveBeenCalledTimes(32))
+    expect(maxActive).toBe(32)
+    releases.splice(0).forEach((release) => release())
+    await vi.waitFor(() => expect(localProvider.shutdown).toHaveBeenCalledTimes(40))
+    releases.splice(0).forEach((release) => release())
+
+    await expect(teardown).resolves.toEqual({
+      runtimeStopped: 0,
+      providerStopped: 40,
+      registryStopped: 0
+    })
+  })
+
   it('invokes runtime.stopTerminalsForWorktree when runtime is provided', async () => {
     const stopTerminalsForWorktree = vi.fn().mockResolvedValue({ stopped: 3 })
     const runtime = {

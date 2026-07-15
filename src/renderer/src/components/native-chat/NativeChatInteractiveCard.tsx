@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '../../store'
 import { parseInteractivePrompt } from './native-chat-interactive-prompt'
 import { nativeChatCardDismissKey } from './native-chat-dismiss-key'
@@ -11,8 +11,8 @@ import type { NativeChatInteractiveSend } from './use-native-chat-interactive-se
  * `interactivePrompt` is present: a question wizard (precedence) or a tool
  * approval. Cleared by the host once the agent moves on, so it disappears
  * automatically. Sends through the composer's verified runtime path (R8/R6):
- * answers as bracketed-paste + Enter; cancel/deny as ESC. Guarded by `canSend`
- * so a mobile presence-lock blocks desktop sends the same way it guards xterm.
+ * answers via agent-specific paste or selector keystrokes; cancel/deny as ESC.
+ * Guarded by `canSend` so a mobile presence-lock blocks desktop sends too.
  *
  * Dismiss-on-answer (mobile parity): the live status lingers after answering —
  * the agent emits a post-tool event carrying the same prompt — so we track the
@@ -43,7 +43,7 @@ export function NativeChatInteractiveCard({
   // Thread the sibling `toolName` from the same status entry so the question
   // parser can dispatch through the tool's registered parser (mobile parity).
   const interactiveToolName = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.toolName ?? null)
-  const { sendAnswer, sendRaw, cancel } = send
+  const { sendAnswer, sendRaw, cancelPending, cancel } = send
 
   const card = useMemo(
     () => parseInteractivePrompt(interactivePrompt, interactiveToolName ?? undefined),
@@ -56,17 +56,24 @@ export function NativeChatInteractiveCard({
   // vanish mid-send. `submitting` also gates a second submit racing the first.
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const submittingRef = useRef(false)
-  const clearDismissTimer = (): void => {
+  const [submitting, setSubmitting] = useState(false)
+  const clearDismissTimer = useCallback((): void => {
     if (dismissTimerRef.current) {
       clearTimeout(dismissTimerRef.current)
       dismissTimerRef.current = null
     }
     submittingRef.current = false
-  }
-  // Keyed on cardKey (and unmount): a new prompt can replace the current one
-  // before the settle timer fires, and a stale `submitting` gate would swallow
-  // the new card's first answer.
-  useEffect(() => clearDismissTimer, [cardKey])
+    setSubmitting(false)
+  }, [])
+  // A replacement prompt, ownership loss, or unmount must stop both timers and
+  // PTY writes during commit, before an old answer can type into the new prompt.
+  useLayoutEffect(
+    () => () => {
+      clearDismissTimer()
+      cancelPending()
+    },
+    [canSend, cardKey, cancelPending, clearDismissTimer]
+  )
 
   // Forget the dismissal once the prompt clears so a fresh prompt can show.
   const present = card != null
@@ -75,7 +82,7 @@ export function NativeChatInteractiveCard({
       setDismissedKey(null)
       clearDismissTimer()
     }
-  }, [present])
+  }, [present, clearDismissTimer])
 
   // Tell the view when a question card is up so it can hide the composer (this
   // card supplies its own input). Reset on unmount so the composer comes back.
@@ -93,18 +100,28 @@ export function NativeChatInteractiveCard({
       <NativeChatQuestionCard
         key={cardKey ?? 'question'}
         prompt={card.prompt}
+        isSubmitting={submitting}
         answerInputRef={answerInputRef}
-        onAnswer={(text) => {
+        onAnswer={(selections) => {
           if (submittingRef.current) {
             return
           }
           submittingRef.current = true
-          const settleMs = sendAnswer(text)
+          const settleMs = sendAnswer(card.prompt, selections)
+          if (settleMs <= 0) {
+            // Keep the actionable card visible when its PTY disappeared between
+            // render and submit; the next live target update can make it retryable.
+            submittingRef.current = false
+            return
+          }
+          setSubmitting(true)
           // Hold the card until the paced write finishes, then mark it answered
           // (which hides it and restores the composer).
           dismissTimerRef.current = setTimeout(() => {
+            cancelPending()
             setDismissedKey(cardKey)
             submittingRef.current = false
+            setSubmitting(false)
             dismissTimerRef.current = null
           }, settleMs)
         }}

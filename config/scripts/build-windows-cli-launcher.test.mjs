@@ -4,9 +4,14 @@ import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 
-const itWindows = process.platform === 'win32' ? it : it.skip
 const itCrossHost = process.platform === 'win32' ? it.skip : it
 const projectRoot = resolve(import.meta.dirname, '../..')
+// Why: cold csc.exe startup exceeds Vitest's 5s unit budget on hosted Windows;
+// keep the larger allowance scoped to the real compiler integration test.
+function itWindows(name, test) {
+  const runner = process.platform === 'win32' ? it : it.skip
+  runner(name, { timeout: 15_000 }, test)
+}
 
 describe('Windows CLI launcher', () => {
   itCrossHost('fails closed when the Windows launcher cannot be compiled on this host', () => {

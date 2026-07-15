@@ -1127,6 +1127,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('repos:remove')
   ipcMain.removeHandler('repos:removeForHost')
   ipcMain.removeHandler('repos:reorder')
+  ipcMain.removeHandler('repos:reorderForHost')
   ipcMain.removeHandler('repos:update')
   ipcMain.removeHandler('projects:list')
   ipcMain.removeHandler('projects:update')
@@ -1920,6 +1921,26 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       // a concurrent add/remove. Reject so the renderer can resync.
       const ids = Array.isArray(args?.orderedIds) ? args.orderedIds : []
       const applied = store.reorderRepos(ids)
+      if (applied) {
+        notifyReposChanged(mainWindow)
+        return { status: 'applied' }
+      }
+      return { status: 'rejected' }
+    }
+  )
+
+  ipcMain.handle(
+    'repos:reorderForHost',
+    (
+      _event,
+      args: { orderedIds: string[]; hostId: string }
+    ): { status: 'applied' | 'rejected' } => {
+      const hostId = normalizeExecutionHostId(args?.hostId)
+      if (!hostId) {
+        return { status: 'rejected' }
+      }
+      const ids = Array.isArray(args?.orderedIds) ? args.orderedIds : []
+      const applied = store.reorderReposForHost(ids, hostId)
       if (applied) {
         notifyReposChanged(mainWindow)
         return { status: 'applied' }
