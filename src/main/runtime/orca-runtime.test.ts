@@ -2878,7 +2878,6 @@ describe('OrcaRuntimeService', () => {
       .mockImplementationOnce(() => staleScan.promise)
       .mockResolvedValueOnce([createdWorktree])
       .mockResolvedValueOnce([...MOCK_GIT_WORKTREES, createdWorktree])
-      .mockResolvedValueOnce([...MOCK_GIT_WORKTREES, createdWorktree])
 
     const staleLookup = runtime.showManagedWorktree(TEST_WORKTREE_ID)
     const result = await runtime.createManagedWorktree({
