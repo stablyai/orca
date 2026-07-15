@@ -1,4 +1,6 @@
 import { useAppStore } from '@/store'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentSessionRecord
@@ -145,6 +147,11 @@ export function resumeSleepingAgentSessionsForWorktree(
   options?: ResumeSleepingAgentSessionsOptions
 ): number {
   const state = useAppStore.getState()
+  // Why: runtime-owned worktrees are host-authoritative for agent wake; a paired
+  // client resuming here would double-launch a still-live host session (#8878).
+  if (isWebRuntimeSessionActive(getRuntimeEnvironmentIdForWorktree(state, worktreeId))) {
+    return 0
+  }
   const worktreeRecords = Object.values(state.sleepingAgentSessionsByPaneKey)
     .filter((record) => record.worktreeId === worktreeId)
     .sort((a, b) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)
