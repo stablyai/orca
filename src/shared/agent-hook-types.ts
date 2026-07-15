@@ -38,6 +38,18 @@ export type AgentHookInstallStatus = {
   skipReason?: AgentHookInstallSkipReason
 }
 
+// Why: hook installs on SSH remotes happen host-side, so a local file check
+// cannot answer "are hooks installed where the agent runs?". Each relay
+// session records its last install outcome in this shape so `agent hooks
+// status` reports the host that actually executes the agent (#8711).
+export type RemoteAgentHookInstallReport = {
+  targetId: string
+  remoteHome: string | null
+  state: 'installed' | 'partial' | 'skipped' | 'error'
+  detail: string | null
+  statuses: AgentHookInstallStatus[]
+}
+
 // Why: bumped whenever the managed script's request shape changes. The
 // receiver logs a warning when it sees a request from a different version so a
 // stale script installed by an older app build is diagnosable instead of

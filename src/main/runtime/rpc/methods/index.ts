@@ -16,6 +16,7 @@ import { ORCHESTRATION_METHODS } from './orchestration'
 import { NOTIFICATION_METHODS } from './notifications'
 import { STATS_METHODS } from './stats'
 import { DIAGNOSTICS_METHODS } from './diagnostics'
+import { AGENT_HOOK_METHODS } from './agent-hooks'
 import { ACCOUNT_METHODS } from './accounts'
 import { PREFLIGHT_METHODS } from './preflight'
 import { COMPUTER_METHODS } from './computer'
@@ -71,6 +72,7 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...NOTIFICATION_METHODS,
   ...STATS_METHODS,
   ...DIAGNOSTICS_METHODS,
+  ...AGENT_HOOK_METHODS,
   ...ACCOUNT_METHODS,
   ...PREFLIGHT_METHODS,
   ...COMPUTER_METHODS,

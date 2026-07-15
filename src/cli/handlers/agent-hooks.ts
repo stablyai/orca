@@ -10,7 +10,10 @@ import {
   type RuntimeRpcSuccess,
   getDefaultUserDataPath
 } from '../runtime-client'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type {
+  AgentHookInstallStatus,
+  RemoteAgentHookInstallReport
+} from '../../shared/agent-hook-types'
 import { getDefaultPersistedState } from '../../shared/constants'
 import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import type { GlobalSettings } from '../../shared/global-settings-types'
@@ -26,6 +29,7 @@ type AgentHookCommandResult = {
   settingsPath: string
   appliedBy: 'runtime' | 'offline'
   statuses: AgentHookInstallStatus[]
+  remotes?: RemoteAgentHookInstallReport[] | null
 }
 
 // Covers managed-home verification, WSL identity, trust grant, and bounded app-server reap.
@@ -180,14 +184,44 @@ function formatAgentHookCommandResult(result: AgentHookCommandResult): string {
   const statusSummary = result.statuses
     .map((status) => `${status.agent}: ${status.state}`)
     .join('\n')
+  const remoteSummary = (result.remotes ?? [])
+    .flatMap((remote) => [
+      `ssh:${remote.targetId}: ${remote.state}${remote.detail ? ` - ${remote.detail}` : ''}`,
+      ...remote.statuses.map(
+        (status) => `  ${status.agent}: ${status.state}${status.detail ? ` - ${status.detail}` : ''}`
+      )
+    ])
+    .join('\n')
   return [
     `agentStatusHooksEnabled: ${result.enabled}`,
     `appliedBy: ${result.appliedBy}`,
     `settingsPath: ${result.settingsPath}`,
-    statusSummary
+    statusSummary,
+    result.remotes === null ? 'ssh: unavailable (runtime offline)' : remoteSummary
   ]
     .filter(Boolean)
     .join('\n')
+}
+
+async function fetchRuntimeHookStatuses(client: RuntimeClient): Promise<{
+  local: AgentHookInstallStatus[]
+  remotes: RemoteAgentHookInstallReport[]
+} | null> {
+  let reachable = false
+  try {
+    const status = await client.getCliStatus()
+    reachable = status.result.runtime.reachable
+  } catch {
+    return null
+  }
+  if (!reachable) {
+    return null
+  }
+  const response = await client.call<{
+    local: AgentHookInstallStatus[]
+    remotes: RemoteAgentHookInstallReport[]
+  }>('agentHooks.status', undefined, { timeoutMs: 10_000 })
+  return response.result
 }
 
 async function setAgentHooksEnabled(
@@ -233,12 +267,14 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
         settings.agentStatusHooksEnabled && !settings.disabledTuiAgents.includes('codex')
     })
   },
-  'agent hooks status': async ({ json }) => {
+  'agent hooks status': async ({ client, json }) => {
+    const runtimeStatuses = await fetchRuntimeHookStatuses(client)
     const result: AgentHookCommandResult = {
       enabled: readHookSettingsFromDisk().agentStatusHooksEnabled,
       settingsPath: getDataPath(),
-      appliedBy: 'offline',
-      statuses: getManagedAgentHookStatuses()
+      appliedBy: runtimeStatuses ? 'runtime' : 'offline',
+      statuses: runtimeStatuses?.local ?? getManagedAgentHookStatuses(),
+      remotes: runtimeStatuses?.remotes ?? null
     }
     printResult(localSuccess(result), json, formatAgentHookCommandResult)
   },

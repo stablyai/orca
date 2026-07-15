@@ -24,13 +24,13 @@ function context(signal?: AbortSignal): RequestContext {
 describe('registerManagedHookInstaller', () => {
   it('forwards request cancellation to the remote runtime', async () => {
     const controller = new AbortController()
-    const installManagedHooks = vi.fn().mockResolvedValue({ installers: 14, errors: 0 })
+    const result = { home: '/home/orca', installers: 1, errors: 0, statuses: [] }
+    const installManagedHooks = vi.fn().mockResolvedValue(result)
     const handler = captureHandler(() => ({ installManagedHooks }))
 
-    await expect(handler({ agents: ['codex'] }, context(controller.signal))).resolves.toEqual({
-      installers: 14,
-      errors: 0
-    })
+    await expect(handler({ agents: ['codex'] }, context(controller.signal))).resolves.toEqual(
+      result
+    )
     expect(installManagedHooks).toHaveBeenCalledWith({
       signal: controller.signal,
       agents: ['codex']

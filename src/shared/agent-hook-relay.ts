@@ -26,7 +26,7 @@ import { createHash } from 'node:crypto'
 
 import type { AgentSubagentSnapshot, ParsedAgentStatusPayload } from './agent-status-types'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
-import type { AgentHookTarget } from './agent-hook-types'
+import type { AgentHookInstallStatus, AgentHookTarget } from './agent-hook-types'
 
 // Why: the local hook server knows the discriminator from URL pathname routing
 // (`/hook/<source>`); the relay equally must tag each forwarded notification
@@ -215,6 +215,14 @@ export type AgentHookInstallManagedHooksParams = {
   hostKeyFingerprint?: string
   /** Positively detected and enabled agents allowed to mutate remote config. */
   agents: readonly AgentHookTarget[]
+}
+
+/** Result returned after the relay installs the positively detected hooks. */
+export type AgentHookInstallManagedHooksResult = {
+  home: string
+  installers: number
+  errors: number
+  statuses: AgentHookInstallStatus[]
 }
 
 /** Feature-flag env var. Read once at process start by Orca and the relay.

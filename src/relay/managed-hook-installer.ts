@@ -1,23 +1,19 @@
 import { join } from 'node:path'
 import {
   AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
-  type AgentHookInstallManagedHooksParams
+  type AgentHookInstallManagedHooksParams,
+  type AgentHookInstallManagedHooksResult
 } from '../shared/agent-hook-relay'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { AgentHookTarget } from '../shared/agent-hook-types'
 import { isManagedAgentHookTarget } from '../shared/managed-agent-hook-targets'
-
-export type ManagedHookInstallSummary = {
-  installers: number
-  errors: number
-}
 
 export type ManagedHookRuntime = {
   installManagedHooks: (options?: {
     signal?: AbortSignal
     hostKeyFingerprint?: string
     agents?: readonly AgentHookTarget[]
-  }) => Promise<ManagedHookInstallSummary>
+  }) => Promise<AgentHookInstallManagedHooksResult>
 }
 
 const SHA256_HOST_KEY_PATTERN = /^SHA256:[A-Za-z\d+/]{43}$/
@@ -58,7 +54,7 @@ export function registerManagedHookInstaller(
 ): void {
   dispatcher.onRequest(
     AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
-    async (params, context: RequestContext): Promise<ManagedHookInstallSummary> => {
+    async (params, context: RequestContext): Promise<AgentHookInstallManagedHooksResult> => {
       context.signal?.throwIfAborted()
       const hostKeyFingerprint = readHostKeyFingerprint(params)
       const agents = readAgents(params)

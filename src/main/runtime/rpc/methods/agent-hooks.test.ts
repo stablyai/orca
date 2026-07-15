@@ -2,15 +2,28 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { isStreamingMethod, type RpcContext } from '../core'
 
-const { installForRuntimeHomeSerializedMock, realpathMock } = vi.hoisted(() => ({
+const {
+  installForRuntimeHomeSerializedMock,
+  realpathMock,
+  getManagedAgentHookStatusesMock,
+  getActiveSshAgentHookInstallReportsMock
+} = vi.hoisted(() => ({
   installForRuntimeHomeSerializedMock: vi.fn(),
-  realpathMock: vi.fn()
+  realpathMock: vi.fn(),
+  getManagedAgentHookStatusesMock: vi.fn(),
+  getActiveSshAgentHookInstallReportsMock: vi.fn()
 }))
 
 vi.mock('../../../codex/hook-service', () => ({
   codexHookService: { installForRuntimeHomeSerialized: installForRuntimeHomeSerializedMock }
 }))
 vi.mock('node:fs/promises', () => ({ realpath: realpathMock }))
+vi.mock('../../../agent-hooks/managed-agent-hook-controls', () => ({
+  getManagedAgentHookStatuses: getManagedAgentHookStatusesMock
+}))
+vi.mock('../../../ipc/ssh', () => ({
+  getActiveSshAgentHookInstallReports: getActiveSshAgentHookInstallReportsMock
+}))
 
 import { AGENT_HOOK_METHODS } from './agent-hooks'
 import {
@@ -32,6 +45,14 @@ function prepareMethod() {
   return method
 }
 
+function statusMethod() {
+  const method = AGENT_HOOK_METHODS.find((candidate) => candidate.name === 'agentHooks.status')
+  if (!method || isStreamingMethod(method)) {
+    throw new Error('Missing agentHooks.status request method')
+  }
+  return method
+}
+
 function runtimeWithSettings(enabled = true, disabledTuiAgents: string[] = []): OrcaRuntimeService {
   return {
     getClientSettings: vi.fn(() => ({
@@ -48,6 +69,19 @@ describe('agent hook RPC methods', () => {
     realpathMock.mockImplementation(async (path: string) => path)
     managedWslHomeRegistryInternals.clearRecordedManagedWslCodexHomes()
     recordManagedWslCodexHome('Ubuntu-24.04', RUNTIME_HOME)
+    getManagedAgentHookStatusesMock.mockReset()
+    getActiveSshAgentHookInstallReportsMock.mockReset()
+  })
+
+  it('returns local and active SSH hook install reports', async () => {
+    const local = [{ agent: 'codex', state: 'installed' }]
+    const remotes = [{ targetId: 'ssh-1', state: 'partial' }]
+    getManagedAgentHookStatusesMock.mockReturnValue(local)
+    getActiveSshAgentHookInstallReportsMock.mockReturnValue(remotes)
+
+    await expect(statusMethod().handler(undefined, { runtime: runtimeWithSettings() })).resolves.toEqual(
+      { local, remotes }
+    )
   })
 
   it('installs the pane-selected WSL home once and returns its status', async () => {
