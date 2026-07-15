@@ -3389,6 +3389,13 @@ function normalizePiCompatibleEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
+  if (agentType === 'pi' && eventName === 'session_start') {
+    // Why: Pi emits session_start when the TUI opens or resumes; discard stale
+    // turn details without creating a visible working row before user activity.
+    clearPaneTurnCacheState(state, paneKey)
+    return null
+  }
+
   const stateName =
     eventName === 'before_agent_start' ||
     eventName === 'agent_start' ||

@@ -1,6 +1,18 @@
+import type { PiAgentKind } from '../../shared/pi-agent-kind'
+
 // Why: keep the generated handler registrations separate from hook transport;
 // both are independently sizeable and the installed extension concatenates them.
-export function getPiAgentStatusHandlerSourceLines(): string[] {
+export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] {
+  const sessionStartHandler =
+    kind === 'pi'
+      ? [
+          "  pi.on('session_start', (_event, ctx) => {",
+          '    updateSessionMetadata(ctx)',
+          '  })',
+          ''
+        ]
+      : []
+
   return [
     '// Why: pi assistant messages carry content as an array of parts',
     "// ({ type: 'text', text } / tool_use / tool_result / reasoning). We only",
@@ -30,11 +42,7 @@ export function getPiAgentStatusHandlerSourceLines(): string[] {
     '// names Claude uses (tool_name / tool_input) and let the server pick the',
     '// preview. Keeps tool-name knowledge centralized on the receiver side.',
     'export default function (pi): void {',
-    "  pi.on('session_start', (_event, ctx) => {",
-    '    updateSessionMetadata(ctx)',
-    "    post('session_start')",
-    '  })',
-    '',
+    ...sessionStartHandler,
     "  pi.on('before_agent_start', (event) => {",
     "    post('before_agent_start', { prompt: event.prompt ?? '' })",
     '  })',

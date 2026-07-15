@@ -153,7 +153,7 @@ function createHarness(args: {
 }
 
 describe('getPiAgentStatusExtensionSource', () => {
-  it('includes the session id and file path in status posts after session_start', async () => {
+  it('includes the session id and file path in Pi status posts after session_start', async () => {
     const harness = createHarness({ kind: 'pi' })
 
     await harness.callHook(
@@ -167,12 +167,60 @@ describe('getPiAgentStatusExtensionSource', () => {
       }
     )
 
+    expect(harness.fetchMock).not.toHaveBeenCalled()
+
+    await harness.callHook('before_agent_start', { prompt: 'resume this task' })
+
     const body = JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body))
     expect(body.payload).toEqual({
-      hook_event_name: 'session_start',
+      hook_event_name: 'before_agent_start',
+      prompt: 'resume this task',
       session_id: 'pi-session-1',
       session_file: '/tmp/pi-session-1.jsonl'
     })
+  })
+
+  it('omits absent or empty Pi session metadata from status posts', async () => {
+    for (const sessionManager of [
+      { getSessionId: () => '', getSessionFile: () => undefined },
+      { getSessionFile: () => '/tmp/pi-session.jsonl' }
+    ]) {
+      const harness = createHarness({ kind: 'pi' })
+      await harness.callHook('session_start', {}, { sessionManager })
+      await harness.callHook('agent_start')
+
+      const body = JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body))
+      expect(body.payload).toEqual({ hook_event_name: 'agent_start' })
+    }
+  })
+
+  it('keeps OMP runtime status payloads unchanged by Pi session metadata', async () => {
+    const harness = createHarness({ kind: 'omp' })
+
+    await harness.callHook(
+      'session_start',
+      {},
+      {
+        sessionManager: {
+          getSessionId: () => 'omp-session-1',
+          getSessionFile: () => '/tmp/omp-session-1.jsonl'
+        }
+      }
+    )
+    await harness.callHook('agent_start')
+
+    expect(harness.fetchMock).toHaveBeenCalledTimes(1)
+    expect(harness.fetchMock.mock.calls[0]?.[1]?.body).toBe(
+      JSON.stringify({
+        paneKey: 'pane-1',
+        launchToken: 'launch-1',
+        tabId: 'tab-1',
+        worktreeId: 'tree-1',
+        env: 'env-1',
+        version: '1.2.3',
+        payload: { hook_event_name: 'agent_start' }
+      })
+    )
   })
 
   it('routes an OMP executable through /hook/omp', async () => {

@@ -101,23 +101,29 @@ function readSessionId(record: Record<string, unknown>, keys: readonly string[])
 /** The agent hook's authoritative transcript/rollout path, when present. Used by
  *  native chat to read the exact file rather than reconstructing it from the
  *  session id (which recent Claude Code no longer matches to the file name). */
-function readTranscriptPath(record: Record<string, unknown>): string | undefined {
-  const raw = record.transcript_path ?? record.transcriptPath
-  if (typeof raw !== 'string') {
-    return undefined
+function readTranscriptPathFromKeys(
+  record: Record<string, unknown>,
+  keys: readonly string[]
+): string | undefined {
+  for (const key of keys) {
+    const raw = record[key]
+    if (typeof raw !== 'string') {
+      continue
+    }
+    const trimmed = raw.trim()
+    if (trimmed && !hasUnsafeProviderSessionIdChars(trimmed)) {
+      return trimmed
+    }
   }
-  const trimmed = raw.trim()
-  if (!trimmed || hasUnsafeProviderSessionIdChars(trimmed)) {
-    return undefined
-  }
-  return trimmed
+  return undefined
 }
 
 function withTranscriptPath(
   metadata: AgentProviderSessionMetadata,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  keys: readonly string[] = ['transcript_path', 'transcriptPath']
 ): AgentProviderSessionMetadata {
-  const transcriptPath = readTranscriptPath(payload)
+  const transcriptPath = readTranscriptPathFromKeys(payload, keys)
   return transcriptPath ? { ...metadata, transcriptPath } : metadata
 }
 
@@ -176,7 +182,10 @@ export function extractAgentProviderSession(
     }
     case 'pi': {
       const id = readSessionId(payload, ['session_id'])
-      return id ? { key: 'session_id', id } : null
+      const providerSession = id
+        ? withTranscriptPath({ key: 'session_id', id }, payload, ['session_file'])
+        : null
+      return providerSession?.transcriptPath ? providerSession : null
     }
     case 'grok': {
       const id = readSessionId(payload, ['sessionId', 'session_id'])
@@ -213,7 +222,9 @@ export function getAgentResumeArgv(
     case 'opencode':
       return providerSession.key === 'session_id' ? ['opencode', '--session', id] : null
     case 'pi':
-      return providerSession.key === 'session_id' ? ['pi', '--session', id] : null
+      return providerSession.key === 'session_id' && providerSession.transcriptPath
+        ? ['pi', '--session', providerSession.transcriptPath]
+        : null
     case 'mimo-code':
       return providerSession.key === 'session_id' ? ['mimo', '--session', id] : null
     case 'droid':

@@ -441,7 +441,41 @@ describe('shared agent-hook-listener', () => {
       prompt: 'resume this task',
       agentType: 'pi'
     })
-    expect(event?.providerSession).toEqual({ key: 'session_id', id: 'pi-session-1' })
+    expect(event?.providerSession).toEqual({
+      key: 'session_id',
+      id: 'pi-session-1',
+      transcriptPath: '/tmp/pi-session-1.jsonl'
+    })
+  })
+
+  it('clears Pi turn cache on session_start without creating a status event', () => {
+    const start = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'before_agent_start', prompt: 'stale turn' }
+      },
+      'production'
+    )
+    expect(start?.payload.prompt).toBe('stale turn')
+
+    expect(
+      normalizeHookPayload(
+        state,
+        'pi',
+        { paneKey: PANE_KEY, payload: { hook_event_name: 'session_start' } },
+        'production'
+      )
+    ).toBeNull()
+
+    const next = normalizeHookPayload(
+      state,
+      'pi',
+      { paneKey: PANE_KEY, payload: { hook_event_name: 'tool_call', tool_name: 'bash' } },
+      'production'
+    )
+    expect(next?.payload.prompt).toBe('')
   })
 
   it('normalizes Command Code hooks and reads turn text from the transcript', () => {

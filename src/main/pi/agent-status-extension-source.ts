@@ -16,6 +16,28 @@ import { getPiAgentStatusHandlerSourceLines } from './agent-status-handler-sourc
 export const ORCA_PI_AGENT_STATUS_EXTENSION_FILE = 'orca-agent-status.ts'
 
 export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): string {
+  const sessionMetadataSourceLines =
+    kind === 'pi'
+      ? [
+          'let sessionMetadata: Record<string, unknown> = {}',
+          '',
+          'function updateSessionMetadata(ctx: unknown): void {',
+          '  const sessionManager = (ctx as { sessionManager?: { getSessionId?: () => unknown; getSessionFile?: () => unknown } } | null)?.sessionManager',
+          '  const sessionId = sessionManager?.getSessionId?.()',
+          '  const sessionFile = sessionManager?.getSessionFile?.()',
+          "  sessionMetadata = typeof sessionId === 'string' && sessionId ? {",
+          '    session_id: sessionId,',
+          "    ...(typeof sessionFile === 'string' && sessionFile ? { session_file: sessionFile } : {}),",
+          '  } : {}',
+          '}',
+          ''
+        ]
+      : []
+  const payloadLine =
+    kind === 'pi'
+      ? '    payload: { hook_event_name: hookEventName, ...sessionMetadata, ...extra },'
+      : '    payload: { hook_event_name: hookEventName, ...extra },'
+
   // Why: keep this string self-contained — it runs inside the pi process,
   // so it cannot import from Orca's main bundle. fs/http coords come from
   // the same endpoint file the OpenCode plugin reads (process.env is frozen
@@ -32,7 +54,7 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     'const HOOK_POST_TIMEOUT_MS = 1000',
     'let activePost = false',
     'let pendingPost: { hookEventName: string; extra: Record<string, unknown> } | null = null',
-    'let sessionMetadata: Record<string, unknown> = {}',
+    ...sessionMetadataSourceLines,
     '',
     '// Why: re-reading the endpoint file on every event is cheap (small file,',
     '// rare changes) but stat+mtime caching avoids re-parsing on every event',
@@ -112,16 +134,6 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '  return configuredPath',
     '}',
     '',
-    'function updateSessionMetadata(ctx: unknown): void {',
-    '  const sessionManager = (ctx as { sessionManager?: { getSessionId?: () => unknown; getSessionFile?: () => unknown } } | null)?.sessionManager',
-    '  const sessionId = sessionManager?.getSessionId?.()',
-    '  const sessionFile = sessionManager?.getSessionFile?.()',
-    '  sessionMetadata = {',
-    "    ...(typeof sessionId === 'string' && sessionId ? { session_id: sessionId } : {}),",
-    "    ...(typeof sessionFile === 'string' && sessionFile ? { session_file: sessionFile } : {}),",
-    '  }',
-    '}',
-    '',
     'function post(hookEventName: string, extra: Record<string, unknown> = {}): void {',
     '  pendingPost = { hookEventName, extra }',
     '  drainPosts()',
@@ -155,7 +167,7 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     "    worktreeId: process.env.ORCA_WORKTREE_ID || '',",
     '    env: coords.env,',
     '    version: coords.version,',
-    '    payload: { hook_event_name: hookEventName, ...sessionMetadata, ...extra },',
+    payloadLine,
     '  })',
     "  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null",
     '  let timeout: ReturnType<typeof setTimeout> | undefined',
@@ -269,6 +281,6 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '  }',
     '}',
     '',
-    ...getPiAgentStatusHandlerSourceLines()
+    ...getPiAgentStatusHandlerSourceLines(kind)
   ].join('\n')
 }

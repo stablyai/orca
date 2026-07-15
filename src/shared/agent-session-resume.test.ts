@@ -21,7 +21,11 @@ describe('agent session resume metadata', () => {
       { key: 'conversation_id', id: 'agy-conversation' }
     ],
     ['opencode', { sessionID: 'opencode-session' }, { key: 'session_id', id: 'opencode-session' }],
-    ['pi', { session_id: 'pi-session' }, { key: 'session_id', id: 'pi-session' }],
+    [
+      'pi',
+      { session_id: 'pi-session', session_file: '/tmp/pi-session.jsonl' },
+      { key: 'session_id', id: 'pi-session', transcriptPath: '/tmp/pi-session.jsonl' }
+    ],
     ['mimo-code', { sessionID: 'mimo-session' }, { key: 'session_id', id: 'mimo-session' }],
     ['droid', { session_id: 'droid-session' }, { key: 'session_id', id: 'droid-session' }],
     ['grok', { sessionId: 'grok-session' }, { key: 'session_id', id: 'grok-session' }],
@@ -36,7 +40,11 @@ describe('agent session resume metadata', () => {
     ['gemini', { key: 'session_id', id: 's1' }, ['gemini', '--resume', 's1']],
     ['antigravity', { key: 'conversation_id', id: 's1' }, ['agy', '--conversation', 's1']],
     ['opencode', { key: 'session_id', id: 's1' }, ['opencode', '--session', 's1']],
-    ['pi', { key: 'session_id', id: 's1' }, ['pi', '--session', 's1']],
+    [
+      'pi',
+      { key: 'session_id', id: 's1', transcriptPath: '/tmp/pi-session.jsonl' },
+      ['pi', '--session', '/tmp/pi-session.jsonl']
+    ],
     ['mimo-code', { key: 'session_id', id: 's1' }, ['mimo', '--session', 's1']],
     ['droid', { key: 'session_id', id: 's1' }, ['droid', '--resume', 's1']],
     ['grok', { key: 'session_id', id: 's1' }, ['grok', '--resume', 's1']],
@@ -54,6 +62,15 @@ describe('agent session resume metadata', () => {
       key: 'session_id',
       id: 'ok'
     })
+  })
+
+  it('does not capture ephemeral Pi sessions without a session file', () => {
+    expect(extractAgentProviderSession('pi', { session_id: 'pi-session' })).toBeNull()
+    expect(
+      extractAgentProviderSession('pi', { session_id: 'pi-session', session_file: '' })
+    ).toBeNull()
+    expect(extractAgentProviderSession('pi', { session_file: '/tmp/pi-session.jsonl' })).toBeNull()
+    expect(getAgentResumeArgv('pi', { key: 'session_id', id: 'pi-session' })).toBeNull()
   })
 
   it('rejects devin resume when provider session key is not session_id', () => {
