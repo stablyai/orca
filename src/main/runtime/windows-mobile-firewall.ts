@@ -174,11 +174,13 @@ try {
 } catch {}`
     : ''
   // Why: NetSecurity filter properties are stable across localized Windows
-  // display output and keep every rule's address scope independent.
+  // display output and keep every rule's address scope independent. ActiveStore
+  // includes GPO-applied rules the default persistent store hides, so managed
+  // Block rules cannot produce a false success after repair.
   return `$ErrorActionPreference = 'Stop'
 $matchingRuleScopes = @()
 $blockingRuleDetected = $false
-$rules = @(Get-NetFirewallApplicationFilter -Program ${quotePowerShell(executablePath)} -ErrorAction SilentlyContinue | Get-NetFirewallRule | Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' })
+$rules = @(Get-NetFirewallApplicationFilter -PolicyStore ActiveStore -Program ${quotePowerShell(executablePath)} -ErrorAction SilentlyContinue | Get-NetFirewallRule | Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' })
 foreach ($rule in $rules) {
   $portFilter = $rule | Get-NetFirewallPortFilter
   $protocol = [string]$portFilter.Protocol
@@ -195,7 +197,7 @@ foreach ($rule in $rules) {
     }
   }
 }
-$privateFirewallEnabled = [bool](Get-NetFirewallProfile -Name Private).Enabled
+$privateFirewallEnabled = [bool](Get-NetFirewallProfile -PolicyStore ActiveStore -Name Private).Enabled
 $networkCategory = 'Unknown'${addressLookup}
 [pscustomobject]@{
   matchingRuleScopes = @($matchingRuleScopes)

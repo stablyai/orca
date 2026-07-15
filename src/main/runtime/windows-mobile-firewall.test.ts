@@ -46,6 +46,12 @@ describe('windows mobile firewall', () => {
     })
 
     const script = runPowerShell.mock.calls[0]![0] as string
+    // Why: without ActiveStore, GPO-applied Block rules are invisible and the
+    // post-repair re-inspection could report a false success on managed hosts.
+    expect(script).toContain(
+      "Get-NetFirewallApplicationFilter -PolicyStore ActiveStore -Program 'C:\\Users\\O''Brien\\Orca\\Orca.exe'"
+    )
+    expect(script).toContain('Get-NetFirewallProfile -PolicyStore ActiveStore -Name Private')
     expect(script).toContain("LocalPort | Where-Object { [string]$_ -eq 'Any'")
     expect(script).toContain("[string]$_ -eq '6768'")
     expect(script).toContain("C:\\Users\\O''Brien\\Orca\\Orca.exe")
