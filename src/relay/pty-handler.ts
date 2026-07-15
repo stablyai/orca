@@ -1003,9 +1003,11 @@ export class PtyHandler {
           managed.windowsImmediateKillIssued = false
           throw error
         }
-      } else {
-        killPtyProcess(managed.pty, 'SIGTERM')
+        // Why: no stronger Windows fallback exists after ConPTY close. Retain
+        // liveness until native exit so deletion cannot trust a synthetic exit.
+        return
       }
+      killPtyProcess(managed.pty, 'SIGTERM')
 
       // Why: Some processes ignore SIGTERM (e.g. a hung child, a custom signal
       // handler). Without a SIGKILL fallback the PTY process would leak and the
@@ -1019,12 +1021,7 @@ export class PtyHandler {
       managed.killTimer = setTimeout(() => {
         const still = this.ptys.get(id)
         if (still && !still.disposed) {
-          // Why: on Windows the graceful path already closed ConPTY, which is
-          // force-capable; a second close can tear down an unrelated conout
-          // pipe pairing. Keep the cleanup guarantee, skip the redundant kill.
-          if (!still.windowsImmediateKillIssued) {
-            killPtyProcess(still.pty, 'SIGKILL')
-          }
+          killPtyProcess(still.pty, 'SIGKILL')
           this.flushPtyOutput(id)
           // Why: emit pty.exit BEFORE disposeManagedPty sets disposed=true.
           // The natural onExit short-circuits on `managed.disposed`, so
@@ -1032,14 +1029,11 @@ export class PtyHandler {
           // when the SIGKILL fallback fires for a SIGTERM-ignoring child.
           this.dispatcher.notify('pty.exit', { id, code: -1 })
           // Why: POSIX SIGKILL may never emit onExit for a D-state child, so
-          // dispose and delete it synchronously. Windows must retain the owner
-          // until native exit proves the already-issued ConPTY close completed.
+          // dispose and delete it synchronously.
           this.notifyExitListener(still)
           disposeManagedPty(still)
-          if (process.platform !== 'win32' || !still.windowsImmediateKillIssued) {
-            this.ptys.delete(id)
-            this.clearPtyFlowState(id)
-          }
+          this.ptys.delete(id)
+          this.clearPtyFlowState(id)
         }
       }, 5000)
     }

@@ -1239,7 +1239,7 @@ describe('PtyHandler', () => {
       })
     })
 
-    it('retains an unverified ConPTY across graceful-fallback teardown retries', async () => {
+    it('retains an unverified ConPTY across delayed teardown retries', async () => {
       await withWindowsPlatform(async () => {
         let onExitCb: ((evt: { exitCode: number }) => void) | undefined
         const mockKill = vi.fn()
@@ -1257,6 +1257,11 @@ describe('PtyHandler', () => {
         await vi.advanceTimersByTimeAsync(5000)
 
         expect(handler.activePtyCount).toBe(1)
+        await expect(dispatcher.callRequest('pty.hasPty', { id: 'pty-1' })).resolves.toBe(true)
+        expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.exit', {
+          id: 'pty-1',
+          code: -1
+        })
         const firstRetry = dispatcher.callRequest('pty.shutdown', {
           id: 'pty-1',
           immediate: true
@@ -1281,6 +1286,7 @@ describe('PtyHandler', () => {
         expect(handler.activePtyCount).toBe(1)
         onExitCb!({ exitCode: 0 })
         expect(handler.activePtyCount).toBe(0)
+        await expect(dispatcher.callRequest('pty.hasPty', { id: 'pty-1' })).resolves.toBe(false)
       })
     })
 
