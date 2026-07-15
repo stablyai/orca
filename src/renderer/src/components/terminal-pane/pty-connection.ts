@@ -3056,9 +3056,9 @@ export function connectPanePty(
     executionHostId
   })
   if (isNativeWindowsConpty) {
-    // Why: completed Windows ConPTY agent turns can leave xterm's renderer-side
-    // Kitty encoder enabled; clearing it restores plain Backspace/Enter input.
-    idleAgentTerminalModeReset = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`
+    // Why: Windows ConPTY agent turns can leave renderer keyboard/focus modes
+    // armed after completion, corrupting plain input with encoded or CSI bytes.
+    idleAgentTerminalModeReset = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}${FOCUS_REPORTING_DISABLE_SEQUENCE}`
   }
   const shouldApplyNativeWindowsRewriteRefresh = isNativeWindowsConpty
   const shouldApplyWindowsRendererUnicodeRefresh = CLIENT_PLATFORM === 'win32'

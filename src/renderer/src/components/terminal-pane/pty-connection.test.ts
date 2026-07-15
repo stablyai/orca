@@ -16541,7 +16541,7 @@ describe('connectPanePty', () => {
         expect(deps.dispatchNotification).toHaveBeenCalledWith(expectedNotification)
       }
       expect(pane.terminal.write).toHaveBeenCalledWith(
-        `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`,
+        `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?1004l`,
         expect.any(Function)
       )
     } finally {
@@ -16745,7 +16745,7 @@ describe('connectPanePty', () => {
     )
   })
 
-  it('resets stale Kitty keyboard state when a native Windows agent becomes idle', async () => {
+  it('resets stale keyboard and focus-reporting state when a native Windows agent becomes idle', async () => {
     const restoreUserAgent = temporarilySetNavigatorUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     )
@@ -16770,7 +16770,7 @@ describe('connectPanePty', () => {
       idleHandler('* Codex done')
 
       expect(pane.terminal.write).toHaveBeenCalledWith(
-        `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`,
+        `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?1004l`,
         expect.any(Function)
       )
     } finally {
@@ -16820,7 +16820,7 @@ describe('connectPanePty', () => {
     }
   })
 
-  it('resets stale Kitty keyboard state when native Windows hook status reaches done', async () => {
+  it('resets stale keyboard and focus-reporting state when native Windows hook status reaches done', async () => {
     const restoreUserAgent = temporarilySetNavigatorUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     )
@@ -16860,7 +16860,7 @@ describe('connectPanePty', () => {
       notifyStoreSubscribers()
 
       expect(pane.terminal.write).toHaveBeenCalledWith(
-        `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}`,
+        `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?1004l`,
         expect.any(Function)
       )
     } finally {
