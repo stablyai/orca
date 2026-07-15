@@ -152,7 +152,7 @@ import {
   resolveTabTitleAfterPaneClose,
   shouldClearLaunchAgentForClosedPane
 } from './terminal-pane-close-identity'
-import { registerTerminalSurfaceActionConsumer } from '@/hooks/useIpcEvents'
+import { registerTerminalSurfaceActionConsumer } from '@/hooks/terminal-surface-action-queue'
 import { seedStartupSessionRestoredBanner } from './session-restored-banner-pane-state'
 import { shouldClearLaunchAgentForClosedPane } from './terminal-pane-close-identity'
 

@@ -110,6 +110,14 @@ import {
 import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
 import { closeMobileSessionTabInStore } from '@/runtime/mobile-session-tab-close'
 import { createWorktreeChangeRefreshQueue } from './worktree-change-refresh-queue'
+import {
+  cancelAllPendingTerminalSurfaceActions,
+  cancelTerminalSurfaceActionsForRemovedTabs,
+  hasTerminalSurfaceActionConsumer,
+  queueTerminalSurfaceAction,
+  type TerminalSurfaceActionCallbacks,
+  type TerminalSurfaceActionCancellationReason
+} from './terminal-surface-action-queue'
 import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
 import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat-launch-draft-runtime-resolution'
 import { toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
@@ -305,6 +313,13 @@ function acquireBrowserAutomationBootstrapLease(
 }
 
 export { resolveZoomTarget } from './resolve-zoom-target'
+export {
+  cancelPendingTerminalSurfaceActions,
+  cancelTerminalSurfaceActionsForRemovedTabs,
+  queueTerminalSurfaceAction,
+  registerTerminalSurfaceActionConsumer
+} from './terminal-surface-action-queue'
+export type { TerminalSurfaceActionCancellationReason } from './terminal-surface-action-queue'
 
 const PENDING_AGENT_STATUS_RETRY_MS = 100
 const PENDING_AGENT_STATUS_TTL_MS = 15_000
@@ -361,153 +376,6 @@ function activateTerminalInitiatedWorktree(store: AppState, worktreeId: string):
   if (!store.isNavigatingHistory) {
     store.recordWorktreeVisit(worktreeId)
   }
-}
-
-const TERMINAL_SURFACE_ACTION_TIMEOUT_MS = 9_000
-
-export type TerminalSurfaceActionCancellationReason =
-  | 'action-failed'
-  | 'cancelled'
-  | 'ipc-events-disposed'
-  | 'surface-unmounted'
-  | 'tab-removed'
-  | 'timeout'
-
-type TerminalSurfaceActionCallbacks = {
-  onConsumed?: () => void
-  onCancelled?: (reason: TerminalSurfaceActionCancellationReason, error?: unknown) => void
-}
-
-type PendingTerminalSurfaceAction = {
-  tabId: string
-  action: () => void
-  callbacks: TerminalSurfaceActionCallbacks
-  timeoutId: ReturnType<typeof setTimeout> | null
-  settled: boolean
-}
-
-const terminalSurfaceConsumerCountByTabId = new Map<string, number>()
-const pendingTerminalSurfaceActionsByTabId = new Map<string, Set<PendingTerminalSurfaceAction>>()
-
-function invokeTerminalSurfaceSettlement(callback: () => void): void {
-  try {
-    callback()
-  } catch {
-    // Why: the action outcome is already final; a reply failure must not
-    // reclassify success as cancellation or strand consumer cleanup.
-  }
-}
-
-function removePendingTerminalSurfaceAction(pending: PendingTerminalSurfaceAction): void {
-  const tabActions = pendingTerminalSurfaceActionsByTabId.get(pending.tabId)
-  tabActions?.delete(pending)
-  if (tabActions?.size === 0) {
-    pendingTerminalSurfaceActionsByTabId.delete(pending.tabId)
-  }
-}
-
-function consumeTerminalSurfaceAction(pending: PendingTerminalSurfaceAction): void {
-  if (pending.settled) {
-    return
-  }
-  pending.settled = true
-  removePendingTerminalSurfaceAction(pending)
-  if (pending.timeoutId !== null) {
-    globalThis.clearTimeout(pending.timeoutId)
-  }
-  try {
-    pending.action()
-  } catch (error) {
-    invokeTerminalSurfaceSettlement(() => pending.callbacks.onCancelled?.('action-failed', error))
-    return
-  }
-  invokeTerminalSurfaceSettlement(() => pending.callbacks.onConsumed?.())
-}
-
-function cancelTerminalSurfaceAction(
-  pending: PendingTerminalSurfaceAction,
-  reason: TerminalSurfaceActionCancellationReason
-): void {
-  if (pending.settled) {
-    return
-  }
-  pending.settled = true
-  removePendingTerminalSurfaceAction(pending)
-  if (pending.timeoutId !== null) {
-    globalThis.clearTimeout(pending.timeoutId)
-  }
-  invokeTerminalSurfaceSettlement(() => pending.callbacks.onCancelled?.(reason))
-}
-
-export function queueTerminalSurfaceAction(
-  tabId: string,
-  action: () => void,
-  callbacks: TerminalSurfaceActionCallbacks = {}
-): () => void {
-  if ((terminalSurfaceConsumerCountByTabId.get(tabId) ?? 0) > 0) {
-    try {
-      action()
-    } catch (error) {
-      invokeTerminalSurfaceSettlement(() => callbacks.onCancelled?.('action-failed', error))
-      return () => undefined
-    }
-    invokeTerminalSurfaceSettlement(() => callbacks.onConsumed?.())
-    return () => undefined
-  }
-
-  const pending: PendingTerminalSurfaceAction = {
-    tabId,
-    action,
-    callbacks,
-    timeoutId: null,
-    settled: false
-  }
-  pending.timeoutId = globalThis.setTimeout(() => {
-    cancelTerminalSurfaceAction(pending, 'timeout')
-  }, TERMINAL_SURFACE_ACTION_TIMEOUT_MS)
-  const tabActions = pendingTerminalSurfaceActionsByTabId.get(tabId) ?? new Set()
-  tabActions.add(pending)
-  pendingTerminalSurfaceActionsByTabId.set(tabId, tabActions)
-  return () => cancelTerminalSurfaceAction(pending, 'cancelled')
-}
-
-export function cancelPendingTerminalSurfaceActions(
-  tabId: string,
-  reason: TerminalSurfaceActionCancellationReason
-): void {
-  const pending = [...(pendingTerminalSurfaceActionsByTabId.get(tabId) ?? [])]
-  for (const action of pending) {
-    cancelTerminalSurfaceAction(action, reason)
-  }
-}
-
-export function registerTerminalSurfaceActionConsumer(tabId: string): () => void {
-  terminalSurfaceConsumerCountByTabId.set(
-    tabId,
-    (terminalSurfaceConsumerCountByTabId.get(tabId) ?? 0) + 1
-  )
-  for (const pending of pendingTerminalSurfaceActionsByTabId.get(tabId) ?? []) {
-    consumeTerminalSurfaceAction(pending)
-  }
-
-  let registered = true
-  return () => {
-    if (!registered) {
-      return
-    }
-    registered = false
-    const nextCount = (terminalSurfaceConsumerCountByTabId.get(tabId) ?? 1) - 1
-    if (nextCount > 0) {
-      terminalSurfaceConsumerCountByTabId.set(tabId, nextCount)
-      return
-    }
-    terminalSurfaceConsumerCountByTabId.delete(tabId)
-    cancelPendingTerminalSurfaceActions(tabId, 'surface-unmounted')
-  }
-}
-
-function hasTerminalSurfaceActionConsumer(tabId: string): boolean {
-  return (terminalSurfaceConsumerCountByTabId.get(tabId) ?? 0) > 0
 }
 
 type SuccessfulTerminalPaneSplit = Extract<SplitTerminalPaneAcknowledgement, { status: 'success' }>
@@ -682,14 +550,6 @@ function runTerminalSurfaceActionTransaction(
   }
 }
 
-function cancelAllPendingTerminalSurfaceActions(
-  reason: TerminalSurfaceActionCancellationReason
-): void {
-  for (const tabId of pendingTerminalSurfaceActionsByTabId.keys()) {
-    cancelPendingTerminalSurfaceActions(tabId, reason)
-  }
-}
-
 function terminalSurfaceActionFailureMessage(
   tabId: string,
   reason: TerminalSurfaceActionCancellationReason,
@@ -711,22 +571,6 @@ function terminalSurfaceActionFailureMessage(
       return `Terminal split failed for ${tabId}`
     case 'cancelled':
       return `Terminal split was cancelled for ${tabId}`
-  }
-}
-
-export function cancelTerminalSurfaceActionsForRemovedTabs(
-  state: Pick<AppState, 'tabsByWorktree'>
-): void {
-  if (pendingTerminalSurfaceActionsByTabId.size === 0) {
-    return
-  }
-  const liveTabIds = new Set(
-    Object.values(state.tabsByWorktree).flatMap((tabs) => tabs.map((tab) => tab.id))
-  )
-  for (const tabId of pendingTerminalSurfaceActionsByTabId.keys()) {
-    if (!liveTabIds.has(tabId)) {
-      cancelPendingTerminalSurfaceActions(tabId, 'tab-removed')
-    }
   }
 }
 
