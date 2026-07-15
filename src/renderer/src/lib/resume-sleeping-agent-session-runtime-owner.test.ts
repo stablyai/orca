@@ -170,4 +170,40 @@ describe('resumeSleepingAgentSessionsForWorktree runtime-owner gate', () => {
     const resumedLocalTab = state.tabsByWorktree['wt-target']?.find((tab) => tab.id !== 'tab-target')
     expect(resumedLocalTab?.launchAgent).toBe('claude')
   })
+
+  it('leaves the sleeping record present and unmodified when the gate skips resume', () => {
+    const { targetRecord } = installState({
+      via: 'worktreeHost',
+      hostId: toRuntimeExecutionHostId('env-1')
+    })
+    const recordSnapshot = JSON.parse(JSON.stringify(targetRecord))
+
+    const launched = resumeSleepingAgentSessionsForWorktree('wt-target')
+
+    const gatedState = useAppStore.getState()
+    expect(launched).toBe(0)
+    const preserved = gatedState.sleepingAgentSessionsByPaneKey[targetRecord.paneKey]
+    // The gate is non-destructive: it must not consume or mutate the record, only
+    // decline to launch. Retirement policy is the deferred follow-up (#8878).
+    expect(preserved).toBe(targetRecord)
+    expect(preserved).toEqual(recordSnapshot)
+
+    // The preserved record stays resumable once the worktree is no longer
+    // runtime-owned (ownership legitimately moving back to this client).
+    useAppStore.setState({
+      worktreesByRepo: {
+        ...gatedState.worktreesByRepo,
+        'repo-target': [
+          worktreeRow('wt-target', 'repo-target', {
+            via: 'worktreeHost',
+            hostId: LOCAL_EXECUTION_HOST_ID
+          })
+        ]
+      }
+    } as never)
+    expect(resumeSleepingAgentSessionsForWorktree('wt-target')).toBe(1)
+    expect(
+      useAppStore.getState().sleepingAgentSessionsByPaneKey[targetRecord.paneKey]
+    ).toBeUndefined()
+  })
 })
