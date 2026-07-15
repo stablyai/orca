@@ -24,17 +24,8 @@ export type MarkupPointerParams = {
 // Canvas pointer interactions: draw a new shape, or place text. Split out of
 // useMarkupEditor to keep that hook focused.
 export function useMarkupPointerHandlers(params: MarkupPointerParams) {
-  const {
-    busy,
-    tool,
-    color,
-    width,
-    pendingText,
-    canvasRef,
-    setInProgress,
-    setPendingText,
-    setDoc
-  } = params
+  const { busy, tool, color, width, pendingText, canvasRef, setInProgress, setPendingText, setDoc } =
+    params
 
   const pointFromEvent = useCallback(
     (event: { clientX: number; clientY: number }): MarkupPoint => {
