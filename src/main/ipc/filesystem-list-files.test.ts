@@ -71,7 +71,7 @@ describe('filesystem-list-files', () => {
     getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({})
   })
 
-  it('settles both local rg passes when one reaches the result budget', async () => {
+  it('stops after the primary rg pass fills the result budget', async () => {
     const p1 = createMockProcess()
     const p2 = createMockProcess()
     spawnMock.mockImplementation((_cmd, args: string[]) => (isIgnoredRgPass(args) ? p2 : p1))
@@ -86,13 +86,13 @@ describe('filesystem-list-files', () => {
     setTimeout(() => {
       ;(p1.stdout as unknown as EventEmitter).emit('data', 'one.ts\ntwo.ts')
       p1.emit('close', 0, null)
-      // The ignored pass deliberately stays silent and never closes.
     }, 0)
     const result = await promise
 
     expect(result).toEqual(['one.ts', 'two.ts'])
     expect(p1.kill).toHaveBeenCalled()
-    expect(p2.kill).toHaveBeenCalled()
+    expect(p2.kill).not.toHaveBeenCalled()
+    expect(spawnMock).toHaveBeenCalledTimes(1)
   })
 
   it('merges normal files and ignored files and filters correctly', async () => {
@@ -401,7 +401,7 @@ describe('filesystem-list-files', () => {
       expect(result).not.toContain('node_modules/dep/index.js')
     })
 
-    it('settles both git passes when one reaches the result budget', async () => {
+    it('stops after primary Git files fill the result budget', async () => {
       checkRgAvailableMock.mockResolvedValue(false)
       const revParseProc = createMockProcess()
       const gitP1 = createMockProcess()
@@ -430,12 +430,42 @@ describe('filesystem-list-files', () => {
       setTimeout(() => {
         ;(gitP1.stdout as unknown as EventEmitter).emit('data', 'one.ts\0two.ts')
         gitP1.emit('close', 0, null)
-        // The ignored pass deliberately stays silent and never closes.
       }, 10)
 
       await expect(promise).resolves.toEqual(['one.ts', 'two.ts'])
       expect(gitP1.kill).toHaveBeenCalled()
-      expect(gitP2.kill).toHaveBeenCalled()
+      expect(gitP2.kill).not.toHaveBeenCalled()
+      expect(callIndex).toBe(1)
+    })
+
+    it('does not let a discarded Git directory placeholder consume the result budget', async () => {
+      checkRgAvailableMock.mockResolvedValue(false)
+      const revParseProc = createMockProcess()
+      const primary = createMockProcess()
+      spawnMock.mockImplementation((cmd: string, args: string[]) => {
+        if (cmd === 'git' && args.includes('rev-parse')) {
+          return revParseProc
+        }
+        return primary
+      })
+
+      const promise = listQuickOpenFiles(
+        '/mock/root',
+        {} as unknown as Store,
+        undefined,
+        undefined,
+        1
+      )
+      setTimeout(() => revParseProc.emit('close', 0, null), 0)
+      setTimeout(() => {
+        ;(primary.stdout as unknown as EventEmitter).emit(
+          'data',
+          `discarded/\0${staged('100644', 'src/kept.ts')}\0`
+        )
+      }, 10)
+
+      await expect(promise).resolves.toEqual(['src/kept.ts'])
+      expect(primary.kill).toHaveBeenCalled()
     })
 
     it('git fallback applies hidden dir blocklist', async () => {

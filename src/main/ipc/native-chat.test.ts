@@ -58,6 +58,7 @@ async function invokeReadSession(args: {
   agent: string
   sessionId: string
   limit?: number
+  transcriptPath?: string
 }): Promise<unknown> {
   registerNativeChatHandlers()
   const handler = handlers.get('nativeChat:readSession')
@@ -68,6 +69,17 @@ async function invokeReadSession(args: {
 }
 
 describe('nativeChat:readSession handler', () => {
+  it('preserves notFound so a just-created session stays in retry/loading', async () => {
+    const result = (await invokeReadSession({
+      agent: 'claude',
+      sessionId: 'missing-session',
+      transcriptPath: join(tmpdir(), 'orca-native-chat-ipc-does-not-exist.jsonl')
+    })) as { error?: string; notFound?: true }
+
+    expect(result.error).toBeDefined()
+    expect(result.notFound).toBe(true)
+  })
+
   it('resolves a Claude transcript and returns the full conversation', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-ipc-'))
     tempRoots.push(root)

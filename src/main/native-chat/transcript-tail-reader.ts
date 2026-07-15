@@ -165,12 +165,18 @@ export async function readNativeChatTranscriptTail(
     beforeOffset?: number
   }
 ): Promise<
-  { messages: NativeChatMessage[]; hasMore: boolean; beforeOffset: number } | { error: string }
+  | { messages: NativeChatMessage[]; hasMore: boolean; beforeOffset: number }
+  | { error: string; notFound?: true }
 > {
   const decode = nativeChatLineDecoderForAgent(args.agent)
   const filePath = args.filePath ?? (await resolveSessionFilePath(args.agent, args.sessionId, args))
-  if (!filePath || !decode) {
+  if (!decode) {
     return { error: 'Transcript unavailable' }
+  }
+  // Why: a new agent session can report its id before the first JSONL flush;
+  // callers keep that miss in loading/retry rather than showing a false error.
+  if (!filePath) {
+    return { error: 'Transcript unavailable', notFound: true }
   }
   try {
     const result = await readNativeChatTranscriptTailFile(
@@ -186,6 +192,9 @@ export async function readNativeChatTranscriptTail(
       beforeOffset: result.beforeOffset
     }
   } catch (error) {
-    return { error: error instanceof Error ? error.message : String(error) }
+    const message = error instanceof Error ? error.message : String(error)
+    return (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
+      ? { error: message, notFound: true }
+      : { error: message }
   }
 }

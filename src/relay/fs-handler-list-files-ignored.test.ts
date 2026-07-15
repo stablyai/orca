@@ -97,7 +97,7 @@ describe('relay quick open ignored file listing', () => {
     expect(ignoredArgs).toContain('!packages/other/**')
   })
 
-  it('stops both relay listing passes at a bounded result budget', async () => {
+  it('stops after the primary relay rg pass fills the result budget', async () => {
     const primaryProc = createMockProcess()
     const ignoredProc = createMockProcess()
     let callIndex = 0
@@ -111,7 +111,8 @@ describe('relay quick open ignored file listing', () => {
 
     await expect(promise).resolves.toEqual(['src/one.ts', 'src/two.ts'])
     expect(primaryProc.kill).toHaveBeenCalled()
-    expect(ignoredProc.kill).toHaveBeenCalled()
+    expect(ignoredProc.kill).not.toHaveBeenCalled()
+    expect(callIndex).toBe(1)
   })
 
   it('git fallback ignored pass includes ignored non-env files', async () => {
@@ -163,7 +164,7 @@ describe('relay quick open ignored file listing', () => {
     expect(ignoredArgs).toContain(':(exclude,glob)packages/other/**')
   })
 
-  it('settles both relay git passes when one reaches the result budget', async () => {
+  it('stops after primary relay Git files fill the result budget', async () => {
     const primaryProc = createMockProcess()
     const ignoredProc = createMockProcess()
     let callIndex = 0
@@ -172,11 +173,24 @@ describe('relay quick open ignored file listing', () => {
     const promise = listFilesWithGit('/remote/root', [], { maxResults: 2 })
     ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/one.ts\0src/two.ts')
     primaryProc.emit('close', 0, null)
-    // The ignored pass deliberately stays silent and never closes.
-
     await expect(promise).resolves.toEqual(['src/one.ts', 'src/two.ts'])
     expect(primaryProc.kill).toHaveBeenCalled()
-    expect(ignoredProc.kill).toHaveBeenCalled()
+    expect(ignoredProc.kill).not.toHaveBeenCalled()
+    expect(callIndex).toBe(1)
+  })
+
+  it('does not let a discarded relay Git placeholder consume the result budget', async () => {
+    const primaryProc = createMockProcess()
+    spawnMock.mockReturnValue(primaryProc)
+
+    const promise = listFilesWithGit('/remote/root', [], { maxResults: 1 })
+    ;(primaryProc.stdout as unknown as EventEmitter).emit(
+      'data',
+      `discarded/\0${staged('100644', 'src/kept.ts')}\0`
+    )
+
+    await expect(promise).resolves.toEqual(['src/kept.ts'])
+    expect(primaryProc.kill).toHaveBeenCalled()
   })
 
   it('git fallback fills nested git repos returned as root-relative placeholders', async () => {

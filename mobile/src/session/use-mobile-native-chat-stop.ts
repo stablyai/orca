@@ -38,6 +38,7 @@ export function useMobileNativeChatStop(args: {
       clearTimeout(timerRef.current)
     }
     const stopStreamIdentity = streamIdentity
+    let failureReported = false
     const sendEscape = (): void => {
       const activeRoute = activeRouteRef.current
       if (
@@ -48,13 +49,22 @@ export function useMobileNativeChatStop(args: {
       ) {
         return
       }
-      void client.sendRequest('terminal.send', {
-        terminal: handle,
-        text: String.fromCharCode(27),
-        ...(deviceTokenRef.current
-          ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
-          : {})
-      })
+      void client
+        .sendRequest('terminal.send', {
+          terminal: handle,
+          text: String.fromCharCode(27),
+          ...(deviceTokenRef.current
+            ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
+            : {})
+        })
+        .catch(() => {
+          // Why: disconnect can race either fire-and-forget Escape; surface one
+          // failure instead of leaking an unhandled RPC rejection.
+          if (!failureReported) {
+            failureReported = true
+            onSendError('Stop not sent')
+          }
+        })
     }
     sendEscape()
     // Why: two paced Escape bytes reliably stop TUIs without remote coalescing.

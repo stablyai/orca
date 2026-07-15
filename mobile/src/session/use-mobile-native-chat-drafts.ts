@@ -1,8 +1,41 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 
-export type MobileNativeChatPendingMessage = { id: string; text: string }
-export type MobileNativeChatSendOrigin = { draftKey: string; pendingKey: string }
+export type MobileNativeChatPendingMessage = {
+  id: string
+  text: string
+  expectedOccurrence: number
+}
+export type MobileNativeChatSendOrigin = {
+  draftKey: string
+  pendingKey: string
+  normalizedText: string
+  baselineOccurrences: number
+}
+
+const NO_PENDING_MESSAGES: MobileNativeChatPendingMessage[] = []
+
+function normalizedUserText(message: NativeChatMessage): string | null {
+  if (message.role !== 'user') {
+    return null
+  }
+  const text = message.blocks
+    .filter((block) => block.type === 'text')
+    .map((block) => (block.type === 'text' ? block.text : ''))
+    .join('')
+    .trim()
+  return text || null
+}
+
+function countUserTextOccurrences(messages: readonly NativeChatMessage[], text: string): number {
+  let count = 0
+  for (const message of messages) {
+    if (normalizedUserText(message) === text) {
+      count++
+    }
+  }
+  return count
+}
 
 export function useMobileNativeChatDrafts(args: {
   hostId: string
@@ -14,7 +47,7 @@ export function useMobileNativeChatDrafts(args: {
   composerText: string
   setComposerText: Dispatch<SetStateAction<string>>
   pending: MobileNativeChatPendingMessage[]
-  captureSendOrigin: () => MobileNativeChatSendOrigin | null
+  captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
   acceptSend: (origin: MobileNativeChatSendOrigin, text: string) => void
 } {
   const { hostId, worktreeId, tabId, sessionId, messages } = args
@@ -25,6 +58,8 @@ export function useMobileNativeChatDrafts(args: {
     Record<string, MobileNativeChatPendingMessage[]>
   >({})
   const pendingCounterRef = useRef(0)
+  const messagesRef = useRef(messages)
+  messagesRef.current = messages
 
   const setComposerText: Dispatch<SetStateAction<string>> = useCallback(
     (value) => {
@@ -41,7 +76,18 @@ export function useMobileNativeChatDrafts(args: {
   )
 
   const captureSendOrigin = useCallback(
-    () => (draftKey && pendingKey ? { draftKey, pendingKey } : null),
+    (text: string) => {
+      if (!draftKey || !pendingKey) {
+        return null
+      }
+      const normalizedText = text.trim()
+      return {
+        draftKey,
+        pendingKey,
+        normalizedText,
+        baselineOccurrences: countUserTextOccurrences(messagesRef.current, normalizedText)
+      }
+    },
     [draftKey, pendingKey]
   )
 
@@ -54,49 +100,59 @@ export function useMobileNativeChatDrafts(args: {
         : previous
     )
     pendingCounterRef.current += 1
-    const pending = { id: `pending-${pendingCounterRef.current}`, text }
-    setPendingBySession((previous) => ({
-      ...previous,
-      [origin.pendingKey]: [...(previous[origin.pendingKey] ?? []), pending]
-    }))
+    setPendingBySession((previous) => {
+      const current = previous[origin.pendingKey] ?? NO_PENDING_MESSAGES
+      const earlierOutstanding = current.filter(
+        (pending) =>
+          pending.text.trim() === origin.normalizedText &&
+          pending.expectedOccurrence > origin.baselineOccurrences
+      ).length
+      const pending = {
+        id: `pending-${pendingCounterRef.current}`,
+        text,
+        expectedOccurrence: origin.baselineOccurrences + earlierOutstanding + 1
+      }
+      return { ...previous, [origin.pendingKey]: [...current, pending] }
+    })
   }, [])
 
+  const pending = pendingKey
+    ? (pendingBySession[pendingKey] ?? NO_PENDING_MESSAGES)
+    : NO_PENDING_MESSAGES
   useEffect(() => {
-    if (!pendingKey) {
+    if (!pendingKey || pending.length === 0) {
       return
     }
     setPendingBySession((previous) => {
       const current = previous[pendingKey] ?? []
-      // Why: consume one landed user message per pending entry so duplicate-text
-      // sends still in flight are not all dropped when a single one lands.
       const landedCounts = new Map<string, number>()
       for (const message of messages) {
-        if (message.role !== 'user') {
-          continue
-        }
-        for (const block of message.blocks) {
-          if (block.type === 'text') {
-            const text = block.text.trim()
-            landedCounts.set(text, (landedCounts.get(text) ?? 0) + 1)
-          }
+        const text = normalizedUserText(message)
+        if (text) {
+          landedCounts.set(text, (landedCounts.get(text) ?? 0) + 1)
         }
       }
-      const next = current.filter((pending) => {
-        const remaining = landedCounts.get(pending.text.trim()) ?? 0
-        if (remaining > 0) {
-          landedCounts.set(pending.text.trim(), remaining - 1)
-          return false
-        }
-        return true
-      })
-      return next.length === current.length ? previous : { ...previous, [pendingKey]: next }
+      // Why: compare against the count captured before send; historical equal
+      // turns cannot clear a new echo, while duplicates land one occurrence each.
+      const next = current.filter(
+        (item) => (landedCounts.get(item.text.trim()) ?? 0) < item.expectedOccurrence
+      )
+      if (next.length === current.length) {
+        return previous
+      }
+      if (next.length > 0) {
+        return { ...previous, [pendingKey]: next }
+      }
+      const remaining = { ...previous }
+      delete remaining[pendingKey]
+      return remaining
     })
-  }, [messages, pendingKey])
+  }, [messages, pending, pendingKey])
 
   return {
     composerText: draftKey ? (drafts[draftKey] ?? '') : '',
     setComposerText,
-    pending: pendingKey ? (pendingBySession[pendingKey] ?? []) : [],
+    pending,
     captureSendOrigin,
     acceptSend
   }

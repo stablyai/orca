@@ -37,8 +37,10 @@ describe('useMobileNativeChatInputLease', () => {
         renderer = create(createElement(Harness, { connected: true }))
       })
       expect(lease?.ready).toBe(false)
+      expect(lease?.lockReason).toBe('waiting')
       act(() => lease?.markReady('terminal'))
       expect(lease?.ready).toBe(true)
+      expect(lease?.lockReason).toBeNull()
 
       act(() => lease?.clear())
       expect(lease?.ready).toBe(false)
@@ -47,6 +49,7 @@ describe('useMobileNativeChatInputLease', () => {
 
       await act(async () => renderer?.update(createElement(Harness, { connected: false })))
       expect(lease?.ready).toBe(false)
+      expect(lease?.lockReason).toBe('disconnected')
     } finally {
       consoleSpy.mockRestore()
     }

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { readNativeChatTranscript } from './transcript-reader'
 import {
   nativeChatLineDecoderForAgent,
+  readNativeChatTranscriptTail,
   readNativeChatTranscriptTailFile
 } from './transcript-tail-reader'
 
@@ -300,6 +301,17 @@ describe('readNativeChatTranscript (errors)', () => {
 })
 
 describe('readNativeChatTranscriptTailFile', () => {
+  it('keeps a missing tail retry-worthy for the live-session seed', async () => {
+    const result = await readNativeChatTranscriptTail({
+      agent: 'claude',
+      sessionId: 'sess',
+      filePath: join(tmpdir(), 'orca-native-chat-tail-does-not-exist.jsonl'),
+      limit: 40
+    })
+
+    expect(result).toMatchObject({ notFound: true })
+  })
+
   it('windows to nothing for a non-positive limit instead of the whole tail', async () => {
     const decode = nativeChatLineDecoderForAgent('claude')!
     const filePath = await writeFixture('orca-native-chat-tail-limit-', [

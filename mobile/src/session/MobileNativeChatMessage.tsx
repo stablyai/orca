@@ -85,7 +85,6 @@ function ToolLine({
   onOpenFile?: (relativePath: string) => void
 }): React.JSX.Element {
   const [expanded, setExpanded] = useState(defaultExpanded)
-  useEffect(() => setExpanded(defaultExpanded), [defaultExpanded])
   const { call, result } = pair
   const name = call ? call.name : 'Result'
   const preview = call
@@ -185,8 +184,6 @@ function ToolRun({
   onOpenFile?: (relativePath: string) => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(defaultExpanded)
-  // Re-sync when the global toolbar toggle flips.
-  useEffect(() => setOpen(defaultExpanded), [defaultExpanded])
   const pairs = pairToolBlocks(blocks, MAX_VISIBLE_TOOL_PAIRS)
   const diffLineLimit = Math.max(1, Math.floor(MAX_TOOL_RUN_DIFF_ROWS / (pairs.length * 2 || 1)))
   let callCount = 0
@@ -355,6 +352,9 @@ function MobileNativeChatMessageImpl({
         ))}
         {tools.length > 0 ? (
           <ToolRun
+            // Why: a global toggle intentionally resets all per-run/per-line
+            // overrides in one remount, avoiding an effect-driven second render.
+            key={toolsExpanded ? 'expanded' : 'collapsed'}
             blocks={tools}
             defaultExpanded={toolsExpanded}
             trailing={controls}

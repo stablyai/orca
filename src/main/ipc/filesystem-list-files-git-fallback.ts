@@ -1,10 +1,15 @@
 import type { ChildProcess } from 'node:child_process'
 import { gitSpawn } from '../git/runner'
-import { buildGitLsFilesArgsForQuickOpen } from '../../shared/quick-open-filter'
+import {
+  buildGitLsFilesArgsForQuickOpen,
+  shouldExcludeQuickOpenRelPath,
+  shouldIncludeQuickOpenPath
+} from '../../shared/quick-open-filter'
 import {
   createQuickOpenReaddirBudget,
   expandQuickOpenGitFileListing,
-  listQuickOpenFilesWithReaddir
+  listQuickOpenFilesWithReaddir,
+  parseQuickOpenGitLsFilesEntry
 } from '../../shared/quick-open-readdir-walk'
 import { fileListingCancellationError } from '../../shared/file-listing-cancellation'
 
@@ -91,6 +96,7 @@ export async function listFilesWithGit(
 
   const gitPaths = new Set<string>()
   const directoryPaths = new Set<string>()
+  const directFileCandidates = new Set<string>()
   const { primary, ignoredPass } = buildGitLsFilesArgsForQuickOpen(excludePathPrefixes)
   const children: {
     child: ChildProcess
@@ -112,8 +118,24 @@ export async function listFilesWithGit(
           directoryPaths.add(path)
         } else {
           gitPaths.add(path)
+          if (maxResults !== undefined) {
+            // Why: this duplicate classification exists only to stop bounded
+            // scans; unbounded scans must not retain a second repo-sized set.
+            const parsed = parseQuickOpenGitLsFilesEntry(path)
+            const relPath = parsed.path.replace(/\/+$/, '')
+            if (
+              !parsed.isGitlink &&
+              !parsed.isUntrackedDir &&
+              shouldIncludeQuickOpenPath(relPath) &&
+              !shouldExcludeQuickOpenRelPath(relPath, excludePathPrefixes)
+            ) {
+              directFileCandidates.add(relPath)
+            }
+          }
         }
-        return maxResults !== undefined && gitPaths.size + directoryPaths.size >= maxResults
+        // Why: collapsed directories and gitlinks may be discarded during the
+        // later filesystem classification, so they cannot consume the stop cap.
+        return maxResults !== undefined && directFileCandidates.size >= maxResults
       }
 
       // Why: git ls-files outputs paths relative to cwd, so we set cwd to
@@ -239,19 +261,24 @@ export async function listFilesWithGit(
   const onAbort = (): void => killSurvivors('git ls-files cancelled')
   signal?.addEventListener('abort', onAbort, { once: true })
   try {
-    await Promise.all([
-      runGitLsFiles(primary),
+    const runIgnoredPass = () =>
       // Why: ignored files are supplementary — a failed or timed-out ignored
-      // pass must not discard the primary listing the user actually needs
-      // (#7719 root cause: the all-or-nothing failure showed zero files).
-      // Entries streamed before the failure are kept; a cancelled scan still
-      // rejects via the primary pass or the expansion's cancellation check.
+      // pass must not discard the primary listing the user actually needs.
       runGitLsFiles(ignoredPass).catch((err: Error) => {
         if (!signal?.aborted) {
           console.warn('[quick-open] git ignored-file pass failed; keeping primary results:', err)
         }
       })
-    ])
+    if (maxResults === undefined) {
+      await Promise.all([runGitLsFiles(primary), runIgnoredPass()])
+    } else {
+      // Why: give ordinary source files first claim on a bounded autocomplete
+      // inventory; a large ignored tree must not win a parallel-output race.
+      await runGitLsFiles(primary)
+      if (directFileCandidates.size < maxResults) {
+        await runIgnoredPass()
+      }
+    }
   } catch (err) {
     killSurvivors()
     if (signal?.aborted) {

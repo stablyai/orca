@@ -8,11 +8,13 @@ describe('useMobileNativeChatStop', () => {
   let renderer: ReactTestRenderer | null = null
   let stop: (() => void) | null = null
   const sendRequest = vi.fn()
+  const onSendError = vi.fn()
 
   beforeEach(() => {
     vi.useFakeTimers()
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
-    sendRequest.mockReset()
+    sendRequest.mockReset().mockResolvedValue({ ok: true })
+    onSendError.mockReset()
   })
 
   afterEach(() => {
@@ -36,7 +38,7 @@ describe('useMobileNativeChatStop', () => {
       deviceTokenRef: { current: 'mobile-1' },
       streamIdentity,
       cancelPending: vi.fn(),
-      onSendError: vi.fn()
+      onSendError
     })
     return null
   }
@@ -65,5 +67,19 @@ describe('useMobileNativeChatStop', () => {
     await act(async () => vi.runAllTimersAsync())
 
     expect(sendRequest).toHaveBeenCalledTimes(1)
+  })
+
+  it('handles a rejected Escape without leaking an unhandled rejection', async () => {
+    sendRequest.mockRejectedValue(new Error('disconnected'))
+    await render(true, 'stream-1')
+
+    act(() => stop?.())
+    await act(async () => {
+      await Promise.resolve()
+      await vi.runAllTimersAsync()
+    })
+
+    expect(onSendError).toHaveBeenCalledOnce()
+    expect(onSendError).toHaveBeenCalledWith('Stop not sent')
   })
 })

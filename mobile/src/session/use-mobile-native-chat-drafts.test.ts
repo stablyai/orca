@@ -16,6 +16,16 @@ function userTextMessage(id: string, text: string): NativeChatMessage {
   }
 }
 
+function assistantTextMessage(id: string, text: string): NativeChatMessage {
+  return {
+    id,
+    role: 'assistant',
+    blocks: [{ type: 'text', text }],
+    timestamp: null,
+    source: 'transcript'
+  }
+}
+
 describe('useMobileNativeChatDrafts', () => {
   let renderer: ReactTestRenderer | null = null
   let state: DraftState | null = null
@@ -71,7 +81,7 @@ describe('useMobileNativeChatDrafts', () => {
   it('keeps drafts and accepted pending messages on their originating tabs', async () => {
     await mount('a')
     act(() => state?.setComposerText('from a'))
-    const originA = state?.captureSendOrigin()
+    const originA = state?.captureSendOrigin('from a')
     expect(originA).not.toBeNull()
 
     await switchTo('b')
@@ -91,7 +101,7 @@ describe('useMobileNativeChatDrafts', () => {
 
   it('clears one pending per landed message so duplicate sends are not all dropped', async () => {
     await mount('a')
-    const origin = state?.captureSendOrigin()
+    const origin = state?.captureSendOrigin('ping')
     act(() => {
       if (origin) {
         state?.acceptSend(origin, 'ping')
@@ -108,10 +118,49 @@ describe('useMobileNativeChatDrafts', () => {
     expect(state?.pending.map((pending) => pending.text)).toEqual(['ping'])
   })
 
+  it('does not reconcile a repeated send against an older identical turn', async () => {
+    await mount('a')
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, { tabId: 'a', messages: [userTextMessage('old', 'ping')] })
+      )
+    )
+    const origin = state?.captureSendOrigin('ping')
+    act(() => {
+      if (origin) {
+        state?.acceptSend(origin, 'ping')
+      }
+    })
+
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          tabId: 'a',
+          messages: [userTextMessage('old', 'ping'), assistantTextMessage('other', 'working')]
+        })
+      )
+    )
+    expect(state?.pending.map((pending) => pending.text)).toEqual(['ping'])
+
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          tabId: 'a',
+          messages: [
+            userTextMessage('old', 'ping'),
+            assistantTextMessage('other', 'working'),
+            userTextMessage('new', 'ping')
+          ]
+        })
+      )
+    )
+    expect(state?.pending).toEqual([])
+  })
+
   it('does not erase newer edits when an older send settles', async () => {
     await mount('a')
     act(() => state?.setComposerText('submitted'))
-    const origin = state?.captureSendOrigin()
+    const origin = state?.captureSendOrigin('submitted')
     act(() => state?.setComposerText('new edit'))
     act(() => {
       if (origin) {

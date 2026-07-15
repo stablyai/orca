@@ -228,7 +228,16 @@ export function listFilesWithRg(
     }
     signal?.addEventListener('abort', onAbort, { once: true })
 
-    Promise.all([runPass(primary), runPass(ignoredPass)])
+    const passes =
+      maxResults === undefined
+        ? Promise.all([runPass(primary), runPass(ignoredPass)])
+        : // Why: deterministic primary-first budgeting prevents a large ignored
+          // tree from starving ordinary source paths on a remote host.
+          runPass(primary).then(() =>
+            files.size < maxResults ? runPass(ignoredPass) : Promise.resolve()
+          )
+
+    passes
       .then(() => {
         if (done) {
           return

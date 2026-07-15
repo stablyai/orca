@@ -262,7 +262,7 @@ export function useMobileNativeChatController(args: {
   const handleNativeChatSend = useCallback(
     async (text: string): Promise<boolean> => {
       const handle = activeHandleRef.current
-      const origin = captureSendOrigin()
+      const origin = captureSendOrigin(text)
       if (!client || !handle || !origin || !nativeChatInputLeaseReady) {
         onSendError('Message not sent (disconnected)')
         return false

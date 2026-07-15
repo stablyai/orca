@@ -32,10 +32,9 @@ import { MobileNativeChatQuestion } from './MobileNativeChatQuestion'
 import { mobileChatQuestionKey, type MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 
-/** Why the composer input is locked: `disconnected` (transport not connected)
- *  vs `other-client` (another client holds the input lease). Kept distinct so the
- *  placeholder never mislabels a mere reconnect as "locked by another client". */
-export type MobileNativeChatInputLockReason = 'disconnected' | 'other-client'
+/** Why the composer input is locked: the transport is disconnected, or the
+ *  terminal subscription has not acknowledged its input lease yet. */
+export type MobileNativeChatInputLockReason = 'disconnected' | 'waiting'
 
 type Props = {
   messages: NativeChatMessage[]
@@ -412,8 +411,8 @@ export function MobileNativeChatView({
         placeholder={
           lockReason === 'disconnected'
             ? 'Reconnecting…'
-            : lockReason === 'other-client'
-              ? 'Input is locked by another client'
+            : lockReason === 'waiting'
+              ? 'Waiting for terminal…'
               : 'Message, @files, /commands'
         }
         filePaths={filePaths}

@@ -222,7 +222,16 @@ export async function listQuickOpenFiles(
   }
 
   try {
-    await Promise.all([runRg(primary), runRg(ignoredPass)])
+    if (maxResults === undefined) {
+      await Promise.all([runRg(primary), runRg(ignoredPass)])
+    } else {
+      // Why: ignored-file output can be much larger and faster than the primary
+      // pass; let source files claim the bounded autocomplete budget first.
+      await runRg(primary)
+      if (files.size < maxResults) {
+        await runRg(ignoredPass)
+      }
+    }
   } catch (err) {
     killSurvivors()
     throw err

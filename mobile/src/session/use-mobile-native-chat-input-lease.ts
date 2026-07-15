@@ -13,13 +13,13 @@ export function useMobileNativeChatInputLease(args: {
 } {
   const [readyHandles, setReadyHandles] = useState<Set<string>>(new Set())
   const ready = args.activeHandle != null && readyHandles.has(args.activeHandle)
-  // Distinguish a transport drop from a genuine other-client hold so the composer
-  // never mislabels a reconnect as "locked by another client".
+  // Why: absence of an acknowledgement proves only that setup is still pending;
+  // the protocol does not report evidence that another client owns the floor.
   const lockReason: MobileNativeChatInputLockReason | null = !args.connected
     ? 'disconnected'
     : ready
       ? null
-      : 'other-client'
+      : 'waiting'
   const readyRef = useRef(ready)
   readyRef.current = ready
   useEffect(() => {
