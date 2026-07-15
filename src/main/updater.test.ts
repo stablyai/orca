@@ -2823,25 +2823,28 @@ describe('updater', () => {
 
   it.each([
     {
+      caseName: 'stable-not-ready',
       version: '1.4.26',
       candidateLimit: 1,
       includePrerelease: false,
       result: { tags: [], state: 'not-ready' as const }
     },
     {
+      caseName: 'prerelease-not-ready',
       version: '1.4.26-rc.1',
       candidateLimit: 2,
       includePrerelease: true,
       result: { tags: [], state: 'not-ready' as const }
     },
     {
+      caseName: 'stable-manifest-unavailable',
       version: '1.4.26',
       candidateLimit: 1,
       includePrerelease: false,
       result: { tags: [], state: 'unavailable' as const, unavailableReason: 'manifest' as const }
     }
   ])(
-    'keeps a nudge campaign pending for $version',
+    'keeps a nudge campaign pending for $caseName',
     async ({ version, candidateLimit, includePrerelease, result }) => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-05-24T21:40:00Z'))

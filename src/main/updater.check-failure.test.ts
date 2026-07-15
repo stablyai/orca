@@ -203,6 +203,8 @@ describe('updater check failure handling', () => {
   })
 
   it('surfaces the publishing sentinel with publishing-specific copy', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-24T21:40:00Z'))
     makeBenignCheckFailure('Latest release assets are still publishing')
 
     const sendMock = vi.fn()
@@ -228,6 +230,9 @@ describe('updater check failure handling', () => {
       sendMock.mock.calls.filter(([, status]) => status?.message === PUBLISHING_MESSAGE)
     ).toHaveLength(1)
     expect(setLastUpdateCheckAt).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
   })
 
   it('maps the captured release incident through readiness into publishing copy', async () => {
