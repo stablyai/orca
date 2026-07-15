@@ -271,7 +271,7 @@ describe('resolveTerminalMountLayout', () => {
       root: {
         type: 'split',
         direction: 'vertical',
-        first: capturedLayout.root,
+        first: capturedLayout.root!,
         second: { type: 'leaf', leafId: '22222222-2222-4222-8222-222222222222' }
       },
       activeLeafId: capturedLayout.activeLeafId,
