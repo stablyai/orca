@@ -105,12 +105,16 @@ const FRIENDLY_MESSAGE = "Couldn't reach the update server. Try again in a few m
 const PUBLISHING_MESSAGE = 'A new release is still being published. Try again shortly.'
 
 function makeBenignCheckFailure(message: string): void {
+  const error = new Error(message) as Error & { updaterReleaseChannel?: 'default' }
+  if (message === 'Latest release assets are still publishing') {
+    error.updaterReleaseChannel = 'default'
+  }
   autoUpdaterMock.checkForUpdates.mockImplementation(() => {
     autoUpdaterMock.emit('checking-for-update')
     queueMicrotask(() => {
-      autoUpdaterMock.emit('error', new Error(message))
+      autoUpdaterMock.emit('error', error)
     })
-    return Promise.reject(new Error(message))
+    return Promise.reject(error)
   })
 }
 

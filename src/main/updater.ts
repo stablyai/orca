@@ -904,7 +904,7 @@ function isStableReleasePublishingFailure(message: string, sourceError: unknown)
     return false
   }
   const channel = (sourceError as ReleasePublishingError | null)?.updaterReleaseChannel
-  return channel === undefined || channel === 'default'
+  return channel === 'default'
 }
 
 export function getUpdateStatus(): UpdateStatus {
