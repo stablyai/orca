@@ -175,7 +175,7 @@ ORCA worktree create --name task --setup skip --json
 ORCA worktree create --name task --run-hooks --json
 ```
 
-- `--agent <id>` launches that agent **in the first terminal** (Orca docs: *"`--agent` launches the selected agent in the first terminal"*); `--prompt <text>` sends initial work to it. Known ids include `claude`, `codex`, `omp`, `pi`, `grok`, and other installed TUI agents.
+- `--agent <id>` launches that agent **in the first terminal** (Orca docs: _"`--agent` launches the selected agent in the first terminal"_); `--prompt <text>` sends initial work to it. Known ids include `claude`, `codex`, `omp`, `pi`, `grok`, and other installed TUI agents.
 - **Prefer agent-first create for agent workers.** `orca worktree create --agent <id> --prompt "..."` puts the agent in the worktree's first terminal without adding a separate fallback shell for that worker. Repo setup or default-terminal settings may still add tabs or splits. Without configured default tabs, the bare-create fallback shell plus a later `terminal create --command <agent>` is an anti-pattern for ordinary agent worktrees — use `--agent` instead of “create worktree, then open agent.” Configured default tabs are intentional surfaces; never treat one as disposable without verifying that it is an unused shell.
 - After create, use exactly one agent handle: `startupTerminal.handle` from the create response when present, or the matching result from `orca terminal list --worktree id:<repoId>::<newWorktreePath> --json` (or `name:<displayName>`) when the response omits it. If a handle later returns `terminal_handle_stale`, re-list it; never dual-send to old and replacement handles.
 - `--setup run|skip|inherit` controls repo setup hooks. Default is `inherit`, which follows the repo's setup policy.
@@ -233,7 +233,10 @@ Terminal rules:
 - Use `terminal send` only for direct terminal input or one-off prompts where no task state, inbox, or reply tracking is needed.
 - For structured coordination, invoke the `orchestration` skill; it uses `orca orchestration ...` commands for messages, handoffs, task DAGs, dispatches, inbox/reply flows, and coordinator loops. A receiving agent can run `orca orchestration check --unread --inject` to render its unread mail in agent-readable form; this checks the caller's inbox and does not remotely deliver input to another terminal.
 - Use `terminal create --worktree active --command "<agent>"` for a fresh agent in the current worktree. Use `worktree create --agent <agent>` only for a separate checkout (agent in the first terminal — do not also `terminal create` the same agent).
-- Supervised orchestration should add same-worktree workers with `--placement orchestration-grid`; Orca reuses one visible tab and packs equal-size panes into rows of at most six. Ordinary creates keep their one-tab behavior, and `--placement tab` is the explicit opt-out.
+- Supervised orchestration should add same-worktree workers with
+  `--placement orchestration-grid`; Orca reuses one visible tab and packs
+  equal-size panes into rows of at most six.
+- Ordinary creates keep their one-tab behavior. `--placement tab` is the explicit opt-out.
 - Use `terminal wait --for tui-idle` for agent CLIs such as Claude Code, Gemini, Codex, OMP, Pi, and Grok; always pass `--timeout-ms`.
 - Terminal handles are runtime-scoped. Use `startupTerminal.handle` as the sole agent handle when `worktree create --agent` returns it; if Orca restarts, omits the handle, or returns `terminal_handle_stale`, reacquire with `terminal list` and continue with the replacement only.
 - For long output, use cursor reads. After a limited tail preview, page from `oldestCursor`; after a cursor read, continue with `nextCursor` while `limited` is true and `nextCursor !== latestCursor`.

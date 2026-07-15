@@ -203,7 +203,10 @@ Terminal rules:
 - Use `terminal send` only for direct terminal input or one-off prompts where no task state, inbox, or reply tracking is needed.
 - For structured coordination, invoke the `orchestration` skill; it uses `orca orchestration ...` commands for messages, handoffs, task DAGs, dispatches, inbox/reply flows, and coordinator loops. A receiving agent can run `orca orchestration check --unread --inject` to render its unread mail in agent-readable form; this checks the caller's inbox and does not remotely deliver input to another terminal.
 - Use `terminal create --worktree active --command "<agent>"` for a fresh agent in the current worktree. Use `worktree create --agent <agent>` only for a separate checkout (agent in the first terminal — do not also `terminal create` the same agent).
-- Supervised orchestration should add same-worktree workers with `--placement orchestration-grid`; Orca reuses one visible tab and packs equal-size panes into rows of at most six. Ordinary creates keep their one-tab behavior, and `--placement tab` is the explicit opt-out.
+- Supervised orchestration should add same-worktree workers with
+  `--placement orchestration-grid`; Orca reuses one visible tab and packs
+  equal-size panes into rows of at most six.
+- Ordinary creates keep their one-tab behavior. `--placement tab` is the explicit opt-out.
 - Use `terminal wait --for tui-idle` for agent CLIs such as Claude Code, Gemini, Codex, OMP, Pi, and Grok; always pass `--timeout-ms`.
 - Terminal handles are runtime-scoped. Use `startupTerminal.handle` as the sole agent handle when `worktree create --agent` returns it; if Orca restarts, omits the handle, or returns `terminal_handle_stale`, reacquire with `terminal list` and continue with the replacement only.
 - For long output, use cursor reads. After a limited tail preview, page from `oldestCursor`; after a cursor read, continue with `nextCursor` while `limited` is true and `nextCursor !== latestCursor`.
