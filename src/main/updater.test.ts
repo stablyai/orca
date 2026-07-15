@@ -2505,7 +2505,11 @@ describe('updater', () => {
 
   it('keeps unavailable release probes on generic copy without launching a moving feed', async () => {
     appMock.getVersion.mockReturnValue('1.4.141')
-    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: [], state: 'unavailable' })
+    fetchNewerReleaseTagsMock.mockResolvedValue({
+      tags: [],
+      state: 'unavailable',
+      unavailableReason: 'manifest'
+    })
     const sendMock = vi.fn()
     const mainWindow = { webContents: { send: sendMock } }
 

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { publishingIncident } from './updater-prerelease-feed-reproduction.fixture'
 
 const { netFetchMock } = vi.hoisted(() => ({ netFetchMock: vi.fn() }))
 
@@ -215,6 +216,41 @@ describe('updater check failure handling', () => {
         })
       )
     })
+  })
+
+  it('maps the captured release incident through readiness into publishing copy', async () => {
+    appMock.getVersion.mockReturnValue(publishingIncident.installedVersion)
+    const atom = `<feed>${publishingIncident.atomTags
+      .map(
+        (tag) =>
+          `<entry><link rel="alternate" type="text/html" href="https://github.com/stablyai/orca/releases/tag/${tag}"/><title>${tag}</title></entry>`
+      )
+      .join('')}</feed>`
+    netFetchMock.mockImplementation((url: string) =>
+      url === 'https://github.com/stablyai/orca/releases.atom'
+        ? Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(atom) })
+        : Promise.resolve({
+            ok: false,
+            status: publishingIncident.missingManifestStatus,
+            text: () => Promise.resolve('')
+          })
+    )
+
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'error',
+        message: PUBLISHING_MESSAGE,
+        userInitiated: true
+      })
+    })
+    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
   })
 
   it('silently drops background benign failures to idle and waits for the hourly retry', async () => {

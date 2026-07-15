@@ -128,13 +128,14 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
     netFetchMock.mockResolvedValue({ ok: false, text: () => Promise.resolve('') })
     await expect(fetchNewerReleaseTagsWithReadiness('1.4.26', 1)).resolves.toEqual({
       tags: [],
-      state: 'unavailable'
+      state: 'unavailable',
+      unavailableReason: 'feed'
     })
   })
 
   it('reproduces the v1.4.142 publishing incident as not-ready', async () => {
     respondWithAtom(
-      [publishingIncident.atomStableTag],
+      publishingIncident.atomTags,
       [publishingIncident.atomStableTag],
       [publishingIncident.atomStableTag],
       [],
@@ -144,7 +145,9 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
     const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
 
     expect(
-      await fetchNewerReleaseTagsWithReadiness(publishingIncident.installedVersion, 1)
+      await fetchNewerReleaseTagsWithReadiness(publishingIncident.installedVersion, 1, {
+        includePrerelease: false
+      })
     ).toEqual({
       tags: [],
       state: publishingIncident.expectedState
@@ -179,7 +182,8 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
 
     await expect(fetchNewerReleaseTagsWithReadiness('1.4.27', 1)).resolves.toEqual({
       tags: [],
-      state: 'unavailable'
+      state: 'unavailable',
+      unavailableReason: 'manifest'
     })
   })
 
@@ -204,9 +208,9 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
               [
                 `version: ${version}`,
                 'files:',
-                `  - url: Orca-${version}-mac.zip`,
+                '  - url: orca-windows-setup.exe',
                 '    sha512: test',
-                `  - url: Orca-${version}-arm64-mac.zip`,
+                `  - url: Orca-${version}-mac.zip`,
                 '    sha512: test',
                 `path: Orca-${version}-mac.zip`
               ].join('\n')
@@ -215,8 +219,9 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
       }
 
       if (init?.method === 'HEAD') {
-        const unavailable = url.endsWith('/Orca-1.4.28-mac.zip')
-        const missing = url.endsWith('/Orca-1.4.28-arm64-mac.zip')
+        const latest = url.includes('/v1.4.28/')
+        const unavailable = latest && url.endsWith('/Orca-1.4.28-mac.zip')
+        const missing = latest && url.endsWith('/orca-windows-setup.exe')
         return Promise.resolve({
           ok: !missing && !unavailable,
           status: missing ? publishingIncident.missingWindowsAssetStatus : unavailable ? 503 : 200,

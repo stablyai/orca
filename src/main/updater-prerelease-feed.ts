@@ -178,6 +178,7 @@ export type FetchNewerReleaseTagsResult = {
   tags: string[]
   state: 'ready' | 'no-newer' | 'not-ready' | 'unavailable'
   lastGoodTag?: string
+  unavailableReason?: 'feed' | 'manifest'
 }
 
 export async function fetchNewerReleaseTag(
@@ -203,7 +204,7 @@ export async function fetchNewerReleaseTagsWithReadiness(
   const includePrerelease = options.includePrerelease ?? true
   const tags = await fetchReleaseFeedTags()
   if (!tags || maxTags <= 0) {
-    return { tags: [], state: 'unavailable' }
+    return { tags: [], state: 'unavailable', unavailableReason: 'feed' }
   }
 
   // Why: perf builds are explicit opt-in; regular prerelease checks should
@@ -244,7 +245,7 @@ export async function fetchNewerReleaseTagsWithReadiness(
     return lastGoodTag
       ? { tags: [], state: 'not-ready', lastGoodTag }
       : manifestResults[0]?.readiness === 'unavailable'
-        ? { tags: [], state: 'unavailable' }
+        ? { tags: [], state: 'unavailable', unavailableReason: 'manifest' }
         : { tags: [], state: 'not-ready' }
   }
 
