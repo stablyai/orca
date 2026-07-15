@@ -137,6 +137,40 @@ describe('Gitea client', () => {
     expect(listCalls).toBe(1)
   })
 
+  it('does not let an in-flight scan re-cache results from before an invalidation', async () => {
+    let releaseFirstScan!: () => void
+    const firstScanGate = new Promise<void>((resolve) => {
+      releaseFirstScan = resolve
+    })
+    let listCalls = 0
+    const fetchMock = vi.fn(async (url: string) => {
+      const parsed = new URL(url)
+      if (parsed.pathname.endsWith('/status')) {
+        return Response.json({ state: 'success' })
+      }
+      listCalls++
+      if (listCalls === 1) {
+        // First scan is in flight (pre-create listing) when the invalidation lands.
+        await firstScanGate
+        return Response.json([giteaPr(7, 'feature/old')])
+      }
+      return Response.json([giteaPr(7, 'feature/old'), giteaPr(8, 'feature/new')])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const staleScanRead = getGiteaPullRequestForBranch('/repo', 'feature/old')
+    const { invalidateGiteaPullRequestScanForRepo, getGiteaRepoSlug } = await import('./client')
+    const repo = await getGiteaRepoSlug('/repo')
+    invalidateGiteaPullRequestScanForRepo(repo!)
+    releaseFirstScan()
+    await staleScanRead
+
+    await expect(getGiteaPullRequestForBranch('/repo', 'feature/new')).resolves.toMatchObject({
+      number: 8
+    })
+    expect(listCalls).toBe(2)
+  })
+
   it('uses an API base URL override for subpath or non-standard deployments', async () => {
     process.env.ORCA_GITEA_API_BASE_URL = 'https://git.example.com/code'
     const fetchMock = vi.fn(async (url: string | URL) => {

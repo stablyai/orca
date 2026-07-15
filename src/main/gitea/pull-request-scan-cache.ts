@@ -13,6 +13,10 @@ const SCAN_TTL_MS = 30_000
 
 const scanCache = new Map<string, GiteaPullRequestScanEntry>()
 const inFlightScans = new Map<string, Promise<RawGiteaPullRequest[]>>()
+// Why: an invalidation (PR just created) must also defeat a scan already in
+// flight — otherwise that scan finishes afterwards and re-caches a listing
+// from before the mutation, hiding the new PR for a full TTL.
+const scanGenerations = new Map<string, number>()
 
 /**
  * Why: every worktree card resolves its branch by paginating the same
@@ -37,6 +41,7 @@ export async function scanGiteaPullRequests(
   if (running) {
     return running
   }
+  const generation = scanGenerations.get(repoKey) ?? 0
   const scan = (async () => {
     const pullRequests: RawGiteaPullRequest[] = []
     for (let page = 1; page <= maxPages; page++) {
@@ -48,14 +53,18 @@ export async function scanGiteaPullRequests(
         break
       }
     }
-    scanCache.set(repoKey, { fetchedAt: Date.now(), pullRequests })
+    if ((scanGenerations.get(repoKey) ?? 0) === generation) {
+      scanCache.set(repoKey, { fetchedAt: Date.now(), pullRequests })
+    }
     return pullRequests
   })()
   inFlightScans.set(repoKey, scan)
   try {
     return await scan
   } finally {
-    inFlightScans.delete(repoKey)
+    if (inFlightScans.get(repoKey) === scan) {
+      inFlightScans.delete(repoKey)
+    }
   }
 }
 
@@ -63,9 +72,12 @@ export async function scanGiteaPullRequests(
  *  so the next card refresh sees the new PR instead of a stale miss. */
 export function invalidateGiteaPullRequestScan(repoKey: string): void {
   scanCache.delete(repoKey)
+  inFlightScans.delete(repoKey)
+  scanGenerations.set(repoKey, (scanGenerations.get(repoKey) ?? 0) + 1)
 }
 
 export function _resetGiteaPullRequestScanCache(): void {
   scanCache.clear()
   inFlightScans.clear()
+  scanGenerations.clear()
 }
