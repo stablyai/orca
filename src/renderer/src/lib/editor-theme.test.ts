@@ -1,5 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { resolveMonacoEditorTheme } from './editor-theme'
+import { resolveCurrentMonacoTheme, resolveMonacoEditorTheme } from './editor-theme'
+
+describe('resolveCurrentMonacoTheme', () => {
+  it('centralizes the app-theme fallback for editor consumers', () => {
+    expect(
+      resolveCurrentMonacoTheme({ theme: 'system', editorTheme: 'app' }, () => ({
+        matches: true
+      }))
+    ).toBe('vs-dark')
+  })
+
+  it('keeps an explicit editor theme independent from the app theme', () => {
+    expect(resolveCurrentMonacoTheme({ theme: 'light', editorTheme: 'dracula' })).toBe(
+      'orca-dracula'
+    )
+  })
+})
 
 describe('resolveMonacoEditorTheme', () => {
   it('follows the resolved app theme by default', () => {

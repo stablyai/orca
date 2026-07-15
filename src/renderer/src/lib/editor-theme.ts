@@ -1,6 +1,19 @@
 import type { GlobalSettings } from '../../../shared/types'
+import { resolveDocumentTheme } from './document-theme'
 
 export type MonacoEditorTheme = 'vs' | 'vs-dark' | 'hc-light' | 'hc-black' | 'orca-dracula'
+
+type EditorThemeSettings = Pick<GlobalSettings, 'editorTheme' | 'theme'> | null | undefined
+
+export function resolveCurrentMonacoTheme(
+  settings: EditorThemeSettings,
+  matchMedia?: Parameters<typeof resolveDocumentTheme>[1]
+): MonacoEditorTheme {
+  return resolveMonacoEditorTheme(
+    settings?.editorTheme,
+    resolveDocumentTheme(settings?.theme ?? 'system', matchMedia)
+  )
+}
 
 export function resolveMonacoEditorTheme(
   preference: GlobalSettings['editorTheme'],

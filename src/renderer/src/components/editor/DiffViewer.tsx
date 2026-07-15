@@ -25,8 +25,7 @@ import { getDiffViewerLargeDiffSaveAction } from './diff-viewer-large-diff-save-
 import type { DiffViewerProps } from './diff-viewer-props'
 import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
 import { useDiffEditorRegistration } from './diff-navigation-context'
-import { resolveMonacoEditorTheme } from '@/lib/editor-theme'
-import { resolveDocumentTheme } from '@/lib/document-theme'
+import { resolveCurrentMonacoTheme } from '@/lib/editor-theme'
 
 export default function DiffViewer({
   modelKey,
@@ -70,10 +69,7 @@ export default function DiffViewer({
     settings?.terminalFontSize ?? 13,
     editorFontZoomLevel
   )
-  const monacoTheme = resolveMonacoEditorTheme(
-    settings?.editorTheme,
-    resolveDocumentTheme(settings?.theme ?? 'system')
-  )
+  const monacoTheme = resolveCurrentMonacoTheme(settings)
 
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
   const { registerDiffEditor, unregisterDiffEditor } = useDiffEditorRegistration()

@@ -78,8 +78,7 @@ import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { detectLanguage } from '@/lib/language-detect'
 import { cn } from '@/lib/utils'
 import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
-import { resolveMonacoEditorTheme } from '@/lib/editor-theme'
-import { resolveDocumentTheme } from '@/lib/document-theme'
+import { resolveCurrentMonacoTheme } from '@/lib/editor-theme'
 import type { DecoratedDiffComment } from '@/components/diff-comments/useDiffCommentDecorator'
 import {
   CombinedDiffFileTree,
@@ -2189,10 +2188,7 @@ function PRFilesCombinedDiffViewer({
   onViewedChange
 }: PRFilesCombinedDiffViewerProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
-  const monacoTheme = resolveMonacoEditorTheme(
-    settings?.editorTheme,
-    resolveDocumentTheme(settings?.theme ?? 'system')
-  )
+  const monacoTheme = resolveCurrentMonacoTheme(settings)
   const entriesCacheRef = useRef<{
     signature: string
     entries: GitBranchChangeEntry[]

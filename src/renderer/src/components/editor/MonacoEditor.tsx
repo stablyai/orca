@@ -63,8 +63,7 @@ import {
   isMonacoAutoHeightCapped
 } from './monaco-auto-height'
 import { installMonacoE2EProbe } from './monaco-e2e-probe'
-import { resolveMonacoEditorTheme } from '@/lib/editor-theme'
-import { resolveDocumentTheme } from '@/lib/document-theme'
+import { resolveCurrentMonacoTheme } from '@/lib/editor-theme'
 
 type MonacoEditorProps = {
   fileId: string
@@ -200,10 +199,7 @@ export default function MonacoEditor({
   const [commentPopover, setCommentPopover] = useState<MarkdownCommentPopoverState | null>(null)
   const [selectionAnnotationTarget, setSelectionAnnotationTarget] =
     useState<MonacoMarkdownSelectionAnnotationTarget | null>(null)
-  const monacoTheme = resolveMonacoEditorTheme(
-    settings?.editorTheme,
-    resolveDocumentTheme(settings?.theme ?? 'system')
-  )
+  const monacoTheme = resolveCurrentMonacoTheme(settings)
 
   const updateMarkdownCompletionDocuments = useCallback((): void => {
     const modelKey = editorRef.current?.getModel()?.uri.toString() ?? null
