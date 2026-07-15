@@ -240,14 +240,14 @@ function broadcastSshState(
   targetId: string,
   state: SshConnectionState
 ): void {
+  const enrichedState = withSshRemotePlatform(targetId, state)
   // Why: runtime-owned (ephemeral-VM) targets are hidden from the renderer, which
   // has no surface for them. Broadcasting their state would make the renderer fire
   // a listTargets() lookup per event (incl. each relay-lost reconnect) for nothing.
   if (isRuntimeOwnedSshTargetId(targetId)) {
-    currentRuntime?.notifySshStateChanged?.(targetId, state)
+    currentRuntime?.notifySshStateChanged?.(targetId, enrichedState)
     return
   }
-  const enrichedState = withSshRemotePlatform(targetId, state)
   const win = getMainWindow()
   if (win && !win.isDestroyed()) {
     win.webContents.send('ssh:state-changed', { targetId, state: enrichedState })

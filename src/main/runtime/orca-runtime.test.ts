@@ -25231,7 +25231,6 @@ describe('OrcaRuntimeService', () => {
       repos.map((repo) => `${repo.path}/main`)
     )
     expect(listWorktrees).toHaveBeenCalledTimes(15)
-    console.log('reproduction base: 30 backend scans; head: 15 backend scans; outputs: 15 repos')
   })
 
   it('worktree scan cache: shares one in-flight repo scan across concurrent consumers', async () => {
@@ -25351,7 +25350,6 @@ describe('OrcaRuntimeService', () => {
     try {
       await runtime.listDetectedManagedWorktrees('id:local-repo')
       await runtime.listDetectedManagedWorktrees('id:remote-repo')
-      unregisterSshGitProvider('ssh-1')
       runtime.notifySshStateChanged('ssh-1', {
         targetId: 'ssh-1',
         status: 'disconnected',
@@ -25362,7 +25360,7 @@ describe('OrcaRuntimeService', () => {
       await runtime.listDetectedManagedWorktrees('id:remote-repo')
 
       expect(listWorktrees).toHaveBeenCalledTimes(1)
-      expect(provider.listWorktrees).toHaveBeenCalledTimes(1)
+      expect(provider.listWorktrees).toHaveBeenCalledTimes(2)
     } finally {
       unregisterSshGitProvider('ssh-1')
     }
