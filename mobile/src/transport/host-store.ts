@@ -15,6 +15,7 @@ import {
 import {
   loadMobileRelayHostOverlayState,
   removeMobileRelayHostOverlay,
+  removeMobileRelayHostOverlays,
   saveMobileRelayHostOverlay
 } from './mobile-relay-host-overlay-store'
 import { deleteMobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
@@ -182,12 +183,18 @@ async function doLoadHosts(): Promise<HostProfile[]> {
   return out
 }
 
-async function loadStoredHosts(): Promise<StoredHostProfile[]> {
-  try {
-    return parseStoredHosts(await AsyncStorage.getItem(STORAGE_KEY)) ?? []
-  } catch {
-    return []
-  }
+export async function resolvePairingHostIdentity(
+  publicKeyB64: string,
+  newHostId: string
+): Promise<{ id: string; name: string }> {
+  // Why: one durable read both preserves an existing identity and names a new host,
+  // avoiding duplicate cards and a second serial storage read before connecting.
+  await hostListMutation
+  const hosts = await readStoredHostsForMutation()
+  const match = hosts.find((host) => host.publicKeyB64 === publicKeyB64)
+  return match
+    ? { id: match.id, name: match.name }
+    : { id: newHostId, name: getNextHostNameFromHosts(hosts) }
 }
 
 async function readStoredHostsForMutation(): Promise<StoredHostProfile[]> {
@@ -242,18 +249,28 @@ export async function saveExistingHostRelayUpgrade(host: HostProfile): Promise<v
 async function persistHost(host: HostProfile, requireExisting: boolean): Promise<void> {
   const validated = HostProfileSchema.parse(host)
   const stored = toStored(validated)
+  const duplicateHostIds = new Set<string>()
+  let updatedExistingHost = false
   await mutateStoredHosts((hosts) => {
     const index = hosts.findIndex((h) => h.id === stored.id)
+    for (const candidate of hosts) {
+      if (candidate.id !== stored.id && candidate.publicKeyB64 === stored.publicKeyB64) {
+        duplicateHostIds.add(candidate.id)
+      }
+    }
     if (index >= 0) {
-      const next = hosts.slice()
-      next[index] = stored
-      return next
+      updatedExistingHost = true
+      // Why: affected installs may already contain duplicate rows; an authoritative
+      // save is the safe point to collapse them to the preserved host id.
+      return hosts
+        .filter(({ id }) => !duplicateHostIds.has(id))
+        .map((candidate) => (candidate.id === stored.id ? stored : candidate))
     }
     if (requireExisting) {
       // Why: an in-flight relay upgrade must not resurrect a host the user removed.
       throw new MobileRelayUpgradeHostRemovedError('mobile relay upgrade host was removed')
     }
-    return [...hosts, stored]
+    return [...hosts.filter(({ id }) => !duplicateHostIds.has(id)), stored]
   })
   // Why: write metadata BEFORE the keychain token so a crash between the two
   // leaves orphaned metadata (which loadHosts skips and removeHost can clean
@@ -270,6 +287,23 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
       relayHostId: validated.relayHostId,
       relay: validated.relay
     })
+  }
+  const overlayRemovalIds = [...duplicateHostIds]
+  if (!validated.endpoints && updatedExistingHost) {
+    overlayRemovalIds.push(stored.id)
+  }
+  if (overlayRemovalIds.length > 0) {
+    // Why: reusing an id for direct-only re-pairing must not retain routing
+    // metadata from the host's previous transport state.
+    await removeMobileRelayHostOverlays(overlayRemovalIds)
+  }
+  for (const duplicateHostId of duplicateHostIds) {
+    tokenCache.delete(duplicateHostId)
+    try {
+      await scheduleHostCredentialCleanup(duplicateHostId, deleteHostCredentials)
+    } catch {
+      // Metadata is already deduplicated; orphan-token recovery is best-effort.
+    }
   }
 }
 
@@ -309,12 +343,6 @@ export async function renameHost(hostId: string, newName: string): Promise<void>
     next[index] = { ...next[index]!, name: newName }
     return next
   })
-}
-
-export async function getNextHostName(): Promise<string> {
-  await hostListMutation
-  const hosts = await loadStoredHosts()
-  return getNextHostNameFromHosts(hosts)
 }
 
 export async function updateLastConnected(hostId: string): Promise<void> {

@@ -111,6 +111,8 @@ import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 import { listBoundAgentTabActions, resolveDefaultAgentForNewTab } from '@/lib/agent-tab-shortcuts'
+import { terminalProviderHasAuthoritativeSnapshot } from './terminal/terminal-provider-snapshot-capability'
+import { useTerminalProviderSnapshotCapability } from './terminal/use-terminal-provider-snapshot-capability'
 import {
   createFloatingWorkspaceBrowserTab,
   createFloatingWorkspaceMarkdownTab,
@@ -354,6 +356,7 @@ function Terminal(): React.JSX.Element | null {
     () => (renderedActiveWorktreeId ? (tabsByWorktree[renderedActiveWorktreeId] ?? []) : []),
     [renderedActiveWorktreeId, tabsByWorktree]
   )
+  useTerminalProviderSnapshotCapability(workspaceSessionReady && hydrationSucceeded)
 
   // Why: the TabBar is rendered into the titlebar via a portal so tabs share
   // the same row as the "Orca" title. The target element is created by App.tsx.
@@ -1064,7 +1067,11 @@ function Terminal(): React.JSX.Element | null {
             coldActivationDeferralEnabled &&
             activationHostSupportsDeferral &&
             tab !== undefined &&
-            canWatcherCoverParkedTerminalTab(renderedActiveWorktreeId, tab)
+            canWatcherCoverParkedTerminalTab(
+              renderedActiveWorktreeId,
+              tab,
+              terminalProviderHasAuthoritativeSnapshot
+            )
           )
         },
         immediateTabIds
@@ -1079,7 +1086,13 @@ function Terminal(): React.JSX.Element | null {
       // gate. Uncoverable/no-PTY tabs must mount now so they can spawn or keep
       // their non-snapshot-backed live transport.
       for (const tab of worktreeTabs) {
-        if (!canWatcherCoverParkedTerminalTab(renderedActiveWorktreeId, tab)) {
+        if (
+          !canWatcherCoverParkedTerminalTab(
+            renderedActiveWorktreeId,
+            tab,
+            terminalProviderHasAuthoritativeSnapshot
+          )
+        ) {
           immediateTabIds.add(tab.id)
         }
       }

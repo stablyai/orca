@@ -84,6 +84,24 @@ export function isSystemSshFallbackError(err: Error): boolean {
   return err.message.includes('EHOSTUNREACH') || err.message.includes('ENETUNREACH')
 }
 
+// Why: ssh2 has no gssapi-with-mic support. When the effective OpenSSH config
+// enables GSSAPIAuthentication (often a distro-wide /etc/ssh default), a
+// Kerberos ticket can still authenticate through the system ssh binary after
+// key/agent auth fails — but only auth-shaped failures qualify, so network
+// errors keep their existing retry semantics.
+export function isGssapiSystemSshFallbackCandidate(
+  err: Error,
+  target: Pick<SshTarget, 'gssapiAuthentication'>,
+  resolved: Pick<SshResolvedConfig, 'gssapiAuthentication'> | null
+): boolean {
+  // Why: targets with an explicit per-host flag already tried system ssh
+  // proactively during this attempt; probing again cannot succeed.
+  if (target.gssapiAuthentication === true) {
+    return false
+  }
+  return (isAuthError(err) || isPassphraseError(err)) && resolved?.gssapiAuthentication === true
+}
+
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }

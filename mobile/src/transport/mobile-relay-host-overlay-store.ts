@@ -40,7 +40,12 @@ async function mutateOverlays(
 ): Promise<void> {
   const mutation = overlayMutation.then(async () => {
     const current = await readOverlaysForMutation()
-    await AsyncStorage.setItem(OVERLAY_STORAGE_KEY, JSON.stringify(update(current)))
+    const next = update(current)
+    // Why: direct-only saves commonly have no overlay to remove; avoid a full
+    // AsyncStorage write when cleanup leaves the durable list unchanged.
+    if (next !== current) {
+      await AsyncStorage.setItem(OVERLAY_STORAGE_KEY, JSON.stringify(next))
+    }
   })
   overlayMutation = mutation.catch(() => {})
   return mutation
@@ -85,7 +90,22 @@ export async function saveMobileRelayHostOverlay(overlay: MobileRelayHostOverlay
 }
 
 export function removeMobileRelayHostOverlay(hostId: string): Promise<void> {
-  return mutateOverlays((overlays) => overlays.filter((overlay) => overlay.hostId !== hostId))
+  return removeMobileRelayHostOverlays([hostId])
+}
+
+export function removeMobileRelayHostOverlays(hostIds: readonly string[]): Promise<void> {
+  const targets = new Set(hostIds)
+  let removed = false
+  return mutateOverlays((overlays) => {
+    const next = overlays.filter((overlay) => {
+      if (!targets.has(overlay.hostId)) {
+        return true
+      }
+      removed = true
+      return false
+    })
+    return removed ? next : overlays
+  })
 }
 
 /** Test-only: drain the module mutation chain between cases. */

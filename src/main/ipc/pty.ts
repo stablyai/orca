@@ -1518,6 +1518,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:confirmForegroundProcess')
   ipcMain.removeHandler('pty:getCwd')
   ipcMain.removeHandler('pty:getSize')
+  ipcMain.removeAllListeners('pty:getAuthoritativeBufferSnapshotCapabilitiesSync')
   ipcMain.removeHandler('pty:declarePendingPaneSerializer')
   ipcMain.removeHandler('pty:settlePaneSerializer')
   ipcMain.removeHandler('pty:clearPendingPaneSerializer')
@@ -5078,6 +5079,40 @@ export function registerPtyHandlers(
         }
       }
       return Array.from(deduped.values())
+    }
+  )
+
+  ipcMain.on(
+    'pty:getAuthoritativeBufferSnapshotCapabilitiesSync',
+    (event, args: { ids?: unknown }) => {
+      const ids = Array.isArray(args?.ids) ? args.ids.slice(0, 512) : []
+      const capabilities: { id: string; authoritative: boolean | null }[] = []
+      const seen = new Set<string>()
+      for (const value of ids) {
+        if (
+          typeof value !== 'string' ||
+          value.length === 0 ||
+          value.length > 512 ||
+          seen.has(value)
+        ) {
+          continue
+        }
+        seen.add(value)
+        const provider = tryGetProviderForPty(value)
+        // Why: degraded routing mixes preserved daemons with an in-process
+        // fallback. Keep all of its panes mounted rather than guess ownership.
+        capabilities.push({
+          id: value,
+          authoritative: provider?.canProvideAuthoritativeBufferSnapshot
+            ? provider.canProvideAuthoritativeBufferSnapshot(value)
+            : provider && routesFreshSpawnsToLocalProvider(provider)
+              ? false
+              : null
+        })
+      }
+      // Why: cold deferral runs during render, before hidden panes mount. This
+      // batch is an in-memory route lookup so legacy PTYs can mount in that pass.
+      event.returnValue = capabilities
     }
   )
 

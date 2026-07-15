@@ -627,6 +627,23 @@ describe('terminal-parked-tab-watchers', () => {
       )
     })
 
+    it('lets cold activation add stricter eligibility without changing ordinary parking', () => {
+      capturePanes([{ ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
+      const providerCanSnapshotWithoutRenderer = vi.fn(() => false)
+
+      expect(canWatcherCoverParkedTerminalTab(WORKTREE_ID, { id: TAB_ID, ptyId: PTY_ID })).toBe(
+        true
+      )
+      expect(
+        canWatcherCoverParkedTerminalTab(
+          WORKTREE_ID,
+          { id: TAB_ID, ptyId: PTY_ID },
+          providerCanSnapshotWithoutRenderer
+        )
+      ).toBe(false)
+      expect(providerCanSnapshotWithoutRenderer).toHaveBeenCalledWith(PTY_ID)
+    })
+
     it('rejects a capture containing a legacy non-UUID leaf id', () => {
       capturePanes([
         { ptyId: PTY_ID, paneId: 1, leafId: 'legacy-leaf-1', drivesTabTitle: true },

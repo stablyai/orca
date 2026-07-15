@@ -291,6 +291,53 @@ describe('spawnSystemSsh', () => {
     expect(args).toContain('deploy@127.0.0.1')
   })
 
+  it('requests GSSAPI authentication explicitly for manual targets', () => {
+    const args = buildSshArgs(
+      createTarget({ source: 'manual', configHost: 'krb.example.com', gssapiAuthentication: true })
+    )
+
+    expect(args).toContain('GSSAPIAuthentication=yes')
+  })
+
+  it('restricts Kerberos probes to non-interactive GSSAPI authentication', () => {
+    spawnSystemSshCommand(
+      createTarget({
+        configHost: 'krb-host; touch /tmp/not-run',
+        source: 'ssh-config',
+        gssapiAuthentication: true
+      }),
+      'echo ready',
+      { gssapiOnly: true, wrapCommand: false }
+    )
+
+    const args = spawnMock.mock.calls[0][1] as string[]
+    expect(args).toEqual(
+      expect.arrayContaining([
+        '-o',
+        'BatchMode=yes',
+        '-o',
+        'GSSAPIAuthentication=yes',
+        '-o',
+        'PreferredAuthentications=gssapi-with-mic'
+      ])
+    )
+    expect(args).not.toContain('BatchMode=no')
+    const standaloneControlIdx = args.indexOf('-S')
+    expect(standaloneControlIdx).toBeGreaterThan(-1)
+    expect(args[standaloneControlIdx + 1]).toBe('none')
+    expect(args.at(-2)).toBe('deploy@krb-host; touch /tmp/not-run')
+    expect(args.at(-1)).toBe('echo ready')
+  })
+
+  it('leaves GSSAPI to the Host block for ssh-config targets', () => {
+    const args = buildSshArgs(
+      createTarget({ configHost: 'krb-host', source: 'ssh-config', gssapiAuthentication: true })
+    )
+
+    expect(args).not.toContain('GSSAPIAuthentication=yes')
+    expect(args).toContain('deploy@krb-host')
+  })
+
   it('does not inject Orca ControlMaster flags when ssh config already owns muxing', () => {
     const args = buildSshArgs(createTarget({ configHost: 'workbox', source: 'ssh-config' }), {
       resolvedConfig: createResolvedConfig({

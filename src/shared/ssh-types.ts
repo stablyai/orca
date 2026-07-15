@@ -24,6 +24,10 @@ export type SshTarget = {
   identityAgent?: string
   /** Whether OpenSSH IdentitiesOnly should limit public-key auth attempts. */
   identitiesOnly?: boolean
+  /** Whether the host's SSH config explicitly requests GSSAPIAuthentication
+   *  (Kerberos). ssh2 has no gssapi-with-mic support, so these targets try the
+   *  system OpenSSH transport first. */
+  gssapiAuthentication?: boolean
   /** ProxyCommand from SSH config, if any. */
   proxyCommand?: string
   /** Jump host (ProxyJump), if any. */
