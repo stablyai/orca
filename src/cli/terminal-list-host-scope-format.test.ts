@@ -16,6 +16,7 @@ function terminal(overrides: Partial<RuntimeTerminalSummary> = {}): RuntimeTermi
     writable: true,
     lastOutputAt: null,
     preview: '',
+    surface: 'visible',
     ...overrides
   }
 }
