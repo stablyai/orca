@@ -1381,9 +1381,6 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       if (!workspace) {
         return s
       }
-      // Why: annotations point at DOM coordinates from one loaded document.
-      // A real URL change invalidates those markers and copied context.
-      const shouldClearAnnotations = normalizeUrl(page.url) !== nextUrl
       const nextPages = (s.browserPagesByWorkspace[workspace.id] ?? []).map((entry) =>
         entry.id === pageId
           ? {
@@ -1396,12 +1393,6 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           : entry
       )
       const nextWorkspace = mirrorWorkspaceFromActivePage(workspace, nextPages)
-      const nextBrowserAnnotationsByPageId = shouldClearAnnotations
-        ? { ...s.browserAnnotationsByPageId }
-        : s.browserAnnotationsByPageId
-      if (shouldClearAnnotations) {
-        delete nextBrowserAnnotationsByPageId[pageId]
-      }
       return {
         browserPagesByWorkspace: {
           ...s.browserPagesByWorkspace,
@@ -1412,10 +1403,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
           [workspace.worktreeId]: (s.browserTabsByWorktree[workspace.worktreeId] ?? []).map((tab) =>
             tab.id === workspace.id ? nextWorkspace : tab
           )
-        },
-        ...(shouldClearAnnotations
-          ? { browserAnnotationsByPageId: nextBrowserAnnotationsByPageId }
-          : {})
+        }
       }
     })
   },

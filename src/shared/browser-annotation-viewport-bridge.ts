@@ -25,6 +25,7 @@ export type BrowserAnnotationViewportBridgeOptions = {
 
 export const BROWSER_ANNOTATION_VIEWPORT_BRIDGE_WORLD_ID = 1207
 export const BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX = '__orca_annotation_viewport__:'
+export const BROWSER_ANNOTATION_MARKERS_MESSAGE_PREFIX = '__orca_annotation_markers__:'
 
 export function isValidBrowserAnnotationViewportBridgeToken(value: unknown): value is string {
   return typeof value === 'string' && /^[a-zA-Z0-9_-]{16,80}$/.test(value)
@@ -91,6 +92,7 @@ export function buildBrowserAnnotationViewportBridgeScript({
   const markers = ${JSON.stringify(markers)};
   const token = ${JSON.stringify(token)};
   const prefix = ${JSON.stringify(BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX)};
+  const markerPrefix = ${JSON.stringify(BROWSER_ANNOTATION_MARKERS_MESSAGE_PREFIX)};
   const stateKey = '__orcaBrowserAnnotationViewportBridge';
   const hostAttribute = 'data-orca-browser-annotation-overlay';
   const markerSize = 24;
@@ -114,8 +116,15 @@ export function buildBrowserAnnotationViewportBridgeScript({
     removeOverlay(state);
   };
 
+  const emitMarkerIds = (markerIds) => {
+    try {
+      console.debug(markerPrefix + token + ':' + JSON.stringify(markerIds));
+    } catch (e) {}
+  };
+
   const existing = globalThis[stateKey];
   if (!enabled) {
+    emitMarkerIds([]);
     cleanup(existing);
     delete globalThis[stateKey];
     return true;
@@ -160,6 +169,7 @@ export function buildBrowserAnnotationViewportBridgeScript({
   const updateMarkers = (state, nextMarkers) => {
     state.markers = Array.isArray(nextMarkers) ? nextMarkers : [];
     if (state.markers.length === 0) {
+      emitMarkerIds([]);
       removeOverlay(state);
       state.host = null;
       state.shadowRoot = null;
@@ -186,6 +196,7 @@ export function buildBrowserAnnotationViewportBridgeScript({
         state.markerElements.delete(id);
       }
     });
+    emitMarkerIds(state.markers.map((marker) => marker.id));
   };
 
   const positionMarkers = (state) => {

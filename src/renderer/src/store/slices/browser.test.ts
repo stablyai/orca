@@ -164,7 +164,7 @@ describe('createBrowserSlice annotations', () => {
     expect(store.getState().recordFeatureInteraction).toHaveBeenCalledWith('browser-tab-created')
   })
 
-  it('clears page annotations when the browser page URL changes', () => {
+  it('keeps page annotations across navigation and loading', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
     const pageId = tab.activePageId
@@ -177,7 +177,66 @@ describe('createBrowserSlice annotations', () => {
 
     store.getState().setBrowserPageUrl(pageId, 'https://example.com/next')
 
+    expect(store.getState().browserAnnotationsByPageId[pageId]).toHaveLength(1)
+    expect(store.getState().browserAnnotationsByPageId[pageId]?.[0]?.payload).toEqual(
+      expect.objectContaining({
+        page: expect.objectContaining({ sanitizedUrl: 'https://example.com' })
+      })
+    )
+  })
+
+  it('keeps explicit annotation lifecycle boundaries', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+
+    const seeded = makeAnnotation(pageId, 'annotation-0')
+    store.getState().addBrowserPageAnnotation({
+      ...seeded,
+      comment: 'a'.repeat(GRAB_BUDGET.annotationCommentMaxLength + 10),
+      payload: {
+        ...seeded.payload,
+        page: {
+          ...seeded.payload.page,
+          sanitizedUrl: 'https://example.com/path?token=secret#fragment'
+        },
+        screenshot: {
+          mimeType: 'image/png',
+          dataUrl: 'data:image/png;base64,abc',
+          width: 1,
+          height: 1
+        }
+      } as unknown as BrowserPageAnnotation['payload']
+    })
+
+    let annotations = store.getState().browserAnnotationsByPageId[pageId] ?? []
+    expect(annotations[0]?.comment).toHaveLength(GRAB_BUDGET.annotationCommentMaxLength)
+    expect(annotations[0]?.payload.screenshot).toBeNull()
+
+    store.getState().addBrowserPageAnnotation(makeAnnotation(pageId, 'delete-me'))
+    store.getState().deleteBrowserPageAnnotation(pageId, 'delete-me')
+    expect(store.getState().browserAnnotationsByPageId[pageId]?.map(({ id }) => id)).toEqual([
+      'annotation-0'
+    ])
+
+    store.getState().setBrowserPageUrl(pageId, 'https://kagi.com/search?q=orca&token=secret')
+    expect(
+      store.getState().browserPagesByWorkspace[tab.id]?.find((page) => page.id === pageId)?.url
+    ).toBe('https://kagi.com/search?q=orca')
+
+    store.getState().clearBrowserPageAnnotations(pageId)
     expect(store.getState().browserAnnotationsByPageId[pageId]).toBeUndefined()
+
+    for (let index = 0; index < GRAB_BUDGET.annotationsMaxPerPage + 3; index++) {
+      store.getState().addBrowserPageAnnotation(makeAnnotation(pageId, `annotation-${index}`))
+    }
+
+    annotations = store.getState().browserAnnotationsByPageId[pageId] ?? []
+    expect(annotations).toHaveLength(GRAB_BUDGET.annotationsMaxPerPage)
+    expect(annotations[0]?.id).toBe('annotation-3')
   })
 
   it('creates inactive browser unified tabs without stealing the visible tab', () => {

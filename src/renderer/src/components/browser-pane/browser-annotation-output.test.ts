@@ -78,6 +78,41 @@ function makeAnnotation(overrides?: Partial<BrowserPageAnnotation>): BrowserPage
 }
 
 describe('formatBrowserAnnotationsAsMarkdown', () => {
+  it('groups annotations by captured document', () => {
+    const first = makeAnnotation()
+    const second = makeAnnotation({
+      id: 'annotation-2',
+      payload: {
+        ...first.payload,
+        page: { ...first.payload.page, sanitizedUrl: 'https://example.com/settings' }
+      }
+    })
+    const markdown = formatBrowserAnnotationsAsMarkdown([first, second])
+
+    expect(markdown).toContain('## Design Feedback: /pricing')
+    expect(markdown).toContain('## Design Feedback: /settings')
+    expect(markdown).toContain('**URL:** https://example.com/pricing')
+    expect(markdown).toContain('**URL:** https://example.com/settings')
+    expect(markdown.match(/### 1\./g)).toHaveLength(2)
+  })
+
+  it('retains empty captured URLs as a current-page output group', () => {
+    const first = makeAnnotation()
+    const markdown = formatBrowserAnnotationsAsMarkdown([
+      makeAnnotation({
+        id: 'annotation-empty',
+        comment: 'Keep this unsupported-page feedback in the output.',
+        payload: {
+          ...first.payload,
+          page: { ...first.payload.page, sanitizedUrl: '' }
+        }
+      })
+    ])
+
+    expect(markdown).toContain('## Design Feedback: current page')
+    expect(markdown).toContain('Keep this unsupported-page feedback in the output.')
+  })
+
   it('includes agent-useful selectors, source, react tree, styles, and feedback', () => {
     const markdown = formatBrowserAnnotationsAsMarkdown([makeAnnotation()])
 

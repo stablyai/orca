@@ -108,10 +108,17 @@ import {
   type BrowserGrabScreenshot,
   type BrowserPageAnnotation
 } from '../../../../shared/browser-grab-types'
-import { BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX } from '../../../../shared/browser-annotation-viewport-bridge'
+import {
+  BROWSER_ANNOTATION_MARKERS_MESSAGE_PREFIX,
+  BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX
+} from '../../../../shared/browser-annotation-viewport-bridge'
 import { useGrabMode } from './useGrabMode'
 import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
 import { formatBrowserAnnotationsAsMarkdown } from './browser-annotation-output'
+import {
+  isBrowserAnnotationOnDocument,
+  selectBrowserAnnotationMarkers
+} from './browser-annotation-page-identity'
 import { isEditableKeyboardTarget } from './browser-keyboard'
 import { getBrowserPagesForWorkspace } from './browser-pane-page-selection'
 import BrowserAddressBar from './BrowserAddressBar'
@@ -2901,8 +2908,6 @@ function BrowserPagePane({
   const deleteBrowserPageAnnotation = useAppStore((s) => s.deleteBrowserPageAnnotation)
   const clearBrowserPageAnnotations = useAppStore((s) => s.clearBrowserPageAnnotations)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-  const clearBrowserPageAnnotationsRef = useRef(clearBrowserPageAnnotations)
-  clearBrowserPageAnnotationsRef.current = clearBrowserPageAnnotations
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   const consumeAddressBarFocusRequest = useAppStore((s) => s.consumeAddressBarFocusRequest)
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
@@ -3648,13 +3653,10 @@ function BrowserPagePane({
     const pendingAnnotationPayload = pendingAnnotationPayloadRef.current
     // Why: existing annotation badges are rendered in the guest process for
     // compositor-smooth scroll; only the pending dialog needs viewport messages.
-    const markers = browserAnnotationsRef.current.map((annotation, index) => ({
-      id: annotation.id,
-      index,
-      isFixed: annotation.payload.target.isFixed === true,
-      rectPage: annotation.payload.target.rectPage,
-      rectViewport: annotation.payload.target.rectViewport
-    }))
+    const markers = selectBrowserAnnotationMarkers(
+      browserAnnotationsRef.current,
+      browserTabUrlRef.current
+    )
     const enabled = isActiveRef.current && (pendingAnnotationPayload !== null || markers.length > 0)
     void window.api.browser
       .setAnnotationViewportBridge({
@@ -3781,9 +3783,6 @@ function BrowserPagePane({
     }
 
     const handleDidStartLoading = (): void => {
-      // Why: reloads replace the document without changing URL, invalidating
-      // captured element rects and DOM context just like navigation does.
-      clearBrowserPageAnnotationsRef.current(browserTab.id)
       setPendingAnnotationPayload(null)
       setBrowserOverlayViewport({ scrollX: 0, scrollY: 0, version: 0 })
       if (!trackNextLoadingEventRef.current) {
@@ -3844,6 +3843,7 @@ function BrowserPagePane({
       }
       trackNextLoadingEventRef.current = false
       activeLoadFailureRef.current = null
+      browserTabUrlRef.current = browserModelUrl
       lastKnownWebviewUrlRef.current =
         normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
       rememberLiveBrowserUrl(browserTab.id, browserModelUrl)
@@ -3866,6 +3866,7 @@ function BrowserPagePane({
         canGoForward: webview.canGoForward(),
         loadError: null
       })
+      syncBrowserAnnotationViewportBridge()
     }
 
     const handleDidNavigate = (event: { url?: string; isMainFrame?: boolean }): void => {
@@ -3877,6 +3878,7 @@ function BrowserPagePane({
         return
       }
       const browserModelUrl = redactKagiSessionToken(currentUrl)
+      browserTabUrlRef.current = browserModelUrl
       lastKnownWebviewUrlRef.current =
         normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
       rememberLiveBrowserUrl(browserTab.id, browserModelUrl)
@@ -3890,6 +3892,7 @@ function BrowserPagePane({
         canGoBack: webview.canGoBack(),
         canGoForward: webview.canGoForward()
       })
+      syncBrowserAnnotationViewportBridge()
     }
 
     const handleTitleUpdate = (event: { title?: string }): void => {
@@ -3943,24 +3946,31 @@ function BrowserPagePane({
     const handleAnnotationViewportMessage = (event: { message?: string }): void => {
       const message = typeof event.message === 'string' ? event.message : ''
       const prefix = `${BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX}${annotationViewportBridgeTokenRef.current}:`
-      if (!message.startsWith(prefix)) {
-        return
-      }
+      const markerPrefix = `${BROWSER_ANNOTATION_MARKERS_MESSAGE_PREFIX}${annotationViewportBridgeTokenRef.current}:`
       try {
-        const next = JSON.parse(message.slice(prefix.length)) as {
-          scrollX?: unknown
-          scrollY?: unknown
-        }
-        const scrollX =
-          typeof next.scrollX === 'number' && Number.isFinite(next.scrollX) ? next.scrollX : 0
-        const scrollY =
-          typeof next.scrollY === 'number' && Number.isFinite(next.scrollY) ? next.scrollY : 0
-        setBrowserOverlayViewport((current) => {
-          if (current.scrollX === scrollX && current.scrollY === scrollY) {
-            return current.version === 0 ? { ...current, version: 1 } : current
+        if (message.startsWith(prefix)) {
+          const next = JSON.parse(message.slice(prefix.length)) as {
+            scrollX?: unknown
+            scrollY?: unknown
           }
-          return { scrollX, scrollY, version: current.version + 1 }
-        })
+          const scrollX =
+            typeof next.scrollX === 'number' && Number.isFinite(next.scrollX) ? next.scrollX : 0
+          const scrollY =
+            typeof next.scrollY === 'number' && Number.isFinite(next.scrollY) ? next.scrollY : 0
+          setBrowserOverlayViewport((current) => {
+            if (current.scrollX === scrollX && current.scrollY === scrollY) {
+              return current.version === 0 ? { ...current, version: 1 } : current
+            }
+            return { scrollX, scrollY, version: current.version + 1 }
+          })
+          return
+        }
+        if (message.startsWith(markerPrefix)) {
+          const next = JSON.parse(message.slice(markerPrefix.length))
+          if (Array.isArray(next) && next.every((markerId) => typeof markerId === 'string')) {
+            webview.setAttribute('data-orca-browser-annotation-marker-ids', JSON.stringify(next))
+          }
+        }
       } catch {
         // Ignore unrelated or malformed guest console output.
       }
@@ -3970,6 +3980,7 @@ function BrowserPagePane({
     webview.addEventListener('focus', dismissAddressBarSuggestions)
     webview.addEventListener('did-start-loading', handleDidStartLoading)
     webview.addEventListener('did-stop-loading', handleDidStopLoading)
+    webview.setAttribute('data-orca-browser-annotation-marker-ids', '[]')
     // Why: separate handler registered only on 'did-navigate' (full page loads),
     // NOT on 'did-navigate-in-page'. The shared handleDidNavigate is registered
     // on both events, so adding find-close logic there would also close on SPA
@@ -4070,8 +4081,9 @@ function BrowserPagePane({
   useEffect(() => {
     syncBrowserAnnotationViewportBridge()
   }, [
-    browserAnnotations.length,
+    browserAnnotations,
     browserTab.id,
+    browserTab.url,
     isActive,
     pendingAnnotationPayload,
     syncBrowserAnnotationViewportBridge
@@ -5717,42 +5729,55 @@ function BrowserPagePane({
                     </Tooltip>
                   </div>
                   <div className="scrollbar-sleek min-h-0 flex-1 overflow-auto p-1.5">
-                    {browserAnnotations.map((annotation, index) => (
-                      <div
-                        key={annotation.id}
-                        className="group flex gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-accent focus-within:bg-accent"
-                      >
-                        <div className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                          {index + 1}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate font-medium text-foreground">
-                            {annotation.payload.target.accessibility.accessibleName ||
-                              annotation.payload.target.textSnippet ||
-                              annotation.payload.target.tagName}
+                    {browserAnnotations.map((annotation, index) =>
+                      (() => {
+                        const onCurrentDocument = isBrowserAnnotationOnDocument(
+                          annotation,
+                          browserTab.url
+                        )
+                        return (
+                          <div
+                            key={annotation.id}
+                            className="group flex gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-accent focus-within:bg-accent"
+                          >
+                            <div className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                              {index + 1}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate font-medium text-foreground">
+                                {annotation.payload.target.accessibility.accessibleName ||
+                                  annotation.payload.target.textSnippet ||
+                                  annotation.payload.target.tagName}
+                              </div>
+                              <div className="mt-0.5 line-clamp-2 text-muted-foreground">
+                                {annotation.comment}
+                              </div>
+                              <div className="mt-1 text-[11px] text-muted-foreground">
+                                <span>{annotation.intent}</span>
+                                {!onCurrentDocument ? (
+                                  <span className="ml-2 truncate">
+                                    {annotation.payload.page.sanitizedUrl}
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
+                            <Button
+                              size="icon-xs"
+                              variant="ghost"
+                              className="can-hover:opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100"
+                              onClick={() => handleDeleteBrowserAnnotation(annotation.id)}
+                              aria-label={translate(
+                                'auto.components.browser.pane.BrowserPane.f2d0c22d67',
+                                'Delete annotation {{value0}}',
+                                { value0: index + 1 }
+                              )}
+                            >
+                              <Trash2 className="size-3" />
+                            </Button>
                           </div>
-                          <div className="mt-0.5 line-clamp-2 text-muted-foreground">
-                            {annotation.comment}
-                          </div>
-                          <div className="mt-1 text-[11px] text-muted-foreground">
-                            <span>{annotation.intent}</span>
-                          </div>
-                        </div>
-                        <Button
-                          size="icon-xs"
-                          variant="ghost"
-                          className="can-hover:opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100"
-                          onClick={() => handleDeleteBrowserAnnotation(annotation.id)}
-                          aria-label={translate(
-                            'auto.components.browser.pane.BrowserPane.f2d0c22d67',
-                            'Delete annotation {{value0}}',
-                            { value0: index + 1 }
-                          )}
-                        >
-                          <Trash2 className="size-3" />
-                        </Button>
-                      </div>
-                    ))}
+                        )
+                      })()
+                    )}
                   </div>
                 </div>
               ) : null}
