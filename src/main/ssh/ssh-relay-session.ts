@@ -1283,10 +1283,7 @@ export class SshRelaySession {
     mux: SshChannelMultiplexer,
     shouldContinue?: () => boolean
   ): Promise<void> {
-    if (
-      !isRemoteAgentHooksEnabled() ||
-      !this.areAgentStatusHooksEnabled()
-    ) {
+    if (!isRemoteAgentHooksEnabled() || !this.areAgentStatusHooksEnabled()) {
       this.recordAgentHookInstallReport(
         this.remoteCliBridgeEnv?.remoteHome ?? null,
         'skipped',
@@ -1389,6 +1386,7 @@ export class SshRelaySession {
     statuses: RemoteAgentHookInstallReport['statuses'],
     shouldContinue?: () => boolean
   ): void {
+    // Why: an aborted reconnect may finish late; only its current owner may replace host status.
     if (shouldContinue && !shouldContinue()) {
       return
     }

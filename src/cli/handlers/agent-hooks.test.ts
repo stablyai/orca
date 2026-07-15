@@ -47,9 +47,12 @@ vi.mock('../runtime-client', () => {
     }
   }
 
+  class RuntimeRpcFailureError extends Error {}
+
   return {
     RuntimeClient,
     RuntimeClientError,
+    RuntimeRpcFailureError,
     getDefaultUserDataPath: getDefaultUserDataPathMock
   }
 })
@@ -108,7 +111,7 @@ describe('agent hooks CLI handler', () => {
         graph: { state: 'running' }
       },
       _meta: { runtimeId: 'test' }
-    })
+    } as never)
     const local = [
       {
         agent: 'codex',
@@ -152,6 +155,33 @@ describe('agent hooks CLI handler', () => {
       statuses: local,
       remotes
     })
+  })
+
+  it('surfaces an RPC failure from a reachable runtime instead of reporting local-only status', async () => {
+    getDefaultUserDataPathMock.mockReturnValue(userDataPath)
+    getCliStatusMock.mockResolvedValueOnce({
+      id: 'test-status',
+      ok: true,
+      result: {
+        app: { running: true, pid: 123 },
+        runtime: { state: 'running', reachable: true, runtimeId: 'rt-1' },
+        graph: { state: 'running' }
+      },
+      _meta: { runtimeId: 'test' }
+    } as never)
+    callMock.mockRejectedValueOnce(new Error('agentHooks.status timed out'))
+
+    await main(['agent', 'hooks', 'status', '--json'], userDataPath)
+
+    // Why: a reachable runtime whose status RPC fails must not silently print
+    // a local-only report — that reads as `installed` while SSH host state is
+    // unknown, the exact misleading green this command exists to prevent.
+    expect(process.exitCode).toBe(1)
+    const printed = [
+      ...vi.mocked(console.error).mock.calls.flat(),
+      ...vi.mocked(console.log).mock.calls.flat()
+    ].join('\n')
+    expect(printed).toContain('agentHooks.status timed out')
   })
 
   it('falls back to local-only status when the runtime is unreachable', async () => {
