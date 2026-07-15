@@ -69,6 +69,7 @@ function respondWithAtom(
     if (assetMatch && init?.method === 'HEAD') {
       return Promise.resolve({
         ok: !missingAssets.has(decodeURIComponent(assetMatch[1])),
+        status: missingAssets.has(decodeURIComponent(assetMatch[1])) ? 404 : 200,
         text: () => Promise.resolve('')
       })
     }
