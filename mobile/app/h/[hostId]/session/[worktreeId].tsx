@@ -26,7 +26,6 @@ import {
   Bot,
   ChevronDown,
   ChevronLeft,
-  ChevronRight,
   ChevronsRight,
   Copy,
   Folder,
@@ -199,11 +198,10 @@ import {
 } from '../../../../src/dictation/mobile-dictation-setup'
 import { TerminalPaneView } from '../../../../src/session/TerminalPaneView'
 import { MobileNativeChatOverlay } from '../../../../src/session/MobileNativeChatOverlay'
+import { MobileBrowserTabActionSheet } from '../../../../src/session/MobileBrowserTabActionSheet'
 import { useMobileNativeChatController } from '../../../../src/session/use-mobile-native-chat-controller'
 import { useMobileNativeChatReadability } from '../../../../src/session/use-mobile-native-chat-readability'
 import { useMobileNativeChatInputLease } from '../../../../src/session/use-mobile-native-chat-input-lease'
-import { getActiveTabIdForHandle } from '../../../../src/session/mobile-active-terminal-tab'
-import { updateTerminalCwdFromStreamEvent } from '../../../../src/session/mobile-terminal-stream-cwd'
 import { getMobileTerminalActionSheetActions } from '../../../../src/session/mobile-terminal-action-sheet-actions'
 import * as nativeChatTerminalStream from '../../../../src/session/mobile-native-chat-terminal-stream'
 import { useMobileNativeChatTerminalStream } from '../../../../src/session/use-mobile-native-chat-terminal-stream'
@@ -258,8 +256,6 @@ import type {
   TerminalGestureInputBucket,
   TerminalGestureInputQueue
 } from './mobile-session-route-types'
-
-type TerminalLiveAccessoryInput = ReturnType<typeof createTerminalLiveAccessoryInput>
 
 const TERMINAL_KEYBOARD_DISMISS_ACTION_SHEET_FALLBACK_MS = 450
 
@@ -1663,7 +1659,7 @@ export default function SessionScreen() {
     [client, getTerminalRef, markNativeChatInputLeaseReady, scheduleDelayedAction]
   )
 
-  useMobileNativeChatTerminalStream({
+  const notifyTerminalWebReady = useMobileNativeChatTerminalStream({
     showNativeChat,
     activeHandle,
     activeTabType: activeSessionTab?.type ?? null,
@@ -3154,6 +3150,7 @@ export default function SessionScreen() {
     (handle: string) => {
       const wasAlreadyReady = webReadyHandlesRef.current.has(handle)
       webReadyHandlesRef.current.add(handle)
+      notifyTerminalWebReady(handle, wasAlreadyReady)
       terminalDiagnosticsRef.current.webViewReady(
         handle,
         wasAlreadyReady,
@@ -3195,7 +3192,7 @@ export default function SessionScreen() {
         })()
       }
     },
-    [getTerminalRef, measureViewportOnce, subscribeToTerminal, unsubscribeTerminal]
+    [measureViewportOnce, notifyTerminalWebReady, subscribeToTerminal, unsubscribeTerminal]
   )
 
   useEffect(() => {
@@ -3246,7 +3243,7 @@ export default function SessionScreen() {
     }
   }
 
-  async function handleAccessoryKey(input: TerminalLiveAccessoryInput) {
+  async function handleAccessoryKey(input: ReturnType<typeof createTerminalLiveAccessoryInput>) {
     if (!client || !activeHandle || !canSend) {
       return
     }
@@ -3733,7 +3730,7 @@ export default function SessionScreen() {
     }
   }, [])
   const startAccessoryRepeat = useCallback(
-    (input: TerminalLiveAccessoryInput) => {
+    (input: ReturnType<typeof createTerminalLiveAccessoryInput>) => {
       stopAccessoryRepeat()
       repeatTimeoutRef.current = setTimeout(() => {
         repeatIntervalRef.current = setInterval(() => {
@@ -5501,64 +5498,11 @@ export default function SessionScreen() {
         ]}
         onClose={() => setFileActionTarget(null)}
       />
-      <ActionSheetModal
-        visible={browserActionTarget != null}
-        title={browserActionTarget ? getMobileSessionTabTitle(browserActionTarget) : 'Browser'}
-        actions={[
-          ...(browserActionTarget?.canGoBack
-            ? [
-                {
-                  label: 'Back',
-                  icon: ChevronLeft,
-                  onPress: () => {
-                    const target = browserActionTarget
-                    setBrowserActionTarget(null)
-                    if (target) {
-                      void handleBrowserNavigationCommand(target, 'browser.back')
-                    }
-                  }
-                }
-              ]
-            : []),
-          ...(browserActionTarget?.canGoForward
-            ? [
-                {
-                  label: 'Forward',
-                  icon: ChevronRight,
-                  onPress: () => {
-                    const target = browserActionTarget
-                    setBrowserActionTarget(null)
-                    if (target) {
-                      void handleBrowserNavigationCommand(target, 'browser.forward')
-                    }
-                  }
-                }
-              ]
-            : []),
-          {
-            label: 'Reload',
-            icon: RefreshCw,
-            onPress: () => {
-              const target = browserActionTarget
-              setBrowserActionTarget(null)
-              if (target) {
-                void handleBrowserNavigationCommand(target, 'browser.reload')
-              }
-            }
-          },
-          {
-            label: 'Close',
-            destructive: true,
-            onPress: () => {
-              const target = browserActionTarget
-              setBrowserActionTarget(null)
-              if (target) {
-                void handleCloseSessionTab(target)
-              }
-            }
-          }
-        ]}
+      <MobileBrowserTabActionSheet
+        target={browserActionTarget}
         onClose={() => setBrowserActionTarget(null)}
+        onNavigate={handleBrowserNavigationCommand}
+        onCloseTab={handleCloseSessionTab}
       />
       <ActionSheetModal
         visible={leaveDrafts != null}

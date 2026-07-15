@@ -3865,13 +3865,15 @@
       "oracle": "The current executable slice asserts mobile initial snapshots downgrade until they fit <=512KB, requested binary snapshots downgrade until they fit <=2MB, binary live output queued while the initial snapshot loads stays <=256KB while preserving the newest tail, large binary output is split into <=48KB frames, output bursts are coalesced before emit, aborts do not register stale listeners, and stale mobile resize re-stream completions are dropped. The mobile native-chat decision test asserts an active stream pauses while covered and resumes only for a ready active terminal. JSON fallback parity and live Android scrollback restoration remain explicit gaps.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/main/runtime/rpc/terminal-output-batching.test.ts src/main/runtime/rpc/terminal-multiplex.test.ts",
-        "pnpm --dir mobile exec vitest run --root .. mobile/src/session/mobile-native-chat-terminal-stream.test.ts"
+        "pnpm --dir mobile exec vitest run --root .. mobile/src/session/mobile-native-chat-terminal-stream.test.ts",
+        "pnpm --dir mobile exec vitest run --root .. mobile/src/session/use-mobile-native-chat-terminal-stream.test.ts"
       ],
       "testFiles": [
         "src/main/runtime/rpc/terminal-subscribe-buffer.test.ts",
         "src/main/runtime/rpc/terminal-output-batching.test.ts",
         "src/main/runtime/rpc/terminal-multiplex.test.ts",
-        "mobile/src/session/mobile-native-chat-terminal-stream.test.ts"
+        "mobile/src/session/mobile-native-chat-terminal-stream.test.ts",
+        "mobile/src/session/use-mobile-native-chat-terminal-stream.test.ts"
       ],
       "assertionRefs": [
         {
@@ -3903,6 +3905,13 @@
             "an active terminal stream pauses while native chat covers its WebView",
             "the stream resumes only for the ready active terminal after chat closes",
             "non-terminal and already-settled stream states perform no lifecycle work"
+          ]
+        },
+        {
+          "file": "mobile/src/session/use-mobile-native-chat-terminal-stream.test.ts",
+          "assertions": [
+            "a late WebView-ready transition converts a cold-start lease-only stream back to output",
+            "ordinary WebView readiness does not rerender the mobile session route"
           ]
         }
       ],

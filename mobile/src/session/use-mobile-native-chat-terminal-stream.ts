@@ -1,4 +1,4 @@
-import { useEffect, useRef, type MutableRefObject } from 'react'
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
 import { resolveMobileNativeChatTerminalStreamAction } from './mobile-native-chat-terminal-stream'
 
 /** Pauses the active terminal stream while native chat covers its mounted WebView,
@@ -13,8 +13,16 @@ export function useMobileNativeChatTerminalStream(args: {
   initializedRef: MutableRefObject<Set<string>>
   subscribe: (handle: string) => void
   unsubscribe: (handle: string) => void
-}): void {
+}): (handle: string, wasAlreadyReady: boolean) => void {
   const coveredHandleRef = useRef<string | null>(null)
+  const [webReadyRevision, setWebReadyRevision] = useState(0)
+  const notifyWebReady = useCallback((handle: string, wasAlreadyReady: boolean) => {
+    // Why: ordinary WebView startups must not rerender the large session route;
+    // only readiness that can release a native-chat lease needs reconciliation.
+    if (!wasAlreadyReady && coveredHandleRef.current === handle) {
+      setWebReadyRevision((revision) => revision + 1)
+    }
+  }, [])
   useEffect(() => {
     const handle = args.activeHandle
     if (coveredHandleRef.current && coveredHandleRef.current !== handle) {
@@ -61,6 +69,8 @@ export function useMobileNativeChatTerminalStream(args: {
     args.subscribingRef,
     args.subscriptionsRef,
     args.unsubscribe,
-    args.webReadyRef
+    args.webReadyRef,
+    webReadyRevision
   ])
+  return notifyWebReady
 }
