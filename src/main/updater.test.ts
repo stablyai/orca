@@ -1475,7 +1475,7 @@ describe('updater', () => {
     await vi.waitFor(() => {
       expect(sendMock).toHaveBeenCalledWith('updater:status', {
         state: 'error',
-        message: "Couldn't reach the update server. Try again in a few minutes.",
+        message: 'A new release is still being published. Try again shortly.',
         userInitiated: true
       })
     })
