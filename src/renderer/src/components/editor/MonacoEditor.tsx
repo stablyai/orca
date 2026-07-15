@@ -15,7 +15,11 @@ import { registerFileSearchSelectedTextProvider } from '@/lib/file-search-select
 
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MAX_REVEAL_CONTENT_WAIT_FRAMES, performReveal } from './monaco-reveal'
-import { syncContentOnMount, syncContentUpdate } from './monaco-content-sync'
+import {
+  syncContentOnMount,
+  syncContentUpdate,
+  type MonacoContentSyncMode
+} from './monaco-content-sync'
 import { getMonacoCodebaseSearchQuery } from './monaco-codebase-search'
 import {
   beginProgrammaticContentSync,
@@ -77,6 +81,7 @@ type MonacoEditorProps = {
   markdownAnnotationsEnabled?: boolean
   conflictDecorationsEnabled?: boolean
   readOnly?: boolean
+  liveTail?: boolean
   autoHeight?: boolean
 }
 
@@ -101,6 +106,7 @@ export default function MonacoEditor({
   markdownAnnotationsEnabled = false,
   conflictDecorationsEnabled = false,
   readOnly = false,
+  liveTail = false,
   autoHeight = false
 }: MonacoEditorProps): React.JSX.Element {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
@@ -131,6 +137,8 @@ export default function MonacoEditor({
   propsRef.current = { relativePath, language, onSave, onContentChange }
   const readOnlyRef = useRef(readOnly)
   readOnlyRef.current = readOnly
+  const contentSyncModeRef = useRef<MonacoContentSyncMode>('undoable')
+  contentSyncModeRef.current = readOnly && liveTail ? 'read-only-live-tail' : 'undoable'
 
   const settings = useAppStore((s) => s.settings)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
@@ -370,7 +378,11 @@ export default function MonacoEditor({
       beginProgrammaticContentSync(filePath)
       isApplyingProgrammaticContentRef.current = true
       try {
-        const didSyncOnMount = syncContentOnMount(editorInstance, contentRef.current)
+        const didSyncOnMount = syncContentOnMount(
+          editorInstance,
+          contentRef.current,
+          contentSyncModeRef.current
+        )
         if (didSyncOnMount) {
           lastSyncedContentRef.current = contentRef.current
         }
@@ -672,7 +684,7 @@ export default function MonacoEditor({
     beginProgrammaticContentSync(filePath)
     isApplyingProgrammaticContentRef.current = true
     try {
-      syncContentUpdate(ed, content)
+      syncContentUpdate(ed, content, contentSyncModeRef.current)
       lastSyncedContentRef.current = content
     } finally {
       isApplyingProgrammaticContentRef.current = false

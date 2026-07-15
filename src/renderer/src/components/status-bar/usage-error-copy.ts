@@ -30,7 +30,13 @@ export function getProviderDisplayName(provider: ProviderRateLimits['provider'])
 }
 
 function isUsageRateLimitError(message: string | null): boolean {
-  return Boolean(message && /\brate[- ]?limits?\b|\brate[- ]?limited\b/i.test(message))
+  // Why: Codex app-server's "chatgpt authentication required to read rate
+  // limits" mentions rate limits only as the thing it could not read; treat
+  // authentication-required failures as auth, never as the user being limited.
+  if (!message || /\bauthentication required\b/i.test(message)) {
+    return false
+  }
+  return /\brate[- ]?limits?\b|\brate[- ]?limited\b/i.test(message)
 }
 
 const USAGE_AUTH_ERROR_PATTERNS = [
@@ -45,6 +51,7 @@ const USAGE_AUTH_ERROR_PATTERNS = [
   /\bauth (?:is missing|tokens are missing|does not expose)\b/i,
   /\bunauthori[sz]ed\b/i,
   /\bunauthenticated\b/i,
+  /\bauthentication required\b/i,
   /\bplease reauthenticate\b/i,
   /\bsign in\b/i,
   /\blogged in to another account\b/i,

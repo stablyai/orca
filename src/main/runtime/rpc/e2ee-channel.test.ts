@@ -27,7 +27,10 @@ function setup(overrides?: Partial<E2EEChannelOptions>) {
 
   const channel = new E2EEChannel(ws as unknown as WebSocket, {
     serverSecretKey: serverKeys.secretKey,
-    validateToken: (token) => token === 'valid-token',
+    resolveAuthenticatedDevice: (token) =>
+      token === 'valid-token'
+        ? { deviceId: 'device-1', deviceToken: token, scope: 'mobile' }
+        : null,
     onReady,
     onError,
     ...overrides
@@ -63,7 +66,11 @@ describe('E2EEChannel', () => {
       const ctx = setup()
       doHandshake(ctx)
 
-      expect(ctx.onReady).toHaveBeenCalledWith(ctx.channel)
+      expect(ctx.onReady).toHaveBeenCalledWith(ctx.channel, {
+        deviceId: 'device-1',
+        deviceToken: 'valid-token',
+        scope: 'mobile'
+      })
       expect(ctx.onError).not.toHaveBeenCalled()
       expect(ctx.channel.deviceToken).toBe('valid-token')
 

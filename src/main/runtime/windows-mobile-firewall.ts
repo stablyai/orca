@@ -5,6 +5,7 @@ import type {
   WindowsMobileFirewallStatus,
   WindowsNetworkCategory
 } from '../../shared/windows-mobile-firewall'
+import { hasSufficientWindowsFirewallRemoteScope } from './windows-firewall-remote-scope'
 
 const FIREWALL_RULE_NAME = 'Orca.MobilePairing'
 const FIREWALL_RULE_DISPLAY_NAME = 'Orca Mobile Pairing'
@@ -22,7 +23,9 @@ export type WindowsMobileFirewallEnvironment = {
 }
 
 type FirewallInspection = {
-  ruleAllowed: boolean
+  matchingRuleScopes?: unknown
+  localAddress?: unknown
+  localPrefixLength?: unknown
   privateFirewallEnabled: boolean
   networkCategory: string
 }
@@ -51,7 +54,11 @@ export async function inspectWindowsMobileFirewall(
     return {
       supported: true,
       port,
-      ruleAllowed: result.ruleAllowed === true,
+      ruleAllowed: hasSufficientWindowsFirewallRemoteScope(
+        result.matchingRuleScopes,
+        result.localAddress,
+        result.localPrefixLength
+      ),
       privateFirewallEnabled: result.privateFirewallEnabled !== false,
       networkCategory: parseNetworkCategory(result.networkCategory),
       inspectionAvailable: true
@@ -152,12 +159,16 @@ function buildInspectionScript(port: number, executablePath: string, address?: s
     ? `
 try {
   $ip = Get-NetIPAddress -IPAddress ${quotePowerShell(address)} -ErrorAction Stop | Select-Object -First 1
+  $localAddress = [string]$ip.IPAddress
+  $localPrefixLength = [int]$ip.PrefixLength
   $profile = Get-NetConnectionProfile -InterfaceIndex $ip.InterfaceIndex -ErrorAction Stop | Select-Object -First 1
   if ($profile) { $networkCategory = [string]$profile.NetworkCategory }
 } catch {}`
     : ''
+  // Why: NetSecurity filter properties are stable across localized Windows
+  // display output and keep every rule's address scope independent.
   return `$ErrorActionPreference = 'Stop'
-$ruleAllowed = $false
+$matchingRuleScopes = @()
 $rules = @(Get-NetFirewallApplicationFilter -Program ${quotePowerShell(executablePath)} -ErrorAction SilentlyContinue | Get-NetFirewallRule | Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' -and $_.Action -eq 'Allow' })
 foreach ($rule in $rules) {
   $portFilter = $rule | Get-NetFirewallPortFilter
@@ -165,16 +176,21 @@ foreach ($rule in $rules) {
   $profile = [string]$rule.Profile
   $portMatches = @($portFilter.LocalPort | Where-Object { [string]$_ -eq 'Any' -or [string]$_ -eq '${port}' }).Count -gt 0
   if (($protocol -eq 'Any' -or $protocol -eq 'TCP' -or $protocol -eq '6') -and ($profile -eq 'Any' -or $profile -match 'Private') -and $portMatches) {
-    $ruleAllowed = $true
+    $addressFilter = $rule | Get-NetFirewallAddressFilter
+    $matchingRuleScopes += [pscustomobject]@{
+      remoteAddresses = @($addressFilter.RemoteAddress | ForEach-Object { [string]$_ })
+    }
   }
 }
 $privateFirewallEnabled = [bool](Get-NetFirewallProfile -Name Private).Enabled
 $networkCategory = 'Unknown'${addressLookup}
 [pscustomobject]@{
-  ruleAllowed = $ruleAllowed
+  matchingRuleScopes = @($matchingRuleScopes)
+  localAddress = $localAddress
+  localPrefixLength = $localPrefixLength
   privateFirewallEnabled = $privateFirewallEnabled
   networkCategory = $networkCategory
-} | ConvertTo-Json -Compress`
+} | ConvertTo-Json -Depth 4 -Compress`
 }
 
 function buildRepairScript(port: number, executablePath: string): string {

@@ -2227,7 +2227,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     const terminalPane = findByTypeName(element, 'TerminalPane')
 
     ;(terminalPane.props.onPtyExit as () => void)()
-    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1')
+    expect(mocks.closeTab).toHaveBeenCalledWith('tab-1', { reason: 'pty-exit' })
     expect(onOpenChange).not.toHaveBeenCalled()
 
     mocks.closeTab.mockClear()

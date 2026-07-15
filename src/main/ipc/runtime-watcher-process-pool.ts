@@ -77,10 +77,7 @@ export class RuntimeWatcherProcessPool {
       if (isWatcherProcessFailure(error) && error.scope === 'supervisor') {
         this.retireSlot(slot)
       } else {
-        releaseAssignment()
-        if (isWatcherProcessFailure(error) && error.code === 'subscribe_timeout') {
-          this.isolatedRoots.add(dir)
-        }
+        this.releaseFailedRoot(assignment, dir, error, releaseAssignment)
       }
       hooks.onTerminalError?.(error)
     }
@@ -94,10 +91,7 @@ export class RuntimeWatcherProcessPool {
       if (isWatcherProcessFailure(error) && error.scope === 'supervisor') {
         this.retireSlot(slot)
       } else {
-        releaseAssignment()
-        if (isWatcherProcessFailure(error) && error.code === 'subscribe_timeout') {
-          this.isolatedRoots.add(dir)
-        }
+        this.releaseFailedRoot(assignment, dir, error, releaseAssignment)
       }
       throw error
     }
@@ -207,14 +201,7 @@ export class RuntimeWatcherProcessPool {
       if (this.assignments.get(root)?.slot === slot) {
         this.assignments.delete(root)
       }
-      if (slot.isolated) {
-        // Why: one bounded quarantine attempt is the recovery budget for a
-        // watch lifetime; repeated fused replacements would recreate churn.
-        this.isolatedRoots.delete(root)
-        this.failedQuarantineRoots.add(root)
-      } else {
-        this.isolatedRoots.add(root)
-      }
+      this.quarantineOrFuse(root, slot.isolated)
     }
     slot.roots.clear()
     // Why: failAllSubscriptions is still iterating callbacks; defer disposal
@@ -238,6 +225,31 @@ export class RuntimeWatcherProcessPool {
       this.activeSlots.delete(slot)
       this.disposeSlot(slot)
     }
+  }
+
+  private releaseFailedRoot(
+    assignment: RuntimeWatcherPoolAssignment,
+    dir: string,
+    error: unknown,
+    releaseAssignment: () => void
+  ): void {
+    releaseAssignment()
+    if (!isWatcherProcessFailure(error) || error.code !== 'subscribe_timeout') {
+      return
+    }
+    this.quarantineOrFuse(dir, assignment.slot.isolated)
+  }
+
+  // Why: one bounded quarantine attempt is the recovery budget per watch
+  // lifetime; an already-isolated root that fails again is fused, not re-isolated,
+  // so it cannot spawn another child generation.
+  private quarantineOrFuse(dir: string, isolated: boolean): void {
+    if (isolated) {
+      this.isolatedRoots.delete(dir)
+      this.failedQuarantineRoots.add(dir)
+      return
+    }
+    this.isolatedRoots.add(dir)
   }
 
   private disposeSlot(slot: RuntimeWatcherPoolSlot): void {

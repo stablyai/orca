@@ -155,14 +155,36 @@ describe('useCreatePullRequestDialogFields', () => {
     }
   })
 
-  it('prefers the selected current base ref over stale eligibility defaults', async () => {
+  it('prefers the remote-validated eligibility default over a stacked local-only base', async () => {
+    // Why: for a stacked worktree the current base is the local-only parent
+    // branch, which the main process resolves to the repo default. The seeded
+    // field must follow the remote-validated eligibility default, not the parent.
     const harness = renderDialogFields({
       eligibility: createEligibility({ defaultBaseRef: 'refs/remotes/origin/main' }),
-      currentBaseRef: 'refs/remotes/origin/release'
+      currentBaseRef: 'stacked-parent'
     })
     try {
       await harness.rerender({
         eligibility: createEligibility({ defaultBaseRef: 'refs/remotes/origin/main' }),
+        currentBaseRef: 'stacked-parent'
+      })
+
+      expect(harness.current().base).toBe('main')
+    } finally {
+      harness.unmount()
+    }
+  })
+
+  it('falls back to the current base ref when eligibility supplies no default', async () => {
+    // Why: when the main process cannot resolve a default (e.g. origin/HEAD
+    // unset and no probes match), keep the current base rather than blanking it.
+    const harness = renderDialogFields({
+      eligibility: createEligibility({ defaultBaseRef: null }),
+      currentBaseRef: 'refs/remotes/origin/release'
+    })
+    try {
+      await harness.rerender({
+        eligibility: createEligibility({ defaultBaseRef: null }),
         currentBaseRef: 'refs/remotes/origin/release'
       })
 
@@ -212,7 +234,7 @@ describe('useCreatePullRequestDialogFields', () => {
       const seedRevisions = { ...harness.current().fieldRevisions }
 
       await harness.rerender({
-        eligibility: createEligibility(),
+        eligibility: createEligibility({ defaultBaseRef: 'refs/remotes/origin/release' }),
         currentBaseRef: 'refs/remotes/origin/release'
       })
       expect(harness.current().base).toBe('release')

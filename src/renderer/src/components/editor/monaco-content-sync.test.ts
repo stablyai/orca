@@ -9,6 +9,7 @@ function createHarness(
   editorInstance: editor.IStandaloneCodeEditor
   getValue: ReturnType<typeof vi.fn>
   getFullModelRange: ReturnType<typeof vi.fn>
+  applyEdits: ReturnType<typeof vi.fn>
   pushEditOperations: ReturnType<typeof vi.fn>
   pushUndoStop: ReturnType<typeof vi.fn>
 } {
@@ -20,18 +21,27 @@ function createHarness(
     endColumn: 5
   }))
   const pushEditOperations = vi.fn()
+  const applyEdits = vi.fn()
   const model = {
     getValue,
     getEOL: () => eol,
     getFullModelRange,
-    pushEditOperations
+    pushEditOperations,
+    applyEdits
   } as unknown as editor.ITextModel
   const pushUndoStop = vi.fn()
   const editorInstance = {
     getModel: () => model,
     pushUndoStop
   } as unknown as editor.IStandaloneCodeEditor
-  return { editorInstance, getValue, getFullModelRange, pushEditOperations, pushUndoStop }
+  return {
+    editorInstance,
+    getValue,
+    getFullModelRange,
+    applyEdits,
+    pushEditOperations,
+    pushUndoStop
+  }
 }
 
 describe('monaco content sync', () => {
@@ -58,6 +68,26 @@ describe('monaco content sync', () => {
       expect.any(Function)
     )
     expect(harness.pushUndoStop).toHaveBeenCalledTimes(2)
+  })
+
+  it('inserts a read-only live-tail suffix without recording undo history', () => {
+    const harness = createHarness('first\nsecond\nlast')
+
+    syncContentUpdate(harness.editorInstance, 'first\nsecond\nlast\nnext', 'read-only-live-tail')
+
+    expect(harness.applyEdits).toHaveBeenCalledWith([
+      {
+        range: {
+          startLineNumber: 3,
+          startColumn: 5,
+          endLineNumber: 3,
+          endColumn: 5
+        },
+        text: '\nnext'
+      }
+    ])
+    expect(harness.pushEditOperations).not.toHaveBeenCalled()
+    expect(harness.pushUndoStop).not.toHaveBeenCalled()
   })
 
   it('does nothing for identical content', () => {
@@ -127,12 +157,38 @@ describe('monaco content sync', () => {
     expect(harness.pushUndoStop).toHaveBeenCalledTimes(2)
   })
 
+  it.each([
+    ['same-length rewrite', 'before', 'after!'],
+    ['prefix mismatch', 'before', 'changed content'],
+    ['truncation', 'longer content', 'short']
+  ])('non-undoingly replaces a read-only live-tail %s', (_label, initialContent, nextContent) => {
+    const harness = createHarness(initialContent)
+
+    syncContentUpdate(harness.editorInstance, nextContent, 'read-only-live-tail')
+
+    expect(harness.applyEdits).toHaveBeenCalledWith([
+      { range: harness.getFullModelRange.mock.results[0]?.value, text: nextContent }
+    ])
+    expect(harness.pushEditOperations).not.toHaveBeenCalled()
+    expect(harness.pushUndoStop).not.toHaveBeenCalled()
+  })
+
   it('reconciles a stale retained model on mount without undo stops', () => {
     const harness = createHarness('stale')
 
     expect(syncContentOnMount(harness.editorInstance, 'fresh')).toBe(true)
 
     expect(harness.pushEditOperations).toHaveBeenCalledTimes(1)
+    expect(harness.pushUndoStop).not.toHaveBeenCalled()
+  })
+
+  it('reconciles a stale read-only live-tail model on mount without undo history', () => {
+    const harness = createHarness('stale')
+
+    expect(syncContentOnMount(harness.editorInstance, 'fresh', 'read-only-live-tail')).toBe(true)
+
+    expect(harness.applyEdits).toHaveBeenCalledTimes(1)
+    expect(harness.pushEditOperations).not.toHaveBeenCalled()
     expect(harness.pushUndoStop).not.toHaveBeenCalled()
   })
 

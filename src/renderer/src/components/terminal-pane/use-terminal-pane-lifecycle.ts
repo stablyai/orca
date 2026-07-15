@@ -15,7 +15,10 @@ import {
   resolveTerminalCursorInactiveStyle
 } from '@/lib/pane-manager/pane-terminal-options'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
-import { configureTerminalOutputBacklogCap } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import {
+  configureTerminalOutputBacklogCap,
+  writeTerminalOutput
+} from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
 import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-mouse-wheel'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
@@ -131,6 +134,17 @@ import {
   resolveTabTitleAfterPaneClose,
   shouldClearLaunchAgentForClosedPane
 } from './terminal-pane-close-identity'
+
+export function resetTerminalKeyboardProtocolAfterInterrupt(terminal: Terminal): void {
+  // Use the guarded output path so a certified/throwing xterm cannot escape a
+  // keyboard handler or retain more writes while pane recovery is delayed.
+  writeTerminalOutput(terminal, RESET_KITTY_KEYBOARD_PROTOCOL, {
+    foreground: true,
+    // The interrupt itself already took the synchronous input path. Queue the
+    // renderer reset so it cannot flush a PTY backlog inside the key handler.
+    latencySensitive: false
+  })
+}
 
 export function recordRuntimeCreatedTerminalPaneSplit(
   createdPane: unknown,
@@ -459,15 +473,9 @@ export function shouldDetachPaneTransportOnUnmount(args: {
   ptyId: string | null
   worktreeTabs: readonly TerminalTab[] | undefined
 }): boolean {
-  if (!args.ptyId) {
-    return false
-  }
-  if (args.tabStillExists) {
-    return true
-  }
-  return Boolean(
-    args.worktreeTabs?.some((tab) => tab.id !== args.tabId && tab.ptyId === args.ptyId)
-  )
+  // Why: mounted transport teardown is renderer-only; closeTab or the pane-close
+  // action already owns provider shutdown. Destroy only pending, ID-less spawns.
+  return Boolean(args.ptyId)
 }
 
 /**
@@ -987,7 +995,7 @@ export function useTerminalPaneLifecycle({
               pane.terminal.input(TERMINAL_INTERRUPT_INPUT)
               // Why: CLIs such as Codex can die on SIGINT before restoring
               // xterm's renderer-side Kitty flags, leaving the shell corrupted.
-              pane.terminal.write(RESET_KITTY_KEYBOARD_PROTOCOL)
+              resetTerminalKeyboardProtocolAfterInterrupt(pane.terminal)
             } else {
               pendingTerminalInterruptKeyup = false
             }
@@ -1296,16 +1304,10 @@ export function useTerminalPaneLifecycle({
         }
         const leafId = closedPane?.leafId
         if (leafId && !isDetachedToTab) {
-          // Why: closing a pane is user-initiated teardown of this row — drop
-          // (not remove) so any retained `done` snapshot for this pane is also
-          // cleared and a same-frame live→gone transition cannot re-snapshot
-          // it via the retention sync. This is pane-keyed state, so it must
-          // clear even if the PTY transport was already removed.
+          // Why: pane close permanently revokes only this pane's authority;
+          // an exact tombstone blocks queued hooks without suppressing siblings.
           const paneKey = makePaneKey(tabId, leafId)
-          useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
-          clearTerminalPaneUnread(paneKey)
-          useAppStore.getState().dropAgentStatus(paneKey)
-          useAppStore.getState().clearPaneForegroundAgent(paneKey)
+          useAppStore.getState().retireAgentPaneAuthority(paneKey)
         }
         if (transport) {
           if (isDetachedToTab) {
@@ -1817,7 +1819,11 @@ export function useTerminalPaneLifecycle({
       releaseWebviewDragPassthrough = null
       managerRef.current = null
       if (e2eConfig.exposeStore) {
-        window.__paneManagers?.delete(tabId)
+        // Why: a replacement mount can register before this effect cleans up.
+        // Preserve the successor so E2E and recovery probes see the live pane.
+        if (window.__paneManagers?.get(tabId) === manager) {
+          window.__paneManagers.delete(tabId)
+        }
       }
       setTabPaneExpanded(tabId, false)
       setTabCanExpandPane(tabId, false)

@@ -4,7 +4,12 @@ import type { RpcResponse } from '../transport/types'
 import {
   isTerminalUpdateViewportApplied,
   isTerminalUpdateViewportUpdated,
-  isTerminalViewportRefitTargetCurrent
+  isTerminalViewportRefitTargetCurrent,
+  reduceTerminalFrameHeightRefit,
+  resolveTerminalUpdateViewportCapability,
+  type TerminalFrameHeightRefitEvent,
+  type TerminalFrameHeightRefitState,
+  type TerminalUpdateViewportCapability
 } from './terminal-viewport-refit-state'
 
 const hookSource = readFileSync(new URL('./terminal-viewport-refit.ts', import.meta.url), 'utf8')
@@ -48,11 +53,110 @@ describe('terminal viewport refit', () => {
     expect(textScaleEffect).toContain('[textScale, viewportMeasuredRef, scheduleViewportRefit]')
   })
 
+  it('coalesces keyboard-visible frame-height churn into one refit after close', () => {
+    let state: TerminalFrameHeightRefitState = {
+      frameHeight: 600,
+      keyboardVisible: false,
+      pending: false
+    }
+    let refitCount = 0
+    const dispatch = (event: TerminalFrameHeightRefitEvent) => {
+      const transition = reduceTerminalFrameHeightRefit(state, event)
+      state = transition.state
+      refitCount += Number(transition.shouldRefit)
+    }
+
+    dispatch({ type: 'keyboard-visibility', visible: true })
+    dispatch({ type: 'frame-height', height: 540 })
+    dispatch({ type: 'frame-height', height: 520 })
+    dispatch({ type: 'frame-height', height: 520 })
+    expect(refitCount).toBe(0)
+    expect(state.pending).toBe(true)
+
+    dispatch({ type: 'keyboard-visibility', visible: false })
+    dispatch({ type: 'keyboard-visibility', visible: false })
+    dispatch({ type: 'frame-height', height: 520 })
+    expect(refitCount).toBe(1)
+    expect(state.pending).toBe(false)
+
+    dispatch({ type: 'frame-height', height: 500 })
+    expect(refitCount).toBe(2)
+  })
+
+  it('routes imperative height notifications through the keyboard-aware reducer', () => {
+    const start = hookSource.indexOf('const notifyFrameHeightRefitEvent = useCallback(')
+    expect(start).toBeGreaterThanOrEqual(0)
+    const notifier = hookSource.slice(start, start + 1_300)
+    expect(notifier).toContain('reduceTerminalFrameHeightRefit(')
+    expect(notifier).toContain("{ type: 'frame-height', height }")
+    expect(notifier).toContain("{ type: 'keyboard-visibility', visible }")
+    expect(notifier).toContain('viewportMeasuredRef.current = false')
+    expect(notifier).toContain('scheduleViewportRefit({ heightOriginated: true })')
+  })
+
+  it('re-defers a height refit if the keyboard reopens before the debounce fires', () => {
+    // Settle while the keyboard is up -> deferred (pending), no refit.
+    let r = reduceTerminalFrameHeightRefit(
+      { frameHeight: 600, keyboardVisible: true, pending: false },
+      { type: 'frame-height', height: 520 }
+    )
+    expect(r.shouldRefit).toBe(false)
+    expect(r.state.pending).toBe(true)
+
+    // Keyboard closes -> refit scheduled (the hook arms a 150ms timer here).
+    r = reduceTerminalFrameHeightRefit(r.state, { type: 'keyboard-visibility', visible: false })
+    expect(r.shouldRefit).toBe(true)
+
+    // Keyboard reopens inside the debounce window, then the timer fires:
+    // the committed refit must NOT reflow while typing, and stays owed.
+    r = reduceTerminalFrameHeightRefit(r.state, { type: 'keyboard-visibility', visible: true })
+    const committed = reduceTerminalFrameHeightRefit(r.state, { type: 'refit-committed' })
+    expect(committed.shouldRefit).toBe(false)
+    expect(committed.state.pending).toBe(true)
+
+    // Keyboard closes again -> rescheduled -> now the committed refit runs.
+    const rescheduled = reduceTerminalFrameHeightRefit(committed.state, {
+      type: 'keyboard-visibility',
+      visible: false
+    })
+    expect(rescheduled.shouldRefit).toBe(true)
+    const ran = reduceTerminalFrameHeightRefit(rescheduled.state, { type: 'refit-committed' })
+    expect(ran.shouldRefit).toBe(true)
+    expect(ran.state.pending).toBe(false)
+  })
+
+  it('re-checks the keyboard at fire time only for height-originated refits', () => {
+    const start = hookSource.indexOf('refitTimerRef.current = setTimeout(')
+    expect(start).toBeGreaterThanOrEqual(0)
+    const timerBody = hookSource.slice(start, start + 900)
+    // The height flag scopes the guard; forced/width refits stay unguarded.
+    expect(timerBody).toContain('if (heightOriginatedRefitRef.current)')
+    expect(timerBody).toContain("type: 'refit-committed'")
+    expect(timerBody).toContain('if (!decision.shouldRefit)')
+  })
+
   it('is wired into the session screen', () => {
     expect(sessionSource).toContain('useTerminalViewportRefit({')
     expect(sessionSource).toContain('tabStripVisible: terminals.length > 1')
     expect(sessionSource).toContain('textScale: terminalTextScale')
     expect(sessionSource).toContain('connState,')
+    expect(sessionSource).toContain('notifyTerminalFrameHeight(nextHeight)')
+    expect(sessionSource).toContain('notifyKeyboardVisibility(true)')
+    expect(sessionSource).toContain('notifyKeyboardVisibility(false)')
+  })
+
+  it('does not rerender SessionScreen for frame-height-only layout changes', () => {
+    // The imperative notifier keeps a dock-settling burst off React's render path.
+    expect(sessionSource).not.toContain('setTerminalFrameHeight')
+    expect(sessionSource).not.toContain('const [terminalFrameHeight,')
+  })
+
+  it('defers height-only window resizes while the keyboard is visible', () => {
+    const start = hookSource.indexOf('const prevWindowDimsRef')
+    const windowEffect = hookSource.slice(start, start + 1_100)
+    expect(windowEffect).toContain(
+      'prev.width === windowWidth && frameHeightRefitStateRef.current.keyboardVisible'
+    )
   })
 
   it('forces a refit on iOS foreground and connection recovery', () => {
@@ -91,6 +195,42 @@ describe('terminal viewport refit', () => {
     expect(rpcIndex).toBeGreaterThanOrEqual(0)
     expect(cacheUpdateIndex).toBeGreaterThan(rpcIndex)
     expect(resubscribeIndex).toBeGreaterThan(rpcIndex)
+  })
+
+  it('falls back to legacy resubscribe when an older desktop lacks updateViewport', () => {
+    const unsupported = {
+      id: 'old-host',
+      ok: false,
+      error: { code: 'method_not_found', message: 'Unknown method: terminal.updateViewport' },
+      _meta: { runtimeId: 'runtime' }
+    } satisfies RpcResponse
+    expect(isTerminalUpdateViewportUpdated(unsupported)).toBe(false)
+    expect(
+      resolveTerminalUpdateViewportCapability({
+        ...unsupported,
+        error: { code: 'temporary_failure', message: 'retryable' }
+      })
+    ).toBe('unknown')
+
+    let capability: TerminalUpdateViewportCapability = 'unknown'
+    let probeCount = 0
+    for (let refit = 0; refit < 10; refit += 1) {
+      if (capability === 'unsupported') {
+        continue
+      }
+      probeCount += 1
+      capability = resolveTerminalUpdateViewportCapability(unsupported)
+    }
+    expect(probeCount).toBe(1)
+
+    const responseCheckIndex = hookSource.indexOf('isTerminalUpdateViewportUpdated(response)')
+    const unsubscribeIndex = hookSource.indexOf('unsubscribeTerminal(handle)', responseCheckIndex)
+    const subscribeIndex = hookSource.indexOf('subscribeToTerminal(handle)', unsubscribeIndex)
+    expect(responseCheckIndex).toBeGreaterThanOrEqual(0)
+    expect(unsubscribeIndex).toBeGreaterThan(responseCheckIndex)
+    expect(subscribeIndex).toBeGreaterThan(unsubscribeIndex)
+    expect(hookSource).toContain("updateViewportCapabilityRef.current !== 'unsupported'")
+    expect(hookSource).toContain("updateViewportCapabilityRef.current = 'unknown'")
   })
 
   it('reflows the local xterm scrollback after a successful updateViewport', () => {

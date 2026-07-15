@@ -117,6 +117,12 @@ export type PtySpawnResult = {
    *  writing the snapshot so ANSI cursor positions land correctly. */
   snapshotCols?: number
   snapshotRows?: number
+  /** Provider sequence at the attach boundary. `reset` starts a new provider
+   *  generation; `continued` resumes the existing absolute domain. */
+  providerSequence?: {
+    value: number
+    generation: 'continued' | 'reset'
+  }
   /** Kitty keyboard flags persisted in the daemon snapshot, threaded so the
    *  re-seeded runtime emulator answers hidden `CSI ? u` with the real flags
    *  (terminal-query-authority.md §kitty). Never replayed into a renderer
@@ -154,6 +160,8 @@ export type PtyProcessInfo = {
 
 export type IPtyProvider = {
   spawn(opts: PtySpawnOptions): Promise<PtySpawnResult>
+  /** Whether this spawn target can append the Git guard after its final env merge. */
+  supportsGitCredentialGuardHost?: (sessionId?: string) => boolean
   attach(id: string): Promise<void>
   hasPty?: (id: string) => boolean
   write(id: string, data: string): void

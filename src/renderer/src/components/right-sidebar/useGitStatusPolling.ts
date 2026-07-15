@@ -72,13 +72,20 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     openFiles
   }
   const isActiveConnectionReady = isConnectionReady(activeConnectionId)
-  const shouldPollActiveWorktreeGitStatus =
+  const canFetchActiveWorktreeGitStatus =
     enabled &&
     !!activeWorktreeId &&
     !!worktreePath &&
     activeRepoSupportsGit &&
     shouldPollActiveGitStatus(activeGitStatusPollingArgs) &&
-    isActiveConnectionReady &&
+    isActiveConnectionReady
+  // Why: the huge flag must only pause evidence-free polling, not push-signal
+  // refreshes — a fresh non-huge status result is the only thing that can
+  // clear the flag, so gating every lane on it would deadlock the worktree
+  // into stale status until an app restart.
+  const shouldPollActiveWorktreeGitStatus =
+    canFetchActiveWorktreeGitStatus &&
+    !!activeWorktreeId &&
     !gitStatusHugeByWorktree?.[activeWorktreeId]
   const activeStatusPollIntervalMs = hasInteractiveActiveGitStatusConsumer(
     activeGitStatusPollingArgs
@@ -116,7 +123,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     if (!isWindowVisible()) {
       return
     }
-    if (!shouldPollActiveWorktreeGitStatus || !activeWorktreeId || !worktreePath) {
+    if (!canFetchActiveWorktreeGitStatus || !activeWorktreeId || !worktreePath) {
       return
     }
     try {
@@ -141,7 +148,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     activePushTarget,
     activeWorktreeId,
     fetchUpstreamStatus,
-    shouldPollActiveWorktreeGitStatus,
+    canFetchActiveWorktreeGitStatus,
     worktreePath,
     setGitStatus,
     setUpstreamStatus,
@@ -180,6 +187,29 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     statusPollRunnerRef.current?.run({ changeSignal: true })
   }, [])
 
+  // Why: while huge, the visibility interval below is not installed, and push
+  // signals are dropped while hidden — e.g. an agent committing behind a
+  // minimized window. Catch up on reveal so the huge flag can still clear.
+  const hugeStatusPauseActive = canFetchActiveWorktreeGitStatus && !activeStatusPollScope
+  useEffect(() => {
+    if (
+      !hugeStatusPauseActive ||
+      typeof document === 'undefined' ||
+      typeof document.addEventListener !== 'function'
+    ) {
+      return
+    }
+    const catchUpOnReveal = (): void => {
+      if (isWindowVisible()) {
+        fetchStatusOnChangeSignal()
+      }
+    }
+    document.addEventListener('visibilitychange', catchUpOnReveal)
+    return () => {
+      document.removeEventListener('visibilitychange', catchUpOnReveal)
+    }
+  }, [hugeStatusPauseActive, fetchStatusOnChangeSignal])
+
   useEffect(() => {
     if (!activeStatusPollScope) {
       return
@@ -213,7 +243,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   useGitStatusPushSignalRefresh({
     activeRepoId,
     activeWorktreeId,
-    enabled: shouldPollActiveWorktreeGitStatus,
+    enabled: canFetchActiveWorktreeGitStatus,
     fetchStatus: fetchStatusOnChangeSignal
   })
 

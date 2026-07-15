@@ -413,7 +413,8 @@ async function main() {
       appTotalSavedMB: subMB(off.appMemory?.totalMB, on.appMemory?.totalMB),
       appRendererSavedMB: subMB(off.appMemory?.rendererMB, on.appMemory?.rendererMB),
       appMainSavedMB: subMB(off.appMemory?.mainMB, on.appMemory?.mainMB),
-      domNodesReleased: off.cdpNodes != null && on.cdpNodes != null ? off.cdpNodes - on.cdpNodes : null
+      domNodesReleased:
+        off.cdpNodes != null && on.cdpNodes != null ? off.cdpNodes - on.cdpNodes : null
     }
     report.finalDiagnostics = await collectRendererDiagnostics(page)
   } finally {
@@ -451,7 +452,13 @@ async function main() {
     const stamp = new Date(startedAt).toISOString().replace(/[:.]/g, '-')
     const reportPath = path.resolve(
       args.reportPath ??
-        path.join(rootDir, 'tools', 'benchmarks', 'results', `cold-park-res-${args.label}-${stamp}.json`)
+        path.join(
+          rootDir,
+          'tools',
+          'benchmarks',
+          'results',
+          `cold-park-res-${args.label}-${stamp}.json`
+        )
     )
     mkdirSync(path.dirname(reportPath), { recursive: true })
     writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`)

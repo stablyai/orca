@@ -6,6 +6,8 @@ on:
       - '.github/workflows/computer-e2e.yml'
       - 'config/electron-builder.config.cjs'
       - 'config/scripts/build-computer-macos.mjs'
+      - 'config/scripts/build-windows-cli-launcher.mjs'
+      - 'config/scripts/build-windows-cli-launcher.test.mjs'
       - 'config/scripts/computer-e2e-workflow.test.mjs'
       - 'config/scripts/computer-use-skill-guidance.test.mjs'
       - 'config/scripts/computer-use-smoke.mjs'
@@ -22,12 +24,15 @@ on:
       - 'native/computer-use-macos/**'
       - 'native/computer-use-linux/**'
       - 'native/computer-use-windows/**'
+      - 'native/windows-cli-launcher/**'
       - 'skills/computer-use/SKILL.md'
       - 'src/cli/**'
       - 'src/main/computer/**'
       - 'src/main/runtime/rpc/dispatcher.ts'
       - 'src/main/runtime/rpc/errors.ts'
       - 'src/main/runtime/rpc/methods/computer*.ts'
+      - 'src/main/ssh/ssh-remote-cli-launcher.ts'
+      - 'src/main/ssh/ssh-remote-cli-launcher.test.ts'
       - 'src/shared/computer-use-*.ts'
       - 'tests/e2e/computer-linux.e2e.ts'
       - 'tests/e2e/computer-mac.e2e.ts'
@@ -73,6 +78,7 @@ jobs:
       - run: >-
           pnpm vitest run
           config/scripts/build-windows-cli-launcher.test.mjs
+          src/main/ssh/ssh-remote-cli-launcher.test.ts
           config/scripts/computer-e2e-workflow.test.mjs
           config/scripts/computer-use-skill-guidance.test.mjs
           config/scripts/computer-use-smoke.test.mjs

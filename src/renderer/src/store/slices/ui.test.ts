@@ -984,6 +984,20 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().visibleWorkspaceHostIds).toBeNull()
   })
 
+  it('tracks the per-project settings host selection without persisting it', () => {
+    const setUI = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().setSettingsProjectHostSelection('git:acme/app', 'runtime:home-mac')
+
+    expect(store.getState().settingsProjectHostSelection).toEqual({
+      'git:acme/app': 'runtime:home-mac'
+    })
+    // Ephemeral: never written through the UI persistence pipeline.
+    expect(setUI).not.toHaveBeenCalled()
+  })
+
   it('persists workspace host scope changes', () => {
     const setUI = vi.fn(() => Promise.resolve())
     vi.stubGlobal('window', { api: { ui: { set: setUI } } })

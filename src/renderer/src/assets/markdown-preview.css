@@ -237,15 +237,17 @@
   }
 }
 
-.markdown-preview-search-match {
-  padding: 0;
-  border-radius: 2px;
-  background: color-mix(in srgb, #facc15 50%, transparent);
+/* Why: search hits are painted with the CSS Custom Highlight API (Ranges, no
+   DOM mutation) instead of injected <mark> elements — see markdown-preview-search.ts.
+   ::highlight() supports color/background only, not border-radius/padding. */
+::highlight(markdown-preview-search-match) {
+  background-color: color-mix(in srgb, var(--markdown-search-match) 50%, transparent);
   color: inherit;
 }
 
-.markdown-preview-search-match[data-active] {
-  background: color-mix(in srgb, #fb923c 60%, transparent);
+::highlight(markdown-preview-search-active-match) {
+  background-color: color-mix(in srgb, var(--markdown-search-match-active) 60%, transparent);
+  color: inherit;
 }
 
 .markdown-review-toolbar {

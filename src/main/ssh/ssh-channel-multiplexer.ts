@@ -54,8 +54,7 @@ export class SshChannelMultiplexer {
   // generic notification listener that already serves fs.changed.
   private methodNotificationHandlers = new Map<string, Set<MethodNotificationHandler>>()
   private disposeHandlers: ((reason: 'shutdown' | 'connection_lost') => void)[] = []
-  private keepaliveTimer: ReturnType<typeof setInterval> | null = null
-  private timeoutTimer: ReturnType<typeof setInterval> | null = null
+  private connectionHealthTimer: ReturnType<typeof setInterval> | null = null
   private disposed = false
 
   // Track the oldest unacked outgoing message timestamp
@@ -88,8 +87,7 @@ export class SshChannelMultiplexer {
     if (this.disposed) {
       return
     }
-    this.startKeepalive()
-    this.startTimeoutCheck()
+    this.startConnectionHealthTimer()
   }
 
   onNotification(handler: NotificationHandler): () => void {
@@ -276,13 +274,9 @@ export class SshChannelMultiplexer {
     }
     this.disposed = true
 
-    if (this.keepaliveTimer) {
-      clearInterval(this.keepaliveTimer)
-      this.keepaliveTimer = null
-    }
-    if (this.timeoutTimer) {
-      clearInterval(this.timeoutTimer)
-      this.timeoutTimer = null
+    if (this.connectionHealthTimer) {
+      clearInterval(this.connectionHealthTimer)
+      this.connectionHealthTimer = null
     }
 
     // Why: the renderer uses the error code to distinguish temporary disconnects
@@ -488,15 +482,17 @@ export class SshChannelMultiplexer {
     }
   }
 
-  private startKeepalive(): void {
-    this.keepaliveTimer = setInterval(() => {
-      this.sendKeepAlive()
-    }, KEEPALIVE_SEND_MS)
-  }
-
-  private startTimeoutCheck(): void {
+  // Why: one 5s interval owns BOTH the periodic keepalive send and the
+  // liveness/dead-link check. They used to be two separate 5s intervals that
+  // always fired back-to-back (keepalive created first); folding them into one
+  // tick — send first (as the keepalive timer did), then run the check (as the
+  // timeout timer did) — halves the per-connection timer count with identical
+  // behavior, including the #7773 wake-gap recovery below.
+  private startConnectionHealthTimer(): void {
     let lastTickAt = Date.now()
-    this.timeoutTimer = setInterval(() => {
+    this.connectionHealthTimer = setInterval(() => {
+      this.sendKeepAlive()
+
       if (this.disposed) {
         return
       }

@@ -25,6 +25,7 @@ import type {
   TerminalSideEffectFact
 } from '../../shared/terminal-side-effect-facts'
 import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
+import { TerminalKittyKeyboardModeTracker } from '../../shared/terminal-kitty-keyboard-mode-tracker'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   isFreshNonDoneAgentStatus,
@@ -54,7 +55,7 @@ import {
   AGENT_PROMPT_SUBMIT_DELAY_MS,
   buildAgentPromptPasteBytes
 } from '../../shared/agent-prompt-injection'
-import { gitExecFileAsync, gitSpawn } from '../git/runner'
+import { gitExecFileAsync, gitSpawn, nonInteractiveGitEnv } from '../git/runner'
 import { runWithGitReadCacheInvalidation } from '../git/status'
 import {
   cleanupClaimedCloneTarget,
@@ -171,6 +172,10 @@ import type {
   LinearTeamStatesResult,
   LinearStatusSetResult
 } from '../../shared/linear-agent-access'
+import {
+  HEADLESS_RUNTIME_WINDOW_ID,
+  type RuntimeDesktopWindowStatus
+} from '../../shared/runtime-types'
 import {
   LINEAR_SEARCH_MAX_LIMIT,
   LINEAR_WRITE_BODY_CAP,
@@ -347,6 +352,7 @@ import { serveSimStateWatcher } from '../emulator/serve-sim-state-watcher'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import { RuntimeFileCommands } from './orca-runtime-files'
 import { RuntimeGitCommands } from './orca-runtime-git'
+import type { PtyProviderBufferSnapshot } from '../providers/types'
 import { ClaudeAgentTeamsService } from './claude-agent-teams-service'
 import type {
   AgentTeamsTmuxCompatRequest,
@@ -721,6 +727,10 @@ import {
   registerTerminalViewAttributesApplier
 } from './terminal-view-attribute-store'
 import { killAllProcessesForWorktree } from './worktree-teardown'
+import {
+  MobileNotificationReplayBuffer,
+  type ReplayableMobileNotification
+} from './mobile-notification-replay'
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
 import {
   createMobileSessionTabsNotifyCoalescer,
@@ -1171,6 +1181,8 @@ type RuntimeHeadlessTerminal = {
 type HeadlessSeedMetadata = {
   cwd?: string | null
   oscLinks?: TerminalOscLinkRange[]
+  /** Cold restore history must outrank a model that only saw new-generation bytes. */
+  preferProviderIfExisting?: boolean
   /** Persisted kitty flags from the daemon snapshot, re-applied to the fresh
    *  emulator so hidden `CSI ? u` answers the real flags instead of ?0u
    *  (terminal-query-authority.md §kitty). */
@@ -1183,6 +1195,7 @@ type RuntimePtyController = {
     rows: number
     cwd?: string
     command?: string
+    launchAgent?: TuiAgent
     commandDelivery?: 'renderer' | 'provider'
     startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
     env?: Record<string, string>
@@ -1210,6 +1223,11 @@ type RuntimePtyController = {
     ptyId: string,
     opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
   ): Promise<{ data: string; cols: number; rows: number; lastTitle?: string } | null>
+  /** Authoritative provider-owned snapshot for restored PTYs with no mounted renderer. */
+  serializeProviderBuffer?(
+    ptyId: string,
+    opts?: { scrollbackRows?: number }
+  ): Promise<PtyProviderBufferSnapshot | null>
   // Why: synchronous probe used by maybeHydrateHeadlessFromRenderer to skip
   // hydration when no renderer is authoritative for this PTY. See
   // docs/mobile-prefer-renderer-scrollback.md.
@@ -2036,6 +2054,10 @@ type ResolvedWorktreeInFlight = {
   promise: Promise<ResolvedWorktreeSnapshot>
 }
 
+// Why: notificationSeq is the desktop-assigned monotonic sequence used for
+// mobile reconnect catch-up (#8129). It is added on dispatch (and replay) so a
+// client can watermark the last event it delivered and request exactly the
+// events after it — idempotent, no duplicate local pushes.
 export type MobileNotificationDispatchEvent = {
   type: 'notification'
   source: 'agent-task-complete' | 'terminal-bell' | 'test'
@@ -2043,11 +2065,13 @@ export type MobileNotificationDispatchEvent = {
   body: string
   worktreeId?: string
   notificationId?: string
+  notificationSeq?: number
 }
 
 export type MobileNotificationDismissEvent = {
   type: 'dismiss'
   notificationId: string
+  notificationSeq?: number
 }
 
 export type MobileNotificationEvent =
@@ -2229,6 +2253,14 @@ export class OrcaRuntimeService {
   private titleObservationSequence = 0
   private headlessTerminals = new Map<string, RuntimeHeadlessTerminal>()
   private ptyOutputSequenceById = new Map<string, number>()
+  private providerSequenceInitializedPtys = new Set<string>()
+  private providerSequenceOffsetByPtyId = new Map<string, number>()
+  private providerSnapshotPreferredPtys = new Set<string>()
+  private providerModeTrackersByPtyId = new Map<string, TerminalKittyKeyboardModeTracker>()
+  private providerModeSnapshotScansByPtyId = new Map<
+    string,
+    Set<TerminalKittyKeyboardModeTracker>
+  >()
   private recentPtyPathCandidatesById = new Map<string, string[]>()
   // Why: OSC 9999 status can span PTY chunks. Keeping parser state in the
   // runtime lets hidden/model-owned terminals observe agent state without a
@@ -2502,8 +2534,10 @@ export class OrcaRuntimeService {
   private readonly onPtyStopped: ((ptyId: string) => void) | null
   private readonly onTerminalAgentStatus: ((event: RuntimeTerminalAgentStatusEvent) => void) | null
   private readonly onTerminalSideEffects: ((batch: TerminalSideEffectBatch) => void) | null
+  private terminalSideEffectConsumerAvailable = false
   private readonly getAgentStatusSnapshotFn: (() => AgentStatusIpcPayload[]) | null
   private readonly buildAgentHookPtyEnv: (() => Record<string, string>) | null
+  private readonly getDesktopWindowStatusFn: () => RuntimeDesktopWindowStatus
   private accountServices: RuntimeAccountServices | null = null
   private commitMessageAgentEnv: CommitMessageAgentEnvironmentResolvers | null = null
   private automationService: AutomationService | null = null
@@ -2537,6 +2571,7 @@ export class OrcaRuntimeService {
       // managed-Codex sessions. The runtime ctor runs in BOTH window and serve.
       getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
       buildAgentHookPtyEnv?: () => Record<string, string>
+      getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
     }
   ) {
     this.store = store
@@ -2563,6 +2598,7 @@ export class OrcaRuntimeService {
     this.onPtyStopped = deps?.onPtyStopped ?? null
     this.onTerminalAgentStatus = deps?.onTerminalAgentStatus ?? null
     this.buildAgentHookPtyEnv = deps?.buildAgentHookPtyEnv ?? null
+    this.getDesktopWindowStatusFn = deps?.getDesktopWindowStatus ?? (() => 'openable')
     this.onTerminalSideEffects = deps?.onTerminalSideEffects ?? null
     // Why: the ConPTY spawn mark can land after daemon stream data already
     // created this PTY's emulator; the mark retrofits the DA1 override here
@@ -2965,6 +3001,7 @@ export class OrcaRuntimeService {
       rendererGraphEpoch: this.rendererGraphEpoch,
       graphStatus: this.graphStatus,
       authoritativeWindowId: this.authoritativeWindowId,
+      desktopWindowStatus: hasRenderer ? 'available' : this.getDesktopWindowStatusFn(),
       liveTabCount: this.tabs.size,
       liveLeafCount: this.leaves.size,
       runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
@@ -3079,9 +3116,76 @@ export class OrcaRuntimeService {
   }
 
   attachWindow(windowId: number): void {
+    if (this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID) {
+      // Why: promotion is a renderer reload of the same graph owner, not a new
+      // runtime; stale handles must transition before the real window publishes.
+      this.persistWindowlessPtyBindingsForDesktopAttach()
+      this.markRendererReloading(HEADLESS_RUNTIME_WINDOW_ID)
+      this.authoritativeWindowId = windowId
+      return
+    }
     if (this.authoritativeWindowId === null) {
+      // Why: a promoted serve can close and later reopen its window while new
+      // background PTYs keep arriving; every windowless gap needs this handoff.
+      this.persistWindowlessPtyBindingsForDesktopAttach()
       this.authoritativeWindowId = windowId
     }
+  }
+
+  private persistWindowlessPtyBindingsForDesktopAttach(): void {
+    const session = this.store?.getWorkspaceSession?.()
+    if (!session || !this.store?.setWorkspaceSession) {
+      return
+    }
+    const promotablePtys = [...this.ptysById.values()].filter((pty) => {
+      if (!pty.connected || !pty.tabId) {
+        return false
+      }
+      const tab = session.tabsByWorktree[pty.worktreeId]?.find(
+        (candidate) => candidate.id === pty.tabId
+      )
+      if (!tab) {
+        return false
+      }
+      const layoutPtyIds = Object.values(
+        session.terminalLayoutsByTabId[pty.tabId]?.ptyIdsByLeafId ?? {}
+      )
+      return tab.ptyId === pty.ptyId || layoutPtyIds.includes(pty.ptyId)
+    })
+    if (promotablePtys.length === 0) {
+      return
+    }
+
+    // Why: renderer hydration treats an explicitly-present shutdown list as
+    // authoritative. A windowless owner has no renderer shutdown pass, so seed
+    // that existing reattach contract before its next desktop window loads.
+    const activeWorktreeIdsOnShutdown = [
+      ...new Set([
+        ...(session.activeWorktreeIdsOnShutdown ?? []),
+        ...promotablePtys.map((pty) => pty.worktreeId)
+      ])
+    ]
+    const activeConnectionIdsAtShutdown = [
+      ...new Set([
+        ...(session.activeConnectionIdsAtShutdown ?? []),
+        ...promotablePtys
+          .map((pty) => pty.connectionId)
+          .filter((connectionId): connectionId is string => connectionId !== null)
+      ])
+    ]
+    const remoteSessionIdsByTabId = { ...session.remoteSessionIdsByTabId }
+    for (const pty of promotablePtys) {
+      if (pty.connectionId && pty.tabId) {
+        remoteSessionIdsByTabId[pty.tabId] = pty.ptyId
+      }
+    }
+
+    this.store.setWorkspaceSession({
+      ...session,
+      activeWorktreeIdsOnShutdown,
+      ...(activeConnectionIdsAtShutdown.length > 0 ? { activeConnectionIdsAtShutdown } : {}),
+      ...(Object.keys(remoteSessionIdsByTabId).length > 0 ? { remoteSessionIdsByTabId } : {})
+    })
   }
 
   syncWindowGraph(windowId: number, graph: RuntimeSyncWindowGraph): RuntimeSyncWindowGraphResult {
@@ -3208,6 +3312,7 @@ export class OrcaRuntimeService {
     this.rebuildLeafPtyIndex()
     this.notifyMobileSessionTabSnapshots()
     this.graphStatus = 'ready'
+    this.setTerminalSideEffectConsumerAvailable(windowId !== HEADLESS_RUNTIME_WINDOW_ID)
     this.refreshWritableFlags()
     for (const leaf of this.leaves.values()) {
       this.adoptPreAllocatedHandle(leaf)
@@ -5592,6 +5697,10 @@ export class OrcaRuntimeService {
   onPtyData(ptyId: string, data: string, at: number, sequenceChars = data.length): number {
     const outputSequence = (this.ptyOutputSequenceById.get(ptyId) ?? 0) + sequenceChars
     this.ptyOutputSequenceById.set(ptyId, outputSequence)
+    this.providerModeTrackersByPtyId.get(ptyId)?.scan(data)
+    for (const tracker of this.providerModeSnapshotScansByPtyId.get(ptyId) ?? []) {
+      tracker.scan(data)
+    }
     const osc7Metadata = this.recordOsc7MetadataForPty(ptyId, data)
     const cwd = osc7Metadata.cwd
     const cwdChanged = osc7Metadata.cwdChanged
@@ -5985,7 +6094,7 @@ export class OrcaRuntimeService {
   /** Record one derived side-effect fact: batched per chunk while applying
    *  bytes, emitted immediately for between-chunk facts (stale-title timer). */
   private recordTerminalSideEffectFact(ptyId: string, fact: TerminalSideEffectFact): void {
-    if (!this.onTerminalSideEffects) {
+    if (!this.onTerminalSideEffects || !this.terminalSideEffectConsumerAvailable) {
       return
     }
     const entry = this.ptyTitleTrackersByPtyId.get(ptyId)
@@ -6001,7 +6110,11 @@ export class OrcaRuntimeService {
     facts: TerminalSideEffectFact[],
     options: { replay?: boolean } = {}
   ): void {
-    if (!this.onTerminalSideEffects || facts.length === 0) {
+    if (
+      !this.onTerminalSideEffects ||
+      !this.terminalSideEffectConsumerAvailable ||
+      facts.length === 0
+    ) {
       return
     }
     const batch: TerminalSideEffectBatch = {
@@ -6180,7 +6293,7 @@ export class OrcaRuntimeService {
         // Why: bell/command-finished/pr-link/2031 facts exist only for the
         // pty:sideEffect channel. Headless serve has no consumer, so skip the
         // per-chunk bell walk and 133/URL/2031 scans entirely.
-        ...(this.onTerminalSideEffects
+        ...(this.terminalSideEffectConsumerAvailable
           ? {
               onBell: () => {
                 this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
@@ -6213,7 +6326,7 @@ export class OrcaRuntimeService {
       // headless serve skips the per-chunk scrape entirely. The detector
       // self-arms on the Command Code banner; the spawn command (when main
       // saw one) mirrors the renderer detector's startupCommand fast-arm.
-      commandCodeDetector: this.onTerminalSideEffects
+      commandCodeDetector: this.terminalSideEffectConsumerAvailable
         ? createCommandCodeOutputStatusDetector({
             startupCommand: this.terminalSpawnCommandsByPtyId.get(ptyId) ?? null,
             onWorking: (prompt) => {
@@ -6310,6 +6423,42 @@ export class OrcaRuntimeService {
   private disposePtyTitleTracker(ptyId: string): void {
     this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.dispose()
     this.ptyTitleTrackersByPtyId.delete(ptyId)
+  }
+
+  private resetTrackedTerminalStateForProviderGeneration(ptyId: string): void {
+    // Why: a replacement daemon session can reuse the PTY id, but title/parser
+    // state from the prior process must not bleed into its snapshots or chunks.
+    this.disposePtyTitleTracker(ptyId)
+    this.oscTitleScanTailByPtyId.delete(ptyId)
+    this.osc7ScanTailByPtyId.delete(ptyId)
+    this.agentStatusOscProcessorsByPtyId.delete(ptyId)
+    const pty = this.ptysById.get(ptyId)
+    if (pty) {
+      pty.lastOscTitle = null
+      pty.lastOscTitleAt = null
+      pty.lastAgentStatus = null
+      pty.managementTitle = null
+      pty.managementTitleAt = null
+    }
+    for (const leaf of this.getLeavesForPty(ptyId)) {
+      leaf.lastOscTitle = null
+      leaf.lastOscTitleAt = null
+      leaf.lastAgentStatus = null
+    }
+    this.clearAgentRowSnapshotsForPty(ptyId)
+  }
+
+  private setTerminalSideEffectConsumerAvailable(available: boolean): void {
+    const nextAvailable = available && this.onTerminalSideEffects !== null
+    if (nextAvailable === this.terminalSideEffectConsumerAvailable) {
+      return
+    }
+    this.terminalSideEffectConsumerAvailable = nextAvailable
+    // Why: optional bell/command/link scanners are selected when a tracker is
+    // created. Rebuild at the window boundary so pure headless output stays cheap.
+    for (const ptyId of [...this.ptyTitleTrackersByPtyId.keys()]) {
+      this.disposePtyTitleTracker(ptyId)
+    }
   }
 
   private extractLastOsc7CwdForPty(
@@ -6489,6 +6638,80 @@ export class OrcaRuntimeService {
     return this.ptyOutputSequenceById.get(ptyId) ?? 0
   }
 
+  synchronizePtyOutputSequenceFromProvider(
+    ptyId: string,
+    providerSequence: { value: number; generation: 'continued' | 'reset' },
+    runtimeSequenceAtSpawnStart = 0
+  ): number {
+    if (
+      !Number.isFinite(providerSequence.value) ||
+      providerSequence.value < 0 ||
+      !Number.isFinite(runtimeSequenceAtSpawnStart) ||
+      runtimeSequenceAtSpawnStart < 0
+    ) {
+      return this.getPtyOutputSequence(ptyId)
+    }
+    const baseline = Math.floor(providerSequence.value)
+    const currentSequence = this.getPtyOutputSequence(ptyId)
+    const sequenceAtSpawnStart = Math.min(currentSequence, Math.floor(runtimeSequenceAtSpawnStart))
+    const postSpawnSequence = currentSequence - sequenceAtSpawnStart
+    const wasInitialized = this.providerSequenceInitializedPtys.has(ptyId)
+    const replacesExistingRuntimeGeneration = wasInitialized || sequenceAtSpawnStart > 0
+    const providerOffset =
+      providerSequence.generation === 'reset'
+        ? sequenceAtSpawnStart
+        : (this.providerSequenceOffsetByPtyId.get(ptyId) ?? 0)
+    const providerBaseline = providerOffset + baseline
+
+    if (providerSequence.generation === 'reset') {
+      // Why: daemon respawn/cold restore starts a new absolute domain. Old
+      // emulator state cannot remain authoritative over the replacement.
+      if (replacesExistingRuntimeGeneration) {
+        this.disposeHeadlessTerminal(ptyId)
+      }
+      this.providerModeTrackersByPtyId.delete(ptyId)
+      if (replacesExistingRuntimeGeneration && postSpawnSequence === 0) {
+        this.resetTrackedTerminalStateForProviderGeneration(ptyId)
+      }
+    }
+
+    const synchronizedSequence =
+      providerSequence.generation === 'reset'
+        ? currentSequence
+        : wasInitialized
+          ? currentSequence
+          : providerBaseline + postSpawnSequence
+    this.ptyOutputSequenceById.set(ptyId, synchronizedSequence)
+    this.providerSequenceInitializedPtys.add(ptyId)
+    this.providerSequenceOffsetByPtyId.set(ptyId, providerOffset)
+
+    const snapshotMayCoverMissingState =
+      (providerSequence.generation === 'continued' && !wasInitialized) ||
+      (postSpawnSequence > 0 &&
+        providerSequence.generation === 'reset' &&
+        replacesExistingRuntimeGeneration) ||
+      (providerSequence.generation === 'continued' &&
+        wasInitialized &&
+        providerBaseline > currentSequence)
+    if (snapshotMayCoverMissingState) {
+      // Why: bytes can cross the control/stream sockets around attach. Until a
+      // full renderer/provider snapshot is available, a partial model is unsafe.
+      this.providerSnapshotPreferredPtys.add(ptyId)
+    } else if (providerSequence.generation === 'reset') {
+      this.providerSnapshotPreferredPtys.delete(ptyId)
+    }
+
+    const headless = this.headlessTerminals.get(ptyId)
+    if (headless && !wasInitialized && providerSequence.generation === 'continued') {
+      // Why: daemon bytes can reach main just before spawn resolves. Queue the
+      // baseline behind those writes so their emulator sequence is rebased too.
+      headless.writeChain = headless.writeChain.then(() => {
+        headless.outputSequence = synchronizedSequence
+      })
+    }
+    return synchronizedSequence
+  }
+
   subscribeToTerminalData(
     ptyId: string,
     listener: (data: string, meta?: { seq?: number; rawLength?: number; cwd?: string }) => void
@@ -6661,7 +6884,8 @@ export class OrcaRuntimeService {
     // Why: hidden-output recovery is initiated by the desktop renderer. If the
     // runtime has not built headless state yet, the mounted xterm is still the
     // best available state and avoids a false "snapshot unavailable" result.
-    return this.serializeRendererTerminalBuffer(ptyId, opts)
+    const rendererSnapshot = await this.serializeRendererTerminalBuffer(ptyId, opts)
+    return rendererSnapshot ?? this.serializeProviderTerminalBuffer(ptyId, opts)
   }
 
   async clearTerminalBuffer(handle: string): Promise<{ handle: string; cleared: boolean }> {
@@ -6686,10 +6910,17 @@ export class OrcaRuntimeService {
   // scrollback to mobile so it rewraps at the new cols, but alternate-screen
   // TUIs (vim, Claude Code) own their repaint and have no scrollback — for
   // those the mobile client just resizes xterm geometry and consumes the
-  // TUI's own redraw, so the resize re-stream must be skipped. Returns false
-  // when there is no headless emulator (resize falls back to geometry-only).
+  // TUI's own redraw, so the resize re-stream must be skipped. Provider state
+  // covers restored PTYs whose main-side emulator is only a partial suffix.
   isTerminalAlternateScreen(ptyId: string): boolean {
-    return this.headlessTerminals.get(ptyId)?.emulator.isAlternateScreen ?? false
+    if (this.providerSnapshotPreferredPtys.has(ptyId)) {
+      return this.providerModeTrackersByPtyId.get(ptyId)?.isAlternateScreen ?? false
+    }
+    return (
+      this.headlessTerminals.get(ptyId)?.emulator.isAlternateScreen ??
+      this.providerModeTrackersByPtyId.get(ptyId)?.isAlternateScreen ??
+      false
+    )
   }
 
   // Why: daemon-backed PTYs that the runtime adopted after an Orca relaunch
@@ -6713,10 +6944,14 @@ export class OrcaRuntimeService {
     if (existing) {
       // Why: emulator already has live data — re-seeding would duplicate
       // every byte. The seed is only valid when the emulator is fresh.
+      if (metadata.preferProviderIfExisting) {
+        this.providerSnapshotPreferredPtys.add(ptyId)
+      }
       return
     }
     const dims = size ?? this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
     const state = this.createPtyHeadlessTerminalState(ptyId, dims)
+    state.outputSequence = this.getPtyOutputSequence(ptyId)
     this.headlessTerminals.set(ptyId, state)
     this.recordOsc7MetadataForPty(ptyId, data)
     this.recordRecentPtyOutputForPathProvenance(ptyId, data)
@@ -6738,6 +6973,7 @@ export class OrcaRuntimeService {
         if (metadata.oscLinks !== undefined) {
           state.emulator.setRestoredOscLinks(metadata.oscLinks)
         }
+        this.providerSnapshotPreferredPtys.delete(ptyId)
       })
       .catch(() => {
         // Seeding is best-effort; live data will continue to populate the
@@ -6755,7 +6991,8 @@ export class OrcaRuntimeService {
     if (this.headlessHydrationState.has(ptyId)) {
       return
     }
-    if (this.headlessTerminals.has(ptyId)) {
+    const providerSnapshotPreferred = this.providerSnapshotPreferredPtys.has(ptyId)
+    if (this.headlessTerminals.has(ptyId) && !providerSnapshotPreferred) {
       // Daemon-snapshot seed already populated the emulator — skip hydration.
       this.headlessHydrationState.set(ptyId, 'done')
       return
@@ -6770,11 +7007,18 @@ export class OrcaRuntimeService {
       return
     }
 
+    if (providerSnapshotPreferred) {
+      // Why: a stream byte can create a partial model before restored history
+      // arrives. A mounted renderer snapshot can safely replace that model.
+      this.disposeHeadlessTerminal(ptyId)
+    }
+
     this.headlessHydrationState.set(ptyId, 'pending')
     const dims = this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
     // Why: hydration writes below never set forwardQueryReplies (main-side
     // replay guard) — renderer-buffer snapshots can embed stale queries.
     const state = this.createPtyHeadlessTerminalState(ptyId, dims)
+    state.outputSequence = this.getPtyOutputSequence(ptyId)
     this.headlessTerminals.set(ptyId, state)
 
     // Why: append the seed work to writeChain so live writes queued by
@@ -6813,6 +7057,7 @@ export class OrcaRuntimeService {
           state.emulator.setLastTitle(seedTitle)
           this.applySeededAgentStatus(ptyId, seedTitle)
         }
+        this.providerSnapshotPreferredPtys.delete(ptyId)
       } catch {
         // Hydration is best-effort. Live writes continue via the same
         // writeChain that this catch-arm leaves intact.
@@ -7005,12 +7250,26 @@ export class OrcaRuntimeService {
     alternateScreen?: boolean
     pendingEscapeTailAnsi?: string
   } | null> {
+    if (this.providerSnapshotPreferredPtys.has(ptyId)) {
+      // Why: pre-attach stream bytes only form a suffix of restored state. A
+      // sequenced provider snapshot safely reconciles live bytes; renderer is
+      // the fallback when an older provider cannot expose that boundary.
+      const providerSnapshot = await this.serializeProviderTerminalBuffer(ptyId, opts)
+      if (providerSnapshot) {
+        return providerSnapshot
+      }
+      const rendererSnapshot = await this.serializeRendererTerminalBuffer(ptyId, opts)
+      if (rendererSnapshot) {
+        return rendererSnapshot
+      }
+    }
     const headlessSnapshot = await this.serializeHeadlessTerminalBuffer(ptyId, opts)
     if (headlessSnapshot) {
       return headlessSnapshot
     }
 
-    return this.serializeRendererTerminalBuffer(ptyId, opts)
+    const rendererSnapshot = await this.serializeRendererTerminalBuffer(ptyId, opts)
+    return rendererSnapshot ?? this.serializeProviderTerminalBuffer(ptyId, opts)
   }
 
   private async serializeRendererTerminalBuffer(
@@ -7025,6 +7284,9 @@ export class OrcaRuntimeService {
     source?: 'renderer'
     oscLinks?: TerminalOscLinkRange[]
   } | null> {
+    if (this.ptyController?.hasRendererSerializer?.(ptyId) === false) {
+      return null
+    }
     let rendererSnapshot: {
       data: string
       cols: number
@@ -7053,6 +7315,49 @@ export class OrcaRuntimeService {
           source: 'renderer' as const
         })
       : null
+  }
+
+  private async serializeProviderTerminalBuffer(
+    ptyId: string,
+    opts: { scrollbackRows?: number } = {}
+  ): Promise<PtyProviderBufferSnapshot | null> {
+    const liveModeTracker = new TerminalKittyKeyboardModeTracker()
+    let liveModeTrackers = this.providerModeSnapshotScansByPtyId.get(ptyId)
+    if (!liveModeTrackers) {
+      liveModeTrackers = new Set()
+      this.providerModeSnapshotScansByPtyId.set(ptyId, liveModeTrackers)
+    }
+    liveModeTrackers.add(liveModeTracker)
+    try {
+      // Why: daemon PTYs survive an app relaunch before any renderer mounts.
+      // Mobile still needs their retained history without navigating desktop.
+      const snapshot = await this.ptyController?.serializeProviderBuffer?.(ptyId, opts)
+      if (typeof snapshot?.alternateScreen === 'boolean') {
+        const modeTracker = new TerminalKittyKeyboardModeTracker()
+        if (snapshot.alternateScreen) {
+          modeTracker.scan('\x1b[?1049h')
+        }
+        if (liveModeTracker.hasObservedAlternateScreenSwitch) {
+          modeTracker.scan(liveModeTracker.isAlternateScreen ? '\x1b[?1049h' : '\x1b[?1049l')
+        }
+        this.providerModeTrackersByPtyId.set(ptyId, modeTracker)
+      }
+      if (!snapshot) {
+        return null
+      }
+      const providerOffset = this.providerSequenceOffsetByPtyId.get(ptyId) ?? 0
+      return this.preferTrackedLastTitle(ptyId, {
+        ...snapshot,
+        seq: providerOffset + snapshot.seq
+      })
+    } catch {
+      return null
+    } finally {
+      liveModeTrackers.delete(liveModeTracker)
+      if (liveModeTrackers.size === 0) {
+        this.providerModeSnapshotScansByPtyId.delete(ptyId)
+      }
+    }
   }
 
   private async withVisibleSnapshotFallback(
@@ -7375,10 +7680,28 @@ export class OrcaRuntimeService {
     return this.notificationListeners.size
   }
 
+  // Why: bounded replay buffer for the mobile reconnect catch-up (#8129).
+  // Every dispatched notification is recorded with a monotonic seq so a
+  // reconnecting client can fetch exactly the events it missed. Kept on the
+  // service instance (not per-client) because the buffer is a global,
+  // idempotent-by-seq source of truth; clients watermark their own position.
+  private readonly mobileNotificationReplay = new MobileNotificationReplayBuffer()
+
   dispatchMobileNotification(event: MobileNotificationEvent): void {
+    const seq = this.mobileNotificationReplay.record(event)
     for (const listener of this.notificationListeners) {
-      listener(event)
+      // Why: surface the desktop-assigned seq to live listeners so they can
+      // watermark the last event delivered and feed it back to getMissedSince
+      // on reconnect (idempotent catch-up, no duplicate local pushes).
+      listener({ ...event, notificationSeq: seq })
     }
+  }
+
+  // Returns notifications dispatched after lastSeenSeq. Idempotent: the same
+  // watermark always yields the same set, so a client cannot be re-pushed an
+  // already-delivered event (the adversarial-review gate for #8129).
+  getMissedNotificationsSince(lastSeenSeq: number): ReplayableMobileNotification[] {
+    return this.mobileNotificationReplay.getMissedSince(lastSeenSeq)
   }
 
   dismissMobileNotification(notificationId: string): void {
@@ -8122,6 +8445,11 @@ export class OrcaRuntimeService {
     this.clearWaitBlockedCheckState(ptyId)
     this.recentPtyPathCandidatesById.delete(ptyId)
     this.ptyOutputSequenceById.delete(ptyId)
+    this.providerSequenceInitializedPtys.delete(ptyId)
+    this.providerSequenceOffsetByPtyId.delete(ptyId)
+    this.providerSnapshotPreferredPtys.delete(ptyId)
+    this.providerModeTrackersByPtyId.delete(ptyId)
+    this.providerModeSnapshotScansByPtyId.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.terminalSpawnCommandsByPtyId.delete(ptyId)
     this.disposePtyTitleTracker(ptyId)
@@ -12146,6 +12474,12 @@ export class OrcaRuntimeService {
       try {
         proc = gitSpawn(['clone', '--progress', '--', trimmedUrl, clonePath], {
           cwd: trimmedDestination,
+          // Why: without the non-interactive guard, a clone that needs GitHub
+          // auth makes Git Credential Manager pop its "Connect to GitHub" OAuth
+          // window on Windows; in a network-restricted env the browser/device
+          // flow can never complete and git's credential retry re-pops it
+          // (issue #7652). Fail fast with a clear error instead.
+          env: nonInteractiveGitEnv(),
           stdio: ['ignore', 'ignore', 'pipe']
         })
       } catch (err) {
@@ -17578,12 +17912,12 @@ export class OrcaRuntimeService {
   ): Promise<RuntimeTerminalCreate> {
     const presentation = resolveTerminalPresentation(opts)
     const requiresRendererFocus = opts.presentation === 'focused' || opts.focus === true
+    const availableAuthoritativeWindow = this.getAvailableAuthoritativeWindow()
     // Why: pre-diff createTerminal fell back to the renderer's active worktree
     // when no selector was provided. The new background-spawn branch hard-
     // requires a resolvable selector, so route the no-selector case through
     // the renderer IPC path to preserve that behavior.
-    const rendererWindow =
-      opts.rendererBacked === true ? this.getAvailableAuthoritativeWindow() : null
+    const rendererWindow = opts.rendererBacked === true ? availableAuthoritativeWindow : null
     const shouldCreateInBackground =
       worktreeSelector !== undefined &&
       ((!requiresRendererFocus && opts.rendererBacked !== true) ||
@@ -17693,6 +18027,7 @@ export class OrcaRuntimeService {
         command: sequencedStartupCommand
           ? launchOpts.command
           : (agentTeamsPlan?.command ?? launchOpts.command),
+        launchAgent: launchOpts.launchAgent,
         commandDelivery: 'provider',
         startupCommandDelivery: launchOpts.startupCommandDelivery,
         env,
@@ -17704,7 +18039,14 @@ export class OrcaRuntimeService {
         tabId,
         leafId,
         ...(launchOpts.sessionId ? { sessionId: launchOpts.sessionId } : {}),
-        ...(launchOpts.persistHostSessionBinding ? { persistHostSessionBinding: true } : {})
+        // Why: a headless-created pane has no renderer session writer. Persist
+        // its tab/leaf binding at spawn so a later promoted window reattaches
+        // the live daemon or SSH PTY instead of replacing it with a fresh one.
+        // Re-check freshly: the entry-time snapshot can go stale across the
+        // awaits above if the authoritative window is destroyed mid-spawn.
+        ...(launchOpts.persistHostSessionBinding || this.getAvailableAuthoritativeWindow() === null
+          ? { persistHostSessionBinding: true }
+          : {})
       })
       this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
       this.registerPty(result.id, workspace.id, workspace.connectionId)
@@ -19049,6 +19391,7 @@ export class OrcaRuntimeService {
     // against whatever the renderer rebuilds next.
     this.rendererGraphEpoch += 1
     this.graphStatus = 'reloading'
+    this.setTerminalSideEffectConsumerAvailable(false)
     this.rememberDetachedPreAllocatedLeaves()
     this.handles.clear()
     this.handleByLeafKey.clear()
@@ -19065,6 +19408,7 @@ export class OrcaRuntimeService {
       return
     }
     this.graphStatus = 'ready'
+    this.setTerminalSideEffectConsumerAvailable(windowId !== HEADLESS_RUNTIME_WINDOW_ID)
     this.refreshWritableFlags()
   }
 
@@ -19078,6 +19422,7 @@ export class OrcaRuntimeService {
       this.rendererGraphEpoch += 1
     }
     this.graphStatus = 'unavailable'
+    this.setTerminalSideEffectConsumerAvailable(false)
     this.authoritativeWindowId = null
     this.rememberDetachedPreAllocatedLeaves()
     this.tabs.clear()
@@ -20329,6 +20674,11 @@ export class OrcaRuntimeService {
     this.clearWaitBlockedCheckState(ptyId)
     this.recentPtyPathCandidatesById.delete(ptyId)
     this.ptyOutputSequenceById.delete(ptyId)
+    this.providerSequenceInitializedPtys.delete(ptyId)
+    this.providerSequenceOffsetByPtyId.delete(ptyId)
+    this.providerSnapshotPreferredPtys.delete(ptyId)
+    this.providerModeTrackersByPtyId.delete(ptyId)
+    this.providerModeSnapshotScansByPtyId.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.terminalSpawnCommandsByPtyId.delete(ptyId)
     this.disposePtyTitleTracker(ptyId)
