@@ -761,7 +761,11 @@ import {
   getFolderWorkspacePathStatusForPath,
   inferFolderWorkspacePathConnection
 } from '../project-groups/folder-workspace-path-status'
-import { getSshGitProvider, requireSshGitProvider } from '../providers/ssh-git-dispatch'
+import {
+  getSshGitProvider,
+  getSshGitProviderGeneration,
+  requireSshGitProvider
+} from '../providers/ssh-git-dispatch'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
 import { githubAvatarIcon } from '../../shared/repo-icon'
@@ -2224,6 +2228,7 @@ export class OrcaRuntimeService {
   private resolvedWorktreeCache: ResolvedWorktreeCache | null = null
   private resolvedWorktreeInFlight: ResolvedWorktreeInFlight | null = null
   private resolvedWorktreeGeneration = 0
+  private worktreeScanGenerations = new Map<string, number>()
   private worktreeScanCache = new Map<string, RuntimeWorktreeScanCache>()
   private worktreeScanInFlight = new Map<string, RuntimeWorktreeScanInFlight>()
   private cloneInFlightByPath = new Map<string, Promise<void>>()
@@ -3126,7 +3131,7 @@ export class OrcaRuntimeService {
   // Why: SSH state changes originate in main's ssh handlers, not in runtime
   // methods, so they need a public entry point onto the client-event stream.
   notifySshStateChanged(targetId: string, state: SshConnectionState): void {
-    this.invalidateResolvedWorktreeCache()
+    this.invalidateSshWorktreeScanCache(targetId)
     this.emitClientEvent({ type: 'sshStateChanged', targetId, state })
   }
 
@@ -20709,7 +20714,7 @@ export class OrcaRuntimeService {
     projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
   ): Promise<RuntimeWorktreeScanResult> {
     const now = Date.now()
-    const generation = this.resolvedWorktreeGeneration
+    const generation = this.worktreeScanGenerations.get(repo.id) ?? 0
     const projectRuntime =
       projectRuntimeByRepoId?.get(repo.id) ??
       (!repo.connectionId
@@ -20720,7 +20725,7 @@ export class OrcaRuntimeService {
         ? projectRuntime.runtime.cacheKey
         : projectRuntime.repair.cacheKey
       : repo.connectionId
-        ? `ssh:${repo.connectionId}`
+        ? `ssh:${repo.connectionId}:${getSshGitProviderGeneration(repo.connectionId)}`
         : 'local:default'
     const cached = this.worktreeScanCache.get(repo.id)
     if (
@@ -20740,7 +20745,7 @@ export class OrcaRuntimeService {
       const result = await promise
       if (
         result.ok &&
-        generation === this.resolvedWorktreeGeneration &&
+        generation === (this.worktreeScanGenerations.get(repo.id) ?? 0) &&
         this.worktreeScanInFlight.get(repo.id)?.promise === promise
       ) {
         this.worktreeScanCache.set(repo.id, {
@@ -20821,6 +20826,25 @@ export class OrcaRuntimeService {
     this.resolvedWorktreeCache = null
     this.worktreeScanCache.clear()
     this.worktreeScanInFlight.clear()
+  }
+
+  private invalidateSshWorktreeScanCache(targetId: string): void {
+    const repos = this.store?.getRepos() ?? []
+    const affectedRepoIds = new Set(
+      repos.filter((repo) => repo.connectionId === targetId).map((repo) => repo.id)
+    )
+    for (const repoId of affectedRepoIds) {
+      this.worktreeScanGenerations.set(repoId, (this.worktreeScanGenerations.get(repoId) ?? 0) + 1)
+      this.worktreeScanCache.delete(repoId)
+      this.worktreeScanInFlight.delete(repoId)
+    }
+    const snapshotContainsAffectedRepo = this.resolvedWorktreeCache?.worktrees.some((worktree) =>
+      [...affectedRepoIds].some((repoId) => worktree.id.startsWith(`${repoId}::`))
+    )
+    if (snapshotContainsAffectedRepo || this.resolvedWorktreeInFlight) {
+      this.resolvedWorktreeGeneration += 1
+      this.resolvedWorktreeCache = null
+    }
   }
 
   /** Invalidate the worktree cache and tell the renderer to re-list, after an
