@@ -1214,7 +1214,7 @@ type RuntimePtyController = {
     rows: number
     cwd?: string
     command?: string
-    launchAgent?: TuiAgent
+    launchAgent?: AgentId
     commandDelivery?: 'renderer' | 'provider'
     startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
     env?: Record<string, string>
