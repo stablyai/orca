@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Session } from './session'
+import { PRODUCER_PAUSE_FAILSAFE_MS, SESSION_FORCE_KILL_RETRY_MS, Session } from './session'
 import type { SessionState, ShellReadyState } from './types'
+import type { TuiAgent } from '../../shared/types'
+
+const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
+vi.mock('../pty-descendant-termination', () => ({
+  killWithDescendantSweep: killWithDescendantSweepMock
+}))
 
 // Stub the subprocess — Session talks to it via an interface, not child_process directly.
 function createMockSubprocess() {
@@ -11,6 +17,8 @@ function createMockSubprocess() {
   let killed = false
   let clearCalls = 0
   let pid = 12345
+  let pauseCalls = 0
+  let resumeCalls = 0
 
   return {
     written,
@@ -21,6 +29,12 @@ function createMockSubprocess() {
     get pid() {
       return pid
     },
+    get pauseCalls() {
+      return pauseCalls
+    },
+    get resumeCalls() {
+      return resumeCalls
+    },
     foregroundProcess: null as string | null,
     getForegroundProcess(): string | null {
       return this.foregroundProcess
@@ -29,6 +43,12 @@ function createMockSubprocess() {
       written.push(data)
     },
     resize(_cols: number, _rows: number) {},
+    pause() {
+      pauseCalls++
+    },
+    resume() {
+      resumeCalls++
+    },
     get clearCalls() {
       return clearCalls
     },
@@ -72,6 +92,7 @@ describe('Session', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     subprocess = createMockSubprocess()
+    killWithDescendantSweepMock.mockReset()
   })
 
   afterEach(() => {
@@ -84,11 +105,13 @@ describe('Session', () => {
     shellReadyTimeoutMs?: number
     cols?: number
     rows?: number
+    launchAgent?: TuiAgent
   }): Session {
     session = new Session({
       sessionId: 'test-session',
       cols: opts?.cols ?? 80,
       rows: opts?.rows ?? 24,
+      ...(opts?.launchAgent ? { launchAgent: opts.launchAgent } : {}),
       subprocess,
       shellReadySupported: opts?.shellReadySupported ?? false,
       ...(opts?.shellReadyTimeoutMs !== undefined
@@ -174,14 +197,22 @@ describe('Session', () => {
 
   describe('emulator does not reply to terminal queries', () => {
     // Why: daemon emulator parses in-process synchronously — before
-    // handleSubprocessData forwards bytes to the renderer over IPC — so any
-    // auto-reply it emits races ahead of the renderer's xterm and clobbers
-    // it with default-xterm values (no theme, stale cursor). The renderer is
-    // the authoritative responder; a daemon-side reply to any query is a bug.
+    // handleSubprocessData forwards bytes onward — so any auto-reply it
+    // emits races ahead of the live answerer and clobbers it with
+    // default-xterm values (no theme, stale cursor). Query authority is
+    // structural (terminal-query-authority.md): a delivered chunk is
+    // answered by the consuming view's xterm, a hidden-dropped chunk by
+    // MAIN's runtime model responder. The daemon emulator is neither — it
+    // stays write-only forever, and these pins are permanent.
     it.each([
+      ['OSC 10 foreground-color', '\x1b]10;?\x07'],
       ['OSC 11 background-color', '\x1b]11;?\x07'],
+      ['OSC 12 cursor-color', '\x1b]12;?\x1b\\'],
       ['DA1 device-attributes', '\x1b[c'],
-      ['DSR cursor-position', '\x1b[6n']
+      ['DA2 secondary device-attributes', '\x1b[>c'],
+      ['DSR terminal status', '\x1b[5n'],
+      ['DSR cursor-position', '\x1b[6n'],
+      ['DECRPM bracketed-paste mode', '\x1b[?2004$p']
     ])('does not reply to %s query', async (_label, query) => {
       createSession({ shellReadySupported: false })
       subprocess.simulateData(query)
@@ -260,6 +291,15 @@ describe('Session', () => {
       expect(session.getSnapshot()?.snapshotAnsi).not.toContain('orca-shell-ready')
     })
 
+    it('publishes an absolute output sequence with live snapshots', () => {
+      createSession()
+      subprocess.simulateData('first')
+      subprocess.simulateData('🟢second')
+
+      expect(session.getSnapshot()?.outputSequence).toBe('first🟢second'.length)
+      expect(session.takePendingOutput(true)?.snapshot?.outputSequence).toBe('first🟢second'.length)
+    })
+
     it('releases held marker-prefix bytes before flushing queued input on timeout', () => {
       createSession({ shellReadySupported: true, shellReadyTimeoutMs: 100 })
       const received: string[] = []
@@ -322,13 +362,15 @@ describe('Session', () => {
       expect(taken?.snapshot).toBeTruthy()
     })
 
-    it('cancels the post-ready flush gate when force-disposing the subprocess', () => {
+    it('cancels the post-ready flush gate when force-disposing the subprocess', async () => {
       createSession({ shellReadySupported: true })
       session.write('codex\n')
 
       subprocess.simulateData('\x1b]777;orca-shell-ready\x07')
       expect(session.shellState).toBe('ready' satisfies ShellReadyState)
-      session.forceKillAndDisposeSubprocess()
+      const dispose = session.forceKillAndDisposeSubprocess()
+      subprocess.simulateExit(137)
+      await dispose
       vi.advanceTimersByTime(500)
 
       expect(subprocess.written).toEqual([])
@@ -375,6 +417,55 @@ describe('Session', () => {
       expect(session.isTerminating).toBe(true)
     })
 
+    it('allows a graceful retry when the first kill is rejected', () => {
+      let attempts = 0
+      subprocess.kill = () => {
+        attempts++
+        if (attempts === 1) {
+          throw new Error('graceful kill rejected')
+        }
+      }
+      createSession()
+
+      expect(() => session.kill()).toThrow('graceful kill rejected')
+      expect(session.isTerminating).toBe(false)
+      expect(() => session.kill()).not.toThrow()
+
+      expect(attempts).toBe(2)
+      expect(session.isTerminating).toBe(true)
+    })
+
+    it('non-agent kill stays synchronous and never routes through the descendant sweep', () => {
+      createSession()
+      session.kill()
+      expect(subprocess.killed).toBe(true)
+      expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
+    })
+
+    it('agent kill routes through the descendant sweep with the subprocess as root', () => {
+      createSession({ launchAgent: 'claude' })
+      session.kill()
+      expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
+        subprocess.pid,
+        expect.any(Function),
+        expect.objectContaining({ ownsRoot: expect.any(Function) })
+      )
+      // The root kill is deferred to the sweep's snapshot-first sequencing.
+      expect(subprocess.killed).toBe(false)
+      const killRoot = killWithDescendantSweepMock.mock.calls[0][1] as () => void
+      killRoot()
+      expect(subprocess.killed).toBe(true)
+    })
+
+    it('agent kill root callback is a no-op after the session already exited', () => {
+      createSession({ launchAgent: 'claude' })
+      session.kill()
+      const killRoot = killWithDescendantSweepMock.mock.calls[0][1] as () => void
+      subprocess.simulateExit(0)
+      killRoot()
+      expect(subprocess.killed).toBe(false)
+    })
+
     it('notifies attached clients on exit after kill', async () => {
       vi.useRealTimers()
       createSession()
@@ -391,7 +482,7 @@ describe('Session', () => {
       expect(exitCodes).toEqual([0])
     })
 
-    it('force-disposes after 5s if subprocess does not exit', () => {
+    it('force-kills after 5s but retains ownership until subprocess exit', () => {
       createSession()
       // Override kill to NOT trigger exit
       subprocess.kill = () => {}
@@ -401,11 +492,58 @@ describe('Session', () => {
       expect(session.state).not.toBe('exited')
 
       vi.advanceTimersByTime(5_000)
-      expect(session.state).toBe('exited')
       expect(forceKillSpy).toHaveBeenCalled()
+      expect(session.state).toBe('running')
+      expect(session.isTerminating).toBe(true)
+
+      subprocess.simulateExit(137)
+      expect(session.state).toBe('exited')
     })
 
-    it('ignores late data and exit after force-dispose', () => {
+    it('retries a rejected destructive force kill while retaining ownership', async () => {
+      let forceKillAttempts = 0
+      subprocess.forceKill = () => {
+        forceKillAttempts++
+        if (forceKillAttempts === 1) {
+          throw new Error('force kill rejected')
+        }
+      }
+      createSession()
+
+      const shutdown = session.forceKillAndWaitForExit()
+      expect(forceKillAttempts).toBe(1)
+      await vi.advanceTimersByTimeAsync(SESSION_FORCE_KILL_RETRY_MS)
+      expect(forceKillAttempts).toBe(2)
+      subprocess.simulateExit(137)
+      await shutdown
+
+      expect(session.state).toBe('exited')
+    })
+
+    it('retries a rejected graceful-deadline force kill', async () => {
+      subprocess.kill = () => {}
+      let forceKillAttempts = 0
+      subprocess.forceKill = () => {
+        forceKillAttempts++
+        if (forceKillAttempts === 1) {
+          throw new Error('transient graceful fallback failure')
+        }
+      }
+      createSession()
+
+      session.kill()
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(forceKillAttempts).toBe(1)
+      expect(session.isTerminating).toBe(true)
+
+      await vi.advanceTimersByTimeAsync(SESSION_FORCE_KILL_RETRY_MS)
+      expect(forceKillAttempts).toBe(2)
+      subprocess.simulateExit(137)
+      expect(session.state).toBe('exited')
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it('keeps late data and the real exit code until physical exit', () => {
       createSession()
       subprocess.kill = () => {}
       const onData = vi.fn()
@@ -418,10 +556,10 @@ describe('Session', () => {
       subprocess.simulateData('late output')
       subprocess.simulateExit(23)
 
-      expect(onData).not.toHaveBeenCalled()
+      expect(onData).toHaveBeenCalledWith('late output')
       expect(onExit).toHaveBeenCalledTimes(1)
-      expect(onExit).toHaveBeenCalledWith(-1)
-      expect(session.exitCode).toBe(-1)
+      expect(onExit).toHaveBeenCalledWith(23)
+      expect(session.exitCode).toBe(23)
     })
   })
 
@@ -598,6 +736,105 @@ describe('Session', () => {
       createSession()
       session.dispose()
       expect(session.state).toBe('exited')
+    })
+  })
+
+  describe('producer flow control', () => {
+    it('pauses the subprocess and auto-resumes via the lost-resume failsafe', () => {
+      createSession()
+      session.pauseProducer()
+      expect(subprocess.pauseCalls).toBe(1)
+      expect(subprocess.resumeCalls).toBe(0)
+
+      vi.advanceTimersByTime(PRODUCER_PAUSE_FAILSAFE_MS - 1)
+      expect(subprocess.resumeCalls).toBe(0)
+      vi.advanceTimersByTime(1)
+      expect(subprocess.resumeCalls).toBe(1)
+    })
+
+    it('resumeProducer resumes once and cancels the failsafe timer', () => {
+      createSession()
+      session.pauseProducer()
+      session.resumeProducer()
+      expect(subprocess.resumeCalls).toBe(1)
+
+      vi.advanceTimersByTime(PRODUCER_PAUSE_FAILSAFE_MS * 2)
+      expect(subprocess.resumeCalls).toBe(1)
+    })
+
+    it('resumeProducer without a matching pause is a no-op', () => {
+      createSession()
+      session.resumeProducer()
+      expect(subprocess.resumeCalls).toBe(0)
+    })
+
+    it('re-pausing re-arms the failsafe window', () => {
+      createSession()
+      session.pauseProducer()
+      vi.advanceTimersByTime(PRODUCER_PAUSE_FAILSAFE_MS - 1_000)
+      session.pauseProducer()
+
+      vi.advanceTimersByTime(PRODUCER_PAUSE_FAILSAFE_MS - 1)
+      expect(subprocess.resumeCalls).toBe(0)
+      vi.advanceTimersByTime(1)
+      expect(subprocess.resumeCalls).toBe(1)
+    })
+
+    it('kill() resumes a paused producer before signalling the child', () => {
+      createSession()
+      session.pauseProducer()
+      session.kill()
+      expect(subprocess.resumeCalls).toBe(1)
+      expect(subprocess.killed).toBe(true)
+    })
+
+    it('dispose() resumes a paused producer and clears the failsafe', () => {
+      createSession()
+      session.pauseProducer()
+      session.dispose()
+      expect(subprocess.resumeCalls).toBe(1)
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it('subprocess exit clears the failsafe without resuming a reaped child', () => {
+      createSession()
+      session.pauseProducer()
+      subprocess.simulateExit(0)
+      vi.advanceTimersByTime(PRODUCER_PAUSE_FAILSAFE_MS * 2)
+      expect(subprocess.resumeCalls).toBe(0)
+    })
+
+    it('ignores pauseProducer on an exited session', () => {
+      createSession()
+      subprocess.simulateExit(0)
+      session.pauseProducer()
+      expect(subprocess.pauseCalls).toBe(0)
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it('detaching the last client resumes a paused producer', () => {
+      createSession()
+      const token = session.attachClient({ onData: () => {}, onExit: () => {} })
+      session.pauseProducer()
+      session.detachClient(token)
+      expect(subprocess.resumeCalls).toBe(1)
+    })
+
+    it('keeps the pause while another client is still attached', () => {
+      createSession()
+      const token = session.attachClient({ onData: () => {}, onExit: () => {} })
+      session.attachClient({ onData: () => {}, onExit: () => {} })
+      session.pauseProducer()
+      session.detachClient(token)
+      expect(subprocess.resumeCalls).toBe(0)
+    })
+
+    it('detachAllClients resumes a paused producer', () => {
+      createSession()
+      session.attachClient({ onData: () => {}, onExit: () => {} })
+      session.pauseProducer()
+      session.detachAllClients()
+      expect(subprocess.resumeCalls).toBe(1)
     })
   })
 })

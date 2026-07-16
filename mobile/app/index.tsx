@@ -1,9 +1,8 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
-import { View, Text, StyleSheet, Pressable, FlatList } from 'react-native'
+import { View, Text, StyleSheet, Pressable, FlatList, Alert } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useFocusEffect } from 'expo-router'
 import {
-  Monitor,
   QrCode,
   Settings,
   ChevronRight,
@@ -25,7 +24,8 @@ import {
   UsageBar
 } from '../src/components/AccountUsage'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { loadHosts, removeHost, renameHost } from '../src/transport/host-store'
+import { loadHosts } from '../src/transport/host-store'
+import { removeHostAndCloseClient } from '../src/transport/host-removal-lifecycle'
 import { pickResumeWorktree } from '../src/worktree/resume-worktree'
 import type { RpcClient } from '../src/transport/rpc-client'
 import {
@@ -36,12 +36,12 @@ import {
 } from '../src/transport/client-context'
 import { classifyConnection } from '../src/transport/connection-health'
 import { subscribeToDesktopNotifications } from '../src/notifications/mobile-notifications'
+import { shouldPresentNotificationOptIn } from '../src/notifications/notification-opt-in-gate'
 import type { ConnectionState, HostProfile } from '../src/transport/types'
 import { triggerMediumImpact } from '../src/platform/haptics'
 import { OrcaLogo } from '../src/components/OrcaLogo'
-import { StatusDot } from '../src/components/StatusDot'
+import { MobileHostCard } from '../src/components/MobileHostCard'
 import { TaskProviderLogo } from '../src/components/TaskProviderLogo'
-import { TextInputModal } from '../src/components/TextInputModal'
 import { ActionSheetModal, type ActionSheetAction } from '../src/components/ActionSheetModal'
 import { ConfirmModal } from '../src/components/ConfirmModal'
 import { setCachedWorktrees, getCachedWorktrees } from '../src/cache/worktree-cache'
@@ -305,7 +305,6 @@ export default function HomeScreen() {
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const [hosts, setHosts] = useState<HostProfile[]>([])
   const [actionTarget, setActionTarget] = useState<HostProfile | null>(null)
-  const [renameTarget, setRenameTarget] = useState<HostProfile | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<HostProfile | null>(null)
   const [hostStates, setHostStates] = useState<Record<string, ConnectionState>>({})
   const [hostAttempts, setHostAttempts] = useState<Record<string, number>>({})
@@ -317,12 +316,17 @@ export default function HomeScreen() {
   const [lastVisited, setLastVisited] = useState<{ hostId: string; worktreeId: string } | null>(
     null
   )
+  const notificationOptInCheckedRef = useRef(false)
 
   // Why: read shared clients from the per-host store. Replaces the prior
   // pattern of opening N independent WebSockets here. See
   // docs/mobile-shared-client-per-host.md.
   const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
   const allClients = useAllHostClients(hostIds)
+  const hostPaths = useMemo(
+    () => Object.fromEntries(allClients.map(({ hostId, path }) => [hostId, path])),
+    [allClients]
+  )
   const closeHostClient = useCloseHost()
   const forceReconnectHost = useForceReconnect()
   const primeHosts = usePrimeHosts()
@@ -391,9 +395,18 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       let stale = false
-      void loadHosts().then((h) => {
-        if (!stale) {
-          setHosts(h)
+      void loadHosts().then(async (h) => {
+        if (stale) {
+          return
+        }
+        setHosts(h)
+        if (h.length === 0 || notificationOptInCheckedRef.current) {
+          return
+        }
+        notificationOptInCheckedRef.current = true
+        const showNotificationOptIn = await shouldPresentNotificationOptIn()
+        if (!stale && showNotificationOptIn) {
+          router.replace('/notification-opt-in')
         }
       })
       void AsyncStorage.getItem('orca:last-visited-worktree').then((raw) => {
@@ -415,7 +428,7 @@ export default function HomeScreen() {
       return () => {
         stale = true
       }
-    }, [])
+    }, [router])
   )
 
   const sortedHosts = useMemo(
@@ -693,32 +706,20 @@ export default function HomeScreen() {
     </Pressable>
   )
 
-  async function handleRename(newName: string) {
-    if (!renameTarget) {
-      return
-    }
-    try {
-      await renameHost(renameTarget.id, newName)
-      setRenameTarget(null)
-      setHosts(await loadHosts())
-    } catch {
-      setRenameTarget(null)
-    }
-  }
-
   async function handleRemove() {
     if (!confirmRemove) {
       return
     }
+    const hostToRemove = confirmRemove
     try {
-      // Why: close the shared client first so the WebSocket is gone
-      // before the host record disappears from loadHosts().
-      closeHostClient(confirmRemove.id)
-      await removeHost(confirmRemove.id)
+      await removeHostAndCloseClient(hostToRemove.id, closeHostClient)
       setConfirmRemove(null)
       setHosts(await loadHosts())
     } catch {
-      setConfirmRemove(null)
+      // Why: ConfirmModal closes on confirm; re-open for retry and surface the
+      // failure instead of silently leaving the host listed.
+      setConfirmRemove(hostToRemove)
+      Alert.alert('Could not remove host', 'Please try again.')
     }
   }
 
@@ -822,52 +823,28 @@ export default function HomeScreen() {
             const state = hostStates[item.id] ?? 'connecting'
             const attempts = hostAttempts[item.id] ?? 0
             const lastConnectedAt = hostLastConnected[item.id] ?? null
-            const connected = state === 'connected'
             const info = worktreeInfo[item.id]
             const verdict = classifyConnection({
               state,
               reconnectAttempts: attempts,
-              lastConnectedAt
+              lastConnectedAt,
+              endpoint: item.endpoint
             })
-            const isError =
-              verdict.kind === 'warning' ||
-              verdict.kind === 'unreachable' ||
-              verdict.kind === 'auth-failed'
             return (
-              <Pressable
-                style={({ pressed }) => [styles.hostCard, pressed && styles.hostCardPressed]}
+              <MobileHostCard
+                host={item}
+                state={state}
+                verdict={verdict}
+                path={hostPaths[item.id] ?? 'lan'}
+                worktreeCounts={
+                  info ? { total: info.totalWorktrees, active: info.activeCount } : undefined
+                }
                 onPress={() => router.push(`/h/${item.id}`)}
                 onLongPress={() => {
                   triggerMediumImpact()
                   setActionTarget(item)
                 }}
-                delayLongPress={400}
-              >
-                <View style={styles.hostIcon}>
-                  <Monitor
-                    size={20}
-                    color={connected ? colors.textPrimary : colors.textSecondary}
-                  />
-                </View>
-                <View style={styles.hostMain}>
-                  <Text
-                    style={[styles.hostName, !connected && { color: colors.textSecondary }]}
-                    numberOfLines={1}
-                  >
-                    {item.name}
-                  </Text>
-                  <View style={styles.hostMeta}>
-                    <StatusDot state={state} verdict={verdict} />
-                    <Text style={[styles.hostMetaItem, isError && { color: colors.statusRed }]}>
-                      {verdict.label}
-                      {connected && info
-                        ? ` · ${info.totalWorktrees} worktree${info.totalWorktrees !== 1 ? 's' : ''}${info.activeCount > 0 ? ` · ${info.activeCount} active` : ''}`
-                        : ''}
-                    </Text>
-                  </View>
-                </View>
-                <ChevronRight size={16} color={colors.textMuted} />
-              </Pressable>
+              />
             )
           }}
           ListFooterComponent={
@@ -1076,34 +1053,25 @@ export default function HomeScreen() {
             })
           }
           items.push({
-            label: 'Rename',
+            label: 'Edit host',
             icon: Edit3,
+            closeBeforePress: true,
             onPress: () => {
               setActionTarget(null)
-              setRenameTarget(host)
+              router.push(`/h/${host.id}/edit`)
             }
           })
           items.push({
             label: 'Remove',
             destructive: true,
+            closeBeforePress: true,
             onPress: () => {
-              setActionTarget(null)
               setConfirmRemove(host)
             }
           })
           return items
         })()}
         onClose={() => setActionTarget(null)}
-      />
-
-      <TextInputModal
-        visible={renameTarget != null}
-        title="Rename Host"
-        message="Enter a new name for this host."
-        defaultValue={renameTarget?.name ?? ''}
-        placeholder="Host name"
-        onSubmit={(name) => void handleRename(name)}
-        onCancel={() => setRenameTarget(null)}
       />
 
       <ConfirmModal
@@ -1241,62 +1209,8 @@ const styles = StyleSheet.create({
   },
 
   /* ─── Host cards ─── */
-  hostCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingLeft: spacing.md,
-    paddingRight: spacing.md,
-    paddingVertical: 12,
-    borderRadius: radii.card,
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
   hostCardPressed: {
     backgroundColor: colors.bgRaised
-  },
-  hostIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgRaised,
-    marginRight: 14,
-    position: 'relative'
-  },
-  hostMain: {
-    flex: 1,
-    minWidth: 0,
-    marginRight: spacing.sm
-  },
-  hostName: {
-    color: colors.textPrimary,
-    fontSize: 15,
-    fontWeight: '600',
-    lineHeight: 20
-  },
-  hostMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 3
-  },
-  hostMetaItem: {
-    fontSize: 12,
-    color: colors.textSecondary
-  },
-  hostMetaDot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: colors.textMuted,
-    marginHorizontal: 8
-  },
-  statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5
   },
 
   /* ─── Resume card ─── */

@@ -185,55 +185,6 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
       ]
     },
     getNewWorktreeCardStyleSearchEntry(),
-    {
-      title: translate(
-        'auto.components.settings.experimental.search.78c2a8dc74',
-        'Shared paths on worktrees'
-      ),
-      description: translate(
-        'auto.components.settings.experimental.search.603d29ed74',
-        'Automatically materialize configured files or folders into newly created worktrees using APFS clone-copy on macOS when possible, otherwise symlinks.'
-      ),
-      keywords: [
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.0d24759f14',
-          'experimental'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.d23ae13990',
-          'worktree'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.10b52f79c1',
-          'worktrees'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.c387565812',
-          'symlink'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.bff1ff7768',
-          'symlinks'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.3028f0bd3a',
-          'link'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.f082788cfe',
-          'links'
-        ),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.3021571c30',
-          'shared'
-        ),
-        ...translateSearchKeyword('auto.components.settings.experimental.search.4ad605f222', 'env'),
-        ...translateSearchKeyword(
-          'auto.components.settings.experimental.search.44c7f209d5',
-          'node_modules'
-        )
-      ]
-    },
     getEphemeralVmsSearchEntry()
   ]
 )
@@ -271,12 +222,6 @@ export function getExperimentalSearchEntry() {
       translate(
         'auto.components.settings.experimental.search.newWorktreeCardStyle.title',
         'New card style'
-      )
-    ),
-    symlinksOnWorktrees: findEntry(
-      translate(
-        'auto.components.settings.experimental.search.78c2a8dc74',
-        'Shared paths on worktrees'
       )
     ),
     ephemeralVms: findEntry(

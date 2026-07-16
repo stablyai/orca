@@ -4,6 +4,7 @@
  * branches share little beyond drag data, so consolidating them would cost
  * more clarity than the ~5 lines of bloat is worth. */
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { SortableContext } from '@dnd-kit/sortable'
 import {
   ChevronLeft,
@@ -51,6 +52,7 @@ import {
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { getConnectionIdFromState } from '@/lib/connection-context'
 import { useOptionalShortcutLabel, useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
   type BuiltInWindowsTerminalShell,
@@ -78,8 +80,12 @@ import { useTabStripOverflowNavigation } from './tab-strip-overflow-navigation'
 import { useTabStripDragScrollHandlers } from './tab-strip-drag-scroll'
 import { shouldShowWindowsShellMenu } from './windows-shell-menu-visibility'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
-import { findTabAgentEntry } from '../native-chat/native-chat-tab-agent-entry'
-import { resolveTabAgentFromTitle } from '@/lib/use-tab-agent'
+import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
+import {
+  selectNativeChatTabWideFallbackUnsafeTabsById,
+  selectTabAgentTypesByTabId
+} from './tab-agent-types-by-tab-id'
+import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 
 const isWindows = navigator.userAgent.includes('Windows')
 const isMacOs = navigator.userAgent.includes('Mac')
@@ -310,13 +316,11 @@ function TabBarInner({
   const activeRuntimeEnvironmentId = useAppStore(
     (s) => getRuntimeEnvironmentIdForWorktree(s, worktreeId)?.trim() || null
   )
-  const worktreeConnectionId = useAppStore((s) => {
-    const worktree = Object.values(s.worktreesByRepo ?? {})
-      .flat()
-      .find((entry) => entry.id === worktreeId)
-    const repo = worktree ? s.repos?.find((entry) => entry.id === worktree.repoId) : null
-    return repo?.connectionId?.trim() || null
-  })
+  // Why: retained tab strips rerun selectors on every store write; reuse the
+  // canonical worktree/repo indexes instead of flattening both slices here.
+  const worktreeConnectionId = useAppStore(
+    (s) => getConnectionIdFromState(s, worktreeId)?.trim() || null
+  )
   const worktreeRemotePlatform = useAppStore((s) => {
     if (!worktreeConnectionId) {
       return null
@@ -328,15 +332,13 @@ function TabBarInner({
     (s) => s.settings?.agentCmdOverrides ?? EMPTY_AGENT_CMD_OVERRIDES
   )
   const agentDetectionTargetKey = useAppStore((s): string | undefined => {
-    const allWorktrees = Object.values(s.worktreesByRepo ?? {}).flat()
-    const worktree = allWorktrees.find((w) => w.id === worktreeId)
-    if (!worktree) {
+    const connectionId = getConnectionIdFromState(s, worktreeId)
+    if (connectionId === undefined) {
       return undefined
     }
-    const repo = s.repos?.find((r) => r.id === worktree.repoId)
-    const repoConnectionId = repo?.connectionId?.trim()
-    if (repoConnectionId) {
-      return `ssh:${repoConnectionId}`
+    const normalizedConnectionId = connectionId?.trim()
+    if (normalizedConnectionId) {
+      return `ssh:${normalizedConnectionId}`
     }
     const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(s, worktreeId)?.trim()
     if (runtimeEnvironmentId) {
@@ -450,12 +452,25 @@ function TabBarInner({
     [unifiedTabs]
   )
 
-  // Why: gate the tab long-press view-mode toggle to agent terminals. A tab is
-  // eligible when it launched an agent or has a live agent-status entry on any of
-  // its panes (paneKey = `${unifiedTabId}:…`), mirroring the toggle button's gate.
+  // Why: gate the tab long-press view-mode toggle to the agent in its active leaf.
+  // Tab-wide launch/title hints are safe only before the terminal is split.
   const toggleTabViewMode = useAppStore((s) => s.toggleTabViewMode)
-  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
+  // Why: the strip only needs each tab's stable agent identity, but the whole
+  // agentStatusByPaneKey map churns on every working↔idle transition app-wide.
+  // Select a shallow-stable { tabId: agentType } projection so the strip
+  // re-renders only when a tab gains/loses/changes its agent, not on status flips.
+  const tabAgentTypesByTabId = useAppStore(
+    useShallow((s) =>
+      selectTabAgentTypesByTabId(s.agentStatusByPaneKey ?? {}, s.terminalLayoutsByTabId)
+    )
+  )
+  const nativeChatTabWideFallbackUnsafeTabsById = useAppStore(
+    useShallow((s) => selectNativeChatTabWideFallbackUnsafeTabsById(s.terminalLayoutsByTabId))
+  )
   const nativeChatEnabled = useAppStore((s) => s.settings?.experimentalNativeChat === true)
+  const nativeChatTranscriptIsLocalReadable = useAppStore((s) =>
+    isNativeChatTranscriptLocalReadable(getConnectionIdFromState(s, worktreeId))
+  )
 
   // Why: Electron <webview> elements run in a separate process, so clicking
   // inside one never dispatches a pointerdown on the renderer document.
@@ -1103,21 +1118,23 @@ function TabBarInner({
                 // Carry the agent *identity* (not just "an agent exists") so the
                 // native-chat gate can reject unsupported agents like Grok.
                 const resolvedAgent =
-                  resolveTabAgentFromTitle(unifiedTabForItem?.label ?? '') ??
-                  resolveTabAgentFromTitle(terminalTab.title)
+                  resolveCommittedTitleAgentType(unifiedTabForItem?.label ?? '') ??
+                  resolveCommittedTitleAgentType(terminalTab.title)
                 // Key the live-agent lookup by the backing terminal tab id —
                 // agent-status pane keys are `${terminalTab.id}:${leafId}`, and
                 // the unified tab id can differ from it.
-                const detectedAgent =
-                  findTabAgentEntry(agentStatusByPaneKey ?? {}, terminalTab.id)?.agentType ?? null
+                const detectedAgent = tabAgentTypesByTabId[terminalTab.id] ?? null
+                const tabWideFallbackSafe =
+                  nativeChatTabWideFallbackUnsafeTabsById[terminalTab.id] !== true
                 const canToggleViewMode =
                   unifiedTabForItem !== undefined &&
                   canToggleNativeChat({
                     experimentalNativeChatEnabled: nativeChatEnabled,
                     contentType: 'terminal',
-                    launchAgent: terminalTab.launchAgent,
+                    launchAgent: tabWideFallbackSafe ? terminalTab.launchAgent : null,
                     detectedAgent,
-                    resolvedAgent,
+                    resolvedAgent: tabWideFallbackSafe ? resolvedAgent : null,
+                    nativeChatTranscriptIsLocalReadable,
                     isChatViewMode: unifiedTabForItem.viewMode === 'chat'
                   })
                 return (

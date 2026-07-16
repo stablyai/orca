@@ -214,23 +214,35 @@ export function createFilePathLinkProvider(
             }
           )
         )
-      ).then((resolvedLinks) => {
-        const latestFingerprints = new Set(
-          buildCandidateLogicalLinesForBufferPosition(buffer, bufferLineNumber).map(
-            (logicalLine) => logicalLine.fingerprint
-          )
+      )
+        .then(
+          (resolvedLinks) => {
+            const latestFingerprints = new Set(
+              buildCandidateLogicalLinesForBufferPosition(buffer, bufferLineNumber).map(
+                (logicalLine) => logicalLine.fingerprint
+              )
+            )
+            const providedLinks = resolvedLinks.filter(
+              (link): link is ProvidedFileLink => link !== null
+            )
+            const links = preferLongestNonOverlappingLinks(providedLinks)
+              .filter(({ logicalLine }) => latestFingerprints.has(logicalLine.fingerprint))
+              .map(({ link }) => link)
+            if (providedLinks.length > 0 && links.length === 0) {
+              return
+            }
+            callback(links.length > 0 ? links : undefined)
+          },
+          () => {
+            // Why: remote probes reject during SSH teardown; using the rejection
+            // arm avoids treating a consumer callback failure as a probe failure.
+            callback(undefined)
+          }
         )
-        const providedLinks = resolvedLinks.filter(
-          (link): link is ProvidedFileLink => link !== null
-        )
-        const links = preferLongestNonOverlappingLinks(providedLinks)
-          .filter(({ logicalLine }) => latestFingerprints.has(logicalLine.fingerprint))
-          .map(({ link }) => link)
-        if (providedLinks.length > 0 && links.length === 0) {
-          return
-        }
-        callback(links.length > 0 ? links : undefined)
-      })
+        .catch(() => {
+          // Link discovery is best-effort; a stale xterm callback must not
+          // recreate the unhandled rejection this path is meant to contain.
+        })
     }
   }
 }

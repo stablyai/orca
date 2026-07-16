@@ -28,11 +28,14 @@ function tryRun(command: string, args: string[], opts: { timeoutMs?: number } = 
   spawnSync(command, args, { stdio: 'ignore', timeout: opts.timeoutMs ?? 10_000 })
 }
 
-function shellQuote(value: string): string {
+export function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`
 }
 
-function dockerExec(target: DockerSshRelayTarget, command: string): string {
+export function execDockerSshRelayTargetCommand(
+  target: DockerSshRelayTarget,
+  command: string
+): string {
   return run('docker', ['exec', target.containerName, 'bash', '-lc', command], {
     timeoutMs: 60_000
   })
@@ -74,7 +77,7 @@ function waitForSsh(target: DockerSshRelayTarget): void {
 }
 
 function seedRemoteRepo(target: DockerSshRelayTarget): void {
-  dockerExec(
+  execDockerSshRelayTargetCommand(
     target,
     [
       `rm -rf ${shellQuote(DOCKER_SSH_RELAY_REMOTE_REPO_PATH)}`,
@@ -87,6 +90,17 @@ function seedRemoteRepo(target: DockerSshRelayTarget): void {
       'git add README.md',
       'git commit -m initial'
     ].join(' && ')
+  )
+}
+
+export function writeDockerSshRelayTargetFile(
+  target: DockerSshRelayTarget,
+  filePath: string,
+  contents: string
+): void {
+  execDockerSshRelayTargetCommand(
+    target,
+    `printf '%s' ${shellQuote(contents)} > ${shellQuote(filePath)}`
   )
 }
 

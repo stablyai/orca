@@ -63,7 +63,8 @@ vi.mock('../git/runner', () => ({
 
 vi.mock('./rate-limit', () => ({
   rateLimitGuard: rateLimitGuardMock,
-  noteRateLimitSpend: noteRateLimitSpendMock
+  noteRateLimitSpend: noteRateLimitSpendMock,
+  getRateLimit: vi.fn(async () => ({ ok: false, error: 'not probed in tests' }))
 }))
 
 import {
@@ -72,6 +73,7 @@ import {
   _resetMergeQueueCacheForTests,
   _resetOwnerRepoCache
 } from './client'
+import { _resetGhCwdRepoNegativeCache } from './gh-cwd-repo-negative-cache'
 import { GITHUB_WORK_ITEMS_QUERY_MAX_BYTES } from '../../shared/github-work-items-query-bounds'
 
 describe('listWorkItems', () => {
@@ -99,6 +101,25 @@ describe('listWorkItems', () => {
     getOwnerRepoForRemoteMock.mockResolvedValue(null)
     _resetOwnerRepoCache()
     _resetMergeQueueCacheForTests()
+    _resetGhCwdRepoNegativeCache()
+  })
+
+  it('stops re-spawning gh for a repo whose cwd resolution already failed with no remotes', async () => {
+    getIssueOwnerRepoMock.mockResolvedValue(null)
+    getOwnerRepoMock.mockResolvedValue(null)
+    ghExecFileAsyncMock.mockRejectedValue(
+      Object.assign(new Error('Command failed: gh pr list\nno git remotes found'), {
+        stderr: 'no git remotes found'
+      })
+    )
+
+    await expect(listWorkItems('/no-remote-repo', 36)).rejects.toThrow('no git remotes found')
+    // The first refresh pays the two cwd-fallback spawns (issue + pr list).
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+
+    await expect(listWorkItems('/no-remote-repo', 36)).rejects.toThrow('no git remotes found')
+    // The second refresh is served from the negative cache — zero new spawns.
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
   })
 
   it('runs both issue and PR GitHub searches for a mixed query and merges the results by recency', async () => {
@@ -159,16 +180,12 @@ describe('listWorkItems', () => {
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
       [
-        'issue',
-        'list',
-        '--limit',
-        '10',
-        '--json',
-        'number,title,state,url,labels,updatedAt,author,assignees',
-        '--repo',
-        'acme/widgets',
-        '--assignee',
-        '@me'
+        'api',
+        '--cache',
+        '120s',
+        `search/issues?q=${encodeURIComponent('repo:acme/widgets is:issue assignee:@me')}&sort=created&order=desc&per_page=10&page=1`,
+        '--jq',
+        '.items'
       ],
       { cwd: '/repo-root' }
     )
@@ -179,12 +196,14 @@ describe('listWorkItems', () => {
         'list',
         '--limit',
         '10',
+        '--state',
+        'all',
         '--json',
         'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,reviewRequests',
         '--repo',
         'acme/widgets',
-        '--assignee',
-        '@me'
+        '--search',
+        'is:pr assignee:@me sort:created-desc'
       ],
       { cwd: '/repo-root' }
     )
@@ -193,24 +212,6 @@ describe('listWorkItems', () => {
     expect(prListFields).toContain('reviewRequests')
     expect(prListFields).not.toContain('mergeStateStatus')
     expect(items).toEqual([
-      {
-        id: 'issue:12',
-        type: 'issue',
-        number: 12,
-        title: 'Fix bug',
-        state: 'open',
-        url: 'https://github.com/acme/widgets/issues/12',
-        labels: [],
-        updatedAt: '2026-03-29T00:00:00Z',
-        author: 'octocat',
-        assignees: [
-          {
-            login: 'test-assignee',
-            name: 'Test Assignee',
-            avatarUrl: 'https://avatars.githubusercontent.com/u/1?v=4'
-          }
-        ]
-      },
       {
         id: 'pr:42',
         type: 'pr',
@@ -226,6 +227,24 @@ describe('listWorkItems', () => {
         headSha: 'head-42',
         prRepo: { owner: 'acme', repo: 'widgets' },
         reviewRequests: [
+          {
+            login: 'test-assignee',
+            name: 'Test Assignee',
+            avatarUrl: 'https://avatars.githubusercontent.com/u/1?v=4'
+          }
+        ]
+      },
+      {
+        id: 'issue:12',
+        type: 'issue',
+        number: 12,
+        title: 'Fix bug',
+        state: 'open',
+        url: 'https://github.com/acme/widgets/issues/12',
+        labels: [],
+        updatedAt: '2026-03-29T00:00:00Z',
+        author: 'octocat',
+        assignees: [
           {
             login: 'test-assignee',
             name: 'Test Assignee',
@@ -379,13 +398,14 @@ describe('listWorkItems', () => {
         'list',
         '--limit',
         '10',
+        '--state',
+        'all',
         '--json',
         'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,reviewRequests',
         '--repo',
         'acme/widgets',
-        '--state',
-        'open',
-        '--draft'
+        '--search',
+        'is:pr is:open draft:true sort:created-desc'
       ],
       { cwd: '/repo-root' }
     )
@@ -438,12 +458,14 @@ describe('listWorkItems', () => {
         'list',
         '--limit',
         '10',
+        '--state',
+        'all',
         '--json',
         'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,reviewRequests',
         '--repo',
         'acme/widgets',
-        '--state',
-        'merged'
+        '--search',
+        'is:pr is:merged sort:created-desc'
       ],
       { cwd: '/repo-root' }
     )
@@ -507,7 +529,12 @@ describe('listWorkItems', () => {
     const { items } = await listWorkItems('/repo-root', 10, 'is:pr is:closed')
 
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      expect.arrayContaining(['--state', 'closed', '--search', '-is:merged']),
+      expect.arrayContaining([
+        '--state',
+        'all',
+        '--search',
+        'is:pr is:closed -is:merged sort:created-desc'
+      ]),
       { cwd: '/repo-root' }
     )
     expect(items).toMatchObject([{ id: 'pr:9', type: 'pr', state: 'closed' }])
@@ -537,6 +564,22 @@ describe('listWorkItems', () => {
     expect(apiPath).not.toContain('-is:merged')
   })
 
+  it('returns zero without spawning gh when the search bucket is rate-limit blocked', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    rateLimitGuardMock.mockReturnValue({
+      blocked: true,
+      remaining: 0,
+      limit: 30,
+      resetAt: Math.floor(Date.now() / 1000) + 60
+    } as unknown as { blocked: boolean })
+
+    await expect(countWorkItems('/repo-root', 'is:issue is:open')).resolves.toBe(0)
+
+    expect(rateLimitGuardMock).toHaveBeenCalledWith('search')
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
   it('returns zero for oversized count queries before resolving repo sources', async () => {
     const secret = 'main-github-work-items-secret'
     const oversizedQuery = secret + 'x'.repeat(GITHUB_WORK_ITEMS_QUERY_MAX_BYTES)
@@ -560,13 +603,95 @@ describe('listWorkItems', () => {
 
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      expect.arrayContaining(['--search', 'review-requested:@me']),
+      expect.arrayContaining(['--search', 'is:pr is:open review-requested:@me sort:created-desc']),
       { cwd: '/repo-root' }
     )
     expect(ghExecFileAsyncMock).not.toHaveBeenCalledWith(
       expect.arrayContaining(['--review-requested']),
       expect.anything()
     )
+  })
+
+  it('uses the requested numbered Search API page for issues', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+
+    await listWorkItems('/repo-root', 10, 'is:issue is:open', 2)
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        'api',
+        '--cache',
+        '120s',
+        `search/issues?q=${encodeURIComponent('repo:acme/widgets is:issue is:open')}&sort=created&order=desc&per_page=10&page=2`,
+        '--jq',
+        '.items'
+      ],
+      { cwd: '/repo-root' }
+    )
+  })
+
+  it('fetches and slices stable PR results for the requested numbered page', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify(
+        [1, 2, 3, 4].map((number) => ({
+          number,
+          title: `PR ${number}`,
+          state: 'OPEN',
+          url: `https://github.com/acme/widgets/pull/${number}`,
+          labels: [],
+          updatedAt: `2026-07-0${number}T00:00:00Z`,
+          author: { login: 'octocat' },
+          isDraft: false,
+          headRefName: `feature/${number}`,
+          headRefOid: `head-${number}`,
+          baseRefName: 'main'
+        }))
+      )
+    })
+
+    const { items } = await listWorkItems('/repo-root', 2, 'is:pr is:open', 2)
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      expect.arrayContaining(['--limit', '4', '--search', 'is:pr is:open sort:created-desc']),
+      { cwd: '/repo-root' }
+    )
+    expect(items.map((item) => item.number)).toEqual([4, 3])
+  })
+
+  it('filters pull request rows out of issue Search API results', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify([
+        {
+          number: 2,
+          title: 'PR-shaped search row',
+          state: 'open',
+          html_url: 'https://github.com/acme/widgets/pull/2',
+          labels: [],
+          updated_at: '2026-07-02T00:00:00Z',
+          user: { login: 'octocat' },
+          pull_request: { url: 'https://api.github.com/repos/acme/widgets/pulls/2' }
+        },
+        {
+          number: 1,
+          title: 'Issue row',
+          state: 'open',
+          html_url: 'https://github.com/acme/widgets/issues/1',
+          labels: [],
+          updated_at: '2026-07-01T00:00:00Z',
+          user: { login: 'octocat' }
+        }
+      ])
+    })
+
+    const { items } = await listWorkItems('/repo-root', 10, 'is:issue is:open')
+
+    expect(items.map((item) => item.id)).toEqual(['issue:1'])
   })
 
   it('returns open issues and PRs for the all-open preset query', async () => {
@@ -606,16 +731,12 @@ describe('listWorkItems', () => {
     const { items } = await listWorkItems('/repo-root', 10, 'is:open')
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       [
-        'issue',
-        'list',
-        '--limit',
-        '10',
-        '--json',
-        'number,title,state,url,labels,updatedAt,author,assignees',
-        '--repo',
-        'acme/widgets',
-        '--state',
-        'open'
+        'api',
+        '--cache',
+        '120s',
+        `search/issues?q=${encodeURIComponent('repo:acme/widgets is:issue is:open')}&sort=created&order=desc&per_page=10&page=1`,
+        '--jq',
+        '.items'
       ],
       { cwd: '/repo-root' }
     )
@@ -625,27 +746,18 @@ describe('listWorkItems', () => {
         'list',
         '--limit',
         '10',
+        '--state',
+        'all',
         '--json',
         'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,reviewRequests',
         '--repo',
         'acme/widgets',
-        '--state',
-        'open'
+        '--search',
+        'is:pr is:open sort:created-desc'
       ],
       { cwd: '/repo-root' }
     )
     expect(items).toEqual([
-      {
-        id: 'issue:1',
-        type: 'issue',
-        number: 1,
-        title: 'Open issue',
-        state: 'open',
-        url: 'https://github.com/acme/widgets/issues/1',
-        labels: [],
-        updatedAt: '2026-03-31T00:00:00Z',
-        author: 'octocat'
-      },
       {
         id: 'pr:2',
         type: 'pr',
@@ -660,6 +772,17 @@ describe('listWorkItems', () => {
         baseRefName: 'main',
         headSha: 'head-2',
         prRepo: { owner: 'acme', repo: 'widgets' }
+      },
+      {
+        id: 'issue:1',
+        type: 'issue',
+        number: 1,
+        title: 'Open issue',
+        state: 'open',
+        url: 'https://github.com/acme/widgets/issues/1',
+        labels: [],
+        updatedAt: '2026-03-31T00:00:00Z',
+        author: 'octocat'
       }
     ])
   })

@@ -38,6 +38,7 @@ type AppearanceInterfaceSectionProps = {
   applyTheme: (theme: 'system' | 'dark' | 'light') => void
   fontSuggestions: string[]
   isDesktopWindows: boolean
+  onRequestFontSuggestions?: () => void
   forceVisiblePrimary?: boolean
 }
 
@@ -47,6 +48,7 @@ export function AppearanceInterfaceSection({
   applyTheme,
   fontSuggestions,
   isDesktopWindows,
+  onRequestFontSuggestions,
   forceVisiblePrimary = false
 }: AppearanceInterfaceSectionProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
@@ -142,6 +144,7 @@ export function AppearanceInterfaceSection({
               value={settings.appFontFamily}
               suggestions={fontSuggestions}
               placeholder={DEFAULT_APP_FONT_FAMILY}
+              onRequestSuggestions={onRequestFontSuggestions}
               onChange={(value) =>
                 updateSettings({ appFontFamily: value.trim() || DEFAULT_APP_FONT_FAMILY })
               }

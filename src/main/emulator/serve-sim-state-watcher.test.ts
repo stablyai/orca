@@ -2,9 +2,24 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { ServeSimStateWatcher, type ServeSimStateDetectedEvent } from './serve-sim-state-watcher'
+import {
+  SERVE_SIM_STATE_DIR_EXISTENCE_POLL_MS,
+  ServeSimStateWatcher,
+  type ServeSimStateDetectedEvent
+} from './serve-sim-state-watcher'
 
 const TEST_UDID = '11111111-2222-3333-4444-555555555555'
+
+let isolatedStateDirSeq = 0
+// Why: the default state dir is the real $TMPDIR/serve-sim — a leftover state
+// file from an actual simulator session would leak extra events into tests
+// that only exercise PTY ingestion. Point at a dir that never exists.
+function createIsolatedWatcher(): ServeSimStateWatcher {
+  isolatedStateDirSeq += 1
+  return new ServeSimStateWatcher({
+    stateDir: join(tmpdir(), `orca-serve-sim-test-none-${process.pid}-${isolatedStateDirSeq}`)
+  })
+}
 
 async function waitForEvent(
   events: ServeSimStateDetectedEvent[],
@@ -34,7 +49,9 @@ describe('ServeSimStateWatcher', () => {
     const parentDir = await mkdtemp(join(tmpdir(), 'orca-serve-sim-watch-'))
     cleanupPaths.push(parentDir)
     const stateDir = join(parentDir, 'serve-sim')
-    const watcher = new ServeSimStateWatcher({ stateDir })
+    // Force darwin (the poll is macOS-only) and a fast interval so this
+    // cross-platform test exercises the existence-poll -> attach path quickly.
+    const watcher = new ServeSimStateWatcher({ stateDir, platform: 'darwin', existencePollMs: 50 })
     const events: ServeSimStateDetectedEvent[] = []
 
     watcher.bindPty('pty-1', 'worktree-1')
@@ -67,8 +84,79 @@ describe('ServeSimStateWatcher', () => {
     watcher.stop()
   })
 
-  it('suppresses Orca-managed sessions only while they are marked managed', async () => {
+  it('does not arm the existence poll on non-macOS platforms', () => {
+    // serve-sim state never appears off macOS, so start() must not leave a
+    // recurring timer waking the daemon for a directory that can never exist.
+    for (const platform of ['win32', 'linux'] as const) {
+      const watcher = new ServeSimStateWatcher({
+        stateDir: join(tmpdir(), `orca-serve-sim-nonmac-${process.pid}-${platform}`),
+        platform
+      })
+      watcher.start()
+      const poll = (watcher as unknown as { stateDirPoll: unknown }).stateDirPoll
+      expect(poll).toBeNull()
+      watcher.stop()
+    }
+  })
+
+  it('defaults the existence poll to a coarse (battery-friendly) interval', () => {
+    expect(SERVE_SIM_STATE_DIR_EXISTENCE_POLL_MS).toBe(2_000)
     const watcher = new ServeSimStateWatcher()
+    expect((watcher as unknown as { existencePollMs: number }).existencePollMs).toBe(
+      SERVE_SIM_STATE_DIR_EXISTENCE_POLL_MS
+    )
+  })
+
+  it('does not buffer repeated brace-free PTY output while waiting for metadata', () => {
+    const watcher = createIsolatedWatcher()
+    const buffers = (watcher as unknown as { ptyBuffers: Map<string, string> }).ptyBuffers
+    const originalSet = buffers.set
+    let setCalls = 0
+    buffers.set = function (key, value): Map<string, string> {
+      setCalls += 1
+      return originalSet.call(this, key, value)
+    }
+    watcher.bindPty('pty-1', 'worktree-1')
+
+    try {
+      for (let index = 0; index < 4096; index += 1) {
+        watcher.ingestPtyOutput('pty-1', 'ordinary compiler progress without JSON metadata\n')
+      }
+    } finally {
+      buffers.set = originalSet
+    }
+
+    expect(setCalls).toBe(0)
+    expect(buffers.has('pty-1')).toBe(false)
+    watcher.stop()
+  })
+
+  it('detects serve-sim metadata split across PTY chunks and releases the partial object', () => {
+    const watcher = createIsolatedWatcher()
+    const events: ServeSimStateDetectedEvent[] = []
+    const buffers = (watcher as unknown as { ptyBuffers: Map<string, string> }).ptyBuffers
+    const payload = JSON.stringify({
+      device: TEST_UDID,
+      streamUrl: 'http://127.0.0.1:3100/stream.mjpeg',
+      wsUrl: 'ws://127.0.0.1:3100/ws'
+    })
+    const splitIndex = payload.indexOf('streamUrl') + 4
+    watcher.bindPty('pty-1', 'worktree-1')
+    watcher.onDetected((event) => events.push(event))
+
+    watcher.ingestPtyOutput('pty-1', payload.slice(0, splitIndex))
+    expect(events).toHaveLength(0)
+    expect(buffers.has('pty-1')).toBe(true)
+
+    watcher.ingestPtyOutput('pty-1', payload.slice(splitIndex))
+    expect(events).toHaveLength(1)
+    expect(events[0]?.info.deviceUdid).toBe(TEST_UDID)
+    expect(buffers.has('pty-1')).toBe(false)
+    watcher.stop()
+  })
+
+  it('suppresses Orca-managed sessions only while they are marked managed', async () => {
+    const watcher = createIsolatedWatcher()
     const events: ServeSimStateDetectedEvent[] = []
     const payload = JSON.stringify({
       device: TEST_UDID,
@@ -95,7 +183,7 @@ describe('ServeSimStateWatcher', () => {
   })
 
   it('prunes worktree-scoped dedupe keys on forget so a re-bound worktree re-emits', () => {
-    const watcher = new ServeSimStateWatcher()
+    const watcher = createIsolatedWatcher()
     const events: ServeSimStateDetectedEvent[] = []
     const payload = JSON.stringify({
       device: TEST_UDID,
@@ -122,7 +210,7 @@ describe('ServeSimStateWatcher', () => {
   })
 
   it('dedupes one helper without hiding a later helper for the same simulator', () => {
-    const watcher = new ServeSimStateWatcher()
+    const watcher = createIsolatedWatcher()
     const events: ServeSimStateDetectedEvent[] = []
     const firstPayload = JSON.stringify({
       device: TEST_UDID,

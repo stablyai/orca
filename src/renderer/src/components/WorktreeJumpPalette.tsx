@@ -1,5 +1,6 @@
 /* oxlint-disable max-lines */
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { getRepoMapFromState, useAllWorktrees } from '@/store/selectors'
+import { selectPaletteStatusInputs } from './worktree-jump-palette-status-inputs'
 import {
   CommandDialog,
   CommandInput,
@@ -30,7 +32,7 @@ import {
   isAutomationGeneratedWorkspace,
   isDefaultBranchWorkspace
 } from '@/components/sidebar/visible-worktrees'
-import { isInactiveWorkspace } from '@/lib/worktree-activity-state'
+import { getLiveAgentStatusByWorktreeId, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
 import StatusIndicator from '@/components/sidebar/StatusIndicator'
 import { cn } from '@/lib/utils'
@@ -102,14 +104,15 @@ import {
   getCmdJQuickActions,
   CREATE_WORKSPACE_QUICK_ACTION_ID
 } from '@/components/cmd-j/quick-actions'
+import { buildWorktreeChecksReviewIndex } from '@/components/cmd-j/worktree-checks-review-index'
+import { resolvePaletteFocusRestoreTarget } from '@/components/cmd-j/palette-focus-restore-target'
+import { selectWorktreePaletteCacheInputs } from '@/components/cmd-j/worktree-palette-cache-inputs'
+import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 import {
   getComposerEligibleRepos,
   resolveComposerGitRepoId
 } from '@/lib/new-workspace-composer-repo'
-import {
-  lookupGitHubWorkItemByOwnerRepoForSource,
-  lookupGitHubWorkItemForSource
-} from '@/lib/github-work-item-source-lookup'
+import { lookupGitHubWorkItemForSource } from '@/lib/github-work-item-source-lookup'
 import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
 import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
 import { isRuntimeOwnedSshTargetId } from '../../../shared/execution-host'
@@ -192,6 +195,10 @@ type PaletteItem =
 type PaletteListEntry = PaletteItem | CreateWorktreePaletteItem | SectionHeader | HintRow
 
 const CREATE_WORKSPACE_QUICK_ACTION_ITEM_ID = `quick-action:${CREATE_WORKSPACE_QUICK_ACTION_ID}`
+
+// Why: comfortably outlast the CommandDialog close animation (~150–200ms) so the
+// gated status maps stay live until the fading rows are gone from the DOM.
+const PALETTE_STATUS_INPUTS_LINGER_MS = 300
 
 function getComposerPrefetchRepoId(
   state: ReturnType<typeof useAppStore.getState>,
@@ -337,21 +344,48 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const projectHostSetups = useAppStore((s) => s.projectHostSetups)
   const detectedWorktreesByRepo = useAppStore((s) => s.detectedWorktreesByRepo)
   const pendingWorktreeCreations = useAppStore((s) => s.pendingWorktreeCreations)
-  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
-  // Why: getWorktreeStatus needs per-pane titles so split-pane tabs with a
-  // working agent in a non-focused pane still surface as 'working' in the
-  // jump palette. Without this, clicking between panes would desync the
-  // palette's spinner from the sidebar's spinner.
-  const runtimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
-  // Why: ptyIdsByTabId is the live-pty source of truth — without it,
-  // getWorktreeStatus would treat slept tabs as live (their preserved
-  // tab.ptyId is a wake-hint sessionId, not a liveness signal) and the jump
-  // palette dot would lie green even though the sidebar dot is correctly grey.
-  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
-  const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
-  const prCache = useAppStore((s) => s.prCache)
-  const issueCache = useAppStore((s) => s.issueCache)
-  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
+  // Why: keep the (very hot) status maps subscribed through the dialog's close
+  // animation. `visible` flips false synchronously on close, but the CommandDialog
+  // content stays mounted while it fades/zooms out — dropping the maps to empty
+  // there would flash the switcher rows empty/reordered mid-animation. Linger a
+  // beat past close, then let the gate drop the subscription.
+  const [statusInputsLingering, setStatusInputsLingering] = useState(false)
+  useEffect(() => {
+    if (visible) {
+      setStatusInputsLingering(true)
+      return
+    }
+    const timer = window.setTimeout(
+      () => setStatusInputsLingering(false),
+      PALETTE_STATUS_INPUTS_LINGER_MS
+    )
+    return () => window.clearTimeout(timer)
+  }, [visible])
+  // Why: these five status maps drive per-worktree live/working dots and the
+  // switcher sort, but only matter while the palette is active. Two of them
+  // (agentStatusByPaneKey, runtimePaneTitlesByTabId) get a new identity on every
+  // agent-status / pane-title write app-wide, so subscribing to them while the
+  // always-mounted palette is closed re-rendered it on unrelated terminals. Gate
+  // the subscription on active-or-still-closing: a shared frozen constant while
+  // inactive keeps useShallow referentially equal across the churn, and the live
+  // maps flow through the instant the palette opens.
+  // - runtimePaneTitlesByTabId: split-pane tabs with a working agent in a
+  //   non-focused pane still surface as 'working' (matches the sidebar spinner).
+  // - ptyIdsByTabId: the live-pty source of truth — slept tabs keep a wake-hint
+  //   sessionId in tab.ptyId, so without it the palette dot would lie green.
+  const {
+    agentStatusByPaneKey,
+    runtimePaneTitlesByTabId,
+    ptyIdsByTabId,
+    terminalLayoutsByTabId,
+    tabsByWorktree
+  } = useAppStore(useShallow((s) => selectPaletteStatusInputs(s, visible || statusInputsLingering)))
+  const agentStatusEpoch = useAppStore((s) =>
+    visible || statusInputsLingering ? s.agentStatusEpoch : 0
+  )
+  const { prCache, issueCache, hostedReviewCache } = useAppStore(
+    useShallow((s) => selectWorktreePaletteCacheInputs(s, visible || statusInputsLingering))
+  )
   const migrationUnsupportedByPtyId = useAppStore((s) => s.migrationUnsupportedByPtyId)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeTabType = useAppStore((s) => s.activeTabType)
@@ -397,6 +431,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   )
   const previousBrowserPageIdRef = useRef<string | null>(null)
   const previousBrowserFocusTargetRef = useRef<'webview' | 'address-bar'>('webview')
+  // Why: the exact element focused before Cmd+J opened (e.g. the terminal
+  // textarea the user was typing in) so Escape restores it precisely instead
+  // of the first matching surface in the DOM, which may be a background
+  // worktree's mounted-but-hidden terminal.
+  const previousFocusElementRef = useRef<HTMLElement | null>(null)
   const activeGroupSnapshotRef = useRef<CmdJActiveGroupSnapshot | null>(null)
   const wasVisibleRef = useRef(false)
   const skipRestoreFocusRef = useRef(false)
@@ -407,6 +446,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const preserveCreateLookupOnCloseRef = useRef(false)
 
   const repoMap = useMemo(() => new Map(repos.map((r) => [r.id, r])), [repos])
+  const repoByHostIdentity = useMemo(
+    () => new Map(repos.map((repo) => [getRepoHostIdentity(repo), repo])),
+    [repos]
+  )
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
   // Why: host badges only appear when more than one execution host exists; reuse
   // the same registry the sidebar host-scope strip builds so labels stay in sync.
@@ -436,6 +479,19 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const hasQuery = deferredQuery.trim().length > 0
   const isLoading = repos.length > 0 && Object.keys(worktreesByRepo).length === 0
 
+  // Why: keep running-agent workspaces visible under "Hide sleeping" even when
+  // their live PTY is momentarily absent, matching the sidebar filter. #7197
+  const liveAgentActivity = useMemo(() => {
+    void agentStatusEpoch
+    const statusByWorktreeId = getLiveAgentStatusByWorktreeId(
+      agentStatusByPaneKey,
+      tabsByWorktree,
+      Date.now()
+    )
+    return { statusByWorktreeId, worktreeIds: new Set(statusByWorktreeId.keys()) }
+  }, [agentStatusByPaneKey, agentStatusEpoch, tabsByWorktree])
+  const worktreeIdsWithLiveAgent = liveAgentActivity.worktreeIds
+
   // Why: the empty-query palette mirrors sidebar filters so opening Search
   // starts from the same quiet list. Typed search switches to the global
   // non-archived scope below.
@@ -453,7 +509,13 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         }
         if (
           !showSleepingWorkspaces &&
-          isInactiveWorkspace(worktree.id, tabsByWorktree, ptyIdsByTabId, browserTabsByWorktree)
+          isInactiveWorkspace(
+            worktree.id,
+            tabsByWorktree,
+            ptyIdsByTabId,
+            browserTabsByWorktree,
+            worktreeIdsWithLiveAgent
+          )
         ) {
           return false
         }
@@ -466,7 +528,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       hideDefaultBranchWorkspace,
       ptyIdsByTabId,
       showSleepingWorkspaces,
-      tabsByWorktree
+      tabsByWorktree,
+      worktreeIdsWithLiveAgent
     ]
   )
 
@@ -570,6 +633,18 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     [browserSortedWorktrees]
   )
 
+  const checksReviewByWorktree = useMemo(
+    () =>
+      buildWorktreeChecksReviewIndex({
+        worktrees: allWorktrees,
+        repoByHostIdentity,
+        prCache,
+        hostedReviewCache,
+        settings
+      }),
+    [allWorktrees, hostedReviewCache, prCache, repoByHostIdentity, settings]
+  )
+
   const worktreeMatches = useMemo(
     () =>
       searchWorktrees(
@@ -578,9 +653,18 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         repoMap,
         prCache,
         issueCache,
-        getWorkspacePortsByWorktreeId(workspacePortScan)
+        getWorkspacePortsByWorktreeId(workspacePortScan),
+        checksReviewByWorktree
       ),
-    [sortedWorktrees, deferredQuery, repoMap, prCache, issueCache, workspacePortScan]
+    [
+      sortedWorktrees,
+      deferredQuery,
+      repoMap,
+      prCache,
+      issueCache,
+      workspacePortScan,
+      checksReviewByWorktree
+    ]
   )
 
   const browserPageEntries = useMemo<SearchableBrowserPage[]>(() => {
@@ -1096,6 +1180,13 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         document.activeElement.closest('[data-orca-browser-address-bar="true"]')
           ? 'address-bar'
           : 'webview'
+      // Why: same timing constraint — capture the pre-dialog focus target now
+      // so Escape can return focus to the exact input the user left (excluding
+      // document.body, which isn't a meaningful restore target).
+      previousFocusElementRef.current =
+        document.activeElement instanceof HTMLElement && document.activeElement !== document.body
+          ? document.activeElement
+          : null
       skipRestoreFocusRef.current = false
       setQuery('')
       setSelectedItemId('')
@@ -1162,24 +1253,19 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
   useEffect(() => cancelFallbackFocusFrames, [cancelFallbackFocusFrames])
 
-  const focusFallbackSurface = useCallback(() => {
-    cancelFallbackFocusFrames()
-    fallbackFocusOuterFrameRef.current = requestAnimationFrame(() => {
-      fallbackFocusOuterFrameRef.current = null
-      fallbackFocusInnerFrameRef.current = requestAnimationFrame(() => {
-        fallbackFocusInnerFrameRef.current = null
-        const xterm = document.querySelector('.xterm-helper-textarea') as HTMLElement | null
-        if (xterm) {
-          xterm.focus()
-          return
-        }
-        const monaco = document.querySelector('.monaco-editor textarea') as HTMLElement | null
-        if (monaco) {
-          monaco.focus()
-        }
+  const focusFallbackSurface = useCallback(
+    (preferredTarget?: HTMLElement | null) => {
+      cancelFallbackFocusFrames()
+      fallbackFocusOuterFrameRef.current = requestAnimationFrame(() => {
+        fallbackFocusOuterFrameRef.current = null
+        fallbackFocusInnerFrameRef.current = requestAnimationFrame(() => {
+          fallbackFocusInnerFrameRef.current = null
+          resolvePaletteFocusRestoreTarget(preferredTarget ?? null)?.focus({ preventScroll: true })
+        })
       })
-    })
-  }, [cancelFallbackFocusFrames])
+    },
+    [cancelFallbackFocusFrames]
+  )
 
   const requestBrowserFocus = useCallback(
     (detail: { pageId: string; target: 'webview' | 'address-bar' }) => {
@@ -1213,7 +1299,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         return
       }
       if (previousWorktreeIdRef.current) {
-        focusFallbackSurface()
+        // Why: dismissing Cmd+J should return to whatever the user was doing —
+        // restore the exact previously-focused surface (e.g. the terminal they
+        // were typing in) rather than an arbitrary first match.
+        focusFallbackSurface(previousFocusElementRef.current)
       }
     },
     [closeModal, focusFallbackSurface, requestBrowserFocus]
@@ -1454,13 +1543,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
     // Case 1: user pasted a GH issue/PR URL.
     if (ghLink) {
-      const { slug, number } = ghLink
+      const { number } = ghLink
       const state = useAppStore.getState()
 
       // Why: the existing-worktree check only needs the issue/PR number, which
-      // is repo-agnostic on the worktree meta side. We don't currently cache a
-      // repo-slug map, so slug-matching against a specific repo happens
-      // implicitly when we pick a repo for the `gh workItem` lookup below.
+      // is repo-agnostic on the worktree meta side.
       const matches = allWorktrees.filter(
         (w) => !w.isArchived && (w.linkedIssue === number || w.linkedPR === number)
       )
@@ -1472,73 +1559,21 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         return
       }
 
-      // Resolve via gh.workItem: prefer the active repo, else the first eligible.
+      // Why: hand the raw URL to the composer's name field so it runs the same
+      // cross-project detection as Cmd+N — surfacing the "Switch project?"
+      // dialog when the URL targets a different project. Pre-resolving here
+      // against an arbitrary repo silently linked cross-project items to the
+      // wrong project and skipped that prompt. Seed the active repo so the
+      // field compares the URL against the project the user is currently in.
       const eligibleRepos = state.repos.filter((r) => isGitRepoKind(r))
       const repoForLookup =
         (state.activeRepoId && eligibleRepos.find((r) => r.id === state.activeRepoId)) ||
         eligibleRepos[0]
-      if (!repoForLookup) {
-        openComposer({ prefilledName: trimmed })
-        return
-      }
-
-      prefetchCreateWorkspaceBaseForComposer(repoForLookup.id)
-      const sourceContext = buildTaskSourceContextFromRepo({
-        provider: 'github',
-        projectId: repoForLookup.id,
-        repo: repoForLookup
-      })
-      // Why: awaiting inside the user gesture would leave the palette open
-      // indefinitely on slow networks. Close immediately and populate the
-      // composer once the lookup returns.
-      const lookupToken = createLookupGuard.start()
-      preserveCreateLookupOnCloseRef.current = true
-      recordFeatureInteraction('cmd-j-create-workspace')
-      closeModal()
-      void lookupGitHubWorkItemByOwnerRepoForSource({
-        repoPath: repoForLookup.path,
-        repoId: repoForLookup.id,
-        sourceContext,
-        owner: slug.owner,
-        repo: slug.repo,
-        number,
-        type: ghLink.type
-      })
-        .then((item) => {
-          if (!createLookupGuard.isCurrent(lookupToken)) {
-            return
-          }
-          const data: Record<string, unknown> = { initialRepoId: repoForLookup.id }
-          if (item) {
-            const linkedWorkItem: LinkedWorkItemSummary = {
-              type: item.type,
-              number: item.number,
-              title: item.title,
-              url: item.url
-            }
-            data.linkedWorkItem = linkedWorkItem
-            data.prefilledName =
-              getLinkedWorkItemWorkspaceName(linkedWorkItem)?.seedName ??
-              getLinkedWorkItemSuggestedName({ title: item.title })
-          } else {
-            // Fallback: we couldn't resolve the URL, just seed the name.
-            data.prefilledName = `${slug.owner}-${slug.repo}-${number}`
-          }
-          queueMicrotask(() =>
-            openModal('new-workspace-composer', { ...data, telemetrySource: 'command_palette' })
-          )
-        })
-        .catch(() => {
-          if (!createLookupGuard.isCurrent(lookupToken)) {
-            return
-          }
-          queueMicrotask(() =>
-            openModal('new-workspace-composer', {
-              initialRepoId: repoForLookup.id,
-              telemetrySource: 'command_palette'
-            })
-          )
-        })
+      openComposer(
+        repoForLookup
+          ? { prefilledName: trimmed, initialRepoId: repoForLookup.id }
+          : { prefilledName: trimmed }
+      )
       return
     }
 
@@ -1796,7 +1831,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                   tabsByWorktree[worktree.id] ?? [],
                   browserTabsByWorktree[worktree.id] ?? [],
                   ptyIdsByTabId,
-                  runtimePaneTitlesByTabId
+                  runtimePaneTitlesByTabId,
+                  { liveAgentStatus: liveAgentActivity.statusByWorktreeId.get(worktree.id) }
                 )
                 const statusLabel = getWorktreeStatusLabel(status)
                 const isCurrentWorktree = activeWorktreeId === worktree.id
@@ -2311,5 +2347,7 @@ function getPaletteSupportingTextLabel(
       return translate('worktreeJumpPalette.matchLabel.port', 'Port')
     case 'pr':
       return translate('worktreeJumpPalette.matchLabel.pr', 'PR')
+    case 'mr':
+      return translate('worktreeJumpPalette.matchLabel.mr', 'MR')
   }
 }

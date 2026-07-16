@@ -48,7 +48,12 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
   ipcMain.removeHandler('runtime:getTerminalFitOverrides')
   ipcMain.handle(
     'runtime:getTerminalFitOverrides',
-    (): { ptyId: string; mode: 'mobile-fit'; cols: number; rows: number }[] => {
+    (): {
+      ptyId: string
+      mode: 'mobile-fit' | 'remote-desktop-fit'
+      cols: number
+      rows: number
+    }[] => {
       const overrides = runtime.getAllTerminalFitOverrides()
       return Array.from(overrides.entries()).map(([ptyId, override]) => ({
         ptyId,

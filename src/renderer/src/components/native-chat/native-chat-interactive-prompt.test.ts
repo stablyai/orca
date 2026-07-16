@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildAskAnswerKeys,
   formatAskAnswer,
+  hasAskAnswer,
   parseApprovalFromStatus,
   parseAskFromStatus,
-  parseInteractivePrompt
+  parseInteractivePrompt,
+  type AskPrompt
 } from './native-chat-interactive-prompt'
 
 const ESC = String.fromCharCode(27)
@@ -129,37 +132,119 @@ describe('parseInteractivePrompt', () => {
 })
 
 describe('formatAskAnswer', () => {
-  it('joins selected labels per question, one line each', () => {
-    const prompt = {
+  it('joins selected option labels per question, one line each', () => {
+    const prompt: AskPrompt = {
       questions: [
         { question: 'q1', multiSelect: true, options: [{ label: 'A' }, { label: 'B' }] },
         { question: 'q2', multiSelect: false, options: [{ label: 'C' }] }
       ]
     }
-    expect(formatAskAnswer(prompt, [['A', 'B'], ['C']])).toBe('A, B\nC')
+    expect(formatAskAnswer(prompt, [{ indices: [0, 1] }, { indices: [0] }])).toBe('A, B\nC')
+  })
+
+  it('appends free-text after picked labels', () => {
+    const prompt: AskPrompt = {
+      questions: [{ question: 'q1', multiSelect: true, options: [{ label: 'A' }, { label: 'B' }] }]
+    }
+    expect(formatAskAnswer(prompt, [{ indices: [0], other: '  extra ' }])).toBe('A, extra')
   })
 
   it('preserves empty answers as empty lines so N lines == N questions', () => {
-    const prompt = {
+    const prompt: AskPrompt = {
       questions: [
         { question: 'q1', multiSelect: false, options: [{ label: 'A' }] },
         { question: 'q2', multiSelect: false, options: [{ label: 'B' }] }
       ]
     }
     // Leading blank stays an empty line: '\nB' (2 lines), not 'B'.
-    expect(formatAskAnswer(prompt, [[], ['B']])).toBe('\nB')
+    expect(formatAskAnswer(prompt, [{ indices: [] }, { indices: [0] }])).toBe('\nB')
   })
 
   it('keeps one line per question with a blank middle answer (3 questions)', () => {
-    const prompt = {
+    const prompt: AskPrompt = {
       questions: [
         { question: 'q1', multiSelect: false, options: [{ label: 'A' }] },
         { question: 'q2', multiSelect: false, options: [{ label: 'B' }] },
         { question: 'q3', multiSelect: false, options: [{ label: 'C' }] }
       ]
     }
-    const answer = formatAskAnswer(prompt, [['A'], [], ['C']])
+    const answer = formatAskAnswer(prompt, [{ indices: [0] }, { indices: [] }, { indices: [0] }])
     expect(answer).toBe('A\n\nC')
     expect(answer.split('\n')).toHaveLength(3)
+  })
+})
+
+const single = (options: string[], multiSelect = false): AskPrompt => ({
+  questions: [{ question: 'q', multiSelect, options: options.map((label) => ({ label })) }]
+})
+
+describe('buildAskAnswerKeys', () => {
+  it('single-select: sends the picked option NUMBER (not the label), no trailing Enter', () => {
+    // STA-1860 regression: picking the 2nd option must deliver the 2nd option.
+    // '2' is the selector marker Claude commits on; a label + Enter committed the
+    // highlighted default (option 1) instead.
+    expect(buildAskAnswerKeys(single(['Tabs', 'Spaces']), [{ indices: [1] }])).toEqual([
+      { raw: '2' }
+    ])
+    expect(buildAskAnswerKeys(single(['Apple', 'Banana', 'Cherry']), [{ indices: [2] }])).toEqual([
+      { raw: '3' }
+    ])
+  })
+
+  it('single-select free text: opens "Type something" then types the answer + Enter', () => {
+    expect(
+      buildAskAnswerKeys(single(['Tabs', 'Spaces']), [{ indices: [], other: 'Zebra' }])
+    ).toEqual([{ raw: '3' }, { text: 'Zebra' }, { raw: '\r' }])
+  })
+
+  it('multi-select: toggles each option NUMBER, then steps to Submit and confirms', () => {
+    expect(
+      buildAskAnswerKeys(single(['Apple', 'Banana', 'Cherry'], true), [{ indices: [0, 2] }])
+    ).toEqual([{ raw: '1' }, { raw: '3' }, { raw: '\x1b[C' }, { raw: '\r' }])
+  })
+
+  it('multi-question single-select: option numbers auto-advance, one final submit Enter', () => {
+    const prompt: AskPrompt = {
+      questions: [
+        { question: 'q1', multiSelect: false, options: [{ label: 'Tabs' }, { label: 'Spaces' }] },
+        {
+          question: 'q2',
+          multiSelect: false,
+          options: [{ label: 'Apple' }, { label: 'Banana' }, { label: 'Cherry' }]
+        }
+      ]
+    }
+    expect(buildAskAnswerKeys(prompt, [{ indices: [1] }, { indices: [2] }])).toEqual([
+      { raw: '2' },
+      { raw: '3' },
+      { raw: '\r' }
+    ])
+  })
+
+  it('multi-question: steps past an unanswered question then submits', () => {
+    const prompt: AskPrompt = {
+      questions: [
+        { question: 'q1', multiSelect: false, options: [{ label: 'Tabs' }, { label: 'Spaces' }] },
+        { question: 'q2', multiSelect: false, options: [{ label: 'Apple' }, { label: 'Banana' }] }
+      ]
+    }
+    expect(buildAskAnswerKeys(prompt, [{ indices: [] }, { indices: [1] }])).toEqual([
+      { raw: '\x1b[C' },
+      { raw: '2' },
+      { raw: '\r' }
+    ])
+  })
+
+  it('is empty when nothing is answered', () => {
+    expect(buildAskAnswerKeys(single(['Tabs', 'Spaces']), [{ indices: [] }])).toEqual([])
+  })
+})
+
+describe('hasAskAnswer', () => {
+  it('is true for a picked option or typed text, false when empty', () => {
+    expect(hasAskAnswer(single(['A', 'B']), [{ indices: [1] }])).toBe(true)
+    expect(hasAskAnswer(single(['A', 'B']), [{ indices: [], other: 'x' }])).toBe(true)
+    expect(hasAskAnswer(single(['A', 'B']), [{ indices: [], other: '  ' }])).toBe(false)
+    expect(hasAskAnswer(single(['A', 'B']), [])).toBe(false)
   })
 })

@@ -190,11 +190,112 @@ export function parseInteractivePrompt(
   return null
 }
 
-/** Build the answer text to send: exactly one line per question, in question
- *  order, each line the selected option label(s) joined by ", ". Empty answers
- *  stay as empty lines (not dropped) so N lines always == N questions — the
- *  per-question Enter stepping counts one Enter per line, so dropping a blank
- *  middle answer would misalign the count and leave the prompt unsubmitted. */
-export function formatAskAnswer(prompt: AskPrompt, selections: string[][]): string {
-  return prompt.questions.map((_, i) => (selections[i] ?? []).join(', ')).join('\n')
+/** One question's chosen answer, normalized for delivery: the selected option
+ *  indices (in option order) plus any free-text "other" answer. Index-based (not
+ *  label text) so the answer can be delivered by the selector's stable option
+ *  number — see `buildAskAnswerKeys`. */
+export type AskAnswerSelection = { indices: number[]; other?: string }
+
+/** A single keystroke group to write to the agent PTY. `raw` bytes (option
+ *  numbers, Enter, arrows) are written verbatim as keystrokes; `text` is a
+ *  free-text answer the caller runs through its paste sanitizer before writing. */
+export type AskAnswerKeyGroup = { raw: string } | { text: string }
+
+/** True when this question is answered (a picked option or typed free text). */
+function isAnswered(sel: AskAnswerSelection | undefined): boolean {
+  return (sel?.indices.length ?? 0) > 0 || (sel?.other ?? '').trim().length > 0
+}
+
+/** The picked labels + trimmed free text for one question, in option order. */
+function answerLabels(question: AskQuestion, sel: AskAnswerSelection | undefined): string[] {
+  const labels = (sel?.indices ?? [])
+    .map((i) => question.options[i]?.label ?? '')
+    .filter((l) => l.length > 0)
+  const other = (sel?.other ?? '').trim()
+  return other ? [...labels, other] : labels
+}
+
+/** Build the human-readable answer text: one line per question, in question
+ *  order, each the selected label(s) + free text joined by ", ". Empty answers
+ *  stay empty lines so N lines always == N questions. Used for agents whose
+ *  question tool commits a pasted answer (not Claude's arrow-navigate selector). */
+export function formatAskAnswer(prompt: AskPrompt, selections: AskAnswerSelection[]): string {
+  return prompt.questions.map((q, i) => answerLabels(q, selections[i]).join(', ')).join('\n')
+}
+
+// Claude's AskUserQuestion is an arrow-navigate selector: a bare Enter commits
+// the HIGHLIGHTED default (the first option), and pasted label text does not move
+// the highlight — so answering by label silently delivered every non-first pick
+// as the first option (STA-1860). Instead we drive the selector by each option's
+// stable 1-based number (which matches the card's badge), the marker it commits
+// on. Right-arrow steps to the next question / the Submit tab. Verified live
+// against Claude Code's TUI; groups are written spaced apart (see the desktop
+// sender) because a navigation keystroke batched with Enter commits before the
+// selector has applied it.
+const ASK_ENTER = '\r'
+const ASK_NEXT_TAB = '\x1b[C'
+
+/** Build the ordered keystroke groups that answer a Claude Code AskUserQuestion.
+ *  Each group is written a step apart so the selector applies it before the next.
+ *
+ *  - single-select pick  → the option number (selects AND commits; in a
+ *    multi-question prompt it auto-advances to the next question)
+ *  - free-text answer    → the "Type something" row number, the text, then Enter
+ *  - multi-select        → each option number TOGGLES its checkbox, then a step
+ *    to the Submit tab
+ *  - a multi-question prompt (and a lone multi-select) finishes on a Submit
+ *    confirmation, so it ends with one Enter
+ *
+ *  (Option counts are ≤ the tool's cap of a few, so single-digit numbers always
+ *  address every row.) */
+export function buildAskAnswerKeys(
+  prompt: AskPrompt,
+  selections: AskAnswerSelection[]
+): AskAnswerKeyGroup[] {
+  const questions = prompt.questions
+  const multiQuestion = questions.length > 1
+  const groups: AskAnswerKeyGroup[] = []
+
+  questions.forEach((q, qi) => {
+    const sel = selections[qi]
+    const other = (sel?.other ?? '').trim()
+    const typeSomething = String(q.options.length + 1)
+
+    if (q.multiSelect) {
+      for (const i of sel?.indices ?? []) {
+        groups.push({ raw: String(i + 1) })
+      }
+      if (other) {
+        groups.push({ raw: typeSomething }, { text: other }, { raw: ASK_ENTER })
+      }
+      // A multi-select never auto-advances; step to the next tab (the Submit tab
+      // when this is the last question).
+      groups.push({ raw: ASK_NEXT_TAB })
+    } else if (other) {
+      // Single-select can only carry one value, so route any answer that
+      // includes free text through the "Type something" row as one string.
+      groups.push(
+        { raw: typeSomething },
+        { text: answerLabels(q, sel).join(', ') },
+        { raw: ASK_ENTER }
+      )
+    } else if ((sel?.indices.length ?? 0) > 0) {
+      groups.push({ raw: String(sel!.indices[0]! + 1) })
+    } else if (multiQuestion) {
+      // Unanswered question in a multi-question prompt: step past it.
+      groups.push({ raw: ASK_NEXT_TAB })
+    }
+  })
+
+  const endsOnSubmitTab =
+    multiQuestion || (questions.length === 1 && questions[0]!.multiSelect === true)
+  if (endsOnSubmitTab && groups.length > 0) {
+    groups.push({ raw: ASK_ENTER })
+  }
+  return groups
+}
+
+/** Whether any question in `selections` carries an answer worth submitting. */
+export function hasAskAnswer(prompt: AskPrompt, selections: AskAnswerSelection[]): boolean {
+  return prompt.questions.some((_, i) => isAnswered(selections[i]))
 }

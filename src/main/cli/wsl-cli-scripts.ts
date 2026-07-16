@@ -20,34 +20,54 @@ else
   echo "Orca WSL CLI requires Windows interop and could not find powershell.exe." >&2
   exit 1
 fi
+# Why: a shell can outlive a deleted worktree; keep explicit CLI selectors and
+# help usable, and repair cwd before any WSL interop tool tries to resolve it.
+ORCA_WSL_CWD=$(pwd -P 2>/dev/null) || {
+  ORCA_WSL_CWD=/
+  cd /
+}
 ORCA_BRIDGE_PS1_WIN=$(wslpath -w "$ORCA_BRIDGE_PS1")
-exec "$ORCA_POWERSHELL" -NoProfile -ExecutionPolicy Bypass -File "$ORCA_BRIDGE_PS1_WIN" "$ORCA_WIN_LAUNCHER" "$@"
+ORCA_WSL_CWD_WIN=$(wslpath -w "$ORCA_WSL_CWD")
+exec "$ORCA_POWERSHELL" -NoProfile -ExecutionPolicy Bypass -File "$ORCA_BRIDGE_PS1_WIN" "$ORCA_WIN_LAUNCHER" -WslCwd "$ORCA_WSL_CWD_WIN" "$@"
 `
 }
 
 export function buildWslBridgeScript(): string {
   return `${BRIDGE_MANAGED_MARKER}
+[CmdletBinding(PositionalBinding=$false)]
 param(
-  [Parameter(Mandatory=$true)]
+  [Parameter(Mandatory=$true, Position=0)]
   [string]$OrcaLauncher,
+
+  [string]$WslCwd,
 
   [Parameter(ValueFromRemainingArguments=$true)]
   [string[]]$ForwardArgs
 )
 
+$exitCode = 0
 try {
+  if ([string]::IsNullOrEmpty($WslCwd)) {
+    Remove-Item Env:ORCA_CLI_CWD -ErrorAction SilentlyContinue
+  } else {
+    $env:ORCA_CLI_CWD = $WslCwd
+  }
+  Push-Location -LiteralPath (Split-Path -Parent $OrcaLauncher)
   & $OrcaLauncher @ForwardArgs
-  if (-not $?) {
-    exit 1
-  }
   if ($null -eq $LASTEXITCODE) {
-    exit 0
+    if (-not $?) {
+      $exitCode = 1
+    } else {
+      $exitCode = 0
+    }
+  } else {
+    $exitCode = $LASTEXITCODE
   }
-  exit $LASTEXITCODE
 } catch {
   Write-Error $_
-  exit 1
+  $exitCode = 1
 }
+exit $exitCode
 `
 }
 
@@ -71,13 +91,35 @@ export function buildSafeReplaceGuard(path: string, managedMarker: string): stri
   ].join('\n')
 }
 
-export function buildSafeRemoveCommand(commandPath: string): string {
+export function buildRegistrationLockPrelude(commandPath: string): string {
+  const lockDir = getPosixDirname(getBridgePathFromCommandPath(commandPath))
+  // Why: the per-distro queue only serializes one Orca process; flock covers
+  // a second install (e.g. stable + nightly) mutating the same distro files.
+  return [
+    `if command -v flock >/dev/null 2>&1 && mkdir -p ${quoteShell(lockDir)} 2>/dev/null; then`,
+    `  exec 9>${quoteShell(`${lockDir}/.orca-wsl-cli.lock`)}`,
+    '  flock -x -w 30 9',
+    'fi'
+  ].join('\n')
+}
+
+export function buildManagedLegacyRemoveCommand(quotedLegacyCommandPath: string): string {
+  // Why: remove only the Orca-managed pre-rename wrapper; user-owned `orca`
+  // commands and symlinks must survive.
+  return `if [ ! -L ${quotedLegacyCommandPath} ] && [ -f ${quotedLegacyCommandPath} ] && grep -Fq ${quoteShell(MANAGED_MARKER)} ${quotedLegacyCommandPath}; then rm -f ${quotedLegacyCommandPath}; fi`
+}
+
+export function buildSafeRemoveCommand(commandPath: string, legacyCommandPath?: string): string {
   const bridgePath = getBridgePathFromCommandPath(commandPath)
   return [
     'set -euo pipefail',
+    buildRegistrationLockPrelude(commandPath),
     buildSafeReplaceGuard(commandPath, MANAGED_MARKER),
     buildSafeReplaceGuard(bridgePath, BRIDGE_MANAGED_MARKER),
-    `rm -f ${quoteShell(commandPath)} ${quoteShell(bridgePath)}`
+    `rm -f ${quoteShell(commandPath)} ${quoteShell(bridgePath)}`,
+    // Why: leaving a managed legacy `orca` behind lets startup reconciliation
+    // re-adopt it as opt-in proof and silently undo this removal.
+    ...(legacyCommandPath ? [buildManagedLegacyRemoveCommand(quoteShell(legacyCommandPath))] : [])
   ].join('\n')
 }
 

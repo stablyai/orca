@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: root and generated command help text live together so CLI discovery stays greppable. */
 import type { CommandSpec } from './args'
 import { findCommandSpec, isCommandGroup, supportsBrowserPageFlag } from './args'
+import { unknownCommandData } from './command-suggestion'
 
 const ROOT_HELP_TEXT = `orca
 
@@ -13,6 +14,13 @@ Startup:
 
 Diagnostics:
   diagnostics memory        Collect a memory snapshot for Orca and managed terminals
+
+Agent Discovery:
+  agent-context             Print the machine-readable command schema for agents
+
+Skills:
+  skills list               List version-matched skill guides bundled with this Orca CLI
+  skills get                Print a version-matched skill guide as Markdown
 
 Environments:
   environment add           Save a remote Orca runtime from a pairing code
@@ -74,7 +82,7 @@ Terminals:
   terminal split            Split an existing terminal pane
   terminal switch           Bring a terminal tab to the foreground
   terminal focus            Alias for terminal switch
-  terminal close            Close a terminal pane (or tab if last pane)
+  terminal close            Close a terminal pane/session, or its whole tab with --tab
 
 Orchestration:
   orchestration send        Send an inter-agent message
@@ -192,6 +200,7 @@ Common Commands:
   orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--project-root <path>] [--recipe-json] [--json]
   orca status [--json]
   orca diagnostics memory [--json]
+  orca agent-context [--json]
   orca environment add --name <name> --pairing-code <code> [--json]
   orca environment list [--json]
   orca environment show --environment <selector> [--json]
@@ -215,7 +224,7 @@ Common Commands:
   orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--focus] [--json]
   orca terminal split [--terminal <handle>] [--direction horizontal|vertical] [--json]
   orca terminal switch [--terminal <handle>] [--json]
-  orca terminal close [--terminal <handle>] [--json]
+  orca terminal close [--terminal <handle>] [--tab] [--json]
   orca project list [--json]
   orca project setups [--project <id>] [--host <host-id>] [--json]
   orca project setup-existing-folder --project <id> --host <host-id> --path <path> [--kind git|folder] [--display-name <name>] [--json]
@@ -231,9 +240,9 @@ Common Commands:
 
 Selectors:
   --repo <selector>         Registered repo selector such as id:<id>, name:<name>, or path:<path>
-  --worktree <selector>     Worktree selector such as id:<id>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current
+  --worktree <selector>     Worktree selector such as id:<repo-id>::<path>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current
   --terminal <handle>       Runtime-issued terminal handle returned by \`orca terminal list --json\`
-  --parent-worktree <selector> Parent worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current
+  --parent-worktree <selector> Parent worktree selector such as id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, or active/current
   --no-parent               Force no parent lineage for unrelated worktree creation/update
 
 Terminal Send Options:
@@ -339,7 +348,9 @@ export function printHelp(specs: CommandSpec[], commandPath: string[] = []): voi
   }
 
   if (commandPath.length > 0) {
-    console.log(`Unknown command: ${commandPath.join(' ')}\n`)
+    const { nextSteps } = unknownCommandData(specs, commandPath)
+    const recovery = nextSteps.map((step) => `Next step: ${step}`).join('\n')
+    console.log(`Unknown command: ${commandPath.join(' ')}${recovery ? `\n${recovery}` : ''}\n`)
   }
 
   console.log(ROOT_HELP_TEXT)
@@ -347,9 +358,12 @@ export function printHelp(specs: CommandSpec[], commandPath: string[] = []): voi
 
 export function formatCommandHelp(spec: CommandSpec): string {
   const lines = [`orca ${spec.path.join(' ')}`, '', `Usage: ${spec.usage}`, '', spec.summary]
-  const displayedFlags = supportsBrowserPageFlag(spec.path)
-    ? [...spec.allowedFlags, 'page']
-    : spec.allowedFlags
+  const displayedFlags =
+    spec.argumentMode === 'passthrough'
+      ? []
+      : supportsBrowserPageFlag(spec.path)
+        ? [...spec.allowedFlags, 'page']
+        : spec.allowedFlags
 
   if (displayedFlags.length > 0) {
     lines.push('', 'Options:')
@@ -387,6 +401,9 @@ export function formatGroupHelp(specs: CommandSpec[], group: string): string {
 
 function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   const command = commandPath.join(' ')
+  if (command === 'terminal close' && flag === 'tab') {
+    return '--tab                  Close the whole tab and wait for durable persistence'
+  }
   if (command === 'linear issue' && flag === 'id') {
     return '--id <id>             Linear issue key, id, or URL'
   }
@@ -436,7 +453,7 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
     return '--parent-current      Use the current linked issue as parent'
   }
   if (command === 'worktree create' && flag === 'parent-worktree') {
-    return '--parent-worktree <selector> Parent selector such as active/current, id:<id>, branch:<branch>, issue:<number>, path:<path>, folder:<id>, or worktree:<id>'
+    return '--parent-worktree <selector> Parent selector such as active/current, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, folder:<id>, or worktree:<worktreeId>'
   }
   if (command === 'orchestration task-create' && flag === 'task-title') {
     return '--task-title <text>  Concise title for the orchestration task'
@@ -491,7 +508,7 @@ export function formatFlagHelp(flag: string): string {
     'no-screenshot': '--no-screenshot       Skip screenshot capture after the operation',
     pages: '--pages <n>           Number of scroll pages',
     'parent-worktree':
-      '--parent-worktree <selector> Parent worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current',
+      '--parent-worktree <selector> Parent worktree selector such as id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, or active/current',
     path: '--path <path>          Path argument for the command',
     prompt: '--prompt <text>        Prompt text for agent-backed commands',
     query: '--query <text>        Search text for matching refs',
@@ -515,7 +532,7 @@ export function formatFlagHelp(flag: string): string {
     'to-x': '--to-x <x>             Destination window-local x coordinate',
     'to-y': '--to-y <y>             Destination window-local y coordinate',
     worktree:
-      '--worktree <selector>  Worktree selector such as id:<id>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current',
+      '--worktree <selector>  Worktree selector such as id:<repo-id>::<path>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current',
     workspace: '--workspace <selector> Existing worktree selector for automation runs',
     'workspace-status':
       '--workspace-status <id> Board status id (defaults: todo, in-progress, in-review, completed)',

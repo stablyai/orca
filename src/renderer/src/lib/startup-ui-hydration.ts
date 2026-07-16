@@ -13,13 +13,13 @@ export function hydratePersistedUIAfterStartupRead({
 }: {
   persistedUI: PersistedUIState
   cancelled: boolean
-  hydratePersistedUI: (ui: PersistedUIState) => void
+  hydratePersistedUI: (ui: PersistedUIState, source?: 'startup' | 'sync') => void
 }): boolean {
   if (cancelled) {
     return false
   }
 
-  hydratePersistedUI(persistedUI)
+  hydratePersistedUI(persistedUI, 'startup')
   return true
 }
 
@@ -34,6 +34,7 @@ export function getStartupErrorFallbackUI(uiHydrated: boolean): PersistedUIState
   return {
     lastActiveRepoId: null,
     lastActiveWorktreeId: null,
+    activeView: 'terminal',
     sidebarWidth: 280,
     rightSidebarOpen: true,
     rightSidebarTab: 'explorer',

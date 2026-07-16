@@ -4,10 +4,15 @@ import type {
   WorktreeSetupLaunch,
   WorktreeStartupLaunch
 } from './types'
+import type { SshConnectionState } from './ssh-types'
 
 export type RuntimeClientEvent =
   | { type: 'reposChanged' }
   | { type: 'worktreesChanged'; repoId: string }
+  // Why: SSH connections live on the runtime host; paired clients have no IPC
+  // channel for ssh:state-changed, so without this event their reconnect
+  // overlays never learn the host connected (STA-1468).
+  | { type: 'sshStateChanged'; targetId: string; state: SshConnectionState }
   | {
       type: 'linearLinkedIssueUpdated'
       worktreeId: string

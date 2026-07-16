@@ -59,9 +59,12 @@ export const WORKTREE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'worktree.activate',
     params: WorktreeActivate,
-    handler: async (params, { runtime }) =>
+    handler: async (params, { runtime, clientKind }) =>
+      // Why: clientKind ('mobile'|'runtime') scopes the host-renderer slept-agent
+      // wake to phones so web/desktop activation behavior is unchanged.
       runtime.activateManagedWorktree(params.worktree, {
-        notifyClients: params.notifyClients !== false
+        notifyClients: params.notifyClients !== false,
+        clientKind
       })
   }),
   defineMethod({
@@ -130,7 +133,11 @@ export const WORKTREE_METHODS: RpcMethod[] = [
           }
         })
         finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
-        return result
+        // Why: agent callers need a stable dispatch target without traversing
+        // terminal-list layout duplicates after creating the worktree.
+        return params.startupAgent && result.startupTerminal?.handle
+          ? { ...result, agentTerminalHandle: result.startupTerminal.handle }
+          : result
       } catch (error) {
         releaseAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
         throw error

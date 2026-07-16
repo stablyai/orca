@@ -39,12 +39,17 @@ function HostStack({ animation }: { animation: 'none' | 'default' }) {
       }}
     >
       <Stack.Screen name="[hostId]/index" options={{ title: 'Host' }} />
+      <Stack.Screen name="[hostId]/edit" options={{ title: 'Edit host' }} />
       <Stack.Screen name="[hostId]/accounts" options={{ title: 'Accounts' }} />
       <Stack.Screen name="[hostId]/tasks" options={{ title: 'Tasks' }} />
       <Stack.Screen name="[hostId]/session/[worktreeId]" options={{ title: 'Terminal' }} />
       <Stack.Screen
         name="[hostId]/source-control/[worktreeId]"
         options={{ title: 'Source Control' }}
+      />
+      <Stack.Screen
+        name="[hostId]/agent-history/[worktreeId]"
+        options={{ title: 'Agent Session History' }}
       />
       <Stack.Screen name="[hostId]/review/[worktreeId]" options={{ title: 'Changes' }} />
       <Stack.Screen name="[hostId]/pr/[worktreeId]" options={{ title: 'Pull Request' }} />

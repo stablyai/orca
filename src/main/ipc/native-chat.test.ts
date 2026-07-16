@@ -20,6 +20,7 @@ vi.mock('electron', () => ({
 }))
 
 import {
+  _getNativeChatSenderCleanupCountForTest,
   clearNativeChatSubscriptions,
   clearNativeChatTranscriptCache,
   registerNativeChatHandlers
@@ -229,6 +230,67 @@ describe('nativeChat:readSession handler', () => {
       // Destroyed window tears down the watcher without error.
       expect(destroyedCb).toBeDefined()
       destroyedCb!()
+    } finally {
+      if (previousHome === undefined) {
+        delete process.env.HOME
+      } else {
+        process.env.HOME = previousHome
+      }
+    }
+  })
+
+  it('drops cleanup registration when sender is destroyed before subscribe completes', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-ipc-destroy-race-'))
+    tempRoots.push(root)
+    const projectDir = join(root, '.claude', 'projects', '-repo')
+    await mkdir(projectDir, { recursive: true })
+    await writeFile(
+      join(projectDir, 'sess-race.jsonl'),
+      `${jsonLines([
+        {
+          type: 'user',
+          uuid: 'u-race',
+          timestamp: '2026-06-01T10:00:00.000Z',
+          message: { role: 'user', content: 'Race' }
+        }
+      ])}\n`
+    )
+
+    registerNativeChatHandlers()
+    const subscribe = listeners.get('nativeChat:subscribe')
+    expect(subscribe).toBeDefined()
+
+    let destroyed = false
+    let destroyedCb: (() => void) | undefined
+    const sender = {
+      id: 41,
+      isDestroyed: () => destroyed,
+      once: (event: string, cb: () => void) => {
+        if (event === 'destroyed') {
+          destroyedCb = cb
+        }
+      },
+      send: vi.fn()
+    }
+
+    const previousHome = process.env.HOME
+    process.env.HOME = root
+    try {
+      subscribe!(
+        { sender },
+        {
+          subscriptionId: 'sub-race',
+          agent: 'claude',
+          sessionId: 'sess-race'
+        }
+      )
+
+      expect(destroyedCb).toBeDefined()
+      destroyed = true
+      destroyedCb!()
+
+      await waitFor(() => _getNativeChatSenderCleanupCountForTest() === 0)
+      expect(sender.send).not.toHaveBeenCalled()
     } finally {
       if (previousHome === undefined) {
         delete process.env.HOME

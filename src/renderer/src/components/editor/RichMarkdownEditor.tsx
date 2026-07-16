@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Editor } from '@tiptap/react'
+import { useEditorState, type Editor } from '@tiptap/react'
 import type { DiffComment, MarkdownDocument } from '../../../../shared/types'
 import { useAppStore } from '@/store'
+import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { useLocalImagePick } from './useLocalImagePick'
 import { useRichMarkdownSearch } from './useRichMarkdownSearch'
 import type { LinkBubbleState } from './RichMarkdownLinkBubble'
@@ -16,6 +17,8 @@ import { RichMarkdownEditorSurface } from './RichMarkdownEditorSurface'
 import { useRichMarkdownEditorInstance } from './useRichMarkdownEditorInstance'
 import { useRichMarkdownMenuController } from './useRichMarkdownMenuController'
 import { useRichMarkdownProgrammaticSync } from './useRichMarkdownProgrammaticSync'
+import { useRichMarkdownReconcileRoundTrip } from './useRichMarkdownReconcileRoundTrip'
+import { commitRichMarkdownSerialization } from './rich-markdown-serialization-commit'
 import { useRichMarkdownReviewController } from './useRichMarkdownReviewController'
 import { useRichMarkdownReviewEditorEffects } from './useRichMarkdownReviewEditorEffects'
 import {
@@ -23,6 +26,11 @@ import {
   runRichMarkdownContextCommand
 } from './rich-markdown-context-command-routing'
 import { useRichMarkdownSpellcheckAttribute } from './rich-markdown-spellcheck'
+import { useRichMarkdownSuperscriptLinkSetup } from './useRichMarkdownSuperscriptLinkSetup'
+import {
+  formatSelectedHtmlSuperscriptLinkStatus,
+  getSelectedHtmlSuperscriptLinkStatus
+} from './rich-markdown-selected-link-actions'
 
 type RichMarkdownEditorProps = {
   fileId: string
@@ -81,28 +89,23 @@ export default function RichMarkdownEditor({
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
-  const allDiffComments = useAppStore((s): DiffComment[] | undefined => {
-    for (const list of Object.values(s.worktreesByRepo)) {
-      const worktree = list.find((candidate) => candidate.id === worktreeId)
-      if (worktree) {
-        return worktree.diffComments
-      }
-    }
-    return undefined
-  })
-  const worktreeRoot = useAppStore((s) => {
-    for (const list of Object.values(s.worktreesByRepo)) {
-      const wt = list.find((w) => w.id === worktreeId)
-      if (wt) {
-        return wt.path
-      }
-    }
-    return null
+  const allDiffComments = useAppStore((s): DiffComment[] | undefined =>
+    selectWorktreeDiffComments(s, worktreeId)
+  )
+  const { codec, htmlSuperscriptLinkContext, worktreeRoot } = useRichMarkdownSuperscriptLinkSetup({
+    filePath,
+    runtimeEnvironmentId,
+    worktreeId
   })
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const menu = useRichMarkdownMenuController({ markdownDocuments })
   const isMac = navigator.userAgent.includes('Mac')
   const lastCommittedMarkdownRef = useRef(content)
+  // Why: three-way source-preserving reconciliation baseline — the raw on-disk
+  // bytes and their canonical serialization — so edits patch onto the original
+  // style rather than re-canonicalizing untouched regions (#6080).
+  const originalSourceRef = useRef(content)
+  const baseCanonicalRef = useRef('')
   const onContentChangeRef = useRef(onContentChange)
   const onDirtyStateHintRef = useRef(onDirtyStateHint)
   const onSaveRef = useRef(onSave)
@@ -163,6 +166,13 @@ export default function RichMarkdownEditor({
   onSaveRef.current = onSave
   onOpenDocLinkRef.current = onOpenDocLink
   isEditingLinkRef.current = isEditingLink
+  const reconcileRoundTripRef = useRichMarkdownReconcileRoundTrip({
+    htmlSuperscriptLinkContext,
+    filePath,
+    runtimeEnvironmentId,
+    worktreeId,
+    worktreeRoot
+  })
 
   const flushPendingSerialization = useCallback(() => {
     if (serializeTimerRef.current === null) {
@@ -171,16 +181,19 @@ export default function RichMarkdownEditor({
     window.clearTimeout(serializeTimerRef.current)
     serializeTimerRef.current = null
     try {
-      const markdown = editorRef.current?.getMarkdown()
-      if (markdown !== undefined) {
-        lastCommittedMarkdownRef.current = markdown
+      const { markdown, didSerialize } = commitRichMarkdownSerialization(
+        editorRef.current,
+        { originalSourceRef, baseCanonicalRef, lastCommittedMarkdownRef },
+        reconcileRoundTripRef.current
+      )
+      if (didSerialize) {
         onContentChangeRef.current(markdown)
       }
     } catch {
       // Why: save/restart flows should never crash the UI just because the
       // editor was torn down between scheduling and flushing a debounced sync.
     }
-  }, [])
+  }, [reconcileRoundTripRef])
 
   useEffect(() => {
     // Why: autosave/restart paths live outside the editor component tree, so a
@@ -206,6 +219,8 @@ export default function RichMarkdownEditor({
   )
 
   const editor = useRichMarkdownEditorInstance({
+    codec,
+    htmlSuperscriptLinkContext,
     content,
     filePath,
     worktreeId,
@@ -218,6 +233,9 @@ export default function RichMarkdownEditor({
     rootRef,
     editorRef,
     lastCommittedMarkdownRef,
+    originalSourceRef,
+    baseCanonicalRef,
+    reconcileRoundTripRef,
     onContentChangeRef,
     onDirtyStateHintRef,
     onSaveRef,
@@ -250,6 +268,13 @@ export default function RichMarkdownEditor({
     setSlashMenu: menu.setSlashMenu,
     setDocLinkMenu: menu.setDocLinkMenu
   })
+  // Why: useEditor defaults shouldRerenderOnTransaction to false, so selection-only
+  // citation NodeSelections would leave aria status stale without useEditorState.
+  const selectedCitationStatus = useEditorState({
+    editor,
+    selector: (snapshot) =>
+      getSelectedHtmlSuperscriptLinkStatus(snapshot.editor, htmlSuperscriptLinkContext)
+  })
   useRichMarkdownSpellcheckAttribute(editor, richMarkdownSpellcheckEnabled)
 
   // Why: use useLayoutEffect (synchronous cleanup) so the pending serialization
@@ -275,6 +300,7 @@ export default function RichMarkdownEditor({
   })
 
   useRichMarkdownProgrammaticSync({
+    codec,
     content,
     docLinkMenuSetter: menu.setDocLinkMenu,
     editor,
@@ -282,6 +308,8 @@ export default function RichMarkdownEditor({
     filePath,
     isApplyingProgrammaticUpdateRef,
     lastCommittedMarkdownRef,
+    originalSourceRef,
+    baseCanonicalRef,
     markdownDocuments,
     rootRef,
     runtimeEnvironmentId,
@@ -299,12 +327,14 @@ export default function RichMarkdownEditor({
     handleLinkRemove,
     handleLinkEditCancel,
     handleLinkOpen,
+    handleLinkCopy,
     toggleLinkFromToolbar
   } = useLinkBubble(editor, rootRef, linkBubble, setLinkBubble, setIsEditingLink, {
     sourceFilePath: filePath,
     worktreeId,
     worktreeRoot,
-    runtimeEnvironmentId
+    runtimeEnvironmentId,
+    htmlSuperscriptLinkContext
   })
 
   useEffect(() => {
@@ -346,6 +376,7 @@ export default function RichMarkdownEditor({
     <RichMarkdownEditorSurface
       editor={editor}
       editorFontZoomLevel={editorFontZoomLevel}
+      rootElement={rootRef.current}
       rootRef={setRootElement}
       scrollContainerRef={scrollContainerRef}
       headerSlot={headerSlot}
@@ -379,11 +410,22 @@ export default function RichMarkdownEditor({
       showTableOfContents={showTableOfContents}
       searchState={searchState}
       searchActions={searchActions}
+      citationStatus={
+        selectedCitationStatus
+          ? formatSelectedHtmlSuperscriptLinkStatus(selectedCitationStatus)
+          : ''
+      }
+      linkBubbleOwnerId={codec.transport.key}
       linkBubbleActions={{
+        dismissLinkBubble: () => {
+          setLinkBubble(null)
+          setIsEditingLink(false)
+        },
         handleLinkSave,
         handleLinkRemove,
         handleLinkEditCancel,
         handleLinkOpen,
+        handleLinkCopy,
         setIsEditingLink
       }}
       onToggleLink={toggleLinkFromToolbar}

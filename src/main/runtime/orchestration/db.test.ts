@@ -6,6 +6,20 @@ import Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
 import type { MessageType } from './db'
 
+// Overwrites the datetime('now')-seeded timestamps with explicit fixture values
+// so stale-detection assertions stay deterministic (no wall clock).
+function setDispatchTimes(
+  d: OrchestrationDb,
+  id: string,
+  dispatchedAt: string,
+  heartbeatAt: string | null = null
+): void {
+  const sqlite = (d as unknown as { db: Database.Database }).db
+  sqlite
+    .prepare('UPDATE dispatch_contexts SET dispatched_at = ?, last_heartbeat_at = ? WHERE id = ?')
+    .run(dispatchedAt, heartbeatAt, id)
+}
+
 describe('OrchestrationDb', () => {
   let db: OrchestrationDb | undefined
 
@@ -339,6 +353,53 @@ describe('OrchestrationDb', () => {
       )
     })
 
+    // Real leaf UUIDs: pane keys are `${tabId}:${leafUuid}`; only the leaf is
+    // remint-stable identity (tab half can change on pane break-out).
+    const LEAF_A = '11111111-1111-1111-8111-111111111111'
+    const LEAF_B = '22222222-2222-4222-9222-222222222222'
+
+    it('rejects dispatch to a reminted handle on a pane with an active dispatch', () => {
+      const d = createDb()
+      const t1 = d.createTask({ spec: 'first' })
+      const t2 = d.createTask({ spec: 'second' })
+      d.createDispatchContext(t1.id, 'term_old', `tab_1:${LEAF_A}`)
+
+      expect(() => d.createDispatchContext(t2.id, 'term_new', `tab_1:${LEAF_A}`)).toThrow(
+        /already has an active dispatch/
+      )
+    })
+
+    it('rejects dispatch when pane keys share a leaf after break-out', () => {
+      const d = createDb()
+      const t1 = d.createTask({ spec: 'first' })
+      const t2 = d.createTask({ spec: 'second' })
+      d.createDispatchContext(t1.id, 'term_old', `tab_1:${LEAF_A}`)
+
+      expect(() => d.createDispatchContext(t2.id, 'term_new', `tab_2:${LEAF_A}`)).toThrow(
+        /already has an active dispatch/
+      )
+    })
+
+    it('allows concurrent dispatches to different panes', () => {
+      const d = createDb()
+      const t1 = d.createTask({ spec: 'first' })
+      const t2 = d.createTask({ spec: 'second' })
+      d.createDispatchContext(t1.id, 'term_a', `tab_1:${LEAF_A}`)
+
+      expect(() => d.createDispatchContext(t2.id, 'term_b', `tab_1:${LEAF_B}`)).not.toThrow()
+    })
+
+    it('falls back to handle lock when pane keys are missing', () => {
+      const d = createDb()
+      const t1 = d.createTask({ spec: 'first' })
+      const t2 = d.createTask({ spec: 'second' })
+      d.createDispatchContext(t1.id, 'term_worker')
+
+      // New dispatch has a pane key but the active row is legacy (no pane key):
+      // only handle identity can lock; a different handle is free.
+      expect(() => d.createDispatchContext(t2.id, 'term_other', `tab_1:${LEAF_A}`)).not.toThrow()
+    })
+
     it('allows dispatch to a terminal after previous dispatch completes', () => {
       const d = createDb()
       const t1 = d.createTask({ spec: 'first' })
@@ -649,6 +710,67 @@ describe('OrchestrationDb', () => {
       expect(stale.map((s) => s.id)).toEqual([ctxB.id])
     })
 
+    // Regression for #8452: dispatched_at / last_heartbeat_at are written by
+    // datetime('now') (space-format, e.g. "2026-07-12 12:00:00") while the
+    // threshold is ISO ("...T11:55:00.000Z"). Raw TEXT ordering ranks the space
+    // (0x20) below the 'T' (0x54) at index 10, flagging fresh same-date rows.
+    it('getStaleDispatches ignores fresh SQLite space-format timestamps (#8452)', () => {
+      const d = createDb()
+
+      // Fresh worker: dispatched 12:00, heartbeat 12:05 (space-format), both
+      // after the 11:55 threshold → NOT stale.
+      const fresh = d.createDispatchContext(d.createTask({ spec: 'fresh' }).id, 'term_fresh')
+      setDispatchTimes(d, fresh.id, '2026-07-12 12:00:00', '2026-07-12 12:05:00')
+
+      // Legacy ISO-format fresh row (mixed-format table) stays fresh too.
+      const legacy = d.createDispatchContext(d.createTask({ spec: 'legacy' }).id, 'term_legacy')
+      setDispatchTimes(d, legacy.id, '2026-07-12T12:00:00.000Z', '2026-07-12T12:05:00.000Z')
+
+      // Genuinely hung: dispatched + heartbeated at 10:00, ~2h before threshold.
+      const hung = d.createDispatchContext(d.createTask({ spec: 'hung' }).id, 'term_hung')
+      setDispatchTimes(d, hung.id, '2026-07-12 10:00:00', '2026-07-12 10:00:00')
+
+      const stale = d.getStaleDispatches('2026-07-12T11:55:00.000Z')
+      expect(stale.map((s) => s.id)).toEqual([hung.id])
+    })
+
+    it('getStaleDispatches keeps a just-dispatched space-format row in the grace window (#8452)', () => {
+      const d = createDb()
+
+      // Space-format dispatched_at one minute after the threshold, no heartbeat
+      // yet → still inside the grace window, must not be flagged.
+      const ctx = d.createDispatchContext(d.createTask({ spec: 'x' }).id, 'term_x')
+      setDispatchTimes(d, ctx.id, '2026-07-12 12:00:00')
+
+      const stale = d.getStaleDispatches('2026-07-12T11:59:00.000Z')
+      expect(stale).toEqual([])
+    })
+
+    // Same-UTC-date midnight threshold: keeps the buggy space-vs-'T' compare in
+    // play so this guards the fix at a day boundary (#8452; idea from @KMGeon's #8453).
+    it('getStaleDispatches keeps a fresh row just after a UTC-midnight threshold (#8452)', () => {
+      const d = createDb()
+
+      const ctx = d.createDispatchContext(d.createTask({ spec: 'midnight' }).id, 'term_midnight')
+      setDispatchTimes(d, ctx.id, '2026-05-04 00:04:00')
+
+      const stale = d.getStaleDispatches('2026-05-04T00:00:00.000Z')
+      expect(stale).toEqual([])
+    })
+
+    // Guards the last_heartbeat_at half of the fix on its own: a worker
+    // dispatched long before the threshold (stale under either format) that
+    // just sent a fresh space-format heartbeat must stay fresh (#8452).
+    it('getStaleDispatches keeps a live worker with a fresh space-format heartbeat (#8452)', () => {
+      const d = createDb()
+
+      const ctx = d.createDispatchContext(d.createTask({ spec: 'live' }).id, 'term_live')
+      setDispatchTimes(d, ctx.id, '2026-07-12 10:00:00', '2026-07-12 11:59:00')
+
+      const stale = d.getStaleDispatches('2026-07-12T11:55:00.000Z')
+      expect(stale).toEqual([])
+    })
+
     it('getThreadMessagesFor returns only same-thread replies to a handle', () => {
       const d = createDb()
       const outbound = d.insertMessage({
@@ -820,6 +942,25 @@ describe('OrchestrationDb', () => {
 
       // v1 data preserved
       expect(d.getMessageById('msg_v1')?.subject).toBe('pre-migration')
+    })
+
+    it('adds pane-identity columns (v6) and persists them', () => {
+      const path = createV1Snapshot()
+      const d = new OrchestrationDb(path)
+      db = d
+
+      const task = d.createTask({ spec: 'work' })
+      const ctx = d.createDispatchContext(task.id, 'term_a', 'tab_1:leaf_1')
+      expect(d.getDispatchContextById(ctx.id)?.assignee_pane_key).toBe('tab_1:leaf_1')
+
+      const msg = d.insertMessage({
+        from: 'w',
+        to: 'c',
+        subject: 'done',
+        type: 'worker_done',
+        senderPaneKey: 'tab_1:leaf_1'
+      })
+      expect(d.getMessageById(msg.id)?.sender_pane_key).toBe('tab_1:leaf_1')
     })
 
     it('is idempotent: opening an already-migrated DB is a no-op', () => {

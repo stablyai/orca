@@ -33,9 +33,11 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     commitMessage: 'feat: add commit area',
     commitError: null as string | null,
     commitFailureRecoveryPrompt: null as string | null,
+    pushRecovery: null,
     remoteActionError: null as string | null,
     isCommitting: inputs.isCommitting,
     isFixingCommitFailureWithAI: false,
+    isFixingPushFailureWithAI: false,
     sourceControlAiActionsVisible: true,
     aiEnabled: false,
     aiAgentConfigured: false,
@@ -52,6 +54,7 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
     onGenerate: vi.fn(),
     onCancelGenerate: vi.fn(),
     onFixCommitFailureWithAI: vi.fn(),
+    onFixPushFailureWithAI: vi.fn(),
     onPrimaryAction: vi.fn(),
     onDropdownAction: vi.fn() as (kind: DropdownActionKind) => void
   }

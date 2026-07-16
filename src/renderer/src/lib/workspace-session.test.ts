@@ -176,18 +176,18 @@ describe('buildWorkspaceSessionPayload', () => {
     expect(payload.browserTabsByWorktree?.['wt-1'][0].loading).toBe(false)
   })
 
-  it('persists front-matter visibility only for restored editor files', () => {
+  it('persists front-matter hide overrides only for restored editor files', () => {
     const payload = buildWorkspaceSessionPayload(
       createSnapshot({
         markdownFrontmatterVisible: {
-          '/tmp/demo.ts': true,
-          '/tmp/demo.diff': true,
-          '/tmp/closed.md': true
+          '/tmp/demo.ts': false,
+          '/tmp/demo.diff': false,
+          '/tmp/closed.md': false
         }
       })
     )
 
-    expect(payload.markdownFrontmatterVisible).toEqual({ '/tmp/demo.ts': true })
+    expect(payload.markdownFrontmatterVisible).toEqual({ '/tmp/demo.ts': false })
   })
 
   it('does not persist empty split groups from transient simulator tab creation', () => {

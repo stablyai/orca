@@ -14,7 +14,11 @@ export type RuntimeClientEventsSyncDeps = {
     onError: (error: unknown) => void
   ) => Promise<RuntimeClientEventSubscriptionHandle>
   onEvent: (environmentId: string, event: RuntimeClientEvent) => void
+  /** Base retry delay; doubles per consecutive failure up to retryMaxDelayMs. */
   retryDelayMs?: number
+  retryMaxDelayMs?: number
+  /** Injectable randomness for deterministic backoff-jitter tests. */
+  random?: () => number
 }
 
 export type RuntimeClientEventsSync = {
@@ -46,7 +50,10 @@ export function createRuntimeClientEventsSync(
   const subscriptions = new Map<string, () => void>()
   const pending = new Set<string>()
   const retryTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  const consecutiveFailures = new Map<string, number>()
   const retryDelayMs = deps.retryDelayMs ?? 1_000
+  const retryMaxDelayMs = deps.retryMaxDelayMs ?? 30_000
+  const random = deps.random ?? Math.random
   let generation = 0
 
   const clearRetryTimer = (environmentId: string): void => {
@@ -56,6 +63,17 @@ export function createRuntimeClientEventsSync(
     }
     clearTimeout(retryTimer)
     retryTimers.delete(environmentId)
+  }
+
+  const nextRetryDelayMs = (environmentId: string): number => {
+    // Why: a flat retry hammers an unreachable runtime with one socket dial per
+    // tick forever. Exponential-with-cap keeps transient blips fast to recover
+    // while a dead host settles at one attempt per cap window; jitter keeps
+    // multiple envs from dialing in lockstep. External sync() (desired/reachable
+    // transitions) still retries immediately, so recovery is not delayed.
+    const failures = consecutiveFailures.get(environmentId) ?? 0
+    const capped = Math.min(retryDelayMs * 2 ** Math.max(0, failures - 1), retryMaxDelayMs)
+    return capped * (0.5 + random() * 0.5)
   }
 
   const scheduleRetry = (environmentId: string, subscribeGeneration: number): void => {
@@ -73,7 +91,7 @@ export function createRuntimeClientEventsSync(
         return
       }
       sync()
-    }, retryDelayMs)
+    }, nextRetryDelayMs(environmentId))
     retryTimers.set(environmentId, retryTimer)
   }
 
@@ -88,6 +106,7 @@ export function createRuntimeClientEventsSync(
       clearTimeout(retryTimer)
     }
     retryTimers.clear()
+    consecutiveFailures.clear()
   }
 
   const sync = (): void => {
@@ -97,6 +116,11 @@ export function createRuntimeClientEventsSync(
         continue
       }
       clearRetryTimer(environmentId)
+    }
+    for (const environmentId of consecutiveFailures.keys()) {
+      if (!desiredIds.has(environmentId)) {
+        consecutiveFailures.delete(environmentId)
+      }
     }
 
     for (const [environmentId, unsubscribe] of subscriptions) {
@@ -139,14 +163,25 @@ export function createRuntimeClientEventsSync(
             subscription.unsubscribe()
             return
           }
+          consecutiveFailures.delete(environmentId)
           subscriptions.set(environmentId, subscription.unsubscribe)
         })
         .catch((error) => {
           pending.delete(environmentId)
           if (subscribeGeneration === generation) {
             console.warn('[runtime-client-events] failed to subscribe:', error)
+            // Why: only track a failure when we will actually retry this env.
+            // A failure that lands after the env left the desired set must not
+            // leave a stale count that makes its first retry after re-entry skip
+            // the base delay.
             if (deps.getDesiredEnvironmentIds().includes(environmentId)) {
+              consecutiveFailures.set(
+                environmentId,
+                (consecutiveFailures.get(environmentId) ?? 0) + 1
+              )
               scheduleRetry(environmentId, subscribeGeneration)
+            } else {
+              consecutiveFailures.delete(environmentId)
             }
           }
         })

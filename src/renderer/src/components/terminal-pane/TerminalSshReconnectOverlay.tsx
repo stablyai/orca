@@ -6,11 +6,24 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
+import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
+import {
+  connectRuntimeEnvironmentSshTarget,
+  resyncRuntimeEnvironmentSshTargets
+} from '@/runtime/runtime-environment-ssh-state'
 
 type TerminalSshReconnectOverlayProps = {
   targetId: string
   targetLabel: string
   status: SshConnectionStatus
+  // The SSH target was removed entirely — reconnect is impossible, so offer to
+  // remove the workspace instead of a Connect button that can only fail.
+  targetRemoved?: boolean
+  worktreeId?: string
+  // Set when the SSH target belongs to a remote Orca server (runtime
+  // environment): Connect and the failed-connect resync then route to that
+  // environment's runtime RPC and bucket instead of the local ssh.* API.
+  sshOwnerEnvironmentId?: string | null
 }
 
 // Why: relay deployment/reconnect are host-driven transient states; the
@@ -63,13 +76,17 @@ function messageForStatus(status: SshConnectionStatus, targetLabel: string): str
 export function TerminalSshReconnectOverlay({
   targetId,
   targetLabel,
-  status
+  status,
+  targetRemoved = false,
+  worktreeId,
+  sshOwnerEnvironmentId = null
 }: TerminalSshReconnectOverlayProps): React.JSX.Element {
   const [connecting, setConnecting] = useState(false)
   const mountedRef = useMountedRef()
   const setSshConnectionState = useAppStore((store) => store.setSshConnectionState)
   const isConnecting = connecting || isConnectingStatus(status)
-  const showConnect = canConnectStatus(status)
+  // Why: a removed target can never reconnect, so never offer Connect for it.
+  const showConnect = !targetRemoved && canConnectStatus(status)
 
   const handleConnect = useCallback(async () => {
     if (isConnecting) {
@@ -77,11 +94,16 @@ export function TerminalSshReconnectOverlay({
     }
     setConnecting(true)
     try {
-      const connectState = await window.api.ssh.connect({ targetId })
-      if (connectState) {
-        // Why: ssh.connect can resolve before the global state-change IPC lands;
-        // the waiting deferred PTY reattach path keys off this renderer store.
-        setSshConnectionState(targetId, connectState)
+      if (sshOwnerEnvironmentId) {
+        // Bucket state is written inside the helper, mirroring the local path.
+        await connectRuntimeEnvironmentSshTarget(sshOwnerEnvironmentId, targetId)
+      } else {
+        const connectState = await window.api.ssh.connect({ targetId })
+        if (connectState) {
+          // Why: ssh.connect can resolve before the global state-change IPC lands;
+          // the waiting deferred PTY reattach path keys off this renderer store.
+          setSshConnectionState(targetId, connectState)
+        }
       }
     } catch (err) {
       toast.error(
@@ -92,12 +114,27 @@ export function TerminalSshReconnectOverlay({
               'SSH connection failed'
             )
       )
+      // Why: a failed connect usually means the renderer's target metadata is
+      // stale (target removed, or re-added under a new id). Resync it so the
+      // overlay converges to the ghost/re-adopted state instead of offering
+      // the same failing Connect forever (STA-1468). Apply the target list
+      // first — a removed-labels failure must not discard it.
+      if (sshOwnerEnvironmentId) {
+        void resyncRuntimeEnvironmentSshTargets(sshOwnerEnvironmentId).catch(() => {})
+      } else {
+        void (async () => {
+          const targets = await window.api.ssh.listTargets()
+          useAppStore.getState().setSshTargetsMetadata(targets)
+          const removedLabels = await window.api.ssh.listRemovedTargetLabels()
+          useAppStore.getState().setRemovedSshTargetLabels(removedLabels)
+        })().catch(() => {})
+      }
     } finally {
       if (mountedRef.current) {
         setConnecting(false)
       }
     }
-  }, [isConnecting, mountedRef, setSshConnectionState, targetId])
+  }, [isConnecting, mountedRef, setSshConnectionState, sshOwnerEnvironmentId, targetId])
 
   return (
     <div
@@ -115,13 +152,23 @@ export function TerminalSshReconnectOverlay({
           </div>
           <div className="min-w-0 space-y-1">
             <div className="text-sm font-semibold">
-              {translate(
-                'auto.components.terminal.pane.TerminalSshReconnectOverlay.title',
-                'SSH connection required'
-              )}
+              {targetRemoved
+                ? translate(
+                    'auto.components.terminal.pane.TerminalSshReconnectOverlay.removedTitle',
+                    'SSH host removed'
+                  )
+                : translate(
+                    'auto.components.terminal.pane.TerminalSshReconnectOverlay.title',
+                    'SSH connection required'
+                  )}
             </div>
             <div className="text-xs leading-5 text-muted-foreground">
-              {messageForStatus(status, targetLabel)}
+              {targetRemoved
+                ? translate(
+                    'auto.components.terminal.pane.TerminalSshReconnectOverlay.removedBody',
+                    'The SSH host for this workspace was removed, so it can no longer connect. Remove the workspace to clear it — remote files are left untouched.'
+                  )
+                : messageForStatus(status, targetLabel)}
             </div>
           </div>
         </div>
@@ -130,26 +177,40 @@ export function TerminalSshReconnectOverlay({
             <Server className="size-3.5 shrink-0 text-muted-foreground" />
             <span className="truncate text-xs font-medium">{targetLabel}</span>
           </div>
-          <Button
-            size="sm"
-            onClick={showConnect ? () => void handleConnect() : undefined}
-            disabled={!showConnect || isConnecting}
-          >
-            {!showConnect || isConnecting ? (
-              <>
-                <Loader2 className="size-3.5 animate-spin" />
-                {translate(
-                  'auto.components.terminal.pane.TerminalSshReconnectOverlay.connectingButton',
-                  'Connecting...'
-                )}
-              </>
-            ) : (
-              translate(
-                'auto.components.terminal.pane.TerminalSshReconnectOverlay.connectButton',
-                'Connect'
-              )
-            )}
-          </Button>
+          {targetRemoved ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={worktreeId ? () => runWorktreeDelete(worktreeId) : undefined}
+              disabled={!worktreeId}
+            >
+              {translate(
+                'auto.components.terminal.pane.TerminalSshReconnectOverlay.removeWorkspaceButton',
+                'Remove workspace'
+              )}
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              onClick={showConnect ? () => void handleConnect() : undefined}
+              disabled={!showConnect || isConnecting}
+            >
+              {!showConnect || isConnecting ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" />
+                  {translate(
+                    'auto.components.terminal.pane.TerminalSshReconnectOverlay.connectingButton',
+                    'Connecting...'
+                  )}
+                </>
+              ) : (
+                translate(
+                  'auto.components.terminal.pane.TerminalSshReconnectOverlay.connectButton',
+                  'Connect'
+                )
+              )}
+            </Button>
+          )}
         </div>
       </div>
     </div>

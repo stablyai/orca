@@ -28,15 +28,14 @@
 // import isolation rule above. The cost of one duplicated array vs.
 // punching a hole in the architecture is trivially worth it.
 
-import { app } from 'electron'
-import { homedir, platform } from 'node:os'
-import { join } from 'node:path'
 import {
   createLocalFileSink,
   DEFAULT_MAX_FILES,
   getRotatedFamilySize,
   type LocalFileSink
 } from './local-file-sink'
+import { getDaemonLogFilePath, getTraceFilePath } from './logs-directory'
+import { DAEMON_LOG_MAX_FILES } from '../daemon/daemon-file-log'
 import {
   collectBundle as _collectBundle,
   type CollectBundleOptions,
@@ -128,30 +127,9 @@ export function resolveObservabilityConsent(): ObservabilityConsent {
   }
 }
 
-/** Path for the trace NDJSON file. macOS conventional location is
- *  `~/Library/Application Support/Orca/logs/main.trace.ndjson`; we resolve
- *  the same intent on Windows / Linux via Electron's `userData` dir. The
- *  function falls back to homedir when Electron is not available (tests).
- */
-export function getTraceFilePath(): string {
-  let userData: string
-  try {
-    userData = app.getPath('userData')
-  } catch {
-    // Tests — Electron's `app` may not be initialized. Use a sensible
-    // OS-conventional fallback so unit tests can construct the path
-    // without spinning up the full Electron runtime.
-    const home = homedir()
-    if (platform() === 'darwin') {
-      userData = join(home, 'Library', 'Application Support', 'Orca')
-    } else if (platform() === 'win32') {
-      userData = join(process.env.APPDATA ?? home, 'Orca')
-    } else {
-      userData = join(home, '.config', 'Orca')
-    }
-  }
-  return join(userData, 'logs', 'main.trace.ndjson')
-}
+// Re-exported so existing importers of the trace path keep working; the
+// resolution now lives in one place alongside the daemon log path.
+export { getTraceFilePath } from './logs-directory'
 
 // ── Module-level state ───────────────────────────────────────────────────
 
@@ -237,6 +215,11 @@ export function collectDiagnosticBundle(
   return _collectBundle({
     traceFilePath: getTraceFilePath(),
     maxFiles: DEFAULT_MAX_FILES,
+    // Why: the detached daemon writes its lifecycle log to a separate file, so
+    // the bundle collector must be pointed at it explicitly — it does not glob
+    // the logs directory.
+    daemonLogFilePath: getDaemonLogFilePath(),
+    daemonLogMaxFiles: DAEMON_LOG_MAX_FILES,
     ...meta
   })
 }

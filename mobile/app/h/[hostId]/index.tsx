@@ -6,7 +6,8 @@ import {
   SectionList,
   Pressable,
   ActivityIndicator,
-  TextInput
+  Alert,
+  RefreshControl
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, usePathname, useRouter } from 'expo-router'
@@ -14,7 +15,6 @@ import {
   Search,
   X,
   Pin,
-  GitBranch,
   List,
   SlidersHorizontal,
   Layers,
@@ -29,14 +29,18 @@ import {
   PanelLeftClose
 } from 'lucide-react-native'
 import type { RpcClient } from '../../../src/transport/rpc-client'
-import { loadHosts, updateLastConnected, removeHost } from '../../../src/transport/host-store'
+import { loadHosts, updateLastConnected } from '../../../src/transport/host-store'
+import { removeHostAndCloseClient } from '../../../src/transport/host-removal-lifecycle'
 import {
   useHostClient,
   useCloseHost,
-  useForceReconnect,
-  useReconnectAttempt,
-  useLastConnectedAt
+  useForceReconnect
 } from '../../../src/transport/client-context'
+import { useWorktreeResync } from '../../../src/transport/use-worktree-resync'
+import {
+  useLastConnectedAt,
+  useReconnectAttempt
+} from '../../../src/transport/client-context-connection-metrics'
 import {
   classifyConnection,
   type ConnectionVerdict
@@ -52,12 +56,14 @@ import { useActiveWorktreeScroll } from '../../../src/hooks/use-active-worktree-
 import type { RepoIcon } from '../../../../src/shared/repo-icon'
 import { PickerModal } from '../../../src/components/PickerModal'
 import { ActionSheetContent } from '../../../src/components/ActionSheetModal'
+import { buildWorktreeNavigationActions } from '../../../src/agent-history/worktree-navigation-actions'
 import { ConfirmModal } from '../../../src/components/ConfirmModal'
 import { BottomDrawer } from '../../../src/components/BottomDrawer'
 import { ProtocolBlockScreen } from '../../../src/components/ProtocolBlockScreen'
 import { AuthFailedBanner } from '../../../src/components/AuthFailedBanner'
+import { MobileSearchField } from '../../../src/components/MobileSearchField'
 import { WorkspaceDetailPlaceholder } from '../../../src/components/WorkspaceDetailPlaceholder'
-import { getCachedWorktrees } from '../../../src/cache/worktree-cache'
+import { getCachedWorktrees, setCachedWorktrees } from '../../../src/cache/worktree-cache'
 import { setCachedRepos } from '../../../src/cache/repo-cache'
 import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
 import { useResponsiveLayout } from '../../../src/layout/responsive-layout'
@@ -182,6 +188,7 @@ export function HostScreen({
   const [showGroupPicker, setShowGroupPicker] = useState(false)
   const [showFilterModal, setShowFilterModal] = useState(false)
   const [actionTarget, setActionTarget] = useState<Worktree | null>(null)
+  const [hostCapabilities, setHostCapabilities] = useState<string[]>([])
   const [confirmDelete, setConfirmDelete] = useState<Worktree | null>(null)
   const [confirmRemoveHost, setConfirmRemoveHost] = useState(false)
   const [routeActionState, setRouteActionState] = useState(() =>
@@ -456,6 +463,14 @@ export function HostScreen({
             areWorktreeListsEqual(current, result.worktrees) ? current : result.worktrees
           )
           setWorktreesLoaded(true)
+          // Why (#8498): the host detail screen seeds its list from the
+          // home-written cache, so a partial home fetch could poison it until a
+          // focus poll corrected it. Write the confirmed snapshot back through
+          // the same cache so a reconnect refetch (or a remount) can't serve a
+          // stale worktree list.
+          if (hostId) {
+            setCachedWorktrees(hostId, result.worktrees)
+          }
           // Drop the optimistic active override once the host confirms it (the
           // activate RPC has landed and worktree.ps now reports it active), so we
           // stop overriding and respect any later desktop-driven change.
@@ -513,6 +528,10 @@ export function HostScreen({
   // format is in place to flip a switch in a future release.
   useEffect(() => {
     if (connState !== 'connected' || !client) {
+      // Why: drop the prior host's capabilities while disconnected/switching so
+      // a capability-gated action (e.g. Agent Session History) can't linger for
+      // a host that doesn't support it.
+      setHostCapabilities([])
       return
     }
     let cancelled = false
@@ -524,9 +543,13 @@ export function HostScreen({
           return
         }
         if (!response.ok) {
+          setHostCapabilities([])
           return
         }
-        const status = (response as RpcSuccess).result as DesktopStatus
+        const status = (response as RpcSuccess).result as DesktopStatus & {
+          capabilities?: string[]
+        }
+        setHostCapabilities(status.capabilities ?? [])
         const verdict = evaluateCompat({
           desktopProtocolVersion: status.protocolVersion,
           desktopMinCompatibleMobileVersion: status.minCompatibleMobileVersion
@@ -551,6 +574,17 @@ export function HostScreen({
       cancelled = true
     }
   }, [connState, client])
+
+  useFocusEffect(
+    useCallback(() => {
+      // Why: opening the host is a strong user signal — reset a backed-off or
+      // trickling reconnect loop (and probe a possibly half-open socket)
+      // immediately instead of waiting out its timer. Deps stay empty so this
+      // fires per focus transition, not per connection-state change; nudging
+      // on every reconnecting↔connecting flip would defeat the backoff.
+      clientRef.current?.notifyForeground()
+    }, [])
+  )
 
   useFocusEffect(
     useCallback(() => {
@@ -590,6 +624,17 @@ export function HostScreen({
     }, 3000)
     return () => clearInterval(interval)
   }, [embedded, connState, fetchWorktrees, fetchRepoMetadata, syncViewSettingsFromDesktop])
+
+  // Why (#8498): reconnect refetch + manual pull-to-refresh, extracted to
+  // useWorktreeResync so this screen stays under its max-lines budget. The
+  // steady-state focus/embedded polls don't cover the transition INTO
+  // 'connected' after a background/sleep, which is when the cache is stalest.
+  const { refreshing, onRefresh } = useWorktreeResync({
+    client,
+    connState,
+    fetchWorktrees,
+    fetchRepoMetadata
+  })
 
   const updateLocalPins = useCallback(
     (worktreeId: string, pinned: boolean) => {
@@ -671,13 +716,15 @@ export function HostScreen({
     if (!hostId) {
       return
     }
-    // Why: close the shared client first so its WebSocket is gone before
-    // the host record disappears; otherwise the next loadHosts() the
-    // provider does (e.g. on remount) wouldn't find this host but the
-    // socket would still be open, leaking state.
-    closeHostClient(hostId)
-    await removeHost(hostId)
-    leaveHost()
+    try {
+      await removeHostAndCloseClient(hostId, closeHostClient)
+      leaveHost()
+    } catch {
+      // Why: metadata commit can fail while the host is still paired; keep the
+      // screen mounted and re-open confirm (ConfirmModal closes on confirm).
+      setConfirmRemoveHost(true)
+      Alert.alert('Could not remove host', 'Please try again.')
+    }
   }, [hostId, leaveHost, closeHostClient])
 
   const navigateFromHostList = useCallback(
@@ -1114,22 +1161,16 @@ export function HostScreen({
       {/* Search bar */}
       {showSearch && (
         <View style={styles.searchBar}>
-          <Search size={14} color={colors.textMuted} />
-          <TextInput
-            style={styles.searchInput}
+          <MobileSearchField
             value={search}
             onChangeText={setSearch}
             placeholder="Search worktrees…"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
             autoFocus
+            // Why: new key each open remounts focus effect if the field stays mounted
+            // across rapid toggles; pairs with delayed focus so the keyboard appears.
+            focusKey={showSearch}
+            accessibilityLabel="Search worktrees"
           />
-          {search.length > 0 && (
-            <Pressable onPress={() => setSearch('')}>
-              <X size={14} color={colors.textSecondary} />
-            </Pressable>
-          )}
         </View>
       )}
 
@@ -1161,6 +1202,9 @@ export function HostScreen({
           sections={sections}
           keyExtractor={(w) => w.sectionListKey ?? w.worktreeId}
           stickySectionHeadersEnabled={false}
+          // Why: keep the search IME up while tapping clear / scrolling results.
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           onScrollToIndexFailed={onScrollToIndexFailed}
           // Why: edge-to-edge — the list scrolls under the system nav bar
           // while reserving insets.bottom keeps the last worktree row reachable
@@ -1208,6 +1252,16 @@ export function HostScreen({
             )
           }}
           ItemSeparatorComponent={ListSeparator}
+          // Why (#8498): manual pull-to-refresh forces a fresh worktree
+          // snapshot after a reconnect or whenever the cache looks stale.
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.textSecondary}
+              colors={[colors.textSecondary]}
+            />
+          }
           renderItem={({ item }) => (
             <WorktreeListRow
               item={item}
@@ -1348,20 +1402,14 @@ export function HostScreen({
             actions={
               actionTarget
                 ? [
-                    {
-                      label: 'Source Control',
-                      icon: GitBranch,
-                      onPress: () => {
-                        const params = new URLSearchParams({
-                          name: actionTarget.displayName || actionTarget.repo,
-                          origin: 'host'
-                        })
-                        navigateFromHostList(
-                          `/h/${hostId}/source-control/${encodeURIComponent(actionTarget.worktreeId)}?${params.toString()}`
-                        )
-                        setActionTarget(null)
-                      }
-                    },
+                    ...buildWorktreeNavigationActions({
+                      hostId,
+                      worktreeId: actionTarget.worktreeId,
+                      worktreeName: actionTarget.displayName || actionTarget.repo,
+                      hostCapabilities,
+                      navigate: navigateFromHostList,
+                      onDone: () => setActionTarget(null)
+                    }),
                     {
                       label: 'Sleep',
                       icon: Moon,
@@ -1413,6 +1461,7 @@ export function HostScreen({
         client={client}
         hostId={hostId}
         existingWorktreePaths={existingWorktreePaths}
+        existingWorktrees={worktrees}
         onVisibleChange={(visible) => {
           newWorktreeModalVisibleRef.current = visible
         }}
@@ -1601,20 +1650,11 @@ const styles = StyleSheet.create({
     padding: spacing.xs
   },
   searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    gap: spacing.sm,
-    borderBottomWidth: 1,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel
-  },
-  searchInput: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: 13,
-    paddingVertical: 2
   },
   centered: {
     flex: 1,

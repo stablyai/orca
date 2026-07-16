@@ -24,7 +24,8 @@ vi.mock('./runner', () => ({
 }))
 
 vi.mock('./status', () => ({
-  resolveGitDir: resolveGitDirMock
+  resolveGitDir: resolveGitDirMock,
+  runWithGitReadCacheInvalidation: <T>(run: () => Promise<T>) => run()
 }))
 
 vi.mock('fs/promises', async () => {
@@ -32,13 +33,20 @@ vi.mock('fs/promises', async () => {
   return { ...actual, stat: statMock }
 })
 
+import { clearGitCapabilityStateForTests } from './git-capability-state'
+
 import {
   addSparseWorktree,
   assertWorktreeCleanForRemoval,
   forceDeleteLocalBranch,
   listWorktrees,
-  removeWorktree
+  removeWorktree,
+  WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS
 } from './worktree'
+
+beforeEach(() => {
+  clearGitCapabilityStateForTests()
+})
 
 type MockResult = {
   error?: Error
@@ -247,7 +255,7 @@ branch refs/heads/main
     ])
   })
 
-  it('passes --force before the worktree path when forced removal is requested', async () => {
+  it('passes one --force before the worktree path for dirty-file removal', async () => {
     mockGitCommands({
       'git worktree list --porcelain': {
         stdout: `worktree /repo
@@ -270,6 +278,48 @@ branch refs/heads/main
     await removeWorktree('/repo', '/repo-feature', true)
 
     expect(getGitCalls()).toContain('git worktree remove --force /repo-feature')
+  })
+
+  it('rejects a locked worktree with stable app-owned copy before invoking remove', async () => {
+    mockGitCommands({
+      'git worktree list --porcelain': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-feature
+HEAD def456
+branch refs/heads/feature/test
+locked active agent session
+`
+      }
+    })
+
+    await expect(removeWorktree('/repo', '/repo-feature', true)).rejects.toThrow(
+      'Worktree is locked by Git. Lock reason: active agent session.'
+    )
+    expect(getGitCalls()).not.toContain('git worktree remove /repo-feature')
+  })
+
+  it('does not treat dirty-file force as permission to override a lock', async () => {
+    mockGitCommands({
+      'git worktree list --porcelain': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-feature
+HEAD def456
+branch refs/heads/feature/test
+locked active agent session
+`
+      }
+    })
+
+    await expect(removeWorktree('/repo', '/repo-feature', true)).rejects.toThrow(
+      'Worktree is locked by Git. Lock reason: active agent session.'
+    )
+    expect(getGitCalls()).not.toContain('git worktree remove --force /repo-feature')
   })
 
   it('matches Windows worktree paths before deleting the branch', async () => {
@@ -699,7 +749,7 @@ describe('assertWorktreeCleanForRemoval', () => {
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['status', '--porcelain', '--untracked-files=all'],
-      { cwd: '/repo-feature' }
+      { cwd: '/repo-feature', timeout: WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS }
     )
   })
 
@@ -710,6 +760,47 @@ describe('assertWorktreeCleanForRemoval', () => {
       message: 'Worktree has uncommitted or untracked changes.',
       stdout: '?? scratch.txt\n'
     })
+  })
+
+  it('ignores configured linked paths without mutating them before preflight', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '?? node_modules\0', stderr: '' })
+
+    await expect(
+      assertWorktreeCleanForRemoval('/repo-feature', false, {
+        ignoredUntrackedPaths: ['node_modules']
+      })
+    ).resolves.toBeUndefined()
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['status', '--porcelain', '-z', '--untracked-files=all'],
+      { cwd: '/repo-feature', timeout: WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS }
+    )
+  })
+
+  it('allows a shorter caller deadline for destructive preflight', async () => {
+    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('git timed out.'))
+
+    await expect(
+      assertWorktreeCleanForRemoval('/repo-feature', false, { timeout: 25 })
+    ).rejects.toThrow('git timed out.')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['status', '--porcelain', '--untracked-files=all'],
+      { cwd: '/repo-feature', timeout: 25 }
+    )
+  })
+
+  it('still rejects real changes when configured linked paths are ignored', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: '?? node_modules\0 M src/index.ts\0',
+      stderr: ''
+    })
+
+    await expect(
+      assertWorktreeCleanForRemoval('/repo-feature', false, {
+        ignoredUntrackedPaths: ['node_modules']
+      })
+    ).rejects.toMatchObject({ message: 'Worktree has uncommitted or untracked changes.' })
   })
 
   it('rethrows preflight subprocess failures as-is', async () => {
@@ -977,6 +1068,14 @@ describe('listWorktrees', () => {
           'worktree /repo-feature\nHEAD def456\nbranch refs/heads/feature/test\n'
       }
     })
+    // Why: the fallback probes each linked worktree path for existence; keep
+    // the paths "present" so this test stays about parser selection.
+    statMock.mockImplementation(async (targetPath: string) => {
+      if (String(targetPath).endsWith('sparse-checkout')) {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      }
+      return {}
+    })
 
     await expect(listWorktrees('/repo')).resolves.toEqual([
       {
@@ -998,6 +1097,36 @@ describe('listWorktrees', () => {
       'git worktree list --porcelain -z',
       'git worktree list --porcelain'
     ])
+  })
+
+  it('annotates missing linked worktrees as prunable via the line-block fallback', async () => {
+    // Why: Git <2.36 lacks the `prunable` porcelain field (issue #8389), so
+    // the fallback must probe each linked worktree path instead of treating a
+    // stale registration as a live workspace.
+    mockGitCommands({
+      'git worktree list --porcelain -z': {
+        error: Object.assign(new Error("unknown switch `z'"), {
+          stderr: "error: unknown switch `z'"
+        })
+      },
+      'git worktree list --porcelain': {
+        stdout:
+          'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\n' +
+          'worktree /repo-feature\nHEAD def456\nbranch refs/heads/feature/test\n\n' +
+          'worktree /repo-locked\nHEAD aaa789\nbranch refs/heads/agent\nlocked agent session\n'
+      }
+    })
+    // statMock default (beforeEach): every path is missing (ENOENT).
+
+    const worktrees = await listWorktrees('/repo')
+
+    expect(worktrees.find((worktree) => worktree.path === '/repo-feature')).toMatchObject({
+      prunable: true
+    })
+    // Locked registrations are shielded, mirroring git's own prunable rules;
+    // the main worktree is covered by the repo-level missing-path handling.
+    expect(worktrees.find((worktree) => worktree.path === '/repo-locked')?.prunable).toBeUndefined()
+    expect(worktrees.find((worktree) => worktree.path === '/repo')?.prunable).toBeUndefined()
   })
 })
 

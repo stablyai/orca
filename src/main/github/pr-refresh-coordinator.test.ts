@@ -3,14 +3,21 @@ request timestamps, and follow-up scheduling against shared module state. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitHubPRRefreshCandidate, PRInfo } from '../../shared/types'
 
-const { sendMock, getAllWebContentsMock, getPRForBranchOutcomeMock, getRateLimitMock } = vi.hoisted(
-  () => ({
-    sendMock: vi.fn(),
-    getAllWebContentsMock: vi.fn(),
-    getPRForBranchOutcomeMock: vi.fn(),
-    getRateLimitMock: vi.fn()
-  })
-)
+const {
+  sendMock,
+  sendToTrustedUIRendererMock,
+  getAllWebContentsMock,
+  getPRForBranchOutcomeMock,
+  getRateLimitMock,
+  rateLimitGuardMock
+} = vi.hoisted(() => ({
+  sendMock: vi.fn(),
+  sendToTrustedUIRendererMock: vi.fn(),
+  getAllWebContentsMock: vi.fn(),
+  getPRForBranchOutcomeMock: vi.fn(),
+  getRateLimitMock: vi.fn(),
+  rateLimitGuardMock: vi.fn()
+}))
 
 vi.mock('electron', () => ({
   webContents: {
@@ -25,7 +32,11 @@ vi.mock('./client', () => ({
 vi.mock('./rate-limit', () => ({
   getRateLimit: getRateLimitMock,
   noteRateLimitSpend: vi.fn(),
-  rateLimitGuard: vi.fn(() => ({ blocked: false }))
+  rateLimitGuard: rateLimitGuardMock
+}))
+
+vi.mock('../ipc/ui', () => ({
+  sendToTrustedUIRenderer: sendToTrustedUIRendererMock
 }))
 
 function makeCandidate(
@@ -77,9 +88,15 @@ describe('pr-refresh-coordinator', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     sendMock.mockReset()
+    sendToTrustedUIRendererMock.mockReset()
+    sendToTrustedUIRendererMock.mockImplementation((channel, payload) => {
+      sendMock(channel, payload)
+    })
     getAllWebContentsMock.mockReset()
     getPRForBranchOutcomeMock.mockReset()
     getRateLimitMock.mockReset()
+    rateLimitGuardMock.mockReset()
+    rateLimitGuardMock.mockReturnValue({ blocked: false })
     getAllWebContentsMock.mockReturnValue([
       {
         id: 1,
@@ -92,6 +109,29 @@ describe('pr-refresh-coordinator', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('sends each refresh event once without broadcasting to 100 browser guests', async () => {
+    const guestSends = Array.from({ length: 100 }, () => vi.fn())
+    getAllWebContentsMock.mockReturnValue(
+      guestSends.map((send, index) => ({
+        id: index + 100,
+        isDestroyed: () => false,
+        send
+      }))
+    )
+    const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
+
+    enqueuePRRefresh(makeCandidate({ isBare: true }), 'manual')
+
+    expect(sendToTrustedUIRendererMock).toHaveBeenCalledOnce()
+    expect(sendToTrustedUIRendererMock).toHaveBeenCalledWith(
+      'gh:prRefreshEvent',
+      expect.objectContaining({ status: 'skipped', skippedReason: 'bare' })
+    )
+    expect(sendMock).toHaveBeenCalledOnce()
+    expect(getAllWebContentsMock).not.toHaveBeenCalled()
+    expect(guestSends.reduce((total, send) => total + send.mock.calls.length, 0)).toBe(0)
   })
 
   it('forwards the candidate worktree head into the branch lookup options', async () => {
@@ -505,13 +545,45 @@ describe('pr-refresh-coordinator', () => {
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(5)
   })
 
+  it('proceeds with background refreshes when the budget probe fails (fail open)', async () => {
+    const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
+    // Why: regression for #7553 — GHES with rate limiting disabled 404s every
+    // probe; an unreadable budget must not pause refreshes.
+    getRateLimitMock.mockResolvedValue({
+      ok: false,
+      error: 'HTTP 404: Rate limiting is not enabled.'
+    })
+    getPRForBranchOutcomeMock.mockResolvedValue({
+      kind: 'no-pr',
+      fetchedAt: Date.now()
+    })
+
+    enqueuePRRefresh(makeCandidate(), 'active', 80, 1)
+
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+    const pausedEvents = sendMock.mock.calls
+      .map(([, event]) => event)
+      .filter((event) => event.status === 'paused' && event.skippedReason === 'rate-limit')
+    expect(pausedEvents).toHaveLength(0)
+  })
+
   it('does not consume active burst slots for rate-limit pauses', async () => {
     const { enqueuePRRefresh } = await import('./pr-refresh-coordinator')
-    getRateLimitMock
-      .mockResolvedValueOnce({ ok: false })
-      .mockResolvedValueOnce({ ok: false })
-      .mockResolvedValueOnce({ ok: false })
-      .mockResolvedValue({ ok: true })
+    // Why: keyed on drained items (one getRateLimit call each) rather than
+    // guard-call counts, so the guard's per-bucket evaluation order stays free
+    // to change without breaking the slot-accounting assertion.
+    let drainedItems = 0
+    getRateLimitMock.mockImplementation(async () => {
+      drainedItems += 1
+      return { ok: true }
+    })
+    rateLimitGuardMock.mockImplementation(() =>
+      drainedItems <= 3
+        ? { blocked: true, remaining: 0, limit: 5000, resetAt: 61 }
+        : { blocked: false }
+    )
     getPRForBranchOutcomeMock.mockResolvedValue({
       kind: 'upstream-error',
       errorType: 'unknown',

@@ -8,6 +8,8 @@ import {
   type EditorConfigParams
 } from './rich-markdown-editor-config'
 import type { SlashMenuState } from './rich-markdown-slash-commands'
+import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
+import { createRichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
 
 function ref<T>(current: T): MutableRefObject<T> {
   return { current }
@@ -25,7 +27,15 @@ function getSpellcheckAttribute(config: ReturnType<typeof createRichMarkdownEdit
 }
 
 function createConfigParams(overrides: Partial<EditorConfigParams> = {}): EditorConfigParams {
+  const codec = createRichMarkdownEditorCodec()
   return {
+    codec,
+    htmlSuperscriptLinkContext: createRichMarkdownHtmlSuperscriptLinkContext({
+      sourceFilePath: '/repo/README.md',
+      worktreeId: 'worktree-1',
+      worktreeRoot: '/repo',
+      sourceOwner: { kind: 'local' }
+    }),
     content: '',
     filePath: '/repo/README.md',
     worktreeId: 'worktree-1',
@@ -38,6 +48,9 @@ function createConfigParams(overrides: Partial<EditorConfigParams> = {}): Editor
     rootRef: ref<HTMLDivElement | null>(null),
     editorRef: ref<Editor | null>(null),
     lastCommittedMarkdownRef: ref(''),
+    originalSourceRef: ref(''),
+    baseCanonicalRef: ref(''),
+    reconcileRoundTripRef: ref<(markdown: string) => string | null>(() => null),
     onContentChangeRef: ref(vi.fn()),
     onDirtyStateHintRef: ref(vi.fn()),
     onSaveRef: ref(vi.fn()),

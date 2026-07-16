@@ -18,6 +18,7 @@ import { toast } from 'sonner'
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -1047,7 +1048,7 @@ export default function AutomationsPage(): React.JSX.Element {
   }, [automationHostTargetKey, isLoading, pendingAutomationRunNavigation, refresh])
 
   const hydratePersistedUIState = useCallback(async (): Promise<void> => {
-    useAppStore.getState().hydratePersistedUI(await window.api.ui.get())
+    useAppStore.getState().hydratePersistedUI(await window.api.ui.get(), 'sync')
   }, [])
 
   useEffect(() => {
@@ -1056,8 +1057,11 @@ export default function AutomationsPage(): React.JSX.Element {
   }, [fetchAllWorktrees, refresh])
 
   useEffect(() => {
-    const timer = window.setInterval(() => setRelativeNow(Date.now()), 60 * 1000)
-    return () => window.clearInterval(timer)
+    // Pause the relative-time clock while the window is hidden.
+    return installWindowVisibilityInterval({
+      run: () => setRelativeNow(Date.now()),
+      intervalMs: 60 * 1000
+    })
   }, [])
 
   useEffect(() => {

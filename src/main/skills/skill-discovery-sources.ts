@@ -41,7 +41,23 @@ export function buildSkillDiscoverySources(
       join(home, '.codex', 'plugins', 'cache'),
       'plugin',
       ['codex', 'agent-skills']
-    )
+    ),
+    // Why: `npx skills add --global` writes into each agent's own home skills
+    // directory, so coverage misses them unless we scan every provider root.
+    source('home-grok', 'Grok home', join(home, '.grok', 'skills'), 'home', ['agent-skills']),
+    source('home-opencode', 'OpenCode home', join(home, '.config', 'opencode', 'skills'), 'home', [
+      'agent-skills'
+    ]),
+    source('home-pi', 'Pi home', join(home, '.pi', 'agent', 'skills'), 'home', ['agent-skills']),
+    source('home-gemini', 'Gemini home', join(home, '.gemini', 'skills'), 'home', ['agent-skills']),
+    source(
+      'home-antigravity',
+      'Antigravity home',
+      join(home, '.gemini', 'antigravity', 'skills'),
+      'home',
+      ['agent-skills']
+    ),
+    source('home-cursor', 'Cursor home', join(home, '.cursor', 'skills'), 'home', ['agent-skills'])
   ]
 
   const projectPaths = new Set<string>()

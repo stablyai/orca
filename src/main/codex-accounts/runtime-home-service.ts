@@ -33,13 +33,20 @@ import {
 import { app } from 'electron'
 import type { CodexManagedAccount } from '../../shared/types'
 import type { Store } from '../persistence'
+import { WSL_CODEX_RUNTIME_HOME_SEGMENTS } from '../pty/codex-home-wsl-env'
 import { writeFileAtomically } from './fs-utils'
 import {
   getOrcaManagedCodexHomePath,
   getSystemCodexHomePath,
+  syncCodexGlobalInstructionsIntoManagedHome,
   syncSystemCodexResourcesIntoManagedHome
 } from '../codex/codex-home-paths'
 import { startSystemCodexSessionBridgeInBackground } from '../codex/codex-session-bridge'
+import {
+  resolveHostCodexSessionSourceHome,
+  resolveWslCodexSessionSourceHome
+} from '../codex/codex-session-source-home'
+import { startWslCodexSessionBridgeInBackground } from '../codex/wsl-codex-session-bridge'
 import {
   prepareSystemConfigForFreshRuntimeMirror,
   syncSystemConfigIntoManagedCodexHome
@@ -134,18 +141,51 @@ export class CodexRuntimeHomeService {
   prepareForCodexLaunch(target?: CodexAccountSelectionTarget): string | null {
     if (target?.runtime === 'wsl') {
       const wslTarget = this.resolveWslDefaultTarget(target)
-      return (
-        this.syncWslRuntimeForCurrentSelection(wslTarget) ??
-        this.getWslSystemCodexHomePath(wslTarget)
-      )
+      const syncedRuntimeHomePath = this.syncWslRuntimeForCurrentSelection(wslTarget)
+      this.syncWslConfigAndGlobalInstructionsForLaunch(wslTarget, syncedRuntimeHomePath)
+      const runtimeHomePath = syncedRuntimeHomePath ?? this.getWslSystemCodexHomePath(wslTarget)
+      this.startWslSessionBridgeForLaunch(wslTarget, runtimeHomePath)
+      return runtimeHomePath
     }
     this.syncForCurrentSelection()
     syncSystemCodexResourcesIntoManagedHome()
     syncSystemConfigIntoManagedCodexHome()
     // Why: historical Codex sessions can be large; bridge them after launch
     // setup so starting a fresh Codex TUI never waits on a full tree walk.
-    void startSystemCodexSessionBridgeInBackground()
+    void startSystemCodexSessionBridgeInBackground(
+      {},
+      resolveHostCodexSessionSourceHome(this.store.getSettings())
+    )
     return this.getRuntimeHomePath()
+  }
+
+  private startWslSessionBridgeForLaunch(
+    target: CodexAccountSelectionTarget,
+    runtimeHomePath: string | null
+  ): void {
+    if (process.platform !== 'win32' || !runtimeHomePath) {
+      return
+    }
+    const runtimeHomeWsl = parseWslUncPath(runtimeHomePath)
+    const distro = target.wslDistro?.trim() || runtimeHomeWsl?.distro || getDefaultWslDistro()
+    if (!distro) {
+      return
+    }
+    // Why: history-only override lets custom-CODEX_HOME users bridge from their
+    // real home; falls back to <wslHome>/.codex, which auth/config still use.
+    const systemCodexHomePath =
+      resolveWslCodexSessionSourceHome(this.store.getSettings(), distro) ??
+      this.getWslSystemCodexHomePath({ runtime: 'wsl', wslDistro: distro })
+    if (!systemCodexHomePath || systemCodexHomePath === runtimeHomePath) {
+      return
+    }
+    // Why: WSL history must be hardlinked inside the distro; host-side links
+    // cannot bridge Windows and WSL filesystems in a resume-visible way.
+    void startWslCodexSessionBridgeInBackground({
+      distro,
+      systemCodexHomePath,
+      managedCodexHomePath: runtimeHomePath
+    })
   }
 
   getHostRuntimeHomePath(): string {
@@ -184,13 +224,36 @@ export class CodexRuntimeHomeService {
     return home ? this.joinWslPath(home, '.codex') : null
   }
 
+  private syncWslConfigAndGlobalInstructionsForLaunch(
+    target: CodexAccountSelectionTarget,
+    runtimeHomePath: string | null
+  ): void {
+    if (!runtimeHomePath) {
+      return
+    }
+    const distro =
+      parseWslUncPath(runtimeHomePath)?.distro || target.wslDistro?.trim() || getDefaultWslDistro()
+    if (!distro) {
+      return
+    }
+    const systemHomePath = this.getWslSystemCodexHomePath({ runtime: 'wsl', wslDistro: distro })
+    if (!systemHomePath || systemHomePath === runtimeHomePath) {
+      return
+    }
+    // Why: WSL uses a distro-local CODEX_HOME, so host resource mirroring
+    // cannot provide the distro user's global instructions.
+    syncCodexGlobalInstructionsIntoManagedHome({
+      systemHomePath,
+      managedHomePath: runtimeHomePath
+    })
+    syncSystemConfigIntoManagedCodexHome({ runtimeHomePath, systemHomePath })
+  }
+
   prepareForRateLimitFetch(target?: CodexAccountSelectionTarget): string | null {
     if (target?.runtime === 'wsl') {
       const wslTarget = this.resolveWslDefaultTarget(target)
-      return (
-        this.syncWslRuntimeForCurrentSelection(wslTarget) ??
-        this.getWslSystemCodexHomePath(wslTarget)
-      )
+      const syncedRuntimeHomePath = this.getPreparedWslRateLimitHomePath(wslTarget)
+      return syncedRuntimeHomePath ?? this.getWslSystemCodexHomePath(wslTarget)
     }
     this.syncForCurrentSelection()
     syncSystemCodexResourcesIntoManagedHome()
@@ -465,6 +528,32 @@ export class CodexRuntimeHomeService {
     return parseWslUncPath(account.managedHomePath) ? account.managedHomePath : null
   }
 
+  private getPreparedWslRateLimitHomePath(target: CodexAccountSelectionTarget): string | null {
+    const distro = target.wslDistro?.trim()
+    if (distro) {
+      const settings = this.store.getSettings()
+      const selectedAccountId = getSelectedCodexAccountIdForTarget(settings, target)
+      if (selectedAccountId === null) {
+        // Why: the system-default account changes outside Orca (login, logout,
+        // token refresh). Read its real home directly so a cached runtime copy
+        // cannot stay stale; filesystem probing in the fetcher is asynchronous.
+        return this.getWslSystemCodexHomePath(target)
+      }
+      const cachedRuntimeHomePath = this.wslRuntimeHomePathByDistro.get(distro)
+      if (
+        cachedRuntimeHomePath &&
+        this.lastSyncedWslAccountIdByDistro.has(distro) &&
+        this.lastSyncedWslAccountIdByDistro.get(distro) === selectedAccountId
+      ) {
+        // Why: RateLimitService resolves provenance twice per poll. Account
+        // changes sync explicitly, so repeated resolution must stay path-only
+        // instead of blocking main on UNC reads and a wsl.exe migration probe.
+        return cachedRuntimeHomePath
+      }
+    }
+    return this.syncWslRuntimeForCurrentSelection(target)
+  }
+
   private syncWslRuntimeForCurrentSelection(target: CodexAccountSelectionTarget): string | null {
     if (process.platform !== 'win32') {
       return null
@@ -573,9 +662,7 @@ export class CodexRuntimeHomeService {
 
   private getWslRuntimeHomePath(distro: string): string | null {
     const home = getWslHome(distro)
-    return home
-      ? this.joinWslPath(home, '.local', 'share', 'orca', 'codex-runtime-home', 'home')
-      : null
+    return home ? this.joinWslPath(home, ...WSL_CODEX_RUNTIME_HOME_SEGMENTS) : null
   }
 
   private safeReadBackActiveWslAccountBeforeRestart(

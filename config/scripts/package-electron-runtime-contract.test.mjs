@@ -7,6 +7,19 @@ const projectDir = resolve(import.meta.dirname, '../..')
 const packageJson = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf8'))
 
 describe('Electron runtime package contract', () => {
+  it('keeps shared WebGL atlas invalidation reproducible from vendored source', () => {
+    const patch = readFileSync(
+      join(projectDir, 'config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch'),
+      'utf8'
+    )
+
+    expect(patch).toContain('diff --git a/src/Types.ts b/src/Types.ts')
+    expect(patch).toContain('readonly clearModelGeneration: number')
+    expect(patch).toContain('const generation = this._atlas.clearModelGeneration')
+    expect(patch).toContain('this.clearModelGeneration++')
+    expect(patch).toContain('this._atlas._clearModelGeneration||0')
+  })
+
   it('keeps root postinstall as the single Electron binary install owner', () => {
     expect(packageJson.scripts.postinstall).toBe('node config/scripts/rebuild-native-deps.mjs')
     expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('electron')
@@ -88,6 +101,77 @@ describe('Electron runtime package contract', () => {
     expect(releaseCommands.get('linux-arm64')).toContain('--linux AppImage deb rpm --arm64')
     expect(releaseCommands.get('win')).toContain(
       '; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder '
+    )
+  })
+
+  it('blocks Linux and macOS release packaging on watcher process fault recovery', () => {
+    const releaseWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
+    )
+    const macWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-mac-build.yml'), 'utf8')
+    )
+    const assertFaultGate = (steps, publishStepName, expectedCondition) => {
+      const names = steps.map((step) => step.name)
+      const gate = steps.find((step) => step.name === 'Gate runtime file-watcher process isolation')
+
+      expect(gate.if).toBe(expectedCondition)
+      expect(gate['continue-on-error']).toBeUndefined()
+      expect(gate.run).toContain('node config/scripts/runtime-file-watcher-fault-harness.mjs')
+      expect(gate.run).toContain('ELECTRON_RUN_AS_NODE=1 pnpm exec electron')
+      expect(names.indexOf('Build app')).toBeLessThan(names.indexOf(gate.name))
+      expect(names.indexOf(gate.name)).toBeLessThan(names.indexOf(publishStepName))
+    }
+
+    assertFaultGate(
+      releaseWorkflow.jobs.build.steps,
+      'Publish release artifacts (Linux)',
+      "runner.os == 'Linux'"
+    )
+    assertFaultGate(
+      macWorkflow.jobs['build-mac'].steps,
+      'Publish release artifacts (macOS)',
+      undefined
+    )
+  })
+
+  it('packages and release-gates the SSH relay watcher child', () => {
+    const relayBuild = readFileSync(join(projectDir, 'config/scripts/build-relay.mjs'), 'utf8')
+    const builderConfig = readFileSync(
+      join(projectDir, 'config/electron-builder.config.cjs'),
+      'utf8'
+    )
+    const remoteCommands = readFileSync(
+      join(projectDir, 'src/main/ssh/ssh-remote-commands.ts'),
+      'utf8'
+    )
+    const releaseWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
+    )
+    const macWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-mac-build.yml'), 'utf8')
+    )
+
+    expect(relayBuild).toContain("'parcel-watcher-process-entry.ts'")
+    expect(relayBuild).toContain("outfile: join(outDir, 'relay-watcher.js')")
+    expect(relayBuild).toContain("readFileSync(join(outDir, 'relay-watcher.js'))")
+    expect(builderConfig).toContain("from: 'out/relay'")
+    expect(remoteCommands).toContain("joinRemotePath(host, remoteRelayDir, 'relay-watcher.js')")
+
+    const assertRelayGate = (steps, publishStepName) => {
+      const names = steps.map((step) => step.name)
+      const gate = steps.find((step) => step.name === 'Gate SSH relay watcher process isolation')
+      expect(gate['continue-on-error']).toBeUndefined()
+      expect(gate.run).toContain('node config/scripts/relay-watcher-fault-harness.mjs')
+      expect(names.indexOf('Build app')).toBeLessThan(names.indexOf(gate.name))
+      expect(names.indexOf(gate.name)).toBeLessThan(names.indexOf(publishStepName))
+    }
+
+    assertRelayGate(releaseWorkflow.jobs.build.steps, 'Publish release artifacts (Linux)')
+    assertRelayGate(macWorkflow.jobs['build-mac'].steps, 'Publish release artifacts (macOS)')
+    const releaseNames = releaseWorkflow.jobs.build.steps.map((step) => step.name)
+    expect(releaseNames.indexOf('Gate SSH relay watcher process isolation')).toBeLessThan(
+      releaseNames.indexOf('Build Windows release artifacts')
     )
   })
 
@@ -221,7 +305,7 @@ describe('Electron runtime package contract', () => {
     expect(installRun).not.toMatch(/throw\s+\$_/)
   })
 
-  it('temporarily allows publishing Windows after verifying the signed installer only', () => {
+  it('verifies Windows inner binary signatures fail-open before publishing', () => {
     const releaseWorkflow = readFileSync(
       join(projectDir, '.github/workflows/release-cut.yml'),
       'utf8'
@@ -230,12 +314,38 @@ describe('Electron runtime package contract', () => {
     const steps = parsedWorkflow.jobs.build.steps
     const stepNames = steps.map((step) => step.name)
     const outerVerifyIndex = stepNames.indexOf('Verify signed Windows installer')
-    const innerVerifyIndex = stepNames.indexOf('Verify signed Windows inner executable')
+    const innerVerifyIndex = stepNames.indexOf('Verify Windows inner binary signatures')
+    const evidenceIndex = stepNames.indexOf('Upload Windows inner signing evidence')
     const publishIndex = stepNames.indexOf('Publish signed Windows release artifacts')
 
     expect(outerVerifyIndex).toBeGreaterThan(-1)
-    expect(innerVerifyIndex).toBe(-1)
-    expect(publishIndex).toBe(outerVerifyIndex + 1)
+    expect(innerVerifyIndex).toBe(outerVerifyIndex + 1)
+    expect(evidenceIndex).toBe(innerVerifyIndex + 1)
+    expect(publishIndex).toBe(evidenceIndex + 1)
+
+    // Why fail-open: unsigned inner binaries must warn, not block, until the
+    // flow is proven on a real release (issue #7785). Flip this to 'true'
+    // together with the workflow env to make the gate required.
+    expect(steps[innerVerifyIndex].env.ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED).toBe('false')
+
+    // Why: every step in the inner-signing chain must be unable to fail the
+    // release — a SignPath outage or timeout falls through to today's
+    // unsigned-inner flow instead of blocking the cut.
+    const innerChainStepNames = [
+      'Stage unsigned inner PE files for signing',
+      'Upload unsigned inner binaries for SignPath',
+      'Submit inner binaries signing request',
+      'Notify Slack that inner-binary signing is waiting for approval',
+      'Download signed inner binaries from SignPath',
+      'Restore signed inner binaries into unpacked app',
+      'Replace cached elevate.exe with the signed copy',
+      'Rebuild NSIS installer from signed unpacked app'
+    ]
+    for (const stepName of innerChainStepNames) {
+      const step = steps[stepNames.indexOf(stepName)]
+      expect(step, stepName).toBeDefined()
+      expect(step['continue-on-error'], stepName).toBe(true)
+    }
   })
 
   it('publishes both Linux release matrix entries', () => {
@@ -438,6 +548,9 @@ describe('Electron runtime package contract', () => {
     expect(packageScripts['test:e2e:terminal-rendering-golden']).toContain(
       'terminal-raw-emoji-table-scroll-restore.spec.ts'
     )
+    expect(packageScripts['test:e2e:terminal-rendering-golden']).toContain(
+      'terminal-webgl-atlas-budget.spec.ts'
+    )
     expect(packageScripts['test:e2e:terminal-rendering-golden']).not.toContain(
       'terminal-long-table-scroll-restore.spec.ts'
     )
@@ -451,6 +564,8 @@ describe('Electron runtime package contract', () => {
       expect(runStep?.run).toContain('pnpm run test:e2e:terminal-rendering-golden')
     }
     expect(pullRequestPaths).toContain('tests/e2e/terminal-raw-emoji-table-scroll-restore.spec.ts')
+    expect(pullRequestPaths).toContain('tests/e2e/terminal-webgl-atlas-budget.spec.ts')
+    expect(pullRequestPaths).toContain('config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch')
     expect(pullRequestPaths).toContain('tests/e2e/fixtures/terminal-emoji-table.md')
     expect(pullRequestPaths).toContain('src/renderer/src/lib/pane-manager/**')
     expect(releaseBuildNeeds).not.toContain('terminal-rendering-golden')

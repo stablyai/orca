@@ -29,6 +29,10 @@ export default function TabGroupPanel({
   hasSplitGroups,
   touchesRightEdge,
   touchesLeftEdge,
+  touchesBottomEdge = false,
+  suppressLeftBorder = false,
+  suppressRightBorder = false,
+  suppressBottomBorder = false,
   reserveClosedExplorerToggleSpace,
   reserveCollapsedSidebarHeaderSpace,
   isTabDragActive = false,
@@ -40,6 +44,10 @@ export default function TabGroupPanel({
   hasSplitGroups: boolean
   touchesRightEdge: boolean
   touchesLeftEdge: boolean
+  touchesBottomEdge?: boolean
+  suppressLeftBorder?: boolean
+  suppressRightBorder?: boolean
+  suppressBottomBorder?: boolean
   reserveClosedExplorerToggleSpace: boolean
   reserveCollapsedSidebarHeaderSpace: boolean
   isTabDragActive?: boolean
@@ -205,7 +213,13 @@ export default function TabGroupPanel({
             // border-l/border-r in those spots stacks a second 1px line
             // next to it, reading as a ~2px bar below the drag strip
             // (where the sibling border continues alone above).
-            ` ${touchesLeftEdge ? '' : 'border-l'} ${touchesRightEdge ? '' : 'border-r'} border-border border-b ${isFocused ? 'border-b-accent' : 'opacity-95'}`
+            ` ${
+              touchesLeftEdge || suppressLeftBorder ? '' : 'border-l'
+            } ${touchesRightEdge || suppressRightBorder ? '' : 'border-r'} ${
+              touchesBottomEdge || suppressBottomBorder ? '' : 'border-b'
+            } border-border ${
+              isFocused && !touchesBottomEdge && !suppressBottomBorder ? 'border-b-accent' : ''
+            } ${isFocused ? '' : 'opacity-95'}`
           : ''
       }`}
       onPointerDown={commands.focusGroup}

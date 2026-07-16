@@ -5,6 +5,11 @@ const mockCreateEmptySplitGroup = vi.fn()
 const mockQueueTabStartupCommand = vi.fn()
 const mockSetActiveTabType = vi.fn()
 const mockSetTabBarOrder = vi.fn()
+const runtimeMocks = vi.hoisted(() => ({
+  createWebRuntimeSessionTerminal: vi.fn(),
+  getRuntimeEnvironmentIdForWorktree: vi.fn<() => string | null>(() => null),
+  isWebRuntimeSessionActive: vi.fn(() => false)
+}))
 
 const mockState = {
   createTab: mockCreateTab,
@@ -37,11 +42,23 @@ vi.mock('@/lib/telemetry', () => ({
   tuiAgentToAgentKind: (agent: string) => agent
 }))
 
+vi.mock('@/lib/worktree-runtime-owner', () => ({
+  getRuntimeEnvironmentIdForWorktree: runtimeMocks.getRuntimeEnvironmentIdForWorktree
+}))
+
+vi.mock('@/runtime/web-runtime-session', () => ({
+  createWebRuntimeSessionTerminal: runtimeMocks.createWebRuntimeSessionTerminal,
+  isWebRuntimeSessionActive: runtimeMocks.isWebRuntimeSessionActive
+}))
+
 import { launchAiVaultSessionInNewTab } from './launch-ai-vault-session'
 
 describe('launchAiVaultSessionInNewTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    runtimeMocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue(null)
+    runtimeMocks.isWebRuntimeSessionActive.mockReturnValue(false)
+    runtimeMocks.createWebRuntimeSessionTerminal.mockResolvedValue(true)
     mockState.tabsByWorktree = {}
     mockState.openFiles = []
     mockState.browserTabsByWorktree = {}
@@ -117,5 +134,46 @@ describe('launchAiVaultSessionInNewTab', () => {
 
     expect(mockCreateEmptySplitGroup).toHaveBeenCalledWith('wt-1', 'group-1', 'right')
     expect(mockCreateTab).toHaveBeenCalledWith('wt-1', 'group-new')
+  })
+
+  it('creates runtime-hosted resume terminals through the paired host', async () => {
+    runtimeMocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue('env-1')
+    runtimeMocks.isWebRuntimeSessionActive.mockReturnValue(true)
+
+    const result = launchAiVaultSessionInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      targetGroupId: 'group-1',
+      command: "codex resume 'session-1'",
+      env: { CODEX_PROFILE: 'runtime' },
+      launchConfig: {
+        agentCommand: 'codex',
+        agentArgs: '',
+        agentEnv: { CODEX_PROFILE: 'runtime' }
+      }
+    })
+
+    expect(result.tabId).toBeNull()
+    expect(runtimeMocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      environmentId: 'env-1',
+      targetGroupId: 'group-1',
+      command: "codex resume 'session-1'",
+      env: { CODEX_PROFILE: 'runtime' },
+      launchConfig: {
+        agentCommand: 'codex',
+        agentArgs: '',
+        agentEnv: { CODEX_PROFILE: 'runtime' }
+      },
+      launchAgent: 'codex',
+      activate: true
+    })
+    expect(mockCreateTab).not.toHaveBeenCalled()
+    expect(mockQueueTabStartupCommand).not.toHaveBeenCalled()
+
+    if (result.tabId === null) {
+      await expect(result.runtimeLaunch).resolves.toBe(true)
+    }
+    expect(mockSetActiveTabType).toHaveBeenCalledWith('terminal')
   })
 })

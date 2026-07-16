@@ -5,6 +5,17 @@
 import { ZodError, type ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
 import type { OrcaRuntimeService } from '../orca-runtime'
+import type {
+  DeviceCredentialInstalled,
+  PairingGetEndpointsParams,
+  PairingGetEndpointsResult,
+  PairingProvisionRelayParams
+} from '../../../shared/mobile-relay-credential-contract'
+
+export type PairingRpcContext = {
+  getEndpoints(params: PairingGetEndpointsParams): Promise<PairingGetEndpointsResult>
+  provisionRelay(params: PairingProvisionRelayParams): Promise<DeviceCredentialInstalled>
+}
 
 export type RpcEnvelopeMeta = {
   runtimeId: string
@@ -64,6 +75,7 @@ export type RpcContext = {
   // clients. Carries the paired device's scope so handlers can gate the diet to
   // phones only. Undefined for in-process callers → treat as full-class (no clip).
   clientKind?: 'mobile' | 'runtime'
+  pairing?: PairingRpcContext
   // Why: mobile terminal traffic is byte-oriented and bypasses JSON streaming
   // responses after the binary terminal cutover. Undefined on Unix/socket
   // transports and non-E2EE WebSocket paths.

@@ -9,6 +9,9 @@ import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
+    // Why: subscribe streams register as remote view subscribers for Phase-5
+    // query-authority suppression (terminal-query-authority.md).
+    registerRemoteTerminalViewSubscriber: () => () => {},
     ...overrides
   } as OrcaRuntimeService
 }
@@ -312,6 +315,9 @@ describe('RpcDispatcher streaming', () => {
     )
 
     await vi.waitFor(() => expect(cleanups.has('terminal-1:desktop-1')).toBe(true))
+    // Cleanup now registers before snapshot work so a disconnect cannot orphan
+    // a desktop width floor; wait for the actual exit waiter before resolving it.
+    await vi.waitFor(() => expect(runtime.waitForTerminal).toHaveBeenCalled())
     resolveExit()
     await dispatchPromise
 

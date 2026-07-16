@@ -764,6 +764,29 @@
   height: 2.405em;
 }
 
+/* Heading toggle sizes mirror the plain h2–h4 scales (1.4 / 1.15 / 1em). */
+.rich-markdown-editor details.orca-details[data-orca-toggle='heading-2'] > summary,
+.rich-markdown-editor .orca-details[data-type='details'][data-orca-toggle='heading-2'] summary {
+  font-size: 1.4em;
+  line-height: 1.3;
+}
+
+.rich-markdown-editor .orca-details[data-type='details'][data-orca-toggle='heading-2'] > button {
+  height: 1.82em;
+}
+
+.rich-markdown-editor details.orca-details[data-orca-toggle='heading-3'] > summary,
+.rich-markdown-editor .orca-details[data-type='details'][data-orca-toggle='heading-3'] summary {
+  font-size: 1.15em;
+  line-height: 1.3;
+}
+
+.rich-markdown-editor details.orca-details[data-orca-toggle='heading-4'] > summary,
+.rich-markdown-editor .orca-details[data-type='details'][data-orca-toggle='heading-4'] summary {
+  font-size: 1em;
+  line-height: 1.3;
+}
+
 .rich-markdown-editor blockquote {
   padding: 0.5em 1em;
   border-left: 3px solid var(--border);
@@ -1024,6 +1047,27 @@
 
 .dark .rich-markdown-editor a {
   color: #58a6ff;
+}
+
+.rich-markdown-editor sup[data-rich-markdown-html-superscript-link] {
+  line-height: 0;
+}
+
+.rich-markdown-editor .rich-markdown-html-superscript-link {
+  color: #0969da;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  text-underline-offset: 2px;
+}
+
+.dark .rich-markdown-editor .rich-markdown-html-superscript-link {
+  color: #58a6ff;
+}
+
+.rich-markdown-mod-held
+  .rich-markdown-editor
+  .rich-markdown-html-superscript-link[data-actionable] {
+  cursor: pointer;
 }
 
 .rich-markdown-editor img {
@@ -1381,8 +1425,9 @@
 /* ── Link Bubble ──────────────────────────────────────── */
 
 .rich-markdown-link-bubble {
-  position: absolute;
-  z-index: 30;
+  position: fixed;
+  z-index: 60;
+  -webkit-app-region: no-drag;
   display: flex;
   align-items: center;
   gap: 2px;

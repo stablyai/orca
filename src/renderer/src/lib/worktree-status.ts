@@ -1,4 +1,5 @@
-import { detectAgentStatusFromTitle } from '@/lib/agent-status'
+import { resolveAgentTypeFromTerminalTitle } from '@/components/sidebar/worktree-title-derived-agent-rows'
+import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { resolveRuntimePaneTitleLeafIdFromRoot } from '@/lib/runtime-pane-title-leaf-id'
 import type {
@@ -6,10 +7,12 @@ import type {
   TerminalPaneLayoutNode,
   TerminalTab
 } from '../../../shared/types'
+import type { LiveAgentWorktreeStatus } from './worktree-activity-state'
 
 export type WorktreeStatus = 'active' | 'working' | 'permission' | 'done' | 'inactive'
 
 type WorktreeStatusHeuristicOptions = {
+  liveAgentStatus?: LiveAgentWorktreeStatus
   agentStatusPaneIdsByTabId?: Record<string, ReadonlySet<string>>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
   terminalLayoutRootsByTabId?: Record<string, TerminalPaneLayoutNode | null | undefined>
@@ -49,17 +52,15 @@ export function getWorktreeStatus(
   const hasStatus = (status: 'permission' | 'working'): boolean =>
     liveTabs.some((tab) => tabHasStatus(tab, runtimePaneTitlesByTabId, status, options))
 
-  if (hasStatus('permission')) {
+  if (options.liveAgentStatus === 'permission' || hasStatus('permission')) {
     return 'permission'
   }
-  if (hasStatus('working')) {
+  if (options.liveAgentStatus === 'working' || hasStatus('working')) {
     return 'working'
   }
   if (liveTabs.length > 0 || browserTabs.length > 0) {
     // Why: browser-only worktrees are still active from the user's point of
-    // view even when they have no PTY-backed terminal. The sidebar filter
-    // already treats them as active, so every navigation surface must reuse
-    // that rule instead of showing a misleading inactive dot.
+    // view even when they have no PTY-backed terminal.
     return 'active'
   }
   return 'inactive'
@@ -91,7 +92,7 @@ function tabHasStatus(
       ) {
         continue
       }
-      if (detectAgentStatusFromTitle(title) === status) {
+      if (classifyTitleActivity(title) === status && titleStatusIsAgentAttributable(title)) {
         return true
       }
     }
@@ -103,7 +104,17 @@ function tabHasStatus(
   if (agentStatusPaneIds && agentStatusPaneIds.size > 0) {
     return false
   }
-  return detectAgentStatusFromTitle(tab.title) === status
+  return classifyTitleActivity(tab.title) === status && titleStatusIsAgentAttributable(tab.title)
+}
+
+// Why: the title heuristic is only a fallback — hook-managed agents promote the
+// worktree via hasLiveWorking/hasPermission in resolveWorktreeStatus, not here.
+// A bare braille-spinner title (e.g. an exited agent's never-cleared "⠐ task"
+// frame) classifies as working yet produces no sidebar agent row, spinning the
+// worktree forever with "0 agents". Require the same agent attribution the row
+// builder uses, so a title only spins the dot when it would also show a row.
+function titleStatusIsAgentAttributable(title: string): boolean {
+  return resolveAgentTypeFromTerminalTitle(title) !== null
 }
 
 export function getWorktreeStatusLabel(status: WorktreeStatus): string {

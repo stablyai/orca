@@ -33,4 +33,11 @@ describe('computer-use skill guidance', () => {
     expect(skill).toContain('use `--restore-window` so another window does not cover')
     expect(skill).toContain('trust the tree over potentially occluded pixels')
   })
+
+  it('points JSON users to the public accessibility-tree field', () => {
+    const skill = readFileSync(skillPath, 'utf8')
+
+    expect(skill).toContain('`result.snapshot.treeText`')
+    expect(skill).not.toContain('`result.elements`')
+  })
 })

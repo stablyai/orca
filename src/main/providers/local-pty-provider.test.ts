@@ -9,7 +9,9 @@ const {
   mkdirSyncMock,
   writeFileSyncMock,
   spawnMock,
-  resolveAgentForegroundProcessMock
+  resolveAgentForegroundProcessMock,
+  captureDescendantSnapshotMock,
+  terminateDescendantSnapshotMock
 } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
   statSyncMock: vi.fn(),
@@ -17,7 +19,9 @@ const {
   mkdirSyncMock: vi.fn(),
   writeFileSyncMock: vi.fn(),
   spawnMock: vi.fn(),
-  resolveAgentForegroundProcessMock: vi.fn()
+  resolveAgentForegroundProcessMock: vi.fn(),
+  captureDescendantSnapshotMock: vi.fn(),
+  terminateDescendantSnapshotMock: vi.fn()
 }))
 
 vi.mock('fs', () => ({
@@ -40,6 +44,11 @@ vi.mock('node-pty', () => ({
   spawn: spawnMock
 }))
 
+vi.mock('../pty-descendant-termination', () => ({
+  captureDescendantSnapshot: captureDescendantSnapshotMock,
+  terminateDescendantSnapshot: terminateDescendantSnapshotMock
+}))
+
 // Resolve PowerShell family names to deterministic absolute paths (the fs mock
 // above otherwise makes every probe miss). The real resolver — which skips the
 // Store App Execution Alias stub — is covered in
@@ -58,7 +67,10 @@ vi.mock('./windows-powershell-executable', () => ({
 }))
 
 vi.mock('./agent-foreground-process', () => ({
-  resolveAgentForegroundProcess: resolveAgentForegroundProcessMock
+  resolveAgentForegroundProcessWithAvailability: async (...args: unknown[]) => ({
+    available: true,
+    processName: await resolveAgentForegroundProcessMock(...args)
+  })
 }))
 
 vi.mock('../wsl', () => ({
@@ -81,7 +93,13 @@ vi.mock('../wsl', () => ({
   wslUncDirectoryExists: () => true
 }))
 
-import { LocalPtyProvider } from './local-pty-provider'
+import {
+  _resetLocalPtyProviderStateForTest,
+  LOCAL_PTY_FORCE_KILL_RETRY_MS,
+  LOCAL_PTY_GRACEFUL_FORCE_TIMEOUT_MS,
+  LOCAL_PTY_PHYSICAL_EXIT_TIMEOUT_MS,
+  LocalPtyProvider
+} from './local-pty-provider'
 import { isRootLikePath } from './pty-path-safety'
 import { POWERLEVEL10K_WIZARD_DISABLE_ENV } from '../pty/powerlevel10k-wizard-env'
 
@@ -92,6 +110,8 @@ describe('LocalPtyProvider', () => {
     onExit: ReturnType<typeof vi.fn>
     write: ReturnType<typeof vi.fn>
     resize: ReturnType<typeof vi.fn>
+    pause: ReturnType<typeof vi.fn>
+    resume: ReturnType<typeof vi.fn>
     kill: ReturnType<typeof vi.fn>
     process: string
     pid: number
@@ -118,6 +138,9 @@ describe('LocalPtyProvider', () => {
     accessSyncMock.mockReturnValue(undefined)
     mkdirSyncMock.mockReset()
     writeFileSyncMock.mockReset()
+    captureDescendantSnapshotMock.mockReset()
+    captureDescendantSnapshotMock.mockResolvedValue(null)
+    terminateDescendantSnapshotMock.mockReset()
     resolveAgentForegroundProcessMock.mockReset()
     resolveAgentForegroundProcessMock.mockImplementation(
       async (_pid: number, fallbackProcess: string | null) => fallbackProcess
@@ -138,6 +161,8 @@ describe('LocalPtyProvider', () => {
       }),
       write: vi.fn(),
       resize: vi.fn(),
+      pause: vi.fn(),
+      resume: vi.fn(),
       kill: vi.fn(() => {
         exitCb?.({ exitCode: -1 })
       }),
@@ -150,6 +175,7 @@ describe('LocalPtyProvider', () => {
   })
 
   afterEach(() => {
+    _resetLocalPtyProviderStateForTest()
     if (origPlatform) {
       Object.defineProperty(process, 'platform', origPlatform)
     }
@@ -422,6 +448,48 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
     })
 
+    it('drops stale inherited Git config indices behind a smaller explicit count', async () => {
+      const keys = [
+        'GIT_CONFIG_COUNT',
+        'GIT_CONFIG_KEY_0',
+        'GIT_CONFIG_VALUE_0',
+        'GIT_CONFIG_KEY_1',
+        'GIT_CONFIG_VALUE_1'
+      ] as const
+      const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
+      process.env.GIT_CONFIG_COUNT = '2'
+      process.env.GIT_CONFIG_KEY_0 = 'base.zero'
+      process.env.GIT_CONFIG_VALUE_0 = 'zero'
+      process.env.GIT_CONFIG_KEY_1 = 'base.one'
+      process.env.GIT_CONFIG_VALUE_1 = 'one'
+
+      try {
+        await provider.spawn({
+          cols: 80,
+          rows: 24,
+          env: {
+            GIT_CONFIG_COUNT: '1',
+            GIT_CONFIG_KEY_0: 'override.zero',
+            GIT_CONFIG_VALUE_0: 'override'
+          }
+        })
+
+        const spawnEnv = spawnMock.mock.calls.at(-1)?.[2]?.env as Record<string, string>
+        expect(spawnEnv.GIT_CONFIG_COUNT).toBe('1')
+        expect(spawnEnv.GIT_CONFIG_KEY_0).toBe('override.zero')
+        expect(spawnEnv.GIT_CONFIG_KEY_1).toBeUndefined()
+        expect(spawnEnv.GIT_CONFIG_VALUE_1).toBeUndefined()
+      } finally {
+        for (const key of keys) {
+          if (saved[key] === undefined) {
+            delete process.env[key]
+          } else {
+            process.env[key] = saved[key]
+          }
+        }
+      }
+    })
+
     it('does not inherit AppImage runtime env into Linux PTY shells', async () => {
       const saved = {
         APPIMAGE: process.env.APPIMAGE,
@@ -668,7 +736,8 @@ describe('LocalPtyProvider', () => {
         await provider.spawn({
           cols: 80,
           rows: 24,
-          cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
+          cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
+          env: { ORCA_HERMES_STARTUP_QUERY: 'line one\nline two' }
         })
       } finally {
         if (savedCodexHome === undefined) {
@@ -686,8 +755,12 @@ describe('LocalPtyProvider', () => {
       const spawnCall = spawnMock.mock.calls.at(-1)!
       expect(spawnCall[0]).toBe('wsl.exe')
       expect(spawnCall[2].env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
-      expect(spawnCall[2].env.WSLENV).toBe(
-        'ORCA_TERMINAL_HANDLE/u:POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD'
+      expect(spawnCall[2].env.WSLENV?.split(':')).toEqual(
+        expect.arrayContaining([
+          'ORCA_TERMINAL_HANDLE/u',
+          'ORCA_HERMES_STARTUP_QUERY',
+          POWERLEVEL10K_WIZARD_DISABLE_ENV
+        ])
       )
     })
 
@@ -896,6 +969,39 @@ describe('LocalPtyProvider', () => {
     })
   })
 
+  describe('producer flow control', () => {
+    it('pauses and resumes the node-pty process directly', async () => {
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      provider.pauseProducer(id)
+      expect(mockProc.pause).toHaveBeenCalledTimes(1)
+      provider.resumeProducer(id)
+      expect(mockProc.resume).toHaveBeenCalledTimes(1)
+    })
+
+    it('is a no-op for unknown PTY ids', () => {
+      expect(() => {
+        provider.pauseProducer('nonexistent')
+        provider.resumeProducer('nonexistent')
+      }).not.toThrow()
+      expect(mockProc.pause).not.toHaveBeenCalled()
+      expect(mockProc.resume).not.toHaveBeenCalled()
+    })
+
+    it('swallows node-pty throws from a torn-down PTY', async () => {
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      mockProc.pause.mockImplementation(() => {
+        throw new Error('read EIO')
+      })
+      mockProc.resume.mockImplementation(() => {
+        throw new Error('read EIO')
+      })
+      expect(() => {
+        provider.pauseProducer(id)
+        provider.resumeProducer(id)
+      }).not.toThrow()
+    })
+  })
+
   describe('shutdown', () => {
     it('kills the PTY process', async () => {
       // Why: capture the spy reference before shutdown triggers onExit →
@@ -929,10 +1035,189 @@ describe('LocalPtyProvider', () => {
       })
 
       const { id } = await provider.spawn({ cols: 80, rows: 24 })
-      await provider.shutdown(id, { immediate: true })
+      const shutdown = provider.shutdown(id, { immediate: true })
+      exitCb?.({ exitCode: -1 })
+      await shutdown
 
       expect(killSpy).toHaveBeenCalledTimes(1)
       expect(destroySpy).not.toHaveBeenCalled()
+    })
+
+    it('keeps shutdown and ownership pending until node-pty reports physical exit', async () => {
+      const killSpy = vi.fn()
+      mockProc.kill = killSpy
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      let settled = false
+      const shutdown = provider.shutdown(id, { immediate: true }).finally(() => {
+        settled = true
+      })
+      await Promise.resolve()
+
+      expect(killSpy).toHaveBeenCalledWith('SIGKILL')
+      expect(settled).toBe(false)
+      expect(provider.hasPty(id)).toBe(true)
+      exitCb?.({ exitCode: 137 })
+      await shutdown
+      expect(provider.hasPty(id)).toBe(false)
+    })
+
+    it('keeps physical-exit tracking when orphan cleanup races immediate shutdown', async () => {
+      const killSpy = vi.fn(() => {
+        queueMicrotask(() => exitCb?.({ exitCode: 137 }))
+      })
+      mockProc.kill = killSpy
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      const shutdown = provider.shutdown(id, { immediate: true })
+      expect(provider.killOrphanedPtys(1)).toEqual([{ id }])
+      expect(provider.hasPty(id)).toBe(true)
+
+      await expect(shutdown).resolves.toBeUndefined()
+      expect(killSpy).toHaveBeenCalledTimes(1)
+      expect(provider.hasPty(id)).toBe(false)
+    })
+
+    it('escalates graceful shutdown before orphan cleanup disables the kill handle', async () => {
+      vi.useFakeTimers()
+      try {
+        const killSpy = vi.fn()
+        mockProc.kill = killSpy
+        const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+        const graceful = provider.shutdown(id, { immediate: false })
+        expect(killSpy.mock.calls).toEqual([['SIGTERM']])
+
+        expect(provider.killOrphanedPtys(1)).toEqual([{ id }])
+        expect(killSpy.mock.calls).toEqual([['SIGTERM'], ['SIGKILL']])
+
+        // The original graceful deadline was replaced by the immediate
+        // escalation, so it cannot call the now-neutralized proc.kill later.
+        await vi.advanceTimersByTimeAsync(LOCAL_PTY_GRACEFUL_FORCE_TIMEOUT_MS)
+        expect(killSpy).toHaveBeenCalledTimes(2)
+        exitCb?.({ exitCode: 137 })
+        await graceful
+        expect(provider.hasPty(id)).toBe(false)
+        expect(vi.getTimerCount()).toBe(0)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('escalates a graceful shutdown when destructive cleanup joins it', async () => {
+      const killSpy = vi.fn()
+      mockProc.kill = killSpy
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      const graceful = provider.shutdown(id, { immediate: false })
+      const immediate = provider.shutdown(id, { immediate: true })
+      expect(killSpy.mock.calls).toEqual([['SIGTERM'], ['SIGKILL']])
+
+      exitCb?.({ exitCode: 137 })
+      await Promise.all([graceful, immediate])
+      expect(provider.hasPty(id)).toBe(false)
+    })
+
+    it('force-kills a POSIX PTY that ignores graceful shutdown', async () => {
+      vi.useFakeTimers()
+      try {
+        const killSpy = vi.fn()
+        mockProc.kill = killSpy
+        const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+        const graceful = provider.shutdown(id, { immediate: false })
+        expect(killSpy.mock.calls).toEqual([['SIGTERM']])
+
+        await vi.advanceTimersByTimeAsync(LOCAL_PTY_GRACEFUL_FORCE_TIMEOUT_MS)
+        expect(killSpy.mock.calls).toEqual([['SIGTERM'], ['SIGKILL']])
+        exitCb?.({ exitCode: 137 })
+        await graceful
+        expect(provider.hasPty(id)).toBe(false)
+        expect(vi.getTimerCount()).toBe(0)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('retries a rejected graceful-deadline SIGKILL before the physical timeout', async () => {
+      vi.useFakeTimers()
+      try {
+        let forceAttempts = 0
+        const killSpy = vi.fn((signal: string) => {
+          if (signal === 'SIGKILL' && forceAttempts++ === 0) {
+            throw new Error('transient force-kill failure')
+          }
+        })
+        mockProc.kill = killSpy
+        const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+        const graceful = provider.shutdown(id, { immediate: false })
+        await vi.advanceTimersByTimeAsync(LOCAL_PTY_GRACEFUL_FORCE_TIMEOUT_MS)
+        expect(killSpy.mock.calls).toEqual([['SIGTERM'], ['SIGKILL']])
+        expect(provider.hasPty(id)).toBe(true)
+
+        await vi.advanceTimersByTimeAsync(LOCAL_PTY_FORCE_KILL_RETRY_MS)
+        expect(killSpy.mock.calls).toEqual([['SIGTERM'], ['SIGKILL'], ['SIGKILL']])
+        exitCb?.({ exitCode: 137 })
+        await graceful
+        expect(provider.hasPty(id)).toBe(false)
+        expect(vi.getTimerCount()).toBe(0)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('does not double-kill ConPTY when destructive cleanup joins shutdown', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const killSpy = vi.fn()
+      mockProc.kill = killSpy
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      const graceful = provider.shutdown(id, { immediate: false })
+      const immediate = provider.shutdown(id, { immediate: true })
+      expect(killSpy.mock.calls).toEqual([[]])
+
+      exitCb?.({ exitCode: 137 })
+      await Promise.all([graceful, immediate])
+      expect(killSpy).toHaveBeenCalledTimes(1)
+      expect(provider.hasPty(id)).toBe(false)
+    })
+
+    it('rejects a physical-exit timeout but retains the owner for a successful retry', async () => {
+      vi.useFakeTimers()
+      try {
+        const killSpy = vi.fn()
+        mockProc.kill = killSpy
+        const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+        const shutdown = provider.shutdown(id, { immediate: true })
+        const rejected = expect(shutdown).rejects.toThrow('Timed out waiting for PTY process exit')
+        await vi.advanceTimersByTimeAsync(LOCAL_PTY_PHYSICAL_EXIT_TIMEOUT_MS)
+        await rejected
+        expect(provider.hasPty(id)).toBe(true)
+
+        const retry = provider.shutdown(id, { immediate: true })
+        expect(killSpy).toHaveBeenCalledTimes(1)
+        exitCb?.({ exitCode: 137 })
+        await expect(retry).resolves.toBeUndefined()
+        expect(provider.hasPty(id)).toBe(false)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('propagates kill failure without dropping the physical owner', async () => {
+      mockProc.kill = vi.fn(() => {
+        throw new Error('kill denied')
+      })
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      await expect(provider.shutdown(id, { immediate: true })).rejects.toThrow('kill denied')
+      expect(provider.hasPty(id)).toBe(true)
+
+      mockProc.kill = vi.fn(() => exitCb?.({ exitCode: 137 }))
+      await expect(provider.shutdown(id, { immediate: true })).resolves.toBeUndefined()
+      expect(provider.hasPty(id)).toBe(false)
     })
 
     it('cancels pending shell-ready startup delivery on forced shutdown', async () => {
@@ -953,6 +1238,79 @@ describe('LocalPtyProvider', () => {
     it('is a no-op for unknown PTY ids', async () => {
       await provider.shutdown('nonexistent', { immediate: true })
       expect(mockProc.kill).not.toHaveBeenCalled()
+    })
+
+    it('waits for an in-flight agent shutdown before reusing the same session id', async () => {
+      let resolveSnapshot!: (value: null) => void
+      captureDescendantSnapshotMock.mockReturnValue(
+        new Promise<null>((resolve) => {
+          resolveSnapshot = resolve
+        })
+      )
+      const spawnArgs = {
+        cols: 80,
+        rows: 24,
+        sessionId: 'stable-agent-session',
+        launchAgent: 'claude' as const
+      }
+      const spawnCallsBefore = spawnMock.mock.calls.length
+      const { id } = await provider.spawn(spawnArgs)
+
+      const shutdown = provider.shutdown(id, { immediate: true })
+      const respawn = provider.spawn(spawnArgs)
+      await Promise.resolve()
+      expect(spawnMock).toHaveBeenCalledTimes(spawnCallsBefore + 1)
+
+      resolveSnapshot(null)
+      await shutdown
+      await respawn
+      expect(spawnMock).toHaveBeenCalledTimes(spawnCallsBefore + 2)
+    })
+
+    it('coalesces duplicate shutdown while descendant capture is pending', async () => {
+      let resolveSnapshot!: (value: null) => void
+      captureDescendantSnapshotMock.mockReturnValue(
+        new Promise<null>((resolve) => {
+          resolveSnapshot = resolve
+        })
+      )
+      const { id } = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        launchAgent: 'claude'
+      })
+
+      const first = provider.shutdown(id, { immediate: true })
+      const second = provider.shutdown(id, { immediate: true })
+      expect(captureDescendantSnapshotMock).toHaveBeenCalledOnce()
+      resolveSnapshot(null)
+      await Promise.all([first, second])
+      expect(captureDescendantSnapshotMock).toHaveBeenCalledOnce()
+    })
+
+    it('does not signal a captured tree after the tracked root exits naturally', async () => {
+      let resolveSnapshot!: (value: {
+        rootPgid: number
+        descendants: []
+        capturedAtMs: number
+      }) => void
+      captureDescendantSnapshotMock.mockReturnValue(
+        new Promise((resolve) => {
+          resolveSnapshot = resolve
+        })
+      )
+      const { id } = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        launchAgent: 'claude'
+      })
+
+      const shutdown = provider.shutdown(id, { immediate: true })
+      exitCb?.({ exitCode: 0 })
+      resolveSnapshot({ rootPgid: mockProc.pid, descendants: [], capturedAtMs: Date.now() })
+      await shutdown
+
+      expect(terminateDescendantSnapshotMock).not.toHaveBeenCalled()
     })
   })
 
@@ -1002,6 +1360,24 @@ describe('LocalPtyProvider', () => {
     })
   })
 
+  describe('confirmForegroundProcess', () => {
+    it('drops a delayed result after the PTY exits', async () => {
+      let resolveScan!: (processName: string) => void
+      resolveAgentForegroundProcessMock.mockReturnValue(
+        new Promise<string>((resolve) => {
+          resolveScan = resolve
+        })
+      )
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      const confirmation = provider.confirmForegroundProcess(id)
+      exitCb?.({ exitCode: 0 })
+      resolveScan('droid')
+
+      await expect(confirmation).resolves.toBeNull()
+    })
+  })
+
   describe('event listeners', () => {
     it('notifies data listeners when PTY produces output', async () => {
       const dataHandler = vi.fn()
@@ -1042,13 +1418,14 @@ describe('LocalPtyProvider', () => {
   describe('listProcesses', () => {
     it('returns spawned PTYs', async () => {
       const before = await provider.listProcesses()
-      await provider.spawn({ cols: 80, rows: 24 })
+      await provider.spawn({ cols: 80, rows: 24, cwd: '/tmp/owned-cwd' })
       await provider.spawn({ cols: 80, rows: 24 })
       const after = await provider.listProcesses()
       expect(after.length - before.length).toBe(2)
       const newEntries = after.slice(before.length)
       expect(newEntries[0]).toHaveProperty('id')
       expect(newEntries[0]).toHaveProperty('title', 'zsh')
+      expect(newEntries[0]).toHaveProperty('cwd', '/tmp/owned-cwd')
     })
   })
 
@@ -1124,6 +1501,22 @@ describe('LocalPtyProvider', () => {
 
       expect(killSpy).toHaveBeenCalledTimes(1)
       expect(destroySpy).not.toHaveBeenCalled()
+    })
+
+    it('settles an overlapping shutdown when app quit takes final ownership', async () => {
+      mockProc.kill.mockImplementation(() => undefined)
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      const shutdown = provider.shutdown(id, { immediate: true })
+      let settled = false
+      void shutdown.then(() => {
+        settled = true
+      })
+      await Promise.resolve()
+      expect(settled).toBe(false)
+
+      provider.killAll()
+
+      await expect(shutdown).resolves.toBeUndefined()
     })
   })
 })

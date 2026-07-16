@@ -11,7 +11,10 @@ import {
 } from '../activity/activity-terminal-portal'
 import TerminalPane from './TerminalPane'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
+import { shouldMountBackgroundWorktreeTab } from '../terminal/background-terminal-worktree-mount'
 import { useNativeChatToggleShortcut } from '../native-chat/use-native-chat-toggle-shortcut'
+import { shouldDeferParkedPtyExitTabClose } from './terminal-parked-tab-watchers'
+import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
 
 type TerminalOverlayAssignment = {
   unifiedTabId: string
@@ -58,7 +61,6 @@ type TerminalOverlaySlotProps = {
   activityTerminalPortal: ActivityTerminalPortalTarget | null
   onFocusOwningGroup: ((groupId: string) => void) | undefined
   consumeSuppressedPtyExit: (ptyId: string) => boolean
-  closeTab: (tabId: string) => void
   leaveWorktreeIfEmpty: () => void
 }
 
@@ -75,7 +77,6 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   activityTerminalPortal,
   onFocusOwningGroup,
   consumeSuppressedPtyExit,
-  closeTab,
   leaveWorktreeIfEmpty
 }: TerminalOverlaySlotProps): React.JSX.Element {
   const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
@@ -237,15 +238,22 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
         if (consumeSuppressedPtyExit(ptyId)) {
           return
         }
-        closeTab(terminalTabId)
-        leaveWorktreeIfEmpty()
+        // Why: a parked multi-leaf tab has no PaneManager to promote split
+        // siblings, so closing the tab here would kill them; the reveal
+        // remount handles dead PTYs per leaf instead.
+        if (shouldDeferParkedPtyExitTabClose(terminalTabId, ptyId)) {
+          return
+        }
+        closeTerminalTab(terminalTabId, {
+          reason: 'pty-exit',
+          onClosed: leaveWorktreeIfEmpty
+        })
       }}
       onCloseTab={() => {
         // Why: route through closeTerminalTab (not the raw store closeTab) so a
         // pinned tab hits the confirmation guard. The overlay's direct
         // store.closeTab was the path that closed pinned terminals silently.
-        closeTerminalTab(terminalTabId)
-        leaveWorktreeIfEmpty()
+        closeTerminalTab(terminalTabId, { onClosed: leaveWorktreeIfEmpty })
       }}
     />
   )
@@ -278,12 +286,24 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   worktreeId,
   worktreePath,
   isWorktreeActive,
-  activityTerminalPortals = EMPTY_ACTIVITY_PORTALS
+  coldParkTerminalPanes = false,
+  shouldMeasureHiddenWorktree = false,
+  activityTerminalPortals = EMPTY_ACTIVITY_PORTALS,
+  backgroundMountTabIds = null,
+  activationDeferredMountTabIds = null
 }: {
   worktreeId: string
   worktreePath: string
   isWorktreeActive: boolean
+  coldParkTerminalPanes?: boolean
+  shouldMeasureHiddenWorktree?: boolean
   activityTerminalPortals?: ActivityTerminalPortalTarget[]
+  /** Non-null for targeted background mounts: only these terminal tabs get a
+   *  TerminalPane, so waking one slept agent does not connect every saved tab. */
+  backgroundMountTabIds?: ReadonlySet<string> | null
+  /** Only cold-activation deferred tabs receive immediate parked watcher
+   *  coverage; targeted mounts keep their existing delayed parking policy. */
+  activationDeferredMountTabIds?: ReadonlySet<string> | null
 }): React.JSX.Element | null {
   const { terminalTabs, unifiedTabs, groups, activeGroupId } = useAppStore(
     useShallow((state) => ({
@@ -295,7 +315,6 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   )
   const focusGroup = useAppStore((state) => state.focusGroup)
   const consumeSuppressedPtyExit = useAppStore((state) => state.consumeSuppressedPtyExit)
-  const closeTab = useAppStore((state) => state.closeTab)
   const setActiveWorktree = useAppStore((state) => state.setActiveWorktree)
   const reconcileWorktreeTabModel = useAppStore((state) => state.reconcileWorktreeTabModel)
 
@@ -304,9 +323,8 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   // Why: legacy TabGroupPanel routed terminal closes through
   // commands.closeItem → leaveWorktreeIfEmpty, which deselected the worktree
   // when the last renderable tab closed and sent the user back to Landing.
-  // The overlay layer calls store.closeTab directly, so replicate that
-  // post-close check here; otherwise closing the last terminal leaves an
-  // empty TabGroupPanel body selected.
+  // Run this only after the guarded close resolves; a pending/cancelled pinned
+  // close must leave the worktree and paired-web mirror selected.
   const leaveWorktreeIfEmpty = useCallback(() => {
     const state = useAppStore.getState()
     if (state.activeWorktreeId !== worktreeId) {
@@ -346,40 +364,59 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
     return entries
   }, [groupActiveTabById, unifiedTabs])
 
+  const parkedTerminalTabIds = useTerminalTabColdParking({
+    worktreeId,
+    terminalTabs,
+    assignments,
+    isWorktreeActive,
+    coldParkTerminalPanes,
+    shouldMeasureHiddenWorktree,
+    activityTerminalPortals,
+    activationDeferredMountTabIds
+  })
+
   if (!worktreePath) {
     return null
   }
 
   return (
     <>
-      {terminalTabs.map((terminalTab) => {
-        const assignment = assignments.get(terminalTab.id)
-        const isVisible = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
-        const isActive = Boolean(isVisible && assignment && assignment.groupId === activeGroupId)
-        const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
-          worktreeId,
-          tabId: terminalTab.id
-        })
-        return (
-          <TerminalOverlaySlot
-            key={terminalTab.id}
-            terminalTabId={terminalTab.id}
-            terminalGeneration={terminalTab.generation}
-            worktreeId={worktreeId}
-            worktreePath={worktreePath}
-            startupCwd={terminalTab.startupCwd}
-            groupId={assignment?.groupId}
-            isWorktreeActive={isWorktreeActive}
-            isVisible={isVisible}
-            isActive={isActive}
-            activityTerminalPortal={activityTerminalPortal}
-            onFocusOwningGroup={focusOwningGroup}
-            consumeSuppressedPtyExit={consumeSuppressedPtyExit}
-            closeTab={closeTab}
-            leaveWorktreeIfEmpty={leaveWorktreeIfEmpty}
-          />
+      {terminalTabs
+        .filter((terminalTab) =>
+          shouldMountBackgroundWorktreeTab(backgroundMountTabIds, terminalTab.id)
         )
-      })}
+        .map((terminalTab) => {
+          const assignment = assignments.get(terminalTab.id)
+          const isVisible = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
+          const isActive = Boolean(isVisible && assignment && assignment.groupId === activeGroupId)
+          const activityTerminalPortal = findActivityTerminalPortal(activityTerminalPortals, {
+            worktreeId,
+            tabId: terminalTab.id
+          })
+          // Why: parking unmounts only the view; the parked watcher owns exit
+          // and side-effect handling until this tab is eligible to remount.
+          if (parkedTerminalTabIds.has(terminalTab.id)) {
+            return null
+          }
+          return (
+            <TerminalOverlaySlot
+              key={terminalTab.id}
+              terminalTabId={terminalTab.id}
+              terminalGeneration={terminalTab.generation}
+              worktreeId={worktreeId}
+              worktreePath={worktreePath}
+              startupCwd={terminalTab.startupCwd}
+              groupId={assignment?.groupId}
+              isWorktreeActive={isWorktreeActive}
+              isVisible={isVisible}
+              isActive={isActive}
+              activityTerminalPortal={activityTerminalPortal}
+              onFocusOwningGroup={focusOwningGroup}
+              consumeSuppressedPtyExit={consumeSuppressedPtyExit}
+              leaveWorktreeIfEmpty={leaveWorktreeIfEmpty}
+            />
+          )
+        })}
     </>
   )
 })

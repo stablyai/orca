@@ -37,6 +37,7 @@ export type RuntimeReadableFileContent = {
   isBinary: boolean
   isImage?: boolean
   mimeType?: string
+  fileIdentity?: string
 }
 
 export type RuntimeFileReadArgs = {
@@ -45,6 +46,7 @@ export type RuntimeFileReadArgs = {
   relativePath?: string
   worktreeId?: string
   connectionId?: string
+  includeLocalLogMetadata?: boolean
 }
 
 export type RuntimeFileOperationArgs = {
@@ -97,12 +99,18 @@ type RuntimeImportResult =
     }
 
 type RuntimeFileWatchEvent =
+  | { type: 'starting'; subscriptionId: string }
   | { type: 'ready'; subscriptionId: string }
   | { type: 'changed'; worktree: string; events: FsChangedPayload['events'] }
+  | { type: 'error'; message: string }
   | { type: 'end' }
 
 const REMOTE_UPLOAD_BASE64_CHUNK_CHARS = 512 * 1024
 const REMOTE_DOWNLOAD_CHUNK_BYTES = 384 * 1024
+const REMOTE_DOWNLOAD_UPDATE_REQUIRED_MESSAGE =
+  'Remote file download requires a newer Orca server. Update the headless server and try again.'
+
+type RemoteFileDownloadArgs = NonNullable<ReturnType<typeof getRemoteFileArgs>>
 
 type RuntimeFileWatchListener = {
   onPayload: (payload: FsChangedPayload) => void
@@ -143,14 +151,15 @@ export async function readRuntimeFileContent({
   filePath,
   relativePath,
   worktreeId,
-  connectionId
+  connectionId,
+  includeLocalLogMetadata
 }: RuntimeFileReadArgs): Promise<RuntimeReadableFileContent> {
   const target = getActiveRuntimeTarget(settings)
   if (target.kind !== 'environment') {
-    return window.api.fs.readFile({ filePath, connectionId })
+    return window.api.fs.readFile({ filePath, connectionId, includeLocalLogMetadata })
   }
   if (!worktreeId) {
-    return window.api.fs.readFile({ filePath, connectionId })
+    return window.api.fs.readFile({ filePath, connectionId, includeLocalLogMetadata })
   }
   if (!canReadRelativeRuntimeFile(relativePath)) {
     throw new Error('Remote file is outside the owning runtime worktree')
@@ -227,6 +236,10 @@ export async function downloadRuntimeFile(
     })
   }
 
+  if (!(await remoteChunkedDownloadAvailable(remoteArgs))) {
+    return downloadRemoteFileViaPreview(remoteArgs, suggestedName)
+  }
+
   const download = await window.api.fs.startDownloadedFile({ suggestedName })
   if (download.canceled) {
     return download
@@ -236,17 +249,7 @@ export async function downloadRuntimeFile(
   try {
     let offset = 0
     for (;;) {
-      const chunk = await callRuntimeRpc<RuntimeFileReadChunkResult>(
-        remoteArgs.target,
-        'files.readChunk',
-        {
-          worktree: remoteArgs.worktreeSelector,
-          relativePath: remoteArgs.relativePath,
-          offset,
-          length: REMOTE_DOWNLOAD_CHUNK_BYTES
-        },
-        { timeoutMs: 60_000 }
-      )
+      const chunk = await readRemoteDownloadChunk(remoteArgs, offset)
       if (chunk.bytesRead > 0) {
         await window.api.fs.appendDownloadedFileChunk({
           transferId: download.transferId,
@@ -269,6 +272,89 @@ export async function downloadRuntimeFile(
       await window.api.fs.cancelDownloadedFile({ transferId: download.transferId }).catch(() => {})
     }
   }
+}
+
+async function remoteChunkedDownloadAvailable(
+  remoteArgs: RemoteFileDownloadArgs
+): Promise<boolean> {
+  try {
+    await callRuntimeRpc<RuntimeFileReadChunkResult>(
+      remoteArgs.target,
+      'files.readChunk',
+      {
+        worktree: remoteArgs.worktreeSelector,
+        relativePath: remoteArgs.relativePath,
+        offset: 0,
+        length: 1
+      },
+      { timeoutMs: 60_000 }
+    )
+    return true
+  } catch (error) {
+    // Why: compatible older headless servers may lack chunked downloads while
+    // still supporting preview-sized file reads that can complete the request.
+    if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
+      return false
+    }
+    throw error
+  }
+}
+
+async function readRemoteDownloadChunk(
+  remoteArgs: RemoteFileDownloadArgs,
+  offset: number
+): Promise<RuntimeFileReadChunkResult> {
+  return callRuntimeRpc<RuntimeFileReadChunkResult>(
+    remoteArgs.target,
+    'files.readChunk',
+    {
+      worktree: remoteArgs.worktreeSelector,
+      relativePath: remoteArgs.relativePath,
+      offset,
+      length: REMOTE_DOWNLOAD_CHUNK_BYTES
+    },
+    { timeoutMs: 60_000 }
+  )
+}
+
+async function downloadRemoteFileViaPreview(
+  remoteArgs: RemoteFileDownloadArgs,
+  suggestedName: string
+): Promise<RuntimeFileDownloadResult> {
+  try {
+    const result = await callRuntimeRpc<RuntimeFilePreviewResult>(
+      remoteArgs.target,
+      'files.readPreview',
+      { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath },
+      { timeoutMs: 15_000 }
+    )
+    // Why: old servers use an empty, metadata-free binary result to signal an
+    // unsupported binary; recognized zero-byte previews are still complete.
+    if (result.isBinary && !result.content && !result.isImage && !result.mimeType) {
+      throw new Error(REMOTE_DOWNLOAD_UPDATE_REQUIRED_MESSAGE)
+    }
+    return window.api.fs.saveDownloadedFile({
+      suggestedName,
+      content: result.content,
+      encoding: result.isBinary ? 'base64' : 'utf8'
+    })
+  } catch (error) {
+    if (isUnsupportedRemotePreviewDownload(error)) {
+      throw new Error(REMOTE_DOWNLOAD_UPDATE_REQUIRED_MESSAGE)
+    }
+    throw error
+  }
+}
+
+function isUnsupportedRemotePreviewDownload(error: unknown): boolean {
+  if (!(error instanceof RuntimeRpcCallError)) {
+    return false
+  }
+  return (
+    error.code === 'method_not_found' ||
+    (error.code === 'runtime_error' &&
+      (error.message === 'file_too_large' || error.message === 'binary_file'))
+  )
 }
 
 export async function readRuntimeDirectory(
@@ -654,14 +740,15 @@ export async function searchRuntimeFiles(
 
 export async function listRuntimeFiles(
   context: RuntimeFileOperationArgs,
-  args: { rootPath: string; excludePaths?: string[] }
+  args: { rootPath: string; excludePaths?: string[]; requestToken?: string }
 ): Promise<string[]> {
   const target = getActiveRuntimeTarget(context.settings)
   if (target.kind !== 'environment' || !context.worktreeId) {
     return window.api.fs.listFiles({
       rootPath: args.rootPath,
       connectionId: context.connectionId,
-      excludePaths: args.excludePaths
+      excludePaths: args.excludePaths,
+      requestToken: args.requestToken
     })
   }
   return callRuntimeRpc<string[]>(
@@ -673,6 +760,24 @@ export async function listRuntimeFiles(
     },
     { timeoutMs: 15_000 }
   )
+}
+
+/**
+ * Best-effort abort of an in-flight listRuntimeFiles call (#7721). Switching
+ * workspaces must stop the previous workspace's full-tree scan — over SSH an
+ * abandoned scan keeps loading the relay and starves fs.readDir/fs.stat.
+ */
+export function cancelRuntimeFileList(
+  context: RuntimeFileOperationArgs,
+  requestToken: string
+): void {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind !== 'environment' || !context.worktreeId) {
+    void window.api.fs.cancelListFiles({ requestToken }).catch(() => {
+      /* cancellation is advisory; the request path has its own timeouts */
+    })
+  }
+  // Environment runtimes bound files.listAll with their own RPC timeout.
 }
 
 export async function listRuntimeMarkdownDocuments(
@@ -783,10 +888,10 @@ function createSharedRuntimeFileWatch(
       },
       {
         onResponse: (response) => {
-          handleSharedRuntimeFileWatchResponse(shared, worktreePath, response)
+          handleSharedRuntimeFileWatchResponse(key, shared, worktreePath, response)
         },
         onError: (error) => {
-          notifySharedRuntimeFileWatchError(shared, new Error(error.message))
+          failSharedRuntimeFileWatch(key, shared, new Error(error.message))
         },
         onClose: () => {
           if (sharedRuntimeFileWatches.get(key) === shared) {
@@ -808,17 +913,14 @@ function createSharedRuntimeFileWatch(
       }
     })
     .catch((err) => {
-      if (sharedRuntimeFileWatches.get(key) === shared) {
-        sharedRuntimeFileWatches.delete(key)
-      }
-      shared.closed = true
-      notifySharedRuntimeFileWatchError(shared, err instanceof Error ? err : new Error(String(err)))
+      failSharedRuntimeFileWatch(key, shared, err instanceof Error ? err : new Error(String(err)))
       throw err
     })
   return shared
 }
 
 function handleSharedRuntimeFileWatchResponse(
+  key: string,
   shared: SharedRuntimeFileWatch,
   worktreePath: string,
   response: unknown
@@ -827,7 +929,7 @@ function handleSharedRuntimeFileWatchResponse(
     const event = unwrapRuntimeRpcResult<RuntimeFileWatchEvent>(
       response as RuntimeRpcResponse<RuntimeFileWatchEvent>
     )
-    if (event.type === 'ready') {
+    if (event.type === 'starting' || event.type === 'ready') {
       shared.remoteSubscriptionId = event.subscriptionId
       if (shared.closed) {
         shared.unsubscribe?.()
@@ -840,14 +942,44 @@ function handleSharedRuntimeFileWatchResponse(
       for (const listener of Array.from(shared.listeners)) {
         listener.onPayload({ worktreePath, events: event.events })
       }
+    } else if (event.type === 'error') {
+      // Why: error listeners may synchronously retry. Evict the terminal watch
+      // before callbacks run so the retry cannot join a stream awaiting `end`.
+      failSharedRuntimeFileWatch(key, shared, new Error(event.message))
+    } else if (event.type === 'end') {
+      // Why: shared-control completes without onClose; evict and release its
+      // transport handle so later listeners start cleanly without retained state.
+      if (sharedRuntimeFileWatches.get(key) === shared) {
+        sharedRuntimeFileWatches.delete(key)
+      }
+      shared.closed = true
+      const unsubscribe = shared.unsubscribe
+      shared.unsubscribe = null
+      shared.remoteSubscriptionId = null
+      shared.listeners.clear()
+      unsubscribe?.()
     }
   } catch (err) {
-    notifySharedRuntimeFileWatchError(shared, err instanceof Error ? err : new Error(String(err)))
+    failSharedRuntimeFileWatch(key, shared, err instanceof Error ? err : new Error(String(err)))
   }
 }
 
-function notifySharedRuntimeFileWatchError(shared: SharedRuntimeFileWatch, error: Error): void {
-  for (const listener of Array.from(shared.listeners)) {
+function failSharedRuntimeFileWatch(
+  key: string,
+  shared: SharedRuntimeFileWatch,
+  error: Error
+): void {
+  if (sharedRuntimeFileWatches.get(key) === shared) {
+    sharedRuntimeFileWatches.delete(key)
+  }
+  shared.closed = true
+  shared.remoteSubscriptionId = null
+  const unsubscribe = shared.unsubscribe
+  shared.unsubscribe = null
+  const listeners = Array.from(shared.listeners)
+  shared.listeners.clear()
+  unsubscribe?.()
+  for (const listener of listeners) {
     listener.onError?.(error)
   }
 }
@@ -860,7 +992,7 @@ function closeSharedRuntimeFileWatch(key: string, shared: SharedRuntimeFileWatch
   sharedRuntimeFileWatches.delete(key)
   if (shared.keepStreamUntilReady) {
     // Why: WebRuntimeClient owns shared-socket file-watch cleanup, including
-    // pre-ready fallback timers and late-ready files.unwatch.
+    // pre-ready cancellation ownership and late-ready files.unwatch.
     shared.unsubscribe?.()
     shared.unsubscribe = null
     return

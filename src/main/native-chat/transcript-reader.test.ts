@@ -87,6 +87,74 @@ describe('readNativeChatTranscript (claude)', () => {
     expect(toolResult?.blocks[0]).toEqual({ type: 'tool-result', output: 'file-a\nfile-b' })
   })
 
+  it('drops structurally marked injected user turns but keeps their tool results', async () => {
+    const filePath = await writeFixture('orca-native-chat-claude-meta-', [
+      {
+        type: 'user',
+        uuid: 'u-real',
+        timestamp: '2026-06-01T10:00:00.000Z',
+        message: { role: 'user', content: 'fix the login bug' }
+      },
+      {
+        type: 'user',
+        uuid: 'u-meta',
+        isMeta: true,
+        timestamp: '2026-06-01T10:00:01.000Z',
+        message: {
+          role: 'user',
+          content: 'Another Claude session sent a message:\n<agent-message from="reviewer">hi'
+        }
+      },
+      {
+        type: 'user',
+        uuid: 'u-compact',
+        isCompactSummary: true,
+        timestamp: '2026-06-01T10:00:02.000Z',
+        message: {
+          role: 'user',
+          content: 'This session is being continued from a previous conversation.'
+        }
+      },
+      {
+        type: 'user',
+        uuid: 'u-meta-toolresult',
+        isMeta: true,
+        timestamp: '2026-06-01T10:00:03.000Z',
+        message: {
+          role: 'user',
+          content: [{ type: 'tool_result', content: 'ok', is_error: false }]
+        }
+      },
+      {
+        type: 'user',
+        uuid: 'u-meta-mixed',
+        isMeta: true,
+        timestamp: '2026-06-01T10:00:04.000Z',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'text', text: '<system-reminder>hidden machinery' },
+            { type: 'tool_result', content: 'mixed result', is_error: false }
+          ]
+        }
+      }
+    ])
+    const result = await readNativeChatTranscript('claude', 'sess', { filePath })
+    if (!('messages' in result)) {
+      throw new Error('expected messages')
+    }
+    expect(result.messages.map((m) => m.id)).toEqual([
+      'u-real',
+      'u-meta-toolresult',
+      'u-meta-mixed'
+    ])
+    expect(result.messages[1].role).toBe('tool')
+    expect(result.messages[2]).toMatchObject({
+      role: 'tool',
+      blocks: [{ type: 'tool-result', output: 'mixed result' }]
+    })
+  })
+
   it('marks thinking-only assistant content as a reasoning surface', async () => {
     const filePath = await writeFixture('orca-native-chat-claude-think-', [
       {
@@ -174,19 +242,41 @@ describe('readNativeChatTranscript (codex)', () => {
 })
 
 describe('readNativeChatTranscript (errors)', () => {
-  it('returns an error for an unreadable/missing file without throwing', async () => {
+  // Why: ENOENT after a successful resolve is the same first-flush/rotation
+  // race as an unresolved path (#8401) — it must stay retry-worthy.
+  it('marks an ENOENT on a directly-passed path as notFound (vanished after resolve)', async () => {
     const result = await readNativeChatTranscript('claude', 'sess', {
       filePath: join(tmpdir(), 'orca-native-chat-does-not-exist.jsonl')
     })
     expect('error' in result).toBe(true)
+    if ('error' in result) {
+      expect(result.notFound).toBe(true)
+    }
   })
 
-  it('returns an error when no transcript can be resolved', async () => {
+  it('returns a real read error (no notFound) when the path exists but is unreadable', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-unreadable-'))
+    tempRoots.push(root)
+    // A directory instead of a file fails the read with a non-ENOENT error.
+    const result = await readNativeChatTranscript('claude', 'sess', { filePath: root })
+    expect('error' in result).toBe(true)
+    if ('error' in result) {
+      expect(result.notFound).toBeUndefined()
+    }
+  })
+
+  // Why: a just-created Claude Code session's transcript can take up to minutes
+  // to exist on disk (#8401) — the miss must be marked retry-worthy so callers
+  // above (cache, watch, renderer) don't settle into a permanent error.
+  it('marks an unresolved session as notFound so callers know to retry', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-noresolve-'))
     tempRoots.push(root)
     const result = await readNativeChatTranscript('claude', 'missing', {
       claudeProjectsDir: join(root, 'empty')
     })
     expect('error' in result).toBe(true)
+    if ('error' in result) {
+      expect(result.notFound).toBe(true)
+    }
   })
 })

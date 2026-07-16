@@ -34,11 +34,12 @@ function makeEntry(options?: {
   } as unknown as LinearClientForWorkspace
 }
 
-function rawIssue(id: string, updatedAt = '2026-01-01T00:00:00.000Z') {
+function rawIssue(id: string, updatedAt = '2026-01-01T00:00:00.000Z', branchName?: string | null) {
   return {
     id,
     identifier: id,
     title: id,
+    branchName,
     description: 'Description',
     url: `https://linear.app/${id}`,
     estimate: 3,
@@ -120,6 +121,17 @@ describe('Linear issue queries', () => {
     expect(rawRequest.mock.calls[0][0]).toContain('estimate')
   })
 
+  it('maps Linear branch names from raw issue reads', async () => {
+    rawRequest.mockResolvedValueOnce({
+      data: { issues: { nodes: [rawIssue('LIN-1', undefined, 'team/lin-1-fix')] } }
+    })
+    const { listIssues } = await import('./issues')
+
+    await expect(listIssues('all', 10, 'workspace-1')).resolves.toMatchObject({
+      items: [{ branchName: 'team/lin-1-fix' }]
+    })
+  })
+
   it('fetches issue comments with one request (no per-comment user N+1)', async () => {
     rawRequest.mockResolvedValueOnce({
       data: {
@@ -188,7 +200,9 @@ describe('Linear issue queries', () => {
     })
     const { listIssues } = await import('./issues')
 
-    await expect(listIssues('open', 10, 'workspace-1', 'team-1')).resolves.toMatchObject({
+    await expect(
+      listIssues('open', 10, 'workspace-1', { teamId: 'team-1' })
+    ).resolves.toMatchObject({
       items: [{ id: 'LIN-1' }],
       hasMore: false
     })
@@ -200,6 +214,48 @@ describe('Linear issue queries', () => {
         team: { id: { eq: 'team-1' } }
       }
     })
+  })
+
+  it('passes attribute facets into Linear GraphQL variables before pagination', async () => {
+    rawRequest.mockResolvedValueOnce({
+      data: { issues: { nodes: [rawIssue('LIN-1')], pageInfo: { hasNextPage: false } } }
+    })
+    const { listIssues } = await import('./issues')
+
+    await expect(
+      listIssues('all', 10, 'workspace-1', {
+        attributeFilter: {
+          stateIds: ['state-1'],
+          priorities: [0, 1],
+          assignee: { kind: 'unassigned' },
+          labelIds: ['label-1']
+        }
+      })
+    ).resolves.toMatchObject({ items: [{ id: 'LIN-1' }] })
+
+    expect(rawRequest.mock.calls[0][1]).toMatchObject({
+      filter: {
+        state: { id: { in: ['state-1'] } },
+        priority: { in: [0, 1] },
+        assignee: { null: true },
+        labels: { some: { id: { in: ['label-1'] } } }
+      }
+    })
+  })
+
+  it('rejects non-empty attribute filters when workspace scope is all', async () => {
+    const { listIssues } = await import('./issues')
+    await expect(
+      listIssues('all', 10, 'all', {
+        attributeFilter: {
+          stateIds: ['state-1'],
+          priorities: [],
+          assignee: null,
+          labelIds: []
+        }
+      })
+    ).rejects.toThrow(/concrete workspace/i)
+    expect(getClients).not.toHaveBeenCalled()
   })
 
   it('keeps single-workspace search results in Linear relevance order', async () => {

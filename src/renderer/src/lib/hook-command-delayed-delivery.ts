@@ -33,7 +33,31 @@ function ensurePendingHookCommandSubscription(): void {
   if (unsubscribePendingHookCommandDeliveries) {
     return
   }
-  unsubscribePendingHookCommandDeliveries = useAppStore.subscribe(() => {
+  const initial = useAppStore.getState()
+  // Capture references so unrelated PTY/status updates do not rescan every
+  // runtime worktree waiting for its first mirrored terminal tab.
+  let previousTabsByWorktree = initial.tabsByWorktree
+  let previousWorktreesByRepo = initial.worktreesByRepo
+  let previousDetectedWorktreesByRepo = initial.detectedWorktreesByRepo
+  let previousFolderWorkspaces = initial.folderWorkspaces
+  let previousWorktreeLookup = initial.getKnownWorktreeById
+  unsubscribePendingHookCommandDeliveries = useAppStore.subscribe((state) => {
+    // Why: only these slices (or the test-adapter lookup itself) can change
+    // whether a pending worktree exists or has received its first tab.
+    if (
+      state.tabsByWorktree === previousTabsByWorktree &&
+      state.worktreesByRepo === previousWorktreesByRepo &&
+      state.detectedWorktreesByRepo === previousDetectedWorktreesByRepo &&
+      state.folderWorkspaces === previousFolderWorkspaces &&
+      state.getKnownWorktreeById === previousWorktreeLookup
+    ) {
+      return
+    }
+    previousTabsByWorktree = state.tabsByWorktree
+    previousWorktreesByRepo = state.worktreesByRepo
+    previousDetectedWorktreesByRepo = state.detectedWorktreesByRepo
+    previousFolderWorkspaces = state.folderWorkspaces
+    previousWorktreeLookup = state.getKnownWorktreeById
     flushPendingHookCommandDeliveries()
   })
 }

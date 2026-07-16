@@ -15,7 +15,7 @@ import { resolveProcessCwd } from './process-cwd'
 import { existsSync } from 'node:fs'
 import * as pty from 'node-pty'
 import { parseWslPath, isWslAvailable } from '../wsl'
-import { splitWorktreeId } from '../../shared/worktree-id'
+import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
 import {
   injectHistoryEnv,
   updateHistFileForFallback,
@@ -51,11 +51,20 @@ import {
   resolveWindowsGitBashShellPath
 } from '../git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
-import { resolveAgentForegroundProcess } from './agent-foreground-process'
+import { resolveAgentForegroundProcessWithAvailability } from './agent-foreground-process'
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+import {
+  captureDescendantSnapshot,
+  terminateDescendantSnapshot
+} from '../pty-descendant-termination'
+import { readWindowsConptyProcessIds } from './windows-conpty-process-membership'
+import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from './pty-default-cwd'
+import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
+import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
+import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -66,15 +75,36 @@ const PANE_IDENTITY_ENV_KEYS = [
 
 let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()
+// Why: only agent sessions get descendant tree-kill on shutdown. Agent CLIs
+// spawn tool children in detached process groups the PTY's SIGHUP can never
+// reach; plain user terminals keep classic semantics where deliberately
+// detached (nohup-style) children survive the pane.
+const ptyAgentSessionIds = new Set<string>()
+// Why: descendant capture is async. Reattach and duplicate shutdown must wait
+// for the original owner instead of returning a PTY that is about to die.
+type PtyShutdownOperation = {
+  promise: Promise<void>
+  immediate: boolean
+  rootSignalled: boolean
+  proc: pty.IPty
+}
+const ptyShutdownOperations = new Map<string, PtyShutdownOperation>()
 const ptyShellName = new Map<string, string>()
 const ptyAgentForegroundContextPaths = new Map<string, string[]>()
 const ptyTerminalHandle = new Map<string, string>()
-// Why: node-pty's onData/onExit register native NAPI ThreadSafeFunction
-// callbacks. If the PTY is killed without disposing these listeners, the
-// stale callbacks survive into node::FreeEnvironment() where NAPI attempts
-// to invoke/clean them up on a destroyed environment, triggering a SIGABRT.
+const ptyInitialCwd = new Map<string, string>()
+// Why: node-pty callbacks must be disposed before environment teardown, but
+// onExit separately owns physical process-exit proof during termination.
 const ptyDisposables = new Map<string, { dispose: () => void }[]>()
+const ptyExitDisposables = new Map<string, { dispose: () => void }>()
 const ptyCleanupCallbacks = new Map<string, () => void>()
+const ptyTerminationMode = new Map<string, 'graceful' | 'force'>()
+const ptyPhysicalExits = new Map<string, PhysicalExitTracker>()
+const ptyForceKillTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+export const LOCAL_PTY_PHYSICAL_EXIT_TIMEOUT_MS = 8_000
+export const LOCAL_PTY_GRACEFUL_FORCE_TIMEOUT_MS = 5_000
+export const LOCAL_PTY_FORCE_KILL_RETRY_MS = 250
 
 let loadGeneration = 0
 const ptyLoadGeneration = new Map<string, number>()
@@ -137,6 +167,19 @@ function disposePtyListeners(id: string): void {
   }
 }
 
+function disposePtyExitListener(id: string): void {
+  ptyExitDisposables.get(id)?.dispose()
+  ptyExitDisposables.delete(id)
+}
+
+function clearLocalPtyForceKillTimer(id: string): void {
+  const timer = ptyForceKillTimers.get(id)
+  if (timer) {
+    clearTimeout(timer)
+    ptyForceKillTimers.delete(id)
+  }
+}
+
 function runPtyCleanup(id: string): void {
   const cleanup = ptyCleanupCallbacks.get(id)
   if (!cleanup) {
@@ -152,7 +195,11 @@ function runPtyCleanup(id: string): void {
 function getWslContextFromWorktreeId(
   worktreeId: string | undefined
 ): { distro: string; treatPosixCwdAsWsl: true } | undefined {
-  const worktreePath = worktreeId ? splitWorktreeId(worktreeId)?.worktreePath : undefined
+  // Why: strip any synthetic `::workspace:<uuid>` folder-workspace suffix so WSL
+  // detection parses the real path, not a nonexistent identifier.
+  const worktreePath = worktreeId
+    ? splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
+    : undefined
   const wslInfo = worktreePath ? parseWslPath(worktreePath) : null
   return wslInfo ? { distro: wslInfo.distro, treatPosixCwdAsWsl: true } : undefined
 }
@@ -171,13 +218,79 @@ function getWslContextFromPreferredDistro(
  * Removes all local tracking state for a PTY id after teardown.
  */
 function clearPtyState(id: string): void {
+  clearLocalPtyForceKillTimer(id)
   runPtyCleanup(id)
   disposePtyListeners(id)
+  disposePtyExitListener(id)
   ptyProcesses.delete(id)
+  ptyAgentSessionIds.delete(id)
   ptyShellName.delete(id)
   ptyAgentForegroundContextPaths.delete(id)
   ptyTerminalHandle.delete(id)
+  ptyInitialCwd.delete(id)
   ptyLoadGeneration.delete(id)
+  ptyTerminationMode.delete(id)
+  ptyPhysicalExits.delete(id)
+}
+
+function createPtyPhysicalExit(id: string): void {
+  ptyPhysicalExits.set(id, new PhysicalExitTracker())
+}
+
+function waitForPtyPhysicalExit(id: string, physicalExit?: PhysicalExitTracker): Promise<void> {
+  if (!physicalExit) {
+    return Promise.reject(new Error(`PTY "${id}" exit tracking unavailable`))
+  }
+  return physicalExit.waitForExit(
+    LOCAL_PTY_PHYSICAL_EXIT_TIMEOUT_MS,
+    () => new Error(`Timed out waiting for PTY process exit: ${id}`)
+  )
+}
+
+function killLocalPtyProcess(proc: pty.IPty, immediate: boolean): void {
+  if (process.platform === 'win32') {
+    proc.kill()
+    return
+  }
+  if (!immediate) {
+    proc.kill('SIGTERM')
+    return
+  }
+  forceKillPosixPtyProcessGroups(proc.pid, () => proc.kill('SIGKILL'))
+}
+
+function armLocalPtyForceKill(
+  id: string,
+  proc: pty.IPty,
+  options: { delayMs?: number; attemptsRemaining?: number } = {}
+): void {
+  if (ptyProcesses.get(id) !== proc || ptyTerminationMode.get(id) !== 'graceful') {
+    return
+  }
+  const attemptsRemaining = options.attemptsRemaining ?? 2
+  const timer = setTimeout(() => {
+    ptyForceKillTimers.delete(id)
+    if (ptyProcesses.get(id) !== proc || ptyTerminationMode.get(id) !== 'graceful') {
+      return
+    }
+    ptyTerminationMode.set(id, 'force')
+    try {
+      killLocalPtyProcess(proc, true)
+    } catch (error) {
+      ptyTerminationMode.set(id, 'graceful')
+      console.error('[pty] failed to force-kill PTY after graceful deadline', { id, error })
+      // Why: a transient native rejection must not consume the only SIGKILL
+      // owner while the logical shutdown continues waiting for physical exit.
+      if (attemptsRemaining > 1) {
+        armLocalPtyForceKill(id, proc, {
+          delayMs: LOCAL_PTY_FORCE_KILL_RETRY_MS,
+          attemptsRemaining: attemptsRemaining - 1
+        })
+      }
+    }
+  }, options.delayMs ?? LOCAL_PTY_GRACEFUL_FORCE_TIMEOUT_MS)
+  timer.unref?.()
+  ptyForceKillTimers.set(id, timer)
 }
 
 /**
@@ -268,18 +381,36 @@ function destroyPtyProcess(proc: pty.IPty, options: { alreadyKilled?: boolean } 
 }
 
 /**
- * Kills a local PTY and clears all associated local provider state.
+ * Requests local PTY termination while retaining physical-exit ownership.
  */
-function safeKillAndClean(id: string, proc: pty.IPty): void {
+function requestPtyTermination(id: string, proc: pty.IPty): void {
   runPtyCleanup(id)
   disposePtyListeners(id)
-  try {
-    proc.kill()
-  } catch {
-    /* Process may already be dead */
+  const previousMode = ptyTerminationMode.get(id)
+  // Why: destructive cleanup neutralizes proc.kill below, so an outstanding
+  // graceful request must be escalated before its deadline can be disabled.
+  if (previousMode !== 'force') {
+    clearLocalPtyForceKillTimer(id)
+    ptyTerminationMode.set(id, 'force')
+    try {
+      killLocalPtyProcess(proc, true)
+    } catch {
+      if (previousMode === 'graceful') {
+        ptyTerminationMode.set(id, previousMode)
+        armLocalPtyForceKill(id, proc, {
+          delayMs: LOCAL_PTY_FORCE_KILL_RETRY_MS,
+          attemptsRemaining: 1
+        })
+      } else {
+        ptyTerminationMode.delete(id)
+      }
+      /* Process may already be dead. */
+      return
+    }
   }
+  // Why: shutdown and orphan cleanup can race; node-pty's onExit listener and
+  // tracker must remain installed until the OS proves the child was reaped.
   destroyPtyProcess(proc, { alreadyKilled: true })
-  clearPtyState(id)
 }
 
 export type LocalPtyProviderOptions = {
@@ -290,7 +421,13 @@ export type LocalPtyProviderOptions = {
   buildSpawnEnv?: (
     id: string,
     baseEnv: Record<string, string>,
-    ctx?: { command?: string; shellPath?: string; isWsl?: boolean; wslDistro?: string | null }
+    ctx?: {
+      command?: string
+      launchAgent?: PtySpawnOptions['launchAgent']
+      shellPath?: string
+      isWsl?: boolean
+      wslDistro?: string | null
+    }
   ) => Record<string, string>
   /** Whether worktree-scoped shell history is enabled. When true (or absent)
    *  and a worktreeId is provided, HISTFILE is scoped per-worktree. */
@@ -328,6 +465,10 @@ export class LocalPtyProvider implements IPtyProvider {
   async spawn(args: PtySpawnOptions): Promise<PtySpawnResult> {
     const reattachId = normalizeLocalCallerSessionId(args.sessionId)
     if (reattachId) {
+      const pendingShutdown = ptyShutdownOperations.get(reattachId)
+      if (pendingShutdown) {
+        await pendingShutdown.promise
+      }
       const existing = ptyProcesses.get(reattachId)
       if (existing) {
         try {
@@ -463,8 +604,7 @@ export class LocalPtyProvider implements IPtyProvider {
     validateWorkingDirectory(validationCwd)
 
     const spawnEnv: Record<string, string> = {
-      ...process.env,
-      ...args.env,
+      ...mergeGitConfigEnvProtocol(process.env, args.env),
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor',
       TERM_PROGRAM: 'Orca',
@@ -516,6 +656,7 @@ export class LocalPtyProvider implements IPtyProvider {
     const finalEnv = this.opts.buildSpawnEnv
       ? this.opts.buildSpawnEnv(id, spawnEnv, {
           command: args.command,
+          launchAgent: args.launchAgent,
           shellPath,
           isWsl: isWslShell,
           wslDistro: launchWslDistro
@@ -565,6 +706,11 @@ export class LocalPtyProvider implements IPtyProvider {
           // Why: managed WSL Claude accounts pass a Linux CLAUDE_CONFIG_DIR
           // through Windows wsl.exe; non-default env vars need WSLENV import.
           addWslEnvKeys(finalEnv, ['CLAUDE_CONFIG_DIR'])
+        }
+        if (finalEnv[ORCA_HERMES_STARTUP_QUERY_ENV] !== undefined) {
+          // Why: the startup wrapper expands this only inside WSL; wsl.exe
+          // otherwise drops custom Windows environment variables.
+          addWslEnvKeys(finalEnv, [ORCA_HERMES_STARTUP_QUERY_ENV])
         }
       } else if (codexHomeWslInfo || isWslCodexHomeForHost(finalEnv.CODEX_HOME)) {
         // Why: WSL-managed Codex homes are Linux paths. Windows Codex cannot use
@@ -677,7 +823,15 @@ export class LocalPtyProvider implements IPtyProvider {
     }
 
     const proc = spawnResult.process
+    createPtyPhysicalExit(id)
     ptyProcesses.set(id, proc)
+    ptyInitialCwd.set(id, cwd)
+    // Why both signals: launchAgent is the caller's explicit intent and
+    // survives command rewriting (e.g. auth env prefixes); recognition covers
+    // callers that pass a bare agent command line without the flag.
+    if (args.launchAgent || startupAgentRecognition) {
+      ptyAgentSessionIds.add(id)
+    }
     ptyShellName.set(id, getSpawnedShellName(shellPath))
     if (finalEnv.ORCA_TERMINAL_HANDLE) {
       ptyTerminalHandle.set(id, finalEnv.ORCA_TERMINAL_HANDLE)
@@ -772,6 +926,8 @@ export class LocalPtyProvider implements IPtyProvider {
     }
 
     const onExitDisposable = proc.onExit(({ exitCode }) => {
+      const wasTerminationRequested = ptyTerminationMode.has(id)
+      ptyPhysicalExits.get(id)?.markExited()
       // Why: neutralize proc.kill the instant the child is reaped, before any
       // other work in this callback. node-pty's UnixTerminal installs a
       // `_socket.once('close', () => this.kill('SIGHUP'))` handler at destroy
@@ -793,14 +949,14 @@ export class LocalPtyProvider implements IPtyProvider {
       // Why: release the master ptmx fd on the natural-exit path — without
       // this, a shell that exits cleanly (the common case) never releases its
       // fd until the next GC. See docs/fix-pty-fd-leak.md.
-      destroyPtyProcess(proc)
+      destroyPtyProcess(proc, { alreadyKilled: wasTerminationRequested })
       this.opts.onExit?.(id, exitCode)
       for (const cb of exitListeners) {
         cb({ id, code: exitCode })
       }
     })
     if (onExitDisposable) {
-      disposables.push(onExitDisposable)
+      ptyExitDisposables.set(id, onExitDisposable)
     }
     ptyDisposables.set(id, disposables)
 
@@ -842,6 +998,26 @@ export class LocalPtyProvider implements IPtyProvider {
     ptyProcesses.get(id)?.resize(cols, rows)
   }
 
+  // Why: node-pty pause() stops reading the pty master fd, so the kernel
+  // buffer fills and a flooding child blocks on write — true producer
+  // backpressure. Best-effort: a PTY torn down mid-call must never throw
+  // into the flow-control path.
+  pauseProducer(id: string): void {
+    try {
+      ptyProcesses.get(id)?.pause()
+    } catch {
+      /* PTY already destroyed */
+    }
+  }
+
+  resumeProducer(id: string): void {
+    try {
+      ptyProcesses.get(id)?.resume()
+    } catch {
+      /* PTY already destroyed */
+    }
+  }
+
   // Why: node-pty caches the last winsize it applied on the IPty handle, so its
   // cols/rows are the authoritative applied size (node-pty clamps invalid dims
   // and a resize on a dead handle is a no-op, neither of which the requested
@@ -855,28 +1031,87 @@ export class LocalPtyProvider implements IPtyProvider {
     return { cols: proc.cols, rows: proc.rows }
   }
 
-  async shutdown(id: string, _opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+  async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+    const pending = ptyShutdownOperations.get(id)
+    if (pending) {
+      if (opts.immediate === true) {
+        pending.immediate = true
+        if (pending.rootSignalled && ptyProcesses.get(id) === pending.proc) {
+          this.requestTrackedPtyShutdown(id, pending.proc, true)
+        }
+      }
+      await pending.promise
+      return
+    }
     const proc = ptyProcesses.get(id)
     if (!proc) {
       return
     }
-    // Why: disposePtyListeners removes the onExit callback, so the natural
-    // exit cleanup path from node-pty won't fire. Cleanup and notification
-    // must happen unconditionally after the try/catch.
-    // Timer/writer cleanup must happen here too: disposing listeners prevents
-    // the natural onExit callback from running the usual clearPtyState path.
-    runPtyCleanup(id)
-    disposePtyListeners(id)
-    try {
-      proc.kill()
-    } catch {
-      /* Process may already be dead */
+    const entry: PtyShutdownOperation = {
+      promise: Promise.resolve(),
+      immediate: opts.immediate === true,
+      rootSignalled: false,
+      proc
     }
-    destroyPtyProcess(proc, { alreadyKilled: true })
-    clearPtyState(id)
-    this.opts.onExit?.(id, -1)
-    for (const cb of exitListeners) {
-      cb({ id, code: -1 })
+    entry.promise = this.shutdownTrackedPty(id, proc, entry)
+    ptyShutdownOperations.set(id, entry)
+    try {
+      await entry.promise
+    } finally {
+      if (ptyShutdownOperations.get(id) === entry) {
+        ptyShutdownOperations.delete(id)
+      }
+    }
+  }
+
+  private async shutdownTrackedPty(
+    id: string,
+    proc: pty.IPty,
+    operation: PtyShutdownOperation
+  ): Promise<void> {
+    const physicalExit = ptyPhysicalExits.get(id)
+    // Why: the snapshot must precede any signal — once the shell dies,
+    // surviving descendants reparent to pid 1 and a ppid walk can't find them.
+    const descendants = ptyAgentSessionIds.has(id)
+      ? await captureDescendantSnapshot(proc.pid)
+      : null
+    // Why: a natural exit can race the snapshot. Never signal descendants or
+    // a root PID after this exact PTY has lost ownership.
+    if (ptyProcesses.get(id) === proc) {
+      if (descendants) {
+        terminateDescendantSnapshot(descendants)
+      }
+      // Cancel startup delivery now, but preserve the exit listener and all
+      // ownership maps until node-pty reports the physical process exit.
+      runPtyCleanup(id)
+      operation.rootSignalled = true
+      this.requestTrackedPtyShutdown(id, proc, operation.immediate)
+    }
+    await waitForPtyPhysicalExit(id, physicalExit)
+  }
+
+  private requestTrackedPtyShutdown(id: string, proc: pty.IPty, immediate: boolean): void {
+    const previousMode = ptyTerminationMode.get(id)
+    // Why: ConPTY has no graceful signal; its first bare node-pty kill closes
+    // the pseudoconsole and must be treated as the final force request.
+    const requestedMode = immediate || process.platform === 'win32' ? 'force' : 'graceful'
+    if (!previousMode || (requestedMode === 'force' && previousMode !== 'force')) {
+      ptyTerminationMode.set(id, requestedMode)
+      try {
+        killLocalPtyProcess(proc, immediate)
+        if (requestedMode === 'graceful') {
+          armLocalPtyForceKill(id, proc)
+        } else {
+          clearLocalPtyForceKillTimer(id)
+        }
+      } catch (error) {
+        if (previousMode) {
+          ptyTerminationMode.set(id, previousMode)
+        } else {
+          ptyTerminationMode.delete(id)
+        }
+        throw error
+      }
     }
   }
 
@@ -951,13 +1186,45 @@ export class LocalPtyProvider implements IPtyProvider {
       return null
     }
     try {
-      return await resolveAgentForegroundProcess(
+      const resolution = await resolveAgentForegroundProcessWithAvailability(
         proc.pid,
         resolveForegroundFallbackProcess(proc.process || null, ptyShellName.get(id)),
         {
           contextPaths: ptyAgentForegroundContextPaths.get(id)
         }
       )
+      return resolution.processName
+    } catch {
+      return null
+    }
+  }
+
+  async confirmForegroundProcess(id: string): Promise<string | null> {
+    const proc = ptyProcesses.get(id)
+    if (!proc) {
+      return null
+    }
+    try {
+      const resolution = await resolveAgentForegroundProcessWithAvailability(
+        proc.pid,
+        resolveForegroundFallbackProcess(proc.process || null, ptyShellName.get(id)),
+        {
+          contextPaths: ptyAgentForegroundContextPaths.get(id),
+          fresh: true,
+          ...(process.platform === 'win32'
+            ? {
+                forceProcessScan: true,
+                readWindowsConptyProcessIds: () => readWindowsConptyProcessIds(proc.pid)
+              }
+            : {})
+        }
+      )
+      // Why: a fresh scan can outlive this PTY id; never publish identity from
+      // an exited process or a replacement session that reused the same id.
+      if (ptyProcesses.get(id) !== proc) {
+        return null
+      }
+      return resolution.available ? resolution.processName : null
     } catch {
       return null
     }
@@ -973,7 +1240,7 @@ export class LocalPtyProvider implements IPtyProvider {
   async listProcesses(): Promise<PtyProcessInfo[]> {
     return Array.from(ptyProcesses.entries()).map(([id, proc]) => ({
       id,
-      cwd: '',
+      cwd: ptyInitialCwd.get(id) ?? '',
       title: proc.process || ptyShellName.get(id) || 'shell',
       ...(ptyTerminalHandle.get(id) ? { terminalHandle: ptyTerminalHandle.get(id) } : {})
     }))
@@ -1027,7 +1294,7 @@ export class LocalPtyProvider implements IPtyProvider {
     const killed: { id: string }[] = []
     for (const [id, proc] of ptyProcesses) {
       if ((ptyLoadGeneration.get(id) ?? -1) < currentGeneration) {
-        safeKillAndClean(id, proc)
+        requestPtyTermination(id, proc)
         killed.push({ id })
       }
     }
@@ -1044,10 +1311,33 @@ export class LocalPtyProvider implements IPtyProvider {
     return ptyProcesses.get(id)
   }
 
-  /** Kill all PTYs. Call on app quit. */
+  /** Kill all in-process local PTYs. Call on app quit. */
   killAll(): void {
     for (const [id, proc] of ptyProcesses) {
-      safeKillAndClean(id, proc)
+      runPtyCleanup(id)
+      disposePtyListeners(id)
+      disposePtyExitListener(id)
+      if (!(process.platform === 'win32' && ptyTerminationMode.has(id))) {
+        try {
+          proc.kill()
+        } catch {
+          /* Process may already be dead. */
+        }
+      }
+      // Why: app quit cannot retain NAPI callbacks into FreeEnvironment; the
+      // process exit itself is the final physical handle boundary here.
+      destroyPtyProcess(proc, { alreadyKilled: true })
+      // Why: app quit replaces node-pty's onExit callback as the final owner;
+      // overlapping shutdown waiters must join that same terminal boundary.
+      ptyPhysicalExits.get(id)?.markExited()
+      clearPtyState(id)
     }
   }
+}
+
+export function _resetLocalPtyProviderStateForTest(): void {
+  for (const id of ptyProcesses.keys()) {
+    clearPtyState(id)
+  }
+  loadGeneration = 0
 }

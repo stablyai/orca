@@ -4,20 +4,24 @@ restore-on-remount caching, and scroll preservation. Splitting those pieces
 across smaller files would make the lifecycle edges harder to reason about and
 more error-prone than keeping the whole viewer flow together. */
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: diff entry changes must reset virtualizer measurement and generation state in lockstep with external scroll restoration. */
-import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react'
-import { useVirtualizer } from '@tanstack/react-virtual'
+import React, { useState, useEffect, useCallback, useRef, useLayoutEffect, useMemo } from 'react'
+import { elementScroll, useVirtualizer } from '@tanstack/react-virtual'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import {
   useVirtualizedScrollAnchor,
+  VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT,
   type VirtualizedScrollAnchor
 } from '@/hooks/useVirtualizedScrollAnchor'
 import { getVirtualizedScrollAnchorForOffset } from '@/hooks/virtualized-scroll-anchor-recording'
+import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 import { joinPath } from '@/lib/path'
 import { detectLanguage } from '@/lib/language-detect'
 import { setWithLRU } from '@/lib/scroll-cache'
-import { getConnectionId, getConnectionIdForFile } from '@/lib/connection-context'
+import { getConnectionIdForFile } from '@/lib/connection-context'
+import { getCombinedDiffSectionConnectionId } from './combined-diff-section-connection'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { selectWorktreeDiffCommentsOrEmpty } from '@/store/worktree-diff-comments-selector'
 import { writeRuntimeFile } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { formatDiffComments } from '@/lib/diff-comments-format'
@@ -231,7 +235,9 @@ export default function CombinedDiffViewer({
   const openBranchAllDiffs = useAppStore((s) => s.openBranchAllDiffs)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const clearDiffComments = useAppStore((s) => s.clearDiffComments)
-  const diffCommentsForWorktree = useAppStore((s) => s.getDiffComments(file.worktreeId))
+  const diffCommentsForWorktree = useAppStore((s) =>
+    selectWorktreeDiffCommentsOrEmpty(s, file.worktreeId)
+  )
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[file.worktreeId])
   const isDark =
     settings?.theme === 'dark' ||
@@ -293,6 +299,11 @@ export default function CombinedDiffViewer({
     combinedDiffScrollAnchorCache.get(viewStateKey) ?? null
   )
   const directScrollInputUntilRef = useRef(0)
+  const [programmaticScrollMarks] = useState(createProgrammaticScrollMarks)
+  // Why: a scroll event pinned at a shrunken max is a browser clamp, not user
+  // input; bumping this asks the anchor restore to re-pin the viewport.
+  const [clampRestoreCount, setClampRestoreCount] = useState(0)
+  const lastScrollHeightRef = useRef(0)
   const activeScrollbarDragCleanupRef = useRef<CombinedDiffScrollbarDragCleanup | null>(null)
   const loadedIndicesRef = useRef<Set<number>>(new Set())
   const loadingIndicesRef = useRef<Set<number>>(new Set())
@@ -615,7 +626,11 @@ export default function CombinedDiffViewer({
       let result: GitDiffResult
       let error: string | undefined
       try {
-        const connectionId = getConnectionId(file.worktreeId) ?? undefined
+        const connectionId = getCombinedDiffSectionConnectionId(
+          file.worktreeId,
+          file.filePath,
+          entry.path
+        )
         const state = useAppStore.getState()
         const fileSettings = settingsForRuntimeOwner(state.settings, file.runtimeEnvironmentId)
         if ((isBranchMode || (isAllMode && !('area' in entry))) && branchCompare) {
@@ -840,6 +855,18 @@ export default function CombinedDiffViewer({
     },
     overscan: COMBINED_DIFF_OVERSCAN,
     initialOffset: () => scrollOffsetRef.current,
+    // Why: every scroll the virtualizer issues (scrollToIndex, measurement
+    // corrections) must be marked so scroll events can be attributed to the
+    // user only when this code didn't cause them.
+    scrollToFn: (offset, options, instance) => {
+      const target = offset + (options.adjustments ?? 0)
+      // Why: a write to the current position emits no scroll event; marking
+      // it would leave a stale mark that can claim a later user scroll.
+      if (instance.scrollElement?.scrollTop !== target) {
+        programmaticScrollMarks.mark(target)
+      }
+      elementScroll(offset, options, instance)
+    },
     getItemKey: (index) => {
       const section = sections[index]
       if (!section) {
@@ -906,7 +933,8 @@ export default function CombinedDiffViewer({
       offset: Math.min(
         firstVisible.rect.height,
         Math.max(0, containerRect.top - firstVisible.rect.top)
-      )
+      ),
+      scrollTop: container.scrollTop
     }
     scrollAnchorRef.current = anchor
     latestDomScrollAnchorRef.current = anchor
@@ -930,14 +958,29 @@ export default function CombinedDiffViewer({
     [recordCombinedDiffDomScrollAnchor, writeCombinedDiffScrollAnchor]
   )
 
+  // Why: restore only on structural changes (rows added/removed/collapsed,
+  // remount, layout-mode flips, clamp recovery). Measurement churn during
+  // scrolling is compensated by the virtualizer itself; restoring on it wrote
+  // scrollTop against active wheel input whenever main-thread jank outlived
+  // the direct-input window.
+  const combinedDiffRestoreSignal = useMemo(
+    () =>
+      `${generation}|${sideBySide ? 'sbs' : 'inline'}|${clampRestoreCount}|${sections
+        .map((section) => `${section.key}:${section.collapsed ? 'c' : 'e'}`)
+        .join(',')}`,
+    [clampRestoreCount, generation, sections, sideBySide]
+  )
+
   useVirtualizedScrollAnchor({
     anchorRef: scrollAnchorRef,
     getItemElementKey: getCombinedDiffSectionElementKey,
     getRowKey: getCombinedDiffSectionKey,
     hasDirectScrollInput,
     itemElementSelector: '[data-combined-diff-section-row]',
+    programmaticScrollMarks,
     recordAnchorOnCleanup: false,
     recordAnchorOnScroll: false,
+    restoreSignal: combinedDiffRestoreSignal,
     rows: sections,
     scrollElementRef: scrollContainerRef,
     shouldSkipRestore: hasDirectScrollInput,
@@ -1001,6 +1044,13 @@ export default function CombinedDiffViewer({
           scrollAnchorRef.current = null
           latestDomScrollAnchorRef.current = null
           virtualizer.scrollToIndex(index, { align: 'start' })
+          // Why: this jump is marked programmatic, so no scroll event records
+          // an anchor for it; snapshot the destination once layout settles.
+          window.requestAnimationFrame(() => {
+            scrollContainerRef.current?.dispatchEvent(
+              new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT)
+            )
+          })
         }
       })
       if (navigatedIndex !== null) {
@@ -1336,16 +1386,35 @@ export default function CombinedDiffViewer({
         scrollTop
       })
     }
-    const handleScroll = (): void => {
-      if (!hasDirectScrollInput()) {
+    lastScrollHeightRef.current = container.scrollHeight
+    const handleScroll = (event: Event): void => {
+      const scrollTop = container.scrollTop
+      const scrollHeight = container.scrollHeight
+      const maxScrollTop = Math.max(0, scrollHeight - container.clientHeight)
+      const shrank = scrollHeight < lastScrollHeightRef.current - 1
+      lastScrollHeightRef.current = scrollHeight
+      if (programmaticScrollMarks.consume(event, scrollTop, maxScrollTop)) {
         updateCombinedDiffScrollbar()
         return
       }
-      recordCombinedDiffVirtualScrollAnchor(container.scrollTop)
+      if (shrank && scrollTop >= maxScrollTop - 1 && scrollOffsetRef.current > maxScrollTop + 1) {
+        // Why: pinned at a max that just shrank, coming from an offset the new
+        // range can't reach, is the browser clamping the viewport, not user
+        // input (a user scroll to the bottom starts from an in-range offset);
+        // ask the anchor restore to re-pin instead of recording the clamped
+        // position as intentional.
+        setClampRestoreCount((count) => count + 1)
+        updateCombinedDiffScrollbar()
+        return
+      }
+      // Why: any unmarked scroll is the user's (wheel, momentum, keyboard,
+      // scrollbar drag) — including events whose input never reached the
+      // wheel handler because the main thread was janked past its window.
+      recordCombinedDiffVirtualScrollAnchor(scrollTop)
       updateCachedScrollPosition({
         recordDomAnchor: false,
         scheduleSettled: true,
-        scrollTop: container.scrollTop,
+        scrollTop,
         writeAnchor: true
       })
     }
@@ -1376,6 +1445,7 @@ export default function CombinedDiffViewer({
     entrySignature,
     hasDirectScrollInput,
     persistCombinedDiffScrollAnchor,
+    programmaticScrollMarks,
     recordCombinedDiffVirtualScrollAnchor,
     sections.length,
     updateCombinedDiffScrollbar,

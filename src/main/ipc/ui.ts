@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, type WebContents } from 'electron'
+import { BrowserWindow, ipcMain, webContents, type WebContents } from 'electron'
 import type { Store } from '../persistence'
 import type { PersistedUIState } from '../../shared/types'
 import { isFeatureInteractionId } from '../../shared/feature-interactions'
@@ -13,6 +13,24 @@ export function clearTrustedUIRendererWebContentsId(webContentsId: number): void
   if (trustedUIRendererWebContentsId === webContentsId) {
     trustedUIRendererWebContentsId = null
   }
+}
+
+export function sendToTrustedUIRenderer(
+  channel: string,
+  payload: unknown,
+  excludedWebContentsId?: number
+): void {
+  const rendererId = trustedUIRendererWebContentsId
+  if (rendererId == null || rendererId === excludedWebContentsId) {
+    return
+  }
+  const renderer = webContents.fromId(rendererId)
+  if (!renderer || renderer.isDestroyed()) {
+    return
+  }
+  // Why: app events belong to the registered UI renderer; enumerating every
+  // WebContents wakes retained browser guests that cannot consume the channel.
+  renderer.send(channel, payload)
 }
 
 export function registerUIHandlers(store: Store): void {

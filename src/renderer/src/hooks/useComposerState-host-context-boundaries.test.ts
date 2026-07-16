@@ -159,6 +159,40 @@ describe('useComposerState host-context boundaries', () => {
     expect(submitSection).toContain('runtimeEnvironmentId: folderTargetRuntimeEnvironmentId')
   })
 
+  it('detects composer agents against the repo host: SSH, then runtime, then local (#7082)', () => {
+    // Why: a repo owned by a paired runtime must show the runtime's agents, not
+    // the local machine's. SSH stays first priority; runtime falls through before
+    // local so an SSH repo never double-detects. Regression guard for #7082.
+    const selectorSection = sourceBetween(
+      HOOK_SOURCE,
+      'const detectedAgentList = useAppStore',
+      'const ensureDetectedAgents = useAppStore'
+    )
+    expect(selectorSection).toContain('if (isRemote) {')
+    expect(selectorSection).toContain('s.remoteDetectedAgentIds[connectionId]')
+    expect(selectorSection).toContain('if (runtimeEnvironmentId) {')
+    expect(selectorSection).toContain('s.runtimeDetectedAgentIds[runtimeEnvironmentId]')
+    expect(selectorSection).toContain('return s.detectedAgentIds')
+    // SSH branch is checked before the runtime branch.
+    expect(selectorSection.indexOf('if (isRemote) {')).toBeLessThan(
+      selectorSection.indexOf('if (runtimeEnvironmentId) {')
+    )
+
+    expect(HOOK_SOURCE).toContain(
+      'const runtimeEnvironmentId = selectedRepoSettings?.activeRuntimeEnvironmentId?.trim() || null'
+    )
+
+    // Detection effect fans out to the same three hosts in the same order and
+    // re-runs when the runtime environment changes.
+    const detectSection = sourceBetween(HOOK_SOURCE, 'const detect = isRemote', 'void detect.then')
+    expect(detectSection).toContain('ensureRemoteDetectedAgents(connectionId)')
+    expect(detectSection).toContain('ensureRuntimeDetectedAgents(runtimeEnvironmentId)')
+    expect(detectSection).toContain('ensureDetectedAgents()')
+    expect(HOOK_SOURCE).toContain(
+      '}, [connectionId, runtimeEnvironmentId, isRemote, selectedRepoSshStatus, disabledTuiAgents])'
+    )
+  })
+
   it('seeds initial workspace run target from the task source context', () => {
     expect(
       resolveInitialWorkspaceRunSeed({
@@ -377,6 +411,36 @@ describe('useComposerState host-context boundaries', () => {
     )
   })
 
+  it('keeps a Linear branch override when its workspace-scoped issue survives a repo change', () => {
+    const section = sourceBetween(
+      HOOK_SOURCE,
+      'const handleRepoChange = useCallback',
+      'const handleFolderSourceRepoChange = useCallback'
+    )
+
+    expect(section).toContain('const preservedLinearBranchName = preserveLinearLinkedWorkItem')
+    expect(section).toContain('getLinearLinkedWorkItemBranchName(linkedWorkItem)')
+    expect(section).toContain('setBranchNameOverride(preservedLinearBranchName)')
+    expect(section).toContain(
+      'setBranchNameOverridePreservesNameEdits(Boolean(preservedLinearBranchName))'
+    )
+    expect(section).toContain("branchAutoNameRef.current = preservedLinearBranchName ?? ''")
+  })
+
+  it('clears a Linear branch override when its linked issue is removed', () => {
+    const section = sourceBetween(
+      HOOK_SOURCE,
+      'const handleRemoveLinkedWorkItem = useCallback',
+      'const handleNameValueChange = useCallback'
+    )
+
+    expect(section).toContain('const removedLinearItem = isLinearLinkedWorkItem(linkedWorkItem)')
+    expect(section).toContain('if (removedLinearItem)')
+    expect(section).toContain('setBranchNameOverride(undefined)')
+    expect(section).toContain('setBranchNameOverridePreservesNameEdits(false)')
+    expect(section).toContain("branchAutoNameRef.current = ''")
+  })
+
   it('selects a project by its own host instead of pinning the current host', () => {
     // Regression: passing the current host as a hard `hostId` made picking a
     // project set up only on a different host a silent no-op. The current host
@@ -411,6 +475,8 @@ describe('useComposerState host-context boundaries', () => {
     )
     expect(githubApply).toContain('setLinkedGitLabIssue(null)')
     expect(githubApply).toContain('setLinkedGitLabMR(null)')
+    expect(githubApply).toContain('setBranchNameOverridePreservesNameEdits(false)')
+    expect(githubApply).toContain("branchAutoNameRef.current = ''")
 
     const gitlabApply = sourceBetween(
       HOOK_SOURCE,
@@ -419,6 +485,8 @@ describe('useComposerState host-context boundaries', () => {
     )
     expect(gitlabApply).toContain("setLinkedIssue('')")
     expect(gitlabApply).toContain('setLinkedPR(null)')
+    expect(gitlabApply).toContain('setBranchNameOverridePreservesNameEdits(false)')
+    expect(gitlabApply).toContain("branchAutoNameRef.current = ''")
 
     const projectGroupSmartHandlers = sourceBetween(
       HOOK_SOURCE,

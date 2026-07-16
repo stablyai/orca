@@ -9,6 +9,9 @@ import {
   type ShellReadyScanState
 } from '../shell-ready-marker-scanner'
 import { isPowerShellProcess } from '../../shared/shell-process-detection'
+import { killWithDescendantSweep } from '../pty-descendant-termination'
+import type { TuiAgent } from '../../shared/types'
+import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import type {
   PendingOutputRecord,
   SessionState,
@@ -22,6 +25,9 @@ const SHELL_READY_TIMEOUT_MS = 15_000
 // older daemon/local paths that still report shell-ready support for Codex.
 export const CODEX_SHELL_READY_TIMEOUT_MS = 300
 const KILL_TIMEOUT_MS = 5_000
+export const IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS = 8_000
+export const SESSION_FORCE_KILL_RETRY_MS = 250
+const SESSION_FORCE_KILL_MAX_ATTEMPTS = 2
 // Why: pending records exist so the 5s checkpoint can persist increments
 // instead of re-serializing the whole buffer. If no client drains them (main
 // process gone, history disabled), memory must stay bounded — past the cap we
@@ -31,17 +37,33 @@ const KILL_TIMEOUT_MS = 5_000
 // Worst-case wire size for a full take is ~6x this (each control char
 // JSON-escapes to six bytes) and must stay under NDJSON_MAX_LINE_BYTES (16MB).
 const PENDING_OUTPUT_MAX_BYTES = 2 * 1024 * 1024
+// Why: producer pause is requested over a fire-and-forget notification, so the
+// matching resume can be lost (main crash, dropped socket). A lost resume must
+// never wedge a shell: auto-resume after this window; a still-flooded main
+// re-asserts the pause on its next watermark check.
+export const PRODUCER_PAUSE_FAILSAFE_MS = 5_000
 
 export type SubprocessHandle = {
   pid: number
   /** Live foreground process name of the PTY (node-pty's `.process`), e.g.
    *  'claude' / 'codex' / 'zsh'. Null once the child has exited. */
   getForegroundProcess(): string | null
+  /** Await process-table evidence captured after this confirmation request. */
+  confirmForegroundProcess?(): Promise<string | null>
   /** True when shell launch args already delivered the startup command, so the
    *  terminal host must skip its stdin fallback write. */
   startupCommandDeliveredInShellArgs?: boolean
+  /** Shell the subprocess actually spawned, after Unix/Windows fallbacks. The
+   *  host reconciles the caller's shell-ready assumption against it so a
+   *  fallback shell without a ready marker never gates startup commands. */
+  shellPath?: string
   write(data: string): void
   resize(cols: number, rows: number): void
+  /** Stop reading the PTY fd (node-pty pause()) so the kernel/ConPTY buffer
+   *  fills and a flooding child blocks on write. Optional: handles that
+   *  cannot pause simply omit it and flow control degrades to a no-op. */
+  pause?(): void
+  resume?(): void
   /** Resync the native PTY's own screen state after a frontend clear.
    *  No-op except on Windows/ConPTY, where a stale ConPTY cursor row makes
    *  the next prompt repaint land below a blank gap. */
@@ -62,9 +84,11 @@ export type SessionOptions = {
   cols: number
   rows: number
   terminalHandle?: string
+  launchAgent?: TuiAgent
   subprocess: SubprocessHandle
   shellReadySupported: boolean
   shellReadyTimeoutMs?: number
+  historySeed?: string
   scrollback?: number
   // Why: fired once the session reaches a terminal state (natural exit or
   // kill-timeout force-dispose) so the owner (TerminalHost) can reap it —
@@ -83,6 +107,7 @@ type AttachedClient = {
 export class Session {
   readonly sessionId: string
   readonly terminalHandle: string | null
+  readonly launchAgent: TuiAgent | null
   private _state: SessionState = 'running'
   private _shellState: ShellReadyState
   private _exitCode: number | null = null
@@ -101,10 +126,18 @@ export class Session {
   private pendingOutputBytes = 0
   private pendingOutputOverflowed = false
   private pendingOutputSeq = 0
+  private outputSequence = 0
+  private producerPaused = false
+  private producerPauseFailsafeTimer: ReturnType<typeof setTimeout> | null = null
+  private readonly _historySeeded: boolean | undefined
+  private forceKillSent = false
+  private subprocessDisposed = false
+  private readonly physicalExit = new PhysicalExitTracker()
 
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
     this.terminalHandle = opts.terminalHandle ?? null
+    this.launchAgent = opts.launchAgent ?? null
     this.subprocess = opts.subprocess
     this.onSessionExit = opts.onExit
     const size = normalizePtySize(opts.cols, opts.rows)
@@ -117,6 +150,10 @@ export class Session {
       // responder; any daemon reply races ahead via in-process parsing and
       // clobbers the renderer's answer. See the comment in HeadlessEmulator.
     })
+    // Why: recovery must precede listener registration; shells can emit their
+    // prompt synchronously as soon as onData subscribes.
+    this._historySeeded =
+      opts.historySeed === undefined ? undefined : this.emulator.writeSync(opts.historySeed)
 
     if (opts.shellReadySupported) {
       this._shellState = 'pending'
@@ -141,6 +178,10 @@ export class Session {
     return this._shellState
   }
 
+  get historySeeded(): boolean | undefined {
+    return this._historySeeded
+  }
+
   get exitCode(): number | null {
     return this._exitCode
   }
@@ -151,6 +192,19 @@ export class Session {
 
   get isTerminating(): boolean {
     return this._isTerminating
+  }
+
+  /** Claims termination synchronously so attach/re-entry cannot race async
+   * teardown preparation. Returns false when another owner already claimed it. */
+  beginTermination(): boolean {
+    if (this._state === 'exited' || this._isTerminating) {
+      return false
+    }
+    this._isTerminating = true
+    // Why: a paused child can be blocked inside write(); resume before any
+    // async snapshot so it can handle termination promptly.
+    this.releaseProducerPause({ resume: true })
+    return true
   }
 
   get pid(): number {
@@ -188,19 +242,140 @@ export class Session {
     this.subprocess.resize(cols, rows)
   }
 
-  kill(): void {
-    if (this._state === 'exited' || this._isTerminating) {
+  /** Producer-side flow control: stop reading the PTY fd so the flooding
+   *  child blocks on write (kernel backpressure). Arms the lost-resume
+   *  failsafe; re-pausing re-arms it (main re-asserts during long floods). */
+  pauseProducer(): void {
+    if (this._state === 'exited' || this._disposed) {
       return
     }
-    this._isTerminating = true
+    this.producerPaused = true
+    this.subprocess.pause?.()
+    if (this.producerPauseFailsafeTimer) {
+      clearTimeout(this.producerPauseFailsafeTimer)
+    }
+    this.producerPauseFailsafeTimer = setTimeout(() => {
+      this.producerPauseFailsafeTimer = null
+      this.producerPaused = false
+      this.subprocess.resume?.()
+    }, PRODUCER_PAUSE_FAILSAFE_MS)
+  }
 
-    this.subprocess.kill()
+  resumeProducer(): void {
+    this.releaseProducerPause({ resume: true })
+  }
 
+  private releaseProducerPause(opts: { resume: boolean }): void {
+    if (this.producerPauseFailsafeTimer) {
+      clearTimeout(this.producerPauseFailsafeTimer)
+      this.producerPauseFailsafeTimer = null
+    }
+    if (!this.producerPaused) {
+      return
+    }
+    this.producerPaused = false
+    if (opts.resume) {
+      this.subprocess.resume?.()
+    }
+  }
+
+  kill(): void {
+    if (!this.beginTermination()) {
+      return
+    }
+    if (!this.launchAgent) {
+      this.signalTerminationRoot()
+    } else {
+      // Why: agent tool children live in detached process groups a dying
+      // shell's SIGHUP never reaches. The bounded snapshot briefly defers the
+      // signal; the kill timer below starts now, so force-dispose timing is
+      // unaffected.
+      void Promise.resolve(
+        killWithDescendantSweep(
+          this.subprocess.pid,
+          () => {
+            this.signalTerminationRoot()
+          },
+          {
+            // Why: if the root exits during ps, its numeric PID can be recycled.
+            // Never apply that stale snapshot to a different process tree.
+            ownsRoot: () => this.isAlive
+          }
+        )
+      ).catch((error) => {
+        if (this.isAlive) {
+          this.resetTerminationAfterSignalFailure()
+        }
+        console.warn('[Session] descendant-aware graceful kill failed:', error)
+      })
+    }
+    this.scheduleForceDisposeFallback()
+  }
+
+  /** Signals a root whose descendant snapshot has completed. */
+  signalTerminationRoot(): void {
+    if (this._state === 'exited') {
+      return
+    }
+    try {
+      this.subprocess.kill()
+    } catch (error) {
+      // Why: rejected signalling is not termination. Reopen the session so a
+      // later graceful or destructive retry can still target the live child.
+      this.resetTerminationAfterSignalFailure()
+      throw error
+    }
+  }
+
+  /** Starts the existing graceful-kill deadline when a coordinator owns the
+   * snapshot-first portion of teardown. */
+  scheduleForceDisposeFallback(): void {
+    if (this.killTimer) {
+      return
+    }
+    this.armForceKillFallback(KILL_TIMEOUT_MS, SESSION_FORCE_KILL_MAX_ATTEMPTS)
+  }
+
+  private resetTerminationAfterSignalFailure(): void {
+    this._isTerminating = false
+    if (this.killTimer) {
+      clearTimeout(this.killTimer)
+      this.killTimer = null
+    }
+  }
+
+  private armForceKillFallback(delayMs: number, attemptsRemaining: number): void {
     this.killTimer = setTimeout(() => {
+      this.killTimer = null
       if (this._state !== 'exited') {
-        this.forceDispose()
+        try {
+          this.requestForceKill()
+        } catch (error) {
+          console.warn('[Session] failed to force-kill terminating subprocess:', error)
+          // Why: a transient SIGKILL rejection must not consume the only
+          // fallback owner after graceful shutdown has already returned.
+          if (attemptsRemaining > 1) {
+            this.armForceKillFallback(SESSION_FORCE_KILL_RETRY_MS, attemptsRemaining - 1)
+          }
+        }
       }
-    }, KILL_TIMEOUT_MS)
+    }, delayMs)
+  }
+
+  async forceKillAndWaitForExit(
+    timeoutMs = IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS
+  ): Promise<void> {
+    if (this._state === 'exited') {
+      return
+    }
+    if (!this._isTerminating) {
+      this._isTerminating = true
+      this.releaseProducerPause({ resume: true })
+    }
+    // Why: destructive cleanup joins a graceful termination but escalates it
+    // now; waiting for the 5s timer would spend most of the physical-exit budget.
+    await this.requestForceKillWithRetry()
+    await this.waitForPhysicalExit(timeoutMs)
   }
 
   signal(sig: string): void {
@@ -221,17 +396,30 @@ export class Session {
     if (idx !== -1) {
       this.attachedClients.splice(idx, 1)
     }
+    // Why: with no attached client, nobody will ever send resumePty — a
+    // paused shell would sit wedged until the failsafe. Resume eagerly.
+    if (this.attachedClients.length === 0) {
+      this.releaseProducerPause({ resume: true })
+    }
   }
 
   detachAllClients(): void {
     this.attachedClients.length = 0
+    this.releaseProducerPause({ resume: true })
   }
 
-  getSnapshot(): TerminalSnapshot | null {
+  getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {
     if (this._disposed) {
       return null
     }
-    return this.emulator.getSnapshot()
+    return { ...this.emulator.getSnapshot(opts), outputSequence: this.outputSequence }
+  }
+
+  getPartialEscapeTailAnsi(): string {
+    if (this._disposed) {
+      return ''
+    }
+    return this.emulator.partialEscapeTailAnsi
   }
 
   // Why: the size the PTY actually applied (emulator dims, which Session.resize
@@ -272,7 +460,7 @@ export class Session {
         : records,
       seq: this.pendingOutputSeq,
       overflowed,
-      snapshot: includeSnapshot ? this.emulator.getSnapshot() : null
+      snapshot: includeSnapshot ? this.getSnapshot() : null
     }
   }
 
@@ -282,6 +470,10 @@ export class Session {
 
   getForegroundProcess(): string | null {
     return this.subprocess.getForegroundProcess()
+  }
+
+  async confirmForegroundProcess(): Promise<string | null> {
+    return this.subprocess.confirmForegroundProcess?.() ?? this.subprocess.getForegroundProcess()
   }
 
   clearScrollback(): void {
@@ -385,26 +577,14 @@ export class Session {
    *  out onExit to attached clients — renderer reconnects cold after daemon
    *  exit. Callers MUST check isAlive first; see disposeSubprocess() for the
    *  already-exited case. */
-  forceKillAndDisposeSubprocess(): void {
-    // Why: forceKill before #teardownSubprocess. The helper's subprocess.dispose()
-    // neutralizes node-pty's proc.kill on POSIX (to kill the SIGHUP-to-recycled-pid
-    // hazard). subprocess.forceKill uses process.kill(pid, 'SIGKILL') directly
-    // (pty-subprocess.ts) — unaffected by the neutralization, because it does not
-    // go through proc.kill. SIGKILL is not ignorable; any child that would have
-    // survived the 5s timer is reaped immediately.
-    try {
-      this.subprocess.forceKill()
-    } catch {
-      /* swallow — child may already be gone */
-    }
-    this.#teardownSubprocess()
-    this._state = 'exited'
-    // Why: free the headless emulator's scrollback here too (this path skips
-    // dispose()). Matches forceDispose(); reaping just drops the map entry.
-    this.emulator.dispose()
+  async forceKillAndDisposeSubprocess(): Promise<void> {
+    // Why: daemon exit cannot neutralize the native handle until a bounded
+    // retry is accepted and onExit proves the child was physically reaped.
+    await this.forceKillAndWaitForExit()
+    this.dispose()
   }
 
-  /** Private: shared teardown helper called by dispose(), forceDispose(), and
+  /** Private: shared teardown helper called by dispose() and
    *  forceKillAndDisposeSubprocess(). Flips `_disposed`, clears pending timers,
    *  and forwards to subprocess.dispose() exactly once. Does NOT set `_state` —
    *  the caller owns the state transition AFTER capturing any invariants that
@@ -414,6 +594,9 @@ export class Session {
       return
     }
     this._disposed = true
+    // Why: never leave a paused fd behind on any teardown path — the handle's
+    // own dead-guard makes this a no-op when the child is already reaped.
+    this.releaseProducerPause({ resume: true })
     if (this.killTimer) {
       clearTimeout(this.killTimer)
       this.killTimer = null
@@ -425,6 +608,14 @@ export class Session {
     this.shellReadyScanState = null
     this.preReadyStdinQueue = []
     this.postReadyFlushGate.clear()
+    this.disposeSubprocessHandle()
+  }
+
+  private disposeSubprocessHandle(): void {
+    if (this.subprocessDisposed) {
+      return
+    }
+    this.subprocessDisposed = true
     try {
       this.subprocess.dispose()
     } catch (err) {
@@ -480,6 +671,10 @@ export class Session {
       return
     }
 
+    // Why: daemon stream thinning can omit bytes before main sees them. The
+    // absolute count lets an authoritative snapshot cover those gaps while
+    // renderer reconciliation deduplicates any queued post-snapshot tail.
+    this.outputSequence += data.length
     // Feed data to headless emulator for state tracking
     this.emulator.write(data)
     this.recordPendingOutput({ kind: 'output', data })
@@ -491,12 +686,17 @@ export class Session {
   }
 
   private handleSubprocessExit(code: number): void {
+    this.physicalExit.markExited()
     if (this._disposed) {
       return
     }
 
     this._exitCode = code
     this._state = 'exited'
+    this._isTerminating = false
+    // Why resume:false — the child is reaped, so there is nothing to unblock;
+    // only the failsafe timer must not outlive the session.
+    this.releaseProducerPause({ resume: false })
     this.releaseHeldShellReadyBytes()
 
     if (this.killTimer) {
@@ -515,12 +715,7 @@ export class Session {
     // that helper flips `_disposed = true`, which would short-circuit the later
     // Session.dispose() call from TerminalHost.reapSession (wired via onExit
     // below) — skipping attachedClients/emulator/postReadyFlushGate cleanup.
-    // Call subprocess.dispose() directly inside try/catch.
-    try {
-      this.subprocess.dispose()
-    } catch {
-      /* swallow — must not prevent exit-code fanout below */
-    }
+    this.disposeSubprocessHandle()
 
     for (const client of this.attachedClients) {
       client.onExit(code)
@@ -576,40 +771,49 @@ export class Session {
     }
   }
 
-  private forceDispose(): void {
-    if (this._state === 'exited') {
+  private requestForceKill(): void {
+    if (this._state === 'exited' || this.forceKillSent) {
       return
     }
-    // Why: forceKill BEFORE #teardownSubprocess. Order is load-bearing — the
-    // helper's subprocess.dispose() neutralizes proc.kill on POSIX (to defuse
-    // the SIGHUP-to-recycled-pid hazard inside node-pty). forceKill uses
-    // process.kill(pid, 'SIGKILL') directly and is unaffected by that
-    // neutralization. Must NOT flip `_disposed` here before #teardownSubprocess
-    // runs, or the helper would early-return and skip subprocess.dispose() —
-    // the ptmx fd would leak on every kill-timeout (this whole doc's target).
+    this.forceKillSent = true
     try {
       this.subprocess.forceKill()
-    } catch {
-      /* already dead */
+    } catch (error) {
+      this.forceKillSent = false
+      throw error
     }
-    this._exitCode = -1
-    this._isTerminating = false
+  }
 
-    this.#teardownSubprocess()
-    this._state = 'exited'
-
-    const clients = this.attachedClients
-    this.attachedClients = []
-    this.preReadyStdinQueue = []
-    this.postReadyFlushGate.clear()
-    this.emulator.dispose()
-
-    for (const client of clients) {
-      client.onExit(-1)
+  private async requestForceKillWithRetry(): Promise<void> {
+    let lastError: unknown
+    for (let attempt = 0; attempt < SESSION_FORCE_KILL_MAX_ATTEMPTS; attempt++) {
+      try {
+        this.requestForceKill()
+        return
+      } catch (error) {
+        lastError = error
+      }
+      if (attempt + 1 < SESSION_FORCE_KILL_MAX_ATTEMPTS) {
+        try {
+          await this.physicalExit.waitForExit(
+            SESSION_FORCE_KILL_RETRY_MS,
+            () => new Error(`Retrying force-kill for PTY ${this.sessionId}`)
+          )
+          return
+        } catch {
+          // The bounded waiter detached; retry the still-owned subprocess.
+        }
+      }
     }
+    throw lastError
+  }
 
-    // Why: reap from the host map on the kill-timeout path too (emulator already
-    // disposed above; reapSession's dispose() call is a no-op and just drops it).
-    this.onSessionExit?.(-1)
+  private waitForPhysicalExit(timeoutMs: number): Promise<void> {
+    // Why: timed-out destructive retries must detach from an unkillable child;
+    // otherwise every retry stays retained until the process eventually exits.
+    return this.physicalExit.waitForExit(
+      timeoutMs,
+      () => new Error(`Timed out waiting for PTY process exit: ${this.sessionId}`)
+    )
   }
 }

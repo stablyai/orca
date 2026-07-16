@@ -5,17 +5,15 @@ import { parseCodexSessionContent } from './session-scanner-codex-parser'
 import { parseDevinSessionContent } from './session-scanner-devin-parser'
 import { parseDroidSessionContent } from './session-scanner-droid-parser'
 import { parseMessageGraphSessionContent } from './session-scanner-graph-parsers'
-import {
-  parseClaudeSessionContent,
-  parseGeminiSessionContent
-} from './session-scanner-primary-parsers'
+import { parseClaudeSessionContent } from './session-scanner-primary-parsers'
+import { parseGeminiSessionContent } from './session-scanner-gemini-parsers'
 import {
   parseCopilotSessionContent,
   parseCursorSessionContent,
   parseHermesSessionContent
 } from './session-scanner-secondary-parsers'
 import type { FileWithMtime } from './session-scanner-types'
-import { normalizePiSessionsDir } from './session-scanner-values'
+import { normalizeAgentSessionsDir } from './session-scanner-values'
 import { remoteCodexIndexTitles } from './remote-session-scanner-codex-index'
 import type {
   RemoteParserOptions,
@@ -36,13 +34,21 @@ export function remoteSessionSources(
 ): RemoteSessionSource[] {
   return [
     ...remoteCodexSources(remoteHome, hostPlatform),
-    jsonlSource(
-      'claude',
-      remoteHome,
-      hostPlatform,
-      ['.claude', 'projects'],
-      parseClaudeSessionContent
-    ),
+    {
+      ...jsonlSource(
+        'claude',
+        remoteHome,
+        hostPlatform,
+        ['.claude', 'projects'],
+        parseClaudeSessionContent
+      ),
+      // The remote host owns the transcript disk, so the local readdir in the
+      // Claude parser is skipped; the walked listing supplies the sibling
+      // subagent counts instead. Partitioning also prunes the subagent
+      // transcripts themselves, which would otherwise list as phantom
+      // top-level sessions carrying the parent's sessionId.
+      collectSubagentSiblingCounts: true
+    },
     source(
       'gemini',
       remoteHome,
@@ -83,6 +89,7 @@ export function remoteSessionSources(
       parseDevinSessionContent
     ),
     jsonlSource('pi', remoteHome, hostPlatform, remotePiSessionsSegments(), piParser),
+    jsonlSource('omp', remoteHome, hostPlatform, remoteOmpSessionsSegments(), ompParser),
     jsonlSource(
       'droid',
       remoteHome,
@@ -203,6 +210,15 @@ function piParser(
   return parseMessageGraphSessionContent('pi', file, content, platform, options)
 }
 
+function ompParser(
+  file: FileWithMtime,
+  content: string,
+  platform: NodeJS.Platform,
+  options: RemoteParserOptions
+): Promise<AiVaultSession | null> {
+  return parseMessageGraphSessionContent('omp', file, content, platform, options)
+}
+
 function openClawParser(
   file: FileWithMtime,
   content: string,
@@ -217,5 +233,9 @@ function remotePathSegments(path: string): string[] {
 }
 
 function remotePiSessionsSegments(): string[] {
-  return normalizePiSessionsDir('/.pi/agent/sessions').split('/').filter(Boolean)
+  return normalizeAgentSessionsDir('/.pi/agent/sessions', '.pi').split('/').filter(Boolean)
+}
+
+function remoteOmpSessionsSegments(): string[] {
+  return normalizeAgentSessionsDir('/.omp/agent/sessions', '.omp').split('/').filter(Boolean)
 }

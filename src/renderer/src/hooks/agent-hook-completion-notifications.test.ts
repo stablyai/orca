@@ -4,6 +4,7 @@ import { YOLO_TUI_AGENT_ARGS } from '../../../shared/tui-agent-permissions'
 import { createHookListenerState, normalizeHookPayload } from '../../../shared/agent-hook-listener'
 
 const dispatchTerminalNotification = vi.fn()
+const dispatchAgentHookTerminalLifecycle = vi.fn()
 
 type MockStoreState = {
   settings: {
@@ -55,6 +56,9 @@ type MockStoreState = {
 
 let mockStoreState: MockStoreState
 const HOOK_DONE_QUIET_MS = 1_500
+// Why: Codex attention notifications are debounced (issue #8387), so a genuine
+// permission pause only notifies once this quiet window elapses without resuming.
+const CODEX_ATTENTION_QUIET_MS = 1_500
 
 vi.mock('@/store', () => ({
   useAppStore: {
@@ -64,6 +68,10 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/components/terminal-pane/use-notification-dispatch', () => ({
   dispatchTerminalNotification
+}))
+
+vi.mock('@/components/terminal-pane/agent-hook-terminal-lifecycle', () => ({
+  dispatchAgentHookTerminalLifecycle
 }))
 
 function hookStatus(state: ParsedAgentStatusPayload['state']): ParsedAgentStatusPayload {
@@ -101,10 +109,35 @@ function seedCodexPaneLaunchConfig(
 describe('agent hook completion notifications', () => {
   const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
 
+  // Why: the Codex permission-pause tests share a working→pause→quiet-window
+  // sequence; centralizing it keeps the debounce advance (issue #8387) in one spot.
+  async function observeCodexPermissionPause(state: 'waiting' | 'blocked'): Promise<void> {
+    const { observeAgentHookCompletionForNotification } =
+      await import('./agent-hook-completion-notifications')
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: hookStatus('working')
+    })
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: {
+        state,
+        prompt: 'implement notifications',
+        agentType: 'codex',
+        toolName: 'exec_command',
+        toolInput: 'git status'
+      }
+    })
+    vi.advanceTimersByTime(CODEX_ATTENTION_QUIET_MS)
+  }
+
   beforeEach(() => {
     vi.resetModules()
     vi.useFakeTimers()
     dispatchTerminalNotification.mockClear()
+    dispatchAgentHookTerminalLifecycle.mockClear()
     mockStoreState = {
       settings: {
         experimentalTerminalAttention: false,
@@ -182,6 +215,39 @@ describe('agent hook completion notifications', () => {
       })
     )
   }, 15_000)
+
+  it('accepts hook lifecycle while every completion alert consumer is disabled', async () => {
+    mockStoreState.settings.notifications.agentTaskComplete = false
+    mockStoreState.settings.experimentalTerminalAttention = false
+    const {
+      observeAgentHookCompletionForNotification,
+      syncAgentHookCompletionNotificationSettings
+    } = await import('./agent-hook-completion-notifications')
+
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: hookStatus('working')
+    })
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: hookStatus('done')
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchAgentHookTerminalLifecycle).toHaveBeenCalledWith(
+      paneKey,
+      expect.objectContaining({ state: 'done', agentType: 'codex' })
+    )
+    expect(dispatchTerminalNotification).not.toHaveBeenCalled()
+
+    mockStoreState.settings.notifications.agentTaskComplete = true
+    syncAgentHookCompletionNotificationSettings()
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchTerminalNotification).not.toHaveBeenCalled()
+  })
 
   it('tracks hook completion for terminal attention when OS completion notifications are disabled', async () => {
     mockStoreState.settings.experimentalTerminalAttention = true
@@ -521,50 +587,14 @@ describe('agent hook completion notifications', () => {
 
   it('fails open for Codex auto-approved permission requests without launch proof', async () => {
     seedCodexPaneLaunchConfig(paneKey, YOLO_TUI_AGENT_ARGS.codex ?? '')
-    const { observeAgentHookCompletionForNotification } =
-      await import('./agent-hook-completion-notifications')
-
-    observeAgentHookCompletionForNotification({
-      paneKey,
-      worktreeId: 'wt-1',
-      payload: hookStatus('working')
-    })
-    observeAgentHookCompletionForNotification({
-      paneKey,
-      worktreeId: 'wt-1',
-      payload: {
-        state: 'waiting',
-        prompt: 'implement notifications',
-        agentType: 'codex',
-        toolName: 'exec_command',
-        toolInput: 'git status'
-      }
-    })
+    await observeCodexPermissionPause('waiting')
 
     expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
   })
 
   it('still notifies for manual Codex permission requests', async () => {
     seedCodexPaneLaunchConfig(paneKey, '')
-    const { observeAgentHookCompletionForNotification } =
-      await import('./agent-hook-completion-notifications')
-
-    observeAgentHookCompletionForNotification({
-      paneKey,
-      worktreeId: 'wt-1',
-      payload: hookStatus('working')
-    })
-    observeAgentHookCompletionForNotification({
-      paneKey,
-      worktreeId: 'wt-1',
-      payload: {
-        state: 'waiting',
-        prompt: 'implement notifications',
-        agentType: 'codex',
-        toolName: 'exec_command',
-        toolInput: 'git status'
-      }
-    })
+    await observeCodexPermissionPause('waiting')
 
     expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(
@@ -579,25 +609,7 @@ describe('agent hook completion notifications', () => {
 
   it('fails open for Codex auto-approved blocked permission requests without launch proof', async () => {
     seedCodexPaneLaunchConfig(paneKey, YOLO_TUI_AGENT_ARGS.codex ?? '')
-    const { observeAgentHookCompletionForNotification } =
-      await import('./agent-hook-completion-notifications')
-
-    observeAgentHookCompletionForNotification({
-      paneKey,
-      worktreeId: 'wt-1',
-      payload: hookStatus('working')
-    })
-    observeAgentHookCompletionForNotification({
-      paneKey,
-      worktreeId: 'wt-1',
-      payload: {
-        state: 'blocked',
-        prompt: 'implement notifications',
-        agentType: 'codex',
-        toolName: 'exec_command',
-        toolInput: 'git status'
-      }
-    })
+    await observeCodexPermissionPause('blocked')
 
     expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
   })
@@ -695,6 +707,11 @@ describe('agent hook completion notifications', () => {
     })
     vi.advanceTimersByTime(HOOK_DONE_QUIET_MS - 1)
     expect(dispatchTerminalNotification).not.toHaveBeenCalled()
+    expect(
+      dispatchAgentHookTerminalLifecycle.mock.calls.filter(
+        ([, payload]) => payload.state === 'done'
+      )
+    ).toHaveLength(0)
 
     observeAgentHookCompletionForNotification({
       paneKey,
@@ -703,6 +720,11 @@ describe('agent hook completion notifications', () => {
     })
     vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
     expect(dispatchTerminalNotification).not.toHaveBeenCalled()
+    expect(
+      dispatchAgentHookTerminalLifecycle.mock.calls.filter(
+        ([, payload]) => payload.state === 'done'
+      )
+    ).toHaveLength(0)
 
     observeAgentHookCompletionForNotification({
       paneKey,
@@ -712,6 +734,10 @@ describe('agent hook completion notifications', () => {
     vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
 
     expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
+    expect(dispatchAgentHookTerminalLifecycle).toHaveBeenCalledWith(
+      paneKey,
+      expect.objectContaining({ state: 'done', agentType: 'codex' })
+    )
     expect(dispatchTerminalNotification).toHaveBeenCalledWith(
       'wt-1',
       expect.objectContaining({
@@ -771,7 +797,38 @@ describe('agent hook completion notifications', () => {
     expect(_getAgentHookCompletionNotificationCoordinatorCountForTest()).toBe(3)
   })
 
-  it('reads tabsByWorktree once per prune pass regardless of coordinator count', async () => {
+  it('gates cosmetic store updates but still prunes after a pane closes', async () => {
+    const {
+      _getAgentHookCompletionNotificationCoordinatorCountForTest,
+      observeAgentHookCompletionForNotification,
+      syncAgentHookCompletionNotificationsForStoreUpdate
+    } = await import('./agent-hook-completion-notifications')
+
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: hookStatus('working')
+    })
+
+    const beforeCosmeticUpdate = { ...mockStoreState }
+    mockStoreState.tabsByWorktree = {
+      'wt-1': [{ id: 'tab-1', ptyId: 'pty-1' }]
+    }
+    expect(
+      syncAgentHookCompletionNotificationsForStoreUpdate(mockStoreState, beforeCosmeticUpdate)
+    ).toBe(false)
+    expect(_getAgentHookCompletionNotificationCoordinatorCountForTest()).toBe(1)
+
+    const beforeClose = { ...mockStoreState }
+    mockStoreState.tabsByWorktree = { 'wt-1': [] }
+    mockStoreState.ptyIdsByTabId = {}
+    expect(syncAgentHookCompletionNotificationsForStoreUpdate(mockStoreState, beforeClose)).toBe(
+      true
+    )
+    expect(_getAgentHookCompletionNotificationCoordinatorCountForTest()).toBe(0)
+  })
+
+  it('skips tab scans until a pane-liveness slice changes', async () => {
     seedManyLivePanes()
     const {
       observeAgentHookCompletionForNotification,
@@ -786,21 +843,27 @@ describe('agent hook completion notifications', () => {
       })
     }
 
-    // Count tabsByWorktree reads during a single prune pass. Pre-fix this was
-    // O(coordinators) because each pane re-flattened tabsByWorktree; the index
-    // makes it exactly one read for the whole pass.
+    // Count full tab-map enumerations rather than cheap reference reads.
     const realTabs = mockStoreState.tabsByWorktree
-    let tabsReadCount = 0
-    Object.defineProperty(mockStoreState, 'tabsByWorktree', {
-      configurable: true,
-      get() {
-        tabsReadCount += 1
-        return realTabs
+    let tabEnumerationCount = 0
+    mockStoreState.tabsByWorktree = new Proxy(realTabs, {
+      ownKeys(target) {
+        tabEnumerationCount += 1
+        return Reflect.ownKeys(target)
       }
     })
 
     syncAgentHookCompletionNotificationSettings()
 
-    expect(tabsReadCount).toBe(1)
+    expect(tabEnumerationCount).toBe(1)
+
+    syncAgentHookCompletionNotificationSettings()
+
+    expect(tabEnumerationCount).toBe(1)
+
+    mockStoreState.ptyIdsByTabId = { ...mockStoreState.ptyIdsByTabId }
+    syncAgentHookCompletionNotificationSettings()
+
+    expect(tabEnumerationCount).toBe(2)
   })
 })

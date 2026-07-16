@@ -412,5 +412,7 @@ function writePatchedNodePtyBuildArtifacts(projectDir) {
   const buildDir = join(projectDir, 'node_modules', 'node-pty', 'build', 'Release')
   mkdirSync(buildDir, { recursive: true })
   writeFileSync(join(buildDir, 'pty.node'), '')
-  writeFileSync(join(buildDir, 'spawn-helper'), '')
+  if (process.platform === 'darwin') {
+    writeFileSync(join(buildDir, 'spawn-helper'), '')
+  }
 }

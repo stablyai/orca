@@ -25,7 +25,8 @@ export async function discoverFiles(args: {
       files.push({
         path,
         mtimeMs: fileStat.mtimeMs,
-        modifiedAt: fileStat.mtime.toISOString()
+        modifiedAt: fileStat.mtime.toISOString(),
+        sizeBytes: fileStat.size
       })
     } catch (err) {
       args.issues.push({ agent: args.agent, path, message: errorMessage(err) })
@@ -69,6 +70,8 @@ export async function walkSessionFiles(
   options: {
     extensions: Set<string>
     filePredicate?: (path: string) => boolean
+    // Return false to skip descending into a directory (matched by its name),
+    // so pruned subtrees are never stat'd or parsed.
     directoryPredicate?: (name: string) => boolean
   }
 ): Promise<string[]> {

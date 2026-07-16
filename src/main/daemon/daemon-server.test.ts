@@ -2,13 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, readFileSync } from 'node:fs'
 import { DaemonServer } from './daemon-server'
 import { DaemonClient } from './client'
 import { encodeNdjson } from './ndjson'
 import { PROTOCOL_VERSION, type DaemonRequest } from './types'
 import type { SubprocessHandle } from './session'
 import { getDaemonSocketPath } from './daemon-spawner'
+
+const confirmForegroundProcessMock = vi.fn(async () => 'droid')
 
 function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'daemon-server-test-'))
@@ -23,10 +25,11 @@ function createMockSubprocess(): SubprocessHandle & {
   return {
     pid: 55555,
     getForegroundProcess: vi.fn(() => null),
+    confirmForegroundProcess: confirmForegroundProcessMock,
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
-    forceKill: vi.fn(),
+    forceKill: vi.fn(() => onExitCb?.(137)),
     signal: vi.fn(),
     onData(cb) {
       onDataCb = cb
@@ -46,6 +49,9 @@ function createMockSubprocess(): SubprocessHandle & {
 
 type DaemonServerPrivate = {
   server: Server | null
+  host: {
+    kill: (sessionId: string, opts?: { immediate?: boolean }) => void | Promise<void>
+  }
   clients: Map<
     string,
     {
@@ -65,6 +71,7 @@ describe('DaemonServer', () => {
   let client: DaemonClient
 
   beforeEach(() => {
+    confirmForegroundProcessMock.mockClear()
     dir = createTestDir()
     socketPath = getDaemonSocketPath(dir)
     tokenPath = join(dir, 'test.token')
@@ -174,6 +181,34 @@ describe('DaemonServer', () => {
       })
     })
 
+    it('persists only an allowlisted launch identity across reattach', async () => {
+      await startServer()
+      const c = await connectClient()
+
+      const first = await c.request('createOrAttach', {
+        sessionId: 'agent-session',
+        cols: 80,
+        rows: 24,
+        launchAgent: 'droid'
+      })
+      expect(first).toMatchObject({ isNew: true, launchAgent: 'droid' })
+
+      const second = await c.request('createOrAttach', {
+        sessionId: 'agent-session',
+        cols: 80,
+        rows: 24
+      })
+      expect(second).toMatchObject({ isNew: false, launchAgent: 'droid' })
+
+      const unknown = await c.request('createOrAttach', {
+        sessionId: 'unknown-agent-session',
+        cols: 80,
+        rows: 24,
+        launchAgent: 'not-an-agent'
+      } as never)
+      expect(unknown).not.toHaveProperty('launchAgent')
+    })
+
     it('handles listSessions', async () => {
       await startServer()
       const c = await connectClient()
@@ -257,6 +292,36 @@ describe('DaemonServer', () => {
       expect(result).toBeDefined()
     })
 
+    it('does not acknowledge kill until asynchronous teardown completes', async () => {
+      await startServer()
+      const daemon = server as unknown as DaemonServerPrivate
+      let finishKill!: () => void
+      const teardown = new Promise<void>((resolve) => {
+        finishKill = resolve
+      })
+      const kill = vi.spyOn(daemon.host, 'kill').mockReturnValue(teardown)
+
+      let acknowledged = false
+      const routed = daemon
+        .routeRequest('client-1', {
+          id: 'kill-1',
+          type: 'kill',
+          payload: { sessionId: 'agent-session', immediate: true }
+        })
+        .then((result) => {
+          acknowledged = true
+          return result
+        })
+
+      await Promise.resolve()
+      expect(kill).toHaveBeenCalledWith('agent-session', { immediate: true })
+      expect(acknowledged).toBe(false)
+
+      finishKill()
+      await expect(routed).resolves.toEqual({})
+      expect(acknowledged).toBe(true)
+    })
+
     it('handles getCwd', async () => {
       await startServer()
       const c = await connectClient()
@@ -277,6 +342,19 @@ describe('DaemonServer', () => {
       // happens to match would legitimately return a path and we don't want
       // this test to flake on whatever happens to be running on the host.
       expect(result.cwd === null || typeof result.cwd === 'string').toBe(true)
+    })
+
+    it('awaits fresh foreground confirmation', async () => {
+      await startServer()
+      const c = await connectClient()
+      await c.request('createOrAttach', { sessionId: 'test-session', cols: 80, rows: 24 })
+
+      await expect(
+        c.request<{ foregroundProcess: string | null }>('confirmForegroundProcess', {
+          sessionId: 'test-session'
+        })
+      ).resolves.toEqual({ foregroundProcess: 'droid' })
+      expect(confirmForegroundProcessMock).toHaveBeenCalledTimes(1)
     })
 
     it('returns error for unknown session operations', async () => {
@@ -408,6 +486,72 @@ describe('DaemonServer', () => {
         vi.useRealTimers()
       }
     })
+
+    it('keeps exit behind final output held by the shallow socket gate', async () => {
+      vi.useFakeTimers()
+      try {
+        let subprocess: ReturnType<typeof createMockSubprocess>
+        server = new DaemonServer({
+          socketPath,
+          tokenPath,
+          spawnSubprocess: () => {
+            subprocess = createMockSubprocess()
+            return subprocess
+          }
+        })
+        const daemon = server as unknown as DaemonServerPrivate
+        const refillCallbacks: (() => void)[] = []
+        const controlSocket = { destroy: vi.fn() } as unknown as Socket
+        const streamSocket = {
+          destroyed: false,
+          destroy: vi.fn(),
+          writableLength: 128 * 1024,
+          write: vi.fn((_line: string, callback?: () => void) => {
+            if (callback) {
+              refillCallbacks.push(callback)
+            }
+            return true
+          })
+        } as unknown as Socket & {
+          write: ReturnType<typeof vi.fn>
+          writableLength: number
+        }
+
+        daemon.clients.set('client-1', {
+          clientId: 'client-1',
+          controlSocket,
+          streamSocket
+        })
+        await daemon.routeRequest('client-1', {
+          id: 'req-1',
+          type: 'createOrAttach',
+          payload: { sessionId: 'test-session', cols: 80, rows: 24 }
+        })
+
+        const finalOutput = 'final-output'.repeat(1024)
+        subprocess!._simulateData(finalOutput)
+        subprocess!._simulateExit(42)
+
+        // Only the refill sentinel may enter the already-deep socket; exit
+        // remains queued behind the final data for this session.
+        expect(refillCallbacks).toHaveLength(1)
+        const beforeRefill = streamSocket.write.mock.calls.map(([line]) => JSON.parse(String(line)))
+        expect(beforeRefill).toHaveLength(1)
+        expect(beforeRefill[0]).toMatchObject({ event: 'data', payload: { data: '' } })
+
+        streamSocket.writableLength = 0
+        refillCallbacks[0]()
+        const delivered = streamSocket.write.mock.calls
+          .map(
+            ([line]) => JSON.parse(String(line)) as { event: string; payload: { data?: string } }
+          )
+          .filter((message) => message.payload.data !== '')
+        expect(delivered.map((message) => message.event)).toEqual(['data', 'exit'])
+        expect(delivered[0]?.payload.data).toBe(finalOutput)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
   })
 
   describe('authentication', () => {
@@ -514,6 +658,28 @@ describe('DaemonServer', () => {
 
       const c = new DaemonClient({ socketPath, tokenPath })
       await expect(c.ensureConnected()).rejects.toThrow()
+    })
+
+    it('still terminates via the shutdown RPC when disposal cannot prove physical exit', async () => {
+      await startServer()
+      const daemon = server as unknown as DaemonServerPrivate & {
+        host: { dispose: () => Promise<void> }
+      }
+      // Why: an unreapable child rejects dispose after its exit deadline; the
+      // daemon must exit anyway or its replacement flow strands it as an orphan.
+      daemon.host.dispose = vi.fn(() =>
+        Promise.reject(new Error('Timed out waiting for physical PTY exit'))
+      )
+
+      const c = await connectClient()
+      // The daemon may self-terminate before the reply flushes; callers treat
+      // that as success, so only the observable teardown below is asserted.
+      await c.request('shutdown', { killSessions: true }).catch(() => {})
+
+      await waitFor(() => daemon.server === null)
+      await waitFor(() => !existsSync(socketPath))
+      const late = new DaemonClient({ socketPath, tokenPath })
+      await expect(late.ensureConnected()).rejects.toThrow()
     })
   })
 })

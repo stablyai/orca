@@ -6,20 +6,33 @@ on:
       - '.github/workflows/computer-e2e.yml'
       - 'config/electron-builder.config.cjs'
       - 'config/scripts/build-computer-macos.mjs'
+      - 'config/scripts/build-windows-cli-launcher.mjs'
+      - 'config/scripts/build-windows-cli-launcher.test.mjs'
       - 'config/scripts/computer-e2e-workflow.test.mjs'
       - 'config/scripts/computer-use-skill-guidance.test.mjs'
       - 'config/scripts/computer-use-smoke.mjs'
       - 'config/scripts/computer-use-smoke.test.mjs'
+      - 'config/scripts/daemon-boot-smoke.mjs'
+      - 'config/scripts/windows-daemon-workspace-close-repro.mjs'
       - 'config/scripts/verify-computer-native.mjs'
+      # Why: the native-smoke job boots the built terminal daemon under plain
+      # Node, so any change to the daemon bundle graph or the main build must
+      # re-run it (the v1.4.129-rc.1 daemon outage shipped with green CI).
+      - 'electron.vite.config.ts'
+      - 'build-plugins/**'
+      - 'src/main/daemon/**'
       - 'native/computer-use-macos/**'
       - 'native/computer-use-linux/**'
       - 'native/computer-use-windows/**'
+      - 'native/windows-cli-launcher/**'
       - 'skills/computer-use/SKILL.md'
       - 'src/cli/**'
       - 'src/main/computer/**'
       - 'src/main/runtime/rpc/dispatcher.ts'
       - 'src/main/runtime/rpc/errors.ts'
       - 'src/main/runtime/rpc/methods/computer*.ts'
+      - 'src/main/ssh/ssh-remote-cli-launcher.ts'
+      - 'src/main/ssh/ssh-remote-cli-launcher.test.ts'
       - 'src/shared/computer-use-*.ts'
       - 'tests/e2e/computer-linux.e2e.ts'
       - 'tests/e2e/computer-mac.e2e.ts'
@@ -62,8 +75,14 @@ jobs:
           npm install -g node-gyp@11.5.0
           echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
       - run: pnpm install --frozen-lockfile
+      # Why: without --config, bare vitest ignores config/vitest.config.ts (there
+      # is no root config) and falls back to the 5s default timeout with no
+      # Windows worker cap, so the real csc.exe launcher-compile tests time out
+      # on hosted Windows. Use the shared config so this job matches pnpm test.
       - run: >-
-          pnpm vitest run
+          pnpm vitest run --config config/vitest.config.ts
+          config/scripts/build-windows-cli-launcher.test.mjs
+          src/main/ssh/ssh-remote-cli-launcher.test.ts
           config/scripts/computer-e2e-workflow.test.mjs
           config/scripts/computer-use-skill-guidance.test.mjs
           config/scripts/computer-use-smoke.test.mjs
@@ -98,6 +117,17 @@ jobs:
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
       - run: pnpm build:electron-vite
+      # Why: boot the BUILT daemon-entry under plain Node the way production
+      # forks it. v1.4.129-rc.1 shipped a daemon that exited at module load
+      # (leaked electron require) while every other check passed; this fails
+      # the PR when the built daemon cannot start on ubuntu-22.04 / windows.
+      - name: Daemon boot smoke
+        run: node config/scripts/daemon-boot-smoke.mjs
+      # Why: workspace removal overlaps graceful renderer teardown with the
+      # forced main-process sweep; exercise that exact pair against real ConPTY.
+      - name: Windows daemon workspace-close repro
+        if: runner.os == 'Windows'
+        run: node config/scripts/windows-daemon-workspace-close-repro.mjs
       - if: runner.os == 'Linux'
         env:
           ORCA_COMPUTER_E2E: '1'

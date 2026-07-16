@@ -5,17 +5,13 @@ import type { ProjectExecutionRuntimeResolution } from '../../../../shared/proje
 import { Button } from '@/components/ui/button'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
-  hasInstalledAgentSkill,
   useInstalledAgentSkillNames
 } from '@/hooks/useInstalledAgentSkills'
 import {
   LINEAR_AGENT_SKILL_NAMES,
-  LINEAR_TICKETS_SKILL_NAME,
-  LINEAR_TICKETS_SKILL_UPDATE_COMMAND,
-  ORCA_LINEAR_SKILL_NAME,
-  ORCA_LINEAR_SKILL_INSTALL_COMMAND,
-  ORCA_LINEAR_SKILL_UPDATE_COMMAND
+  ORCA_LINEAR_SKILL_INSTALL_COMMAND
 } from '@/lib/agent-feature-install-commands'
+import { getLinearAgentSkillUpdateCommand } from '@/lib/linear-agent-skill-update-command'
 import {
   ensureOrcaCliAvailableForAgentSkillTerminal,
   isOrcaCliAvailableOnPath
@@ -109,6 +105,13 @@ export function LinearAgentSkillSetupPrompt({
   const [localDismissed, setLocalDismissed] = useState(() =>
     readLocalDismissed(localDismissStorageKey)
   )
+  const [previousDismissStorageKey, setPreviousDismissStorageKey] = useState(localDismissStorageKey)
+  // Why: dismissal is scoped to the selected runtime, so read the new key before
+  // paint rather than briefly showing the previous runtime's prompt state.
+  if (localDismissStorageKey !== previousDismissStorageKey) {
+    setPreviousDismissStorageKey(localDismissStorageKey)
+    setLocalDismissed(readLocalDismissed(localDismissStorageKey))
+  }
   const skill = useInstalledAgentSkillNames(LINEAR_AGENT_SKILL_NAMES, {
     enabled: linked,
     discoveryTarget: skillDiscoveryTarget,
@@ -118,31 +121,19 @@ export function LinearAgentSkillSetupPrompt({
     () => buildSkillCommandForRuntime(ORCA_LINEAR_SKILL_INSTALL_COMMAND, agentRuntime),
     [agentRuntime]
   )
-  const canonicalSkillInstalled = hasInstalledAgentSkill(skill.skills, ORCA_LINEAR_SKILL_NAME, {
-    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
-  })
-  const legacySkillInstalled = hasInstalledAgentSkill(skill.skills, LINEAR_TICKETS_SKILL_NAME, {
-    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
-  })
-  // Why: legacy-only installs must update the installed legacy skill, while
-  // fresh/canonical/both-name states should move through the canonical name.
-  const updateCommand =
-    !skill.installed || canonicalSkillInstalled || !legacySkillInstalled
-      ? ORCA_LINEAR_SKILL_UPDATE_COMMAND
-      : LINEAR_TICKETS_SKILL_UPDATE_COMMAND
   const installedCommand = useMemo(
-    () => buildSkillCommandForRuntime(updateCommand, agentRuntime),
-    [agentRuntime, updateCommand]
+    () =>
+      buildSkillCommandForRuntime(
+        getLinearAgentSkillUpdateCommand(skill.skills, skill.installed),
+        agentRuntime
+      ),
+    [agentRuntime, skill.installed, skill.skills]
   )
   const terminalShellOverride = getLinearPromptTerminalShellOverride(
     currentPlatform,
     settings,
     agentRuntime
   )
-  useEffect(() => {
-    setLocalDismissed(readLocalDismissed(localDismissStorageKey))
-  }, [localDismissStorageKey])
-
   const writeCliStatusIfCurrent = useCallback(
     (requestIdentity: string, requestGeneration: number, write: () => void): void => {
       if (

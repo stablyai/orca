@@ -42,7 +42,7 @@ import { isTuiAgent } from '../../shared/tui-agent-config'
 import { invalidateAuthorizedRootsCache } from './filesystem-auth'
 import type { ChildProcess } from 'node:child_process'
 import { access, mkdir, readdir, rm } from 'node:fs/promises'
-import { gitExecFileAsync, gitSpawn } from '../git/runner'
+import { gitExecFileAsync, gitSpawn, nonInteractiveGitEnv } from '../git/runner'
 import { isAbsolute, join, posix } from 'node:path'
 import {
   cleanupClaimedCloneTarget,
@@ -74,6 +74,7 @@ import {
   searchBaseRefDetails
 } from '../git/repo'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import { getSshGitCapabilityCache } from '../git/git-capability-state'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { getSshGitUsername, resolveLocalGitUsername } from '../git/git-username'
 import { enrichRepoGitUsernames } from '../repo-git-username-enrichment'
@@ -86,7 +87,12 @@ import type { RepoMethod } from '../../shared/telemetry-events'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 import { enrichMissingRepoGitRemoteIdentities } from '../repo-git-remote-identity-enrichment'
 import { getProjectHostSetupForRepo } from '../../shared/project-host-setup-projection'
-import { normalizeExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  normalizeExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
 import {
   assertFolderWorkspacePathUsable,
@@ -95,6 +101,7 @@ import {
 } from '../project-groups/folder-workspace-path-status'
 import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
+import { runWithGitReadCacheInvalidation } from '../git/status'
 
 // Why: `method` answers "which entry point did the user take?", not "what did
 // they add?" — so the IPC the renderer invoked IS the method. We never send
@@ -981,7 +988,7 @@ async function runWithClonePathLock<T>(clonePathKey: string, task: () => Promise
 
   try {
     await previous
-    return await task()
+    return await runWithGitReadCacheInvalidation(task)
   } finally {
     release()
     if (cloneInFlightByPath.get(clonePathKey) === tail) {
@@ -1118,7 +1125,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('repos:list')
   ipcMain.removeHandler('repos:add')
   ipcMain.removeHandler('repos:remove')
+  ipcMain.removeHandler('repos:removeForHost')
   ipcMain.removeHandler('repos:reorder')
+  ipcMain.removeHandler('repos:reorderForHost')
   ipcMain.removeHandler('repos:update')
   ipcMain.removeHandler('projects:list')
   ipcMain.removeHandler('projects:update')
@@ -1920,11 +1929,47 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     }
   )
 
+  ipcMain.handle(
+    'repos:reorderForHost',
+    (
+      _event,
+      args: { orderedIds: string[]; hostId: string }
+    ): { status: 'applied' | 'rejected' } => {
+      const hostId = normalizeExecutionHostId(args?.hostId)
+      if (!hostId) {
+        return { status: 'rejected' }
+      }
+      const ids = Array.isArray(args?.orderedIds) ? args.orderedIds : []
+      const applied = store.reorderReposForHost(ids, hostId)
+      if (applied) {
+        notifyReposChanged(mainWindow)
+        return { status: 'applied' }
+      }
+      return { status: 'rejected' }
+    }
+  )
+
   ipcMain.handle('repos:remove', async (_event, args: { repoId: string }) => {
     store.removeProject(args.repoId)
     invalidateAuthorizedRootsCache()
     notifyReposChanged(mainWindow)
   })
+
+  // Why: forget a project on a single execution host without disturbing the
+  // same repo id on other hosts (local or a re-added SSH target). Used by the
+  // SSH-workspace forget flow when a host is removed/disconnected.
+  ipcMain.handle(
+    'repos:removeForHost',
+    async (_event, args: { repoId: string; hostId: string }) => {
+      const hostId = normalizeExecutionHostId(args.hostId)
+      if (!hostId) {
+        throw new Error(`Invalid host ID: ${args.hostId}`)
+      }
+      store.removeProjectForHost(args.repoId, hostId)
+      invalidateAuthorizedRootsCache()
+      notifyReposChanged(mainWindow)
+    }
+  )
 
   ipcMain.handle(
     'repos:update',
@@ -2236,6 +2281,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           try {
             proc = gitSpawn(['clone', '--progress', '--', args.url, clonePath], {
               cwd: args.destination,
+              // Why: without the non-interactive guard, a clone that needs
+              // GitHub auth makes Git Credential Manager pop its "Connect to
+              // GitHub" OAuth window on Windows; in a network-restricted env the
+              // browser/device flow can never complete and git's credential
+              // retry re-pops it (issue #7652). Fail fast with a clear error and
+              // let Orca's non-intrusive GitHub state stand instead.
+              env: nonInteractiveGitEnv(),
               stdio: ['ignore', 'ignore', 'pipe']
             })
           } catch (err) {
@@ -2411,8 +2463,11 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
 
   ipcMain.handle(
     'repos:getBaseRefDefault',
-    async (_event, args: { repoId: string }): Promise<BaseRefDefaultResult> => {
-      const repo = store.getRepo(args.repoId)
+    async (
+      _event,
+      args: { repoId: string; hostId?: ExecutionHostId }
+    ): Promise<BaseRefDefaultResult> => {
+      const repo = getRepoForExecutionHost(store, args.repoId, args.hostId)
       if (!repo || isFolderRepo(repo)) {
         // Why: folder-mode repos have no git state to resolve a base ref from.
         // Return null + 0 so the renderer can decline to use a fabricated default
@@ -2488,14 +2543,20 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
 
   ipcMain.handle(
     'repos:searchBaseRefs',
-    async (_event, args: { repoId: string; query: string; limit?: number }) => {
+    async (
+      _event,
+      args: { repoId: string; query: string; limit?: number; hostId?: ExecutionHostId }
+    ) => {
       return (await searchBaseRefDetailsForRepo(store, args)).map((entry) => entry.refName)
     }
   )
 
   ipcMain.handle(
     'repos:searchBaseRefDetails',
-    async (_event, args: { repoId: string; query: string; limit?: number }) => {
+    async (
+      _event,
+      args: { repoId: string; query: string; limit?: number; hostId?: ExecutionHostId }
+    ) => {
       return searchBaseRefDetailsForRepo(store, args)
     }
   )
@@ -2503,9 +2564,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
 
 async function searchBaseRefDetailsForRepo(
   store: Store,
-  args: { repoId: string; query: string; limit?: number }
+  args: { repoId: string; query: string; limit?: number; hostId?: ExecutionHostId }
 ): Promise<BaseRefSearchResult[]> {
-  const repo = store.getRepo(args.repoId)
+  const repo = getRepoForExecutionHost(store, args.repoId, args.hostId)
   if (!repo || isFolderRepo(repo)) {
     return []
   }
@@ -2531,32 +2592,33 @@ async function searchBaseRefDetailsForRepo(
         .split('\n')
         .map((line) => line.trim())
         .filter(Boolean)
+      const capabilities = getSshGitCapabilityCache(provider)
       const runSearch = async (patternGroup?: 'segmented' | 'branchRoot'): Promise<string> => {
-        try {
-          return (
-            await provider.exec(
-              buildSearchBaseRefsArgv(normalizedQuery, limit, {
-                remoteNames: remotes,
-                patternGroup
-              }),
-              repo.path
-            )
-          ).stdout
-        } catch (err) {
-          if (!isForEachRefExcludeUnsupportedError(err)) {
-            throw err
-          }
-          return (
-            await provider.exec(
-              buildSearchBaseRefsArgv(normalizedQuery, limit, {
-                excludeRemoteHead: false,
-                remoteNames: remotes,
-                patternGroup
-              }),
-              repo.path
-            )
-          ).stdout
-        }
+        return capabilities.runWithFallback(
+          'for-each-ref-exclude',
+          async () =>
+            (
+              await provider.exec(
+                buildSearchBaseRefsArgv(normalizedQuery, limit, {
+                  remoteNames: remotes,
+                  patternGroup
+                }),
+                repo.path
+              )
+            ).stdout,
+          async () =>
+            (
+              await provider.exec(
+                buildSearchBaseRefsArgv(normalizedQuery, limit, {
+                  excludeRemoteHead: false,
+                  remoteNames: remotes,
+                  patternGroup
+                }),
+                repo.path
+              )
+            ).stdout,
+          isForEachRefExcludeUnsupportedError
+        )
       }
       // Why: delegate the NUL-parse + HEAD filter + dedup + limit pipeline
       // to the shared helper so the SSH and local paths cannot diverge.
@@ -2580,6 +2642,23 @@ async function searchBaseRefDetailsForRepo(
     }
   }
   return searchBaseRefDetails(repo.path, args.query, limit)
+}
+
+function getRepoForExecutionHost(
+  store: Store,
+  repoId: string,
+  hostId?: ExecutionHostId
+): Repo | null {
+  if (!hostId) {
+    return store.getRepo(repoId) ?? null
+  }
+  // Why: repo ids can collide across local and SSH hosts; base-ref reads must
+  // use the same host selected by the Settings pane as the subsequent write.
+  return (
+    store
+      .getRepos()
+      .find((repo) => repo.id === repoId && getRepoExecutionHostId(repo) === hostId) ?? null
+  )
 }
 
 function notifyReposChanged(mainWindow: BrowserWindow): void {

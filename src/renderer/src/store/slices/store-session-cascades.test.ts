@@ -3,7 +3,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { BrowserTab, DetectedWorktreeListResult, Worktree } from '../../../../shared/types'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import {
+  FLOATING_TERMINAL_WORKTREE_ID,
+  getDefaultWorkspaceSession
+} from '../../../../shared/constants'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -182,6 +186,8 @@ describe('removeProject cascade', () => {
         tab1: ['pty1'],
         tab2: ['pty2']
       },
+      suppressedPtyExitIds: { pty1: true, pty2: true },
+      pendingCodexPaneRestartIds: { pty1: true, pty2: true },
       terminalLayoutsByTabId: {
         tab1: makeLayout(),
         tab2: makeLayout()
@@ -208,9 +214,20 @@ describe('removeProject cascade', () => {
     expect(mockApi.pty.kill).toHaveBeenCalledWith('pty1')
     expect(mockApi.pty.kill).toHaveBeenCalledWith('pty2')
 
-    // Killed PTY IDs are suppressed
-    expect(s.suppressedPtyExitIds['pty1']).toBe(true)
-    expect(s.suppressedPtyExitIds['pty2']).toBe(true)
+    // The tabs are gone before async exit events can close them, so retaining
+    // their one-shot guards would leak ephemeral PTY ids for the renderer session.
+    expect(s.suppressedPtyExitIds['pty1']).toBeUndefined()
+    expect(s.suppressedPtyExitIds['pty2']).toBeUndefined()
+    expect(s.pendingCodexPaneRestartIds['pty1']).toBeUndefined()
+    expect(s.pendingCodexPaneRestartIds['pty2']).toBeUndefined()
+
+    store.getState().clearTabPtyId('tab1', 'pty1')
+    store.getState().clearTabPtyId('tab2', 'pty2')
+
+    // Why: exit IPC can arrive after repo purge but before the mounted pane
+    // unmounts. A late exit must not recreate an index for a tab with no owner.
+    expect(store.getState().ptyIdsByTabId['tab1']).toBeUndefined()
+    expect(store.getState().ptyIdsByTabId['tab2']).toBeUndefined()
   })
 })
 
@@ -528,6 +545,143 @@ describe('hydrateWorkspaceSession', () => {
     // The restored-active worktree is marked ever-activated so a later click
     // doesn't retag (which would suppress a real codex-restart / new-pane bump).
     expect(s.everActivatedWorktreeIds.has(validWt)).toBe(true)
+  })
+})
+
+describe('restored folder workspace hydration', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('keeps runtime folder workspace tabs, files, and browsers before remote catalogs load', () => {
+    const store = createTestStore()
+    const folderKey = folderWorkspaceKey('remote-folder')
+    const groupId = 'group-folder'
+    const editorFileId = '/srv/app/src/App.tsx'
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      activeWorkspaceKey: folderKey,
+      activeWorktreeId: folderKey,
+      activeTabId: 'terminal-folder',
+      tabsByWorktree: {
+        [folderKey]: [makeTab({ id: 'terminal-folder', worktreeId: folderKey })]
+      },
+      openFilesByWorktree: {
+        [folderKey]: [
+          {
+            filePath: editorFileId,
+            relativePath: 'src/App.tsx',
+            worktreeId: folderKey,
+            language: 'typescript'
+          }
+        ]
+      },
+      activeFileIdByWorktree: { [folderKey]: editorFileId },
+      browserTabsByWorktree: {
+        [folderKey]: [
+          makeBrowserTab({
+            id: 'browser-folder',
+            worktreeId: folderKey,
+            url: 'https://example.com'
+          })
+        ]
+      },
+      browserPagesByWorkspace: {
+        'browser-folder': [
+          {
+            id: 'browser-page-folder',
+            workspaceId: 'browser-folder',
+            worktreeId: folderKey,
+            url: 'https://example.com',
+            title: 'Example',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1
+          }
+        ]
+      },
+      activeBrowserTabIdByWorktree: { [folderKey]: 'browser-folder' },
+      activeTabTypeByWorktree: { [folderKey]: 'browser' as const },
+      unifiedTabs: {
+        [folderKey]: [
+          {
+            id: 'terminal-folder',
+            entityId: 'terminal-folder',
+            groupId,
+            worktreeId: folderKey,
+            contentType: 'terminal' as const,
+            label: 'Terminal',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          },
+          {
+            id: editorFileId,
+            entityId: editorFileId,
+            groupId,
+            worktreeId: folderKey,
+            contentType: 'editor' as const,
+            label: 'App.tsx',
+            customLabel: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 2
+          },
+          {
+            id: 'browser-folder',
+            entityId: 'browser-folder',
+            groupId,
+            worktreeId: folderKey,
+            contentType: 'browser' as const,
+            label: 'Example',
+            customLabel: null,
+            color: null,
+            sortOrder: 2,
+            createdAt: 3
+          }
+        ]
+      },
+      tabGroups: {
+        [folderKey]: [
+          {
+            id: groupId,
+            worktreeId: folderKey,
+            activeTabId: 'browser-folder',
+            tabOrder: ['terminal-folder', editorFileId, 'browser-folder'],
+            recentTabIds: ['terminal-folder', editorFileId, 'browser-folder']
+          }
+        ]
+      },
+      activeGroupIdByWorktree: { [folderKey]: groupId }
+    }
+    const options = {
+      additionalValidWorkspaceKeys: [folderKey],
+      runtimeHostIdByWorkspaceSessionKey: { [folderKey]: 'runtime:env-1' as const }
+    }
+
+    store.getState().hydrateWorkspaceSession(session, options)
+    store.getState().hydrateTabsSession(session, options)
+    store.getState().hydrateEditorSession(session, options)
+    store.getState().hydrateBrowserSession(session, options)
+
+    const state = store.getState()
+    expect(state.activeWorktreeId).toBe(folderKey)
+    expect(state.activeWorkspaceKey).toBe(folderKey)
+    expect(state.tabsByWorktree[folderKey]?.map((tab) => tab.id)).toEqual(['terminal-folder'])
+    expect(state.unifiedTabsByWorktree[folderKey]?.map((tab) => tab.id)).toEqual([
+      'terminal-folder',
+      editorFileId,
+      'browser-folder'
+    ])
+    expect(state.openFiles.map((file) => file.worktreeId)).toEqual([folderKey])
+    expect(state.activeFileIdByWorktree[folderKey]).toBe(editorFileId)
+    expect(state.browserTabsByWorktree[folderKey]?.map((tab) => tab.id)).toEqual(['browser-folder'])
+    expect(state.browserPagesByWorkspace['browser-folder']?.[0]?.worktreeId).toBe(folderKey)
+    expect(state.activeTabTypeByWorktree[folderKey]).toBe('browser')
   })
 })
 
@@ -1518,6 +1672,7 @@ describe('reconnectPersistedTerminals', () => {
         tabsByWorktree: s.tabsByWorktree,
         ptyIdsByTabId: s.ptyIdsByTabId,
         browserTabsByWorktree: s.browserTabsByWorktree,
+        worktreeIdsWithLiveAgent: new Set(),
         hideDefaultBranchWorkspace: false,
         hideAutomationGeneratedWorkspaces: false,
         repoMap: new Map(s.repos.map((repo) => [repo.id, repo])),
@@ -1866,6 +2021,7 @@ describe('reconnectPersistedTerminals', () => {
         tabsByWorktree: s.tabsByWorktree,
         ptyIdsByTabId: s.ptyIdsByTabId,
         browserTabsByWorktree: s.browserTabsByWorktree,
+        worktreeIdsWithLiveAgent: new Set(),
         hideDefaultBranchWorkspace: false,
         hideAutomationGeneratedWorkspaces: false,
         repoMap: new Map(s.repos.map((repo) => [repo.id, repo])),
@@ -1923,7 +2079,7 @@ describe('hydrateEditorSession', () => {
       },
       activeFileIdByWorktree: { [wt]: '/path/wt1/src/index.ts' },
       activeTabTypeByWorktree: { [wt]: 'editor' },
-      markdownFrontmatterVisible: { '/path/wt1/README.md': true }
+      markdownFrontmatterVisible: { '/path/wt1/README.md': false }
     })
 
     const s = store.getState()
@@ -1932,7 +2088,7 @@ describe('hydrateEditorSession', () => {
     expect(s.openFiles[0].mode).toBe('edit')
     expect(s.openFiles[0].isDirty).toBe(false)
     expect(s.openFiles[1].isPreview).toBe(true)
-    expect(s.markdownFrontmatterVisible).toEqual({ '/path/wt1/README.md': true })
+    expect(s.markdownFrontmatterVisible).toEqual({ '/path/wt1/README.md': false })
     expect(s.activeFileId).toBe('/path/wt1/src/index.ts')
     expect(s.activeTabType).toBe('editor')
   })
@@ -2011,10 +2167,46 @@ describe('hydrateEditorSession', () => {
         [FLOATING_TERMINAL_WORKTREE_ID]: filePath
       },
       activeTabTypeByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'editor' },
+      markdownFrontmatterVisible: { [filePath]: false }
+    })
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({ [fileId]: false })
+  })
+
+  it('drops legacy visible=true front-matter entries so upgraded sessions fall back to the visible default', () => {
+    const store = createTestStore()
+    const filePath = '/orca/userData/floating-workspace/note.md'
+    const fileId = ownedEditorFileId(filePath, FLOATING_TERMINAL_WORKTREE_ID, null)
+
+    store.setState({ activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+
+    store.getState().hydrateEditorSession({
+      activeRepoId: null,
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            filePath,
+            relativePath: 'note.md',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            language: 'markdown',
+            runtimeEnvironmentId: null
+          }
+        ]
+      },
+      activeFileIdByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: filePath
+      },
+      activeTabTypeByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'editor' },
+      // Pre-flip sessions stored `true` for the (then non-default) visible state.
       markdownFrontmatterVisible: { [filePath]: true }
     })
 
-    expect(store.getState().markdownFrontmatterVisible).toEqual({ [fileId]: true })
+    expect(store.getState().markdownFrontmatterVisible).toEqual({})
+    expect(fileId in store.getState().markdownFrontmatterVisible).toBe(false)
   })
 
   it('falls back to the floating workspace file id when duplicate paths are owner-qualified', () => {

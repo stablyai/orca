@@ -349,10 +349,12 @@ function getPatchedNodePtyRebuildReason() {
   // Why: Orca patches node-pty's native Unix spawn path; upstream prebuilds can
   // load successfully in Electron while missing the patched fd/error handling.
   const nodePtyDir = resolve(projectDir, 'node_modules', 'node-pty')
-  const missingArtifact = [
-    resolve(nodePtyDir, 'build', 'Release', 'pty.node'),
-    resolve(nodePtyDir, 'build', 'Release', 'spawn-helper')
-  ].find((artifactPath) => !existsSync(artifactPath))
+  const artifactPaths = [resolve(nodePtyDir, 'build', 'Release', 'pty.node')]
+  // Why: node-pty only builds spawn-helper on macOS; Linux builds only pty.node.
+  if (process.platform === 'darwin') {
+    artifactPaths.push(resolve(nodePtyDir, 'build', 'Release', 'spawn-helper'))
+  }
+  const missingArtifact = artifactPaths.find((artifactPath) => !existsSync(artifactPath))
 
   if (!missingArtifact) {
     return null

@@ -1,46 +1,22 @@
 import { Session, type SubprocessHandle } from './session'
 import { normalizePtySize } from './daemon-pty-size'
+import { shellPathSupportsPtyStartupBarrier } from './shell-ready'
 import { resolveProcessCwd } from '../providers/process-cwd'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
-import type {
-  SessionInfo,
-  TakePendingOutputResult,
-  TerminalSnapshot,
-  ShellReadyState
+import {
+  SessionNotFoundError,
+  type SessionInfo,
+  type TakePendingOutputResult,
+  type TerminalSnapshot
 } from './types'
-import { SessionNotFoundError } from './types'
+import type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
+import { shutdownTerminalHostSessions } from './terminal-host-session-shutdown'
+import { TerminalSessionTeardown } from './terminal-session-teardown'
+
+export type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
 
 const DEFAULT_MAX_TOMBSTONES = 1000
-
-export type CreateOrAttachOptions = {
-  sessionId: string
-  cols: number
-  rows: number
-  cwd?: string
-  env?: Record<string, string>
-  envToDelete?: string[]
-  command?: string
-  startupCommandDelivery?: StartupCommandDelivery
-  /** Explicit shell the renderer asked for (e.g. 'wsl.exe' for "New WSL
-   *  terminal" from the "+" menu). Forwarded to the subprocess spawner so the
-   *  daemon path honors per-tab shell selection the same way LocalPtyProvider
-   *  does. */
-  shellOverride?: string
-  terminalWindowsWslDistro?: string | null
-  terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
-  shellReadySupported?: boolean
-  shellReadyTimeoutMs?: number
-  streamClient: { onData: (data: string) => void; onExit: (code: number) => void }
-}
-
-export type CreateOrAttachResult = {
-  isNew: boolean
-  snapshot: TerminalSnapshot | null
-  pid: number | null
-  shellState: ShellReadyState
-  attachToken: symbol
-}
 
 export type TerminalHostOptions = {
   spawnSubprocess: (opts: {
@@ -71,10 +47,13 @@ export type TerminalHostOptions = {
 
 export class TerminalHost {
   private sessions = new Map<string, Session>()
+  private sessionTeardown = new TerminalSessionTeardown(this.sessions)
   private killedTombstones = new Map<string, number>()
   private spawnSubprocess: TerminalHostOptions['spawnSubprocess']
   private onFinalCheckpoint: TerminalHostOptions['onFinalCheckpoint']
   private maxTombstones: number
+  private creationFenced = false
+  private disposePromise: Promise<void> | null = null
 
   constructor(opts: TerminalHostOptions) {
     this.spawnSubprocess = opts.spawnSubprocess
@@ -89,13 +68,18 @@ export class TerminalHost {
    * already deliver them through shell launch arguments.
    */
   async createOrAttach(opts: CreateOrAttachOptions): Promise<CreateOrAttachResult> {
+    if (this.creationFenced) {
+      throw new Error('Terminal host is shutting down')
+    }
     const existing = this.sessions.get(opts.sessionId)
 
-    // Why: a session that has been asked to terminate (kill() called but the
-    // subprocess hasn't exited yet) must not be reattached. Reattaching would
-    // hand the caller a handle that races with the in-flight exit, and any
-    // subsequent operation (write/kill/resize) would fail once the subprocess
-    // finally exits. Treat terminating sessions the same as fully-exited ones.
+    // Why: async descendant capture must finish before anyone can attach or
+    // dispose/recreate this id. Disposing here would kill the root before the
+    // snapshot and reattaching would hand out a doomed session.
+    if (this.sessionTeardown.get(opts.sessionId) || existing?.isTerminating) {
+      throw new SessionNotFoundError(opts.sessionId)
+    }
+
     if (existing && existing.isAlive && !existing.isTerminating) {
       const snapshot = existing.getSnapshot()
       existing.detachAllClients()
@@ -105,8 +89,16 @@ export class TerminalHost {
         snapshot,
         pid: existing.pid,
         shellState: existing.shellState,
+        ...(existing.launchAgent ? { launchAgent: existing.launchAgent } : {}),
+        ...(existing.historySeeded !== undefined ? { historySeeded: existing.historySeeded } : {}),
         attachToken: token
       }
+    }
+
+    if (existing?.isAlive && existing.isTerminating) {
+      // Why: replacing a SIGKILLed-but-unreaped child would lose ownership of
+      // its native handles and let the same session id hide two generations.
+      throw new Error(`Session "${opts.sessionId}" is terminating`)
     }
 
     // Clean up dead session if present
@@ -128,18 +120,31 @@ export class TerminalHost {
       envToDelete: opts.envToDelete,
       command: opts.command,
       startupCommandDelivery: opts.startupCommandDelivery,
+      ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
       shellOverride: opts.shellOverride,
       terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
       terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation
     })
+
+    // Why: the caller computed shellReadySupported from the preferred shell,
+    // before spawn. A Unix fallback (e.g. /bin/sh) never emits the ready
+    // marker, so keeping the stale flag would queue startup commands until the
+    // shell-ready timeout and bracketed-paste-wrap them for a line editor
+    // without paste mode.
+    const shellReadySupported =
+      (opts.shellReadySupported ?? false) &&
+      (subprocess.shellPath === undefined ||
+        shellPathSupportsPtyStartupBarrier(subprocess.shellPath))
 
     const session = new Session({
       sessionId: opts.sessionId,
       cols: size.cols,
       rows: size.rows,
       terminalHandle: opts.env?.ORCA_TERMINAL_HANDLE,
+      launchAgent: opts.launchAgent,
       subprocess,
-      shellReadySupported: opts.shellReadySupported ?? false,
+      shellReadySupported,
+      historySeed: opts.historySeed,
       // Why: reap the dead session (dispose emulator + drop from the map) the
       // moment its subprocess exits, instead of retaining it for the daemon's
       // lifetime. Nothing reads a dead session's emulator (getSnapshot/
@@ -170,7 +175,7 @@ export class TerminalHost {
       session.write(
         buildStartupCommandSubmission(opts.command, {
           submit,
-          bracketedPasteSafe: opts.shellReadySupported ?? false
+          bracketedPasteSafe: shellReadySupported
         })
       )
     }
@@ -180,6 +185,8 @@ export class TerminalHost {
       snapshot: null,
       pid: subprocess.pid,
       shellState: session.shellState,
+      ...(session.launchAgent ? { launchAgent: session.launchAgent } : {}),
+      ...(session.historySeeded !== undefined ? { historySeeded: session.historySeeded } : {}),
       attachToken: token
     }
   }
@@ -192,25 +199,38 @@ export class TerminalHost {
     this.getAliveSession(sessionId).resize(cols, rows)
   }
 
-  kill(sessionId: string, opts: { immediate?: boolean } = {}): void {
-    const session = this.getAliveSession(sessionId)
-    this.recordTombstone(sessionId)
-    if (opts.immediate) {
-      session.forceKillAndDisposeSubprocess()
-      // Why: the immediate path tears down synchronously without firing the
-      // session's onExit hook, so reap it here. The graceful path below funnels
-      // through Session.handleSubprocessExit -> onExit -> reapSession.
-      this.reapSession(sessionId)
+  // Why null-not-throw (unlike write/resize): pause/resume are best-effort
+  // flow-control hints; a session that exited while the notify was in flight
+  // must not surface an error or a synthetic exit.
+  pauseProducer(sessionId: string): void {
+    const session = this.sessions.get(sessionId)
+    if (!session || !session.isAlive) {
       return
     }
-    session.kill()
+    session.pauseProducer()
+  }
+
+  resumeProducer(sessionId: string): void {
+    this.sessions.get(sessionId)?.resumeProducer()
+  }
+
+  kill(sessionId: string, opts: { immediate?: boolean } = {}): Promise<void> {
+    const pending = this.sessionTeardown.get(sessionId)
+    if (pending) {
+      return Promise.resolve(
+        opts.immediate ? this.sessionTeardown.requestImmediate(sessionId) : pending
+      )
+    }
+    const session = this.getAliveSession(sessionId)
+    const killed = this.sessionTeardown.killSession(sessionId, session, opts.immediate === true)
+    this.recordTombstone(sessionId)
+    return Promise.resolve(killed)
   }
 
   // Why: dispose a dead session's headless emulator and drop it from the map so
   // exited terminals don't pin ~5000 rows of scrollback for the daemon's life.
   // No-ops on live sessions (a live session must never be disposed here) and on
-  // already-reaped/unknown ids. Wired as the Session onExit hook and also called
-  // on the immediate-kill path.
+  // already-reaped/unknown ids. Wired as the Session onExit hook.
   private reapSession(sessionId: string): void {
     const session = this.sessions.get(sessionId)
     if (!session || session.isAlive) {
@@ -254,6 +274,14 @@ export class TerminalHost {
     return session.getForegroundProcess()
   }
 
+  async confirmForegroundProcess(sessionId: string): Promise<string | null> {
+    const session = this.sessions.get(sessionId)
+    if (!session || !session.isAlive) {
+      return null
+    }
+    return session.confirmForegroundProcess()
+  }
+
   clearScrollback(sessionId: string): void {
     this.getAliveSession(sessionId).clearScrollback()
   }
@@ -261,12 +289,22 @@ export class TerminalHost {
   // Why: unlike getAliveSession (which throws), this returns null for dead/missing
   // sessions. Checkpoint is best-effort — a session that exited between the timer
   // firing and the RPC arriving should not throw.
-  getSnapshot(sessionId: string): TerminalSnapshot | null {
+  getSnapshot(sessionId: string, opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {
     const session = this.sessions.get(sessionId)
     if (!session || !session.isAlive) {
       return null
     }
-    return session.getSnapshot()
+    return session.getSnapshot(opts)
+  }
+
+  // Why: scan-authority handoff seed (null-not-throw like getSnapshot) — the
+  // emulator's dangling incomplete escape at the current stream position.
+  getPartialEscapeTailAnsi(sessionId: string): string {
+    const session = this.sessions.get(sessionId)
+    if (!session || !session.isAlive) {
+      return ''
+    }
+    return session.getPartialEscapeTailAnsi()
   }
 
   // Why: read-only readback of the size the PTY actually applied (null-not-throw
@@ -321,42 +359,24 @@ export class TerminalHost {
     return result
   }
 
-  dispose(): void {
-    // Why: write final checkpoints before killing sessions so graceful shutdown
-    // has zero data loss. The checkpoint callback writes synchronously to disk.
-    if (this.onFinalCheckpoint) {
-      for (const [sessionId, session] of this.sessions) {
-        if (!session.isAlive) {
-          continue
-        }
-        const take = session.takePendingOutput(true, { teardownSnapshot: true })
-        if (take?.snapshot) {
-          try {
-            this.onFinalCheckpoint(sessionId, take.snapshot, take.records)
-          } catch {
-            // Best-effort — don't block shutdown
-          }
-        }
-      }
+  dispose(): Promise<void> {
+    this.creationFenced = true
+    if (this.disposePromise) {
+      return this.disposePromise
     }
+    const disposePromise = this.disposeSessions()
+    this.disposePromise = disposePromise
+    void disposePromise.catch(() => {
+      // Why: keep failed native owners retryable on a later shutdown request.
+      if (this.disposePromise === disposePromise) {
+        this.disposePromise = null
+      }
+    })
+    return disposePromise
+  }
 
-    for (const [, session] of this.sessions) {
-      session.detachAllClients()
-      // Why: live-vs-exited is load-bearing. For LIVE sessions we use
-      // forceKillAndDisposeSubprocess (SIGKILL + destroy) to reap stubborn
-      // children AND release the ptmx fd on the same tick, bypassing the 5s
-      // KILL_TIMEOUT_MS fallback that would otherwise outlive the daemon
-      // process. For sessions that have already exited but are still in the
-      // map, SIGKILL would target a reaped pid — on POSIX that pid can be
-      // recycled to an unrelated process, so we MUST only release the fd via
-      // disposeSubprocess() (destroy without kill). See docs/fix-pty-fd-leak.md.
-      if (session.isAlive) {
-        session.forceKillAndDisposeSubprocess()
-      } else {
-        session.disposeSubprocess()
-      }
-    }
-    this.sessions.clear()
+  private async disposeSessions(): Promise<void> {
+    await shutdownTerminalHostSessions(this.sessions, this.onFinalCheckpoint)
     this.killedTombstones.clear()
   }
 

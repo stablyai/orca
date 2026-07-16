@@ -383,16 +383,19 @@
   color: var(--foreground);
 }
 
-/* Why: stack both step screens in the same grid cell so the viewport
-   sizes to the tallest child. This keeps the back button at the same
-   Y on Step 1 and Step 2 even though Step 2 has more rows of content. */
+/* Why: only the active step contributes to layout; the measured height lets
+   the card grow for Step 2 without making the shorter Step 1 oversized. */
 .mobile-page-root .mp-flow-viewport {
-  display: grid;
-  grid-template-areas: 'stack';
+  position: relative;
+  overflow: hidden;
+  transition: height 280ms cubic-bezier(0.32, 0.72, 0.24, 1);
 }
 
 .mobile-page-root .mp-flow-screen {
-  grid-area: stack;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
   transform: translateX(40px);
   opacity: 0;
   pointer-events: none;
@@ -402,6 +405,7 @@
 }
 
 .mobile-page-root .mp-flow-screen.is-active {
+  position: relative;
   transform: translateX(0);
   opacity: 1;
   pointer-events: auto;
@@ -562,8 +566,10 @@
 }
 
 .mobile-page-root .mp-qr {
+  position: relative;
   display: grid;
   place-items: center;
+  overflow: hidden;
   padding: 8px;
   border-radius: 12px;
   background: #fafafa;
@@ -576,12 +582,32 @@
 }
 
 .mobile-page-root .mp-qr-large {
+  box-sizing: border-box;
+  width: 184px;
+  height: 184px;
   padding: 10px;
 }
 
 .mobile-page-root .mp-qr-large img {
   width: 164px;
   height: 164px;
+}
+
+.mobile-page-root .mp-qr-refreshing {
+  filter: blur(5px);
+  opacity: 0.32;
+}
+
+.mobile-page-root .mp-qr-loading {
+  position: absolute;
+  inset: 10px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--background) 76%, transparent);
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .mobile-page-root .mp-qr-stack {
@@ -619,6 +645,38 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 28px;
   align-items: start;
+}
+
+.mobile-page-root .mp-pairing-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'copy qr'
+    'relay qr'
+    'controls controls';
+  column-gap: 32px;
+  row-gap: 18px;
+  align-items: start;
+}
+
+.mobile-page-root .mp-pairing-copy {
+  grid-area: copy;
+}
+
+.mobile-page-root .mp-pairing-qr {
+  grid-area: qr;
+  /* Why: the QR belongs to the pairing heading, not the paragraph below it. */
+  margin-top: 48px;
+}
+
+.mobile-page-root .mp-pairing-relay {
+  grid-area: relay;
+  min-width: 0;
+}
+
+.mobile-page-root .mp-pairing-controls {
+  grid-area: controls;
+  min-width: 0;
 }
 
 /* Why: align the QR's top with the body copy ("Scan the QR…") instead
@@ -1940,7 +1998,9 @@
 
 /* Reduced motion: pin to home, no slide transitions */
 @media (prefers-reduced-motion: reduce) {
-  .mobile-page-root .mp-screen-slide {
+  .mobile-page-root .mp-screen-slide,
+  .mobile-page-root .mp-flow-viewport,
+  .mobile-page-root .mp-flow-screen {
     transition: none;
   }
 }

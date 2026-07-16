@@ -225,6 +225,28 @@ describe('ensureHooksConfirmed', () => {
     expect(pending).toHaveLength(0)
   })
 
+  it('inspects the requested host when duplicate repo ids exist', async () => {
+    const { state } = createTestState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      trustedOrcaHooks: { 'repo-1': { all: { approvedAt: 1 } } },
+      repos: [
+        { id: 'repo-1', displayName: 'Runtime', executionHostId: 'runtime:env-1' },
+        { id: 'repo-1', displayName: 'SSH', connectionId: 'ssh-1' }
+      ]
+    } as unknown as Partial<AppState>)
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: { scripts: {} },
+      mayNeedUpdate: false
+    })
+
+    const decision = await ensureHooksConfirmed(state, 'repo-1', 'archive', 'ssh:ssh-1')
+
+    expect(decision).toBe('run')
+    expect(hooksCheckMock).toHaveBeenCalledWith({ repoId: 'repo-1', hostId: 'ssh:ssh-1' })
+    expect(runtimeEnvironmentCallMock).not.toHaveBeenCalled()
+  })
+
   it('checks runtime-owned repo hooks through the repo owner runtime', async () => {
     const { state, pending } = createTestState({
       settings: { activeRuntimeEnvironmentId: 'focused-env' },
@@ -344,6 +366,26 @@ describe('ensureHooksConfirmed', () => {
 
     expect(decision).toBe('run')
     expect(pending).toHaveLength(0)
+  })
+
+  it('forwards the explicit host to issueCommand inspection when repo ids collide', async () => {
+    const { state } = createTestState({
+      repos: [
+        { id: 'repo-1', displayName: 'Local Row' },
+        { id: 'repo-1', displayName: 'SSH Row', connectionId: 'server' }
+      ]
+    } as unknown as Partial<AppState>)
+    readIssueCommandMock.mockResolvedValue({
+      source: 'local',
+      sharedContent: null,
+      localContent: 'user content',
+      effectiveContent: 'user content',
+      localFilePath: ''
+    })
+
+    await ensureHooksConfirmed(state, 'repo-1', 'issueCommand', 'ssh:server')
+
+    expect(readIssueCommandMock).toHaveBeenCalledWith({ repoId: 'repo-1', hostId: 'ssh:server' })
   })
 
   it('fails closed when issueCommand inspection reports an error status', async () => {

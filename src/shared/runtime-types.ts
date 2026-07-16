@@ -10,6 +10,7 @@ import type {
   BrowserCookieImportResult,
   BrowserSessionProfile,
   BrowserSessionProfileSource,
+  CreateWorktreeResult,
   GitWorktreeInfo,
   RemoveWorktreeResult,
   Repo,
@@ -36,6 +37,12 @@ export type { RuntimeMarkdownReadTabResult, RuntimeMarkdownSaveTabResult }
 
 export type RuntimeGraphStatus = 'ready' | 'reloading' | 'unavailable'
 
+export type RuntimeDesktopWindowStatus = 'available' | 'openable' | 'initializing' | 'blocked'
+
+// Why: headless serve still owns one runtime graph, but zero can never collide
+// with Electron BrowserWindow ids and can be transferred safely on promotion.
+export const HEADLESS_RUNTIME_WINDOW_ID = 0
+
 // Why: the access scope a paired device token grants. Lives in shared so
 // pairing offers, status.get, and the device registry use one vocabulary.
 export type DeviceScope = 'mobile' | 'runtime'
@@ -54,6 +61,7 @@ export type RuntimeStatus = {
   rendererGraphEpoch: number
   graphStatus: RuntimeGraphStatus
   authoritativeWindowId: number | null
+  desktopWindowStatus?: RuntimeDesktopWindowStatus
   liveTabCount: number
   liveLeafCount: number
   // Why: optional so clients can read both new and pre-contract runtimes.
@@ -63,6 +71,7 @@ export type RuntimeStatus = {
   capabilities?: RuntimeCapability[]
   remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
   hostPlatform?: NodeJS.Platform
+  terminalWindowsShell?: string | null
   // Why: legacy or saved WebSocket pairings may not carry scope metadata, so
   // the server stamps the authenticated token scope here for status.get only.
   deviceScope?: DeviceScope
@@ -83,6 +92,7 @@ export type CliStatusResult = {
   app: {
     running: boolean
     pid: number | null
+    desktopWindowStatus?: RuntimeDesktopWindowStatus
   }
   runtime: {
     state: CliRuntimeState
@@ -488,6 +498,7 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   launchConfig?: SleepingAgentLaunchConfig
   launchToken?: string
   launchAgent?: TuiAgent
+  viewMode?: 'terminal' | 'chat'
   startupCommandDelivery?: StartupCommandDelivery
   title?: string
   activate?: boolean
@@ -536,6 +547,8 @@ export type RuntimeTerminalFocus = {
 export type RuntimeTerminalClose = {
   handle: string
   tabId: string
+  /** Present for the durable whole-tab lifecycle without changing legacy receipts. */
+  closeMode?: 'tab'
   ptyKilled: boolean
 }
 
@@ -585,18 +598,25 @@ export type RuntimeWorktreePsSummary = {
   workspaceKind?: 'git' | 'folder-workspace'
   worktreeId: string
   repoId: string
+  hostId?: Worktree['hostId']
+  terminalPlatform?: NodeJS.Platform
   repo: string
   path: string
   branch: string
   isArchived: boolean
   isMainWorktree: boolean
   hasHostSidebarActivity: boolean
+  worktreeInstanceId?: string
+  lineageWorktreeInstanceId?: string
+  parentWorktreeInstanceId?: string
   parentWorktreeId: string | null
   childWorktreeIds: string[]
   displayName: string
   workspaceStatus: string
   sortOrder: number
   manualOrder?: number
+  lastActivityAt?: number
+  createdAt?: number
   linkedIssue: number | null
   linkedPR: { number: number; state: string } | null
   linkedLinearIssue: string | null
@@ -665,6 +685,8 @@ export type RuntimeWorktreeCreateResult = {
   workspaceLineage?: WorkspaceLineage | null
   warnings: WorktreeLineageWarning[]
   warning?: string
+  startupTerminal?: CreateWorktreeResult['startupTerminal']
+  agentTerminalHandle?: string
 }
 
 export type RuntimeWorktreeRemoveResult = RemoveWorktreeResult & {

@@ -8,7 +8,10 @@ import {
   getOrcaControlSocketPath,
   spawnSystemSsh,
   spawnSystemSshCommand,
+  downloadFileViaSystemSsh,
   uploadDirectoryViaSystemSsh,
+  uploadFileViaSystemSsh,
+  writeBufferViaSystemSsh,
   writeFileViaSystemSsh,
   type SystemSshBuildArgsOptions,
   type SystemSshProcess
@@ -24,6 +27,7 @@ import {
   isAuthError,
   isAgentFallbackError,
   isSystemSshFallbackError,
+  isGssapiSystemSshFallbackCandidate,
   isPassphraseError,
   sleep,
   buildConnectConfig,
@@ -35,6 +39,7 @@ import {
   type SshConnectionCallbacks
 } from './ssh-connection-utils'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
+import type { FileUploadSession } from '../providers/types'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
 export type { SshConnectionCallbacks } from './ssh-connection-utils'
 
@@ -69,6 +74,7 @@ export class SshConnection {
   private systemOperationAbortController = new AbortController()
   private systemSshResolvedConfig: SshResolvedConfig | null = null
   private systemSshControlMasterDisabledForSession = false
+  private systemSshGssapiOnlyForSession = false
   private useSystemSshTransport = false
   private state: SshConnectionState
   private callbacks: SshConnectionCallbacks
@@ -347,6 +353,54 @@ export class SshConnection {
     })
   }
 
+  async downloadFile(
+    remotePath: string,
+    localPath: string,
+    options?: SshRemoteFileOptions
+  ): Promise<void> {
+    if (!this.useSystemSshTransport) {
+      const sftp = await this.sftp()
+      try {
+        const { fastGetViaSftp } = await import('../providers/ssh-filesystem-provider-sftp')
+        await fastGetViaSftp(sftp, remotePath, localPath)
+      } finally {
+        sftp.end()
+      }
+      return
+    }
+    await downloadFileViaSystemSsh(this.target, remotePath, localPath, {
+      signal: this.systemOperationAbortController.signal,
+      hostPlatform: options?.hostPlatform,
+      ...this.getSystemSshBuildArgsOptions()
+    })
+  }
+
+  async openFileUploadSession(options?: SshRemoteFileOptions): Promise<FileUploadSession> {
+    if (!this.useSystemSshTransport) {
+      const sftp = await this.sftp()
+      const { uploadFile } = await import('./sftp-upload')
+      return {
+        uploadFile: (localPath, remotePath, uploadOptions) =>
+          uploadFile(sftp, localPath, remotePath, uploadOptions),
+        close: () => sftp.end()
+      }
+    }
+    // Why: disconnect replaces the connection controller; an existing import
+    // session must stay bound to the signal and SSH config it opened with.
+    const signal = this.systemOperationAbortController.signal
+    const buildArgsOptions = this.getSystemSshBuildArgsOptions()
+    return {
+      uploadFile: (localPath, remotePath, uploadOptions) =>
+        uploadFileViaSystemSsh(this.target, localPath, remotePath, {
+          signal,
+          hostPlatform: options?.hostPlatform,
+          exclusive: uploadOptions?.exclusive,
+          ...buildArgsOptions
+        }),
+      close: () => {}
+    }
+  }
+
   async writeFile(
     remotePath: string,
     contents: string,
@@ -401,6 +455,30 @@ export class SshConnection {
     })
   }
 
+  async writeBuffer(
+    remotePath: string,
+    contents: Buffer,
+    options?: SshRemoteFileOptions & { append?: boolean; exclusive?: boolean }
+  ): Promise<void> {
+    if (!this.useSystemSshTransport) {
+      const sftp = await this.sftp()
+      try {
+        const { uploadBuffer } = await import('./sftp-upload')
+        await uploadBuffer(sftp, contents, remotePath, options)
+      } finally {
+        sftp.end()
+      }
+      return
+    }
+    await writeBufferViaSystemSsh(this.target, remotePath, contents, {
+      signal: this.systemOperationAbortController.signal,
+      hostPlatform: options?.hostPlatform,
+      append: options?.append,
+      exclusive: options?.exclusive,
+      ...this.getSystemSshBuildArgsOptions()
+    })
+  }
+
   async connect(): Promise<void> {
     if (this.disposed) {
       throw new Error('Connection disposed')
@@ -414,6 +492,12 @@ export class SshConnection {
         return
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err))
+
+        // Why: a concurrent disconnect() already set 'disconnected'; a cancelled
+        // attempt's late error must not overwrite it with auth-failed/error.
+        if (this.disposed) {
+          throw lastError
+        }
 
         if (isAuthError(lastError) || isPassphraseError(lastError)) {
           this.setState('auth-failed', lastError.message)
@@ -449,8 +533,27 @@ export class SshConnection {
       await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved)
       return
     }
+    // Why: ssh2 has no gssapi-with-mic support, so hosts that explicitly
+    // request GSSAPIAuthentication try Kerberos SSO via the system OpenSSH
+    // binary first. Restrict the probe to GSSAPI so missing tickets fall through
+    // to Orca's existing key and credential-prompt path.
+    if (this.target.gssapiAuthentication === true) {
+      try {
+        await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved, true)
+        return
+      } catch (probeErr) {
+        if (this.disposed || !this.isCurrentConnectAttempt(connectGeneration)) {
+          throw probeErr
+        }
+      }
+    }
+    // Why: a synchronous spawn throw (no system ssh binary) bypasses the probe's
+    // own catch, so the ssh2 fall-through must clear all system-transport state
+    // itself — otherwise exec/sftp keep routing through the failed transport.
     this.systemSshResolvedConfig = null
     this.systemSshControlMasterDisabledForSession = false
+    this.systemSshGssapiOnlyForSession = false
+    this.useSystemSshTransport = false
 
     const config = buildConnectConfig(this.target, resolved)
 
@@ -490,6 +593,7 @@ export class SshConnection {
         } catch {
           this.systemSshResolvedConfig = null
           this.systemSshControlMasterDisabledForSession = false
+          this.systemSshGssapiOnlyForSession = false
           this.useSystemSshTransport = false
           throw err
         }
@@ -528,7 +632,15 @@ export class SshConnection {
               throw keyErr
             }
             authError = keyErr
-            if (isPassphraseError(authError) && !this.cachedPassphrase) {
+            // Why: when the effective config enables GSSAPI, let the reactive
+            // system-ssh probe (below) try a Kerberos ticket before prompting
+            // for the key passphrase; the general passphrase prompt still runs
+            // if that probe fails, since passphrasePromptHandled stays false.
+            if (
+              isPassphraseError(authError) &&
+              !this.cachedPassphrase &&
+              !isGssapiSystemSshFallbackCandidate(authError, this.target, resolved)
+            ) {
               passphrasePromptHandled = true
               const detail = this.target.identityFile || resolved?.identityFile?.[0] || '(unknown)'
               const val = await this.callbacks.onCredentialRequest?.(
@@ -545,6 +657,28 @@ export class SshConnection {
               }
             }
           }
+        }
+      }
+
+      // Why: a Kerberos ticket may authenticate where keys did not; try the
+      // system ssh binary before falling back to interactive prompts.
+      if (isGssapiSystemSshFallbackCandidate(authError, this.target, resolved)) {
+        this.proxyProcess?.kill()
+        this.proxyProcess = null
+        try {
+          await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved, true)
+          return
+        } catch {
+          this.systemSshResolvedConfig = null
+          this.systemSshControlMasterDisabledForSession = false
+          this.systemSshGssapiOnlyForSession = false
+          this.useSystemSshTransport = false
+        }
+        // Why: if a disconnect/reconnect superseded this attempt mid-probe, throw
+        // the cancellation error — not the stale ssh2 authError — so connect()
+        // does not post auth-failed after the target was deliberately disconnected.
+        if (this.disposed || !this.isCurrentConnectAttempt(connectGeneration)) {
+          throw this.createCancelledConnectAttemptError()
         }
       }
 
@@ -686,12 +820,15 @@ export class SshConnection {
 
   private async doSystemSshProbeWithControlMasterRetry(
     connectGeneration: number,
-    resolved: SshResolvedConfig | null
+    resolved: SshResolvedConfig | null,
+    gssapiOnly = false
   ): Promise<void> {
     this.systemSshResolvedConfig = cloneResolvedConfig(resolved)
     this.systemSshControlMasterDisabledForSession = false
+    this.systemSshGssapiOnlyForSession = gssapiOnly
     const controlPath = getOrcaControlSocketPath(this.target, {
-      resolvedConfig: this.systemSshResolvedConfig
+      resolvedConfig: this.systemSshResolvedConfig,
+      gssapiOnly: this.systemSshGssapiOnlyForSession
     })
     try {
       await this.doSystemSshProbe(connectGeneration)
@@ -860,6 +997,9 @@ export class SshConnection {
     }
     if (this.systemSshControlMasterDisabledForSession) {
       options.disableControlMaster = true
+    }
+    if (this.systemSshGssapiOnlyForSession) {
+      options.gssapiOnly = true
     }
     return options
   }
@@ -1041,6 +1181,7 @@ export class SshConnection {
     this.systemSsh = null
     this.systemSshResolvedConfig = null
     this.systemSshControlMasterDisabledForSession = false
+    this.systemSshGssapiOnlyForSession = false
     this.useSystemSshTransport = false
   }
 
@@ -1053,6 +1194,7 @@ export class SshConnection {
     this.systemSsh = null
     this.systemSshResolvedConfig = null
     this.systemSshControlMasterDisabledForSession = false
+    this.systemSshGssapiOnlyForSession = false
     this.useSystemSshTransport = false
     this.setState('connecting')
     try {
@@ -1094,6 +1236,7 @@ export class SshConnection {
       this.useSystemSshTransport = false
       this.systemSshResolvedConfig = null
       this.systemSshControlMasterDisabledForSession = false
+      this.systemSshGssapiOnlyForSession = false
       this.setState('error', err instanceof Error ? err.message : String(err))
       throw err
     }
@@ -1122,6 +1265,7 @@ export class SshConnection {
     this.systemSsh = null
     this.systemSshResolvedConfig = null
     this.systemSshControlMasterDisabledForSession = false
+    this.systemSshGssapiOnlyForSession = false
     this.useSystemSshTransport = false
     this.setState('disconnected')
   }

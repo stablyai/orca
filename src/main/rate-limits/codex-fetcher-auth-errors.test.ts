@@ -21,7 +21,7 @@ vi.mock('node-pty', () => ({
 
 // Auth gate is covered separately; these tests assume a signed-in Codex.
 vi.mock('./codex-auth-presence', () => ({
-  codexAuthExists: vi.fn(() => true)
+  probeCodexAuthPresence: vi.fn(() => 'present')
 }))
 
 import { fetchCodexRateLimits } from './codex-fetcher'
@@ -76,6 +76,51 @@ describe('fetchCodexRateLimits auth errors', () => {
                 jsonrpc: '2.0',
                 id: msg.id,
                 error: { code: -32000, message: authError }
+              })}\n`
+            )
+          )
+        }, 0)
+      }
+    })
+
+    const resultPromise = fetchCodexRateLimits()
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(1)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      status: 'error',
+      error: authError
+    })
+    expect(ptySpawnMock).not.toHaveBeenCalled()
+  })
+
+  it('returns the app-server chatgpt-auth-required error without spawning the PTY probe', async () => {
+    const rpcChild = makeRpcChild()
+    const authError = 'chatgpt authentication required to read rate limits'
+
+    childSpawnMock.mockReturnValue(rpcChild)
+    rpcChild.stdin.write.mockImplementation((line: string) => {
+      const msg = JSON.parse(line) as { id?: number; method?: string }
+      if (msg.method === 'initialize') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} })}\n`)
+          )
+        }, 0)
+      }
+      if (msg.method === 'account/rateLimits/read') {
+        setTimeout(() => {
+          rpcChild.stdout.emit(
+            'data',
+            Buffer.from(
+              `${JSON.stringify({
+                jsonrpc: '2.0',
+                id: msg.id,
+                error: { code: -32600, message: authError }
               })}\n`
             )
           )

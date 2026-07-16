@@ -907,6 +907,35 @@ describe('registerFilesystemHandlers', () => {
     })
   })
 
+  it('returns stable byte metadata only for opted-in local log snapshots', async () => {
+    const content = Buffer.from('first\npartial')
+    const close = vi.fn()
+    openMock.mockResolvedValue({
+      stat: vi.fn().mockResolvedValue({
+        size: content.byteLength,
+        dev: 1,
+        ino: 2,
+        birthtimeMs: 3
+      }),
+      readFile: vi.fn().mockResolvedValue(content),
+      close
+    })
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:readFile')!(null, {
+        filePath: path.resolve('/workspace/repo/session.jsonl'),
+        includeLocalLogMetadata: true
+      })
+    ).resolves.toEqual({
+      content: 'first\npartial',
+      isBinary: false,
+      fileIdentity: '1:2:3'
+    })
+    expect(close).toHaveBeenCalledTimes(1)
+    expect(readFileMock).not.toHaveBeenCalled()
+  })
+
   it('rejects text files beyond the editor read budget', async () => {
     statMock.mockResolvedValue({ size: 51 * 1024 * 1024, isDirectory: () => false, mtimeMs: 123 })
 
@@ -1117,6 +1146,72 @@ describe('registerFilesystemHandlers', () => {
       includeIgnored: false,
       bypassEffectiveUpstreamNegativeCache: true
     })
+  })
+
+  it('forwards line-stat reuse through local and SSH git status IPC', async () => {
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+    getStatusMock.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+    const sshProvider = {
+      getStatus: vi.fn().mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+    }
+    getSshGitProviderMock.mockReturnValue(sshProvider)
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:status')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      reuseLineStats: true
+    })
+    await handlers.get('git:status')!(null, {
+      worktreePath: '/remote/repo',
+      connectionId: 'ssh-1',
+      reuseLineStats: true
+    })
+
+    expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {
+      includeIgnored: false,
+      reuseLineStats: true
+    })
+    expect(sshProvider.getStatus).toHaveBeenCalledWith('/remote/repo', {
+      includeIgnored: false,
+      reuseLineStats: true
+    })
+  })
+
+  it('aborts tokenized local status without crossing renderer boundaries', async () => {
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+    const statusSignals: AbortSignal[] = []
+    getStatusMock.mockImplementation(
+      (_worktreePath: string, options: { signal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          if (options.signal) {
+            statusSignals.push(options.signal)
+            options.signal.addEventListener('abort', () => reject(new Error('aborted')), {
+              once: true
+            })
+          }
+        })
+    )
+    registerFilesystemHandlers(store as never)
+
+    const firstEvent = { sender: { id: 7 } }
+    const secondEvent = { sender: { id: 8 } }
+    const firstRequest = handlers.get('git:status')!(firstEvent, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      requestToken: 'status-1'
+    }) as Promise<unknown>
+    const secondRequest = handlers.get('git:status')!(secondEvent, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      requestToken: 'status-1'
+    }) as Promise<unknown>
+    await vi.waitFor(() => expect(statusSignals).toHaveLength(2))
+    await handlers.get('git:cancelStatus')!(firstEvent, { requestToken: 'status-1' })
+
+    expect(statusSignals[0]?.aborted).toBe(true)
+    expect(statusSignals[1]?.aborted).toBe(false)
+    await expect(firstRequest).rejects.toThrow('aborted')
+
+    await handlers.get('git:cancelStatus')!(secondEvent, { requestToken: 'status-1' })
+    await expect(secondRequest).rejects.toThrow('aborted')
   })
 
   it('checks ignored paths through local and SSH git providers', async () => {
@@ -2315,5 +2410,43 @@ describe('registerFilesystemHandlers', () => {
     expect(listFilesMock).toHaveBeenCalledWith('/home/user/repo', {
       excludePaths: ['/home/user/repo/worktrees/feature']
     })
+  })
+
+  // Why #7721: without a cancel path, every workspace switch left the previous
+  // workspace's full-tree SSH scan running, stacking scans on the relay until
+  // interactive fs.readDir/fs.stat starved past their 30s timeout.
+  it('fs:cancelListFiles aborts an in-flight SSH listing by request token (#7721)', async () => {
+    let capturedSignal: AbortSignal | undefined
+    const listFilesMock = vi.fn(
+      (_rootPath: string, options: { signal?: AbortSignal }) =>
+        new Promise<string[]>((_resolve, reject) => {
+          capturedSignal = options.signal
+          options.signal?.addEventListener('abort', () => reject(new Error('listing cancelled')), {
+            once: true
+          })
+        })
+    )
+    getSshFilesystemProviderMock.mockReturnValue({ listFiles: listFilesMock })
+
+    registerFilesystemHandlers(store as never)
+
+    // Why: cancellation keys are scoped to the issuing webContents, so the
+    // cancel must come from the same sender as the listing request.
+    const senderEvent = { sender: { id: 7 } }
+    const pending = handlers.get('fs:listFiles')!(senderEvent, {
+      rootPath: '/home/user/repo',
+      connectionId: 'conn-1',
+      requestToken: 'token-1'
+    }) as Promise<string[]>
+
+    expect(capturedSignal?.aborted).toBe(false)
+    await handlers.get('fs:cancelListFiles')!(senderEvent, { requestToken: 'token-1' })
+    expect(capturedSignal?.aborted).toBe(true)
+    await expect(pending).rejects.toThrow('listing cancelled')
+
+    // Unknown or already-settled tokens are a no-op, not an error.
+    expect(() =>
+      handlers.get('fs:cancelListFiles')!(senderEvent, { requestToken: 'unknown' })
+    ).not.toThrow()
   })
 })
