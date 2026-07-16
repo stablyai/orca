@@ -89,7 +89,13 @@ export function QuickCommandsPane({
   })
 
   const projectCommands = useMemo(
-    () => repos.flatMap((repo) => projectQuickCommandsByRepo[repo.id] ?? []),
+    // Why: dedupe repo ids so a duplicate bare repo id (same id on two hosts)
+    // doesn't emit the same cached bucket twice — that would collide row keys and
+    // show duplicate rows until the slice's dup-id fail-safe prunes the bucket.
+    () =>
+      [...new Set(repos.map((repo) => repo.id))].flatMap(
+        (id) => projectQuickCommandsByRepo[id] ?? []
+      ),
     [repos, projectQuickCommandsByRepo]
   )
   const visibleProjectCommands = projectCommands.filter((command) => {

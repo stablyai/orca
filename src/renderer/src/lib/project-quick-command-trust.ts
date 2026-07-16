@@ -58,9 +58,13 @@ export async function ensureProjectQuickCommandTrusted(
     return command
   }
   const fresh = getProjectTerminalQuickCommands(inspectedHooks?.quickCommands, scope.repoId)
-  // Keep the menu cache honest: it should reflect the read the user just acted on.
-  useAppStore.setState((s) => ({
-    projectQuickCommandsByRepo: { ...s.projectQuickCommandsByRepo, [scope.repoId]: fresh }
-  }))
+  // Keep the menu cache honest: it should reflect the read the user just acted
+  // on. Guard on the repo still existing so a removal during the prompt can't
+  // resurrect an orphaned bucket the removal reducer already pruned.
+  useAppStore.setState((s) =>
+    s.repos.some((repo) => repo.id === scope.repoId)
+      ? { projectQuickCommandsByRepo: { ...s.projectQuickCommandsByRepo, [scope.repoId]: fresh } }
+      : {}
+  )
   return fresh.find((candidate) => candidate.id === command.id) ?? null
 }

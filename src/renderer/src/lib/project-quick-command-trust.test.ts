@@ -172,6 +172,28 @@ describe('ensureProjectQuickCommandTrusted', () => {
     expect(trusted).toMatchObject({ id: 'orca-yaml:dev-server', command: 'echo approved-safe' })
   })
 
+  it('does not resurrect the cache bucket when the repo was removed during the prompt', async () => {
+    // Why: the repo can be removed (and its bucket pruned) while the trust prompt
+    // is open; approving must not write an orphaned bucket for a gone repo.
+    seedStore({ repos: [{ id: 'other-repo', displayName: 'Other' }] })
+    checkRuntimeHooksMock.mockResolvedValue(
+      okHooksResult([{ action: 'terminal-command', label: 'Dev server', command: 'echo fresh' }])
+    )
+
+    const promise = ensureProjectQuickCommandTrusted(cachedProjectCommand)
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    pending[0].resolve('run')
+
+    const trusted = await promise
+    // Execution still proceeds with the freshly read command...
+    expect(trusted).toMatchObject({ id: 'orca-yaml:dev-server', command: 'echo fresh' })
+    // ...but no bucket is written for the repo that no longer exists.
+    expect(
+      (useAppStore.getState() as never as Record<string, Record<string, unknown>>)
+        .projectQuickCommandsByRepo
+    ).not.toHaveProperty('repo-1')
+  })
+
   it('returns null when the user skips the prompt', async () => {
     checkRuntimeHooksMock.mockResolvedValue(
       okHooksResult([{ action: 'terminal-command', label: 'Dev server', command: 'echo fresh' }])

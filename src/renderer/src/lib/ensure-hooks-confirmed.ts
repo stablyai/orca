@@ -39,8 +39,12 @@ function getSetupTrustContent(yamlHooks: OrcaHooks | null): string {
   return [yamlHooks?.scripts?.setup?.trim(), ...defaultTabCommands].filter(Boolean).join('\n\n')
 }
 
+// Why: collapse every whitespace run — including a bare CR, which YAML
+// double-quoted scalars can produce and which renders as a line break under the
+// dialog's pre-wrap — to one space, so a repo-authored label/agent cannot inject
+// a break that forges a "# quickCommands[...]" header at column 0.
 function toSingleTrustLine(value: string): string {
-  return value.replace(/\s*\r?\n\s*/g, ' ')
+  return value.replace(/\s+/g, ' ').trim()
 }
 
 function indentTrustBodyLines(value: string): string {
