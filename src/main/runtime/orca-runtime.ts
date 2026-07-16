@@ -491,6 +491,10 @@ import {
   recoverLocalWindowsWorktreeRemoval
 } from '../local-worktree-removal-recovery'
 import {
+  assertSubmoduleWorktreeSafeToForceRemove,
+  sshSubmoduleRemovalGuardGitExec
+} from '../worktree-submodule-removal-guard'
+import {
   connect as connectLinear,
   disconnect as disconnectLinear,
   getStatus as getLinearStatus,
@@ -17902,17 +17906,17 @@ export class OrcaRuntimeService {
               throw error
             }
             // Why: non-forced `git worktree remove` refuses any worktree with
-            // populated submodules before it even checks cleanliness, and this
-            // flow has no earlier Orca-side clean check (remote git is the
-            // gate). Verify the tree is clean before escalating to --force —
-            // git's designed override for this refusal.
+            // populated submodules before it even checks cleanliness; --force
+            // is git's designed override. The guard re-verifies the tree
+            // strictly (dirty state hidden by ignore-submodules config, and
+            // submodule commits whose only copy lives in the worktree admin
+            // dir) right before forcing.
             if (!force) {
-              const { clean, stdout } = await provider!.worktreeIsClean(canonicalWorktreePath)
-              if (!clean) {
-                const dirtyError = new Error('Worktree has uncommitted or untracked changes.')
-                ;(dirtyError as Error & { stdout?: string }).stdout = stdout
-                throw dirtyError
-              }
+              await assertSubmoduleWorktreeSafeToForceRemove(
+                sshSubmoduleRemovalGuardGitExec(provider!, canonicalWorktreePath),
+                error,
+                canonicalWorktreePath
+              )
             }
             rawRemovalResult = await (Object.keys(remoteRemoveOptions).length > 0
               ? provider!.removeWorktree(canonicalWorktreePath, true, remoteRemoveOptions)
@@ -17991,10 +17995,6 @@ export class OrcaRuntimeService {
       const ignoredLinkedPaths = force
         ? []
         : await findExistingWorktreeSymlinkPaths(canonicalWorktreePath, linkedPaths)
-      // Why: --force escalation for git's blanket submodule refusal is only
-      // safe when the tree was verified clean (or the user forced); a
-      // preflight swallowed as orphan-compatible proves nothing.
-      let worktreeVerifiedCleanForRemoval = false
       try {
         await (hasLocalWorktreeGitOptions
           ? assertWorktreeCleanForRemoval(canonicalWorktreePath, force, {
@@ -18008,7 +18008,6 @@ export class OrcaRuntimeService {
                 ignoredUntrackedPaths: ignoredLinkedPaths
               })
             : assertWorktreeCleanForRemoval(canonicalWorktreePath, force))
-        worktreeVerifiedCleanForRemoval = true
       } catch (error) {
         if (!isOrphanCompatiblePreflightError(error)) {
           throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
@@ -18057,7 +18056,7 @@ export class OrcaRuntimeService {
           if (recoveredRemovalResult) {
             removalResult = recoveredRemovalResult
             removalCompleted = true
-          } else if (worktreeVerifiedCleanForRemoval && isSubmoduleWorktreeRemovalError(error)) {
+          } else if (isSubmoduleWorktreeRemovalError(error)) {
             removalResult = this.preserveBranchHeadFallback(
               await forceRemoveWorktreeAfterSubmoduleRefusal({
                 canonicalWorktreePath,
@@ -18065,6 +18064,8 @@ export class OrcaRuntimeService {
                 localWorktreeGitOptions,
                 registeredWorktree: refreshedRegisteredWorktree,
                 deleteBranch,
+                originalRemovalError: error,
+                originalRemovalForced: force === true,
                 closeWatcher: (worktreePath) => this.closeFileWatchersForRemoval(worktreePath)
               }),
               refreshedRegisteredWorktree.head

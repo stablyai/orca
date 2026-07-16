@@ -4,6 +4,7 @@ import { areWorktreePathsEqual, formatWorktreeRemovalError } from './ipc/worktre
 import { gitExecFileAsync } from './git/runner'
 import { listWorktreesStrict, removeWorktree, type GitWorktreeExecOptions } from './git/worktree'
 import { removeLocalWorktreePath } from './local-worktree-filesystem'
+import { assertSubmoduleWorktreeSafeToForceRemove } from './worktree-submodule-removal-guard'
 
 type LocalWindowsRemovalRecoveryArgs = {
   error: unknown
@@ -161,13 +162,28 @@ export async function removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval
  * populated submodules. Non-forced `git worktree remove` dies on any such tree
  * — even a clean one — while `--force` is git's designed override and performs
  * a normal removal (worktree directory plus its `.git/worktrees` admin dir) on
- * every supported git version. Callers must escalate only after their own
- * clean check passed or the user explicitly forced, so `--force` never skips a
- * dirtiness gate that has not already run.
+ * every supported git version. Unless the user already forced, the strict
+ * guard re-verifies the tree directly before the forced retry: `--force`
+ * skips git's own cleanliness check, and the admin dir it deletes holds each
+ * initialized submodule's git database.
  */
 export async function forceRemoveWorktreeAfterSubmoduleRefusal(
-  args: Omit<LocalWindowsRemovalRecoveryArgs, 'error' | 'force'>
+  args: Omit<LocalWindowsRemovalRecoveryArgs, 'error' | 'force'> & {
+    originalRemovalError: unknown
+    originalRemovalForced: boolean
+  }
 ): Promise<RemoveWorktreeResult> {
+  if (!args.originalRemovalForced) {
+    await assertSubmoduleWorktreeSafeToForceRemove(
+      (gitArgs) =>
+        gitExecFileAsync(gitArgs, {
+          cwd: args.canonicalWorktreePath,
+          ...args.localWorktreeGitOptions
+        }),
+      args.originalRemovalError,
+      args.canonicalWorktreePath
+    )
+  }
   console.warn(
     `[worktrees] git refused to remove worktree with submodules at ${args.canonicalWorktreePath}; retrying with --force after clean preflight`
   )

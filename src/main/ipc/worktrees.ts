@@ -196,6 +196,10 @@ import {
   removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval,
   recoverLocalWindowsWorktreeRemoval
 } from '../local-worktree-removal-recovery'
+import {
+  assertSubmoduleWorktreeSafeToForceRemove,
+  sshSubmoduleRemovalGuardGitExec
+} from '../worktree-submodule-removal-guard'
 
 const WORKTREE_ARCHIVE_HOOK_TIMEOUT_MS = 120_000
 const WORKTREE_LIST_ALL_CONCURRENCY = 8
@@ -1750,9 +1754,18 @@ export function registerWorktreeHandlers(
                 throw error
               }
               // Why: non-forced `git worktree remove` refuses any worktree with
-              // populated submodules, even a clean one. The clean check above
-              // (or the user's explicit force) already vetted the tree, so
-              // escalate to --force — git's designed override for this refusal.
+              // populated submodules, even a clean one; --force is git's
+              // designed override. The guard re-verifies the tree strictly
+              // (dirty state hidden by ignore-submodules config, and submodule
+              // commits whose only copy lives in the worktree admin dir) right
+              // before forcing.
+              if (!args.force) {
+                await assertSubmoduleWorktreeSafeToForceRemove(
+                  sshSubmoduleRemovalGuardGitExec(provider!, canonicalWorktreePath),
+                  error,
+                  canonicalWorktreePath
+                )
+              }
               rawRemovalResult = await (Object.keys(remoteRemoveOptions).length > 0
                 ? provider!.removeWorktree(canonicalWorktreePath, true, remoteRemoveOptions)
                 : provider!.removeWorktree(canonicalWorktreePath, true))
@@ -1811,10 +1824,6 @@ export function registerWorktreeHandlers(
         const ignoredLinkedPaths = args.force
           ? []
           : await findExistingWorktreeSymlinkPaths(canonicalWorktreePath, linkedPaths)
-        // Why: --force escalation for git's blanket submodule refusal is only
-        // safe when the tree was verified clean (or the user forced); a
-        // preflight swallowed as orphan-compatible proves nothing.
-        let worktreeVerifiedCleanForRemoval = false
         try {
           await (hasLocalWorktreeGitOptions
             ? assertWorktreeCleanForRemoval(canonicalWorktreePath, args.force ?? false, {
@@ -1828,7 +1837,6 @@ export function registerWorktreeHandlers(
                   ignoredUntrackedPaths: ignoredLinkedPaths
                 })
               : assertWorktreeCleanForRemoval(canonicalWorktreePath, args.force ?? false))
-          worktreeVerifiedCleanForRemoval = true
         } catch (error) {
           if (!isOrphanCompatiblePreflightError(error)) {
             throw new Error(
@@ -1887,7 +1895,7 @@ export function registerWorktreeHandlers(
             if (recoveredRemovalResult) {
               removalResult = recoveredRemovalResult
               removalCompleted = true
-            } else if (worktreeVerifiedCleanForRemoval && isSubmoduleWorktreeRemovalError(error)) {
+            } else if (isSubmoduleWorktreeRemovalError(error)) {
               removalResult = preserveBranchHeadFallback(
                 await forceRemoveWorktreeAfterSubmoduleRefusal({
                   canonicalWorktreePath,
@@ -1895,6 +1903,8 @@ export function registerWorktreeHandlers(
                   localWorktreeGitOptions,
                   registeredWorktree: refreshedRegisteredWorktree,
                   deleteBranch,
+                  originalRemovalError: error,
+                  originalRemovalForced: args.force === true,
                   closeWatcher: (worktreePath) => runtime.closeFileWatchersForRemoval(worktreePath)
                 }),
                 refreshedRegisteredWorktree.head

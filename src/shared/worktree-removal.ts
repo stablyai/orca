@@ -2,7 +2,18 @@ import type { GitWorktreeInfo } from './types'
 
 export const LOCKED_WORKTREE_REMOVAL_PREFIX = 'Worktree is locked by Git.'
 
-export type WorktreeForceDeleteReason = 'dirty' | 'orphan-directory' | 'missing-registration'
+// Why: a linked worktree's initialized submodules keep their entire git
+// database under .git/worktrees/<id>/modules, which any completed removal
+// deletes. Commits that exist only there are unrecoverable, so removal must
+// refuse to auto-force until the user explicitly opts in.
+export const UNPUSHED_SUBMODULE_WORKTREE_REMOVAL_MESSAGE =
+  'Worktree contains submodule commits that exist only in this workspace.'
+
+export type WorktreeForceDeleteReason =
+  | 'dirty'
+  | 'orphan-directory'
+  | 'missing-registration'
+  | 'unpushed-submodules'
 
 export function createLockedWorktreeRemovalError(lockReason?: string): Error {
   const reason = lockReason?.trim()
@@ -63,6 +74,9 @@ export function classifyWorktreeForceDeleteReason(
     error.includes('Worktree is no longer registered with Git and its directory is already gone')
   ) {
     return 'missing-registration'
+  }
+  if (error.includes(UNPUSHED_SUBMODULE_WORKTREE_REMOVAL_MESSAGE)) {
+    return 'unpushed-submodules'
   }
   if (
     error.includes('Worktree has uncommitted or untracked changes') ||

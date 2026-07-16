@@ -65,6 +65,20 @@ export function getDeleteWorktreeToastCopy(
         isDestructive: false
       }
     }
+    if (forceDeleteReason === 'unpushed-submodules') {
+      return {
+        title: translate(
+          'auto.components.sidebar.delete.worktree.toast.1d0fa5c0a5',
+          'Failed to delete workspace {{value0}}',
+          { value0: worktreeName }
+        ),
+        description: translate(
+          'auto.components.sidebar.delete.worktree.toast.unpushedSubmodules',
+          'Its submodules have commits that exist only in this workspace. Push them first, or use Force Delete to discard them permanently.'
+        ),
+        isDestructive: false
+      }
+    }
     return {
       title: translate(
         'auto.components.sidebar.delete.worktree.toast.1d0fa5c0a5',

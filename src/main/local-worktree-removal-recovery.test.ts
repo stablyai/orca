@@ -378,8 +378,11 @@ describe('forceRemoveWorktreeAfterSubmoduleRefusal', () => {
   })
 
   const registeredWorktree = { branch: 'refs/heads/feature', head: 'abc123' }
+  const submoduleRefusalError = Object.assign(new Error('Command failed: git worktree remove'), {
+    stderr: 'fatal: working trees containing submodules cannot be moved or removed'
+  })
 
-  it('retries the removal with force and the known registration', async () => {
+  it('retries the removal with force and the known registration after a clean guard pass', async () => {
     removeWorktreeMock.mockResolvedValue({})
 
     const result = await forceRemoveWorktreeAfterSubmoduleRefusal({
@@ -388,14 +391,71 @@ describe('forceRemoveWorktreeAfterSubmoduleRefusal', () => {
       localWorktreeGitOptions: { wslDistro: 'Ubuntu' },
       registeredWorktree,
       deleteBranch: true,
+      originalRemovalError: submoduleRefusalError,
+      originalRemovalForced: false,
       closeWatcher: vi.fn().mockResolvedValue(undefined)
     })
 
+    // The strict guard re-verifies inside the worktree before any force.
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['status', '--porcelain', '--untracked-files=all', '--ignore-submodules=none'],
+      { cwd: '/workspaces/feature', wslDistro: 'Ubuntu' }
+    )
     expect(removeWorktreeMock).toHaveBeenCalledWith('/repo', '/workspaces/feature', true, {
       knownRemovedWorktree: registeredWorktree,
       wslDistro: 'Ubuntu'
     })
     expect(result).toEqual({})
+  })
+
+  it('refuses the forced retry when a submodule has local-only commits', async () => {
+    gitExecFileAsyncMock.mockImplementation(async (gitArgs: string[]) => {
+      if (gitArgs[0] === 'submodule') {
+        return { stdout: '1\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      forceRemoveWorktreeAfterSubmoduleRefusal({
+        canonicalWorktreePath: '/workspaces/feature',
+        repoPath: '/repo',
+        localWorktreeGitOptions: {},
+        registeredWorktree,
+        deleteBranch: true,
+        originalRemovalError: submoduleRefusalError,
+        originalRemovalForced: false,
+        closeWatcher: vi.fn().mockResolvedValue(undefined)
+      })
+    ).rejects.toThrow('Worktree contains submodule commits that exist only in this workspace.')
+
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+  })
+
+  it('skips the guard when the user already forced the removal', async () => {
+    removeWorktreeMock.mockResolvedValue({})
+
+    await forceRemoveWorktreeAfterSubmoduleRefusal({
+      canonicalWorktreePath: '/workspaces/feature',
+      repoPath: '/repo',
+      localWorktreeGitOptions: {},
+      registeredWorktree,
+      deleteBranch: true,
+      originalRemovalError: submoduleRefusalError,
+      originalRemovalForced: true,
+      closeWatcher: vi.fn().mockResolvedValue(undefined)
+    })
+
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
+      ['status', '--porcelain', '--untracked-files=all', '--ignore-submodules=none'],
+      expect.anything()
+    )
+    expect(removeWorktreeMock).toHaveBeenCalledWith(
+      '/repo',
+      '/workspaces/feature',
+      true,
+      expect.objectContaining({ knownRemovedWorktree: registeredWorktree })
+    )
   })
 
   it('routes a transient Windows failure of the forced retry into recovery', async () => {
@@ -413,6 +473,8 @@ describe('forceRemoveWorktreeAfterSubmoduleRefusal', () => {
         localWorktreeGitOptions: {},
         registeredWorktree,
         deleteBranch: true,
+        originalRemovalError: submoduleRefusalError,
+        originalRemovalForced: false,
         closeWatcher
       })
 
@@ -435,6 +497,8 @@ describe('forceRemoveWorktreeAfterSubmoduleRefusal', () => {
           localWorktreeGitOptions: {},
           registeredWorktree,
           deleteBranch: true,
+          originalRemovalError: submoduleRefusalError,
+          originalRemovalForced: false,
           closeWatcher: vi.fn().mockResolvedValue(undefined)
         })
       ).rejects.toThrow('Failed to force delete worktree at /workspaces/feature. disk I/O error')

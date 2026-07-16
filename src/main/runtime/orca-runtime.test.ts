@@ -29386,6 +29386,11 @@ describe('OrcaRuntimeService', () => {
   it('escalates runtime worktree removal to force when the tree contains submodules', async () => {
     const runtime = createWorktreeRemovalRuntime()
     vi.mocked(getEffectiveHooks).mockReturnValue(null)
+    // The escalation guard re-verifies the tree (strict status + local-only
+    // submodule commit probe) before the forced retry.
+    const gitSpy = vi
+      .spyOn(gitRunner, 'gitExecFileAsync')
+      .mockResolvedValue({ stdout: '', stderr: '' })
     vi.mocked(removeWorktree)
       .mockRejectedValueOnce(
         Object.assign(new Error('Command failed: git worktree remove'), {
@@ -29395,6 +29400,11 @@ describe('OrcaRuntimeService', () => {
       .mockResolvedValueOnce({})
 
     const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
+
+    expect(gitSpy).toHaveBeenCalledWith(
+      ['status', '--porcelain', '--untracked-files=all', '--ignore-submodules=none'],
+      expect.objectContaining({ cwd: TEST_WORKTREE_PATH })
+    )
 
     // Non-forced `git worktree remove` refuses submodule worktrees outright;
     // the clean preflight already vetted the tree, so removal retries with
