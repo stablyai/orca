@@ -89,9 +89,12 @@ test.describe('Worktree Lineage', () => {
     await expect(childRow).toBeVisible()
   })
 
-  test('selects and renders a parent worktree from another repo', async ({ orcaPage }) => {
+  test('selects and renders a parent worktree from another repo', async ({
+    orcaPage,
+    registerPostElectronShutdownCleanup
+  }) => {
     const { parentId, childId, parentName, parentRepoName, repoPath } =
-      await seedCrossRepoParentPickerScenario(orcaPage)
+      await seedCrossRepoParentPickerScenario(orcaPage, registerPostElectronShutdownCleanup)
     try {
       const childRow = worktreeOption(orcaPage, childId)
       const parentRow = worktreeOption(orcaPage, parentId)

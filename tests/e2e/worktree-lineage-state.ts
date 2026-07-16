@@ -1,6 +1,7 @@
 import type { Page } from '@stablyai/playwright-test'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect } from './helpers/orca-app'
@@ -16,8 +17,24 @@ export type CrossRepoParentPickerScenario = LineageScenario & {
   repoPath: string
 }
 
-function createCrossRepoParentPickerRepo(): string {
+type RegisterPostElectronShutdownCleanup = (cleanup: () => Promise<void>) => void
+
+async function removeCrossRepoParentPickerRepoFromDisk(repoPath: string): Promise<void> {
+  await rm(repoPath, {
+    force: true,
+    maxRetries: 5,
+    recursive: true,
+    retryDelay: 250
+  })
+}
+
+function createCrossRepoParentPickerRepo(
+  registerPostElectronShutdownCleanup: RegisterPostElectronShutdownCleanup
+): string {
   const repoPath = mkdtempSync(join(tmpdir(), 'orca-e2e-cross-repo-parent-'))
+  // Why: register immediately so even Git seeding failures clean up, but only
+  // after Electron and its watchers have released the repository on Windows.
+  registerPostElectronShutdownCleanup(() => removeCrossRepoParentPickerRepoFromDisk(repoPath))
   execFileSync('git', ['init', '-b', 'main'], { cwd: repoPath })
   writeFileSync(join(repoPath, 'README.md'), '# Cross-repo parent picker E2E\n')
   execFileSync(
@@ -59,13 +76,13 @@ export async function removeCrossRepoParentPickerRepo(page: Page, repoPath: stri
       await store?.getState().removeProject(repo.id)
     }
   }, repoPath)
-  rmSync(repoPath, { force: true, recursive: true })
 }
 
 export async function seedCrossRepoParentPickerScenario(
-  page: Page
+  page: Page,
+  registerPostElectronShutdownCleanup: RegisterPostElectronShutdownCleanup
 ): Promise<CrossRepoParentPickerScenario> {
-  const repoPath = createCrossRepoParentPickerRepo()
+  const repoPath = createCrossRepoParentPickerRepo(registerPostElectronShutdownCleanup)
   try {
     const repoId = await page.evaluate(async (path) => {
       const result = await window.api.repos.add({ path })
