@@ -147,6 +147,9 @@ export type PtySpawnResult = {
   coldRestore?: {
     scrollback: string
     cwd: string
+    /** Optional for compatibility with restore payloads from older app code. */
+    cols?: number
+    rows?: number
     oscLinks?: TerminalOscLinkRange[]
   }
 }

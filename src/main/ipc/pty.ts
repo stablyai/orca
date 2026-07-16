@@ -4374,7 +4374,7 @@ export function registerPtyHandlers(
         // its hydration path will seed the emulator from xterm's live buffer,
         // which is richer than the daemon snapshot.
         if (runtime && !rendererPreSignaled && !rendererAlreadyRegistered) {
-          const seedSize =
+          const snapshotSeedSize =
             typeof result.snapshotCols === 'number' && typeof result.snapshotRows === 'number'
               ? { cols: result.snapshotCols, rows: result.snapshotRows }
               : undefined
@@ -4386,7 +4386,7 @@ export function registerPtyHandlers(
             runtime.seedHeadlessTerminal(
               result.id,
               result.snapshot,
-              seedSize,
+              snapshotSeedSize,
               typeof result.snapshotKittyKeyboardFlags === 'number'
                 ? { kittyKeyboardFlags: result.snapshotKittyKeyboardFlags }
                 : {}
@@ -4396,11 +4396,21 @@ export function registerPtyHandlers(
             typeof result.coldRestore.scrollback === 'string' &&
             result.coldRestore.scrollback.length > 0
           ) {
-            runtime.seedHeadlessTerminal(result.id, result.coldRestore.scrollback, seedSize, {
-              cwd: result.coldRestore.cwd,
-              oscLinks: result.coldRestore.oscLinks,
-              preferProviderIfExisting: true
-            })
+            const coldRestoreSeedSize =
+              typeof result.coldRestore.cols === 'number' &&
+              typeof result.coldRestore.rows === 'number'
+                ? { cols: result.coldRestore.cols, rows: result.coldRestore.rows }
+                : undefined
+            runtime.seedHeadlessTerminal(
+              result.id,
+              result.coldRestore.scrollback,
+              coldRestoreSeedSize,
+              {
+                cwd: result.coldRestore.cwd,
+                oscLinks: result.coldRestore.oscLinks,
+                preferProviderIfExisting: true
+              }
+            )
           }
         }
         if (

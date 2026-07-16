@@ -7160,15 +7160,30 @@ describe('connectPanePty', () => {
     expect(rendered.visibleLines).toEqual(['PS >', '', '', ''])
   })
 
-  it('cold-restores scrollback then blanks the viewport without erasing scrollback', async () => {
+  it('cold-restores at the recovered grid and clears only the dirty viewport before blanking', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('fresh-pty')
     const written: string[] = []
+    const operations: (
+      | { kind: 'write'; data: string }
+      | { kind: 'resize'; cols: number; rows: number }
+    )[] = []
+    const destinationCols = 10
+    const destinationRows = 5
+    const recoveredCols = 20
+    const recoveredRows = 3
+    const coldScrollback = '\x1b[1;1HCOLD\x1b[1;15HEND\r\nCOLD_SOURCE_ROW_02'
+    const viewportClear = '\x1b[2J\x1b[H'
     transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
       if (sessionId) {
         return {
           id: 'fresh-pty',
-          coldRestore: { scrollback: 'cold TUI row one\r\ncold TUI row two', cwd: '/tmp/wt-1' }
+          coldRestore: {
+            scrollback: coldScrollback,
+            cwd: '/tmp/wt-1',
+            cols: recoveredCols,
+            rows: recoveredRows
+          }
         }
       }
       return 'fresh-pty'
@@ -7182,13 +7197,34 @@ describe('connectPanePty', () => {
     } as StoreState
 
     const pane = createPane(1)
-    pane.terminal.rows = 4
-    pane.terminal.cols = 20
+    pane.terminal.rows = destinationRows
+    pane.terminal.cols = destinationCols
+    let sawViewportClear = false
+    const preResizeBarrier = { release: null as (() => void) | null }
     pane.terminal.write = vi.fn((data: string, callback?: () => void) => {
       written.push(data)
+      operations.push({ kind: 'write', data })
+      if (data === viewportClear) {
+        sawViewportClear = true
+      } else if (sawViewportClear && data === '' && preResizeBarrier.release === null) {
+        preResizeBarrier.release = callback ?? (() => {})
+        return
+      }
       callback?.()
     })
+    pane.terminal.resize = vi.fn((cols: number, rows: number) => {
+      operations.push({ kind: 'resize', cols, rows })
+      pane.terminal.cols = cols
+      pane.terminal.rows = rows
+    })
     const manager = createManager(1)
+    pane.fitAddon.proposeDimensions = vi.fn(() => ({
+      cols: destinationCols,
+      rows: destinationRows
+    }))
+    pane.fitAddon.fit = vi.fn(() => {
+      pane.terminal.resize(destinationCols, destinationRows)
+    })
     const deps = createDeps({
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
@@ -7196,24 +7232,110 @@ describe('connectPanePty', () => {
 
     connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks(20)
+    expect(preResizeBarrier.release).not.toBeNull()
+    expect(pane.terminal.resize).not.toHaveBeenCalledWith(recoveredCols, recoveredRows)
+    expect(written).not.toContain(coldScrollback)
 
-    const blankViewport = buildFreshShellViewportBlankingSequence(4)
+    preResizeBarrier.release?.()
+    await flushAsyncTicks(20)
+
+    const blankViewport = buildFreshShellViewportBlankingSequence(destinationRows)
+    expect(pane.terminal.resize).toHaveBeenCalledWith(recoveredCols, recoveredRows)
+    expect(transport.resize).not.toHaveBeenCalledWith(recoveredCols, recoveredRows)
+    expect(transport.resize).toHaveBeenLastCalledWith(destinationCols, destinationRows)
+    expect(written).toContain(viewportClear)
     expect(written).not.toContain('\x1b[2J\x1b[3J\x1b[H')
     expect(written).toEqual(
-      expect.arrayContaining([
-        'cold TUI row one\r\ncold TUI row two',
-        POST_REPLAY_MODE_RESET,
-        blankViewport
-      ])
+      expect.arrayContaining([coldScrollback, POST_REPLAY_MODE_RESET, blankViewport])
     )
-    expect(written.indexOf('cold TUI row one\r\ncold TUI row two')).toBeLessThan(
-      written.indexOf(blankViewport)
+    expect(written.indexOf(viewportClear)).toBeLessThan(written.indexOf(coldScrollback))
+    expect(written.indexOf(coldScrollback)).toBeLessThan(written.indexOf(blankViewport))
+    const viewportClearOperation = operations.findIndex(
+      (operation) => operation.kind === 'write' && operation.data === viewportClear
     )
+    const recoveredResizeOperation = operations.findIndex(
+      (operation) =>
+        operation.kind === 'resize' &&
+        operation.cols === recoveredCols &&
+        operation.rows === recoveredRows
+    )
+    expect(viewportClearOperation).toBeLessThan(recoveredResizeOperation)
 
-    const rendered = await renderHeadlessTerminalState([...written, 'PS >'], 20, 4)
-    expect(rendered.baseY).toBeGreaterThan(0)
-    expect(rendered.allLines.some((line) => line.includes('cold TUI row'))).toBe(true)
-    expect(rendered.visibleLines).toEqual(['PS >', '', '', ''])
+    // Model the real operation order. The previous behavior appended the
+    // recovered 20-column snapshot to a dirty 10-column xterm, leaving stale
+    // cells and wrapping each authoritative row at the wrong grid.
+    const rendered = new Terminal({
+      cols: destinationCols,
+      rows: destinationRows,
+      allowProposedApi: true
+    })
+    try {
+      await writeHeadlessTerminal(
+        rendered,
+        'KEEP_1\r\nKEEP_2\r\nOLD_ROW_1\r\nOLD_ROW_2\r\nOLD_ROW_3\r\nOLD_ROW_4\r\nOLD_ROW_5'
+      )
+      let replayedAtRecoveredGrid = false
+      let sourceGridLines: string[] = []
+      for (const operation of operations) {
+        if (operation.kind === 'resize') {
+          if (
+            replayedAtRecoveredGrid &&
+            operation.cols === destinationCols &&
+            operation.rows === destinationRows &&
+            sourceGridLines.length === 0
+          ) {
+            sourceGridLines = Array.from(
+              { length: rendered.buffer.active.length },
+              (_, lineIndex) =>
+                rendered.buffer.active.getLine(lineIndex)?.translateToString(true) ?? ''
+            )
+          }
+          rendered.resize(operation.cols, operation.rows)
+          if (operation.cols === recoveredCols && operation.rows === recoveredRows) {
+            replayedAtRecoveredGrid = true
+          }
+        } else {
+          await writeHeadlessTerminal(rendered, operation.data)
+        }
+      }
+      if (sourceGridLines.length === 0) {
+        sourceGridLines = Array.from(
+          { length: rendered.buffer.active.length },
+          (_, lineIndex) => rendered.buffer.active.getLine(lineIndex)?.translateToString(true) ?? ''
+        )
+      }
+      expect(sourceGridLines).toContain('COLD          END')
+      if (rendered.cols !== destinationCols || rendered.rows !== destinationRows) {
+        rendered.resize(destinationCols, destinationRows)
+      }
+      await writeHeadlessTerminal(rendered, 'PS >')
+      const buffer = rendered.buffer.active
+      const lines = Array.from({ length: buffer.length }, (_, lineIndex) =>
+        buffer.getLine(lineIndex)?.translateToString(true)
+      )
+      const logicalLines: string[] = []
+      for (let lineIndex = 0; lineIndex < buffer.length; lineIndex += 1) {
+        const line = buffer.getLine(lineIndex)
+        const text = line?.translateToString(true) ?? ''
+        if (line?.isWrapped && logicalLines.length > 0) {
+          logicalLines[logicalLines.length - 1] += text
+        } else {
+          logicalLines.push(text)
+        }
+      }
+      const visibleLines = Array.from({ length: rendered.rows }, (_, row) =>
+        buffer.getLine(buffer.viewportY + row)?.translateToString(true)
+      )
+      expect(buffer.baseY).toBeGreaterThan(0)
+      expect(lines.some((line) => line?.includes('OLD_ROW_'))).toBe(false)
+      expect(lines.some((line) => line?.includes('KEEP_1'))).toBe(true)
+      expect(lines.some((line) => line?.includes('KEEP_2'))).toBe(true)
+      expect(logicalLines.some((line) => /COLD\s+END/.test(line))).toBe(true)
+      expect(logicalLines.some((line) => line.includes('COLD_SOURCE_ROW_02'))).toBe(true)
+      expect(visibleLines).toEqual(['PS >', '', '', '', ''])
+    } finally {
+      rendered.dispose()
+    }
   })
 
   it('resumes the provider agent session when daemon reattach cold-restores a fresh shell', async () => {

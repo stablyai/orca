@@ -10765,15 +10765,24 @@ describe('registerPtyHandlers', () => {
     )
   })
 
-  it('seeds headless terminal state with cold-restore cwd metadata', async () => {
+  it('seeds cold restore at recovered dimensions with a legacy dimensionless fallback', async () => {
     const oscLinks = [{ row: 0, startCol: 0, endCol: 8, uri: 'https://example.com/restored' }]
     const coldRestore = {
       scrollback: 'restored history\r\n',
       cwd: '/projects/restored',
+      cols: 132,
+      rows: 43,
       oscLinks
     }
+    const spawn = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'pty-cold-restore', coldRestore })
+      .mockResolvedValueOnce({
+        id: 'pty-legacy-cold-restore',
+        coldRestore: { scrollback: 'legacy history\r\n', cwd: '/projects/legacy' }
+      })
     setLocalPtyProvider({
-      spawn: vi.fn(async () => ({ id: 'pty-cold-restore', coldRestore })),
+      spawn,
       write: vi.fn(),
       resize: vi.fn(),
       kill: vi.fn(),
@@ -10798,11 +10807,22 @@ describe('registerPtyHandlers', () => {
 
     await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
-    expect(runtime.seedHeadlessTerminal).toHaveBeenCalledWith(
+    expect(runtime.seedHeadlessTerminal).toHaveBeenNthCalledWith(
+      1,
       'pty-cold-restore',
       'restored history\r\n',
-      undefined,
+      { cols: 132, rows: 43 },
       { cwd: '/projects/restored', oscLinks, preferProviderIfExisting: true }
+    )
+
+    await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
+    expect(runtime.seedHeadlessTerminal).toHaveBeenNthCalledWith(
+      2,
+      'pty-legacy-cold-restore',
+      'legacy history\r\n',
+      undefined,
+      { cwd: '/projects/legacy', oscLinks: undefined, preferProviderIfExisting: true }
     )
   })
 

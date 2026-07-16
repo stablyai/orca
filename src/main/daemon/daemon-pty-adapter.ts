@@ -36,6 +36,8 @@ import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges
 type ColdRestorePayload = {
   scrollback: string
   cwd: string
+  cols: number
+  rows: number
   oscLinks?: TerminalOscLinkRange[]
 }
 
@@ -595,7 +597,13 @@ export class DaemonPtyAdapter implements IPtyProvider {
     if (!scrollback) {
       return null
     }
-    return { scrollback, cwd: restoreInfo.cwd, oscLinks: restoreInfo.oscLinks }
+    return {
+      scrollback,
+      cwd: restoreInfo.cwd,
+      cols: restoreInfo.cols,
+      rows: restoreInfo.rows,
+      oscLinks: restoreInfo.oscLinks
+    }
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {
