@@ -1130,9 +1130,14 @@ export function useTerminalPaneLifecycle({
           if (!selection) {
             return
           }
-          void window.api.ui.writeClipboardText(selection).catch(() => {
-            /* ignore clipboard write failures */
-          })
+           void window.api.ui
+              .writeClipboardText(selection)
+              .then(() => {
+                // TODO(orca): Show a "Copied" toast notification
+              })
+              .catch(() => {
+                // TODO(orca): Show a "Copy failed" toast notification
+              })
         })
         selectionDisposablesRef.current.set(pane.id, selectionDisposable)
         // Hide mouse cursor while typing — classic terminal UX, scoped to the

@@ -142,7 +142,18 @@ export function registerClipboardHandlers(store: Store): void {
   )
   ipcMain.handle('clipboard:writeText', async (event, text: string) => {
     assertTrustedClipboardSender(event)
-    return clipboard.writeText(await assertClipboardTextWriteWithinLimitWithYield(text))
+    const newText = await assertClipboardTextWriteWithinLimitWithYield(text)
+    if (process.platform === 'win32') {
+      try {
+        // Use a PowerShell fallback for Windows to improve reliability
+        await runCommand('powershell', ['-Command', `Set-Clipboard -Value $input`], newText)
+      } catch (error) {
+        console.error('PowerShell clipboard write failed, falling back to Electron API', error)
+        clipboard.writeText(newText)
+      }
+    } else {
+      clipboard.writeText(newText)
+    }
   })
   ipcMain.handle('clipboard:writeSelectionText', async (event, text: string) => {
     assertTrustedClipboardSender(event)
