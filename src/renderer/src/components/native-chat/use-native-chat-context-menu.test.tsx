@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { render } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { createRef } from 'react'
+import { useRef } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import {
   useNativeChatContextMenu,
@@ -50,7 +50,7 @@ function actions(overrides: Partial<NativeChatContextMenuActions>): NativeChatCo
 }
 
 function ContextMenuHarness({ menuActions }: { menuActions: NativeChatContextMenuActions }) {
-  const rootRef = createRef<HTMLElement>()
+  const rootRef = useRef<HTMLElement>(null)
   const { menu } = useNativeChatContextMenu({ rootRef, actions: menuActions })
   return <section ref={rootRef}>{menu}</section>
 }
