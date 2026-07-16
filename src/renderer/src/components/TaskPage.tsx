@@ -205,7 +205,11 @@ import {
   type TaskPageRepoSourceState
 } from '@/components/task-page-cache-selectors'
 import { shouldHideTaskPageListChrome } from '@/components/task-page-list-chrome-visibility'
-import { accumulateWorkItemPages } from '@/components/task-page-work-item-pagination'
+import {
+  getTaskPagePerRepoLimit,
+  taskPageToGitHubApiPage
+} from '@/components/task-page-work-item-pagination'
+import { sortWorkItemsByNumber } from '../../../shared/work-items'
 import LinearIssueAttributeFilterDropdowns from '@/components/linear-issue-attribute-filter-dropdowns'
 import { resolveLinearIssueAttributeFilterPrimaryTeam } from '@/components/linear-issue-attribute-filter-primary-team'
 import {
@@ -3801,15 +3805,23 @@ export default function TaskPage(): React.JSX.Element {
   // once, but the result is reconciled into existing rows to avoid a full
   // table shuffle when only status/key fields changed.
   const landingGitHubRefreshKeysRef = useRef<ReadonlySet<string>>(new Set())
-  // Why: pages holds all fetched pages of work items. Page 0 is seeded from
-  // cache for instant first paint; subsequent pages are loaded via date cursors.
-  const [pages, setPages] = useState<GitHubWorkItem[][]>(() => {
+  // Why: divide the display budget between repos so one provider page maps to
+  // one UI page without truncating rows that later provider pages cannot return.
+  const githubPerRepoPageLimit = getTaskPagePerRepoLimit(
+    selectedRepos.length,
+    PER_REPO_FETCH_LIMIT,
+    CROSS_REPO_DISPLAY_LIMIT
+  )
+  const githubPageSize = githubPerRepoPageLimit * Math.max(1, selectedRepos.length)
+  // Why: null entries are pages not fetched yet. Numbered provider pages let a
+  // high-page click load that page directly without rate-limiting intermediate reads.
+  const [pages, setPages] = useState<(GitHubWorkItem[] | null)[]>(() => {
     const trimmed = initialTaskQuery.trim()
     const merged: GitHubWorkItem[] = []
     for (const r of selectedRepos) {
       const cached = getCachedWorkItems(
         r.id,
-        PER_REPO_FETCH_LIMIT,
+        githubPerRepoPageLimit,
         trimmed,
         r.path,
         getTaskPageRepoSourceContext(r, 'github')
@@ -3821,15 +3833,13 @@ export default function TaskPage(): React.JSX.Element {
     if (merged.length === 0) {
       return [[]]
     }
-    const page0 = [...merged]
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-      .slice(0, CROSS_REPO_DISPLAY_LIMIT)
+    const page0 = sortWorkItemsByNumber(merged).slice(0, githubPageSize)
     return [page0]
   })
   const [currentPage, setCurrentPage] = useState(0)
   const [paginationLoading, setPaginationLoading] = useState(false)
   const [loadingTargetPage, setLoadingTargetPage] = useState<number | null>(null)
-  const [totalItemCount, setTotalItemCount] = useState<number | null>(null)
+  const [countedTotalPages, setCountedTotalPages] = useState<number | null>(null)
   const fetchWorkItemsNextPage = useAppStore((s) => s.fetchWorkItemsNextPage)
   const countWorkItemsAcrossRepos = useAppStore((s) => s.countWorkItemsAcrossRepos)
 
@@ -3859,7 +3869,7 @@ export default function TaskPage(): React.JSX.Element {
       selectTaskPageWorkItemsCacheEntries(
         s.workItemsCache,
         selectedRepos.map(getTaskPageRepoCacheInput),
-        PER_REPO_FETCH_LIMIT,
+        githubPerRepoPageLimit,
         appliedWorkItemsCacheQuery
       )
     )
@@ -3982,6 +3992,9 @@ export default function TaskPage(): React.JSX.Element {
       setPages((current) => {
         let changed = false
         const nextPages = current.map((page) => {
+          if (!page) {
+            return page
+          }
           let pageChanged = false
           const nextPage = page.map((item) => {
             if (item.id !== itemKey.id || item.repoId !== itemKey.repoId) {
@@ -6156,6 +6169,9 @@ export default function TaskPage(): React.JSX.Element {
     const seen = new Set<string>()
     const logins: string[] = []
     for (const page of pages) {
+      if (!page) {
+        continue
+      }
       for (const item of page) {
         if (
           !item.author ||
@@ -6229,43 +6245,29 @@ export default function TaskPage(): React.JSX.Element {
     }
   }, [ensurePRChecksLoaded, filteredWorkItems, githubMode, showPRManagementColumns, taskSource])
 
-  // Why: each page is bounded by both the per-repo fetch budget (so a single
-  // repo can yield at most PER_REPO_FETCH_LIMIT rows per page) and the
-  // post-merge display cap. Dividing the total by CROSS_REPO_DISPLAY_LIMIT
-  // alone under-counts pages when the per-repo budget is the tighter bound —
-  // e.g. one repo with 60 open PRs yielded 36 rows on page 0 and ceil(60/100)
-  // = 1 total pages, hiding the pager entirely.
-  const effectivePageSize = Math.max(
-    1,
-    Math.min(PER_REPO_FETCH_LIMIT * Math.max(1, selectedRepos.length), CROSS_REPO_DISPLAY_LIMIT)
-  )
-  // Why: if the search-API count is unavailable (rate-limited, transient
-  // failure — `countWorkItemsAcrossRepos` swallows errors and returns 0),
-  // infer there's at least one more page whenever the last loaded page
-  // filled to the per-page capacity. Otherwise pagination would silently
-  // hide and trap the user on page 0 with no way to advance.
-  const lastPageFull = (pages.at(-1)?.length ?? 0) >= effectivePageSize
+  let lastLoadedPageIndex = 0
+  for (let index = 0; index < pages.length; index += 1) {
+    if (pages[index] !== null) {
+      lastLoadedPageIndex = index
+    }
+  }
+  // Why: when counts fail, a full loaded page is enough evidence to expose one
+  // more page without pretending unfetched sparse entries are empty results.
+  const lastLoadedPageFull =
+    (pages[lastLoadedPageIndex]?.length ?? 0) >= Math.max(1, githubPageSize)
+  const fallbackTotalPages = lastLoadedPageFull
+    ? Math.max(pages.length, lastLoadedPageIndex + 2)
+    : Math.max(1, pages.length)
   const totalPages =
-    totalItemCount && totalItemCount > 0
-      ? Math.max(pages.length, Math.ceil(totalItemCount / effectivePageSize))
-      : lastPageFull
-        ? pages.length + 1
-        : pages.length
+    countedTotalPages && countedTotalPages > 0
+      ? Math.max(pages.length, countedTotalPages)
+      : fallbackTotalPages
 
-  // Why: loads the next page using the oldest item's updatedAt as a cursor.
-  // When targetPage is provided (from clicking a numbered page beyond loaded
-  // pages), it chains fetches until that page is loaded.
+  // Why: numbered provider pages support random access. Load only the clicked
+  // page so a high-page jump does not exhaust GitHub's Search API rate bucket.
   const handleLoadNextPage = useCallback(
     async (targetPage?: number) => {
       if (paginationLoading || selectedRepos.length === 0) {
-        return
-      }
-      const lastPage = pages.at(-1)
-      if (!lastPage || lastPage.length === 0) {
-        return
-      }
-      const oldestItem = lastPage.at(-1)
-      if (!oldestItem?.updatedAt) {
         return
       }
       const q = stripRepoQualifiers(appliedTaskSearch.trim())
@@ -6277,37 +6279,32 @@ export default function TaskPage(): React.JSX.Element {
       }))
       const requestGeneration = paginationGenerationRef.current
 
-      const target = targetPage ?? pages.length
+      const target = targetPage ?? currentPage + 1
       setPaginationLoading(true)
       setLoadingTargetPage(target)
       try {
-        const result = await accumulateWorkItemPages({
-          existingPages: pages,
-          initialCursor: oldestItem.updatedAt,
-          targetPage: target,
-          // Why: uniform page size keeps deduped pages from shrinking below the
-          // size `totalPages` (count ÷ effectivePageSize) assumes — otherwise
-          // the per-page overlap loss would strand the tail items.
-          pageSize: effectivePageSize,
-          isCancelled: () => paginationGenerationRef.current !== requestGeneration,
-          fetchPage: async (cursor) => {
-            const { items } = await fetchWorkItemsNextPage(
-              repoArgs,
-              PER_REPO_FETCH_LIMIT,
-              CROSS_REPO_DISPLAY_LIMIT,
-              q,
-              cursor
-            )
-            return { items }
-          }
-        })
-        if (result.cancelled) {
+        const { items } = await fetchWorkItemsNextPage(
+          repoArgs,
+          githubPerRepoPageLimit,
+          githubPageSize,
+          q,
+          taskPageToGitHubApiPage(target)
+        )
+        if (paginationGenerationRef.current !== requestGeneration) {
           return
         }
-        if (result.newPages.length > 0) {
-          setPages((prev) => [...prev, ...result.newPages])
-          setCurrentPage(target < result.loadedPages ? target : result.loadedPages - 1)
+        if (items.length === 0) {
+          return
         }
+        setPages((previous) => {
+          const next = [...previous]
+          while (next.length <= target) {
+            next.push(null)
+          }
+          next[target] = items
+          return next
+        })
+        setCurrentPage(target)
       } catch (err) {
         console.error('Failed to load next page:', err)
       } finally {
@@ -6320,10 +6317,11 @@ export default function TaskPage(): React.JSX.Element {
     [
       paginationLoading,
       selectedRepos,
-      pages,
+      currentPage,
       appliedTaskSearch,
       fetchWorkItemsNextPage,
-      effectivePageSize
+      githubPageSize,
+      githubPerRepoPageLimit
     ]
   )
 
@@ -6399,7 +6397,7 @@ export default function TaskPage(): React.JSX.Element {
     for (const r of selectedRepos) {
       const cached = getCachedWorkItems(
         r.id,
-        PER_REPO_FETCH_LIMIT,
+        githubPerRepoPageLimit,
         q,
         r.path,
         getTaskPageRepoSourceContext(r, 'github')
@@ -6415,14 +6413,10 @@ export default function TaskPage(): React.JSX.Element {
     // no repo has a cache entry for it), we clear the previous query's rows
     // rather than leaving them on screen under the spinner.
     const page0 =
-      preMerged.length > 0
-        ? [...preMerged]
-            .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-            .slice(0, CROSS_REPO_DISPLAY_LIMIT)
-        : []
+      preMerged.length > 0 ? sortWorkItemsByNumber(preMerged).slice(0, githubPageSize) : []
     setPages([page0])
     setCurrentPage(0)
-    setTotalItemCount(null)
+    setCountedTotalPages(null)
     setTasksError(null)
     setFailedCount(0) // reset so a prior failure banner doesn't linger
     setTasksLoading(anyUncached)
@@ -6464,7 +6458,7 @@ export default function TaskPage(): React.JSX.Element {
     // newer retry's source from the set. Clearing only the keys captured
     // when this effect dispatched preserves later additions.
     const dispatchedRetrySourceKeys = retryingSourceKeys
-    void fetchWorkItemsAcrossRepos(repoArgs, PER_REPO_FETCH_LIMIT, CROSS_REPO_DISPLAY_LIMIT, q, {
+    void fetchWorkItemsAcrossRepos(repoArgs, githubPerRepoPageLimit, githubPageSize, q, {
       ...deriveTaskPageGitHubWorkItemsFetchOptions(forcedFetch, shouldProbeOnLanding)
     })
       .then(({ items, failedCount: failed }) => {
@@ -6542,10 +6536,11 @@ export default function TaskPage(): React.JSX.Element {
         executionHostId: r.executionHostId,
         sourceContext: getTaskPageRepoSourceContext(r, 'github')
       })),
-      q
-    ).then((count) => {
+      q,
+      githubPerRepoPageLimit
+    ).then(({ totalPages: countedPages }) => {
       if (!cancelled) {
-        setTotalItemCount(count)
+        setCountedTotalPages(countedPages)
       }
     })
 
@@ -9834,7 +9829,7 @@ export default function TaskPage(): React.JSX.Element {
                     totalPages={totalPages}
                     loadingTarget={loadingTargetPage}
                     onPageChange={(page) => {
-                      if (page < pages.length) {
+                      if (pages[page] !== null && pages[page] !== undefined) {
                         setCurrentPage(page)
                       } else {
                         void handleLoadNextPage(page)

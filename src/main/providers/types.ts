@@ -23,6 +23,7 @@ import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-s
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
+import type { GitProviderStatusOptions } from './git-provider-status-options'
 
 // ─── PTY Provider ───────────────────────────────────────────────────
 
@@ -154,6 +155,8 @@ export type PtyProcessInfo = {
   id: string
   cwd: string
   title: string
+  /** Owning worktree when the provider can report it authoritatively. */
+  worktreeId?: string
   /** Trusted ORCA_TERMINAL_HANDLE exported into this PTY, when known. */
   terminalHandle?: string
 }
@@ -292,8 +295,9 @@ export type IFilesystemProvider = {
   watch(
     rootPath: string,
     callback: (events: FsChangeEvent[]) => void,
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal; onTerminalError?: (error: Error) => void }
   ): Promise<() => void>
+  closeWatch?(rootPath: string): Promise<void>
 }
 
 export type FileUploadSession = {
@@ -313,11 +317,7 @@ export type TerminalArtifactAccessOptions = {
 
 // ─── Git Provider ───────────────────────────────────────────────────
 
-export type GitProviderStatusOptions = {
-  includeIgnored?: boolean
-  bypassEffectiveUpstreamNegativeCache?: boolean
-  signal?: AbortSignal
-}
+export type { GitProviderStatusOptions } from './git-provider-status-options'
 
 export type IGitProvider = {
   getStatus(worktreePath: string, options?: GitProviderStatusOptions): Promise<GitStatusResult>

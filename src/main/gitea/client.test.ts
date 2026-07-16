@@ -14,6 +14,11 @@ import {
   normalizeGiteaApiBaseUrl
 } from './client'
 import { _resetGiteaRepoRefCache } from './repository-ref'
+import {
+  _getGiteaPullRequestScanCacheSize,
+  _resetGiteaPullRequestScanCache,
+  scanGiteaPullRequests
+} from './pull-request-scan-cache'
 
 const OLD_ENV = process.env
 
@@ -44,6 +49,7 @@ describe('Gitea client', () => {
       stderr: ''
     })
     _resetGiteaRepoRefCache()
+    _resetGiteaPullRequestScanCache()
     vi.unstubAllGlobals()
   })
 
@@ -90,6 +96,145 @@ describe('Gitea client', () => {
     expect(listUrl.searchParams.get('sort')).toBe('recentupdate')
     expect(listUrl.searchParams.get('page')).toBe('1')
     expect(listUrl.searchParams.get('limit')).toBe('50')
+  })
+
+  it('shares one /pulls scan across concurrent branch lookups (#8807)', async () => {
+    let listCalls = 0
+    const fetchMock = vi.fn(async (url: string) => {
+      const parsed = new URL(url)
+      if (parsed.pathname.endsWith('/status')) {
+        return Response.json({ state: 'success' })
+      }
+      listCalls++
+      return Response.json([giteaPr(7, 'feature/a'), giteaPr(8, 'feature/b')])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const [a, b, missing] = await Promise.all([
+      getGiteaPullRequestForBranch('/repo', 'feature/a'),
+      getGiteaPullRequestForBranch('/repo', 'feature/b'),
+      getGiteaPullRequestForBranch('/repo', 'feature/none')
+    ])
+
+    expect(a?.number).toBe(7)
+    expect(b?.number).toBe(8)
+    expect(missing).toBeNull()
+    expect(listCalls).toBe(1)
+  })
+
+  it('reuses the cached /pulls scan for lookups inside the TTL', async () => {
+    let listCalls = 0
+    const fetchMock = vi.fn(async (url: string) => {
+      const parsed = new URL(url)
+      if (parsed.pathname.endsWith('/status')) {
+        return Response.json({ state: 'success' })
+      }
+      listCalls++
+      return Response.json([giteaPr()])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getGiteaPullRequestForBranch('/repo', 'feature/gitea')
+    await getGiteaPullRequestForBranch('/repo', 'feature/gitea')
+    await getGiteaPullRequestForBranch('/repo', 'no-pr-branch')
+
+    expect(listCalls).toBe(1)
+  })
+
+  it('retries a failed /pulls scan after only the short failure cooldown', async () => {
+    vi.useFakeTimers()
+    try {
+      let listCalls = 0
+      const fetchMock = vi.fn(async (url: string) => {
+        const parsed = new URL(url)
+        if (parsed.pathname.endsWith('/status')) {
+          return Response.json({ state: 'success' })
+        }
+        listCalls++
+        return listCalls === 1
+          ? Response.json({ message: 'temporary failure' }, { status: 503 })
+          : Response.json([giteaPr()])
+      })
+      vi.stubGlobal('fetch', fetchMock)
+
+      await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toBeNull()
+      await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toBeNull()
+      expect(listCalls).toBe(1)
+
+      await vi.advanceTimersByTimeAsync(3_001)
+      await expect(getGiteaPullRequestForBranch('/repo', 'feature/gitea')).resolves.toMatchObject({
+        number: 7
+      })
+      expect(listCalls).toBe(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('expires successful scans and bounds retained repository listings', async () => {
+    vi.useFakeTimers()
+    try {
+      let listCalls = 0
+      const fetchMock = vi.fn(async (url: string) => {
+        const parsed = new URL(url)
+        if (parsed.pathname.endsWith('/status')) {
+          return Response.json({ state: 'success' })
+        }
+        listCalls++
+        return Response.json([giteaPr()])
+      })
+      vi.stubGlobal('fetch', fetchMock)
+
+      await getGiteaPullRequestForBranch('/repo', 'feature/gitea')
+      expect(_getGiteaPullRequestScanCacheSize()).toBe(1)
+      await vi.advanceTimersByTimeAsync(30_001)
+      expect(_getGiteaPullRequestScanCacheSize()).toBe(0)
+      await getGiteaPullRequestForBranch('/repo', 'feature/gitea')
+      expect(listCalls).toBe(2)
+
+      await Promise.all(
+        Array.from({ length: 40 }, (_, index) =>
+          scanGiteaPullRequests(`repo-${index}`, async () => [], 50, 5)
+        )
+      )
+      expect(_getGiteaPullRequestScanCacheSize()).toBe(32)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not let an in-flight scan re-cache results from before an invalidation', async () => {
+    let releaseFirstScan!: () => void
+    const firstScanGate = new Promise<void>((resolve) => {
+      releaseFirstScan = resolve
+    })
+    let listCalls = 0
+    const fetchMock = vi.fn(async (url: string) => {
+      const parsed = new URL(url)
+      if (parsed.pathname.endsWith('/status')) {
+        return Response.json({ state: 'success' })
+      }
+      listCalls++
+      if (listCalls === 1) {
+        // First scan is in flight (pre-create listing) when the invalidation lands.
+        await firstScanGate
+        return Response.json([giteaPr(7, 'feature/old')])
+      }
+      return Response.json([giteaPr(7, 'feature/old'), giteaPr(8, 'feature/new')])
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const staleScanRead = getGiteaPullRequestForBranch('/repo', 'feature/old')
+    const { invalidateGiteaPullRequestScanForRepo, getGiteaRepoSlug } = await import('./client')
+    const repo = await getGiteaRepoSlug('/repo')
+    invalidateGiteaPullRequestScanForRepo(repo!)
+    releaseFirstScan()
+    await staleScanRead
+
+    await expect(getGiteaPullRequestForBranch('/repo', 'feature/new')).resolves.toMatchObject({
+      number: 8
+    })
+    expect(listCalls).toBe(2)
   })
 
   it('uses an API base URL override for subpath or non-standard deployments', async () => {

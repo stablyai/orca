@@ -1,8 +1,13 @@
 import type { ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { sendToWatcherChild } from './parcel-watcher-child-messaging'
 import { createHostWatcherSubscription } from './parcel-watcher-host-subscriptions'
+import type { PendingWatcherUnsubscribe } from './parcel-watcher-host-subscriptions'
 import { subscribeWithInProcessWatcher } from './parcel-watcher-in-process-fallback'
-import { installPendingSubscribeControls } from './parcel-watcher-pending-subscribe'
+import {
+  installPendingSubscribeControls,
+  resetPendingSubscribeAttempt
+} from './parcel-watcher-pending-subscribe'
 import { WatcherProcessFailure } from './parcel-watcher-process-failure'
 import type {
   HostToWatcherMessage,
@@ -25,16 +30,32 @@ type WatcherSupervisorSubscribeOptions = {
   useInProcessVitestFallback: boolean
   allocateId: () => number
   records: Map<number, WatcherProcessSubscriptionRecord>
-  pendingUnsubscribes: Map<number, () => void>
+  pendingUnsubscribes: Map<number, PendingWatcherUnsubscribe>
   ensureWatcherProcess: (entryPath: string) => ChildProcess | null
   getChild: () => ChildProcess | null
-  killWatcherChildIfIdle: () => void
+  getTerminationPromise: () => Promise<void> | null
+  killWatcherChildIfIdle: () => Promise<void>
+  terminateUnavailableChild: (child: ChildProcess | null) => Promise<void>
   sendSubscribe: (child: ChildProcess, record: WatcherProcessSubscriptionRecord) => void
   sendToChild: (child: ChildProcess, message: HostToWatcherMessage) => void
   cancelPendingSubscribe: (
     record: WatcherProcessSubscriptionRecord,
     error: WatcherProcessFailure
   ) => void
+}
+
+export function sendWatcherSubscribe(
+  child: ChildProcess,
+  record: WatcherProcessSubscriptionRecord
+): void {
+  resetPendingSubscribeAttempt(record)
+  sendToWatcherChild(child, {
+    op: 'subscribe',
+    id: record.id,
+    dir: record.dir,
+    opts: record.opts,
+    delivery: record.hooks.delivery
+  })
 }
 
 export function subscribeThroughWatcherSupervisor({
@@ -50,7 +71,9 @@ export function subscribeThroughWatcherSupervisor({
   pendingUnsubscribes,
   ensureWatcherProcess,
   getChild,
+  getTerminationPromise,
   killWatcherChildIfIdle,
+  terminateUnavailableChild,
   sendSubscribe,
   sendToChild,
   cancelPendingSubscribe
@@ -117,7 +140,9 @@ export function subscribeThroughWatcherSupervisor({
             records,
             pendingUnsubscribes,
             getChild,
+            getTerminationPromise,
             killWatcherChildIfIdle,
+            terminateUnavailableChild,
             sendToChild
           })
         ),

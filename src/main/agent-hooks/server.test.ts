@@ -6046,6 +6046,62 @@ describe('Last-status persistence', () => {
     }
   })
 
+  it('drops persisted idle Claude child rows from hydration replay', async () => {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    const receivedAt = recentTs()
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: {
+          [PANE]: {
+            paneKey: PANE,
+            tabId: 'tab-1',
+            worktreeId: 'wt-1',
+            receivedAt,
+            stateStartedAt: recentTs(-1000),
+            payload: {
+              state: 'done',
+              prompt: 'finished orchestration',
+              agentType: 'claude',
+              subagents: [
+                { id: 'aweb-research-8a76b7d7', state: 'idle', startedAt: receivedAt - 5000 },
+                { id: 'apr-history-9b87c6e6', state: 'idle', startedAt: receivedAt - 4000 }
+              ]
+            }
+          }
+        }
+      }),
+      'utf8'
+    )
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          payload: expect.objectContaining({ subagents: undefined })
+        })
+      )
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'done',
+          prompt: 'finished orchestration',
+          subagents: undefined
+        })
+      ])
+      // Why: make the migration one-time; otherwise every launch reparses and
+      // re-prunes the same persisted idle rows.
+      const persisted = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      expect(persisted.entries[PANE].payload.subagents).toBeUndefined()
+    } finally {
+      server.stop()
+    }
+  })
+
   it('treats a corrupt file as empty hydration without throwing', async () => {
     mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
     writeFileSync(lastStatusPath(), 'not-json{{', 'utf8')

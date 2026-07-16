@@ -49,6 +49,47 @@ vi.mock('./rate-limit', () => ({
 
 import { countWorkItems, getWorkItem, listWorkItems, _resetOwnerRepoCache } from './client'
 
+const PR_LIST_FIELDS =
+  'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,reviewRequests'
+
+function issueSearchArgs(
+  ownerRepo: string,
+  options: { noCache?: boolean; query?: string } = {}
+): string[] {
+  const query = options.query ?? 'is:issue is:open'
+  return [
+    'api',
+    ...(options.noCache ? [] : ['--cache', '120s']),
+    `search/issues?q=${encodeURIComponent(`repo:${ownerRepo} ${query}`)}&sort=created&order=desc&per_page=10&page=1`,
+    '--jq',
+    '.items'
+  ]
+}
+
+function prListArgs(ownerRepo: string, query = 'is:pr is:open'): string[] {
+  return [
+    'pr',
+    'list',
+    '--limit',
+    '10',
+    '--state',
+    'all',
+    '--json',
+    PR_LIST_FIELDS,
+    '--repo',
+    ownerRepo,
+    '--search',
+    `${query} sort:created-desc`
+  ]
+}
+
+function decodedIssueSearchPath(callIndex: number): string {
+  const args = ghExecFileAsyncMock.mock.calls[callIndex]?.[0] as string[] | undefined
+  const apiPath = args?.find((arg) => arg.startsWith('search/issues?'))
+  expect(apiPath).toBeDefined()
+  return decodeURIComponent(apiPath ?? '')
+}
+
 describe('GitHub issue source split', () => {
   beforeEach(() => {
     execFileAsyncMock.mockReset()
@@ -115,26 +156,12 @@ describe('GitHub issue source split', () => {
 
     await listWorkItems('/repo-root', 10)
 
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      1,
-      [
-        'api',
-        '--cache',
-        '120s',
-        'repos/stablyai/orca/issues?per_page=10&state=open&sort=updated&direction=desc'
-      ],
-      { cwd: '/repo-root' }
-    )
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      2,
-      [
-        'api',
-        '--cache',
-        '120s',
-        'repos/fork/orca/pulls?per_page=10&state=open&sort=updated&direction=desc'
-      ],
-      { cwd: '/repo-root' }
-    )
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(1, issueSearchArgs('stablyai/orca'), {
+      cwd: '/repo-root'
+    })
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(2, prListArgs('fork/orca'), {
+      cwd: '/repo-root'
+    })
   })
 
   it('omits gh api cache args for no-cache recent work-item requests', async () => {
@@ -148,14 +175,12 @@ describe('GitHub issue source split', () => {
 
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
-      ['api', 'repos/stablyai/orca/issues?per_page=10&state=open&sort=updated&direction=desc'],
+      issueSearchArgs('stablyai/orca', { noCache: true }),
       { cwd: '/repo-root' }
     )
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      2,
-      ['api', 'repos/fork/orca/pulls?per_page=10&state=open&sort=updated&direction=desc'],
-      { cwd: '/repo-root' }
-    )
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(2, prListArgs('fork/orca'), {
+      cwd: '/repo-root'
+    })
   })
 
   it('lists SSH repo work items with explicit owner/repo and no local cwd', async () => {
@@ -177,26 +202,8 @@ describe('GitHub issue source split', () => {
       {}
     )
     expect(getOwnerRepoMock).toHaveBeenCalledWith('/home/jinwoo/orca', 'openclaw-2', {})
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      1,
-      [
-        'api',
-        '--cache',
-        '120s',
-        'repos/stablyai/orca/issues?per_page=10&state=open&sort=updated&direction=desc'
-      ],
-      {}
-    )
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      2,
-      [
-        'api',
-        '--cache',
-        '120s',
-        'repos/fork/orca/pulls?per_page=10&state=open&sort=updated&direction=desc'
-      ],
-      {}
-    )
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(1, issueSearchArgs('stablyai/orca'), {})
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(2, prListArgs('fork/orca'), {})
   })
 
   it('uses upstream for issue-only queries and origin for PR-only queries', async () => {
@@ -206,10 +213,7 @@ describe('GitHub issue source split', () => {
 
     await listWorkItems('/repo-root', 10, 'is:issue')
 
-    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      expect.arrayContaining(['--repo', 'stablyai/orca']),
-      { cwd: '/repo-root' }
-    )
+    expect(decodedIssueSearchPath(0)).toContain('q=repo:stablyai/orca is:issue')
 
     ghExecFileAsyncMock.mockClear()
     getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
@@ -237,16 +241,9 @@ describe('GitHub issue source split', () => {
 
     await listWorkItems('/repo-root', 10, undefined, undefined, 'upstream')
 
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-      2,
-      [
-        'api',
-        '--cache',
-        '120s',
-        'repos/stablyai/orca/pulls?per_page=10&state=open&sort=updated&direction=desc'
-      ],
-      { cwd: '/repo-root' }
-    )
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(2, prListArgs('stablyai/orca'), {
+      cwd: '/repo-root'
+    })
   })
 
   it("uses upstream for queried PRs when preference='upstream'", async () => {
@@ -515,16 +512,9 @@ describe('GitHub issue source split', () => {
       const result = await listWorkItems('/repo-root', 10, undefined, undefined, 'auto')
 
       expect(resolveIssueSourceMock).toHaveBeenCalledWith('/repo-root', 'auto', undefined, {})
-      expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-        1,
-        [
-          'api',
-          '--cache',
-          '120s',
-          'repos/stablyai/orca/issues?per_page=10&state=open&sort=updated&direction=desc'
-        ],
-        { cwd: '/repo-root' }
-      )
+      expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(1, issueSearchArgs('stablyai/orca'), {
+        cwd: '/repo-root'
+      })
       expect(result.issueSourceFellBack).toBeUndefined()
     })
 
@@ -540,16 +530,9 @@ describe('GitHub issue source split', () => {
 
       await listWorkItems('/repo-root', 10, undefined, undefined, 'auto')
 
-      expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-        1,
-        [
-          'api',
-          '--cache',
-          '120s',
-          'repos/solo/orca/issues?per_page=10&state=open&sort=updated&direction=desc'
-        ],
-        { cwd: '/repo-root' }
-      )
+      expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(1, issueSearchArgs('solo/orca'), {
+        cwd: '/repo-root'
+      })
     })
 
     it("preference='upstream' + upstream exists → queries upstream", async () => {
@@ -564,13 +547,7 @@ describe('GitHub issue source split', () => {
 
       const result = await listWorkItems('/repo-root', 10, undefined, undefined, 'upstream')
 
-      expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-        1,
-        expect.arrayContaining([
-          'repos/stablyai/orca/issues?per_page=10&state=open&sort=updated&direction=desc'
-        ]),
-        { cwd: '/repo-root' }
-      )
+      expect(decodedIssueSearchPath(0)).toContain('q=repo:stablyai/orca is:issue is:open')
       expect(result.issueSourceFellBack).toBeUndefined()
     })
 
@@ -586,13 +563,7 @@ describe('GitHub issue source split', () => {
 
       const result = await listWorkItems('/repo-root', 10, undefined, undefined, 'upstream')
 
-      expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-        1,
-        expect.arrayContaining([
-          'repos/solo/orca/issues?per_page=10&state=open&sort=updated&direction=desc'
-        ]),
-        { cwd: '/repo-root' }
-      )
+      expect(decodedIssueSearchPath(0)).toContain('q=repo:solo/orca is:issue is:open')
       expect(result.issueSourceFellBack).toBe(true)
     })
 
@@ -608,13 +579,7 @@ describe('GitHub issue source split', () => {
 
       await listWorkItems('/repo-root', 10, undefined, undefined, 'origin')
 
-      expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-        1,
-        expect.arrayContaining([
-          'repos/fork/orca/issues?per_page=10&state=open&sort=updated&direction=desc'
-        ]),
-        { cwd: '/repo-root' }
-      )
+      expect(decodedIssueSearchPath(0)).toContain('q=repo:fork/orca is:issue is:open')
     })
 
     it("preference='origin' + no upstream → queries origin", async () => {
@@ -629,13 +594,7 @@ describe('GitHub issue source split', () => {
 
       await listWorkItems('/repo-root', 10, undefined, undefined, 'origin')
 
-      expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
-        1,
-        expect.arrayContaining([
-          'repos/solo/orca/issues?per_page=10&state=open&sort=updated&direction=desc'
-        ]),
-        { cwd: '/repo-root' }
-      )
+      expect(decodedIssueSearchPath(0)).toContain('q=repo:solo/orca is:issue is:open')
     })
 
     it('surfaces upstreamCandidate in sources regardless of effective preference', async () => {

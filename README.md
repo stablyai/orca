@@ -261,6 +261,9 @@ Want to contribute or run locally? See our [CONTRIBUTING.md](.github/CONTRIBUTIN
   <img src="docs/assets/star-history.png" alt="GitHub star history chart for stablyai/orca" width="880" />
 </p>
 
+## Signed Builds
+Windows code signing sponored/provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
 ## License
 
 Orca is free and open source under the [MIT License](LICENSE).

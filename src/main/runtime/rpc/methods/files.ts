@@ -1,7 +1,7 @@
 /* oxlint-disable max-lines -- Why: file RPC routing coverage stays together so the dispatcher contract for read, write, mutation, and watch methods is easy to audit. */
 import { z } from 'zod'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
-import { createFileWatchEventBatcher } from './file-watch-event-batcher'
+import { runFileWatchStream } from './file-watch-stream-lifecycle'
 
 let filesWatchSubscriptionSeq = 0
 const RUNTIME_FILE_BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
@@ -386,91 +386,13 @@ export const FILE_METHODS: RpcAnyMethod[] = [
     handler: async (params, { runtime, connectionId, signal }, emit) => {
       const seq = ++filesWatchSubscriptionSeq
       const subscriptionId = `files-watch-${connectionId ?? 'inproc'}-${seq}`
-      if (signal?.aborted) {
-        return
-      }
-      await new Promise<void>((resolve, reject) => {
-        let settled = false
-        let unwatch: (() => void) | null = null
-        let terminalError: Error | null = null
-        const eventBatcher = createFileWatchEventBatcher(params.worktree, emit)
-        const finish = (): void => {
-          if (settled) {
-            return
-          }
-          settled = true
-          signal?.removeEventListener('abort', handleAbort)
-          resolve()
-        }
-        const cleanup = (): void => {
-          // Mark cleanup complete before emitting so a synchronous transport
-          // abort cannot re-enter this function and duplicate error/end.
-          finish()
-          if (terminalError) {
-            // Why: recovery emits overflow before giving up. Flush that final
-            // refresh so clients never end on a knowingly stale snapshot.
-            eventBatcher.flush()
-            eventBatcher.dispose()
-            emit({ type: 'error', message: terminalError.message })
-          } else {
-            eventBatcher.flush()
-            eventBatcher.dispose()
-          }
-          unwatch?.()
-          emit({ type: 'end' })
-        }
-        const handleTerminalError = (error: Error): void => {
-          if (settled || terminalError) {
-            return
-          }
-          terminalError = error
-          if (unwatch) {
-            runtime.cleanupSubscription(subscriptionId)
-          } else {
-            cleanup()
-          }
-        }
-        const handleAbort = (): void => {
-          if (unwatch) {
-            cleanup()
-          } else {
-            // Why: watch setup may have queued events before resolving its
-            // unwatch callback. Dispose that transient batcher on early abort.
-            eventBatcher.dispose()
-            finish()
-          }
-        }
-        signal?.addEventListener('abort', handleAbort, { once: true })
-        void runtime
-          .watchFileExplorer(
-            params.worktree,
-            (events) => {
-              eventBatcher.push(events)
-            },
-            handleTerminalError,
-            signal
-          )
-          .then((nextUnwatch) => {
-            if (signal?.aborted || settled) {
-              // Why: the connection can close while watch setup is still
-              // resolving. Tear down the late watcher immediately instead of
-              // registering cleanup on a connection that was already reaped.
-              eventBatcher.dispose()
-              nextUnwatch()
-              return
-            }
-            unwatch = nextUnwatch
-            runtime.registerSubscriptionCleanup(subscriptionId, cleanup, connectionId)
-            emit({ type: 'ready', subscriptionId })
-          })
-          .catch((error) => {
-            if (!settled) {
-              settled = true
-              signal?.removeEventListener('abort', handleAbort)
-              eventBatcher.dispose()
-              reject(error)
-            }
-          })
+      await runFileWatchStream({
+        runtime,
+        worktree: params.worktree,
+        connectionId,
+        signal,
+        subscriptionId,
+        emit
       })
     }
   }),
@@ -478,7 +400,7 @@ export const FILE_METHODS: RpcAnyMethod[] = [
     name: 'files.unwatch',
     params: FileUnwatch,
     handler: async (params, { runtime }) => {
-      runtime.cleanupSubscription(params.subscriptionId)
+      await runtime.cleanupSubscriptionAndWait(params.subscriptionId)
       return { unsubscribed: true }
     }
   })

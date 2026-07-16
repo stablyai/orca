@@ -1232,6 +1232,16 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(shellPathExists).toHaveBeenCalled()
   })
 
+  it('does not invoke the xterm callback twice when the callback throws', async () => {
+    const { provider } = createProviderSetup([makeBufferLine('CLAUDE.md')])
+    const callback = vi.fn(() => {
+      throw new Error('terminal was disposed')
+    })
+
+    provider.provideLinks(1, callback)
+    await vi.waitFor(() => expect(callback).toHaveBeenCalledTimes(1))
+  })
+
   it('shows switch and external-open hint for known worktree root hover', async () => {
     setPlatform('Macintosh')
     storeState.worktreesByRepo = {

@@ -174,6 +174,24 @@ export function isValidPaneKey(value: unknown): value is string {
   )
 }
 
+function dropHydratedIdleClaudeSubagents(
+  payload: ParsedAgentStatusPayload
+): ParsedAgentStatusPayload {
+  if (
+    payload.agentType !== 'claude' ||
+    !payload.subagents?.some((subagent) => subagent.state === 'idle')
+  ) {
+    return payload
+  }
+  const workingSubagents = payload.subagents.filter((subagent) => subagent.state === 'working')
+  // Why: older builds persisted finished Claude children as idle rows. Prune
+  // them from the replay payload itself so restart cannot resurrect the pile.
+  return {
+    ...payload,
+    subagents: workingSubagents.length > 0 ? workingSubagents : undefined
+  }
+}
+
 function sanitizeHydratedEntry(
   paneKey: string,
   rawEntry: unknown
@@ -1758,6 +1776,7 @@ export class AgentHookServer {
     }
     let hydrated = 0
     let dropped = 0
+    let prunedLegacyClaudeSubagents = 0
     // Why: bound disk growth — drop anything older than HYDRATE_MAX_AGE_MS so
     // entries from worktrees archived weeks ago do not pile up forever. Use
     // Date.now() once to keep the cutoff consistent across all entries this
@@ -1771,11 +1790,15 @@ export class AgentHookServer {
           : { ...(rawEntry as Record<string, unknown>), paneKey: resolvedPaneKey }
       const entry = sanitizeHydratedEntry(resolvedPaneKey, rawResolvedEntry)
       if (entry && entry.receivedAt >= ttlCutoff) {
+        const hydratedPayload = dropHydratedIdleClaudeSubagents(entry.payload)
+        if (hydratedPayload !== entry.payload) {
+          prunedLegacyClaudeSubagents +=
+            (entry.payload.subagents?.length ?? 0) - (hydratedPayload.subagents?.length ?? 0)
+          entry.payload = hydratedPayload
+        }
         this.state.lastStatusByPaneKey.set(resolvedPaneKey, entry)
-        // Why: the in-memory subagent roster died with the previous process.
-        // Reseed it from the persisted snapshot so the next teammate-bearing
-        // Stop (whose task ids never match lifecycle ids) doesn't silently
-        // drop the replayed child rows.
+        // Why: preserve only working children across restart. Live activity
+        // confirms them; a later complete inventory may reap stale seeds.
         if (entry.payload.subagents) {
           seedClaudeSubagentRosterFromSnapshots(
             this.state,
@@ -1793,18 +1816,16 @@ export class AgentHookServer {
         `[agent-hooks] last-status hydrate dropped ${dropped} entries (kept ${hydrated})`
       )
     }
-    if (hydrated > 0 && dropped === 0) {
+    if (dropped > 0 || prunedLegacyClaudeSubagents > 0) {
+      // Why: persist load-time pruning once so legacy idle rows do not consume
+      // parse/filter work again on every launch.
+      this.runStatusPersist()
+    } else if (hydrated > 0) {
       // Why: prime from the raw on-disk bytes (not a re-serialization) so the
       // dedup is robust against future shape drift in serializeStatusFile.
       // Only prime when hydration was lossless — if entries were dropped
       // during sanitize, the in-memory map diverges from the on-disk bytes.
       this.lastWrittenJson = raw
-    } else if (dropped > 0) {
-      // Why: clean the stale on-disk file now so a user who has not run an
-      // agent in 8+ days does not re-drop the same entries on every cold
-      // boot. Synchronous variant is safe at start time and avoids
-      // unref'd-timer-during-quit edge cases.
-      this.runStatusPersist()
     }
   }
 

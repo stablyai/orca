@@ -64,6 +64,7 @@ import { getAgentForegroundContextPaths } from '../providers/agent-foreground-co
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
 import type { TuiAgent } from '../../shared/types'
+import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -1199,11 +1200,14 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       if (dead) {
         return
       }
+      nodePtyKillIssued = true
       try {
-        nodePtyKillIssued = true
         proc.kill()
-      } catch {
-        dead = true
+      } catch (error) {
+        // Why: a rejected native kill is not proof of exit. Keep the wrapper
+        // live and let Session retain/retry the physical owner.
+        nodePtyKillIssued = false
+        throw error
       }
     },
     forceKill: () => {
@@ -1217,13 +1221,17 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         return
       }
       try {
-        process.kill(proc.pid, 'SIGKILL')
-      } catch {
+        forceKillPosixPtyProcessGroups(proc.pid, () => {
+          process.kill(proc.pid, 'SIGKILL')
+        })
+      } catch (signalError) {
         try {
-          nodePtyKillIssued = true
           proc.kill()
+          nodePtyKillIssued = true
         } catch {
-          // Process may already be dead
+          nodePtyKillIssued = false
+          // Keep the original OS failure so callers can retry the same owner.
+          throw signalError
         }
       }
     },

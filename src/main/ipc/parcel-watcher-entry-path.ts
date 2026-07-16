@@ -28,10 +28,32 @@ export function resolveWatcherProcessEntryPath(
   return join(basePath, 'out', 'main', 'parcel-watcher-process-entry.js')
 }
 
+export function resolveWatcherProcessEntryPathWithoutApp(
+  cwd: string,
+  resourcesPath: string | undefined,
+  pathExists: (candidate: string) => boolean = existsSync
+): string {
+  if (resourcesPath) {
+    const packagedEntry = join(
+      resourcesPath,
+      'app.asar.unpacked',
+      'out',
+      'main',
+      'parcel-watcher-process-entry.js'
+    )
+    // Why: ELECTRON_RUN_AS_NODE exposes resourcesPath but not electron.app.
+    // Prefer the unpacked packaged entry without breaking dev Node fallbacks.
+    if (pathExists(packagedEntry)) {
+      return packagedEntry
+    }
+  }
+  return resolveWatcherProcessEntryPath(cwd, false, pathExists)
+}
+
 export function getWatcherProcessEntryPath(): string {
   const app = loadElectronApp()
-  return resolveWatcherProcessEntryPath(
-    app?.getAppPath() ?? process.cwd(),
-    app?.isPackaged === true
-  )
+  if (app) {
+    return resolveWatcherProcessEntryPath(app.getAppPath(), app.isPackaged)
+  }
+  return resolveWatcherProcessEntryPathWithoutApp(process.cwd(), process.resourcesPath)
 }

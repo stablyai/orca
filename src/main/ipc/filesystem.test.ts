@@ -1148,6 +1148,72 @@ describe('registerFilesystemHandlers', () => {
     })
   })
 
+  it('forwards line-stat reuse through local and SSH git status IPC', async () => {
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+    getStatusMock.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+    const sshProvider = {
+      getStatus: vi.fn().mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+    }
+    getSshGitProviderMock.mockReturnValue(sshProvider)
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:status')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      reuseLineStats: true
+    })
+    await handlers.get('git:status')!(null, {
+      worktreePath: '/remote/repo',
+      connectionId: 'ssh-1',
+      reuseLineStats: true
+    })
+
+    expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {
+      includeIgnored: false,
+      reuseLineStats: true
+    })
+    expect(sshProvider.getStatus).toHaveBeenCalledWith('/remote/repo', {
+      includeIgnored: false,
+      reuseLineStats: true
+    })
+  })
+
+  it('aborts tokenized local status without crossing renderer boundaries', async () => {
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+    const statusSignals: AbortSignal[] = []
+    getStatusMock.mockImplementation(
+      (_worktreePath: string, options: { signal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          if (options.signal) {
+            statusSignals.push(options.signal)
+            options.signal.addEventListener('abort', () => reject(new Error('aborted')), {
+              once: true
+            })
+          }
+        })
+    )
+    registerFilesystemHandlers(store as never)
+
+    const firstEvent = { sender: { id: 7 } }
+    const secondEvent = { sender: { id: 8 } }
+    const firstRequest = handlers.get('git:status')!(firstEvent, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      requestToken: 'status-1'
+    }) as Promise<unknown>
+    const secondRequest = handlers.get('git:status')!(secondEvent, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      requestToken: 'status-1'
+    }) as Promise<unknown>
+    await vi.waitFor(() => expect(statusSignals).toHaveLength(2))
+    await handlers.get('git:cancelStatus')!(firstEvent, { requestToken: 'status-1' })
+
+    expect(statusSignals[0]?.aborted).toBe(true)
+    expect(statusSignals[1]?.aborted).toBe(false)
+    await expect(firstRequest).rejects.toThrow('aborted')
+
+    await handlers.get('git:cancelStatus')!(secondEvent, { requestToken: 'status-1' })
+    await expect(secondRequest).rejects.toThrow('aborted')
+  })
+
   it('checks ignored paths through local and SSH git providers', async () => {
     registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
     checkIgnoredPathsMock.mockResolvedValue(['dist/bundle.js'])
@@ -2364,20 +2430,23 @@ describe('registerFilesystemHandlers', () => {
 
     registerFilesystemHandlers(store as never)
 
-    const pending = handlers.get('fs:listFiles')!(null, {
+    // Why: cancellation keys are scoped to the issuing webContents, so the
+    // cancel must come from the same sender as the listing request.
+    const senderEvent = { sender: { id: 7 } }
+    const pending = handlers.get('fs:listFiles')!(senderEvent, {
       rootPath: '/home/user/repo',
       connectionId: 'conn-1',
       requestToken: 'token-1'
     }) as Promise<string[]>
 
     expect(capturedSignal?.aborted).toBe(false)
-    await handlers.get('fs:cancelListFiles')!(null, { requestToken: 'token-1' })
+    await handlers.get('fs:cancelListFiles')!(senderEvent, { requestToken: 'token-1' })
     expect(capturedSignal?.aborted).toBe(true)
     await expect(pending).rejects.toThrow('listing cancelled')
 
     // Unknown or already-settled tokens are a no-op, not an error.
     expect(() =>
-      handlers.get('fs:cancelListFiles')!(null, { requestToken: 'unknown' })
+      handlers.get('fs:cancelListFiles')!(senderEvent, { requestToken: 'unknown' })
     ).not.toThrow()
   })
 })

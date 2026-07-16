@@ -10703,14 +10703,18 @@
         },
         "WindowsFirewallNotice": {
           "repair-success": "Windows Firewall now allows Orca Mobile on private networks",
-          "repair-failed": "Could not add the Windows Firewall rule",
+          "repair-failed": "Could not update the Windows Firewall rules",
           "public-title": "Windows marks this network as public",
           "missing-title": "Allow phone connections through Windows Firewall",
           "public-description": "Change this trusted Wi-Fi network to Private before allowing Orca Mobile connections.",
           "missing-description": "Windows may block the pairing server. Add a rule for this Orca app and TCP port {{port}} on Private networks.",
           "open-settings": "Open network settings",
           "waiting": "Waiting for Windows…",
-          "allow": "Allow phone connections"
+          "allow": "Allow phone connections",
+          "repair-unverified": "Windows Firewall access could not be verified",
+          "blocked-title": "Windows may be blocking Orca Mobile",
+          "blocked-description": "An existing inbound Block rule can override the pairing exception. Repair removes conflicting TCP rules for this Orca app, then allows port {{port}} on Private networks.",
+          "repair": "Repair firewall access"
         }
       },
       "gitlab": {
@@ -11847,7 +11851,13 @@
                 "5f9a0ed7c4": "Título 4",
                 "01a71dbbdd": "Encabezado de sección anidada.",
                 "8440fa4acf": "Título 5",
-                "b287b93c66": "Encabezado de sección profunda."
+                "b287b93c66": "Encabezado de sección profunda.",
+                "7a2c1f9b04": "Alternar título 2",
+                "b3e5d8a1c6": "Cree una sección plegable con un resumen de encabezado mediano.",
+                "2f9d6b4e10": "Alternar título 3",
+                "8c1a3e7d52": "Cree una sección plegable con un resumen de encabezado pequeño.",
+                "5e0b9c2a71": "Alternar título 4",
+                "d4f16a8b39": "Cree una sección plegable con un resumen de encabezado anidado."
               }
             }
           }
@@ -13133,7 +13143,8 @@
         "cancel": "Cancelar",
         "send": "Enviar respuesta",
         "next": "Siguiente",
-        "skip": "Omitir"
+        "skip": "Omitir",
+        "sending": "Enviando…"
       },
       "approval": {
         "title": "¿Permitir {{value0}}?",

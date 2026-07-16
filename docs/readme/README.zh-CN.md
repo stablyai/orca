@@ -17,7 +17,7 @@
 
 <p align="center">
   <strong>面向 100x 构建者的 AI 编排器。</strong><br/>
-  并排运行 Claude Code、OpenClaude、Codex 或 OpenCode — 每个都在自己的 worktree 中运行，并在一个地方统一跟踪。
+  并排运行 Codex、Claude Code、OpenCode 或 Pi — 每个都在自己的 worktree 中运行，并在一个地方统一跟踪。
 </p>
 
 <h3 align="center"><a href="https://onorca.dev/download"><ins>下载 Orca</ins></a></h3>

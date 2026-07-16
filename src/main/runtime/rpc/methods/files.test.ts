@@ -126,15 +126,20 @@ describe('file RPC methods', () => {
       )
 
       await vi.waitFor(() => {
-        expect(replies).toHaveLength(1)
+        expect(replies).toHaveLength(2)
       })
       expect(runtime.watchFileExplorer).toHaveBeenCalledWith(
         'id:wt-1',
         expect.any(Function),
         expect.any(Function),
-        undefined
+        expect.any(AbortSignal)
       )
       expect(replies[0]).toMatchObject({
+        ok: true,
+        streaming: true,
+        result: { type: 'starting', subscriptionId: expect.stringContaining('files-watch-') }
+      })
+      expect(replies[1]).toMatchObject({
         ok: true,
         streaming: true,
         result: { type: 'ready', subscriptionId: expect.stringContaining('files-watch-') }
@@ -146,11 +151,11 @@ describe('file RPC methods', () => {
       emitWatchChange?.([
         { kind: 'update', absolutePath: '/repo/package.json', isDirectory: false }
       ])
-      expect(replies).toHaveLength(1)
+      expect(replies).toHaveLength(2)
 
       await vi.runOnlyPendingTimersAsync()
 
-      expect(replies[1]).toMatchObject({
+      expect(replies[2]).toMatchObject({
         ok: true,
         streaming: true,
         result: {
@@ -163,11 +168,11 @@ describe('file RPC methods', () => {
         }
       })
 
-      const ready = replies[0] as { result: { subscriptionId: string } }
+      const ready = replies[1] as { result: { subscriptionId: string } }
       cleanups.get(ready.result.subscriptionId)?.()
       await dispatch
 
-      expect(replies[2]).toMatchObject({
+      expect(replies[3]).toMatchObject({
         ok: true,
         streaming: true,
         result: { type: 'end' }
@@ -205,14 +210,20 @@ describe('file RPC methods', () => {
       makeRequest('files.watch', { worktree: 'id:wt-1' }),
       (response) => replies.push(JSON.parse(response))
     )
-    await vi.waitFor(() => expect(replies[0]?.result?.type).toBe('ready'))
+    await vi.waitFor(() => expect(replies[1]?.result?.type).toBe('ready'))
 
     emitWatchChange?.([{ kind: 'overflow', absolutePath: '/repo' }])
     onTerminalError?.(new Error('file watcher process crashed repeatedly'))
     await dispatch
 
-    expect(replies.map((reply) => reply.result?.type)).toEqual(['ready', 'changed', 'error', 'end'])
-    expect(replies[2]?.result?.message).toContain('crashed repeatedly')
+    expect(replies.map((reply) => reply.result?.type)).toEqual([
+      'starting',
+      'ready',
+      'changed',
+      'error',
+      'end'
+    ])
+    expect(replies[3]?.result?.message).toContain('crashed repeatedly')
     expect(unwatch).toHaveBeenCalledTimes(1)
     expect(cleanups.size).toBe(0)
   })
@@ -234,10 +245,14 @@ describe('file RPC methods', () => {
           resolveWatch = resolve
         })
     )
+    const cleanups = new Map<string, () => void | Promise<void>>()
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       watchFileExplorer,
-      registerSubscriptionCleanup: vi.fn()
+      registerSubscriptionCleanup: vi.fn((id, cleanup) => cleanups.set(id, cleanup)),
+      cleanupSubscription: vi.fn((id) => {
+        void Promise.resolve(cleanups.get(id)?.())
+      })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
     const abortController = new AbortController()
@@ -251,63 +266,39 @@ describe('file RPC methods', () => {
     await vi.waitFor(() => {
       expect(watchFileExplorer).toHaveBeenCalled()
     })
-    expect(watchFileExplorer.mock.calls[0]?.[3]).toBe(abortController.signal)
+    const setupSignal = watchFileExplorer.mock.calls[0]?.[3]
+    expect(setupSignal).not.toBe(abortController.signal)
     abortController.abort()
+    expect(setupSignal?.aborted).toBe(true)
     await dispatch
 
     resolveWatch(unwatch)
     await vi.waitFor(() => {
       expect(unwatch).toHaveBeenCalled()
     })
-    expect(runtime.registerSubscriptionCleanup).not.toHaveBeenCalled()
-    expect(replies).toEqual([])
+    expect(runtime.registerSubscriptionCleanup).toHaveBeenCalledTimes(1)
+    expect(replies).toEqual([
+      expect.objectContaining({ result: expect.objectContaining({ type: 'starting' }) }),
+      expect.objectContaining({ result: { type: 'end' } })
+    ])
   })
 
-  it('drops queued file watch events when aborted before setup resolves', async () => {
-    vi.useFakeTimers()
-    try {
-      type WatchCallback = (
-        events: { kind: 'update'; absolutePath: string; isDirectory?: boolean }[]
-      ) => void
-      const unwatch = vi.fn()
-      let resolveWatch: (value: () => void) => void = () => {}
-      const watchFileExplorer = vi.fn((_worktree: string, callback: WatchCallback) => {
-        callback([{ kind: 'update', absolutePath: '/repo/queued.ts', isDirectory: false }])
-        return new Promise<() => void>((resolve) => {
-          resolveWatch = resolve
-        })
-      })
-      const runtime = {
-        getRuntimeId: () => 'test-runtime',
-        watchFileExplorer,
-        registerSubscriptionCleanup: vi.fn()
-      } as unknown as OrcaRuntimeService
-      const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
-      const abortController = new AbortController()
-      const replies: unknown[] = []
+  it('reports files.unwatch failure instead of acknowledging incomplete teardown', async () => {
+    const cleanupError = new Error('file watcher process did not exit after termination deadline')
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      cleanupSubscriptionAndWait: vi.fn().mockRejectedValue(cleanupError)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
-      const dispatch = dispatcher.dispatchStreaming(
-        makeRequest('files.watch', { worktree: 'id:wt-1' }),
-        (response) => replies.push(JSON.parse(response)),
-        { connectionId: 'conn-1', signal: abortController.signal }
-      )
-      await vi.waitFor(() => {
-        expect(watchFileExplorer).toHaveBeenCalled()
-      })
+    const response = await dispatcher.dispatch(
+      makeRequest('files.unwatch', { subscriptionId: 'files-watch-inproc-1' })
+    )
 
-      abortController.abort()
-      await dispatch
-      await vi.runOnlyPendingTimersAsync()
-      resolveWatch(unwatch)
-      await vi.waitFor(() => {
-        expect(unwatch).toHaveBeenCalled()
-      })
-
-      expect(runtime.registerSubscriptionCleanup).not.toHaveBeenCalled()
-      expect(replies).toEqual([])
-    } finally {
-      vi.useRealTimers()
-    }
+    expect(response).toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining(cleanupError.message) }
+    })
   })
 
   it('reads a relative file path for a selected worktree', async () => {

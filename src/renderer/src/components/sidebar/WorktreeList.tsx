@@ -269,7 +269,7 @@ import { buildSidebarHostOptions } from './sidebar-host-options'
 import { HostSectionHeaderMenu } from './HostSectionHeaderMenu'
 import { ProjectHeaderActions } from './ProjectHeaderActions'
 import { translate } from '@/i18n/i18n'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey, getActiveSidebarWorkspaceId } from '../../../../shared/workspace-scope'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import {
   isConfirmedStaleFolderPathStatus,
@@ -405,22 +405,6 @@ function shouldIgnoreRepoHeaderToggle(event: React.SyntheticEvent<HTMLElement>):
 
 function getWorktreeOptionId(rowKey: string): string {
   return `worktree-list-option-${encodeURIComponent(rowKey)}`
-}
-
-// Why: folder workspaces are tracked by the scoped active key, while older
-// worktree-only paths still read activeWorktreeId.
-function getActiveSidebarWorkspaceId(
-  activeWorkspaceKey: string | null,
-  activeWorktreeId: string | null
-): string | null {
-  const scope = activeWorkspaceKey ? parseWorkspaceKey(activeWorkspaceKey) : null
-  if (scope?.type === 'folder') {
-    return folderWorkspaceKey(scope.folderWorkspaceId)
-  }
-  if (scope?.type === 'worktree') {
-    return scope.worktreeId
-  }
-  return activeWorktreeId
 }
 
 function getMountedWorktreeOptions(worktreeId: string, root?: ParentNode | null): HTMLElement[] {

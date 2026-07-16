@@ -10703,14 +10703,18 @@
         },
         "WindowsFirewallNotice": {
           "repair-success": "Windows Firewall now allows Orca Mobile on private networks",
-          "repair-failed": "Could not add the Windows Firewall rule",
+          "repair-failed": "Could not update the Windows Firewall rules",
           "public-title": "Windows marks this network as public",
           "missing-title": "Allow phone connections through Windows Firewall",
           "public-description": "Change this trusted Wi-Fi network to Private before allowing Orca Mobile connections.",
           "missing-description": "Windows may block the pairing server. Add a rule for this Orca app and TCP port {{port}} on Private networks.",
           "open-settings": "Open network settings",
           "waiting": "Waiting for Windows…",
-          "allow": "Allow phone connections"
+          "allow": "Allow phone connections",
+          "repair-unverified": "Windows Firewall access could not be verified",
+          "blocked-title": "Windows may be blocking Orca Mobile",
+          "blocked-description": "An existing inbound Block rule can override the pairing exception. Repair removes conflicting TCP rules for this Orca app, then allows port {{port}} on Private networks.",
+          "repair": "Repair firewall access"
         }
       },
       "gitlab": {
@@ -11847,7 +11851,13 @@
                 "5f9a0ed7c4": "見出し 4",
                 "01a71dbbdd": "ネストされたセクション見出し。",
                 "8440fa4acf": "見出し 5",
-                "b287b93c66": "深いセクションの見出し。"
+                "b287b93c66": "深いセクションの見出し。",
+                "7a2c1f9b04": "見出し 2 を切り替えます",
+                "b3e5d8a1c6": "中程度の見出しの概要を含む折りたたみ可能なセクションを作成します。",
+                "2f9d6b4e10": "見出し 3 を切り替えます",
+                "8c1a3e7d52": "小さな見出しの概要を含む折りたたみ可能なセクションを作成します。",
+                "5e0b9c2a71": "見出し 4 を切り替えます",
+                "d4f16a8b39": "入れ子の見出しの概要を含む折りたたみ可能なセクションを作成します。"
               }
             }
           }
@@ -13133,7 +13143,8 @@
         "cancel": "キャンセル",
         "send": "回答を送信する",
         "next": "次へ",
-        "skip": "スキップ"
+        "skip": "スキップ",
+        "sending": "送信中…"
       },
       "approval": {
         "title": "{{value0}} を許可しますか?",

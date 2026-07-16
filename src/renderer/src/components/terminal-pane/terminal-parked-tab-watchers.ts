@@ -196,6 +196,9 @@ function startParkedTabWatchers(
       disposersByPtyId.get(ptyId)?.()
       disposersByPtyId.delete(ptyId)
       closeTerminalTab(tab.id, {
+        // Why: this autonomous PTY exit still needs the parked pinned-tab
+        // confirmation flow, but it must not become user reopen history.
+        captureRecentlyClosed: false,
         onClosed: () => {
           discardPreHandlerPtyState(ptyId)
           const entry = parkedWatchersByTabId.get(tab.id)

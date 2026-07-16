@@ -540,7 +540,7 @@ describe('SshFilesystemProvider', () => {
 
       expect(mux.request).toHaveBeenCalledWith(
         'fs.watch',
-        { rootPath: '/home/user/project' },
+        { rootPath: '/home/user/project', watchId: expect.any(Number) },
         { signal: expect.any(AbortSignal) }
       )
       expect(typeof unsub).toBe('function')
@@ -555,7 +555,7 @@ describe('SshFilesystemProvider', () => {
 
       expect(mux.request).toHaveBeenCalledWith(
         'fs.watch',
-        { rootPath: '/home/user/project' },
+        { rootPath: '/home/user/project', watchId: expect.any(Number) },
         { signal: expect.any(AbortSignal) }
       )
       const physicalSignal = mux.request.mock.calls[0][2]?.signal
@@ -642,6 +642,50 @@ describe('SshFilesystemProvider', () => {
       expect(callback).toHaveBeenCalledWith(events)
     })
 
+    it('invalidates only the matching watch generation after relay recovery terminates', async () => {
+      const firstTerminal = vi.fn()
+      const secondTerminal = vi.fn()
+      await provider.watch('/home/user/project', vi.fn(), {
+        onTerminalError: firstTerminal
+      })
+      await provider.watch('/home/user/project', vi.fn(), {
+        onTerminalError: secondTerminal
+      })
+      const notifHandler = mux.onNotification.mock.calls[0][0]
+      const firstWatchId = mux.request.mock.calls[0][1].watchId as number
+
+      notifHandler('fs.watchFailed', {
+        rootPath: '/home/user/project',
+        watchId: firstWatchId + 1,
+        message: 'stale failure'
+      })
+      expect(firstTerminal).not.toHaveBeenCalled()
+
+      notifHandler('fs.watchFailed', {
+        rootPath: '/home/user/project',
+        watchId: firstWatchId,
+        message: 'bounded recovery failed'
+      })
+      expect(firstTerminal).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'bounded recovery failed' })
+      )
+      expect(secondTerminal).toHaveBeenCalledTimes(1)
+
+      const replacementTerminal = vi.fn()
+      await provider.watch('/home/user/project', vi.fn(), {
+        onTerminalError: replacementTerminal
+      })
+      const replacementWatchId = mux.request.mock.calls[1][1].watchId as number
+      expect(replacementWatchId).not.toBe(firstWatchId)
+
+      notifHandler('fs.watchFailed', {
+        rootPath: '/home/user/project',
+        watchId: firstWatchId,
+        message: 'late stale failure'
+      })
+      expect(replacementTerminal).not.toHaveBeenCalled()
+    })
+
     it('fans out same-root watch events and unwatches only after the last subscriber', async () => {
       const first = vi.fn()
       const second = vi.fn()
@@ -651,7 +695,7 @@ describe('SshFilesystemProvider', () => {
       expect(mux.request).toHaveBeenCalledTimes(1)
       expect(mux.request).toHaveBeenCalledWith(
         'fs.watch',
-        { rootPath: '/home/user/project' },
+        { rootPath: '/home/user/project', watchId: expect.any(Number) },
         { signal: expect.any(AbortSignal) }
       )
 
@@ -668,6 +712,40 @@ describe('SshFilesystemProvider', () => {
 
       unsubSecond()
       expect(mux.notify).toHaveBeenCalledWith('fs.unwatch', { rootPath: '/home/user/project' })
+    })
+
+    it('shares equivalent Windows spellings under one provider watch generation', async () => {
+      const first = vi.fn()
+      const second = vi.fn()
+      const firstTerminal = vi.fn()
+      const secondTerminal = vi.fn()
+      const unsubFirst = await provider.watch('C:\\Repo', first, {
+        onTerminalError: firstTerminal
+      })
+      const unsubSecond = await provider.watch('c:/repo/', second, {
+        onTerminalError: secondTerminal
+      })
+
+      expect(mux.request).toHaveBeenCalledTimes(1)
+      const watchId = mux.request.mock.calls[0][1].watchId as number
+      const notification = mux.onNotification.mock.calls[0][0]
+      notification('fs.changed', {
+        events: [{ kind: 'update', absolutePath: 'c:/repo/file.ts' }]
+      })
+      expect(first).toHaveBeenCalledTimes(1)
+      expect(second).toHaveBeenCalledTimes(1)
+
+      unsubFirst()
+      expect(mux.notify).not.toHaveBeenCalledWith('fs.unwatch', { rootPath: 'C:\\Repo' })
+      notification('fs.watchFailed', {
+        rootPath: 'c:/repo',
+        watchId,
+        message: 'bounded recovery failed'
+      })
+      expect(firstTerminal).not.toHaveBeenCalled()
+      expect(secondTerminal).toHaveBeenCalledTimes(1)
+
+      unsubSecond()
     })
 
     it('shares an in-flight same-root watch setup across concurrent subscribers', async () => {
@@ -758,6 +836,42 @@ describe('SshFilesystemProvider', () => {
       unsub()
 
       expect(mux.notify).toHaveBeenCalledWith('fs.unwatch', { rootPath: '/home/user/project' })
+    })
+
+    it('awaits acknowledged watcher teardown for destructive cleanup', async () => {
+      const callback = vi.fn()
+      await provider.watch('/home/user/project', callback)
+      mux.request.mockClear()
+
+      await provider.closeWatch('/home/user/project')
+
+      expect(mux.request).toHaveBeenCalledWith('fs.unwatchAndWait', {
+        rootPath: '/home/user/project'
+      })
+      const notifHandler = mux.onNotification.mock.calls[0][0]
+      notifHandler('fs.changed', {
+        events: [{ kind: 'update', absolutePath: '/home/user/project/file.ts' }]
+      })
+      expect(callback).not.toHaveBeenCalled()
+    })
+
+    it('fails destructive teardown closed on an older relay', async () => {
+      const callback = vi.fn()
+      await provider.watch('/home/user/project', callback)
+      mux.request.mockRejectedValueOnce(
+        Object.assign(new Error('Method not found'), { code: JsonRpcErrorCode.MethodNotFound })
+      )
+
+      await expect(provider.closeWatch('/home/user/project')).rejects.toThrow(
+        'Reconnect the SSH target'
+      )
+      expect(mux.notify).not.toHaveBeenCalledWith('fs.unwatch', {
+        rootPath: '/home/user/project'
+      })
+      const notifHandler = mux.onNotification.mock.calls[0][0]
+      const events = [{ kind: 'update' as const, absolutePath: '/home/user/project/file.ts' }]
+      notifHandler('fs.changed', { events })
+      expect(callback).toHaveBeenCalledWith(events)
     })
 
     it('sends fs.unwatch for active roots when disposed', async () => {

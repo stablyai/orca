@@ -23,6 +23,7 @@ import {
 } from '../../../../shared/workspace-session-browser-history'
 import { pickNeighbor } from './tab-group-state'
 import { destroyWorkspaceWebviews } from './browser-webview-cleanup'
+import { pushRecentlyClosedTabKind } from './recently-closed-tabs'
 import {
   callRuntimeRpc,
   getActiveRuntimeTarget,
@@ -726,6 +727,11 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         { workspace: closedWorkspace, pages: closedPages },
         ...existingSnapshots.filter((entry) => entry.workspace.id !== closedWorkspace.id)
       ].slice(0, 10)
+      const nextRecentlyClosedTabKindsByWorktree = pushRecentlyClosedTabKind(
+        s.recentlyClosedTabKindsByWorktree,
+        owningWorktreeId,
+        'browser'
+      )
 
       const nextRecentlyClosedBrowserPagesByWorkspace = {
         ...s.recentlyClosedBrowserPagesByWorkspace
@@ -757,6 +763,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         pendingAddressBarFocusByTabId: nextPendingAddressBarFocusByTabId,
         activeTabTypeByWorktree: nextActiveTabTypeByWorktree,
         recentlyClosedBrowserTabsByWorktree: nextRecentlyClosedBrowserTabsByWorktree,
+        recentlyClosedTabKindsByWorktree: nextRecentlyClosedTabKindsByWorktree,
         recentlyClosedBrowserPagesByWorkspace: nextRecentlyClosedBrowserPagesByWorkspace,
         remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId,
         browserAnnotationsByPageId: nextBrowserAnnotationsByPageId

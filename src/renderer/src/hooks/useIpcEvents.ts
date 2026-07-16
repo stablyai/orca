@@ -14,6 +14,8 @@ import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/wake-sleeping
 import { OPEN_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/useWorkspaceBoardPanel'
 import { SPLIT_TERMINAL_PANE_EVENT, CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
+import { planMobileTerminalTabMount } from '@/lib/mobile-terminal-tab-mount'
+import { hasRegisteredRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
 import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
@@ -1664,6 +1666,32 @@ export function useIpcEvents(): void {
           }
         }
       )
+    )
+
+    // Why: background-mounting a mobile-subscribed tab attaches a PTY that this
+    // renderer never mounted, without navigating the desktop (STA-1840).
+    unsubs.push(
+      window.api.ui.onRequestTerminalTabMount(({ worktreeId, tabId, ptyId }) => {
+        if (!worktreeId) {
+          return
+        }
+        // Why: synthetic pty handles need persisted-tab resolution, but a miss
+        // must not mount every saved terminal in a large hidden worktree.
+        const mount = planMobileTerminalTabMount(
+          useAppStore.getState(),
+          {
+            worktreeId,
+            ...(tabId ? { tabId } : {}),
+            ...(ptyId ? { ptyId } : {})
+          },
+          {
+            isTabMounted: hasRegisteredRuntimeTerminalTab
+          }
+        )
+        if (mount) {
+          requestBackgroundTerminalWorktreeMount(mount)
+        }
+      })
     )
 
     // Why: CLI-driven terminal creation sends a request and waits for the

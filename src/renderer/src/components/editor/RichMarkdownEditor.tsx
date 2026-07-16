@@ -17,6 +17,8 @@ import { RichMarkdownEditorSurface } from './RichMarkdownEditorSurface'
 import { useRichMarkdownEditorInstance } from './useRichMarkdownEditorInstance'
 import { useRichMarkdownMenuController } from './useRichMarkdownMenuController'
 import { useRichMarkdownProgrammaticSync } from './useRichMarkdownProgrammaticSync'
+import { useRichMarkdownReconcileRoundTrip } from './useRichMarkdownReconcileRoundTrip'
+import { commitRichMarkdownSerialization } from './rich-markdown-serialization-commit'
 import { useRichMarkdownReviewController } from './useRichMarkdownReviewController'
 import { useRichMarkdownReviewEditorEffects } from './useRichMarkdownReviewEditorEffects'
 import {
@@ -99,6 +101,11 @@ export default function RichMarkdownEditor({
   const menu = useRichMarkdownMenuController({ markdownDocuments })
   const isMac = navigator.userAgent.includes('Mac')
   const lastCommittedMarkdownRef = useRef(content)
+  // Why: three-way source-preserving reconciliation baseline — the raw on-disk
+  // bytes and their canonical serialization — so edits patch onto the original
+  // style rather than re-canonicalizing untouched regions (#6080).
+  const originalSourceRef = useRef(content)
+  const baseCanonicalRef = useRef('')
   const onContentChangeRef = useRef(onContentChange)
   const onDirtyStateHintRef = useRef(onDirtyStateHint)
   const onSaveRef = useRef(onSave)
@@ -159,6 +166,13 @@ export default function RichMarkdownEditor({
   onSaveRef.current = onSave
   onOpenDocLinkRef.current = onOpenDocLink
   isEditingLinkRef.current = isEditingLink
+  const reconcileRoundTripRef = useRichMarkdownReconcileRoundTrip({
+    htmlSuperscriptLinkContext,
+    filePath,
+    runtimeEnvironmentId,
+    worktreeId,
+    worktreeRoot
+  })
 
   const flushPendingSerialization = useCallback(() => {
     if (serializeTimerRef.current === null) {
@@ -167,16 +181,19 @@ export default function RichMarkdownEditor({
     window.clearTimeout(serializeTimerRef.current)
     serializeTimerRef.current = null
     try {
-      const markdown = editorRef.current?.getMarkdown()
-      if (markdown !== undefined) {
-        lastCommittedMarkdownRef.current = markdown
+      const { markdown, didSerialize } = commitRichMarkdownSerialization(
+        editorRef.current,
+        { originalSourceRef, baseCanonicalRef, lastCommittedMarkdownRef },
+        reconcileRoundTripRef.current
+      )
+      if (didSerialize) {
         onContentChangeRef.current(markdown)
       }
     } catch {
       // Why: save/restart flows should never crash the UI just because the
       // editor was torn down between scheduling and flushing a debounced sync.
     }
-  }, [])
+  }, [reconcileRoundTripRef])
 
   useEffect(() => {
     // Why: autosave/restart paths live outside the editor component tree, so a
@@ -216,6 +233,9 @@ export default function RichMarkdownEditor({
     rootRef,
     editorRef,
     lastCommittedMarkdownRef,
+    originalSourceRef,
+    baseCanonicalRef,
+    reconcileRoundTripRef,
     onContentChangeRef,
     onDirtyStateHintRef,
     onSaveRef,
@@ -288,6 +308,8 @@ export default function RichMarkdownEditor({
     filePath,
     isApplyingProgrammaticUpdateRef,
     lastCommittedMarkdownRef,
+    originalSourceRef,
+    baseCanonicalRef,
     markdownDocuments,
     rootRef,
     runtimeEnvironmentId,

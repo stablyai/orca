@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import type React from 'react'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { PendingText } from './useMarkupKeyboardShortcuts'
 import {
   commitShape,
@@ -24,8 +25,17 @@ export type MarkupPointerParams = {
 // Canvas pointer interactions: draw a new shape, or place text. Split out of
 // useMarkupEditor to keep that hook focused.
 export function useMarkupPointerHandlers(params: MarkupPointerParams) {
-  const { busy, tool, color, width, pendingText, canvasRef, setInProgress, setPendingText, setDoc } =
-    params
+  const {
+    busy,
+    tool,
+    color,
+    width,
+    pendingText,
+    canvasRef,
+    setInProgress,
+    setPendingText,
+    setDoc
+  } = params
 
   const pointFromEvent = useCallback(
     (event: { clientX: number; clientY: number }): MarkupPoint => {
@@ -57,7 +67,7 @@ export function useMarkupPointerHandlers(params: MarkupPointerParams) {
         return
       }
       event.currentTarget.setPointerCapture(event.pointerId)
-      const id = crypto.randomUUID()
+      const id = createBrowserUuid()
       if (tool === 'pen' || tool === 'highlight') {
         setInProgress({ id, kind: tool, color, width, points: [point] })
       } else {

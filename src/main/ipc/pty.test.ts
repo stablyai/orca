@@ -205,6 +205,7 @@ import {
   unregisterSshPtyProvider,
   getLocalPtyProvider
 } from './pty'
+import { _resetLocalPtyProviderStateForTest } from '../providers/local-pty-provider'
 import {
   _resetHiddenRendererPtyDeliveryGateForTest,
   isHiddenRendererPty
@@ -221,6 +222,7 @@ import {
   SSH_SESSION_EXPIRED_ERROR
 } from '../providers/ssh-pty-provider'
 import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
+import { acquireWatcherRemovalGate } from './watcher-removal-gate'
 
 const POWERSHELL_OSC133_ARGS = [
   '-NoLogo',
@@ -423,6 +425,7 @@ describe('registerPtyHandlers', () => {
   })
 
   afterEach(() => {
+    _resetLocalPtyProviderStateForTest()
     _resetWslCachesForTests()
     vi.useRealTimers()
     // Why: sshProviders is module-level state; any id left registered leaks
@@ -826,6 +829,19 @@ describe('registerPtyHandlers', () => {
 
   describe('spawn environment', () => {
     it('marks local Claude launches live until the PTY is killed', async () => {
+      let exitCb: ((info: { exitCode: number }) => void) | undefined
+      spawnMock.mockReturnValue({
+        onData: vi.fn(() => makeDisposable()),
+        onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
+          exitCb = cb
+          return makeDisposable()
+        }),
+        write: vi.fn(),
+        resize: vi.fn(),
+        kill: vi.fn(() => exitCb?.({ exitCode: -1 })),
+        process: 'zsh',
+        pid: 12345
+      })
       const prepareClaudeAuth = vi.fn(async () => ({
         configDir: '/tmp/claude',
         envPatch: {},
@@ -6085,6 +6101,7 @@ describe('registerPtyHandlers', () => {
         env?: Record<string, string>
       }): Promise<{ id: string }>
       hasRendererSerializer?(ptyId: string): boolean
+      getRendererSerializerGeneration?(ptyId: string): number
     }
     let controller: RuntimeSpawnController | null = null
     const runtime = {
@@ -6112,10 +6129,113 @@ describe('registerPtyHandlers', () => {
       worktreeId: 'wt-1',
       env: { ORCA_PANE_KEY: ` ${paneKey} ` }
     })
+    const replacementGen = (await handlers.get('pty:declarePendingPaneSerializer')!(null, {
+      paneKey
+    })) as number
 
     expect(spawnController.hasRendererSerializer?.(result.id)).toBe(false)
     await handlers.get('pty:settlePaneSerializer')!(null, { paneKey, gen })
+    expect(spawnController.hasRendererSerializer?.(result.id)).toBe(false)
+    expect(spawnController.getRendererSerializerGeneration?.(result.id)).toBe(0)
+    await handlers.get('pty:settlePaneSerializer')!(null, { paneKey, gen: replacementGen })
     expect(spawnController.hasRendererSerializer?.(result.id)).toBe(true)
+    expect(spawnController.getRendererSerializerGeneration?.(result.id)).toBe(1)
+  })
+
+  it('does not let old teardown cancel serializer settlement for a reused PTY id', async () => {
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        worktreeId?: string
+        env?: Record<string, string>
+      }): Promise<{ id: string }>
+      getRendererSerializerGeneration?(ptyId: string): number
+      hasRendererSerializer?(ptyId: string): boolean
+      waitForRendererSerializer?(
+        ptyId: string,
+        afterGeneration: number,
+        timeoutMs?: number
+      ): Promise<boolean>
+    }
+    const reusedPtyId = 'pty-reused'
+    setLocalPtyProvider({
+      spawn: vi.fn(async () => ({ id: reusedPtyId })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => []),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      preAllocateHandleForPty: vi.fn(() => null),
+      registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const paneKey = makePaneKey('tab-reused', '33333333-3333-4333-8333-333333333333')
+    const spawnController = controller as unknown as RuntimeSpawnController
+    const spawn = async (): Promise<void> => {
+      await spawnController.spawn({
+        cols: 80,
+        rows: 24,
+        worktreeId: 'wt-1',
+        env: { ORCA_PANE_KEY: paneKey }
+      })
+    }
+
+    const firstGen = (await handlers.get('pty:declarePendingPaneSerializer')!(null, {
+      paneKey
+    })) as number
+    await spawn()
+    await handlers.get('pty:settlePaneSerializer')!(null, { paneKey, gen: firstGen })
+    const priorGeneration = spawnController.getRendererSerializerGeneration?.(reusedPtyId) ?? 0
+
+    const secondGen = (await handlers.get('pty:declarePendingPaneSerializer')!(null, {
+      paneKey
+    })) as number
+    await spawn()
+    const ready = spawnController.waitForRendererSerializer?.(reusedPtyId, priorGeneration, 1_000)
+    clearProviderPtyState(reusedPtyId)
+    clearProviderPtyState(reusedPtyId)
+    await handlers.get('pty:settlePaneSerializer')!(null, { paneKey, gen: secondGen })
+
+    await expect(ready).resolves.toBe(true)
+    expect(spawnController.hasRendererSerializer?.(reusedPtyId)).toBe(true)
+  })
+
+  it('tracks exact remote-runtime serializer readiness without a local spawn mapping', async () => {
+    type RuntimeSpawnController = {
+      hasRendererSerializer?(ptyId: string): boolean
+      getRendererSerializerGeneration?(ptyId: string): number
+    }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      })
+    }
+
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const ptyId = 'remote:env-1@@terminal-1'
+    const spawnController = controller as unknown as RuntimeSpawnController
+
+    expect(spawnController.hasRendererSerializer?.(ptyId)).toBe(false)
+    await handlers.get('pty:reportRendererSerializerReady')!(null, { ptyId: 'local-pty' })
+    expect(spawnController.hasRendererSerializer?.('local-pty')).toBe(false)
+    await handlers.get('pty:reportRendererSerializerReady')!(null, { ptyId })
+    expect(spawnController.hasRendererSerializer?.(ptyId)).toBe(true)
+    expect(spawnController.getRendererSerializerGeneration?.(ptyId)).toBe(1)
   })
 
   it('clears pending pane serializer declarations when their renderer is destroyed', async () => {
@@ -6688,6 +6808,85 @@ describe('registerPtyHandlers', () => {
 
     const [, , options] = spawnMock.mock.calls.at(-1) as [string, string[], { cwd: string }]
     expect(options.cwd).toBe('/tmp/floating-notes')
+  })
+
+  it('rejects a renderer spawn while destructive worktree removal holds the gate', async () => {
+    const removal = acquireWatcherRemovalGate('/repo/app')
+    await removal.ready
+    registerPtyHandlers(mainWindow as never)
+
+    try {
+      await expect(
+        handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          worktreeId: 'repo-1::/repo/app'
+        })
+      ).rejects.toMatchObject({ code: 'terminal_removal_in_progress' })
+      expect(spawnMock).not.toHaveBeenCalled()
+    } finally {
+      removal.release()
+    }
+  })
+
+  it('rejects a sibling-worktree terminal cwd inside a worktree being removed', async () => {
+    const removal = acquireWatcherRemovalGate('/repo/app')
+    await removal.ready
+    registerPtyHandlers(mainWindow as never)
+
+    try {
+      await expect(
+        handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/repo/app/nested',
+          worktreeId: 'repo-1::/repo/sibling'
+        })
+      ).rejects.toMatchObject({ code: 'terminal_removal_in_progress' })
+      expect(spawnMock).not.toHaveBeenCalled()
+    } finally {
+      removal.release()
+    }
+    const siblingRemoval = acquireWatcherRemovalGate('/repo/sibling')
+    await siblingRemoval.ready
+    siblingRemoval.release()
+  })
+
+  it('rejects a runtime sibling-worktree cwd inside a removing worktree', async () => {
+    const runtime = {
+      setPtyController: vi.fn(),
+      registerPty: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+      spawn(args: {
+        cols: number
+        rows: number
+        cwd?: string
+        worktreeId?: string
+        env?: Record<string, string>
+      }): Promise<{ id: string }>
+    }
+    const removal = acquireWatcherRemovalGate('/repo/app')
+    await removal.ready
+
+    try {
+      await expect(
+        controller.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '/repo/app/nested',
+          worktreeId: 'repo-1::/repo/sibling',
+          env: {}
+        })
+      ).rejects.toMatchObject({ code: 'terminal_removal_in_progress' })
+      expect(spawnMock).not.toHaveBeenCalled()
+    } finally {
+      removal.release()
+    }
   })
 
   it('falls back to the worktree root when a saved local cwd no longer exists', async () => {
@@ -10804,9 +11003,10 @@ describe('registerPtyHandlers', () => {
     expect(piClearPtyMock).toHaveBeenCalledWith(spawnResult.id)
   })
 
-  it('disposes PTY listeners before manual kill IPC', async () => {
+  it('retains PTY listeners until physical exit after manual kill IPC', async () => {
     const onDataDisposable = makeDisposable()
     const onExitDisposable = makeDisposable()
+    let exitCb: ((info: { exitCode: number }) => void) | undefined
     // Why: hold a stable reference to the kill spy. On POSIX, destroyPtyProcess
     // in local-pty-provider reassigns proc.kill to a no-op to defuse the
     // SIGHUP-to-recycled-pid hazard (see docs/fix-pty-fd-leak.md). Reading
@@ -10814,7 +11014,10 @@ describe('registerPtyHandlers', () => {
     const killSpy = vi.fn()
     const proc = {
       onData: vi.fn(() => onDataDisposable),
-      onExit: vi.fn(() => onExitDisposable),
+      onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
+        exitCb = cb
+        return onExitDisposable
+      }),
       write: vi.fn(),
       resize: vi.fn(),
       kill: killSpy,
@@ -10829,23 +11032,30 @@ describe('registerPtyHandlers', () => {
       rows: 24
     })) as { id: string }
 
-    await handlers.get('pty:kill')!(null, { id: spawnResult.id })
+    const killPromise = handlers.get('pty:kill')!(null, { id: spawnResult.id }) as Promise<void>
 
-    expect(onDataDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      killSpy.mock.invocationCallOrder[0]
-    )
-    expect(onExitDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      killSpy.mock.invocationCallOrder[0]
-    )
+    expect(killSpy).toHaveBeenCalledTimes(1)
+    expect(onDataDisposable.dispose).not.toHaveBeenCalled()
+    expect(onExitDisposable.dispose).not.toHaveBeenCalled()
+
+    exitCb?.({ exitCode: -1 })
+    await killPromise
+
+    expect(onDataDisposable.dispose).toHaveBeenCalledTimes(1)
+    expect(onExitDisposable.dispose).toHaveBeenCalledTimes(1)
   })
 
-  it('disposes PTY listeners before runtime controller kill', async () => {
+  it('retains PTY listeners until physical exit after runtime controller kill', async () => {
     const onDataDisposable = makeDisposable()
     const onExitDisposable = makeDisposable()
+    let exitCb: ((info: { exitCode: number }) => void) | undefined
     const killSpy = vi.fn()
     const proc = {
       onData: vi.fn(() => onDataDisposable),
-      onExit: vi.fn(() => onExitDisposable),
+      onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
+        exitCb = cb
+        return onExitDisposable
+      }),
       write: vi.fn(),
       resize: vi.fn(),
       kill: killSpy,
@@ -10872,21 +11082,26 @@ describe('registerPtyHandlers', () => {
     }
 
     expect(runtimeController.kill(spawnResult.id)).toBe(true)
-    expect(onDataDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      killSpy.mock.invocationCallOrder[0]
-    )
-    expect(onExitDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      killSpy.mock.invocationCallOrder[0]
-    )
+    await vi.waitFor(() => expect(killSpy).toHaveBeenCalledTimes(1))
+    expect(onDataDisposable.dispose).not.toHaveBeenCalled()
+    expect(onExitDisposable.dispose).not.toHaveBeenCalled()
+
+    exitCb?.({ exitCode: -1 })
+    await vi.waitFor(() => expect(onExitDisposable.dispose).toHaveBeenCalledTimes(1))
+    expect(onDataDisposable.dispose).toHaveBeenCalledTimes(1)
   })
 
-  it('disposes PTY listeners before did-finish-load orphan cleanup', async () => {
+  it('retains the PTY exit listener through did-finish-load orphan cleanup', async () => {
     const onDataDisposable = makeDisposable()
     const onExitDisposable = makeDisposable()
+    let exitCb: ((info: { exitCode: number }) => void) | undefined
     const killSpy = vi.fn()
     const proc = {
       onData: vi.fn(() => onDataDisposable),
-      onExit: vi.fn(() => onExitDisposable),
+      onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
+        exitCb = cb
+        return onExitDisposable
+      }),
       write: vi.fn(),
       resize: vi.fn(),
       kill: killSpy,
@@ -10925,9 +11140,10 @@ describe('registerPtyHandlers', () => {
     expect(onDataDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
       killSpy.mock.invocationCallOrder[0]
     )
-    expect(onExitDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      killSpy.mock.invocationCallOrder[0]
-    )
+    expect(onExitDisposable.dispose).not.toHaveBeenCalled()
+
+    exitCb?.({ exitCode: -1 })
+    expect(onExitDisposable.dispose).toHaveBeenCalledTimes(1)
   })
 
   it('removes the previous orphan-cleanup listener from its original webContents', () => {
@@ -11055,10 +11271,16 @@ describe('registerPtyHandlers', () => {
   // Why: guard against over-suppression — when no recovery reload is in flight the
   // sweep MUST still reclaim genuinely orphaned local PTYs.
   it('still sweeps orphaned local PTYs when no recovery reload is in flight', async () => {
-    const killSpy = vi.fn()
+    let exitCb: ((info: { exitCode: number }) => void) | undefined
+    const killSpy = vi.fn(() => {
+      queueMicrotask(() => exitCb?.({ exitCode: -1 }))
+    })
     const proc = {
       onData: vi.fn(() => makeDisposable()),
-      onExit: vi.fn(() => makeDisposable()),
+      onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
+        exitCb = cb
+        return makeDisposable()
+      }),
       write: vi.fn(),
       resize: vi.fn(),
       kill: killSpy,
@@ -11099,6 +11321,7 @@ describe('registerPtyHandlers', () => {
     // prior-load orphan. With the flag false the guard must NOT suppress the sweep.
     didFinishLoad()
     didFinishLoad()
+    await Promise.resolve()
 
     expect(killSpy).toHaveBeenCalled()
     expect(runtime.onPtyExit).toHaveBeenCalledWith(spawnResult.id, -1)
@@ -11171,10 +11394,14 @@ describe('registerPtyHandlers', () => {
     expect(ids).toContain(ptyB.id)
   })
 
-  it('clears PTY state even when kill reports the process is already gone', async () => {
+  it('retains PTY state when kill fails until physical exit arrives', async () => {
+    let exitCb: ((info: { exitCode: number }) => void) | undefined
     const proc = {
       onData: vi.fn(() => makeDisposable()),
-      onExit: vi.fn(() => makeDisposable()),
+      onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
+        exitCb = cb
+        return makeDisposable()
+      }),
       write: vi.fn(),
       resize: vi.fn(),
       kill: vi.fn(() => {
@@ -11191,9 +11418,21 @@ describe('registerPtyHandlers', () => {
       rows: 24
     })) as { id: string }
 
-    await handlers.get('pty:kill')!(null, { id: spawnResult.id })
+    await expect(handlers.get('pty:kill')!(null, { id: spawnResult.id })).rejects.toThrow(
+      'already dead'
+    )
 
-    expect(await handlers.get('pty:hasChildProcesses')!(null, { id: spawnResult.id })).toBe(false)
+    expect((await getLocalPtyProvider().listProcesses()).map(({ id }) => id)).toContain(
+      spawnResult.id
+    )
+    expect(openCodeClearPtyMock).not.toHaveBeenCalled()
+    expect(piClearPtyMock).not.toHaveBeenCalled()
+
+    exitCb?.({ exitCode: -1 })
+
+    expect((await getLocalPtyProvider().listProcesses()).map(({ id }) => id)).not.toContain(
+      spawnResult.id
+    )
     expect(openCodeClearPtyMock).toHaveBeenCalledWith(spawnResult.id)
     expect(piClearPtyMock).toHaveBeenCalledWith(spawnResult.id)
   })
