@@ -22,6 +22,7 @@ import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percenta
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
 import {
   getLeftSidebarAppearanceEntry,
+  getRightSidebarLayoutEntry,
   getShowPinnedWorktreesInGroupsEntry,
   getWorkspaceCardLayoutEntry
 } from './appearance-sidebar-search'
@@ -74,6 +75,7 @@ export function AppearanceWindowSidebarSection({
   const visibleStatusBarToggles = useAvailableStatusBarToggles(getStatusBarToggles())
   const usagePercentageDisplayEntry = getUsagePercentageDisplayEntry()
   const leftSidebarAppearanceEntry = getLeftSidebarAppearanceEntry()
+  const rightSidebarLayoutEntry = getRightSidebarLayoutEntry()
   const sidebarEntries = getSidebarEntries()
   const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
   const layoutEntries = getLayoutEntries()
@@ -121,6 +123,50 @@ export function AppearanceWindowSidebarSection({
           forceVisible={forceVisiblePrimary}
         >
           <LeftSidebarAppearanceSetting settings={settings} updateSettings={updateSettings} />
+        </SearchableSetting>
+
+        <SearchableSetting
+          title={rightSidebarLayoutEntry.title}
+          description={rightSidebarLayoutEntry.description}
+          keywords={rightSidebarLayoutEntry.keywords}
+          forceVisible={forceVisiblePrimary}
+        >
+          <SettingsRow
+            label={rightSidebarLayoutEntry.title}
+            // Why: spell out the tradeoff — overlay covers content but keeps
+            // terminal panes from re-wrapping every time the sidebar toggles.
+            description={translate(
+              'auto.components.settings.AppearanceWindowSidebarSection.rightSidebarLayoutDescription',
+              'Overlay floats the sidebar over the workspace so terminals keep their size when it opens.'
+            )}
+            control={
+              <SettingsSegmentedControl
+                ariaLabel={rightSidebarLayoutEntry.title}
+                value={settings.rightSidebarLayoutMode === 'overlay' ? 'overlay' : 'push'}
+                onChange={(value) =>
+                  updateSettings({
+                    rightSidebarLayoutMode: value === 'overlay' ? 'overlay' : 'push'
+                  })
+                }
+                options={[
+                  {
+                    value: 'push',
+                    label: translate(
+                      'auto.components.settings.AppearanceWindowSidebarSection.rightSidebarLayoutPush',
+                      'Push'
+                    )
+                  },
+                  {
+                    value: 'overlay',
+                    label: translate(
+                      'auto.components.settings.AppearanceWindowSidebarSection.rightSidebarLayoutOverlay',
+                      'Overlay'
+                    )
+                  }
+                ]}
+              />
+            }
+          />
         </SearchableSetting>
 
         <SearchableSetting

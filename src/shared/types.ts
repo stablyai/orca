@@ -2512,6 +2512,8 @@ export type SourceControlGroupOrder = 'changes-first' | 'staged-first' | 'untrac
 
 export type LeftSidebarAppearanceMode = 'default' | 'match-terminal' | 'tinted'
 
+export type RightSidebarLayoutMode = 'push' | 'overlay'
+
 export type FloatingTerminalCwdRequest = {
   path?: string
   requireTrusted?: boolean
@@ -2715,6 +2717,10 @@ export type GlobalSettings = {
   openInApplications?: OpenInApplication[]
   /** Deprecated: migration/backward-compat only. Use PersistedUIState.rightSidebarOpen. */
   rightSidebarOpenByDefault: boolean
+  /** 'overlay' floats the right sidebar over the workspace so toggling it
+   *  never resizes/re-wraps the visible terminal panes. Readers treat any
+   *  value other than 'overlay' as 'push' (the default flex layout). */
+  rightSidebarLayoutMode?: RightSidebarLayoutMode
   showGitIgnoredFiles?: boolean
   /** Preferred Source Control changes layout. Per-user, not per-workspace. */
   sourceControlViewMode: SourceControlViewMode

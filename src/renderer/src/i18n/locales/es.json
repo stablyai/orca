@@ -7309,7 +7309,11 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Porcentajes de uso",
-            "usagePercentageDisplayDescription": "Elige si los límites del proveedor muestran el porcentaje usado o restante."
+            "usagePercentageDisplayDescription": "Elige si los límites del proveedor muestran el porcentaje usado o restante.",
+            "rightSidebarLayout": {
+              "title": "Right Sidebar Layout",
+              "description": "Push resizes the workspace; Overlay floats the sidebar over it so terminals never reflow."
+            }
           }
         },
         "auto": {
@@ -9113,7 +9117,10 @@
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Usado",
-          "usagePercentageDisplayRemaining": "Restante"
+          "usagePercentageDisplayRemaining": "Restante",
+          "rightSidebarLayoutDescription": "Overlay floats the sidebar over the workspace so terminals keep their size when it opens.",
+          "rightSidebarLayoutPush": "Push",
+          "rightSidebarLayoutOverlay": "Overlay"
         },
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",

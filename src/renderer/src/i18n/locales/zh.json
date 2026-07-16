@@ -7294,7 +7294,11 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "用量百分比",
-            "usagePercentageDisplayDescription": "选择以已用或剩余百分比显示提供商限额。"
+            "usagePercentageDisplayDescription": "选择以已用或剩余百分比显示提供商限额。",
+            "rightSidebarLayout": {
+              "title": "Right Sidebar Layout",
+              "description": "Push resizes the workspace; Overlay floats the sidebar over it so terminals never reflow."
+            }
           }
         },
         "auto": {
@@ -9113,7 +9117,10 @@
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "已用",
-          "usagePercentageDisplayRemaining": "剩余"
+          "usagePercentageDisplayRemaining": "剩余",
+          "rightSidebarLayoutDescription": "Overlay floats the sidebar over the workspace so terminals keep their size when it opens.",
+          "rightSidebarLayoutPush": "Push",
+          "rightSidebarLayoutOverlay": "Overlay"
         },
         "TerminalInteractionSection": {
           "567633ff50": "右键点击将剪贴板内容粘贴到终端。按住 Control 键点击以打开上下文菜单。",
