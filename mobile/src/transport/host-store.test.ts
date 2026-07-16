@@ -37,11 +37,11 @@ import {
   loadHosts,
   MobileRelayUpgradeHostRemovedError,
   removeHost,
-  renameHost,
   resolvePairingHostIdentity,
   resetHostStoreForTests,
   saveHost,
   saveExistingHostRelayUpgrade,
+  updateHostNameAndEndpoint,
   updateLastConnected
 } from './host-store'
 import { resetMobileRelayHostOverlayStoreForTests } from './mobile-relay-host-overlay-store'
@@ -273,7 +273,7 @@ describe('host-store list mutations', () => {
       return storedHostsRaw
     })
 
-    const rename = renameHost(HOST_ONE.id, 'Renamed Host')
+    const rename = updateHostNameAndEndpoint(HOST_ONE.id, { name: 'Renamed Host' })
     const remove = removeHost(HOST_TWO.id)
     // Both writers have started their RMW and are blocked on the shared read
     // gate; without a mutation queue the second would clobber the first.
@@ -294,9 +294,9 @@ describe('host-store list mutations', () => {
   it('preserves a rename when lastConnected updates race it', async () => {
     const before = Date.now()
     await Promise.all([
-      renameHost(HOST_ONE.id, 'Alpha'),
+      updateHostNameAndEndpoint(HOST_ONE.id, { name: 'Alpha' }),
       updateLastConnected(HOST_ONE.id),
-      renameHost(HOST_TWO.id, 'Beta')
+      updateHostNameAndEndpoint(HOST_TWO.id, { name: 'Beta' })
     ])
 
     const stored = JSON.parse(storedHostsRaw) as Array<typeof HOST_ONE>
@@ -312,7 +312,9 @@ describe('host-store list mutations', () => {
 
   it('does not wipe the host list when storage is unreadable during mutation', async () => {
     storedHostsRaw = '{'
-    await expect(renameHost(HOST_ONE.id, 'Nope')).rejects.toThrow(/unreadable/)
+    await expect(updateHostNameAndEndpoint(HOST_ONE.id, { name: 'Nope' })).rejects.toThrow(
+      /unreadable/
+    )
     expect(asyncStorageMock.setItem).not.toHaveBeenCalled()
     expect(storedHostsRaw).toBe('{')
   })

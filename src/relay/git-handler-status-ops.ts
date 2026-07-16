@@ -20,6 +20,11 @@ import {
   type GitLineStats
 } from '../shared/git-uncommitted-line-stats'
 import { DEFAULT_GIT_STATUS_LIMIT } from '../shared/git-status-limit'
+import {
+  beginGitStatusLineStatsCacheWrite,
+  clearGitStatusLineStatsCacheKey,
+  reuseOrRecomputeGitStatusLineStats
+} from '../shared/git-status-line-stats-cache'
 
 export async function resolveGitDir(worktreePath: string): Promise<string> {
   const dotGitPath = path.join(worktreePath, '.git')
@@ -58,7 +63,8 @@ export async function detectConflictOperation(worktreePath: string): Promise<str
 
 export async function getStatusOp(
   git: GitExec,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  options: { signal?: AbortSignal } = {}
 ): Promise<{
   entries: Record<string, unknown>[]
   conflictOperation: string
@@ -70,6 +76,8 @@ export async function getStatusOp(
   statusLength?: number
 }> {
   const worktreePath = params.worktreePath as string
+  const lineStatsCacheKey = `relay\0${worktreePath}`
+  const lineStatsWriteToken = beginGitStatusLineStatsCacheWrite(lineStatsCacheKey)
   const includeIgnored = params.includeIgnored === true
   // Why: reject non-finite/negative limits so the cap guard stays reliable
   // (NaN would silently disable capping; negatives would over-truncate).
@@ -106,7 +114,8 @@ export async function getStatusOp(
     const { stdout } = await git(statusArgs, worktreePath, {
       // Why: status polling is read-like; avoid refreshing the index and racing
       // terminal Git commands on `.git/worktrees/*/index.lock`.
-      disableOptionalLocks: true
+      disableOptionalLocks: true,
+      signal: options.signal
     })
     const parsed = parseStatusOutput(stdout)
     head = parsed.head
@@ -134,6 +143,9 @@ export async function getStatusOp(
         const branchName = getShortBranchName(branch)
         if (branchName) {
           try {
+            // Why: this probe coalesces across concurrent status reads, so one
+            // request's abort must not reject the shared in-flight promise for
+            // the others; the probe is small and its cached result stays useful.
             upstreamStatus = await readOrProbeNoEffectiveUpstreamStatus(
               { worktreePath, branchName, upstreamName: upstreamStatus?.upstreamName },
               (args) => git(args, worktreePath),
@@ -155,7 +167,12 @@ export async function getStatusOp(
         }
       }
     }
-  } catch {
+  } catch (error) {
+    // Why: an aborted scan must reject, not resolve — swallowing here would let
+    // a cancelled request be mistaken for a completed (empty) status result.
+    if (options.signal?.aborted) {
+      throw error
+    }
     // not a git repo or git not available
   }
 
@@ -165,7 +182,25 @@ export async function getStatusOp(
   // running numstat over a huge change set would reintroduce the cost the limit
   // exists to avoid.
   if (!didHitLimit) {
-    await attachLineStats(git, worktreePath, entries)
+    await reuseOrRecomputeGitStatusLineStats({
+      cacheKey: lineStatsCacheKey,
+      head,
+      entries,
+      writeToken: lineStatsWriteToken,
+      reuse: params.reuseLineStats === true,
+      isAborted: () => options.signal?.aborted === true,
+      recompute: () => attachLineStats(git, worktreePath, entries, options.signal)
+    })
+  } else {
+    clearGitStatusLineStatsCacheKey(lineStatsCacheKey, lineStatsWriteToken)
+  }
+
+  // Why: abort after the porcelain read (e.g. during unmerged/upstream/line-stats
+  // work) must still reject — never resolve a cancelled scan as completed.
+  if (options.signal?.aborted) {
+    const error = new Error('The operation was aborted.')
+    error.name = 'AbortError'
+    throw error
   }
 
   return {
@@ -182,29 +217,39 @@ export async function getStatusOp(
 async function runNumstat(
   git: GitExec,
   worktreePath: string,
-  cached: boolean
-): Promise<Map<string, GitLineStats>> {
+  cached: boolean,
+  signal?: AbortSignal
+): Promise<Map<string, GitLineStats> | null> {
   try {
     const { stdout } = await git(
       ['-c', 'core.quotePath=false', 'diff', ...(cached ? ['--cached'] : []), '--numstat', '-M'],
       worktreePath,
-      { disableOptionalLocks: true }
+      { disableOptionalLocks: true, signal }
     )
     return parseNumstat(stdout)
-  } catch {
+  } catch (error) {
+    // Why: an aborted pass must reject so a cancelled scan is never treated as
+    // a completed one; only a genuine (non-abort) numstat failure degrades to
+    // uncounted rows below.
+    if (signal?.aborted) {
+      throw error
+    }
     // Why: a numstat failure should leave rows without counts rather than break
-    // the whole status refresh.
-    return new Map()
+    // the whole status refresh. Null (vs an empty map) tells the caller the
+    // pass is incomplete and must not be cached.
+    return null
   }
 }
 
+/** Returns false when a numstat pass failed, so callers skip caching it. */
 async function attachLineStats(
   git: GitExec,
   worktreePath: string,
-  entries: Record<string, unknown>[]
-): Promise<void> {
+  entries: Record<string, unknown>[],
+  signal?: AbortSignal
+): Promise<boolean> {
   if (entries.length === 0) {
-    return
+    return true
   }
   const hasStaged = entries.some((entry) => entry.area === 'staged')
   const hasUnstaged = entries.some((entry) => entry.area === 'unstaged')
@@ -213,21 +258,22 @@ async function attachLineStats(
     .map((entry) => entry.path as string)
   const emptyStats = new Map<string, GitLineStats>()
   const [stagedStats, unstagedStats, untrackedStats] = await Promise.all([
-    hasStaged ? runNumstat(git, worktreePath, true) : Promise.resolve(emptyStats),
-    hasUnstaged ? runNumstat(git, worktreePath, false) : Promise.resolve(emptyStats),
-    collectUntrackedAdditions(worktreePath, untrackedPaths)
+    hasStaged ? runNumstat(git, worktreePath, true, signal) : Promise.resolve(emptyStats),
+    hasUnstaged ? runNumstat(git, worktreePath, false, signal) : Promise.resolve(emptyStats),
+    collectUntrackedAdditions(worktreePath, untrackedPaths, signal)
   ])
   for (const entry of entries) {
     const filePath = entry.path as string
     applyLineStats(
       entry as { added?: number; removed?: number },
       entry.area === 'staged'
-        ? stagedStats.get(filePath)
+        ? (stagedStats ?? emptyStats).get(filePath)
         : entry.area === 'unstaged'
-          ? unstagedStats.get(filePath)
+          ? (unstagedStats ?? emptyStats).get(filePath)
           : untrackedStats.get(filePath)
     )
   }
+  return stagedStats !== null && unstagedStats !== null
 }
 
 function getShortBranchName(branch: string | undefined): string | null {

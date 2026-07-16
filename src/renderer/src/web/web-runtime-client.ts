@@ -564,14 +564,15 @@ export class WebRuntimeClient {
     }
 
     const subscription = this.subscriptions.get(response.id)
-    if (subscription && isSubscriptionResponse(response)) {
-      // Why: setup failures are terminal. Evict before callbacks so a
-      // synchronous retry creates a fresh watch and reconnect cannot replay it.
-      if (response.ok === false) {
+    if (subscription) {
+      const subscriptionResponse = response as RuntimeRpcResponse<unknown>
+      // Why: setup failures must be evicted before callbacks so reconnect cannot replay them.
+      if (subscriptionResponse.ok === false) {
         this.subscriptions.delete(response.id)
       }
-      subscription.callbacks.onResponse(response)
-      if (response.ok && isEndResult(response.result)) {
+      // Why: subscription-backed unary RPCs can return ordinary success frames.
+      subscription.callbacks.onResponse(subscriptionResponse)
+      if (subscriptionResponse.ok && isEndResult(subscriptionResponse.result)) {
         this.subscriptions.delete(response.id)
         subscription.callbacks.onClose?.()
       }
@@ -862,21 +863,6 @@ export class WebRuntimeClient {
   }
 }
 
-function isSubscriptionResponse(
-  response: RuntimeRpcResponse<unknown> | Record<string, unknown>
-): response is RuntimeRpcResponse<unknown> {
-  if (!('ok' in response)) {
-    return false
-  }
-  if (response.ok === false) {
-    return true
-  }
-  const success = response as RuntimeRpcResponse<unknown> & { ok: true; streaming?: true }
-  return (
-    success.streaming === true || isEndResult(success.result) || isScrollbackResult(success.result)
-  )
-}
-
 function isRuntimeFailureResponse(
   response: RuntimeRpcResponse<unknown> | Record<string, unknown>
 ): response is RuntimeRpcResponse<unknown> & { ok: false } {
@@ -938,10 +924,6 @@ function isFileWatchStartingResponse(
 
 function isEndResult(value: unknown): value is { type: 'end' } {
   return !!value && typeof value === 'object' && (value as { type?: unknown }).type === 'end'
-}
-
-function isScrollbackResult(value: unknown): value is { type: 'scrollback' } {
-  return !!value && typeof value === 'object' && (value as { type?: unknown }).type === 'scrollback'
 }
 
 async function websocketPayloadToUint8(

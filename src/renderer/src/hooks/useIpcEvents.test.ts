@@ -969,6 +969,7 @@ describe('useIpcEvents browser tab create routing', () => {
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
           onRequestTerminalCreate: () => () => {},
+          onRequestTerminalTabMount: () => () => {},
           replyTerminalCreate: () => {},
           onSplitTerminal: () => () => {},
           onRenameTerminal: () => () => {},
@@ -1190,6 +1191,7 @@ describe('useIpcEvents updater integration', () => {
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
           onRequestTerminalCreate: () => () => {},
+          onRequestTerminalTabMount: () => () => {},
           replyTerminalCreate: () => {},
           onSplitTerminal: () => () => {},
           onRenameTerminal: () => () => {},
@@ -1434,6 +1436,7 @@ describe('useIpcEvents updater integration', () => {
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
           onRequestTerminalCreate: () => () => {},
+          onRequestTerminalTabMount: () => () => {},
           replyTerminalCreate: () => {},
           onSplitTerminal: () => () => {},
           onRenameTerminal: () => () => {},
@@ -1918,6 +1921,7 @@ describe('useIpcEvents updater integration', () => {
             requestTerminalCreateListenerRef.current = listener
             return () => {}
           },
+          onRequestTerminalTabMount: () => () => {},
           replyTerminalCreate,
           onSplitTerminal: () => () => {},
           onRenameTerminal: () => () => {},
@@ -2684,6 +2688,7 @@ describe('useIpcEvents browser tab close routing', () => {
   type CloseActiveTabListener = () => void
   type CloseTerminalListener = (data: { tabId: string; paneRuntimeId?: number | null }) => void
   type CloseSessionTabListener = (data: { tabId: string; worktreeId: string }) => void
+  type TerminalTabCloseRequestListener = (data: { requestId: string; tabId: string }) => void
 
   async function useIpcEventsForCloseRouting({
     closeActiveTabListenerRef,
@@ -2691,7 +2696,10 @@ describe('useIpcEvents browser tab close routing', () => {
     closeTerminalListenerRef,
     getState,
     requestTabCloseListenerRef,
-    replyTabClose = vi.fn()
+    replyTabClose = vi.fn(),
+    terminalTabCloseRequestListenerRef,
+    respondTerminalTabClose = vi.fn(),
+    persistWorkspaceSession = vi.fn().mockResolvedValue(undefined)
   }: {
     closeActiveTabListenerRef?: { current: CloseActiveTabListener | null }
     closeSessionTabListenerRef?: { current: CloseSessionTabListener | null }
@@ -2699,6 +2707,9 @@ describe('useIpcEvents browser tab close routing', () => {
     getState: () => Record<string, unknown>
     requestTabCloseListenerRef?: { current: RequestTabCloseListener | null }
     replyTabClose?: ReturnType<typeof vi.fn>
+    terminalTabCloseRequestListenerRef?: { current: TerminalTabCloseRequestListener | null }
+    respondTerminalTabClose?: ReturnType<typeof vi.fn>
+    persistWorkspaceSession?: ReturnType<typeof vi.fn>
   }): Promise<void> {
     vi.doMock('react', async () => {
       const actual = await vi.importActual<typeof ReactModule>('react')
@@ -2779,6 +2790,12 @@ describe('useIpcEvents browser tab close routing', () => {
     vi.doMock('@/lib/zoom-events', () => ({
       dispatchZoomLevelChanged: vi.fn()
     }))
+    vi.doMock('@/lib/workspace-session-host-persistence', () => ({
+      persistWorkspaceSessionByHost: persistWorkspaceSession
+    }))
+    vi.doMock('@/lib/workspace-session', () => ({
+      buildWorkspaceSessionPayload: vi.fn(() => ({}))
+    }))
 
     vi.stubGlobal('window', {
       dispatchEvent: vi.fn(),
@@ -2807,6 +2824,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
           onRequestTerminalCreate: () => () => {},
+          onRequestTerminalTabMount: () => () => {},
           replyTerminalCreate: () => {},
           onSplitTerminal: () => () => {},
           onRenameTerminal: () => () => {},
@@ -2827,6 +2845,13 @@ describe('useIpcEvents browser tab close routing', () => {
             }
             return () => {}
           },
+          onTerminalTabCloseRequest: (listener: TerminalTabCloseRequestListener) => {
+            if (terminalTabCloseRequestListenerRef) {
+              terminalTabCloseRequestListenerRef.current = listener
+            }
+            return () => {}
+          },
+          respondTerminalTabClose,
           onSleepWorktree: () => () => {},
           onResumeSleepingAgents: () => () => {},
           onNewBrowserTab: () => () => {},
@@ -2972,6 +2997,65 @@ describe('useIpcEvents browser tab close routing', () => {
     closeTerminalListenerRef.current?.({ tabId: 'terminal-1' })
 
     expect(closeTerminalTabMock).toHaveBeenCalledWith('terminal-1')
+  })
+
+  it('acknowledges whole-tab close only after the fresh session is durably persisted', async () => {
+    const listenerRef: { current: TerminalTabCloseRequestListener | null } = { current: null }
+    let finishPersist!: () => void
+    const persistWorkspaceSession = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishPersist = resolve
+        })
+    )
+    const respondTerminalTabClose = vi.fn()
+    closeTerminalTabMock.mockImplementation((_tabId: string, options: { onClosed?: () => void }) =>
+      options.onClosed?.()
+    )
+    await useIpcEventsForCloseRouting({
+      getState: () => ({}),
+      terminalTabCloseRequestListenerRef: listenerRef,
+      respondTerminalTabClose,
+      persistWorkspaceSession
+    })
+
+    listenerRef.current?.({ requestId: 'close-1', tabId: 'terminal-1' })
+    await Promise.resolve()
+
+    expect(closeTerminalTabMock).toHaveBeenCalledWith(
+      'terminal-1',
+      expect.objectContaining({ rejectPinned: true })
+    )
+    expect(persistWorkspaceSession).toHaveBeenCalledTimes(1)
+    expect(respondTerminalTabClose).not.toHaveBeenCalled()
+
+    finishPersist()
+    await vi.waitFor(() =>
+      expect(respondTerminalTabClose).toHaveBeenCalledWith({ requestId: 'close-1' })
+    )
+  })
+
+  it('rejects a pinned whole-tab close without persisting or reporting success', async () => {
+    const listenerRef: { current: TerminalTabCloseRequestListener | null } = { current: null }
+    const persistWorkspaceSession = vi.fn().mockResolvedValue(undefined)
+    const respondTerminalTabClose = vi.fn()
+    closeTerminalTabMock.mockImplementation((_tabId: string, options: { onCancel?: () => void }) =>
+      options.onCancel?.()
+    )
+    await useIpcEventsForCloseRouting({
+      getState: () => ({}),
+      terminalTabCloseRequestListenerRef: listenerRef,
+      respondTerminalTabClose,
+      persistWorkspaceSession
+    })
+
+    listenerRef.current?.({ requestId: 'close-pinned', tabId: 'terminal-pinned' })
+
+    expect(persistWorkspaceSession).not.toHaveBeenCalled()
+    expect(respondTerminalTabClose).toHaveBeenCalledWith({
+      requestId: 'close-pinned',
+      error: 'terminal_tab_pinned'
+    })
   })
 
   it('confirms before closing a pinned active browser tab from the native close event', async () => {
@@ -3296,6 +3380,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
           onRequestTerminalCreate: () => () => {},
+          onRequestTerminalTabMount: () => () => {},
           replyTerminalCreate: () => {},
           onSplitTerminal: () => () => {},
           onRenameTerminal: () => () => {},
@@ -3513,6 +3598,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
           onRequestTerminalCreate: () => () => {},
+          onRequestTerminalTabMount: () => () => {},
           replyTerminalCreate: () => {},
           onSplitTerminal: () => () => {},
           onRenameTerminal: () => () => {},
@@ -3725,6 +3811,7 @@ describe('useIpcEvents browser tab close routing', () => {
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
           onRequestTerminalCreate: () => () => {},
+          onRequestTerminalTabMount: () => () => {},
           replyTerminalCreate: () => {},
           onSplitTerminal: () => () => {},
           onRenameTerminal: () => () => {},
@@ -3964,6 +4051,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           },
           onCreateTerminal: () => () => {},
           onRequestTerminalCreate: () => () => {},
+          onRequestTerminalTabMount: () => () => {},
           replyTerminalCreate: () => {},
           onSplitTerminal: () => () => {},
           onRenameTerminal: () => () => {},
@@ -4211,6 +4299,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
           onRequestTerminalCreate: () => () => {},
+          onRequestTerminalTabMount: () => () => {},
           replyTerminalCreate: () => {},
           onSplitTerminal: () => () => {},
           onRenameTerminal: () => () => {},
@@ -4444,6 +4533,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
           onActivateWorktree: () => () => {},
           onCreateTerminal: () => () => {},
           onRequestTerminalCreate: () => () => {},
+          onRequestTerminalTabMount: () => () => {},
           replyTerminalCreate: () => {},
           onSplitTerminal: () => () => {},
           onRenameTerminal: () => () => {},

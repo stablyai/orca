@@ -5,7 +5,7 @@ export type PtySizeReassertionOptions = {
   getPtyId: () => string | null
   isRemotePtyId: (ptyId: string) => boolean
   shouldSuppressDesktopResize: () => boolean
-  fit: () => void
+  fitAndRun: (continuation: () => void) => void
   getTerminalDimensions: () => PtySizeReassertionDimensions
   getAppliedSize: (ptyId: string) => Promise<PtySizeReassertionDimensions | null>
   forwardResize: (cols: number, rows: number) => void
@@ -46,7 +46,8 @@ export function createPtySizeReassertion(options: PtySizeReassertionOptions): Pt
       return
     }
     if (shouldFit) {
-      options.fit()
+      options.fitAndRun(() => run(false))
+      return
     }
     const target = options.getTerminalDimensions()
     if (!dimensionsAreUsable(target)) {

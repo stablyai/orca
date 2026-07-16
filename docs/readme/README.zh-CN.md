@@ -17,7 +17,7 @@
 
 <p align="center">
   <strong>面向 100x 构建者的 AI 编排器。</strong><br/>
-  并排运行 Claude Code、OpenClaude、Codex 或 OpenCode — 每个都在自己的 worktree 中运行，并在一个地方统一跟踪。
+  并排运行 Codex、Claude Code、OpenCode 或 Pi — 每个都在自己的 worktree 中运行，并在一个地方统一跟踪。
 </p>
 
 <h3 align="center"><a href="https://onorca.dev/download"><ins>下载 Orca</ins></a></h3>
@@ -238,6 +238,7 @@ yay -S stably-orca-bin
 - **微信:** 扫描二维码加入社区。如果第一个群已满，请使用备用微信群。
 
   <img src="../assets/wechat-qr.png" alt="Orca 社区微信群二维码" width="160" />
+  &nbsp;&nbsp;&nbsp;
   <img src="../assets/wechat-qr-backup.jpg" alt="Orca 社区备用微信群二维码" width="160" />
 
 - **反馈与想法:** 我们发布很快。缺少什么功能？[提交功能请求](https://github.com/stablyai/orca/issues)。

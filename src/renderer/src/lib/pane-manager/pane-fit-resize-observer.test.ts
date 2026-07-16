@@ -5,6 +5,10 @@ import {
   detachPaneFitResizeObserver,
   requestStablePaneFit
 } from './pane-fit-resize-observer'
+import {
+  beginTerminalScrollIntentBufferRebuild,
+  endTerminalScrollIntentBufferRebuild
+} from './terminal-scroll-intent-rebuild'
 
 type ResizeObserverCallbackLike = ConstructorParameters<typeof ResizeObserver>[0]
 
@@ -171,6 +175,23 @@ describe('attachPaneFitResizeObserver', () => {
     flushAnimationFrames()
 
     expect(pane.fitAddon.fit).not.toHaveBeenCalled()
+    expect(onSettled).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not notify settled callbacks until a replay-deferred fit completes', async () => {
+    const onSettled = vi.fn()
+    const pane = createPane()
+    beginTerminalScrollIntentBufferRebuild(pane.terminal)
+
+    requestStablePaneFit(pane, onSettled)
+    flushAnimationFrames()
+
+    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
+    expect(onSettled).not.toHaveBeenCalled()
+    endTerminalScrollIntentBufferRebuild(pane.terminal)
+    await Promise.resolve()
+
+    expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
     expect(onSettled).toHaveBeenCalledTimes(1)
   })
 

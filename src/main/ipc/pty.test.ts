@@ -6101,6 +6101,7 @@ describe('registerPtyHandlers', () => {
         env?: Record<string, string>
       }): Promise<{ id: string }>
       hasRendererSerializer?(ptyId: string): boolean
+      getRendererSerializerGeneration?(ptyId: string): number
     }
     let controller: RuntimeSpawnController | null = null
     const runtime = {
@@ -6128,10 +6129,113 @@ describe('registerPtyHandlers', () => {
       worktreeId: 'wt-1',
       env: { ORCA_PANE_KEY: ` ${paneKey} ` }
     })
+    const replacementGen = (await handlers.get('pty:declarePendingPaneSerializer')!(null, {
+      paneKey
+    })) as number
 
     expect(spawnController.hasRendererSerializer?.(result.id)).toBe(false)
     await handlers.get('pty:settlePaneSerializer')!(null, { paneKey, gen })
+    expect(spawnController.hasRendererSerializer?.(result.id)).toBe(false)
+    expect(spawnController.getRendererSerializerGeneration?.(result.id)).toBe(0)
+    await handlers.get('pty:settlePaneSerializer')!(null, { paneKey, gen: replacementGen })
     expect(spawnController.hasRendererSerializer?.(result.id)).toBe(true)
+    expect(spawnController.getRendererSerializerGeneration?.(result.id)).toBe(1)
+  })
+
+  it('does not let old teardown cancel serializer settlement for a reused PTY id', async () => {
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        worktreeId?: string
+        env?: Record<string, string>
+      }): Promise<{ id: string }>
+      getRendererSerializerGeneration?(ptyId: string): number
+      hasRendererSerializer?(ptyId: string): boolean
+      waitForRendererSerializer?(
+        ptyId: string,
+        afterGeneration: number,
+        timeoutMs?: number
+      ): Promise<boolean>
+    }
+    const reusedPtyId = 'pty-reused'
+    setLocalPtyProvider({
+      spawn: vi.fn(async () => ({ id: reusedPtyId })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => []),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      preAllocateHandleForPty: vi.fn(() => null),
+      registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const paneKey = makePaneKey('tab-reused', '33333333-3333-4333-8333-333333333333')
+    const spawnController = controller as unknown as RuntimeSpawnController
+    const spawn = async (): Promise<void> => {
+      await spawnController.spawn({
+        cols: 80,
+        rows: 24,
+        worktreeId: 'wt-1',
+        env: { ORCA_PANE_KEY: paneKey }
+      })
+    }
+
+    const firstGen = (await handlers.get('pty:declarePendingPaneSerializer')!(null, {
+      paneKey
+    })) as number
+    await spawn()
+    await handlers.get('pty:settlePaneSerializer')!(null, { paneKey, gen: firstGen })
+    const priorGeneration = spawnController.getRendererSerializerGeneration?.(reusedPtyId) ?? 0
+
+    const secondGen = (await handlers.get('pty:declarePendingPaneSerializer')!(null, {
+      paneKey
+    })) as number
+    await spawn()
+    const ready = spawnController.waitForRendererSerializer?.(reusedPtyId, priorGeneration, 1_000)
+    clearProviderPtyState(reusedPtyId)
+    clearProviderPtyState(reusedPtyId)
+    await handlers.get('pty:settlePaneSerializer')!(null, { paneKey, gen: secondGen })
+
+    await expect(ready).resolves.toBe(true)
+    expect(spawnController.hasRendererSerializer?.(reusedPtyId)).toBe(true)
+  })
+
+  it('tracks exact remote-runtime serializer readiness without a local spawn mapping', async () => {
+    type RuntimeSpawnController = {
+      hasRendererSerializer?(ptyId: string): boolean
+      getRendererSerializerGeneration?(ptyId: string): number
+    }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      })
+    }
+
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const ptyId = 'remote:env-1@@terminal-1'
+    const spawnController = controller as unknown as RuntimeSpawnController
+
+    expect(spawnController.hasRendererSerializer?.(ptyId)).toBe(false)
+    await handlers.get('pty:reportRendererSerializerReady')!(null, { ptyId: 'local-pty' })
+    expect(spawnController.hasRendererSerializer?.('local-pty')).toBe(false)
+    await handlers.get('pty:reportRendererSerializerReady')!(null, { ptyId })
+    expect(spawnController.hasRendererSerializer?.(ptyId)).toBe(true)
+    expect(spawnController.getRendererSerializerGeneration?.(ptyId)).toBe(1)
   })
 
   it('clears pending pane serializer declarations when their renderer is destroyed', async () => {

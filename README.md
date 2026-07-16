@@ -241,6 +241,7 @@ Pair with your desktop app to monitor and steer your agents from your phone.
 - **WeChat:** Scan the QR code to join the community. If the first group is full, use the backup group.
 
   <img src="docs/assets/wechat-qr.png" alt="WeChat QR code for the Orca community" width="160" />
+  &nbsp;&nbsp;&nbsp;
   <img src="docs/assets/wechat-qr-backup.jpg" alt="Backup WeChat QR code for the Orca community" width="160" />
 
 - **Feedback &amp; Ideas:** We ship fast. Missing something? [Request a new feature](https://github.com/stablyai/orca/issues).

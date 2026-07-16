@@ -8678,7 +8678,9 @@
                 "fe9231215b": "Checking Linear access before showing setup actions.",
                 "e1f5e6424c": "{{value0}} workspace{{value1}} connected",
                 "disconnect_all": "Disconnect",
-                "account_scope_prefix": "Account scope"
+                "account_scope_prefix": "Account scope",
+                "2d60ec7921": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.",
+                "977e360b71": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are stored locally and encrypted when local runtime storage supports it."
               }
             }
           }
@@ -11845,18 +11847,18 @@
                 "45cf7ceb3f": "Medium section heading.",
                 "c209a116b7": "Heading 2",
                 "3294a2c0cc": "Create a collapsible section with a large heading summary.",
-                "41482b15ce": "Toggle Heading 1",
+                "41482b15ce": "Toggle H1",
                 "570611864e": "Large section heading.",
                 "e66e7f04c6": "Heading 1",
                 "5f9a0ed7c4": "Heading 4",
                 "01a71dbbdd": "Nested section heading.",
                 "8440fa4acf": "Heading 5",
                 "b287b93c66": "Deep section heading.",
-                "7a2c1f9b04": "Toggle Heading 2",
+                "7a2c1f9b04": "Toggle H2",
                 "b3e5d8a1c6": "Create a collapsible section with a medium heading summary.",
-                "2f9d6b4e10": "Toggle Heading 3",
+                "2f9d6b4e10": "Toggle H3",
                 "8c1a3e7d52": "Create a collapsible section with a small heading summary.",
-                "5e0b9c2a71": "Toggle Heading 4",
+                "5e0b9c2a71": "Toggle H4",
                 "d4f16a8b39": "Create a collapsible section with a nested heading summary."
               }
             }
@@ -12692,7 +12694,24 @@
             "70fcd360c4": "https://example.atlassian.net",
             "e176f9d0c5": "Jira Cloud site URL",
             "d785c42b8b": "Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.",
-            "8388bdea2b": "Connect Jira site"
+            "8388bdea2b": "Connect Jira site",
+            "2e2b69e48e": "Use a self-hosted Jira base URL and a personal access token to browse issues.",
+            "b67e919bd5": "Jira instance type",
+            "17787d6e4b": "Atlassian Cloud",
+            "bc7a831773": "Self-hosted",
+            "3489e186d6": "Jira site URL",
+            "cbc27fa599": "https://jira.example.com",
+            "730d973bae": "Personal access token",
+            "8b9c7b9e7b": "Jira personal access token",
+            "ccfb086d3e": "Create a personal access token in your Jira profile under Personal Access Tokens.",
+            "1d947a07ab": "Use a self-hosted Jira base URL, username, and password to browse issues.",
+            "f49708c369": "Jira authentication method",
+            "84a810dd0e": "Username & password",
+            "8d1223fa5c": "Username",
+            "be9eba0a1b": "username",
+            "70035652d7": "Password",
+            "c50abbf340": "Jira account password",
+            "d8737db691": "Use your Jira Server or Data Center account username and password."
           }
         }
       },

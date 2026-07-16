@@ -247,3 +247,49 @@ export function replayIntoTerminalAsync(
     })
   })
 }
+
+/** Resolves after every replay write already queued on this terminal has
+ * parsed. A delayed FIFO probe covers a lost sentinel callback without ever
+ * treating elapsed time alone as proof that parsing finished. */
+export function waitForTerminalReplayWritesParsed(
+  terminal: ReplayGuardWriteTarget,
+  options: Pick<ReplayTerminalOptions, 'stallCheckMs'> = {}
+): Promise<void> {
+  return new Promise((resolve) => {
+    let finished = false
+    let stallTimer: ReturnType<typeof setTimeout> | null = null
+    const finish = (): void => {
+      if (finished) {
+        return
+      }
+      finished = true
+      if (stallTimer !== null) {
+        clearTimeout(stallTimer)
+        stallTimer = null
+      }
+      resolve()
+    }
+    const queueProbe = (): void => {
+      if (finished) {
+        return
+      }
+      try {
+        // Why: an empty write is FIFO with earlier replay bytes. Its callback
+        // can recover a lost sentinel callback without changing parser state.
+        terminal.write('', finish)
+      } catch {
+        // A disposed terminal cannot parse any remaining replay bytes.
+        finish()
+      }
+    }
+    stallTimer = setTimeout(queueProbe, options.stallCheckMs ?? REPLAY_GUARD_STALL_CHECK_MS)
+    try {
+      // Why empty: pendingEscapeTailAnsi must remain the final replay bytes;
+      // xterm still orders this completion after every earlier write.
+      terminal.write('', finish)
+    } catch {
+      // A disposed terminal cannot parse any remaining replay bytes.
+      finish()
+    }
+  })
+}

@@ -178,7 +178,7 @@ async function createBackgroundTab(args: {
       env: args.launch.env
     })
   } catch (error) {
-    store.closeTab(tab.id, { recordInteraction: false })
+    store.closeTab(tab.id, { recordInteraction: false, reason: 'cleanup' })
     throw error
   }
   if (

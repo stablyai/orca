@@ -75,8 +75,12 @@ jobs:
           npm install -g node-gyp@11.5.0
           echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
       - run: pnpm install --frozen-lockfile
+      # Why: without --config, bare vitest ignores config/vitest.config.ts (there
+      # is no root config) and falls back to the 5s default timeout with no
+      # Windows worker cap, so the real csc.exe launcher-compile tests time out
+      # on hosted Windows. Use the shared config so this job matches pnpm test.
       - run: >-
-          pnpm vitest run
+          pnpm vitest run --config config/vitest.config.ts
           config/scripts/build-windows-cli-launcher.test.mjs
           src/main/ssh/ssh-remote-cli-launcher.test.ts
           config/scripts/computer-e2e-workflow.test.mjs

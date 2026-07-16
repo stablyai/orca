@@ -13,7 +13,8 @@ vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({
   requestTerminalBacklogRecovery: vi.fn()
 }))
 vi.mock('@/lib/pane-manager/terminal-scroll-intent', () => ({
-  enforceTerminalCurrentScrollIntent: vi.fn()
+  enforceTerminalCurrentScrollIntent: vi.fn(),
+  syncTerminalScrollIntentFromViewport: vi.fn()
 }))
 vi.mock('./pane-helpers', () => ({
   fitAndFocusPanes: vi.fn(),
@@ -71,6 +72,22 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     // Reveal recovery is immediate (not the terminal-output debounce), so a
     // background stream in another pane cannot defer this tab's atlas rebuild.
     expect(scheduleTabRevealWebglAtlasRecovery).toHaveBeenCalledTimes(1)
+  })
+
+  it('captures native trim movement before enforcing viewport intent', async () => {
+    const terminal = { name: 'trimmed-terminal' }
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([{ terminal }])
+    const { enforceTerminalCurrentScrollIntent, syncTerminalScrollIntentFromViewport } = vi.mocked(
+      await import('@/lib/pane-manager/terminal-scroll-intent')
+    )
+
+    resumeTerminalVisibility(resumeArgs(manager, true))
+
+    expect(syncTerminalScrollIntentFromViewport).toHaveBeenCalledWith(terminal)
+    expect(syncTerminalScrollIntentFromViewport.mock.invocationCallOrder[0]).toBeLessThan(
+      enforceTerminalCurrentScrollIntent.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
+    )
   })
 
   it('schedules the repaint after rendering resumes on a heavy reveal', () => {

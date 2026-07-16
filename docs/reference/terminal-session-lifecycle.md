@@ -46,6 +46,22 @@ persisted physical-to-owner pane-key alias for detach, plus a live Electron
 parked-close gate. Focused tests cover local, SSH, split, parked, shared,
 paired-host, ordinary runtime, pane-transfer, and late-spawn paths.
 
+`orca terminal close --tab` extends that same ownership boundary to automation.
+With an attached renderer, main sends a request/reply close, the renderer runs
+the canonical retirement path, persists a fresh host-partitioned session, and
+forces the main store to disk before acknowledging success. Without a renderer,
+the runtime applies the equivalent immutable projection to the persisted
+aggregate tab, removes every split binding and resume record, safely selects a
+surviving browser/editor/terminal surface, stops exact live or durable SSH PTYs,
+and flushes before returning. The ordinary `terminal close` pane/session
+contract is unchanged.
+
+This durability boundary does not use replay fences or tombstones. Renderer
+session writes are ordered through the same IPC sender, and a pending debounced
+write rebuilds from the latest store state, so the forced fresh snapshot is not
+followed by a captured pre-close topology patch. Headless closes update the
+single main-owned session projection directly.
+
 Origin-aware defensive expiry remains a follow-up. Immediate deletion on
 explicit close fixes the incident without applying a wall-clock policy that
 could invalidate intentional long-lived `worktree-sleep` checkpoints.

@@ -150,7 +150,8 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
   // `focus` resolves to this canonical path via CommandSpec.aliases before dispatch.
   'terminal switch': terminalFocusHandler,
   'terminal close': async ({ flags, client, cwd, json }) => {
-    const result = await client.call<{ close: RuntimeTerminalClose }>('terminal.close', {
+    const method = flags.get('tab') === true ? 'terminal.closeTab' : 'terminal.close'
+    const result = await client.call<{ close: RuntimeTerminalClose }>(method, {
       terminal: await getTerminalHandle(flags, cwd, client)
     })
     printResult(result, json, formatTerminalClose)

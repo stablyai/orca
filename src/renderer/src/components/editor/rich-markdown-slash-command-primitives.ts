@@ -40,7 +40,13 @@ export type SlashCommandIcon =
   | { kind: 'component'; component: React.ComponentType<{ className?: string }> }
   | { kind: 'text'; value: string }
 
-export type SlashCommandGroup = 'Headings' | 'Basic blocks' | 'Advanced' | 'Media' | 'Others'
+export type SlashCommandGroup =
+  | 'Headings'
+  | 'Toggle headings'
+  | 'Basic blocks'
+  | 'Advanced'
+  | 'Media'
+  | 'Others'
 
 export type SlashCommand = {
   id: SlashCommandId

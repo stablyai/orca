@@ -32,7 +32,7 @@ const CODEX_TRUST_PROMPT_RE =
 const CODEX_UPDATE_PROMPT_RE = /update available|install update|Skip for now|Skip until next/i
 const CODEX_SKILL_PREVIEW_RE = /Press enter to insert|esc to close|electron|orca-cli|orca-emulator/i
 const SETUP_PANE_ACTIVITY_RE = /install-orca-skills|pnpm|Progress:|Packages:|Lockfile/i
-const CLEAN_SKILL_ROW_RE = /^  [A-Za-z][A-Za-z0-9 -]{1,32}\s+\[Skill\]\s/
+const CLEAN_SKILL_ROW_RE = /^  [A-Za-z][A-Za-z0-9 .-]{1,32}\s+\[Skill\]\s/
 const CODEX_READY_SETTLE_MS = 3_500
 const SETUP_CHANGES_AFTER_PREVIEW = 3
 
@@ -44,6 +44,12 @@ type PaneDescriptor = {
   rect: { x: number; y: number; width: number; height: number }
   cols: number
   rows: number
+  proposed: { cols: number; rows: number } | null
+  appliedPtySize: { cols: number; rows: number } | null
+  viewportY: number
+  baseY: number
+  isUserScrolling: boolean | null
+  screenToPaneGap: number | null
   hasWebgl: boolean
 }
 
@@ -259,7 +265,7 @@ async function forceTerminalWebgl(page: Page): Promise<boolean> {
 }
 
 async function describeActiveTerminalPanes(page: Page): Promise<PaneDescriptor[]> {
-  return page.evaluate(() => {
+  return page.evaluate(async () => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
     const tabId =
@@ -274,29 +280,54 @@ async function describeActiveTerminalPanes(page: Page): Promise<PaneDescriptor[]
       throw new Error('Expected a split terminal tab with at least two panes')
     }
     const diagnostics = manager.getRenderingDiagnostics?.() ?? []
-    return [...panes]
-      .sort((a, b) => {
-        const aRect = a.container.getBoundingClientRect()
-        const bRect = b.container.getBoundingClientRect()
-        return aRect.x - bRect.x || aRect.y - bRect.y
-      })
-      .map((pane) => {
-        if (!pane.container.dataset.ptyId) {
-          throw new Error(`Terminal pane ${pane.id} has no PTY binding`)
-        }
-        const rect = pane.container.getBoundingClientRect()
-        const rendering = diagnostics.find((diagnostic) => diagnostic.paneId === pane.id)
-        return {
-          tabId,
-          paneId: pane.id,
-          leafId: pane.leafId,
-          ptyId: pane.container.dataset.ptyId,
-          rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
-          cols: pane.terminal.cols,
-          rows: pane.terminal.rows,
-          hasWebgl: rendering?.hasWebgl ?? false
-        }
-      })
+    return Promise.all(
+      [...panes]
+        .sort((a, b) => {
+          const aRect = a.container.getBoundingClientRect()
+          const bRect = b.container.getBoundingClientRect()
+          return aRect.x - bRect.x || aRect.y - bRect.y
+        })
+        .map(async (pane) => {
+          const ptyId = pane.container.dataset.ptyId
+          if (!ptyId) {
+            throw new Error(`Terminal pane ${pane.id} has no PTY binding`)
+          }
+          const rect = pane.container.getBoundingClientRect()
+          const screenRect = pane.container
+            .querySelector<HTMLElement>('.xterm-screen')
+            ?.getBoundingClientRect()
+          const rendering = diagnostics.find((diagnostic) => diagnostic.paneId === pane.id)
+          let proposed: { cols: number; rows: number } | null = null
+          try {
+            proposed = pane.fitAddon.proposeDimensions() ?? null
+          } catch {
+            proposed = null
+          }
+          const appliedPtySize = await window.api.pty.getSize(ptyId).catch(() => null)
+          const terminalCore = pane.terminal as typeof pane.terminal & {
+            _core?: { _bufferService?: { isUserScrolling?: boolean } }
+          }
+          return {
+            tabId,
+            paneId: pane.id,
+            leafId: pane.leafId,
+            ptyId,
+            rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+            cols: pane.terminal.cols,
+            rows: pane.terminal.rows,
+            proposed,
+            appliedPtySize,
+            viewportY: pane.terminal.buffer.active.viewportY,
+            baseY: pane.terminal.buffer.active.baseY,
+            isUserScrolling:
+              typeof terminalCore._core?._bufferService?.isUserScrolling === 'boolean'
+                ? terminalCore._core._bufferService.isUserScrolling
+                : null,
+            screenToPaneGap: screenRect ? rect.right - screenRect.right : null,
+            hasWebgl: rendering?.hasWebgl ?? false
+          }
+        })
+    )
   })
 }
 
@@ -490,6 +521,10 @@ async function captureClickEvidence(
   const beforeWindowPath = persistEvidenceFile('full-window-before-click.png', beforeFullPage)
   const afterPanePath = persistEvidenceFile('left-pane-after-click.png', afterPane)
   const bufferPath = persistEvidenceFile('left-pane-buffer.txt', beforeContent)
+  const metricsPath = persistEvidenceFile(
+    'left-pane-metrics.json',
+    `${JSON.stringify(pane, null, 2)}\n`
+  )
 
   await testInfo.attach('codex-skill-preview-left-pane-before-click', {
     body: beforePane,
@@ -509,7 +544,13 @@ async function captureClickEvidence(
   })
   testInfo.annotations.push({
     type: 'codex-skill-preview-evidence-files',
-    description: JSON.stringify({ beforePanePath, beforeWindowPath, afterPanePath, bufferPath })
+    description: JSON.stringify({
+      beforePanePath,
+      beforeWindowPath,
+      afterPanePath,
+      bufferPath,
+      metricsPath
+    })
   })
 
   return {
@@ -563,6 +604,9 @@ test.describe('Codex skill preview terminal artifact repro @headful', () => {
     const rightPane = await getRightTerminalPane(orcaPage)
     expect(leftPane.hasWebgl).toBe(true)
     expect(rightPane.hasWebgl).toBe(true)
+    expect(leftPane.proposed).toEqual({ cols: leftPane.cols, rows: leftPane.rows })
+    expect(leftPane.appliedPtySize).toEqual({ cols: leftPane.cols, rows: leftPane.rows })
+    expect(leftPane.isUserScrolling).toBe(false)
     await waitForPaneContent(
       orcaPage,
       rightPane.tabId,

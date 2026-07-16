@@ -78,6 +78,7 @@ import {
 import { GitResponseStreamRegistry } from './git-response-stream'
 import { GIT_RESPONSE_STREAM_THRESHOLD } from './protocol'
 import { endSubprocessStdin } from '../shared/subprocess-stdin-write'
+import { clearGitStatusLineStatsCache } from '../shared/git-status-line-stats-cache'
 
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
@@ -198,7 +199,7 @@ export class GitHandler {
   }
 
   private registerHandlers(): void {
-    this.dispatcher.onRequest('git.status', (p) => this.getStatus(p))
+    this.dispatcher.onRequest('git.status', (p, context) => this.getStatus(p, context))
     this.dispatcher.onRequest('git.submoduleStatus', (p) => this.getSubmoduleStatus(p))
     this.dispatcher.onRequest('git.checkIgnored', (p) => this.checkIgnored(p))
     this.dispatcher.onRequest('git.history', (p) => this.history(p))
@@ -287,6 +288,7 @@ export class GitHandler {
 
   private clearGitMutationReadCaches(): void {
     this.gitDiffReadDedupe.clear()
+    clearGitStatusLineStatsCache()
     clearSubmodulePathsCache(this.submodulePathsCache)
   }
 
@@ -342,9 +344,9 @@ export class GitHandler {
     return stdout
   }
 
-  private async getStatus(params: Record<string, unknown>) {
+  private async getStatus(params: Record<string, unknown>, context: RequestContext) {
     this.gitDiffReadDedupe.clear()
-    return getStatusOp(this.git.bind(this), params)
+    return getStatusOp(this.git.bind(this), params, { signal: context.signal })
   }
 
   // Why: the parent status only lists a single gitlink row per submodule. The

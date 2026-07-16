@@ -8670,7 +8670,9 @@
                 "fe9231215b": "Checking Linear access before showing setup actions.",
                 "e1f5e6424c": "{{value0}} workspace{{value1}} connected",
                 "disconnect_all": "切断",
-                "account_scope_prefix": "Account scope"
+                "account_scope_prefix": "Account scope",
+                "2d60ec7921": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.",
+                "977e360b71": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are stored locally and encrypted when local runtime storage supports it."
               }
             }
           }
@@ -12692,7 +12694,24 @@
             "70fcd360c4": "https://example.atlassian.net",
             "e176f9d0c5": "Jira Cloud site URL",
             "d785c42b8b": "Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.",
-            "8388bdea2b": "Connect Jira site"
+            "8388bdea2b": "Connect Jira site",
+            "2e2b69e48e": "Use a self-hosted Jira base URL and a personal access token to browse issues.",
+            "b67e919bd5": "Jira instance type",
+            "17787d6e4b": "Atlassian Cloud",
+            "bc7a831773": "Self-hosted",
+            "3489e186d6": "Jira site URL",
+            "cbc27fa599": "https://jira.example.com",
+            "730d973bae": "Personal access token",
+            "8b9c7b9e7b": "Jira personal access token",
+            "ccfb086d3e": "Create a personal access token in your Jira profile under Personal Access Tokens.",
+            "1d947a07ab": "Use a self-hosted Jira base URL, username, and password to browse issues.",
+            "f49708c369": "Jira authentication method",
+            "84a810dd0e": "Username & password",
+            "8d1223fa5c": "Username",
+            "be9eba0a1b": "username",
+            "70035652d7": "Password",
+            "c50abbf340": "Jira account password",
+            "d8737db691": "Use your Jira Server or Data Center account username and password."
           }
         }
       },

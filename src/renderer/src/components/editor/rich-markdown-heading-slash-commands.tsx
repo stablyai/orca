@@ -26,27 +26,6 @@ export const headingSlashCommands: SlashCommand[] = [
     }
   },
   {
-    id: 'toggle-h1',
-    get label() {
-      return translate(
-        'auto.components.editor.rich.markdown.slash.commands.41482b15ce',
-        'Toggle Heading 1'
-      )
-    },
-    aliases: ['toggle-h1', 'toggle heading', 'details heading', 'collapse heading'],
-    icon: icon(ChevronRight),
-    group: 'Headings',
-    get description() {
-      return translate(
-        'auto.components.editor.rich.markdown.slash.commands.3294a2c0cc',
-        'Create a collapsible section with a large heading summary.'
-      )
-    },
-    run: (editor) => {
-      insertToggle(editor, 'heading-1')
-    }
-  },
-  {
     id: 'heading-2',
     get label() {
       return translate(
@@ -66,27 +45,6 @@ export const headingSlashCommands: SlashCommand[] = [
     run: (editor) => {
       // Use setHeading (not toggleHeading) so "/h2" is idempotent.
       editor.chain().focus().setHeading({ level: 2 }).run()
-    }
-  },
-  {
-    id: 'toggle-h2',
-    get label() {
-      return translate(
-        'auto.components.editor.rich.markdown.slash.commands.7a2c1f9b04',
-        'Toggle Heading 2'
-      )
-    },
-    aliases: ['toggle-h2'],
-    icon: icon(ChevronRight),
-    group: 'Headings',
-    get description() {
-      return translate(
-        'auto.components.editor.rich.markdown.slash.commands.b3e5d8a1c6',
-        'Create a collapsible section with a medium heading summary.'
-      )
-    },
-    run: (editor) => {
-      insertToggle(editor, 'heading-2')
     }
   },
   {
@@ -112,27 +70,6 @@ export const headingSlashCommands: SlashCommand[] = [
     }
   },
   {
-    id: 'toggle-h3',
-    get label() {
-      return translate(
-        'auto.components.editor.rich.markdown.slash.commands.2f9d6b4e10',
-        'Toggle Heading 3'
-      )
-    },
-    aliases: ['toggle-h3'],
-    icon: icon(ChevronRight),
-    group: 'Headings',
-    get description() {
-      return translate(
-        'auto.components.editor.rich.markdown.slash.commands.8c1a3e7d52',
-        'Create a collapsible section with a small heading summary.'
-      )
-    },
-    run: (editor) => {
-      insertToggle(editor, 'heading-3')
-    }
-  },
-  {
     id: 'heading-4',
     get label() {
       return translate(
@@ -155,27 +92,6 @@ export const headingSlashCommands: SlashCommand[] = [
     }
   },
   {
-    id: 'toggle-h4',
-    get label() {
-      return translate(
-        'auto.components.editor.rich.markdown.slash.commands.5e0b9c2a71',
-        'Toggle Heading 4'
-      )
-    },
-    aliases: ['toggle-h4'],
-    icon: icon(ChevronRight),
-    group: 'Headings',
-    get description() {
-      return translate(
-        'auto.components.editor.rich.markdown.slash.commands.d4f16a8b39',
-        'Create a collapsible section with a nested heading summary.'
-      )
-    },
-    run: (editor) => {
-      insertToggle(editor, 'heading-4')
-    }
-  },
-  {
     id: 'heading-5',
     get label() {
       return translate(
@@ -195,6 +111,92 @@ export const headingSlashCommands: SlashCommand[] = [
     run: (editor) => {
       // Use setHeading (not toggleHeading) so "/h5" is idempotent.
       editor.chain().focus().setHeading({ level: 5 }).run()
+    }
+  },
+  // Grouped separately (Notion-style) so plain headings and collapsible
+  // toggle headings are easy to scan as distinct families in the slash menu.
+  {
+    id: 'toggle-h1',
+    get label() {
+      return translate(
+        'auto.components.editor.rich.markdown.slash.commands.41482b15ce',
+        'Toggle H1'
+      )
+    },
+    aliases: ['toggle-h1', 'toggle heading', 'details heading', 'collapse heading'],
+    icon: icon(ChevronRight),
+    group: 'Toggle headings',
+    get description() {
+      return translate(
+        'auto.components.editor.rich.markdown.slash.commands.3294a2c0cc',
+        'Create a collapsible section with a large heading summary.'
+      )
+    },
+    run: (editor) => {
+      insertToggle(editor, 'heading-1')
+    }
+  },
+  {
+    id: 'toggle-h2',
+    get label() {
+      return translate(
+        'auto.components.editor.rich.markdown.slash.commands.7a2c1f9b04',
+        'Toggle H2'
+      )
+    },
+    aliases: ['toggle-h2'],
+    icon: icon(ChevronRight),
+    group: 'Toggle headings',
+    get description() {
+      return translate(
+        'auto.components.editor.rich.markdown.slash.commands.b3e5d8a1c6',
+        'Create a collapsible section with a medium heading summary.'
+      )
+    },
+    run: (editor) => {
+      insertToggle(editor, 'heading-2')
+    }
+  },
+  {
+    id: 'toggle-h3',
+    get label() {
+      return translate(
+        'auto.components.editor.rich.markdown.slash.commands.2f9d6b4e10',
+        'Toggle H3'
+      )
+    },
+    aliases: ['toggle-h3'],
+    icon: icon(ChevronRight),
+    group: 'Toggle headings',
+    get description() {
+      return translate(
+        'auto.components.editor.rich.markdown.slash.commands.8c1a3e7d52',
+        'Create a collapsible section with a small heading summary.'
+      )
+    },
+    run: (editor) => {
+      insertToggle(editor, 'heading-3')
+    }
+  },
+  {
+    id: 'toggle-h4',
+    get label() {
+      return translate(
+        'auto.components.editor.rich.markdown.slash.commands.5e0b9c2a71',
+        'Toggle H4'
+      )
+    },
+    aliases: ['toggle-h4'],
+    icon: icon(ChevronRight),
+    group: 'Toggle headings',
+    get description() {
+      return translate(
+        'auto.components.editor.rich.markdown.slash.commands.d4f16a8b39',
+        'Create a collapsible section with a nested heading summary.'
+      )
+    },
+    run: (editor) => {
+      insertToggle(editor, 'heading-4')
     }
   }
 ]

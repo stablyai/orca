@@ -17,7 +17,7 @@
 
 <p align="center">
   <strong>100x 빌더를 위한 AI 오케스트레이터.</strong><br/>
-  Claude Code, OpenClaude, Codex, OpenCode를 나란히 실행하세요 — 각 에이전트는 자체 worktree에서 실행되고 한곳에서 추적됩니다.
+  Codex, Claude Code, OpenCode, Pi를 나란히 실행하세요. — 각 에이전트는 자체 worktree에서 실행되고 한곳에서 추적됩니다.
 </p>
 
 <h3 align="center"><a href="https://onorca.dev/download"><ins>Orca 다운로드</ins></a></h3>
@@ -164,7 +164,7 @@ diff의 어느 줄에든 코멘트를 남기고 에이전트에게 바로 보내
 - **[풍부한 리포지토리 미리보기](https://www.onorca.dev/docs/editing/markdown)** — Markdown, 이미지, PDF, 리포지토리 문서를 워크스페이스에서 미리 볼 수 있습니다.
 - **[Computer Use](https://www.onorca.dev/docs/cli/computer-use)** — 워크플로에 실제 상호작용이 필요할 때 에이전트가 데스크톱 앱과 화면에 보이는 UI를 직접 조작하게 하세요.
 - **[알림과 읽지 않음 상태](https://www.onorca.dev/docs/notifications)** — 에이전트가 완료되거나 주의가 필요할 때 알림을 받고, 스레드를 읽지 않음으로 표시해 나중에 다시 확인하세요.
-- **그리고 훨씬 더 많은 기능** — 매일 출시하기 때문에 이 목록은 항상 뒤처져 있습니다. 진짜 기능 목록은 [체인지로그](https://github.com/stablyai/orca/releases)입니다.
+- **그리고 훨씬 더 많은 기능** — 새로운 기능이 매일 출시되므로 이 목록은 늘 한 발 늦습니다. 진짜 기능은 [체인지로그](https://github.com/stablyai/orca/releases)에서 확인하세요.
 
 ---
 
@@ -237,7 +237,7 @@ yay -S stably-orca-bin
 - **Twitter / X:** 업데이트와 공지는 **[@orca_build](https://x.com/orca_build)** 를 팔로우하세요.
 - **피드백과 아이디어:** 우리는 빠르게 출시합니다. 필요한 기능이 있나요? [새 기능을 요청](https://github.com/stablyai/orca/issues)하세요.
 - **개인정보 보호:** Orca가 수집하는 익명 사용 데이터와 수집 거부 방법은 [개인정보 및 텔레메트리 문서](https://www.onorca.dev/docs/telemetry)를 참고하세요.
-- **응원하기:** 이 리포지토리에 [Star](https://github.com/stablyai/orca)를 눌러 매일의 릴리스를 따라와 주세요.
+- **응원하기:** 이 리포지토리에 [Star](https://github.com/stablyai/orca)를 눌러 매일 공개되는 릴리스 소식을 확인해 주세요.
 
 ---
 
