@@ -10,6 +10,15 @@ function hasAsciiControlCharacter(value: string): boolean {
   return false
 }
 
+function hasNonLatin1CodeUnit(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    if (value.charCodeAt(index) > 0xff) {
+      return true
+    }
+  }
+  return false
+}
+
 export function validateZaiApiKey(apiKey: string): string {
   const trimmed = apiKey.trim()
   if (!trimmed) {
@@ -22,6 +31,9 @@ export function validateZaiApiKey(apiKey: string): string {
   }
   if (hasAsciiControlCharacter(trimmed)) {
     throw new Error('Z.ai API key contains unsupported control characters')
+  }
+  if (hasNonLatin1CodeUnit(trimmed)) {
+    throw new Error('Z.ai API key contains characters unsupported in HTTP headers')
   }
   return trimmed
 }

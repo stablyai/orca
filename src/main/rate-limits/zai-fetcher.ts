@@ -7,6 +7,7 @@ const SESSION_WINDOW_MINUTES = 300
 const WEEKLY_WINDOW_MINUTES = 10080
 const MONTHLY_WINDOW_MINUTES = 43200
 const ZAI_USAGE_UNAVAILABLE_MESSAGE = 'Z.ai usage data is currently unavailable'
+const ZAI_USAGE_PARSE_ERROR_MESSAGE = 'Invalid Z.ai usage response'
 
 type ZaiQuotaEntry = {
   quotaType?: unknown
@@ -36,6 +37,7 @@ export type FetchZaiRateLimitsOptions = {
   apiKey: string
   /** Test-only endpoint override. Production wiring always uses the fixed endpoint. */
   endpoint?: string
+  signal?: AbortSignal
 }
 
 function clampPercent(value: number): number {
@@ -218,6 +220,9 @@ export async function fetchZaiRateLimits(
     return makeUnavailable('Z.ai API key not configured')
   }
   try {
+    const requestSignal = options.signal
+      ? AbortSignal.any([options.signal, AbortSignal.timeout(API_TIMEOUT_MS)])
+      : AbortSignal.timeout(API_TIMEOUT_MS)
     const response = await net.fetch(options.endpoint ?? ZAI_USAGE_ENDPOINT, {
       method: 'GET',
       headers: {
@@ -225,7 +230,7 @@ export async function fetchZaiRateLimits(
         Accept: 'application/json'
       },
       redirect: 'error',
-      signal: AbortSignal.timeout(API_TIMEOUT_MS)
+      signal: requestSignal
     })
     if (response.status === 401 || response.status === 403) {
       return makeError('Z.ai API key expired or unauthorized', 'stale-token')
@@ -241,12 +246,11 @@ export async function fetchZaiRateLimits(
       const decoded: unknown = await response.json()
       const payloadRecord = asRecord(decoded)
       if (!payloadRecord) {
-        return makeError('Invalid Z.ai usage response', 'parse')
+        return makeError(ZAI_USAGE_PARSE_ERROR_MESSAGE, 'parse')
       }
       payload = payloadRecord
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Invalid Z.ai usage response'
-      return makeError(message, 'parse')
+    } catch {
+      return makeError(ZAI_USAGE_PARSE_ERROR_MESSAGE, 'parse')
     }
     if (!payloadSucceeded(payload)) {
       return makeError(payloadErrorMessage(payload), 'usage-unavailable')

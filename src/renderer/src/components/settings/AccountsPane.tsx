@@ -92,7 +92,7 @@ const EMPTY_WSL_DISTROS: string[] = []
 const MINIMAX_CONSOLE_URL = 'https://platform.minimax.io/console/usage'
 const ZAI_CONSOLE_URL = 'https://z.ai/manage-apikey'
 
-function formatMiniMaxRelativeRefresh(updatedAt: number, now: number): string {
+function formatProviderRelativeRefresh(updatedAt: number, now: number): string {
   const diffMs = Math.max(0, now - updatedAt)
   if (diffMs < 60_000) {
     return translate('auto.components.settings.AccountsPane.3a30aaf526', 'just now')
@@ -1840,7 +1840,7 @@ export function AccountsPane({
               {translate(
                 'auto.components.settings.AccountsPane.53f7b8c7a2',
                 'Last refresh: {{value0}}',
-                { value0: formatMiniMaxRelativeRefresh(miniMaxRateLimits.updatedAt, Date.now()) }
+                { value0: formatProviderRelativeRefresh(miniMaxRateLimits.updatedAt, Date.now()) }
               )}
             </p>
           ) : null}
@@ -2046,7 +2046,7 @@ export function AccountsPane({
                 'auto.components.settings.AccountsPane.53f7b8c7a2',
                 'Last refresh: {{value0}}',
                 {
-                  value0: formatMiniMaxRelativeRefresh(zaiRateLimits.updatedAt, Date.now())
+                  value0: formatProviderRelativeRefresh(zaiRateLimits.updatedAt, Date.now())
                 }
               )}
             </p>

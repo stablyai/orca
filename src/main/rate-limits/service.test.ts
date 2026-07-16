@@ -889,7 +889,14 @@ describe('RateLimitService', () => {
 
   it('aborts the active fetch cycle and clears queued refreshes on stop', async () => {
     const service = new RateLimitService()
-    const capturedSignals: { claude?: AbortSignal; codex?: AbortSignal; grok?: AbortSignal } = {}
+    const capturedSignals: {
+      claude?: AbortSignal
+      codex?: AbortSignal
+      grok?: AbortSignal
+      zai?: AbortSignal
+    } = {}
+    service.setZaiConfigResolver(() => ({ apiKey: 'glm-key' }))
+    vi.mocked(hasZaiApiKey).mockReturnValue(true)
 
     vi.mocked(fetchClaudeRateLimits).mockImplementation(
       (options) =>
@@ -924,6 +931,17 @@ describe('RateLimitService', () => {
           )
         })
     )
+    vi.mocked(fetchZaiRateLimits).mockImplementation(
+      (options) =>
+        new Promise((resolve) => {
+          capturedSignals.zai = options.signal
+          options.signal?.addEventListener(
+            'abort',
+            () => resolve(errorProvider('zai', 'aborted')),
+            { once: true }
+          )
+        })
+    )
 
     const activeFetch = serviceInternals(service).fetchAll()
     await Promise.resolve()
@@ -937,6 +955,7 @@ describe('RateLimitService', () => {
     expect(capturedSignals.claude?.aborted).toBe(true)
     expect(capturedSignals.codex?.aborted).toBe(true)
     expect(capturedSignals.grok?.aborted).toBe(true)
+    expect(capturedSignals.zai?.aborted).toBe(true)
 
     await queuedRefresh
     await activeFetch
@@ -944,6 +963,7 @@ describe('RateLimitService', () => {
     expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchGrokRateLimits).toHaveBeenCalledTimes(1)
+    expect(fetchZaiRateLimits).toHaveBeenCalledTimes(1)
   })
 
   it('aborts inactive Claude preview fetches on stop', async () => {
@@ -1780,7 +1800,10 @@ describe('RateLimitService', () => {
     await service.refresh()
 
     expect(fetchZaiRateLimits).toHaveBeenCalledTimes(1)
-    expect(fetchZaiRateLimits).toHaveBeenCalledWith({ apiKey: 'glm-key' })
+    expect(fetchZaiRateLimits).toHaveBeenCalledWith({
+      apiKey: 'glm-key',
+      signal: expect.any(AbortSignal)
+    })
     const state = service.getState()
     expect(state.zai?.status).toBe('ok')
     expect(state.zai?.session?.usedPercent).toBe(33)

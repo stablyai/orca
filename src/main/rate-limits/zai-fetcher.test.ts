@@ -199,15 +199,43 @@ describe('fetchZaiRateLimits', () => {
     expect(result.usageMetadata?.failureKind).toBe(failureKind)
   })
 
-  it('maps invalid JSON to parse failures', async () => {
+  it('redacts invalid JSON parser errors', async () => {
+    const leakedApiKey = 'glm-secret-key'
     netFetchMock.mockResolvedValueOnce(
-      makeJsonThrowingResponse(new SyntaxError('Unexpected token <'))
+      makeJsonThrowingResponse(new SyntaxError(`Unexpected token near ${leakedApiKey}`))
     )
 
-    const result = await fetchZaiRateLimits({ apiKey: 'glm-key' })
+    const result = await fetchZaiRateLimits({ apiKey: leakedApiKey })
 
     expect(result.status).toBe('error')
     expect(result.usageMetadata?.failureKind).toBe('parse')
+    expect(result.error).toBe('Invalid Z.ai usage response')
+    expect(result.error).not.toContain(leakedApiKey)
+  })
+
+  it('aborts the request when the caller aborts', async () => {
+    const controller = new AbortController()
+    let requestSignal: AbortSignal | undefined
+    netFetchMock.mockImplementationOnce((_url, init: RequestInit) => {
+      requestSignal = init.signal as AbortSignal
+      return new Promise((_resolve, reject) => {
+        requestSignal?.addEventListener('abort', () => reject(new Error('aborted')), {
+          once: true
+        })
+      })
+    })
+
+    const resultPromise = fetchZaiRateLimits({ apiKey: 'glm-key', signal: controller.signal })
+    await Promise.resolve()
+
+    expect(requestSignal).not.toBe(controller.signal)
+    expect(requestSignal?.aborted).toBe(false)
+    controller.abort()
+    expect(requestSignal?.aborted).toBe(true)
+
+    const result = await resultPromise
+    expect(result.status).toBe('error')
+    expect(result.usageMetadata?.failureKind).toBe('network')
   })
 
   it.each([null, 42, 'oops'])('maps non-object JSON payload %j to parse failures', async (body) => {
