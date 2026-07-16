@@ -1687,6 +1687,11 @@ export default function MarkdownPreview({
         }
         const blockKey = `li:${range.startLine}-${range.endLine}`
         const hasReviewNotes = getMarkdownCommentsForRange(range).length > 0
+        const controls = renderAnnotationControls(
+          range,
+          blockKey,
+          getMarkdownPreviewAnnotationQuote(children)
+        )
         return (
           <li {...props}>
             <div
@@ -1695,15 +1700,13 @@ export default function MarkdownPreview({
               }`.trim()}
               data-source-line={range.startLine}
               data-source-end-line={range.endLine}
-              data-annotation-block-key={blockKey}
+              // Why: only advertise the block to the add-review-note shortcut
+              // when the composer can actually render (mirrors wrapAnnotatedBlock).
+              data-annotation-block-key={controls ? blockKey : undefined}
               onClick={(event) => handleAnnotatedMarkdownBlockClick(range, event)}
             >
               <span className="markdown-annotation-list-content">{children}</span>
-              {renderAnnotationControls(
-                range,
-                blockKey,
-                getMarkdownPreviewAnnotationQuote(children)
-              )}
+              {controls}
             </div>
           </li>
         )
