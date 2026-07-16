@@ -19,7 +19,7 @@ import {
   notifyOrchestrationSetupStateChanged
 } from '@/lib/orchestration-setup-state'
 import type { EventProps } from '../../../../shared/telemetry-events'
-import { computerUseHelperGuidance } from '../settings/computer-use-helper-guidance'
+import { computerUseHelperGuidance } from '../../../../shared/computer-use-helper-guidance'
 
 export type OnboardingFeatureSetupId =
   | 'browserUse'

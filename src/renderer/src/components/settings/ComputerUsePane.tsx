@@ -10,7 +10,7 @@ import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
 import { ComputerUseSkillSetupPanel } from './ComputerUseSkillSetupPanel'
-import { computerUseHelperGuidance } from './computer-use-helper-guidance'
+import { computerUseHelperGuidance } from '../../../../shared/computer-use-helper-guidance'
 import { translate } from '@/i18n/i18n'
 export { getComputerUsePaneSearchEntries } from './computer-use-search'
 
@@ -81,6 +81,7 @@ export function ComputerUsePane(): React.JSX.Element {
     (permission) => stateById.get(permission.id) === 'granted'
   ).length
   const allGranted = grantedCount === PERMISSIONS.length
+  const permissionStatusKnown = states.length > 0
   const checking = loading && states.length === 0
   const setupUnavailable = helperUnavailableReason !== null
   const resetAccessDisabled =
@@ -162,6 +163,11 @@ export function ComputerUsePane(): React.JSX.Element {
   }, [refresh])
 
   const openPermission = async (id: ComputerUsePermissionId): Promise<void> => {
+    // Why: the first permission probe owns helper availability; do not race it
+    // even if a stale event bypasses the button's disabled state.
+    if (loading || !permissionStatusKnown || helperUnavailableReason !== null) {
+      return
+    }
     useAppStore.getState().recordFeatureInteraction('computer-use-setup')
     setPendingId(id)
     try {
@@ -324,6 +330,8 @@ export function ComputerUsePane(): React.JSX.Element {
                         size="sm"
                         disabled={
                           resetting ||
+                          loading ||
+                          !permissionStatusKnown ||
                           pending ||
                           status === 'unsupported' ||
                           helperUnavailableReason !== null
