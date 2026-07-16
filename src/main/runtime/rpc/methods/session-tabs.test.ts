@@ -35,8 +35,48 @@ describe('session tab RPC methods', () => {
 
     expect(response.ok).toBe(true)
     expect(runtime.activateMobileSessionTab).toHaveBeenCalledWith('id:wt-1', 'tab-1', 'leaf-1', {
-      notifyClients: false
+      notifyClients: false,
+      clientKind: undefined,
+      followHost: false
     })
+  })
+
+  it('keeps runtime-client tab activation publish-only unless followHost is explicit', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      activateMobileSessionTab: vi.fn().mockResolvedValue({ tabs: [] })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('session.tabs.activate', { worktree: 'id:wt-1', tabId: 'tab-1' }),
+      vi.fn(),
+      { clientKind: 'runtime' }
+    )
+    await dispatcher.dispatchStreaming(
+      makeRequest('session.tabs.activate', {
+        worktree: 'id:wt-1',
+        tabId: 'tab-1',
+        followHost: true
+      }),
+      vi.fn(),
+      { clientKind: 'runtime' }
+    )
+
+    expect(runtime.activateMobileSessionTab).toHaveBeenNthCalledWith(
+      1,
+      'id:wt-1',
+      'tab-1',
+      undefined,
+      { notifyClients: false, clientKind: 'runtime', followHost: false }
+    )
+    expect(runtime.activateMobileSessionTab).toHaveBeenNthCalledWith(
+      2,
+      'id:wt-1',
+      'tab-1',
+      undefined,
+      { notifyClients: true, clientKind: 'runtime', followHost: true }
+    )
   })
 
   it('dispatches tab moves through the runtime', async () => {

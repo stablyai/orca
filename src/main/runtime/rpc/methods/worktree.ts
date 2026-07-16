@@ -59,13 +59,18 @@ export const WORKTREE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'worktree.activate',
     params: WorktreeActivate,
-    handler: async (params, { runtime, clientKind }) =>
-      // Why: clientKind ('mobile'|'runtime') scopes the host-renderer slept-agent
-      // wake to phones so web/desktop activation behavior is unchanged.
-      runtime.activateManagedWorktree(params.worktree, {
-        notifyClients: params.notifyClients !== false,
-        clientKind
+    handler: async (params, { runtime, clientKind }) => {
+      // Why: clientKind scopes both phone-only sleeping-agent wakes and whether
+      // a paired desktop may turn publication into host-window navigation.
+      const followHost = params.followHost === true
+      return runtime.activateManagedWorktree(params.worktree, {
+        // Why: paired desktops publish selection by default. Host navigation
+        // requires an affirmative followHost bit, not a legacy true default.
+        notifyClients: params.notifyClients !== false && (clientKind !== 'runtime' || followHost),
+        clientKind,
+        followHost
       })
+    }
   }),
   defineMethod({
     name: 'worktree.create',

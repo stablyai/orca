@@ -56,7 +56,8 @@ export const WorktreeSelector = z.object({
 })
 
 export const WorktreeActivate = WorktreeSelector.extend({
-  notifyClients: OptionalBoolean
+  notifyClients: OptionalBoolean,
+  followHost: OptionalBoolean
 })
 
 export const WorktreeCreate = z

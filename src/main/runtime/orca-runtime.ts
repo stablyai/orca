@@ -4377,8 +4377,14 @@ export class OrcaRuntimeService {
     worktreeSelector: string,
     tabId: string,
     leafId?: string,
-    opts: { notifyClients?: boolean } = {}
+    opts: {
+      notifyClients?: boolean
+      clientKind?: 'mobile' | 'runtime'
+      followHost?: boolean
+    } = {}
   ): Promise<RuntimeMobileSessionTabsResult> {
+    const notifyHost =
+      opts.notifyClients !== false && (opts.clientKind !== 'runtime' || opts.followHost === true)
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
@@ -4416,7 +4422,7 @@ export class OrcaRuntimeService {
       const shouldMaterializePendingTerminal =
         publicTab?.type === 'terminal' &&
         publicTab.status !== 'ready' &&
-        (opts.notifyClients === false ||
+        (!notifyHost ||
           !this.notifier?.focusTerminal ||
           this.shouldMaterializeHeadlessMobileSessionTab(snapshot!, tab))
       if (shouldMaterializePendingTerminal) {
@@ -4478,7 +4484,7 @@ export class OrcaRuntimeService {
                 candidate.isActive
             )
       const targetTab = activeSibling ?? tab
-      if (opts.notifyClients === false) {
+      if (!notifyHost) {
         this.activateMobileSessionTabForRemoteClient(worktreeId, snapshot!, targetTab)
         return this.getMobileSessionTabsForWorktree(worktreeId)
       }
@@ -4493,7 +4499,7 @@ export class OrcaRuntimeService {
       }
       this.notifier?.focusTerminal(targetTab.parentTabId, worktreeId, targetTab.leafId)
     } else if (tab.type === 'browser') {
-      if (opts.notifyClients === false) {
+      if (!notifyHost) {
         this.activateMobileSessionTabForRemoteClient(worktreeId, snapshot!, tab)
         return this.getMobileSessionTabsForWorktree(worktreeId)
       }
@@ -4501,7 +4507,7 @@ export class OrcaRuntimeService {
       // session tab keeps desktop tab order/group state authoritative.
       this.notifier?.focusEditorTab?.(tab.id, worktreeId)
     } else {
-      if (opts.notifyClients === false) {
+      if (!notifyHost) {
         this.activateMobileSessionTabForRemoteClient(worktreeId, snapshot!, tab)
         return this.getMobileSessionTabsForWorktree(worktreeId)
       }
@@ -14698,7 +14704,11 @@ export class OrcaRuntimeService {
 
   async activateManagedWorktree(
     worktreeSelector: string,
-    opts: { notifyClients?: boolean; clientKind?: 'mobile' | 'runtime' } = {}
+    opts: {
+      notifyClients?: boolean
+      clientKind?: 'mobile' | 'runtime'
+      followHost?: boolean
+    } = {}
   ): Promise<{
     repoId: string
     worktreeId: string
@@ -14715,7 +14725,10 @@ export class OrcaRuntimeService {
       throw new Error('repo_not_found')
     }
 
-    if (opts.notifyClients === false && this.store?.getWorktreeMeta(worktree.id)?.isUnread) {
+    const notifyHost =
+      opts.notifyClients !== false && (opts.clientKind !== 'runtime' || opts.followHost === true)
+
+    if (!notifyHost && this.store?.getWorktreeMeta(worktree.id)?.isUnread) {
       // Why: mobile/web session activation intentionally bypasses renderer
       // selection, so the runtime must acknowledge the unread state itself.
       this.store.setWorktreeMeta(worktree.id, { isUnread: false })
@@ -14724,7 +14737,7 @@ export class OrcaRuntimeService {
 
     let sleepingAgentWake: 'requested' | 'unsupported-headless' | 'not-applicable' =
       'not-applicable'
-    if (opts.notifyClients !== false) {
+    if (notifyHost) {
       // Why: inactive worktree terminal panes are renderer-owned and may not have
       // live PTYs until the desktop activates the worktree and mounts them.
       this.notifyActivateWorktree(repo.id, worktree.id)

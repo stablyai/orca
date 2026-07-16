@@ -39,7 +39,8 @@ describe('worktree RPC methods', () => {
     expect(response).toMatchObject({ ok: true })
     expect(runtime.activateManagedWorktree).toHaveBeenCalledWith('id:wt-1', {
       notifyClients: false,
-      clientKind: undefined
+      clientKind: undefined,
+      followHost: false
     })
   })
 
@@ -63,7 +64,41 @@ describe('worktree RPC methods', () => {
 
     expect(runtime.activateManagedWorktree).toHaveBeenCalledWith('id:wt-1', {
       notifyClients: false,
-      clientKind: 'mobile'
+      clientKind: 'mobile',
+      followHost: false
+    })
+  })
+
+  it('keeps runtime-client activation publish-only unless followHost is explicit', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      activateManagedWorktree: vi
+        .fn()
+        .mockResolvedValue({ repoId: 'repo-1', worktreeId: 'wt-1', activated: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+    const replies: string[] = []
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('worktree.activate', { worktree: 'id:wt-1' }),
+      (response) => replies.push(response),
+      { clientKind: 'runtime' }
+    )
+    await dispatcher.dispatchStreaming(
+      makeRequest('worktree.activate', { worktree: 'id:wt-1', followHost: true }),
+      (response) => replies.push(response),
+      { clientKind: 'runtime' }
+    )
+
+    expect(runtime.activateManagedWorktree).toHaveBeenNthCalledWith(1, 'id:wt-1', {
+      notifyClients: false,
+      clientKind: 'runtime',
+      followHost: false
+    })
+    expect(runtime.activateManagedWorktree).toHaveBeenNthCalledWith(2, 'id:wt-1', {
+      notifyClients: true,
+      clientKind: 'runtime',
+      followHost: true
     })
   })
 

@@ -27,10 +27,14 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'session.tabs.activate',
     params: ActivateTab,
-    handler: async (params, { runtime }) =>
-      runtime.activateMobileSessionTab(params.worktree, params.tabId, params.leafId, {
-        notifyClients: params.notifyClients !== false
+    handler: async (params, { runtime, clientKind }) => {
+      const followHost = params.followHost === true
+      return runtime.activateMobileSessionTab(params.worktree, params.tabId, params.leafId, {
+        notifyClients: params.notifyClients !== false && (clientKind !== 'runtime' || followHost),
+        clientKind,
+        followHost
       })
+    }
   }),
   defineMethod({
     name: 'session.tabs.close',

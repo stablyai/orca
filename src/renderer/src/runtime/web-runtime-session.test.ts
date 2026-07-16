@@ -98,7 +98,7 @@ describe('activateWebRuntimeSessionWorktree', () => {
     await expect(
       activateWebRuntimeSessionWorktree({
         worktreeId: WORKTREE_ID,
-        notifyDesktop: false
+        followHost: false
       })
     ).resolves.toBe(true)
 
@@ -107,7 +107,8 @@ describe('activateWebRuntimeSessionWorktree', () => {
       method: 'worktree.activate',
       params: {
         worktree: `id:${WORKTREE_ID}`,
-        notifyClients: false
+        notifyClients: false,
+        followHost: false
       },
       timeoutMs: 15_000
     })
@@ -851,7 +852,9 @@ describe('web runtime session tab actions', () => {
       method: 'session.tabs.activate',
       params: {
         worktree: `id:${WORKTREE_ID}`,
-        tabId: 'host-browser-unified'
+        tabId: 'host-browser-unified',
+        notifyClients: false,
+        followHost: false
       },
       timeoutMs: 15_000
     })

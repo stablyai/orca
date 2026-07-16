@@ -21,7 +21,8 @@ export const ActivateTab = WorktreeTabSelector.extend({
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string().min(1, 'Missing tab id')),
   leafId: z.string().max(128).optional(),
-  notifyClients: OptionalBoolean
+  notifyClients: OptionalBoolean,
+  followHost: OptionalBoolean
 })
 
 export type TerminalPaneLayoutNodeInput =

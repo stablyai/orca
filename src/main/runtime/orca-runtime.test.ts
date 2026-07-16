@@ -17075,6 +17075,74 @@ describe('OrcaRuntimeService', () => {
     ])
   })
 
+  it('keeps runtime-client tab activation publish-only unless host follow is explicit', async () => {
+    const focusTerminal = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal,
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'epoch-1',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'tab-1::pane:2',
+          activeTabType: 'terminal',
+          tabGroups: [{ id: 'group-1', activeTabId: 'tab-1', tabOrder: ['tab-1'] }],
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'tab-1::pane:1',
+              parentTabId: 'tab-1',
+              leafId: 'pane:1',
+              ptyId: 'pty-pane-1',
+              title: 'left',
+              isActive: false
+            },
+            {
+              type: 'terminal',
+              id: 'tab-1::pane:2',
+              parentTabId: 'tab-1',
+              leafId: 'pane:2',
+              ptyId: 'pty-pane-2',
+              title: 'right',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+    runtime.registerPty('pty-pane-1', TEST_WORKTREE_ID)
+    runtime.registerPty('pty-pane-2', TEST_WORKTREE_ID)
+
+    await runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'tab-1::pane:1', undefined, {
+      clientKind: 'runtime'
+    })
+    expect(focusTerminal).not.toHaveBeenCalled()
+
+    await runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'tab-1', 'pane:2', {
+      clientKind: 'runtime',
+      followHost: true
+    })
+    expect(focusTerminal).toHaveBeenCalledWith('tab-1', TEST_WORKTREE_ID, 'pane:2')
+  })
+
   it('clears unread metadata on mobile worktree activation without focusing desktop clients', async () => {
     const metaById: Record<string, WorktreeMeta> = {
       [TEST_WORKTREE_ID]: makeWorktreeMeta({ isUnread: true })
@@ -17115,6 +17183,44 @@ describe('OrcaRuntimeService', () => {
     expect(metaById[TEST_WORKTREE_ID]?.isUnread).toBe(false)
     expect(worktreesChanged).toHaveBeenCalledWith(TEST_REPO_ID)
     expect(activateWorktree).not.toHaveBeenCalled()
+  })
+
+  it('keeps runtime-client worktree activation publish-only unless host follow is explicit', async () => {
+    const activateWorktree = vi.fn()
+    const runtime = new OrcaRuntimeService(store as never)
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree,
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.markGraphReady(TEST_WINDOW_ID)
+
+    await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, {
+      clientKind: 'runtime'
+    })
+    expect(activateWorktree).not.toHaveBeenCalled()
+
+    await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, {
+      clientKind: 'runtime',
+      followHost: true
+    })
+    expect(activateWorktree).toHaveBeenCalledWith(
+      TEST_REPO_ID,
+      TEST_WORKTREE_ID,
+      undefined,
+      undefined,
+      undefined
+    )
   })
 
   it('wakes slept agents on the host renderer when a phone activates a worktree', async () => {

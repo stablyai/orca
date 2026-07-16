@@ -288,7 +288,7 @@ async function refreshWebRuntimeSessionTabsSnapshot(
 export async function activateWebRuntimeSessionWorktree(args: {
   worktreeId: string
   environmentId?: string | null
-  notifyDesktop?: boolean
+  followHost?: boolean
 }): Promise<boolean> {
   const environmentId =
     args.environmentId?.trim() ??
@@ -304,7 +304,8 @@ export async function activateWebRuntimeSessionWorktree(args: {
       method: 'worktree.activate',
       params: {
         worktree: toRuntimeWorktreeSelector(args.worktreeId),
-        notifyClients: args.notifyDesktop !== false
+        notifyClients: args.followHost === true,
+        followHost: args.followHost === true
       },
       timeoutMs: 15_000
     })
@@ -323,6 +324,7 @@ export async function activateWebRuntimeSessionTab(args: {
   worktreeId: string
   tabId: string
   environmentId?: string | null
+  followHost?: boolean
 }): Promise<boolean> {
   return callWebRuntimeSessionTabMethod('session.tabs.activate', args)
 }
@@ -442,6 +444,7 @@ async function callWebRuntimeSessionTabMethod(
     worktreeId: string
     tabId: string
     environmentId?: string | null
+    followHost?: boolean
   }
 ): Promise<boolean> {
   const environmentId =
@@ -482,7 +485,13 @@ async function callWebRuntimeSessionTabMethod(
       method,
       params: {
         worktree: toRuntimeWorktreeSelector(args.worktreeId),
-        tabId: hostTabId
+        tabId: hostTabId,
+        ...(method === 'session.tabs.activate'
+          ? {
+              notifyClients: args.followHost === true,
+              followHost: args.followHost === true
+            }
+          : {})
       },
       timeoutMs: 15_000
     })
