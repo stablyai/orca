@@ -44,15 +44,23 @@ type CoreThirdLevelShift = (
   event: ClassificationEvent
 ) => boolean
 
+type XtermCoreInternals = {
+  _isThirdLevelShift?: CoreThirdLevelShift
+  _keyboardService?: { evaluateKeyDown?: (event: unknown) => { key?: string } | undefined }
+  coreService?: { kittyKeyboard?: { flags: number } }
+}
+
+function getCore(terminal: Terminal): XtermCoreInternals {
+  return (terminal as unknown as { _core?: XtermCoreInternals })._core ?? {}
+}
+
 function getThirdLevelShift(terminal: Terminal): CoreThirdLevelShift {
-  const classify = (terminal as unknown as { _core?: { _isThirdLevelShift?: CoreThirdLevelShift } })
-    ._core?._isThirdLevelShift
+  const core = getCore(terminal)
+  const classify = core._isThirdLevelShift
   if (typeof classify !== 'function') {
     throw new Error('xterm no longer exposes _core._isThirdLevelShift')
   }
-  return classify.bind(
-    (terminal as unknown as { _core: object })._core
-  ) as unknown as CoreThirdLevelShift
+  return classify.bind(core)
 }
 
 describe('isGenuineWindowsCtrlAltChord', () => {
@@ -76,8 +84,8 @@ describe('isGenuineWindowsCtrlAltChord', () => {
 describe('shouldRepairWindowsCtrlAltChords', () => {
   it('repairs only Windows Chromium clients', () => {
     expect(shouldRepairWindowsCtrlAltChords(WINDOWS_ELECTRON_UA)).toBe(true)
-    // Why: Firefox does not simulate the layout-wide AltGraph modifier, so a
-    // false AltGraph state there does not prove the chord is genuine.
+    // Why: Firefox does not rewrite composing Ctrl+Alt presses to AltGraph, so
+    // a false AltGraph state there does not prove the chord is genuine.
     expect(shouldRepairWindowsCtrlAltChords(WINDOWS_FIREFOX_UA)).toBe(false)
     expect(shouldRepairWindowsCtrlAltChords(MAC_ELECTRON_UA)).toBe(false)
   })
@@ -130,13 +138,6 @@ describe('installWindowsCtrlAltChordRepair', () => {
 // whatever bytes xterm's own keyboard service computes for the protocol the
 // foreground app negotiated. These pin that contract for both protocol tiers.
 describe('rescued chords are encoded by xterm, not Orca', () => {
-  type KeyboardServiceCore = {
-    _core?: {
-      _keyboardService?: { evaluateKeyDown?: (event: unknown) => { key?: string } | undefined }
-      coreService?: { kittyKeyboard?: { flags: number } }
-    }
-  }
-
   function keyDownChord(overrides: Record<string, unknown>): Record<string, unknown> {
     return { ...chord(), repeat: false, ...overrides }
   }
@@ -144,7 +145,7 @@ describe('rescued chords are encoded by xterm, not Orca', () => {
   function getEvaluateKeyDown(
     terminal: Terminal
   ): (event: unknown) => { key?: string } | undefined {
-    const service = (terminal as unknown as KeyboardServiceCore)._core?._keyboardService
+    const service = getCore(terminal)._keyboardService
     if (typeof service?.evaluateKeyDown !== 'function') {
       throw new Error('xterm no longer exposes _core._keyboardService.evaluateKeyDown')
     }
@@ -170,7 +171,7 @@ describe('rescued chords are encoded by xterm, not Orca', () => {
     const terminal = new Terminal({ vtExtensions: { kittyKeyboard: true } })
     try {
       installWindowsCtrlAltChordRepair(terminal, WINDOWS_ELECTRON_UA)
-      const kitty = (terminal as unknown as KeyboardServiceCore)._core?.coreService?.kittyKeyboard
+      const kitty = getCore(terminal).coreService?.kittyKeyboard
       expect(kitty).toBeTruthy()
       kitty!.flags = 1
       const evaluate = getEvaluateKeyDown(terminal)

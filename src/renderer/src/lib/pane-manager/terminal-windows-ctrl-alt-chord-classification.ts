@@ -1,12 +1,8 @@
 import type { Terminal } from '@xterm/xterm'
 
-// Why: xterm classifies every Windows Ctrl+Alt chord as third-level shift
-// (AltGr) and waits for a composed keypress that never arrives on layouts
-// without AltGr, silently dropping the chord (#8734). The keyboard service
-// has already computed the correct encoding for the active protocol (legacy
-// ESC-prefixed bytes, kitty CSI-u, win32-input-mode) before that check
-// discards it, so repairing the classification — not re-encoding the chord —
-// is the whole fix.
+// Why: xterm misclassifies Windows Ctrl+Alt chords as AltGr and drops the ones
+// that never compose a keypress (#8734); repairing the classification lets
+// xterm's own protocol-aware key encoders emit the bytes.
 type ThirdLevelShiftBrowserInfo = { isWindows?: boolean }
 
 type ThirdLevelShiftKeyboardEvent = Pick<KeyboardEvent, 'ctrlKey' | 'altKey' | 'metaKey'> & {
@@ -26,8 +22,8 @@ type TerminalWithThirdLevelShift = {
  * Returns whether a Windows Ctrl+Alt chord is genuine keyboard input rather
  * than AltGr composition, and must therefore reach xterm's key encoders.
  *
- * Chromium simulates the AltGraph modifier for the whole Ctrl+Alt press
- * whenever the active Windows layout maps AltGr characters (crbug 762557),
+ * Chromium reports AltGraph=true on a Ctrl+Alt keydown exactly when that
+ * chord composes a printable character on the active layout (crbug 762557),
  * so a false AltGraph state proves the chord cannot compose text.
  */
 export function isGenuineWindowsCtrlAltChord(event: ThirdLevelShiftKeyboardEvent): boolean {
@@ -38,9 +34,9 @@ export function isGenuineWindowsCtrlAltChord(event: ThirdLevelShiftKeyboardEvent
 
 /** Returns whether this client's AltGraph modifier state is trustworthy. */
 export function shouldRepairWindowsCtrlAltChords(userAgent: string): boolean {
-  // Why: only Chromium guarantees the layout-wide AltGraph simulation the
-  // rescue relies on. Paired web clients on Firefox keep stock classification
-  // so Ctrl+Alt-alias AltGr typing there is never misread as a chord.
+  // Why: only Chromium rewrites composing Ctrl+Alt presses to AltGraph. Paired
+  // web clients on Firefox keep stock classification so Ctrl+Alt-alias AltGr
+  // typing there is never misread as a chord.
   return userAgent.includes('Windows') && userAgent.includes('Chrome/')
 }
 
@@ -63,6 +59,9 @@ export function installWindowsCtrlAltChordRepair(
   const core = (terminal as unknown as TerminalWithThirdLevelShift)._core
   const stockClassification = core?._isThirdLevelShift
   if (!core || typeof stockClassification !== 'function') {
+    console.warn(
+      'xterm no longer exposes _core._isThirdLevelShift; Windows Ctrl+Alt chords will be dropped'
+    )
     return false
   }
   core._isThirdLevelShift = function (browser, event) {
