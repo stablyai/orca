@@ -141,3 +141,44 @@ export function combineDiffComments(
 ): DecoratedDiffComment[] {
   return [...localComments, ...prComments] as DecoratedDiffComment[]
 }
+
+// Why: selector function to retrieve raw PR comments from the store for a specific worktree.
+// This extracts the complex cache key matching logic to keep DiffViewer.tsx under the 400-line limit.
+// Returns a stable empty array reference when no comments are available to avoid re-renders.
+export function selectRawPRCommentsFromStore(
+  state: AppState,
+  worktreeId: string | undefined
+): readonly PRComment[] {
+  if (!worktreeId) {
+    return []
+  }
+  const wt = state.getKnownWorktreeById(worktreeId)
+  if (!wt || !wt.repoId) {
+    return []
+  }
+  let pr = wt.linkedPR
+  if (!pr && wt.branch) {
+    const keys = Object.keys(state.prCache)
+    const targetKey = keys.find(
+      (k) => k.toLowerCase().includes(wt.repoId.toLowerCase()) && k.endsWith(`::${wt.branch}`)
+    )
+    const cachedPR = targetKey ? state.prCache[targetKey]?.data : null
+    if (cachedPR) {
+      pr = cachedPR.number
+    }
+  }
+  if (!pr) {
+    return []
+  }
+  // Why: commentsCache keys may be prefixed by host/runtime environment
+  // scope or contain the full prRepo name in the middle. Match keys
+  // dynamically to find the correct entry regardless of caching scopes.
+  const keys = Object.keys(state.commentsCache)
+  const targetKey = keys.find(
+    (k) =>
+      k.toLowerCase().includes(wt.repoId.toLowerCase()) &&
+      k.includes('::pr-comments::') &&
+      k.endsWith(`::${pr}`)
+  )
+  return (targetKey ? state.commentsCache[targetKey]?.data : null) ?? []
+}
