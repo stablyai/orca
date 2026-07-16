@@ -241,9 +241,12 @@ describe('Windows managed hook stdin structure', () => {
     const home = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-windows-'))
     const inheritedUserData = mkdtempSync(join(tmpdir(), 'orca-hook-inherited-user-data-'))
     const inheritedHooksPath = join(inheritedUserData, 'codex-runtime-home', 'home', 'hooks.json')
+    const inheritedConfigPath = join(inheritedUserData, 'codex-runtime-home', 'home', 'config.toml')
     const inheritedHooks = '{"hooks":{"Stop":[]}}\n'
+    const inheritedConfig = 'model = "gpt-5.6-sol"\n\n[features]\nhooks = true\n'
     mkdirSync(dirname(inheritedHooksPath), { recursive: true })
     writeFileSync(inheritedHooksPath, inheritedHooks, 'utf8')
+    writeFileSync(inheritedConfigPath, inheritedConfig, 'utf8')
     homedirMock.mockReturnValue(home)
     const previousOrcaUserDataPath = process.env.ORCA_USER_DATA_PATH
     const previousGrokHome = process.env.GROK_HOME
@@ -260,6 +263,7 @@ describe('Windows managed hook stdin structure', () => {
           expect(entry.install().state, `${entry.agent} install status`).toBe('installed')
         }
       })
+      expect(readFileSync(inheritedConfigPath, 'utf8')).toBe(inheritedConfig)
       expect(readFileSync(inheritedHooksPath, 'utf8')).toBe(inheritedHooks)
       expect(
         readFileSync(
