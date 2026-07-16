@@ -6,8 +6,8 @@ import {
   defaultTerminalLiveInputHandles,
   filterTerminalLiveInputDefaultCandidates,
   focusTerminalLiveInputTarget,
+  encodeTerminalLiveInputWithinByteLimit,
   getTerminalLiveSpecialKeyBytes,
-  isTerminalLiveInputWithinByteLimit,
   pruneTerminalLiveInputHandles,
   scheduleTerminalLiveInputFocus,
   type TerminalLiveInputFocusTarget,
@@ -74,14 +74,21 @@ describe('terminal live input', () => {
   })
 
   it('enforces the paste-sized byte budget', () => {
-    expect(isTerminalLiveInputWithinByteLimit('hello')).toBe(true)
-    expect(isTerminalLiveInputWithinByteLimit('x'.repeat(TERMINAL_LIVE_INPUT_MAX_BYTES))).toBe(true)
-    expect(isTerminalLiveInputWithinByteLimit('x'.repeat(TERMINAL_LIVE_INPUT_MAX_BYTES + 1))).toBe(
-      false
+    expect(encodeTerminalLiveInputWithinByteLimit('hello')).toEqual(
+      new TextEncoder().encode('hello')
     )
     expect(
-      isTerminalLiveInputWithinByteLimit('é'.repeat(TERMINAL_LIVE_INPUT_MAX_BYTES / 2 + 1))
-    ).toBe(false)
+      encodeTerminalLiveInputWithinByteLimit('x'.repeat(TERMINAL_LIVE_INPUT_MAX_BYTES))
+    ).not.toBeNull()
+    expect(
+      encodeTerminalLiveInputWithinByteLimit('x'.repeat(TERMINAL_LIVE_INPUT_MAX_BYTES + 1))
+    ).toBeNull()
+    expect(
+      encodeTerminalLiveInputWithinByteLimit('é'.repeat(TERMINAL_LIVE_INPUT_MAX_BYTES / 2))
+    ).not.toBeNull()
+    expect(
+      encodeTerminalLiveInputWithinByteLimit('é'.repeat(TERMINAL_LIVE_INPUT_MAX_BYTES / 2 + 1))
+    ).toBeNull()
   })
 
   it('defaults first-seen terminal handles to live input once', () => {
