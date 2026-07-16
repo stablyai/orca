@@ -73,6 +73,7 @@ import {
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   folderWorkspaceKey,
+  getActiveSidebarWorkspaceId,
   isWorkspaceKey,
   parseWorkspaceKey,
   worktreeWorkspaceKey
@@ -4128,33 +4129,44 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   },
 
   setWorktreesPinnedAndReveal: (worktreeIds, isPinned) => {
+    // Only follow a toggled row with the viewport when it's the focused
+    // worktree; pinning/unpinning an unfocused card shouldn't yank the user's
+    // scroll to a row they aren't looking at.
+    const activeSidebarWorktreeId = getActiveSidebarWorkspaceId(
+      get().activeWorkspaceKey,
+      get().activeWorktreeId
+    )
     // Skip worktrees already in the target state so a no-op toggle doesn't
     // scroll the viewport away from where the user is.
     const updates = new Map<string, Partial<WorktreeMeta>>()
+    let didChange = false
     let revealWorktreeId: string | null = null
     for (const worktreeId of worktreeIds) {
       const current = get().getKnownWorktreeById(worktreeId)
       if (!current || current.isPinned === isPinned) {
         continue
       }
+      didChange = true
       const workspaceScope = parseWorkspaceKey(worktreeId)
       if (workspaceScope?.type === 'folder') {
         void get().updateWorktreeMeta(worktreeId, { isPinned })
       } else {
         updates.set(worktreeId, { isPinned })
       }
-      if (revealWorktreeId === null) {
+      if (revealWorktreeId === null && worktreeId === activeSidebarWorktreeId) {
         revealWorktreeId = worktreeId
       }
     }
-    if (revealWorktreeId === null) {
+    if (!didChange) {
       return
     }
     // updateWorktreesMeta applies its store update synchronously (only the
     // persistence is async), so the reveal below resolves against a render
     // where the shortcut row already exists.
     void get().updateWorktreesMeta(updates)
-    get().revealWorktreeInSidebar(revealWorktreeId, { behavior: 'smooth', highlight: true })
+    if (revealWorktreeId !== null) {
+      get().revealWorktreeInSidebar(revealWorktreeId, { behavior: 'smooth', highlight: true })
+    }
   },
 
   markWorktreeUnread: (worktreeId) => {
