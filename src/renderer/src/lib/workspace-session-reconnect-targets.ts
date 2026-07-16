@@ -12,9 +12,13 @@ export function buildActiveConnectionIdsAtShutdown(
 ): WorkspaceSessionState['activeConnectionIdsAtShutdown'] {
   // Why: sshConnectionStates is a Map<string, SshConnectionState>, not a plain
   // object. Object.entries() on a Map returns [] — must use Array.from().
+  // Runtime-owned states are normally never broadcast to the renderer, but a
+  // pane-level optimistic write could stamp one; exclude them here too.
   const targetIds = new Set(
     Array.from(snapshot.sshConnectionStates.entries())
-      .filter(([, state]) => state.status === 'connected')
+      .filter(
+        ([targetId, state]) => state.status === 'connected' && !isRuntimeOwnedSshTargetId(targetId)
+      )
       .map(([targetId]) => targetId)
   )
 
