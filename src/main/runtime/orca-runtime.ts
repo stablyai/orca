@@ -12451,7 +12451,7 @@ export class OrcaRuntimeService {
         this.store.deleteProjectGroup?.(group.id)
       }
     }
-    this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCache()
     this.notifyReposChanged()
     const rootGroup = groupResolver.getRootGroup()
     return {
@@ -12531,7 +12531,7 @@ export class OrcaRuntimeService {
         const adopted =
           this.store.updateRepo(existing.id, { executionHostId }) ??
           ({ ...existing, executionHostId } as Repo)
-        this.invalidateResolvedWorktreeCache()
+        this.invalidateWorktreeScanCache()
         this.notifyReposChanged()
         return adopted
       }
@@ -12557,7 +12557,7 @@ export class OrcaRuntimeService {
     }
     this.store.addRepo(repo)
     await prepareLocalWorktreeRootForRepo(this.store, repo)
-    this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCache()
     this.notifyReposChanged()
     return this.store.getRepo(repo.id) ?? repo
   }
@@ -12678,7 +12678,7 @@ export class OrcaRuntimeService {
     this.store.addRepo(repo)
     await prepareLocalWorktreeRootForRepo(this.store, repo)
     invalidateAuthorizedRootsCache()
-    this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCache()
     this.notifyReposChanged()
     return { repo: this.store.getRepo(repo.id) ?? repo }
   }
@@ -12821,7 +12821,7 @@ export class OrcaRuntimeService {
         if (updated) {
           await prepareLocalWorktreeRootForRepo(this.store, updated)
           invalidateAuthorizedRootsCache()
-          this.invalidateResolvedWorktreeCache()
+          this.invalidateWorktreeScanCache()
           this.notifyReposChanged()
           return updated
         }
@@ -12845,7 +12845,7 @@ export class OrcaRuntimeService {
     this.store.addRepo(repo)
     await prepareLocalWorktreeRootForRepo(this.store, repo)
     invalidateAuthorizedRootsCache()
-    this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCache()
     this.notifyReposChanged()
     return this.store.getRepo(repo.id) ?? repo
   }
@@ -12923,7 +12923,11 @@ export class OrcaRuntimeService {
       await prepareLocalWorktreeRootForRepo(this.store, updated)
       invalidateAuthorizedRootsCache()
     }
-    this.invalidateResolvedWorktreeCache()
+    if ('worktreeBasePath' in updates) {
+      this.invalidateWorktreeScanCache()
+    } else {
+      this.invalidateResolvedWorktreeCache()
+    }
     this.notifyReposChanged()
     return updated
   }
@@ -12934,7 +12938,7 @@ export class OrcaRuntimeService {
     }
     const repo = await this.resolveRepoSelector(repoSelector)
     this.store.removeProject(repo.id)
-    this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCache()
     invalidateAuthorizedRootsCache()
     this.notifyReposChanged()
     return { removed: true }
@@ -16030,7 +16034,7 @@ export class OrcaRuntimeService {
       console.warn(`[hooks] ${warning}`)
     }
 
-    this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCache()
     // Why: the filesystem-auth layer maintains a separate cache of registered
     // worktree roots used by git IPC handlers (branchCompare, diff, status, etc.)
     // to authorize paths. Without invalidating it here, CLI-created worktrees
@@ -16343,7 +16347,7 @@ export class OrcaRuntimeService {
       result.worktree.comment = args.comment
     }
 
-    this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCache()
     this.notifyWorktreesChanged(repo.id)
 
     let warning = result.warning
@@ -17034,6 +17038,10 @@ export class OrcaRuntimeService {
     }
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     const { lineage, ...metaUpdates } = updates
+    if (lineage?.parentWorktree) {
+      this.invalidateResolvedWorktreeCache()
+      this.invalidateWorktreeScanCacheForRepo(worktree.repoId)
+    }
     const shouldClearPushTarget =
       Object.prototype.hasOwnProperty.call(metaUpdates, 'pushTarget') &&
       metaUpdates.pushTarget === null
@@ -17752,7 +17760,7 @@ export class OrcaRuntimeService {
           this.clearOptimisticReconcileToken(removalTarget.id)
           this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
           this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
-          this.invalidateResolvedWorktreeCache()
+          this.invalidateWorktreeScanCache()
           invalidateAuthorizedRootsCache()
           this.notifyWorktreesChanged(repo.id)
           return {}
@@ -17797,7 +17805,7 @@ export class OrcaRuntimeService {
             this.clearOptimisticReconcileToken(removalTarget.id)
             this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
             this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
-            this.invalidateResolvedWorktreeCache()
+            this.invalidateWorktreeScanCache()
             invalidateAuthorizedRootsCache()
             this.notifyWorktreesChanged(repo.id)
             return {}
@@ -17830,7 +17838,7 @@ export class OrcaRuntimeService {
           this.clearOptimisticReconcileToken(removalTarget.id)
           this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
           this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
-          this.invalidateResolvedWorktreeCache()
+          this.invalidateWorktreeScanCache()
           invalidateAuthorizedRootsCache()
           this.notifyWorktreesChanged(repo.id)
           return {}
@@ -17880,7 +17888,7 @@ export class OrcaRuntimeService {
         )
         this.clearOptimisticReconcileToken(removalTarget.id)
         this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
-        this.invalidateResolvedWorktreeCache()
+        this.invalidateWorktreeScanCache()
         invalidateAuthorizedRootsCache()
         this.notifyWorktreesChanged(repo.id)
         return removalResult ?? {}
@@ -17921,7 +17929,7 @@ export class OrcaRuntimeService {
         )
         this.clearOptimisticReconcileToken(removalTarget.id)
         this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
-        this.invalidateResolvedWorktreeCache()
+        this.invalidateWorktreeScanCache()
         invalidateAuthorizedRootsCache()
         this.notifyWorktreesChanged(repo.id)
         return removalResult ?? {}
@@ -18100,7 +18108,7 @@ export class OrcaRuntimeService {
       )
       this.clearOptimisticReconcileToken(removalTarget.id)
       this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
-      this.invalidateResolvedWorktreeCache()
+      this.invalidateWorktreeScanCache()
       invalidateAuthorizedRootsCache()
       this.notifyWorktreesChanged(repo.id)
       return {
@@ -20828,8 +20836,18 @@ export class OrcaRuntimeService {
   private invalidateResolvedWorktreeCache(): void {
     this.resolvedWorktreeGeneration += 1
     this.resolvedWorktreeCache = null
+  }
+
+  private invalidateWorktreeScanCache(): void {
+    this.invalidateResolvedWorktreeCache()
     this.worktreeScanCache.clear()
     this.worktreeScanInFlight.clear()
+  }
+
+  private invalidateWorktreeScanCacheForRepo(repoId: string): void {
+    this.worktreeScanGenerations.set(repoId, (this.worktreeScanGenerations.get(repoId) ?? 0) + 1)
+    this.worktreeScanCache.delete(repoId)
+    this.worktreeScanInFlight.delete(repoId)
   }
 
   private invalidateSshWorktreeScanCacheInternal(targetId: string): void {
@@ -20858,7 +20876,7 @@ export class OrcaRuntimeService {
    *  out-of-band branch change (e.g. auto-rename-from-work) so the new branch
    *  name surfaces without waiting for the next ambient refresh. */
   notifyBranchRenamed(repoId: string): void {
-    this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCache()
     this.notifyWorktreesChanged(repoId)
   }
 
@@ -20866,7 +20884,7 @@ export class OrcaRuntimeService {
    *  renderer re-keys its worktree-scoped state instead of treating the id change
    *  (from a folder rename) as a deletion. Same channel = guaranteed ordering. */
   notifyWorktreeFolderRenamed(repoId: string, oldWorktreeId: string, newWorktreeId: string): void {
-    this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCache()
     this.notifier?.worktreesChanged(repoId, { oldWorktreeId, newWorktreeId })
     // Mirror notifyBranchRenamed so in-process onClientEvent listeners also see the rename.
     this.emitClientEvent({ type: 'worktreesChanged', repoId })

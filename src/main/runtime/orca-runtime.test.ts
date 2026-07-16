@@ -25258,6 +25258,26 @@ describe('OrcaRuntimeService', () => {
     expect(listWorktrees).toHaveBeenCalledTimes(2)
   })
 
+  it('worktree scan cache: metadata invalidation preserves raw scans', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const runtime = createRuntime()
+    await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+    runtime.notifyWorktreesChangedForRemoteClients(TEST_REPO_ID)
+    await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+
+    expect(listWorktrees).toHaveBeenCalledTimes(1)
+  })
+
+  it('worktree scan cache: folder metadata invalidation preserves raw scans', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const runtime = createRuntime()
+    await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+    runtime.notifyFolderWorkspaceChanged()
+    await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+
+    expect(listWorktrees).toHaveBeenCalledTimes(1)
+  })
+
   it('worktree scan cache: expires scans per repo without coupling sibling repos', async () => {
     vi.mocked(listWorktrees).mockClear()
     vi.useFakeTimers({ now: 0 })
