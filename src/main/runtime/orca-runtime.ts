@@ -349,7 +349,6 @@ import {
   buildHeadlessTabGroupSplit
 } from './headless-tab-group-split-layout'
 import { RuntimeEmulatorCommands, setEmulatorBridge } from './orca-runtime-emulator'
-import { serveSimStateWatcher } from '../emulator/serve-sim-state-watcher'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import { RuntimeFileCommands } from './orca-runtime-files'
 import { RuntimeGitCommands } from './orca-runtime-git'
@@ -5882,7 +5881,6 @@ export class OrcaRuntimeService {
     // `Network: https://local.example.com:3001/`) so the workspace ports
     // panel can surface them in place of the kernel bind address.
     advertisedUrlWatcher.ingest(ptyId, data, at)
-    serveSimStateWatcher.ingestPtyOutput(ptyId, data)
     // Why: reply ownership is captured per chunk, here at ingestion — the
     // same module state and tick as the hidden-gate drop sites — and rides
     // the writeChain link. A mark/setting/subscriber flip before the queued
@@ -8705,7 +8703,6 @@ export class OrcaRuntimeService {
 
   onPtyExit(ptyId: string, exitCode: number): void {
     advertisedUrlWatcher.unbindPty(ptyId)
-    serveSimStateWatcher.unbindPty(ptyId)
     // Clean up new mobile state for this PTY
     this.mobileSubscribers.delete(ptyId)
     this.remoteTerminalViewSubscriberCounts.delete(ptyId)
@@ -17608,7 +17605,6 @@ export class OrcaRuntimeService {
     // purge history and process-local caches before the ID points at new state.
     store.removeWorktreeMeta(worktreeId)
     advertisedUrlWatcher.forgetWorktree(worktreeId)
-    serveSimStateWatcher.forgetWorktree(worktreeId)
     deleteWorktreeHistoryDir(worktreeId)
     this.closeHeadlessBrowserPagesForWorktree(worktreeId)
   }
@@ -21084,7 +21080,6 @@ export class OrcaRuntimeService {
       // Why: restored/controller-discovered PTYs learn their worktree here
       // without registerPty(), so URL enrichment must bind at this source.
       advertisedUrlWatcher.bindPty(ptyId, worktreeId)
-      serveSimStateWatcher.bindPty(ptyId, worktreeId)
       return pty
     }
 
@@ -21120,7 +21115,6 @@ export class OrcaRuntimeService {
     // Why: recordPtyWorktree is the common lifecycle point for every path that
     // resolves a PTY's worktree, including renderer restore and controller list.
     advertisedUrlWatcher.bindPty(ptyId, worktreeId)
-    serveSimStateWatcher.bindPty(ptyId, worktreeId)
     return pty
   }
 
@@ -21233,8 +21227,6 @@ export class OrcaRuntimeService {
   }
 
   private dropDisconnectedPtyRecord(ptyId: string): void {
-    // Why: pruning can remove a PTY without the normal exit callback.
-    serveSimStateWatcher.unbindPty(ptyId)
     this.ptysById.delete(ptyId)
     this.recentPtyOutputById.delete(ptyId)
     this.clearWaitBlockedCheckState(ptyId)
@@ -25725,18 +25717,6 @@ export class OrcaRuntimeService {
     this.emulatorCommands.emulatorLogcat.bind(this.emulatorCommands)
   emulatorUnregisterActive: RuntimeEmulatorCommands['emulatorUnregisterActive'] =
     this.emulatorCommands.emulatorUnregisterActive.bind(this.emulatorCommands)
-
-  // Why: serve-sim-state-watcher runs from main/index.ts startup; keep window IPC behind runtime (getAuthoritativeWindow is private).
-  notifyEmulatorAutoAttachFromWatcher(
-    worktreeId: string,
-    info: { deviceUdid: string; streamUrl: string; wsUrl: string; axUrl?: string }
-  ): void {
-    try {
-      this.getAuthoritativeWindow().webContents.send('ui:emulatorAutoAttach', { worktreeId, info })
-    } catch {
-      // Window may not exist during shutdown
-    }
-  }
 
   private getAuthoritativeWindow(): BrowserWindow {
     const win = this.getAvailableAuthoritativeWindow()

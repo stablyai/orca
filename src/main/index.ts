@@ -163,7 +163,6 @@ import {
 } from './ipc/pty'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
 import { EmulatorBridge } from './emulator/emulator-bridge'
-import { serveSimStateWatcher } from './emulator/serve-sim-state-watcher'
 import { browserManager } from './browser/browser-manager'
 import { OffscreenBrowserBackend } from './browser/offscreen-browser-backend'
 import { initializeBrowserSessionsForApp } from './browser/browser-session-startup'
@@ -2032,16 +2031,10 @@ app.whenReady().then(async () => {
   )
 
   // Emulator bridge (serve-sim). macOS-only feature (gated in CLI/runtime); always ship like agent-browser.
+  // Why: only Orca-managed or explicitly attached helpers belong to a workspace;
+  // externally started serve-sim processes must remain independent from Orca.
   const emulatorBridge = new EmulatorBridge()
   runtimeService.setEmulatorBridge(emulatorBridge)
-  serveSimStateWatcher.start()
-  serveSimStateWatcher.onDetected(({ worktreeId, info }) => {
-    runtimeService.getEmulatorBridge()?.registerActiveEmulator(worktreeId, info, {
-      managed: false
-    })
-    serveSimStateWatcher.markOrcaManaged(info)
-    runtimeService.notifyEmulatorAutoAttachFromWatcher(worktreeId, info)
-  })
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
   if (shouldInstallManagedHooks(is.dev)) {
     // Why: the persisted off switch must run before any auto-install path so
@@ -2401,7 +2394,6 @@ app.on('will-quit', (e) => {
   // down explicitly on quit alongside the other browser/session shutdowns.
   runtime?.getOffscreenBrowserBackend()?.destroyAll?.()
   const emulatorShutdown = runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
-  serveSimStateWatcher.stop()
   killAllPty()
   const watcherShutdown = shutdownWatchersOnce()
   store?.flush()
