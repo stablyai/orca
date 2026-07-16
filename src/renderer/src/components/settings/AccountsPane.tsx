@@ -36,7 +36,8 @@ import {
   GeminiIcon,
   MiniMaxIcon,
   OpenAIIcon,
-  OpenCodeGoIcon
+  OpenCodeGoIcon,
+  ZaiIcon
 } from '../status-bar/icons'
 import { toast } from 'sonner'
 import {
@@ -46,6 +47,7 @@ import {
   getAccountsLocationSearchEntries,
   getAccountsGrokSearchEntries,
   getAccountsMiniMaxSearchEntries,
+  getAccountsZaiSearchEntries,
   getAccountsOpencodeSearchEntries,
   getAccountsPaneSearchEntries
 } from './accounts-search'
@@ -88,6 +90,7 @@ export { getAccountsPaneSearchEntries }
 
 const EMPTY_WSL_DISTROS: string[] = []
 const MINIMAX_CONSOLE_URL = 'https://platform.minimax.io/console/usage'
+const ZAI_CONSOLE_URL = 'https://z.ai/manage-apikey'
 
 function formatMiniMaxRelativeRefresh(updatedAt: number, now: number): string {
   const diffMs = Math.max(0, now - updatedAt)
@@ -326,6 +329,7 @@ export function AccountsPane({
   const codexRateLimits = useAppStore((s) => s.rateLimits.codex)
   const codexRateLimitTarget = useAppStore((s) => s.rateLimits.codexTarget)
   const miniMaxRateLimits = useAppStore((s) => s.rateLimits.minimax)
+  const zaiRateLimits = useAppStore((s) => s.rateLimits.zai)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
@@ -333,6 +337,9 @@ export function AccountsPane({
   const [miniMaxCookieDraft, setMiniMaxCookieDraft] = useState('')
   const [miniMaxConfigured, setMiniMaxConfigured] = useState(false)
   const [miniMaxCredentialBusy, setMiniMaxCredentialBusy] = useState(false)
+  const [zaiApiKeyDraft, setZaiApiKeyDraft] = useState('')
+  const [zaiConfigured, setZaiConfigured] = useState(false)
+  const [zaiCredentialBusy, setZaiCredentialBusy] = useState(false)
   const localAccountRuntime = getSelectedAccountRuntime(
     settings,
     wslSupportedPlatform,
@@ -505,8 +512,75 @@ export function AccountsPane({
     }
   }
 
+  const refreshZaiCredentialStatus = async (): Promise<void> => {
+    try {
+      const status = await window.api.zaiCredentials.getStatus()
+      setZaiConfigured(status.configured)
+    } catch (error) {
+      console.error('Failed to load Z.ai API key status:', error)
+    }
+  }
+
+  const saveZaiApiKey = async (): Promise<void> => {
+    if (!zaiApiKeyDraft.trim()) {
+      toast.error(
+        translate('auto.components.settings.AccountsPane.zaiRequired', 'Z.ai API key is required.')
+      )
+      return
+    }
+    setZaiCredentialBusy(true)
+    try {
+      const status = await window.api.zaiCredentials.saveApiKey(zaiApiKeyDraft.trim())
+      if (!status.configured) {
+        throw new Error(
+          translate(
+            'auto.components.settings.AccountsPane.zaiNotSaved',
+            'Z.ai API key was not saved.'
+          )
+        )
+      }
+      setZaiConfigured(status.configured)
+      setZaiApiKeyDraft('')
+      recordFeatureInteraction('usage-tracking')
+      toast.success(
+        translate('auto.components.settings.AccountsPane.zaiSaved', 'Z.ai API key saved.')
+      )
+    } catch (error) {
+      toast.error(
+        translate(
+          'auto.components.settings.AccountsPane.zaiUpdateFailed',
+          'Z.ai API key update failed.'
+        ),
+        { description: String((error as Error)?.message ?? error) }
+      )
+    } finally {
+      setZaiCredentialBusy(false)
+    }
+  }
+
+  const clearZaiApiKey = async (): Promise<void> => {
+    setZaiCredentialBusy(true)
+    try {
+      const status = await window.api.zaiCredentials.clearApiKey()
+      setZaiConfigured(status.configured)
+      setZaiApiKeyDraft('')
+      recordFeatureInteraction('usage-tracking')
+    } catch (error) {
+      toast.error(
+        translate(
+          'auto.components.settings.AccountsPane.zaiUpdateFailed',
+          'Z.ai API key update failed.'
+        ),
+        { description: String((error as Error)?.message ?? error) }
+      )
+    } finally {
+      setZaiCredentialBusy(false)
+    }
+  }
+
   useEffect(() => {
     void refreshMiniMaxCredentialStatus()
+    void refreshZaiCredentialStatus()
   }, [])
 
   useEffect(() => {
@@ -1846,6 +1920,138 @@ export function AccountsPane({
             />
           </SearchableSetting>
         </div>
+      </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsZaiSearchEntries()) ? (
+      <section key="zai" id="accounts-zai" className="space-y-4 scroll-mt-6">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1">
+            <h3 className="flex items-center gap-2 text-sm font-semibold">
+              <ZaiIcon size={16} />
+              {translate('auto.components.settings.AccountsPane.zaiTitle', 'Z.ai GLM')}
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {translate(
+                'auto.components.settings.AccountsPane.zaiDescription',
+                'Configure Z.ai GLM usage tracking with an API key.'
+              )}
+            </p>
+          </div>
+          <a
+            href={ZAI_CONSOLE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            {translate('auto.components.settings.AccountsPane.openConsole', 'Open console')}
+            <ExternalLink className="size-3" />
+          </a>
+        </div>
+        <div
+          className={cn(
+            'flex items-start gap-3 rounded-lg border bg-muted/20 p-3',
+            zaiConfigured ? 'border-border/60' : 'border-border/40'
+          )}
+        >
+          <ShieldCheck
+            className={cn(
+              'mt-0.5 size-4 shrink-0',
+              zaiConfigured ? 'text-foreground' : 'text-muted-foreground'
+            )}
+          />
+          <div className="space-y-0.5">
+            <p className="text-xs font-medium">
+              {zaiConfigured
+                ? translate('auto.components.settings.AccountsPane.storedLocally', 'Stored locally')
+                : translate(
+                    'auto.components.settings.AccountsPane.apiKeyNotSet',
+                    'API key not set'
+                  )}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {translate(
+                'auto.components.settings.AccountsPane.zaiStoredCopy',
+                'Stored locally and sent only to api.z.ai for usage refreshes.'
+              )}
+            </p>
+          </div>
+        </div>
+        <SearchableSetting
+          title={translate('auto.components.settings.AccountsPane.zaiApiKeyLabel', 'Z.ai API Key')}
+          description={translate(
+            'auto.components.settings.AccountsPane.zaiApiKeyDescription',
+            'Paste your Z.ai API key for local rate-limit fetching.'
+          )}
+          keywords={['z.ai', 'glm', 'api key', 'rate limit', 'status bar']}
+          className="space-y-2"
+        >
+          <div className="flex items-center gap-2">
+            <Label>
+              {translate('auto.components.settings.AccountsPane.zaiApiKeyLabel', 'Z.ai API Key')}
+            </Label>
+            <Badge
+              variant={zaiConfigured ? 'secondary' : 'outline'}
+              className="h-5 gap-1 rounded-full px-2 text-[10px] font-medium text-muted-foreground"
+            >
+              {zaiConfigured ? <Lock className="size-3" /> : <LockOpen className="size-3" />}
+              {zaiConfigured
+                ? translate('auto.components.settings.AccountsPane.73ea15f24b', 'Saved')
+                : translate('auto.components.settings.AccountsPane.23afe8f226', 'Not saved')}
+            </Badge>
+          </div>
+          <div className="flex gap-2">
+            <Input
+              type="password"
+              value={zaiApiKeyDraft}
+              onChange={(e) => setZaiApiKeyDraft(e.target.value)}
+              placeholder={translate(
+                'auto.components.settings.AccountsPane.zaiApiKeyPlaceholder',
+                'Enter API key'
+              )}
+              spellCheck={false}
+              className="flex-1 text-xs"
+            />
+            <Button
+              size="xs"
+              onClick={() => void saveZaiApiKey()}
+              disabled={zaiCredentialBusy || !zaiApiKeyDraft.trim()}
+              className="h-7 shrink-0 text-xs"
+            >
+              {zaiCredentialBusy ? <Loader2 className="size-3 animate-spin" /> : null}
+              {zaiConfigured
+                ? translate('auto.components.settings.AccountsPane.f38b9cc4bd', 'Replace')
+                : translate('auto.components.settings.AccountsPane.590a3130f9', 'Save')}
+            </Button>
+            {zaiConfigured ? (
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => void clearZaiApiKey()}
+                disabled={zaiCredentialBusy}
+                className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
+              >
+                {translate('auto.components.settings.AccountsPane.zaiForget', 'Forget key')}
+              </Button>
+            ) : null}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.settings.AccountsPane.zaiConsoleCopy',
+              'Create or manage API keys in the official Z.ai console.'
+            )}
+          </p>
+          {zaiConfigured && zaiRateLimits?.status === 'ok' && zaiRateLimits.error === null ? (
+            <p className="text-xs text-muted-foreground">
+              {translate(
+                'auto.components.settings.AccountsPane.53f7b8c7a2',
+                'Last refresh: {{value0}}',
+                {
+                  value0: formatMiniMaxRelativeRefresh(zaiRateLimits.updatedAt, Date.now())
+                }
+              )}
+            </p>
+          ) : null}
+        </SearchableSetting>
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
