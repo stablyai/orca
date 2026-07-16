@@ -71,6 +71,7 @@ import { getShortcutsPaneSearchEntries } from '@/components/settings/shortcuts-s
 import { getStatsPaneSearchEntries } from '@/components/stats/stats-search'
 import { getExperimentalPaneSearchEntries } from '@/components/settings/experimental-search'
 import { getRepositoryPaneSearchEntries } from '@/components/settings/repository-search'
+import { buildSettingsProjectList } from '@/components/settings/settings-project-list'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import {
   getWindowsTerminalCapabilityOwnerKey,
@@ -130,6 +131,12 @@ export function buildSettingsNavigationMetadata({
   const runtimeEnvironmentsSearchEntry = isWebClient
     ? getWebRuntimeEnvironmentsSearchEntry()
     : getRuntimeEnvironmentsSearchEntry()
+  const reposById = new Map<string, Repo>()
+  for (const repo of repos) {
+    if (!reposById.has(repo.id)) {
+      reposById.set(repo.id, repo)
+    }
+  }
 
   return [
     // Why: this array's order must mirror SETTINGS_NAV_GROUPS so the Settings
@@ -537,16 +544,30 @@ export function buildSettingsNavigationMetadata({
       searchEntries: getExperimentalPaneSearchEntries(),
       group: 'experimental'
     },
-    ...repos.map((repo) => ({
-      id: `repo-${repo.id}`,
-      title: repo.displayName,
-      description: `${getRepoKindLabel(repo)} • ${repo.path}`,
-      icon: SlidersHorizontal,
-      searchEntries: getRepositoryPaneSearchEntries(repo, {
-        windowsRuntimeSupported: isWindowsTerminalHost
-      }),
-      group: 'repositories'
-    }))
+    // Why: one nav row per project, not per repo row — a project set up on
+    // multiple hosts (local + a Remote Orca Server, or two clones) collapses to
+    // a single entry. Derived from repos alone so this list matches the panes.
+    ...buildSettingsProjectList(repos).map(({ project, representativeRepoId, setups }) => {
+      const representativeRepo = reposById.get(representativeRepoId) ?? repos[0]
+      const hostSummary =
+        setups.length > 1
+          ? translate(
+              'auto.hooks.useSettingsNavigationMetadata.projectHostsSummary',
+              '{{value0}} hosts',
+              { value0: setups.length }
+            )
+          : (setups[0]?.path ?? representativeRepo.path)
+      return {
+        id: `repo-${representativeRepoId}`,
+        title: project.displayName,
+        description: `${getRepoKindLabel(project)} • ${hostSummary}`,
+        icon: SlidersHorizontal,
+        searchEntries: getRepositoryPaneSearchEntries(representativeRepo, {
+          windowsRuntimeSupported: isWindowsTerminalHost
+        }),
+        group: 'repositories'
+      }
+    })
   ]
 }
 

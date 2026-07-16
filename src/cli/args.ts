@@ -58,6 +58,7 @@ export const BOOLEAN_FLAGS = new Set([
   'run-hooks',
   'show-profile',
   'staged',
+  'tab',
   'tasks',
   'text-stdin',
   'unread',

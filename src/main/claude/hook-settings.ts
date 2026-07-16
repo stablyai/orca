@@ -34,8 +34,8 @@ export const CLAUDE_EVENTS = [
   { eventName: 'StopFailure', definition: { hooks: [{ type: 'command', command: '' }] } },
   // Why: subagent/teammate lifecycle feeds the sidebar's child rows and keeps
   // a pane 'working' while background children outlive the lead's turn.
-  // TeammateIdle is required because idle-but-alive teammates still report
-  // status "running" in Stop's background_tasks.
+  // TeammateIdle retires the working-only row when SubagentStop is lost;
+  // idle teammates still report status "running" in Stop's background_tasks.
   // Older Claude builds ignore unregistered event names (StopFailure precedent).
   { eventName: 'SubagentStart', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'SubagentStop', definition: { hooks: [{ type: 'command', command: '' }] } },

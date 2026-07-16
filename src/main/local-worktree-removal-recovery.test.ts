@@ -116,6 +116,28 @@ describe('recoverLocalWindowsWorktreeRemoval', () => {
     })
   })
 
+  it('does not recursively delete while watcher teardown remains unconfirmed', async () => {
+    await withPlatform('win32', async () => {
+      const watcherError = new Error('file watcher process did not exit after termination deadline')
+
+      await expect(
+        recoverLocalWindowsWorktreeRemoval({
+          error: new Error('git worktree remove failed'),
+          force: true,
+          canonicalWorktreePath: 'C:/repo/worktree/feature',
+          repoPath: 'C:/repo',
+          localWorktreeGitOptions: {},
+          registeredWorktree: { branch: 'refs/heads/feature', head: 'abc123' },
+          deleteBranch: true,
+          closeWatcher: vi.fn().mockRejectedValue(watcherError)
+        })
+      ).rejects.toBe(watcherError)
+
+      expect(removeLocalWorktreePathMock).not.toHaveBeenCalled()
+      expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    })
+  })
+
   it('recovers localized Windows failures after Git already removed the registration', async () => {
     await withPlatform('win32', async () => {
       const result = await recoverLocalWindowsWorktreeRemoval({

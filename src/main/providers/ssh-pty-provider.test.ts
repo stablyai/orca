@@ -67,6 +67,25 @@ describe('SshPtyProvider', () => {
       })
     })
 
+    it('forwards trusted agent identity for wrapped remote commands', async () => {
+      mux.request.mockResolvedValue({ id: 'pty-agent' })
+
+      await provider.spawn({
+        cols: 120,
+        rows: 40,
+        command: 'cd /repo && custom-agent-wrapper',
+        launchAgent: 'claude'
+      })
+
+      expect(mux.request).toHaveBeenCalledWith(
+        'pty.spawn',
+        expect.objectContaining({
+          command: 'cd /repo && custom-agent-wrapper',
+          launchAgent: 'claude'
+        })
+      )
+    })
+
     it('forwards pane identity as relay metadata on fresh spawn', async () => {
       mux.request.mockResolvedValue({ id: 'pty-2' })
 
@@ -486,10 +505,12 @@ describe('SshPtyProvider', () => {
   })
 
   it('listProcesses returns process list', async () => {
-    const processes = [{ id: 'pty-1', cwd: '/home', title: 'zsh' }]
+    const processes = [{ id: 'pty-1', cwd: '/home', title: 'zsh', worktreeId: 'repo::/home' }]
     mux.request.mockResolvedValue(processes)
     const result = await provider.listProcesses()
-    expect(result).toEqual([{ id: scopedPty1, cwd: '/home', title: 'zsh' }])
+    expect(result).toEqual([
+      { id: scopedPty1, cwd: '/home', title: 'zsh', worktreeId: 'repo::/home' }
+    ])
   })
 
   it('getDefaultShell returns shell path', async () => {

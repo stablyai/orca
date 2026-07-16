@@ -711,15 +711,18 @@
         "ssh",
         "runtime"
       ],
-      "coverageNotes": "A live macOS Electron test proves exact local PTY disappearance after a parked-tab close. Deterministic unit/store tests cover daemon and SSH routing, ordinary runtime close ownership, unified-only hydration, split ownership, pane detach transfer, restart alias hydration, and late-hook suppression; live Linux, Windows, WSL, SSH, and remote-runtime process evidence remains pending.",
+      "coverageNotes": "Live macOS Electron tests prove exact local PTY disappearance after parked-tab close and detached-pgid descendant death after agent close. Deterministic tests cover daemon and SSH routing, local/daemon pending-snapshot ownership across natural exit, stale-root descendant-signal suppression, graceful-to-immediate kill upgrades, duplicate-kill completion sharing, locale-stable bounded/fresh/coalesced process-table reads, deadline-safe successor scans, cycle-safe linear descendant traversal, target-only escalation indexing, 32-wide bulk teardown, source-scan timestamp identity, same-second PID ambiguity, ordinary runtime close ownership, unified-only hydration, split ownership, pane detach transfer, restart alias hydration, and late-hook suppression; live Linux, Windows, WSL, SSH, and remote-runtime process evidence remains pending.",
       "motivatingLinks": [
-        "https://github.com/stablyai/orca/pull/8628"
+        "https://github.com/stablyai/orca/pull/8628",
+        "https://github.com/stablyai/orca/pull/8706"
       ],
-      "invariant": "Close permanently removes the owned provider session and resume authority even when no TerminalPane is mounted; detach and park preserve both; aliases prevent a detached agent's immutable physical pane key from being retired with its former tab.",
-      "oracle": "Capture the exact PTY before parking, prove it remains listed while the view is absent, close through the product state boundary, and poll the provider inventory until that exact ID disappears; unit tests assert canonical owner dedupe, one teardown owner, exact pane tombstones, chained detach transfer, and restart alias restoration.",
+      "invariant": "Close permanently removes the owned provider session, agent descendants, and resume authority even when no TerminalPane is mounted; a terminating id remains reserved through natural exit, duplicate callers await the same completion, and immediate teardown upgrades any graceful request without signalling a recycled PID or a descendant tree after root ownership is lost; process-table work is locale-stable, bounded, fresh for each post-start request, same-turn coalesced, and begins within the requesting caller's deadline, including bulk worktree cleanup; detach and park preserve ownership; aliases prevent a detached agent's immutable physical pane key from being retired with its former tab.",
+      "oracle": "Capture the exact PTY before parking, prove it remains listed while the view is absent, close through the product state boundary, and poll the provider inventory until that exact ID disappears; an agent-marked PTY's detached-pgid child is alive before close and absent afterward; unit tests keep a naturally exited id reserved without re-killing its PID or signalling its captured tree, upgrade pending and post-snapshot graceful kills to immediate, force ps into the C locale, coalesce each bounded bulk-shutdown batch, share duplicate teardown completion, coalesce 20 same-turn process-table requests, start one shared successor without waiting for the prior scan, terminate cyclic-looking traversal, retain the source scan's timestamp, bound both read phases, avoid ambiguous SIGKILL, and assert canonical owner dedupe, exact pane tombstones, chained detach transfer, and restart alias restoration.",
       "commands": [
         "pnpm dlx node@24 ./node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server-pane-authority.test.ts src/main/ipc/agent-hooks.test.ts src/main/ipc/agent-pane-authority-ownership.test.ts src/main/ipc/pty-management.test.ts src/main/persistence.test.ts src/renderer/src/store/slices/agent-pane-authority.test.ts src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts src/renderer/src/store/slices/terminal-tab-retirement.test.ts src/renderer/src/store/slices/terminal-tab-retirement-store.test.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
-        "pnpm run test:e2e -- tests/e2e/terminal-parked-close-retirement.spec.ts --workers=1"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/pty-descendant-termination.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/providers/local-pty-provider.test.ts src/main/runtime/worktree-teardown.test.ts",
+        "pnpm run test:e2e -- tests/e2e/terminal-parked-close-retirement.spec.ts --workers=1",
+        "pnpm run test:e2e -- tests/e2e/agent-descendant-process-kill.spec.ts --workers=1"
       ],
       "testFiles": [
         "src/main/agent-hooks/server-pane-authority.test.ts",
@@ -727,12 +730,18 @@
         "src/main/ipc/agent-pane-authority-ownership.test.ts",
         "src/main/ipc/pty-management.test.ts",
         "src/main/persistence.test.ts",
+        "src/main/pty-descendant-termination.test.ts",
+        "src/main/daemon/session.test.ts",
+        "src/main/daemon/terminal-host.test.ts",
+        "src/main/providers/local-pty-provider.test.ts",
+        "src/main/runtime/worktree-teardown.test.ts",
         "src/renderer/src/store/slices/agent-pane-authority.test.ts",
         "src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts",
         "src/renderer/src/store/slices/terminal-tab-retirement.test.ts",
         "src/renderer/src/store/slices/terminal-tab-retirement-store.test.ts",
         "src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
-        "tests/e2e/terminal-parked-close-retirement.spec.ts"
+        "tests/e2e/terminal-parked-close-retirement.spec.ts",
+        "tests/e2e/agent-descendant-process-kill.spec.ts"
       ],
       "assertionRefs": [
         {
@@ -754,6 +763,39 @@
             "exact pane retirement removes resume and launch authority while preserving siblings",
             "chained detach keeps physical hooks and resume authority routed to the current owner until that owner closes"
           ]
+        },
+        {
+          "file": "src/main/pty-descendant-termination.test.ts",
+          "assertions": [
+            "20 same-turn process-table requests execute one fresh scan while later arrivals start one shared successor inside their own deadline",
+            "snapshot and escalation readers stop at their deadline",
+            "production ps reads force locale-independent C timestamps",
+            "the source scan timestamp survives request resolution and capture-second identities are never escalated with SIGKILL",
+            "cyclic-looking duplicate PID rows terminate with each descendant visited once and duplicate escalation identities stay unsignalled",
+            "descendant signals are suppressed after the caller loses root ownership"
+          ]
+        },
+        {
+          "file": "src/main/daemon/terminal-host.test.ts",
+          "assertions": [
+            "agent immediate kill rejects reattach while descendant capture is pending",
+            "a naturally exited session id remains reserved until capture finishes without force-killing its retired PID",
+            "graceful teardown upgrades to immediate both during and after descendant capture",
+            "duplicate immediate kill starts one descendant sweep"
+          ]
+        },
+        {
+          "file": "src/main/runtime/worktree-teardown.test.ts",
+          "assertions": [
+            "owned provider shutdowns start together so process-table snapshots can coalesce within a batch",
+            "inventories above 32 sessions never exceed 32 concurrent provider shutdowns"
+          ]
+        },
+        {
+          "file": "tests/e2e/agent-descendant-process-kill.spec.ts",
+          "assertions": [
+            "a detached-pgid descendant is alive before agent PTY kill and absent afterward"
+          ]
         }
       ],
       "evidenceRuns": [
@@ -765,11 +807,29 @@
           "result": "passed",
           "durationSeconds": 40.3,
           "summary": "A fresh E2E build launched an isolated Electron profile, parked a live terminal, closed it through closeTab, and observed its exact PTY disappear."
+        },
+        {
+          "date": "2026-07-14",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run test:e2e -- tests/e2e/agent-descendant-process-kill.spec.ts --workers=1",
+          "result": "passed",
+          "durationSeconds": 37.7,
+          "summary": "A current-main integrated fresh-build run proved a detached-pgid child was alive before agent PTY kill and absent afterward on the deadline-safe, root-ownership-gated implementation."
+        },
+        {
+          "date": "2026-07-15",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run test:e2e -- tests/e2e/agent-descendant-process-kill.spec.ts --workers=1",
+          "result": "passed",
+          "durationSeconds": 78,
+          "summary": "The cycle-safe, target-indexed, bounded-fanout review head passed from a cold full build; the live detached-pgid descendant test body completed in 4.8 seconds."
         }
       ],
       "runtimeBudget": {
         "p95Seconds": 60,
-        "scope": "fresh E2E build plus one isolated local Electron parked-close test"
+        "scope": "fresh E2E build plus isolated local Electron parked-close and descendant-kill tests"
       },
       "flakeHistory": {
         "status": "unknown",
@@ -780,8 +840,8 @@
         "evidence": "The test exercises the original parked-view failure shape and passed with the retirement boundary; an archived intentional-break run is not yet attached."
       },
       "performanceBudget": {
-        "required": false,
-        "evidence": "The close path is user-triggered and bounded by canonical live-owner indexing; kill-all scale remains covered by terminal-session.kill-all-surface-cleanup."
+        "required": true,
+        "evidence": "The close path is user-triggered and bounded by canonical live-owner indexing. Production ps has a 1s kill timeout; 20 same-turn requests execute one fresh process-table read, while requests arriving after a scan starts immediately share one successor so their deadline is not consumed waiting and no unusable ps starts after timeout. Completed tables are never reused. Bulk worktree shutdown runs in 32-wide batches so each batch can coalesce its initial scan without unbounded provider fanout. Descendant traversal uses a visited set and index cursor; a Node 24 local 100,000-wide synthetic tree fell from 861ms to 16.7ms, and escalation indexes only the requested descendant PIDs instead of duplicating the full process table. Escalation uses the same bounded coordinator, and kill-all store scale remains covered by terminal-session.kill-all-surface-cleanup."
       },
       "promotionCriteria": [
         "Accumulate 100 clean runs or 14 days on required CI platforms.",
@@ -791,7 +851,10 @@
       "knownGaps": [
         "The live Electron proof currently covers macOS local PTYs only.",
         "Disconnected SSH relay death still requires reconnect-aware provider ownership.",
-        "Daemon owner leases and durable retry inventory remain follow-up hardening."
+        "Daemon owner leases and durable retry inventory remain follow-up hardening.",
+        "Windows ConPTY, SSH-hosted PTYs, app-quit killAll, and daemon dispose retain foreground-tree-only teardown.",
+        "A process born in the capture second is SIGTERMed but not SIGKILLed because ps cannot prove its recycled-PID identity.",
+        "A descendant orphaned before or during root ownership loss requires the separate crash-orphan sweep and is not recovered from a stale kill-time snapshot."
       ],
       "demotionRule": "Keep experimental or demote to protection none if exact PTY disappearance flakes, a sibling/detached pane is retired, or late hooks can recreate closed authority."
     },
@@ -4290,37 +4353,84 @@
         "remote-runtime",
         "ssh"
       ],
-      "coverageNotes": "Deterministic tests cover a four-child healthy runtime pool, a one-child healthy SSH relay pool, and at most four bounded quarantine children, with one quarantine attempt per watch lifetime, queue-aware cancellation, bounded initial and crash-resubscribe crawls, physical desktop-install abort, stale-generation rejection, per-child stat bounds, final-overflow RPC delivery, and renderer eviction before terminal callbacks can retry. The relay policy test maps a standard repository's base, Git common directory, and worktree roots to one healthy supervisor, then proves a shared-child failure recovers those roots in separate quarantine supervisors with overflow and resumed events. A built-entry macOS harness drives the real supervisor, kills its child with SIGSEGV, then requires automatic resubscription and a later event. SSH bundles the same child boundary beside relay.js, requires both artifacts for install completeness, and preserves registration-owned same-root cancellation. A built-relay harness kills that child and requires the original relay PID and existing PTY to survive before overflow and precise events resume.",
+      "coverageNotes": "Deterministic tests cover one shared healthy child per runtime process plus at most four bounded fault-quarantine children, native desktop, paired-runtime, and WSL snapshot processes sharing the same eight-physical-child reservation with typed serialized event-driven capacity recovery, including recursive re-wait when crash recovery reclaims an announced slot, one quarantine attempt per watch lifetime, generation-scoped cancellation, bounded termination with removable deadline waiters, replacement-crawl errors that cannot be blessed by a late readiness ack, pre-ready paired-web cancellation registered before an unbounded capacity wait, already-resolved and late physical-exit retry of a rejected paired-web teardown, physical desktop-install and local/SSH PTY teardown, stale-generation rejection, per-child stat bounds, final-overflow RPC delivery, and renderer eviction before terminal callbacks can retry. Destructive local and SSH removal fences both ID-derived and resolved-cwd terminal roots, including sibling-root/cwd combinations with reverse admission rollback, closes descendant relay watches before parent deletion, enumerates authoritative provider/cwd ownership, falls back to daemon spawn cwd before OSC 7, and keeps daemon/relay immediate shutdown pending until native exit or a bounded fail-closed error; a dead relay PID discovered during attach also settles concurrent shutdown before its stale entry is reaped, while Windows runtime watcher deadlines retain one removable physical-close waiter, treat Node's error-close path as positive physical-exit proof, and clear root ownership on late close. The relay policy test maps a standard repository's base, Git common directory, and worktree roots to one healthy supervisor, then proves a shared-child failure recovers those roots in separate quarantine supervisors with overflow and resumed events. Abortable capacity, quarantine, runtime-root, relay, SSH, and relay pre-install setup waits attach one reaction to each shared promise and explicitly remove 10,000 cancelled caller closures while one anchor remains. Built-entry macOS harnesses kill the desktop/runtime and SSH relay watcher children, then require automatic resubscription and later events while the host process and relay PTY survive. SSH bundles the child boundary beside relay.js, requires both artifacts for install completeness, and preserves registration-owned same-root cancellation.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/5308",
         "https://github.com/stablyai/orca/issues/7547",
         "https://github.com/stablyai/orca/issues/8212"
       ],
-      "invariant": "Local runtime roots use at most four shared watcher children while healthy, while each SSH relay process uses at most one; either pool uses at most four additional quarantine children after shard failure. Cancelling queued setup removes only that request; cancelling an active crawl restarts one shard and restores its healthy records. Setup deadlines start only when the child owns the crawl; the runtime RPC transport owns the normal 15-second initial budget, while a 60-second recovery deadline quarantines a root that would otherwise pin its shard. A crash-fused shared shard moves affected roots into the bounded quarantine pool, and a second fused quarantine ends those watch lifetimes instead of spawning replacements indefinitely. Every interrupted setup emits overflow after recovery, event delivery stays bounded, and each SSH target's relay, PTYs, Git, and other filesystem operations remain isolated from other targets and never load the watcher native addon or share its fault boundary.",
-      "oracle": "Fill the four-child healthy runtime pool with multiple roots, and map a standard SSH repository's base, Git common directory, and worktree roots to one relay supervisor. Inject IPC disconnect-before-exit, queued and active setup cancellation, initial and crash-resubscribe timeouts, and shard-level terminal failure, then assert healthy roots are restored, affected roots spread across no more than four quarantine supervisors, a second quarantine fuse creates no replacement, stale generations stop delivering, and existing same-root clients receive overflow plus later events without error/end. Abort a pending desktop install and require worktree close and app shutdown to settle before the native crawl resolves. Verify relay build hashes and remote install probes require both relay.js and relay-watcher.js. Launch the built relay with a real PTY and Parcel watch, kill only the watcher child, and require the same relay PID and PTY to answer before a replacement child delivers overflow and a post-crash event.",
+      "invariant": "Local runtime and SSH relay roots share one watcher child per host process while healthy and use at most four quarantine children after shard failure; native desktop, paired-runtime, and direct WSL snapshot children consume the same process-wide eight-child reservation and retry transient exhaustion without permanently disabling a root. Cancellation remains owned by its child generation and settles only after acknowledgement or bounded physical exit; paired-web retains cleanup ownership and can cancel before readiness even while capacity is exhausted, retries a failed unwatch after already-resolved or late physical exit without duplicating stream termination, replacements never overlap a still-retiring generation, and aborted or timed-out callers detach immediately even while queued behind same-root relay teardown. Destructive local and SSH cleanup holds one containment-aware watcher/terminal removal fence through descendant watcher and PTY physical exit plus parent Git/filesystem deletion; daemon and relay kill requests retain ownership until the actual subprocess exit callback or an equivalent positive dead-PID proof and propagate rejected signals or a bounded failure otherwise. A crash-fused shared shard moves affected roots into the bounded quarantine pool, a second fused quarantine ends those watch lifetimes, interrupted setup emits overflow after recovery, metadata work stays bounded, and the SSH relay, PTYs, Git, and other filesystem operations never load the watcher native addon or share its fault boundary.",
+      "oracle": "Fill the global watcher-child reservation, require native desktop, paired-runtime, and WSL setup to retain typed transient capacity and retry after one serialized release, then cancel pending desktop and paired-client watches and require no retry. Hold one live anchor while aborting 10,000 callers at the capacity, quarantine-assignment, runtime-root, relay-setup, and SSH-registration layers; require exactly one explicit waiter and one base-promise reaction to remain, then zero after settlement. Hold an old relay unsubscribe, queue one same-root setup leader and one anchor, then abort 10,000 joiners; require every cancellation to settle before teardown releases, exactly one anchor waiter, and only one later physical install. Advance the former paired-web callback deadline while capacity remains full, require cancellation ownership to stay live, publish the server token before ready, and require files.unwatch to abort setup before a later slot release can install a native root. Reject the first ready-watch unwatch with a physical-exit promise, resolve that exit later, and require a fresh physical unwatch attempt, registry release, and exactly one stream end. Fill one healthy shared child with multiple roots, map a standard SSH repository's base, Git common directory, and worktree roots to one relay supervisor, then inject IPC disconnect-before-exit, queued and active cancellation, operations during termination, kill-without-exit, repeated unkillable generations, initial and recovery timeouts, and shard failure. During local and SSH deletion, attempt a late terminal spawn whose worktree identity and cwd name different roots, enumerate a non-prefix remote PTY by authoritative worktree ownership, withhold daemon/relay exit callbacks, make attach positively prove a concurrent-shutdown PID dead, and make the provider unavailable; require every acquired admission to roll back on rejection, dead-PID proof to settle physical exit before reaping, timeout to retain ownership, and Git/filesystem deletion never to start. Require bounded watcher process count, physical-exit settlement, healthy-root recovery, stale-generation rejection, overflow plus later events, and fail-closed destructive cleanup. Verify relay build hashes and remote install probes require both relay.js and relay-watcher.js. Launch the built relay with a real PTY and Parcel watch, kill only the watcher child, and require the same relay PID and PTY to answer before a replacement child delivers overflow and a post-crash event.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/providers/ssh-filesystem-provider.test.ts src/renderer/src/runtime/runtime-file-client.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/files-watch-cleanup.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-watcher-pending-setup-waiters.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-watcher-parent-removal.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-unsubscribe-timeout.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher.test.ts src/main/ipc/filesystem-watcher-native-capacity.test.ts src/main/ipc/parcel-watcher-child-registry.test.ts src/main/ipc/parcel-watcher-child-launch.test.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-supervisor-capacity-wait.test.ts src/main/ipc/parcel-watcher-supervisor-capacity.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-pending-assignment.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/runtime/rpc/methods/files-watch-cancellation.test.ts src/main/providers/ssh-filesystem-provider-watch-waiters.test.ts src/main/providers/ssh-filesystem-provider.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/shared/physical-exit-tracker.test.ts src/shared/promise-settlement-waiters.test.ts src/main/ipc/pty.test.ts src/main/providers/local-pty-provider.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/pty-subprocess.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts src/relay/relay-watcher-setup-wait.test.ts src/relay/pty-handler.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher.test.ts src/main/ipc/filesystem-watcher-native-capacity.test.ts src/main/ipc/parcel-watcher-child-registry.test.ts src/main/ipc/parcel-watcher-child-launch.test.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-supervisor-capacity.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/runtime/rpc/methods/files-watch-cancellation.test.ts src/main/providers/ssh-filesystem-provider.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/shared/physical-exit-tracker.test.ts src/main/ipc/pty.test.ts src/main/providers/local-pty-provider.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/pty-subprocess.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts src/relay/pty-handler.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher.test.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/providers/ssh-filesystem-provider.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/main/ipc/pty.test.ts src/main/providers/local-pty-provider.test.ts src/main/daemon/pty-subprocess.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts src/relay/pty-handler.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/providers/ssh-filesystem-provider.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/main/ipc/pty.test.ts src/main/providers/local-pty-provider.test.ts src/main/daemon/pty-subprocess.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts src/relay/pty-handler.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/providers/ssh-filesystem-provider.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/main/ipc/pty.test.ts src/main/providers/local-pty-provider.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts src/relay/pty-handler.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/providers/ssh-filesystem-provider.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/main/ipc/pty.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts src/relay/pty-handler.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/providers/ssh-filesystem-provider.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts",
         "pnpm run build:electron-vite",
+        "node config/scripts/runtime-file-watcher-resource-probe.mjs",
         "node config/scripts/runtime-file-watcher-fault-harness.mjs",
         "ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mjs",
-        "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
+        "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-watcher-setup-wait.test.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/git-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
+        "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/git-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
         "pnpm run build:relay",
         "node config/scripts/relay-watcher-fault-harness.mjs"
       ],
       "testFiles": [
+        "src/main/daemon/daemon-pty-adapter.test.ts",
+        "src/main/ipc/filesystem-watcher.test.ts",
+        "src/main/ipc/filesystem-watcher-native-capacity.test.ts",
+        "src/main/ipc/parcel-watcher-child-registry.test.ts",
+        "src/main/ipc/parcel-watcher-child-launch.test.ts",
         "src/main/ipc/parcel-watcher-process.test.ts",
+        "src/main/ipc/parcel-watcher-unsubscribe-timeout.test.ts",
+        "src/main/ipc/parcel-watcher-supervisor-capacity-wait.test.ts",
+        "src/main/ipc/parcel-watcher-supervisor-capacity.test.ts",
+        "src/main/ipc/parcel-watcher-disconnect-termination.test.ts",
+        "src/main/ipc/runtime-watcher-pending-assignment.test.ts",
         "src/main/ipc/runtime-watcher-process-pool.test.ts",
         "src/main/ipc/parcel-watcher-process-entry.test.ts",
         "src/main/ipc/parcel-watcher-event-delivery.test.ts",
         "src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts",
         "src/main/ipc/filesystem-watcher-wsl.test.ts",
+        "src/main/ipc/worktrees.test.ts",
+        "src/main/ipc/watcher-removal-gate.test.ts",
+        "src/main/ipc/pty.test.ts",
+        "src/main/providers/local-pty-provider.test.ts",
+        "src/main/daemon/pty-subprocess.test.ts",
+        "src/main/daemon/session.test.ts",
+        "src/main/daemon/terminal-host.test.ts",
+        "src/main/daemon/terminal-host-session-reaping-leak.test.ts",
         "src/main/runtime/file-watcher-host.test.ts",
+        "src/main/runtime/orca-runtime-files-watch.test.ts",
+        "src/main/runtime/worktree-teardown.test.ts",
+        "src/main/runtime/orca-runtime.test.ts",
         "src/main/runtime/rpc/methods/files.test.ts",
+        "src/main/runtime/rpc/methods/files-watch-cancellation.test.ts",
+        "src/main/runtime/rpc/methods/files-watch-cleanup.test.ts",
         "src/main/providers/ssh-filesystem-provider.test.ts",
+        "src/main/providers/ssh-filesystem-provider-watch-waiters.test.ts",
+        "src/main/providers/ssh-pty-provider.test.ts",
         "src/renderer/src/runtime/runtime-file-client.test.ts",
+        "src/renderer/src/web/web-runtime-client.test.ts",
+        "src/shared/cross-platform-path.test.ts",
+        "src/shared/physical-exit-tracker.test.ts",
+        "src/shared/promise-settlement-waiters.test.ts",
         "config/scripts/runtime-file-watcher-fault-harness.mjs",
+        "config/scripts/runtime-file-watcher-resource-probe.mjs",
         "src/relay/relay-filesystem-watch-registry.test.ts",
+        "src/relay/relay-watcher-pending-setup-waiters.test.ts",
+        "src/relay/relay-watcher-parent-removal.test.ts",
+        "src/relay/relay-watcher-setup-wait.test.ts",
         "src/relay/fs-handler.test.ts",
+        "src/relay/pty-handler.test.ts",
+        "src/relay/git-handler.test.ts",
         "src/relay/subprocess.test.ts",
         "src/main/ssh/ssh-relay-versioned-install.test.ts",
         "config/scripts/package-electron-runtime-contract.test.mjs",
@@ -4328,25 +4438,115 @@
       ],
       "assertionRefs": [
         {
+          "file": "src/main/ipc/filesystem-watcher.test.ts",
+          "assertions": [
+            "a transient WSL child-capacity rejection automatically retries on release and renderer unwatch cancels the wait",
+            "failed SSH worktree removal restores every live renderer listener, emits overflow, and resumes precise events"
+          ]
+        },
+        {
+          "file": "src/main/ipc/filesystem-watcher-native-capacity.test.ts",
+          "assertions": [
+            "typed native child-capacity exhaustion automatically retries after a serialized slot release",
+            "renderer unwatch cancels a pending native capacity retry before subscription restarts"
+          ]
+        },
+        {
+          "file": "src/main/ipc/parcel-watcher-child-registry.test.ts",
+          "assertions": [
+            "capacity notification closes the release-before-listen race, supports cancellation, fires at most once, and serializes reserving waiters per released slot"
+          ]
+        },
+        {
+          "file": "src/main/ipc/parcel-watcher-child-launch.test.ts",
+          "assertions": [
+            "native launcher reports typed transient capacity exhaustion without forking another child"
+          ]
+        },
+        {
+          "file": "src/shared/physical-exit-tracker.test.ts",
+          "assertions": [
+            "timed-out physical-exit waiters detach while active and later retries still settle on exact exit"
+          ]
+        },
+        {
+          "file": "src/shared/promise-settlement-waiters.test.ts",
+          "assertions": [
+            "one shared-promise reaction serves an anchor plus 10,000 abortable callers, and all cancelled closures detach immediately",
+            "timeout and already-aborted paths remove timers, listeners, and ownership while preserving the active anchor"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-pty-adapter.test.ts",
+          "assertions": [
+            "daemon process enumeration falls back to spawn cwd before OSC 7 reports a live cwd",
+            "force-killed keep-history sleep remains cold-restorable across repeated wake cycles after physical exit"
+          ]
+        },
+        {
           "file": "src/main/ipc/parcel-watcher-process.test.ts",
           "assertions": [
             "initial-subscribe crashes complete with an interruption refresh",
+            "watch errors before readiness reject setup and physically cancel the native crawl",
+            "watch errors during replacement crawl terminate recovery and a late readiness ack cannot revive the failed root",
             "IPC disconnect recovery restores every existing root before accepting new setup",
             "queued abort removes one request without restarting healthy roots, while active abort or crawl-scoped timeout restores the shard",
-            "a crash-resubscribe crawl deadline ends only the stuck root and tears down its shard process",
+            "a crash-resubscribe crawl deadline and concurrent unsubscribe settle only after physical shard exit, or report physical-exit failure at the termination deadline",
+            "a close-only asynchronous spawn failure settles physical termination without waiting for the exit deadline",
+            "production runtime-pool disposal rejects later subscriptions without forking an overlapping child",
+            "Vitest cleanup resets rather than re-disposes the reusable runtime pool",
+            "native child launch preserves typed transient capacity exhaustion instead of reporting permanent process unavailability",
             "missing built entries fail closed and unavailable canary storage remains optional",
             "fault-harness PID reporting cannot clobber an existing filesystem path"
           ]
         },
         {
+          "file": "src/main/ipc/parcel-watcher-unsubscribe-timeout.test.ts",
+          "assertions": [
+            "a canary-independent native-unsubscribe deadline restarts the shard and restores healthy siblings after physical child exit",
+            "an unkillable child rejects the native unsubscribe with its retained physical-exit promise only at the bounded exit deadline"
+          ]
+        },
+        {
+          "file": "src/main/ipc/parcel-watcher-supervisor-capacity-wait.test.ts",
+          "assertions": [
+            "10,000 cancelled capacity callers leave exactly one live anchor and zero waiters after the released slot settles"
+          ]
+        },
+        {
+          "file": "src/main/ipc/parcel-watcher-supervisor-capacity.test.ts",
+          "assertions": [
+            "one released physical slot launches one shared supervisor child for every waiting root, while partial/all cancellation and disposal remove the shared capacity barrier",
+            "a waiter recursively re-enters the event-driven barrier when crash recovery reclaims its announced slot"
+          ]
+        },
+        {
+          "file": "src/main/ipc/parcel-watcher-disconnect-termination.test.ts",
+          "assertions": [
+            "pending-crawl cancellation after disconnect remains pending until the exact child exits",
+            "ready and pending-crawl cancellation force disconnected-child exit even while a healthy sibling root remains",
+            "a cancellation deadline joins active disconnect termination without duplicate sibling resubscription",
+            "an exit-deadline failure replaces the early cancellation and remains visible to synchronous unsubscribe until physical exit"
+          ]
+        },
+        {
+          "file": "src/main/ipc/runtime-watcher-pending-assignment.test.ts",
+          "assertions": [
+            "10,000 cancelled quarantine-assignment callers leave exactly one live anchor and zero waiters after grant",
+            "an already-aborted first caller synchronously releases pending assignment ownership"
+          ]
+        },
+        {
           "file": "src/main/ipc/runtime-watcher-process-pool.test.ts",
           "assertions": [
-            "healthy roots spread across at most four shared supervisors before sharing",
+            "healthy roots share one supervisor until a fault requires quarantine",
             "a supervisor-scoped failure spreads affected roots across at most four quarantine supervisors",
             "a second fused quarantine creates no further replacement for that watch lifetime",
             "a root-specific failure preserves healthy shard assignments",
             "a live root whose crash-resubscribe times out moves to quarantine",
-            "an older same-root teardown cannot erase a newer watch lease's assignment"
+            "an older same-root teardown cannot erase a newer watch lease's assignment",
+            "test reset explicitly reopens the production-disposed pool",
+            "a zero-waiter aborted assignment cannot poison a same-turn replacement subscribe"
           ]
         },
         {
@@ -4371,15 +4571,126 @@
           "file": "src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts",
           "assertions": [
             "worktree deletion physically aborts pending native setup and settles before its crawl resolves",
-            "app shutdown physically aborts pending native setup and releases a late native handle"
+            "app shutdown physically aborts pending native setup and releases a late native handle",
+            "a cancelled pending install retains physical-exit failure across an immediate second destructive close",
+            "desktop terminal failure remains root-owned even when the cleared subscription later unsubscribes cleanly",
+            "Windows drive and UNC watcher ownership is found across path casing and separator variants",
+            "Windows event payloads retain the physical root spelling instead of the comparison key",
+            "failed local worktree removal restores every live renderer listener and emits overflow"
+          ]
+        },
+        {
+          "file": "src/main/ipc/filesystem-watcher-wsl.test.ts",
+          "assertions": [
+            "unsubscribe and startup abort remain pending until the WSL watcher process physically closes",
+            "a termination timeout or rejected kill retains the WSL watcher owner for later physical-exit proof",
+            "WSL watcher processes consume the shared eight-child reservation until physical close, including synchronous startup-write cleanup"
+          ]
+        },
+        {
+          "file": "src/main/ipc/worktrees.test.ts",
+          "assertions": [
+            "desktop IPC deletion never starts Git removal when physical PTY teardown cannot be proven",
+            "normal and orphan/leftover deletion paths perform strict PTY teardown before local or SSH Git/filesystem removal",
+            "SSH deletion fails closed before Git when the remote PTY provider is unavailable",
+            "failed IPC deletion finishes the watcher fence as aborted so logical subscriptions can recover"
+          ]
+        },
+        {
+          "file": "src/main/ipc/watcher-removal-gate.test.ts",
+          "assertions": [
+            "Windows-equivalent spellings share one removal fence while distinct POSIX backslash roots do not",
+            "desktop and runtime removal entry points cannot own overlapping destructive roots concurrently",
+            "parent removal waits descendant terminal spawns and rejects later descendant installs"
+          ]
+        },
+        {
+          "file": "src/main/ipc/pty.test.ts",
+          "assertions": [
+            "renderer PTY spawn is rejected before provider creation while destructive worktree removal holds the shared terminal gate",
+            "renderer and runtime spawns fence both the worktree-ID root and resolved cwd, including cross-worktree cwd ownership with rollback",
+            "manual and runtime-controller local PTY shutdown retain listener and provider ownership until physical exit",
+            "did-finish-load orphan cleanup disposes data delivery but retains the onExit listener and tracker through physical exit",
+            "a failed local PTY kill retains retryable provider ownership until a later physical exit"
+          ]
+        },
+        {
+          "file": "src/main/providers/local-pty-provider.test.ts",
+          "assertions": [
+            "local shutdown remains pending and owned until node-pty reports physical exit",
+            "local process enumeration retains the spawn cwd for destructive ownership fallback",
+            "destructive cleanup escalates an existing graceful shutdown without losing its shared exit proof",
+            "POSIX graceful shutdown escalates to one bounded SIGKILL when the child ignores SIGTERM",
+            "Windows graceful-to-destructive cleanup treats the first ConPTY kill as final and never double-closes the handle",
+            "orphan cleanup racing immediate shutdown shares one kill and remains owned until the queued physical exit",
+            "timeout and kill failure preserve ownership for a later successful retry"
+          ]
+        },
+        {
+          "file": "src/main/daemon/pty-subprocess.test.ts",
+          "assertions": [
+            "rejected graceful and force kills propagate without marking the wrapper dead so retries can signal the same child"
+          ]
+        },
+        {
+          "file": "src/main/daemon/session.test.ts",
+          "assertions": [
+            "graceful daemon termination force-kills after its deadline but retains session ownership and late output until physical exit",
+            "rejected graceful and force kills reopen termination state for a later retry"
+          ]
+        },
+        {
+          "file": "src/main/daemon/terminal-host.test.ts",
+          "assertions": [
+            "immediate daemon kill remains pending and listed until the subprocess exit callback",
+            "an unconfirmed immediate kill rejects at the bounded deadline, retains ownership, and blocks same-id replacement"
+          ]
+        },
+        {
+          "file": "src/main/daemon/terminal-host-session-reaping-leak.test.ts",
+          "assertions": [
+            "immediate daemon kill reaps the emulator and session only after physical exit"
           ]
         },
         {
           "file": "src/main/runtime/file-watcher-host.test.ts",
           "assertions": [
             "same-root clients share one physical watch and one client abort cannot cancel another owner's setup",
+            "concurrent pre-ready cancellations join one native root release before an immediate replacement subscribes",
+            "10,000 cancelled runtime-root callers detach while one setup anchor remains",
+            "root-scoped destructive cleanup joins an in-progress subscriber teardown",
             "shard failure preserves existing subscribers through isolated recovery and rejects stale-generation events",
-            "only failed isolated recovery ends subscribers, after a conservative overflow"
+            "only failed isolated recovery ends subscribers, after a conservative overflow",
+            "initial setup failure remains discoverable by root-scoped destructive cleanup until physical exit"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime-files-watch.test.ts",
+          "assertions": [
+            "Windows runtime cleanup waits for the native close event, fails closed at a bounded deadline, and clears retained ownership on late close without retry listeners",
+            "a Windows watcher error before cleanup uses Node's proven native error-close as physical-exit proof, emits final overflow and terminal error, and releases deletion ownership",
+            "pre-publication local runtime setup failure remains owned through destructive cleanup",
+            "failed deletion re-arms runtime watches immediately after ordinary teardown or after delayed physical exit, without reviving a logically stopped watch"
+          ]
+        },
+        {
+          "file": "src/main/runtime/worktree-teardown.test.ts",
+          "assertions": [
+            "overlapping runtime, provider, and registry sweeps stay behind one physical PTY-stop promise",
+            "destructive teardown rejects instead of releasing deletion when physical stop misses its deadline",
+            "cwd-owned and floating PTYs are swept while legacy rows without cwd retain prefix ownership",
+            "remote provider enumeration matches authoritative worktree ownership without touching the local-only registry"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime.test.ts",
+          "assertions": [
+            "destructive worktree teardown awaits controller stopAndWait instead of treating fire-and-forget kill as physical exit",
+            "runtime worktree deletion never starts Git removal when a known PTY cannot be physically stopped",
+            "SSH runtime deletion shuts down an authoritatively owned remote PTY before remote Git removal",
+            "a delayed physical-exit retry remains scoped to its registered cleanup owner and cannot tear down a same-id replacement",
+            "failed CLI worktree deletion restores watcher ownership after releasing the install fence",
+            "cross-layer teardown failure joins every bounded watcher close before restoration begins"
           ]
         },
         {
@@ -4390,11 +4701,42 @@
           ]
         },
         {
+          "file": "src/main/runtime/rpc/methods/files-watch-cancellation.test.ts",
+          "assertions": [
+            "the server publishes a cleanup token before ready and files.unwatch aborts pending setup without delivering queued crawl events"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/files-watch-cleanup.test.ts",
+          "assertions": [
+            "a failed paired-web unwatch retries after already-resolved or late physical exit and emits stream end exactly once"
+          ]
+        },
+        {
+          "file": "src/main/providers/ssh-filesystem-provider-watch-waiters.test.ts",
+          "assertions": [
+            "10,000 cancelled SSH callers detach while one registration-owned setup anchor remains"
+          ]
+        },
+        {
           "file": "src/main/providers/ssh-filesystem-provider.test.ts",
           "assertions": [
             "an SSH caller abort rejects promptly without cancelling another same-root subscriber's shared setup",
             "the physical relay request is cancelled when the last pending subscriber leaves",
-            "provider disposal cancels pending setup and sends one remote unwatch"
+            "provider disposal cancels pending setup and sends one remote unwatch",
+            "equivalent Windows spellings share one provider generation and terminal failure reaches the surviving owner"
+          ]
+        },
+        {
+          "file": "src/main/providers/ssh-pty-provider.test.ts",
+          "assertions": [
+            "remote process enumeration preserves authoritative worktree ownership while scoping relay PTY ids to the SSH connection"
+          ]
+        },
+        {
+          "file": "src/shared/cross-platform-path.test.ts",
+          "assertions": [
+            "comparison keys preserve literal POSIX backslashes while folding Windows drive and UNC spellings"
           ]
         },
         {
@@ -4407,6 +4749,25 @@
           ]
         },
         {
+          "file": "src/relay/relay-watcher-parent-removal.test.ts",
+          "assertions": [
+            "POSIX and Windows parent deletion closes and terminally notifies descendant watches before removal while preserving path siblings",
+            "parent deletion waits for descendant setup publication and already-retiring descendant teardown before removal"
+          ]
+        },
+        {
+          "file": "src/relay/relay-watcher-pending-setup-waiters.test.ts",
+          "assertions": [
+            "10,000 aborted relay setup callers detach while one same-root teardown anchor remains and only one replacement installs"
+          ]
+        },
+        {
+          "file": "src/relay/relay-watcher-setup-wait.test.ts",
+          "assertions": [
+            "10,000 cancelled relay setup callers leave exactly one explicit anchor and one base-promise reaction"
+          ]
+        },
+        {
           "file": "src/relay/relay-filesystem-watch-registry.test.ts",
           "assertions": [
             "each SSH host keeps its own healthy watcher supervisor while a standard repository's three distinct roots share that one child",
@@ -4414,19 +4775,48 @@
             "replacement emits overflow before later ordered events",
             "terminal shard failure preserves same-root clients through recovery",
             "pending setup aborts only after the last same-root client leaves",
+            "relay-side removal sends every client a terminal failure, closes every watch, and fences new same-root watcher or PTY setup even when deletion fails",
             "a missing child fails closed even if the relay inherits a VITEST environment"
           ]
         },
         {
           "file": "src/relay/fs-handler.test.ts",
           "assertions": [
-            "shared watches retain the twenty-root budget and release after every client leaves"
+            "shared watches retain the twenty-root budget and release after every client leaves",
+            "recursive relay deletion closes and terminally notifies same-root watches before removing the directory"
+          ]
+        },
+        {
+          "file": "src/relay/pty-handler.test.ts",
+          "assertions": [
+            "immediate relay shutdown stays pending with the PTY map entry retained until onExit",
+            "a missing exit rejects at the bounded deadline, preserves the physical owner, and a retry joins without duplicate SIGKILL",
+            "Windows relay graceful, fallback, immediate, stale-spawn, exit-dispose, and handler-dispose paths issue at most one ConPTY kill",
+            "relay PTY admission succeeds when post-Node-18 array copy methods are unavailable",
+            "attach dead-PID proof settles a concurrent immediate shutdown before the stale PTY entry is reaped",
+            "concurrent spawn and revive admission is atomic, capped at fifty physical PTYs, and same-id revive is deduplicated",
+            "worktree removal waits explicit and default-cwd PTY creation, rejects later creation, and physically stops only authoritative matching PTYs before deletion",
+            "relay spawn and revive fence distinct worktree-ID and cwd roots, rolling back earlier admissions in reverse when either root is removing"
+          ]
+        },
+        {
+          "file": "src/renderer/src/web/web-runtime-client.test.ts",
+          "assertions": [
+            "a stopped pre-ready paired-web watch retains its callback beyond the former deadline and uses the early server token to unwatch",
+            "transient shared-socket loss replays an active file watch under a new transport id while preserving its logical handle and never revives a stopped watch"
+          ]
+        },
+        {
+          "file": "src/relay/git-handler.test.ts",
+          "assertions": [
+            "remote Git worktree removal executes inside the relay filesystem watcher fence"
           ]
         },
         {
           "file": "src/relay/subprocess.test.ts",
           "assertions": [
-            "the real relay bundle serves PTY, filesystem, and Git requests with its adjacent watcher child"
+            "the real relay bundle serves PTY, filesystem, and Git requests with its adjacent watcher child",
+            "the Node-18-targeted relay bundle contains no unsupported array copy methods"
           ]
         },
         {
@@ -4439,6 +4829,15 @@
           "file": "config/scripts/package-electron-runtime-contract.test.mjs",
           "assertions": [
             "every release platform packages and gates the hashed watcher child"
+          ]
+        },
+        {
+          "file": "config/scripts/runtime-file-watcher-resource-probe.mjs",
+          "assertions": [
+            "five healthy roots share one exact watcher PID within the per-child RSS budget",
+            "four quarantine roots use exactly four child PIDs and remain within the global eight-child reservation cap",
+            "CPU and RSS are sampled for every exact child PID and every PID exits during cleanup",
+            "per-child and aggregate RSS and sampled CPU ceilings fail the probe before the physical child cap can hide excess resource use"
           ]
         },
         {
@@ -4459,13 +4858,202 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-07-12",
+          "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher.test.ts src/main/ipc/filesystem-watcher-native-capacity.test.ts src/main/ipc/parcel-watcher-child-registry.test.ts src/main/ipc/parcel-watcher-child-launch.test.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-supervisor-capacity-wait.test.ts src/main/ipc/parcel-watcher-supervisor-capacity.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-pending-assignment.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/runtime/rpc/methods/files-watch-cancellation.test.ts src/main/providers/ssh-filesystem-provider-watch-waiters.test.ts src/main/providers/ssh-filesystem-provider.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/shared/physical-exit-tracker.test.ts src/shared/promise-settlement-waiters.test.ts src/main/ipc/pty.test.ts src/main/providers/local-pty-provider.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/pty-subprocess.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts src/relay/relay-watcher-setup-wait.test.ts src/relay/pty-handler.test.ts --reporter=dot",
           "result": "passed",
-          "durationSeconds": 4.5,
-          "summary": "Five relay registry, handler, bundled subprocess, install, and package contract files passed with 114 tests."
+          "durationSeconds": 11.98,
+          "summary": "Thirty-nine watcher, cancellation, desktop/serve, paired-web, WSL, SSH/relay, removal, and PTY physical-exit files passed with 2,008 tests. Capacity, quarantine, runtime-root, relay, and SSH setup layers each prove that 10,000 aborted callers detach while one anchor remains and zero waiters remain after settlement."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher.test.ts src/main/ipc/filesystem-watcher-native-capacity.test.ts src/main/ipc/parcel-watcher-child-registry.test.ts src/main/ipc/parcel-watcher-child-launch.test.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-supervisor-capacity.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/runtime/rpc/methods/files-watch-cancellation.test.ts src/main/providers/ssh-filesystem-provider.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/shared/physical-exit-tracker.test.ts src/main/ipc/pty.test.ts src/main/providers/local-pty-provider.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/pty-subprocess.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts src/relay/pty-handler.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 11.59,
+          "summary": "Thirty-four watcher, cancellation, desktop/serve, paired-web, WSL, removal, PTY physical-exit, provider, renderer, and path files passed with 1,999 tests; paired-web cancellation now owns a server token before ready and aborts pending setup without a late native install."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "node config/scripts/runtime-file-watcher-resource-probe.mjs",
+          "result": "passed",
+          "durationSeconds": 0.58,
+          "summary": "Five healthy roots shared one child at 50,688 KiB RSS and 4.9% sampled CPU; four quarantine children totaled 202,368 KiB RSS and 29.5% sampled CPU, all budgets and the eight-child cap passed, and exact-PID cleanup was true."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/filesystem-watcher.test.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/providers/ssh-filesystem-provider.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/main/ipc/pty.test.ts src/main/providers/local-pty-provider.test.ts src/main/daemon/pty-subprocess.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts src/relay/pty-handler.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 10.01,
+          "summary": "Twenty-seven watcher, WSL, desktop/serve removal, local/daemon/SSH PTY physical-exit, provider ownership, RPC, renderer, relay PTY admission, and cross-platform path files passed with 1,886 tests. The suite includes nested removal fencing, renderer/runtime cwd-only admission, legacy provider rows, rejected kill retries, transient WSL capacity, and synchronous-startup reservation cleanup."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "node config/scripts/runtime-file-watcher-resource-probe.mjs",
+          "result": "passed",
+          "durationSeconds": 0.56,
+          "summary": "Five healthy roots shared one child at 50,176 KiB RSS and 6.0% sampled CPU; four quarantine children totaled 200,112 KiB RSS and 18.0% sampled CPU. The global eight-child cap and all per-child/aggregate budgets passed, and exact-PID cleanup was true."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/git-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
+          "result": "passed",
+          "durationSeconds": 10.01,
+          "summary": "Six relay registry, filesystem/Git handler, bundled subprocess, install, and package contract files passed with 226 tests."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run build:electron-vite",
+          "result": "passed",
+          "durationSeconds": 24.41,
+          "summary": "The production Electron main, preload, renderer, daemon, and watcher child entries built successfully."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "node config/scripts/runtime-file-watcher-fault-harness.mjs",
+          "result": "passed",
+          "durationSeconds": 0.1,
+          "summary": "The Node host survived watcher-child SIGSEGV, replaced and resubscribed the child, and delivered a post-crash event."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mjs",
+          "result": "passed",
+          "durationSeconds": 0.46,
+          "summary": "The Electron-as-Node host survived watcher-child SIGSEGV, replaced and resubscribed the child, and delivered a post-crash event."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run build:relay",
+          "result": "passed",
+          "durationSeconds": 0.38,
+          "summary": "Relay and adjacent watcher artifacts built for Linux, macOS, and Windows on x64 and arm64, plus the WSL hook relay."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "node config/scripts/relay-watcher-fault-harness.mjs",
+          "result": "passed",
+          "durationSeconds": 0.12,
+          "summary": "The relay and existing PTY survived watcher-child SIGSEGV; replacement delivered overflow and a precise post-crash event."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/providers/ssh-filesystem-provider.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/main/ipc/pty.test.ts src/main/providers/local-pty-provider.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts src/relay/pty-handler.test.ts",
+          "result": "passed",
+          "durationSeconds": 9.12,
+          "summary": "Twenty-five watcher, WSL, desktop/serve removal, local/daemon/SSH PTY physical-exit, provider ownership, RPC, renderer, relay PTY admission, and cross-platform path files passed with 1,762 tests. The suite covers operations joining in-flight termination, kill failures retaining ownership, bounded timeouts, atomic relay spawn/revive caps, and PTY-removal admission."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "node config/scripts/runtime-file-watcher-resource-probe.mjs",
+          "result": "passed",
+          "durationSeconds": 0.56,
+          "summary": "Five healthy roots shared one child at 50,096 KiB RSS and 3.4% sampled CPU; four quarantine children totaled 200,576 KiB RSS and 25.0% sampled CPU. The eight-child physical cap and every per-child/aggregate CPU and RSS budget passed, and exact-PID cleanup was true."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/git-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
+          "result": "passed",
+          "durationSeconds": 10.69,
+          "summary": "Six relay registry, filesystem/Git handler, bundled subprocess, install, and package contract files passed with 226 tests, including watcher/PTY removal fencing and recursive deletion failure behavior."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run build:electron-vite",
+          "result": "passed",
+          "durationSeconds": 24,
+          "summary": "The production Electron main, preload, renderer, daemon, and watcher child entries built successfully."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "node config/scripts/runtime-file-watcher-fault-harness.mjs",
+          "result": "passed",
+          "durationSeconds": 0.01,
+          "summary": "The Node host survived watcher-child SIGSEGV, replaced and resubscribed the child, and delivered a post-crash event."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mjs",
+          "result": "passed",
+          "durationSeconds": 0.46,
+          "summary": "The Electron-as-Node host survived watcher-child SIGSEGV, replaced and resubscribed the child, and delivered a post-crash event."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run build:relay",
+          "result": "passed",
+          "durationSeconds": 0.39,
+          "summary": "Relay and adjacent watcher artifacts built for Linux, macOS, and Windows on x64 and arm64, plus the WSL hook relay."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "node config/scripts/relay-watcher-fault-harness.mjs",
+          "result": "passed",
+          "durationSeconds": 0.12,
+          "summary": "The relay and existing PTY survived watcher-child SIGSEGV; replacement delivered overflow and a precise post-crash event."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/providers/ssh-filesystem-provider.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts src/main/ipc/pty.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/terminal-host-session-reaping-leak.test.ts src/main/providers/ssh-pty-provider.test.ts src/relay/pty-handler.test.ts",
+          "result": "passed",
+          "durationSeconds": 9.03,
+          "summary": "Twenty-three watcher, desktop/serve removal, terminal-spawn gate, daemon/SSH physical PTY exit, provider ownership, RPC, renderer, and cross-platform path files passed with 1,630 tests. The suite includes same-turn watcher replacement, authoritative SSH teardown before Git, bounded kill-without-exit failures that retain ownership, and local/SSH deletion fail-closed behavior."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "node config/scripts/runtime-file-watcher-resource-probe.mjs",
+          "result": "passed",
+          "durationSeconds": 0.55,
+          "summary": "Five healthy roots shared one child at 50,160 KiB RSS and 5.6% sampled CPU; four quarantine children totaled 199,968 KiB RSS and 16.7% sampled CPU, hard per-child and aggregate RSS/CPU budgets passed, the eight-child reservation cap rejected the next launch, and every exact PID exited during cleanup."
+        },
+        {
+          "date": "2026-07-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/git-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
+          "result": "passed",
+          "durationSeconds": 9.79,
+          "summary": "Six relay registry, filesystem/Git handler, bundled subprocess, install, and package contract files passed with 225 tests, including terminal removal notification and recursive deletion fencing."
         },
         {
           "date": "2026-07-12",
@@ -4477,13 +5065,13 @@
           "summary": "The relay PID and existing PTY survived watcher-child SIGSEGV; overflow and precise events resumed from a replacement child."
         },
         {
-          "date": "2026-07-12",
+          "date": "2026-07-13",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/providers/ssh-filesystem-provider.test.ts src/renderer/src/runtime/runtime-file-client.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/parcel-watcher-process.test.ts src/main/ipc/parcel-watcher-disconnect-termination.test.ts src/main/ipc/runtime-watcher-process-pool.test.ts src/main/ipc/parcel-watcher-process-entry.test.ts src/main/ipc/parcel-watcher-event-delivery.test.ts src/main/ipc/filesystem-watcher-local-unsubscribe.test.ts src/main/ipc/filesystem-watcher-wsl.test.ts src/main/ipc/worktrees.test.ts src/main/ipc/watcher-removal-gate.test.ts src/main/runtime/file-watcher-host.test.ts src/main/runtime/orca-runtime-files-watch.test.ts src/main/runtime/worktree-teardown.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/methods/files.test.ts src/main/providers/ssh-filesystem-provider.test.ts src/renderer/src/runtime/runtime-file-client.test.ts src/renderer/src/web/web-runtime-client.test.ts src/shared/cross-platform-path.test.ts",
           "result": "passed",
-          "durationSeconds": 1.7,
-          "summary": "10 focused supervisor, pool, child-entry, delivery, desktop/WSL cleanup, runtime-host, RPC, SSH ownership, and renderer-client test files passed with 223 tests."
+          "durationSeconds": 8.85,
+          "summary": "18 focused supervisor, disconnect termination, pool, child-entry, delivery, desktop/WSL cleanup and IPC removal, removal-gate, runtime-host/commands and physical PTY teardown, RPC, SSH ownership, renderer/paired-web clients, and cross-platform path files passed with 1,193 tests."
         },
         {
           "date": "2026-07-12",
@@ -4527,7 +5115,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Local runtime operation remains capped at four shared child processes, while each SSH relay is capped at one healthy child instead of spreading a standard repository's three roots across three children. Based on the measured 51.9 MiB per child, normal SSH watcher overhead is bounded near 51.9 MiB rather than 155.7 MiB before relay and PTY overhead. Degraded operation adds at most four quarantine children, distributes affected roots by least load, disposes empty slots, and permits no replacement after a quarantine shard itself fuses. Each child caps directory stats at eight across its assigned roots (at most 32 healthy or 64 total logical stat operations for local runtime; 8 healthy or 40 total per SSH relay), each subscription retains at most one active plus one bounded pending batch, and no polling or serve-process stat fanout is added."
+        "evidence": "The committed resource probe reproducibly measures five healthy roots sharing one child (50,160 KiB RSS, 5.6% sampled CPU) and four quarantine children (199,968 KiB total RSS, 16.7% sampled CPU), enforces 128 MiB/50% per-child and 512 MiB/100% quarantine aggregate budgets, derives a 1 GiB/400% ceiling across the global eight-physical-child cap, and waits for every exact PID during cleanup. A relay policy test separately proves a standard SSH repository's three roots share one healthy child. Shared pending setup attaches one base-promise reaction per generation; quantitative owner tests abort 10,000 callers at each affected layer and require exactly one anchor, then zero explicit waiters after settlement. The shared supervisor capacity barrier is event-driven, one-shot, abortable, and serialized per released physical slot, waking every same-child desktop, paired-runtime, or SSH relay root without consuming crash-recovery attempts; direct WSL capacity retains the same event-driven desktop retry. Relay PTY admission adds at most two deduplicated path checks per spawn/revive and releases both without polling or retained listeners, while dead-PID reaping settles an existing tracker without allocating another timer. Fault quarantine distributes affected roots by least load, disposes empty slots, and permits no replacement after a quarantine shard itself fuses. Each child caps directory stats at eight across its assigned roots (at most eight healthy or 32 quarantined operations), each subscription retains at most one active plus one bounded pending batch, and no additional polling or serve-process stat fanout is added."
       },
       "promotionCriteria": [
         "Run the built-entry SIGSEGV harness in soak for at least 100 consecutive passes or 14 days on macOS.",
@@ -4536,11 +5124,11 @@
       ],
       "knownGaps": [
         "The fault harness bundles the real source supervisor and drives the built child, but it does not launch a packaged orca serve pairing session or exercise app.asar path resolution.",
-        "The one-child SSH healthy and four-child quarantine memory ceilings are inferred from the earlier one-child measurement; direct degraded-state RSS plus sustained six-writer event-loop-delay and CPU soak evidence is still absent.",
+        "The committed resource probe covers the one-child healthy pool, four-child fault-quarantine ceiling, RSS/CPU sampling, global physical-child cap, and exact-PID cleanup, but sustained six-writer event-loop-delay and CPU soak evidence is still absent.",
         "Linux native watcher fault containment is source-equivalent but not live fault-injected in this evidence run.",
-        "Windows runtime watches bypass this path; SSH registration ownership is deterministic-contract tested but not live-relay fault-injected."
+        "Windows native runtime watches bypass this child path; WSL reservation/release is deterministic-contract tested but not live fault-injected, and SSH registration ownership is not live-relay fault-injected."
       ],
-      "demotionRule": "Demote or quarantine if the fault harness flakes without a product or harness bug, if healthy operation exceeds four local runtime watcher children or one child in any SSH relay, if total healthy plus quarantine operation exceeds eight locally or five in an SSH relay, if quarantine children outlive their roots or repeat after fusing, if event delivery becomes unbounded, or if metadata/stat work returns to the serve process."
+      "demotionRule": "Demote or quarantine if the fault harness flakes without a product or harness bug, if healthy operation exceeds one runtime watcher child, if total physical operation exceeds eight children including retiring generations, if quarantine children outlive their roots or repeat after fusing, if event delivery becomes unbounded, or if metadata/stat work returns to the serve process."
     }
   ]
 }

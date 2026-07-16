@@ -238,7 +238,7 @@ describe('useGitStatusPolling', () => {
     expect(globalThis.setInterval).not.toHaveBeenCalled()
   })
 
-  it('uses a slower git status cadence when only terminal branch detection needs polling', async () => {
+  it('uses the safety scheduler instead of an interval for terminal-only branch detection', async () => {
     const { gitStatus } = await usePollingOnce(
       {
         entries: [],
@@ -255,7 +255,7 @@ describe('useGitStatusPolling', () => {
     )
 
     expect(gitStatus).toHaveBeenCalledTimes(1)
-    expect(globalThis.setInterval).toHaveBeenCalledWith(expect.any(Function), 30_000)
+    expect(globalThis.setInterval).not.toHaveBeenCalled()
   })
 
   it('does not install the visible git status poll while disabled', async () => {
@@ -411,6 +411,7 @@ describe('useGitStatusPolling', () => {
 
     await vi.advanceTimersByTimeAsync(125)
     expect(gitStatus).toHaveBeenCalledTimes(1)
+    // Why: evidence refreshes keep the 3s anti-churn floor from the last run.
     await vi.advanceTimersByTimeAsync(2875)
     await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(2))
     expect(window.api.fs.watchWorktree).not.toHaveBeenCalled()
@@ -652,6 +653,7 @@ describe('useGitStatusPolling', () => {
 
     await vi.advanceTimersByTimeAsync(65)
     expect(gitStatus).toHaveBeenCalledTimes(callsBeforeDebounceFires)
+    // Why: evidence refreshes keep the 3s anti-churn floor from the last run.
     await vi.advanceTimersByTimeAsync(2875)
     await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(callsBeforeDebounceFires + 1))
 
@@ -728,7 +730,6 @@ describe('useGitStatusPolling', () => {
   it('does not overlap slow visible git status polls and runs one trailing refresh', async () => {
     vi.resetModules()
     vi.useFakeTimers()
-    let intervalCallback: (() => void) | null = null
     let resolveFirst!: (value: GitStatusResult) => void
     const firstStatus = new Promise<GitStatusResult>((resolve) => {
       resolveFirst = resolve
@@ -804,27 +805,22 @@ describe('useGitStatusPolling', () => {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn()
     })
-    vi.stubGlobal(
-      'setInterval',
-      vi.fn((callback: () => void) => {
-        intervalCallback = callback
-        return 1
-      })
-    )
+    vi.stubGlobal('setInterval', vi.fn())
     vi.stubGlobal('clearInterval', vi.fn())
 
     const { useGitStatusPolling: runPolling } = await import('./useGitStatusPolling')
     GitStatusPollingHarness({ runPolling })
     await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(1))
 
-    expect(intervalCallback).toBeTypeOf('function')
-    const tick = intervalCallback as unknown as () => void
-    tick()
-    tick()
+    const onChanged = window.api.worktrees.onChanged as ReturnType<typeof vi.fn>
+    const handleRepoSignal = onChanged.mock.calls[0][0] as (payload: { repoId: string }) => void
+    handleRepoSignal({ repoId: repo.id })
+    handleRepoSignal({ repoId: repo.id })
     expect(gitStatus).toHaveBeenCalledTimes(1)
 
     resolveFirst(status)
     await vi.waitFor(() => expect(state.setGitStatus).toHaveBeenCalledTimes(1))
+    // Why: the trailing refresh respects the 3s anti-churn floor after settle.
     await vi.advanceTimersByTimeAsync(3000)
     await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(2))
     await vi.waitFor(() => expect(state.setGitStatus).toHaveBeenCalledTimes(2))

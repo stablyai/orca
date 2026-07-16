@@ -62,6 +62,11 @@ export class DaemonPtyRouter implements IPtyProvider {
     return result
   }
 
+  supportsGitCredentialGuardHost(sessionId?: string): boolean {
+    const adapter = sessionId ? this.adapterFor(sessionId) : this.current
+    return adapter.supportsGitCredentialGuardHost()
+  }
+
   async attach(id: string): Promise<void> {
     await this.adapterFor(id).attach(id)
   }
@@ -128,6 +133,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     opts?: { scrollbackRows?: number }
   ): Promise<PtyProviderBufferSnapshot | null> {
     return await this.adapterFor(id).getBufferSnapshot(id, opts)
+  }
+
+  canProvideAuthoritativeBufferSnapshot(id: string): boolean {
+    return this.adapterFor(id).canProvideAuthoritativeBufferSnapshot(id)
   }
 
   async clearBuffer(id: string): Promise<void> {

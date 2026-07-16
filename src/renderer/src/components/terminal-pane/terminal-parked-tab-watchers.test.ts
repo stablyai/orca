@@ -51,7 +51,11 @@ vi.mock('./pty-pre-handler-buffer', () => ({
   discardPreHandlerPtyState: (ptyId: string) => consumePreHandlerPtyState(ptyId)
 }))
 
-type CloseTerminalTabOptions = { onClosed?: () => void; onCancel?: () => void }
+type CloseTerminalTabOptions = {
+  captureRecentlyClosed?: boolean
+  onClosed?: () => void
+  onCancel?: () => void
+}
 const closeTerminalTab = vi.fn()
 vi.mock('../terminal/terminal-tab-actions', () => ({
   closeTerminalTab: (tabId: string, options?: CloseTerminalTabOptions) =>
@@ -276,6 +280,7 @@ describe('terminal-parked-tab-watchers', () => {
     expect(consumePreHandlerPtyState).not.toHaveBeenCalled()
     expect(getParkedTerminalWatcherTabIds()).toEqual([TAB_ID])
     const options = closeTerminalTab.mock.calls[0]?.[1] as CloseTerminalTabOptions
+    expect(options.captureRecentlyClosed).toBe(false)
     options.onClosed?.()
 
     expect(consumePreHandlerPtyState).toHaveBeenCalledWith(PTY_ID)
@@ -625,6 +630,23 @@ describe('terminal-parked-tab-watchers', () => {
       expect(canWatcherCoverParkedTerminalTab(WORKTREE_ID, { id: TAB_ID, ptyId: PTY_ID })).toBe(
         true
       )
+    })
+
+    it('lets cold activation add stricter eligibility without changing ordinary parking', () => {
+      capturePanes([{ ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
+      const providerCanSnapshotWithoutRenderer = vi.fn(() => false)
+
+      expect(canWatcherCoverParkedTerminalTab(WORKTREE_ID, { id: TAB_ID, ptyId: PTY_ID })).toBe(
+        true
+      )
+      expect(
+        canWatcherCoverParkedTerminalTab(
+          WORKTREE_ID,
+          { id: TAB_ID, ptyId: PTY_ID },
+          providerCanSnapshotWithoutRenderer
+        )
+      ).toBe(false)
+      expect(providerCanSnapshotWithoutRenderer).toHaveBeenCalledWith(PTY_ID)
     })
 
     it('rejects a capture containing a legacy non-UUID leaf id', () => {

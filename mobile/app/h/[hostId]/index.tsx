@@ -34,11 +34,13 @@ import { removeHostAndCloseClient } from '../../../src/transport/host-removal-li
 import {
   useHostClient,
   useCloseHost,
-  useForceReconnect,
-  useReconnectAttempt,
-  useLastConnectedAt
+  useForceReconnect
 } from '../../../src/transport/client-context'
 import { useWorktreeResync } from '../../../src/transport/use-worktree-resync'
+import {
+  useLastConnectedAt,
+  useReconnectAttempt
+} from '../../../src/transport/client-context-connection-metrics'
 import {
   classifyConnection,
   type ConnectionVerdict

@@ -168,6 +168,9 @@ export function formatTerminalFocus(result: { focus: RuntimeTerminalFocus }): st
 }
 
 export function formatTerminalClose(result: { close: RuntimeTerminalClose }): string {
+  if (result.close.closeMode === 'tab') {
+    return `Closed terminal tab ${result.close.tabId} (${result.close.handle}).`
+  }
   const ptyNote = result.close.ptyKilled ? ' PTY killed.' : ''
   return `Closed terminal ${result.close.handle}.${ptyNote}`
 }

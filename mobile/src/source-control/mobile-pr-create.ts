@@ -72,5 +72,9 @@ export function getMobilePrCreateBlockMessage(prefill: MobilePrPrefill): string 
     case null:
     case undefined:
       return `This branch is not ready for a ${copy.reviewLabel} yet.`
+    default:
+      // Why: desktop can add blocked reasons before a long-lived mobile branch
+      // catches up; remain safely blocked while preserving merge-ref typechecks.
+      return `This branch is not ready for a ${copy.reviewLabel} yet.`
   }
 }

@@ -84,6 +84,13 @@ describe.skipIf(process.platform === 'win32')('getControlSocketPath', () => {
     })
   })
 
+  it('uses a separate socket for GSSAPI-only authentication', () => {
+    const ordinary = getControlSocketPath(createTarget(), createResolved())
+    const gssapiOnly = getControlSocketPath(createTarget(), createResolved(), true)
+
+    expect(gssapiOnly).not.toBe(ordinary)
+  })
+
   it('changes the path when a config-backed target resolves to a different host', () => {
     const before = getControlSocketPath(createTarget({ host: '10.0.0.5' }), createResolved())
     const after = getControlSocketPath(

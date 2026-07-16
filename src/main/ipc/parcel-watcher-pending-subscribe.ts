@@ -53,15 +53,13 @@ export function startInterruptedSubscribeTimeout(
   record: WatcherProcessSubscriptionRecord,
   cancel: (error: WatcherProcessFailure) => void
 ): void {
-  if (
-    !record.interrupted ||
-    record.pendingSubscribe ||
-    record.resubscribeTimer ||
-    record.hooks.subscribeTimeoutMs === undefined
-  ) {
+  if (!record.interrupted || record.pendingSubscribe) {
     return
   }
   record.crawlStarted = true
+  if (record.resubscribeTimer || record.hooks.subscribeTimeoutMs === undefined) {
+    return
+  }
   record.resubscribeTimer = setTimeout(() => {
     cancel(
       new WatcherProcessFailure(

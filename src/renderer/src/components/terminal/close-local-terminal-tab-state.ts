@@ -8,6 +8,7 @@ export function closeLocalTerminalTabState(
   terminalTabId: string,
   options?: {
     reason?: TerminalTabCloseReason
+    captureRecentlyClosed?: boolean
     remoteCloseOwnedByHost?: boolean
     localPtyTeardownOwnedExternally?: boolean
     precomputedRetirementPlan?: TerminalTabRetirementPlan
@@ -20,6 +21,7 @@ export function closeLocalTerminalTabState(
   ) {
     if (
       options?.reason ||
+      options?.captureRecentlyClosed !== undefined ||
       options?.remoteCloseOwnedByHost ||
       options?.localPtyTeardownOwnedExternally ||
       options?.precomputedRetirementPlan

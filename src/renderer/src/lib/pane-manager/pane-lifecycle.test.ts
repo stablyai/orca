@@ -46,6 +46,7 @@ function createPane(): ManagedPaneInternal {
       loadAddon: vi.fn(),
       attachCustomWheelEventHandler: vi.fn(),
       refresh: vi.fn(),
+      cols: 80,
       rows: 24
     } as never,
     container: {} as never,
@@ -57,7 +58,8 @@ function createPane(): ManagedPaneInternal {
     webglDisabledAfterContextLoss: false,
     hasComplexScriptOutput: false,
     fitAddon: {
-      fit: vi.fn()
+      fit: vi.fn(),
+      proposeDimensions: vi.fn(() => ({ cols: 80, rows: 23 }))
     } as never,
     fitResizeObserver: null,
     pendingObservedFitRafId: null,

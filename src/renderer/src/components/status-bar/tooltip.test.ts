@@ -185,6 +185,20 @@ describe('provider usage error copy', () => {
     )
   })
 
+  it('classifies the Codex chatgpt-auth-required rate-limits read error as auth, not Limited', () => {
+    // Why: the message mentions "rate limits" only as the object it failed to
+    // read; labeling it "Limited" would wrongly imply the user hit a limit.
+    const p = provider({
+      provider: 'codex',
+      error: 'chatgpt authentication required to read rate limits'
+    })
+
+    expect(getProviderUsageStatusLabel(p)).toBe('Refresh failed')
+    expect(getProviderUsageErrorMessage(p)).toBe(
+      'Codex usage could not be refreshed. Agent sessions may still be signed in.'
+    )
+  })
+
   it('keeps generic OAuth and network failures as raw refresh details', () => {
     const oauth = provider({ error: 'OAuth API returned 500' })
     const network = provider({ error: 'Network error while refreshing OAuth usage: ECONNRESET' })
@@ -500,26 +514,24 @@ describe('ProviderPanel reset rendering', () => {
     expect(markup).not.toContain('140%')
   })
 
-  it.each(PROVIDER_IDS)(
-    'applies remaining copy to %s while retaining consumption bar direction',
-    (providerId) => {
-      const p = provider({
-        provider: providerId,
-        status: 'ok',
-        session: {
-          usedPercent: 25,
-          windowMinutes: 300,
-          resetsAt: null,
-          resetDescription: null
-        }
-      })
+  it.each(PROVIDER_IDS)('applies remaining copy and meter fill to %s', (providerId) => {
+    const p = provider({
+      provider: providerId,
+      status: 'ok',
+      session: {
+        usedPercent: 25,
+        windowMinutes: 300,
+        resetsAt: null,
+        resetDescription: null
+      }
+    })
 
-      const markup = renderToStaticMarkup(ProviderPanel({ p, usagePercentageDisplay: 'remaining' }))
+    const markup = renderToStaticMarkup(ProviderPanel({ p, usagePercentageDisplay: 'remaining' }))
 
-      expect(markup).toContain('75% left')
-      expect(markup).toContain('width:25%')
-    }
-  )
+    expect(markup).toContain('75% left')
+    expect(markup).toContain('width:75%')
+    expect(markup).not.toContain('width:25%')
+  })
 })
 
 describe('clampUsedPercent', () => {

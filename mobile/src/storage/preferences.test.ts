@@ -10,11 +10,14 @@ import {
   clampHostSidebarWidth,
   loadDisabledTerminalLiveInputHandles,
   loadHostSidebarWidth,
+  loadPushNotificationsEnabled,
   loadTerminalAutocompleteEnabled,
   loadTerminalLinkOpenMode,
+  readPushNotificationsPreference,
   readDisabledTerminalLiveInputHandlesPreference,
   saveDisabledTerminalLiveInputHandles,
   saveHostSidebarWidth,
+  savePushNotificationsEnabled,
   saveTerminalAutocompleteEnabled,
   saveTerminalLinkOpenMode
 } from './preferences'
@@ -25,6 +28,46 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
     setItem: vi.fn()
   }
 }))
+
+describe('push notification preference', () => {
+  beforeEach(() => {
+    vi.mocked(AsyncStorage.getItem).mockReset()
+    vi.mocked(AsyncStorage.setItem).mockReset()
+  })
+
+  it('distinguishes an unset preference from an explicit disabled choice', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+    await expect(readPushNotificationsPreference()).resolves.toEqual({
+      value: null,
+      loaded: true
+    })
+    await expect(loadPushNotificationsEnabled()).resolves.toBe(false)
+
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('false')
+    await expect(readPushNotificationsPreference()).resolves.toEqual({
+      value: false,
+      loaded: true
+    })
+  })
+
+  it('reports storage failures without enabling notifications', async () => {
+    vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
+
+    await expect(readPushNotificationsPreference()).resolves.toEqual({
+      value: null,
+      loaded: false
+    })
+    await expect(loadPushNotificationsEnabled()).resolves.toBe(false)
+  })
+
+  it('persists the onboarding decision in the existing mobile toggle', async () => {
+    await savePushNotificationsEnabled(true)
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:pushNotificationsEnabled', 'true')
+
+    await savePushNotificationsEnabled(false)
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:pushNotificationsEnabled', 'false')
+  })
+})
 
 describe('terminal autocomplete preference', () => {
   beforeEach(() => {

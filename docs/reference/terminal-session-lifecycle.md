@@ -46,6 +46,22 @@ persisted physical-to-owner pane-key alias for detach, plus a live Electron
 parked-close gate. Focused tests cover local, SSH, split, parked, shared,
 paired-host, ordinary runtime, pane-transfer, and late-spawn paths.
 
+`orca terminal close --tab` extends that same ownership boundary to automation.
+With an attached renderer, main sends a request/reply close, the renderer runs
+the canonical retirement path, persists a fresh host-partitioned session, and
+forces the main store to disk before acknowledging success. Without a renderer,
+the runtime applies the equivalent immutable projection to the persisted
+aggregate tab, removes every split binding and resume record, safely selects a
+surviving browser/editor/terminal surface, stops exact live or durable SSH PTYs,
+and flushes before returning. The ordinary `terminal close` pane/session
+contract is unchanged.
+
+This durability boundary does not use replay fences or tombstones. Renderer
+session writes are ordered through the same IPC sender, and a pending debounced
+write rebuilds from the latest store state, so the forced fresh snapshot is not
+followed by a captured pre-close topology patch. Headless closes update the
+single main-owned session projection directly.
+
 Origin-aware defensive expiry remains a follow-up. Immediate deletion on
 explicit close fixes the incident without applying a wall-clock policy that
 could invalidate intentional long-lived `worktree-sleep` checkpoints.
@@ -74,8 +90,20 @@ could invalidate intentional long-lived `worktree-sleep` checkpoints.
 
 - Changing terminal output, snapshot, replay, query-response, or hidden-delivery
   behavior.
-- Killing processes that deliberately daemonize away from the terminal process
-  group. This contract covers the PTY and its attached foreground process tree.
+- Killing processes that deliberately daemonize away from a plain user
+  terminal's process group (nohup-style survivors remain user intent there).
+  For **agent sessions**, close/kill additionally terminates the snapshotted
+  descendant tree — including detached-pgid children the PTY's SIGHUP cannot
+  reach — via `pty-descendant-termination.ts` (bounded fresh snapshot with
+  same-turn coalescing, SIGTERM, grace window, then identity-safe SIGKILL).
+  Completed process tables are never reused as signal targets, and identity
+  checks use C-locale timestamps from the source scan. Later requests start a
+  fresh same-turn-coalesced successor inside their own deadline instead of
+  waiting behind older scans. A session is marked as terminating before capture
+  and keeps request ownership through natural exit, so reattach, duplicate kill,
+  and graceful-to-immediate upgrade cannot race the snapshot; descendant signals
+  still require the exact root session/handle to be live. Windows and SSH-hosted
+  PTYs keep the previous foreground-tree contract for now.
 - Changing agent-provider resume commands or permission flags.
 - Making a UI close wait for a remote process to exit before the tab disappears.
 - Replacing worktree sleep with tab close. Sleep remains resumable by design.

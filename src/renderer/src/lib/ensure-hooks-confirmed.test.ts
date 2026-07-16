@@ -368,6 +368,26 @@ describe('ensureHooksConfirmed', () => {
     expect(pending).toHaveLength(0)
   })
 
+  it('forwards the explicit host to issueCommand inspection when repo ids collide', async () => {
+    const { state } = createTestState({
+      repos: [
+        { id: 'repo-1', displayName: 'Local Row' },
+        { id: 'repo-1', displayName: 'SSH Row', connectionId: 'server' }
+      ]
+    } as unknown as Partial<AppState>)
+    readIssueCommandMock.mockResolvedValue({
+      source: 'local',
+      sharedContent: null,
+      localContent: 'user content',
+      effectiveContent: 'user content',
+      localFilePath: ''
+    })
+
+    await ensureHooksConfirmed(state, 'repo-1', 'issueCommand', 'ssh:server')
+
+    expect(readIssueCommandMock).toHaveBeenCalledWith({ repoId: 'repo-1', hostId: 'ssh:server' })
+  })
+
   it('fails closed when issueCommand inspection reports an error status', async () => {
     const { state, pending } = createTestState()
     readIssueCommandMock.mockResolvedValue({

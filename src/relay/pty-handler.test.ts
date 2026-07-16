@@ -31,7 +31,12 @@ vi.mock('node-pty', () => ({
   spawn: mockPtySpawn
 }))
 
-import { PtyHandler, attachIdentityMismatches } from './pty-handler'
+import {
+  IMMEDIATE_PTY_EXIT_TIMEOUT_MS,
+  MAX_RELAY_PTY_SESSIONS,
+  PtyHandler,
+  attachIdentityMismatches
+} from './pty-handler'
 import type { RelayDispatcher } from './dispatcher'
 
 function createMockDispatcher() {
@@ -107,8 +112,10 @@ describe('PtyHandler', () => {
     handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
   })
 
-  afterEach(() => {
-    handler.dispose()
+  afterEach(async () => {
+    const cleanup = handler.dispose({ waitForPhysicalExit: false })
+    await vi.runAllTimersAsync()
+    await cleanup.catch(() => {})
     vi.useRealTimers()
   })
 
@@ -172,6 +179,128 @@ describe('PtyHandler', () => {
     expect(result).toEqual({ id: 'pty-1' })
     expect(mockPtySpawn).toHaveBeenCalled()
     expect(handler.activePtyCount).toBe(1)
+  })
+
+  it('atomically caps concurrent PTY spawn admission', async () => {
+    const results = await Promise.allSettled(
+      Array.from({ length: MAX_RELAY_PTY_SESSIONS + 1 }, () =>
+        dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
+      )
+    )
+
+    expect(results.filter(({ status }) => status === 'fulfilled')).toHaveLength(
+      MAX_RELAY_PTY_SESSIONS
+    )
+    expect(results.filter(({ status }) => status === 'rejected')).toHaveLength(1)
+    expect(results.find(({ status }) => status === 'rejected')).toMatchObject({
+      reason: expect.objectContaining({ message: 'Maximum number of PTY sessions reached (50)' })
+    })
+    expect(mockPtySpawn).toHaveBeenCalledTimes(MAX_RELAY_PTY_SESSIONS)
+    expect(handler.activePtyCount).toBe(MAX_RELAY_PTY_SESSIONS)
+  })
+
+  it('spawns a PTY without post-Node-18 array copy methods', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'toReversed')
+    Reflect.deleteProperty(Array.prototype, 'toReversed')
+    try {
+      await expect(dispatcher.callRequest('pty.spawn', {})).resolves.toMatchObject({ id: 'pty-1' })
+      expect(handler.activePtyCount).toBe(1)
+    } finally {
+      if (descriptor) {
+        Object.defineProperty(Array.prototype, 'toReversed', descriptor)
+      }
+    }
+  })
+
+  it('guards SSH agent terminals after merging the relay inherited Git config', async () => {
+    const gitConfigKeys = [
+      'GIT_CONFIG_COUNT',
+      'GIT_CONFIG_KEY_0',
+      'GIT_CONFIG_VALUE_0',
+      'GIT_CONFIG_KEY_1',
+      'GIT_CONFIG_VALUE_1',
+      'GIT_CONFIG_KEY_2',
+      'GIT_CONFIG_VALUE_2'
+    ] as const
+    const saved = Object.fromEntries(gitConfigKeys.map((key) => [key, process.env[key]]))
+    process.env.GIT_CONFIG_COUNT = '3'
+    process.env.GIT_CONFIG_KEY_0 = 'core.quotePath'
+    process.env.GIT_CONFIG_VALUE_0 = 'false'
+    process.env.GIT_CONFIG_KEY_1 = 'base.one'
+    process.env.GIT_CONFIG_VALUE_1 = 'one'
+    process.env.GIT_CONFIG_KEY_2 = 'base.two'
+    process.env.GIT_CONFIG_VALUE_2 = 'two'
+
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        command: 'claude',
+        env: {
+          GIT_CONFIG_COUNT: '1',
+          GIT_CONFIG_KEY_0: 'http.proxy',
+          GIT_CONFIG_VALUE_0: 'http://proxy.invalid'
+        }
+      })
+
+      const spawnEnv = mockPtySpawn.mock.calls[0]?.[2]?.env as Record<string, string>
+      expect(spawnEnv.GIT_TERMINAL_PROMPT).toBe('0')
+      expect(spawnEnv.GCM_INTERACTIVE).toBe('never')
+      expect(spawnEnv.GIT_CONFIG_COUNT).toBe('3')
+      expect(spawnEnv.GIT_CONFIG_KEY_0).toBe('http.proxy')
+      expect(spawnEnv.GIT_CONFIG_KEY_1).toBe('credential.interactive')
+      expect(spawnEnv.GIT_CONFIG_KEY_2).toBe('credential.guiPrompt')
+      expect(spawnEnv.GIT_CONFIG_KEY_3).toBeUndefined()
+    } finally {
+      for (const key of gitConfigKeys) {
+        if (saved[key] === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = saved[key]
+        }
+      }
+    }
+  })
+
+  it('guards a trusted SSH agent when its command uses a custom wrapper', async () => {
+    await dispatcher.callRequest('pty.spawn', {
+      command: 'cd /repo && custom-agent-wrapper',
+      launchAgent: 'claude'
+    })
+
+    const spawnEnv = mockPtySpawn.mock.calls[0]?.[2]?.env as Record<string, string>
+    expect(spawnEnv.GIT_TERMINAL_PROMPT).toBe('0')
+    expect(spawnEnv.GCM_INTERACTIVE).toBe('never')
+    expect(Object.values(spawnEnv)).toContain('credential.interactive')
+    expect(Object.values(spawnEnv)).toContain('credential.guiPrompt')
+  })
+
+  it('leaves an ordinary Windows SSH user terminal unchanged', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        env: {
+          GIT_TERMINAL_PROMPT: '1',
+          GCM_INTERACTIVE: 'auto',
+          GIT_CONFIG_COUNT: '1',
+          GIT_CONFIG_KEY_0: 'core.quotePath',
+          GIT_CONFIG_VALUE_0: 'false'
+        }
+      })
+      const userEnv = mockPtySpawn.mock.calls[0]?.[2]?.env as Record<string, string>
+      expect(userEnv.GIT_TERMINAL_PROMPT).toBe('1')
+      expect(userEnv.GCM_INTERACTIVE).toBe('auto')
+      expect(userEnv.GIT_CONFIG_COUNT).toBe('1')
+      expect(userEnv.GIT_CONFIG_KEY_0).toBe('core.quotePath')
+      expect(userEnv.GIT_CONFIG_KEY_1).toBeUndefined()
+      const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+      expect(JSON.parse(state)[0]?.gitCredentialPromptGuarded).toBe(false)
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
   })
 
   it('uses an explicit shell override and falls back to the default shell otherwise', async () => {
@@ -650,6 +779,35 @@ describe('PtyHandler', () => {
     ).rejects.toThrow('PTY "pty-1" not found')
   })
 
+  it('settles concurrent immediate shutdown when attach proves the shell exited', async () => {
+    const mockKill = vi.fn()
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      kill: mockKill,
+      onData: vi.fn(),
+      onExit: vi.fn()
+    })
+    await dispatcher.callRequest('pty.spawn', {})
+
+    let shutdown: Promise<unknown> | undefined
+    const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockImplementation(() => {
+      shutdown = dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+      return false
+    })
+    try {
+      await expect(dispatcher.callRequest('pty.attach', { id: 'pty-1' })).rejects.toThrow(
+        'PTY "pty-1" not found'
+      )
+      await expect(shutdown).resolves.toBeUndefined()
+    } finally {
+      aliveSpy.mockRestore()
+    }
+
+    expect(mockKill).toHaveBeenCalledWith('SIGKILL')
+    expect(handler.activePtyCount).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('replays for a reattach whose backing shell is still alive', async () => {
     // Guard the other direction: a live pid must never be reaped, so a quiet
     // but live session still returns its buffered replay on reattach.
@@ -678,8 +836,16 @@ describe('PtyHandler', () => {
   })
 
   it('terminates spawned PTY when request becomes stale before response', async () => {
+    let onExitCb: ((evt: { exitCode: number }) => void) | undefined
     const killSpy = vi.fn()
-    const term = { ...mockPtyInstance, kill: killSpy, onData: vi.fn(), onExit: vi.fn() }
+    const term = {
+      ...mockPtyInstance,
+      kill: killSpy,
+      onData: vi.fn(),
+      onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+        onExitCb = cb
+      })
+    }
     mockPtySpawn.mockReturnValue(term)
 
     await dispatcher.callRequest('pty.spawn', {}, { isStale: () => true })
@@ -692,6 +858,10 @@ describe('PtyHandler', () => {
     expect(killSpy).toHaveBeenCalledWith('SIGTERM')
     vi.advanceTimersByTime(5000)
     expect(killSpy).toHaveBeenCalledWith('SIGKILL')
+    expect(handler.activePtyCount).toBe(1)
+
+    onExitCb?.({ exitCode: 137 })
+    expect(handler.activePtyCount).toBe(0)
   })
 
   it('does not submit provider-delivered commands for stale spawn responses', async () => {
@@ -712,8 +882,16 @@ describe('PtyHandler', () => {
   })
 
   it('releases pending provider-delivered commands on shutdown before delivery', async () => {
+    let onExitCb: ((evt: { exitCode: number }) => void) | undefined
     const killSpy = vi.fn()
-    const term = { ...mockPtyInstance, kill: killSpy, onData: vi.fn(), onExit: vi.fn() }
+    const term = {
+      ...mockPtyInstance,
+      kill: killSpy,
+      onData: vi.fn(),
+      onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+        onExitCb = cb
+      })
+    }
     mockPtySpawn.mockReturnValue(term)
 
     await dispatcher.callRequest('pty.spawn', {
@@ -722,7 +900,9 @@ describe('PtyHandler', () => {
     })
     expect(handler.retainedStartupCommandCount).toBe(1)
 
-    await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+    const shutdown = dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+    onExitCb!({ exitCode: 137 })
+    await shutdown
     vi.advanceTimersByTime(50)
 
     expect(handler.retainedStartupCommandCount).toBe(0)
@@ -1062,46 +1242,96 @@ describe('PtyHandler', () => {
 
     it('on immediate shutdown', async () => {
       await withWindowsPlatform(async () => {
-        const mockKill = mockKillablePty()
+        let onExitCb: ((evt: { exitCode: number }) => void) | undefined
+        const mockKill = vi.fn()
+        mockPtySpawn.mockReturnValue({
+          ...mockPtyInstance,
+          kill: mockKill,
+          onData: vi.fn(),
+          onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+            onExitCb = cb
+          })
+        })
         await dispatcher.callRequest('pty.spawn', {})
-        await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+        const shutdown = dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+        onExitCb!({ exitCode: 137 })
+        await shutdown
         expectBareKills(mockKill, 1)
       })
     })
 
-    it('on stale-spawn cleanup including the SIGKILL fallback', async () => {
+    it('does not double-kill when immediate cleanup joins graceful shutdown', async () => {
+      await withWindowsPlatform(async () => {
+        let onExitCb: ((evt: { exitCode: number }) => void) | undefined
+        const mockKill = vi.fn()
+        const destroy = vi.fn()
+        mockPtySpawn.mockReturnValue({
+          ...mockPtyInstance,
+          kill: mockKill,
+          destroy,
+          onData: vi.fn(),
+          onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+            onExitCb = cb
+          })
+        })
+        await dispatcher.callRequest('pty.spawn', {})
+        await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: false })
+        const immediate = dispatcher.callRequest('pty.shutdown', {
+          id: 'pty-1',
+          immediate: true
+        })
+
+        expectBareKills(mockKill, 1)
+        onExitCb!({ exitCode: 137 })
+        await immediate
+        expectBareKills(mockKill, 1)
+        expect(destroy).not.toHaveBeenCalled()
+      })
+    })
+
+    it('does not retry stale-spawn cleanup after the Windows kill deadline', async () => {
       await withWindowsPlatform(async () => {
         const mockKill = mockKillablePty()
         await dispatcher.callRequest('pty.spawn', {}, { isStale: () => true })
         expectBareKills(mockKill, 1)
         vi.advanceTimersByTime(5000)
-        expectBareKills(mockKill, 2)
+        expectBareKills(mockKill, 1)
       })
     })
 
-    it('on graceful-shutdown SIGKILL fallback', async () => {
+    it('does not retry graceful shutdown after the Windows kill deadline', async () => {
       await withWindowsPlatform(async () => {
         const mockKill = mockKillablePty()
         await dispatcher.callRequest('pty.spawn', {})
         await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: false })
         expectBareKills(mockKill, 1)
         vi.advanceTimersByTime(5000)
-        expectBareKills(mockKill, 2)
+        expectBareKills(mockKill, 1)
       })
     })
 
     it('on dispose', async () => {
       await withWindowsPlatform(async () => {
-        const mockKill = mockKillablePty()
+        const mockKill = vi.fn()
+        const destroy = vi.fn()
+        mockPtySpawn.mockReturnValue({
+          ...mockPtyInstance,
+          kill: mockKill,
+          destroy,
+          onData: vi.fn(),
+          onExit: vi.fn()
+        })
         await dispatcher.callRequest('pty.spawn', {})
-        handler.dispose()
+        await handler.dispose({ waitForPhysicalExit: false })
         expectBareKills(mockKill, 1)
+        expect(destroy).not.toHaveBeenCalled()
       })
     })
   })
 
   it('flushes pending PTY output before immediate shutdown cleanup', async () => {
     let dataCallback: ((data: string) => void) | undefined
+    let onExitCb: ((evt: { exitCode: number }) => void) | undefined
     const mockKill = vi.fn()
     mockPtySpawn.mockReturnValue({
       ...mockPtyInstance,
@@ -1109,12 +1339,16 @@ describe('PtyHandler', () => {
       onData: vi.fn((cb: (data: string) => void) => {
         dataCallback = cb
       }),
-      onExit: vi.fn()
+      onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+        onExitCb = cb
+      })
     })
 
     await dispatcher.callRequest('pty.spawn', {})
     dataCallback!('last words')
-    await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+    const shutdown = dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+    onExitCb!({ exitCode: 137 })
+    await shutdown
 
     expect(dispatcher.notify).toHaveBeenNthCalledWith(1, 'pty.data', {
       id: 'pty-1',
@@ -1140,26 +1374,69 @@ describe('PtyHandler', () => {
     await dispatcher.callRequest('pty.spawn', { env: { ORCA_PANE_KEY: 'tab-fallback:0' } })
     await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: false })
     vi.advanceTimersByTime(5000)
+
+    expect(handler.activePtyCount).toBe(1)
+    expect(exits).toEqual([])
+    expect(dispatcher.notify).not.toHaveBeenCalledWith('pty.exit', expect.anything())
     onExitCb!({ exitCode: 137 })
 
     expect(mockKill).toHaveBeenCalledWith('SIGTERM')
     expect(mockKill).toHaveBeenCalledWith('SIGKILL')
-    expect(dispatcher.notify).toHaveBeenCalledWith('pty.exit', { id: 'pty-1', code: -1 })
+    expect(dispatcher.notify).toHaveBeenCalledWith('pty.exit', { id: 'pty-1', code: 137 })
     expect(exits).toEqual([{ id: 'pty-1', paneKey: 'tab-fallback:0' }])
     expect(handler.activePtyCount).toBe(0)
   })
 
+  it('retries a rejected graceful SIGKILL fallback while retaining ownership', async () => {
+    let onExitCb: ((evt: { exitCode: number }) => void) | undefined
+    let forceAttempts = 0
+    const mockKill = vi.fn((signal: string) => {
+      if (signal === 'SIGKILL' && forceAttempts++ === 0) {
+        throw new Error('transient kill failure')
+      }
+    })
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      kill: mockKill,
+      onData: vi.fn(),
+      onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+        onExitCb = cb
+      })
+    })
+
+    await dispatcher.callRequest('pty.spawn', {})
+    await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: false })
+    vi.advanceTimersByTime(5000)
+
+    expect(mockKill.mock.calls).toEqual([['SIGTERM'], ['SIGKILL']])
+    expect(handler.activePtyCount).toBe(1)
+    expect(vi.getTimerCount()).toBe(1)
+
+    vi.runOnlyPendingTimers()
+    expect(mockKill.mock.calls).toEqual([['SIGTERM'], ['SIGKILL'], ['SIGKILL']])
+    expect(handler.activePtyCount).toBe(1)
+
+    onExitCb!({ exitCode: 137 })
+    expect(handler.activePtyCount).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('kills PTY on shutdown with SIGKILL when immediate', async () => {
+    let onExitCb: ((evt: { exitCode: number }) => void) | undefined
     const mockKill = vi.fn()
     mockPtySpawn.mockReturnValue({
       ...mockPtyInstance,
       kill: mockKill,
       onData: vi.fn(),
-      onExit: vi.fn()
+      onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+        onExitCb = cb
+      })
     })
 
     await dispatcher.callRequest('pty.spawn', {})
-    await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+    const shutdown = dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+    onExitCb!({ exitCode: 137 })
+    await shutdown
     expect(mockKill).toHaveBeenCalledWith('SIGKILL')
   })
 
@@ -1444,6 +1721,43 @@ describe('PtyHandler', () => {
     expect(spawnEnv.env.TERM).toBe('xterm-256color')
   })
 
+  it('admits default-cwd spawns through the worktree removal coordinator', async () => {
+    const finishCreation = vi.fn()
+    const beginWorktreePtySpawn = vi.fn((_operationPath: string) => finishCreation)
+    handler.setWorktreeRemovalCoordinator({ beginWorktreePtySpawn })
+
+    await dispatcher.callRequest('pty.spawn', {})
+
+    expect(beginWorktreePtySpawn).toHaveBeenCalledWith(expect.any(String))
+    expect(beginWorktreePtySpawn.mock.calls[0][0]).not.toBe('')
+    expect(finishCreation).toHaveBeenCalledTimes(1)
+  })
+
+  it('fences both sibling worktree identity and removing cwd with rollback', async () => {
+    const finishSiblingAdmission = vi.fn()
+    const beginWorktreePtySpawn = vi.fn((operationPath: string) => {
+      if (operationPath === '/repo/removing/nested') {
+        throw new Error('Remote worktree deletion already in progress')
+      }
+      return finishSiblingAdmission
+    })
+    handler.setWorktreeRemovalCoordinator({ beginWorktreePtySpawn })
+
+    await expect(
+      dispatcher.callRequest('pty.spawn', {
+        cwd: '/repo/removing/nested',
+        env: { ORCA_WORKTREE_ID: 'repo-id::/repo/sibling' }
+      })
+    ).rejects.toThrow('Remote worktree deletion already in progress')
+
+    expect(beginWorktreePtySpawn.mock.calls.map(([operationPath]) => operationPath)).toEqual([
+      '/repo/sibling',
+      '/repo/removing/nested'
+    ])
+    expect(finishSiblingAdmission).toHaveBeenCalledOnce()
+    expect(mockPtySpawn).not.toHaveBeenCalled()
+  })
+
   it('lets relay env augmenters resolve the original sequenced startup command hint', async () => {
     handler.addEnvAugmenter((ctx) => ({
       SEEN_LAUNCH_COMMAND_HINT: resolveSetupAgentSequenceLaunchCommand(ctx.env, ctx.command) ?? ''
@@ -1529,7 +1843,7 @@ describe('PtyHandler', () => {
     })
     const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
 
-    handler.dispose()
+    await handler.dispose({ waitForPhysicalExit: false })
     mockPtySpawn.mockClear()
     dispatcher = createMockDispatcher()
     handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
@@ -1555,6 +1869,152 @@ describe('PtyHandler', () => {
     expect(callArgs.env.TERM_PROGRAM).toBe('Orca')
   })
 
+  it('fences both revived worktree identity and cwd with rollback', async () => {
+    const finishSiblingAdmission = vi.fn()
+    const beginWorktreePtySpawn = vi.fn((operationPath: string) => {
+      if (operationPath === '/repo/removing/nested') {
+        throw new Error('Remote worktree deletion already in progress')
+      }
+      return finishSiblingAdmission
+    })
+    handler.setWorktreeRemovalCoordinator({ beginWorktreePtySpawn })
+    const state = JSON.stringify([
+      {
+        id: 'pty-7',
+        pid: process.pid,
+        cols: 80,
+        rows: 24,
+        cwd: '/repo/removing/nested',
+        worktreeId: 'repo-id::/repo/sibling'
+      }
+    ])
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      await expect(dispatcher.callRequest('pty.revive', { state })).rejects.toThrow(
+        'Remote worktree deletion already in progress'
+      )
+    } finally {
+      killSpy.mockRestore()
+    }
+
+    expect(beginWorktreePtySpawn.mock.calls.map(([operationPath]) => operationPath)).toEqual([
+      '/repo/sibling',
+      '/repo/removing/nested'
+    ])
+    expect(finishSiblingAdmission).toHaveBeenCalledOnce()
+    expect(mockPtySpawn).not.toHaveBeenCalled()
+  })
+
+  it('applies the physical PTY cap to untrusted revive state', async () => {
+    const state = JSON.stringify(
+      Array.from({ length: MAX_RELAY_PTY_SESSIONS + 1 }, (_, index) => ({
+        id: `pty-${index + 1}`,
+        pid: process.pid,
+        cols: 80,
+        rows: 24,
+        cwd: '/repo',
+        worktreeId: 'repo-id::/repo'
+      }))
+    )
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      await expect(dispatcher.callRequest('pty.revive', { state })).rejects.toThrow(
+        'Maximum number of PTY sessions reached (50)'
+      )
+    } finally {
+      killSpy.mockRestore()
+    }
+
+    expect(mockPtySpawn).toHaveBeenCalledTimes(MAX_RELAY_PTY_SESSIONS)
+    expect(handler.activePtyCount).toBe(MAX_RELAY_PTY_SESSIONS)
+  })
+
+  it('deduplicates concurrent revive requests for the same physical PTY id', async () => {
+    const state = JSON.stringify([
+      {
+        id: 'pty-7',
+        pid: process.pid,
+        cols: 80,
+        rows: 24,
+        cwd: '/repo',
+        worktreeId: 'repo-id::/repo'
+      }
+    ])
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      await Promise.all([
+        dispatcher.callRequest('pty.revive', { state }),
+        dispatcher.callRequest('pty.revive', { state })
+      ])
+    } finally {
+      killSpy.mockRestore()
+    }
+
+    expect(mockPtySpawn).toHaveBeenCalledTimes(1)
+    expect(handler.activePtyCount).toBe(1)
+  })
+
+  it('revive preserves the credential guard chosen for an SSH agent terminal', async () => {
+    await dispatcher.callRequest('pty.spawn', {
+      command: 'claude'
+    })
+    const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
+    expect(JSON.parse(state)[0]?.gitCredentialPromptGuarded).toBe(true)
+
+    handler.dispose()
+    mockPtySpawn.mockClear()
+    dispatcher = createMockDispatcher()
+    handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      await dispatcher.callRequest('pty.revive', { state })
+    } finally {
+      killSpy.mockRestore()
+    }
+
+    const revivedEnv = mockPtySpawn.mock.calls[0]?.[2]?.env as Record<string, string>
+    expect(revivedEnv.GIT_TERMINAL_PROMPT).toBe('0')
+    expect(revivedEnv.GCM_INTERACTIVE).toBe('never')
+    expect(Object.values(revivedEnv)).toContain('credential.interactive')
+    expect(Object.values(revivedEnv)).toContain('credential.guiPrompt')
+  })
+
+  it('revive treats legacy relay state as an ordinary unguarded terminal', async () => {
+    const savedTerminalPrompt = process.env.GIT_TERMINAL_PROMPT
+    const savedGcmInteractive = process.env.GCM_INTERACTIVE
+    delete process.env.GIT_TERMINAL_PROMPT
+    delete process.env.GCM_INTERACTIVE
+    const state = JSON.stringify([
+      {
+        id: 'pty-legacy',
+        pid: process.pid,
+        cols: 80,
+        rows: 24,
+        cwd: process.cwd()
+      }
+    ])
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
+    try {
+      await dispatcher.callRequest('pty.revive', { state })
+      const revivedEnv = mockPtySpawn.mock.calls[0]?.[2]?.env as Record<string, string>
+      expect(revivedEnv.GIT_TERMINAL_PROMPT).toBeUndefined()
+      expect(revivedEnv.GCM_INTERACTIVE).toBeUndefined()
+    } finally {
+      killSpy.mockRestore()
+      if (savedTerminalPrompt === undefined) {
+        delete process.env.GIT_TERMINAL_PROMPT
+      } else {
+        process.env.GIT_TERMINAL_PROMPT = savedTerminalPrompt
+      }
+      if (savedGcmInteractive === undefined) {
+        delete process.env.GCM_INTERACTIVE
+      } else {
+        process.env.GCM_INTERACTIVE = savedGcmInteractive
+      }
+    }
+  })
+
   it('normalizes an explicit empty TERM and preserves sanitized env deletions on revive', async () => {
     await dispatcher.callRequest('pty.spawn', {
       env: { TERM: '' },
@@ -1576,7 +2036,7 @@ describe('PtyHandler', () => {
     expect(serialized.explicitTerm).toBeUndefined()
     expect(serialized.envToDelete).toEqual(['ORCA_ATTRIBUTION_SHIM_DIR'])
 
-    handler.dispose()
+    await handler.dispose({ waitForPhysicalExit: false })
     mockPtySpawn.mockClear()
     dispatcher = createMockDispatcher()
     handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
@@ -1649,7 +2109,7 @@ describe('PtyHandler', () => {
 
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
     try {
-      handler.dispose()
+      await handler.dispose({ waitForPhysicalExit: false })
       mockPtySpawn.mockClear()
       dispatcher = createMockDispatcher()
       handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
@@ -1673,7 +2133,7 @@ describe('PtyHandler', () => {
         }
       ])
 
-      handler.dispose()
+      await handler.dispose({ waitForPhysicalExit: false })
       mockPtySpawn.mockClear()
       dispatcher = createMockDispatcher()
       handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
@@ -1747,7 +2207,7 @@ describe('PtyHandler', () => {
     }
     const state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
 
-    handler.dispose()
+    await handler.dispose({ waitForPhysicalExit: false })
     mockPtySpawn.mockClear()
     dispatcher = createMockDispatcher()
     handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
@@ -1805,7 +2265,7 @@ describe('PtyHandler', () => {
     expect(exits).toEqual([{ id: 'pty-1', paneKey: 'tab-2:1' }])
   })
 
-  it('immediate shutdown invokes the exit listener once even if onExit arrives later', async () => {
+  it('keeps immediate shutdown pending until onExit and invokes the exit listener once', async () => {
     let onExitCb: ((evt: { exitCode: number }) => void) | undefined
     const mockKill = vi.fn()
     mockPtySpawn.mockReturnValue({
@@ -1822,21 +2282,219 @@ describe('PtyHandler', () => {
     await dispatcher.callRequest('pty.spawn', {
       env: { ORCA_PANE_KEY: 'tab-shutdown:0' }
     })
-    await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+    let settled = false
+    const shutdown = dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+    void shutdown.then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+
+    expect(settled).toBe(false)
+    expect(exits).toEqual([])
+    expect(handler.activePtyCount).toBe(1)
     onExitCb!({ exitCode: 0 })
+    await shutdown
 
     expect(mockKill).toHaveBeenCalledWith('SIGKILL')
     expect(exits).toEqual([{ id: 'pty-1', paneKey: 'tab-shutdown:0' }])
     expect(handler.activePtyCount).toBe(0)
   })
 
-  it('dispose kills all PTYs with SIGKILL and invokes exit listeners', async () => {
+  it('physically stops only matching worktree PTYs before relay deletion', async () => {
+    let firstExit: ((evt: { exitCode: number }) => void) | undefined
+    let secondExit: ((evt: { exitCode: number }) => void) | undefined
+    const firstKill = vi.fn()
+    const secondKill = vi.fn()
+    mockPtySpawn
+      .mockReturnValueOnce({
+        ...mockPtyInstance,
+        kill: firstKill,
+        onData: vi.fn(),
+        onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+          firstExit = cb
+        })
+      })
+      .mockReturnValueOnce({
+        ...mockPtyInstance,
+        kill: secondKill,
+        onData: vi.fn(),
+        onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+          secondExit = cb
+        })
+      })
+
+    await dispatcher.callRequest('pty.spawn', {
+      cwd: '/repo',
+      env: { ORCA_WORKTREE_ID: 'repo-id::/repo' }
+    })
+    await dispatcher.callRequest('pty.spawn', {
+      cwd: '/sibling',
+      env: { ORCA_WORKTREE_ID: 'repo-id::/sibling' }
+    })
+
+    let settled = false
+    const shutdown = handler.shutdownForWorktreePath('/repo').finally(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    expect(firstKill).toHaveBeenCalledWith('SIGKILL')
+    expect(secondKill).not.toHaveBeenCalled()
+    expect(settled).toBe(false)
+    expect(handler.activePtyCount).toBe(2)
+
+    firstExit?.({ exitCode: 137 })
+    await shutdown
+    expect(secondExit).toBeDefined()
+    expect(handler.activePtyCount).toBe(1)
+  })
+
+  it('rejects timed-out immediate shutdown while retaining the physical owner', async () => {
+    let onExitCb: ((evt: { exitCode: number }) => void) | undefined
     const mockKill = vi.fn()
     mockPtySpawn.mockReturnValue({
       ...mockPtyInstance,
       kill: mockKill,
       onData: vi.fn(),
-      onExit: vi.fn()
+      onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+        onExitCb = cb
+      })
+    })
+
+    await dispatcher.callRequest('pty.spawn', {})
+    const shutdown = dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+    const rejected = expect(shutdown).rejects.toThrow('Timed out waiting for PTY process exit')
+    await vi.advanceTimersByTimeAsync(IMMEDIATE_PTY_EXIT_TIMEOUT_MS)
+    await rejected
+
+    expect(mockKill).toHaveBeenCalledTimes(1)
+    expect(handler.activePtyCount).toBe(1)
+    const retry = dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: true })
+    expect(mockKill).toHaveBeenCalledTimes(1)
+    onExitCb!({ exitCode: 137 })
+    await retry
+    expect(handler.activePtyCount).toBe(0)
+  })
+
+  it('fences late creation and drains an admitted spawn before the disposal snapshot', async () => {
+    let onExitCb: ((evt: { exitCode: number }) => void) | undefined
+    const mockKill = vi.fn()
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      kill: mockKill,
+      onData: vi.fn(),
+      onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+        onExitCb = cb
+      })
+    })
+
+    const admittedSpawn = dispatcher.callRequest('pty.spawn', {})
+    const dispose = handler.dispose()
+    await admittedSpawn
+
+    expect(mockKill).toHaveBeenCalledWith('SIGKILL')
+    expect(handler.activePtyCount).toBe(1)
+    await expect(dispatcher.callRequest('pty.spawn', {})).rejects.toThrow(
+      'PTY handler is shutting down'
+    )
+    const aliveSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    try {
+      await expect(
+        dispatcher.callRequest('pty.revive', {
+          state: JSON.stringify([
+            { id: 'pty-late', pid: process.pid, cols: 80, rows: 24, cwd: '/tmp' }
+          ])
+        })
+      ).rejects.toThrow('PTY handler is shutting down')
+    } finally {
+      aliveSpy.mockRestore()
+    }
+
+    onExitCb!({ exitCode: 137 })
+    await dispose
+    expect(handler.activePtyCount).toBe(0)
+    expect(handler.dispose()).toBe(dispose)
+  })
+
+  it('retries a rejected force kill during dispose and waits for physical exit', async () => {
+    let onExitCb: ((evt: { exitCode: number }) => void) | undefined
+    let forceAttempts = 0
+    const mockKill = vi.fn((signal: string) => {
+      if (signal === 'SIGKILL' && forceAttempts++ === 0) {
+        throw new Error('transient dispose kill failure')
+      }
+    })
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      kill: mockKill,
+      onData: vi.fn(),
+      onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+        onExitCb = cb
+      })
+    })
+
+    await dispatcher.callRequest('pty.spawn', {})
+    const dispose = handler.dispose()
+    await Promise.resolve()
+
+    expect(mockKill.mock.calls).toEqual([['SIGKILL']])
+    expect(handler.activePtyCount).toBe(1)
+    await vi.advanceTimersByTimeAsync(250)
+    expect(mockKill.mock.calls).toEqual([['SIGKILL'], ['SIGKILL']])
+    expect(handler.activePtyCount).toBe(1)
+
+    onExitCb!({ exitCode: 137 })
+    await dispose
+    expect(handler.activePtyCount).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('takes ownership when dispose overlaps a queued graceful force-kill retry', async () => {
+    let onExitCb: ((evt: { exitCode: number }) => void) | undefined
+    let forceAttempts = 0
+    const mockKill = vi.fn((signal: string) => {
+      if (signal === 'SIGKILL' && forceAttempts++ < 2) {
+        throw new Error('transient overlapping kill failure')
+      }
+    })
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      kill: mockKill,
+      onData: vi.fn(),
+      onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+        onExitCb = cb
+      })
+    })
+
+    await dispatcher.callRequest('pty.spawn', {})
+    await dispatcher.callRequest('pty.shutdown', { id: 'pty-1', immediate: false })
+    vi.advanceTimersByTime(5000)
+    expect(mockKill.mock.calls).toEqual([['SIGTERM'], ['SIGKILL']])
+    expect(vi.getTimerCount()).toBe(1)
+
+    const dispose = handler.dispose()
+    await Promise.resolve()
+    expect(mockKill.mock.calls).toEqual([['SIGTERM'], ['SIGKILL'], ['SIGKILL']])
+    expect(vi.getTimerCount()).toBe(1)
+    await vi.advanceTimersByTimeAsync(250)
+    expect(mockKill.mock.calls).toEqual([['SIGTERM'], ['SIGKILL'], ['SIGKILL'], ['SIGKILL']])
+    expect(handler.activePtyCount).toBe(1)
+
+    onExitCb!({ exitCode: 137 })
+    await dispose
+    expect(handler.activePtyCount).toBe(0)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('dispose kills all PTYs with SIGKILL and invokes exit listeners', async () => {
+    const mockKill = vi.fn()
+    const onExitCallbacks: ((evt: { exitCode: number }) => void)[] = []
+    mockPtySpawn.mockReturnValue({
+      ...mockPtyInstance,
+      kill: mockKill,
+      onData: vi.fn(),
+      onExit: vi.fn((cb: (evt: { exitCode: number }) => void) => {
+        onExitCallbacks.push(cb)
+      })
     })
     const exits: { id: string; paneKey?: string }[] = []
     handler.setExitListener((evt) => exits.push(evt))
@@ -1845,12 +2503,18 @@ describe('PtyHandler', () => {
     await dispatcher.callRequest('pty.spawn', { env: { ORCA_PANE_KEY: 'tab-dispose:1' } })
     expect(handler.activePtyCount).toBe(2)
 
-    handler.dispose()
+    const dispose = handler.dispose()
+    await Promise.resolve()
     // Why: dispose uses SIGKILL (not SIGTERM) because the relay process is
     // exiting. A SIGTERM-ignoring remote shell (editor with unsaved buffers,
     // wedged process, uninterruptible sleep) would survive SIGTERM + immediate
     // destroy() as an orphan on the remote host. SIGKILL is not ignorable.
     expect(mockKill).toHaveBeenCalledWith('SIGKILL')
+    expect(handler.activePtyCount).toBe(2)
+    for (const onExit of onExitCallbacks) {
+      onExit({ exitCode: 137 })
+    }
+    await dispose
     expect(exits).toEqual([
       { id: 'pty-1', paneKey: 'tab-dispose:0' },
       { id: 'pty-2', paneKey: 'tab-dispose:1' }

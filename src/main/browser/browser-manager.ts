@@ -39,6 +39,11 @@ import {
 } from './browser-guest-ui'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 import { openPopupWithOriginBar, type PopupChildWindowOptions } from './popup-origin-bar-window'
+import {
+  BROWSER_CLICKED_LINK_ROUTING_WORLD_ID,
+  buildBrowserClickedLinkRoutingScript,
+  buildBrowserIframeClickedLinkRoutingScript
+} from './browser-clicked-link-routing'
 import { cleanElectronUserAgent } from './browser-session-ua'
 import type { BrowserViewportOverride } from '../../shared/types'
 import {
@@ -146,7 +151,6 @@ type PopupOwnerContext = {
   browserTabId: string
   rootGuestWebContentsId: number
 }
-
 const SAFE_POPUP_WINDOW_OPTIONS = {
   alwaysOnTop: false,
   closable: true,
@@ -235,6 +239,7 @@ export class BrowserManager {
   private readonly worktreeIdByTabId = new Map<string, string>()
   private readonly policyAttachedGuestIds = new Set<number>()
   private readonly policyCleanupByGuestId = new Map<number, () => void>()
+  private readonly clickedLinkFrameNameByGuestId = new Map<number, string>()
   private shouldForwardDictationShortcut: (() => boolean) | null = null
   private readonly pendingLoadFailuresByGuestId = new Map<
     number,
@@ -620,6 +625,15 @@ export class BrowserManager {
     if (inheritedOwnerContext) {
       this.popupOwnerContextByGuestId.set(guest.id, inheritedOwnerContext)
     }
+    // Why: OAuth child windows must retain normal link/window relationships;
+    // only the primary embedded browser converts new-tab clicks to Orca tabs.
+    const clickedLinkFrameName = inheritedOwnerContext
+      ? null
+      : `__orca_clicked_link_foreground_${randomUUID()}`
+    if (clickedLinkFrameName) {
+      this.clickedLinkFrameNameByGuestId.set(guest.id, clickedLinkFrameName)
+    }
+    let clickedLinkRoutingActive = Boolean(clickedLinkFrameName)
 
     // Why: Cloudflare Turnstile and similar bot detectors probe browser APIs
     // (navigator.webdriver, plugins, window.chrome) that differ in Electron
@@ -632,16 +646,118 @@ export class BrowserManager {
     // Orca window is not the focused foreground app. With throttling enabled,
     // the compositor stops producing frames and capturePage() returns empty.
     guest.setBackgroundThrottling(false)
+    const installClickedLinkRouting = (): void => {
+      if (!clickedLinkRoutingActive || !clickedLinkFrameName || guest.isDestroyed()) {
+        return
+      }
+      // Why: an isolated-world click listener can label real anchor clicks
+      // without exposing the private frame name to untrusted page scripts.
+      void guest
+        .executeJavaScriptInIsolatedWorld(
+          BROWSER_CLICKED_LINK_ROUTING_WORLD_ID,
+          [
+            {
+              // Why: mobile emulation spoofs the guest UA as iOS, so modifier
+              // routing must use the actual desktop host platform from main.
+              code: buildBrowserClickedLinkRoutingScript(
+                clickedLinkFrameName,
+                process.platform === 'darwin'
+              )
+            }
+          ],
+          false
+        )
+        .catch(() => {})
+    }
+    if (clickedLinkFrameName) {
+      guest.on('dom-ready', installClickedLinkRouting)
+    }
+    const pendingIframeRoutingInstalls = new Map<Electron.WebFrameMain, () => void>()
+    const iframeFrameNameByFrame = new Map<Electron.WebFrameMain, string>()
+    const iframeFrameByFrameName = new Map<string, Electron.WebFrameMain>()
+    const clearIframeFrameName = (frame: Electron.WebFrameMain): void => {
+      const name = iframeFrameNameByFrame.get(frame)
+      if (!name) {
+        return
+      }
+      iframeFrameNameByFrame.delete(frame)
+      iframeFrameByFrameName.delete(name)
+    }
+    const installIframeClickedLinkRouting = (frame: Electron.WebFrameMain): void => {
+      clearIframeFrameName(frame)
+      if (!clickedLinkRoutingActive || frame.isDestroyed()) {
+        return
+      }
+      const name = `__orca_clicked_link_iframe_foreground_${randomUUID()}`
+      iframeFrameNameByFrame.set(frame, name)
+      iframeFrameByFrameName.set(name, frame)
+      // Why: child-frame tokens live in the page world, so they are consumed
+      // after one trusted click and replaced before another can be routed.
+      void frame
+        .executeJavaScript(
+          buildBrowserIframeClickedLinkRoutingScript(name, process.platform === 'darwin'),
+          false
+        )
+        .catch(() => {
+          if (iframeFrameNameByFrame.get(frame) === name) {
+            clearIframeFrameName(frame)
+          }
+        })
+    }
+    const handleFrameCreated = (
+      _event: Electron.Event,
+      { frame }: Electron.FrameCreatedDetails
+    ): void => {
+      if (!clickedLinkFrameName || !frame || frame.parent === null) {
+        return
+      }
+      for (const knownFrame of iframeFrameNameByFrame.keys()) {
+        if (knownFrame.isDestroyed()) {
+          clearIframeFrameName(knownFrame)
+        }
+      }
+      const installAfterDomReady = (): void => {
+        pendingIframeRoutingInstalls.delete(frame)
+        installIframeClickedLinkRouting(frame)
+      }
+      pendingIframeRoutingInstalls.set(frame, installAfterDomReady)
+      frame.once('dom-ready', installAfterDomReady)
+    }
+    if (clickedLinkFrameName) {
+      guest.on('frame-created', handleFrameCreated)
+    }
     const handleDidCreateWindow = (window: Electron.BrowserWindow): void => {
       // Why: popup descendants inherit the opener's owner context for routing,
       // but must not replace its primary guest registration.
       this.attachGuestPolicies(window.webContents, this.resolvePopupOwnerContext(guest.id))
     }
     guest.on('did-create-window', handleDidCreateWindow)
-    guest.setWindowOpenHandler(({ url }) => {
+    guest.setWindowOpenHandler(({ url, frameName }) => {
       const browserTabId = this.resolveBrowserTabIdForGuestWebContentsId(guest.id)
       const browserUrl = normalizeBrowserNavigationUrl(url)
       const externalUrl = normalizeExternalBrowserUrl(url)
+      const expectedClickedLinkFrameName = this.clickedLinkFrameNameByGuestId.get(guest.id)
+      const iframeFrame = frameName ? iframeFrameByFrameName.get(frameName) : undefined
+      let isClickedLink = Boolean(
+        expectedClickedLinkFrameName && frameName === expectedClickedLinkFrameName
+      )
+      if (!isClickedLink && iframeFrame) {
+        isClickedLink = true
+        clearIframeFrameName(iframeFrame)
+        queueMicrotask(() => installIframeClickedLinkRouting(iframeFrame))
+      }
+
+      if (isClickedLink) {
+        if (browserTabId && browserUrl && this.openLinkInOrcaTab(browserTabId, browserUrl)) {
+          this.forwardOrQueuePopupEvent(guest.id, {
+            origin: safeOrigin(browserUrl),
+            action: 'opened-in-orca'
+          })
+        }
+        // Why: a recognized user gesture must never fall through to a native
+        // popup merely because its renderer disappeared during the click.
+        return { action: 'deny' }
+      }
 
       // Why: file URLs are valid for user-opened in-pane previews, but remote
       // content must not create native child windows targeting local paths.
@@ -739,6 +855,19 @@ export class BrowserManager {
       try {
         guest.off('destroyed', handleDestroyed)
         guest.off('did-create-window', handleDidCreateWindow)
+        if (clickedLinkFrameName) {
+          clickedLinkRoutingActive = false
+          guest.off('dom-ready', installClickedLinkRouting)
+          guest.off('frame-created', handleFrameCreated)
+          for (const [frame, install] of pendingIframeRoutingInstalls) {
+            if (!frame.isDestroyed()) {
+              frame.off('dom-ready', install)
+            }
+          }
+          pendingIframeRoutingInstalls.clear()
+          iframeFrameNameByFrame.clear()
+          iframeFrameByFrameName.clear()
+        }
       } catch {
         // guest may already be destroyed
       }
@@ -795,6 +924,7 @@ export class BrowserManager {
       this.policyCleanupByGuestId.delete(guestWebContentsId)
     }
     this.policyAttachedGuestIds.delete(guestWebContentsId)
+    this.clickedLinkFrameNameByGuestId.delete(guestWebContentsId)
     this.popupOwnerContextByGuestId.delete(guestWebContentsId)
     // Why: a popup must stop inheriting authorization as soon as its primary
     // owner is retired, even if Chromium has not destroyed the child yet.
@@ -989,6 +1119,7 @@ export class BrowserManager {
       cleanup()
     }
     this.policyCleanupByGuestId.clear()
+    this.clickedLinkFrameNameByGuestId.clear()
     this.tabIdByWebContentsId.clear()
     this.popupOwnerContextByGuestId.clear()
     this.worktreeIdByTabId.clear()
@@ -1880,6 +2011,24 @@ export class BrowserManager {
         validatedUrl: redactKagiSessionToken(loadError.validatedUrl)
       }
     })
+  }
+
+  private openLinkInOrcaTab(browserTabId: string, rawUrl: string): boolean {
+    const renderer = this.resolveRendererForBrowserTab(browserTabId)
+    if (!renderer) {
+      return false
+    }
+    const normalizedUrl = normalizeBrowserNavigationUrl(rawUrl)
+    if (!normalizedUrl || normalizedUrl === ORCA_BROWSER_BLANK_URL) {
+      return false
+    }
+    // Why: only the renderer owns Orca's worktree/tab model. Main forwards a
+    // validated URL instead of letting arbitrary guest content mutate it.
+    renderer.send('browser:open-link-in-orca-tab', {
+      browserPageId: browserTabId,
+      url: normalizedUrl
+    })
+    return true
   }
 }
 

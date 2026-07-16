@@ -15,7 +15,10 @@ import {
   resolveTerminalCursorInactiveStyle
 } from '@/lib/pane-manager/pane-terminal-options'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
-import { configureTerminalOutputBacklogCap } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import {
+  configureTerminalOutputBacklogCap,
+  writeTerminalOutput
+} from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
 import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/pane-terminal-mouse-wheel'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
@@ -103,10 +106,8 @@ import { getConnectionId } from '@/lib/connection-context'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { isPaneReplaying, type ReplayingPanesRef } from './replay-guard'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
-import {
-  markTerminalPinnedViewport,
-  syncTerminalScrollIntentSoon
-} from '@/lib/pane-manager/terminal-scroll-intent'
+import { markTerminalPinnedViewport } from '@/lib/pane-manager/terminal-scroll-intent'
+import { syncTerminalScrollIntentSoon } from '@/lib/pane-manager/terminal-scroll-intent-settle'
 import { registerRuntimeTerminalTab, scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { captureParkedTerminalPaneCandidates } from './terminal-parked-tab-watchers'
 import { e2eConfig } from '@/lib/e2e-config'
@@ -131,6 +132,17 @@ import {
   resolveTabTitleAfterPaneClose,
   shouldClearLaunchAgentForClosedPane
 } from './terminal-pane-close-identity'
+
+export function resetTerminalKeyboardProtocolAfterInterrupt(terminal: Terminal): void {
+  // Use the guarded output path so a certified/throwing xterm cannot escape a
+  // keyboard handler or retain more writes while pane recovery is delayed.
+  writeTerminalOutput(terminal, RESET_KITTY_KEYBOARD_PROTOCOL, {
+    foreground: true,
+    // The interrupt itself already took the synchronous input path. Queue the
+    // renderer reset so it cannot flush a PTY backlog inside the key handler.
+    latencySensitive: false
+  })
+}
 
 export function recordRuntimeCreatedTerminalPaneSplit(
   createdPane: unknown,
@@ -981,7 +993,7 @@ export function useTerminalPaneLifecycle({
               pane.terminal.input(TERMINAL_INTERRUPT_INPUT)
               // Why: CLIs such as Codex can die on SIGINT before restoring
               // xterm's renderer-side Kitty flags, leaving the shell corrupted.
-              pane.terminal.write(RESET_KITTY_KEYBOARD_PROTOCOL)
+              resetTerminalKeyboardProtocolAfterInterrupt(pane.terminal)
             } else {
               pendingTerminalInterruptKeyup = false
             }
@@ -1010,11 +1022,20 @@ export function useTerminalPaneLifecycle({
           }
 
           if (e.type === 'keydown') {
+            const shouldSyncCurrentTerminal = (): boolean =>
+              managerRef.current
+                ?.getPanes()
+                .some((candidate) => candidate.terminal === pane.terminal) === true
             if (e.key === 'PageUp' || e.key === 'Home') {
               markTerminalPinnedViewport(pane.terminal)
-              syncTerminalScrollIntentSoon(pane.terminal, { preservePinnedAtBottom: true })
+              syncTerminalScrollIntentSoon(pane.terminal, {
+                preservePinnedAtBottom: true,
+                shouldSync: shouldSyncCurrentTerminal
+              })
             } else if (e.key === 'PageDown' || e.key === 'End') {
-              syncTerminalScrollIntentSoon(pane.terminal)
+              syncTerminalScrollIntentSoon(pane.terminal, {
+                shouldSync: shouldSyncCurrentTerminal
+              })
             }
           }
 

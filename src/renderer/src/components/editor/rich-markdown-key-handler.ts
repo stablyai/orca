@@ -3,7 +3,6 @@ import type { Editor } from '@tiptap/react'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { useAppStore } from '@/store'
 import { isMarkdownPreviewFindShortcut } from './markdown-preview-search'
-import { editorShortcutMatches } from './editor-shortcuts'
 import type { LinkBubbleState } from './RichMarkdownLinkBubble'
 import { commitRow, type DocLinkMenuRow, type DocLinkMenuState } from './rich-markdown-commands'
 import {
@@ -21,12 +20,16 @@ import { deleteAdjacentEmptyParagraph } from './rich-markdown-empty-paragraph-de
 import { handleRichMarkdownCitationKey } from './rich-markdown-citation-keyboard'
 import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
 import { handleRichMarkdownLinkShortcut } from './rich-markdown-link-shortcut'
+import { handleRichMarkdownSaveShortcut } from './rich-markdown-save-shortcut'
 
 export type KeyHandlerContext = {
   isMac: boolean
   editorRef: MutableRefObject<Editor | null>
   rootRef: MutableRefObject<HTMLDivElement | null>
   lastCommittedMarkdownRef: MutableRefObject<string>
+  originalSourceRef: MutableRefObject<string>
+  baseCanonicalRef: MutableRefObject<string>
+  reconcileRoundTripRef: MutableRefObject<(markdown: string) => string | null>
   onContentChangeRef: MutableRefObject<(content: string) => void>
   onSaveRef: MutableRefObject<(content: string) => void>
   isEditingLinkRef: MutableRefObject<boolean>
@@ -127,15 +130,7 @@ export function createRichMarkdownKeyHandler(
       ctx.openSearchRef.current()
       return true
     }
-    if (editorShortcutMatches('editor.save', event)) {
-      event.preventDefault()
-      // Why: flush any pending debounced serialization so the save
-      // captures the very latest editor content, not a stale snapshot.
-      ctx.flushPendingSerialization()
-      const markdown = ctx.editorRef.current?.getMarkdown() ?? ctx.lastCommittedMarkdownRef.current
-      ctx.lastCommittedMarkdownRef.current = markdown
-      ctx.onContentChangeRef.current(markdown)
-      ctx.onSaveRef.current(markdown)
+    if (handleRichMarkdownSaveShortcut(ctx, event)) {
       return true
     }
 
