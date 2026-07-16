@@ -24,6 +24,7 @@ import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormContr
 import { translate } from '@/i18n/i18n'
 import { DefaultWindowsProjectRuntimeSetting } from './DefaultWindowsProjectRuntimeSetting'
 import { GlobalHotkeySetting } from './GlobalHotkeySetting'
+import { isWebClientLocation } from '@/lib/web-client-location'
 
 export {
   createAutoSaveDelayDraftState,
@@ -138,28 +139,30 @@ export function GeneralPane({
             }
           />
         </SearchableSetting>
-        <SearchableSetting
-          title={translate('auto.components.settings.GeneralPane.globalHotkey', 'Global Hotkey')}
-          description={translate(
-            'auto.components.settings.GeneralPane.globalHotkeyDescription',
-            'Show or hide the Orca window from anywhere with a system-wide keyboard shortcut.'
-          )}
-          keywords={[
-            'hotkey',
-            'shortcut',
-            'global',
-            'show',
-            'hide',
-            'toggle',
-            'window',
-            'spotlight'
-          ]}
-        >
-          <GlobalHotkeySetting
-            value={settings.globalHotkey}
-            onChange={(accelerator) => updateSettings({ globalHotkey: accelerator })}
-          />
-        </SearchableSetting>
+        {isWebClientLocation() ? null : (
+          <SearchableSetting
+            title={translate('auto.components.settings.GeneralPane.globalHotkey', 'Global hotkey')}
+            description={translate(
+              'auto.components.settings.GeneralPane.globalHotkeyDescription',
+              'Show or hide the Orca window from anywhere with a system-wide keyboard shortcut.'
+            )}
+            keywords={[
+              'hotkey',
+              'shortcut',
+              'global',
+              'show',
+              'hide',
+              'toggle',
+              'window',
+              'spotlight'
+            ]}
+          >
+            <GlobalHotkeySetting
+              value={settings.globalHotkey}
+              onChange={(accelerator) => updateSettings({ globalHotkey: accelerator })}
+            />
+          </SearchableSetting>
+        )}
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, getGeneralWorkspaceSearchEntries()) ? (

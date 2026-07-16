@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { Button } from '../ui/button'
 import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
@@ -7,18 +7,16 @@ import { CircleX } from 'lucide-react'
 
 const isMac = navigator.userAgent.includes('Mac')
 
-const DEFAULT_HOTKEY_ACCELERATOR = 'Alt+Space'
-
 type GlobalHotkeySettingProps = {
   value: string | undefined
   onChange: (accelerator: string) => void
 }
 
 /**
- * Parse an Electron accelerator string (e.g. "Alt+Space", "CommandOrControl+K")
- * into an array of display key labels suitable for ShortcutKeyCombo.
+ * Parse an Electron accelerator string (e.g. "Alt+Space", "Super+K") into an
+ * array of display key labels suitable for ShortcutKeyCombo.
  */
-function acceleratorToKeys(accelerator: string): string[] {
+export function acceleratorToKeys(accelerator: string): string[] {
   if (!accelerator.trim()) {
     return []
   }
@@ -40,7 +38,7 @@ function acceleratorToKeys(accelerator: string): string[] {
     if (lower === 'shift') {
       return isMac ? '⇧' : 'Shift'
     }
-    if (lower === 'space' || lower === 'Space') {
+    if (lower === 'space') {
       return 'Space'
     }
     if (lower.length === 1) {
@@ -55,13 +53,23 @@ function acceleratorToKeys(accelerator: string): string[] {
  * Convert a keyboard event into an Electron accelerator string.
  * Returns null if the event does not represent a valid hotkey chord.
  */
-function eventToAccelerator(event: React.KeyboardEvent): string | null {
+export function eventToAccelerator(event: {
+  metaKey: boolean
+  ctrlKey: boolean
+  altKey: boolean
+  shiftKey: boolean
+  key: string
+  code: string
+}): string | null {
   const parts: string[] = []
 
+  // Why: Super (not CommandOrControl) so recording Ctrl+X and Cmd+X stay
+  // distinct chords; Electron maps Super to Cmd on macOS and Win elsewhere.
   if (event.metaKey) {
-    parts.push('CommandOrControl')
-  } else if (event.ctrlKey) {
-    parts.push('CommandOrControl')
+    parts.push('Super')
+  }
+  if (event.ctrlKey) {
+    parts.push('Control')
   }
   if (event.altKey) {
     parts.push('Alt')
@@ -86,7 +94,7 @@ function eventToAccelerator(event: React.KeyboardEvent): string | null {
     keyPart = code.slice(3) // e.g. "KeyA" -> "A"
   } else if (code.startsWith('Digit')) {
     keyPart = code.slice(5) // e.g. "Digit1" -> "1"
-  } else if (code.startsWith('F') && /^F\d+$/.test(code)) {
+  } else if (/^F\d+$/.test(code)) {
     keyPart = code // F1-F24
   } else if (key === 'Enter' || key === 'Return') {
     keyPart = 'Enter'
@@ -114,7 +122,8 @@ function eventToAccelerator(event: React.KeyboardEvent): string | null {
     return null
   }
 
-  // A valid global hotkey needs at least one modifier.
+  // Why: an OS-global chord without a modifier would shadow plain typing keys
+  // in every application, so require at least one modifier.
   if (parts.length === 0) {
     return null
   }
@@ -130,33 +139,13 @@ export function GlobalHotkeySetting({
   const [recording, setRecording] = useState(false)
   const recordButtonRef = useRef<HTMLButtonElement | null>(null)
 
-  const currentAccelerator = value?.trim() ?? ''
-  const hasCustom = currentAccelerator !== ''
-  const effectiveAccelerator = hasCustom ? currentAccelerator : DEFAULT_HOTKEY_ACCELERATOR
-
-  const displayKeys = acceleratorToKeys(effectiveAccelerator)
-
-  useEffect(() => {
-    if (recording) {
-      recordButtonRef.current?.focus()
-    }
-  }, [recording])
-
-  const startRecording = useCallback(() => {
-    setRecording(true)
-  }, [])
-
-  const cancelRecording = useCallback(() => {
-    setRecording(false)
-  }, [])
+  // Empty or unset means the hotkey is disabled (the feature is opt-in).
+  const accelerator = value?.trim() ?? ''
+  const displayKeys = acceleratorToKeys(accelerator)
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent): void => {
       if (!recording) {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault()
-          startRecording()
-        }
         return
       }
 
@@ -164,28 +153,20 @@ export function GlobalHotkeySetting({
       event.stopPropagation()
 
       if (event.key === 'Escape') {
-        cancelRecording()
+        setRecording(false)
         return
       }
 
-      const accelerator = eventToAccelerator(event)
-      if (!accelerator) {
+      const next = eventToAccelerator(event)
+      if (!next) {
         return
       }
 
-      onChange(accelerator)
+      onChange(next)
       setRecording(false)
     },
-    [recording, onChange, startRecording, cancelRecording]
+    [recording, onChange]
   )
-
-  const clearHotkey = useCallback(() => {
-    onChange('')
-  }, [onChange])
-
-  const resetToDefault = useCallback(() => {
-    onChange(DEFAULT_HOTKEY_ACCELERATOR)
-  }, [onChange])
 
   const recordingLabel = translate(
     'auto.components.settings.GlobalHotkeySetting.recording',
@@ -201,11 +182,13 @@ export function GlobalHotkeySetting({
           aria-label={recording ? recordingLabel : undefined}
           aria-pressed={recording}
           onClick={() => {
-            if (!recording) {
-              startRecording()
-            }
+            setRecording(true)
+            // Why: recording listens on this button's keydown, so it must own
+            // focus even when the click did not focus it.
+            recordButtonRef.current?.focus()
           }}
           onKeyDown={handleKeyDown}
+          onBlur={() => setRecording(false)}
           className={cn(
             'flex min-h-8 min-w-[8rem] items-center justify-center gap-1 rounded-md border px-3 py-1.5 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
             recording
@@ -221,17 +204,20 @@ export function GlobalHotkeySetting({
             <ShortcutKeyCombo keys={displayKeys} />
           ) : (
             <span className="text-xs text-muted-foreground">
-              {translate('auto.components.settings.GlobalHotkeySetting.disabled', 'Disabled')}
+              {translate(
+                'auto.components.settings.GlobalHotkeySetting.clickToRecord',
+                'Click to record'
+              )}
             </span>
           )}
         </button>
 
-        {hasCustom ? (
+        {accelerator !== '' && !recording ? (
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            onClick={clearHotkey}
+            onClick={() => onChange('')}
             title={translate(
               'auto.components.settings.GlobalHotkeySetting.disable',
               'Disable global hotkey'
@@ -240,23 +226,15 @@ export function GlobalHotkeySetting({
             <CircleX className="size-4" />
           </Button>
         ) : null}
-
-        {!hasCustom && effectiveAccelerator !== DEFAULT_HOTKEY_ACCELERATOR ? (
-          <Button type="button" variant="ghost" size="sm" onClick={resetToDefault}>
-            {translate(
-              'auto.components.settings.GlobalHotkeySetting.resetDefault',
-              'Reset to default'
-            )}
-          </Button>
-        ) : null}
       </div>
 
       <p className="text-xs text-muted-foreground">
-        {translate(
-          'auto.components.settings.GlobalHotkeySetting.description',
-          'Press this key combination anywhere to show or hide the Orca window. Default: {{value0}}+Space',
-          { value0: isMac ? '⌥' : 'Alt' }
-        )}
+        {recording
+          ? recordingLabel
+          : translate(
+              'auto.components.settings.GlobalHotkeySetting.description',
+              'Press this key combination anywhere to show or hide the Orca window.'
+            )}
       </p>
     </div>
   )

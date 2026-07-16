@@ -1806,8 +1806,9 @@ app.whenReady().then(async () => {
   agentAwakeService = new AgentAwakeService()
   agentAwakeService.setEnabled(store.getSettings().keepComputerAwakeWhileAgentsRun)
   // Why: register the global show/hide hotkey early so it's available as soon
-  // as the app launches, even before the main window finishes loading.
-  if (!isServeMode && store) {
+  // as the app launches, even before the main window finishes loading. Serve
+  // mode is headless (SSH/web-client host) and must not grab OS-level keys.
+  if (!isServeMode) {
     globalHotkeyManager = new GlobalHotkeyManager({
       store,
       getMainWindow: () => mainWindow,

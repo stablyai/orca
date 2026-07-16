@@ -30,7 +30,7 @@ export class GlobalHotkeyManager {
     this.register(settings.globalHotkey ?? '')
 
     this.unsubscribeSettings = this.options.store.onSettingsChanged((updates) => {
-      if ('globalHotkey' in updates && updates.globalHotkey !== undefined) {
+      if (typeof updates.globalHotkey === 'string') {
         this.register(updates.globalHotkey)
       }
     })
@@ -81,27 +81,20 @@ export class GlobalHotkeyManager {
 
   private handleHotkeyPressed(): void {
     const win = this.options.getMainWindow()
-    const isVisibleAndFocused = Boolean(
-      win && !win.isDestroyed() && win.isVisible() && win.isFocused()
-    )
-
-    if (isVisibleAndFocused) {
-      // Window is frontmost, hide it.
-      if (win && !win.isDestroyed()) {
-        win.hide()
-      }
-      // Why: app.hide() is macOS-only; on Linux/Win we just hide the window.
+    if (win && !win.isDestroyed() && win.isVisible() && win.isFocused()) {
+      win.hide()
+      // Why: app.hide() exists only on macOS; there it also returns focus to
+      // the previously active app, which win.hide() alone does not.
       if (typeof app.hide === 'function') {
         app.hide()
       }
-    } else {
-      // Show and focus the window.
-      focusExistingMainWindow({
-        app,
-        getWindow: () => this.options.getMainWindow(),
-        openWindow: () => this.options.openMainWindow(),
-        warn: this.options.warn
-      })
+      return
     }
+    focusExistingMainWindow({
+      app,
+      getWindow: () => this.options.getMainWindow(),
+      openWindow: () => this.options.openMainWindow(),
+      warn: this.options.warn
+    })
   }
 }
