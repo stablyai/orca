@@ -3075,8 +3075,14 @@ export type PreloadApi = {
     fetchInactiveClaudeAccounts: () => Promise<void>
     fetchInactiveCodexAccounts: () => Promise<void>
     refreshMiniMax: () => Promise<RateLimitState>
+    refreshZai: () => Promise<RateLimitState>
     refreshGrok: () => Promise<RateLimitState>
     onUpdate: (callback: (state: RateLimitState) => void) => () => void
+  }
+  zaiCredentials: {
+    getStatus: () => Promise<{ configured: boolean }>
+    saveApiKey: (apiKey: string) => Promise<{ configured: boolean }>
+    clearApiKey: () => Promise<{ configured: boolean }>
   }
   minimaxCredentials: {
     getStatus: () => Promise<{ configured: boolean }>

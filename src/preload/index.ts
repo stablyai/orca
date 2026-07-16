@@ -4075,12 +4075,22 @@ const api = {
     fetchInactiveCodexAccounts: (): Promise<void> =>
       ipcRenderer.invoke('rateLimits:fetchInactiveCodexAccounts'),
     refreshMiniMax: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refreshMiniMax'),
+    refreshZai: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refreshZai'),
     refreshGrok: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refreshGrok'),
     onUpdate: (callback: (state: RateLimitState) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, state: RateLimitState) => callback(state)
       ipcRenderer.on('rateLimits:update', listener)
       return () => ipcRenderer.removeListener('rateLimits:update', listener)
     }
+  },
+
+  zaiCredentials: {
+    getStatus: (): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('zaiCredentials:getStatus'),
+    saveApiKey: (apiKey: string): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('zaiCredentials:saveApiKey', apiKey),
+    clearApiKey: (): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('zaiCredentials:clearApiKey')
   },
 
   minimaxCredentials: {

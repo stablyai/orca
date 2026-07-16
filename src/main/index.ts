@@ -111,6 +111,7 @@ import { shouldQuitWhenAllWindowsClosed } from './startup/window-all-closed-quit
 import { createServeDesktopActivationGate } from './startup/serve-desktop-activation'
 import { RateLimitService } from './rate-limits/service'
 import { readMiniMaxSessionCookie } from './minimax/minimax-cookie-store'
+import { readZaiApiKey } from './zai/zai-api-key-store'
 import { getInitialClaudeRateLimitTarget } from './rate-limits/claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './rate-limits/codex-rate-limit-target'
 import {
@@ -1838,6 +1839,9 @@ app.whenReady().then(async () => {
       models: settings.minimaxUsageModels
     }
   })
+  rateLimits.setZaiConfigResolver(() => ({
+    apiKey: readZaiApiKey() ?? ''
+  }))
   rateLimits.setGeminiCliOAuthEnabledResolver(() => store!.getSettings().geminiCliOAuthEnabled)
   rateLimits.setNetworkProxySettingsResolver(() => store!.getSettings())
   keybindings = new KeybindingService({
