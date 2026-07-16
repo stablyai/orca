@@ -71,7 +71,8 @@ import {
   areWorktreePathsEqual,
   formatWorktreeRemovalError,
   isOrphanCompatiblePreflightError,
-  isOrphanedWorktreeError
+  isOrphanedWorktreeError,
+  isSubmoduleWorktreeRemovalError
 } from './worktree-logic'
 import { dedupeWorktreesByPath } from './worktree-path-comparison'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
@@ -1867,10 +1868,18 @@ export function registerWorktreeHandlers(
             if (recoveredRemovalResult) {
               removalResult = recoveredRemovalResult
               removalCompleted = true
-            } else if (isOrphanedWorktreeError(error)) {
-              // If git no longer tracks this worktree, clean up the directory and metadata
+            } else if (isOrphanedWorktreeError(error) || isSubmoduleWorktreeRemovalError(error)) {
+              // Why: two git states leave a live worktree directory that
+              // `git worktree remove` will not clear — git no longer tracks the
+              // worktree ("is not a working tree"), or the worktree contains
+              // submodules, which git refuses to remove even with --force. Both
+              // recover by deleting the proven worktree directory and pruning
+              // git's stale registration below.
+              const containsSubmodules = isSubmoduleWorktreeRemovalError(error)
               console.warn(
-                `[worktrees] Orphaned worktree detected at ${canonicalWorktreePath}, cleaning up`
+                containsSubmodules
+                  ? `[worktrees] Worktree at ${canonicalWorktreePath} contains submodules and cannot be removed by \`git worktree remove\`, cleaning up`
+                  : `[worktrees] Orphaned worktree detected at ${canonicalWorktreePath}, cleaning up`
               )
               const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
               if (

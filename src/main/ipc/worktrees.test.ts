@@ -6575,6 +6575,32 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('prunes git worktree tracking when the worktree contains submodules', async () => {
+    mockKnownFeatureWorktree()
+    const submoduleError = Object.assign(new Error('Command failed: git worktree remove'), {
+      stderr: 'fatal: working trees containing submodules cannot be moved or removed'
+    })
+    removeWorktreeMock.mockRejectedValue(submoduleError)
+    getEffectiveHooksMock.mockReturnValue(null)
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+
+    await handlers['worktrees:remove'](null, {
+      worktreeId: 'repo-1::/workspace/feature-wt'
+    })
+
+    // `git worktree remove` refuses submodule worktrees, so recovery must prune
+    // git's stale registration and clear Orca's metadata instead of surfacing
+    // the failure to the user.
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'prune'], {
+      cwd: '/workspace/repo'
+    })
+    expect(store.removeWorktreeMeta).toHaveBeenCalledWith('repo-1::/workspace/feature-wt')
+    expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith('repo-1::/workspace/feature-wt')
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
+      repoId: 'repo-1'
+    })
+  })
+
   it('recovers forced Windows long-path worktree removal through local deletion and prune', async () => {
     setPlatform('win32')
     const parentDir = await mkdtemp(join(tmpdir(), 'orca-ipc-long-path-'))

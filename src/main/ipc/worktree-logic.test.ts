@@ -18,6 +18,7 @@ import {
   isWindowsLongPathWorktreeRemovalError,
   isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError,
+  isSubmoduleWorktreeRemovalError,
   areWorktreePathsEqual
 } from './worktree-logic'
 
@@ -530,6 +531,32 @@ describe('isOrphanedWorktreeError', () => {
   it('returns false for non-Error input', () => {
     expect(isOrphanedWorktreeError('string error')).toBe(false)
     expect(isOrphanedWorktreeError(null)).toBe(false)
+  })
+})
+
+describe('isSubmoduleWorktreeRemovalError', () => {
+  it('returns true when stderr reports the submodule removal refusal', () => {
+    const error = Object.assign(new Error('Command failed: git worktree remove'), {
+      stderr: 'fatal: working trees containing submodules cannot be moved or removed'
+    })
+    expect(isSubmoduleWorktreeRemovalError(error)).toBe(true)
+  })
+
+  it('returns true when the message reports the submodule removal refusal', () => {
+    const error = new Error('fatal: working trees containing submodules cannot be moved or removed')
+    expect(isSubmoduleWorktreeRemovalError(error)).toBe(true)
+  })
+
+  it('returns false for unrelated git errors', () => {
+    const error = Object.assign(new Error('git failed'), {
+      stderr: 'fatal: contains modified or untracked files'
+    })
+    expect(isSubmoduleWorktreeRemovalError(error)).toBe(false)
+  })
+
+  it('returns false for non-Error input', () => {
+    expect(isSubmoduleWorktreeRemovalError('string error')).toBe(false)
+    expect(isSubmoduleWorktreeRemovalError(null)).toBe(false)
   })
 })
 
