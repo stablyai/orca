@@ -31,10 +31,14 @@ export function normalizeCodexBackendBaseUrl(raw: string | null | undefined): st
   try {
     const url = new URL(trimmed)
     const path = url.pathname.replace(/\/+$/, '')
-    if (isOfficialChatGptHost(url.hostname) && !hasBackendApiSuffix(url.pathname)) {
-      return `${url.origin}${path === '' || path === '/' ? '' : path}/backend-api`
-    }
-    return `${url.origin}${path === '/' ? '' : path}`
+    url.pathname =
+      isOfficialChatGptHost(url.hostname) && !hasBackendApiSuffix(url.pathname)
+        ? `${path}/backend-api`
+        : path || '/'
+    const result = url.toString()
+    return result.endsWith('/') && url.pathname === '/' && !url.search && !url.hash
+      ? result.slice(0, -1)
+      : result
   } catch {
     return trimmed
   }
@@ -51,13 +55,25 @@ function isOfficialChatGptBackend(baseUrl: string): boolean {
 
 export function buildCodexRateLimitResetCreditsUrl(baseUrl: string): string {
   const normalized = normalizeCodexBackendBaseUrl(baseUrl)
-  return isOfficialChatGptBackend(normalized)
-    ? `${normalized}/wham/rate-limit-reset-credits`
-    : `${normalized}/api/codex/rate-limit-reset-credits`
+  const suffix = isOfficialChatGptBackend(normalized)
+    ? '/wham/rate-limit-reset-credits'
+    : '/api/codex/rate-limit-reset-credits'
+  return appendCodexBackendPath(normalized, suffix)
 }
 
 export function buildCodexRateLimitResetCreditsConsumeUrl(baseUrl: string): string {
-  return `${buildCodexRateLimitResetCreditsUrl(baseUrl)}/consume`
+  return appendCodexBackendPath(buildCodexRateLimitResetCreditsUrl(baseUrl), '/consume')
+}
+
+function appendCodexBackendPath(baseUrl: string, suffix: string): string {
+  try {
+    const url = new URL(baseUrl)
+    // Why: append to pathname so configured query/fragment data remains at the URL tail.
+    url.pathname = `${url.pathname.replace(/\/+$/, '')}${suffix}`
+    return url.toString()
+  } catch {
+    return `${baseUrl}${suffix}`
+  }
 }
 
 function parseTopLevelTomlString(config: string, key: string): string | null {

@@ -6,6 +6,7 @@ vi.mock('node:fs/promises', () => ({ readFile: readFileMock }))
 vi.mock('node-pty', () => ({ spawn: vi.fn() }))
 
 import {
+  buildCodexRateLimitResetCreditsConsumeUrl,
   buildCodexRateLimitResetCreditsUrl,
   normalizeCodexBackendBaseUrl,
   resolveCodexBackendBaseUrl
@@ -35,6 +36,23 @@ describe('Codex backend base URL', () => {
     )
     expect(buildCodexRateLimitResetCreditsUrl('https://api.example.com/backend-api')).toBe(
       'https://api.example.com/backend-api/api/codex/rate-limit-reset-credits'
+    )
+  })
+
+  it('preserves query and fragment components while appending backend paths', () => {
+    expect(normalizeCodexBackendBaseUrl('https://chatgpt.com/?token=official#account')).toBe(
+      'https://chatgpt.com/backend-api?token=official#account'
+    )
+    expect(normalizeCodexBackendBaseUrl('https://api.example.com/v1/?token=custom#account')).toBe(
+      'https://api.example.com/v1?token=custom#account'
+    )
+    expect(
+      buildCodexRateLimitResetCreditsUrl('https://api.example.com/v1/?token=custom#account')
+    ).toBe('https://api.example.com/v1/api/codex/rate-limit-reset-credits?token=custom#account')
+    expect(
+      buildCodexRateLimitResetCreditsConsumeUrl('https://api.example.com/v1/?token=custom#account')
+    ).toBe(
+      'https://api.example.com/v1/api/codex/rate-limit-reset-credits/consume?token=custom#account'
     )
   })
 
