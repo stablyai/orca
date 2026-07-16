@@ -32,7 +32,9 @@ describe('mobileNativeChatEmptyState', () => {
   })
 
   it('falls back to "the agent" when the agent is unknown', () => {
-    expect(mobileNativeChatEmptyState('waiting-session', null)?.title).toBe('Start a chat with the agent')
+    expect(mobileNativeChatEmptyState('waiting-session', null)?.title).toBe(
+      'Start a chat with the agent'
+    )
   })
 
   it('prefers the provided error message over the default subtitle', () => {
