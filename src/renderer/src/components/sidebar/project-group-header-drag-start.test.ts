@@ -36,6 +36,7 @@ describe('createProjectGroupHeaderDragSession', () => {
     ])
     const valuesSpy = vi.spyOn(projectGroupById, 'values')
     const sidebarProjectGroupHeaderIdsByBucket = new Map([['root', ['group-a', 'group-b']]])
+    const bucketValuesSpy = vi.spyOn(sidebarProjectGroupHeaderIdsByBucket, 'values')
 
     const session = createProjectGroupHeaderDragSession({
       event: {
@@ -49,6 +50,7 @@ describe('createProjectGroupHeaderDragSession', () => {
       groupId: 'group-a',
       projectGroupById,
       sidebarProjectGroupHeaderIdsByBucket,
+      totalProjectGroupHeaderCount: 2,
       getScrollContainer: () => scrollContainer
     })
 
@@ -57,6 +59,7 @@ describe('createProjectGroupHeaderDragSession', () => {
     expect(session?.reparentIndex).toBeNull()
     expect(session?.headerRects).toEqual([])
     expect(valuesSpy).not.toHaveBeenCalled()
+    expect(bucketValuesSpy).not.toHaveBeenCalled()
     expect(header.setPointerCapture).not.toHaveBeenCalled()
   })
 
@@ -91,6 +94,7 @@ describe('createProjectGroupHeaderDragSession', () => {
       groupId: 'nested',
       projectGroupById,
       sidebarProjectGroupHeaderIdsByBucket,
+      totalProjectGroupHeaderCount: 2,
       getScrollContainer: () => scrollContainer
     })
 
@@ -122,6 +126,7 @@ describe('createProjectGroupHeaderDragSession', () => {
       groupId: 'group-a',
       projectGroupById,
       sidebarProjectGroupHeaderIdsByBucket,
+      totalProjectGroupHeaderCount: 1,
       getScrollContainer: () => scrollContainer
     })
 
@@ -155,6 +160,7 @@ describe('createProjectGroupHeaderDragSession', () => {
       groupId: 'group-a',
       projectGroupById,
       sidebarProjectGroupHeaderIdsByBucket,
+      totalProjectGroupHeaderCount: 2,
       getScrollContainer: () => scrollContainer
     })
 

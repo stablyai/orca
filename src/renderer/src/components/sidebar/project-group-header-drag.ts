@@ -24,6 +24,7 @@ import { createProjectGroupReparentIndex } from '../../../../shared/project-grou
 
 export function useProjectGroupHeaderDrag({
   sidebarProjectGroupHeaderIdsByBucket,
+  totalProjectGroupHeaderCount,
   projectGroupById,
   onCommitProjectGroupTabOrder,
   onCommitProjectGroupReparent,
@@ -34,6 +35,8 @@ export function useProjectGroupHeaderDrag({
   const latestDropTargetRef = useRef<ProjectGroupHeaderDropTarget | null>(null)
   const sidebarProjectGroupHeaderIdsByBucketRef = useRef(sidebarProjectGroupHeaderIdsByBucket)
   sidebarProjectGroupHeaderIdsByBucketRef.current = sidebarProjectGroupHeaderIdsByBucket
+  const totalProjectGroupHeaderCountRef = useRef(totalProjectGroupHeaderCount)
+  totalProjectGroupHeaderCountRef.current = totalProjectGroupHeaderCount
   const projectGroupByIdRef = useRef(projectGroupById)
   projectGroupByIdRef.current = projectGroupById
   const onCommitProjectGroupTabOrderRef = useRef(onCommitProjectGroupTabOrder)
@@ -300,6 +303,7 @@ export function useProjectGroupHeaderDrag({
         groupId,
         projectGroupById: projectGroupByIdRef.current,
         sidebarProjectGroupHeaderIdsByBucket: sidebarProjectGroupHeaderIdsByBucketRef.current,
+        totalProjectGroupHeaderCount: totalProjectGroupHeaderCountRef.current,
         getScrollContainer: getContainerRef.current
       })
       if (!session) {

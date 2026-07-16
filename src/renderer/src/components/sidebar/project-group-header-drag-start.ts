@@ -20,6 +20,7 @@ export function createProjectGroupHeaderDragSession(args: {
     ProjectGroupHeaderDragBucketKey,
     readonly string[]
   >
+  totalProjectGroupHeaderCount: number
   getScrollContainer: () => HTMLElement | null
 }): ProjectGroupHeaderDragSession | null {
   if (args.event.button !== 0) {
@@ -38,13 +39,9 @@ export function createProjectGroupHeaderDragSession(args: {
   const bucketKey = getProjectGroupHeaderDragBucketKey(group, args.projectGroupById)
   const sidebarProjectGroupHeaderIds =
     args.sidebarProjectGroupHeaderIdsByBucket.get(bucketKey) ?? []
-  // Why: drops can now reparent across buckets, so a drag is meaningful as
-  // long as any other group header exists anywhere in the sidebar.
-  let totalHeaderCount = 0
-  for (const headerIds of args.sidebarProjectGroupHeaderIdsByBucket.values()) {
-    totalHeaderCount += headerIds.length
-  }
-  if (totalHeaderCount <= 1) {
+  // Why: cross-bucket drops need a global count; the caller reuses its memoized
+  // value so ordinary pointer-downs do not scan every bucket.
+  if (args.totalProjectGroupHeaderCount <= 1) {
     return null
   }
   if (!args.getScrollContainer()) {

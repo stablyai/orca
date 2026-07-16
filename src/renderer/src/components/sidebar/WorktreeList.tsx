@@ -1707,6 +1707,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   })
   const projectGroupDrag = useProjectGroupHeaderDrag({
     sidebarProjectGroupHeaderIdsByBucket,
+    totalProjectGroupHeaderCount,
     projectGroupById: projectGroupByIdForHeaderDrag,
     onCommitProjectGroupTabOrder: commitProjectGroupHeaderOrder,
     onCommitProjectGroupReparent: commitProjectGroupHeaderReparent,

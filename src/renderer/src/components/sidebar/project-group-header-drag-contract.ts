@@ -26,6 +26,7 @@ export type UseProjectGroupHeaderDragArgs = {
     ProjectGroupHeaderDragBucketKey,
     readonly string[]
   >
+  totalProjectGroupHeaderCount: number
   projectGroupById: ReadonlyMap<string, ProjectGroup>
   onCommitProjectGroupTabOrder: (groupId: string, tabOrder: number) => void
   onCommitProjectGroupReparent: (
