@@ -6575,30 +6575,80 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
-  it('prunes git worktree tracking when the worktree contains submodules', async () => {
-    mockKnownFeatureWorktree()
+  it('escalates to a forced git removal when the worktree contains submodules', async () => {
+    const registeredWorktrees = mockKnownFeatureWorktree()
     const submoduleError = Object.assign(new Error('Command failed: git worktree remove'), {
       stderr: 'fatal: working trees containing submodules cannot be moved or removed'
     })
-    removeWorktreeMock.mockRejectedValue(submoduleError)
+    removeWorktreeMock
+      .mockRejectedValueOnce(submoduleError)
+      .mockResolvedValueOnce({ preservedBranch: { branchName: 'feature', head: 'feature' } })
     getEffectiveHooksMock.mockReturnValue(null)
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
 
-    await handlers['worktrees:remove'](null, {
+    const result = await handlers['worktrees:remove'](null, {
       worktreeId: 'repo-1::/workspace/feature-wt'
     })
 
-    // `git worktree remove` refuses submodule worktrees, so recovery must prune
-    // git's stale registration and clear Orca's metadata instead of surfacing
-    // the failure to the user.
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'prune'], {
-      cwd: '/workspace/repo'
-    })
+    // Non-forced `git worktree remove` refuses submodule worktrees outright;
+    // the clean preflight already vetted the tree, so the handler retries with
+    // --force (git's designed override) instead of surfacing the refusal.
+    expect(removeWorktreeMock).toHaveBeenNthCalledWith(
+      2,
+      '/workspace/repo',
+      '/workspace/feature-wt',
+      true,
+      expect.objectContaining({ knownRemovedWorktree: registeredWorktrees[1] })
+    )
+    // The forced retry is a normal git removal that clears its own
+    // registration; pruning would deregister unrelated prunable worktrees.
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(['worktree', 'prune'], expect.anything())
+    expect(result).toEqual({ preservedBranch: { branchName: 'feature', head: 'feature' } })
     expect(store.removeWorktreeMeta).toHaveBeenCalledWith('repo-1::/workspace/feature-wt')
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith('repo-1::/workspace/feature-wt')
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
       repoId: 'repo-1'
     })
+  })
+
+  it('does not escalate the submodule refusal when the clean preflight could not verify the tree', async () => {
+    mockKnownFeatureWorktree()
+    assertWorktreeCleanForRemovalMock.mockRejectedValue(
+      Object.assign(new Error('git status failed'), {
+        stderr: 'fatal: not a git repository: /workspace/feature-wt/.git'
+      })
+    )
+    removeWorktreeMock.mockRejectedValue(
+      Object.assign(new Error('Command failed: git worktree remove'), {
+        stderr: 'fatal: working trees containing submodules cannot be moved or removed'
+      })
+    )
+    getEffectiveHooksMock.mockReturnValue(null)
+
+    await expect(
+      handlers['worktrees:remove'](null, { worktreeId: 'repo-1::/workspace/feature-wt' })
+    ).rejects.toThrow('Failed to delete worktree')
+
+    expect(removeWorktreeMock).toHaveBeenCalledTimes(1)
+    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+  })
+
+  it('surfaces the error when the forced submodule removal retry fails', async () => {
+    mockKnownFeatureWorktree()
+    removeWorktreeMock
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Command failed: git worktree remove'), {
+          stderr: 'fatal: working trees containing submodules cannot be moved or removed'
+        })
+      )
+      .mockRejectedValueOnce(new Error('disk I/O error'))
+    getEffectiveHooksMock.mockReturnValue(null)
+
+    await expect(
+      handlers['worktrees:remove'](null, { worktreeId: 'repo-1::/workspace/feature-wt' })
+    ).rejects.toThrow('disk I/O error')
+
+    expect(removeWorktreeMock).toHaveBeenCalledTimes(2)
+    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
   })
 
   it('recovers forced Windows long-path worktree removal through local deletion and prune', async () => {
@@ -7143,6 +7193,132 @@ describe('registerWorktreeHandlers', () => {
 
     expect(provider.worktreeIsClean).not.toHaveBeenCalled()
     expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', true)
+  })
+
+  it('escalates SSH removal to force when the remote refuses a submodule worktree', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: null
+    }
+    const provider = {
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/repo',
+          head: 'main',
+          branch: 'main',
+          isBare: false,
+          isMainWorktree: true
+        },
+        {
+          path: '/remote/feature-wt',
+          head: 'feature',
+          branch: 'feature',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      removeWorktree: vi
+        .fn()
+        // Why message-only: relay errors are rehydrated from JSON-RPC with the
+        // remote execFile message (which embeds stderr) and no stderr field.
+        .mockRejectedValueOnce(
+          new Error(
+            'Command failed: git worktree remove /remote/feature-wt\nfatal: working trees containing submodules cannot be moved or removed'
+          )
+        )
+        .mockResolvedValueOnce(undefined),
+      worktreeIsClean: vi.fn().mockResolvedValue({ clean: true }),
+      execNonInteractive: vi.fn().mockResolvedValue({
+        stdout: '',
+        stderr: '',
+        exitCode: 0,
+        timedOut: false
+      })
+    }
+    const fsProvider = {
+      readFile: vi.fn().mockResolvedValue({
+        content: 'scripts:\n  archive: echo archived\n',
+        isBinary: false
+      })
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getSshFilesystemProviderMock.mockReturnValue(fsProvider)
+    getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { archive: 'echo archived' } })
+
+    await handlers['worktrees:remove'](null, {
+      worktreeId: 'repo-ssh::/remote/feature-wt'
+    })
+
+    expect(provider.worktreeIsClean).toHaveBeenCalled()
+    expect(provider.removeWorktree).toHaveBeenNthCalledWith(1, '/remote/feature-wt', undefined)
+    expect(provider.removeWorktree).toHaveBeenNthCalledWith(2, '/remote/feature-wt', true)
+    expect(store.removeWorktreeMeta).toHaveBeenCalledWith('repo-ssh::/remote/feature-wt')
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
+      repoId: 'repo-ssh'
+    })
+  })
+
+  it('surfaces the SSH submodule refusal unchanged for other remote errors', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: null
+    }
+    const provider = {
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/repo',
+          head: 'main',
+          branch: 'main',
+          isBare: false,
+          isMainWorktree: true
+        },
+        {
+          path: '/remote/feature-wt',
+          head: 'feature',
+          branch: 'feature',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      removeWorktree: vi.fn().mockRejectedValue(new Error('remote host disconnected')),
+      worktreeIsClean: vi.fn().mockResolvedValue({ clean: true }),
+      execNonInteractive: vi.fn().mockResolvedValue({
+        stdout: '',
+        stderr: '',
+        exitCode: 0,
+        timedOut: false
+      })
+    }
+    const fsProvider = {
+      readFile: vi.fn().mockResolvedValue({
+        content: 'scripts:\n  archive: echo archived\n',
+        isBinary: false
+      })
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getSshFilesystemProviderMock.mockReturnValue(fsProvider)
+    getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { archive: 'echo archived' } })
+
+    await expect(
+      handlers['worktrees:remove'](null, { worktreeId: 'repo-ssh::/remote/feature-wt' })
+    ).rejects.toThrow('remote host disconnected')
+
+    expect(provider.removeWorktree).toHaveBeenCalledTimes(1)
+    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
   })
 
   it('continues SSH worktree removal when the archive hook fails', async () => {

@@ -486,6 +486,7 @@ import {
   toLocalWorktreeRuntimePath
 } from '../local-worktree-filesystem'
 import {
+  forceRemoveWorktreeAfterSubmoduleRefusal,
   removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval,
   recoverLocalWindowsWorktreeRemoval
 } from '../local-worktree-removal-recovery'
@@ -700,6 +701,7 @@ import {
   getWorktreePathSettings,
   isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError,
+  isSubmoduleWorktreeRemovalError,
   mergeWorktree,
   sanitizeWorktreeName,
   shouldSetDisplayName,
@@ -17891,9 +17893,31 @@ export class OrcaRuntimeService {
         let removalCompleted = false
         try {
           await this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id, repo.connectionId)
-          rawRemovalResult = await (Object.keys(remoteRemoveOptions).length > 0
-            ? provider!.removeWorktree(canonicalWorktreePath, force, remoteRemoveOptions)
-            : provider!.removeWorktree(canonicalWorktreePath, force))
+          try {
+            rawRemovalResult = await (Object.keys(remoteRemoveOptions).length > 0
+              ? provider!.removeWorktree(canonicalWorktreePath, force, remoteRemoveOptions)
+              : provider!.removeWorktree(canonicalWorktreePath, force))
+          } catch (error) {
+            if (!isSubmoduleWorktreeRemovalError(error)) {
+              throw error
+            }
+            // Why: non-forced `git worktree remove` refuses any worktree with
+            // populated submodules before it even checks cleanliness, and this
+            // flow has no earlier Orca-side clean check (remote git is the
+            // gate). Verify the tree is clean before escalating to --force —
+            // git's designed override for this refusal.
+            if (!force) {
+              const { clean, stdout } = await provider!.worktreeIsClean(canonicalWorktreePath)
+              if (!clean) {
+                const dirtyError = new Error('Worktree has uncommitted or untracked changes.')
+                ;(dirtyError as Error & { stdout?: string }).stdout = stdout
+                throw dirtyError
+              }
+            }
+            rawRemovalResult = await (Object.keys(remoteRemoveOptions).length > 0
+              ? provider!.removeWorktree(canonicalWorktreePath, true, remoteRemoveOptions)
+              : provider!.removeWorktree(canonicalWorktreePath, true))
+          }
           removalCompleted = true
         } finally {
           await removalGate.finish(removalCompleted)
@@ -17967,6 +17991,10 @@ export class OrcaRuntimeService {
       const ignoredLinkedPaths = force
         ? []
         : await findExistingWorktreeSymlinkPaths(canonicalWorktreePath, linkedPaths)
+      // Why: --force escalation for git's blanket submodule refusal is only
+      // safe when the tree was verified clean (or the user forced); a
+      // preflight swallowed as orphan-compatible proves nothing.
+      let worktreeVerifiedCleanForRemoval = false
       try {
         await (hasLocalWorktreeGitOptions
           ? assertWorktreeCleanForRemoval(canonicalWorktreePath, force, {
@@ -17980,6 +18008,7 @@ export class OrcaRuntimeService {
                 ignoredUntrackedPaths: ignoredLinkedPaths
               })
             : assertWorktreeCleanForRemoval(canonicalWorktreePath, force))
+        worktreeVerifiedCleanForRemoval = true
       } catch (error) {
         if (!isOrphanCompatiblePreflightError(error)) {
           throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
@@ -18028,6 +18057,18 @@ export class OrcaRuntimeService {
           if (recoveredRemovalResult) {
             removalResult = recoveredRemovalResult
             removalCompleted = true
+          } else if (worktreeVerifiedCleanForRemoval && isSubmoduleWorktreeRemovalError(error)) {
+            removalResult = this.preserveBranchHeadFallback(
+              await forceRemoveWorktreeAfterSubmoduleRefusal({
+                canonicalWorktreePath,
+                repoPath: repo.path,
+                localWorktreeGitOptions,
+                registeredWorktree: refreshedRegisteredWorktree,
+                deleteBranch,
+                closeWatcher: (worktreePath) => this.closeFileWatchersForRemoval(worktreePath)
+              }),
+              refreshedRegisteredWorktree.head
+            )
           } else if (isOrphanedWorktreeError(error)) {
             const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
             if (

@@ -29383,6 +29383,35 @@ describe('OrcaRuntimeService', () => {
     expect(restoreRuntime).toHaveBeenCalledWith(TEST_WORKTREE_PATH, undefined)
   })
 
+  it('escalates runtime worktree removal to force when the tree contains submodules', async () => {
+    const runtime = createWorktreeRemovalRuntime()
+    vi.mocked(getEffectiveHooks).mockReturnValue(null)
+    vi.mocked(removeWorktree)
+      .mockRejectedValueOnce(
+        Object.assign(new Error('Command failed: git worktree remove'), {
+          stderr: 'fatal: working trees containing submodules cannot be moved or removed'
+        })
+      )
+      .mockResolvedValueOnce({})
+
+    const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
+
+    // Non-forced `git worktree remove` refuses submodule worktrees outright;
+    // the clean preflight already vetted the tree, so removal retries with
+    // --force (git's designed override) instead of surfacing the refusal.
+    expect(removeWorktree).toHaveBeenNthCalledWith(
+      2,
+      TEST_REPO_PATH,
+      TEST_WORKTREE_PATH,
+      true,
+      expect.objectContaining({
+        knownRemovedWorktree: expect.objectContaining({ path: TEST_WORKTREE_PATH })
+      })
+    )
+    expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(TEST_WORKTREE_ID)
+    expect(result).toEqual({})
+  })
+
   it('restores runtime watchers when CLI worktree deletion fails after teardown', async () => {
     const runtime = createWorktreeRemovalRuntime()
     vi.mocked(getEffectiveHooks).mockReturnValue(null)

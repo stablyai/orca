@@ -2,7 +2,7 @@ import type { GitWorktreeInfo, RemoveWorktreeResult } from '../shared/types'
 import { assertWorktreeUnlockedForRemoval } from '../shared/worktree-removal'
 import { areWorktreePathsEqual, formatWorktreeRemovalError } from './ipc/worktree-logic'
 import { gitExecFileAsync } from './git/runner'
-import { listWorktreesStrict, type GitWorktreeExecOptions } from './git/worktree'
+import { listWorktreesStrict, removeWorktree, type GitWorktreeExecOptions } from './git/worktree'
 import { removeLocalWorktreePath } from './local-worktree-filesystem'
 
 type LocalWindowsRemovalRecoveryArgs = {
@@ -154,4 +154,36 @@ export async function removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval
   args: StaleLocalWorktreeRegistrationArgs
 ): Promise<RemoveWorktreeResult> {
   return removeRequiredGitWorktreeRegistration(args)
+}
+
+/**
+ * Complete a removal that git refused only because the worktree contains
+ * populated submodules. Non-forced `git worktree remove` dies on any such tree
+ * — even a clean one — while `--force` is git's designed override and performs
+ * a normal removal (worktree directory plus its `.git/worktrees` admin dir) on
+ * every supported git version. Callers must escalate only after their own
+ * clean check passed or the user explicitly forced, so `--force` never skips a
+ * dirtiness gate that has not already run.
+ */
+export async function forceRemoveWorktreeAfterSubmoduleRefusal(
+  args: Omit<LocalWindowsRemovalRecoveryArgs, 'error' | 'force'>
+): Promise<RemoveWorktreeResult> {
+  console.warn(
+    `[worktrees] git refused to remove worktree with submodules at ${args.canonicalWorktreePath}; retrying with --force after clean preflight`
+  )
+  try {
+    return await removeWorktree(args.repoPath, args.canonicalWorktreePath, true, {
+      ...(args.deleteBranch ? {} : { deleteBranch: false }),
+      knownRemovedWorktree: args.registeredWorktree,
+      ...args.localWorktreeGitOptions
+    })
+  } catch (error) {
+    // Why: the forced retry can hit the same transient Windows filesystem
+    // failure as a first-attempt removal; give it the same recovery.
+    const recovered = await recoverLocalWindowsWorktreeRemoval({ ...args, error, force: true })
+    if (recovered) {
+      return recovered
+    }
+    throw new Error(formatWorktreeRemovalError(error, args.canonicalWorktreePath, true))
+  }
 }

@@ -192,6 +192,7 @@ import {
   toLocalWorktreeRuntimePath
 } from '../local-worktree-filesystem'
 import {
+  forceRemoveWorktreeAfterSubmoduleRefusal,
   removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval,
   recoverLocalWindowsWorktreeRemoval
 } from '../local-worktree-removal-recovery'
@@ -1740,9 +1741,22 @@ export function registerWorktreeHandlers(
           let removalCompleted = false
           try {
             await stopPtysForDestructiveWorktreeRemoval(runtime, args.worktreeId, repo.connectionId)
-            rawRemovalResult = await (Object.keys(remoteRemoveOptions).length > 0
-              ? provider!.removeWorktree(canonicalWorktreePath, args.force, remoteRemoveOptions)
-              : provider!.removeWorktree(canonicalWorktreePath, args.force))
+            try {
+              rawRemovalResult = await (Object.keys(remoteRemoveOptions).length > 0
+                ? provider!.removeWorktree(canonicalWorktreePath, args.force, remoteRemoveOptions)
+                : provider!.removeWorktree(canonicalWorktreePath, args.force))
+            } catch (error) {
+              if (!isSubmoduleWorktreeRemovalError(error)) {
+                throw error
+              }
+              // Why: non-forced `git worktree remove` refuses any worktree with
+              // populated submodules, even a clean one. The clean check above
+              // (or the user's explicit force) already vetted the tree, so
+              // escalate to --force — git's designed override for this refusal.
+              rawRemovalResult = await (Object.keys(remoteRemoveOptions).length > 0
+                ? provider!.removeWorktree(canonicalWorktreePath, true, remoteRemoveOptions)
+                : provider!.removeWorktree(canonicalWorktreePath, true))
+            }
             removalCompleted = true
           } finally {
             await removalGate.finish(removalCompleted)
@@ -1797,6 +1811,10 @@ export function registerWorktreeHandlers(
         const ignoredLinkedPaths = args.force
           ? []
           : await findExistingWorktreeSymlinkPaths(canonicalWorktreePath, linkedPaths)
+        // Why: --force escalation for git's blanket submodule refusal is only
+        // safe when the tree was verified clean (or the user forced); a
+        // preflight swallowed as orphan-compatible proves nothing.
+        let worktreeVerifiedCleanForRemoval = false
         try {
           await (hasLocalWorktreeGitOptions
             ? assertWorktreeCleanForRemoval(canonicalWorktreePath, args.force ?? false, {
@@ -1810,6 +1828,7 @@ export function registerWorktreeHandlers(
                   ignoredUntrackedPaths: ignoredLinkedPaths
                 })
               : assertWorktreeCleanForRemoval(canonicalWorktreePath, args.force ?? false))
+          worktreeVerifiedCleanForRemoval = true
         } catch (error) {
           if (!isOrphanCompatiblePreflightError(error)) {
             throw new Error(
@@ -1868,18 +1887,22 @@ export function registerWorktreeHandlers(
             if (recoveredRemovalResult) {
               removalResult = recoveredRemovalResult
               removalCompleted = true
-            } else if (isOrphanedWorktreeError(error) || isSubmoduleWorktreeRemovalError(error)) {
-              // Why: two git states leave a live worktree directory that
-              // `git worktree remove` will not clear — git no longer tracks the
-              // worktree ("is not a working tree"), or the worktree contains
-              // submodules, which git refuses to remove even with --force. Both
-              // recover by deleting the proven worktree directory and pruning
-              // git's stale registration below.
-              const containsSubmodules = isSubmoduleWorktreeRemovalError(error)
+            } else if (worktreeVerifiedCleanForRemoval && isSubmoduleWorktreeRemovalError(error)) {
+              removalResult = preserveBranchHeadFallback(
+                await forceRemoveWorktreeAfterSubmoduleRefusal({
+                  canonicalWorktreePath,
+                  repoPath: repo.path,
+                  localWorktreeGitOptions,
+                  registeredWorktree: refreshedRegisteredWorktree,
+                  deleteBranch,
+                  closeWatcher: (worktreePath) => runtime.closeFileWatchersForRemoval(worktreePath)
+                }),
+                refreshedRegisteredWorktree.head
+              )
+            } else if (isOrphanedWorktreeError(error)) {
+              // If git no longer tracks this worktree, clean up the directory and metadata
               console.warn(
-                containsSubmodules
-                  ? `[worktrees] Worktree at ${canonicalWorktreePath} contains submodules and cannot be removed by \`git worktree remove\`, cleaning up`
-                  : `[worktrees] Orphaned worktree detected at ${canonicalWorktreePath}, cleaning up`
+                `[worktrees] Orphaned worktree detected at ${canonicalWorktreePath}, cleaning up`
               )
               const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
               if (
