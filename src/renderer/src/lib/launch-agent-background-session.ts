@@ -12,6 +12,7 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import { requireTuiAgentConfig } from '../../../shared/require-tui-agent-config'
+import { getTuiAgentPromptInjectionMode } from '../../../shared/tui-agent-config'
 import { resolveAgentBackgroundLaunchHost } from '@/lib/agent-background-session-launch-host'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
@@ -82,8 +83,8 @@ export async function launchAgentBackgroundSession(
   })
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
-  const isFollowupPath = requireTuiAgentConfig(agent).promptInjectionMode === 'stdin-after-start'
-
+  const isFollowupPath =
+    getTuiAgentPromptInjectionMode(agent, launchPlatform) === 'stdin-after-start'
   const pasteDraftAfterLaunch = hasPrompt && isFollowupPath ? trimmedPrompt : null
   const startupPlan = buildAgentStartupPlan({
     agent,

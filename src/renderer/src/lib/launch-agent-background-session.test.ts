@@ -540,27 +540,30 @@ describe('launchAgentBackgroundSession', () => {
     )
   })
 
-  it('submits prompts for stdin-after-start agents in background mode', async () => {
-    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+  it.each([
+    ['aider', 'run the automation', "aider '--yes-always'", null],
+    ['cursor', 'fix the startup path', "cursor-agent '--yolo'", 'win32']
+  ] as const)(
+    'submits %s startup prompts after ready in background mode',
+    async (agent, prompt, command, platform) => {
+      if (platform) {
+        mockGetAgentLaunchPlatformForRepo.mockReturnValue(platform)
+      }
+      const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
-    await launchAgentBackgroundSession({
-      agent: 'aider',
-      worktreeId: 'wt-1',
-      prompt: 'run the automation'
-    })
+      await launchAgentBackgroundSession({ agent, worktreeId: 'wt-1', prompt })
 
-    expect(mockSpawn).toHaveBeenCalledWith(
-      expect.objectContaining({ command: "aider '--yes-always'" })
-    )
-    expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tabId: expectReservedAgentBackgroundTabId(mockSpawn),
-        content: 'run the automation',
-        agent: 'aider',
-        submit: true
-      })
-    )
-  })
+      expect(mockSpawn).toHaveBeenCalledWith(expect.objectContaining({ command }))
+      expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tabId: expectReservedAgentBackgroundTabId(mockSpawn),
+          content: prompt,
+          agent,
+          submit: true
+        })
+      )
+    }
+  )
 
   it('passes Hermes automation prompts through the native startup query', async () => {
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')

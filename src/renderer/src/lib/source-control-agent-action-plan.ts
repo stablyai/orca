@@ -5,7 +5,7 @@ import {
   type AgentStartupPlan
 } from '@/lib/tui-agent-startup'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { getTuiAgentPromptInjectionMode } from '../../../shared/tui-agent-config'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { translate } from '@/i18n/i18n'
@@ -154,7 +154,7 @@ export function planSourceControlAgentActionLaunch(args: {
       })
       delivery = 'draft-paste'
     }
-  } else if (TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start') {
+  } else if (getTuiAgentPromptInjectionMode(agent, platform) === 'stdin-after-start') {
     startupPlan = buildAgentStartupPlan({
       agent,
       prompt: '',
@@ -166,7 +166,7 @@ export function planSourceControlAgentActionLaunch(args: {
       sessionOptions: args.sessionOptions,
       allowEmptyPromptLaunch: true
     })
-    delivery = 'draft-paste'
+    delivery = args.promptDelivery === 'auto-submit' ? 'paste-submit' : 'draft-paste'
   } else {
     startupPlan = buildAgentStartupPlan({
       agent,

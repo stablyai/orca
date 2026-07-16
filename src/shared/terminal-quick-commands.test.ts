@@ -333,6 +333,10 @@ describe('terminal quick commands', () => {
     expect(supportsTerminalAgentQuickCommand('aider')).toBe(false)
     expect(supportsTerminalAgentQuickCommand('not-real')).toBe(false)
   })
+
+  it('keeps Cursor quick-command support with the Windows override', () => {
+    expect(supportsTerminalAgentQuickCommand('cursor')).toBe(true)
+  })
 })
 
 describe('flattenTerminalQuickCommand', () => {

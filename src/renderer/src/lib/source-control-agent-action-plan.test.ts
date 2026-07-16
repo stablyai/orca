@@ -42,6 +42,20 @@ describe('planSourceControlAgentActionLaunch', () => {
     expect(result.ok && result.caveat).toContain('PATH')
   })
 
+  it('routes Windows Cursor source-control prompts after ready', () => {
+    const result = planSourceControlAgentActionLaunch({
+      agent: 'cursor',
+      commandInput: 'Fix checks',
+      promptDelivery: 'auto-submit',
+      detectedAgents: ['cursor'],
+      platform: 'win32'
+    })
+
+    expect(result.ok && result.delivery).toBe('paste-submit')
+    expect(result.ok && result.plan.launchCommand).toBe('cursor-agent')
+    expect(result.ok && result.plan.launchCommand).not.toContain('Fix checks')
+  })
+
   it('includes per-action CLI arguments in submit-after-ready launch plans', () => {
     const result = planSourceControlAgentActionLaunch({
       agent: 'codex',

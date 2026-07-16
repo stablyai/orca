@@ -12,7 +12,7 @@ import {
   resolveStartupShell,
   type AgentStartupShell
 } from './tui-agent-startup-shell'
-import { TUI_AGENT_CONFIG } from './tui-agent-config'
+import { getTuiAgentPromptInjectionMode, TUI_AGENT_CONFIG } from './tui-agent-config'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
 import { buildSleepingAgentLaunchConfig } from './sleeping-agent-launch-config'
 import { planHermesStartupQuery } from './hermes-startup-query'
@@ -60,7 +60,8 @@ export function buildAgentStartupPlan(args: {
   const shell = resolveStartupShell(platform, args.shell)
   const trimmedPrompt = prompt.trim()
   const config = TUI_AGENT_CONFIG[agent]
-  const usesQuery = config.promptInjectionMode === 'hermes-query' && Boolean(trimmedPrompt)
+  const promptInjectionMode = getTuiAgentPromptInjectionMode(agent, platform)
+  const usesQuery = promptInjectionMode === 'hermes-query' && Boolean(trimmedPrompt)
   const baseCommand = resolveAgentLaunchCommand({
     agent,
     cmdOverrides,
@@ -80,7 +81,6 @@ export function buildAgentStartupPlan(args: {
     // session restores its own state and must retain only explicit user args.
     agentCommand: baseCommand.commandWithoutSessionOptions
   })
-
   if (!trimmedPrompt) {
     if (!allowEmptyPromptLaunch) {
       return null
@@ -97,12 +97,10 @@ export function buildAgentStartupPlan(args: {
   }
 
   const quotedPrompt = quoteStartupArg(trimmedPrompt, shell)
-
-  if (config.promptInjectionMode === 'argv') {
-    const promptSeparator = config.argvPromptSeparator ? ` ${config.argvPromptSeparator}` : ''
+  if (promptInjectionMode === 'argv') {
     return {
       agent,
-      launchCommand: `${baseCommand.command}${promptSeparator} ${quotedPrompt}`,
+      launchCommand: `${baseCommand.command}${config.argvPromptSeparator ? ` ${config.argvPromptSeparator}` : ''} ${quotedPrompt}`,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
       launchConfig,
@@ -112,7 +110,7 @@ export function buildAgentStartupPlan(args: {
     }
   }
 
-  if (config.promptInjectionMode === 'flag-prompt') {
+  if (promptInjectionMode === 'flag-prompt') {
     return {
       agent,
       launchCommand: `${baseCommand.command} --prompt ${quotedPrompt}`,
@@ -124,7 +122,7 @@ export function buildAgentStartupPlan(args: {
     }
   }
 
-  if (config.promptInjectionMode === 'hermes-query') {
+  if (promptInjectionMode === 'hermes-query') {
     const queryPlan = planHermesStartupQuery({
       baseCommand: baseCommand.command,
       agentArgs: args.agentArgs,
@@ -139,8 +137,6 @@ export function buildAgentStartupPlan(args: {
     }
     return {
       agent,
-      // Why: Hermes owns readiness and submission for `chat --query`; Orca
-      // only bounds and quotes the native invocation before starting the TUI.
       launchCommand: queryPlan.command,
       expectedProcess: config.expectedProcess,
       followupPrompt: null,
@@ -150,7 +146,7 @@ export function buildAgentStartupPlan(args: {
     }
   }
 
-  if (config.promptInjectionMode === 'flag-prompt-interactive') {
+  if (promptInjectionMode === 'flag-prompt-interactive') {
     return {
       agent,
       launchCommand: `${baseCommand.command} --prompt-interactive ${quotedPrompt}`,
@@ -162,7 +158,7 @@ export function buildAgentStartupPlan(args: {
     }
   }
 
-  if (config.promptInjectionMode === 'flag-interactive') {
+  if (promptInjectionMode === 'flag-interactive') {
     return {
       agent,
       launchCommand: `${baseCommand.command} -i ${quotedPrompt}`,

@@ -262,6 +262,33 @@ describe('runSourceControlAgentActionStart', () => {
     expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
+  it('maps followup-path auto-submit launches onto submit-after-ready', async () => {
+    mocks.launchAgentInNewTab.mockReturnValue({
+      tabId: 'tab-1',
+      startupPlan: {} as never,
+      pasteDraftAfterLaunch: true,
+      promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
+    })
+
+    await expect(
+      runSourceControlAgentActionStart(
+        buildArgs({
+          selectedAgent: 'cursor',
+          promptDelivery: 'auto-submit',
+          launchPlatform: 'win32'
+        })
+      )
+    ).resolves.toBe(true)
+
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: 'cursor',
+        promptDelivery: 'submit-after-ready',
+        launchPlatform: 'win32'
+      })
+    )
+  })
+
   it('keeps injected onStart successes immediate', async () => {
     const onStart = vi.fn().mockResolvedValue(true)
 
