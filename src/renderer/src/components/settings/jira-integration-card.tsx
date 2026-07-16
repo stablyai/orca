@@ -40,11 +40,11 @@ export function JiraIntegrationCard(): React.JSX.Element {
   const credentialCopy = hasRemoteProviderRuntime(settings)
     ? translate(
         'auto.components.settings.task.tracker.integration.cards.2d60ec7921',
-        'Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.'
+        'Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.'
       )
     : translate(
         'auto.components.settings.task.tracker.integration.cards.977e360b71',
-        'Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token. Credentials are stored locally and encrypted when local runtime storage supports it.'
+        'Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are stored locally and encrypted when local runtime storage supports it.'
       )
   const subordinateRowClass = useIntegrationSubordinateRowClass('flex items-center gap-3')
   const accountScopeRowClass = useIntegrationSubordinateRowClass('text-xs')

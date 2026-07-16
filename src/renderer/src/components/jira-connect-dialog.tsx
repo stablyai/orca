@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useId, useLayoutEffect, useState } from 'react'
 import { LoaderCircle, Lock } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -58,6 +58,22 @@ export function JiraConnectDialog({
   const [connectState, setConnectState] = useState<ConnectState>('idle')
   const [connectError, setConnectError] = useState<string | null>(null)
 
+  // Start every open with a clean slate so a previously-typed secret, stale
+  // instance/auth-method selection, or old error can't linger across reopens.
+  // Runs before paint so a stale credential never renders for a frame.
+  useLayoutEffect(() => {
+    if (!open) {
+      return
+    }
+    setInstanceType('cloud')
+    setServerAuthMethod('pat')
+    setSiteUrl('')
+    setEmail('')
+    setApiToken('')
+    setConnectState('idle')
+    setConnectError(null)
+  }, [open])
+
   const isServer = instanceType === 'server'
   // `needsIdentity` folds "Cloud Atlassian email" and "self-hosted Basic
   // username" — the identity slot that keys/labels the stored site. PAT auth
@@ -78,6 +94,16 @@ export function JiraConnectDialog({
       setConnectState('idle')
       setConnectError(null)
     }
+  }
+
+  // A Cloud email, a Server username, a PAT, and an account password are
+  // different secrets; drop the credential fields when the deployment or auth
+  // method changes so one can't be submitted as another (e.g. a password
+  // silently riding along as a Bearer PAT).
+  const clearCredentialsOnModeSwitch = (): void => {
+    setEmail('')
+    setApiToken('')
+    clearErrorOnEdit()
   }
 
   const handleOpenChange = (nextOpen: boolean): void => {
@@ -162,6 +188,7 @@ export function JiraConnectDialog({
         </DialogHeader>
         <form
           className="flex flex-col gap-4"
+          noValidate
           onSubmit={(event) => {
             event.preventDefault()
             void handleConnect()
@@ -172,12 +199,13 @@ export function JiraConnectDialog({
               type="single"
               variant="outline"
               value={instanceType}
+              disabled={connectState === 'connecting'}
               onValueChange={(value) => {
                 if (!value || connectState === 'connecting') {
                   return
                 }
                 setInstanceType(value as JiraInstanceType)
-                clearErrorOnEdit()
+                clearCredentialsOnModeSwitch()
               }}
               aria-label={translate(
                 'auto.components.jira.connect.dialog.b67e919bd5',
@@ -196,12 +224,13 @@ export function JiraConnectDialog({
                 type="single"
                 variant="outline"
                 value={serverAuthMethod}
+                disabled={connectState === 'connecting'}
                 onValueChange={(value) => {
                   if (!value || connectState === 'connecting') {
                     return
                   }
                   setServerAuthMethod(value as ServerAuthMethod)
-                  clearErrorOnEdit()
+                  clearCredentialsOnModeSwitch()
                 }}
                 aria-label={translate(
                   'auto.components.jira.connect.dialog.f49708c369',

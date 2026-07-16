@@ -541,7 +541,11 @@ export async function connect(
       )) as Record<string, unknown>,
       email || siteUrl
     )
-    const id = getSiteId(siteUrl, email)
+    // PAT sites have no email, so keying on it alone would collide every PAT
+    // connection to the same host into one id (silently overwriting a prior
+    // account + token). Fall back to the verified viewer identity so distinct
+    // accounts stay distinct. Cloud/Basic keep keying on their non-empty email.
+    const id = getSiteId(siteUrl, email || viewer.accountId)
     const site: JiraSite = {
       id,
       siteUrl,

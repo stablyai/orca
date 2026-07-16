@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
@@ -522,6 +522,60 @@ describe('Jira client credential storage', () => {
       })
     ).resolves.toEqual({ ok: false, error: 'Personal access token is required.' })
     expect(netFetchMock).not.toHaveBeenCalled()
+  })
+
+  it('requires a password when a username is present on self-hosted', async () => {
+    const jira = await loadClientModule()
+
+    await expect(
+      jira.connect({
+        siteUrl: 'jira.example.com',
+        email: 'jdoe',
+        apiToken: '',
+        authType: 'server'
+      })
+    ).resolves.toEqual({ ok: false, error: 'Password is required.' })
+    expect(netFetchMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps distinct self-hosted PAT accounts on one host as separate sites', async () => {
+    netFetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ name: 'alice', displayName: 'Alice' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ name: 'bot', displayName: 'Bot' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        })
+      )
+    const jira = await loadClientModule()
+
+    await jira.connect({
+      siteUrl: 'jira.example.com',
+      email: '',
+      apiToken: 'alice-pat',
+      authType: 'server'
+    })
+    await jira.connect({
+      siteUrl: 'jira.example.com',
+      email: '',
+      apiToken: 'bot-pat',
+      authType: 'server'
+    })
+
+    // Two PATs (both with empty email) to the same host must not collide onto
+    // one id and silently overwrite each other — the viewer identity keys them.
+    const stored = JSON.parse(
+      readFileSync(join(tempHome, '.orca', 'jira-sites.json'), 'utf-8')
+    ) as {
+      sites: { accountId: string }[]
+    }
+    expect(stored.sites).toHaveLength(2)
+    expect(stored.sites.map((site) => site.accountId).sort()).toEqual(['alice', 'bot'])
   })
 
   it('uses Bearer auth and REST v2 for stored self-hosted sites', async () => {
