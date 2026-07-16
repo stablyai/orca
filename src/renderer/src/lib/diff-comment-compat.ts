@@ -2,6 +2,20 @@ import type { DiffComment, DiffCommentSource, PRComment } from '../../../shared/
 import type { DecoratedDiffComment } from '../components/diff-comments/useDiffCommentDecorator'
 import type { AppState } from '../store/types'
 
+const EMPTY_PR_COMMENTS: readonly PRComment[] = []
+
+export function isPRCommentsCacheKey(
+  k: string,
+  worktree: { repoId: string },
+  linkedPR: number | string
+): boolean {
+  return (
+    k.toLowerCase().includes(worktree.repoId.toLowerCase()) &&
+    k.includes('::pr-comments::') &&
+    k.endsWith(`::${linkedPR}`)
+  )
+}
+
 export function getDiffCommentSource(comment: Pick<DiffComment, 'source'>): DiffCommentSource {
   return comment.source === 'markdown' ? 'markdown' : 'diff'
 }
@@ -121,12 +135,7 @@ export function getPRInlineCommentsFromStore(
   // scope or contain the full prRepo name in the middle. Match keys
   // dynamically to find the correct entry regardless of caching scopes.
   const keys = Object.keys(state.commentsCache)
-  const targetKey = keys.find(
-    (k) =>
-      k.toLowerCase().includes(worktree.repoId.toLowerCase()) &&
-      k.includes('::pr-comments::') &&
-      k.endsWith(`::${linkedPR}`)
-  )
+  const targetKey = keys.find((k) => isPRCommentsCacheKey(k, worktree, linkedPR))
   const prComments = (targetKey ? state.commentsCache[targetKey]?.data : null) ?? []
 
   return prCommentsToDecoratedDiffComments(prComments, relativePath, worktreeId)
@@ -150,35 +159,30 @@ export function selectRawPRCommentsFromStore(
   worktreeId: string | undefined
 ): readonly PRComment[] {
   if (!worktreeId) {
-    return []
+    return EMPTY_PR_COMMENTS
   }
-  const wt = state.getKnownWorktreeById(worktreeId)
-  if (!wt || !wt.repoId) {
-    return []
+  const worktree = state.getKnownWorktreeById(worktreeId)
+  if (!worktree || !worktree.repoId) {
+    return EMPTY_PR_COMMENTS
   }
-  let pr = wt.linkedPR
-  if (!pr && wt.branch) {
+  let linkedPR = worktree.linkedPR
+  if (!linkedPR && worktree.branch) {
     const keys = Object.keys(state.prCache)
     const targetKey = keys.find(
-      (k) => k.toLowerCase().includes(wt.repoId.toLowerCase()) && k.endsWith(`::${wt.branch}`)
+      (k) => k.toLowerCase().includes(worktree.repoId.toLowerCase()) && k.endsWith(`::${worktree.branch}`)
     )
     const cachedPR = targetKey ? state.prCache[targetKey]?.data : null
     if (cachedPR) {
-      pr = cachedPR.number
+      linkedPR = cachedPR.number
     }
   }
-  if (!pr) {
-    return []
+  if (!linkedPR) {
+    return EMPTY_PR_COMMENTS
   }
   // Why: commentsCache keys may be prefixed by host/runtime environment
   // scope or contain the full prRepo name in the middle. Match keys
   // dynamically to find the correct entry regardless of caching scopes.
   const keys = Object.keys(state.commentsCache)
-  const targetKey = keys.find(
-    (k) =>
-      k.toLowerCase().includes(wt.repoId.toLowerCase()) &&
-      k.includes('::pr-comments::') &&
-      k.endsWith(`::${pr}`)
-  )
-  return (targetKey ? state.commentsCache[targetKey]?.data : null) ?? []
+  const targetKey = keys.find((k) => isPRCommentsCacheKey(k, worktree, linkedPR))
+  return (targetKey ? state.commentsCache[targetKey]?.data : null) ?? EMPTY_PR_COMMENTS
 }

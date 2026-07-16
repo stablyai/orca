@@ -1,7 +1,86 @@
 // @vitest-environment happy-dom
-import { describe, expect, it } from 'vitest'
+import React from 'react'
+import { render, waitFor } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import type { DiffComment, PRComment } from '../../../../shared/types'
 import { prCommentsToDecoratedDiffComments } from '@/lib/diff-comment-compat'
+
+const store = {
+  settings: {
+    theme: 'light',
+    diffDefaultView: 'inline',
+    combinedDiffFileTreeVisibleByDefault: false
+  },
+  gitStatusByWorktree: {},
+  gitBranchChangesByWorktree: {},
+  gitBranchCompareSummaryByWorktree: {},
+  activeGroupIdByWorktree: {},
+  worktreesByRepo: {
+    'owner/repo': [{ id: 'test-worktree', diffComments: [] }]
+  },
+  prCache: {},
+  commentsCache: {},
+  getKnownWorktreeById: () => ({
+    path: '/repo',
+    branch: 'feature',
+    linkedPR: 42,
+    repoId: 'owner/repo'
+  }),
+  openAllDiffs: vi.fn(),
+  openFile: vi.fn(),
+  openBranchDiff: vi.fn(),
+  openCommitDiff: vi.fn(),
+  openConflictReview: vi.fn(),
+  openBranchAllDiffs: vi.fn(),
+  updateSettings: vi.fn(),
+  clearDiffComments: vi.fn(),
+  fetchPRComments: vi.fn(),
+  fetchPRForBranch: vi.fn()
+}
+
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign((selector: (state: typeof store) => unknown) => selector(store), {
+    getState: () => store
+  })
+}))
+
+vi.mock('./DiffSectionItem', () => ({
+  DiffSectionItem: (props: {
+    section: { path: string }
+    inlineComments?: readonly { body: string }[]
+  }) => (
+    <div data-testid={`section-${props.section.path}`}>
+      {props.inlineComments?.map((comment) => (
+        <span key={comment.body}>{comment.body}</span>
+      ))}
+    </div>
+  )
+}))
+
+vi.mock('./CombinedDiffFileTree', () => ({
+  CombinedDiffFileTree: () => null,
+  createCombinedDiffSectionIndexMap: () => new Map(),
+  handleCombinedDiffFileTreeNavigation: vi.fn()
+}))
+
+vi.mock('@/components/ui/tooltip', () => ({
+  TooltipProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipContent: ({ children }: { children: React.ReactNode }) => <>{children}</>
+}))
+
+vi.mock('@tanstack/react-virtual', () => ({
+  elementScroll: vi.fn(),
+  useVirtualizer: () => ({
+    getVirtualItems: () => [{ index: 0, key: 'section-0', start: 0 }],
+    getTotalSize: () => 100,
+    measureElement: vi.fn(),
+    measure: vi.fn(),
+    scrollToOffset: vi.fn(),
+    scrollToIndex: vi.fn()
+  })
+}))
 
 // Why: integration test to verify DiffViewer behavior with PR comments
 // This tests the interaction between local diff comments and PR review comments
@@ -183,5 +262,45 @@ describe('DiffViewer PR comment integration', () => {
 
     expect(allComments).toHaveLength(2)
     expect(allComments.every((c) => c.worktreeId === 'worktree-1')).toBe(true)
+  })
+
+  it('renders PR comments in matching combined diff section', async () => {
+    const { default: CombinedDiffViewer } = await import('./CombinedDiffViewer')
+    store.commentsCache = {
+      'github::owner/repo::pr-comments::42': {
+        data: [createPRComment({ id: 900, path: mockFilePath, body: 'Inline review note' })]
+      }
+    }
+
+    render(
+      <CombinedDiffViewer
+        viewStateKey="test-view"
+        file={{
+          id: 'diff',
+          filePath: '/repo',
+          relativePath: mockFilePath,
+          worktreeId: mockWorktreeId,
+          language: 'typescript',
+          isDirty: false,
+          mode: 'diff',
+          diffSource: 'combined-branch',
+          branchCompare: {
+            baseRef: 'main',
+            baseOid: 'base',
+            headOid: 'head',
+            mergeBase: 'merge',
+            compareRef: 'feature',
+            compareVersion: '1'
+          },
+          branchEntriesSnapshot: [{ path: mockFilePath, status: 'modified' }]
+        }}
+      />
+    )
+
+    await waitFor(() => {
+      expect(
+        document.querySelector(`[data-testid="section-${mockFilePath}"]`)?.textContent
+      ).toContain('Inline review note')
+    })
   })
 })

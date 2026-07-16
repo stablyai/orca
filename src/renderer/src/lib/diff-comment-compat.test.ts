@@ -327,6 +327,35 @@ describe('diff comment compatibility helpers', () => {
       expect(retrieved[0].id).toBe(123)
     })
 
+    it('matches PR comment cache repo IDs by inclusion', () => {
+      const state = {
+        getKnownWorktreeById: (id: string) => ({
+          id,
+          repoId: 'repo-1',
+          linkedPR: 12
+        }),
+        prCache: {},
+        commentsCache: {
+          'scope::repo-10::pr-comments::repo-10::12': { data: [mockPRComment] },
+          'scope::repo-1::pr-comments::repo-1::12': { data: [] }
+        }
+      } as unknown as AppState
+
+      expect(selectRawPRCommentsFromStore(state, 'wt-1')).toEqual([mockPRComment])
+    })
+
+    it('reuses empty PR comment array references', () => {
+      const state = {
+        getKnownWorktreeById: () => undefined,
+        prCache: {},
+        commentsCache: {}
+      } as unknown as AppState
+
+      expect(selectRawPRCommentsFromStore(state, 'wt-1')).toBe(
+        selectRawPRCommentsFromStore(state, 'wt-1')
+      )
+    })
+
     it('selectRawPRCommentsFromStore returns empty array for missing worktree', () => {
       const state = {
         getKnownWorktreeById: () => undefined,

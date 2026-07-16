@@ -55,7 +55,7 @@ import { Check, Copy, MessageSquare, PanelLeftOpen, Sparkles, Trash2, WrapText }
 import { toast } from 'sonner'
 import { DiffSectionItem } from './DiffSectionItem'
 import { DiffNotesSendMenu } from './DiffNotesSendMenu'
-import { prCommentsToDecoratedDiffComments } from '@/lib/diff-comment-compat'
+import { isPRCommentsCacheKey, prCommentsToDecoratedDiffComments } from '@/lib/diff-comment-compat'
 import {
   CombinedDiffFileTree,
   createCombinedDiffSectionIndexMap,
@@ -244,7 +244,9 @@ export default function CombinedDiffViewer({
     selectWorktreeDiffCommentsOrEmpty(s, file.worktreeId)
   )
 
-  const worktree = useAppStore((s) => (file.worktreeId ? s.getKnownWorktreeById(file.worktreeId) : undefined))
+  const worktree = useAppStore((s) =>
+    file.worktreeId ? s.getKnownWorktreeById(file.worktreeId) : undefined
+  )
   const wtPath = worktree?.path
   const wtBranch = worktree?.branch
   const wtLinkedPR = worktree?.linkedPR
@@ -300,12 +302,7 @@ export default function CombinedDiffViewer({
     // scope or contain the full prRepo name in the middle. Match keys
     // dynamically to find the correct entry regardless of caching scopes.
     const keys = Object.keys(s.commentsCache)
-    const targetKey = keys.find(
-      (k) =>
-        k.toLowerCase().includes(wt.repoId.toLowerCase()) &&
-        k.includes('::pr-comments::') &&
-        k.endsWith(`::${pr}`)
-    )
+    const targetKey = keys.find((k) => isPRCommentsCacheKey(k, wt, pr))
     return (targetKey ? s.commentsCache[targetKey]?.data : null) ?? EMPTY_PR_COMMENTS
   })
   const isDark =
@@ -2068,7 +2065,11 @@ export default function CombinedDiffViewer({
                         setSections={setSections}
                         modifiedEditorsRef={modifiedEditorsRef}
                         handleSectionSaveRef={handleSectionSaveRef}
-                        inlineComments={getInlineCommentsForSection(section.path)}
+                        inlineComments={
+                          isBranchMode || (isAllMode && section.area === undefined)
+                            ? getInlineCommentsForSection(section.path)
+                            : []
+                        }
                         renderHeaderTrailingContent={(headerSection) => {
                           const fileNotes = diffCommentsForWorktree.filter(
                             (comment) => comment.filePath === headerSection.path
