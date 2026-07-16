@@ -706,7 +706,8 @@ function copyLaunchConfig(config: SleepingAgentLaunchConfig): SleepingAgentLaunc
   return {
     ...(config.agentCommand ? { agentCommand: config.agentCommand } : {}),
     agentArgs: config.agentArgs,
-    agentEnv: { ...config.agentEnv }
+    agentEnv: { ...config.agentEnv },
+    ...(config.windowsCodexShellHandoff === true ? { windowsCodexShellHandoff: true } : {})
   }
 }
 
@@ -717,7 +718,11 @@ function launchConfigsEqual(
   if (a === undefined || b === undefined) {
     return a === b
   }
-  if (a.agentCommand !== b.agentCommand || a.agentArgs !== b.agentArgs) {
+  if (
+    a.agentCommand !== b.agentCommand ||
+    a.agentArgs !== b.agentArgs ||
+    a.windowsCodexShellHandoff !== b.windowsCodexShellHandoff
+  ) {
     return false
   }
   const aKeys = Object.keys(a.agentEnv)

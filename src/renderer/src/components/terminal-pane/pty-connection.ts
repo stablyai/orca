@@ -4398,6 +4398,9 @@ export function connectPanePty(
             ? launchConfig.agentEnv
             : resolveTuiAgentLaunchEnv(agent, state.settings?.agentDefaultEnv),
         ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
+        ...(launchConfig?.windowsCodexShellHandoff === true
+          ? { windowsCodexShellHandoff: true }
+          : {}),
         platform: resumePlatform
       })
       if (!startupPlan) {

@@ -2,7 +2,7 @@ import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery
 import type { TuiAgent } from '../../shared/types'
 import type { ShellReadyState, TerminalSnapshot } from './types'
 
-export type CreateOrAttachOptions = {
+export type TerminalHostSubprocessOptions = {
   sessionId: string
   cols: number
   rows: number
@@ -12,10 +12,14 @@ export type CreateOrAttachOptions = {
   command?: string
   startupCommandDelivery?: StartupCommandDelivery
   launchAgent?: TuiAgent
+  windowsCodexShellHandoff?: boolean
   /** Explicit shell the renderer asked for, forwarded to the subprocess. */
   shellOverride?: string
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
+}
+
+export type CreateOrAttachOptions = TerminalHostSubprocessOptions & {
   shellReadySupported?: boolean
   shellReadyTimeoutMs?: number
   historySeed?: string

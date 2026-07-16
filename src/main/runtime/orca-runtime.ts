@@ -1077,7 +1077,8 @@ function copySleepingAgentLaunchConfig(
   return {
     ...(config.agentCommand ? { agentCommand: config.agentCommand } : {}),
     agentArgs: config.agentArgs,
-    agentEnv: { ...config.agentEnv }
+    agentEnv: { ...config.agentEnv },
+    ...(config.windowsCodexShellHandoff === true ? { windowsCodexShellHandoff: true } : {})
   }
 }
 
@@ -1212,6 +1213,7 @@ type RuntimePtyController = {
     cwd?: string
     command?: string
     launchAgent?: TuiAgent
+    windowsCodexShellHandoff?: boolean
     commandDelivery?: 'renderer' | 'provider'
     startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
     env?: Record<string, string>
@@ -18344,6 +18346,9 @@ export class OrcaRuntimeService {
           ? launchOpts.command
           : (agentTeamsPlan?.command ?? launchOpts.command),
         launchAgent: launchOpts.launchAgent,
+        ...(effectiveLaunchConfig?.windowsCodexShellHandoff === true
+          ? { windowsCodexShellHandoff: true }
+          : {}),
         commandDelivery: 'provider',
         startupCommandDelivery: launchOpts.startupCommandDelivery,
         env,

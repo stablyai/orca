@@ -168,13 +168,27 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(command.trimEnd().endsWith(startupCommand)).toBe(true)
   })
 
-  it('keeps large PowerShell startup commands on stdin delivery', () => {
+  it('embeds PowerShell startup commands above the conservative cmd.exe limit', () => {
     const result = resolveWindowsShellLaunchArgs(
       'powershell.exe',
       'C:\\Users\\alice',
       'C:\\Users\\alice',
       undefined,
-      `orca ${'x'.repeat(7000)}`
+      `orca ${'x'.repeat(6_001)}`
+    )
+
+    expect(result.startupCommandDeliveredInShellArgs).toBe(true)
+    const command = Buffer.from(result.shellArgs[3] ?? '', 'base64').toString('utf16le')
+    expect(command.trimEnd().endsWith(`orca ${'x'.repeat(6_001)}`)).toBe(true)
+  })
+
+  it('keeps PowerShell startup commands beyond its encoded argv limit on stdin delivery', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'powershell.exe',
+      'C:\\Users\\alice',
+      'C:\\Users\\alice',
+      undefined,
+      `orca ${'x'.repeat(12_000)}`
     )
 
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()

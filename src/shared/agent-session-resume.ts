@@ -33,6 +33,7 @@ export type SleepingAgentLaunchConfig = {
   agentCommand?: string
   agentArgs: string
   agentEnv: Record<string, string>
+  windowsCodexShellHandoff?: true
 }
 
 export type SleepingAgentSessionRecord = {

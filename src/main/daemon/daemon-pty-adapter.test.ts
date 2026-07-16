@@ -95,6 +95,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     cwd?: string
     env?: Record<string, string>
     command?: string
+    windowsCodexShellHandoff?: boolean
   } | null
   let subprocessDataOnSubscribe: string | undefined
 
@@ -138,6 +139,46 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     it('uses worktreeId as session prefix when provided', async () => {
       const result = await adapter.spawn({ cols: 80, rows: 24, worktreeId: 'wt-1' })
       expect(result.id).toContain('wt-1')
+    })
+
+    it('forwards Windows Codex handoff provenance only when it is true', async () => {
+      await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'codex-handoff-true',
+        windowsCodexShellHandoff: true
+      })
+      expect(lastSpawnOpts).toMatchObject({ windowsCodexShellHandoff: true })
+
+      await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'codex-handoff-false',
+        windowsCodexShellHandoff: false
+      })
+      expect(lastSpawnOpts).not.toHaveProperty('windowsCodexShellHandoff')
+    })
+
+    it('does not arm the shell-ready barrier for a Windows Codex handoff', async () => {
+      const client = (
+        adapter as unknown as {
+          client: { request: (type: string, payload?: unknown) => Promise<unknown> }
+        }
+      ).client
+      const requestSpy = vi.spyOn(client, 'request')
+
+      await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'codex-handoff-no-shell-ready',
+        command: 'codex',
+        env: { SHELL: '/bin/zsh' },
+        windowsCodexShellHandoff: true
+      })
+
+      const payload = requestSpy.mock.calls.find((call) => call[0] === 'createOrAttach')?.[1]
+      expect(payload).toMatchObject({ shellReadySupported: false })
+      expect(payload).not.toHaveProperty('shellReadyTimeoutMs')
     })
 
     itOnPosix('keeps plain Codex startup on the short daemon shell-ready timeout', async () => {

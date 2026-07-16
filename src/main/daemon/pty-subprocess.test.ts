@@ -7,12 +7,14 @@ import type * as LocalPtyUtils from '../providers/local-pty-utils'
 
 const {
   spawnMock,
+  buildWindowsCodexShellHandoffAttemptMock,
   isPwshAvailableMock,
   validateWorkingDirectoryMock,
   resolveUnixShellPathMock,
   resolveAgentForegroundProcessMock
 } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
+  buildWindowsCodexShellHandoffAttemptMock: vi.fn(),
   isPwshAvailableMock: vi.fn(),
   resolveUnixShellPathMock: vi.fn((shellPath: string) => shellPath),
   resolveAgentForegroundProcessMock: vi.fn(),
@@ -31,6 +33,10 @@ vi.mock('node-pty', () => ({
 
 vi.mock('../pwsh', () => ({
   isPwshAvailable: isPwshAvailableMock
+}))
+
+vi.mock('../providers/windows-codex-shell-handoff', () => ({
+  buildWindowsCodexShellHandoffAttempt: buildWindowsCodexShellHandoffAttemptMock
 }))
 
 // Resolve PowerShell family names to deterministic absolute paths so these
@@ -115,6 +121,8 @@ describe('createPtySubprocess', () => {
 
   beforeEach(() => {
     spawnMock.mockReset()
+    buildWindowsCodexShellHandoffAttemptMock.mockReset()
+    buildWindowsCodexShellHandoffAttemptMock.mockReturnValue(null)
     isPwshAvailableMock.mockReset()
     resolveAgentForegroundProcessMock.mockReset()
     resolveAgentForegroundProcessMock.mockImplementation(
@@ -327,6 +335,11 @@ describe('createPtySubprocess', () => {
   it('uses a new daemon protocol for post-merge Git guard behavior', () => {
     expect(PROTOCOL_VERSION).toBeGreaterThan(21)
     expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toContain(21)
+  })
+
+  it('uses daemon protocol v23 for Windows Codex shell handoff behavior', () => {
+    expect(PROTOCOL_VERSION).toBe(23)
+    expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS.at(-1)).toBe(22)
   })
 
   it('resolves a missing Unix default before spawning node-pty', () => {
@@ -1069,6 +1082,69 @@ describe('createPtySubprocess', () => {
 
       await vi.waitFor(() => expect(handle.getForegroundProcess()).toBe('codex'))
     } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+  })
+
+  it('spawns the same Windows Codex handoff host and exposes its logical PowerShell', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-16T12:00:00.000Z'))
+    const proc = mockPtyProcess()
+    proc.process = 'xterm-256color'
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const nodeHost = 'C:\\Program Files\\nodejs\\node.exe'
+    buildWindowsCodexShellHandoffAttemptMock.mockReturnValue({
+      shellPath: nodeHost,
+      shellArgs: ['-e', 'handoff-script', 'encoded-config'],
+      logicalShellPath: PWSH7_ABS,
+      effectiveCwd: 'C:\\repo',
+      validationCwd: 'C:\\repo',
+      startupCommandDeliveredInShellArgs: true
+    })
+    resolveAgentForegroundProcessMock.mockResolvedValue('pwsh.exe')
+
+    try {
+      const handle = createPtySubprocess({
+        sessionId: 'repo::C:\\repo@@codex-handoff',
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo',
+        env: { COMSPEC: WINDOWS_POWERSHELL_ABS },
+        terminalWindowsPowerShellImplementation: 'pwsh.exe',
+        command: "codex '--version'",
+        launchAgent: 'codex',
+        windowsCodexShellHandoff: true
+      })
+
+      expect(buildWindowsCodexShellHandoffAttemptMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          launchAgent: 'codex',
+          startupCommand: "codex '--version'",
+          windowsCodexShellHandoff: true
+        })
+      )
+      expect(spawnMock).toHaveBeenCalledWith(
+        nodeHost,
+        ['-e', 'handoff-script', 'encoded-config'],
+        expect.objectContaining({ cwd: 'C:\\repo' })
+      )
+      expect(handle.shellPath).toBe(PWSH7_ABS)
+      expect(handle.startupCommandDeliveredInShellArgs).toBe(true)
+      expect(handle.getForegroundProcess()).toBe('codex')
+
+      vi.advanceTimersByTime(5_001)
+      expect(handle.getForegroundProcess()).toBe('pwsh.exe')
+      expect(resolveAgentForegroundProcessMock).toHaveBeenCalledWith(
+        proc.pid,
+        'pwsh.exe',
+        expect.any(Object)
+      )
+    } finally {
+      vi.useRealTimers()
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }

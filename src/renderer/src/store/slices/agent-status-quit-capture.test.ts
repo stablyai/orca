@@ -123,7 +123,8 @@ describe('captureAllSleepingAgentSessions', () => {
     const launchConfig = {
       agentCommand: "codex '--model' 'gpt-5'",
       agentArgs: '--model gpt-5',
-      agentEnv: { CODEX_PROFILE: 'captured' }
+      agentEnv: { CODEX_PROFILE: 'captured' },
+      windowsCodexShellHandoff: true as const
     }
     const providerSession = { key: 'session_id' as const, id: 'codex-session-1' }
 

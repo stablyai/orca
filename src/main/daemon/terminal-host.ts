@@ -2,7 +2,6 @@ import { Session, type SubprocessHandle } from './session'
 import { normalizePtySize } from './daemon-pty-size'
 import { shellPathSupportsPtyStartupBarrier } from './shell-ready'
 import { resolveProcessCwd } from '../providers/process-cwd'
-import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
 import {
   SessionNotFoundError,
@@ -10,7 +9,11 @@ import {
   type TakePendingOutputResult,
   type TerminalSnapshot
 } from './types'
-import type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host-create-contract'
+import type {
+  CreateOrAttachOptions,
+  CreateOrAttachResult,
+  TerminalHostSubprocessOptions
+} from './terminal-host-create-contract'
 import { shutdownTerminalHostSessions } from './terminal-host-session-shutdown'
 import { TerminalSessionTeardown } from './terminal-session-teardown'
 
@@ -19,19 +22,7 @@ export type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-hos
 const DEFAULT_MAX_TOMBSTONES = 1000
 
 export type TerminalHostOptions = {
-  spawnSubprocess: (opts: {
-    sessionId: string
-    cols: number
-    rows: number
-    cwd?: string
-    env?: Record<string, string>
-    envToDelete?: string[]
-    command?: string
-    startupCommandDelivery?: StartupCommandDelivery
-    shellOverride?: string
-    terminalWindowsWslDistro?: string | null
-    terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
-  }) => SubprocessHandle
+  spawnSubprocess: (opts: TerminalHostSubprocessOptions) => SubprocessHandle
   // Why: on graceful shutdown, the host writes final checkpoints for all live
   // sessions before killing them. This bypasses the RPC round-trip — the daemon
   // writes checkpoints in-process, guaranteeing completion before teardown.
@@ -121,6 +112,7 @@ export class TerminalHost {
       command: opts.command,
       startupCommandDelivery: opts.startupCommandDelivery,
       ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
+      ...(opts.windowsCodexShellHandoff === true ? { windowsCodexShellHandoff: true } : {}),
       shellOverride: opts.shellOverride,
       terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
       terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation

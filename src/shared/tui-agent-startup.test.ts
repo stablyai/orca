@@ -419,6 +419,50 @@ describe('tui agent startup plans', () => {
     expect(plan?.startupCommandDelivery).toBe('shell-ready')
   })
 
+  it('marks stock local Windows PowerShell Codex launches for the native handoff', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      platform: 'win32'
+    })
+
+    expect(plan?.launchConfig.windowsCodexShellHandoff).toBe(true)
+  })
+
+  it('does not mark an exact-looking custom Codex command override', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: 'fix it',
+      cmdOverrides: { codex: 'codex' },
+      platform: 'win32'
+    })
+
+    expect(plan?.launchConfig.windowsCodexShellHandoff).toBeUndefined()
+  })
+
+  it.each([
+    { name: 'cmd', platform: 'win32' as const, shell: 'cmd' as const, isRemote: false },
+    {
+      name: 'remote PowerShell',
+      platform: 'win32' as const,
+      shell: 'powershell' as const,
+      isRemote: true
+    },
+    { name: 'non-Windows', platform: 'linux' as const, shell: 'posix' as const, isRemote: false }
+  ])('does not mark stock Codex on $name', ({ platform, shell, isRemote }) => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      platform,
+      shell,
+      isRemote
+    })
+
+    expect(plan?.launchConfig.windowsCodexShellHandoff).toBeUndefined()
+  })
+
   it('keeps plain empty Codex startup on the fast delivery path', () => {
     const plan = buildAgentStartupPlan({
       agent: 'codex',
@@ -618,6 +662,24 @@ describe('tui agent startup plans', () => {
       agentCommand: 'codex --profile captured',
       agentArgs: '',
       agentEnv: {}
+    })
+  })
+
+  it('preserves a captured Windows Codex handoff marker when resuming', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: { codex: 'codex --profile changed' },
+      agentCommand: 'codex',
+      windowsCodexShellHandoff: true,
+      platform: 'win32'
+    })
+
+    expect(plan?.launchConfig).toEqual({
+      agentCommand: 'codex',
+      agentArgs: '',
+      agentEnv: {},
+      windowsCodexShellHandoff: true
     })
   })
 

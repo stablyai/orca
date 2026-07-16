@@ -26,6 +26,7 @@ import {
 } from '../providers/windows-powershell'
 import {
   buildWindowsPowerShellSpawnAttempts,
+  prependWindowsCodexShellHandoffAttempt,
   type WindowsShellSpawnAttempt
 } from '../providers/windows-shell-fallback-chain'
 import { isPwshAvailable } from '../pwsh'
@@ -115,6 +116,7 @@ export type PtySubprocessOptions = {
   command?: string
   startupCommandDelivery?: StartupCommandDelivery
   launchAgent?: TuiAgent
+  windowsCodexShellHandoff?: boolean
   /** Explicit shell executable path/basename the renderer asked for.
    *  Overrides env.COMSPEC / env.SHELL resolution inside the daemon so a user
    *  who picks "New WSL terminal" from the "+" menu actually gets WSL. */
@@ -509,6 +511,7 @@ function spawnDaemonPtyWithWindowsFallback(args: {
 }): {
   process: pty.IPty
   shellPath: string
+  logicalShellPath?: string
   spawnCwd: string
   startupCommandDeliveredInShellArgs?: boolean
 } {
@@ -530,6 +533,9 @@ function spawnDaemonPtyWithWindowsFallback(args: {
     return {
       process: spawnAt(args.shellPath, args.shellArgs, args.spawnCwd),
       shellPath: args.shellPath,
+      ...(args.windowsFallbackAttempts[0]?.logicalShellPath
+        ? { logicalShellPath: args.windowsFallbackAttempts[0].logicalShellPath }
+        : {}),
       spawnCwd: args.spawnCwd
     }
   } catch (primaryErr) {
@@ -547,6 +553,7 @@ function spawnDaemonPtyWithWindowsFallback(args: {
         return {
           process,
           shellPath: attempt.shellPath,
+          ...(attempt.logicalShellPath ? { logicalShellPath: attempt.logicalShellPath } : {}),
           spawnCwd: attempt.effectiveCwd,
           startupCommandDeliveredInShellArgs: attempt.startupCommandDeliveredInShellArgs
         }
@@ -819,6 +826,27 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   }
   promoteAgentTeamsShimPath(env, opts.env?.PATH)
 
+  if (process.platform === 'win32' && windowsFallbackAttempts.length > 0) {
+    windowsFallbackAttempts = prependWindowsCodexShellHandoffAttempt({
+      attempts: windowsFallbackAttempts,
+      cwd: requestedCwd,
+      defaultCwd: getDefaultCwd(),
+      wslContext: sessionWslContext ?? preferredWslContext,
+      startupCommand: opts.command,
+      launchAgent: opts.launchAgent,
+      windowsCodexShellHandoff: opts.windowsCodexShellHandoff,
+      env
+    })
+    const primaryAttempt = windowsFallbackAttempts[0]
+    if (primaryAttempt) {
+      shellPath = primaryAttempt.shellPath
+      shellArgs = primaryAttempt.shellArgs
+      spawnCwd = primaryAttempt.effectiveCwd
+      validationCwd = primaryAttempt.validationCwd
+      startupCommandDeliveredInShellArgs = primaryAttempt.startupCommandDeliveredInShellArgs
+    }
+  }
+
   // Why: asar packaging can strip the +x bit from node-pty's spawn-helper
   // binary. The main process fixes this via LocalPtyProvider, but the daemon
   // runs in a separate forked process with its own code path.
@@ -844,7 +872,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     proc = spawned.process
     // Why: a Windows fallback (e.g. cmd.exe) carries its own argv-embedded
     // startup command, so adopt the winning shell's identity + delivery flag.
-    shellPath = spawned.shellPath
+    shellPath = spawned.logicalShellPath ?? spawned.shellPath
     spawnCwd = spawned.spawnCwd
     if (spawned.startupCommandDeliveredInShellArgs !== undefined) {
       startupCommandDeliveredInShellArgs = spawned.startupCommandDeliveredInShellArgs

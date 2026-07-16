@@ -13,7 +13,7 @@ import {
 } from '../powershell-osc133-bootstrap'
 
 const CMD_EXE_COMMAND_LINE_MAX_CHARS = 8191
-const STARTUP_COMMAND_TEXT_MAX_CHARS = 6000
+const CMD_STARTUP_COMMAND_TEXT_MAX_CHARS = 6000
 const POWERSHELL_ENCODED_COMMAND_ARG_MAX_CHARS = 28_000
 const CMD_UTF8_SETUP_COMMAND = 'chcp 65001 > nul'
 
@@ -52,7 +52,7 @@ export type WindowsShellWslContext = {
  * keep the older stdin delivery path.
  */
 function getCmdShellArgStartupCommand(command?: string): string | null {
-  if (!command || command.length > STARTUP_COMMAND_TEXT_MAX_CHARS) {
+  if (!command || command.length > CMD_STARTUP_COMMAND_TEXT_MAX_CHARS) {
     return null
   }
   // Why: node-pty's C-runtime argv escaping changes normal cmd quotes in `/K`
@@ -70,15 +70,15 @@ function getCmdShellArgStartupCommand(command?: string): string | null {
 /**
  * Builds the PowerShell -EncodedCommand payload for startup bootstrap.
  *
- * Short startup commands are appended to the bootstrap and marked as delivered;
- * large payloads return the bootstrap alone so stdin delivery remains available.
+ * Startup commands that fit the encoded argv limit are appended to the bootstrap;
+ * larger payloads return the bootstrap alone so stdin delivery remains available.
  */
 function getPowerShellEncodedCommand(startupCommand?: string): {
   encodedCommand: string
   startupCommandDeliveredInShellArgs?: boolean
 } {
   const bootstrap = getPowerShellOsc133Bootstrap()
-  if (!startupCommand || startupCommand.length > STARTUP_COMMAND_TEXT_MAX_CHARS) {
+  if (!startupCommand) {
     return { encodedCommand: encodePowerShellCommand(bootstrap) }
   }
 

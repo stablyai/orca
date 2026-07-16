@@ -10,16 +10,17 @@ export type {
 } from './daemon-foreground-process-protocol'
 
 // ─── Protocol Version ────────────────────────────────────────────────
-import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../shared/types'
+import type { CreateOrAttachRequest } from './daemon-create-or-attach-protocol'
+export type { CreateOrAttachRequest } from './daemon-create-or-attach-protocol'
 // Why: daemons can survive app updates. Bump for IPC wire-shape changes, or
 // when daemon-baked behavior cannot be delivered by on-disk wrapper refresh.
 // Why: bump when adding daemon wire behavior so same-version old daemons do
 // not silently accept the handshake and then reject new RPCs.
-export const PROTOCOL_VERSION = 22
+export const PROTOCOL_VERSION = 23
 export const GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION = 22
 export const PREVIOUS_DAEMON_PROTOCOL_VERSIONS = [
-  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22
 ] as const
 
 // ─── Session State Machine ──────────────────────────────────────────
@@ -95,39 +96,6 @@ export type HelloResponse = {
 }
 
 // ─── RPC Requests (Client → Daemon, on control socket) ─────────────
-
-export type CreateOrAttachRequest = {
-  id: string
-  type: 'createOrAttach'
-  payload: {
-    sessionId: string
-    cols: number
-    rows: number
-    cwd?: string
-    env?: Record<string, string>
-    envToDelete?: string[]
-    command?: string
-    startupCommandDelivery?: StartupCommandDelivery
-    launchAgent?: TuiAgent
-    /** Explicit Windows shell override selected by the user (e.g. 'wsl.exe').
-     *  The daemon forwards this to its subprocess spawner so each tab honors
-     *  the shell picked in the "+" menu or the persisted default-shell setting,
-     *  instead of defaulting to COMSPEC (which is always cmd.exe on Windows)
-     *  or the hard-coded powershell.exe fallback. */
-    shellOverride?: string
-    /** Preferred WSL distro for generic `wsl.exe` launches. */
-    terminalWindowsWslDistro?: string | null
-    /** Why: the UI keeps PowerShell as one shell family, but the runtime may
-     *  need to substitute pwsh.exe for powershell.exe when the user selected
-     *  PowerShell 7+. Forward the persisted implementation choice so the daemon
-     *  PTY path resolves the same effective executable as LocalPtyProvider. */
-    terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
-    shellReadySupported?: boolean
-    shellReadyTimeoutMs?: number
-    /** Recovered ANSI applied before the new subprocess can emit startup output. */
-    historySeed?: string
-  }
-}
 
 export type CancelCreateOrAttachRequest = {
   id: string

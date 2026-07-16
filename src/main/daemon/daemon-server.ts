@@ -43,6 +43,7 @@ export type DaemonServerOptions = {
     cwd?: string
     env?: Record<string, string>
     command?: string
+    windowsCodexShellHandoff?: boolean
     shellOverride?: string
   }) => SubprocessHandle
 }
@@ -353,6 +354,7 @@ export class DaemonServer {
           // Why: daemon RPC payloads are untrusted JSON. Persist only the
           // allowlisted enum used for byte routing, never arbitrary identity.
           ...(isTuiAgent(p.launchAgent) ? { launchAgent: p.launchAgent } : {}),
+          ...(p.windowsCodexShellHandoff === true ? { windowsCodexShellHandoff: true } : {}),
           shellOverride: p.shellOverride,
           terminalWindowsWslDistro: p.terminalWindowsWslDistro,
           terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,
