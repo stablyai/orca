@@ -187,7 +187,10 @@ import {
   shouldDriveSyntheticAgentTitleFromHook,
   type SyntheticAgentTitleProfile
 } from '../shared/synthetic-agent-title'
-import type { AgentStatusState } from '../shared/agent-status-types'
+import {
+  stripAgentStatusPersistenceMetadata,
+  type AgentStatusState
+} from '../shared/agent-status-types'
 import { resolveTuiAgentPermissionMode } from '../shared/tui-agent-permissions'
 import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
 import {
@@ -1074,7 +1077,7 @@ function openMainWindow(): BrowserWindow {
       const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
       const terminalHandle = runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
       mainWindow?.webContents.send('agentStatus:set', {
-        ...payload,
+        ...stripAgentStatusPersistenceMetadata(payload),
         paneKey,
         ...(launchToken ? { launchToken } : {}),
         ...(terminalHandle ? { terminalHandle } : {}),

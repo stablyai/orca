@@ -152,6 +152,21 @@ describe('computeTrustedHash', () => {
     expect(a).not.toBe(b)
   })
 
+  it('retains the agent-type matcher in subagent lifecycle hook identities', () => {
+    for (const eventLabel of ['subagent_start', 'subagent_stop'] as const) {
+      const base: CodexTrustEntry = {
+        sourcePath: '/x/hooks.json',
+        eventLabel,
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'foo'
+      }
+      expect(computeTrustedHash({ ...base, matcher: 'reviewer' })).not.toBe(
+        computeTrustedHash(base)
+      )
+    }
+  })
+
   it('drops the matcher on user_prompt_submit/stop like matcher_pattern_for_event', () => {
     // Why: Codex ignores matchers on these two events and hashes the
     // identity WITHOUT the matcher field. A definition carrying
@@ -1785,6 +1800,17 @@ describe('parseTrustKey', () => {
       groupIndex: 2,
       handlerIndex: 3
     })
+  })
+
+  it('parses both Codex subagent lifecycle event labels', () => {
+    for (const eventLabel of ['subagent_start', 'subagent_stop'] as const) {
+      expect(parseTrustKey(`/Users/x/.codex/hooks.json:${eventLabel}:1:2`)).toEqual({
+        sourcePath: '/Users/x/.codex/hooks.json',
+        eventLabel,
+        groupIndex: 1,
+        handlerIndex: 2
+      })
+    }
   })
 
   it('returns null for a non-Codex event label', () => {

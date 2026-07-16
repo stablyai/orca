@@ -7,10 +7,12 @@ import type { CodexEventLabel, CodexTrustEntry } from './config-toml-trust'
 // install, status, and write-back promotion paths cannot drift.
 export const CODEX_HOOK_EVENT_LABEL: Record<string, CodexEventLabel> = {
   SessionStart: 'session_start',
+  SubagentStart: 'subagent_start',
   UserPromptSubmit: 'user_prompt_submit',
   PreToolUse: 'pre_tool_use',
   PermissionRequest: 'permission_request',
   PostToolUse: 'post_tool_use',
+  SubagentStop: 'subagent_stop',
   Stop: 'stop',
   PreCompact: 'pre_compact',
   PostCompact: 'post_compact'
@@ -18,10 +20,12 @@ export const CODEX_HOOK_EVENT_LABEL: Record<string, CodexEventLabel> = {
 
 export const CODEX_EVENT_NAME_BY_LABEL: Record<CodexEventLabel, string> = {
   session_start: 'SessionStart',
+  subagent_start: 'SubagentStart',
   user_prompt_submit: 'UserPromptSubmit',
   pre_tool_use: 'PreToolUse',
   permission_request: 'PermissionRequest',
   post_tool_use: 'PostToolUse',
+  subagent_stop: 'SubagentStop',
   stop: 'Stop',
   pre_compact: 'PreCompact',
   post_compact: 'PostCompact'

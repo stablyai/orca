@@ -131,6 +131,52 @@ describe('RelayAgentHookServer', () => {
     }
   })
 
+  it('preserves Codex lead ownership through remote cache replay', async () => {
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const postCodex = (payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${port}/hook/codex`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': token
+          },
+          body: JSON.stringify({
+            paneKey: PANE_KEY,
+            tabId: 'tab-1',
+            env: 'remote',
+            version: '1',
+            payload
+          })
+        })
+
+      await postCodex({ hook_event_name: 'UserPromptSubmit', prompt: 'remote review' })
+      await postCodex({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'remote-reviewer',
+        agent_type: 'reviewer'
+      })
+      await postCodex({ hook_event_name: 'Stop' })
+
+      expect(forward.mock.calls.at(-1)?.[0].payload).toMatchObject({
+        state: 'working',
+        leadState: 'done',
+        subagents: [expect.objectContaining({ id: 'remote-reviewer' })]
+      })
+
+      forward.mockClear()
+      expect(server.replayCachedPayloadsForPanes()).toBe(1)
+      expect(forward).toHaveBeenCalledTimes(1)
+      expect(forward.mock.calls[0][0].payload.leadState).toBe('done')
+      expect(forward.mock.calls[0][0].isReplay).toBe(true)
+    } finally {
+      server.stop()
+    }
+  })
+
   it('does not replay paneKeys after clearPaneState', async () => {
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })

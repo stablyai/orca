@@ -32,6 +32,8 @@ export type CodexEventLabel =
   | 'pre_compact'
   | 'post_compact'
   | 'session_start'
+  | 'subagent_start'
+  | 'subagent_stop'
   | 'user_prompt_submit'
   | 'stop'
 
@@ -129,6 +131,8 @@ function matcherPatternForEvent(
     case 'pre_compact':
     case 'post_compact':
     case 'session_start':
+    case 'subagent_start':
+    case 'subagent_stop':
       return matcher
   }
 }
@@ -287,6 +291,8 @@ function isCodexEventLabel(value: string): value is CodexEventLabel {
     value === 'pre_compact' ||
     value === 'post_compact' ||
     value === 'session_start' ||
+    value === 'subagent_start' ||
+    value === 'subagent_stop' ||
     value === 'user_prompt_submit' ||
     value === 'stop'
   )

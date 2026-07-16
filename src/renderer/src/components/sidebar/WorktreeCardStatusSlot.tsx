@@ -1,5 +1,5 @@
 import React from 'react'
-import { Bell, GitBranch } from 'lucide-react'
+import { Bell, CircleCheck, GitBranch } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
@@ -25,40 +25,44 @@ type WorktreeCardStatusSlotProps = {
   className?: string
 }
 
-const QUIET_REVIEW_REPLACEABLE_STATUSES = new Set<WorktreeStatus>(['active', 'done', 'inactive'])
 // Why: a missing review display can also mean provider state is unavailable,
 // so the passive label names the identity cue without claiming no review exists.
 function getDefaultBranchIdentityLabel(): string {
   return translate('auto.components.sidebar.WorktreeCardStatusSlot.branchIdentity', 'Branch')
 }
-// Why: branch-style SVGs are optically left-heavy; this keeps them aligned with
-// the centered activity dots in the shared status column.
-const compactReviewAndBranchStatusIconClassName = 'size-[13px] translate-x-px'
+// Why: two compact cells preserve the existing 20px status lane while keeping
+// activity and review/branch identity independently visible.
+const compactReviewAndBranchStatusIconClassName = 'size-2.5'
 const branchStatusIconClassName = `${compactReviewAndBranchStatusIconClassName} text-muted-foreground/70`
-// Why: a left-edge badge overlays unread on the status glyph without widening
-// the lane or indenting the title; ring-sidebar cuts the dot out from busy icons.
+// Why: the corner badge keeps unread distinct without taking either status
+// cell or widening the lane; ring-sidebar cuts it out from the nearby glyph.
 const newCardUnreadAlertClassName =
-  'pointer-events-none absolute left-0 top-1/2 size-[6px] -translate-y-1/2 rounded-full bg-amber-500 ring-2 ring-sidebar'
+  'pointer-events-none absolute -right-0.5 -top-0.5 size-[6px] rounded-full bg-amber-500 ring-2 ring-sidebar'
 
-function overlayNewCardUnreadStatus(
-  status: React.JSX.Element,
-  showUnreadAlert: boolean
-): React.JSX.Element {
-  if (!showUnreadAlert) {
-    return status
+function NewCardActivityIcon({ status }: { status: WorktreeStatus }): React.JSX.Element {
+  if (status === 'done') {
+    // Why: the new card shows activity beside review state, so completion needs
+    // a distinct shape instead of sharing active's emerald dot.
+    return (
+      <span
+        data-worktree-activity-status={status}
+        className="inline-flex size-2.5 items-center justify-center"
+        aria-hidden="true"
+      >
+        <CircleCheck className="size-2.5 text-emerald-500" />
+      </span>
+    )
   }
 
   return (
     <span
-      data-worktree-status-lane-unread=""
-      className="relative inline-flex size-5 shrink-0 items-center justify-center"
+      data-worktree-activity-status={status}
+      className="inline-flex size-2.5 items-center justify-center"
+      aria-hidden="true"
     >
-      {status}
-      <span
-        data-worktree-unread-alert=""
-        className={newCardUnreadAlertClassName}
-        aria-hidden="true"
-      />
+      {/* Why: the outer tooltip names every lane signal; an inner native title
+          would compete with that complete description. */}
+      <StatusIndicator status={status} className="size-2.5" title="" />
     </span>
   )
 }
@@ -102,41 +106,64 @@ export function WorktreeCardStatusSlot({
 }: WorktreeCardStatusSlotProps): React.JSX.Element | null {
   const status = useWorktreeActivityStatus(worktreeId)
   const statusLabel = getWorktreeStatusLabel(status) || status
-  const canShowReviewStatus =
-    newCardStyle &&
-    showStatus &&
-    prDisplay !== null &&
-    QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
-  const canShowBranchStatus =
-    newCardStyle &&
-    showStatus &&
-    hasBranchIdentity &&
-    prDisplay === null &&
-    QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
-  const passiveStatusLabel =
+  const canShowReviewStatus = newCardStyle && showStatus && prDisplay !== null
+  const canShowBranchStatus = newCardStyle && showStatus && hasBranchIdentity && prDisplay === null
+  const identityStatusLabel =
     canShowReviewStatus && prDisplay
       ? getReviewStatusTooltip(prDisplay)
       : canShowBranchStatus
         ? (branchIdentityLabel ?? getDefaultBranchIdentityLabel())
-        : statusLabel
+        : null
+  const passiveStatusLabel = identityStatusLabel
+    ? `${statusLabel} · ${identityStatusLabel}`
+    : statusLabel
   const passiveStatusTooltip =
     newCardStyle && isUnread ? `${passiveStatusLabel} · Unread` : passiveStatusLabel
-  // Why: working and permission already own the new-card status lane, but
-  // unread state should still surface in tooltip/sr-only copy and reappear afterward.
-  const showNewCardUnreadAlert =
-    newCardStyle && isUnread && showStatus && status !== 'working' && status !== 'permission'
+  const showNewCardUnreadAlert = newCardStyle && isUnread && showStatus
   const reviewStatusIconClassName = compactReviewAndBranchStatusIconClassName
   const branchStatusIcon = <GitBranch className={branchStatusIconClassName} aria-hidden="true" />
   const passiveStatus =
-    canShowReviewStatus && prDisplay ? (
+    newCardStyle && showStatus ? (
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className={cn('inline-flex size-5 items-center justify-center p-0.5', className)}>
-            <ReviewIcon
-              review={prDisplay}
-              className={reviewStatusIconClassName}
-              variant="generic"
-            />
+          <span
+            data-worktree-status-lane=""
+            data-worktree-status-lane-unread={showNewCardUnreadAlert ? '' : undefined}
+            className={cn(
+              'relative inline-grid size-5 shrink-0 items-center justify-items-center',
+              canShowReviewStatus || canShowBranchStatus ? 'grid-cols-2' : 'grid-cols-1',
+              className
+            )}
+          >
+            <NewCardActivityIcon status={status} />
+            {canShowReviewStatus && prDisplay ? (
+              <span
+                data-worktree-review-status=""
+                className="inline-flex size-2.5 items-center justify-center"
+                aria-hidden="true"
+              >
+                <ReviewIcon
+                  review={prDisplay}
+                  className={reviewStatusIconClassName}
+                  variant="generic"
+                />
+              </span>
+            ) : canShowBranchStatus ? (
+              <span
+                data-worktree-branch-status=""
+                className="inline-flex size-2.5 items-center justify-center"
+                aria-hidden="true"
+              >
+                {branchStatusIcon}
+              </span>
+            ) : null}
+            {showNewCardUnreadAlert ? (
+              <span
+                data-worktree-unread-alert=""
+                className={newCardUnreadAlertClassName}
+                aria-hidden="true"
+              />
+            ) : null}
             <span className="sr-only">{passiveStatusTooltip}</span>
           </span>
         </TooltipTrigger>
@@ -144,25 +171,6 @@ export function WorktreeCardStatusSlot({
           <span>{passiveStatusTooltip}</span>
         </TooltipContent>
       </Tooltip>
-    ) : canShowBranchStatus ? (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className={cn('inline-flex size-5 items-center justify-center p-0.5', className)}>
-            {branchStatusIcon}
-            <span className="sr-only">{passiveStatusTooltip}</span>
-          </span>
-        </TooltipTrigger>
-        <TooltipContent side="right" sideOffset={8}>
-          <span>{passiveStatusTooltip}</span>
-        </TooltipContent>
-      </Tooltip>
-    ) : newCardStyle && showStatus ? (
-      <>
-        <span className={cn('inline-flex size-5 items-center justify-center', className)}>
-          <StatusIndicator status={status} aria-hidden="true" />
-        </span>
-        <span className="sr-only">{passiveStatusTooltip}</span>
-      </>
     ) : (
       <>
         <StatusIndicator status={status} aria-hidden="true" className={className} />
@@ -177,7 +185,7 @@ export function WorktreeCardStatusSlot({
   }
 
   if (!unreadActionEnabled) {
-    return overlayNewCardUnreadStatus(passiveStatus, showNewCardUnreadAlert)
+    return passiveStatus
   }
 
   const actionLabel = isUnread ? 'Mark as read' : 'Mark as unread'

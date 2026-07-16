@@ -23,10 +23,12 @@ type HooksConfig = {
 
 const managedEvents = [
   'SessionStart',
+  'SubagentStart',
   'UserPromptSubmit',
   'PreToolUse',
   'PermissionRequest',
   'PostToolUse',
+  'SubagentStop',
   'Stop'
 ] as const
 
@@ -54,11 +56,12 @@ function createTestPlan(): CodexWslRuntimeHookInstallPlan {
 
 function getManagedTrustEntry(
   plan: CodexWslRuntimeHookInstallPlan,
-  command: string
+  command: string,
+  eventLabel: CodexTrustEntry['eventLabel'] = 'user_prompt_submit'
 ): CodexTrustEntry {
   return {
     sourcePath: plan.trustConfigPath,
-    eventLabel: 'user_prompt_submit',
+    eventLabel,
     groupIndex: 0,
     handlerIndex: 0,
     command,
@@ -389,6 +392,13 @@ describe('Codex WSL runtime hook install', () => {
       enabled: true,
       trustedHash: computeTrustedHash(managedTrustEntry)
     })
+    for (const eventLabel of ['subagent_start', 'subagent_stop'] as const) {
+      const lifecycleTrustEntry = getManagedTrustEntry(plan, managedCommand!, eventLabel)
+      expect(trustEntries.get(computeTrustKey(lifecycleTrustEntry))).toEqual({
+        enabled: true,
+        trustedHash: computeTrustedHash(lifecycleTrustEntry)
+      })
+    }
     expect(trustEntries.get(unrelatedTrustKey)).toEqual({
       enabled: false,
       trustedHash: 'sha256:user'
@@ -402,6 +412,10 @@ describe('Codex WSL runtime hook install', () => {
     })
     const refreshedTrustEntries = readHookTrustEntries(plan.tomlPath)
     expect(refreshedTrustEntries.has(computeTrustKey(managedTrustEntry))).toBe(false)
+    for (const eventLabel of ['subagent_start', 'subagent_stop'] as const) {
+      const lifecycleTrustEntry = getManagedTrustEntry(plan, managedCommand!, eventLabel)
+      expect(refreshedTrustEntries.has(computeTrustKey(lifecycleTrustEntry))).toBe(false)
+    }
     expect(refreshedTrustEntries.get(unrelatedTrustKey)).toEqual({
       enabled: false,
       trustedHash: 'sha256:user'

@@ -83,11 +83,11 @@ export type AgentStatusOrchestrationContext = {
 export type AgentSubagentState = 'working' | 'idle'
 
 /** A live in-process subagent/teammate spawned by the pane's agent session
- *  (reported by Claude's SubagentStart/SubagentStop hooks and the
+ *  (reported by Claude/Codex SubagentStart/SubagentStop hooks and Claude's
  *  `background_tasks` field on Stop). Rendered as an indented child row under
  *  the owning pane's sidebar row — these children have no PTY of their own. */
 export type AgentSubagentSnapshot = {
-  /** Provider-assigned id (Claude hook `agent_id`). */
+  /** Provider-assigned id (Claude/Codex hook `agent_id`). */
   id: string
   agentType?: string
   description?: string
@@ -179,6 +179,9 @@ export type MigrationUnsupportedPtyEntry = {
 
 export type AgentStatusPayload = {
   state: AgentStatusState
+  /** Provider lead state before live-child gating. Persisted/relayed so a
+   *  restarted listener can resolve the final child; stripped from UI IPC. */
+  leadState?: AgentStatusState
   prompt?: string
   agentType?: AgentType
   toolName?: string
@@ -200,6 +203,8 @@ export type AgentStatusPayload = {
  */
 export type ParsedAgentStatusPayload = Omit<AgentStatusPayload, 'prompt'> & { prompt: string }
 
+export type AgentStatusDisplayPayload = Omit<ParsedAgentStatusPayload, 'leadState'>
+
 /**
  * Wire shape for agent-status IPC. Both the push channel `agentStatus:set` and the
  * pull channel `agentStatus:getSnapshot` produce this shape so renderer call sites
@@ -207,7 +212,7 @@ export type ParsedAgentStatusPayload = Omit<AgentStatusPayload, 'prompt'> & { pr
  * payload onto pane identity + timing because the renderer's slice expects them
  * destructured.
  */
-export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
+export type AgentStatusIpcPayload = AgentStatusDisplayPayload & {
   paneKey: string
   launchToken?: string
   terminalHandle?: string
@@ -368,6 +373,10 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
   }
   return {
     state: state as AgentStatusState,
+    leadState:
+      typeof obj.leadState === 'string' && VALID_STATES.has(obj.leadState)
+        ? (obj.leadState as AgentStatusState)
+        : undefined,
     prompt: normalizePromptField(obj.prompt),
     // Why: route through normalizeOptionalField so agentType gets the same
     // trim / collapse-newlines / truncate / empty→undefined treatment as the
@@ -402,6 +411,15 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
  */
 export function normalizeAgentStatusPayload(payload: unknown): ParsedAgentStatusPayload | null {
   return normalizeAgentStatusObject(payload)
+}
+
+/** Remove listener-only persistence metadata before renderer IPC. Relay and
+ *  server caches intentionally keep the original parsed payload. */
+export function stripAgentStatusPersistenceMetadata(
+  payload: ParsedAgentStatusPayload
+): AgentStatusDisplayPayload {
+  const { leadState: _leadState, ...displayPayload } = payload
+  return displayPayload
 }
 
 /**

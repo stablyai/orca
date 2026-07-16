@@ -45,6 +45,13 @@ import {
   upsertWorkingClaudeSubagent,
   type ClaudeSubagentRoster
 } from './claude-subagent-roster'
+import {
+  codexRosterHasWorkingSubagent,
+  codexRosterToSnapshots,
+  finishCodexSubagent,
+  upsertWorkingCodexSubagent,
+  type CodexSubagentRoster
+} from './codex-subagent-roster'
 import { ORCA_HOOK_PROTOCOL_VERSION } from './agent-hook-types'
 import { REMOTE_AGENT_HOOK_ENV, type AgentHookSource } from './agent-hook-relay'
 import {
@@ -113,6 +120,13 @@ export type HookListenerState = {
    *  persists here because a gated 'working' emit clamps the flag away, and
    *  the eventual done (when the last child drains) must still carry it. */
   claudeLeadStateByPaneKey: Map<string, ClaudeLeadTurnState>
+  /** Codex child lifecycle is independent of the lead turn. A lead Stop can
+   *  arrive while spawned workers are still running, so both survive turns. */
+  codexSubagentRosterByPaneKey: Map<string, CodexSubagentRoster>
+  codexLeadStateByPaneKey: Map<string, AgentStatusState>
+  /** Child permission waits temporarily own the pane status without replacing
+   *  the lead state. The set is bounded by the already-capped child roster. */
+  codexWaitingSubagentsByPaneKey: Map<string, Set<string>>
 }
 
 export type ClaudeLeadTurnState = {
@@ -140,7 +154,10 @@ export function createHookListenerState(): HookListenerState {
     antigravityCompletedTranscriptByPaneKey: new Map(),
     ampCompletedCacheKeys: new Set(),
     claudeSubagentRosterByPaneKey: new Map(),
-    claudeLeadStateByPaneKey: new Map()
+    claudeLeadStateByPaneKey: new Map(),
+    codexSubagentRosterByPaneKey: new Map(),
+    codexLeadStateByPaneKey: new Map(),
+    codexWaitingSubagentsByPaneKey: new Map()
   }
 }
 
@@ -152,6 +169,9 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   deletePaneScopedSetEntry(state.ampCompletedCacheKeys, paneKey)
   state.claudeSubagentRosterByPaneKey.delete(paneKey)
   state.claudeLeadStateByPaneKey.delete(paneKey)
+  state.codexSubagentRosterByPaneKey.delete(paneKey)
+  state.codexLeadStateByPaneKey.delete(paneKey)
+  state.codexWaitingSubagentsByPaneKey.delete(paneKey)
 }
 
 function movePaneScopedMapEntries<T>(
@@ -193,6 +213,9 @@ export function movePaneCacheState(
   movePaneScopedSetEntries(state.ampCompletedCacheKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeLeadStateByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.codexSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.codexLeadStateByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.codexWaitingSubagentsByPaneKey, fromPaneKey, toPaneKey)
 }
 
 function clearPaneTurnCacheState(state: HookListenerState, paneKey: string): void {
@@ -232,6 +255,9 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.warnedEnvs.clear()
   state.claudeSubagentRosterByPaneKey.clear()
   state.claudeLeadStateByPaneKey.clear()
+  state.codexSubagentRosterByPaneKey.clear()
+  state.codexLeadStateByPaneKey.clear()
+  state.codexWaitingSubagentsByPaneKey.clear()
 }
 
 /** Emit warn-once diagnostics for cross-build (`version`) and dev-vs-prod
@@ -2508,6 +2534,30 @@ export function seedClaudeSubagentRosterFromSnapshots(
   }
 }
 
+/** Restore the visible Codex child roster after Orca restarts. New snapshots
+ *  carry the underlying lead state. Legacy snapshots do not; keep those
+ *  conservatively working until the next lead hook rather than show a false
+ *  done indicator, with normal status freshness bounding the passive display. */
+export function seedCodexSubagentRosterFromSnapshots(
+  state: HookListenerState,
+  paneKey: string,
+  snapshots: readonly AgentSubagentSnapshot[],
+  leadState?: AgentStatusState
+): void {
+  if (snapshots.length === 0 || state.codexSubagentRosterByPaneKey.has(paneKey)) {
+    return
+  }
+  const roster = getOrCreateCodexSubagentRoster(state, paneKey)
+  for (const snapshot of snapshots) {
+    if (snapshot.state === 'working') {
+      upsertWorkingCodexSubagent(roster, snapshot.id, snapshot.agentType, snapshot.startedAt)
+    }
+  }
+  if (leadState) {
+    state.codexLeadStateByPaneKey.set(paneKey, leadState)
+  }
+}
+
 /** Drop a child-owned waiting state when that child stops/idles, restoring
  *  the lead state the wait displaced. Without a stash (the wait was the
  *  pane's first observed lead event) fall back to 'working' and let the next
@@ -3165,6 +3215,135 @@ function hasExplicitPromptForSource(
   return eventName === 'agent.start' && promptText.length > 0
 }
 
+function getOrCreateCodexSubagentRoster(
+  state: HookListenerState,
+  paneKey: string
+): CodexSubagentRoster {
+  let roster = state.codexSubagentRosterByPaneKey.get(paneKey)
+  if (!roster) {
+    roster = new Map()
+    state.codexSubagentRosterByPaneKey.set(paneKey, roster)
+  }
+  return roster
+}
+
+const CODEX_CHILD_ORIGIN_EVENT_NAMES: ReadonlySet<string> = new Set([
+  'SessionStart',
+  'SubagentStart',
+  'UserPromptSubmit',
+  'PreToolUse',
+  'PermissionRequest',
+  'PostToolUse',
+  'SubagentStop',
+  'Stop'
+])
+
+function isCodexChildOriginEvent(eventName: unknown): eventName is string {
+  return typeof eventName === 'string' && CODEX_CHILD_ORIGIN_EVENT_NAMES.has(eventName)
+}
+
+function isCodexCompactSessionStart(
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): boolean {
+  return eventName === 'SessionStart' && readString(hookPayload, 'source') === 'compact'
+}
+
+function clearCodexSubagentWait(state: HookListenerState, paneKey: string, agentId: string): void {
+  const waitingAgentIds = state.codexWaitingSubagentsByPaneKey.get(paneKey)
+  if (!waitingAgentIds) {
+    return
+  }
+  waitingAgentIds.delete(agentId)
+  if (waitingAgentIds.size === 0) {
+    state.codexWaitingSubagentsByPaneKey.delete(paneKey)
+  }
+}
+
+function resolveCodexPaneState(state: HookListenerState, paneKey: string): AgentStatusState {
+  const roster = state.codexSubagentRosterByPaneKey.get(paneKey)
+  const waitingAgentIds = state.codexWaitingSubagentsByPaneKey.get(paneKey)
+  if (roster && waitingAgentIds) {
+    for (const agentId of waitingAgentIds) {
+      if (roster.has(agentId)) {
+        return 'waiting'
+      }
+    }
+  }
+  const leadState = state.codexLeadStateByPaneKey.get(paneKey) ?? 'working'
+  return leadState === 'done' && codexRosterHasWorkingSubagent(roster) ? 'working' : leadState
+}
+
+function buildCodexStatusPayload(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>,
+  updateLeadSnapshot: boolean
+): ParsedAgentStatusPayload | null {
+  // Why: child hooks share the parent pane key. They may refresh the roster,
+  // but must not replace the lead prompt/tool snapshot with child-local work.
+  const resetLeadSnapshot =
+    updateLeadSnapshot &&
+    isNewTurnEvent('codex', eventName) &&
+    !isCodexCompactSessionStart(eventName, hookPayload)
+  const snapshot = updateLeadSnapshot
+    ? resolveToolState(state, paneKey, extractToolFields('codex', eventName, hookPayload), {
+        resetOnNewTurn: resetLeadSnapshot
+      })
+    : (state.lastToolByPaneKey.get(paneKey) ?? {})
+  const subagents = codexRosterToSnapshots(state.codexSubagentRosterByPaneKey.get(paneKey))
+
+  return normalizeAgentStatusPayload({
+    state: resolveCodexPaneState(state, paneKey),
+    // Why: effective state may be clamped to working/waiting by children.
+    // Persist the underlying lead only while that distinction matters.
+    leadState: subagents ? (state.codexLeadStateByPaneKey.get(paneKey) ?? 'working') : undefined,
+    prompt: resolvePrompt(state, paneKey, updateLeadSnapshot ? promptText : '', {
+      resetOnNewTurn: resetLeadSnapshot
+    }),
+    agentType: 'codex',
+    toolName: snapshot.toolName,
+    toolInput: snapshot.toolInput,
+    interactivePrompt: snapshot.interactivePrompt,
+    lastAssistantMessage: snapshot.lastAssistantMessage,
+    subagents
+  })
+}
+
+function normalizeCodexSubagentEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  paneKey: string,
+  hookPayload: Record<string, unknown>,
+  agentId: string
+): ParsedAgentStatusPayload | null {
+  const roster = getOrCreateCodexSubagentRoster(state, paneKey)
+  if (eventName === 'SubagentStop' || eventName === 'Stop') {
+    finishCodexSubagent(roster, agentId)
+    clearCodexSubagentWait(state, paneKey, agentId)
+  } else {
+    const accepted = upsertWorkingCodexSubagent(
+      roster,
+      agentId,
+      readFirstString(hookPayload, ['agent_type', 'agentType']),
+      Date.now()
+    )
+    if (eventName === 'PermissionRequest' && accepted) {
+      let waitingAgentIds = state.codexWaitingSubagentsByPaneKey.get(paneKey)
+      if (!waitingAgentIds) {
+        waitingAgentIds = new Set()
+        state.codexWaitingSubagentsByPaneKey.set(paneKey, waitingAgentIds)
+      }
+      waitingAgentIds.add(agentId)
+    } else if (accepted && (eventName === 'PreToolUse' || eventName === 'PostToolUse')) {
+      clearCodexSubagentWait(state, paneKey, agentId)
+    }
+  }
+  return buildCodexStatusPayload(state, eventName, '', paneKey, hookPayload, false)
+}
+
 function normalizeCodexEvent(
   state: HookListenerState,
   eventName: unknown,
@@ -3172,7 +3351,15 @@ function normalizeCodexEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
-  const stateName =
+  const eventAgentId = readFirstString(hookPayload, ['agent_id', 'agentId'])
+  if (eventAgentId && isCodexChildOriginEvent(eventName)) {
+    return normalizeCodexSubagentEvent(state, eventName, paneKey, hookPayload, eventAgentId)
+  }
+  if (eventName === 'SubagentStart' || eventName === 'SubagentStop') {
+    return null
+  }
+
+  const leadState =
     eventName === 'SessionStart' ||
     eventName === 'UserPromptSubmit' ||
     eventName === 'PreToolUse' ||
@@ -3183,31 +3370,19 @@ function normalizeCodexEvent(
         : eventName === 'Stop'
           ? 'done'
           : null
-
-  if (!stateName) {
+  if (!leadState) {
     return null
   }
 
-  const snapshot = resolveToolState(
-    state,
-    paneKey,
-    extractToolFields('codex', eventName, hookPayload),
-    { resetOnNewTurn: isNewTurnEvent('codex', eventName) }
-  )
-
-  return parseAgentStatusPayload(
-    JSON.stringify({
-      state: stateName,
-      prompt: resolvePrompt(state, paneKey, promptText, {
-        resetOnNewTurn: isNewTurnEvent('codex', eventName)
-      }),
-      agentType: 'codex',
-      toolName: snapshot.toolName,
-      toolInput: snapshot.toolInput,
-      interactivePrompt: snapshot.interactivePrompt,
-      lastAssistantMessage: snapshot.lastAssistantMessage
-    })
-  )
+  const isCompactSessionStart = isCodexCompactSessionStart(eventName, hookPayload)
+  if (eventName === 'SessionStart' && !isCompactSessionStart) {
+    // Why: startup/resume/clear can reuse a pane for a new Codex session, but
+    // compact is an in-place lead restart while its children remain live.
+    state.codexSubagentRosterByPaneKey.delete(paneKey)
+    state.codexWaitingSubagentsByPaneKey.delete(paneKey)
+  }
+  state.codexLeadStateByPaneKey.set(paneKey, leadState)
+  return buildCodexStatusPayload(state, eventName, promptText, paneKey, hookPayload, true)
 }
 
 function normalizeOpenCodeFamilyEvent(
@@ -3889,7 +4064,7 @@ export function normalizeHookPayload(
         hookEventName: typeof eventName === 'string' ? eventName : undefined,
         toolUseId: readFirstString(hookPayloadRecord, ['tool_use_id', 'toolUseId']),
         toolAgentId: readFirstString(hookPayloadRecord, ['agent_id', 'agentId']),
-        toolAgentType: readString(hookPayloadRecord, 'agent_type'),
+        toolAgentType: readFirstString(hookPayloadRecord, ['agent_type', 'agentType']),
         ...(providerSession ? { providerSession } : {}),
         payload
       }

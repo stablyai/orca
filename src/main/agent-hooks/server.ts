@@ -35,6 +35,7 @@ import {
   resolveHookSource,
   preparePendingGrokResultDiscovery,
   seedClaudeSubagentRosterFromSnapshots,
+  seedCodexSubagentRosterFromSnapshots,
   warnOnHookEnvOrVersionMismatch,
   writeEndpointFile,
   type AgentHookEventPayload,
@@ -47,7 +48,8 @@ import {
   type AgentType,
   type AgentStatusState,
   type ParsedAgentStatusPayload,
-  normalizeAgentStatusPayload
+  normalizeAgentStatusPayload,
+  stripAgentStatusPersistenceMetadata
 } from '../../shared/agent-status-types'
 import {
   resolveAgentStatusIdentity,
@@ -277,14 +279,14 @@ function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentSta
     stateStartedAt: entry.stateStartedAt,
     ...(entry.providerSession ? { providerSession: entry.providerSession } : {}),
     ...(entry.promptInteractionKey ? { promptInteractionKey: entry.promptInteractionKey } : {}),
-    ...entry.payload
+    ...stripAgentStatusPersistenceMetadata(entry.payload)
   }
 }
 
-// Why: OSC-only dedupe (ingestTerminalStatus). Deliberately omits `subagents`:
-// OSC payloads never carry them, and including the field would make every
-// hook-cached entry with child rows non-equivalent — the OSC ping would then
-// apply and wipe the roster. Do not reuse this for hook-path comparisons.
+// Why: OSC-only dedupe (ingestTerminalStatus). Deliberately omits `subagents`
+// and `leadState`: OSC payloads never carry either, and including them would
+// make every child-gated hook entry non-equivalent — the OSC ping would then
+// apply and wipe lifecycle metadata. Do not reuse this for hook comparisons.
 function equivalentParsedAgentStatusPayload(
   a: ParsedAgentStatusPayload,
   b: ParsedAgentStatusPayload
@@ -1799,11 +1801,18 @@ export class AgentHookServer {
         this.state.lastStatusByPaneKey.set(resolvedPaneKey, entry)
         // Why: preserve only working children across restart. Live activity
         // confirms them; a later complete inventory may reap stale seeds.
-        if (entry.payload.subagents) {
+        if (entry.payload.agentType === 'claude' && entry.payload.subagents) {
           seedClaudeSubagentRosterFromSnapshots(
             this.state,
             resolvedPaneKey,
             entry.payload.subagents
+          )
+        } else if (entry.payload.agentType === 'codex' && entry.payload.subagents) {
+          seedCodexSubagentRosterFromSnapshots(
+            this.state,
+            resolvedPaneKey,
+            entry.payload.subagents,
+            entry.payload.leadState
           )
         }
         hydrated += 1

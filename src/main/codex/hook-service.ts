@@ -74,10 +74,12 @@ import {
 // can flip the pane to the red waiting state.
 const CODEX_EVENTS = [
   'SessionStart',
+  'SubagentStart',
   'UserPromptSubmit',
   'PreToolUse',
   'PermissionRequest',
   'PostToolUse',
+  'SubagentStop',
   'Stop'
 ] as const
 
@@ -99,10 +101,12 @@ function getCodexConfigTomlPath(): string {
 // full mapping lives in codex-hook-identity.ts so promotion can't drift.
 const CODEX_EVENT_LABEL: Record<(typeof CODEX_EVENTS)[number], CodexEventLabel> = {
   SessionStart: CODEX_HOOK_EVENT_LABEL.SessionStart!,
+  SubagentStart: CODEX_HOOK_EVENT_LABEL.SubagentStart!,
   UserPromptSubmit: CODEX_HOOK_EVENT_LABEL.UserPromptSubmit!,
   PreToolUse: CODEX_HOOK_EVENT_LABEL.PreToolUse!,
   PermissionRequest: CODEX_HOOK_EVENT_LABEL.PermissionRequest!,
   PostToolUse: CODEX_HOOK_EVENT_LABEL.PostToolUse!,
+  SubagentStop: CODEX_HOOK_EVENT_LABEL.SubagentStop!,
   Stop: CODEX_HOOK_EVENT_LABEL.Stop!
 }
 

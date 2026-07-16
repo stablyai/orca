@@ -236,10 +236,12 @@ describe('remote hook service installers', () => {
     expect(hooks._managed).toEqual({ 'external-manager': { Stop: [0] } })
     for (const eventName of [
       'SessionStart',
+      'SubagentStart',
       'UserPromptSubmit',
       'PreToolUse',
       'PermissionRequest',
       'PostToolUse',
+      'SubagentStop',
       'Stop'
     ]) {
       const command = hooks.hooks[eventName]?.[0]?.hooks?.[0]?.command
@@ -250,6 +252,8 @@ describe('remote hook service installers', () => {
     expect(fs.modes.get('/home/dev/.orca/agent-hooks/codex-hook.sh')).toBe(0o755)
     const toml = fs.files.get('/home/dev/.codex/config.toml')
     expect(toml).toContain('/home/dev/.codex/hooks.json:permission_request:0:0')
+    expect(toml).toContain('/home/dev/.codex/hooks.json:subagent_start:0:0')
+    expect(toml).toContain('/home/dev/.codex/hooks.json:subagent_stop:0:0')
     expect(toml).toContain('trusted_hash = "sha256:')
   })
 
@@ -273,9 +277,17 @@ describe('remote hook service installers', () => {
     expect(hooks.hooks.Stop?.[0]?.hooks?.[0]?.command).toContain(
       '/home/dev/.orca/agent-hooks/codex-hook.sh'
     )
+    expect(hooks.hooks.SubagentStart?.[0]?.hooks?.[0]?.command).toContain(
+      '/home/dev/.orca/agent-hooks/codex-hook.sh'
+    )
+    expect(hooks.hooks.SubagentStop?.[0]?.hooks?.[0]?.command).toContain(
+      '/home/dev/.orca/agent-hooks/codex-hook.sh'
+    )
     const toml = fs.files.get(`${runtimeHome}/config.toml`)
     expect(toml).toContain('model = "gpt-5.2-codex"')
     expect(toml).toContain(`${runtimeHome}/hooks.json:stop:0:0`)
+    expect(toml).toContain(`${runtimeHome}/hooks.json:subagent_start:0:0`)
+    expect(toml).toContain(`${runtimeHome}/hooks.json:subagent_stop:0:0`)
   })
 
   it('defers Codex trust writes until the redirected config.toml exists (launch-path seed race)', async () => {

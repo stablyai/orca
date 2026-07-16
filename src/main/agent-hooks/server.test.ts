@@ -89,6 +89,33 @@ afterEach(() => {
 })
 
 describe('AgentHookServer listener replay', () => {
+  it('keeps remote Codex lead ownership in server state but strips renderer snapshots', () => {
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.setListener(listener)
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: {
+          state: 'working',
+          leadState: 'done',
+          prompt: 'remote review',
+          agentType: 'codex',
+          subagents: [{ id: 'remote-reviewer', state: 'working', startedAt: 900 }]
+        }
+      },
+      'conn-1'
+    )
+
+    expect(listener).toHaveBeenLastCalledWith(
+      expect.objectContaining({ payload: expect.objectContaining({ leadState: 'done' }) })
+    )
+    expect('leadState' in server.getStatusSnapshot()[0]).toBe(false)
+  })
+
   it('applies inferred interrupts through the cached status lifecycle', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
@@ -6043,6 +6070,63 @@ describe('Last-status persistence', () => {
       ])
     } finally {
       server.stop()
+    }
+  })
+
+  it('hydrates Codex lead ownership so the final child stop resolves after restart', async () => {
+    const firstServer = new AgentHookServer()
+    const restartedServer = new AgentHookServer()
+    try {
+      await firstServer.start({ env: 'production', userDataPath })
+      await postHookEvent(
+        firstServer,
+        buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'persisted review' }),
+        '/hook/codex'
+      )
+      await postHookEvent(
+        firstServer,
+        buildBody({
+          hook_event_name: 'SubagentStart',
+          agent_id: 'persisted-reviewer',
+          agent_type: 'reviewer'
+        }),
+        '/hook/codex'
+      )
+      await postHookEvent(firstServer, buildBody({ hook_event_name: 'Stop' }), '/hook/codex')
+      firstServer.flushStatusPersistSync()
+      const persisted = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      expect(persisted.entries[PANE].payload).toMatchObject({
+        state: 'working',
+        leadState: 'done',
+        subagents: [expect.objectContaining({ id: 'persisted-reviewer' })]
+      })
+      firstServer.stop()
+
+      await restartedServer.start({ env: 'production', userDataPath })
+      expect(restartedServer.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'working',
+          agentType: 'codex',
+          subagents: [expect.objectContaining({ id: 'persisted-reviewer', state: 'working' })]
+        })
+      ])
+      expect('leadState' in restartedServer.getStatusSnapshot()[0]).toBe(false)
+
+      await postHookEvent(
+        restartedServer,
+        buildBody({ hook_event_name: 'SubagentStop', agent_id: 'persisted-reviewer' }),
+        '/hook/codex'
+      )
+      expect(restartedServer.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'done',
+          agentType: 'codex',
+          subagents: undefined
+        })
+      ])
+    } finally {
+      firstServer.stop()
+      restartedServer.stop()
     }
   })
 

@@ -124,6 +124,8 @@ function localManagedCodexEvents(): string[] {
     'PreToolUse',
     'SessionStart',
     'Stop',
+    'SubagentStart',
+    'SubagentStop',
     'UserPromptSubmit'
   ]
 }
@@ -156,6 +158,8 @@ describe('CodexHookService', () => {
     expect(trustConfig).toContain('model = "gpt-5.2-codex"')
     expect(trustConfig).toContain('approval_policy = "on-request"')
     expect(trustConfig).toContain(':permission_request:0:0')
+    expect(trustConfig).toContain(':subagent_start:0:0')
+    expect(trustConfig).toContain(':subagent_stop:0:0')
   })
 
   it('drops plugin manager metadata from runtime hooks.json during install', () => {

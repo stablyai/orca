@@ -3,6 +3,7 @@ import {
   agentSubagentsEqual,
   parseAgentStatusPayload,
   normalizeAgentStatusPayload,
+  stripAgentStatusPersistenceMetadata,
   AGENT_STATUS_MAX_FIELD_LENGTH,
   AGENT_STATUS_MAX_SUBAGENTS,
   AGENT_STATUS_TOOL_NAME_MAX_LENGTH,
@@ -35,6 +36,27 @@ describe('parseAgentStatusPayload', () => {
       expect(result).not.toBeNull()
       expect(result!.state).toBe(state)
     }
+  })
+
+  it('normalizes optional lead state while ignoring invalid legacy values', () => {
+    expect(parseAgentStatusPayload('{"state":"working","leadState":"done"}')?.leadState).toBe(
+      'done'
+    )
+    expect(
+      parseAgentStatusPayload('{"state":"working","leadState":"running"}')?.leadState
+    ).toBeUndefined()
+    expect(parseAgentStatusPayload('{"state":"working"}')?.leadState).toBeUndefined()
+  })
+
+  it('strips lead persistence metadata without mutating the relay/server payload', () => {
+    const payload = parseAgentStatusPayload(
+      '{"state":"working","leadState":"done","prompt":"review"}'
+    )!
+    const displayPayload = stripAgentStatusPersistenceMetadata(payload)
+
+    expect(displayPayload).toEqual({ state: 'working', prompt: 'review' })
+    expect('leadState' in displayPayload).toBe(false)
+    expect(payload.leadState).toBe('done')
   })
 
   it('returns null for invalid state', () => {
