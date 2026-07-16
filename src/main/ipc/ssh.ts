@@ -920,25 +920,13 @@ export function registerSshHandlers(
       // state is stuck there. Send `connected` directly to the renderer
       // instead of going through callbacks.onStateChange, which would
       // trigger the reconnection logic.
-      const win = getCurrentMainWindow()
-      const connectedState = withSshRemotePlatform(targetId, {
+      clearRelayStateOverride(targetId)
+      broadcastSshState(getCurrentMainWindow, targetId, {
         targetId,
         status: 'connected',
         error: null,
         reconnectAttempt: 0
       })
-      clearRelayStateOverride(targetId)
-      if (!isRuntimeOwnedSshTargetId(targetId) && win && !win.isDestroyed()) {
-        win.webContents.send('ssh:state-changed', {
-          targetId,
-          state: connectedState
-        })
-      }
-      if (isRuntimeOwnedSshTargetId(targetId)) {
-        currentRuntime?.invalidateSshWorktreeScanCache?.(targetId)
-      } else {
-        currentRuntime?.notifySshStateChanged?.(targetId, connectedState)
-      }
     } catch (err) {
       // Relay deployment failed — disconnect SSH
       activeSessions.delete(targetId)
