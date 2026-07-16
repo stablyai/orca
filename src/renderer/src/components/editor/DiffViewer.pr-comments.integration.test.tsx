@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import path from 'node:path'
 import React from 'react'
 import { render, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
@@ -21,7 +22,7 @@ const store = {
   prCache: {},
   commentsCache: {},
   getKnownWorktreeById: () => ({
-    path: '/repo',
+    path: path.join(path.sep, 'repo'),
     branch: 'feature',
     linkedPR: 42,
     repoId: 'owner/repo'
@@ -266,41 +267,47 @@ describe('DiffViewer PR comment integration', () => {
 
   it('renders PR comments in matching combined diff section', async () => {
     const { default: CombinedDiffViewer } = await import('./CombinedDiffViewer')
+    // Why: Restore original state to prevent test cache leakage
+    const originalCache = store.commentsCache
     store.commentsCache = {
       'github::owner/repo::pr-comments::42': {
         data: [createPRComment({ id: 900, path: mockFilePath, body: 'Inline review note' })]
       }
     }
 
-    render(
-      <CombinedDiffViewer
-        viewStateKey="test-view"
-        file={{
-          id: 'diff',
-          filePath: '/repo',
-          relativePath: mockFilePath,
-          worktreeId: mockWorktreeId,
-          language: 'typescript',
-          isDirty: false,
-          mode: 'diff',
-          diffSource: 'combined-branch',
-          branchCompare: {
-            baseRef: 'main',
-            baseOid: 'base',
-            headOid: 'head',
-            mergeBase: 'merge',
-            compareRef: 'feature',
-            compareVersion: '1'
-          },
-          branchEntriesSnapshot: [{ path: mockFilePath, status: 'modified' }]
-        }}
-      />
-    )
+    try {
+      render(
+        <CombinedDiffViewer
+          viewStateKey="test-view"
+          file={{
+            id: 'diff',
+            filePath: path.join(path.sep, 'repo'),
+            relativePath: mockFilePath,
+            worktreeId: mockWorktreeId,
+            language: 'typescript',
+            isDirty: false,
+            mode: 'diff',
+            diffSource: 'combined-branch',
+            branchCompare: {
+              baseRef: 'main',
+              baseOid: 'base',
+              headOid: 'head',
+              mergeBase: 'merge',
+              compareRef: 'feature',
+              compareVersion: '1'
+            },
+            branchEntriesSnapshot: [{ path: mockFilePath, status: 'modified' }]
+          }}
+        />
+      )
 
-    await waitFor(() => {
-      expect(
-        document.querySelector(`[data-testid="section-${mockFilePath}"]`)?.textContent
-      ).toContain('Inline review note')
-    })
+      await waitFor(() => {
+        expect(
+          document.querySelector(`[data-testid="section-${mockFilePath}"]`)?.textContent
+        ).toContain('Inline review note')
+      })
+    } finally {
+      store.commentsCache = originalCache
+    }
   })
 })

@@ -9,11 +9,10 @@ export function isPRCommentsCacheKey(
   worktree: { repoId: string },
   linkedPR: number | string
 ): boolean {
-  return (
-    k.toLowerCase().includes(worktree.repoId.toLowerCase()) &&
-    k.includes('::pr-comments::') &&
-    k.endsWith(`::${linkedPR}`)
-  )
+  const repoId = worktree.repoId.toLowerCase()
+  const lowerKey = k.toLowerCase()
+  const matchesRepo = lowerKey.startsWith(`${repoId}::`) || lowerKey.includes(`::${repoId}::`)
+  return matchesRepo && k.includes('::pr-comments::') && k.endsWith(`::${linkedPR}`)
 }
 
 export function getDiffCommentSource(comment: Pick<DiffComment, 'source'>): DiffCommentSource {
@@ -116,11 +115,14 @@ export function getPRInlineCommentsFromStore(
   let linkedPR = worktree.linkedPR
   if (!linkedPR && worktree.branch) {
     const keys = Object.keys(state.prCache)
-    const targetKey = keys.find(
-      (k) =>
-        k.toLowerCase().includes(worktree.repoId.toLowerCase()) &&
+    const repoId = worktree.repoId.toLowerCase()
+    const targetKey = keys.find((k) => {
+      const lowerKey = k.toLowerCase()
+      return (
+        (lowerKey.startsWith(`${repoId}::`) || lowerKey.includes(`::${repoId}::`)) &&
         k.endsWith(`::${worktree.branch}`)
-    )
+      )
+    })
     const cachedPR = targetKey ? state.prCache[targetKey]?.data : null
     if (cachedPR) {
       linkedPR = cachedPR.number
@@ -168,9 +170,14 @@ export function selectRawPRCommentsFromStore(
   let linkedPR = worktree.linkedPR
   if (!linkedPR && worktree.branch) {
     const keys = Object.keys(state.prCache)
-    const targetKey = keys.find(
-      (k) => k.toLowerCase().includes(worktree.repoId.toLowerCase()) && k.endsWith(`::${worktree.branch}`)
-    )
+    const repoId = worktree.repoId.toLowerCase()
+    const targetKey = keys.find((k) => {
+      const lowerKey = k.toLowerCase()
+      return (
+        (lowerKey.startsWith(`${repoId}::`) || lowerKey.includes(`::${repoId}::`)) &&
+        k.endsWith(`::${worktree.branch}`)
+      )
+    })
     const cachedPR = targetKey ? state.prCache[targetKey]?.data : null
     if (cachedPR) {
       linkedPR = cachedPR.number

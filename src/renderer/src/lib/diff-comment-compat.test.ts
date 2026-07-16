@@ -341,7 +341,7 @@ describe('diff comment compatibility helpers', () => {
         }
       } as unknown as AppState
 
-      expect(selectRawPRCommentsFromStore(state, 'wt-1')).toEqual([mockPRComment])
+      expect(selectRawPRCommentsFromStore(state, 'wt-1')).toEqual([])
     })
 
     it('reuses empty PR comment array references', () => {
