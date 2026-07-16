@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils'
 import type { SourceControlLaunchActionId } from '../../../../shared/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import type { GlobalSettings, Repo, TuiAgent } from '../../../../shared/types'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
 import { sourceControlActionRecipeMatchesTarget } from './source-control-action-recipe-match'
 import type { SourceControlAgentScopeNote } from './source-control-agent-action-dialog-result'
@@ -158,7 +159,7 @@ export function SourceControlAgentActionDialogForm({
             <AgentCombobox
               agents={agentOptions}
               value={selectedAgent}
-              onValueChange={onSelectedAgentChange}
+              onValueChange={(agent) => onSelectedAgentChange(agent && isTuiAgent(agent) ? agent : null)}
               allowNarrowTrigger
               triggerClassName="w-full"
             />

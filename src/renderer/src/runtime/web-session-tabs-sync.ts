@@ -26,10 +26,10 @@ import type {
   TabGroupLayoutNode,
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
-  TerminalTab,
-  TuiAgent
+  TerminalTab
 } from '../../../shared/types'
 import type { OpenFile } from '../store/slices/editor'
+import type { AgentId } from '../../../shared/custom-agent'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { getRemoteRuntimePtyEnvironmentId, toRemoteRuntimePtyId } from './runtime-terminal-stream'
 import { sanitizeTerminalLayoutPaneTitlesForLabels } from '@/lib/terminal-pane-title-sanitization'
@@ -472,7 +472,7 @@ function shouldReplaceTerminalTab(
   environmentId: string,
   nextRemotePtyIds: ReadonlySet<string>,
   nextMirroredTerminalIds: ReadonlySet<string>,
-  nextMirroredLaunchAgents: ReadonlySet<TuiAgent>
+  nextMirroredLaunchAgents: ReadonlySet<AgentId>
 ): boolean {
   if (
     tab.launchAgent &&
@@ -1705,7 +1705,7 @@ export function applyWebSessionTabsSnapshot(
   const nextMirroredLaunchAgents = new Set(
     terminalSurfaceTabs
       .map((tab) => tab.launchAgent)
-      .filter((agent): agent is TuiAgent => Boolean(agent))
+      .filter((agent): agent is AgentId => Boolean(agent))
   )
   const retainedTerminalTabs = currentTerminalTabs.filter(
     (tab) =>

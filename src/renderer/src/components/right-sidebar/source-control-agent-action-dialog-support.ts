@@ -1,6 +1,7 @@
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../../shared/types'
+import type { AgentId } from '../../../../shared/custom-agent'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import { translate } from '@/i18n/i18n'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
@@ -8,7 +9,7 @@ import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlA
 export function isSourceControlAgentDetectedAndEnabled(
   agent: TuiAgent | null,
   detectedAgents: TuiAgent[],
-  disabledAgents: TuiAgent[] | undefined
+  disabledAgents: AgentId[] | undefined
 ): boolean {
   return Boolean(
     agent && detectedAgents.includes(agent) && isTuiAgentEnabled(agent, disabledAgents)

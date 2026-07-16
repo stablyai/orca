@@ -1,4 +1,10 @@
 import type { TuiAgent } from '../../../shared/types'
+import type { AgentId } from '../../../shared/custom-agent'
+import {
+  customAgentForId,
+  isCustomAgentId,
+  type CustomAgentDefinition
+} from '../../../shared/custom-agent'
 import {
   isTuiAgentEnabled,
   pickTuiAgent,
@@ -6,12 +12,26 @@ import {
 } from '../../../shared/tui-agent-selection'
 
 export function pickQuickWorkspaceAgent(
-  preferred: TuiAgent | 'blank' | null | undefined,
+  preferred: AgentId | 'blank' | null | undefined,
   detectedAgentIds: Iterable<TuiAgent> | null,
-  disabledTuiAgents?: Iterable<unknown> | null
-): TuiAgent | null {
+  disabledTuiAgents?: Iterable<unknown> | null,
+  customAgents?: readonly CustomAgentDefinition[]
+): AgentId | null {
+  if (
+    preferred &&
+    preferred !== 'blank' &&
+    isCustomAgentId(preferred) &&
+    isTuiAgentEnabled(preferred, disabledTuiAgents) &&
+    customAgentForId(preferred, customAgents)?.enabled === true
+  ) {
+    return preferred
+  }
   const candidates = detectedAgentIds ?? TUI_AGENT_AUTO_PICK_ORDER
-  return pickTuiAgent(preferred, candidates, disabledTuiAgents)
+  return pickTuiAgent(
+    preferred && !isCustomAgentId(preferred) ? preferred : null,
+    candidates,
+    disabledTuiAgents
+  )
 }
 
 function hasDetectedAgent(detectedAgentIds: Iterable<TuiAgent>, agent: TuiAgent): boolean {
@@ -27,29 +47,36 @@ function hasDetectedAgent(detectedAgentIds: Iterable<TuiAgent>, agent: TuiAgent)
 }
 
 function isQuickWorkspaceAgentAvailable(
-  agent: TuiAgent,
+  agent: AgentId,
   detectedAgentIds: Iterable<TuiAgent> | null,
-  disabledTuiAgents?: Iterable<unknown> | null
+  disabledTuiAgents?: Iterable<unknown> | null,
+  customAgents?: readonly CustomAgentDefinition[]
 ): boolean {
   if (!isTuiAgentEnabled(agent, disabledTuiAgents)) {
     return false
   }
-  return detectedAgentIds === null || hasDetectedAgent(detectedAgentIds, agent)
+  return (
+    (isCustomAgentId(agent) && customAgentForId(agent, customAgents)?.enabled === true) ||
+    (!isCustomAgentId(agent) &&
+      (detectedAgentIds === null || hasDetectedAgent(detectedAgentIds, agent as TuiAgent)))
+  )
 }
 
 export function resolveQuickWorkspaceAgentSelection({
   quickAgentOverride,
   preferredQuickAgent,
   detectedAgentIds,
-  disabledTuiAgents
+  disabledTuiAgents,
+  customAgents
 }: {
-  quickAgentOverride: TuiAgent | null | undefined
-  preferredQuickAgent: TuiAgent | null
+  quickAgentOverride: AgentId | null | undefined
+  preferredQuickAgent: AgentId | null
   detectedAgentIds: Iterable<TuiAgent> | null
   disabledTuiAgents?: Iterable<unknown> | null
+  customAgents?: readonly CustomAgentDefinition[]
 }): {
-  quickAgent: TuiAgent | null
-  quickAgentOverride: TuiAgent | null | undefined
+  quickAgent: AgentId | null
+  quickAgentOverride: AgentId | null | undefined
 } {
   if (quickAgentOverride === undefined || quickAgentOverride === null) {
     return {
@@ -57,7 +84,14 @@ export function resolveQuickWorkspaceAgentSelection({
       quickAgentOverride
     }
   }
-  if (isQuickWorkspaceAgentAvailable(quickAgentOverride, detectedAgentIds, disabledTuiAgents)) {
+  if (
+    isQuickWorkspaceAgentAvailable(
+      quickAgentOverride,
+      detectedAgentIds,
+      disabledTuiAgents,
+      customAgents
+    )
+  ) {
     return { quickAgent: quickAgentOverride, quickAgentOverride }
   }
   return { quickAgent: preferredQuickAgent, quickAgentOverride: preferredQuickAgent }

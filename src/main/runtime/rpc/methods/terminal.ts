@@ -25,7 +25,7 @@ import {
   isTerminalInputTooLargeWithYield
 } from '../../../../shared/terminal-input'
 import { measureClipboardTextByteLength } from '../../../../shared/clipboard-text'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isAgentId } from '../../../../shared/custom-agent'
 import { isTerminalQueryReply } from '../../../../shared/terminal-query-reply'
 import {
   EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
@@ -931,7 +931,7 @@ const TerminalCreateParams = z.object({
     })
     .optional(),
   launchToken: OptionalString,
-  launchAgent: z.string().refine(isTuiAgent).optional(),
+  launchAgent: z.string().refine(isAgentId).optional(),
   title: OptionalString,
   focus: z.unknown().optional(),
   rendererBacked: z.unknown().optional(),

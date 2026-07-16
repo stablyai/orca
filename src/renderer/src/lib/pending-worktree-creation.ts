@@ -2,11 +2,11 @@ import type {
   CreateSparseCheckoutRequest,
   GitPushTarget,
   SetupDecision,
-  TuiAgent,
   WorkspaceCreateTelemetrySource,
   WorkspaceStatus,
   WorktreeStartupLaunch
 } from '../../../shared/types'
+import type { AgentId } from '../../../shared/custom-agent'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
@@ -62,7 +62,7 @@ export type WorktreeCreationRequest = {
   linkedIssue?: number
   linkedPR?: number
   pushTarget?: GitPushTarget
-  agent: TuiAgent | null
+  agent: AgentId | null
   linkedLinearIssue?: string
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null

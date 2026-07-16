@@ -18,7 +18,7 @@ import {
 export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence'
-import type { GlobalSettings, TuiAgent } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/types'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { terminalOutputBacklogCapChars } from '../../shared/terminal-scrollback-policy'
 import type {
@@ -35,7 +35,8 @@ import {
   redactPtyIdForDiagnostics
 } from '../../shared/pty-delivery-diagnostics'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
-import { isTuiAgent } from '../../shared/tui-agent-config'
+import { isAgentId } from '../../shared/custom-agent'
+import type { AgentId } from '../../shared/custom-agent'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import {
@@ -568,7 +569,7 @@ export type BuildPtyHostEnvOptions = {
    *  the bug this option fixes (cross-agent shadowing when both dirs exist). */
   launchCommand?: string
   /** Trusted agent identity for wrapped commands that cannot be recognized from text. */
-  launchAgent?: TuiAgent
+  launchAgent?: AgentId
   shellPath?: string
   isWsl?: boolean
   /** Distro for WSL spawns (null = Windows default distro). Drives the WSL
@@ -3090,7 +3091,7 @@ export function registerPtyHandlers(
           skipCodexHomeEnv,
           githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
           launchCommand: args.command,
-          launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
+          launchAgent: isAgentId(args.launchAgent) ? args.launchAgent : undefined,
           shellPath: daemonShellOverride ?? process.env.COMSPEC,
           isWsl: shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd),
           wslDistro: codexSelectionTarget.runtime === 'wsl' ? codexSelectionTarget.wslDistro : null,
@@ -3132,7 +3133,7 @@ export function registerPtyHandlers(
       if (args.startupCommandDelivery !== undefined) {
         spawnOptions.startupCommandDelivery = args.startupCommandDelivery
       }
-      if (isTuiAgent(args.launchAgent)) {
+      if (isAgentId(args.launchAgent)) {
         spawnOptions.launchAgent = args.launchAgent
       }
       if (args.worktreeId !== undefined) {
@@ -3703,7 +3704,7 @@ export function registerPtyHandlers(
         command?: string
         commandDelivery?: 'renderer' | 'provider'
         launchConfig?: SleepingAgentLaunchConfig
-        launchAgent?: TuiAgent
+        launchAgent?: AgentId
         startupCommandDelivery?: StartupCommandDelivery
         connectionId?: string | null
         worktreeId?: string
@@ -3994,7 +3995,7 @@ export function registerPtyHandlers(
             skipCodexHomeEnv,
             githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
             launchCommand: args.command,
-            launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
+            launchAgent: isAgentId(args.launchAgent) ? args.launchAgent : undefined,
             shellPath: effectiveShellOverride ?? process.env.COMSPEC,
             isWsl: shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, cwd),
             wslDistro:
@@ -4058,7 +4059,7 @@ export function registerPtyHandlers(
       if (args.startupCommandDelivery !== undefined) {
         spawnOptions.startupCommandDelivery = args.startupCommandDelivery
       }
-      if (isTuiAgent(args.launchAgent)) {
+      if (isAgentId(args.launchAgent)) {
         spawnOptions.launchAgent = args.launchAgent
       }
       if (args.worktreeId !== undefined) {

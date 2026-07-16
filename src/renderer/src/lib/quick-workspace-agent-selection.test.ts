@@ -30,6 +30,21 @@ describe('pickQuickWorkspaceAgent', () => {
     expect(pickQuickWorkspaceAgent(null, ['codex'], ['claude'])).toBe('codex')
     expect(pickQuickWorkspaceAgent('codex', ['claude', 'codex'], ['codex'])).toBe('claude')
   })
+
+  it('keeps an enabled custom agent as the configured default', () => {
+    const customAgent = {
+      id: 'custom:my-agent' as const,
+      name: 'My Agent',
+      command: 'my-agent',
+      promptMode: 'pty' as const,
+      icon: { kind: 'terminal' as const },
+      enabled: true
+    }
+
+    expect(pickQuickWorkspaceAgent(customAgent.id, ['codex'], [], [customAgent])).toBe(
+      customAgent.id
+    )
+  })
 })
 
 describe('resolveQuickWorkspaceAgentSelection', () => {

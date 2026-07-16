@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
+import type { CustomAgentDefinition } from '../../../../shared/custom-agent'
 import { formatAutomationSchedule } from '../../../../shared/automation-schedules'
 import { formatAutomationPrecheckTimeout } from '../../../../shared/automation-precheck'
 import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
@@ -24,6 +25,7 @@ type AutomationDetailProps = {
   workspaceName: string
   projectDefaultBaseRef: string | null
   hostLabelById?: ReadonlyMap<string, string>
+  customAgents?: readonly CustomAgentDefinition[]
   runNowAvailability: AutomationTargetAvailability | null
   now: number
   onRunNow: (automation: Automation) => void
@@ -101,6 +103,7 @@ export function AutomationDetail({
   workspaceName,
   projectDefaultBaseRef,
   hostLabelById,
+  customAgents,
   runNowAvailability,
   now,
   onRunNow,
@@ -126,7 +129,8 @@ export function AutomationDetail({
         ? 'Unavailable'
         : 'No runs'
   const agentLabel =
-    getAgentCatalog().find((agent) => agent.id === automation.agentId)?.label ?? automation.agentId
+    getAgentCatalog(customAgents ?? []).find((agent) => agent.id === automation.agentId)?.label ??
+    automation.agentId
   const runLocationLabel =
     automation.workspaceMode === 'new_per_run'
       ? (automation.baseBranch ?? projectDefaultBaseRef ?? 'Project default')
@@ -273,7 +277,7 @@ export function AutomationDetail({
             {translate('auto.components.automations.AutomationDetail.2df8970cd5', 'Agent')}
           </div>
           <div className="mt-1 flex min-w-0 items-center gap-2 text-sm font-medium">
-            <AgentIcon agent={automation.agentId} size={16} />
+            <AgentIcon agent={automation.agentId} size={16} customAgents={customAgents} />
             <span className="truncate">{agentLabel}</span>
           </div>
         </div>

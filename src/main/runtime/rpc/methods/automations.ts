@@ -6,7 +6,7 @@ import {
 } from '../../../../shared/automation-precheck'
 import { normalizeExecutionHostId } from '../../../../shared/execution-host'
 import type { TaskProviderIdentity as SharedTaskProviderIdentity } from '../../../../shared/task-source-context'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isAgentId } from '../../../../shared/custom-agent'
 import { defineMethod, type RpcMethod } from '../core'
 import {
   OptionalBoolean,
@@ -17,7 +17,7 @@ import {
   requiredString
 } from '../schemas'
 
-const TuiAgent = requiredString('Missing provider').refine(isTuiAgent, {
+const TuiAgent = requiredString('Missing provider').refine(isAgentId, {
   message: 'Unknown provider'
 })
 

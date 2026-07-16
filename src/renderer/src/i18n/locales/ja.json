@@ -4940,7 +4940,14 @@
           "3f1bdf3cb4": "環境テキストが大きすぎるため安全に解析できません。",
           "codexSessionSource": "インポートするCodexホーム",
           "codexSessionSourceInfo": "Codex履歴のインポートについて",
-          "codexSessionSourceTooltip": "Orcaは分離されたホームでCodexを実行します。既存のCodexホームを指定してセッション履歴をインポートします。空の場合、~/.codexを使用します。"
+          "codexSessionSourceTooltip": "Orcaは分離されたホームでCodexを実行します。既存のCodexホームを指定してセッション履歴をインポートします。空の場合、~/.codexを使用します。",
+          "35ff8538b5": "No custom agents configured.",
+          "d4f613087c": "Remove custom agent",
+          "89fef859c2": "Edit custom agent",
+          "e393cf0325": "Enable",
+          "f76af13b0c": "Add agent",
+          "b2d7383d2a": "Launch your own agent CLI with the same terminal workflow as built-in agents.",
+          "7ae5b0421d": "Custom agents"
         },
         "AppIconSelector": {
           "d5a112dc9b": "次へのアイコン",
@@ -9046,6 +9053,26 @@
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
           "c64497148a": "Right-click pastes the clipboard. Control-click opens the context menu."
+        },
+        "CustomAgentDialog": {
+          "required": "Name and command are required.",
+          "promptPlaceholder": "The template must include {prompt}.",
+          "editTitle": "Edit custom agent",
+          "createTitle": "Create custom agent",
+          "description": "Configure a command Orca can launch in a terminal.",
+          "name": "Name",
+          "command": "Command",
+          "promptMode": "Prompt delivery",
+          "pty": "Type into the terminal",
+          "argv": "Append as an argument",
+          "template": "Use a command template",
+          "templateLabel": "Command template",
+          "uploadIcon": "Choose PNG icon",
+          "terminalIcon": "Use terminal icon",
+          "cancel": "Cancel",
+          "save": "Save agent",
+          "commandPlaceholder": "my-agent --interactive",
+          "importIconFailed": "Failed to import icon"
         },
         "MobileRelayStatusSection": {
           "registered": "Registered",

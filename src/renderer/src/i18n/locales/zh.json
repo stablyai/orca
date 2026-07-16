@@ -4940,7 +4940,14 @@
           "3f1bdf3cb4": "环境文本过长，无法安全解析。",
           "codexSessionSource": "要导入的 Codex 主目录",
           "codexSessionSourceInfo": "关于导入 Codex 历史记录",
-          "codexSessionSourceTooltip": "Orca 在隔离的主目录中运行 Codex。将此项指向您现有的 Codex 主目录以导入会话历史记录。留空则使用 ~/.codex。"
+          "codexSessionSourceTooltip": "Orca 在隔离的主目录中运行 Codex。将此项指向您现有的 Codex 主目录以导入会话历史记录。留空则使用 ~/.codex。",
+          "35ff8538b5": "No custom agents configured.",
+          "d4f613087c": "Remove custom agent",
+          "89fef859c2": "Edit custom agent",
+          "e393cf0325": "Enable",
+          "f76af13b0c": "Add agent",
+          "b2d7383d2a": "Launch your own agent CLI with the same terminal workflow as built-in agents.",
+          "7ae5b0421d": "Custom agents"
         },
         "AppIconSelector": {
           "d5a112dc9b": "下一个图标",
@@ -9046,6 +9053,26 @@
         "TerminalInteractionSection": {
           "567633ff50": "右键点击将剪贴板内容粘贴到终端。按住 Control 键点击以打开上下文菜单。",
           "c64497148a": "右键点击粘贴剪贴板内容。按住 Control 键点击打开上下文菜单。"
+        },
+        "CustomAgentDialog": {
+          "required": "Name and command are required.",
+          "promptPlaceholder": "The template must include {prompt}.",
+          "editTitle": "Edit custom agent",
+          "createTitle": "Create custom agent",
+          "description": "Configure a command Orca can launch in a terminal.",
+          "name": "Name",
+          "command": "Command",
+          "promptMode": "Prompt delivery",
+          "pty": "Type into the terminal",
+          "argv": "Append as an argument",
+          "template": "Use a command template",
+          "templateLabel": "Command template",
+          "uploadIcon": "Choose PNG icon",
+          "terminalIcon": "Use terminal icon",
+          "cancel": "Cancel",
+          "save": "Save agent",
+          "commandPlaceholder": "my-agent --interactive",
+          "importIconFailed": "Failed to import icon"
         },
         "MobileRelayStatusSection": {
           "registered": "已注册",

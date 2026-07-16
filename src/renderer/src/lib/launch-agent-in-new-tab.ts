@@ -25,12 +25,14 @@ import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-status-seed'
 import type { TuiAgent } from '../../../shared/types'
+import type { AgentId } from '../../../shared/custom-agent'
+import { customAgentForId, isCustomAgentId } from '../../../shared/custom-agent'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 
 export type LaunchAgentInNewTabArgs = {
-  agent: TuiAgent
+  agent: AgentId
   worktreeId: string
   /** The tab group the user clicked from. Keeps split-group launches in the
    *  pane the user initiated from instead of falling through to the active group. */
@@ -120,8 +122,12 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   const effectiveAgentArgs =
     agentArgs !== undefined
       ? agentArgs
-      : resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
-  const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
+      : isCustomAgentId(agent)
+        ? undefined
+        : resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
+  const agentEnv = isCustomAgentId(agent)
+    ? undefined
+    : resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
   const startupPlanBase = {
     agent,
     cmdOverrides,
@@ -129,11 +135,15 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     shell: queuedShell,
     isRemote,
     agentArgs: effectiveAgentArgs,
-    agentEnv
+    agentEnv,
+    customAgents: store.settings?.customAgents
   }
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
-  const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
+  const customAgent = customAgentForId(agent, store.settings?.customAgents)
+  const isFollowupPath = isCustomAgentId(agent)
+    ? customAgent?.promptMode === 'pty'
+    : TUI_AGENT_CONFIG[agent as TuiAgent].promptInjectionMode === 'stdin-after-start'
   // Why: argv/flag agents fold the prompt into the launch command and
   // auto-submit — keeping behavior consistent with the composer/tab-bar `+`
   // mental model, where the prompt is "the first turn the user sent".
@@ -256,7 +266,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       ? { initialAgentStatus: { agent, prompt: trimmedPrompt } }
       : {}),
     telemetry: {
-      agent_kind: tuiAgentToAgentKind(agent),
+      agent_kind: isCustomAgentId(agent) ? 'other' : tuiAgentToAgentKind(agent),
       launch_source: launchSource ?? 'tab_bar_quick_launch',
       request_kind: 'new'
     }
@@ -306,7 +316,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         failureNotified = true
         track('agent_error', {
           error_class: 'paste_readiness_timeout',
-          agent_kind: tuiAgentToAgentKind(agent)
+          agent_kind: isCustomAgentId(agent) ? 'other' : tuiAgentToAgentKind(agent)
         })
       }
     }).then((delivered) => {

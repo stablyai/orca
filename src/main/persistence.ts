@@ -204,7 +204,7 @@ import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   SOURCE_CONTROL_TEXT_ACTION_IDS
 } from '../shared/source-control-ai-actions'
-import { normalizeDisabledTuiAgents } from '../shared/tui-agent-selection'
+import { normalizeAgentIds, normalizeCustomAgents } from '../shared/custom-agent'
 import {
   DEFAULT_TUI_AGENT_ARGS,
   DEFAULT_TUI_AGENT_ENV,
@@ -3068,9 +3068,7 @@ export class Store {
         if (!claudeAgentTeamsDefaultDisabledMigrated) {
           this.loadNeedsSave = true
         }
-        const migratedDisabledTuiAgents = normalizeDisabledTuiAgents(
-          parsed.settings?.disabledTuiAgents
-        )
+        const migratedDisabledTuiAgents = normalizeAgentIds(parsed.settings?.disabledTuiAgents)
         const migratedAgentYoloDefaults = migrateAgentYoloDefaults(parsed.settings)
         if (
           parsed.settings?.agentYoloDefaultsMigrated !== true ||
@@ -3211,6 +3209,7 @@ export class Store {
               parsed.settings?.terminalShortcutPolicy
             ),
             disabledTuiAgents: migratedDisabledTuiAgents,
+            customAgents: normalizeCustomAgents(parsed.settings?.customAgents),
             ...migratedAgentYoloDefaults,
             claudeAgentTeamsDefaultDisabledMigrated: true,
             openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {
@@ -5272,7 +5271,10 @@ export class Store {
       sanitizedUpdates.showMenuBarIcon = updates.showMenuBarIcon === true
     }
     if ('disabledTuiAgents' in updates) {
-      sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
+      sanitizedUpdates.disabledTuiAgents = normalizeAgentIds(updates.disabledTuiAgents)
+    }
+    if ('customAgents' in updates) {
+      sanitizedUpdates.customAgents = normalizeCustomAgents(updates.customAgents)
     }
     if ('agentDefaultArgs' in updates) {
       sanitizedUpdates.agentDefaultArgs = normalizeTuiAgentArgsRecord(updates.agentDefaultArgs)

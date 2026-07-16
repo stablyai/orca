@@ -1,6 +1,5 @@
 import { z } from 'zod'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import type { TuiAgent } from '../../../../shared/types'
+import { isAgentId, type AgentId } from '../../../../shared/custom-agent'
 import { sleepingAgentLaunchConfigSchema } from '../../../../shared/workspace-session-sleeping-agents'
 import { OptionalBoolean } from '../schemas'
 
@@ -119,14 +118,14 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
   launchConfig: sleepingAgentLaunchConfigSchema,
   launchToken: z.string().min(1).max(128).optional(),
   agent: z
-    .custom<TuiAgent>(isTuiAgent, {
+    .custom<AgentId>(isAgentId, {
       message: 'Unknown agent preset'
     })
     .optional(),
   // Why: `agent` is the legacy preset field; `launchAgent` is the launch-plan
   // identity used when preserving resume config across runtime boundaries.
   launchAgent: z
-    .custom<TuiAgent>(isTuiAgent, {
+    .custom<AgentId>(isAgentId, {
       message: 'Unknown launch agent'
     })
     .optional(),

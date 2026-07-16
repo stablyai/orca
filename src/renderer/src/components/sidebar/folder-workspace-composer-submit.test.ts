@@ -356,6 +356,55 @@ describe('submitFolderWorkspaceCreate', () => {
     })
   })
 
+  it('forwards customAgents when building the startup plan for a custom agent with a linked work item', async () => {
+    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
+    const linkedWorkItem = {
+      provider: 'github' as const,
+      type: 'issue' as const,
+      number: 7,
+      title: 'Wire up the custom agent launch',
+      url: 'https://github.com/stablyai/orca/issues/7',
+      repoId: 'repo-1'
+    }
+    const customAgents = [
+      {
+        id: 'custom:forge' as const,
+        name: 'Forge',
+        command: 'forge-cli',
+        promptMode: 'pty' as const,
+        icon: { kind: 'terminal' as const },
+        enabled: true
+      }
+    ]
+
+    await submitFolderWorkspaceCreate({
+      projectGroup: makeProjectGroup(),
+      name: '',
+      lastAutoName: '',
+      linkedWorkItem,
+      note: '',
+      quickAgent: 'custom:forge',
+      autoRenameBranchFromWork: false,
+      agentCmdOverrides: {},
+      customAgents,
+      createFolderWorkspace,
+      onOpenChange: vi.fn()
+    })
+
+    const startup = mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]?.startup
+    expect(startup?.command).toBe('forge-cli')
+    expect(mocks.ensureAgentStartupInTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId: folderWorkspaceKey('folder-workspace-1'),
+        startup: expect.objectContaining({
+          agent: 'custom:forge',
+          launchCommand: 'forge-cli',
+          draftPrompt: linkedWorkItem.url
+        })
+      })
+    )
+  })
+
   it('uses native draft launch for linked agents with prefill support', async () => {
     const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
     const linkedWorkItem = {

@@ -20,7 +20,9 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
-import type { GitHubWorkItem, GlobalSettings, Repo, TuiAgent } from '../../../shared/types'
+import type { GitHubWorkItem, GlobalSettings, Repo } from '../../../shared/types'
+import type { AgentId } from '../../../shared/custom-agent'
+import { isTuiAgent } from '../../../shared/tui-agent-config'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
@@ -45,6 +47,7 @@ export type GitHubWorkItemBackgroundStoreSnapshot = {
           | 'agentDefaultArgs'
           | 'agentDefaultEnv'
           | 'terminalWindowsShell'
+          | 'customAgents'
         >
       >
     | null
@@ -78,7 +81,7 @@ function resolveGitHubWorkItemPrompt(item: GitHubWorkItem): QuickCreateLinkedWor
 }
 
 export function buildGitHubWorkItemBackendStartup(
-  agent: TuiAgent | null,
+  agent: AgentId | null,
   startupPlan: AgentStartupPlan | null,
   quickTelemetry: AgentStartedTelemetry | null
 ): WorktreeCreationRequest['startup'] {
@@ -125,7 +128,7 @@ function getWorkspaceRunContextForRepo(
 export async function resolvePreferredQuickAgentForGitHubWorkItem(
   store: GitHubWorkItemBackgroundStoreSnapshot,
   repo: Repo
-): Promise<TuiAgent | null> {
+): Promise<AgentId | null> {
   const host = parseExecutionHostId(getRepoExecutionHostId(repo))
   const detectedAgents =
     host?.kind === 'ssh'
@@ -136,7 +139,8 @@ export async function resolvePreferredQuickAgentForGitHubWorkItem(
   return pickQuickWorkspaceAgent(
     store.settings?.defaultTuiAgent,
     detectedAgents,
-    store.settings?.disabledTuiAgents
+    store.settings?.disabledTuiAgents,
+    store.settings?.customAgents
   )
 }
 
@@ -167,7 +171,7 @@ function resolveGitHubWorkItemLaunchPlatform(
 }
 
 export function buildGitHubWorkItemStartupPlan(args: {
-  agent: TuiAgent | null
+  agent: AgentId | null
   item: GitHubWorkItem
   repo: Repo
   store: GitHubWorkItemBackgroundStoreSnapshot
@@ -233,11 +237,13 @@ export function buildGitHubWorkItemStartupPlan(args: {
   return {
     startupPlan,
     quickPrompt,
-    quickTelemetry: {
-      agent_kind: tuiAgentToAgentKind(agent),
-      launch_source: 'new_workspace_composer',
-      request_kind: 'new'
-    }
+    quickTelemetry: isTuiAgent(agent)
+      ? {
+          agent_kind: tuiAgentToAgentKind(agent),
+          launch_source: 'new_workspace_composer',
+          request_kind: 'new'
+        }
+      : null
   }
 }
 

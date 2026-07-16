@@ -4,7 +4,7 @@ import type { StartupCommandDelivery } from '../../../../shared/codex-startup-de
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
-import type { TuiAgent } from '../../../../shared/types'
+import type { AgentId } from '../../../../shared/custom-agent'
 import type { PtyDataMeta } from './pty-dispatcher'
 
 export type PtyBufferSnapshot = {
@@ -42,7 +42,7 @@ export type PtyConnectResult = {
   /** The requested session exited while it had no primary pane handler. Its
    *  buffered final data/exit were delivered, so callers must not fresh-spawn. */
   exitedBeforeAttach?: boolean
-  launchAgent?: TuiAgent
+  launchAgent?: AgentId
   launchConfig?: SleepingAgentLaunchConfig
   snapshot?: string
   snapshotCols?: number
@@ -86,7 +86,7 @@ export type PtyTransport = {
     env?: Record<string, string>
     launchConfig?: SleepingAgentLaunchConfig
     launchToken?: string
-    launchAgent?: TuiAgent
+    launchAgent?: AgentId
     startupCommandDelivery?: StartupCommandDelivery
     callbacks: PtyCallbacks
   }) => void | Promise<void | string | PtyConnectResult>
@@ -143,7 +143,7 @@ export type IpcPtyTransportOptions = {
   command?: string
   launchConfig?: SleepingAgentLaunchConfig
   launchToken?: string
-  launchAgent?: TuiAgent
+  launchAgent?: AgentId
   startupCommandDelivery?: StartupCommandDelivery
   connectionId?: string | null
   worktreeId?: string

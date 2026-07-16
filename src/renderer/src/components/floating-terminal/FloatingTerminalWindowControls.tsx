@@ -11,6 +11,7 @@ import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -96,7 +97,7 @@ export function FloatingTerminalWindowControls({
         ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
         : {}),
       telemetry: {
-        agent_kind: tuiAgentToAgentKind(defaultAgent),
+        agent_kind: isTuiAgent(defaultAgent) ? tuiAgentToAgentKind(defaultAgent) : 'other',
         launch_source: 'shortcut',
         request_kind: 'new'
       }

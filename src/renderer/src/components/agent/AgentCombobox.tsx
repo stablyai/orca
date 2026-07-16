@@ -22,7 +22,7 @@ import {
   searchAgentPickerEntries
 } from '@/lib/agent-picker-search'
 import { cn } from '@/lib/utils'
-import type { TuiAgent } from '../../../../shared/types'
+import type { AgentId, CustomAgentDefinition } from '../../../../shared/custom-agent'
 import {
   createAgentComboboxCommandState,
   resolveAgentComboboxCommandState,
@@ -30,13 +30,13 @@ import {
 } from './agent-combobox-command-state'
 import { translate } from '@/i18n/i18n'
 
-type DefaultAgentPreference = TuiAgent | 'blank' | null
+type DefaultAgentPreference = AgentId | 'blank' | null
 
 type AgentComboboxProps = {
   agents: AgentCatalogEntry[]
-  value: TuiAgent | null
-  onValueChange: (agent: TuiAgent | null) => void
-  onValueSelected?: (agent: TuiAgent | null) => void
+  value: AgentId | null
+  onValueChange: (agent: AgentId | null) => void
+  onValueSelected?: (agent: AgentId | null) => void
   onOpenManageAgents?: () => void
   /** Current saved default agent preference. Used to render a subtle "default"
    *  indicator in the list and to tell which right-click menu item is the
@@ -51,10 +51,12 @@ type AgentComboboxProps = {
    *  field as the last keyboard-submit step. */
   onTriggerEnter?: () => void
   allowNarrowTrigger?: boolean
+  customAgents?: readonly CustomAgentDefinition[]
 }
 
 const BLANK_VALUE = '__none__'
 const TRIGGER_MIN_WIDTH_CLASS = '!min-w-[260px]'
+const EMPTY_CUSTOM_AGENTS: readonly CustomAgentDefinition[] = []
 
 type ItemRenderArgs = {
   key: string
@@ -121,7 +123,8 @@ export default function AgentCombobox({
   onSetDefault,
   triggerClassName,
   onTriggerEnter,
-  allowNarrowTrigger = false
+  allowNarrowTrigger = false,
+  customAgents = EMPTY_CUSTOM_AGENTS
 }: AgentComboboxProps): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -210,7 +213,7 @@ export default function AgentCombobox({
   )
 
   const handleSelect = useCallback(
-    (nextValue: TuiAgent | null) => {
+    (nextValue: AgentId | null) => {
       onValueChange(nextValue)
       setOpen(false)
       setQuery('')
@@ -282,7 +285,7 @@ export default function AgentCombobox({
           >
             {selectedAgent ? (
               <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
-                <AgentIcon agent={selectedAgent.id} />
+                <AgentIcon agent={selectedAgent.id} customAgents={customAgents} />
                 <span className="truncate">{selectedAgent.label}</span>
               </span>
             ) : (
@@ -348,7 +351,7 @@ export default function AgentCombobox({
                   isDefault: defaultAgent === agent.id,
                   onSelect: () => handleSelect(agent.id),
                   onSetDefault: onSetDefault ? () => onSetDefault(agent.id) : undefined,
-                  icon: <AgentIcon agent={agent.id} />,
+                  icon: <AgentIcon agent={agent.id} customAgents={customAgents} />,
                   label: agent.label
                 })
               )}

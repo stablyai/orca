@@ -24,6 +24,7 @@ import { AgentStep } from '../onboarding/AgentStep'
 import { NotificationStep } from '../onboarding/NotificationStep'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../../shared/types'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { translate } from '@/i18n/i18n'
 
@@ -205,7 +206,7 @@ function DefaultAgentAction(): React.JSX.Element {
   return (
     <div className="max-w-3xl">
       <AgentStep
-        selectedAgent={selectedAgent}
+          selectedAgent={isTuiAgent(selectedAgent) ? selectedAgent : null}
         onSelect={handleSelectAgent}
         detectedSet={detectedSet}
         isDetecting={isDetectingAgents}

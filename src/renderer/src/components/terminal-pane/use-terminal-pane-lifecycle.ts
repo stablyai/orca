@@ -47,6 +47,7 @@ import type {
   TerminalLayoutSnapshot,
   TuiAgent
 } from '../../../../shared/types'
+import type { AgentId } from '../../../../shared/custom-agent'
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
@@ -214,7 +215,7 @@ type UseTerminalPaneLifecycleDeps = {
     env?: Record<string, string>
     launchConfig?: SleepingAgentLaunchConfig
     launchToken?: string
-    launchAgent?: TuiAgent
+    launchAgent?: AgentId
     draftPrompt?: string
     /** Initial prompt-start status for agents that lack native prompt hooks. */
     initialAgentStatus?: { agent: TuiAgent; prompt: string }

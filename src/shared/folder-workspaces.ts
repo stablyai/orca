@@ -1,5 +1,5 @@
 import type { FolderWorkspace, FolderWorkspaceLinkedTask, ProjectGroup } from './types'
-import { isTuiAgent } from './tui-agent-config'
+import { isAgentId } from './custom-agent'
 
 export function normalizeFolderWorkspaceName(
   name: string | null | undefined,
@@ -119,7 +119,7 @@ export function normalizeFolderWorkspaces(
       ...(typeof raw.workspaceStatus === 'string' && raw.workspaceStatus.trim().length > 0
         ? { workspaceStatus: raw.workspaceStatus }
         : {}),
-      ...(isTuiAgent(raw.createdWithAgent) ? { createdWithAgent: raw.createdWithAgent } : {}),
+      ...(isAgentId(raw.createdWithAgent) ? { createdWithAgent: raw.createdWithAgent } : {}),
       ...(raw.pendingFirstAgentMessageRename === true
         ? { pendingFirstAgentMessageRename: true }
         : {}),

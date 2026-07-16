@@ -49,6 +49,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     autoRenameBranchFromWork: false,
     branchPrefix: 'git-username',
     branchPrefixCustom: '',
+    customAgents: overrides.customAgents ?? [],
     theme: 'system',
     uiLanguage: 'system',
     appIcon: overrides.appIcon ?? 'classic',

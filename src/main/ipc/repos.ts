@@ -38,7 +38,7 @@ import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
 } from '../../shared/cross-platform-path'
-import { isTuiAgent } from '../../shared/tui-agent-config'
+import { isAgentId } from '../../shared/custom-agent'
 import { invalidateAuthorizedRootsCache } from './filesystem-auth'
 import type { ChildProcess } from 'node:child_process'
 import { access, mkdir, readdir, rm } from 'node:fs/promises'
@@ -781,7 +781,7 @@ const FolderWorkspaceCreateArgs = z.object({
   folderPath: z.string().nullable().optional(),
   connectionId: z.string().nullable().optional(),
   linkedTask: FolderWorkspaceLinkedTaskArgs.optional(),
-  createdWithAgent: z.string().refine(isTuiAgent).optional(),
+  createdWithAgent: z.string().refine(isAgentId).optional(),
   pendingFirstAgentMessageRename: z.boolean().optional()
 })
 
@@ -798,7 +798,7 @@ const FolderWorkspaceUpdateArgs = z.object({
     sortOrder: z.number().finite().optional(),
     manualOrder: z.number().finite().optional(),
     workspaceStatus: z.string().optional(),
-    createdWithAgent: z.string().refine(isTuiAgent).optional(),
+    createdWithAgent: z.string().refine(isAgentId).optional(),
     pendingFirstAgentMessageRename: z.boolean().optional(),
     firstAgentMessageRenameError: z.string().nullable().optional(),
     lastActivityAt: z.number().finite().optional()

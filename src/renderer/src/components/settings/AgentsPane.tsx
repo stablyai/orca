@@ -2,8 +2,24 @@
    selection, per-agent controls, and runtime location together so settings
    reconciliation stays visible in one file. */
 import { useId, useMemo, useState } from 'react'
-import { Check, ChevronDown, ExternalLink, Info, RefreshCw, Terminal } from 'lucide-react'
+import {
+  Check,
+  ChevronDown,
+  ExternalLink,
+  Info,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Terminal,
+  Trash2
+} from 'lucide-react'
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
+import type { AgentId, CustomAgentDefinition } from '../../../../shared/custom-agent'
+import {
+  createCustomAgentId,
+  customAgentForId,
+  isCustomAgentId
+} from '../../../../shared/custom-agent'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { useAppStore } from '@/store'
@@ -48,6 +64,7 @@ import { getSettingOwnershipSummary } from './setting-ownership'
 import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { parseAgentDefaultEnvDraft, stringifyAgentDefaultEnvDraft } from './agent-default-env-draft'
+import { CustomAgentDialog } from './CustomAgentDialog'
 
 export { getAgentsPaneSearchEntries } from './agents-search'
 
@@ -692,6 +709,9 @@ export function AgentsPane({
   )
 
   const defaultAgent = settings.defaultTuiAgent
+  const customAgents = settings.customAgents ?? []
+  const [customAgentDialogOpen, setCustomAgentDialogOpen] = useState(false)
+  const [editingCustomAgent, setEditingCustomAgent] = useState<CustomAgentDefinition | undefined>()
   const agentOwnership = getSettingOwnershipSummary('agentLaunchDefaults')
   const cmdOverrides = settings.agentCmdOverrides ?? {}
   const agentDefaultArgs = settings.agentDefaultArgs ?? {}
@@ -702,8 +722,29 @@ export function AgentsPane({
   })
   const disabledAgents = normalizeDisabledTuiAgents(settings.disabledTuiAgents)
 
-  const setDefault = (id: TuiAgent | 'blank' | null): void => {
+  const setDefault = (id: AgentId | 'blank' | null): void => {
     updateSettings({ defaultTuiAgent: id })
+  }
+
+  const saveCustomAgent = (value: Omit<CustomAgentDefinition, 'id'>): void => {
+    const id =
+      editingCustomAgent?.id ??
+      createCustomAgentId(
+        value.name,
+        customAgents.map((agent) => agent.id)
+      )
+    const next = editingCustomAgent
+      ? customAgents.map((agent) => (agent.id === id ? { ...value, id } : agent))
+      : [...customAgents, { ...value, id }]
+    updateSettings({ customAgents: next })
+    setEditingCustomAgent(undefined)
+  }
+
+  const removeCustomAgent = (id: CustomAgentDefinition['id']): void => {
+    updateSettings({
+      customAgents: customAgents.filter((agent) => agent.id !== id),
+      ...(defaultAgent === id ? { defaultTuiAgent: null } : {})
+    })
   }
 
   const setAgentEnabled = (id: TuiAgent, enabled: boolean): void => {
@@ -769,9 +810,12 @@ export function AgentsPane({
   // Why: 'blank' is an explicit no-agent preference, not an auto fallback,
   // so the Auto pill should only light up when the default is null OR when a
   // selected agent id is no longer detected on PATH.
+  const isCustomDefault =
+    isCustomAgentId(defaultAgent) && customAgentForId(defaultAgent, customAgents)?.enabled === true
   const isAutoDefault =
     defaultAgent === null ||
     (defaultAgent !== 'blank' &&
+      !isCustomDefault &&
       (!detectedIds?.has(defaultAgent) || !isTuiAgentEnabled(defaultAgent, disabledAgents)))
   const isBlankDefault = defaultAgent === 'blank'
 
@@ -816,6 +860,19 @@ export function AgentsPane({
               </DefaultAgentPill>
             )
           })}
+          {customAgents
+            .filter((agent) => agent.enabled)
+            .map((agent) => (
+              <DefaultAgentPill
+                key={agent.id}
+                active={defaultAgent === agent.id}
+                onClick={() => setDefault(agent.id)}
+              >
+                <AgentIcon agent={agent.id} size={14} customAgents={customAgents} />
+                {agent.name}
+                {defaultAgent === agent.id && <Check className="size-3.5" />}
+              </DefaultAgentPill>
+            ))}
         </div>
       </section>
 
@@ -947,6 +1004,113 @@ export function AgentsPane({
           </div>
         </section>
       )}
+
+      <section className="space-y-3">
+        <SettingsSubsectionHeader
+          title={translate('auto.components.settings.AgentsPane.7ae5b0421d', 'Custom agents')}
+          description={translate(
+            'auto.components.settings.AgentsPane.b2d7383d2a',
+            'Launch your own agent CLI with the same terminal workflow as built-in agents.'
+          )}
+          action={
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                setEditingCustomAgent(undefined)
+                setCustomAgentDialogOpen(true)
+              }}
+            >
+              <Plus data-icon="inline-start" />
+              {translate('auto.components.settings.AgentsPane.f76af13b0c', 'Add agent')}
+            </Button>
+          }
+        />
+        {customAgents.length > 0 ? (
+          <div className="divide-y divide-border/40">
+            {customAgents.map((agent) => (
+              <div key={agent.id} className="flex items-center gap-3 py-3">
+                <div className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border/50 bg-background/50">
+                  <AgentIcon agent={agent.id} size={16} customAgents={customAgents} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <span className="truncate">{agent.name}</span>
+                    {!agent.enabled && (
+                      <SettingsBadge tone="muted">
+                        {translate('auto.components.settings.AgentsPane.8dc0192e48', 'Disabled')}
+                      </SettingsBadge>
+                    )}
+                  </div>
+                  <div className="truncate font-mono text-[11px] text-muted-foreground">
+                    {agent.command}
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant={agent.enabled ? 'secondary' : 'outline'}
+                  size="xs"
+                  onClick={() =>
+                    updateSettings({
+                      customAgents: customAgents.map((item) =>
+                        item.id === agent.id ? { ...item, enabled: !item.enabled } : item
+                      ),
+                      ...(defaultAgent === agent.id && agent.enabled
+                        ? { defaultTuiAgent: null }
+                        : {})
+                    })
+                  }
+                >
+                  {agent.enabled
+                    ? translate('auto.components.settings.AgentsPane.d4d2a45d63', 'Enabled')
+                    : translate('auto.components.settings.AgentsPane.e393cf0325', 'Enable')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={translate(
+                    'auto.components.settings.AgentsPane.89fef859c2',
+                    'Edit custom agent'
+                  )}
+                  onClick={() => {
+                    setEditingCustomAgent(agent)
+                    setCustomAgentDialogOpen(true)
+                  }}
+                >
+                  <Pencil />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={translate(
+                    'auto.components.settings.AgentsPane.d4f613087c',
+                    'Remove custom agent'
+                  )}
+                  onClick={() => removeCustomAgent(agent.id)}
+                >
+                  <Trash2 />
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-md border border-dashed border-border/50 py-6 text-center text-sm text-muted-foreground">
+            {translate(
+              'auto.components.settings.AgentsPane.35ff8538b5',
+              'No custom agents configured.'
+            )}
+          </div>
+        )}
+      </section>
+
+      <CustomAgentDialog
+        open={customAgentDialogOpen}
+        initialAgent={editingCustomAgent}
+        onOpenChange={setCustomAgentDialogOpen}
+        onSave={saveCustomAgent}
+      />
 
       {detectedIds === null && (
         <div className="flex items-center justify-center rounded-md border border-dashed border-border/50 py-6 text-sm text-muted-foreground">

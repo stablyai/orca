@@ -14,7 +14,7 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
@@ -51,11 +51,11 @@ export async function launchAgentBackgroundSession(
   if (!worktree) {
     throw new Error('The target workspace is no longer available.')
   }
-  const preflight = TUI_AGENT_CONFIG[agent].preflightTrust
-  if (preflight && worktree.path && window.api.agentTrust?.markTrusted) {
+  const agentConfig = isTuiAgent(agent) ? TUI_AGENT_CONFIG[agent] : null
+  if (agentConfig?.preflightTrust && worktree.path && window.api.agentTrust?.markTrusted) {
     try {
       await window.api.agentTrust.markTrusted({
-        preset: preflight,
+        preset: agentConfig.preflightTrust,
         workspacePath: worktree.path
       })
     } catch {
@@ -81,7 +81,7 @@ export async function launchAgentBackgroundSession(
   })
   const trimmedPrompt = prompt?.trim() ?? ''
   const hasPrompt = trimmedPrompt.length > 0
-  const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
+  const isFollowupPath = agentConfig?.promptInjectionMode === 'stdin-after-start'
 
   const pasteDraftAfterLaunch = hasPrompt && isFollowupPath ? trimmedPrompt : null
   const startupPlan = buildAgentStartupPlan({
@@ -93,7 +93,8 @@ export async function launchAgentBackgroundSession(
     platform: launchPlatform,
     shell: startupShell,
     isRemote,
-    allowEmptyPromptLaunch: !hasPrompt || isFollowupPath
+    allowEmptyPromptLaunch: !hasPrompt || isFollowupPath,
+    customAgents: store.settings?.customAgents
   })
   if (!startupPlan) {
     return null
@@ -115,12 +116,7 @@ export async function launchAgentBackgroundSession(
   const leafId = createBrowserUuid()
   const paneKey = makePaneKey(tab.id, leafId)
   const launchToken = createBrowserUuid()
-  const launchRegistration = {
-    agentType: agent,
-    launchToken,
-    tabId: tab.id,
-    leafId
-  }
+  const launchRegistration = { agentType: agent, launchToken, tabId: tab.id, leafId }
   store.registerAgentLaunchConfig(paneKey, startupPlan.launchConfig, launchRegistration)
   // Why: `title` labels the tab/worktree entry. Pane titles render as an
   // in-terminal title row, so background sessions must not persist it there.
@@ -232,7 +228,7 @@ export async function launchAgentBackgroundSession(
         tabId: tab.id,
         leafId,
         telemetry: {
-          agent_kind: tuiAgentToAgentKind(agent),
+          agent_kind: isTuiAgent(agent) ? tuiAgentToAgentKind(agent) : 'other',
           launch_source: launchSource ?? 'unknown',
           request_kind: 'new'
         }

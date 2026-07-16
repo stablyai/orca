@@ -10,6 +10,8 @@ import type {
 } from '../../../shared/source-control-ai-actions'
 import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
 import type { GlobalSettings, Repo, TuiAgent } from '../../../shared/types'
+import type { AgentId } from '../../../shared/custom-agent'
+import { isTuiAgent } from '../../../shared/tui-agent-config'
 
 export function readSourceControlLaunchRecipeAgentId(
   recipe: Pick<SourceControlActionRecipe, 'agentId'> | null | undefined
@@ -20,9 +22,9 @@ export function readSourceControlLaunchRecipeAgentId(
 
 export function pickSourceControlLaunchAgent(args: {
   savedAgent?: TuiAgent | null
-  defaultAgent: TuiAgent | 'blank' | null | undefined
+  defaultAgent: AgentId | 'blank' | null | undefined
   detectedAgents: TuiAgent[]
-  disabledAgents?: TuiAgent[]
+  disabledAgents?: AgentId[]
 }): TuiAgent | null {
   const enabledAgents = filterEnabledTuiAgents(args.detectedAgents, args.disabledAgents)
   if (args.savedAgent && enabledAgents.includes(args.savedAgent)) {
@@ -31,6 +33,7 @@ export function pickSourceControlLaunchAgent(args: {
   if (
     args.defaultAgent &&
     args.defaultAgent !== 'blank' &&
+    isTuiAgent(args.defaultAgent) &&
     enabledAgents.includes(args.defaultAgent)
   ) {
     return args.defaultAgent
@@ -76,7 +79,10 @@ export function resolveSourceControlLaunchAgentScope(input: {
   // to the global default agent when no global recipe agent is set.
   const defaultTuiAgent = input.settings?.defaultTuiAgent
   const globalAgentId =
-    globalRecipeAgentId ?? (defaultTuiAgent && defaultTuiAgent !== 'blank' ? defaultTuiAgent : null)
+    globalRecipeAgentId ??
+    (defaultTuiAgent && defaultTuiAgent !== 'blank' && isTuiAgent(defaultTuiAgent)
+      ? defaultTuiAgent
+      : null)
   const hasRepoAgentOverride =
     normalizeRepoSourceControlAiOverrides(input.repo?.sourceControlAi)?.actionOverrides?.[
       input.actionId

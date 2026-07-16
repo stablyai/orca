@@ -12,6 +12,7 @@ import type {
   WorkspaceKey,
   WorkspaceSessionState
 } from '../../../../shared/types'
+import type { AgentId } from '../../../../shared/custom-agent'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -447,7 +448,7 @@ function withTerminalTabPtyId(
 
 export type AutomaticAgentResumeClaim = {
   worktreeId: string
-  launchAgent: TuiAgent
+  launchAgent: AgentId
   providerSession: AgentProviderSessionMetadata
 }
 
@@ -511,7 +512,7 @@ export type TerminalSlice = {
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string
-      launchAgent?: TuiAgent
+      launchAgent?: AgentId
       draftPrompt?: string
       /** Initial prompt-start status for agents that lack native prompt hooks. */
       initialAgentStatus?: { agent: TuiAgent; prompt: string }
@@ -593,7 +594,7 @@ export type TerminalSlice = {
       id?: string
       /** Coding-harness agent being launched in this tab, recorded so the tab
        *  bar can show the provider icon before the agent's first hook event. */
-      launchAgent?: TuiAgent
+      launchAgent?: AgentId
       quickCommandLabel?: string | null
       /** Initial native-chat view mode for the unified tab. When the
        *  `openAgentTabsInChatByDefault` setting is on, agent launches pass
@@ -697,7 +698,7 @@ export type TerminalSlice = {
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string
-      launchAgent?: TuiAgent
+      launchAgent?: AgentId
       draftPrompt?: string
       initialAgentStatus?: { agent: TuiAgent; prompt: string }
       showSessionRestoredBanner?: boolean
@@ -714,7 +715,7 @@ export type TerminalSlice = {
     launchConfig?: SleepingAgentLaunchConfig
     resumeProviderSession?: AgentProviderSessionMetadata
     launchToken?: string
-    launchAgent?: TuiAgent
+    launchAgent?: AgentId
     draftPrompt?: string
     initialAgentStatus?: { agent: TuiAgent; prompt: string }
     showSessionRestoredBanner?: boolean

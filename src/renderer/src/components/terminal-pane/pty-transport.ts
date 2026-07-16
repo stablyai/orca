@@ -42,7 +42,7 @@ import {
   type ProcessedAgentStatusChunk
 } from '../../../../shared/agent-status-osc'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isAgentId } from '../../../../shared/custom-agent'
 
 // Re-export public API so existing consumers keep working.
 export {
@@ -732,6 +732,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         // resolve cwd on the remote host.
         const shouldSendLocalCwdFallback =
           cwdFallback === 'worktree' && !connectionId && !admittedSessionId
+        const ptyLaunchAgent = isAgentId(options.launchAgent ?? launchAgent)
+          ? (options.launchAgent ?? launchAgent)
+          : undefined
         const result = await window.api.pty.spawn({
           cols: options.cols ?? 80,
           rows: options.rows ?? 24,
@@ -745,9 +748,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           ...((options.launchToken ?? launchToken)
             ? { launchToken: options.launchToken ?? launchToken }
             : {}),
-          ...((options.launchAgent ?? launchAgent)
-            ? { launchAgent: options.launchAgent ?? launchAgent }
-            : {}),
+          ...(ptyLaunchAgent ? { launchAgent: ptyLaunchAgent } : {}),
           ...((options.startupCommandDelivery ?? startupCommandDelivery)
             ? { startupCommandDelivery: options.startupCommandDelivery ?? startupCommandDelivery }
             : {}),
@@ -766,7 +767,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           ...(telemetry ? { telemetry } : {})
         })
         const spawnResult = result as PtyConnectResult & { isReattach?: boolean }
-        const resultLaunchAgent = isTuiAgent(spawnResult.launchAgent)
+        const resultLaunchAgent = isAgentId(spawnResult.launchAgent)
           ? spawnResult.launchAgent
           : undefined
 

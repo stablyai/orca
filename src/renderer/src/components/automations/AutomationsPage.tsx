@@ -16,6 +16,11 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
+import {
+  customAgentForId,
+  isCustomAgentId,
+  type CustomAgentDefinition
+} from '../../../../shared/custom-agent'
 import type { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
@@ -113,6 +118,7 @@ import {
   getVisibleAutomationSetupDecision,
   resolveAutomationSetupDecisionForSave
 } from './automation-setup-decision'
+import { resolveDefaultAutomationAgent } from './automation-default-agent'
 import { getAutomationTemplates, type AutomationTemplate } from './automation-templates'
 import { getAutomationTargetAvailability } from './automation-target-availability'
 import { buildAutomationRunContextForRepo } from './automation-run-context'
@@ -267,8 +273,8 @@ function buildHermesCronSchedule(draft: AutomationDraft): string {
   })
 }
 
-function getAgentLabel(agentId: string): string {
-  return getAgentCatalog().find((agent) => agent.id === agentId)?.label ?? agentId
+function getAgentLabel(agentId: string, customAgents?: readonly CustomAgentDefinition[]): string {
+  return getAgentCatalog(customAgents ?? []).find((agent) => agent.id === agentId)?.label ?? agentId
 }
 
 function getExternalAutomationKey(
@@ -392,13 +398,17 @@ export default function AutomationsPage(): React.JSX.Element {
   const setPendingAutomationRunNavigation = useAppStore((s) => s.setPendingAutomationRunNavigation)
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
-  const enabledAgents = filterEnabledTuiAgents(AGENTS, settings?.disabledTuiAgents)
-  const defaultAgent =
-    settings?.defaultTuiAgent &&
-    settings.defaultTuiAgent !== 'blank' &&
-    isTuiAgentEnabled(settings.defaultTuiAgent, settings.disabledTuiAgents)
-      ? settings.defaultTuiAgent
-      : (enabledAgents[0] ?? AGENTS[0])
+  const agentIds = getAgentCatalog(settings?.customAgents ?? []).map((agent) => agent.id)
+  const firstEnabledAgent = filterEnabledTuiAgents(agentIds, settings?.disabledTuiAgents).find(
+    (agentId) =>
+      !isCustomAgentId(agentId) || customAgentForId(agentId, settings?.customAgents)?.enabled
+  )
+  const defaultAgent = resolveDefaultAutomationAgent({
+    defaultTuiAgent: settings?.defaultTuiAgent,
+    disabledTuiAgents: settings?.disabledTuiAgents,
+    customAgents: settings?.customAgents,
+    fallback: firstEnabledAgent ?? AGENTS[0]
+  })
 
   const [automations, setAutomations] = useState<Automation[]>([])
   const [runs, setRuns] = useState<AutomationRun[]>([])
@@ -2477,7 +2487,9 @@ export default function AutomationsPage(): React.JSX.Element {
                           <span className="shrink-0">/</span>
                           <span className="truncate">{workspaceLabel}</span>
                           <span className="shrink-0">·</span>
-                          <span className="truncate">{getAgentLabel(automation.agentId)}</span>
+                          <span className="truncate">
+                            {getAgentLabel(automation.agentId, settings?.customAgents)}
+                          </span>
                         </span>
                         <span className="mt-1 block truncate text-xs text-muted-foreground">
                           {usageText}
@@ -2895,6 +2907,7 @@ export default function AutomationsPage(): React.JSX.Element {
                       : (selectedWorktree?.displayName ?? 'Missing workspace')
                   }
                   hostLabelById={hostLabelById}
+                  customAgents={settings?.customAgents}
                   runNowAvailability={selectedRunNowAvailability}
                   now={relativeNow}
                   onRunNow={(automation) => void runNow(automation)}

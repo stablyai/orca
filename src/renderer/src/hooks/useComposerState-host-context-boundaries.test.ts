@@ -606,6 +606,69 @@ describe('useComposerState host-context boundaries', () => {
     expect(quickSubmit).not.toContain('platform: CLIENT_PLATFORM')
   })
 
+  it('forwards custom agent ids to submitFolderTarget without narrowing to TuiAgent', () => {
+    const quickSubmit = sourceBetween(
+      HOOK_SOURCE,
+      'const submitQuick = useCallback',
+      'const createGateInput'
+    )
+
+    expect(quickSubmit).toContain('await submitFolderTarget(requestedAgent)')
+    expect(quickSubmit).not.toContain('submitFolderTarget(isTuiAgent(requestedAgent)')
+  })
+
+  it("checks a custom agent's own enabled flag instead of the TUI-only enablement gate", () => {
+    expect(HOOK_SOURCE).toContain('function isRequestedAgentEnabled(')
+    expect(HOOK_SOURCE).toContain(
+      'isCustomAgentId(agent)\n    ? customAgentForId(agent, customAgents)?.enabled === true\n    : isTuiAgentEnabled(agent, disabledTuiAgents)'
+    )
+
+    const folderTargetSubmit = sourceBetween(
+      HOOK_SOURCE,
+      'const submitFolderTarget = useCallback',
+      'const submit = useCallback'
+    )
+    expect(folderTargetSubmit).toContain(
+      'isRequestedAgentEnabled(requestedAgent, disabledTuiAgents, settings?.customAgents)'
+    )
+    expect(folderTargetSubmit).not.toContain(
+      'isTuiAgentEnabled(requestedAgent, disabledTuiAgents)\n            ?'
+    )
+
+    const quickSubmit = sourceBetween(
+      HOOK_SOURCE,
+      'const submitQuick = useCallback',
+      'const createGateInput'
+    )
+    expect(quickSubmit).toContain(
+      'isRequestedAgentEnabled(requestedAgent, disabledTuiAgents, settings?.customAgents)'
+    )
+    expect(quickSubmit).not.toContain('isTuiAgent(requestedAgent) &&')
+  })
+
+  it('keeps custom agent settings in the create-callback dependency arrays', () => {
+    const folderTargetSubmit = sourceBetween(
+      HOOK_SOURCE,
+      'const submitFolderTarget = useCallback',
+      'const submit = useCallback'
+    )
+    expect(folderTargetSubmit).toContain('settings?.customAgents,')
+
+    const fullSubmit = sourceBetween(
+      HOOK_SOURCE,
+      'const submit = useCallback',
+      'const submitQuick = useCallback'
+    )
+    expect(fullSubmit).toContain('settings?.customAgents,')
+
+    const quickSubmit = sourceBetween(
+      HOOK_SOURCE,
+      'const submitQuick = useCallback',
+      'const createGateInput'
+    )
+    expect(quickSubmit).toContain('settings?.customAgents,')
+  })
+
   it('prepares linked quick-create drafts for the selected default agent', () => {
     const quickSubmit = sourceBetween(
       HOOK_SOURCE,

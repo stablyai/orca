@@ -17,11 +17,8 @@ import {
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import type {
-  TuiAgent,
-  WorkspaceCreateTelemetrySource,
-  WorkspaceStatus
-} from '../../../shared/types'
+import type { WorkspaceCreateTelemetrySource, WorkspaceStatus } from '../../../shared/types'
+import type { AgentId } from '../../../shared/custom-agent'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
@@ -151,20 +148,31 @@ function QuickTabBody({
   // override rather than an effect that mirrors a prop into state — deriving
   // during render keeps the selection in sync with the detected set without
   // triggering an extra commit.
-  const [quickAgentOverride, setQuickAgentOverride] = useState<TuiAgent | null | undefined>(
+  const [quickAgentOverride, setQuickAgentOverride] = useState<AgentId | null | undefined>(
     undefined
   )
-  const preferredQuickAgent = useMemo<TuiAgent | null>(() => {
+  const preferredQuickAgent = useMemo<AgentId | null>(() => {
     const pref = settings?.defaultTuiAgent
     // Why: detection can still be pending when quick-create submits; keep the
     // prior catalog fallback while filtering disabled agents out of that choice.
-    return pickQuickWorkspaceAgent(pref, cardProps.detectedAgentIds, settings?.disabledTuiAgents)
-  }, [cardProps.detectedAgentIds, settings?.defaultTuiAgent, settings?.disabledTuiAgents])
+    return pickQuickWorkspaceAgent(
+      pref,
+      cardProps.detectedAgentIds,
+      settings?.disabledTuiAgents,
+      settings?.customAgents
+    )
+  }, [
+    cardProps.detectedAgentIds,
+    settings?.defaultTuiAgent,
+    settings?.disabledTuiAgents,
+    settings?.customAgents
+  ])
   const resolvedQuickAgentSelection = resolveQuickWorkspaceAgentSelection({
     quickAgentOverride,
     preferredQuickAgent,
     detectedAgentIds: cardProps.detectedAgentIds,
-    disabledTuiAgents: settings?.disabledTuiAgents
+    disabledTuiAgents: settings?.disabledTuiAgents,
+    customAgents: settings?.customAgents
   })
   if (resolvedQuickAgentSelection.quickAgentOverride !== quickAgentOverride) {
     // Why: detection/settings changes can invalidate a user-picked agent; repair
@@ -173,7 +181,7 @@ function QuickTabBody({
   }
   const quickAgent = resolvedQuickAgentSelection.quickAgent
 
-  const handleQuickAgentChange = useCallback((agent: TuiAgent | null) => {
+  const handleQuickAgentChange = useCallback((agent: AgentId | null) => {
     setQuickAgentOverride(agent)
   }, [])
 

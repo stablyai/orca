@@ -8,7 +8,7 @@ import { getConnectionIdFromState } from '@/lib/connection-context'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import type { TuiAgent } from '../../../../shared/types'
+import type { AgentId, CustomAgentDefinition } from '../../../../shared/custom-agent'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import { translate } from '@/i18n/i18n'
@@ -34,15 +34,19 @@ export type QuickLaunchAgentMenuItemsProps = {
   onPromptDelivered?: () => void
 }
 
-function getCatalogEntry(agent: TuiAgent): { id: TuiAgent; label: string } | null {
-  return getAgentCatalog().find((a) => a.id === agent) ?? null
+function getCatalogEntry(
+  agent: AgentId,
+  customAgents: readonly CustomAgentDefinition[]
+): { id: AgentId; label: string } | null {
+  return getAgentCatalog(customAgents).find((a) => a.id === agent) ?? null
 }
 
 function orderAgents(
-  defaultAgent: TuiAgent | 'blank' | null | undefined,
-  detected: TuiAgent[]
-): TuiAgent[] {
-  const inCatalogOrder = getAgentCatalog()
+  defaultAgent: AgentId | 'blank' | null | undefined,
+  detected: AgentId[],
+  customAgents: readonly CustomAgentDefinition[]
+): AgentId[] {
+  const inCatalogOrder = getAgentCatalog(customAgents)
     .filter((entry) => detected.includes(entry.id))
     .map((entry) => entry.id)
   if (!defaultAgent || defaultAgent === 'blank' || !inCatalogOrder.includes(defaultAgent)) {
@@ -107,6 +111,7 @@ function QuickLaunchAgentMenuItemsInner({
   const connectionId = useAppStore((s) => getConnectionIdFromState(s, worktreeId))
   const { detectedIds } = useDetectedAgents(connectionId)
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
+  const customAgents = useAppStore((s) => s.settings?.customAgents ?? [])
   const disabledAgents = useAppStore((s) => s.settings?.disabledTuiAgents ?? [])
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
@@ -118,8 +123,8 @@ function QuickLaunchAgentMenuItemsInner({
   }, [openSettingsPage, openSettingsTarget])
 
   const runLaunch = useCallback(
-    (agent: TuiAgent) => {
-      const entry = getCatalogEntry(agent)
+    (agent: AgentId) => {
+      const entry = getCatalogEntry(agent, customAgents)
       const label = entry?.label ?? agent
       const result = launchAgentInNewTab({
         agent,
@@ -168,11 +173,21 @@ function QuickLaunchAgentMenuItemsInner({
         toast.message(getLaunchWatchdogTimeoutMessage(label))
       })
     },
-    [worktreeId, groupId, onFocusTerminal, prompt, promptDelivery, launchSource, onPromptDelivered]
+    [
+      worktreeId,
+      groupId,
+      onFocusTerminal,
+      prompt,
+      promptDelivery,
+      launchSource,
+      onPromptDelivered,
+      customAgents
+    ]
   )
 
   const enabledDetectedIds = detectedIds ? filterEnabledTuiAgents(detectedIds, disabledAgents) : []
-  const agents = detectedIds ? orderAgents(defaultAgent, enabledDetectedIds) : []
+  const customIds = customAgents.filter((agent) => agent.enabled).map((agent) => agent.id)
+  const agents = orderAgents(defaultAgent, [...enabledDetectedIds, ...customIds], customAgents)
 
   return (
     <>
@@ -190,7 +205,7 @@ function QuickLaunchAgentMenuItemsInner({
         </DropdownMenuItem>
       ) : null}
       {agents.map((agent) => {
-        const entry = getCatalogEntry(agent)
+        const entry = getCatalogEntry(agent, customAgents)
         const label = entry?.label ?? agent
         const showsDefaultAgentShortcut =
           newAgentShortcut !== null && defaultAgent !== 'blank' && agent === defaultAgent
@@ -205,7 +220,7 @@ function QuickLaunchAgentMenuItemsInner({
               { value0: label }
             )}
           >
-            <AgentIcon agent={agent} size={14} />
+            <AgentIcon agent={agent} size={14} customAgents={customAgents} />
             <span className="flex-1">{label}</span>
             {showsDefaultAgentShortcut ? (
               <DropdownMenuShortcut>{newAgentShortcut}</DropdownMenuShortcut>

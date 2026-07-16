@@ -1,8 +1,8 @@
-import type { TuiAgent } from '../../../shared/types'
+import type { AgentId } from '../../../shared/custom-agent'
 
 export type NativeChatLaunchPrompt = {
   tabId: string
-  agent: TuiAgent
+  agent: AgentId
   text: string
   createdAt: number
   failed?: boolean

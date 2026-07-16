@@ -12,9 +12,10 @@ import type {
   ProjectHostSetup,
   Repo,
   SetupDecision,
-  TuiAgent,
   Worktree
 } from '../../../../shared/types'
+import type { AgentId } from '../../../../shared/custom-agent'
+import { customAgentForId, isCustomAgentId } from '../../../../shared/custom-agent'
 import {
   isValidAutomationCronSchedule,
   isValidAutomationSchedule
@@ -35,7 +36,7 @@ const MODE_TOGGLE_ITEM_CLASS =
 export type AutomationDraft = {
   name: string
   prompt: string
-  agentId: TuiAgent
+  agentId: AgentId
   projectId: string
   workspaceMode: AutomationWorkspaceMode
   workspaceId: string
@@ -110,14 +111,18 @@ export function AutomationEditorDialog({
   const visibleAgents = React.useMemo(() => {
     const enabledIds = new Set(
       filterEnabledTuiAgents(
-        getAgentCatalog().map((agent) => agent.id),
+        getAgentCatalog(settings?.customAgents ?? []).map((agent) => agent.id),
         settings?.disabledTuiAgents
       )
     )
-    return getAgentCatalog().filter(
-      (agent) => enabledIds.has(agent.id) || agent.id === draft.agentId
+    return getAgentCatalog(settings?.customAgents ?? []).filter(
+      (agent) =>
+        (enabledIds.has(agent.id) &&
+          (!isCustomAgentId(agent.id) ||
+            customAgentForId(agent.id, settings?.customAgents)?.enabled)) ||
+        agent.id === draft.agentId
     )
-  }, [draft.agentId, settings?.disabledTuiAgents])
+  }, [draft.agentId, settings?.customAgents, settings?.disabledTuiAgents])
   const scheduleField = (
     <Field
       label={translate('auto.components.automations.AutomationEditorDialog.c4b19094c2', 'Schedule')}

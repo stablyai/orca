@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../../shared/tui-agent-selection'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { CLIENT_PLATFORM, getWorkspaceIntentName, getWorkspaceSeedName } from '@/lib/new-workspace'
@@ -14,7 +14,8 @@ import {
 } from '@/lib/launch-work-item-direct-messages'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { getConnectionId } from '@/lib/connection-context'
-import type { GitPushTarget, SetupDecision, TuiAgent } from '../../../shared/types'
+import type { GitPushTarget, SetupDecision } from '../../../shared/types'
+import type { AgentId } from '../../../shared/custom-agent'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
 import {
@@ -155,7 +156,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   let worktreeId: string
   let primaryTabId: string | null
   let startupPlan = null as ReturnType<typeof buildDirectWorkItemAgentStartupPlan>['startupPlan']
-  let effectiveAgent: TuiAgent | null = null
+  let effectiveAgent: AgentId | null = null
   let draftLaunchedNatively = false
   const draftContent = await getDirectWorkItemDraftContent(item, repoConnectionId)
   let startupPlanFailed = false
@@ -241,9 +242,11 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       // Why: direct task launch creates and starts the workspace in separate
       // steps so agent detection can overlap git worktree creation. Persist
       // the chosen agent once known so empty-worktree reopen can recreate it.
-      void store.updateWorktreeMeta(worktreeId, { createdWithAgent: effectiveAgent }).catch(() => {
-        // Non-critical: activation still has the explicit startup below.
-      })
+      if (isTuiAgent(effectiveAgent)) {
+        void store.updateWorktreeMeta(worktreeId, { createdWithAgent: effectiveAgent }).catch(() => {
+          // Non-critical: activation still has the explicit startup below.
+        })
+      }
     }
     // Why: agents that gate first-launch behind a "Do you trust this folder?"
     // menu (cursor-agent, copilot) consume the bracketed paste as menu input.
@@ -252,7 +255,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     // and we guard the IPC presence so a stale preload bundle (which can
     // ship a renderer that's ahead of the loaded preload) doesn't crash the
     // launch with "Cannot read properties of undefined".
-    if (effectiveAgent && worktreePath && window.api.agentTrust?.markTrusted) {
+    if (isTuiAgent(effectiveAgent) && worktreePath && window.api.agentTrust?.markTrusted) {
       const preflight = TUI_AGENT_CONFIG[effectiveAgent].preflightTrust
       if (preflight) {
         try {

@@ -2,6 +2,7 @@ import { Terminal } from 'lucide-react'
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
 import type { CustomAgentId } from '../../../../shared/commit-message-agent-spec'
 import { CUSTOM_AGENT_ID, isCustomAgentId } from '../../../../shared/commit-message-agent-spec'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import {
   SOURCE_CONTROL_ACTION_LABELS,
   type SourceControlActionId
@@ -48,7 +49,9 @@ function resolveAgentArgsPlaceholderAgent(
   if (selectedAgent && !isCustomAgentId(selectedAgent)) {
     return selectedAgent
   }
-  return defaultTuiAgent && defaultTuiAgent !== 'blank' ? defaultTuiAgent : null
+  return defaultTuiAgent && defaultTuiAgent !== 'blank' && isTuiAgent(defaultTuiAgent)
+    ? defaultTuiAgent
+    : null
 }
 
 export function SourceControlActionRecipeRow({
