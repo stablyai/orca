@@ -613,6 +613,11 @@ describe('Store', () => {
     expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
   })
 
+  it('defaults minimizeToTrayOnMinimize to false when unset', async () => {
+    const store = await createStore()
+    expect(store.getSettings().minimizeToTrayOnMinimize).toBe(false)
+  })
+
   it('coerces loaded minimizeToTrayOnClose to false unless stored as true', async () => {
     writeDataFile({
       ...getDefaultPersistedState(testState.dir),
@@ -626,6 +631,19 @@ describe('Store', () => {
     expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
   })
 
+  it('coerces loaded minimizeToTrayOnMinimize to false unless stored as true', async () => {
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      settings: {
+        minimizeToTrayOnMinimize: 'true' as unknown as boolean
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().minimizeToTrayOnMinimize).toBe(false)
+  })
+
   it('persists minimizeToTrayOnClose true/false round-trip', async () => {
     const store = await createStore()
     store.updateSettings({ minimizeToTrayOnClose: true })
@@ -634,6 +652,16 @@ describe('Store', () => {
     expect((readDataFile() as PersistedState).settings.minimizeToTrayOnClose).toBe(true)
     store.updateSettings({ minimizeToTrayOnClose: false })
     expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
+  })
+
+  it('persists minimizeToTrayOnMinimize true/false round-trip', async () => {
+    const store = await createStore()
+    store.updateSettings({ minimizeToTrayOnMinimize: true })
+    expect(store.getSettings().minimizeToTrayOnMinimize).toBe(true)
+    store.flush()
+    expect((readDataFile() as PersistedState).settings.minimizeToTrayOnMinimize).toBe(true)
+    store.updateSettings({ minimizeToTrayOnMinimize: false })
+    expect(store.getSettings().minimizeToTrayOnMinimize).toBe(false)
   })
 
   it('coerces non-boolean minimizeToTrayOnClose payloads to a strict boolean', async () => {
@@ -646,6 +674,16 @@ describe('Store', () => {
     expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
     store.updateSettings({ minimizeToTrayOnClose: null as unknown as boolean })
     expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
+  })
+
+  it('coerces non-boolean minimizeToTrayOnMinimize payloads to a strict boolean', async () => {
+    const store = await createStore()
+    store.updateSettings({ minimizeToTrayOnMinimize: 'true' as unknown as boolean })
+    expect(store.getSettings().minimizeToTrayOnMinimize).toBe(false)
+    store.updateSettings({ minimizeToTrayOnMinimize: 1 as unknown as boolean })
+    expect(store.getSettings().minimizeToTrayOnMinimize).toBe(false)
+    store.updateSettings({ minimizeToTrayOnMinimize: null as unknown as boolean })
+    expect(store.getSettings().minimizeToTrayOnMinimize).toBe(false)
   })
 
   it('defaults trayMinimizeNoticeShown to false and persists it strictly', async () => {

@@ -4962,6 +4962,8 @@
           "872af9556e": "System Tray",
           "2edf606c46": "Minimize to Tray on Close",
           "b707773a0d": "When enabled, closing the window keeps Orca running in the system tray instead of quitting.",
+          "minimizeToTrayOnMinimize": "Minimize to Tray on Minimize",
+          "minimizeToTrayOnMinimizeDescription": "When enabled, minimizing the window hides Orca from the taskbar while keeping it running in the system tray.",
           "0cd9b8228f": "Choose the app icon shown in the Dock and window switcher.",
           "ca1590d42f": "App Icon",
           "61d842eca0": "Show the Orca Mobile shortcut in the sidebar. It remains available from Toolbox.",

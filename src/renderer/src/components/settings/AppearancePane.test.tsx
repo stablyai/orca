@@ -195,6 +195,7 @@ describe('AppearancePane', () => {
 
   afterEach(() => {
     delete (window as unknown as { api?: unknown }).api
+    delete (window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
   })
 
   it('renders the language dropdown with system, english, chinese, korean, japanese, and spanish options', async () => {
@@ -357,6 +358,66 @@ describe('AppearancePane', () => {
     expect(
       searchedContainer.querySelector('button[role="switch"][aria-label="Show Tasks Button"]')
     ).not.toBeNull()
+  })
+
+  it('renders the Windows minimize tray switch and binds its matching field', async () => {
+    mocks.state.settingsSearchQuery = ''
+    window.history.replaceState({}, '', '/')
+    ;(
+      window as unknown as {
+        api: { platform: { get: () => { platform: NodeJS.Platform } } }
+      }
+    ).api.platform = {
+      get: () => ({ platform: 'win32' })
+    }
+    const updateSettings = vi.fn()
+    const settings = {
+      ...getDefaultSettings('/tmp'),
+      minimizeToTrayOnClose: true,
+      minimizeToTrayOnMinimize: false
+    }
+
+    const container = await renderAppearancePane(settings, updateSettings)
+    const minimizeSwitch = container.querySelector<HTMLButtonElement>(
+      'button[role="switch"][aria-label="Minimize to Tray on Minimize"]'
+    )
+
+    expect(minimizeSwitch).not.toBeNull()
+    expect(minimizeSwitch?.getAttribute('aria-checked')).toBe('false')
+
+    await act(async () => {
+      minimizeSwitch?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ minimizeToTrayOnMinimize: true })
+  })
+
+  it('hides the Windows minimize tray switch for the web client', async () => {
+    mocks.state.settingsSearchQuery = ''
+    window.history.replaceState({}, '', '/web-index.html')
+    ;(
+      window as unknown as {
+        __ORCA_WEB_CLIENT__?: boolean
+        api: { platform: { get: () => { platform: NodeJS.Platform } } }
+      }
+    ).__ORCA_WEB_CLIENT__ = true
+    ;(
+      window as unknown as {
+        __ORCA_WEB_CLIENT__?: boolean
+        api: { platform: { get: () => { platform: NodeJS.Platform } } }
+      }
+    ).api.platform = {
+      get: () => ({ platform: 'win32' })
+    }
+
+    const container = await renderAppearancePane({
+      ...getDefaultSettings('/tmp'),
+      minimizeToTrayOnMinimize: true
+    })
+
+    expect(
+      container.querySelector('button[role="switch"][aria-label="Minimize to Tray on Minimize"]')
+    ).toBeNull()
   })
 
   it('keeps description-only search matches visible after helper text is hidden', async () => {

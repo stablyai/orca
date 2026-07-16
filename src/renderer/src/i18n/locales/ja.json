@@ -4990,6 +4990,8 @@
           "872af9556e": "システムトレイ",
           "2edf606c46": "閉じるときにトレイへ最小化",
           "b707773a0d": "有効にすると、ウィンドウを閉じてもOrcaは終了せず、システムトレイで実行を続けます。",
+          "minimizeToTrayOnMinimize": "最小化時にトレイへ最小化",
+          "minimizeToTrayOnMinimizeDescription": "有効にすると、ウィンドウを最小化したときにOrcaがタスクバーから隠れ、システムトレイで実行を続けます。",
           "interfaceDefaultFont": "デフォルトフォント",
           "terminalDefaultFont": "デフォルトフォント",
           "interfaceTitle": "インターフェイス",

@@ -29,6 +29,7 @@ import { TerminalAppearanceSection } from './TerminalAppearanceSection'
 import type { UseGhosttyImportReturn } from './useGhosttyImport'
 import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
 import { AppIconSelector } from './AppIconSelector'
+import { SettingsSwitchRow } from './SettingsFormControls'
 import { normalizeAppIconId } from '../../../../shared/app-icon'
 import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { isWebClientLocation } from '@/lib/web-client-location'
@@ -136,6 +137,7 @@ export function AppearancePane({
     ...getTitlebarEntries(),
     ...getSystemTrayEntries({ showSystemTray: isDesktopWindows })
   ]
+  const minimizeToTrayOnMinimizeEntry = getSystemTrayEntries({ showSystemTray: true })[1]
   const terminalSearchEntries = [
     { title: terminalTitle },
     ...getTerminalAppearanceSearchEntries({ showWarpImport: !isWebClient })
@@ -210,6 +212,22 @@ export function AppearancePane({
             isDesktopWindows={isDesktopWindows}
             forceVisiblePrimary={interfaceLabelMatches}
           />
+          {isDesktopWindows ? (
+            <SearchableSetting
+              title={minimizeToTrayOnMinimizeEntry?.title ?? 'Minimize to Tray on Minimize'}
+              description={minimizeToTrayOnMinimizeEntry?.description}
+              keywords={minimizeToTrayOnMinimizeEntry?.keywords}
+            >
+              <SettingsSwitchRow
+                label={minimizeToTrayOnMinimizeEntry?.title ?? 'Minimize to Tray on Minimize'}
+                description={minimizeToTrayOnMinimizeEntry?.description}
+                checked={settings.minimizeToTrayOnMinimize === true}
+                onChange={() =>
+                  updateSettings({ minimizeToTrayOnMinimize: !settings.minimizeToTrayOnMinimize })
+                }
+              />
+            </SearchableSetting>
+          ) : null}
         </AppearanceSection>
       ) : null}
 
