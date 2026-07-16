@@ -232,9 +232,9 @@ export function isOrphanedWorktreeError(error: unknown): boolean {
 
 /**
  * Check whether a git error indicates the worktree could not be removed because
- * it contains submodules. `git worktree remove` refuses these outright — even
- * with `--force` and even when the tree is clean — so removal must fall back to
- * deleting the directory and pruning git's registration.
+ * it contains populated submodules. Non-forced `git worktree remove` refuses
+ * these outright even when the tree is clean; `--force` is git's designed
+ * override, so removal escalates to a forced retry after its own clean check.
  */
 export function isSubmoduleWorktreeRemovalError(error: unknown): boolean {
   if (!(error instanceof Error)) {

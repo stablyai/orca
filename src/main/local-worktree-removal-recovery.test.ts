@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { gitExecFileAsyncMock, listWorktreesStrictMock, removeLocalWorktreePathMock } = vi.hoisted(
-  () => ({
-    gitExecFileAsyncMock: vi.fn(),
-    listWorktreesStrictMock: vi.fn(),
-    removeLocalWorktreePathMock: vi.fn()
-  })
-)
+const {
+  gitExecFileAsyncMock,
+  listWorktreesStrictMock,
+  removeLocalWorktreePathMock,
+  removeWorktreeMock
+} = vi.hoisted(() => ({
+  gitExecFileAsyncMock: vi.fn(),
+  listWorktreesStrictMock: vi.fn(),
+  removeLocalWorktreePathMock: vi.fn(),
+  removeWorktreeMock: vi.fn()
+}))
 
 vi.mock('./git/runner', () => ({
   gitExecFileAsync: gitExecFileAsyncMock
@@ -17,10 +21,12 @@ vi.mock('./local-worktree-filesystem', () => ({
 }))
 
 vi.mock('./git/worktree', () => ({
-  listWorktreesStrict: listWorktreesStrictMock
+  listWorktreesStrict: listWorktreesStrictMock,
+  removeWorktree: removeWorktreeMock
 }))
 
 import {
+  forceRemoveWorktreeAfterSubmoduleRefusal,
   recoverLocalWindowsWorktreeRemoval,
   removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval
 } from './local-worktree-removal-recovery'
@@ -353,5 +359,87 @@ describe('removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval', () => {
         deleteBranch: true
       })
     ).rejects.toThrow('Git still has stale worktree registration')
+  })
+})
+
+describe('forceRemoveWorktreeAfterSubmoduleRefusal', () => {
+  beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
+    listWorktreesStrictMock.mockReset()
+    removeLocalWorktreePathMock.mockReset()
+    removeWorktreeMock.mockReset()
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+    listWorktreesStrictMock.mockResolvedValue([])
+    removeLocalWorktreePathMock.mockResolvedValue(undefined)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  const registeredWorktree = { branch: 'refs/heads/feature', head: 'abc123' }
+
+  it('retries the removal with force and the known registration', async () => {
+    removeWorktreeMock.mockResolvedValue({})
+
+    const result = await forceRemoveWorktreeAfterSubmoduleRefusal({
+      canonicalWorktreePath: '/workspaces/feature',
+      repoPath: '/repo',
+      localWorktreeGitOptions: { wslDistro: 'Ubuntu' },
+      registeredWorktree,
+      deleteBranch: true,
+      closeWatcher: vi.fn().mockResolvedValue(undefined)
+    })
+
+    expect(removeWorktreeMock).toHaveBeenCalledWith('/repo', '/workspaces/feature', true, {
+      knownRemovedWorktree: registeredWorktree,
+      wslDistro: 'Ubuntu'
+    })
+    expect(result).toEqual({})
+  })
+
+  it('routes a transient Windows failure of the forced retry into recovery', async () => {
+    await withPlatform('win32', async () => {
+      removeWorktreeMock.mockRejectedValue(
+        Object.assign(new Error('git worktree remove failed'), {
+          stderr: "error: failed to delete 'C:/workspaces/feature/deep': Permission denied"
+        })
+      )
+      const closeWatcher = vi.fn().mockResolvedValue(undefined)
+
+      const result = await forceRemoveWorktreeAfterSubmoduleRefusal({
+        canonicalWorktreePath: 'C:/workspaces/feature',
+        repoPath: 'C:/repo',
+        localWorktreeGitOptions: {},
+        registeredWorktree,
+        deleteBranch: true,
+        closeWatcher
+      })
+
+      expect(closeWatcher).toHaveBeenCalledWith('C:/workspaces/feature')
+      expect(removeLocalWorktreePathMock).toHaveBeenCalledWith('C:/workspaces/feature', {})
+      expect(result).toEqual({
+        preservedBranch: { branchName: 'feature', head: 'abc123' }
+      })
+    })
+  })
+
+  it('surfaces a non-recoverable forced retry failure as a force removal error', async () => {
+    await withPlatform('darwin', async () => {
+      removeWorktreeMock.mockRejectedValue(new Error('disk I/O error'))
+
+      await expect(
+        forceRemoveWorktreeAfterSubmoduleRefusal({
+          canonicalWorktreePath: '/workspaces/feature',
+          repoPath: '/repo',
+          localWorktreeGitOptions: {},
+          registeredWorktree,
+          deleteBranch: true,
+          closeWatcher: vi.fn().mockResolvedValue(undefined)
+        })
+      ).rejects.toThrow('Failed to force delete worktree at /workspaces/feature. disk I/O error')
+
+      expect(removeLocalWorktreePathMock).not.toHaveBeenCalled()
+    })
   })
 })
