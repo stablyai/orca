@@ -1361,6 +1361,7 @@ describe('createUISlice hydratePersistedUI', () => {
       'ports',
       'kimi',
       'minimax',
+      'zai',
       'antigravity',
       'grok'
     ])
@@ -1371,12 +1372,14 @@ describe('createUISlice hydratePersistedUI', () => {
         'ports',
         'kimi',
         'minimax',
+        'zai',
         'antigravity',
         'grok'
       ],
       _portsStatusBarDefaultAdded: true,
       _kimiStatusBarDefaultAdded: true,
       _minimaxStatusBarDefaultAdded: true,
+      _zaiStatusBarDefaultAdded: true,
       _antigravityStatusBarDefaultAdded: true,
       _grokStatusBarDefaultAdded: true
     })
@@ -1393,6 +1396,7 @@ describe('createUISlice hydratePersistedUI', () => {
         _portsStatusBarDefaultAdded: true,
         _kimiStatusBarDefaultAdded: true,
         _minimaxStatusBarDefaultAdded: true,
+        _zaiStatusBarDefaultAdded: true,
         _antigravityStatusBarDefaultAdded: true,
         _grokStatusBarDefaultAdded: true
       })
