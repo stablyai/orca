@@ -30820,6 +30820,35 @@ describe('OrcaRuntimeService', () => {
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(TEST_WORKTREE_ID)
   })
 
+  it('drops the bounded scan cache when orphan-cleanup removal completes', async () => {
+    const runtime = createWorktreeRemovalRuntime()
+    vi.mocked(getEffectiveHooks).mockReturnValue(null)
+    vi.mocked(assertWorktreeCleanForRemoval).mockRejectedValue(
+      Object.assign(new Error('status failed'), {
+        stderr: 'fatal: not a git repository (or any of the parent directories): .git\n'
+      })
+    )
+    vi.mocked(removeWorktree).mockRejectedValue(
+      Object.assign(new Error('git worktree remove failed'), {
+        stderr: `fatal: '${TEST_WORKTREE_PATH}' is not a working tree`
+      })
+    )
+    vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({ stdout: '', stderr: '' })
+
+    // Prime the bounded raw scan cache with the worktree still present.
+    await runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+
+    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).resolves.toEqual({})
+
+    // Regression (#8882): the orphan-cleanup removal path must also drop the
+    // bounded raw scan cache, or the removed worktree lingers in listings until
+    // the 30s TTL. Git tracking is now gone, so a fresh scan is empty.
+    vi.mocked(listWorktrees).mockResolvedValue([])
+    await expect(runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)).resolves.toMatchObject(
+      { worktrees: [] }
+    )
+  })
+
   it('runs archive hooks for CLI worktree removal when hooks are explicitly enabled', async () => {
     const runtime = createWorktreeRemovalRuntime()
     vi.mocked(getEffectiveHooks).mockReturnValue({

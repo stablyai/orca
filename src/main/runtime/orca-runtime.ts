@@ -18097,6 +18097,7 @@ export class OrcaRuntimeService {
             this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
             this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
             this.invalidateResolvedWorktreeCache()
+            this.invalidateWorktreeScanCacheForRepo(removalTarget.repoId)
             invalidateAuthorizedRootsCache()
             this.notifyWorktreesChanged(repo.id)
             removalCompleted = true
