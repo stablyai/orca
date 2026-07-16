@@ -370,6 +370,35 @@ describe('quick-open-search', () => {
     ])
   })
 
+  it('matches separator queries to camelCase files shadowed by same-named directories', () => {
+    const files = prepareQuickOpenFiles([
+      'src/components/tab-bar/tab-create-entry-action.ts',
+      'src/components/tab-bar/TabBarCreateEntry.tsx'
+    ])
+
+    // Why: greedy anchoring in the `tab-bar/` directory must not dead-end the
+    // camelCase basename for typed-separator queries; all three separator
+    // styles must reach the same file.
+    for (const query of ['tab_bar_create_entry', 'tab-bar-create-entry', 'tab bar create entry']) {
+      const paths = rankQuickOpenFiles(query, files).map((item) => item.path)
+      expect(paths[0]).toBe('src/components/tab-bar/TabBarCreateEntry.tsx')
+    }
+  })
+
+  it('keeps the literally typed separator ranked first under same-named directories', () => {
+    const files = prepareQuickOpenFiles([
+      'src/panel/product/productDetail.dart',
+      'src/order/product/product-detail.dart'
+    ])
+
+    // Why: both candidates must compete from the basename anchor, or the
+    // camelCase file wins by dodging the directory-crossing gap penalty.
+    expect(rankQuickOpenFiles('product-detail', files).map((item) => item.path)).toEqual([
+      'src/order/product/product-detail.dart',
+      'src/panel/product/productDetail.dart'
+    ])
+  })
+
   it('does not confuse a valid negative-one score with no match', () => {
     expect(rankQuickOpenFiles('ab', prepareQuickOpenFiles(['axxx_b/file.txt']))).toEqual([
       { path: 'axxx_b/file.txt', score: -1 }
