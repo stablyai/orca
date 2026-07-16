@@ -2521,13 +2521,13 @@ describe('web GitHub preload API', () => {
       },
       {
         key: 'listWorkItems',
-        args: { repoPath, limit: 20, query: 'is:pr', before: 'cursor', noCache: true },
+        args: { repoPath, limit: 20, query: 'is:pr', page: 2, noCache: true },
         expectedMethod: 'github.listWorkItems',
         expectedParams: withRepo({
           repoPath,
           limit: 20,
           query: 'is:pr',
-          before: 'cursor',
+          page: 2,
           noCache: true
         })
       },

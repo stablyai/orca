@@ -50,6 +50,9 @@ const TERMINAL_MULTIPLEX_ACK_TOTAL_HIGH_WATER_BYTES = 2 * 1024 * 1024
 // payload bytes rather than UTF-16 code units.
 const TERMINAL_MULTIPLEX_PENDING_MAX_BYTES = 256 * 1024
 const TERMINAL_QUERY_REPLAY_MAX_CHARS = 16 * 1024
+// Why: keep initial subscribe latency bounded; readiness remains observed after
+// this deadline and triggers an in-stream recovery snapshot when it arrives.
+const MOBILE_RENDERER_MOUNT_READY_TIMEOUT_MS = 3_000
 let nextTerminalStreamId = 1
 
 type SnapshotFrameOptions = {
@@ -646,6 +649,44 @@ async function serializeBudgetedMobileSnapshot(
         truncatedByByteBudget: rows < MOBILE_SUBSCRIBE_SCROLLBACK_ROWS || overByteBudget
       }
     }
+  }
+  return null
+}
+
+async function serializeStableMobileRendererSnapshot(
+  runtime: OrcaRuntimeService,
+  ptyId: string
+): Promise<SerializedSnapshot> {
+  const candidates = [MOBILE_SUBSCRIBE_SCROLLBACK_ROWS, 500, 250, 100, 25, 0]
+  let candidateIndex = 0
+  for (let attempt = 0; attempt < candidates.length; attempt += 1) {
+    // Why: stability retries share the six-call snapshot budget. Advance
+    // toward zero scrollback so the final attempt always has a bounded payload.
+    candidateIndex = Math.max(candidateIndex, attempt)
+    const rows = candidates[candidateIndex]
+    const outputSequenceBefore = runtime.getPtyOutputSequence(ptyId)
+    const serialized = await runtime.serializeRendererTerminalBuffer(ptyId, {
+      scrollbackRows: rows
+    })
+    const outputSequenceAfter = runtime.getPtyOutputSequence(ptyId)
+    if (outputSequenceBefore !== outputSequenceAfter) {
+      continue
+    }
+    if (!serialized) {
+      return null
+    }
+    const overByteBudget = terminalStreamByteLengthExceeds(
+      serialized.data,
+      MOBILE_SNAPSHOT_BYTE_BUDGET
+    )
+    if (!overByteBudget || rows === 0) {
+      return {
+        ...serialized,
+        scrollbackRows: rows,
+        truncatedByByteBudget: rows < MOBILE_SUBSCRIBE_SCROLLBACK_ROWS || overByteBudget
+      }
+    }
+    candidateIndex += 1
   }
   return null
 }
@@ -1366,6 +1407,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     params: TerminalHandle,
     handler: async (params, { runtime }) => ({
       close: await runtime.closeTerminal(params.terminal)
+    })
+  }),
+  defineMethod({
+    name: 'terminal.closeTab',
+    params: TerminalHandle,
+    handler: async (params, { runtime }) => ({
+      close: await runtime.closeTerminalTab(params.terminal)
     })
   }),
   defineMethod({
@@ -2355,13 +2403,25 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     ) => {
       let leaf = runtime.resolveLeafForHandle(params.terminal)
       const isMobile = params.client?.type === 'mobile'
+      const serializerGenerationBeforeAnyMount = isMobile
+        ? (runtime.getRendererTerminalSerializerGenerationForHandle?.(params.terminal) ?? 0)
+        : 0
+      let rendererMountRequestedBeforePty = false
       const useBinaryStream = params.capabilities?.terminalBinaryStream === 1 && Boolean(sendBinary)
+      // Why: a closed stream must not allocate listeners, mobile-fit state, or
+      // a hidden renderer surface that no client remains to consume.
+      if (signal?.aborted) {
+        return
+      }
 
       // Why: the left pane's PTY spawns asynchronously after the tab is created.
       // Mobile clients that subscribe before the PTY is ready would get a bare
       // scrollback+end with no live stream or phone-fit. Wait for the PTY so
       // the subscribe can proceed normally.
       if (!leaf?.ptyId && isMobile) {
+        // Why: a never-mounted tab has no graph leaf to await; mounting the
+        // exact tab lets its PTY attach without activating the worktree.
+        rendererMountRequestedBeforePty = runtime.requestRendererTerminalTabMount(params.terminal)
         try {
           const ptyId = await runtime.waitForLeafPtyId(params.terminal, 10_000, signal)
           leaf = { ptyId }
@@ -2391,6 +2451,16 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
 
       const ptyId = leaf.ptyId
       const clientId = params.client?.id
+      // Why: the initial mount/PTY wait and phone-fit can both emit a redraw
+      // that creates suffix-only state, so preserve the pre-mount absence signal.
+      const missingHeadlessStateBeforeMobileFit =
+        isMobile &&
+        (rendererMountRequestedBeforePty || runtime.hasHeadlessTerminalState?.(ptyId) === false)
+      const serializerGenerationBeforeMobileFit = missingHeadlessStateBeforeMobileFit
+        ? rendererMountRequestedBeforePty
+          ? serializerGenerationBeforeAnyMount
+          : runtime.getRendererTerminalSerializerGeneration(ptyId)
+        : 0
       const supportsDesktopViewportClaims = params.capabilities?.desktopViewportClaims === 1
       // Why: only unregister the width floor this subscription took (see the
       // multiplex stream's registeredRemoteDesktopDriver note).
@@ -2532,6 +2602,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       let unsubscribeResize = (): void => {}
       let unsubscribeFit = (): void => {}
       let unregisterBinaryHandler = (): void => {}
+      let abortRendererMountWait = (): void => {}
+      let lateRendererReadyPromise: Promise<boolean> | null = null
       let outputBatcher: ReturnType<typeof createTerminalOutputBatcher> | null = null
       let resolveStream = (): void => {}
       const streamClosed = new Promise<void>((resolve) => {
@@ -2551,6 +2623,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           unsubscribeResize()
           unsubscribeFit()
           unregisterBinaryHandler()
+          abortRendererMountWait()
           if (isMobile && clientId) {
             runtime.handleMobileUnsubscribe(ptyId, clientId)
           } else if (registeredRemoteDesktopDriver && clientId) {
@@ -2772,6 +2845,83 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         if (closed) {
           return
         }
+        // Why: missing model state—not snapshot text—is the signal that this
+        // PTY may never have attached; avoid remounting legitimate blank panes.
+        // A renderer-sourced snapshot also proves the exact pane is already
+        // attached, so waiting for a fresh mount generation would only stall.
+        const mountRequested =
+          missingHeadlessStateBeforeMobileFit &&
+          serialized?.source !== 'renderer' &&
+          (rendererMountRequestedBeforePty ||
+            runtime.requestRendererTerminalTabMount(params.terminal))
+        if (missingHeadlessStateBeforeMobileFit && mountRequested) {
+          // Why: an idle legacy PTY emits no later byte; a fresh settle proves
+          // this exact remount completed before we replay its restored screen.
+          const mountWaitController = new AbortController()
+          const abortMountWait = (): void => mountWaitController.abort()
+          abortRendererMountWait = abortMountWait
+          if (signal?.aborted) {
+            abortMountWait()
+          } else {
+            signal?.addEventListener('abort', abortMountWait, { once: true })
+          }
+          const rendererReadyPromise = runtime
+            .waitForRendererTerminalSerializer(
+              ptyId,
+              serializerGenerationBeforeMobileFit,
+              undefined,
+              mountWaitController.signal
+            )
+            .catch(() => false)
+          const finishMountWait = (): void => {
+            signal?.removeEventListener('abort', abortMountWait)
+            if (abortRendererMountWait === abortMountWait) {
+              abortRendererMountWait = () => {}
+            }
+          }
+          void rendererReadyPromise.then(finishMountWait, finishMountWait)
+          let deadlineTimer: ReturnType<typeof setTimeout> | null = null
+          const initialDeadline = new Promise<boolean>((resolve) => {
+            deadlineTimer = setTimeout(() => resolve(false), MOBILE_RENDERER_MOUNT_READY_TIMEOUT_MS)
+            if (typeof deadlineTimer.unref === 'function') {
+              deadlineTimer.unref()
+            }
+          })
+          const rendererReady = await Promise.race([rendererReadyPromise, initialDeadline])
+          if (deadlineTimer) {
+            clearTimeout(deadlineTimer)
+          }
+          if (closed || signal?.aborted) {
+            return
+          }
+          if (rendererReady) {
+            read = await runtime.readTerminal(params.terminal)
+            const stableRendererSnapshot = await serializeStableMobileRendererSnapshot(
+              runtime,
+              ptyId
+            )
+            if (closed) {
+              return
+            }
+            if (stableRendererSnapshot?.data.length) {
+              serialized = stableRendererSnapshot
+              const trailingOutput = pendingOutput.flatMap((item) => {
+                const data = getOutputAfterSnapshotSeq(item, stableRendererSnapshot.seq)
+                const seq = item.meta?.seq
+                return data && typeof seq === 'number' ? [{ data, seq }] : []
+              })
+              runtime.replaceHeadlessTerminalFromRendererSnapshotForRecovery(
+                ptyId,
+                stableRendererSnapshot,
+                trailingOutput
+              )
+            }
+          } else {
+            // Why: a renderer can settle after the bounded initial response.
+            // Keep observing it so an idle PTY still self-heals without bytes.
+            lateRendererReadyPromise = rendererReadyPromise
+          }
+        }
         let initialOutputOverflowed = false
         if (pendingOutputOverflowed) {
           pendingOutput.splice(0)
@@ -2932,6 +3082,54 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         }
         pendingOutputBytes = 0
         outputBatcher.flush()
+        const lateRendererReady = lateRendererReadyPromise
+        lateRendererReadyPromise = null
+        if (lateRendererReady) {
+          void lateRendererReady
+            .then(async (rendererReady) => {
+              if (!rendererReady || closed) {
+                return
+              }
+              outputBatcher?.flush()
+              const recovery = await serializeStableMobileRendererSnapshot(runtime, ptyId)
+              if (closed) {
+                return
+              }
+              if (!recovery?.data.length) {
+                return
+              }
+              // Why: late recovery has no buffered-output gate. Only an exact
+              // renderer high-water may reset mobile without erasing live bytes.
+              if (recovery.seq !== runtime.getPtyOutputSequence(ptyId)) {
+                return
+              }
+              runtime.replaceHeadlessTerminalFromRendererSnapshotForRecovery(ptyId, recovery)
+              // Why: shipped mobile clients apply resized snapshots in place,
+              // allowing a blank initialized xterm to recover without resubscribe.
+              const recoveryStats = sendSnapshotFrames(sendFrame, {
+                kind: 'resized',
+                cols: recovery.cols,
+                rows: recovery.rows,
+                displayMode,
+                reason: 'renderer-mount-ready',
+                source: recovery.source,
+                truncated: false,
+                truncatedByByteBudget: recovery.truncatedByByteBudget,
+                data: recovery.data
+              })
+              lastResizeCols = recovery.cols
+              console.log('[mobile-terminal-stream] recovery snapshot', {
+                terminal: params.terminal,
+                streamId,
+                reason: 'renderer-mount-ready',
+                bytes: recoveryStats.bytes,
+                chunks: recoveryStats.chunks,
+                scrollbackRows: recovery.scrollbackRows,
+                truncatedByByteBudget: recovery.truncatedByByteBudget === true
+              })
+            })
+            .catch(() => {})
+        }
         const sendResizedFrame = (event: {
           cols: number
           rows: number

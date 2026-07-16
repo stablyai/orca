@@ -6331,7 +6331,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         24,
         100,
         '',
-        '2026-05-21T00:00:00Z'
+        1
       )
 
       expect(result.failedCount).toBe(0)
@@ -6377,7 +6377,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         24,
         100,
         'is:open',
-        '2026-05-22T00:00:00Z'
+        1
       )
 
     expect(mockApi.gh.listWorkItems).not.toHaveBeenCalled()
@@ -6388,7 +6388,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         repo: 'runtime-repo-id',
         limit: 24,
         query: 'is:open',
-        before: '2026-05-22T00:00:00Z'
+        page: 1
       },
       timeoutMs: 30_000
     })
@@ -6413,9 +6413,13 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
 
     const result = await store
       .getState()
-      .countWorkItemsAcrossRepos([{ repoId: 'caller-repo-id', path: '/server/repo' }], 'is:open')
+      .countWorkItemsAcrossRepos(
+        [{ repoId: 'caller-repo-id', path: '/server/repo' }],
+        'is:open',
+        10
+      )
 
-    expect(result).toBe(12)
+    expect(result).toEqual({ totalCount: 12, totalPages: 2 })
     expect(mockApi.gh.countWorkItems).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
@@ -6434,15 +6438,31 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
 
     const result = await store
       .getState()
-      .countWorkItemsAcrossRepos([{ repoId: 'repo-id', path: '/local/repo' }], '')
+      .countWorkItemsAcrossRepos([{ repoId: 'repo-id', path: '/local/repo' }], '', 10)
 
-    expect(result).toBe(7)
+    expect(result).toEqual({ totalCount: 7, totalPages: 1 })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(mockApi.gh.countWorkItems).toHaveBeenCalledWith({
       repoPath: '/local/repo',
       repoId: 'repo-id',
       query: undefined
     })
+  })
+
+  it('derives page count from the repo with the most results', async () => {
+    const store = createTestStore()
+    mockApi.gh.countWorkItems.mockResolvedValueOnce(100).mockResolvedValueOnce(1)
+
+    const result = await store.getState().countWorkItemsAcrossRepos(
+      [
+        { repoId: 'large-repo', path: '/local/large' },
+        { repoId: 'small-repo', path: '/local/small' }
+      ],
+      'is:issue',
+      36
+    )
+
+    expect(result).toEqual({ totalCount: 101, totalPages: 3 })
   })
 
   it('rejects oversized work-item queries before cache keys or provider calls', async () => {
@@ -6471,14 +6491,14 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
           24,
           24,
           oversizedQuery,
-          'cursor'
+          1
         )
     ).resolves.toEqual({ items: [], failedCount: 0 })
     await expect(
       store
         .getState()
-        .countWorkItemsAcrossRepos([{ repoId: 'repo-id', path: '/local/repo' }], oversizedQuery)
-    ).resolves.toBe(0)
+        .countWorkItemsAcrossRepos([{ repoId: 'repo-id', path: '/local/repo' }], oversizedQuery, 24)
+    ).resolves.toEqual({ totalCount: 0, totalPages: 0 })
     store.getState().prefetchWorkItems('repo-id', '/local/repo', 24, oversizedQuery)
 
     expect(store.getState().getCachedWorkItems('repo-id', 24, oversizedQuery, '/local/repo')).toBe(

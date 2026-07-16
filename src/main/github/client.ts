@@ -32,7 +32,7 @@ import { isGitHubWorkItemsQueryTooLarge } from '../../shared/github-work-items-q
 import { parseTaskQuery, type ParsedTaskQuery } from '../../shared/task-query'
 import {
   GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE,
-  sortWorkItemsByUpdatedAt
+  sortWorkItemsByNumber
 } from '../../shared/work-items'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -449,17 +449,13 @@ export async function getAuthenticatedViewer(): Promise<GitHubViewer | null> {
 }
 
 // Why: main-process maps omit repoId because the IPC handler never receives
-// a repo identifier beyond path. The renderer stamps repoId after IPC so
-// single-repo and cross-repo items are uniform downstream.
-type MainWorkItem = Omit<GitHubWorkItem, 'repoId'>
+// a repo identifier beyond path. Exported because runtime consumers receive
+// listWorkItems results before the renderer stamps repoId.
+export type MainWorkItem = Omit<GitHubWorkItem, 'repoId'>
 
-const WORK_ITEM_ISSUE_LIST_JSON_FIELDS = 'number,title,state,url,labels,updatedAt,author,assignees'
-
-// Why: the Tasks pager slices pages on updatedAt, so every list/search fetch
-// must return rows newest-updated-first for the cursor to advance correctly.
-// This is the search-qualifier spelling of the same contract the REST list
-// paths express as `sort=updated&direction=desc`; keep the two in sync (#8649).
-const WORK_ITEM_LIST_SORT_QUALIFIER = 'sort:updated-desc'
+// Why: issue numbers follow creation order within a repository. Pinning this
+// sort keeps gh's rich PR rows aligned with numbered Search API issue pages.
+const WORK_ITEM_NUMBER_SORT_QUALIFIER = 'sort:created-desc'
 
 const WORK_ITEM_PR_LIST_JSON_FIELDS =
   'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,reviewRequests'
@@ -956,78 +952,98 @@ async function fetchPullRequestWorkItem(
   return mapPullRequestWorkItem(JSON.parse(stdout) as Record<string, unknown>)
 }
 
-function buildWorkItemListArgs(args: {
+type WorkItemListRequest = {
+  args: string[]
+  offset: number
+}
+
+function normalizeWorkItemPage(page: number | undefined): number {
+  return typeof page === 'number' && Number.isFinite(page) && page >= 1 ? Math.floor(page) : 1
+}
+
+function buildWorkItemListRequest(args: {
   kind: 'issue' | 'pr'
   ownerRepo: OwnerRepo | null
   limit: number
   query: ParsedTaskQuery
-  before?: string
-}): string[] {
-  const { kind, ownerRepo, limit, query, before } = args
-  const fields = kind === 'issue' ? WORK_ITEM_ISSUE_LIST_JSON_FIELDS : WORK_ITEM_PR_LIST_JSON_FIELDS
-  const command = kind === 'issue' ? ['issue', 'list'] : ['pr', 'list']
-  const out = [...command, '--limit', String(limit), '--json', fields]
+  page: number
+}): WorkItemListRequest {
+  const { kind, ownerRepo, limit, query, page } = args
+  const searchParts: string[] = []
 
-  if (ownerRepo) {
-    out.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
+  if (kind === 'issue' && ownerRepo) {
+    searchParts.push(`repo:${ownerRepo.owner}/${ownerRepo.repo}`)
+  }
+  searchParts.push(kind === 'issue' ? 'is:issue' : 'is:pr')
+
+  if (query.state === 'open') {
+    searchParts.push('is:open')
+  } else if (query.state === 'closed') {
+    searchParts.push('is:closed')
+    if (kind === 'pr') {
+      searchParts.push('-is:merged')
+    }
+  } else if (query.state === 'merged') {
+    searchParts.push('is:merged')
   }
 
-  if (query.state) {
-    out.push('--state', query.state)
+  if (kind === 'pr' && query.draft) {
+    searchParts.push('draft:true')
   }
-  // Why: GitHub considers merged PRs as "closed". When the user filters for
-  // closed-only, exclude merged PRs via the search predicate so the displayed
-  // and counted results match the user's intent.
-  const excludeMergedFromClosed = kind === 'pr' && query.state === 'closed'
 
   if (query.assignee) {
-    out.push('--assignee', query.assignee)
+    searchParts.push(`assignee:${quoteGitHubSearchValue(query.assignee)}`)
   }
   if (query.author) {
-    out.push('--author', query.author)
+    searchParts.push(`author:${quoteGitHubSearchValue(query.author)}`)
   }
   if (query.labels.length > 0) {
     for (const label of query.labels) {
-      out.push('--label', label)
+      searchParts.push(`label:${quoteGitHubSearchValue(label)}`)
     }
   }
-  // Why: only add --draft when the user explicitly typed `is:draft`. Previously
-  // this fired for any PR-scoped open query, which made `is:pr is:open` (the
-  // "PRs" preset) silently filter to drafts-only.
-  if (kind === 'pr' && query.draft) {
-    out.push('--draft')
-  }
-
-  const searchParts: string[] = []
-  if (excludeMergedFromClosed) {
-    searchParts.push('-is:merged')
-  }
-  // Why: cursor-based pagination. GitHub search supports updated:<=DATE to
-  // fetch items at or older than the cursor. We use the oldest item's updatedAt
-  // from the previous page as the cursor. The bound is inclusive (`<=`) so items
-  // sharing the boundary row's exact updatedAt aren't skipped between pages; the
-  // renderer dedupes the re-fetched boundary rows by id (#8649).
-  if (before) {
-    searchParts.push(`updated:<=${before}`)
-  }
   if (kind === 'pr' && query.reviewRequested) {
-    searchParts.push(`review-requested:${query.reviewRequested}`)
+    searchParts.push(`review-requested:${quoteGitHubSearchValue(query.reviewRequested)}`)
   }
   if (kind === 'pr' && query.reviewedBy) {
-    searchParts.push(`reviewed-by:${query.reviewedBy}`)
+    searchParts.push(`reviewed-by:${quoteGitHubSearchValue(query.reviewedBy)}`)
   }
   if (query.freeText) {
     searchParts.push(query.freeText)
   }
-  // Why: pagination cursors slice on updatedAt, but `gh issue list` defaults
-  // to created-desc and `--search` defaults to best-match. `gh issue/pr list`
-  // has no --sort flag, so the only lever is the search query — which forces us
-  // to always emit --search. Without pinning the sort, recently-updated old
-  // items never appear on any page, so the pager advertises pages the fetch
-  // chain can never reach (#8649).
-  searchParts.push(WORK_ITEM_LIST_SORT_QUALIFIER)
+
+  if (kind === 'issue') {
+    return {
+      args: [
+        'api',
+        '--cache',
+        '120s',
+        `search/issues?q=${encodeURIComponent(searchParts.join(' '))}&sort=created&order=desc&per_page=${limit}&page=${page}`,
+        '--jq',
+        '.items'
+      ],
+      offset: 0
+    }
+  }
+
+  // Why: search/issues omits the PR fields used by the Tasks management
+  // columns. Fetch through gh's rich PR list and slice its stable created sort.
+  searchParts.push(WORK_ITEM_NUMBER_SORT_QUALIFIER)
+  const out = [
+    'pr',
+    'list',
+    '--limit',
+    String(Math.min(page * limit, 1000)),
+    '--state',
+    'all',
+    '--json',
+    WORK_ITEM_PR_LIST_JSON_FIELDS
+  ]
+  if (ownerRepo) {
+    out.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
+  }
   out.push('--search', searchParts.join(' '))
-  return out
+  return { args: out, offset: (page - 1) * limit }
 }
 
 // Why: internal shape shared by listRecentWorkItems / listQueriedWorkItems so
@@ -1105,6 +1121,7 @@ async function listRecentWorkItems(
   issueOwnerRepo: OwnerRepo | null,
   prOwnerRepo: OwnerRepo | null,
   limit: number,
+  page: number,
   connectionId?: string | null,
   noCache?: boolean,
   localGitOptions: LocalGitExecOptions = {}
@@ -1112,72 +1129,49 @@ async function listRecentWorkItems(
   const repoContext = githubRepoContext(repoPath, connectionId, localGitOptions)
   const ghOptions = ghRepoExecOptions(repoContext)
   const requiresExplicitRepo = Boolean(connectionId)
-  const restCacheArgs = noCache ? [] : ['--cache', '120s']
   assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
+  const recentQuery = parseTaskQuery('is:open')
+  const issueRequest = buildWorkItemListRequest({
+    kind: 'issue',
+    ownerRepo: issueOwnerRepo,
+    limit,
+    query: recentQuery,
+    page
+  })
+  const prRequest = buildWorkItemListRequest({
+    kind: 'pr',
+    ownerRepo: prOwnerRepo,
+    limit,
+    query: recentQuery,
+    page
+  })
+  if (noCache) {
+    issueRequest.args.splice(1, 2)
+  }
   if (issueOwnerRepo || prOwnerRepo || requiresExplicitRepo) {
     // Why: allSettled so a 403 on upstream issues doesn't zero out the origin
     // PR half — the UI renders partial results plus a banner for the failing
     // side, matching the parent design doc's partial-failure rule (§2).
     const [issuesSettled, prsSettled] = await Promise.allSettled([
       issueOwnerRepo
-        ? ghExecFileAsync(
-            [
-              'api',
-              ...restCacheArgs,
-              `repos/${issueOwnerRepo.owner}/${issueOwnerRepo.repo}/issues?per_page=${limit}&state=open&sort=updated&direction=desc`
-            ],
-            ghOptions
-          )
+        ? ghExecFileAsync(issueRequest.args, ghOptions)
         : requiresExplicitRepo
           ? Promise.resolve({ stdout: '[]' })
-          : ghCwdResolvedExec(
-              repoContext,
-              [
-                'issue',
-                'list',
-                '--limit',
-                String(limit),
-                '--state',
-                'open',
-                '--json',
-                WORK_ITEM_ISSUE_LIST_JSON_FIELDS
-              ],
-              ghOptions
-            ),
+          : ghCwdResolvedExec(repoContext, issueRequest.args, ghOptions),
       prOwnerRepo
-        ? ghExecFileAsync(
-            [
-              'api',
-              ...restCacheArgs,
-              `repos/${prOwnerRepo.owner}/${prOwnerRepo.repo}/pulls?per_page=${limit}&state=open&sort=updated&direction=desc`
-            ],
-            ghOptions
-          )
+        ? ghExecFileAsync(prRequest.args, ghOptions)
         : requiresExplicitRepo
           ? Promise.resolve({ stdout: '[]' })
-          : ghCwdResolvedExec(
-              repoContext,
-              [
-                'pr',
-                'list',
-                '--limit',
-                String(limit),
-                '--state',
-                'open',
-                '--json',
-                WORK_ITEM_PR_LIST_JSON_FIELDS
-              ],
-              ghOptions
-            )
+          : ghCwdResolvedExec(repoContext, prRequest.args, ghOptions)
     ])
 
     let issues: MainWorkItem[] = []
     let issuesError: ClassifiedError | undefined
     if (issuesSettled.status === 'fulfilled') {
       issues = (JSON.parse(issuesSettled.value.stdout) as Record<string, unknown>[])
-        // Why: the GitHub issues REST endpoint also returns pull requests with a
-        // `pull_request` marker. The new-workspace task picker needs distinct
-        // issue vs PR buckets, so drop PR-shaped issue rows here before merging.
+        // Why: the GitHub search/issues endpoint may still return PRs with a
+        // pull_request marker even when queried with is:issue. Filter them out
+        // here to keep the issue and PR buckets clean.
         .filter((item) => !('pull_request' in item))
         .map(mapIssueWorkItem)
     } else {
@@ -1190,9 +1184,9 @@ async function listRecentWorkItems(
 
     let prs: MainWorkItem[] = []
     if (prsSettled.status === 'fulfilled') {
-      prs = (JSON.parse(prsSettled.value.stdout) as Record<string, unknown>[]).map((item) =>
-        mapPullRequestWorkItem(item, prOwnerRepo)
-      )
+      prs = (JSON.parse(prsSettled.value.stdout) as Record<string, unknown>[])
+        .slice(prRequest.offset, prRequest.offset + limit)
+        .map((item) => mapPullRequestWorkItem(item, prOwnerRepo))
       prs = await hydrateWorkItemRepositoryMergeMetadata(prs, prOwnerRepo, ghOptions)
     } else {
       // Why: PR-side failures must preserve the pre-diff behavior of
@@ -1215,7 +1209,7 @@ async function listRecentWorkItems(
     }
 
     return {
-      items: sortWorkItemsByUpdatedAt([...issues, ...prs]).slice(0, limit),
+      items: sortWorkItemsByNumber([...issues, ...prs]).slice(0, limit),
       issuesError
     }
   }
@@ -1228,45 +1222,19 @@ async function listRecentWorkItems(
   // effectively unusable for the feature — reject-all matches reality. If
   // non-GitHub remotes ever grow source metadata, revisit this symmetry.
   const [issuesResult, prsResult] = await Promise.all([
-    ghCwdResolvedExec(
-      repoContext,
-      [
-        'issue',
-        'list',
-        '--limit',
-        String(limit),
-        '--state',
-        'open',
-        '--json',
-        WORK_ITEM_ISSUE_LIST_JSON_FIELDS
-      ],
-      ghOptions
-    ),
-    ghCwdResolvedExec(
-      repoContext,
-      [
-        'pr',
-        'list',
-        '--limit',
-        String(limit),
-        '--state',
-        'open',
-        '--json',
-        WORK_ITEM_PR_LIST_JSON_FIELDS
-      ],
-      ghOptions
-    )
+    ghCwdResolvedExec(repoContext, issueRequest.args, ghOptions),
+    ghCwdResolvedExec(repoContext, prRequest.args, ghOptions)
   ])
 
-  const issues = (JSON.parse(issuesResult.stdout) as Record<string, unknown>[]).map(
-    mapIssueWorkItem
-  )
-  const prs = (JSON.parse(prsResult.stdout) as Record<string, unknown>[]).map((item) =>
-    mapPullRequestWorkItem(item, null)
-  )
+  const issues = (JSON.parse(issuesResult.stdout) as Record<string, unknown>[])
+    .filter((item) => !('pull_request' in item))
+    .map(mapIssueWorkItem)
+  const prs = (JSON.parse(prsResult.stdout) as Record<string, unknown>[])
+    .slice(prRequest.offset, prRequest.offset + limit)
+    .map((item) => mapPullRequestWorkItem(item, null))
 
   return {
-    items: sortWorkItemsByUpdatedAt([...issues, ...prs]).slice(0, limit)
+    items: sortWorkItemsByNumber([...issues, ...prs]).slice(0, limit)
   }
 }
 
@@ -1276,7 +1244,7 @@ async function listQueriedWorkItems(
   prOwnerRepo: OwnerRepo | null,
   query: ParsedTaskQuery,
   limit: number,
-  before?: string,
+  page?: number,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PartialWorkItemsResult> {
@@ -1302,19 +1270,21 @@ async function listQueriedWorkItems(
     if (requiresExplicitRepo && !issueOwnerRepo) {
       return { items: [] }
     }
-    const args = buildWorkItemListArgs({
+    const request = buildWorkItemListRequest({
       kind: 'issue',
       ownerRepo: issueOwnerRepo,
       limit,
       query,
-      before
+      page: page ?? 1
     })
     try {
       const { stdout } = issueOwnerRepo
-        ? await ghExecFileAsync(args, ghOptions)
-        : await ghCwdResolvedExec(repoContext, args, ghOptions)
+        ? await ghExecFileAsync(request.args, ghOptions)
+        : await ghCwdResolvedExec(repoContext, request.args, ghOptions)
       return {
-        items: (JSON.parse(stdout) as Record<string, unknown>[]).map(mapIssueWorkItem)
+        items: (JSON.parse(stdout) as Record<string, unknown>[])
+          .filter((item) => !('pull_request' in item))
+          .map(mapIssueWorkItem)
       }
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
@@ -1329,20 +1299,20 @@ async function listQueriedWorkItems(
     if (requiresExplicitRepo && !prOwnerRepo) {
       return []
     }
-    const args = buildWorkItemListArgs({
+    const request = buildWorkItemListRequest({
       kind: 'pr',
       ownerRepo: prOwnerRepo,
       limit,
       query,
-      before
+      page: page ?? 1
     })
     try {
       const { stdout } = prOwnerRepo
-        ? await ghExecFileAsync(args, ghOptions)
-        : await ghCwdResolvedExec(repoContext, args, ghOptions)
-      const mapped = (JSON.parse(stdout) as Record<string, unknown>[]).map((item) =>
-        mapPullRequestWorkItem(item, prOwnerRepo)
-      )
+        ? await ghExecFileAsync(request.args, ghOptions)
+        : await ghCwdResolvedExec(repoContext, request.args, ghOptions)
+      const mapped = (JSON.parse(stdout) as Record<string, unknown>[])
+        .slice(request.offset, request.offset + limit)
+        .map((item) => mapPullRequestWorkItem(item, prOwnerRepo))
       const hydrated = await hydrateWorkItemRepositoryMergeMetadata(mapped, prOwnerRepo, ghOptions)
       if (query.state === 'closed') {
         return hydrated.filter((item) => item.state !== 'merged')
@@ -1356,7 +1326,7 @@ async function listQueriedWorkItems(
 
   const [issueResult, prItems] = await Promise.all([issueFetch, prFetch])
   return {
-    items: sortWorkItemsByUpdatedAt([...issueResult.items, ...prItems]).slice(0, limit),
+    items: sortWorkItemsByNumber([...issueResult.items, ...prItems]).slice(0, limit),
     issuesError: issueResult.issuesError
   }
 }
@@ -1365,13 +1335,14 @@ export async function listWorkItems(
   repoPath: string,
   limit = 24,
   query?: string,
-  before?: string,
+  page?: number,
   preference?: IssueSourcePreference,
   connectionId?: string | null,
   noCache?: boolean,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ListWorkItemsResult<MainWorkItem>> {
   const trimmedQuery = query?.trim() ?? ''
+  const requestedPage = normalizeWorkItemPage(page)
   if (isGitHubWorkItemsQueryTooLarge(trimmedQuery)) {
     return {
       items: [],
@@ -1401,6 +1372,7 @@ export async function listWorkItems(
           issueOwnerRepo,
           prOwnerRepo,
           limit,
+          requestedPage,
           connectionId,
           noCache,
           localGitOptions
@@ -1411,7 +1383,7 @@ export async function listWorkItems(
           prOwnerRepo,
           parseTaskQuery(trimmedQuery),
           limit,
-          before,
+          requestedPage,
           connectionId,
           localGitOptions
         )
@@ -1480,7 +1452,7 @@ function buildSearchQueryString(
 }
 
 function quoteGitHubSearchValue(value: string): string {
-  return /\s/.test(value) ? `"${value.replaceAll('"', '\\"')}"` : value
+  return /[\s"]/.test(value) ? `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"` : value
 }
 
 async function countWorkItemsForQuery(

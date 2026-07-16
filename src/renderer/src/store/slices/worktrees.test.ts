@@ -6686,12 +6686,13 @@ describe('setWorktreesPinnedAndReveal', () => {
     resetRemoteRuntimeMocks()
   })
 
-  it('pins a worktree and reveals it so the viewport follows it into the Pinned section', () => {
+  it('pins the focused worktree and reveals it so the viewport follows it into the Pinned section', () => {
     const store = createTestStore()
     const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a', isPinned: false })
     const reveal = vi.fn()
     store.setState({
       worktreesByRepo: { repo1: [wt] },
+      activeWorktreeId: wt.id,
       revealWorktreeInSidebar: reveal
     } as Partial<AppState>)
 
@@ -6701,12 +6702,13 @@ describe('setWorktreesPinnedAndReveal', () => {
     expect(reveal).toHaveBeenCalledWith(wt.id, { behavior: 'smooth', highlight: true })
   })
 
-  it('reveals on unpin so the viewport follows the row back to its status group', () => {
+  it('reveals on unpin of the focused worktree so the viewport follows it back to its status group', () => {
     const store = createTestStore()
     const wt = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a', isPinned: true })
     const reveal = vi.fn()
     store.setState({
       worktreesByRepo: { repo1: [wt] },
+      activeWorktreeId: wt.id,
       revealWorktreeInSidebar: reveal
     } as Partial<AppState>)
 
@@ -6714,6 +6716,41 @@ describe('setWorktreesPinnedAndReveal', () => {
 
     expect(store.getState().worktreesByRepo.repo1[0].isPinned).toBe(false)
     expect(reveal).toHaveBeenCalledWith(wt.id, { behavior: 'smooth', highlight: true })
+  })
+
+  it('does not scroll when unpinning an unfocused worktree, but still unpins it', () => {
+    const store = createTestStore()
+    const focused = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a', isPinned: false })
+    const pinned = makeWorktree({ id: 'repo1::/b', repoId: 'repo1', path: '/b', isPinned: true })
+    const reveal = vi.fn()
+    store.setState({
+      worktreesByRepo: { repo1: [focused, pinned] },
+      activeWorktreeId: focused.id,
+      revealWorktreeInSidebar: reveal
+    } as Partial<AppState>)
+
+    store.getState().setWorktreesPinnedAndReveal([pinned.id], false)
+
+    // The row unpins, but the viewport stays put because it isn't focused.
+    expect(store.getState().worktreesByRepo.repo1[1].isPinned).toBe(false)
+    expect(reveal).not.toHaveBeenCalled()
+  })
+
+  it('does not scroll when pinning an unfocused worktree, but still pins it', () => {
+    const store = createTestStore()
+    const focused = makeWorktree({ id: 'repo1::/a', repoId: 'repo1', path: '/a', isPinned: false })
+    const other = makeWorktree({ id: 'repo1::/b', repoId: 'repo1', path: '/b', isPinned: false })
+    const reveal = vi.fn()
+    store.setState({
+      worktreesByRepo: { repo1: [focused, other] },
+      activeWorktreeId: focused.id,
+      revealWorktreeInSidebar: reveal
+    } as Partial<AppState>)
+
+    store.getState().setWorktreesPinnedAndReveal([other.id], true)
+
+    expect(store.getState().worktreesByRepo.repo1[1].isPinned).toBe(true)
+    expect(reveal).not.toHaveBeenCalled()
   })
 
   it('skips a no-op toggle without requesting a reveal', () => {
@@ -6759,7 +6796,7 @@ describe('setWorktreesPinnedAndReveal', () => {
     expect(reveal).not.toHaveBeenCalled()
   })
 
-  it('reveals only the first newly-pinned worktree when pinning several at once', () => {
+  it('pins several at once and reveals the focused row even when it is not first', () => {
     const store = createTestStore()
     const alreadyPinned = makeWorktree({
       id: 'repo1::/a',
@@ -6768,22 +6805,48 @@ describe('setWorktreesPinnedAndReveal', () => {
       isPinned: true
     })
     const first = makeWorktree({ id: 'repo1::/b', repoId: 'repo1', path: '/b', isPinned: false })
-    const second = makeWorktree({ id: 'repo1::/c', repoId: 'repo1', path: '/c', isPinned: false })
+    const focused = makeWorktree({ id: 'repo1::/c', repoId: 'repo1', path: '/c', isPinned: false })
     const reveal = vi.fn()
     store.setState({
-      worktreesByRepo: { repo1: [alreadyPinned, first, second] },
+      worktreesByRepo: { repo1: [alreadyPinned, first, focused] },
+      activeWorktreeId: focused.id,
       revealWorktreeInSidebar: reveal
     } as Partial<AppState>)
 
-    store.getState().setWorktreesPinnedAndReveal([alreadyPinned.id, first.id, second.id], true)
+    store.getState().setWorktreesPinnedAndReveal([alreadyPinned.id, first.id, focused.id], true)
 
+    // Only the focused row is revealed, not the first-changed one.
     expect(reveal).toHaveBeenCalledTimes(1)
-    expect(reveal).toHaveBeenCalledWith(first.id, { behavior: 'smooth', highlight: true })
+    expect(reveal).toHaveBeenCalledWith(focused.id, { behavior: 'smooth', highlight: true })
     // Every targeted row is pinned, not just the revealed one, and the
     // already-pinned row is left untouched.
     expect(store.getState().worktreesByRepo.repo1[0].isPinned).toBe(true)
     expect(store.getState().worktreesByRepo.repo1[1].isPinned).toBe(true)
     expect(store.getState().worktreesByRepo.repo1[2].isPinned).toBe(true)
+  })
+
+  it('pins several at once without scrolling when none of them are focused', () => {
+    const store = createTestStore()
+    const first = makeWorktree({ id: 'repo1::/b', repoId: 'repo1', path: '/b', isPinned: false })
+    const second = makeWorktree({ id: 'repo1::/c', repoId: 'repo1', path: '/c', isPinned: false })
+    const elsewhere = makeWorktree({
+      id: 'repo1::/z',
+      repoId: 'repo1',
+      path: '/z',
+      isPinned: false
+    })
+    const reveal = vi.fn()
+    store.setState({
+      worktreesByRepo: { repo1: [first, second, elsewhere] },
+      activeWorktreeId: elsewhere.id,
+      revealWorktreeInSidebar: reveal
+    } as Partial<AppState>)
+
+    store.getState().setWorktreesPinnedAndReveal([first.id, second.id], true)
+
+    expect(reveal).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo.repo1[0].isPinned).toBe(true)
+    expect(store.getState().worktreesByRepo.repo1[1].isPinned).toBe(true)
   })
 })
 

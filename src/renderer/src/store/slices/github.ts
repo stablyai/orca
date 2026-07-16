@@ -34,7 +34,7 @@ import type {
 } from '../../../../shared/github-project-types'
 import {
   isGitHubWorkItemsSshRemoteRequiredError,
-  sortWorkItemsByUpdatedAt,
+  sortWorkItemsByNumber,
   PER_REPO_FETCH_LIMIT
 } from '../../../../shared/work-items'
 import { deriveCheckStatusFromChecks, syncPRChecksStatus } from './github-checks'
@@ -206,7 +206,7 @@ type GitHubWorkItemRequestTarget =
 type GitHubWorkItemsListArgs = {
   limit: number
   query?: string
-  before?: string
+  page?: number
   noCache?: true
 }
 
@@ -2043,10 +2043,7 @@ export type GitHubSlice = {
     query: string,
     options?: FetchOptions
   ) => Promise<{ items: GitHubWorkItem[]; failedCount: number }>
-  /**
-   * Fetch the next page of work items using a date cursor. Does not cache —
-   * pagination pages are ephemeral and managed by TaskPage state.
-   */
+  /** Fetch one numbered provider page. Pagination pages remain renderer-local. */
   fetchWorkItemsNextPage: (
     repos: {
       repoId: string
@@ -2057,12 +2054,9 @@ export type GitHubSlice = {
     perRepoLimit: number,
     displayLimit: number,
     query: string,
-    before: string
+    page: number
   ) => Promise<{ items: GitHubWorkItem[]; failedCount: number }>
-  /**
-   * Count total work items across repos using GitHub's search API.
-   * Returns the sum of per-repo counts for the given query.
-   */
+  /** Count items and derive pages from the largest per-repo result set. */
   countWorkItemsAcrossRepos: (
     repos: {
       repoId: string
@@ -2070,8 +2064,9 @@ export type GitHubSlice = {
       executionHostId?: string | null
       sourceContext?: TaskSourceContext | null
     }[],
-    query: string
-  ) => Promise<number>
+    query: string,
+    perRepoLimit: number
+  ) => Promise<{ totalCount: number; totalPages: number }>
   /**
    * Fire-and-forget prefetch used by UI entry points (hover/focus of the
    * "new workspace" buttons) to warm the cache before the page mounts.
@@ -2896,11 +2891,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         }
       })
     )
-    const merged = sortWorkItemsByUpdatedAt(perProjectResults.flat()).slice(0, displayLimit)
+    const merged = sortWorkItemsByNumber(perProjectResults.flat()).slice(0, displayLimit)
     return { items: merged, failedCount }
   },
 
-  fetchWorkItemsNextPage: async (repos, perRepoLimit, displayLimit, query, before) => {
+  fetchWorkItemsNextPage: async (repos, perRepoLimit, displayLimit, query, page) => {
     if (isGitHubWorkItemsQueryTooLarge(query)) {
       return { items: [], failedCount: 0 }
     }
@@ -2926,7 +2921,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           const envelope = await listGitHubWorkItemsForRepo(requestContext, {
             limit: perRepoLimit,
             query: query || undefined,
-            before
+            page
           })
           // Why: page-N partial failures don't participate in the cache's per-repo
           // error banner (which is keyed on the initial-fetch cache entry). Log the
@@ -2954,14 +2949,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         }
       })
     )
-    const merged = sortWorkItemsByUpdatedAt(perProjectResults.flat()).slice(0, displayLimit)
+    const merged = sortWorkItemsByNumber(perProjectResults.flat()).slice(0, displayLimit)
     return { items: merged, failedCount }
   },
 
-  countWorkItemsAcrossRepos: async (repos, query) => {
+  countWorkItemsAcrossRepos: async (repos, query, perRepoLimit) => {
     if (isGitHubWorkItemsQueryTooLarge(query)) {
-      return 0
+      return { totalCount: 0, totalPages: 0 }
     }
+    const normalizedLimit = Math.max(1, Math.floor(perRepoLimit))
     const counts = await Promise.all(
       repos.map(async (r) => {
         // Why: same stampede cap as the item-fetch paths — without a slot,
@@ -2991,7 +2987,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         }
       })
     )
-    return counts.reduce((sum, c) => sum + c, 0)
+    return {
+      totalCount: counts.reduce((sum, count) => sum + count, 0),
+      // Why: each repo advances independently by the same numbered page. A sum
+      // divided by page width undercounts when one repo owns most results.
+      totalPages: counts.reduce(
+        (maxPages, count) => Math.max(maxPages, Math.ceil(count / normalizedLimit)),
+        0
+      )
+    }
   },
 
   prefetchWorkItems: (repoId, repoPath, limit = PER_REPO_FETCH_LIMIT, query = '', options) => {

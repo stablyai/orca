@@ -49,6 +49,7 @@ export function closeTerminalTab(
   tabId: string,
   options?: {
     force?: boolean
+    rejectPinned?: boolean
     reason?: TerminalTabCloseReason
     captureRecentlyClosed?: boolean
     localPtyTeardownOwnedExternally?: boolean
@@ -78,6 +79,12 @@ export function closeTerminalTab(
     !options?.force &&
     isPinnedVisibleTab(state, owningWorktreeId, terminalTabId)
   ) {
+    // Why: background lifecycle callers cannot safely wait on a modal whose
+    // owner may be unattended; reject pinned tabs without bypassing the guard.
+    if (options?.rejectPinned) {
+      options.onCancel?.()
+      return
+    }
     guardPinnedTabClose({
       isPinned: true,
       tabLabel: resolvePinnedTabLabel(state, owningWorktreeId, terminalTabId),

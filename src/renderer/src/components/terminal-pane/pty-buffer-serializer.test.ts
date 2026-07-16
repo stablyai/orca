@@ -78,4 +78,25 @@ describe('pty buffer serializer registry', () => {
 
     expect(window.api.pty.sendSerializedBuffer).toHaveBeenCalledWith('request-1', null)
   })
+
+  it('preserves the renderer-parsed output sequence in the response', async () => {
+    const { registerPtySerializer } = await import('./pty-buffer-serializer')
+    registerPtySerializer('pty-sequenced', () => ({
+      data: 'parsed output',
+      cols: 80,
+      rows: 24,
+      seq: 42
+    }))
+    const serializeRequestHandler = vi.mocked(window.api.pty.onSerializeBufferRequest).mock
+      .calls[0]?.[0]
+
+    serializeRequestHandler?.({ requestId: 'request-sequenced', ptyId: 'pty-sequenced' })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(window.api.pty.sendSerializedBuffer).toHaveBeenCalledWith(
+      'request-sequenced',
+      expect.objectContaining({ seq: 42 })
+    )
+  })
 })

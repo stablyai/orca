@@ -14,6 +14,8 @@ import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/wake-sleeping
 import { OPEN_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/useWorkspaceBoardPanel'
 import { SPLIT_TERMINAL_PANE_EVENT, CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
+import { planMobileTerminalTabMount } from '@/lib/mobile-terminal-tab-mount'
+import { hasRegisteredRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
 import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
@@ -96,6 +98,7 @@ import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-seriali
 import { track } from '@/lib/telemetry'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
+import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import type { AppState } from '../store/types'
@@ -1666,6 +1669,32 @@ export function useIpcEvents(): void {
       )
     )
 
+    // Why: background-mounting a mobile-subscribed tab attaches a PTY that this
+    // renderer never mounted, without navigating the desktop (STA-1840).
+    unsubs.push(
+      window.api.ui.onRequestTerminalTabMount(({ worktreeId, tabId, ptyId }) => {
+        if (!worktreeId) {
+          return
+        }
+        // Why: synthetic pty handles need persisted-tab resolution, but a miss
+        // must not mount every saved terminal in a large hidden worktree.
+        const mount = planMobileTerminalTabMount(
+          useAppStore.getState(),
+          {
+            worktreeId,
+            ...(tabId ? { tabId } : {}),
+            ...(ptyId ? { ptyId } : {})
+          },
+          {
+            isTabMounted: hasRegisteredRuntimeTerminalTab
+          }
+        )
+        if (mount) {
+          requestBackgroundTerminalWorktreeMount(mount)
+        }
+      })
+    )
+
     // Why: CLI-driven terminal creation sends a request and waits for the
     // tabId reply so it can resolve a handle the caller can use immediately.
     // This mirrors the browser's onRequestTabCreate/replyTabCreate pattern.
@@ -1981,6 +2010,40 @@ export function useIpcEvents(): void {
       })
     )
 
+    // Why: during an in-place renderer reload, an older preload can briefly
+    // remain installed. Keep the new request listener additive at that seam.
+    if (window.api.ui.onTerminalTabCloseRequest) {
+      unsubs.push(
+        window.api.ui.onTerminalTabCloseRequest(({ requestId, tabId }) => {
+          let responded = false
+          const respond = (error?: string): void => {
+            if (responded) {
+              return
+            }
+            responded = true
+            window.api.ui.respondTerminalTabClose({ requestId, ...(error ? { error } : {}) })
+          }
+          closeTerminalTab(tabId, {
+            rejectPinned: true,
+            onCancel: () => respond('terminal_tab_pinned'),
+            onClosed: () => {
+              void (async () => {
+                const state = useAppStore.getState()
+                await persistWorkspaceSessionByHost(
+                  window.api.session,
+                  buildWorkspaceSessionPayload(state),
+                  state
+                )
+                respond()
+              })().catch((error: unknown) => {
+                respond(error instanceof Error ? error.message : 'terminal_tab_close_failed')
+              })
+            }
+          })
+        })
+      )
+    }
+
     unsubs.push(
       window.api.ui.onSleepWorktree(({ worktreeId }) => {
         void runSleepWorktree(worktreeId)
@@ -2100,10 +2163,8 @@ export function useIpcEvents(): void {
         if (getRuntimeEnvironmentIdForWorktree(store, sourcePage.worktreeId)) {
           return
         }
-        // Why: the guest process can request "open this link in Orca", but it
-        // does not own Orca's worktree/tab model. Resolve the source page's
-        // worktree and create a new outer browser tab so the link opens as a
-        // separate tab in the outer Orca tab bar.
+        // Why: only the renderer owns Orca's tab model. Creating the tab with
+        // the default activation behavior brings the clicked link forward.
         store.createBrowserTab(sourcePage.worktreeId, url, { title: url })
       })
     )

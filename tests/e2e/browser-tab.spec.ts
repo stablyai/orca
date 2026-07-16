@@ -121,6 +121,84 @@ async function startBrowserFormServer(): Promise<{
   }
 }
 
+async function startBrowserLinkServer(): Promise<{
+  sourceUrl: string
+  close: () => Promise<void>
+}> {
+  const server = createServer((request, response) => {
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+    const pathname = new URL(request.url ?? '/', origin).pathname
+    response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+    if (pathname === '/destination') {
+      response.end(
+        `<!doctype html><html><head><title>Linked destination</title></head><body>Destination <a id="return-link" href="${origin}/source">Return</a></body></html>`
+      )
+      return
+    }
+    if (pathname === '/frame-destination') {
+      response.end(
+        `<!doctype html><html><head><title>Frame destination</title></head><body>Frame destination <a id="return-link" href="${origin}/source">Return</a></body></html>`
+      )
+      return
+    }
+    if (pathname === '/frame-modifier-destination') {
+      response.end(
+        '<!doctype html><html><head><title>Frame modifier destination</title></head><body>Frame modifier destination</body></html>'
+      )
+      return
+    }
+    if (pathname === '/frame-middle-destination') {
+      response.end(
+        '<!doctype html><html><head><title>Frame middle destination</title></head><body>Frame middle destination</body></html>'
+      )
+      return
+    }
+    if (pathname === '/frame') {
+      response.end(
+        `<!doctype html><html><body><a style="display:block" id="frame-link" href="${origin}/frame-destination" target="_blank">Open frame destination</a><a style="display:block" id="frame-modifier-link" href="${origin}/frame-modifier-destination">Open frame modifier destination</a><a style="display:block" id="frame-middle-link" href="${origin}/frame-middle-destination">Open frame middle destination</a></body></html>`
+      )
+      return
+    }
+    if (pathname === '/modifier-destination') {
+      response.end(
+        '<!doctype html><html><head><title>Modifier destination</title></head><body>Modifier destination</body></html>'
+      )
+      return
+    }
+    if (pathname === '/middle-destination') {
+      response.end(
+        '<!doctype html><html><head><title>Middle-click destination</title></head><body>Middle-click destination</body></html>'
+      )
+      return
+    }
+    response.end(`
+      <!doctype html>
+      <html>
+        <head><title>Source page</title></head>
+        <body>
+          <a id="external-link" href="${origin}/destination" target="_blank">Open destination</a>
+          <a id="modifier-link" href="${origin}/modifier-destination">Open with modifier</a>
+          <a id="middle-link" href="${origin}/middle-destination">Open with middle click</a>
+          <a id="cancelled-link" href="${origin}/destination" target="_blank">Handle in page</a>
+          <iframe id="link-frame" src="${origin}/frame" title="Embedded links"></iframe>
+          <script>
+            document.querySelector('#cancelled-link').addEventListener('click', (event) => {
+              event.preventDefault()
+              document.title = 'Click handled in page'
+            })
+          </script>
+        </body>
+      </html>
+    `)
+  })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = (server.address() as AddressInfo).port
+  return {
+    sourceUrl: `http://127.0.0.1:${port}/source`,
+    close: () => closeServer(server)
+  }
+}
+
 async function closeServer(server: Server): Promise<void> {
   await new Promise<void>((resolve, reject) =>
     server.close((error) => {
@@ -131,6 +209,88 @@ async function closeServer(server: Server): Promise<void> {
       resolve()
     })
   )
+}
+
+async function clickBrowserLink(
+  page: Parameters<typeof getActiveWorktreeId>[0],
+  browserTabId: string,
+  selector: string,
+  options: {
+    modifiers?: ('meta' | 'control')[]
+    button?: 'left' | 'middle'
+    frameSelector?: string
+  } = {}
+): Promise<void> {
+  await page.evaluate(
+    async ({ targetBrowserTabId, targetSelector, inputModifiers, button, frameSelector }) => {
+      const slot = [...document.querySelectorAll('[data-browser-overlay-tab-id]')].find(
+        (candidate) => candidate.getAttribute('data-browser-overlay-tab-id') === targetBrowserTabId
+      )
+      const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
+      if (!webview) {
+        throw new Error(`Missing webview for browser tab ${targetBrowserTabId}`)
+      }
+      const point = (await webview.executeJavaScript(`(async () => {
+        const deadline = Date.now() + 5000
+        while (Date.now() < deadline) {
+          const frame = ${JSON.stringify(frameSelector)}
+            ? document.querySelector(${JSON.stringify(frameSelector)})
+            : null
+          const root = frame?.contentDocument ?? document
+          const linkRect = root.querySelector(${JSON.stringify(targetSelector)})?.getBoundingClientRect()
+          if (linkRect) {
+            const frameRect = frame?.getBoundingClientRect()
+            return {
+              x: (frameRect?.left ?? 0) + linkRect.left + linkRect.width / 2,
+              y: (frameRect?.top ?? 0) + linkRect.top + linkRect.height / 2
+            }
+          }
+          await new Promise((resolve) => setTimeout(resolve, 25))
+        }
+        return null
+      })()`)) as { x: number; y: number } | null
+      if (!point) {
+        throw new Error(`Missing browser link ${targetSelector}`)
+      }
+      await webview.sendInputEvent({ type: 'mouseMove', modifiers: inputModifiers, ...point })
+      await webview.sendInputEvent({
+        type: 'mouseDown',
+        button,
+        clickCount: 1,
+        modifiers: inputModifiers,
+        ...point
+      })
+      await webview.sendInputEvent({
+        type: 'mouseUp',
+        button,
+        clickCount: 1,
+        modifiers: inputModifiers,
+        ...point
+      })
+    },
+    {
+      targetBrowserTabId: browserTabId,
+      targetSelector: selector,
+      inputModifiers: options.modifiers ?? [],
+      button: options.button ?? 'left',
+      frameSelector: options.frameSelector ?? null
+    }
+  )
+}
+
+async function expectBrowserTabActive(
+  page: Parameters<typeof getActiveWorktreeId>[0],
+  title: string
+): Promise<void> {
+  const resolveTabId = (): Promise<string | null> =>
+    page.locator('[data-tab-id]').evaluateAll((tabs, exactTitle) => {
+      const tab = tabs.find((candidate) => candidate.textContent?.trim() === exactTitle)
+      return tab?.getAttribute('data-tab-id') ?? null
+    }, title)
+  await expect.poll(resolveTabId, { timeout: 10_000 }).not.toBeNull()
+  const tabId = await resolveTabId()
+  expect(tabId).toBeTruthy()
+  await expect(page.locator(`[data-browser-overlay-tab-id="${tabId}"]`)).toHaveCSS('opacity', '1')
 }
 
 async function readBrowserInputValue(
@@ -298,6 +458,80 @@ test.describe('Browser Tab', () => {
         .toBe('second typed value')
     } finally {
       await formServer.close()
+    }
+  })
+
+  test('plain links stay current while explicit new-tab gestures activate Orca tabs', async ({
+    electronApp,
+    orcaPage
+  }) => {
+    const linkServer = await startBrowserLinkServer()
+    try {
+      const worktreeId = (await getActiveWorktreeId(orcaPage))!
+      const sourceTab = await createBrowserTab(
+        orcaPage,
+        worktreeId,
+        linkServer.sourceUrl,
+        'Source page'
+      )
+      expect(sourceTab?.id).toBeTruthy()
+
+      const baseWindowCount = await electronApp.evaluate(
+        ({ BaseWindow }) => BaseWindow.getAllWindows().length
+      )
+      const baseTabCount = await orcaPage.locator('[data-tab-id]').count()
+      await clickBrowserLink(orcaPage, sourceTab!.id, '#external-link')
+
+      const sourceTabLocator = orcaPage.locator(`[data-tab-id="${sourceTab!.id}"]`)
+      await expect(sourceTabLocator).toContainText('Linked destination', { timeout: 10_000 })
+      await expect(orcaPage.locator('[data-tab-id]')).toHaveCount(baseTabCount)
+
+      await clickBrowserLink(orcaPage, sourceTab!.id, '#return-link')
+      await expect(sourceTabLocator).toContainText('Source page', { timeout: 10_000 })
+      await clickBrowserLink(orcaPage, sourceTab!.id, '#frame-link', {
+        frameSelector: '#link-frame'
+      })
+      await expect(sourceTabLocator).toContainText('Frame destination', { timeout: 10_000 })
+      await expect(orcaPage.locator('[data-tab-id]')).toHaveCount(baseTabCount)
+
+      await clickBrowserLink(orcaPage, sourceTab!.id, '#return-link')
+      await expect(sourceTabLocator).toContainText('Source page', { timeout: 10_000 })
+
+      await clickBrowserLink(orcaPage, sourceTab!.id, '#frame-modifier-link', {
+        frameSelector: '#link-frame',
+        modifiers: process.platform === 'darwin' ? ['meta'] : ['control']
+      })
+      await expectBrowserTabActive(orcaPage, 'Frame modifier destination')
+      await switchToBrowserTab(orcaPage, worktreeId, sourceTab!.id)
+      await clickBrowserLink(orcaPage, sourceTab!.id, '#frame-middle-link', {
+        button: 'middle',
+        frameSelector: '#link-frame'
+      })
+      await expectBrowserTabActive(orcaPage, 'Frame middle destination')
+      await switchToBrowserTab(orcaPage, worktreeId, sourceTab!.id)
+
+      await clickBrowserLink(orcaPage, sourceTab!.id, '#modifier-link', {
+        modifiers: process.platform === 'darwin' ? ['meta'] : ['control']
+      })
+      await expectBrowserTabActive(orcaPage, 'Modifier destination')
+      await switchToBrowserTab(orcaPage, worktreeId, sourceTab!.id)
+
+      const tabCountBeforeCancelledClick = await orcaPage.locator('[data-tab-id]').count()
+      await clickBrowserLink(orcaPage, sourceTab!.id, '#cancelled-link')
+      await expect(
+        orcaPage.locator('[data-tab-id]').filter({ hasText: 'Click handled in page' })
+      ).toBeVisible({ timeout: 10_000 })
+      await expect(orcaPage.locator('[data-tab-id]')).toHaveCount(tabCountBeforeCancelledClick)
+
+      await clickBrowserLink(orcaPage, sourceTab!.id, '#middle-link', { button: 'middle' })
+      await expectBrowserTabActive(orcaPage, 'Middle-click destination')
+      await expect
+        .poll(() => electronApp.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().length), {
+          timeout: 5_000
+        })
+        .toBe(baseWindowCount)
+    } finally {
+      await linkServer.close()
     }
   })
 

@@ -23,6 +23,7 @@ import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-s
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
+import type { GitProviderStatusOptions } from './git-provider-status-options'
 
 // ─── PTY Provider ───────────────────────────────────────────────────
 
@@ -316,11 +317,7 @@ export type TerminalArtifactAccessOptions = {
 
 // ─── Git Provider ───────────────────────────────────────────────────
 
-export type GitProviderStatusOptions = {
-  includeIgnored?: boolean
-  bypassEffectiveUpstreamNegativeCache?: boolean
-  signal?: AbortSignal
-}
+export type { GitProviderStatusOptions } from './git-provider-status-options'
 
 export type IGitProvider = {
   getStatus(worktreePath: string, options?: GitProviderStatusOptions): Promise<GitStatusResult>

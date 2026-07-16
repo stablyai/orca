@@ -51,6 +51,12 @@ import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
 import { parseGitRevListFirstParentOid } from '../../shared/git-rev-list-output'
+import {
+  beginGitStatusLineStatsCacheWrite,
+  clearGitStatusLineStatsCache,
+  clearGitStatusLineStatsCacheKey,
+  reuseOrRecomputeGitStatusLineStats
+} from '../../shared/git-status-line-stats-cache'
 
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
@@ -97,6 +103,7 @@ const statusReadsInFlight = new Map<string, Promise<GitStatusResult>>()
 export function invalidateGitReadCaches(): void {
   gitDiffReadDedupe.clear()
   statusReadsInFlight.clear()
+  clearGitStatusLineStatsCache()
   clearSubmodulePathsCache()
   resolvedUpstreamNameCache.clear()
 }
@@ -195,6 +202,7 @@ export function getEffectiveUpstreamStatusGenerationCountForTests(): number {
 
 export type GetStatusOptions = GitRuntimeOptions & {
   includeIgnored?: boolean
+  reuseLineStats?: boolean
   /**
    * Max changed-file entries before git is stopped and the result is marked
    * `didHitLimit`. Defaults to DEFAULT_GIT_STATUS_LIMIT; 0 disables the cap.
@@ -243,6 +251,7 @@ function getStatusReadKey(worktreePath: string, options: GetStatusOptions): stri
     worktreePath,
     options.wslDistro ?? '',
     options.includeIgnored === true,
+    options.reuseLineStats === true,
     options.bypassEffectiveUpstreamNegativeCache === true,
     limit
   ].join('\0')
@@ -252,6 +261,8 @@ async function runGetStatus(
   worktreePath: string,
   options: GetStatusOptions = {}
 ): Promise<GitStatusResult> {
+  const lineStatsCacheKey = getStatusLineStatsCacheKey(worktreePath, options)
+  const lineStatsWriteToken = beginGitStatusLineStatsCacheWrite(lineStatsCacheKey)
   let effectiveUpstreamStatus: GitUpstreamStatus | undefined
   let statusSucceeded = false
   // Why: a negative/fractional/NaN limit would trigger spurious early-stop or
@@ -303,7 +314,12 @@ async function runGetStatus(
     }
     didHitLimit = stoppedEarly
     statusSucceeded = true
-  } catch {
+  } catch (error) {
+    // Why: an aborted scan must reject, not resolve — swallowing here would let
+    // a cancelled request be mistaken for a completed (empty) status result.
+    if (options.signal?.aborted) {
+      throw error
+    }
     // Not a git repo or git not available
   }
 
@@ -334,11 +350,17 @@ async function runGetStatus(
         options
       )
       try {
+        // Why: the probe promise and its name/negative caches are shared by
+        // concurrent status reads, so one caller's abort must not reject the
+        // shared probe or evict warm cache state for the others. The probe is
+        // small and its cached result stays useful, so run it unbound from
+        // this request's signal.
+        const { signal: _requestSignal, ...sharedProbeOptions } = options
         effectiveUpstreamStatus = await readOrProbeEffectiveUpstreamStatus(
           cacheKey,
           worktreePath,
           branchName,
-          options,
+          sharedProbeOptions,
           options.bypassEffectiveUpstreamNegativeCache === true
         )
       } catch {
@@ -355,7 +377,25 @@ async function runGetStatus(
   // running numstat over a huge change set would reintroduce the cost the limit
   // exists to avoid, matching how a "huge" repo disables extra git features.
   if (!didHitLimit) {
-    await attachLineStats(worktreePath, entries, options)
+    await reuseOrRecomputeGitStatusLineStats({
+      cacheKey: lineStatsCacheKey,
+      head,
+      entries,
+      writeToken: lineStatsWriteToken,
+      reuse: options.reuseLineStats === true,
+      isAborted: () => options.signal?.aborted === true,
+      recompute: () => attachLineStats(worktreePath, entries, options)
+    })
+  } else {
+    clearGitStatusLineStatsCacheKey(lineStatsCacheKey, lineStatsWriteToken)
+  }
+
+  // Why: abort after the stream (e.g. during unmerged/upstream/line-stats work)
+  // must still reject — never resolve a cancelled scan as a completed result.
+  if (options.signal?.aborted) {
+    const error = new Error('The operation was aborted.')
+    error.name = 'AbortError'
+    throw error
   }
 
   return {
@@ -380,6 +420,12 @@ async function runGetStatus(
         }
       : {})
   }
+}
+
+function getStatusLineStatsCacheKey(worktreePath: string, options: GitRuntimeOptions = {}): string {
+  // Why: identical path strings can address different Linux filesystems in
+  // different WSL distros, so derived stats must follow Git's execution host.
+  return `${options.wslDistro ?? 'native'}\0${worktreePath}`
 }
 
 /**
@@ -505,7 +551,7 @@ async function runNumstat(
   worktreePath: string,
   cached: boolean,
   options: GitRuntimeOptions = {}
-): Promise<Map<string, GitLineStats>> {
+): Promise<Map<string, GitLineStats> | null> {
   try {
     const { stdout } = await gitExecFileAsync(
       [
@@ -520,20 +566,28 @@ async function runNumstat(
       { ...gitOptionsForWorktree(worktreePath, options), env: gitOptionalLocksDisabledEnv() }
     )
     return parseNumstat(stdout)
-  } catch {
+  } catch (error) {
+    // Why: an aborted pass must reject so a cancelled scan is never treated as
+    // a completed one; only a genuine (non-abort) numstat failure degrades to
+    // uncounted rows below.
+    if (options.signal?.aborted) {
+      throw error
+    }
     // Why: a numstat failure (e.g. transient lock) should leave rows without
-    // counts rather than break the whole status refresh.
-    return new Map()
+    // counts rather than break the whole status refresh. Null (vs an empty
+    // map) tells the caller the pass is incomplete and must not be cached.
+    return null
   }
 }
 
+/** Returns false when a numstat pass failed, so callers skip caching it. */
 async function attachLineStats(
   worktreePath: string,
   entries: GitStatusEntry[],
   options: GitRuntimeOptions = {}
-): Promise<void> {
+): Promise<boolean> {
   if (entries.length === 0) {
-    return
+    return true
   }
   const hasStaged = entries.some((entry) => entry.area === 'staged')
   const hasUnstaged = entries.some((entry) => entry.area === 'unstaged')
@@ -544,18 +598,19 @@ async function attachLineStats(
   const [stagedStats, unstagedStats, untrackedStats] = await Promise.all([
     hasStaged ? runNumstat(worktreePath, true, options) : Promise.resolve(emptyStats),
     hasUnstaged ? runNumstat(worktreePath, false, options) : Promise.resolve(emptyStats),
-    collectUntrackedAdditions(worktreePath, untrackedPaths)
+    collectUntrackedAdditions(worktreePath, untrackedPaths, options.signal)
   ])
   for (const entry of entries) {
     applyLineStats(
       entry,
       entry.area === 'staged'
-        ? stagedStats.get(entry.path)
+        ? (stagedStats ?? emptyStats).get(entry.path)
         : entry.area === 'unstaged'
-          ? unstagedStats.get(entry.path)
+          ? (unstagedStats ?? emptyStats).get(entry.path)
           : untrackedStats.get(entry.path)
     )
   }
+  return stagedStats !== null && unstagedStats !== null
 }
 
 function getShortBranchName(branch: string | undefined): string | null {
@@ -753,7 +808,12 @@ async function probeOrRevalidateEffectiveUpstreamStatus(
         cached.upstreamName
       )
       return { status, probedSameNameOriginRef: false }
-    } catch {
+    } catch (error) {
+      // Why: an aborted probe says nothing about the ref; evicting the warm
+      // name cache here would force a pointless full re-resolve next scan.
+      if (options.signal?.aborted) {
+        throw error
+      }
       // Ref deleted or repo state changed — fall through to a full re-resolve.
       resolvedUpstreamNameCache.delete(cacheKey)
     }
