@@ -216,4 +216,49 @@ describe('EditorContent', () => {
     expect(html).toContain('changed on disk')
     expect(html).toContain('Previewing the modified version of this diff')
   })
+
+  it('renders modified markdown preview in the Changes surface', () => {
+    const activeFile = createOpenFile({
+      id: '/repo/notes.md',
+      filePath: '/repo/notes.md',
+      relativePath: 'notes.md',
+      language: 'markdown',
+      isDirty: true
+    })
+    const html = renderToStaticMarkup(
+      <EditorContent
+        activeFile={activeFile}
+        viewStateScopeId={activeFile.id}
+        fileContents={{ [activeFile.id]: { content: '# modified', isBinary: false } }}
+        diffContents={{
+          [activeFile.id]: {
+            kind: 'text',
+            originalContent: '# original',
+            modifiedContent: '# modified'
+          } as never
+        }}
+        editBuffers={{}}
+        openFiles={[activeFile]}
+        worktreeEntries={[]}
+        resolvedLanguage="markdown"
+        isMarkdown
+        isMermaid={false}
+        isCsv={false}
+        isNotebook={false}
+        mdViewMode="preview"
+        isChangesMode
+        sideBySide={false}
+        pendingEditorReveal={null}
+        handleContentChange={vi.fn()}
+        handleContentChangeForFile={vi.fn()}
+        handleDirtyStateHint={vi.fn()}
+        handleSave={vi.fn()}
+        handleSaveForFile={vi.fn()}
+        reloadContent={vi.fn()}
+      />
+    )
+
+    expect(html).toContain('Previewing the modified version of this diff')
+    expect(html).not.toContain('ChangesModeView')
+  })
 })

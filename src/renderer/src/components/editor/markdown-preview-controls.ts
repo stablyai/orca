@@ -4,10 +4,15 @@ import type { EditorToggleValue } from './EditorViewToggle'
 
 type MarkdownPreviewTarget = Pick<OpenFile, 'mode' | 'diffSource'> & {
   language: string
+  isChangesMode?: boolean
 }
 
 const MARKDOWN_EDIT_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
-const MARKDOWN_DIFF_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
+const MARKDOWN_DIFF_VIEW_MODES = [
+  'source',
+  'rich',
+  'preview'
+] as const satisfies readonly MarkdownViewMode[]
 const MERMAID_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
 const CSV_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
 const NOTEBOOK_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
@@ -32,7 +37,11 @@ export function getEditorToggleModes(target: MarkdownPreviewTarget): readonly Ed
   }
   const languageModes = getMarkdownViewModes(target)
   if (languageModes.length > 0) {
-    return [...languageModes, 'changes']
+    return [
+      ...languageModes,
+      ...(target.isChangesMode && target.language === 'markdown' ? (['preview'] as const) : []),
+      'changes'
+    ]
   }
   return CODE_EDIT_TOGGLE_MODES
 }

@@ -17,14 +17,31 @@ describe('getMarkdownViewModes', () => {
     ).toEqual(['source', 'rich'])
   })
 
-  it('offers source and rich for single-file markdown diffs', () => {
+  it('offers source, rich, and preview for single-file markdown diffs', () => {
     expect(
       getMarkdownViewModes({
         language: 'markdown',
         mode: 'diff',
         diffSource: 'unstaged'
       })
-    ).toEqual(['source', 'rich'])
+    ).toEqual(['source', 'rich', 'preview'])
+  })
+
+  it('offers preview in markdown Changes mode but not for adjacent source files', () => {
+    expect(
+      getEditorToggleModes({
+        language: 'markdown',
+        mode: 'edit',
+        isChangesMode: true
+      })
+    ).toEqual(['source', 'rich', 'preview', 'changes'])
+    expect(
+      getEditorToggleModes({
+        language: 'typescript',
+        mode: 'edit',
+        isChangesMode: true
+      })
+    ).toEqual(['edit', 'changes'])
   })
 
   it('does not offer preview for mermaid edit tabs', () => {

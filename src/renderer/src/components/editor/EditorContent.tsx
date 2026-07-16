@@ -791,6 +791,40 @@ export function EditorContent({
         />
       ) : null
     if (isChangesMode) {
+      const changesDiff = diffContents[activeFile.id]
+      if (
+        isMarkdown &&
+        mdViewMode === 'preview' &&
+        changesDiff?.kind === 'text' &&
+        changesDiff.largeDiffRenderLimit?.limited !== true
+      ) {
+        return (
+          <div className="flex h-full min-h-0 flex-col">
+            {externalChangeBanner}
+            <div className="border-b border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              {translate(
+                'auto.components.editor.EditorContent.9640d1d3db',
+                'Previewing the modified version of this diff. Switch to source mode to inspect changes.'
+              )}
+            </div>
+            <div className="min-h-0 flex-1">
+              <MarkdownPreview
+                key={viewStateScopeId}
+                content={editBuffers[activeFile.id] ?? fc.content}
+                filePath={activeFile.filePath}
+                sourceFileId={activeFile.id}
+                sourceWorktreeId={activeFile.worktreeId}
+                sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
+                scrollCacheKey={`${diffViewStateKey}:preview`}
+                showTableOfContents={showMarkdownTableOfContents}
+                onCloseTableOfContents={onCloseMarkdownTableOfContents}
+                markdownAnnotationsEnabled={markdownAnnotationsEnabled}
+                {...md.previewProps}
+              />
+            </div>
+          </div>
+        )
+      }
       const changesView = (
         <ChangesModeView
           activeFile={activeFile}

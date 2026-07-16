@@ -241,6 +241,7 @@ function EditorPanelInner({
   const model = getEditorPanelRenderModel({
     activeFile,
     fileContents,
+    diffContents,
     editorDrafts,
     gitStatusEntries,
     gitBranchEntries,
@@ -287,6 +288,13 @@ function EditorPanelInner({
     }
     if (next === 'changes') {
       setEditorViewMode(fileId, 'changes')
+      if (model.mdViewMode === 'preview') {
+        setMarkdownViewMode(fileId, 'source')
+      }
+      return
+    }
+    if (next === 'preview' && isChangesMode && model.isMarkdown) {
+      setMarkdownViewMode(fileId, 'preview')
       return
     }
     setEditorViewMode(fileId, 'edit')
