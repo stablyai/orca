@@ -142,4 +142,69 @@ describe('restored terminal input readiness', () => {
     expect(firstInput).toHaveBeenCalledTimes(1)
     expect(replacementInput).toHaveBeenCalledTimes(1)
   })
+
+  it('discards stale attempts when document replacement rejects evaluation', async () => {
+    let activePane: TestPane
+    let replacementContent = ''
+    const replacementInput = vi.fn((data: string) => {
+      replacementContent = data
+    })
+    const replacementPane: TestPane = {
+      container: { dataset: { ptyId: 'pty-1' } },
+      serializeAddon: { serialize: () => replacementContent },
+      terminal: { input: replacementInput }
+    }
+    let originalInputCalls = 0
+    const firstInput = vi.fn((data: string) => {
+      originalInputCalls += 1
+      if (originalInputCalls === 2) {
+        replacementContent = data
+        activePane = replacementPane
+      }
+    })
+    activePane = {
+      container: { dataset: { ptyId: 'pty-1' } },
+      serializeAddon: { serialize: () => '' },
+      terminal: { input: firstInput }
+    }
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        __paneManagers: new Map([
+          [
+            'tab-1',
+            {
+              getActivePane: () => activePane,
+              getPanes: () => [activePane]
+            }
+          ]
+        ])
+      }
+    })
+
+    const pendingAttemptCounts: number[] = []
+    let evaluateCalls = 0
+    const page = {
+      evaluate: async (callback: (arg: unknown) => unknown, arg: unknown) => {
+        evaluateCalls += 1
+        pendingAttemptCounts.push(
+          (arg as { pendingAttempts: readonly unknown[] }).pendingAttempts.length
+        )
+        const result = callback(arg)
+        if (evaluateCalls === 2) {
+          throw new Error('Execution context was destroyed')
+        }
+        return result
+      },
+      waitForTimeout: async (timeoutMs: number) => {
+        await vi.advanceTimersByTimeAsync(timeoutMs)
+      }
+    } as unknown as Page
+
+    await expect(waitForRestoredTerminalInputReady(page, 'pty-1', 500)).resolves.toBe(true)
+    expect(pendingAttemptCounts).toEqual([0, 1, 0, 1])
+    expect(firstInput).toHaveBeenCalledTimes(2)
+    expect(replacementInput).toHaveBeenCalledTimes(1)
+    expect(replacementInput.mock.calls[0]?.[0]).not.toBe(firstInput.mock.calls[1]?.[0])
+  })
 })
