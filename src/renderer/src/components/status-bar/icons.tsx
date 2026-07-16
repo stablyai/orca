@@ -34,6 +34,20 @@ export function MiniMaxIcon({ size = 14 }: { size?: number }): React.JSX.Element
   )
 }
 
+export function ZaiIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  return (
+    <svg height={size} width={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M4 6h16L4 18h16"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 // Why: each instance needs unique filter/mask IDs — reusing the same ID across
 // multiple SVGs on the same page causes the browser to resolve to the first one,
 // breaking all subsequent instances.
