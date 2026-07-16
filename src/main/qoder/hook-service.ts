@@ -49,6 +49,13 @@ const QODER_EVENTS = [
     }
   },
   {
+    eventName: 'PermissionRequest',
+    definition: {
+      matcher: QODER_TOOL_EVENT_MATCHER,
+      hooks: [{ type: 'command' as const, command: '' }]
+    }
+  },
+  {
     eventName: 'PostToolUse',
     definition: {
       matcher: QODER_TOOL_EVENT_MATCHER,
