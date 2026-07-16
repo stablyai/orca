@@ -3188,11 +3188,24 @@ describe('createMainWindow', () => {
     it('hides to the tray instead of minimizing when the minimize setting is on', () => {
       setPlatform('win32')
       const ipcHandlers = captureIpcHandlers()
-      const { instance } = setupCloseWindow()
+      const { instance, windowHandlers } = setupCloseWindow()
       const store = makeStore(false, true, true)
 
       createMainWindow(store as never, { getIsQuitting: () => false })
       ipcHandlers['window:minimize']?.()
+
+      expect(instance.hide).toHaveBeenCalledTimes(1)
+      expect(instance.minimize).not.toHaveBeenCalled()
+      expect(windowHandlers.minimize).toBeDefined()
+    })
+
+    it('hides to the tray from the native minimize event when the setting is on', () => {
+      setPlatform('win32')
+      const { instance, windowHandlers } = setupCloseWindow()
+      const store = makeStore(false, true, true)
+
+      createMainWindow(store as never, { getIsQuitting: () => false })
+      windowHandlers.minimize?.()
 
       expect(instance.hide).toHaveBeenCalledTimes(1)
       expect(instance.minimize).not.toHaveBeenCalled()
@@ -3216,14 +3229,32 @@ describe('createMainWindow', () => {
       expect(instance.minimize).toHaveBeenCalledTimes(1)
     })
 
+    it.each([
+      ['false', false],
+      ['missing', undefined],
+      ['malformed string', 'true'],
+      ['malformed number', 1]
+    ])('preserves normal native minimize for a %s setting', (_label, value) => {
+      setPlatform('win32')
+      const { instance, windowHandlers } = setupCloseWindow()
+      const store = makeStore(false, true, value)
+
+      createMainWindow(store as never, { getIsQuitting: () => false })
+      windowHandlers.minimize?.()
+
+      expect(instance.hide).not.toHaveBeenCalled()
+      expect(instance.minimize).not.toHaveBeenCalled()
+    })
+
     it('preserves normal minimize off Windows', () => {
       setPlatform('darwin')
       const ipcHandlers = captureIpcHandlers()
-      const { instance } = setupCloseWindow()
+      const { instance, windowHandlers } = setupCloseWindow()
       const store = makeStore(false, true, true)
 
       createMainWindow(store as never, { getIsQuitting: () => false })
       ipcHandlers['window:minimize']?.()
+      windowHandlers.minimize?.()
 
       expect(instance.hide).not.toHaveBeenCalled()
       expect(instance.minimize).toHaveBeenCalledTimes(1)
@@ -3232,11 +3263,12 @@ describe('createMainWindow', () => {
     it('preserves normal minimize while quitting', () => {
       setPlatform('win32')
       const ipcHandlers = captureIpcHandlers()
-      const { instance } = setupCloseWindow()
+      const { instance, windowHandlers } = setupCloseWindow()
       const store = makeStore(false, true, true)
 
       createMainWindow(store as never, { getIsQuitting: () => true })
       ipcHandlers['window:minimize']?.()
+      windowHandlers.minimize?.()
 
       expect(instance.hide).not.toHaveBeenCalled()
       expect(instance.minimize).toHaveBeenCalledTimes(1)
@@ -3255,6 +3287,7 @@ describe('createMainWindow', () => {
         { reason: 'crashed', exitCode: 5 } as never
       )
       ipcHandlers['window:minimize']?.()
+      windowHandlers.minimize?.()
 
       expect(instance.hide).not.toHaveBeenCalled()
       expect(instance.minimize).toHaveBeenCalledTimes(1)
@@ -3265,12 +3298,13 @@ describe('createMainWindow', () => {
     it('preserves normal minimize when the renderer is marked crashed', () => {
       setPlatform('win32')
       const ipcHandlers = captureIpcHandlers()
-      const { webContents, instance } = setupCloseWindow()
+      const { webContents, instance, windowHandlers } = setupCloseWindow()
       const store = makeStore(false, true, true)
 
       webContents.isCrashed.mockReturnValue(true)
       createMainWindow(store as never, { getIsQuitting: () => false })
       ipcHandlers['window:minimize']?.()
+      windowHandlers.minimize?.()
 
       expect(instance.hide).not.toHaveBeenCalled()
       expect(instance.minimize).toHaveBeenCalledTimes(1)

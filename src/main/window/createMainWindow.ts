@@ -1024,9 +1024,9 @@ export function createMainWindow(
   let windowCloseConfirmed = false
   const confirmCloseChannel = 'window:confirm-close'
 
-  // Why: Windows minimize-to-tray. Hides the window instead of completing the
-  // caller's close or minimize action when the setting is on, this isn't a real
-  // quit (Ctrl+Q / tray "Quit" set getIsQuitting), and the renderer is alive.
+  // Why: Windows minimize-to-tray. Hides before renderer-driven minimize and
+  // after native minimize when the setting is on, this isn't a real quit
+  // (Ctrl+Q / tray "Quit" set getIsQuitting), and the renderer is alive.
   // Shared by the renderer-drawn X, native close, and native minimize paths.
   const hideToTrayIfEnabled = (
     setting: 'minimizeToTrayOnClose' | 'minimizeToTrayOnMinimize'
@@ -1060,6 +1060,12 @@ export function createMainWindow(
     }
     return true
   }
+
+  // Why: Electron emits this after native minimization, covering OS and
+  // programmatic minimize routes that bypass the renderer IPC pre-check.
+  mainWindow.on('minimize', () => {
+    hideToTrayIfEnabled('minimizeToTrayOnMinimize')
+  })
 
   mainWindow.on('close', (e) => {
     // Why: Alt+F4 and programmatic closes reach the native event; apply the same
