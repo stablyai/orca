@@ -3,19 +3,17 @@ import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import { diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
-import { monaco } from '@/lib/monaco-setup'
 import { computeDiffEditorFontSize } from '@/lib/editor-font-zoom'
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
-import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
-import {
-  getDiffCommentPopoverLeft,
-  getDiffCommentPopoverTop
-} from '../diff-comments/diff-comment-popover-position'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
 import type { DiffComment, PRComment } from '../../../../shared/types'
-import { isDiffComment, prCommentsToDecoratedDiffComments } from '@/lib/diff-comment-compat'
+import {
+  isDiffComment,
+  prCommentsToDecoratedDiffComments,
+  selectRawPRCommentsFromStore
+} from '@/lib/diff-comment-compat'
 import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from './editor-shortcuts'
 import { diffEditorScrollbarOptions } from './diff-editor-scrollbar-options'
 import { LargeDiffFallback } from './LargeDiffFallback'
@@ -26,6 +24,10 @@ import type { DiffViewerProps } from './diff-viewer-props'
 import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
 import { useDiffEditorRegistration } from './diff-navigation-context'
 import { preserveDiffViewStateAcrossModelSwaps } from './diff-model-swap-view-state'
+import { useDiffCommentSubmit } from './useDiffCommentSubmit'
+import { useDiffCommentPopoverPosition } from './useDiffCommentPopoverPosition'
+import { useDiffCommentDecoratorConfig } from './useDiffCommentDecoratorConfig'
+import { useDiffViewerAutoScroll } from './useDiffViewerAutoScroll'
 
 const EMPTY_PR_COMMENTS: PRComment[] = []
 
@@ -89,46 +91,16 @@ export default function DiffViewer({
     void load()
   }, [wtPath, wtBranch, wtLinkedPR, wtRepoId, fetchPRComments, fetchPRForBranch])
 
+  // Why: split local and PR comment subscriptions into separate selectors so
+  // each returns a stable store reference. Combining them inside a single
+  // useAppStore selector caused a new array on every store update (via .filter
+  // and spread), triggering infinite re-renders.
   // Why: subscribe to the raw comments array on the worktree so selector
   // identity only changes when localDiffComments actually changes on this worktree.
-  // Filtering by relativePath happens in a memo below.
   const localDiffComments = useAppStore((s): DiffComment[] | undefined =>
     selectWorktreeDiffComments(s, worktreeId)
   )
-  const rawPRComments = useAppStore((s) => {
-    if (!worktreeId) {
-      return EMPTY_PR_COMMENTS
-    }
-    const wt = s.getKnownWorktreeById(worktreeId)
-    if (!wt || !wt.repoId) {
-      return EMPTY_PR_COMMENTS
-    }
-    let pr = wt.linkedPR
-    if (!pr && wt.branch) {
-      const keys = Object.keys(s.prCache)
-      const targetKey = keys.find(
-        (k) => k.toLowerCase().includes(wt.repoId.toLowerCase()) && k.endsWith(`::${wt.branch}`)
-      )
-      const cachedPR = targetKey ? s.prCache[targetKey]?.data : null
-      if (cachedPR) {
-        pr = cachedPR.number
-      }
-    }
-    if (!pr) {
-      return EMPTY_PR_COMMENTS
-    }
-    // Why: commentsCache keys may be prefixed by host/runtime environment
-    // scope or contain the full prRepo name in the middle. Match keys
-    // dynamically to find the correct entry regardless of caching scopes.
-    const keys = Object.keys(s.commentsCache)
-    const targetKey = keys.find(
-      (k) =>
-        k.toLowerCase().includes(wt.repoId.toLowerCase()) &&
-        k.includes('::pr-comments::') &&
-        k.endsWith(`::${pr}`)
-    )
-    return (targetKey ? s.commentsCache[targetKey]?.data : null) ?? EMPTY_PR_COMMENTS
-  })
+  const rawPRComments = useAppStore((s) => selectRawPRCommentsFromStore(s, worktreeId))
   const allComments = useMemo(() => {
     const local = (localDiffComments ?? []).filter(
       (c) => c.filePath === relativePath && isDiffComment(c)
@@ -171,65 +143,28 @@ export default function DiffViewer({
     return allComments.some((c) => c.id === scrollToDiffCommentId) ? scrollToDiffCommentId : null
   }, [scrollToDiffCommentId, allComments, worktreeId])
 
-  // Why: gate the decorator on having a comment target. Local diffs persist
-  // notes to worktree metadata; GitHub PR diffs post line comments remotely.
-  // updateDiffComment is only wired for local diffs (worktreeId present).
-  useDiffCommentDecorator({
-    editor: hasLineCommentAction ? modifiedEditor : null,
-    monacoModelIdentity: modifiedModelKey ?? modelKey,
-    filePath: relativePath,
-    worktreeId: worktreeId ?? '',
-    comments: worktreeId ? allComments : [],
+  useDiffCommentDecoratorConfig({
+    hasLineCommentAction,
+    modifiedEditor,
+    relativePath,
+    worktreeId,
+    allComments,
     commentableLineNumbers,
-    addButtonLabel: addLineCommentLabel,
-    onAddCommentClick: ({ lineNumber, startLine, top }) =>
-      setPopover({
-        lineNumber,
-        startLine,
-        top,
-        left: modifiedEditor
-          ? (getDiffCommentPopoverLeft(modifiedEditor, diffBodyRef.current) ?? undefined)
-          : undefined,
-        lineHeight: modifiedEditor?.getOption(monaco.editor.EditorOption.lineHeight) ?? 0
-      }),
-    onDeleteComment: (id) => {
-      if (worktreeId) {
-        void deleteDiffComment(worktreeId, id)
-      }
-    },
-    onUpdateComment: worktreeId ? (id, body) => updateDiffComment(worktreeId, id, body) : undefined,
-    pendingScrollCommentId: pendingScrollForThisViewer,
-    onPendingScrollConsumed: () => setScrollToDiffCommentId(null)
+    addLineCommentLabel,
+    deleteDiffComment,
+    updateDiffComment,
+    pendingScrollForThisViewer,
+    setScrollToDiffCommentId,
+    diffBodyRef,
+    setPopover
   })
 
-  useEffect(() => {
-    if (!modifiedEditor || !popover) {
-      return
-    }
-    const update = (): void => {
-      const lineHeight = modifiedEditor.getOption(monaco.editor.EditorOption.lineHeight)
-      const top = getDiffCommentPopoverTop(modifiedEditor, popover.lineNumber, lineHeight)
-      if (top == null) {
-        setPopover(null)
-        return
-      }
-      const left = getDiffCommentPopoverLeft(modifiedEditor, diffBodyRef.current)
-      setPopover((prev) =>
-        prev ? { ...prev, top, left: left == null ? prev.left : left, lineHeight } : prev
-      )
-    }
-    const scrollSub = modifiedEditor.onDidScrollChange(update)
-    const contentSub = modifiedEditor.onDidContentSizeChange(update)
-    const layoutSub = modifiedEditor.onDidLayoutChange(update)
-    return () => {
-      scrollSub.dispose()
-      contentSub.dispose()
-      layoutSub.dispose()
-    }
-    // Why: depend on popover.lineNumber (not the whole popover object) so the
-    // effect doesn't re-subscribe on every top update it dispatches.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modifiedEditor, popover?.lineNumber])
+  useDiffCommentPopoverPosition({
+    modifiedEditor,
+    popover,
+    diffBodyRef,
+    setPopover
+  })
 
   // Why: on a fresh open (no cached view state, no pending scroll-to-note),
   // center the first diff change in the viewport. We do this from a dedicated
@@ -242,75 +177,12 @@ export default function DiffViewer({
   // zones already in the layout, so the math survives whatever the decorator
   // added in this render pass. The didScroll guard makes this strictly
   // one-shot per mount.
-  const didAutoScrollFirstDiffRef = useRef(false)
-  const didAutoScrollModelKeyRef = useRef(modelKey)
-  useEffect(() => {
-    if (didAutoScrollModelKeyRef.current !== modelKey) {
-      didAutoScrollModelKeyRef.current = modelKey
-      // Why: the one-shot above is intentionally per-modelKey. Reset inside
-      // this Effect before its first-diff guard runs for the new file.
-      didAutoScrollFirstDiffRef.current = false
-    }
-    const diffEditor = diffEditorRef.current
-    if (!diffEditor || !modifiedEditor) {
-      return
-    }
-    if (didAutoScrollFirstDiffRef.current) {
-      return
-    }
-    if (diffViewStateCache.get(modelKey)) {
-      return
-    }
-    if (pendingScrollForThisViewer) {
-      // Why: the decorator owns this scroll for this mount, so permanently
-      // yield by setting the one-shot flag. Otherwise, when the decorator
-      // ack's and `pendingScrollForThisViewer` flips back to null, this
-      // effect would re-run with empty cache + un-set flag and overwrite
-      // the comment scroll with a jump to the first diff.
-      didAutoScrollFirstDiffRef.current = true
-      return
-    }
-    let rafId: number | null = null
-    const run = (): void => {
-      if (didAutoScrollFirstDiffRef.current) {
-        return
-      }
-      const changes = diffEditor.getLineChanges()
-      if (!changes || changes.length === 0) {
-        return
-      }
-      const line = Math.max(1, changes[0].modifiedStartLineNumber)
-      // Defer one frame so any view zones added in this render pass are part
-      // of the layout before we measure. Cancel any earlier pending rAF so
-      // a late onDidUpdateDiff can't enqueue a redundant scroll.
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId)
-      }
-      rafId = requestAnimationFrame(() => {
-        rafId = null
-        if (didAutoScrollFirstDiffRef.current || !modifiedEditor.getModel()) {
-          return
-        }
-        const top = modifiedEditor.getTopForLineNumber(line, true)
-        const editorHeight = modifiedEditor.getLayoutInfo().height
-        modifiedEditor.setPosition({ lineNumber: line, column: 1 })
-        modifiedEditor.setScrollTop(Math.max(0, top - editorHeight / 2))
-        didAutoScrollFirstDiffRef.current = true
-      })
-    }
-    // If the diff result is already available, run immediately; otherwise
-    // wait for it. onDidUpdateDiff fires once the diff computation lands.
-    if (diffEditor.getLineChanges()) {
-      run()
-    }
-    const sub = diffEditor.onDidUpdateDiff(() => run())
-    return () => {
-      sub.dispose()
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId)
-      }
-    }
-  }, [modifiedEditor, modelKey, pendingScrollForThisViewer])
+  useDiffViewerAutoScroll({
+    diffEditorRef,
+    modifiedEditor,
+    modelKey,
+    pendingScrollForThisViewer
+  })
 
   const handleEnterLargeDiffFallback = useCallback(() => {
     // Why: when a tab transitions to the safety fallback, stale Monaco refs
@@ -328,42 +200,14 @@ export default function DiffViewer({
     setPopover(null)
   }, [unregisterDiffEditor])
 
-  const handleSubmitComment = async (body: string): Promise<void> => {
-    if (!popover) {
-      return
-    }
-    if (onAddLineComment) {
-      const ok = await onAddLineComment({
-        lineNumber: popover.lineNumber,
-        startLine: popover.startLine,
-        body
-      })
-      if (ok) {
-        setPopover(null)
-      }
-      return
-    }
-    if (!worktreeId) {
-      return
-    }
-    // Why: await persistence before closing — if addDiffComment resolves null
-    // (store rolled back after IPC failure), keep the popover open so the user
-    // can retry instead of silently losing their draft.
-    const result = await addDiffComment({
-      worktreeId,
-      filePath: relativePath,
-      source: 'diff',
-      startLine: popover.startLine,
-      lineNumber: popover.lineNumber,
-      body,
-      side: 'modified'
-    })
-    if (result) {
-      setPopover(null)
-    } else {
-      console.error('Failed to add diff comment — draft preserved')
-    }
-  }
+  const handleSubmitComment = useDiffCommentSubmit({
+    popover,
+    onAddLineComment,
+    worktreeId,
+    relativePath,
+    addDiffComment,
+    setPopover
+  })
 
   // Keep refs to latest callbacks so the mounted editor always calls current versions
   const onSaveRef = useRef(onSave)
