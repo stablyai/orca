@@ -26,6 +26,7 @@ function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeSe
     // only stub the legacy resolveLeafForHandle still bind; tests that need a
     // null/stale leaf override this explicitly.
     resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+    requestRendererTerminalTabMount: vi.fn().mockReturnValue(true),
     updateRemoteDesktopViewer: vi.fn().mockResolvedValue(true),
     unregisterRemoteDesktopViewer: vi.fn().mockResolvedValue(true),
     unregisterRemoteDesktopViewers: vi.fn().mockResolvedValue(true),
@@ -38,6 +39,92 @@ function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeSe
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
+}
+
+function startDesktopMultiplexSubscribe(
+  overrides: Partial<OrcaRuntimeService> = {},
+  trace?: string[]
+) {
+  const messages: string[] = []
+  const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+  const handlers = new Map<
+    number,
+    (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
+  >()
+  const cleanups = new Map<string, () => void>()
+  const runtime = stubRuntime({
+    readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
+    serializeTerminalBuffer: vi.fn().mockResolvedValue({ data: 'snapshot', cols: 120, rows: 40 }),
+    getTerminalSize: vi.fn().mockReturnValue({ cols: 120, rows: 40 }),
+    getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
+    getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+    subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
+    subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
+    subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+    subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
+    getTerminalFitOverride: vi.fn().mockReturnValue(null),
+    getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
+    registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+      cleanups.set(id, cleanup)
+    }),
+    cleanupSubscription: vi.fn((id: string) => {
+      cleanups.get(id)?.()
+    }),
+    ...overrides,
+    waitForTerminal:
+      overrides.waitForTerminal ?? vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
+  })
+  const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+  const dispatchPromise = dispatcher.dispatchStreaming(
+    makeRequest('terminal.multiplex', {}),
+    (msg) => {
+      messages.push(msg)
+      const type = JSON.parse(msg).result?.type
+      if (type) {
+        trace?.push(type)
+      }
+    },
+    {
+      connectionId: 'conn-desktop-first-paint',
+      sendBinary: (bytes) => {
+        binaryFrames.push(bytes)
+        const opcode = decodeTerminalStreamFrame(bytes)?.opcode
+        if (
+          opcode === TerminalStreamOpcode.SnapshotStart ||
+          opcode === TerminalStreamOpcode.SnapshotChunk ||
+          opcode === TerminalStreamOpcode.SnapshotEnd
+        ) {
+          trace?.push('snapshot')
+        }
+      },
+      registerBinaryStreamHandler: (streamId, handler) => {
+        handlers.set(streamId, handler)
+        return () => handlers.delete(streamId)
+      }
+    }
+  )
+  return { messages, binaryFrames, handlers, cleanups, runtime, dispatchPromise }
+}
+
+function sendDesktopMultiplexSubscribe(
+  handlers: Map<number, (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void>
+) {
+  handlers.get(0)?.(
+    decodeTerminalStreamFrame(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.Subscribe,
+        streamId: 0,
+        seq: 1,
+        payload: encodeTerminalStreamJson({
+          streamId: 7,
+          terminal: 'terminal-1',
+          client: { id: 'desktop-1', type: 'desktop' },
+          capabilities: { ackOutput: 1, desktopViewportClaims: 1 },
+          viewport: { cols: 120, rows: 40 }
+        })
+      })
+    )!
+  )
 }
 
 describe('terminal multiplex RPC', () => {
@@ -2679,6 +2766,205 @@ describe('terminal multiplex RPC', () => {
 
     cleanups.get('terminal-multiplex:conn-phone-multiplex')?.()
     await dispatchPromise
+  })
+
+  it("waits for a desktop multiplex subscriber's PTY before retiring the terminal", async () => {
+    let resolvePty: (ptyId: string) => void = () => {}
+    const runtime = stubRuntime({
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
+      requestRendererTerminalTabMount: vi.fn(),
+      waitForLeafPtyId: vi.fn(
+        () =>
+          new Promise<string>((resolve) => {
+            resolvePty = resolve
+          })
+      )
+    })
+    const harness = startDesktopMultiplexSubscribe(runtime)
+    await vi.waitFor(() =>
+      expect(harness.messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
+    )
+    sendDesktopMultiplexSubscribe(harness.handlers)
+    await vi.waitFor(() => expect(runtime.waitForLeafPtyId).toHaveBeenCalled())
+    expect(runtime.requestRendererTerminalTabMount).toHaveBeenCalledWith('terminal-1')
+    expect(
+      harness.binaryFrames
+        .map((frame) => decodeTerminalStreamFrame(frame))
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Error)
+        .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+    ).toEqual([])
+    resolvePty('pty-1')
+    await vi.waitFor(() =>
+      expect(
+        harness.binaryFrames.map((frame) => decodeTerminalStreamFrame(frame)?.opcode)
+      ).toContain(TerminalStreamOpcode.SnapshotChunk)
+    )
+    expect(
+      harness.binaryFrames
+        .map((frame) => decodeTerminalStreamFrame(frame))
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Error)
+        .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+    ).toEqual([])
+    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    await harness.dispatchPromise
+  })
+
+  it("still reports no_connected_pty when a desktop multiplex subscriber's PTY never appears", async () => {
+    const runtime = stubRuntime({
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
+      waitForLeafPtyId: vi.fn().mockRejectedValue(new Error('timeout'))
+    })
+    const harness = startDesktopMultiplexSubscribe(runtime)
+    await vi.waitFor(() =>
+      expect(harness.messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
+    )
+    sendDesktopMultiplexSubscribe(harness.handlers)
+    await vi.waitFor(() =>
+      expect(
+        harness.binaryFrames.map((frame) => decodeTerminalStreamFrame(frame)?.opcode)
+      ).toContain(TerminalStreamOpcode.Error)
+    )
+    const errorFrame = harness.binaryFrames
+      .map((frame) => decodeTerminalStreamFrame(frame))
+      .find((frame) => frame?.opcode === TerminalStreamOpcode.Error)
+    expect(errorFrame && decodeTerminalStreamText(errorFrame.payload)).toBe('no_connected_pty')
+    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    await harness.dispatchPromise
+  })
+
+  it('emits initial desktop fit events after the first multiplex snapshot', async () => {
+    const trace: string[] = []
+    let fitListener: ((event: { mode: string; cols: number; rows: number }) => void) | undefined
+    let driverListener: ((driver: unknown) => void) | undefined
+    const harness = startDesktopMultiplexSubscribe(
+      {
+        readTerminal: vi.fn(async () => {
+          fitListener?.({ mode: 'desktop-fit', cols: 100, rows: 30 })
+          driverListener?.({ kind: 'transition-during-snapshot' })
+          return { tail: [], truncated: false } as unknown as Awaited<
+            ReturnType<OrcaRuntimeService['readTerminal']>
+          >
+        }),
+        subscribeToFitOverrideChanges: vi.fn((_ptyId, listener) => {
+          fitListener = listener
+          return vi.fn()
+        }),
+        subscribeToDriverChanges: vi.fn((_ptyId, listener) => {
+          driverListener = listener
+          return vi.fn()
+        })
+      },
+      trace
+    )
+    await vi.waitFor(() =>
+      expect(harness.messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
+    )
+    sendDesktopMultiplexSubscribe(harness.handlers)
+    await vi.waitFor(() => expect(trace).toContain('driver-changed'))
+    expect(trace.lastIndexOf('snapshot')).toBeLessThan(trace.indexOf('fit-override-changed'))
+    expect(trace.lastIndexOf('snapshot')).toBeLessThan(trace.indexOf('driver-changed'))
+    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    await harness.dispatchPromise
+  })
+
+  it('does not wait when a desktop multiplex subscriber already has a PTY', async () => {
+    const runtime = stubRuntime({
+      requestRendererTerminalTabMount: vi.fn(),
+      waitForLeafPtyId: vi.fn()
+    })
+    const harness = startDesktopMultiplexSubscribe(runtime)
+    await vi.waitFor(() =>
+      expect(harness.messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
+    )
+    sendDesktopMultiplexSubscribe(harness.handlers)
+    await vi.waitFor(() =>
+      expect(harness.messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(
+        true
+      )
+    )
+    expect(runtime.waitForLeafPtyId).not.toHaveBeenCalled()
+    expect(runtime.requestRendererTerminalTabMount).not.toHaveBeenCalled()
+    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    await harness.dispatchPromise
+  })
+
+  it('preserves clientless multiplex subscriptions without a PTY wait', async () => {
+    const messages: string[] = []
+    const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+    const handlers = new Map<
+      number,
+      (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
+    >()
+    let cleanup: () => void = () => {}
+    const runtime = stubRuntime({
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
+      requestRendererTerminalTabMount: vi.fn(),
+      waitForLeafPtyId: vi.fn(),
+      registerSubscriptionCleanup: vi.fn((_id: string, callback: () => void) => {
+        cleanup = callback
+      })
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+    const dispatchPromise = dispatcher.dispatchStreaming(
+      makeRequest('terminal.multiplex', {}),
+      (msg) => messages.push(msg),
+      {
+        connectionId: 'conn-clientless-multiplex',
+        sendBinary: (bytes) => {
+          binaryFrames.push(bytes)
+        },
+        registerBinaryStreamHandler: (streamId, handler) => {
+          handlers.set(streamId, handler)
+          return () => handlers.delete(streamId)
+        }
+      }
+    )
+    await vi.waitFor(() =>
+      expect(messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
+    )
+    handlers.get(0)?.(
+      decodeTerminalStreamFrame(
+        encodeTerminalStreamFrame({
+          opcode: TerminalStreamOpcode.Subscribe,
+          streamId: 0,
+          seq: 1,
+          payload: encodeTerminalStreamJson({ streamId: 7, terminal: 'terminal-1' })
+        })
+      )!
+    )
+    await vi.waitFor(() =>
+      expect(binaryFrames.map((frame) => decodeTerminalStreamFrame(frame)?.opcode)).toContain(
+        TerminalStreamOpcode.Error
+      )
+    )
+    expect(runtime.waitForLeafPtyId).not.toHaveBeenCalled()
+    expect(runtime.requestRendererTerminalTabMount).not.toHaveBeenCalled()
+    const errorFrame = binaryFrames
+      .map((frame) => decodeTerminalStreamFrame(frame))
+      .find((frame) => frame?.opcode === TerminalStreamOpcode.Error)
+    expect(errorFrame && decodeTerminalStreamText(errorFrame.payload)).toBe('no_connected_pty')
+    cleanup()
+    await dispatchPromise
+  })
+
+  it('preserves clientless legacy subscriptions without a PTY wait or mount', async () => {
+    const messages: string[] = []
+    const runtime = stubRuntime({
+      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
+      waitForLeafPtyId: vi.fn(),
+      requestRendererTerminalTabMount: vi.fn(),
+      readTerminal: vi.fn().mockResolvedValue({ tail: ['scrollback'], truncated: false })
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+    const dispatchPromise = dispatcher.dispatchStreaming(
+      makeRequest('terminal.subscribe', { terminal: 'terminal-1' }),
+      (msg) => messages.push(msg),
+      { connectionId: 'conn-clientless-legacy' }
+    )
+    await dispatchPromise
+    expect(runtime.waitForLeafPtyId).not.toHaveBeenCalled()
+    expect(runtime.requestRendererTerminalTabMount).not.toHaveBeenCalled()
+    expect(messages.map((msg) => JSON.parse(msg).result?.type)).toEqual(['subscribed', 'end'])
   })
 
   it('keeps view-subscriber releases balanced when a same-streamId subscribe overwrites a blocked one', async () => {

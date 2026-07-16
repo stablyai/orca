@@ -2025,7 +2025,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           emit({ type: 'end', streamId: request.streamId })
           return
         }
-        if (!leaf?.ptyId && isMobile) {
+        if (!leaf?.ptyId && request.client) {
+          // Why: a never-mounted tab has no graph leaf to await; mounting the
+          // exact tab lets its PTY attach without activating the worktree.
+          runtime.requestRendererTerminalTabMount(request.terminal)
           try {
             const ptyId = await runtime.waitForLeafPtyId(request.terminal, 10_000, signal)
             leaf = { ptyId }
@@ -2157,30 +2160,6 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             return
           }
 
-          if (!isMobile) {
-            stream.unsubscribeFit = runtime.subscribeToFitOverrideChanges(ptyId, (event) => {
-              const mode =
-                event.mode === 'mobile-fit'
-                  ? event.mode
-                  : (runtime.getRemoteDesktopFitHold?.(ptyId, stream.remoteDesktopSubscriptionKey)
-                      .mode ?? 'desktop-fit')
-              emit({
-                type: 'fit-override-changed',
-                streamId: request.streamId,
-                mode,
-                cols: event.cols,
-                rows: event.rows
-              })
-            })
-            stream.unsubscribeDriver = runtime.subscribeToDriverChanges(ptyId, (driver) => {
-              emit({
-                type: 'driver-changed',
-                streamId: request.streamId,
-                driver
-              })
-            })
-          }
-
           let read = await runtime.readTerminal(request.terminal)
           let serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
           if (closed || streams.get(request.streamId) !== stream) {
@@ -2208,25 +2187,6 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           const layoutSeq = runtime.getLayout(ptyId)?.seq
           const snapshotFrameSeq = serialized?.seq ?? layoutSeq
           const snapshotOutputSeq = serialized?.seq
-          if (!isMobile) {
-            const fitOverride = runtime.getTerminalFitOverride(ptyId)
-            const desktopHold = runtime.getRemoteDesktopFitHold?.(
-              ptyId,
-              stream.remoteDesktopSubscriptionKey
-            ) ?? { mode: 'desktop-fit' as const, cols: size?.cols ?? 0, rows: size?.rows ?? 0 }
-            emit({
-              type: 'fit-override-changed',
-              streamId: request.streamId,
-              mode: fitOverride?.mode ?? desktopHold.mode,
-              cols: fitOverride?.cols ?? desktopHold.cols,
-              rows: fitOverride?.rows ?? desktopHold.rows
-            })
-            emit({
-              type: 'driver-changed',
-              streamId: request.streamId,
-              driver: runtime.getDriver(ptyId)
-            })
-          }
           emit({
             type: 'subscribed',
             streamId: request.streamId,
@@ -2271,6 +2231,46 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           stream.pendingOutputBytes = 0
           stream.pendingOutputOverflowed = false
           stream.outputBatcher.flush()
+          if (!isMobile) {
+            stream.unsubscribeFit = runtime.subscribeToFitOverrideChanges(ptyId, (event) => {
+              const mode =
+                event.mode === 'mobile-fit'
+                  ? event.mode
+                  : (runtime.getRemoteDesktopFitHold?.(ptyId, stream.remoteDesktopSubscriptionKey)
+                      .mode ?? 'desktop-fit')
+              emit({
+                type: 'fit-override-changed',
+                streamId: request.streamId,
+                mode,
+                cols: event.cols,
+                rows: event.rows
+              })
+            })
+            stream.unsubscribeDriver = runtime.subscribeToDriverChanges(ptyId, (driver) => {
+              emit({
+                type: 'driver-changed',
+                streamId: request.streamId,
+                driver
+              })
+            })
+            const fitOverride = runtime.getTerminalFitOverride(ptyId)
+            const desktopHold = runtime.getRemoteDesktopFitHold?.(
+              ptyId,
+              stream.remoteDesktopSubscriptionKey
+            ) ?? { mode: 'desktop-fit' as const, cols: size?.cols ?? 0, rows: size?.rows ?? 0 }
+            emit({
+              type: 'fit-override-changed',
+              streamId: request.streamId,
+              mode: fitOverride?.mode ?? desktopHold.mode,
+              cols: fitOverride?.cols ?? desktopHold.cols,
+              rows: fitOverride?.rows ?? desktopHold.rows
+            })
+            emit({
+              type: 'driver-changed',
+              streamId: request.streamId,
+              driver: runtime.getDriver(ptyId)
+            })
+          }
           stream.unsubscribeResize = runtime.subscribeToTerminalResize(ptyId, (event) => {
             stream.outputBatcher.flush()
             const resizeGeneration = stream.resizeGeneration + 1
@@ -2408,10 +2408,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       }
 
       // Why: the left pane's PTY spawns asynchronously after the tab is created.
-      // Mobile clients that subscribe before the PTY is ready would get a bare
+      // Clients that subscribe before the PTY is ready would get a bare
       // scrollback+end with no live stream or phone-fit. Wait for the PTY so
       // the subscribe can proceed normally.
-      if (!leaf?.ptyId && isMobile) {
+      if (!leaf?.ptyId && params.client) {
         // Why: a never-mounted tab has no graph leaf to await; mounting the
         // exact tab lets its PTY attach without activating the worktree.
         rendererMountRequestedBeforePty = runtime.requestRendererTerminalTabMount(params.terminal)
