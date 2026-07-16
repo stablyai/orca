@@ -1660,7 +1660,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   // state through a ref avoids toggling against a stale snapshot if the user
   // collapses/expands the target while the update is in flight.
   const collapsedGroupsRef = useRef(collapsedGroups)
-  collapsedGroupsRef.current = collapsedGroups
+  // Why: syncing in the commit phase keeps abandoned concurrent renders from
+  // leaking uncommitted collapse state into the async reparent callback.
+  useLayoutEffect(() => {
+    collapsedGroupsRef.current = collapsedGroups
+  }, [collapsedGroups])
   const commitProjectGroupHeaderReparent = useCallback(
     (groupId: string, parentGroupId: string | null, tabOrder: number) => {
       if (!Number.isFinite(tabOrder)) {
