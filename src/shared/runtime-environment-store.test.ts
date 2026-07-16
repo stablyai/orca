@@ -134,10 +134,7 @@ describe('runtime environment store', () => {
       ],
       preferredEndpointId: 'ws-legacy-id'
     }
-    raw.environments = [
-      { ...oldest, updatedAt: 400, lastUsedAt: 400, runtimeId: 'old-runtime' },
-      newest
-    ]
+    raw.environments = [{ ...oldest, updatedAt: 400, lastUsedAt: 400, runtimeId: null }, newest]
     writeFileSync(getEnvironmentStorePath(userDataPath), JSON.stringify(raw))
 
     const environments = listEnvironments(userDataPath)
@@ -148,7 +145,7 @@ describe('runtime environment store', () => {
       createdAt: 100,
       updatedAt: 400,
       lastUsedAt: 400,
-      runtimeId: 'old-runtime',
+      runtimeId: null,
       endpoints: [
         { endpoint: 'ws://127.0.0.1:7777', deviceToken: 'new-token', id: `ws-${oldest.id}` }
       ]

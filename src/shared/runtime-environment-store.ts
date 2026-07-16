@@ -295,7 +295,7 @@ function normalizeManualEnvironments(store: RuntimeEnvironmentStore): RuntimeEnv
       preferredEndpointId: endpoints[preferredIndex]!.id,
       updatedAt: Math.max(...group.map((entry) => entry.updatedAt)),
       lastUsedAt: freshestUse?.lastUsedAt ?? null,
-      runtimeId: freshestUse?.runtimeId ?? canonical.runtimeId
+      runtimeId: freshestUse ? freshestUse.runtimeId : canonical.runtimeId
     })
   }
 
