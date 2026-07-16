@@ -535,9 +535,10 @@ describe('agentSubagentsEqual', () => {
 })
 
 describe('hasRuntimeBackedAttribution', () => {
-  it('is false for a plain worktree-attributed entry with no runtime reference', () => {
-    // Why: this is the stale relay-restart remnant shape — a worktreeId alone
-    // does not prove a live runtime allocation, so the row is not hydrating.
+  it('is false for an IPC payload with no runtime reference on its face', () => {
+    // Why: this predicate only inspects fields present on a just-received IPC
+    // payload — it is not a liveness test for a stored entry, so a bare
+    // worktreeId does not count as runtime backing on the fresh-IPC path.
     expect(hasRuntimeBackedAttribution({})).toBe(false)
     expect(hasRuntimeBackedAttribution({ terminalHandle: undefined })).toBe(false)
     expect(hasRuntimeBackedAttribution({ orchestration: undefined })).toBe(false)

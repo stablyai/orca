@@ -263,19 +263,18 @@ export function isFreshNonDoneAgentStatus(
   return Boolean(entry && entry.state !== 'done' && now - entry.updatedAt <= staleAfterMs)
 }
 
-/** Whether an agent-status entry carries a runtime reference — an orchestration
- *  dispatch context or a runtime terminal handle — proving it is backed by a
- *  live runtime allocation rather than only a durable worktree attribution.
+/** Whether an agent-status IPC payload carries a runtime reference — an
+ *  orchestration dispatch context or a runtime terminal handle — at the moment
+ *  main enriched it for IPC fanout.
  *
- *  Why: orchestration workers can report worktree-attributed status before the
- *  renderer has a terminal tab for them (the legitimate mid-spawn hydration
- *  case). Such runtime-backed rows are kept visible while their tab hydrates;
- *  rows that merely carry a worktreeId with no runtime backing and no
- *  resolvable tab are stale remnants (e.g. an agent whose SSH relay daemon
- *  restarted) and must not linger as silently unclickable. This is the single
- *  discriminator used by both the snapshot-replay hydration path in
- *  useIpcEvents and the sidebar activation guard in WorktreeCardAgents, so they
- *  cannot drift apart on what counts as "still hydrating". */
+ *  Why: applyAgentStatus uses this on the fresh-IPC path to accept a
+ *  worktree-attributed status whose tab is not yet present in the renderer
+ *  (orchestration workers can arrive worktree-attributed before their terminal
+ *  tab hydrates). It reads fields on a just-received IPC payload, which reflect
+ *  main's current enrichment. It is NOT a liveness test for an already-stored
+ *  entry: a renderer-side entry retains its terminalHandle/orchestration strings
+ *  across an SSH relay daemon restart, so the sidebar activation guard uses the
+ *  live runtimeAgentOrchestrationByPaneKey mirror instead of this predicate. */
 export function hasRuntimeBackedAttribution(
   entry: Pick<AgentStatusEntry, 'terminalHandle' | 'orchestration'>
 ): boolean {

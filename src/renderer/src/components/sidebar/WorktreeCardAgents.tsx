@@ -14,7 +14,6 @@ import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { cn } from '@/lib/utils'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import { hasRuntimeBackedAttribution } from '../../../../shared/agent-status-types'
 import { dismissStaleAgentRowByKey } from '../terminal-pane/stale-agent-row'
 import { useFocusedAgentPaneKey } from './focused-agent-row-highlight'
 import {
@@ -207,22 +206,29 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           scrollToBottomIfOutputSinceLastView: true
         })
       } else {
-        const liveEntry = useAppStore.getState().agentStatusByPaneKey[paneKey]
-        if (liveEntry?.worktreeId === worktreeId && hasRuntimeBackedAttribution(liveEntry)) {
-          // Why: orchestration workers report worktree-attributed status before
-          // the renderer has a terminal tab for them. Runtime backing (an
-          // orchestration context or a runtime terminal handle) is the same
-          // hydration signal applyAgentStatus uses for snapshot replay, so keep
-          // the visible live row while its tab hydrates instead of dismissing it.
+        const store = useAppStore.getState()
+        const liveEntry = store.agentStatusByPaneKey[paneKey]
+        if (
+          liveEntry?.worktreeId === worktreeId &&
+          store.runtimeAgentOrchestrationByPaneKey[paneKey] !== undefined
+        ) {
+          // Why: an orchestration worker can report worktree-attributed status
+          // before the renderer has a terminal tab for it (the legitimate
+          // mid-spawn hydration case). Keep the row only while the runtime
+          // CURRENTLY lists this pane as an orchestration allocation — the live
+          // runtimeAgentOrchestrationByPaneKey mirror synced from main, not the
+          // entry's retained terminalHandle/orchestration strings, which survive
+          // an SSH relay daemon restart and would leave the row silently
+          // unclickable again (issue #9030).
           return
         }
-        // Why: a worktree-attributed row with no runtime backing and no
-        // resolvable tab is a stale remnant — most often a plain terminal agent
-        // whose SSH relay daemon restarted so its tab is gone for good. The
-        // session is dead on the host, but the renderer-memory row lingered up
-        // to the 30-min freshness window and a click must not silently no-op
-        // forever (issue #9030). Dismiss with truthful feedback, mirroring the
-        // snapshot-replay drop that clears these rows after a window reload.
+        // Why: a worktree-attributed row with no resolvable tab and no current
+        // runtime orchestration allocation is a stale remnant — most often a
+        // terminal agent whose SSH relay daemon restarted so its tab is gone for
+        // good. The host session is dead but the renderer-memory row lingered up
+        // to the 30-min freshness window; a click must not silently no-op
+        // forever. Dismiss with truthful feedback so the row reconciles instead
+        // of waiting for the freshness window to expire.
         dismissStaleAgentRowByKey(paneKey)
       }
     },

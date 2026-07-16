@@ -50,15 +50,18 @@ function mockAgent({
 let mockAgents: DashboardAgentRowData[] = []
 let mockAgentActivityDisplayMode: 'compact' | 'full' | undefined
 let mockTabsByWorktree: Record<string, { id: string }[]> = {}
-// Why: the activation guard keeps a worktree-attributed row alive only while it
-// is runtime-backed (orchestration context or a terminal handle) — the same
-// hydration signal applyAgentStatus uses for snapshot replay. The mock store
-// entry therefore carries those fields so each test can model either a
-// hydrating orchestration worker or a stale non-runtime-backed row faithfully.
+// Why: the activation guard keeps a worktree-attributed row alive only while
+// the runtime CURRENTLY lists the pane as an orchestration allocation — the
+// live runtimeAgentOrchestrationByPaneKey mirror, not the entry's retained
+// terminalHandle/orchestration strings (those survive an SSH relay restart and
+// would make the row silently unclickable again). The mock store carries both
+// the entry shape and the live mirror so each test can model a hydrating
+// orchestration worker or a stale relay-restart remnant faithfully.
 let mockAgentStatusByPaneKey: Record<
   string,
   { worktreeId?: string; orchestration?: unknown; terminalHandle?: string }
 > = {}
+let mockRuntimeAgentOrchestrationByPaneKey: Record<string, unknown> = {}
 let mockActiveTabId: string | null = null
 let mockActiveTabType: string = 'editor'
 const mockSetActiveTab = vi.fn((tabId: string) => {
@@ -82,6 +85,7 @@ function buildMockStoreState(): Record<string, unknown> {
     acknowledgeAgents: vi.fn(),
     agentSendPopoverTargetMode: null,
     agentStatusByPaneKey: mockAgentStatusByPaneKey,
+    runtimeAgentOrchestrationByPaneKey: mockRuntimeAgentOrchestrationByPaneKey,
     agentStatusEpoch: 0,
     activeTabId: mockActiveTabId,
     activeTabType: mockActiveTabType,
@@ -163,6 +167,7 @@ describe('WorktreeCardAgents activation', () => {
     mockAgentActivityDisplayMode = undefined
     mockTabsByWorktree = {}
     mockAgentStatusByPaneKey = {}
+    mockRuntimeAgentOrchestrationByPaneKey = {}
     mockActiveTabId = null
     mockActiveTabType = 'editor'
     capturedRowActivations = []
@@ -255,12 +260,15 @@ describe('WorktreeCardAgents activation', () => {
         worktreeId: 'wt-1'
       })
     ]
-    // Why: a hydrating orchestration worker is runtime-backed (it carries an
-    // orchestration dispatch context), which is the signal that distinguishes
-    // legitimate mid-spawn hydration from a stale relay-restart remnant.
+    // Why: a hydrating orchestration worker is one the runtime currently lists
+    // as an orchestration allocation (the live runtimeAgentOrchestrationByPaneKey
+    // mirror). That current-allocation signal — not the entry's retained
+    // strings — is what distinguishes legitimate mid-spawn hydration from a
+    // stale relay-restart remnant.
     mockAgentStatusByPaneKey = {
       [paneKey]: { worktreeId: 'wt-1', orchestration: { taskId: 't-1' } }
     }
+    mockRuntimeAgentOrchestrationByPaneKey = { [paneKey]: { taskId: 't-1' } }
     const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
 
     renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
@@ -289,6 +297,7 @@ describe('WorktreeCardAgents activation', () => {
     mockAgentStatusByPaneKey = {
       [paneKey]: { worktreeId: 'wt-1', orchestration: { taskId: 't-1' } }
     }
+    mockRuntimeAgentOrchestrationByPaneKey = { [paneKey]: { taskId: 't-1' } }
     // Why: activation may create/select a different terminal before the
     // automation worker hydrates; the row must only pane-focus its exact tab.
     activationMocks.activateAndRevealWorktree.mockImplementation(() => {
@@ -385,13 +394,20 @@ describe('WorktreeCardAgents activation', () => {
     expect(staleAgentRowMocks.dismissStaleAgentRowByKey).toHaveBeenCalledWith(paneKey)
   })
 
-  it('dismisses a stale relay-restart row whose worktree still matches but has no runtime backing', async () => {
+  it('dismisses a stale SSH relay-restart remnant that still carries a retained terminalHandle', async () => {
     // Regression for issue #9030: after an SSH relay daemon restarts the agent's
     // terminal tab is gone for good, but the renderer-memory status entry still
-    // carries a matching worktreeId and counts as fresh for 30 minutes. The row
-    // must not stay silently unclickable forever. Because the entry lacks runtime
-    // backing (it is a plain terminal agent, not a hydrating orchestration
-    // worker), the click dismisses it with truthful feedback instead of no-op'ing.
+    // carries a matching worktreeId AND a retained terminalHandle (main stamps a
+    // handle for SSH panes via registerPty, and setAgentStatus retains it), so it
+    // counts as fresh for 30 minutes. The row must not stay silently unclickable.
+    // Because the runtime no longer lists the pane as an orchestration allocation
+    // (runtimeAgentOrchestrationByPaneKey is empty — a plain terminal agent is
+    // never in that map, and the live mirror is rebuilt from main's current
+    // state), the click dismisses the row with truthful feedback instead of
+    // trusting the retained terminalHandle string.
+    //
+    // This fails on a1351d33e, whose guard gated on hasRuntimeBackedAttribution
+    // (the retained terminalHandle) and so still kept the row as a silent no-op.
     mockAgentActivityDisplayMode = 'full'
     const tabId = 'relay-restart-tab'
     const paneKey = makePaneKey(tabId, LEAF_A)
@@ -404,10 +420,13 @@ describe('WorktreeCardAgents activation', () => {
         worktreeId: 'wt-1'
       })
     ]
-    // Why: worktreeId matches wt-1 (so the old guard kept it), but there is no
-    // orchestration context and no terminal handle — the row is not a runtime
-    // allocation whose tab is still hydrating.
-    mockAgentStatusByPaneKey = { [paneKey]: { worktreeId: 'wt-1' } }
+    // Why: realistic SSH remnant shape — worktreeId matches wt-1 AND the entry
+    // retains the non-empty terminalHandle main stamped before the relay died.
+    // runtimeAgentOrchestrationByPaneKey stays empty (default), modelling that
+    // the runtime no longer tracks this pane as a live orchestration allocation.
+    mockAgentStatusByPaneKey = {
+      [paneKey]: { worktreeId: 'wt-1', terminalHandle: 'ssh-term-handle-1' }
+    }
     const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
 
     renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
