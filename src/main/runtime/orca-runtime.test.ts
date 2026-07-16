@@ -25258,6 +25258,29 @@ describe('OrcaRuntimeService', () => {
     expect(listWorktrees).toHaveBeenCalledTimes(2)
   })
 
+  it('worktree scan cache: repo invalidation preserves sibling raw scans', async () => {
+    vi.mocked(listWorktrees).mockClear()
+    const repos = [
+      { ...store.getRepos()[0], id: 'repo-a', path: '/tmp/repo-a' },
+      { ...store.getRepos()[0], id: 'repo-b', path: '/tmp/repo-b' }
+    ]
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      getRepos: () => repos,
+      getRepo: (id: string) => repos.find((repo) => repo.id === id)
+    } as never)
+    vi.mocked(listWorktrees).mockImplementation(async (repoPath) => [makeWorktreeInfo(repoPath)])
+
+    await runtime.listDetectedManagedWorktrees('id:repo-a')
+    await runtime.listDetectedManagedWorktrees('id:repo-b')
+    runtime.notifyBranchRenamed('repo-a')
+    await runtime.listDetectedManagedWorktrees('id:repo-b')
+    await runtime.listDetectedManagedWorktrees('id:repo-a')
+
+    expect(listWorktrees).toHaveBeenCalledTimes(3)
+    expect(listWorktrees).toHaveBeenNthCalledWith(3, '/tmp/repo-a')
+  })
+
   it('worktree scan cache: metadata invalidation preserves raw scans', async () => {
     vi.mocked(listWorktrees).mockClear()
     const runtime = createRuntime()
