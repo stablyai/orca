@@ -86,7 +86,7 @@ describe('locale-translation-policy zh round 5', () => {
     ).toBe('集成')
   })
 
-  it('keeps Terminal as a product surface term', () => {
+  it('uses natural Chinese for terminal surfaces', () => {
     expect(
       repairTranslatedValue({
         key: 'auto.components.settings.Settings.3de4bbb841',
@@ -94,7 +94,7 @@ describe('locale-translation-policy zh round 5', () => {
         localeValue: '终端',
         locale: 'zh'
       })
-    ).toBe('Terminal')
+    ).toBe('终端')
     expect(
       repairTranslatedValue({
         key: 'auto.components.feature.wall.BrowserAnimatedVisual.04096318ab',
@@ -102,7 +102,7 @@ describe('locale-translation-policy zh round 5', () => {
         localeValue: '终端 1',
         locale: 'zh'
       })
-    ).toBe('Terminal 1')
+    ).toBe('终端 1')
     expect(
       repairTranslatedValue({
         key: 'auto.components.agent.AgentCombobox.986f946354',
@@ -110,7 +110,7 @@ describe('locale-translation-policy zh round 5', () => {
         localeValue: '空白端子',
         locale: 'zh'
       })
-    ).toBe('空白 Terminal')
+    ).toBe('空白终端')
     expect(
       repairTranslatedValue({
         key: 'auto.components.terminal.pane.TerminalContextMenu.20e565d865',
@@ -118,7 +118,7 @@ describe('locale-translation-policy zh round 5', () => {
         localeValue: '分体式端子右',
         locale: 'zh'
       })
-    ).toBe('向右拆分 Terminal')
+    ).toBe('向右拆分终端')
     expect(
       repairTranslatedValue({
         key: 'auto.components.settings.TerminalAppearanceSection.abcb4dd019',
@@ -126,7 +126,7 @@ describe('locale-translation-policy zh round 5', () => {
         localeValue: '终端Cursor',
         locale: 'zh'
       })
-    ).toBe('Terminal Cursor')
+    ).toBe('终端光标')
     expect(
       repairTranslatedValue({
         key: 'auto.components.terminal.FloatingTerminalPanel.3215fc73e9',
@@ -134,10 +134,10 @@ describe('locale-translation-policy zh round 5', () => {
         localeValue: '新Terminal',
         locale: 'zh'
       })
-    ).toBe('新 Terminal')
+    ).toBe('新建终端')
   })
 
-  it('keeps workflow terms in English', () => {
+  it('uses natural Chinese for generic workflow terms', () => {
     expect(
       repairTranslatedValue({
         key: 'auto.components.sidebar.SidebarNav.9c95e1ce91',
@@ -145,7 +145,7 @@ describe('locale-translation-policy zh round 5', () => {
         localeValue: '代理',
         locale: 'zh'
       })
-    ).toBe('Agents')
+    ).toBe('智能体')
     expect(
       repairTranslatedValue({
         key: 'auto.components.GitHubItemDialog.28986b3747',
@@ -153,7 +153,7 @@ describe('locale-translation-policy zh round 5', () => {
         localeValue: '已启动 AI 代理处理失败的检查。',
         locale: 'zh'
       })
-    ).toBe('已启动 AI agent 处理失败的检查。')
+    ).toBe('已启动智能体处理失败的检查。')
     expect(
       repairTranslatedValue({
         key: 'auto.components.LinearIssueMarkdownDescriptionEditor.d9c47069ef',
@@ -169,7 +169,7 @@ describe('locale-translation-policy zh round 5', () => {
         localeValue: '描述（可选，降价）',
         locale: 'zh'
       })
-    ).toBe('描述（可选，markdown）')
+    ).toBe('描述（可选，Markdown）')
     expect(
       repairTranslatedValue({
         key: 'auto.components.sidebar.local.base.ref.suggestion.toast.commits',
@@ -177,7 +177,7 @@ describe('locale-translation-policy zh round 5', () => {
         localeValue: '次提交',
         locale: 'zh'
       })
-    ).toBe('commits')
+    ).toBe('提交')
     expect(
       repairTranslatedValue({
         key: 'auto.store.slices.worktrees.d1d78a7baa',
@@ -187,7 +187,7 @@ describe('locale-translation-policy zh round 5', () => {
           'Git 无法安全删除分支“{{value0}}”{{value1}}，因此 Orca 保留它以避免丢失本地提交。',
         locale: 'zh'
       })
-    ).toBe('Git 无法安全删除分支“{{value0}}”{{value1}}，因此 Orca 保留它以避免丢失本地 commits。')
+    ).toBe('Git 无法安全删除分支“{{value0}}”{{value1}}，因此 Orca 保留了该分支，以免丢失本地提交。')
   })
 
   it('does not confuse proxy copy with Agent terminology', () => {
@@ -218,7 +218,7 @@ describe('locale-translation-policy zh round 5', () => {
     ).toBe('no_proxy')
   })
 
-  it('keeps repo terminology in English', () => {
+  it('uses repository terminology consistently', () => {
     expect(
       repairTranslatedValue({
         key: 'auto.components.workspace.cleanup.WorkspaceCleanupDialog.0b1766738a',
@@ -226,7 +226,7 @@ describe('locale-translation-policy zh round 5', () => {
         localeValue: '回购协议',
         locale: 'zh'
       })
-    ).toBe('Repo')
+    ).toBe('仓库')
     expect(
       repairTranslatedValue({
         key: 'auto.components.sidebar.add.repo.local.start.actions.fb4fc5380e',
@@ -234,7 +234,7 @@ describe('locale-translation-policy zh round 5', () => {
         localeValue: '本地项目、Git 存储库或包含多个存储库的文件夹',
         locale: 'zh'
       })
-    ).toBe('本地项目、Git repo 或包含多个 repos 的文件夹')
+    ).toBe('本地项目、Git 仓库或包含多个仓库的文件夹')
   })
 
   it('keeps product, provider, code, and shell tokens untranslated', () => {
@@ -269,7 +269,7 @@ describe('locale-translation-policy zh round 5', () => {
         localeValue: 'git 重击',
         locale: 'zh'
       })
-    ).toBe('git bash')
+    ).toBe('Git Bash')
     expect(
       repairTranslatedValue({
         key: 'auto.components.tab.bar.TabBar.2148f65e04',
@@ -320,7 +320,7 @@ describe('locale-translation-policy zh round 5', () => {
         localeValue: '显示Claude Token 和成本使用情况。',
         locale: 'zh'
       })
-    ).toBe('显示 Claude Token 和成本使用情况。')
+    ).toBe('显示当前工作区的 Claude 令牌用量和费用。')
     expect(
       repairTranslatedValue({
         key: 'auto.components.feature.wall.ComputerUseAnimatedVisual.94787f01f8',

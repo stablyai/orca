@@ -45,18 +45,16 @@ vi.mock('@/components/jira-connect-dialog', () => ({
 let root: Root | null = null
 let container: HTMLDivElement | null = null
 
-function installStore(settings: StoreState['settings']): StoreState {
+function installStore(settings: StoreState['settings'], siteCount = 1): StoreState {
   const state: StoreState = {
     jiraStatus: {
       connected: true,
-      sites: [
-        {
-          id: 'site-1',
-          displayName: 'Acme Jira',
-          siteUrl: 'https://acme.atlassian.net',
-          email: 'jira@example.test'
-        }
-      ]
+      sites: Array.from({ length: siteCount }, (_, index) => ({
+        id: `site-${index + 1}`,
+        displayName: index === 0 ? 'Acme Jira' : `Acme Jira ${index + 1}`,
+        siteUrl: `https://acme${index || ''}.atlassian.net`,
+        email: 'jira@example.test'
+      }))
     },
     jiraStatusChecked: true,
     jiraStatusContextKey: getProviderRuntimeContextKey(settings),
@@ -100,6 +98,7 @@ describe('JiraIntegrationCard account scope', () => {
     const rendered = await renderCard()
 
     expect(rendered.textContent).toContain('Account scope: Remote server: runtime-1')
+    expect(rendered.textContent).toContain('1 site connected')
     expect(rendered.textContent).toContain('Acme Jira')
     expect(rendered.textContent).toContain('https://acme.atlassian.net · jira@example.test')
 
@@ -115,5 +114,13 @@ describe('JiraIntegrationCard account scope', () => {
       repoId: null,
       sectionId: 'default-runtime'
     })
+  })
+
+  it('uses the complete plural connected-site message', async () => {
+    installStore({ activeRuntimeEnvironmentId: null }, 2)
+
+    const rendered = await renderCard()
+
+    expect(rendered.textContent).toContain('2 sites connected')
   })
 })

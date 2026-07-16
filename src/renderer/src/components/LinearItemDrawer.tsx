@@ -1364,7 +1364,9 @@ export default function LinearItemDrawer({
       id: comment.id,
       body: comment.body,
       createdAt: comment.createdAt,
-      user: { displayName: 'You' }
+      user: {
+        displayName: translate('auto.components.LinearItemDrawer.localCommentAuthor', 'You')
+      }
     }
     optimisticCommentsRef.current.push(newComment)
     setComments((prev) => [...prev, newComment])

@@ -4,6 +4,7 @@ import { LOCALE_KEY_OVERRIDES } from './locale-key-overrides.mjs'
 import { LOCALE_PHRASE_FIXES } from './locale-phrase-fixes.mjs'
 import { SEARCH_KEYWORD_OVERRIDES } from './locale-search-keyword-overrides.mjs'
 import { LOCALE_VALUE_OVERRIDES } from './locale-value-overrides.mjs'
+import { ZH_HUMAN_KEY_OVERRIDES } from './locale-zh-human-key-overrides.mjs'
 
 export { LOCALE_KEY_OVERRIDES } from './locale-key-overrides.mjs'
 export { LOCALE_PHRASE_FIXES } from './locale-phrase-fixes.mjs'
@@ -236,24 +237,8 @@ export const BRAND_MISTRANSLATIONS = {
     Linear: ['线性', '线形'],
     Jira: ['吉拉'],
     Tailscale: ['尾鳞', '尾鱗'],
-    Agent: ['代理', '智能体'],
-    Agents: ['代理', '智能体'],
-    agent: ['代理', '智能体'],
-    agents: ['代理', '智能体'],
-    Commit: ['提交'],
-    Commits: ['提交'],
-    commit: ['提交'],
-    commits: ['提交'],
     Markdown: ['降价'],
     markdown: ['降价'],
-    Repo: ['存储库', '仓库', '回购协议', '回购'],
-    Repos: ['存储库', '仓库', '回购协议', '回购'],
-    repo: ['存储库', '仓库', '回购协议', '回购'],
-    repos: ['存储库', '仓库', '回购协议', '回购'],
-    Terminal: ['终端', '端子'],
-    Terminals: ['终端', '端子'],
-    terminal: ['终端', '端子'],
-    terminals: ['终端', '端子'],
     Bash: ['重击'],
     PowerShell: ['电源外壳'],
     REST: ['休息'],
@@ -457,6 +442,16 @@ function applyPhraseFixes(enValue, localeValue, locale) {
 }
 
 export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
+  const humanKeyOverride = locale === 'zh' ? ZH_HUMAN_KEY_OVERRIDES[key]?.zh : undefined
+  if (humanKeyOverride) {
+    // Human-reviewed Simplified Chinese is the final copy, not another MT input to normalize.
+    return humanKeyOverride
+  }
+
+  if (isEnglishOnlyKey(key)) {
+    return enValue
+  }
+
   const keyOverride = LOCALE_KEY_OVERRIDES[key]?.[locale]
   if (keyOverride) {
     // Why: exact key overrides can still carry stale MT output, so glossary repairs remain the final gate.

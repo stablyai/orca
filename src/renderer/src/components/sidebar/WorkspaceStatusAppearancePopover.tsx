@@ -108,7 +108,7 @@ export default function WorkspaceStatusAppearancePopover({
                   className="size-8"
                   onClick={() => onChangeIcon(status.id, icon.id)}
                   aria-label={translate(
-                    'auto.components.sidebar.WorkspaceStatusAppearancePopover.514be2f569',
+                    'auto.components.sidebar.WorkspaceStatusAppearancePopover.setIcon',
                     'Set {{value0}} icon to {{value1}}',
                     { value0: status.label, value1: icon.label }
                   )}

@@ -27,6 +27,86 @@ export type HostedReviewActionInfo = Pick<
     >
   >
 
+export function buildHostedReviewStateConfirmation(args: {
+  nextState: 'open' | 'closed'
+  shortLabel: string
+  isGitLab: boolean
+  reviewNumber: number
+}): {
+  title: string
+  description: string
+  confirmLabel: string
+  confirmVariant: 'default' | 'destructive'
+} {
+  const isClosing = args.nextState === 'closed'
+  const reviewReference = `${args.shortLabel} ${args.isGitLab ? '!' : '#'}${args.reviewNumber}`
+  const localizedReviewLabel = args.isGitLab
+    ? translate(
+        'auto.components.right.sidebar.HostedReviewActions.mergeRequestLabel',
+        'merge request'
+      )
+    : translate(
+        'auto.components.right.sidebar.HostedReviewActions.pullRequestLabel',
+        'pull request'
+      )
+  // Why: Close/Reopen are sentence grammar, while the localized PR/MR
+  // reference is data that translators can position within the full title.
+  return {
+    title: isClosing
+      ? translate(
+          'auto.components.right.sidebar.HostedReviewActions.57fb10cfe7',
+          'Close {{value0}}?',
+          { value0: reviewReference }
+        )
+      : translate(
+          'auto.components.right.sidebar.HostedReviewActions.b982b128c0',
+          'Reopen {{value0}}?',
+          { value0: reviewReference }
+        ),
+    description: isClosing
+      ? translate(
+          'auto.components.right.sidebar.HostedReviewActions.a3d572a4de',
+          'This will close the {{value0}}.',
+          { value0: localizedReviewLabel }
+        )
+      : translate(
+          'auto.components.right.sidebar.HostedReviewActions.78f5ff294c',
+          'This will reopen the {{value0}}.',
+          { value0: localizedReviewLabel }
+        ),
+    confirmLabel: isClosing
+      ? translate('auto.components.right.sidebar.HostedReviewActions.73e5cc9c99', 'Close')
+      : translate('auto.components.right.sidebar.HostedReviewActions.641c8ec02a', 'Reopen'),
+    confirmVariant: isClosing ? 'destructive' : 'default'
+  }
+}
+
+export function formatHostedReviewStateChangeFailure(
+  nextState: 'open' | 'closed',
+  isGitLab: boolean
+): string {
+  const localizedReviewLabel = isGitLab
+    ? translate(
+        'auto.components.right.sidebar.HostedReviewActions.mergeRequestLabel',
+        'merge request'
+      )
+    : translate(
+        'auto.components.right.sidebar.HostedReviewActions.pullRequestLabel',
+        'pull request'
+      )
+  return nextState === 'closed'
+    ? translate(
+        'auto.components.right.sidebar.HostedReviewActions.72c9a274a7',
+        'Failed to close the {{value0}}.',
+        { value0: localizedReviewLabel }
+      )
+    : translate(
+        'auto.components.right.sidebar.HostedReviewActions.93afca5395',
+        'Failed to reopen the {{value0}}.',
+        { value0: localizedReviewLabel }
+      )
+}
+
 export function useHostedReviewActions({
   review,
   githubPR,
@@ -134,23 +214,14 @@ export function useHostedReviewActions({
         return
       }
       const isClosing = nextState === 'closed'
-      const label = isClosing ? 'Close' : 'Reopen'
-      const confirmed = await confirm({
-        title: `${label} ${shortLabel} ${isGitLab ? '!' : '#'}${review.number}?`,
-        description: isClosing
-          ? translate(
-              'auto.components.right.sidebar.HostedReviewActions.a3d572a4de',
-              'This will close the {{value0}}.',
-              { value0: reviewLabel }
-            )
-          : translate(
-              'auto.components.right.sidebar.HostedReviewActions.78f5ff294c',
-              'This will reopen the {{value0}}.',
-              { value0: reviewLabel }
-            ),
-        confirmLabel: label,
-        confirmVariant: isClosing ? 'destructive' : 'default'
-      })
+      const confirmed = await confirm(
+        buildHostedReviewStateConfirmation({
+          nextState,
+          shortLabel,
+          isGitLab,
+          reviewNumber: review.number
+        })
+      )
       if (!confirmed) {
         return
       }
@@ -181,7 +252,7 @@ export function useHostedReviewActions({
           toast.success(
             isClosing
               ? translate(
-                  'auto.components.right.sidebar.HostedReviewActions.fa3ee9a515',
+                  'auto.components.right.sidebar.HostedReviewActions.reviewClosedToast',
                   '{{value0}} closed',
                   { value0: shortLabel }
                 )
@@ -195,7 +266,9 @@ export function useHostedReviewActions({
         }
       } catch (err) {
         const message =
-          err instanceof Error ? err.message : `Failed to ${label.toLowerCase()} ${reviewLabel}`
+          err instanceof Error
+            ? err.message
+            : formatHostedReviewStateChangeFailure(nextState, isGitLab)
         setActionError(message)
         toast.error(message)
       } finally {

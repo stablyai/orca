@@ -14,8 +14,8 @@ import type { UiLanguage } from '../../../shared/ui-language'
 
 export const i18n: I18nInstance = i18next.createInstance()
 
-// Why: only the English catalog is bundled eagerly. The other four locales add
-// ~2MB to the renderer's startup chunk (parsed on every launch) even though the
+// Why: only the English catalog is bundled eagerly. The other locales add
+// multiple megabytes to the startup chunk (parsed on every launch) even though the
 // app always boots in English and only switches after the persisted UI language
 // loads. A lazy backend fetches each non-English catalog on demand, so any
 // changeLanguage() call (UI switch or test) transparently loads its bundle
@@ -27,7 +27,8 @@ const NON_DEFAULT_LOCALE_LOADERS: Record<
   es: () => import('./locales/es.json'),
   ja: () => import('./locales/ja.json'),
   ko: () => import('./locales/ko.json'),
-  zh: () => import('./locales/zh.json')
+  zh: () => import('./locales/zh.json'),
+  'zh-TW': () => import('./locales/zh-TW.json')
 }
 
 const lazyLocaleBackend: BackendModule = {
@@ -54,6 +55,9 @@ void i18n
   .init({
     fallbackLng: DEFAULT_LOCALE,
     lng: DEFAULT_LOCALE,
+    // Every requested language is normalized to a supported catalog first, so
+    // loading a base language for zh-TW only duplicates the full Simplified catalog.
+    load: 'currentOnly',
     // Why: `resources` seeds the eager English catalog while
     // `partialBundledLanguages` lets the backend supply the lazy locales — so
     // i18next uses bundled `en` immediately and only hits the backend for the

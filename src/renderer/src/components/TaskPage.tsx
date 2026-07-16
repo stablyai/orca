@@ -405,6 +405,38 @@ function getGitLabWorkItemWorkspaceSeed(item: GitLabWorkItem): string {
   )
 }
 
+function getSelectedLinearProjectMemberCountLabel(count: number): string {
+  // Why: member/members must remain part of the translated phrase for
+  // locale-specific pluralization.
+  return count === 1
+    ? translate('auto.components.TaskPage.oneSelectedMember', '{{count}} member', { count })
+    : translate('auto.components.TaskPage.manySelectedMembers', '{{count}} members', { count })
+}
+
+function getSelectedLinearLabelCountLabel(count: number): string {
+  // Why: project and issue selectors need the same complete,
+  // locale-orderable count phrase.
+  return count === 1
+    ? translate('auto.components.TaskPage.oneSelectedLabel', '{{count}} label', { count })
+    : translate('auto.components.TaskPage.manySelectedLabels', '{{count}} labels', { count })
+}
+
+function getGitLabStartWorkspaceAriaLabel(item: GitLabWorkItem): string {
+  // Why: issue is translated prose while MR is a product abbreviation, so
+  // the full branches stay distinct.
+  return item.type === 'mr'
+    ? translate(
+        'auto.components.TaskPage.startWorkspaceFromGitLabMR',
+        'Start workspace from MR {{number}}',
+        { number: item.number }
+      )
+    : translate(
+        'auto.components.TaskPage.startWorkspaceFromGitLabIssue',
+        'Start workspace from issue {{number}}',
+        { number: item.number }
+      )
+}
+
 function getJiraIssueWorkspaceSeed(issue: JiraIssue): string {
   return (
     getLinkedWorkItemWorkspaceName({
@@ -10039,11 +10071,7 @@ export default function TaskPage(): React.JSX.Element {
                                 event.stopPropagation()
                                 handleUseGitLabItem(item)
                               }}
-                              aria-label={translate(
-                                'auto.components.TaskPage.5e8061b088',
-                                'Start workspace from {{value0}} {{value1}}',
-                                { value0: item.type === 'mr' ? 'MR' : 'issue', value1: item.number }
-                              )}
+                              aria-label={getGitLabStartWorkspaceAriaLabel(item)}
                             >
                               <ArrowRight className="size-3.5" />
                             </Button>
@@ -11645,13 +11673,8 @@ export default function TaskPage(): React.JSX.Element {
                     <span>
                       {newLinearProjectMemberIds.length === 0
                         ? translate('auto.components.TaskPage.d6cda23ef1', 'Members')
-                        : translate(
-                            'auto.components.TaskPage.7719d8daa9',
-                            '{{value0}} member{{value1}}',
-                            {
-                              value0: newLinearProjectMemberIds.length,
-                              value1: newLinearProjectMemberIds.length > 1 ? 's' : ''
-                            }
+                        : getSelectedLinearProjectMemberCountLabel(
+                            newLinearProjectMemberIds.length
                           )}
                     </span>
                     <ChevronDown className="size-3 text-muted-foreground/70" />
@@ -11719,14 +11742,7 @@ export default function TaskPage(): React.JSX.Element {
                     <span>
                       {newLinearProjectLabelIds.length === 0
                         ? translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels')
-                        : translate(
-                            'auto.components.TaskPage.eff9800d4b',
-                            '{{value0}} label{{value1}}',
-                            {
-                              value0: newLinearProjectLabelIds.length,
-                              value1: newLinearProjectLabelIds.length > 1 ? 's' : ''
-                            }
-                          )}
+                        : getSelectedLinearLabelCountLabel(newLinearProjectLabelIds.length)}
                     </span>
                     <ChevronDown className="size-3 text-muted-foreground/70" />
                   </button>
@@ -12280,14 +12296,7 @@ export default function TaskPage(): React.JSX.Element {
                     <span>
                       {newLinearIssueLabelIds.length === 0
                         ? translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels')
-                        : translate(
-                            'auto.components.TaskPage.eff9800d4b',
-                            '{{value0}} label{{value1}}',
-                            {
-                              value0: newLinearIssueLabelIds.length,
-                              value1: newLinearIssueLabelIds.length > 1 ? 's' : ''
-                            }
-                          )}
+                        : getSelectedLinearLabelCountLabel(newLinearIssueLabelIds.length)}
                     </span>
                     <ChevronDown className="size-3 text-muted-foreground/70" />
                   </button>

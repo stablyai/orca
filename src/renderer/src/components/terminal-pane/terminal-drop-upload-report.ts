@@ -9,29 +9,51 @@ export function reportTerminalDropUploadSkipsAndFailures(
     // Why: symlink rejection is policy, not error. Mixed skips collapse to one
     // count so the terminal drop UI stays readable for multi-file drops.
     const symlinkCount = skipped.filter((s) => s.reason === 'symlink').length
-    const noun = skipped.length === 1 ? 'item' : 'items'
+    const skippedCount = skipped.length
     toast.message(
       symlinkCount === skipped.length
-        ? translate(
-            'auto.components.terminal.pane.terminal.drop.handler.53f015fd85',
-            'Skipped {{value0}} symlink{{value1}}.',
-            { value0: skipped.length, value1: skipped.length === 1 ? '' : 's' }
-          )
-        : translate(
-            'auto.components.terminal.pane.terminal.drop.handler.b4cf68e889',
-            'Skipped {{value0}} {{value1}}.',
-            { value0: skipped.length, value1: noun }
-          )
+        ? // Why: each complete count variant is independently translatable;
+          // noun and suffix fragments cannot represent non-English grammar.
+          skippedCount === 1
+          ? translate(
+              'auto.components.terminal.pane.terminal.drop.handler.skippedOneSymlink',
+              'Skipped {{count}} symlink.',
+              { count: skippedCount }
+            )
+          : translate(
+              'auto.components.terminal.pane.terminal.drop.handler.skippedManySymlinks',
+              'Skipped {{count}} symlinks.',
+              { count: skippedCount }
+            )
+        : skippedCount === 1
+          ? translate(
+              'auto.components.terminal.pane.terminal.drop.handler.skippedOneItem',
+              'Skipped {{count}} item.',
+              { count: skippedCount }
+            )
+          : translate(
+              'auto.components.terminal.pane.terminal.drop.handler.skippedManyItems',
+              'Skipped {{count}} items.',
+              { count: skippedCount }
+            )
     )
   }
   if (failed.length > 0) {
-    const noun = failed.length === 1 ? 'file' : 'files'
+    // Why: keep the complete file-count phrase in the catalog rather than
+    // interpolating an English noun into an otherwise translated sentence.
+    const failedCount = failed.length
     toast.error(
-      translate(
-        'auto.components.terminal.pane.terminal.drop.handler.1e072f611e',
-        'Failed to upload {{value0}} {{value1}}.',
-        { value0: failed.length, value1: noun }
-      )
+      failedCount === 1
+        ? translate(
+            'auto.components.terminal.pane.terminal.drop.handler.failedToUploadOneFile',
+            'Failed to upload {{count}} file.',
+            { count: failedCount }
+          )
+        : translate(
+            'auto.components.terminal.pane.terminal.drop.handler.failedToUploadManyFiles',
+            'Failed to upload {{count}} files.',
+            { count: failedCount }
+          )
     )
   }
 }

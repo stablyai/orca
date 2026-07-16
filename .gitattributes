@@ -9,3 +9,5 @@
 /skill-guides/*.md text eol=lf
 /skills/*/SKILL.md text eol=lf
 /src/cli/bundled-skill-guides.ts text eol=lf
+/src/renderer/src/i18n/locales/zh.json text eol=lf
+/src/renderer/src/i18n/locales/zh-TW.json text eol=lf

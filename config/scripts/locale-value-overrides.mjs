@@ -1,5 +1,6 @@
 import { JA_VALUE_OVERRIDES } from './locale-ja-value-overrides.mjs'
 import { KO_VALUE_OVERRIDES } from './locale-ko-value-overrides.mjs'
+import { ZH_HUMAN_VALUE_OVERRIDES } from './locale-zh-human-value-overrides.mjs'
 import { ZH_VALUE_OVERRIDES } from './locale-zh-value-overrides.mjs'
 
 export const LOCALE_VALUE_OVERRIDES = {
@@ -305,7 +306,7 @@ export const LOCALE_VALUE_OVERRIDES = {
     teams: '团队',
     passing: '通过',
     'opened this issue': '创建了此议题',
-    Open: '进行中',
+    Open: '打开',
     'Join Discord': '加入 Discord',
     'Pull request merged': '拉取请求已合并',
     'Agent Skills': '代理技能',
@@ -371,7 +372,8 @@ export const LOCALE_VALUE_OVERRIDES = {
     'Fix checks prompt is empty. Update Source Control AI settings.':
       '检查提示为空。请更新源代码管理 AI 设置。',
     Question: '疑问',
-    ...ZH_VALUE_OVERRIDES
+    ...ZH_VALUE_OVERRIDES,
+    ...ZH_HUMAN_VALUE_OVERRIDES
   },
   ja: {
     Save: '保存',

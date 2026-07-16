@@ -183,10 +183,7 @@ import {
 } from '@/components/github/github-pr-reviewer-candidate-filter'
 import { githubAvatarUrl } from '@/components/github/github-issue-comment-helpers'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
-import {
-  GITHUB_PR_MERGE_METHOD_LABELS,
-  resolveGitHubPRMergeMethods
-} from '../../../shared/github-pr-merge-methods'
+import { resolveGitHubPRMergeMethods } from '../../../shared/github-pr-merge-methods'
 import {
   findGithubIssueWorkspaceAttachment,
   getGithubWorkItemWorkspaceAttachmentLabel
@@ -2022,6 +2019,20 @@ function PRViewedCheckbox({
   filePath: string
   onToggle: () => void
 }): React.JSX.Element {
+  // Why: action words must remain inside the translated sentence instead of
+  // leaking English into CJK labels.
+  const viewedLabel = checked
+    ? translate(
+        'auto.components.GitHubItemDialog.unmarkFileAsViewed',
+        'Unmark {{filePath}} as viewed',
+        { filePath }
+      )
+    : translate(
+        'auto.components.GitHubItemDialog.markFileAsViewed',
+        'Mark {{filePath}} as viewed',
+        { filePath }
+      )
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -2029,11 +2040,7 @@ function PRViewedCheckbox({
           type="button"
           role="checkbox"
           aria-checked={checked}
-          aria-label={translate(
-            'auto.components.GitHubItemDialog.2d89a38d9d',
-            '{{value0}} {{value1}} as viewed',
-            { value0: checked ? 'Unmark' : 'Mark', value1: filePath }
-          )}
+          aria-label={viewedLabel}
           disabled={pending}
           onClick={(event) => {
             event.stopPropagation()
@@ -2942,7 +2949,7 @@ function CommentCodeContext({
                   )
                 }
                 aria-label={translate(
-                  'auto.components.GitHubItemDialog.307c98e8e3',
+                  'auto.components.GitHubItemDialog.showMoreLinesBelow',
                   'Show {{value0}} more lines below',
                   { value0: CODE_CONTEXT_EXPAND_STEP }
                 )}
@@ -3827,6 +3834,86 @@ function ConversationTab({
   )
 }
 
+function getPullRequestStateActionCopy(
+  nextState: 'open' | 'closed',
+  number: number
+): { title: string; confirmLabel: string; failedMessage: string } {
+  // Why: close/reopen are translated as complete actions so CJK copy never
+  // receives an interpolated English verb.
+  return nextState === 'closed'
+    ? {
+        title: translate(
+          'auto.components.GitHubItemDialog.confirmClosePullRequestTitle',
+          'Close PR #{{number}}?',
+          { number }
+        ),
+        confirmLabel: translate(
+          'auto.components.GitHubItemDialog.closePullRequestConfirmLabel',
+          'Close'
+        ),
+        failedMessage: translate(
+          'auto.components.GitHubItemDialog.failedToClosePullRequest',
+          'Failed to close PR'
+        )
+      }
+    : {
+        title: translate(
+          'auto.components.GitHubItemDialog.confirmReopenPullRequestTitle',
+          'Reopen PR #{{number}}?',
+          { number }
+        ),
+        confirmLabel: translate(
+          'auto.components.GitHubItemDialog.reopenPullRequestConfirmLabel',
+          'Reopen'
+        ),
+        failedMessage: translate(
+          'auto.components.GitHubItemDialog.failedToReopenPullRequest',
+          'Failed to reopen PR'
+        )
+      }
+}
+
+function getLocalizedPullRequestMergeMethodLabel(method: GitHubPRMergeMethod): string {
+  // Why: merge method names are visible commands, not code identifiers, and
+  // must be localized wherever they appear.
+  switch (method) {
+    case 'squash':
+      return translate('auto.components.GitHubItemDialog.squashAndMergeLabel', 'Squash and merge')
+    case 'merge':
+      return translate(
+        'auto.components.GitHubItemDialog.createMergeCommitLabel',
+        'Create merge commit'
+      )
+    case 'rebase':
+      return translate('auto.components.GitHubItemDialog.rebaseAndMergeLabel', 'Rebase and merge')
+  }
+}
+
+function getPullRequestMergeConfirmTitle(method: GitHubPRMergeMethod, number: number): string {
+  // Why: each method owns a complete confirmation sentence so translations
+  // can choose their own word order around the PR number.
+  switch (method) {
+    case 'squash':
+      return translate(
+        'auto.components.GitHubItemDialog.confirmSquashAndMergeTitle',
+        'Squash and merge PR #{{number}}?',
+        { number }
+      )
+    case 'merge':
+      return translate(
+        'auto.components.GitHubItemDialog.confirmCreateMergeCommitTitle',
+        'Create merge commit for PR #{{number}}?',
+        { number }
+      )
+    case 'rebase':
+      return translate(
+        'auto.components.GitHubItemDialog.confirmRebaseAndMergeTitle',
+        'Rebase and merge PR #{{number}}?',
+        { number }
+      )
+  }
+}
+
 function PRActionsPanel({
   item,
   repoPath,
@@ -3891,13 +3978,9 @@ function PRActionsPanel({
     if (!canMutateState || statePending) {
       return
     }
-    const label = nextState === 'closed' ? 'Close' : 'Reopen'
+    const actionCopy = getPullRequestStateActionCopy(nextState, item.number)
     const confirmed = await confirm({
-      title: translate(
-        'auto.components.GitHubItemDialog.03d7216d62',
-        '{{value0}} PR #{{value1}}?',
-        { value0: label, value1: item.number }
-      ),
+      title: actionCopy.title,
       description:
         nextState === 'closed'
           ? translate(
@@ -3908,7 +3991,7 @@ function PRActionsPanel({
               'auto.components.GitHubItemDialog.b6f1b7adbd',
               'This will reopen the pull request on GitHub.'
             ),
-      confirmLabel: label,
+      confirmLabel: actionCopy.confirmLabel,
       confirmVariant: nextState === 'closed' ? 'destructive' : 'default'
     })
     if (!confirmed) {
@@ -3935,13 +4018,7 @@ function PRActionsPanel({
       onMutated()
     } catch (err) {
       applyStatePatch(previousState)
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : translate('auto.components.GitHubItemDialog.e9b7cb7d17', 'Failed to {{value0}} PR', {
-              value0: label.toLowerCase()
-            })
-      )
+      toast.error(err instanceof Error ? err.message : actionCopy.failedMessage)
     } finally {
       setStatePending(false)
     }
@@ -3951,18 +4028,14 @@ function PRActionsPanel({
     if (mergeDisabled) {
       return
     }
-    const label = GITHUB_PR_MERGE_METHOD_LABELS[method]
+    const mergeMethodLabel = getLocalizedPullRequestMergeMethodLabel(method)
     const confirmed = await confirm({
-      title: translate(
-        'auto.components.GitHubItemDialog.03d7216d62',
-        '{{value0}} PR #{{value1}}?',
-        { value0: label, value1: item.number }
-      ),
+      title: getPullRequestMergeConfirmTitle(method, item.number),
       description: translate(
         'auto.components.GitHubItemDialog.a27ee5ca1a',
         'This will update the pull request on GitHub.'
       ),
-      confirmLabel: label
+      confirmLabel: mergeMethodLabel
     })
     if (!confirmed) {
       return
@@ -4115,7 +4188,7 @@ function PRActionsPanel({
                   )}
                   {mergePresentation.autoMergeAction?.label ??
                     (mergePresentation.directMergeAvailable
-                      ? mergeMethods.defaultLabel
+                      ? getLocalizedPullRequestMergeMethodLabel(mergeMethods.defaultMethod)
                       : mergePresentation.label)}
                   <ChevronDown className="size-3 opacity-60" />
                 </Button>
@@ -4141,14 +4214,14 @@ function PRActionsPanel({
               </DropdownMenuItem>
             )}
             {mergePresentation.autoMergeAction && <DropdownMenuSeparator />}
-            {mergeMethods.methods.map(({ method, label }) => (
+            {mergeMethods.methods.map(({ method }) => (
               <DropdownMenuItem
                 key={method}
                 disabled={mergeDisabled}
                 onSelect={() => void handleMerge(method)}
               >
                 <GitMerge className="size-4" />
-                {label}
+                {getLocalizedPullRequestMergeMethodLabel(method)}
               </DropdownMenuItem>
             ))}
             <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>
@@ -4186,6 +4259,22 @@ function PRActionsPanel({
   )
 }
 
+function getCommentReactionAriaLabel(reaction: GitHubReaction): string {
+  // Why: the translated sentence must own reaction/reactions for
+  // locale-specific pluralization and word order.
+  return reaction.count === 1
+    ? translate(
+        'auto.components.GitHubItemDialog.oneReactionAriaLabel',
+        '{{count}} {{reactionEmoji}} reaction',
+        { count: reaction.count, reactionEmoji: REACTION_EMOJI[reaction.content] }
+      )
+    : translate(
+        'auto.components.GitHubItemDialog.manyReactionsAriaLabel',
+        '{{count}} {{reactionEmoji}} reactions',
+        { count: reaction.count, reactionEmoji: REACTION_EMOJI[reaction.content] }
+      )
+}
+
 function CommentReactions({
   reactions
 }: {
@@ -4202,15 +4291,7 @@ function CommentReactions({
         <span
           key={reaction.content}
           className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/35 px-2 text-[12px] leading-none text-foreground"
-          aria-label={translate(
-            'auto.components.GitHubItemDialog.a18f669c7a',
-            '{{value0}} {{value1}} reaction{{value2}}',
-            {
-              value0: reaction.count,
-              value1: reaction.content,
-              value2: reaction.count === 1 ? '' : 's'
-            }
-          )}
+          aria-label={getCommentReactionAriaLabel(reaction)}
         >
           <span aria-hidden="true">{REACTION_EMOJI[reaction.content]}</span>
           <span className="tabular-nums">{reaction.count}</span>

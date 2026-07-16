@@ -18,6 +18,7 @@ import {
   parseRelayGracePeriodSeconds,
   type EditingTarget
 } from '../settings/ssh-target-draft'
+import { getSyncedSshHostSummary } from '../settings/ssh-import-summary'
 import { MAX_SSH_RELAY_GRACE_PERIOD_SECONDS, type SshTarget } from '../../../../shared/ssh-types'
 import { RemoteServerFields, SshHostFields } from './AddRemoteHostFields'
 
@@ -146,13 +147,7 @@ export function AddRemoteHostDialog({
           )
         )
       } else {
-        toast.success(
-          translate(
-            'auto.components.sidebar.AddRemoteHostDialog.sshImportSynced',
-            'Synced {{value0}} host{{value1}}.',
-            { value0: synced.length, value1: synced.length > 1 ? 's' : '' }
-          )
-        )
+        toast.success(getSyncedSshHostSummary(synced.length))
         reset()
         onOpenChange(null)
       }

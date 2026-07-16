@@ -378,7 +378,8 @@
             "new": {
               "tab": {
                 "11cce5cc77": "새 terminal에서 {{value0}}을(를) 시작할 수 없습니다.",
-                "a5a1f7033f": "{{value0}}이(가) 전송되지 않았습니다. agent가 준비되면 붙여넣으세요."
+                "promptDeliveryTimedOut": "Your prompt wasn't sent — paste it once the agent is ready.",
+                "notesDeliveryTimedOut": "Your notes weren't sent — paste them once the agent is ready."
               }
             }
           },
@@ -403,7 +404,8 @@
               "19c7683acf": "생성된 워크스페이스에서는 선택한 agent를 사용할 수 없습니다.",
               "8bc45efdbc": "PR 헤드를 확인하지 못했습니다.",
               "agent": {
-                "ceeeb509b5": "Agent를 시작하는 데 시간이 너무 오래 걸렸습니다. 워크스페이스가 준비되었습니다. Agent가 유휴 상태일 때 {{value0}}을 붙여넣으세요."
+                "20015b902a": "Agent took too long to start. The workspace is ready — paste the prompt when the agent is idle.",
+                "33640ddfa0": "Agent took too long to start. The workspace is ready — paste the work item context when the agent is idle."
               }
             }
           }
@@ -802,7 +804,6 @@
         "0bbdc673c1": "체크를 새로고침하지 못했습니다.",
         "e7007aa1d8": "repos 경로가 없으면 체크를 새로고침할 수 없습니다.",
         "675bc0d638": "취소",
-        "a18f669c7a": "{{value0}} {{value1}} 반응{{value2}}",
         "53fe19aefc": "GitHub 병합 대화상자 열기",
         "a2495e4784": "PR",
         "ce360fc318": "자동 병합을 비활성화하지 못했습니다.",
@@ -812,8 +813,6 @@
         "aba792c8b3": "PR을 병합하지 못했습니다.",
         "dbe5e2448e": "PR이 병합되었습니다",
         "a27ee5ca1a": "그러면 GitHub의 PR이 업데이트됩니다.",
-        "03d7216d62": "{{value0}} PR #{{value1}}?",
-        "e9b7cb7d17": "{{value0}} PR에 실패했습니다.",
         "bd3b4492a0": "PR이 다시 열렸습니다",
         "9f88657c4e": "PR이 종료되었습니다.",
         "b6f1b7adbd": "그러면 GitHub에서 PR이 다시 열립니다.",
@@ -835,6 +834,7 @@
         "5221548274": "설명이 업데이트되었습니다.",
         "06c06e58ba": "아래에 더 많은 줄 표시",
         "307c98e8e3": "위에 {{value0}}줄 더 표시",
+        "showMoreLinesBelow": "아래에 {{value0}}줄 더 표시",
         "5664681624": "위에 줄 더 표시",
         "b1574e8ac2": "코드 컨텍스트 재설정",
         "d43736d09c": "코드 컨텍스트 컨트롤",
@@ -846,7 +846,6 @@
         "d1fa2cf888": "PR 헤드 SHA가 없으면 댓글을 달 수 없습니다.",
         "829674460a": "PR commit SHA가 누락되어 diff를 사용할 수 없습니다.",
         "af924014f8": "봤음",
-        "2d89a38d9d": "{{value0}} {{value1}}을(를) 본 것으로 표시",
         "70e84e3d0b": "일치하는 리뷰어가 없습니다.",
         "1ffce94a8b": "다른 사람들",
         "c2b21818e1": "제안",
@@ -924,7 +923,23 @@
           "activity": "활동",
           "noActivity": "아직 활동이 없습니다."
         },
-        "checkActionRequiredHint": "머지가 해제되려면 이 검사에 대해 GitHub에서 수동 작업(예: 워크플로우 실행 승인)이 필요합니다."
+        "checkActionRequiredHint": "머지가 해제되려면 이 검사에 대해 GitHub에서 수동 작업(예: 워크플로우 실행 승인)이 필요합니다.",
+        "unmarkFileAsViewed": "Unmark {{filePath}} as viewed",
+        "markFileAsViewed": "Mark {{filePath}} as viewed",
+        "confirmClosePullRequestTitle": "Close PR #{{number}}?",
+        "closePullRequestConfirmLabel": "Close",
+        "failedToClosePullRequest": "Failed to close PR",
+        "confirmReopenPullRequestTitle": "Reopen PR #{{number}}?",
+        "reopenPullRequestConfirmLabel": "Reopen",
+        "failedToReopenPullRequest": "Failed to reopen PR",
+        "squashAndMergeLabel": "Squash and merge",
+        "createMergeCommitLabel": "Create merge commit",
+        "rebaseAndMergeLabel": "Rebase and merge",
+        "confirmSquashAndMergeTitle": "Squash and merge PR #{{number}}?",
+        "confirmCreateMergeCommitTitle": "Create merge commit for PR #{{number}}?",
+        "confirmRebaseAndMergeTitle": "Rebase and merge PR #{{number}}?",
+        "oneReactionAriaLabel": "{{count}} {{reactionEmoji}} reaction",
+        "manyReactionsAriaLabel": "{{count}} {{reactionEmoji}} reactions"
       },
       "GitLabItemDialog": {
         "65e784c1f1": "다시 열기",
@@ -983,13 +998,16 @@
         "881e522e04": "병합",
         "6de8ce0cc6": "{{value0}} 필요",
         "22511537d2": "승인됨",
-        "00f3bab87b": " / 총 {{value0}}개 필요",
         "11384f99aa": "숫자",
-        "40c56b95e2": "{{value0}} 승인{{value1}} 남음",
         "3a051b8ade": "작업 항목",
         "32f8bef818": "로그 출력이 없습니다.",
         "4168eb2c51": "해결",
-        "commentTooLarge": "댓글이 너무 커서 안전하게 제출할 수 없습니다."
+        "commentTooLarge": "댓글이 너무 커서 안전하게 제출할 수 없습니다.",
+        "approvedWithRequirement": "Approved · {{requiredCount}} required",
+        "oneApprovalRemainingOfRequired": "{{remainingCount}} approval remaining of {{requiredCount}} required",
+        "manyApprovalsRemainingOfRequired": "{{remainingCount}} approvals remaining of {{requiredCount}} required",
+        "oneApprovalRemaining": "{{remainingCount}} approval remaining",
+        "manyApprovalsRemaining": "{{remainingCount}} approvals remaining"
       },
       "JiraIssueWorkspace": {
         "b0b92666c9": "댓글",
@@ -1024,7 +1042,11 @@
         "2a829a2f00": "우선순위",
         "693be070d0": "전환",
         "ef21405c6d": "Jira 이슈",
-        "commentTooLarge": "댓글이 너무 커서 안전하게 제출할 수 없습니다."
+        "commentTooLarge": "댓글이 너무 커서 안전하게 제출할 수 없습니다.",
+        "localCommentAuthor": "You",
+        "keyCopyLabel": "Key",
+        "branchNameCopyLabel": "Branch name",
+        "promptCopyLabel": "Prompt"
       },
       "Landing": {
         "76a95f7f47": "생성",
@@ -1115,7 +1137,11 @@
         "af6e02c44a": "페이지",
         "76ffd3c937": "추가할 프로젝트를 검색하세요.",
         "c11b4e3cc2": "프로젝트를 찾을 수 없습니다.",
-        "519c3587f3": "프로젝트에 추가"
+        "519c3587f3": "프로젝트에 추가",
+        "localCommentAuthor": "You",
+        "identifierCopyLabel": "Identifier",
+        "suggestedBranchNameCopyLabel": "Suggested branch name",
+        "promptCopyLabel": "Prompt"
       },
       "LinearItemDrawer": {
         "04008e6c46": "이슈에서 워크스페이스 시작",
@@ -1147,7 +1173,8 @@
         "39883467f4": "Linear 이슈",
         "fda549766e": "댓글을 달려면 {{value0}}",
         "d71cd3003e": "+ 담당자",
-        "commentTooLarge": "댓글이 너무 커서 안전하게 제출할 수 없습니다."
+        "commentTooLarge": "댓글이 너무 커서 안전하게 제출할 수 없습니다.",
+        "localCommentAuthor": "You"
       },
       "NewWorkspaceComposerCard": {
         "cbb47ee0dc": "로컬 Git 프로젝트에만 사용할 수 있습니다.",
@@ -1288,7 +1315,6 @@
         "246b2c6456": "체크를 새로고침하지 못했습니다.",
         "c057f2fcb0": "repos 경로가 없으면 체크를 새로고침할 수 없습니다.",
         "6591b1fa82": "취소",
-        "42c36d9166": "{{value0}} {{value1}} 반응{{value2}}",
         "7df8d5fc60": "GitHub 병합 대화상자 열기",
         "1939d0f663": "PR",
         "973ef2fac9": "자동 병합을 비활성화하지 못했습니다.",
@@ -1298,8 +1324,6 @@
         "aae645d36d": "PR을 병합하지 못했습니다.",
         "c57873d721": "PR이 병합되었습니다",
         "a63b3c159c": "그러면 GitHub의 PR이 업데이트됩니다.",
-        "eec3706a6a": "{{value0}} PR #{{value1}}?",
-        "b8c6cbb8c4": "PR {{value0}}에 실패했습니다.",
         "710e47aa06": "PR이 다시 열렸습니다",
         "7aa3b5f706": "PR이 종료되었습니다.",
         "3d77438c92": "그러면 GitHub에서 PR이 다시 열립니다.",
@@ -1322,6 +1346,7 @@
         "9b4190dc98": "설명이 업데이트되었습니다.",
         "51ed0cf38b": "아래 줄 더 보기",
         "e295a78c11": "위에 {{value0}}줄 더 표시",
+        "showMoreLinesBelow": "아래에 {{value0}}줄 더 표시",
         "c9de94b07a": "위에 줄 더 표시",
         "5f3e293517": "코드 컨텍스트 재설정",
         "85d119be40": "코드 컨텍스트 컨트롤",
@@ -1333,7 +1358,6 @@
         "d8c3ba91c4": "PR 헤드 SHA가 없으면 댓글을 달 수 없습니다.",
         "74660bd80b": "PR commit SHA가 누락되어 diff를 사용할 수 없습니다.",
         "2e528e1c2d": "본",
-        "ff84e1f54c": "{{value0}} {{value1}}을(를) 본 것으로 표시",
         "5ad00c7a0e": "일치하는 리뷰어가 없습니다.",
         "2760fa29a4": "다른 사람들",
         "828f045847": "제안",
@@ -1398,7 +1422,23 @@
         "dd5d9a4f17": "{{value0}}에 업데이트됨",
         "71a3c0f9d2": "워크스페이스 시작",
         "filesUnavailable": "Couldn't load changed files.",
-        "filesRetry": "Retry"
+        "filesRetry": "Retry",
+        "unmarkFileAsViewed": "Unmark {{filePath}} as viewed",
+        "markFileAsViewed": "Mark {{filePath}} as viewed",
+        "confirmClosePullRequestTitle": "Close PR #{{number}}?",
+        "closePullRequestConfirmLabel": "Close",
+        "failedToClosePullRequest": "Failed to close PR",
+        "confirmReopenPullRequestTitle": "Reopen PR #{{number}}?",
+        "reopenPullRequestConfirmLabel": "Reopen",
+        "failedToReopenPullRequest": "Failed to reopen PR",
+        "squashAndMergeLabel": "Squash and merge",
+        "createMergeCommitLabel": "Create merge commit",
+        "rebaseAndMergeLabel": "Rebase and merge",
+        "confirmSquashAndMergeTitle": "Squash and merge PR #{{number}}?",
+        "confirmCreateMergeCommitTitle": "Create merge commit for PR #{{number}}?",
+        "confirmRebaseAndMergeTitle": "Rebase and merge PR #{{number}}?",
+        "oneReactionAriaLabel": "{{count}} {{reactionEmoji}} reaction",
+        "manyReactionsAriaLabel": "{{count}} {{reactionEmoji}} reactions"
       },
       "QuickOpen": {
         "1dbd3f59ff": "이동",
@@ -1506,7 +1546,6 @@
         "67662ade50": "프로젝트 이슈",
         "6244a02f46": "Linear에서 열기",
         "606a85c774": "열기",
-        "5e8061b088": "{{value0}} {{value1}}에서 워크스페이스 시작",
         "592a55611b": "더 많은 팀을 선택하거나 새로고침해 보세요. 팀 필터는 현재 가져온 이슈 세트에 적용됩니다.",
         "618107fab3": "선택한 팀과 일치하는 가져온 이슈가 없습니다",
         "903c7af49f": "Linear 이슈를 찾을 수 없습니다.",
@@ -1670,10 +1709,8 @@
         "3b11c8e8fc": "배열",
         "e178c0a953": "이슈를 생성하기 전에 Jira 프로젝트를 선택하세요.",
         "0f7b0d964a": "{{value0}}에 새로운 이슈를 생성합니다.",
-        "eff9800d4b": "{{value0}} 라벨{{value1}}",
         "d7f16d0e32": "팀 선택",
         "5301ca0f20": "프로젝트 생성",
-        "7719d8daa9": "{{value0}} 멤버{{value1}}",
         "5af6f0ae5b": "팀 선택",
         "cfb730b73e": "이슈",
         "3659f9792a": "보드",
@@ -1753,7 +1790,13 @@
         "jiraSortAscending": "오름차순",
         "jiraSortDescending": "내림차순",
         "jiraSortBy": "정렬 기준",
-        "jiraToggleSortDirection": "{{value0}}으로 정렬"
+        "jiraToggleSortDirection": "{{value0}}으로 정렬",
+        "oneSelectedMember": "{{count}} member",
+        "manySelectedMembers": "{{count}} members",
+        "oneSelectedLabel": "{{count}} label",
+        "manySelectedLabels": "{{count}} labels",
+        "startWorkspaceFromGitLabMR": "Start workspace from MR {{number}}",
+        "startWorkspaceFromGitLabIssue": "Start workspace from issue {{number}}"
       },
       "Terminal": {
         "73768427cf": "닫기",
@@ -1844,8 +1887,6 @@
         "50a1d11d5b": "열린 탭",
         "088d66d980": "작업 및 설정",
         "dabd819ca1": "{{value0}}개의 모든 워크트리를 보려면 입력하세요.",
-        "20af998bff": "{{value0}} 사용 가능한 항목{{value1}}",
-        "bb72c08e63": "{{value0}} 결과를 찾았습니다{{value1}}",
         "34c8fbb46e": "SSH 원격",
         "63c2be1914": "SSH 연결이 끊어졌습니다.",
         "95be6587d3": "워크트리 \"{{value0}}\" 만들기",
@@ -1857,7 +1898,15 @@
         "workspaceTabMissing": "탭이 더 이상 존재하지 않습니다",
         "projectsGroupsHeader": "프로젝트 및 그룹",
         "projectBadge": "프로젝트",
-        "repoGroupBadge": "리포지토리 그룹"
+        "repoGroupBadge": "리포지토리 그룹",
+        "oneResultFoundWithCreateAction": "1 result found; create worktree action available",
+        "oneResultFound": "1 result found",
+        "manyResultsFoundWithCreateAction": "{{count}} results found; create worktree action available",
+        "manyResultsFound": "{{count}} results found",
+        "oneItemAvailableWithCreateAction": "1 item available; create worktree action available",
+        "oneItemAvailable": "1 item available",
+        "manyItemsAvailableWithCreateAction": "{{count}} items available; create worktree action available",
+        "manyItemsAvailable": "{{count}} items available"
       },
       "github": {
         "pr": {
@@ -2219,6 +2268,7 @@
               "5f79bc76b0": "프로젝트로 돌아가기",
               "aac9a4afc6": "Linear에서 열기",
               "7616c986c6": "열린 이슈 {{value0}}개",
+              "openInLinear": "Linear에서 {{value0}} 열기",
               "93e1f6bfca": "로드 중",
               "98730088a6": ". 전체 세트를 보려면 Linear를 검색하거나 엽니다.",
               "06b887d622": "처음 표시",
@@ -2623,16 +2673,22 @@
             },
             "drop": {
               "handler": {
-                "1e072f611e": "{{value0}} {{value1}}을(를) 업로드하지 못했습니다.",
-                "53f015fd85": "{{value0}} 심볼릭 링크{{value1}}을 건너뛰었습니다.",
-                "29c031b49a": "{{value0}} 파일{{value1}}을 런타임에 업로드하는 중…",
                 "0c77693641": "Worktree가 준비되지 않았습니다. 잠시 후에 다시 시도하세요.",
                 "ce8248b835": "작업 트리 경로를 사용할 수 없습니다.",
                 "internalTooManyPaths": "터미널에 안전하게 붙여넣기에는 드롭된 경로가 너무 많습니다.",
                 "internalPathsTooLarge": "터미널에 안전하게 붙여넣기에는 경로 목록이 너무 큽니다.",
-                "b4cf68e889": "{{value0}} {{value1}}을(를) 건너뛰었습니다.",
                 "writeTimeout": "파일 드롭이 취소되었습니다. 안전 시간 제한 전에 터미널이 경로를 받지 않았습니다.",
-                "writeRejected": "파일 드롭이 취소되었습니다. 터미널이 경로를 받을 수 없습니다."
+                "writeRejected": "파일 드롭이 취소되었습니다. 터미널이 경로를 받을 수 없습니다.",
+                "uploadingOneFileToRuntime": "Uploading {{count}} file to runtime…",
+                "uploadingManyFilesToRuntime": "Uploading {{count}} files to runtime…",
+                "uploadingOneFileToRemote": "Uploading {{count}} file to remote…",
+                "uploadingManyFilesToRemote": "Uploading {{count}} files to remote…",
+                "skippedOneSymlink": "Skipped {{count}} symlink.",
+                "skippedManySymlinks": "Skipped {{count}} symlinks.",
+                "skippedOneItem": "Skipped {{count}} item.",
+                "skippedManyItems": "Skipped {{count}} items.",
+                "failedToUploadOneFile": "Failed to upload {{count}} file.",
+                "failedToUploadManyFiles": "Failed to upload {{count}} files."
               }
             }
           },
@@ -2915,18 +2971,19 @@
             "4ebf90c12e": "외부 포트가 감지되지 않았습니다.",
             "7dac3ecc9d": "외부 포트",
             "95495019ed": "{{value0}}에서 포트 스캔을 사용할 수 없습니다: {{value1}}",
-            "a8e4bdb412": "· {{value0}} 외부",
             "9aa11005bf": "워크스페이스 ·",
             "c22ea609fd": "포트",
             "a11ed266ce": "워크스페이스",
-            "ca41be2802": "포트 — {{value0}}개 워크스페이스 {{value1}}{{value2}}",
-            "b8bc3e420a": "포트, {{value0}} 워크스페이스 {{value1}}",
             "3a87d54dfb": "워크스페이스 포트가 감지되지 않았습니다.",
             "c174bbbfed": "워크스페이스 포트를 검색하는 중...",
-            "8caaa86e9a": "포트",
-            "45834a9ace": "포트",
             "4ae65d871a": "외부",
-            "2b84c4d11f": "{{value0}} 워크스페이스 · {{value1}} 외부"
+            "2b84c4d11f": "{{value0}} 워크스페이스 · {{value1}} 외부",
+            "oneWorkspacePortAriaLabel": "Ports, {{workspaceCount}} workspace port",
+            "manyWorkspacePortsAriaLabel": "Ports, {{workspaceCount}} workspace ports",
+            "oneWorkspacePortWithExternalTooltip": "Ports — {{workspaceCount}} workspace port · {{externalCount}} external",
+            "manyWorkspacePortsWithExternalTooltip": "Ports — {{workspaceCount}} workspace ports · {{externalCount}} external",
+            "oneWorkspacePortTooltip": "Ports — {{workspaceCount}} workspace port",
+            "manyWorkspacePortsTooltip": "Ports — {{workspaceCount}} workspace ports"
           },
           "ResourceUsageStatusSegment": {
             "946d9f94d0": "취소",
@@ -3095,6 +3152,7 @@
             "0583c806ac": "워크스페이스 디스크 사용량은 스캔되지 않습니다.",
             "39786e3b73": "워크스페이스 크기를 스캔하는 중입니다.",
             "bef4dc0457": "{{value0}} 회수 가능 · {{value1}} 사용 불가",
+            "reclaimableWorkspaces": "{{value0}} 회수 가능 · 워크스페이스 {{value1}}개",
             "3d8d47ce77": "{{value0}} · 마지막 결과가 유지됨"
           },
           "WorkspaceSpaceManagerPanel": {
@@ -3120,7 +3178,6 @@
             "09960d86bd": "스캔됨",
             "1cc6cd4c0f": "워크스페이스",
             "02b27c2230": "워크스페이스",
-            "63efebe0e6": "{{value0}} {{value1}}이(가) Space에서 제거되었습니다.",
             "eee5240810": "워크스페이스가 삭제되었습니다.",
             "9afc97f9a3": "워크스페이스가 삭제되었습니다.",
             "792a214457": "워크스페이스 삭제",
@@ -3171,7 +3228,9 @@
             "0990a63160": "아직 스캔된 워크스페이스 크기가 없습니다.",
             "977bdf9a36": "표시할 최상위 항목이 없습니다.",
             "131662ac65": "{{value0}} 열려 있음",
-            "0d1c78d749": "{{value0}} 선택"
+            "0d1c78d749": "{{value0}} 선택",
+            "oneWorkspaceRemoved": "1 workspace removed from Space.",
+            "manyWorkspacesRemoved": "{{count}} workspaces removed from Space."
           },
           "ports": {
             "status": {
@@ -3765,9 +3824,17 @@
           "b2bc47c080": "더 많은 위치",
           "b47ba1a9d2": "{{value0}} 미리보기",
           "2251d41ebb": "숨겨진 워크트리 그룹",
-          "f54f2bec5d": "{{value1}}의 숨겨진 워크트리 {{value0}}개",
           "5a9688802a": "{{value0}} 더 보기",
-          "294de4aeb2": "간략히 표시"
+          "294de4aeb2": "간략히 표시",
+          "keepOneHiddenForRepo": "Keep 1 discovered worktree hidden for {{value0}}; recover from the project menu",
+          "keepManyHiddenForRepo": "Keep {{count}} discovered worktrees hidden for {{value0}}; recover from the project menu",
+          "keepHiddenRecover": "Keep hidden - recover from the project menu",
+          "collapseHiddenWorktrees": "Collapse hidden worktrees for {{value0}}",
+          "expandHiddenWorktrees": "Expand hidden worktrees for {{value0}}",
+          "hidingOneInRepo": "Hiding 1 discovered worktree in {{value0}}",
+          "hidingManyInRepo": "Hiding {{count}} discovered worktrees in {{value0}}",
+          "hidingOne": "Hiding 1 discovered worktree",
+          "hidingMany": "Hiding {{count}} discovered worktrees"
         },
         "NonGitFolderDialog": {
           "e52454b7f6": "폴더로 열기",
@@ -3982,6 +4049,7 @@
           "dc0bb670bc": "그룹화 기준",
           "9919ae1082": "워크스페이스 옵션",
           "bc96dbd041": "워크스페이스 옵션({{value0}})",
+          "optionsWithActiveFilter": "워크스페이스 옵션(활성: {{value0}})",
           "af9249c505": "가장 최근의 워크스페이스 활동",
           "b451c8b162": "최근",
           "6664282a7b": "프로젝트를 드래그하여 정렬하세요.",
@@ -4058,6 +4126,7 @@
           "79eb990aa4": "상태 추가",
           "054cb50df7": "{{value0}} 제거",
           "b45b350eb0": "{{value0}} 왼쪽으로 이동",
+          "moveRight": "{{value0}} 오른쪽으로 이동",
           "8ce44af9a8": "{{value0}} 이름 바꾸기",
           "395e541d5d": "상태",
           "34f03eb0de": "보드 설정",
@@ -4071,6 +4140,7 @@
         },
         "WorkspaceStatusAppearancePopover": {
           "514be2f569": "{{value0}} 색상을 {{value1}}로 설정",
+          "setIcon": "{{value0}} 아이콘을 {{value1}}로 설정",
           "8be427206b": "아이콘",
           "2ac106f6b2": "색상",
           "74b1413279": "외관",
@@ -4162,7 +4232,8 @@
           "5d1a5d51bb": "{{value0}}에서 프로세스가 중지되었습니다.",
           "c89f290e25": "{{value0}} 복사됨",
           "d1113f4660": "브라우저를 열지 못했습니다.",
-          "fed49903c9": "{{value0}} 실시간 {{value1}}"
+          "oneLivePort": "{{count}} live port",
+          "manyLivePorts": "{{count}} live ports"
         },
         "WorktreeContextMenu": {
           "c39c37676a": "그룹을 만들고 이 프로젝트를 그룹으로 이동하세요.",
@@ -4227,7 +4298,6 @@
           "0cd15956d4": "{{value0}}개 하위 워크스페이스 숨기기",
           "bd37a57ac8": "{{value0}}에 대한 워크스페이스 만들기",
           "b667b59632": "일부 프로젝트를 Orca에서 제거하지 못했습니다.",
-          "f94466bc39": "그룹 삭제 후에도 {{value0}}/{{value1}} 프로젝트{{value2}}가 남아 있습니다.",
           "groupDeleteFailed": "그룹을 삭제하지 못했습니다.",
           "groupDeleteFailedDesc": "그룹을 삭제하는 중 문제가 발생했습니다. 제거된 프로젝트는 없습니다.",
           "7a8b9c0d1e": "업데이트 필요",
@@ -4235,7 +4305,9 @@
           "hostDisconnected": "연결 끊김",
           "failedNestWorkspace": "워크스페이스를 중첩하지 못했습니다",
           "sidebarRowMissing": "대상이 더 이상 존재하지 않습니다",
-          "failedUnnestWorkspace": "워크트리 펼치기 실패"
+          "failedUnnestWorkspace": "워크트리 펼치기 실패",
+          "oneContainedProjectRemained": "{{value0}} of 1 contained project remained after deleting the group.",
+          "manyContainedProjectsRemained": "{{value0}} of {{value1}} contained projects remained after deleting the group."
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "취소",
@@ -4421,9 +4493,12 @@
           "card": {
             "compact": {
               "agents": {
-                "a128d7006b": "{{value0}} {{value1}} 하위 {{value2}}",
                 "289a1d2ca7": "{{value0}}을 확장합니다. {{value1}}",
-                "0c1debfe84": "{{value0}} 접기"
+                "0c1debfe84": "{{value0}} 접기",
+                "hideOneChildAgent": "Hide {{count}} child agent",
+                "hideManyChildAgents": "Hide {{count}} child agents",
+                "showOneChildAgent": "Show {{count}} child agent",
+                "showManyChildAgents": "Show {{count}} child agents"
               }
             }
           },
@@ -4668,11 +4743,12 @@
           "pairingCommand": "orca serve --pairing-address <host>",
           "pairingHelpSuffix": "한 다음 출력된 페어링 URL을 붙여넣으세요.",
           "sshImportAlreadySynced": "~/.ssh/config가 이미 동기화되어 있습니다.",
-          "sshImportSynced": "{{value0}} 호스트{{value1}}을(를) 동기화했습니다.",
           "sshImportFailed": "SSH 구성을 가져오지 못했습니다.",
           "importing": "가져오는 중...",
           "importSshConfig": "~/.ssh/config 가져오기",
-          "sshPersistenceDefault": "이 호스트의 원격 터미널은 종료하거나 릴레이를 재설정할 때까지 계속 실행됩니다."
+          "sshPersistenceDefault": "이 호스트의 원격 터미널은 종료하거나 릴레이를 재설정할 때까지 계속 실행됩니다.",
+          "sshImportSyncedOneHost": "Synced {{count}} host.",
+          "sshImportSyncedManyHosts": "Synced {{count}} hosts."
         },
         "ForgetSshWorkspaceDialog": {
           "reconnectFailed": "재연결 실패",
@@ -6045,6 +6121,7 @@
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "{{value0}} repo 색상 사용",
+          "useRepoIcon": "{{value0}} 저장소 아이콘 사용",
           "fde066a63b": "PNG 업로드는 256KB 이하여야 합니다.",
           "cc1286e263": "파비콘",
           "03ca1a4e9b": "example.com",
@@ -6508,7 +6585,6 @@
           "a7d28dff81": "Orca에서 연결할 원격 호스트를 추가합니다.",
           "94c5284560": "대상",
           "f495689b82": "가져오기 실패",
-          "f8050f6307": "동기화된 {{value0}} 서버{{value1}}",
           "68c13b4589": "테스트 실패",
           "81d08bcddf": "연결 성공",
           "2c4ee7332b": "원격 릴레이를 재설정하지 못했습니다.",
@@ -6526,7 +6602,9 @@
           "4db9afce1c": "포트는 1에서 65535 사이여야 합니다.",
           "0e5aa04161": "호스트 또는 SSH 구성 별칭이 필요합니다.",
           "f1fc50dad2": "SSH 대상을 로드하지 못했습니다.",
-          "0cda732f43": "연결 테스트 실패"
+          "0cda732f43": "연결 테스트 실패",
+          "syncedOneServer": "Synced {{count}} server",
+          "syncedManyServers": "Synced {{count}} servers"
         },
         "SshPassphraseDialog": {
           "d5a234456f": "취소",
@@ -8661,16 +8739,18 @@
                 "60996beda6": "Jira 사이트 추가",
                 "7ca5ffffdb": "Jira Cloud 이슈를 탐색하고 생성하며, 이슈에서 작업을 시작합니다.",
                 "a1093a06c7": "설정 작업을 표시하기 전에 Jira 액세스를 확인하는 중입니다.",
-                "9fa04a032e": "{{value0}}개 사이트{{value1}} 연결됨",
                 "cef18762a2": "Linear 설정의 개인 API 키로 액세스를 추가합니다. 전체 액세스 키는 키 소유자가 접근할 수 있는 모든 팀을 볼 수 있습니다.",
                 "6224fe9d34": "연결된 각 Linear 워크스페이스에는 활성 런타임에 저장되는 키가 하나씩 있습니다. 전체 액세스 키는 키 소유자가 접근할 수 있는 모든 팀에 적용될 수 있으며, 제한된 키는 언제든 교체할 수 있습니다.",
                 "1a12e33fe5": "Linear 액세스 추가",
                 "622c224082": "워크스페이스 액세스 추가",
                 "eae4a9f16b": "이슈를 탐색하고 연결하려면 Linear 액세스를 추가하세요.",
                 "fe9231215b": "설정 작업을 표시하기 전에 Linear 액세스를 확인하는 중입니다.",
-                "e1f5e6424c": "{{value0}}개 워크스페이스{{value1}} 연결됨",
                 "disconnect_all": "연결 해제",
-                "account_scope_prefix": "계정 범위"
+                "account_scope_prefix": "계정 범위",
+                "oneJiraSiteConnected": "{{count}} site connected",
+                "manyJiraSitesConnected": "{{count}} sites connected",
+                "oneLinearWorkspaceConnected": "{{count}} workspace connected",
+                "manyLinearWorkspacesConnected": "{{count}} workspaces connected"
               }
             }
           }
@@ -9243,7 +9323,6 @@
             "9845a71e17": "추가 작업",
             "2bfaf4379c": "추가 {{value0}} 작업",
             "377269db6f": "{{value0}}이 다시 열렸습니다.",
-            "fa3ee9a515": "닫힘",
             "78f5ff294c": "그러면 {{value0}}이(가) 다시 열립니다.",
             "a3d572a4de": "그러면 {{value0}}이(가) 닫힙니다.",
             "e4aca40024": "워크스페이스 삭제",
@@ -9253,7 +9332,16 @@
             "b25f63edd7": "열림",
             "d2ca293f3d": "작업 중...",
             "ef064cb7c3": "기본",
-            "59b4dccf70": "파괴적인"
+            "59b4dccf70": "파괴적인",
+            "mergeRequestLabel": "merge request",
+            "pullRequestLabel": "pull request",
+            "57fb10cfe7": "Close {{value0}}?",
+            "b982b128c0": "Reopen {{value0}}?",
+            "73e5cc9c99": "Close",
+            "641c8ec02a": "Reopen",
+            "72c9a274a7": "Failed to close the {{value0}}.",
+            "93afca5395": "Failed to reopen the {{value0}}.",
+            "reviewClosedToast": "{{value0}} closed"
           },
           "PortsPanel": {
             "3ea4a02a8f": "취소",
@@ -9436,16 +9524,13 @@
             "e131cd7128": "소스 제어는 Git 리포지토리에서만 사용할 수 있습니다.",
             "c07b236287": "변경사항을 보려면 워크스페이스를 선택하세요.",
             "dc5a6465fc": "{{value0}}(예: {{value1}}{{value2}})",
-            "8eb3782a0c": "{{value0}} 파일{{value1}}을(를) 삭제하지 못했습니다.",
             "a5e5a11090": "모두 삭제 실패 - 삭제하기 전에 파일을 스테이지 해제할 수 없습니다.",
             "8a5ba6a988": "commit 차이점을 로드하지 못했습니다.",
             "fe5bd1a610": "{{value0}} 생성 중...",
             "812cb992ee": "{{value0}}에서 열기",
             "eef5446523": "{{value0}} #{{value1}}은(는) 이미 열려 있습니다.",
             "0453ca3a9a": "{{value0}}이(가) 생성되었지만 Orca가 아직 새로 고칠 수 없습니다.",
-            "f99560ab29": "중단 {{value0}} 실패",
             "eae7a1da5f": "메모를 지우지 못했습니다.",
-            "657e0c90ad": "{{value0}} 메모{{value1}}",
             "df5040e3c3": "언스테이지",
             "8cde1a2fb0": "스테이지",
             "d54dd48b0b": "변경사항 취소",
@@ -9573,7 +9658,21 @@
               "a9bf7c171a": "푸시 실패",
               "834cb3f23d": "AI로 수정",
               "783a808870": "닫기"
-            }
+            },
+            "failedToDiscardOneFile": "Failed to discard {{count}} file",
+            "failedToDiscardManyFiles": "Failed to discard {{count}} files",
+            "oneNote": "{{count}} note",
+            "manyNotes": "{{count}} notes",
+            "abortRebaseTitle": "Abort rebase?",
+            "abortRebaseDescription": "This cancels the rebase in progress and can discard conflict resolutions made during this rebase.",
+            "abortRebaseConfirmLabel": "Abort rebase",
+            "abortRebaseFailed": "Abort rebase failed",
+            "failedToAbortRebase": "Failed to abort rebase",
+            "abortMergeTitle": "Abort merge?",
+            "abortMergeDescription": "This cancels the merge in progress and can discard conflict resolutions made during this merge.",
+            "abortMergeConfirmLabel": "Abort merge",
+            "abortMergeFailed": "Abort merge failed",
+            "failedToAbortMerge": "Failed to abort merge"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",
@@ -9885,7 +9984,12 @@
                   "226b85a3a7": "가져오기",
                   "323bb614aa": "Commit 및 동기화",
                   "2b8e6595fd": "Commit",
-                  "04d709801d": "Fetch from remote without merging"
+                  "04d709801d": "Fetch from remote without merging",
+                  "ac19d0917c": "Abort rebase",
+                  "515a94f9f6": "Abort merge",
+                  "f48d7f6445": "Operation in progress…",
+                  "62e79d363d": "Abort the rebase in progress",
+                  "4ef3aa6987": "Abort the merge in progress"
                 }
               },
               "primary": {
@@ -9950,7 +10054,6 @@
             "unresolved": "이 워크스페이스를 소유한 호스트를 확인할 수 없습니다. 연결을 확인한 후 다시 시도하세요."
           },
           "useFileDeletion": {
-            "72691dfebc": "{{value0}} '{{value1}}'에 실패했습니다.",
             "96affe1302": "'{{value0}}'이(가) {{value1}}(으)로 이동되었습니다.",
             "74727df633": "'{{value0}}'이(가) 삭제되었습니다.",
             "d979a4fbb5": "'{{value0}}'을(를) 영구적으로 삭제하시겠습니까?",
@@ -9961,15 +10064,17 @@
             "8b8ee9d22f": "이 파일을 소유한 호스트를 확인할 수 없습니다. 워크스페이스 연결을 확인한 후 다시 시도하세요.",
             "af1270b90d": "{{count}}개 항목을 영구적으로 삭제하시겠습니까?",
             "dd029aa5cd": "원격 호스트의 선택한 항목과 디렉터리 내용을 영구적으로 삭제합니다. 이 작업은 되돌릴 수 없습니다.",
-            "77fdc36183": "Delete {{count}} items?",
-            "fca915a67a": "Remote items are permanently deleted and cannot be undone. Local items move to the {{value0}}."
+            "77fdc36183": "Delete {{count}} items?"
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "심볼릭 링크 대상을 열 수 없습니다"
           },
           "useFileExplorerImport": {
-            "25919b2050": "{{value0}} {{value1}}을(를) 건너뛰었습니다.",
-            "132fd0e1e9": "{{value0}} {{value1}}을(를) 가져오지 못했습니다."
+            "4222b43cc1": "Failed to import {{count}} file.",
+            "576340ce05": "Failed to import {{count}} files.",
+            "d68e492480": "Skipped {{count}} file.",
+            "17be0f9168": "Skipped {{count}} files.",
+            "58220fc4bb": "Failed to import files."
           },
           "useFileExplorerKeys": {
             "8adb953095": "작업 실패"
@@ -10196,6 +10301,33 @@
             "workspaceGone": "Couldn't open log — workspace is no longer available.",
             "notAuthorized": "Couldn't open log — path not authorized.",
             "alreadyEditable": "Log is already open for editing."
+          },
+          "diff": {
+            "comments": {
+              "clear": {
+                "dialog": {
+                  "state": {
+                    "f07232e970": "Clear {{count}} note from this workspace?",
+                    "d10b0441e0": "Clear {{count}} notes from this workspace?",
+                    "bd98da62a0": "Clear {{count}} note from {{value0}}?",
+                    "edd639023e": "Clear {{count}} notes from {{value0}}?"
+                  }
+                }
+              }
+            }
+          },
+          "file": {
+            "deletion": {
+              "localized": {
+                "copy": {
+                  "222a8a3fb3": "Failed to delete '{{value0}}'.",
+                  "e9605383fd": "Failed to move '{{value0}}' to the Recycle Bin.",
+                  "f5fbc0837d": "Failed to move '{{value0}}' to the Trash.",
+                  "f583bf91df": "Remote items are permanently deleted and cannot be undone. Local items move to the Recycle Bin.",
+                  "b1bde1b2e4": "Remote items are permanently deleted and cannot be undone. Local items move to the Trash."
+                }
+              }
+            }
           }
         }
       },
@@ -10300,12 +10432,13 @@
           "5c115cb713": "CLI가 설치되지 않았습니다.",
           "217beb0658": "GitHub",
           "4983ae7433": "개인 API 키로 Linear를 연결하세요. 전체 액세스 키는 키 소유자가 접근할 수 있는 모든 팀을 표시할 수 있습니다.",
-          "b08a6ac93c": "{{value0}} 워크스페이스{{value1}}이 연결되었습니다. 언제든지 다른 워크스페이스를 추가하거나 제한된 키를 교체하세요.",
           "93f0c49ad1": "인증되지 않은",
           "a3bcf13694": "연결됨",
           "d6e5dba05a": "로그인",
           "0b4a7d23ab": "로그인 중",
-          "a74c6d6b18": "설치되지 않은"
+          "a74c6d6b18": "설치되지 않은",
+          "oneWorkspaceLinked": "{{count}} workspace linked. Add another workspace or replace a restricted key any time.",
+          "manyWorkspacesLinked": "{{count}} workspaces linked. Add another workspace or replace a restricted key any time."
         },
         "NotificationStep": {
           "3bede04483": "테스트 알림 보내기",
@@ -10390,8 +10523,7 @@
           "c7af322fc3": "스캔 중지",
           "c3d9d44ca2": "스캔 중지",
           "cf23006ba7": "선택한 호스트",
-          "7ec3f48820": "/home/user",
-          "2e6438dd34": "{{value0}}이 폴더에서 {{value1}} {{value2}}을(를) 찾았습니다."
+          "7ec3f48820": "/home/user"
         },
         "ThemeStep": {
           "a4b254779d": "macOS 옵션 키",
@@ -10465,6 +10597,12 @@
               }
             }
           }
+        },
+        "RepoStepNestedImportPanel": {
+          "scanningFoundOneRepository": "Scanning... Found {{count}} repository in this folder.",
+          "scanningFoundManyRepositories": "Scanning... Found {{count}} repositories in this folder.",
+          "foundOneRepository": "Found {{count}} repository in this folder.",
+          "foundManyRepositories": "Found {{count}} repositories in this folder."
         }
       },
       "new": {
@@ -10777,7 +10915,8 @@
             "3b04b065b5": "플로팅 워크스페이스 표시",
             "4cb418b991": "플로팅 워크트리 표시, 새 활동",
             "5785dd9148": "플로팅 워크스페이스 최소화",
-            "bfe7809a70": "{{value0}} 플로팅 워크스페이스({{value1}})"
+            "minimizeFloatingWorkspaceWithShortcut": "Minimize floating workspace ({{shortcut}})",
+            "showFloatingWorkspaceWithShortcut": "Show floating workspace ({{shortcut}})"
           },
           "FloatingTerminalWindowControls": {
             "2f6054342c": "최소화",
@@ -11224,6 +11363,8 @@
           "FeatureTipsModal": {
             "c169298e4d": "완료",
             "3c6c478462": "X가 끝나면 리뷰 작업을 보냅니다.”",
+            "splitWorktreesPrompt": "“이 PR을 두 개의 {{term}}로 나누고 각각 PR을 만들어 줘.”",
+            "handoffReviewPrompt": "“{{term}} X의 에이전트가 작업을 마치면 검토 작업을 보내 줘.”",
             "298301b7a0": "작업 트리",
             "864e2db28f": "“agent가 들어오면",
             "7fc6f02099": "각각에 대한 PR을 작성합니다.”",
@@ -11426,11 +11567,12 @@
           "982d14bfa5": "commit 되지 않은 Diff 열기",
           "3d909843bb": "브랜치 diff 열기",
           "8368d256ec": "결합 브랜치",
-          "8f68ad9ca9": "{{value0}} AI {{value1}} 표시",
           "724a13568d": "{{value0}}에서",
           "6094135eec": "대 {{value0}}",
           "a4420ca1f7": "랩 온",
-          "dde325ddfe": "마무리"
+          "dde325ddfe": "마무리",
+          "showOneAiNote": "Show {{count}} AI note",
+          "showManyAiNotes": "Show {{count}} AI notes"
         },
         "ConflictComponents": {
           "f338288514": "충돌 콘텐츠 로드 중...",
@@ -11447,7 +11589,23 @@
           "9c2901ef8a": "다음 충돌",
           "41d9af2e7a": "이전 충돌",
           "55d61a0ccd": "충돌 ·",
-          "da539359b6": "이 충돌에 대해 편집할 수 있는 작업 트리 파일이 없습니다."
+          "da539359b6": "이 충돌에 대해 편집할 수 있는 작업 트리 파일이 없습니다.",
+          "71a2c63628": "Both modified",
+          "ba602cdc05": "Both added",
+          "1c55f94973": "Deleted by us",
+          "9d8757e1ca": "Deleted by them",
+          "36bceb6bb5": "Added by us",
+          "5259d6908a": "Added by them",
+          "be2b3274fe": "Both deleted",
+          "b119865c75": "Resolve the conflict markers",
+          "5e89c1d824": "Choose which version to keep, or combine them",
+          "7e6a9cd8ba": "Decide whether to restore the file",
+          "9d73608d56": "Decide whether to keep the file or accept deletion",
+          "2ff72311cd": "Review whether to keep the added file",
+          "7e15338be9": "Review the added file before keeping it",
+          "a63bf70fc7": "Resolve in Git or restore one side before editing",
+          "ec7ef38d67": "Unresolved",
+          "485ab716f0": "Resolved locally"
         },
         "ConflictReviewFileTree": {
           "3449521a8c": "이 스냅샷에는 충돌이 없습니다.",
@@ -12019,7 +12177,10 @@
       },
       "dashboard": {
         "DashboardAgentChildDisclosure": {
-          "1b57ce9fa4": "{{value0}} {{value1}} 하위 {{value2}}"
+          "hideOneChildAgent": "Hide {{count}} child agent",
+          "hideManyChildAgents": "Hide {{count}} child agents",
+          "showOneChildAgent": "Show {{count}} child agent",
+          "showManyChildAgents": "Show {{count}} child agents"
         },
         "DashboardAgentRow": {
           "912e136cd9": "보내기",

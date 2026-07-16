@@ -7,6 +7,7 @@ import { useAppStore } from '@/store'
 import { IntegrationStatusPill } from '@/components/integration-status-pill'
 import { cn } from '@/lib/utils'
 import { OnboardingInlineCommandTerminal } from './OnboardingInlineCommandTerminal'
+import { getLinearWorkspaceLinkSummary } from './linear-workspace-link-summary'
 import { translate } from '@/i18n/i18n'
 
 type GitHubSetupState = 'checking' | 'connected' | 'not-installed' | 'not-authenticated'
@@ -169,11 +170,7 @@ export function LinearRow(props: { compact?: boolean } = {}): React.JSX.Element 
               </div>
               <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
                 {linearStatus.connected
-                  ? translate(
-                      'auto.components.onboarding.IntegrationsStep.b08a6ac93c',
-                      '{{value0}} workspace{{value1}} linked. Add another workspace or replace a restricted key any time.',
-                      { value0: workspaceCount, value1: workspaceCount === 1 ? '' : 's' }
-                    )
+                  ? getLinearWorkspaceLinkSummary(workspaceCount)
                   : translate(
                       'auto.components.onboarding.IntegrationsStep.4983ae7433',
                       'Add Linear access with a Personal API key. Full-access keys can show every team the key owner can access.'

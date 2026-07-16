@@ -327,6 +327,58 @@ function getSettingsTargetFromSectionId(sectionId: string): {
   return { pane: sectionId as SettingsNavTarget, repoId: null }
 }
 
+export function getWorktreeJumpPaletteAnnouncement({
+  hasQuery,
+  resultCount,
+  showCreateAction
+}: {
+  hasQuery: boolean
+  resultCount: number
+  showCreateAction: boolean
+}): string {
+  // Why: count grammar and the optional create action need complete localized sentences.
+  if (hasQuery) {
+    if (resultCount === 1) {
+      return showCreateAction
+        ? translate(
+            'auto.components.WorktreeJumpPalette.oneResultFoundWithCreateAction',
+            '1 result found; create worktree action available'
+          )
+        : translate('auto.components.WorktreeJumpPalette.oneResultFound', '1 result found')
+    }
+    return showCreateAction
+      ? translate(
+          'auto.components.WorktreeJumpPalette.manyResultsFoundWithCreateAction',
+          '{{count}} results found; create worktree action available',
+          { count: resultCount }
+        )
+      : translate(
+          'auto.components.WorktreeJumpPalette.manyResultsFound',
+          '{{count}} results found',
+          { count: resultCount }
+        )
+  }
+  if (resultCount === 1) {
+    return showCreateAction
+      ? translate(
+          'auto.components.WorktreeJumpPalette.oneItemAvailableWithCreateAction',
+          '1 item available; create worktree action available'
+        )
+      : translate('auto.components.WorktreeJumpPalette.oneItemAvailable', '1 item available')
+  }
+  return showCreateAction
+    ? translate(
+        'auto.components.WorktreeJumpPalette.manyItemsAvailableWithCreateAction',
+        '{{count}} items available; create worktree action available',
+        { count: resultCount }
+      )
+    : translate(
+        'auto.components.WorktreeJumpPalette.manyItemsAvailable',
+        '{{count}} items available',
+        { count: resultCount }
+      )
+}
+
 export default function WorktreeJumpPalette(): React.JSX.Element | null {
   // Why: subscribe this palette to language changes; translated memo contents
   // recompute on the rerender without using i18n.language as a fake dependency.
@@ -2359,23 +2411,11 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         </div>
       </div>
       <div aria-live="polite" className="sr-only">
-        {deferredQuery.trim()
-          ? translate(
-              'auto.components.WorktreeJumpPalette.bb72c08e63',
-              '{{value0}} results found{{value1}}',
-              {
-                value0: resultCount,
-                value1: showCreateAction ? ', create worktree action available' : ''
-              }
-            )
-          : translate(
-              'auto.components.WorktreeJumpPalette.20af998bff',
-              '{{value0}} items available{{value1}}',
-              {
-                value0: resultCount,
-                value1: showCreateAction ? ', create worktree action available' : ''
-              }
-            )}
+        {getWorktreeJumpPaletteAnnouncement({
+          hasQuery: Boolean(deferredQuery.trim()),
+          resultCount,
+          showCreateAction
+        })}
       </div>
     </CommandDialog>
   )

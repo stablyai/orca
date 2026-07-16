@@ -19,6 +19,10 @@ import {
   writeRuntimeFile
 } from '@/runtime/runtime-file-client'
 import { translate } from '@/i18n/i18n'
+import {
+  formatFileDeletionFailure,
+  formatMixedFileDeletionDescription
+} from './file-deletion-localized-copy'
 
 type UseFileDeletionParams = {
   activeWorktreeId: string | null
@@ -217,15 +221,10 @@ export function useFileDeletion({
 
         return true
       } catch (error) {
-        const action = isRemote ? 'delete' : isWindows ? 'move to Recycle Bin' : 'move to Trash'
         toast.error(
           error instanceof Error
             ? error.message
-            : translate(
-                'auto.components.right.sidebar.useFileDeletion.72691dfebc',
-                "Failed to {{value0}} '{{value1}}'.",
-                { value0: action, value1: node.name }
-              )
+            : formatFileDeletionFailure({ name: node.name, isRemote, isWindows })
         )
         return false
       } finally {
@@ -269,7 +268,6 @@ export function useFileDeletion({
       // but the selection can also include local roots that only go to the
       // Trash — so a mixed batch needs copy that keeps that distinction.
       const hasLocalDelete = roots.some(isLocalDeleteNode)
-      const trashName = isWindows ? 'Recycle Bin' : 'Trash'
       // Why: selection is cleared once after the entire batch settles rather
       // than per-node, so no concurrent completion can restore a partial
       // stale set.
@@ -296,11 +294,7 @@ export function useFileDeletion({
                     { count: nodes.length }
                   ),
               description: hasLocalDelete
-                ? translate(
-                    'auto.components.right.sidebar.useFileDeletion.fca915a67a',
-                    'Remote items are permanently deleted and cannot be undone. Local items move to the {{value0}}.',
-                    { value0: trashName }
-                  )
+                ? formatMixedFileDeletionDescription(isWindows)
                 : translate(
                     'auto.components.right.sidebar.useFileDeletion.dd029aa5cd',
                     'This permanently deletes the selected items and any directory contents on the remote host. This cannot be undone.'

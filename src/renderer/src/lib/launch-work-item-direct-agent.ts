@@ -136,6 +136,20 @@ export function buildDirectWorkItemStartupOpts(
   }
 }
 
+export function formatDirectWorkItemAgentStartTimeout(submit: boolean): string {
+  // Why: "prompt" and "work item context" are grammatical parts of the
+  // sentence, so each delivery mode needs a complete translation unit.
+  return submit
+    ? translate(
+        'auto.lib.launch.work.item.direct.agent.20015b902a',
+        'Agent took too long to start. The workspace is ready — paste the prompt when the agent is idle.'
+      )
+    : translate(
+        'auto.lib.launch.work.item.direct.agent.33640ddfa0',
+        'Agent took too long to start. The workspace is ready — paste the work item context when the agent is idle.'
+      )
+}
+
 export async function pasteDirectWorkItemDraftWhenAgentReady(args: {
   primaryTabId: string
   startupPlan: AgentStartupPlan
@@ -151,14 +165,7 @@ export async function pasteDirectWorkItemDraftWhenAgentReady(args: {
     submit,
     forcePaste,
     onTimeout: () => {
-      const label = submit ? 'prompt' : 'work item context'
-      toast.message(
-        translate(
-          'auto.lib.launch.work.item.direct.agent.ceeeb509b5',
-          'Agent took too long to start. The workspace is ready — paste the {{value0}} when the agent is idle.',
-          { value0: label }
-        )
-      )
+      toast.message(formatDirectWorkItemAgentStartTimeout(submit))
       // Why: process-startup timeout has no v1 enum slot; the `unknown` slice
       // on the dashboard is the trigger to add one.
       track('agent_error', {

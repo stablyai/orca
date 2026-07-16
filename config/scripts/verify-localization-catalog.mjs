@@ -146,8 +146,8 @@ function normalizeInterpolationVariables(value) {
     .join('|')
 }
 
-function formatInconsistentFallbackVariables(inconsistentFallbackVariables) {
-  return inconsistentFallbackVariables
+function formatInconsistentFallbackReferences(inconsistentFallbacks) {
+  return inconsistentFallbacks
     .map(({ key, references }) => {
       const locations = references
         .map(
@@ -158,6 +158,27 @@ function formatInconsistentFallbackVariables(inconsistentFallbackVariables) {
       return `${key}\n${locations}`
     })
     .join('\n\n')
+}
+
+function collectInconsistentFallbackCopy(references) {
+  const byKey = new Map()
+
+  for (const reference of references) {
+    if (typeof reference.fallback !== 'string') {
+      continue
+    }
+    const existing = byKey.get(reference.key) ?? []
+    existing.push(reference)
+    byKey.set(reference.key, existing)
+  }
+
+  return [...byKey.entries()]
+    .map(([key, keyReferences]) => ({
+      key,
+      references: keyReferences,
+      uniqueFallbackCount: new Set(keyReferences.map((reference) => reference.fallback)).size
+    }))
+    .filter(({ uniqueFallbackCount }) => uniqueFallbackCount > 1)
 }
 
 function collectInconsistentFallbackVariables(references) {
@@ -407,6 +428,15 @@ export async function main(root = process.cwd(), options = parseArgs(process.arg
     }
   }
 
+  const inconsistentFallbackCopy = collectInconsistentFallbackCopy(references)
+  if (inconsistentFallbackCopy.length > 0) {
+    console.error('Localization keys are used with inconsistent string fallbacks.')
+    console.error('Each key must have one complete fallback message across every call site.')
+    console.error('')
+    console.error(formatInconsistentFallbackReferences(inconsistentFallbackCopy))
+    return 1
+  }
+
   const missing = references.filter((reference) => !catalogKeys.has(reference.key))
   if (missing.length > 0) {
     const missingFallbacks = referencesMissingFallbacks(missing)
@@ -443,7 +473,7 @@ export async function main(root = process.cwd(), options = parseArgs(process.arg
   if (inconsistentFallbackVariables.length > 0) {
     console.error('Localization keys are used with inconsistent interpolation placeholders.')
     console.error('')
-    console.error(formatInconsistentFallbackVariables(inconsistentFallbackVariables))
+    console.error(formatInconsistentFallbackReferences(inconsistentFallbackVariables))
     return 1
   }
 

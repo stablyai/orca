@@ -168,6 +168,30 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     },
     [onToggleChildAgents]
   )
+  // Why: plural nouns and the show/hide action need whole localized sentences, not English fragments.
+  const childDisclosureLabel = childAgentsExpanded
+    ? childAgentCount === 1
+      ? translate(
+          'auto.components.sidebar.worktree.card.compact.agents.hideOneChildAgent',
+          'Hide {{count}} child agent',
+          { count: childAgentCount }
+        )
+      : translate(
+          'auto.components.sidebar.worktree.card.compact.agents.hideManyChildAgents',
+          'Hide {{count}} child agents',
+          { count: childAgentCount }
+        )
+    : childAgentCount === 1
+      ? translate(
+          'auto.components.sidebar.worktree.card.compact.agents.showOneChildAgent',
+          'Show {{count}} child agent',
+          { count: childAgentCount }
+        )
+      : translate(
+          'auto.components.sidebar.worktree.card.compact.agents.showManyChildAgents',
+          'Show {{count}} child agents',
+          { count: childAgentCount }
+        )
 
   const rowBody = (
     <>
@@ -175,15 +199,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
         <button
           type="button"
           className="compact-agent-child-disclosure-button flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-worktree-sidebar-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
-          aria-label={translate(
-            'auto.components.sidebar.worktree.card.compact.agents.a128d7006b',
-            '{{value0}} {{value1}} child {{value2}}',
-            {
-              value0: childAgentsExpanded ? 'Hide' : 'Show',
-              value1: childAgentCount,
-              value2: childAgentCount === 1 ? 'agent' : 'agents'
-            }
-          )}
+          aria-label={childDisclosureLabel}
           aria-expanded={childAgentsExpanded}
           onClick={handleToggleChildren}
           onKeyDown={stopActivationKeyPropagation}

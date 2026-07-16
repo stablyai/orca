@@ -89,6 +89,18 @@ vi.mock('./FloatingTerminalIconContextMenu', () => ({
 }))
 
 const storeState = vi.hoisted(() => ({ hasFloatingUnread: false }))
+const translateMock = vi.hoisted(() =>
+  vi.fn((_key: string, fallback: string, values?: Record<string, unknown>) =>
+    Object.entries(values ?? {}).reduce(
+      (message, [name, value]) => message.replaceAll(`{{${name}}}`, String(value)),
+      fallback
+    )
+  )
+)
+
+vi.mock('@/i18n/i18n', () => ({
+  translate: translateMock
+}))
 
 vi.mock('@/store', () => ({
   useAppStore: <T,>(selector: (state: typeof storeState) => T): T => selector(storeState)
@@ -137,6 +149,19 @@ function hasProp(node: unknown, propName: string): boolean {
     }
   })
   return found
+}
+
+function collectText(node: unknown): string {
+  if (typeof node === 'string' || typeof node === 'number') {
+    return String(node)
+  }
+  if (node == null) {
+    return ''
+  }
+  if (Array.isArray(node)) {
+    return node.map(collectText).join('')
+  }
+  return collectText((node as ReactElementLike).props?.children)
 }
 
 function runEffects(): void {
@@ -293,5 +318,23 @@ describe('FloatingTerminalToggleButton attention dot', () => {
     storeState.hasFloatingUnread = false
     const element = await renderToggle(false)
     expect(hasProp(element, 'data-floating-terminal-attention')).toBe(false)
+  })
+
+  it('uses complete show and minimize tooltip translations', async () => {
+    const closedElement = await renderToggle(false)
+    const openElement = await renderToggle(true)
+
+    expect(collectText(closedElement)).toContain('Show floating workspace (Cmd+`)')
+    expect(collectText(openElement)).toContain('Minimize floating workspace (Cmd+`)')
+    expect(translateMock).toHaveBeenCalledWith(
+      'auto.components.floating.terminal.FloatingTerminalToggleButton.showFloatingWorkspaceWithShortcut',
+      'Show floating workspace ({{shortcut}})',
+      { shortcut: 'Cmd+`' }
+    )
+    expect(translateMock).toHaveBeenCalledWith(
+      'auto.components.floating.terminal.FloatingTerminalToggleButton.minimizeFloatingWorkspaceWithShortcut',
+      'Minimize floating workspace ({{shortcut}})',
+      { shortcut: 'Cmd+`' }
+    )
   })
 })

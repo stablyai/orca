@@ -66,6 +66,12 @@ describe('diff comments clear dialog state', () => {
     expect(formatPendingDiffCommentsClearDescription(filePending, 2)).toBe(
       'Clear 2 notes from src/app.tsx?'
     )
+    expect(formatPendingDiffCommentsClearDescription(allPending, 2)).toBe(
+      'Clear 2 notes from this workspace?'
+    )
+    expect(formatPendingDiffCommentsClearDescription(filePending, 1)).toBe(
+      'Clear 1 note from src/app.tsx?'
+    )
     expect(formatPendingDiffCommentsClearDescription(null, 0)).toBe('')
   })
 })

@@ -64,6 +64,19 @@ export function FloatingTerminalToggleButton({
   onToggle: () => void
 }): React.JSX.Element {
   const shortcutLabel = useShortcutLabel('floatingTerminal.toggle')
+  // Why: the action belongs inside the complete tooltip translation so it
+  // can move with the sentence instead of being injected as an English verb.
+  const tooltipLabel = open
+    ? translate(
+        'auto.components.floating.terminal.FloatingTerminalToggleButton.minimizeFloatingWorkspaceWithShortcut',
+        'Minimize floating workspace ({{shortcut}})',
+        { shortcut: shortcutLabel }
+      )
+    : translate(
+        'auto.components.floating.terminal.FloatingTerminalToggleButton.showFloatingWorkspaceWithShortcut',
+        'Show floating workspace ({{shortcut}})',
+        { shortcut: shortcutLabel }
+      )
   // Why: show an attention dot while minimized (closed) when any floating-
   // workspace tab still has an unacknowledged bell or agent completion. Derived
   // from the shared unread maps, so it clears when the user engages with — or
@@ -249,11 +262,7 @@ export function FloatingTerminalToggleButton({
           </Button>
         </TooltipTrigger>
         <TooltipContent side="left" sideOffset={6}>
-          {translate(
-            'auto.components.floating.terminal.FloatingTerminalToggleButton.bfe7809a70',
-            '{{value0}} floating workspace ({{value1}})',
-            { value0: open ? 'Minimize' : 'Show', value1: shortcutLabel }
-          )}
+          {tooltipLabel}
         </TooltipContent>
       </Tooltip>
     </FloatingTerminalIconContextMenu>

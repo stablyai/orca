@@ -107,7 +107,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
               aria-label={
                 hasAnyFilter
                   ? translate(
-                      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.bc96dbd041',
+                      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.optionsWithActiveFilter',
                       'Workspace options ({{value0}} active)',
                       { value0: activeFilterLabel }
                     )

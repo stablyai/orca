@@ -71,7 +71,7 @@ export function WorkspaceSpaceCompactPanel({
                         }
                       )
                     : translate(
-                        'auto.components.status.bar.WorkspaceSpaceCompactPanel.bef4dc0457',
+                        'auto.components.status.bar.WorkspaceSpaceCompactPanel.reclaimableWorkspaces',
                         '{{value0}} reclaimable · {{value1}} workspaces',
                         {
                           value0: formatBytes(analysis.reclaimableBytes),

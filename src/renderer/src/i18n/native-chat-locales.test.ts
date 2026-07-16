@@ -4,8 +4,9 @@ import es from './locales/es.json'
 import ja from './locales/ja.json'
 import ko from './locales/ko.json'
 import zh from './locales/zh.json'
+import zhTW from './locales/zh-TW.json'
 
-const localizedCatalogs = { es, ja, ko, zh }
+const localizedCatalogs = { es, ja, ko, zh, 'zh-TW': zhTW }
 const englishSetting = en.auto.components.settings.ExperimentalPane.nativeChat
 const englishSearch = en.auto.components.settings.experimental.search.nativeChat
 

@@ -32,22 +32,46 @@ describe('reportTerminalDropUploadSkipsAndFailures', () => {
     reportTerminalDropUploadSkipsAndFailures([{ reason: 'symlink' }, { reason: 'too_large' }], [])
     const mixedSkipKey = mocks.translate.mock.calls[0]?.[0]
 
-    expect(symlinkOnlyKey).toBe('auto.components.terminal.pane.terminal.drop.handler.53f015fd85')
-    expect(mixedSkipKey).toBe('auto.components.terminal.pane.terminal.drop.handler.b4cf68e889')
+    expect(symlinkOnlyKey).toBe(
+      'auto.components.terminal.pane.terminal.drop.handler.skippedOneSymlink'
+    )
+    expect(mixedSkipKey).toBe(
+      'auto.components.terminal.pane.terminal.drop.handler.skippedManyItems'
+    )
     expect(symlinkOnlyKey).not.toBe(mixedSkipKey)
     expect(toast.message).toHaveBeenCalledTimes(2)
+  })
+
+  it('uses complete plural messages for multiple symlinks', () => {
+    reportTerminalDropUploadSkipsAndFailures([{ reason: 'symlink' }, { reason: 'symlink' }], [])
+
+    expect(mocks.translate).toHaveBeenCalledWith(
+      'auto.components.terminal.pane.terminal.drop.handler.skippedManySymlinks',
+      'Skipped {{count}} symlinks.',
+      { count: 2 }
+    )
   })
 
   it('reports upload failures without leaking individual paths', () => {
     reportTerminalDropUploadSkipsAndFailures([], [{ reason: '/secret/project/file.txt' }])
 
     expect(mocks.translate).toHaveBeenCalledWith(
-      'auto.components.terminal.pane.terminal.drop.handler.1e072f611e',
-      'Failed to upload {{value0}} {{value1}}.',
-      { value0: 1, value1: 'file' }
+      'auto.components.terminal.pane.terminal.drop.handler.failedToUploadOneFile',
+      'Failed to upload {{count}} file.',
+      { count: 1 }
     )
     expect(toast.error).toHaveBeenCalledWith(
       expect.not.stringContaining('/secret/project/file.txt')
+    )
+  })
+
+  it('uses a complete plural failure message', () => {
+    reportTerminalDropUploadSkipsAndFailures([], [{ reason: 'one' }, { reason: 'two' }])
+
+    expect(mocks.translate).toHaveBeenCalledWith(
+      'auto.components.terminal.pane.terminal.drop.handler.failedToUploadManyFiles',
+      'Failed to upload {{count}} files.',
+      { count: 2 }
     )
   })
 })

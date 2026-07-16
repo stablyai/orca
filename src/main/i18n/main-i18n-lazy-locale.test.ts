@@ -10,14 +10,17 @@ vi.mock('electron', () => ({
   }
 }))
 
+import { app } from 'electron'
 import {
   UI_LANGUAGE_CHINESE,
+  UI_LANGUAGE_CHINESE_TRADITIONAL,
   UI_LANGUAGE_ENGLISH,
   UI_LANGUAGE_JAPANESE,
   UI_LANGUAGE_KOREAN,
-  UI_LANGUAGE_SPANISH
+  UI_LANGUAGE_SPANISH,
+  UI_LANGUAGE_SYSTEM
 } from '../../shared/ui-language'
-import { ensureMainI18n, setMainUiLanguage, translateMain } from './main-i18n'
+import { ensureMainI18n, mainI18n, setMainUiLanguage, translateMain } from './main-i18n'
 
 describe('main-i18n lazy locale loading', () => {
   beforeEach(async () => {
@@ -48,7 +51,21 @@ describe('main-i18n lazy locale loading', () => {
     expect(translateMain('menu.file', 'File')).not.toBe('File')
 
     await setMainUiLanguage(UI_LANGUAGE_CHINESE)
-    expect(translateMain('menu.file', 'File')).not.toBe('File')
+    expect(translateMain('menu.settings', 'Settings')).toBe('设置')
+
+    const traditionalLocale = await setMainUiLanguage(UI_LANGUAGE_CHINESE_TRADITIONAL)
+    expect(traditionalLocale).toBe('zh-TW')
+    expect(mainI18n.options.load).toBe('currentOnly')
+    expect(translateMain('menu.settings', 'Settings')).toBe('設置')
+  })
+
+  it('maps a Traditional Chinese system locale to the Traditional catalog', async () => {
+    vi.mocked(app.getLocale).mockReturnValueOnce('zh-HK')
+
+    const locale = await setMainUiLanguage(UI_LANGUAGE_SYSTEM)
+
+    expect(locale).toBe('zh-TW')
+    expect(translateMain('menu.settings', 'Settings')).toBe('設置')
   })
 
   it('returns to English from a lazily-loaded locale', async () => {

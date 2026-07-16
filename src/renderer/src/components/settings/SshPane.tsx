@@ -9,6 +9,7 @@ import { Button } from '../ui/button'
 import { removeSshTargetWithBestEffortCleanup } from './ssh-target-remove'
 import { SshTargetCard } from './SshTargetCard'
 import { SshTargetDestructiveActions } from './SshTargetDestructiveActions'
+import { getSyncedSshServerSummary } from './ssh-import-summary'
 import { SshTargetForm, EMPTY_FORM, type EditingTarget } from './SshTargetForm'
 import { getEditingTargetForSshTarget } from './ssh-target-draft'
 import { buildSshTargetSavePayload } from './ssh-target-save-payload'
@@ -297,13 +298,7 @@ export function SshPane(): React.JSX.Element {
         if (result.targets.length === 0) {
           toast('~/.ssh/config already in sync')
         } else {
-          toast.success(
-            translate(
-              'auto.components.settings.SshPane.f8050f6307',
-              'Synced {{value0}} server{{value1}}',
-              { value0: result.targets.length, value1: result.targets.length > 1 ? 's' : '' }
-            )
-          )
+          toast.success(getSyncedSshServerSummary(result.targets.length))
         }
       }
       await loadTargets()

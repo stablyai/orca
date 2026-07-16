@@ -29,16 +29,11 @@ type ImportedWorktreesVisibilityLineProps = {
 }
 
 const PREVIEW_LIMIT = 3
-const KEEP_HIDDEN_LABEL = 'Keep hidden - recover from the project menu'
 const GROUP_LIMIT = 5
 
 type ImportedWorktreePathGroup = {
   path: string
   worktrees: ImportedWorktreeVisibilityPreview[]
-}
-
-function pluralizeWorktree(count: number): string {
-  return count === 1 ? 'worktree' : 'worktrees'
 }
 
 function getWorktreeKey(
@@ -85,20 +80,66 @@ export default function ImportedWorktreesVisibilityLine({
   const [isExpanded, setIsExpanded] = useState(false)
   const [expandedGroupPathKeys, setExpandedGroupPathKeys] = useState<Set<string>>(new Set())
   const hiddenCount = hiddenWorktrees.length
-  const worktreeNoun = pluralizeWorktree(hiddenCount)
   const worktreeGroups = groupWorktreesByParentPath(hiddenWorktrees)
   const visibleWorktreeGroups = worktreeGroups.slice(0, GROUP_LIMIT)
   const remainingGroupCount = Math.max(0, worktreeGroups.length - visibleWorktreeGroups.length)
-  const keepHiddenAriaLabel = `Keep ${hiddenCount} discovered ${worktreeNoun} hidden for ${repoDisplayName}; recover from the project menu`
+  const keepHiddenAriaLabel =
+    hiddenCount === 1
+      ? translate(
+          'auto.components.sidebar.ImportedWorktreesVisibilityLine.keepOneHiddenForRepo',
+          'Keep 1 discovered worktree hidden for {{value0}}; recover from the project menu',
+          { value0: repoDisplayName }
+        )
+      : translate(
+          'auto.components.sidebar.ImportedWorktreesVisibilityLine.keepManyHiddenForRepo',
+          'Keep {{count}} discovered worktrees hidden for {{value0}}; recover from the project menu',
+          { count: hiddenCount, value0: repoDisplayName }
+        )
+  const keepHiddenLabel = translate(
+    'auto.components.sidebar.ImportedWorktreesVisibilityLine.keepHiddenRecover',
+    'Keep hidden - recover from the project menu'
+  )
+  // Why: actions must be translated as complete sentences; interpolating English verbs leaks them into CJK labels.
+  const hiddenWorktreeDisclosureLabel = isExpanded
+    ? translate(
+        'auto.components.sidebar.ImportedWorktreesVisibilityLine.collapseHiddenWorktrees',
+        'Collapse hidden worktrees for {{value0}}',
+        { value0: repoDisplayName }
+      )
+    : translate(
+        'auto.components.sidebar.ImportedWorktreesVisibilityLine.expandHiddenWorktrees',
+        'Expand hidden worktrees for {{value0}}',
+        { value0: repoDisplayName }
+      )
 
   if (hiddenCount === 0) {
     return null
   }
 
+  // Why: the visible count summary also needs locale-specific pluralization and word order.
   const lineText =
     placement === 'pinned-fallback'
-      ? `Hiding ${hiddenCount} discovered ${worktreeNoun} in ${repoDisplayName}`
-      : `Hiding ${hiddenCount} discovered ${worktreeNoun}`
+      ? hiddenCount === 1
+        ? translate(
+            'auto.components.sidebar.ImportedWorktreesVisibilityLine.hidingOneInRepo',
+            'Hiding 1 discovered worktree in {{value0}}',
+            { value0: repoDisplayName }
+          )
+        : translate(
+            'auto.components.sidebar.ImportedWorktreesVisibilityLine.hidingManyInRepo',
+            'Hiding {{count}} discovered worktrees in {{value0}}',
+            { count: hiddenCount, value0: repoDisplayName }
+          )
+      : hiddenCount === 1
+        ? translate(
+            'auto.components.sidebar.ImportedWorktreesVisibilityLine.hidingOne',
+            'Hiding 1 discovered worktree'
+          )
+        : translate(
+            'auto.components.sidebar.ImportedWorktreesVisibilityLine.hidingMany',
+            'Hiding {{count}} discovered worktrees',
+            { count: hiddenCount }
+          )
 
   const toggleGroupExpanded = (path: string): void => {
     const key = normalizeRuntimePathForComparison(path)
@@ -130,11 +171,7 @@ export default function ImportedWorktreesVisibilityLine({
           size="icon-xs"
           disabled={pending}
           aria-expanded={isExpanded}
-          aria-label={translate(
-            'auto.components.sidebar.ImportedWorktreesVisibilityLine.f54f2bec5d',
-            '{{value0}} hidden worktrees for {{value1}}',
-            { value0: isExpanded ? 'Collapse' : 'Expand', value1: repoDisplayName }
-          )}
+          aria-label={hiddenWorktreeDisclosureLabel}
           onClick={() => setIsExpanded((value) => !value)}
           className="shrink-0 rounded-[4px] text-muted-foreground hover:bg-worktree-sidebar-accent hover:text-worktree-sidebar-accent-foreground"
         >
@@ -160,7 +197,7 @@ export default function ImportedWorktreesVisibilityLine({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
-              {KEEP_HIDDEN_LABEL}
+              {keepHiddenLabel}
             </TooltipContent>
           </Tooltip>
         ) : null}

@@ -97,18 +97,19 @@ function jiraStatusClass(categoryKey: string): string {
   return 'border-border/50 bg-muted/40 text-muted-foreground'
 }
 
-async function copyTextToClipboard(text: string, label: string): Promise<void> {
+// Why: this label is interpolated into localized toast sentences, so callers must localize it first.
+async function copyTextToClipboard(text: string, localizedLabel: string): Promise<void> {
   try {
     await window.api.ui.writeClipboardText(text)
     toast.success(
       translate('auto.components.JiraIssueWorkspace.2ff69a3545', '{{value0}} copied', {
-        value0: label
+        value0: localizedLabel
       })
     )
   } catch {
     toast.error(
       translate('auto.components.JiraIssueWorkspace.6c41a9bcea', 'Failed to copy {{value0}}', {
-        value0: label.toLowerCase()
+        value0: localizedLabel === 'URL' ? localizedLabel : localizedLabel.toLowerCase()
       })
     )
   }
@@ -339,7 +340,10 @@ export default function JiraIssueWorkspace({
         id: result.id || createBrowserUuid(),
         body: bodyState.body,
         createdAt: new Date().toISOString(),
-        user: { accountId: 'local', displayName: 'You' }
+        user: {
+          accountId: 'local',
+          displayName: translate('auto.components.JiraIssueWorkspace.localCommentAuthor', 'You')
+        }
       }
       optimisticCommentsRef.current.push(comment)
       setComments((prev) => [...prev, comment])
@@ -374,7 +378,11 @@ export default function JiraIssueWorkspace({
       {
         label: translate('auto.components.JiraIssueWorkspace.38839801e8', 'Copy key'),
         icon: Clipboard,
-        action: () => void copyTextToClipboard(displayed.key, 'Key')
+        action: () =>
+          void copyTextToClipboard(
+            displayed.key,
+            translate('auto.components.JiraIssueWorkspace.keyCopyLabel', 'Key')
+          )
       },
       {
         label: translate(
@@ -382,12 +390,20 @@ export default function JiraIssueWorkspace({
           'Copy suggested branch name'
         ),
         icon: GitBranch,
-        action: () => void copyTextToClipboard(buildJiraBranchName(displayed), 'Branch name')
+        action: () =>
+          void copyTextToClipboard(
+            buildJiraBranchName(displayed),
+            translate('auto.components.JiraIssueWorkspace.branchNameCopyLabel', 'Branch name')
+          )
       },
       {
         label: translate('auto.components.JiraIssueWorkspace.0cc62bd690', 'Copy prompt'),
         icon: Clipboard,
-        action: () => void copyTextToClipboard(buildJiraPrompt(displayed), 'Prompt')
+        action: () =>
+          void copyTextToClipboard(
+            buildJiraPrompt(displayed),
+            translate('auto.components.JiraIssueWorkspace.promptCopyLabel', 'Prompt')
+          )
       }
     ]
   }, [displayed])

@@ -1,3 +1,5 @@
+import { translate } from '@/i18n/i18n'
+
 export type PendingDiffCommentsClear =
   | { kind: 'all'; worktreeId: string }
   | { kind: 'file'; worktreeId: string; filePath: string }
@@ -43,9 +45,30 @@ export function formatPendingDiffCommentsClearDescription(
   if (!pending) {
     return ''
   }
-  const noun = count === 1 ? 'note' : 'notes'
+  // Why: scope and plurality both affect sentence grammar, so each combination
+  // is translated as a complete confirmation question.
   if (pending.kind === 'all') {
-    return `Clear ${count} ${noun} from this workspace?`
+    return count === 1
+      ? translate(
+          'auto.components.right.sidebar.diff.comments.clear.dialog.state.f07232e970',
+          'Clear {{count}} note from this workspace?',
+          { count }
+        )
+      : translate(
+          'auto.components.right.sidebar.diff.comments.clear.dialog.state.d10b0441e0',
+          'Clear {{count}} notes from this workspace?',
+          { count }
+        )
   }
-  return `Clear ${count} ${noun} from ${pending.filePath}?`
+  return count === 1
+    ? translate(
+        'auto.components.right.sidebar.diff.comments.clear.dialog.state.bd98da62a0',
+        'Clear {{count}} note from {{value0}}?',
+        { count, value0: pending.filePath }
+      )
+    : translate(
+        'auto.components.right.sidebar.diff.comments.clear.dialog.state.edd639023e',
+        'Clear {{count}} notes from {{value0}}?',
+        { count, value0: pending.filePath }
+      )
 }

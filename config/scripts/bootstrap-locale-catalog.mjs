@@ -126,6 +126,13 @@ function parseLocaleArg(argv) {
 }
 
 export async function main(root = process.cwd(), locale = parseLocaleArg(process.argv)) {
+  if (locale === 'zh') {
+    console.error(
+      'Simplified Chinese is human-reviewed only. Add a zh key override, then run `pnpm run repair:locale-catalog -- --locale zh`.'
+    )
+    return 1
+  }
+
   const config = LOCALE_CONFIG[locale]
   if (!config) {
     console.error(

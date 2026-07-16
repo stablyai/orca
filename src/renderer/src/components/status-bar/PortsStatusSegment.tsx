@@ -12,6 +12,7 @@ import { getExternalWorkspacePorts, getWorkspacePortGroups } from '@/lib/workspa
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
 import { PortRow, WorkspaceGroupRows } from './ports-status-popover-rows'
+import { getWorkspacePortAriaLabel, getWorkspacePortTooltipLabel } from './ports-status-summary'
 import { translate } from '@/i18n/i18n'
 
 type PortsStatusSegmentProps = {
@@ -81,11 +82,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
               type="button"
               {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
               className="inline-flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 hover:bg-accent/70"
-              aria-label={translate(
-                'auto.components.status.bar.PortsStatusSegment.b8bc3e420a',
-                'Ports, {{value0}} workspace {{value1}}',
-                { value0: workspacePortCount, value1: workspacePortCount === 1 ? 'port' : 'ports' }
-              )}
+              aria-label={getWorkspacePortAriaLabel(workspacePortCount)}
             >
               {refreshing ? (
                 <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
@@ -106,25 +103,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
           </PopoverTrigger>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={6}>
-          {translate(
-            'auto.components.status.bar.PortsStatusSegment.ca41be2802',
-            'Ports — {{value0}} workspace {{value1}}{{value2}}',
-            {
-              value0: workspacePortCount,
-              value1:
-                workspacePortCount === 1
-                  ? translate('auto.components.status.bar.PortsStatusSegment.45834a9ace', 'port')
-                  : translate('auto.components.status.bar.PortsStatusSegment.8caaa86e9a', 'ports'),
-              value2:
-                externalPorts.length > 0
-                  ? translate(
-                      'auto.components.status.bar.PortsStatusSegment.a8e4bdb412',
-                      ' · {{value0}} external',
-                      { value0: externalPorts.length }
-                    )
-                  : ''
-            }
-          )}
+          {getWorkspacePortTooltipLabel(workspacePortCount, externalPorts.length)}
         </TooltipContent>
       </Tooltip>
 

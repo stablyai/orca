@@ -4,6 +4,7 @@ import es from '@/i18n/locales/es.json'
 import ja from '@/i18n/locales/ja.json'
 import ko from '@/i18n/locales/ko.json'
 import zh from '@/i18n/locales/zh.json'
+import zhTW from '@/i18n/locales/zh-TW.json'
 import { OSC52_CLIPBOARD_SETTING_ID } from './osc52-clipboard-setting-anchor'
 import type * as Osc52ClipboardBlockedToastModule from './osc52-clipboard-blocked-toast'
 
@@ -75,7 +76,7 @@ describe('showOsc52ClipboardBlockedToast', () => {
   })
 
   it('mentions Grok in every supported locale', () => {
-    const locales = [en, es, ja, ko, zh]
+    const locales = [en, es, ja, ko, zh, zhTW]
 
     for (const locale of locales) {
       expect(

@@ -39,15 +39,23 @@ export function WorktreeCardPortsTrigger({
     return null
   }
 
+  // Why: CJK pluralization cannot be expressed by interpolating the English words port/ports.
+  const livePortsLabel =
+    ports.length === 1
+      ? translate('auto.components.sidebar.WorktreeCardPorts.oneLivePort', '{{count}} live port', {
+          count: ports.length
+        })
+      : translate(
+          'auto.components.sidebar.WorktreeCardPorts.manyLivePorts',
+          '{{count}} live ports',
+          { count: ports.length }
+        )
+
   return (
     <button
       type="button"
       className="inline-flex size-3.5 shrink-0 items-center justify-center rounded text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
-      aria-label={translate(
-        'auto.components.sidebar.WorktreeCardPorts.fed49903c9',
-        '{{value0}} live {{value1}}',
-        { value0: ports.length, value1: ports.length === 1 ? 'port' : 'ports' }
-      )}
+      aria-label={livePortsLabel}
       onClick={(event) => {
         event.stopPropagation()
         recordFeatureInteraction('ports')

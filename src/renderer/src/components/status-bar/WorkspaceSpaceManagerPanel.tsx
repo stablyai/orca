@@ -1571,14 +1571,18 @@ export function WorkspaceSpaceManagerPanel(): React.JSX.Element {
               'Workspaces deleted'
             ),
         {
-          description: translate(
-            'auto.components.status.bar.WorkspaceSpaceManagerPanel.63efebe0e6',
-            '{{value0}} {{value1}} removed from Space.',
-            {
-              value0: deletedIds.length,
-              value1: deletedIds.length === 1 ? 'workspace' : 'workspaces'
-            }
-          )
+          // Why: the workspace noun must follow each locale's own plural and word-order rules.
+          description:
+            deletedIds.length === 1
+              ? translate(
+                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.oneWorkspaceRemoved',
+                  '1 workspace removed from Space.'
+                )
+              : translate(
+                  'auto.components.status.bar.WorkspaceSpaceManagerPanel.manyWorkspacesRemoved',
+                  '{{count}} workspaces removed from Space.',
+                  { count: deletedIds.length }
+                )
         }
       )
     },

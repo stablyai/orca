@@ -297,11 +297,17 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
           return
         }
         toast.message(
-          translate(
-            'auto.lib.launch.agent.in.new.tab.a5a1f7033f',
-            "Your {{value0}} wasn't sent — paste it once the agent is ready.",
-            { value0: submitPastedPrompt ? 'prompt' : 'notes' }
-          )
+          // Why: prompt and notes require different grammar and pronouns;
+          // interpolating the English noun makes the sentence untranslatable.
+          submitPastedPrompt
+            ? translate(
+                'auto.lib.launch.agent.in.new.tab.promptDeliveryTimedOut',
+                "Your prompt wasn't sent — paste it once the agent is ready."
+              )
+            : translate(
+                'auto.lib.launch.agent.in.new.tab.notesDeliveryTimedOut',
+                "Your notes weren't sent — paste them once the agent is ready."
+              )
         )
         failureNotified = true
         track('agent_error', {

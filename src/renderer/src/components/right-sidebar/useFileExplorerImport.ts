@@ -14,6 +14,36 @@ type UseFileExplorerImportParams = {
   setSelectedPath: (path: string | null) => void
 }
 
+export function formatFileExplorerImportFailure(count: number): string {
+  // Why: noun inflection belongs to the translated sentence, not an English
+  // "file/files" fragment passed through interpolation.
+  return count === 1
+    ? translate(
+        'auto.components.right.sidebar.useFileExplorerImport.4222b43cc1',
+        'Failed to import {{count}} file.',
+        { count }
+      )
+    : translate(
+        'auto.components.right.sidebar.useFileExplorerImport.576340ce05',
+        'Failed to import {{count}} files.',
+        { count }
+      )
+}
+
+export function formatFileExplorerImportSkipped(count: number): string {
+  return count === 1
+    ? translate(
+        'auto.components.right.sidebar.useFileExplorerImport.d68e492480',
+        'Skipped {{count}} file.',
+        { count }
+      )
+    : translate(
+        'auto.components.right.sidebar.useFileExplorerImport.17be0f9168',
+        'Skipped {{count}} files.',
+        { count }
+      )
+}
+
 /**
  * Subscribes to native file-drop events targeted at the file explorer and
  * runs the import pipeline: copy into worktree, refresh, reveal.
@@ -89,26 +119,20 @@ export function useFileExplorerImport({
           }
 
           if (failed.length > 0) {
-            const noun = failed.length === 1 ? 'file' : 'files'
-            toast.error(
-              translate(
-                'auto.components.right.sidebar.useFileExplorerImport.132fd0e1e9',
-                'Failed to import {{value0}} {{value1}}.',
-                { value0: failed.length, value1: noun }
-              )
-            )
+            toast.error(formatFileExplorerImportFailure(failed.length))
           } else if (skipped.length > 0 && imported.length === 0) {
-            const noun = skipped.length === 1 ? 'file' : 'files'
-            toast.error(
-              translate(
-                'auto.components.right.sidebar.useFileExplorerImport.25919b2050',
-                'Skipped {{value0}} {{value1}}.',
-                { value0: skipped.length, value1: noun }
-              )
-            )
+            toast.error(formatFileExplorerImportSkipped(skipped.length))
           }
         } catch (err) {
-          toast.error(extractIpcErrorMessage(err, 'Failed to import files.'))
+          toast.error(
+            extractIpcErrorMessage(
+              err,
+              translate(
+                'auto.components.right.sidebar.useFileExplorerImport.58220fc4bb',
+                'Failed to import files.'
+              )
+            )
+          )
         } finally {
           clearNativeDragStateRef.current()
         }

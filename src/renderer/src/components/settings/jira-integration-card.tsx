@@ -74,11 +74,19 @@ export function JiraIntegrationCard(): React.JSX.Element {
       name="Jira"
       description={
         connected
-          ? translate(
-              'auto.components.settings.task.tracker.integration.cards.9fa04a032e',
-              '{{value0}} site{{value1}} connected',
-              { value0: siteCount, value1: siteCount === 1 ? '' : 's' }
-            )
+          ? // Why: site count is numeric data, while each complete noun form
+            // stays translatable for languages that do not use English suffixes.
+            siteCount === 1
+            ? translate(
+                'auto.components.settings.task.tracker.integration.cards.oneJiraSiteConnected',
+                '{{count}} site connected',
+                { count: siteCount }
+              )
+            : translate(
+                'auto.components.settings.task.tracker.integration.cards.manyJiraSitesConnected',
+                '{{count}} sites connected',
+                { count: siteCount }
+              )
           : checking
             ? translate(
                 'auto.components.settings.task.tracker.integration.cards.a1093a06c7',

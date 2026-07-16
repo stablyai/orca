@@ -71,18 +71,19 @@ type LinearIssueWorkspaceProps = {
   sourceContext?: TaskSourceContext | null
 }
 
-async function copyTextToClipboard(text: string, label: string): Promise<void> {
+// Why: this label is interpolated into localized toast sentences, so callers must localize it first.
+async function copyTextToClipboard(text: string, localizedLabel: string): Promise<void> {
   try {
     await window.api.ui.writeClipboardText(text)
     toast.success(
       translate('auto.components.LinearIssueWorkspace.7835483c43', '{{value0}} copied', {
-        value0: label
+        value0: localizedLabel
       })
     )
   } catch {
     toast.error(
       translate('auto.components.LinearIssueWorkspace.9bcbaa2737', 'Failed to copy {{value0}}', {
-        value0: label.toLowerCase()
+        value0: localizedLabel === 'URL' ? localizedLabel : localizedLabel.toLowerCase()
       })
     )
   }
@@ -659,7 +660,9 @@ export default function LinearIssueWorkspace({
       id: comment.id || createBrowserUuid(),
       body: comment.body,
       createdAt: comment.createdAt,
-      user: { displayName: 'You' }
+      user: {
+        displayName: translate('auto.components.LinearIssueWorkspace.localCommentAuthor', 'You')
+      }
     }
     optimisticCommentsRef.current.push(newComment)
     setComments((prev) => [...prev, newComment])
@@ -682,7 +685,11 @@ export default function LinearIssueWorkspace({
       {
         label: translate('auto.components.LinearIssueWorkspace.30c1242f3a', 'Copy identifier'),
         icon: Clipboard,
-        action: () => void copyTextToClipboard(displayed.identifier, 'Identifier')
+        action: () =>
+          void copyTextToClipboard(
+            displayed.identifier,
+            translate('auto.components.LinearIssueWorkspace.identifierCopyLabel', 'Identifier')
+          )
       },
       {
         label: translate(
@@ -691,7 +698,13 @@ export default function LinearIssueWorkspace({
         ),
         icon: GitBranch,
         action: () =>
-          void copyTextToClipboard(buildLinearIssueBranchName(displayed), 'Suggested branch name')
+          void copyTextToClipboard(
+            buildLinearIssueBranchName(displayed),
+            translate(
+              'auto.components.LinearIssueWorkspace.suggestedBranchNameCopyLabel',
+              'Suggested branch name'
+            )
+          )
       },
       {
         label: translate('auto.components.LinearIssueWorkspace.f6c6381593', 'Copy prompt'),
@@ -704,7 +717,10 @@ export default function LinearIssueWorkspace({
               version: 1,
               renderedText
             }) ?? renderedText
-          void copyTextToClipboard(prompt, 'Prompt')
+          void copyTextToClipboard(
+            prompt,
+            translate('auto.components.LinearIssueWorkspace.promptCopyLabel', 'Prompt')
+          )
         }
       }
     ]
@@ -766,7 +782,15 @@ export default function LinearIssueWorkspace({
               <Button
                 variant="ghost"
                 size="icon-sm"
-                onClick={() => void copyTextToClipboard(displayed.identifier, 'Identifier')}
+                onClick={() =>
+                  void copyTextToClipboard(
+                    displayed.identifier,
+                    translate(
+                      'auto.components.LinearIssueWorkspace.identifierCopyLabel',
+                      'Identifier'
+                    )
+                  )
+                }
                 aria-label={translate(
                   'auto.components.LinearIssueWorkspace.9e3c49beb8',
                   'Copy issue identifier'

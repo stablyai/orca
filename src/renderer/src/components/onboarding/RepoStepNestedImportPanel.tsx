@@ -35,6 +35,32 @@ export function RepoStepNestedImportPanel({
 }: RepoStepNestedImportPanelProps) {
   const folderName = getRuntimePathBasename(nestedScan.selectedPath) || nestedScan.selectedPath
   const nestedImportDisabled = disabled || nestedScanInProgress
+  const repositoryCount = nestedScan.repos.length
+  // Why: scan state and noun form belong to the full translated sentence;
+  // interpolated English fragments prevent natural word order.
+  const scanSummary = nestedScanInProgress
+    ? repositoryCount === 1
+      ? translate(
+          'auto.components.onboarding.RepoStepNestedImportPanel.scanningFoundOneRepository',
+          'Scanning... Found {{count}} repository in this folder.',
+          { count: repositoryCount }
+        )
+      : translate(
+          'auto.components.onboarding.RepoStepNestedImportPanel.scanningFoundManyRepositories',
+          'Scanning... Found {{count}} repositories in this folder.',
+          { count: repositoryCount }
+        )
+    : repositoryCount === 1
+      ? translate(
+          'auto.components.onboarding.RepoStepNestedImportPanel.foundOneRepository',
+          'Found {{count}} repository in this folder.',
+          { count: repositoryCount }
+        )
+      : translate(
+          'auto.components.onboarding.RepoStepNestedImportPanel.foundManyRepositories',
+          'Found {{count}} repositories in this folder.',
+          { count: repositoryCount }
+        )
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col gap-3">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-muted/30 p-5">
@@ -77,17 +103,7 @@ export function RepoStepNestedImportPanel({
                   </TooltipContent>
                 </Tooltip>
               ) : null}
-              <span className="min-w-0 truncate">
-                {translate(
-                  'auto.components.onboarding.RepoStep.2e6438dd34',
-                  '{{value0}}Found {{value1}} {{value2}} in this folder.',
-                  {
-                    value0: nestedScanInProgress ? 'Scanning... ' : '',
-                    value1: nestedScan.repos.length,
-                    value2: nestedScan.repos.length === 1 ? 'repository' : 'repositories'
-                  }
-                )}
-              </span>
+              <span className="min-w-0 truncate">{scanSummary}</span>
             </div>
             <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
               {translate('auto.components.onboarding.RepoStep.cecd6593fa', 'Scanned folder:')}{' '}

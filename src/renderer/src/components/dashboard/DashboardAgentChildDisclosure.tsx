@@ -43,6 +43,31 @@ export function DashboardAgentChildDisclosure({
     ) : null
   }
 
+  // Why: translating the full action avoids leaking English verbs and plural nouns into CJK labels.
+  const disclosureLabel = childAgentsExpanded
+    ? childAgentCount === 1
+      ? translate(
+          'auto.components.dashboard.DashboardAgentChildDisclosure.hideOneChildAgent',
+          'Hide {{count}} child agent',
+          { count: childAgentCount }
+        )
+      : translate(
+          'auto.components.dashboard.DashboardAgentChildDisclosure.hideManyChildAgents',
+          'Hide {{count}} child agents',
+          { count: childAgentCount }
+        )
+    : childAgentCount === 1
+      ? translate(
+          'auto.components.dashboard.DashboardAgentChildDisclosure.showOneChildAgent',
+          'Show {{count}} child agent',
+          { count: childAgentCount }
+        )
+      : translate(
+          'auto.components.dashboard.DashboardAgentChildDisclosure.showManyChildAgents',
+          'Show {{count}} child agents',
+          { count: childAgentCount }
+        )
+
   // Why: the chevron owns child disclosure; leaf spacers keep the leading
   // state-dot column aligned across the card.
   return (
@@ -52,15 +77,7 @@ export function DashboardAgentChildDisclosure({
       onMouseDown={stopMouseDown}
       onKeyDown={stopKeyDown}
       className="-ml-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-sm border border-sidebar-border/80 bg-sidebar text-foreground/80 shadow-xs hover:bg-sidebar-accent hover:text-foreground"
-      aria-label={translate(
-        'auto.components.dashboard.DashboardAgentChildDisclosure.1b57ce9fa4',
-        '{{value0}} {{value1}} child {{value2}}',
-        {
-          value0: childAgentsExpanded ? 'Hide' : 'Show',
-          value1: childAgentCount,
-          value2: childAgentCount === 1 ? 'agent' : 'agents'
-        }
-      )}
+      aria-label={disclosureLabel}
       aria-expanded={childAgentsExpanded}
     >
       <ChevronRight

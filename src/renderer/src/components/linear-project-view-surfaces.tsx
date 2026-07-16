@@ -399,7 +399,7 @@ export function LinearProjectTable({
                       onOpenProject(project)
                     }}
                     aria-label={translate(
-                      'auto.components.linear.project.view.surfaces.7616c986c6',
+                      'auto.components.linear.project.view.surfaces.openInLinear',
                       'Open {{value0}} in Linear',
                       { value0: project.name }
                     )}
@@ -549,7 +549,7 @@ export function LinearCustomViewTable({
                       onOpenView(view)
                     }}
                     aria-label={translate(
-                      'auto.components.linear.project.view.surfaces.7616c986c6',
+                      'auto.components.linear.project.view.surfaces.openInLinear',
                       'Open {{value0}} in Linear',
                       { value0: view.name }
                     )}

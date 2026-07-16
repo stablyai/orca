@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
   UI_LANGUAGE_CHINESE,
+  UI_LANGUAGE_CHINESE_TRADITIONAL,
   UI_LANGUAGE_ENGLISH,
   UI_LANGUAGE_SPANISH
 } from '../../../shared/ui-language'
@@ -32,7 +33,14 @@ describe('renderer i18n lazy locale loading', () => {
 
   it('lazy-loads a catalog through a direct changeLanguage call', async () => {
     await i18n.changeLanguage(UI_LANGUAGE_CHINESE)
-    expect(i18n.t('menu.file', { defaultValue: 'File' })).not.toBe('File')
+    expect(i18n.t('menu.settings', { defaultValue: 'Settings' })).toBe('设置')
+  })
+
+  it('lazy-loads Traditional Chinese through the explicit UI setting', async () => {
+    await setRendererUiLanguage(UI_LANGUAGE_CHINESE_TRADITIONAL)
+    expect(i18n.language).toBe('zh-TW')
+    expect(i18n.options.load).toBe('currentOnly')
+    expect(i18n.t('menu.settings', { defaultValue: 'Settings' })).toBe('設置')
   })
 
   it('returns to English from a lazily-loaded locale', async () => {

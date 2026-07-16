@@ -4,7 +4,12 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PRInfo, Repo } from '../../../../shared/types'
-import { useHostedReviewActions, type HostedReviewActionInfo } from './use-hosted-review-actions'
+import {
+  buildHostedReviewStateConfirmation,
+  formatHostedReviewStateChangeFailure,
+  useHostedReviewActions,
+  type HostedReviewActionInfo
+} from './use-hosted-review-actions'
 
 const confirmationMocks = vi.hoisted(() => ({
   confirm: vi.fn()
@@ -139,5 +144,43 @@ describe('useHostedReviewActions', () => {
     })
     expect(runtimeRpcMocks.callRuntimeRpc).not.toHaveBeenCalled()
     expect(onRefreshReview).toHaveBeenCalledTimes(1)
+  })
+
+  it('builds complete localized close and reopen confirmations', () => {
+    expect(
+      buildHostedReviewStateConfirmation({
+        nextState: 'closed',
+        shortLabel: 'PR',
+        isGitLab: false,
+        reviewNumber: 1015
+      })
+    ).toEqual({
+      title: 'Close PR #1015?',
+      description: 'This will close the pull request.',
+      confirmLabel: 'Close',
+      confirmVariant: 'destructive'
+    })
+    expect(
+      buildHostedReviewStateConfirmation({
+        nextState: 'open',
+        shortLabel: 'MR',
+        isGitLab: true,
+        reviewNumber: 42
+      })
+    ).toEqual({
+      title: 'Reopen MR !42?',
+      description: 'This will reopen the merge request.',
+      confirmLabel: 'Reopen',
+      confirmVariant: 'default'
+    })
+  })
+
+  it('formats complete fallback failures for both state transitions', () => {
+    expect(formatHostedReviewStateChangeFailure('closed', false)).toBe(
+      'Failed to close the pull request.'
+    )
+    expect(formatHostedReviewStateChangeFailure('open', true)).toBe(
+      'Failed to reopen the merge request.'
+    )
   })
 })

@@ -378,7 +378,8 @@
             "new": {
               "tab": {
                 "11cce5cc77": "Could not launch {{value0}} in a new terminal.",
-                "a5a1f7033f": "Your {{value0}} wasn't sent — paste it once the agent is ready."
+                "promptDeliveryTimedOut": "Your prompt wasn't sent — paste it once the agent is ready.",
+                "notesDeliveryTimedOut": "Your notes weren't sent — paste them once the agent is ready."
               }
             }
           },
@@ -403,7 +404,8 @@
               "19c7683acf": "Selected agent is not available in the created workspace.",
               "8bc45efdbc": "Failed to resolve PR head.",
               "agent": {
-                "ceeeb509b5": "Agent took too long to start. The workspace is ready — paste the {{value0}} when the agent is idle."
+                "20015b902a": "Agent took too long to start. The workspace is ready — paste the prompt when the agent is idle.",
+                "33640ddfa0": "Agent took too long to start. The workspace is ready — paste the work item context when the agent is idle."
               }
             }
           }
@@ -802,7 +804,6 @@
         "0bbdc673c1": "Failed to refresh checks",
         "e7007aa1d8": "Unable to refresh checks without a repository path.",
         "675bc0d638": "Cancel",
-        "a18f669c7a": "{{value0}} {{value1}} reaction{{value2}}",
         "53fe19aefc": "Open GitHub merge box",
         "a2495e4784": "Pull request",
         "ce360fc318": "Failed to disable auto-merge",
@@ -812,8 +813,6 @@
         "aba792c8b3": "Failed to merge pull request",
         "dbe5e2448e": "Pull request merged",
         "a27ee5ca1a": "This will update the pull request on GitHub.",
-        "03d7216d62": "{{value0}} PR #{{value1}}?",
-        "e9b7cb7d17": "Failed to {{value0}} PR",
         "bd3b4492a0": "Pull request reopened",
         "9f88657c4e": "Pull request closed",
         "b6f1b7adbd": "This will reopen the pull request on GitHub.",
@@ -835,6 +834,7 @@
         "5221548274": "Description updated.",
         "06c06e58ba": "Show more lines below",
         "307c98e8e3": "Show {{value0}} more lines above",
+        "showMoreLinesBelow": "Show {{value0}} more lines below",
         "5664681624": "Show more lines above",
         "b1574e8ac2": "Reset code context",
         "d43736d09c": "Code context controls",
@@ -846,7 +846,6 @@
         "d1fa2cf888": "Unable to comment without the PR head SHA.",
         "829674460a": "Diff unavailable because the PR commit SHAs are missing.",
         "af924014f8": "Viewed",
-        "2d89a38d9d": "{{value0}} {{value1}} as viewed",
         "70e84e3d0b": "No matching reviewers.",
         "1ffce94a8b": "Everyone else",
         "c2b21818e1": "Suggestions",
@@ -924,7 +923,23 @@
           "activity": "Activity",
           "noActivity": "No activity yet."
         },
-        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
+        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
+        "unmarkFileAsViewed": "Unmark {{filePath}} as viewed",
+        "markFileAsViewed": "Mark {{filePath}} as viewed",
+        "confirmClosePullRequestTitle": "Close PR #{{number}}?",
+        "closePullRequestConfirmLabel": "Close",
+        "failedToClosePullRequest": "Failed to close PR",
+        "confirmReopenPullRequestTitle": "Reopen PR #{{number}}?",
+        "reopenPullRequestConfirmLabel": "Reopen",
+        "failedToReopenPullRequest": "Failed to reopen PR",
+        "squashAndMergeLabel": "Squash and merge",
+        "createMergeCommitLabel": "Create merge commit",
+        "rebaseAndMergeLabel": "Rebase and merge",
+        "confirmSquashAndMergeTitle": "Squash and merge PR #{{number}}?",
+        "confirmCreateMergeCommitTitle": "Create merge commit for PR #{{number}}?",
+        "confirmRebaseAndMergeTitle": "Rebase and merge PR #{{number}}?",
+        "oneReactionAriaLabel": "{{count}} {{reactionEmoji}} reaction",
+        "manyReactionsAriaLabel": "{{count}} {{reactionEmoji}} reactions"
       },
       "GitLabItemDialog": {
         "65e784c1f1": "Reopen",
@@ -983,13 +998,16 @@
         "881e522e04": "merge",
         "6de8ce0cc6": "{{value0}} required",
         "22511537d2": "Approved",
-        "00f3bab87b": " of {{value0}} required",
         "11384f99aa": "number",
-        "40c56b95e2": "{{value0}} approval{{value1}} remaining",
         "3a051b8ade": "Work item",
         "32f8bef818": "No log output.",
         "4168eb2c51": "Resolve",
-        "commentTooLarge": "Comment is too large to submit safely."
+        "commentTooLarge": "Comment is too large to submit safely.",
+        "approvedWithRequirement": "Approved · {{requiredCount}} required",
+        "oneApprovalRemainingOfRequired": "{{remainingCount}} approval remaining of {{requiredCount}} required",
+        "manyApprovalsRemainingOfRequired": "{{remainingCount}} approvals remaining of {{requiredCount}} required",
+        "oneApprovalRemaining": "{{remainingCount}} approval remaining",
+        "manyApprovalsRemaining": "{{remainingCount}} approvals remaining"
       },
       "JiraIssueWorkspace": {
         "b0b92666c9": "Comment",
@@ -1024,7 +1042,11 @@
         "2a829a2f00": "priority",
         "693be070d0": "transition",
         "ef21405c6d": "Jira issue",
-        "commentTooLarge": "Comment is too large to submit safely."
+        "commentTooLarge": "Comment is too large to submit safely.",
+        "localCommentAuthor": "You",
+        "keyCopyLabel": "Key",
+        "branchNameCopyLabel": "Branch name",
+        "promptCopyLabel": "Prompt"
       },
       "Landing": {
         "76a95f7f47": "Create",
@@ -1115,7 +1137,11 @@
         "af6e02c44a": "page",
         "76ffd3c937": "Search for a project to add.",
         "c11b4e3cc2": "No projects found.",
-        "519c3587f3": "Add to project"
+        "519c3587f3": "Add to project",
+        "localCommentAuthor": "You",
+        "identifierCopyLabel": "Identifier",
+        "suggestedBranchNameCopyLabel": "Suggested branch name",
+        "promptCopyLabel": "Prompt"
       },
       "LinearItemDrawer": {
         "04008e6c46": "Start workspace from issue",
@@ -1147,7 +1173,8 @@
         "39883467f4": "Linear issue",
         "fda549766e": "{{value0}} to comment",
         "d71cd3003e": "+ Assignee",
-        "commentTooLarge": "Comment is too large to submit safely."
+        "commentTooLarge": "Comment is too large to submit safely.",
+        "localCommentAuthor": "You"
       },
       "NewWorkspaceComposerCard": {
         "reuseExistingBranch": "Reuse branch",
@@ -1292,7 +1319,6 @@
         "246b2c6456": "Failed to refresh checks",
         "c057f2fcb0": "Unable to refresh checks without a repository path.",
         "6591b1fa82": "Cancel",
-        "42c36d9166": "{{value0}} {{value1}} reaction{{value2}}",
         "7df8d5fc60": "Open GitHub merge box",
         "1939d0f663": "Pull request",
         "973ef2fac9": "Failed to disable auto-merge",
@@ -1302,8 +1328,6 @@
         "aae645d36d": "Failed to merge pull request",
         "c57873d721": "Pull request merged",
         "a63b3c159c": "This will update the pull request on GitHub.",
-        "eec3706a6a": "{{value0}} PR #{{value1}}?",
-        "b8c6cbb8c4": "Failed to {{value0}} PR",
         "710e47aa06": "Pull request reopened",
         "7aa3b5f706": "Pull request closed",
         "3d77438c92": "This will reopen the pull request on GitHub.",
@@ -1326,6 +1350,7 @@
         "9b4190dc98": "Description updated.",
         "51ed0cf38b": "Show more lines below",
         "e295a78c11": "Show {{value0}} more lines above",
+        "showMoreLinesBelow": "Show {{value0}} more lines below",
         "c9de94b07a": "Show more lines above",
         "5f3e293517": "Reset code context",
         "85d119be40": "Code context controls",
@@ -1337,7 +1362,6 @@
         "d8c3ba91c4": "Unable to comment without the PR head SHA.",
         "74660bd80b": "Diff unavailable because the PR commit SHAs are missing.",
         "2e528e1c2d": "Viewed",
-        "ff84e1f54c": "{{value0}} {{value1}} as viewed",
         "5ad00c7a0e": "No matching reviewers.",
         "2760fa29a4": "Everyone else",
         "828f045847": "Suggestions",
@@ -1398,7 +1422,23 @@
         "8ff5ae8866": "Assignees",
         "82c87eceb9": "Edit assignees",
         "1ff5d979df": "No one assigned",
-        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
+        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
+        "unmarkFileAsViewed": "Unmark {{filePath}} as viewed",
+        "markFileAsViewed": "Mark {{filePath}} as viewed",
+        "confirmClosePullRequestTitle": "Close PR #{{number}}?",
+        "closePullRequestConfirmLabel": "Close",
+        "failedToClosePullRequest": "Failed to close PR",
+        "confirmReopenPullRequestTitle": "Reopen PR #{{number}}?",
+        "reopenPullRequestConfirmLabel": "Reopen",
+        "failedToReopenPullRequest": "Failed to reopen PR",
+        "squashAndMergeLabel": "Squash and merge",
+        "createMergeCommitLabel": "Create merge commit",
+        "rebaseAndMergeLabel": "Rebase and merge",
+        "confirmSquashAndMergeTitle": "Squash and merge PR #{{number}}?",
+        "confirmCreateMergeCommitTitle": "Create merge commit for PR #{{number}}?",
+        "confirmRebaseAndMergeTitle": "Rebase and merge PR #{{number}}?",
+        "oneReactionAriaLabel": "{{count}} {{reactionEmoji}} reaction",
+        "manyReactionsAriaLabel": "{{count}} {{reactionEmoji}} reactions"
       },
       "QuickOpen": {
         "1dbd3f59ff": "Move",
@@ -1506,7 +1546,6 @@
         "67662ade50": "project issues",
         "6244a02f46": "Open in Linear",
         "606a85c774": "Open",
-        "5e8061b088": "Start workspace from {{value0}} {{value1}}",
         "592a55611b": "Try selecting more teams or refreshing; team filters apply to the current fetched issue set.",
         "618107fab3": "No fetched issues match the selected teams",
         "903c7af49f": "No Linear issues found",
@@ -1670,10 +1709,8 @@
         "3b11c8e8fc": "array",
         "e178c0a953": "Choose a Jira project before creating the issue.",
         "0f7b0d964a": "Creates a new issue in {{value0}}.",
-        "eff9800d4b": "{{value0}} label{{value1}}",
         "d7f16d0e32": "Select Team",
         "5301ca0f20": "Create project",
-        "7719d8daa9": "{{value0}} member{{value1}}",
         "5af6f0ae5b": "Select team",
         "cfb730b73e": "issue",
         "3659f9792a": "board",
@@ -1753,7 +1790,13 @@
         "jiraSortAscending": "ascending",
         "jiraSortDescending": "descending",
         "jiraSortBy": "Sort by",
-        "jiraToggleSortDirection": "Sort {{value0}}"
+        "jiraToggleSortDirection": "Sort {{value0}}",
+        "oneSelectedMember": "{{count}} member",
+        "manySelectedMembers": "{{count}} members",
+        "oneSelectedLabel": "{{count}} label",
+        "manySelectedLabels": "{{count}} labels",
+        "startWorkspaceFromGitLabMR": "Start workspace from MR {{number}}",
+        "startWorkspaceFromGitLabIssue": "Start workspace from issue {{number}}"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -1844,8 +1887,6 @@
         "50a1d11d5b": "Open Tabs",
         "088d66d980": "Actions & Settings",
         "dabd819ca1": "Type to see all {{value0}} worktrees",
-        "20af998bff": "{{value0}} items available{{value1}}",
-        "bb72c08e63": "{{value0}} results found{{value1}}",
         "34c8fbb46e": "SSH remote",
         "63c2be1914": "SSH disconnected",
         "95be6587d3": "Create worktree \"{{value0}}\"",
@@ -1857,7 +1898,15 @@
         "workspaceTabMissing": "Tab no longer exists",
         "projectsGroupsHeader": "Projects & Groups",
         "projectBadge": "Project",
-        "repoGroupBadge": "Repo group"
+        "repoGroupBadge": "Repo group",
+        "oneResultFoundWithCreateAction": "1 result found; create worktree action available",
+        "oneResultFound": "1 result found",
+        "manyResultsFoundWithCreateAction": "{{count}} results found; create worktree action available",
+        "manyResultsFound": "{{count}} results found",
+        "oneItemAvailableWithCreateAction": "1 item available; create worktree action available",
+        "oneItemAvailable": "1 item available",
+        "manyItemsAvailableWithCreateAction": "{{count}} items available; create worktree action available",
+        "manyItemsAvailable": "{{count}} items available"
       },
       "github": {
         "pr": {
@@ -2219,6 +2268,7 @@
               "5f79bc76b0": "Back to projects",
               "aac9a4afc6": "Open in Linear",
               "7616c986c6": "Open {{value0}} issues",
+              "openInLinear": "Open {{value0}} in Linear",
               "93e1f6bfca": "Loading",
               "98730088a6": ". Search or open Linear for the full set.",
               "06b887d622": "Showing first",
@@ -2623,16 +2673,22 @@
             },
             "drop": {
               "handler": {
-                "1e072f611e": "Failed to upload {{value0}} {{value1}}.",
-                "53f015fd85": "Skipped {{value0}} symlink{{value1}}.",
-                "29c031b49a": "Uploading {{value0}} file{{value1}} to runtime…",
                 "0c77693641": "Worktree not ready — try again in a moment.",
                 "ce8248b835": "Worktree path not available.",
                 "internalTooManyPaths": "Drop contains too many paths for a safe terminal paste.",
                 "internalPathsTooLarge": "Drop path list is too large for a safe terminal paste.",
-                "b4cf68e889": "Skipped {{value0}} {{value1}}.",
                 "writeTimeout": "File drop cancelled: terminal did not accept the path before the safety timeout.",
-                "writeRejected": "File drop cancelled: terminal could not accept the path."
+                "writeRejected": "File drop cancelled: terminal could not accept the path.",
+                "uploadingOneFileToRuntime": "Uploading {{count}} file to runtime…",
+                "uploadingManyFilesToRuntime": "Uploading {{count}} files to runtime…",
+                "uploadingOneFileToRemote": "Uploading {{count}} file to remote…",
+                "uploadingManyFilesToRemote": "Uploading {{count}} files to remote…",
+                "skippedOneSymlink": "Skipped {{count}} symlink.",
+                "skippedManySymlinks": "Skipped {{count}} symlinks.",
+                "skippedOneItem": "Skipped {{count}} item.",
+                "skippedManyItems": "Skipped {{count}} items.",
+                "failedToUploadOneFile": "Failed to upload {{count}} file.",
+                "failedToUploadManyFiles": "Failed to upload {{count}} files."
               }
             }
           },
@@ -2915,18 +2971,19 @@
             "4ebf90c12e": "No external ports detected",
             "7dac3ecc9d": "External Ports",
             "95495019ed": "Port scan unavailable on {{value0}}: {{value1}}",
-            "a8e4bdb412": " · {{value0}} external",
             "9aa11005bf": "workspace ·",
             "c22ea609fd": "Ports",
             "a11ed266ce": "workspace",
-            "ca41be2802": "Ports — {{value0}} workspace {{value1}}{{value2}}",
-            "b8bc3e420a": "Ports, {{value0}} workspace {{value1}}",
             "3a87d54dfb": "No workspace ports detected",
             "c174bbbfed": "Scanning for workspace ports...",
-            "8caaa86e9a": "ports",
-            "45834a9ace": "port",
             "4ae65d871a": "external",
-            "2b84c4d11f": "{{value0}} workspace · {{value1}} external"
+            "2b84c4d11f": "{{value0}} workspace · {{value1}} external",
+            "oneWorkspacePortAriaLabel": "Ports, {{workspaceCount}} workspace port",
+            "manyWorkspacePortsAriaLabel": "Ports, {{workspaceCount}} workspace ports",
+            "oneWorkspacePortWithExternalTooltip": "Ports — {{workspaceCount}} workspace port · {{externalCount}} external",
+            "manyWorkspacePortsWithExternalTooltip": "Ports — {{workspaceCount}} workspace ports · {{externalCount}} external",
+            "oneWorkspacePortTooltip": "Ports — {{workspaceCount}} workspace port",
+            "manyWorkspacePortsTooltip": "Ports — {{workspaceCount}} workspace ports"
           },
           "ResourceUsageStatusSegment": {
             "946d9f94d0": "Cancel",
@@ -3095,6 +3152,7 @@
             "0583c806ac": "Workspace disk usage is not scanned.",
             "39786e3b73": "Scanning workspace sizes.",
             "bef4dc0457": "{{value0}} reclaimable · {{value1}} unavailable",
+            "reclaimableWorkspaces": "{{value0}} reclaimable · {{value1}} workspaces",
             "3d8d47ce77": "{{value0}} · last result kept"
           },
           "WorkspaceSpaceManagerPanel": {
@@ -3120,7 +3178,6 @@
             "09960d86bd": "Scanned",
             "1cc6cd4c0f": "workspaces",
             "02b27c2230": "workspace",
-            "63efebe0e6": "{{value0}} {{value1}} removed from Space.",
             "eee5240810": "Workspaces deleted",
             "9afc97f9a3": "Workspace deleted",
             "792a214457": "Delete workspace",
@@ -3171,7 +3228,9 @@
             "0990a63160": "No scanned workspace sizes yet.",
             "977bdf9a36": "No top-level items to show.",
             "131662ac65": "{{value0}} open",
-            "0d1c78d749": "Select {{value0}}"
+            "0d1c78d749": "Select {{value0}}",
+            "oneWorkspaceRemoved": "1 workspace removed from Space.",
+            "manyWorkspacesRemoved": "{{count}} workspaces removed from Space."
           },
           "ports": {
             "status": {
@@ -3799,9 +3858,17 @@
           "b2bc47c080": "more locations",
           "b47ba1a9d2": "{{value0}} preview",
           "2251d41ebb": "Hidden worktree groups",
-          "f54f2bec5d": "{{value0}} hidden worktrees for {{value1}}",
           "5a9688802a": "Show {{value0}} more",
-          "294de4aeb2": "Show fewer"
+          "294de4aeb2": "Show fewer",
+          "keepOneHiddenForRepo": "Keep 1 discovered worktree hidden for {{value0}}; recover from the project menu",
+          "keepManyHiddenForRepo": "Keep {{count}} discovered worktrees hidden for {{value0}}; recover from the project menu",
+          "keepHiddenRecover": "Keep hidden - recover from the project menu",
+          "collapseHiddenWorktrees": "Collapse hidden worktrees for {{value0}}",
+          "expandHiddenWorktrees": "Expand hidden worktrees for {{value0}}",
+          "hidingOneInRepo": "Hiding 1 discovered worktree in {{value0}}",
+          "hidingManyInRepo": "Hiding {{count}} discovered worktrees in {{value0}}",
+          "hidingOne": "Hiding 1 discovered worktree",
+          "hidingMany": "Hiding {{count}} discovered worktrees"
         },
         "NonGitFolderDialog": {
           "e52454b7f6": "Open as Folder",
@@ -4031,6 +4098,7 @@
           "631b97eea9": "Host scope",
           "9919ae1082": "Workspace options",
           "bc96dbd041": "Workspace options ({{value0}})",
+          "optionsWithActiveFilter": "Workspace options ({{value0}} active)",
           "af9249c505": "Most recent workspace activity",
           "b451c8b162": "Recent",
           "6664282a7b": "Drag projects to arrange them",
@@ -4100,6 +4168,7 @@
           "79eb990aa4": "Add status",
           "054cb50df7": "Remove {{value0}}",
           "b45b350eb0": "Move {{value0}} left",
+          "moveRight": "Move {{value0}} right",
           "8ce44af9a8": "Rename {{value0}}",
           "395e541d5d": "Statuses",
           "34f03eb0de": "Board settings",
@@ -4113,6 +4182,7 @@
         },
         "WorkspaceStatusAppearancePopover": {
           "514be2f569": "Set {{value0}} color to {{value1}}",
+          "setIcon": "Set {{value0}} icon to {{value1}}",
           "8be427206b": "Icon",
           "2ac106f6b2": "Color",
           "74b1413279": "Appearance",
@@ -4204,7 +4274,8 @@
           "5d1a5d51bb": "Stopped process on {{value0}}",
           "c89f290e25": "Copied {{value0}}",
           "d1113f4660": "Failed to open browser",
-          "fed49903c9": "{{value0}} live {{value1}}"
+          "oneLivePort": "{{count}} live port",
+          "manyLivePorts": "{{count}} live ports"
         },
         "WorktreeContextMenu": {
           "c39c37676a": "Create a group and move this project into it.",
@@ -4272,12 +4343,13 @@
           "0cd15956d4": "Hide {{value0}} child workspaces",
           "bd37a57ac8": "Create workspace for {{value0}}",
           "b667b59632": "Some projects could not be removed from Orca",
-          "f94466bc39": "{{value0}} of {{value1}} contained project{{value2}} remained after deleting the group.",
           "groupDeleteFailed": "Failed to delete group",
           "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed.",
           "failedNestWorkspace": "Failed to nest workspace",
           "sidebarRowMissing": "Target no longer exists",
-          "failedUnnestWorkspace": "Failed to unnest workspace"
+          "failedUnnestWorkspace": "Failed to unnest workspace",
+          "oneContainedProjectRemained": "{{value0}} of 1 contained project remained after deleting the group.",
+          "manyContainedProjectsRemained": "{{value0}} of {{value1}} contained projects remained after deleting the group."
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -4463,9 +4535,12 @@
           "card": {
             "compact": {
               "agents": {
-                "a128d7006b": "{{value0}} {{value1}} child {{value2}}",
                 "289a1d2ca7": "Expand {{value0}}. {{value1}}",
-                "0c1debfe84": "Collapse {{value0}}"
+                "0c1debfe84": "Collapse {{value0}}",
+                "hideOneChildAgent": "Hide {{count}} child agent",
+                "hideManyChildAgents": "Hide {{count}} child agents",
+                "showOneChildAgent": "Show {{count}} child agent",
+                "showManyChildAgents": "Show {{count}} child agents"
               }
             }
           },
@@ -4669,10 +4744,11 @@
           "pairingCommand": "orca serve --pairing-address <host>",
           "pairingHelpSuffix": "on the server and paste the printed pairing URL.",
           "sshImportAlreadySynced": "~/.ssh/config already in sync.",
-          "sshImportSynced": "Synced {{value0}} host{{value1}}.",
           "sshImportFailed": "Failed to import SSH config.",
           "importing": "Importing...",
-          "importSshConfig": "Import ~/.ssh/config"
+          "importSshConfig": "Import ~/.ssh/config",
+          "sshImportSyncedOneHost": "Synced {{count}} host.",
+          "sshImportSyncedManyHosts": "Synced {{count}} hosts."
         },
         "ForgetSshWorkspaceDialog": {
           "reconnectFailed": "Reconnection failed",
@@ -6097,6 +6173,7 @@
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "Use {{value0}} repo color",
+          "useRepoIcon": "Use {{value0}} repo icon",
           "fde066a63b": "PNG uploads must be 256KB or smaller.",
           "cc1286e263": "Favicon",
           "03ca1a4e9b": "example.com",
@@ -6560,7 +6637,6 @@
           "a7d28dff81": "Add a remote host to connect to it in Orca.",
           "94c5284560": "Targets",
           "f495689b82": "Import failed",
-          "f8050f6307": "Synced {{value0}} server{{value1}}",
           "68c13b4589": "Test failed",
           "81d08bcddf": "Connection successful",
           "2c4ee7332b": "Failed to reset remote relay",
@@ -6578,7 +6654,9 @@
           "4db9afce1c": "Port must be between 1 and 65535",
           "0e5aa04161": "Host or SSH config alias is required",
           "f1fc50dad2": "Failed to load SSH targets",
-          "0cda732f43": "Connection test failed"
+          "0cda732f43": "Connection test failed",
+          "syncedOneServer": "Synced {{count}} server",
+          "syncedManyServers": "Synced {{count}} servers"
         },
         "SshPassphraseDialog": {
           "d5a234456f": "Cancel",
@@ -8669,16 +8747,18 @@
                 "60996beda6": "Add Jira site",
                 "7ca5ffffdb": "Browse, create, and start work from Jira Cloud issues.",
                 "a1093a06c7": "Checking Jira access before showing setup actions.",
-                "9fa04a032e": "{{value0}} site{{value1}} connected",
                 "cef18762a2": "Add access with a Personal API key from your Linear settings. Full-access keys can see every team the key owner can reach.",
                 "6224fe9d34": "Each connected Linear workspace has one key stored by the active runtime. Full-access keys can cover all teams the key owner can access; restricted keys can be replaced any time.",
                 "1a12e33fe5": "Add Linear access",
                 "622c224082": "Add workspace access",
                 "eae4a9f16b": "Add Linear access to browse and link issues.",
                 "fe9231215b": "Checking Linear access before showing setup actions.",
-                "e1f5e6424c": "{{value0}} workspace{{value1}} connected",
                 "disconnect_all": "Disconnect",
-                "account_scope_prefix": "Account scope"
+                "account_scope_prefix": "Account scope",
+                "oneJiraSiteConnected": "{{count}} site connected",
+                "manyJiraSitesConnected": "{{count}} sites connected",
+                "oneLinearWorkspaceConnected": "{{count}} workspace connected",
+                "manyLinearWorkspacesConnected": "{{count}} workspaces connected"
               }
             }
           }
@@ -9243,7 +9323,6 @@
             "9845a71e17": "More actions",
             "2bfaf4379c": "More {{value0}} actions",
             "377269db6f": "{{value0}} reopened",
-            "fa3ee9a515": "closed",
             "78f5ff294c": "This will reopen the {{value0}}.",
             "a3d572a4de": "This will close the {{value0}}.",
             "e4aca40024": "Delete Workspace",
@@ -9253,7 +9332,16 @@
             "b25f63edd7": "open",
             "d2ca293f3d": "Working...",
             "ef064cb7c3": "default",
-            "59b4dccf70": "destructive"
+            "59b4dccf70": "destructive",
+            "mergeRequestLabel": "merge request",
+            "pullRequestLabel": "pull request",
+            "57fb10cfe7": "Close {{value0}}?",
+            "b982b128c0": "Reopen {{value0}}?",
+            "73e5cc9c99": "Close",
+            "641c8ec02a": "Reopen",
+            "72c9a274a7": "Failed to close the {{value0}}.",
+            "93afca5395": "Failed to reopen the {{value0}}.",
+            "reviewClosedToast": "{{value0}} closed"
           },
           "PortsPanel": {
             "3ea4a02a8f": "Cancel",
@@ -9436,16 +9524,13 @@
             "e131cd7128": "Source Control is only available for Git repositories",
             "c07b236287": "Select a workspace to view changes",
             "dc5a6465fc": "{{value0}} (e.g. {{value1}}{{value2}})",
-            "8eb3782a0c": "Failed to discard {{value0}} file{{value1}}",
             "a5e5a11090": "Discard all failed — unable to unstage files before discard",
             "8a5ba6a988": "Failed to load commit diff",
             "fe5bd1a610": "Creating {{value0}}...",
             "812cb992ee": "Open on {{value0}}",
             "eef5446523": "{{value0}} #{{value1}} is already open",
             "0453ca3a9a": "{{value0}} created, but Orca could not refresh it yet.",
-            "f99560ab29": "Abort {{value0}} failed",
             "eae7a1da5f": "Failed to clear notes.",
-            "657e0c90ad": "{{value0}} note{{value1}}",
             "df5040e3c3": "Unstage",
             "8cde1a2fb0": "Stage",
             "d54dd48b0b": "Discard changes",
@@ -9573,7 +9658,21 @@
               "a9bf7c171a": "Push Failed",
               "834cb3f23d": "Fix with AI",
               "783a808870": "Close"
-            }
+            },
+            "failedToDiscardOneFile": "Failed to discard {{count}} file",
+            "failedToDiscardManyFiles": "Failed to discard {{count}} files",
+            "oneNote": "{{count}} note",
+            "manyNotes": "{{count}} notes",
+            "abortRebaseTitle": "Abort rebase?",
+            "abortRebaseDescription": "This cancels the rebase in progress and can discard conflict resolutions made during this rebase.",
+            "abortRebaseConfirmLabel": "Abort rebase",
+            "abortRebaseFailed": "Abort rebase failed",
+            "failedToAbortRebase": "Failed to abort rebase",
+            "abortMergeTitle": "Abort merge?",
+            "abortMergeDescription": "This cancels the merge in progress and can discard conflict resolutions made during this merge.",
+            "abortMergeConfirmLabel": "Abort merge",
+            "abortMergeFailed": "Abort merge failed",
+            "failedToAbortMerge": "Failed to abort merge"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -9885,7 +9984,12 @@
                   "226b85a3a7": "Fetch",
                   "323bb614aa": "Commit & Sync",
                   "2b8e6595fd": "Commit",
-                  "04d709801d": "Fetch from remote without merging"
+                  "04d709801d": "Fetch from remote without merging",
+                  "ac19d0917c": "Abort rebase",
+                  "515a94f9f6": "Abort merge",
+                  "f48d7f6445": "Operation in progress…",
+                  "62e79d363d": "Abort the rebase in progress",
+                  "4ef3aa6987": "Abort the merge in progress"
                 }
               },
               "primary": {
@@ -9950,7 +10054,6 @@
             "unresolved": "Couldn't determine which host owns this workspace. Check the connection and try again."
           },
           "useFileDeletion": {
-            "72691dfebc": "Failed to {{value0}} '{{value1}}'.",
             "96affe1302": "'{{value0}}' moved to {{value1}}",
             "74727df633": "'{{value0}}' deleted",
             "d979a4fbb5": "Permanently delete '{{value0}}'?",
@@ -9961,15 +10064,17 @@
             "8b8ee9d22f": "Couldn't determine which host owns this file. Check the workspace connection and try again.",
             "af1270b90d": "Permanently delete {{count}} items?",
             "dd029aa5cd": "This permanently deletes the selected items and any directory contents on the remote host. This cannot be undone.",
-            "77fdc36183": "Delete {{count}} items?",
-            "fca915a67a": "Remote items are permanently deleted and cannot be undone. Local items move to the {{value0}}."
+            "77fdc36183": "Delete {{count}} items?"
           },
           "useFileExplorerHandlers": {
             "32cd9fd991": "Cannot open symlink target"
           },
           "useFileExplorerImport": {
-            "25919b2050": "Skipped {{value0}} {{value1}}.",
-            "132fd0e1e9": "Failed to import {{value0}} {{value1}}."
+            "4222b43cc1": "Failed to import {{count}} file.",
+            "576340ce05": "Failed to import {{count}} files.",
+            "d68e492480": "Skipped {{count}} file.",
+            "17be0f9168": "Skipped {{count}} files.",
+            "58220fc4bb": "Failed to import files."
           },
           "useFileExplorerKeys": {
             "8adb953095": "Operation failed"
@@ -10196,6 +10301,33 @@
             "workspaceGone": "Couldn't open log — workspace is no longer available.",
             "notAuthorized": "Couldn't open log — path not authorized.",
             "alreadyEditable": "Log is already open for editing."
+          },
+          "diff": {
+            "comments": {
+              "clear": {
+                "dialog": {
+                  "state": {
+                    "f07232e970": "Clear {{count}} note from this workspace?",
+                    "d10b0441e0": "Clear {{count}} notes from this workspace?",
+                    "bd98da62a0": "Clear {{count}} note from {{value0}}?",
+                    "edd639023e": "Clear {{count}} notes from {{value0}}?"
+                  }
+                }
+              }
+            }
+          },
+          "file": {
+            "deletion": {
+              "localized": {
+                "copy": {
+                  "222a8a3fb3": "Failed to delete '{{value0}}'.",
+                  "e9605383fd": "Failed to move '{{value0}}' to the Recycle Bin.",
+                  "f5fbc0837d": "Failed to move '{{value0}}' to the Trash.",
+                  "f583bf91df": "Remote items are permanently deleted and cannot be undone. Local items move to the Recycle Bin.",
+                  "b1bde1b2e4": "Remote items are permanently deleted and cannot be undone. Local items move to the Trash."
+                }
+              }
+            }
           }
         }
       },
@@ -10300,12 +10432,13 @@
           "5c115cb713": "CLI not installed",
           "217beb0658": "GitHub",
           "4983ae7433": "Add Linear access with a Personal API key. Full-access keys can show every team the key owner can access.",
-          "b08a6ac93c": "{{value0}} workspace{{value1}} linked. Add another workspace or replace a restricted key any time.",
           "93f0c49ad1": "not-authenticated",
           "a3bcf13694": "connected",
           "d6e5dba05a": "Sign in",
           "0b4a7d23ab": "Signing in",
-          "a74c6d6b18": "not-installed"
+          "a74c6d6b18": "not-installed",
+          "oneWorkspaceLinked": "{{count}} workspace linked. Add another workspace or replace a restricted key any time.",
+          "manyWorkspacesLinked": "{{count}} workspaces linked. Add another workspace or replace a restricted key any time."
         },
         "NotificationStep": {
           "3bede04483": "Send Test Notification",
@@ -10390,8 +10523,7 @@
           "c7af322fc3": "Stop scanning",
           "c3d9d44ca2": "Stop scan",
           "cf23006ba7": "Selected host",
-          "7ec3f48820": "/home/user",
-          "2e6438dd34": "{{value0}}Found {{value1}} {{value2}} in this folder."
+          "7ec3f48820": "/home/user"
         },
         "ThemeStep": {
           "a4b254779d": "macOS Option key",
@@ -10465,6 +10597,12 @@
               }
             }
           }
+        },
+        "RepoStepNestedImportPanel": {
+          "scanningFoundOneRepository": "Scanning... Found {{count}} repository in this folder.",
+          "scanningFoundManyRepositories": "Scanning... Found {{count}} repositories in this folder.",
+          "foundOneRepository": "Found {{count}} repository in this folder.",
+          "foundManyRepositories": "Found {{count}} repositories in this folder."
         }
       },
       "new": {
@@ -10777,7 +10915,8 @@
             "3b04b065b5": "Show floating workspace",
             "4cb418b991": "Show floating workspace, new activity",
             "5785dd9148": "Minimize floating workspace",
-            "bfe7809a70": "{{value0}} floating workspace ({{value1}})"
+            "minimizeFloatingWorkspaceWithShortcut": "Minimize floating workspace ({{shortcut}})",
+            "showFloatingWorkspaceWithShortcut": "Show floating workspace ({{shortcut}})"
           },
           "FloatingTerminalWindowControls": {
             "2f6054342c": "Minimize",
@@ -11224,6 +11363,8 @@
           "FeatureTipsModal": {
             "c169298e4d": "Done",
             "3c6c478462": "X finishes, send it the review task.”",
+            "splitWorktreesPrompt": "“Split this PR into two {{term}} and create PRs for each.”",
+            "handoffReviewPrompt": "“When the agent in {{term}} X finishes, send it the review task.”",
             "298301b7a0": "worktree",
             "864e2db28f": "“When the agent in",
             "7fc6f02099": "and create PRs for each.”",
@@ -11426,11 +11567,12 @@
           "982d14bfa5": "Open All Changes",
           "3d909843bb": "Open Branch Diff",
           "8368d256ec": "combined-branch",
-          "8f68ad9ca9": "Show {{value0}} AI {{value1}}",
           "724a13568d": " in {{value0}}",
           "6094135eec": " vs {{value0}}",
           "a4420ca1f7": "Wrap On",
-          "dde325ddfe": "Wrap Off"
+          "dde325ddfe": "Wrap Off",
+          "showOneAiNote": "Show {{count}} AI note",
+          "showManyAiNotes": "Show {{count}} AI notes"
         },
         "ConflictComponents": {
           "f338288514": "Loading conflict contents...",
@@ -11447,7 +11589,23 @@
           "9c2901ef8a": "Next conflict",
           "41d9af2e7a": "Previous conflict",
           "55d61a0ccd": "conflict ·",
-          "da539359b6": "No working-tree file is available to edit for this conflict."
+          "da539359b6": "No working-tree file is available to edit for this conflict.",
+          "71a2c63628": "Both modified",
+          "ba602cdc05": "Both added",
+          "1c55f94973": "Deleted by us",
+          "9d8757e1ca": "Deleted by them",
+          "36bceb6bb5": "Added by us",
+          "5259d6908a": "Added by them",
+          "be2b3274fe": "Both deleted",
+          "b119865c75": "Resolve the conflict markers",
+          "5e89c1d824": "Choose which version to keep, or combine them",
+          "7e6a9cd8ba": "Decide whether to restore the file",
+          "9d73608d56": "Decide whether to keep the file or accept deletion",
+          "2ff72311cd": "Review whether to keep the added file",
+          "7e15338be9": "Review the added file before keeping it",
+          "a63bf70fc7": "Resolve in Git or restore one side before editing",
+          "ec7ef38d67": "Unresolved",
+          "485ab716f0": "Resolved locally"
         },
         "ConflictReviewFileTree": {
           "3449521a8c": "No conflicts in this snapshot.",
@@ -12019,7 +12177,10 @@
       },
       "dashboard": {
         "DashboardAgentChildDisclosure": {
-          "1b57ce9fa4": "{{value0}} {{value1}} child {{value2}}"
+          "hideOneChildAgent": "Hide {{count}} child agent",
+          "hideManyChildAgents": "Hide {{count}} child agents",
+          "showOneChildAgent": "Show {{count}} child agent",
+          "showManyChildAgents": "Show {{count}} child agents"
         },
         "DashboardAgentRow": {
           "912e136cd9": "Send",

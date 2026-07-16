@@ -1816,14 +1816,20 @@ export default function CombinedDiffViewer({
                     <button
                       type="button"
                       className="inline-flex h-6 items-center gap-1 pl-2 pr-1.5 text-[11px] font-medium leading-none text-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
-                      aria-label={translate(
-                        'auto.components.editor.CombinedDiffViewer.8f68ad9ca9',
-                        'Show {{value0}} AI {{value1}}',
-                        {
-                          value0: diffCommentCount,
-                          value1: diffCommentCount === 1 ? 'note' : 'notes'
-                        }
-                      )}
+                      aria-label={
+                        // Why: the note noun and word order must be translated as a complete label.
+                        diffCommentCount === 1
+                          ? translate(
+                              'auto.components.editor.CombinedDiffViewer.showOneAiNote',
+                              'Show {{count}} AI note',
+                              { count: diffCommentCount }
+                            )
+                          : translate(
+                              'auto.components.editor.CombinedDiffViewer.showManyAiNotes',
+                              'Show {{count}} AI notes',
+                              { count: diffCommentCount }
+                            )
+                      }
                     >
                       <Sparkles className="size-3 text-violet-500 dark:text-violet-400" />
                       <span>

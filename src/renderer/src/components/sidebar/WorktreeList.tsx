@@ -6340,15 +6340,19 @@ const WorktreeList = React.memo(function WorktreeList({
             'Some projects could not be removed from Orca'
           ),
           {
-            description: translate(
-              'auto.components.sidebar.WorktreeList.f94466bc39',
-              '{{value0}} of {{value1}} contained project{{value2}} remained after deleting the group.',
-              {
-                value0: failedCount,
-                value1: requestedCount,
-                value2: requestedCount === 1 ? '' : 's'
-              }
-            )
+            // Why: plural suffix interpolation only works in English; each sentence is localized whole.
+            description:
+              requestedCount === 1
+                ? translate(
+                    'auto.components.sidebar.WorktreeList.oneContainedProjectRemained',
+                    '{{value0}} of 1 contained project remained after deleting the group.',
+                    { value0: failedCount }
+                  )
+                : translate(
+                    'auto.components.sidebar.WorktreeList.manyContainedProjectsRemained',
+                    '{{value0}} of {{value1}} contained projects remained after deleting the group.',
+                    { value0: failedCount, value1: requestedCount }
+                  )
           }
         )
       }

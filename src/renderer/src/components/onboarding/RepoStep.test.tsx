@@ -105,6 +105,30 @@ describe('RepoStep', () => {
     expect(html.match(/disabled=""/g)?.length).toBeGreaterThanOrEqual(3)
   })
 
+  it('uses a complete plural sentence while a nested scan is still running', () => {
+    const html = renderRepoStep({
+      nestedScan: {
+        selectedPath: '/workspace/platform',
+        selectedPathKind: 'non_git_folder',
+        repos: [
+          { path: '/workspace/platform/apps/web', displayName: 'web', depth: 2 },
+          { path: '/workspace/platform/apps/api', displayName: 'api', depth: 2 }
+        ],
+        truncated: false,
+        timedOut: false,
+        stopped: false,
+        durationMs: 4,
+        maxDepth: 3,
+        maxRepos: 100,
+        timeoutMs: null
+      },
+      nestedScanInProgress: true,
+      nestedSelectedPaths: new Set(['/workspace/platform/apps/web'])
+    })
+
+    expect(html).toContain('Scanning... Found 2 repositories in this folder.')
+  })
+
   it('shows a flat nested repository checklist with collision labels', () => {
     const html = renderRepoStep({
       nestedScan: {

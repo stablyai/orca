@@ -758,6 +758,29 @@ describe('launchAgentInNewTab', () => {
     )
   })
 
+  it('uses complete notes-specific grammar after a draft delivery timeout', async () => {
+    mockPasteDraftWhenAgentReady.mockImplementation(({ onTimeout }) => {
+      onTimeout?.()
+      return Promise.resolve(false)
+    })
+    store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-1' } as never] }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'x'.repeat(25_000),
+      promptDelivery: 'draft',
+      launchPlatform: 'win32'
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(mockToastMessage).toHaveBeenCalledWith(
+      "Your notes weren't sent — paste them once the agent is ready."
+    )
+  })
+
   it('marks a cancelled submit-after-ready launch notified when the user closed the tab', async () => {
     mockPasteDraftWhenAgentReady.mockImplementation(({ onTimeout }) => {
       onTimeout?.()

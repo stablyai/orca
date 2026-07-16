@@ -40,6 +40,18 @@ const port: WorkspacePort = {
 }
 
 describe('WorktreeCardPortsDetails', () => {
+  it('localizes complete singular and plural trigger labels', async () => {
+    const { WorktreeCardPortsTrigger } = await import('./WorktreeCardPorts')
+    const secondPort = { ...port, id: '127.0.0.1:58942:1235', port: 58942, pid: 1235 }
+
+    expect(renderToStaticMarkup(<WorktreeCardPortsTrigger ports={[port]} />)).toContain(
+      'aria-label="1 live port"'
+    )
+    expect(renderToStaticMarkup(<WorktreeCardPortsTrigger ports={[port, secondPort]} />)).toContain(
+      'aria-label="2 live ports"'
+    )
+  })
+
   it('shows advertised port addresses in workspace hover details', async () => {
     const { WorktreeCardPortsDetails } = await import('./WorktreeCardPorts')
 

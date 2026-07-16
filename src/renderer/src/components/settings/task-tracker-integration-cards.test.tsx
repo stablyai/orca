@@ -52,20 +52,19 @@ let container: HTMLDivElement | null = null
 
 function installStore(
   connected: boolean,
-  settings: StoreState['settings'] = { activeRuntimeEnvironmentId: null }
+  settings: StoreState['settings'] = { activeRuntimeEnvironmentId: null },
+  workspaceCount = 1
 ): StoreState {
   const state: StoreState = {
     linearStatus: {
       connected,
       workspaces: connected
-        ? [
-            {
-              id: 'workspace-1',
-              organizationName: 'Acme',
-              displayName: 'Acme workspace',
-              email: 'linear@example.test'
-            }
-          ]
+        ? Array.from({ length: workspaceCount }, (_, index) => ({
+            id: `workspace-${index + 1}`,
+            organizationName: index === 0 ? 'Acme' : `Acme ${index + 1}`,
+            displayName: index === 0 ? 'Acme workspace' : `Acme workspace ${index + 1}`,
+            email: 'linear@example.test'
+          }))
         : []
     },
     linearStatusChecked: true,
@@ -148,6 +147,7 @@ describe('LinearIntegrationCard account scope', () => {
     const rendered = await renderCard()
 
     expect(rendered.textContent).toContain('Account scope: Remote server: runtime-1')
+    expect(rendered.textContent).toContain('1 workspace connected')
     expect(rendered.textContent).toContain(
       'Credentials and account checks for this provider are owned by this remote server. Use Settings > Remote Orca Servers > Advanced to edit another default runtime scope.'
     )
@@ -172,6 +172,14 @@ describe('LinearIntegrationCard account scope', () => {
     })
 
     expect(state.testLinearConnection).toHaveBeenCalledWith('workspace-1')
+  })
+
+  it('uses the complete plural connected-workspace message', async () => {
+    installStore(true, { activeRuntimeEnvironmentId: null }, 2)
+
+    const rendered = await renderCard()
+
+    expect(rendered.textContent).toContain('2 workspaces connected')
   })
 
   it('clears verification state after adding another Linear workspace', async () => {

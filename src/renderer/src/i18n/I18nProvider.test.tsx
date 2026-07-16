@@ -5,7 +5,11 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getDefaultSettings } from '../../../shared/constants'
-import { UI_LANGUAGE_ENGLISH, UI_LANGUAGE_SPANISH } from '../../../shared/ui-language'
+import {
+  UI_LANGUAGE_ENGLISH,
+  UI_LANGUAGE_SPANISH,
+  UI_LANGUAGE_SYSTEM
+} from '../../../shared/ui-language'
 import { useAppStore } from '@/store'
 import { i18n } from './i18n'
 import { I18nProvider } from './I18nProvider'
@@ -110,6 +114,20 @@ describe('I18nProvider startup language', () => {
     // English wins and the Spanish OS locale is never requested.
     expect(changeLanguage).toHaveBeenCalledWith('en')
     expect(changeLanguage).not.toHaveBeenCalledWith('es')
+  })
+
+  it('maps a Traditional Chinese system locale to the Traditional catalog', async () => {
+    stubSystemLocale('zh-HK')
+    const changeLanguage = vi.spyOn(i18n, 'changeLanguage')
+
+    await renderProvider()
+    await act(async () => {
+      useAppStore.setState({
+        settings: { ...getDefaultSettings('/tmp'), uiLanguage: UI_LANGUAGE_SYSTEM }
+      })
+    })
+
+    expect(changeLanguage).toHaveBeenCalledWith('zh-TW')
   })
 
   it('switches language when the setting changes after startup', async () => {

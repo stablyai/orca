@@ -44,6 +44,35 @@ function WorktreePromptTerm({ children }: { children: string }): JSX.Element {
   )
 }
 
+const PROMPT_TERM_MARKER = '\u0000orca-worktree-term\u0000'
+
+function LocalizedWorktreePrompt({
+  translationKey,
+  fallback,
+  termKey,
+  termFallback
+}: {
+  translationKey: string
+  fallback: string
+  termKey: string
+  termFallback: string
+}): JSX.Element {
+  // Why: complete-sentence translation lets CJK locales reorder the highlighted worktree term safely.
+  const copy = translate(translationKey, fallback, { term: PROMPT_TERM_MARKER })
+  const markerIndex = copy.indexOf(PROMPT_TERM_MARKER)
+  if (markerIndex < 0) {
+    return <>{copy}</>
+  }
+
+  return (
+    <>
+      {copy.slice(0, markerIndex)}
+      <WorktreePromptTerm>{translate(termKey, termFallback)}</WorktreePromptTerm>
+      {copy.slice(markerIndex + PROMPT_TERM_MARKER.length)}
+    </>
+  )
+}
+
 function FeatureTipVisual({ tip }: { tip: FeatureTip }): JSX.Element {
   if (tip.action === 'setup-cli') {
     return <CliFeatureTipVisual />
@@ -306,36 +335,20 @@ export default function FeatureTipsModal(): JSX.Element | null {
                     )}
                   </p>
                   <p>
-                    {translate(
-                      'auto.components.feature.tips.FeatureTipsModal.55846c7f95',
-                      '“Split this PR into two'
-                    )}
-                    <WorktreePromptTerm>
-                      {translate(
-                        'auto.components.feature.tips.FeatureTipsModal.27c567a89c',
-                        'worktrees'
-                      )}
-                    </WorktreePromptTerm>{' '}
-                    {translate(
-                      'auto.components.feature.tips.FeatureTipsModal.7fc6f02099',
-                      'and create PRs for each.”'
-                    )}
+                    <LocalizedWorktreePrompt
+                      translationKey="auto.components.feature.tips.FeatureTipsModal.splitWorktreesPrompt"
+                      fallback="“Split this PR into two {{term}} and create PRs for each.”"
+                      termKey="auto.components.feature.tips.FeatureTipsModal.27c567a89c"
+                      termFallback="worktrees"
+                    />
                   </p>
                   <p>
-                    {translate(
-                      'auto.components.feature.tips.FeatureTipsModal.864e2db28f',
-                      '“When the agent in'
-                    )}
-                    <WorktreePromptTerm>
-                      {translate(
-                        'auto.components.feature.tips.FeatureTipsModal.298301b7a0',
-                        'worktree'
-                      )}
-                    </WorktreePromptTerm>{' '}
-                    {translate(
-                      'auto.components.feature.tips.FeatureTipsModal.3c6c478462',
-                      'X finishes, send it the review task.”'
-                    )}
+                    <LocalizedWorktreePrompt
+                      translationKey="auto.components.feature.tips.FeatureTipsModal.handoffReviewPrompt"
+                      fallback="“When the agent in {{term}} X finishes, send it the review task.”"
+                      termKey="auto.components.feature.tips.FeatureTipsModal.298301b7a0"
+                      termFallback="worktree"
+                    />
                   </p>
                 </div>
               </div>

@@ -491,6 +491,90 @@ function rewriteCompareBaseBranchFromCandidate(
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
 const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
 
+function getFailedDiscardFileCountLabel(count: number): string {
+  // Why: file/files must remain inside the translated error sentence for
+  // locale-specific pluralization and word order.
+  return count === 1
+    ? translate(
+        'auto.components.right.sidebar.SourceControl.failedToDiscardOneFile',
+        'Failed to discard {{count}} file',
+        { count }
+      )
+    : translate(
+        'auto.components.right.sidebar.SourceControl.failedToDiscardManyFiles',
+        'Failed to discard {{count}} files',
+        { count }
+      )
+}
+
+function getDiffNoteCountLabel(count: number): string {
+  // Why: both source-control row variants need the same complete,
+  // locale-orderable note count phrase.
+  return count === 1
+    ? translate('auto.components.right.sidebar.SourceControl.oneNote', '{{count}} note', {
+        count
+      })
+    : translate('auto.components.right.sidebar.SourceControl.manyNotes', '{{count}} notes', {
+        count
+      })
+}
+
+function getAbortConflictOperationCopy(operation: AbortConflictOperation): {
+  title: string
+  description: string
+  confirmLabel: string
+  failedTitle: string
+  failedDescription: string
+} {
+  // Why: merge/rebase are visible prose here, so each abort path owns full
+  // translated sentences instead of interpolating English operation names.
+  return operation === 'rebase'
+    ? {
+        title: translate(
+          'auto.components.right.sidebar.SourceControl.abortRebaseTitle',
+          'Abort rebase?'
+        ),
+        description: translate(
+          'auto.components.right.sidebar.SourceControl.abortRebaseDescription',
+          'This cancels the rebase in progress and can discard conflict resolutions made during this rebase.'
+        ),
+        confirmLabel: translate(
+          'auto.components.right.sidebar.SourceControl.abortRebaseConfirmLabel',
+          'Abort rebase'
+        ),
+        failedTitle: translate(
+          'auto.components.right.sidebar.SourceControl.abortRebaseFailed',
+          'Abort rebase failed'
+        ),
+        failedDescription: translate(
+          'auto.components.right.sidebar.SourceControl.failedToAbortRebase',
+          'Failed to abort rebase'
+        )
+      }
+    : {
+        title: translate(
+          'auto.components.right.sidebar.SourceControl.abortMergeTitle',
+          'Abort merge?'
+        ),
+        description: translate(
+          'auto.components.right.sidebar.SourceControl.abortMergeDescription',
+          'This cancels the merge in progress and can discard conflict resolutions made during this merge.'
+        ),
+        confirmLabel: translate(
+          'auto.components.right.sidebar.SourceControl.abortMergeConfirmLabel',
+          'Abort merge'
+        ),
+        failedTitle: translate(
+          'auto.components.right.sidebar.SourceControl.abortMergeFailed',
+          'Abort merge failed'
+        ),
+        failedDescription: translate(
+          'auto.components.right.sidebar.SourceControl.failedToAbortMerge',
+          'Failed to abort merge'
+        )
+      }
+}
+
 // Why: directional signifiers ahead of each primary action label. Commit
 // (✓) is affirmative; Push (↑) points in the direction data flows; Sync
 // (↕) is bidirectional; Publish gets a cloud-up to distinguish the
@@ -2677,15 +2761,11 @@ function SourceControlInner(): React.JSX.Element {
       }
 
       const isRebase = requestedOperation === 'rebase'
-      const label = isRebase ? 'rebase' : 'merge'
-      const title = isRebase ? 'Abort rebase?' : 'Abort merge?'
-      const description = isRebase
-        ? 'This cancels the rebase in progress and can discard conflict resolutions made during this rebase.'
-        : 'This cancels the merge in progress and can discard conflict resolutions made during this merge.'
+      const actionCopy = getAbortConflictOperationCopy(requestedOperation)
       const confirmed = await confirmAction({
-        title,
-        description,
-        confirmLabel: `Abort ${label}`,
+        title: actionCopy.title,
+        description: actionCopy.description,
+        confirmLabel: actionCopy.confirmLabel,
         confirmVariant: 'destructive'
       })
       if (!confirmed) {
@@ -2706,15 +2786,8 @@ function SourceControlInner(): React.JSX.Element {
         const abortGitOperation = isRebase ? abortRuntimeGitRebase : abortRuntimeGitMerge
         await abortGitOperation(context)
       } catch (error) {
-        const message = error instanceof Error ? error.message : `Failed to abort ${label}`
-        toast.error(
-          translate(
-            'auto.components.right.sidebar.SourceControl.f99560ab29',
-            'Abort {{value0}} failed',
-            { value0: label }
-          ),
-          { description: message }
-        )
+        const message = error instanceof Error ? error.message : actionCopy.failedDescription
+        toast.error(actionCopy.failedTitle, { description: message })
         setRemoteActionErrors((prev) => ({
           ...prev,
           [activeWorktreeId]: {
@@ -5452,22 +5525,15 @@ function SourceControlInner(): React.JSX.Element {
           const firstMsg = errors[0] instanceof Error ? errors[0].message : undefined
           const sample = result.failed.slice(0, 3).join(', ')
           const more = result.failed.length > 3 ? `, +${result.failed.length - 3} more` : ''
-          toast.error(
-            translate(
-              'auto.components.right.sidebar.SourceControl.8eb3782a0c',
-              'Failed to discard {{value0}} file{{value1}}',
-              { value0: result.failed.length, value1: result.failed.length === 1 ? '' : 's' }
-            ),
-            {
-              description: firstMsg
-                ? translate(
-                    'auto.components.right.sidebar.SourceControl.dc5a6465fc',
-                    '{{value0}} (e.g. {{value1}}{{value2}})',
-                    { value0: firstMsg, value1: sample, value2: more }
-                  )
-                : `${sample}${more}`
-            }
-          )
+          toast.error(getFailedDiscardFileCountLabel(result.failed.length), {
+            description: firstMsg
+              ? translate(
+                  'auto.components.right.sidebar.SourceControl.dc5a6465fc',
+                  '{{value0}} (e.g. {{value1}}{{value2}})',
+                  { value0: firstMsg, value1: sample, value2: more }
+                )
+              : `${sample}${more}`
+          })
         }
         if (!result.aborted) {
           await refreshActiveGitStatusAfterMutation()
@@ -8068,11 +8134,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
           // attached, without opening the Notes tab.
           <span
             className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground"
-            title={translate(
-              'auto.components.right.sidebar.SourceControl.657e0c90ad',
-              '{{value0}} note{{value1}}',
-              { value0: commentCount, value1: commentCount === 1 ? '' : 's' }
-            )}
+            title={getDiffNoteCountLabel(commentCount)}
           >
             <MessageSquare className="size-3" />
             <span className="tabular-nums">{commentCount}</span>
@@ -8257,11 +8319,7 @@ function BranchEntryRow({
         {commentCount > 0 && (
           <span
             className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground"
-            title={translate(
-              'auto.components.right.sidebar.SourceControl.657e0c90ad',
-              '{{value0}} note{{value1}}',
-              { value0: commentCount, value1: commentCount === 1 ? '' : 's' }
-            )}
+            title={getDiffNoteCountLabel(commentCount)}
           >
             <MessageSquare className="size-3" />
             <span className="tabular-nums">{commentCount}</span>

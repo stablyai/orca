@@ -72,11 +72,19 @@ export function LinearIntegrationCard(): React.JSX.Element {
       name="Linear"
       description={
         connected
-          ? translate(
-              'auto.components.settings.task.tracker.integration.cards.e1f5e6424c',
-              '{{value0}} workspace{{value1}} connected',
-              { value0: workspaces.length, value1: workspaces.length === 1 ? '' : 's' }
-            )
+          ? // Why: translators need complete count variants instead of an
+            // interpolated English suffix that cannot be reordered.
+            workspaces.length === 1
+            ? translate(
+                'auto.components.settings.task.tracker.integration.cards.oneLinearWorkspaceConnected',
+                '{{count}} workspace connected',
+                { count: workspaces.length }
+              )
+            : translate(
+                'auto.components.settings.task.tracker.integration.cards.manyLinearWorkspacesConnected',
+                '{{count}} workspaces connected',
+                { count: workspaces.length }
+              )
           : checking
             ? translate(
                 'auto.components.settings.task.tracker.integration.cards.fe9231215b',

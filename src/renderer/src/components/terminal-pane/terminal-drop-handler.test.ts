@@ -148,6 +148,7 @@ describe('handleTerminalFileDrop', () => {
       ['/Users/me/logo.png'],
       '/remote/repo/.orca/drops'
     )
+    expect(mocks.toastLoading).toHaveBeenCalledWith('Uploading 1 file to runtime…')
     expect(sendInput).toHaveBeenCalledWith(
       wrapTerminalBracketedPasteText('/remote/repo/.orca/drops/logo.png')
     )
@@ -588,6 +589,7 @@ describe('handleTerminalFileDrop', () => {
       worktreePath: 'C:\\Remote Repo',
       connectionId: 'ssh-win'
     })
+    expect(mocks.toastLoading).toHaveBeenCalledWith('Uploading 1 file to remote…')
     expect(sendInput).toHaveBeenCalledWith('"C:\\Remote Repo\\A&B.txt" ')
     expect(focus).toHaveBeenCalled()
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')

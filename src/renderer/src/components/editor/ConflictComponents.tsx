@@ -17,24 +17,74 @@ import type { GitConflictKind, GitStatusEntry } from '../../../../shared/types'
 import { ConflictReviewFileTree } from './ConflictReviewFileTree'
 import { translate } from '@/i18n/i18n'
 
-export const CONFLICT_KIND_LABELS: Record<GitConflictKind, string> = {
-  both_modified: 'Both modified',
-  both_added: 'Both added',
-  deleted_by_us: 'Deleted by us',
-  deleted_by_them: 'Deleted by them',
-  added_by_us: 'Added by us',
-  added_by_them: 'Added by them',
-  both_deleted: 'Both deleted'
+// Why: every Git conflict kind is a distinct translation concept, and resolving
+// it on demand keeps these exported accessors in sync with runtime locale changes.
+const CONFLICT_KIND_LABEL_RESOLVERS: Record<GitConflictKind, () => string> = {
+  both_modified: () =>
+    translate('auto.components.editor.ConflictComponents.71a2c63628', 'Both modified'),
+  both_added: () => translate('auto.components.editor.ConflictComponents.ba602cdc05', 'Both added'),
+  deleted_by_us: () =>
+    translate('auto.components.editor.ConflictComponents.1c55f94973', 'Deleted by us'),
+  deleted_by_them: () =>
+    translate('auto.components.editor.ConflictComponents.9d8757e1ca', 'Deleted by them'),
+  added_by_us: () =>
+    translate('auto.components.editor.ConflictComponents.36bceb6bb5', 'Added by us'),
+  added_by_them: () =>
+    translate('auto.components.editor.ConflictComponents.5259d6908a', 'Added by them'),
+  both_deleted: () =>
+    translate('auto.components.editor.ConflictComponents.be2b3274fe', 'Both deleted')
 }
 
-export const CONFLICT_HINT_MAP: Record<GitConflictKind, string> = {
-  both_modified: 'Resolve the conflict markers',
-  both_added: 'Choose which version to keep, or combine them',
-  deleted_by_us: 'Decide whether to restore the file',
-  deleted_by_them: 'Decide whether to keep the file or accept deletion',
-  added_by_us: 'Review whether to keep the added file',
-  added_by_them: 'Review the added file before keeping it',
-  both_deleted: 'Resolve in Git or restore one side before editing'
+const CONFLICT_HINT_RESOLVERS: Record<GitConflictKind, () => string> = {
+  both_modified: () =>
+    translate(
+      'auto.components.editor.ConflictComponents.b119865c75',
+      'Resolve the conflict markers'
+    ),
+  both_added: () =>
+    translate(
+      'auto.components.editor.ConflictComponents.5e89c1d824',
+      'Choose which version to keep, or combine them'
+    ),
+  deleted_by_us: () =>
+    translate(
+      'auto.components.editor.ConflictComponents.7e6a9cd8ba',
+      'Decide whether to restore the file'
+    ),
+  deleted_by_them: () =>
+    translate(
+      'auto.components.editor.ConflictComponents.9d73608d56',
+      'Decide whether to keep the file or accept deletion'
+    ),
+  added_by_us: () =>
+    translate(
+      'auto.components.editor.ConflictComponents.2ff72311cd',
+      'Review whether to keep the added file'
+    ),
+  added_by_them: () =>
+    translate(
+      'auto.components.editor.ConflictComponents.7e15338be9',
+      'Review the added file before keeping it'
+    ),
+  both_deleted: () =>
+    translate(
+      'auto.components.editor.ConflictComponents.a63bf70fc7',
+      'Resolve in Git or restore one side before editing'
+    )
+}
+
+export function getConflictKindLabel(kind: GitConflictKind): string {
+  return CONFLICT_KIND_LABEL_RESOLVERS[kind]()
+}
+
+export function getConflictHint(kind: GitConflictKind): string {
+  return CONFLICT_HINT_RESOLVERS[kind]()
+}
+
+export function getConflictStatusLabel(isUnresolved: boolean): string {
+  return isUnresolved
+    ? translate('auto.components.editor.ConflictComponents.ec7ef38d67', 'Unresolved')
+    : translate('auto.components.editor.ConflictComponents.485ab716f0', 'Resolved locally')
 }
 
 const EMPTY_CONFLICT_REVIEW_ENTRIES: readonly ConflictReviewEntry[] = []
@@ -81,7 +131,7 @@ export function ConflictBanner({
   }
 
   const isUnresolved = conflict.conflictStatus === 'unresolved'
-  const label = isUnresolved ? 'Unresolved' : 'Resolved locally'
+  const label = getConflictStatusLabel(isUnresolved)
 
   return (
     <div
@@ -102,7 +152,7 @@ export function ConflictBanner({
           <span className="min-w-0 truncate font-medium text-foreground">
             {label}{' '}
             {translate('auto.components.editor.ConflictComponents.55d61a0ccd', 'conflict ·')}
-            {CONFLICT_KIND_LABELS[conflict.conflictKind]}
+            {getConflictKindLabel(conflict.conflictKind)}
           </span>
           {conflictNavigation && conflictNavigation.total > 0 && (
             <span className="shrink-0 px-1 text-[11px] tabular-nums text-muted-foreground">
@@ -189,7 +239,7 @@ export function ConflictPlaceholderView({ file }: { file: OpenFile }): React.JSX
     <div className="flex h-full items-center justify-center px-6 text-center">
       <div className="max-w-md space-y-2">
         <div className="text-sm font-medium text-foreground">
-          {CONFLICT_KIND_LABELS[conflict.conflictKind]}
+          {getConflictKindLabel(conflict.conflictKind)}
         </div>
         <div className="text-xs text-muted-foreground">
           {conflict.message ??
@@ -199,7 +249,7 @@ export function ConflictPlaceholderView({ file }: { file: OpenFile }): React.JSX
             )}
         </div>
         <div className="text-xs text-muted-foreground">
-          {conflict.guidance ?? CONFLICT_HINT_MAP[conflict.conflictKind]}
+          {conflict.guidance ?? getConflictHint(conflict.conflictKind)}
         </div>
       </div>
     </div>

@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { main as verifyLocalizationCatalog } from './verify-localization-catalog.mjs'
 
@@ -78,5 +78,28 @@ describe('verify-localization-catalog', () => {
 
     await expect(verifyLocalizationCatalog(root, { fix: true })).resolves.toBe(1)
     expect(readJson(path.join(localesDir, 'en.json'))).toEqual({})
+  })
+
+  it('rejects different complete fallbacks for one key before fix mode writes', async () => {
+    const { root, localesDir } = makeProject({
+      sourceText: [
+        "import { translate } from '@/i18n/i18n'",
+        "export const issues = translate('auto.example.open', 'Open {{value0}} issues', { value0: 'Orca' })",
+        "export const linear = translate('auto.example.open', 'Open {{value0}} in Linear', { value0: 'Orca' })"
+      ].join('\n')
+    })
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      await expect(verifyLocalizationCatalog(root, { fix: true })).resolves.toBe(1)
+      const output = consoleError.mock.calls.flat().join('\n')
+      expect(output).toContain('auto.example.open')
+      expect(output).toContain('Open {{value0}} issues')
+      expect(output).toContain('Open {{value0}} in Linear')
+      expect(readJson(path.join(localesDir, 'en.json'))).toEqual({})
+      expect(readJson(path.join(localesDir, 'es.json'))).toEqual({})
+    } finally {
+      consoleError.mockRestore()
+    }
   })
 })

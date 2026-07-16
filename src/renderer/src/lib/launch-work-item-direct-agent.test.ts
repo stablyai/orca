@@ -8,7 +8,10 @@ vi.mock('@/lib/telemetry', () => ({
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, value: string) => value }))
 
-import { buildDirectWorkItemStartupOpts } from './launch-work-item-direct-agent'
+import {
+  buildDirectWorkItemStartupOpts,
+  formatDirectWorkItemAgentStartTimeout
+} from './launch-work-item-direct-agent'
 import type { AgentStartupPlan } from './tui-agent-startup'
 
 describe('buildDirectWorkItemStartupOpts', () => {
@@ -35,5 +38,14 @@ describe('buildDirectWorkItemStartupOpts', () => {
         }
       }
     })
+  })
+
+  it('uses complete timeout copy for prompt and work-item-context delivery', () => {
+    expect(formatDirectWorkItemAgentStartTimeout(true)).toBe(
+      'Agent took too long to start. The workspace is ready — paste the prompt when the agent is idle.'
+    )
+    expect(formatDirectWorkItemAgentStartTimeout(false)).toBe(
+      'Agent took too long to start. The workspace is ready — paste the work item context when the agent is idle.'
+    )
   })
 })

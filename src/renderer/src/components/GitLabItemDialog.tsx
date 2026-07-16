@@ -36,6 +36,7 @@ import {
   hasBoundedCommentBodyText
 } from '@/lib/comment-body-submit-state'
 import { useAppStore } from '@/store'
+import { getGitLabApprovalSummary } from './gitlab-approval-summary'
 import type {
   GitLabAssignableUser,
   GitLabPipelineJob,
@@ -1124,26 +1125,7 @@ export default function GitLabItemDialog({
                           </div>
                           {approvalState ? (
                             <div className="mt-0.5 text-[11px] text-muted-foreground">
-                              {approvalState.approvalsLeft === 0
-                                ? translate(
-                                    'auto.components.GitLabItemDialog.22511537d2',
-                                    'Approved'
-                                  )
-                                : translate(
-                                    'auto.components.GitLabItemDialog.40c56b95e2',
-                                    '{{value0}} approval{{value1}} remaining',
-                                    {
-                                      value0: approvalState.approvalsLeft ?? 0,
-                                      value1: approvalState.approvalsLeft === 1 ? '' : 's'
-                                    }
-                                  )}
-                              {typeof approvalState.approvalsRequired === 'number'
-                                ? translate(
-                                    'auto.components.GitLabItemDialog.00f3bab87b',
-                                    ' of {{value0}} required',
-                                    { value0: approvalState.approvalsRequired }
-                                  )
-                                : ''}
+                              {getGitLabApprovalSummary(approvalState)}
                             </div>
                           ) : null}
                         </div>

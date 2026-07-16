@@ -267,7 +267,7 @@ describe('locale-translation-policy', () => {
         localeValue: '未已检测代理',
         locale: 'zh'
       })
-    ).toBe('未检测到 agents')
+    ).toBe('未检测到智能体')
     expect(
       repairTranslatedValue({
         key: 'auto.components.skills.SkillsPage.38e0951c3a',
@@ -275,7 +275,7 @@ describe('locale-translation-policy', () => {
         localeValue: '代理技巧',
         locale: 'zh'
       })
-    ).toBe('Agent 技能')
+    ).toBe('智能体技能')
     expect(
       repairTranslatedValue({
         key: 'auto.components.settings.appearance.search.9ae151b26b',
@@ -522,7 +522,7 @@ describe('locale-translation-policy', () => {
         localeValue: '排队',
         locale: 'zh'
       })
-    ).toBe('内联')
+    ).toBe('行内')
     expect(
       repairTranslatedValue({
         key: 'auto.components.github.pr.merge.state.bf5e4c6c92',
@@ -546,7 +546,7 @@ describe('locale-translation-policy', () => {
         localeValue: '玩',
         locale: 'zh'
       })
-    ).toBe('Play')
+    ).toBe('播放')
     expect(
       repairTranslatedValue({
         key: 'auto.components.right.sidebar.SourceControlAgentActionDialogForm.1bc0bdbb5e',
