@@ -90,10 +90,7 @@ type PaneDeferredNewlineState = {
  * re-dispatch send its newline immediately, which both races ahead of xterm's
  * pending glyph flush and doubles the newline once the deferred send fires.
  */
-export function createTerminalImeDeferredNewlineSender(options?: {
-  now?: () => number
-}): TerminalImeDeferredNewlineSender {
-  const now = options?.now ?? ((): number => Date.now())
+export function createTerminalImeDeferredNewlineSender(): TerminalImeDeferredNewlineSender {
   const statesByPaneId = new Map<number, PaneDeferredNewlineState>()
 
   const cleanUpIfSettled = (paneId: number, state: PaneDeferredNewlineState): void => {
@@ -116,7 +113,7 @@ export function createTerminalImeDeferredNewlineSender(options?: {
       sendTerminalInputAfterComposition(terminalElement, () => {
         state.inFlightSends -= 1
         if (state.inFlightSends <= 0 && state.absorbCredits > 0) {
-          state.absorbDeadline = now() + TERMINAL_IME_ENTER_REDISPATCH_ABSORB_WINDOW_MS
+          state.absorbDeadline = Date.now() + TERMINAL_IME_ENTER_REDISPATCH_ABSORB_WINDOW_MS
         }
         cleanUpIfSettled(paneId, state)
         send()
@@ -128,7 +125,7 @@ export function createTerminalImeDeferredNewlineSender(options?: {
         return false
       }
       if (state.inFlightSends <= 0) {
-        if (state.absorbDeadline === null || now() > state.absorbDeadline) {
+        if (state.absorbDeadline === null || Date.now() > state.absorbDeadline) {
           statesByPaneId.delete(paneId)
           return false
         }

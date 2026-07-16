@@ -79,20 +79,14 @@ describe('sendTerminalInputAfterComposition', () => {
 })
 
 describe('createTerminalImeDeferredNewlineSender', () => {
-  let clock = 0
-  const advanceClock = (ms: number): void => {
-    clock += ms
-  }
-
   beforeEach(() => {
     vi.useFakeTimers()
-    clock = 0
   })
   afterEach(() => {
     vi.useRealTimers()
   })
 
-  const createSender = () => createTerminalImeDeferredNewlineSender({ now: () => clock })
+  const createSender = () => createTerminalImeDeferredNewlineSender()
 
   it('absorbs the re-dispatch while the deferred send is still in flight, exactly once', () => {
     const el = document.createElement('div')
@@ -122,7 +116,7 @@ describe('createTerminalImeDeferredNewlineSender', () => {
     vi.runAllTimers()
     expect(send).toHaveBeenCalledTimes(1)
 
-    advanceClock(TERMINAL_IME_ENTER_REDISPATCH_ABSORB_WINDOW_MS)
+    vi.advanceTimersByTime(TERMINAL_IME_ENTER_REDISPATCH_ABSORB_WINDOW_MS)
     expect(sender.absorbRedispatchedEnter(1)).toBe(true)
     expect(sender.absorbRedispatchedEnter(1)).toBe(false)
   })
@@ -135,7 +129,7 @@ describe('createTerminalImeDeferredNewlineSender', () => {
     el.dispatchEvent(new Event('compositionend'))
     vi.runAllTimers()
 
-    advanceClock(TERMINAL_IME_ENTER_REDISPATCH_ABSORB_WINDOW_MS + 1)
+    vi.advanceTimersByTime(TERMINAL_IME_ENTER_REDISPATCH_ABSORB_WINDOW_MS + 1)
     expect(sender.absorbRedispatchedEnter(1)).toBe(false)
   })
 
