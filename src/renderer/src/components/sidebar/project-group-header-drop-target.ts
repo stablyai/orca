@@ -72,12 +72,14 @@ export function computeProjectGroupHeaderDropTargetForSession(args: {
     | 'groupId'
     | 'bucketKey'
     | 'sourceParentGroupId'
-    | 'draggedSubtreeGroupIds'
-    | 'validateReparent'
+    | 'reparentIndex'
     | 'sidebarProjectGroupHeaderIdsByBucket'
     | 'headerRects'
   >
 }): ProjectGroupHeaderDropTarget | null {
+  if (!args.session.reparentIndex) {
+    return null
+  }
   const containerRect = args.container.getBoundingClientRect()
   return computeProjectGroupHeaderDropTarget({
     pointerY: args.pointerY,
@@ -88,9 +90,9 @@ export function computeProjectGroupHeaderDropTargetForSession(args: {
     draggedGroupId: args.session.groupId,
     sourceBucketKey: args.session.bucketKey,
     sourceParentGroupId: args.session.sourceParentGroupId,
-    draggedSubtreeGroupIds: args.session.draggedSubtreeGroupIds,
+    draggedSubtreeGroupIds: args.session.reparentIndex.subtreeIds,
     sidebarProjectGroupHeaderIdsByBucket: args.session.sidebarProjectGroupHeaderIdsByBucket,
-    validateReparent: args.session.validateReparent
+    validateReparent: args.session.reparentIndex.validate
   })
 }
 

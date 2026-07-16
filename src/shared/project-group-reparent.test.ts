@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  createProjectGroupReparentIndex,
   createProjectGroupReparentValidator,
   getProjectGroupReparentViolation
 } from './project-group-reparent'
@@ -53,6 +54,43 @@ describe('project group reparent validation', () => {
     }
     expect(createProjectGroupReparentValidator(groups, 'missing')('root')).toBe('missing-group')
     expect(createProjectGroupReparentValidator(groups, 'root')('grandchild')).toBe('cycle')
+  })
+
+  it('builds the reusable index from a single iterable pass', () => {
+    const groups = [
+      { id: 'root', parentGroupId: null },
+      { id: 'child', parentGroupId: 'root' },
+      { id: 'grandchild', parentGroupId: 'child' },
+      { id: 'other', parentGroupId: null }
+    ]
+    let iterationCount = 0
+    const groupIterable = {
+      *[Symbol.iterator]() {
+        iterationCount += 1
+        yield* groups
+      }
+    }
+
+    const index = createProjectGroupReparentIndex(groupIterable, 'child')
+
+    expect(iterationCount).toBe(1)
+    expect(index.subtreeIds).toEqual(new Set(['child', 'grandchild']))
+    expect(index.validate('other')).toBeNull()
+    expect(index.validate('grandchild')).toBe('cycle')
+  })
+
+  it('keeps depth validation query-order independent for cyclic input', () => {
+    const groups = [
+      { id: 'a', parentGroupId: 'b' },
+      { id: 'b', parentGroupId: 'c' },
+      { id: 'c', parentGroupId: 'a' },
+      { id: 'dragged', parentGroupId: null }
+    ]
+    const forward = createProjectGroupReparentValidator(groups, 'dragged')
+    const reverse = createProjectGroupReparentValidator(groups, 'dragged')
+
+    expect(['a', 'b', 'c'].map((target) => forward(target))).toEqual(['depth', 'depth', 'depth'])
+    expect(['c', 'b', 'a'].map((target) => reverse(target))).toEqual(['depth', 'depth', 'depth'])
   })
 
   it('answers repeated reparent queries against a huge catalog without rescanning', () => {

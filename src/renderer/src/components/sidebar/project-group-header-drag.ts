@@ -17,6 +17,7 @@ import {
 } from './project-group-header-drag-contract'
 import { createProjectGroupHeaderDragSession } from './project-group-header-drag-start'
 import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
+import { createProjectGroupReparentIndex } from '../../../../shared/project-group-reparent'
 
 // Why pointer events instead of HTML5 DnD: Project Group rows are virtualized
 // and may unmount while scrolling; cached row-model indices keep drops stable.
@@ -207,6 +208,12 @@ export function useProjectGroupHeaderDrag({
         ) {
           return
         }
+        // Why: pointer-down also represents ordinary clicks; pay the catalog
+        // indexing cost only after the gesture becomes an actual drag.
+        session.reparentIndex = createProjectGroupReparentIndex(
+          projectGroupByIdRef.current.values(),
+          session.groupId
+        )
         session.promoted = true
         // Why: virtualized headers may detach during drag; global listeners
         // still keep the operation alive if pointer capture is unavailable.
@@ -217,7 +224,6 @@ export function useProjectGroupHeaderDrag({
             // Ignore capture failure; global listeners will handle the drag.
           }
         }
-        refreshHeaderRects()
         setState({ ...INITIAL_PROJECT_GROUP_DRAG_STATE, draggingGroupId: session.groupId })
       }
       refreshHeaderRects()

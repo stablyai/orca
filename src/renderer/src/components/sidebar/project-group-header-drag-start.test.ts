@@ -34,6 +34,7 @@ describe('createProjectGroupHeaderDragSession', () => {
       ['group-a', group('group-a')],
       ['group-b', group('group-b')]
     ])
+    const valuesSpy = vi.spyOn(projectGroupById, 'values')
     const sidebarProjectGroupHeaderIdsByBucket = new Map([['root', ['group-a', 'group-b']]])
 
     const session = createProjectGroupHeaderDragSession({
@@ -53,7 +54,9 @@ describe('createProjectGroupHeaderDragSession', () => {
 
     expect(session?.groupId).toBe('group-a')
     expect(session?.sourceParentGroupId).toBeNull()
-    expect(session?.draggedSubtreeGroupIds).toEqual(new Set(['group-a']))
+    expect(session?.reparentIndex).toBeNull()
+    expect(session?.headerRects).toEqual([])
+    expect(valuesSpy).not.toHaveBeenCalled()
     expect(header.setPointerCapture).not.toHaveBeenCalled()
   })
 

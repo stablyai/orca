@@ -1,8 +1,4 @@
-import {
-  MAX_MANUAL_PROJECT_GROUP_DEPTH,
-  getProjectGroupSubtreeHeight,
-  getProjectGroupSubtreeIds
-} from './project-groups'
+import { MAX_MANUAL_PROJECT_GROUP_DEPTH } from './project-groups'
 import type { ProjectGroup } from './types'
 
 export type ProjectGroupReparentViolation =
@@ -16,22 +12,49 @@ export type ProjectGroupReparentValidator = (
   parentGroupId: string | null
 ) => ProjectGroupReparentViolation | null
 
+export type ProjectGroupReparentIndex = {
+  /** The dragged group plus all of its descendants. */
+  subtreeIds: ReadonlySet<string>
+  validate: ProjectGroupReparentValidator
+}
+
 /** Precomputes the dragged group's subtree, height, and a memoized ancestor
- *  index so repeated target checks (per-frame drop targeting) walk one parent
- *  chain instead of rescanning the whole catalog on every call. */
-export function createProjectGroupReparentValidator(
-  groups: readonly Pick<ProjectGroup, 'id' | 'parentGroupId'>[],
+ *  index in one catalog pass so repeated target checks walk one parent chain
+ *  instead of rescanning the whole catalog on every frame. */
+export function createProjectGroupReparentIndex(
+  groups: Iterable<Pick<ProjectGroup, 'id' | 'parentGroupId'>>,
   groupId: string
-): ProjectGroupReparentValidator {
+): ProjectGroupReparentIndex {
   const parentById = new Map<string, string | null>()
+  const childrenByParentId = new Map<string, string[]>()
   for (const group of groups) {
     parentById.set(group.id, group.parentGroupId ?? null)
+    if (group.parentGroupId) {
+      const children = childrenByParentId.get(group.parentGroupId) ?? []
+      children.push(group.id)
+      childrenByParentId.set(group.parentGroupId, children)
+    }
   }
   if (!parentById.has(groupId)) {
-    return () => 'missing-group'
+    return { subtreeIds: new Set([groupId]), validate: () => 'missing-group' }
   }
-  const subtreeIds = getProjectGroupSubtreeIds(groups, groupId)
-  const subtreeHeight = getProjectGroupSubtreeHeight(groups, groupId)
+
+  const subtreeIds = new Set<string>([groupId])
+  const pending = [{ id: groupId, height: 0 }]
+  let subtreeHeight = 0
+  for (let index = 0; index < pending.length; index += 1) {
+    const current = pending[index]!
+    for (const childId of childrenByParentId.get(current.id) ?? []) {
+      if (subtreeIds.has(childId)) {
+        continue
+      }
+      const height = current.height + 1
+      subtreeIds.add(childId)
+      subtreeHeight = Math.max(subtreeHeight, height)
+      pending.push({ id: childId, height })
+    }
+  }
+
   const depthById = new Map<string, number>()
   const getDepth = (startId: string): number => {
     // Cycle-safe chain walk counting only resolvable ancestors, mirroring
@@ -43,16 +66,21 @@ export function createProjectGroupReparentValidator(
       path.push(current)
       onPath.add(current)
       const parent: string | null = parentById.get(current) ?? null
-      current = parent !== null && parentById.has(parent) ? parent : undefined
+      current = parent && parentById.has(parent) ? parent : undefined
     }
-    let depth = current !== undefined ? (depthById.get(current) ?? 0) : 0
+    if (current !== undefined && onPath.has(current)) {
+      // Why: a cyclic chain has no reusable absolute depths; caching them
+      // would make validation depend on which target was queried first.
+      return path.length
+    }
+    let depth = current !== undefined ? depthById.get(current)! : 0
     for (let index = path.length - 1; index >= 0; index -= 1) {
       depth += 1
       depthById.set(path[index]!, depth)
     }
     return depthById.get(startId)!
   }
-  return (parentGroupId) => {
+  const validate: ProjectGroupReparentValidator = (parentGroupId) => {
     if (parentGroupId === null) {
       return null
     }
@@ -70,12 +98,20 @@ export function createProjectGroupReparentValidator(
     }
     return null
   }
+  return { subtreeIds, validate }
+}
+
+export function createProjectGroupReparentValidator(
+  groups: Iterable<Pick<ProjectGroup, 'id' | 'parentGroupId'>>,
+  groupId: string
+): ProjectGroupReparentValidator {
+  return createProjectGroupReparentIndex(groups, groupId).validate
 }
 
 /** Preflight/authoritative check shared by renderer drop targeting and the
  *  main-process update path. `null` parent (move to root) is always valid. */
 export function getProjectGroupReparentViolation(
-  groups: readonly Pick<ProjectGroup, 'id' | 'parentGroupId'>[],
+  groups: Iterable<Pick<ProjectGroup, 'id' | 'parentGroupId'>>,
   groupId: string,
   parentGroupId: string | null
 ): ProjectGroupReparentViolation | null {
