@@ -29,6 +29,7 @@ function textContent(overrides: Partial<FileContent> = {}): FileContent {
 function renderModel(args: {
   activeFile?: OpenFile
   fileContents?: Record<string, FileContent>
+  diffContents?: Record<string, unknown>
   editorDrafts?: Record<string, string>
   markdownViewMode?: Record<string, 'source' | 'rich' | 'preview'>
   isChangesMode?: boolean
@@ -38,6 +39,7 @@ function renderModel(args: {
   return getEditorPanelRenderModel({
     activeFile,
     fileContents: args.fileContents ?? { '/repo/README.md': textContent() },
+    diffContents: args.diffContents as never,
     editorDrafts: args.editorDrafts ?? {},
     gitStatusEntries: args.gitStatusByWorktree?.[activeFile.worktreeId],
     gitBranchEntries: undefined,
@@ -205,5 +207,52 @@ describe('getEditorPanelRenderModel markdown export affordance', () => {
         fileContents: { [preview.id]: textContent({ isBinary: true }) }
       }).canExportMarkdownToPdf
     ).toBe(false)
+  })
+})
+
+describe('getEditorPanelRenderModel markdown diff preview gating', () => {
+  it('keeps preview available for renderable direct markdown diffs', () => {
+    const activeFile = markdownFile({
+      id: 'diff:/repo/README.md',
+      mode: 'diff',
+      diffSource: 'unstaged'
+    } as Partial<OpenFile>)
+    const model = renderModel({
+      activeFile,
+      fileContents: {},
+      diffContents: {
+        [activeFile.id]: {
+          kind: 'text',
+          originalContent: '# before',
+          modifiedContent: '# after',
+          largeDiffRenderLimit: { limited: false }
+        }
+      }
+    })
+
+    expect(model.availableEditorToggleModes).toEqual(['source', 'rich', 'preview'])
+    expect(model.hasViewModeToggle).toBe(true)
+  })
+
+  it('removes preview for render-limited direct markdown diffs', () => {
+    const activeFile = markdownFile({
+      id: 'diff:/repo/README.md',
+      mode: 'diff',
+      diffSource: 'unstaged'
+    } as Partial<OpenFile>)
+    const model = renderModel({
+      activeFile,
+      fileContents: {},
+      diffContents: {
+        [activeFile.id]: {
+          kind: 'text',
+          originalContent: '# before',
+          modifiedContent: '# after',
+          largeDiffRenderLimit: { limited: true }
+        }
+      }
+    })
+
+    expect(model.availableEditorToggleModes).toEqual(['source', 'rich'])
   })
 })

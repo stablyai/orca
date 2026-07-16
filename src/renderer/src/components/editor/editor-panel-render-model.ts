@@ -100,10 +100,7 @@ export function getEditorPanelRenderModel({
   const markdownViewModes =
     isChangesMode && isMarkdownFile && canRenderMarkdownDiffPreview
       ? [...baseMarkdownViewModes, ...(['preview'] as const)]
-      : baseMarkdownViewModes.filter(
-          (mode) =>
-            mode !== 'preview' || (activeFile.mode !== 'diff' && canRenderMarkdownDiffPreview)
-        )
+      : baseMarkdownViewModes.filter((mode) => mode !== 'preview' || canRenderMarkdownDiffPreview)
   const hasViewModeToggle = markdownViewModes.length > 0
   const defaultMarkdownViewMode = getDefaultMarkdownViewMode({
     language: markdownLanguage,
@@ -126,9 +123,11 @@ export function getEditorPanelRenderModel({
   const isBinaryEditSurface =
     activeFile.mode === 'edit' && fileContents[activeFile.id]?.isBinary === true
   const availableEditorToggleModes =
-    isBinaryEditSurface || !canUseChangesModeForFile(activeFile)
-      ? editorToggleModes.filter((mode) => mode !== 'changes')
-      : editorToggleModes
+    activeFile.mode !== 'edit'
+      ? [...markdownViewModes]
+      : isBinaryEditSurface || !canUseChangesModeForFile(activeFile)
+        ? editorToggleModes.filter((mode) => mode !== 'changes')
+        : editorToggleModes
   const effectiveToggleValue: EditorToggleValue =
     isChangesMode && mdViewMode !== 'preview' ? 'changes' : hasViewModeToggle ? mdViewMode : 'edit'
   const inlineMarkdownContent =
