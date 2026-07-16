@@ -21,7 +21,9 @@ import {
  * pipeline (computeVisibleWorktreeIds) and the Cmd+J jump palette. Keeping
  * the definition in one place prevents the two surfaces from drifting.
  */
-export function isDefaultBranchWorkspace(worktree: Worktree): boolean {
+export function isDefaultBranchWorkspace(
+  worktree: Pick<Worktree, 'isMainWorktree' | 'branch'>
+): boolean {
   return worktree.isMainWorktree && worktree.branch.trim() !== ''
 }
 
@@ -176,7 +178,8 @@ export function computeVisibleWorktreeIds(
           opts.ptyIdsByTabId,
           opts.browserTabsByWorktree,
           opts.worktreeIdsWithLiveAgent
-        )
+        ) ||
+        (!opts.hideDefaultBranchWorkspace && isDefaultBranchWorkspace(w))
     )
   }
 

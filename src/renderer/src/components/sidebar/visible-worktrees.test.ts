@@ -260,6 +260,49 @@ describe('computeVisibleWorktreeIds', () => {
     expect(result).toEqual([folder.id])
   })
 
+  it('keeps an inactive default branch visible when sleeping is hidden', () => {
+    const main = makeWorktree('main')
+    main.isMainWorktree = true
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [main] },
+      [main.id],
+      visibleOptions({ showSleepingWorkspaces: false })
+    )
+
+    expect(result).toEqual([main.id])
+  })
+
+  it('keeps non-default sleeping workspaces and folder-mode mains hidden', () => {
+    const main = makeWorktree('main')
+    main.isMainWorktree = true
+    const feature = makeWorktree('feature')
+    const folder = makeWorktree('folder')
+    folder.isMainWorktree = true
+    folder.branch = ''
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [main, feature, folder] },
+      [main.id, feature.id, folder.id],
+      visibleOptions({ showSleepingWorkspaces: false })
+    )
+
+    expect(result).toEqual([main.id])
+  })
+
+  it('keeps the explicit default-branch filter authoritative while sleeping is hidden', () => {
+    const main = makeWorktree('main')
+    main.isMainWorktree = true
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [main] },
+      [main.id],
+      visibleOptions({ showSleepingWorkspaces: false, hideDefaultBranchWorkspace: true })
+    )
+
+    expect(result).toEqual([])
+  })
+
   it('filters worktrees to a selected SSH host scope', () => {
     const local = makeWorktree('local', 'repo1')
     const remote = makeWorktree('remote', 'repo2')

@@ -121,6 +121,19 @@ import { isGitRepoKind } from '../../../shared/repo-kind'
 import { buildTaskSourceContextFromRepo } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 
+function shouldKeepEmptyQueryWorktreeVisible(
+  worktree: Pick<Worktree, 'isMainWorktree' | 'branch'>,
+  showSleepingWorkspaces: boolean,
+  hideDefaultBranchWorkspace: boolean,
+  isInactive: boolean
+): boolean {
+  return (
+    showSleepingWorkspaces ||
+    !isInactive ||
+    (!hideDefaultBranchWorkspace && isDefaultBranchWorkspace(worktree))
+  )
+}
+
 type WorktreePaletteItem = {
   id: string
   type: 'worktree'
@@ -508,13 +521,17 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           return false
         }
         if (
-          !showSleepingWorkspaces &&
-          isInactiveWorkspace(
-            worktree.id,
-            tabsByWorktree,
-            ptyIdsByTabId,
-            browserTabsByWorktree,
-            worktreeIdsWithLiveAgent
+          !shouldKeepEmptyQueryWorktreeVisible(
+            worktree,
+            showSleepingWorkspaces,
+            hideDefaultBranchWorkspace,
+            isInactiveWorkspace(
+              worktree.id,
+              tabsByWorktree,
+              ptyIdsByTabId,
+              browserTabsByWorktree,
+              worktreeIdsWithLiveAgent
+            )
           )
         ) {
           return false
