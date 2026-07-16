@@ -12,6 +12,7 @@ import {
 } from './pet-agent-state'
 import { usePetPointerInteraction } from './usePetPointerInteraction'
 import { buildSpriteAnimationCss } from './sprite-animation-css'
+import { usePetWander } from './pet-overlay-wander'
 
 type Sprite = NonNullable<CustomPet['sprite']>
 
@@ -315,6 +316,7 @@ export function PetOverlay(): React.JSX.Element {
   const reducedMotion = usePrefersReducedMotion()
   const { url, sprite, detected } = usePetUrl()
   const size = useAppStore((s) => s.petSize)
+  const petWanderEnabled = useAppStore((s) => s.petWanderEnabled)
 
   const [positionState, setPositionState] = useState<{
     size: number
@@ -353,6 +355,17 @@ export function PetOverlay(): React.JSX.Element {
     position,
     (next) => setPosition(clampToViewport(next, size))
   )
+  const animationName = usePetAnimationName(dragging, dragAnimation, hovering)
+  const { wandering, animationName: displayedAnimationName } = usePetWander({
+    enabled: petWanderEnabled,
+    documentVisible,
+    reducedMotion,
+    dragging,
+    animationName,
+    position,
+    size,
+    setPosition
+  })
 
   useEffect(() => {
     const onResize = (): void => setPosition((prev) => clampToViewport(prev, size))
@@ -361,7 +374,7 @@ export function PetOverlay(): React.JSX.Element {
   }, [setPosition, size])
 
   useEffect(() => {
-    if (dragging) {
+    if (dragging || wandering) {
       return
     }
     try {
@@ -369,14 +382,13 @@ export function PetOverlay(): React.JSX.Element {
     } catch {
       // ignore storage failures
     }
-  }, [dragging, position])
+  }, [dragging, position, wandering])
 
   const motionAllowed = documentVisible && !reducedMotion
   // Why: a still/vertical grab freezes on frame 0 (Codex grab-and-hold); a
   // horizontal drag keeps animating so the running rows show. Bob always pauses.
   const spriteAnimate = motionAllowed && (!dragging || dragAnimation !== null)
   const bobAnimate = motionAllowed && !dragging
-  const animationName = usePetAnimationName(dragging, dragAnimation, hovering)
 
   return (
     // Why: the outer box and middle layer stay pointer-events-none so app chrome
@@ -417,7 +429,7 @@ export function PetOverlay(): React.JSX.Element {
               sprite={sprite}
               animate={spriteAnimate}
               maxSize={size}
-              animationName={animationName}
+              animationName={displayedAnimationName}
               restartKey={dragGeneration}
             />
           ) : detected ? (

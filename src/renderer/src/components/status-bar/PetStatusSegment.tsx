@@ -26,6 +26,8 @@ import { translate } from '@/i18n/i18n'
 function PetStatusSegmentInner(): React.JSX.Element {
   const petVisible = useAppStore((s) => s.petVisible)
   const setPetVisible = useAppStore((s) => s.setPetVisible)
+  const petWanderEnabled = useAppStore((s) => s.petWanderEnabled)
+  const setPetWanderEnabled = useAppStore((s) => s.setPetWanderEnabled)
   const petId = useAppStore((s) => s.petId)
   const setPetId = useAppStore((s) => s.setPetId)
   const customPets = useAppStore((s) => s.customPets)
@@ -142,6 +144,17 @@ function PetStatusSegmentInner(): React.JSX.Element {
           {petVisible
             ? translate('auto.components.status.bar.PetStatusSegment.1fbc51cc77', 'Hide pet')
             : translate('auto.components.status.bar.PetStatusSegment.6d0a8cd179', 'Show pet')}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={(event) => {
+            event.preventDefault()
+            setPetWanderEnabled(!petWanderEnabled)
+          }}
+        >
+          <span className="flex w-4 items-center justify-center">
+            {petWanderEnabled ? <Check className="size-3.5" aria-hidden /> : null}
+          </span>
+          {translate('auto.components.status.bar.PetStatusSegment.77cc168c70', 'Wander')}
         </DropdownMenuItem>
         {/* Why: in-menu range so users can resize the overlay without leaving
             the dropdown — pet sprites can import larger than the default 180px
