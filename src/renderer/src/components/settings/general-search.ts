@@ -88,7 +88,6 @@ export const getGeneralWorkspaceSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.68d03d9980', 'vscode'),
       ...translateSearchKeyword('auto.components.settings.general.search.19f5fffa01', 'jetbrains'),
       ...translateSearchKeyword('auto.components.settings.general.search.33fb604df4', 'intellij'),
-      ...translateSearchKeyword('auto.components.settings.general.search.f4253b2869', 'webstorm'),
       ...translateSearchKeyword('auto.components.settings.general.search.c9d9636f24', 'finder'),
       ...translateSearchKeyword(
         'auto.components.settings.general.search.6c2ce8457c',
