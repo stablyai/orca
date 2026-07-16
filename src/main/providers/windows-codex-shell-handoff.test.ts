@@ -595,6 +595,64 @@ describe('WINDOWS_CODEX_SHELL_HANDOFF_HOST_SCRIPT', () => {
     expect(result.stdout).toBe(prompt)
   })
 
+  it('does not start another fallback after termination begins during a failed attempt', () => {
+    const config: WindowsCodexShellHandoffConfig = {
+      agentFile: 'missing-agent.exe',
+      agentArgs: [],
+      agentEnvToDelete: [],
+      agentEnv: {},
+      shellAttempts: [],
+      agentFallbackAttempts: [
+        { file: 'missing-first-fallback.exe', args: [], cwd: process.cwd() },
+        { file: 'sentinel-second-fallback.exe', args: [], cwd: process.cwd() }
+      ]
+    }
+    const encoded = encodeWindowsCodexShellHandoffConfig(config)
+    const wrapper = `
+const { EventEmitter } = require('node:events')
+const childProcess = require('node:child_process')
+let spawnCount = 0
+
+childProcess.spawn = () => {
+  const attemptNumber = ++spawnCount
+  const child = new EventEmitter()
+  child.killed = false
+  child.kill = () => {
+    child.killed = true
+    return true
+  }
+  queueMicrotask(() => {
+    if (attemptNumber === 1) {
+      child.emit('error', new Error('native launch failed'))
+      return
+    }
+    if (attemptNumber === 2) {
+      process.emit('SIGTERM')
+      child.emit('error', new Error('first fallback failed during shutdown'))
+      return
+    }
+    process.stdout.write('SECOND_FALLBACK_STARTED')
+    child.emit('spawn')
+    child.emit('exit', 0)
+  })
+  return child
+}
+
+eval(${JSON.stringify(WINDOWS_CODEX_SHELL_HANDOFF_HOST_SCRIPT)})
+`
+
+    const result = spawnSync(process.execPath, ['-e', wrapper, encoded], {
+      encoding: 'utf8',
+      timeout: 5_000
+    })
+
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('native launch failed')
+    expect(result.stderr).toContain('first fallback failed during shutdown')
+    expect(result.stdout).not.toContain('SECOND_FALLBACK_STARTED')
+  })
+
   it('opens the normal shell after a nonzero agent exit without relaunching the agent', () => {
     const config: WindowsCodexShellHandoffConfig = {
       agentFile: process.execPath,

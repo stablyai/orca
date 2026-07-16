@@ -51,8 +51,11 @@ const run = (attempt, env) => new Promise((resolve) => {
 
 const runFirstAvailable = async (attempts, env) => {
   for (const attempt of attempts) {
+    // Why: teardown must never create a replacement child after the active
+    // attempt exits or fails in response to SIGTERM/SIGHUP.
+    if (shuttingDown) return 1
     const result = await run(attempt, env)
-    if (result.spawned) return result.code
+    if (result.spawned || shuttingDown) return result.code
   }
   return 1
 }

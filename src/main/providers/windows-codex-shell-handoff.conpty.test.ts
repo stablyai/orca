@@ -296,6 +296,16 @@ describeWindows('Windows Codex shell handoff ConPTY integration', () => {
             'Failed to tear down handoff ConPTY'
           ).catch(() => undefined)
         }
+        for (const pid of [...trackedPids].toReversed()) {
+          if (!isPidAlive(pid)) {
+            continue
+          }
+          try {
+            process.kill(pid)
+          } catch {
+            // Best-effort cleanup after a failed assertion or teardown.
+          }
+        }
       }
     }
   )
@@ -405,13 +415,14 @@ describeWindows('Windows Codex shell handoff ConPTY integration', () => {
           'Failed to tear down active-agent handoff ConPTY'
         ).catch(() => undefined)
       }
-      if (!exited) {
-        for (const pid of [...trackedPids].toReversed()) {
-          try {
-            process.kill(pid)
-          } catch {
-            // Best-effort cleanup only after the ConPTY close path failed.
-          }
+      for (const pid of [...trackedPids].toReversed()) {
+        if (!isPidAlive(pid)) {
+          continue
+        }
+        try {
+          process.kill(pid)
+        } catch {
+          // Best-effort cleanup after a failed assertion or teardown.
         }
       }
     }
