@@ -119,6 +119,15 @@ describe('agent sleep planner', () => {
     expect(
       plannedWorktrees(snapshot({ agentStatusByPaneKey: { [ephemeralPi.paneKey]: ephemeralPi } }))
     ).toEqual([])
+    const piWithoutTranscript = entry({
+      agentType: 'pi',
+      providerSession: { key: 'session_id', id: 'pi-session-1' }
+    })
+    expect(
+      plannedWorktrees(
+        snapshot({ agentStatusByPaneKey: { [piWithoutTranscript.paneKey]: piWithoutTranscript } })
+      )
+    ).toEqual([])
     const unsupported = entry({ agentType: 'amp' })
     expect(
       plannedWorktrees(snapshot({ agentStatusByPaneKey: { [unsupported.paneKey]: unsupported } }))

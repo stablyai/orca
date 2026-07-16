@@ -63,6 +63,8 @@ export type AgentStatusWorktreeShutdownReason =
   | 'remove-worktree'
   | 'auto-hibernate-completed-agent'
 
+type AllAgentSessionCaptureMode = 'periodic' | 'quit'
+
 type DropAgentStatusByWorktreeOptions = {
   shutdownReason?: AgentStatusWorktreeShutdownReason
   sleepingPaneKeys?: readonly string[] | ReadonlySet<string>
@@ -236,9 +238,9 @@ export type AgentStatusSlice = {
   dropAgentStatusByWorktree: (worktreeId: string, opts?: DropAgentStatusByWorktreeOptions) => void
 
   captureSleepingAgentSessionsByWorktree: (worktreeId: string, paneKeys?: string[]) => void
-  /** Capture resumable agent sessions across every worktree. Called from the
-   *  quit flush so provider session ids survive an app restart. */
-  captureAllSleepingAgentSessions: () => void
+  /** Capture resumable agent sessions across every worktree for crash recovery
+   *  or a confirmed quit. The mode keeps live and quit precedence explicit. */
+  captureAllSleepingAgentSessions: (mode: AllAgentSessionCaptureMode) => void
   clearSleepingAgentSession: (paneKey: string) => void
   clearSleepingAgentSessionsByPaneKey: (paneKeys: readonly string[]) => void
   clearSleepingAgentSessionsByWorktree: (worktreeId: string) => void
@@ -749,6 +751,21 @@ function recoveryRecordMatches(
     existing.tabId === next.tabId &&
     agentProviderSessionsEqual(existing.agent, existing.providerSession, next.providerSession) &&
     launchConfigsEqual(existing.launchConfig, next.launchConfig)
+  )
+}
+
+function recoveryRecordTargetsSameSession(
+  existing: SleepingAgentSessionRecord | undefined,
+  next: SleepingAgentSessionRecord
+): boolean {
+  if (!existing) {
+    return false
+  }
+  return (
+    existing.agent === next.agent &&
+    existing.worktreeId === next.worktreeId &&
+    existing.tabId === next.tabId &&
+    agentProviderSessionsEqual(existing.agent, existing.providerSession, next.providerSession)
   )
 }
 
@@ -2728,14 +2745,12 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       })
     },
 
-    captureAllSleepingAgentSessions: () => {
-      // Why: the quit flush must persist provider session ids for every live
-      // agent pane — otherwise agents whose daemon PTYs die while the app is
-      // closed have nothing to `--resume` from (#5232). Retained rows belong
-      // to panes the user already closed; completed Pi is the sole done-state
-      // exception because agent_end ends a turn while its resumable TUI lives on.
+    captureAllSleepingAgentSessions: (mode) => {
+      // Why: both periodic crash checkpoints and quit flushes persist live
+      // provider ids, but only a confirmed quit may claim quit precedence.
       set((s) => {
         const capturedAt = Date.now()
+        const origin = mode === 'quit' ? ('quit' as const) : ('live' as const)
         const next: Record<string, SleepingAgentSessionRecord> = {
           ...s.sleepingAgentSessionsByPaneKey
         }
@@ -2746,7 +2761,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             if (!isCompletedPiWithLiveRecoveryRecord(entry, existing)) {
               continue
             }
-            const record = { ...existing, capturedAt, origin: 'quit' as const }
+            if (mode === 'periodic') {
+              continue
+            }
+            const record = { ...existing, capturedAt, origin }
             if (!sleepingRecordsEquivalentIgnoringCaptureTime(existing, record)) {
               next[entry.paneKey] = record
               changed = true
@@ -2763,12 +2781,20 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             worktreeId,
             capturedAt,
             launchConfig: getLaunchConfigForEntry(s, entry),
-            origin: 'quit'
+            origin
           })
+          const existing = next[entry.paneKey]
+          // Why: a timer racing confirmed window close must not downgrade its
+          // shutdown snapshot; a new live hook event supersedes it elsewhere.
           if (
+            mode === 'periodic' &&
+            existing?.origin === 'quit' &&
             record &&
-            !sleepingRecordsEquivalentIgnoringCaptureTime(next[record.paneKey], record)
+            recoveryRecordTargetsSameSession(existing, record)
           ) {
+            continue
+          }
+          if (record && !sleepingRecordsEquivalentIgnoringCaptureTime(existing, record)) {
             next[record.paneKey] = record
             changed = true
           }

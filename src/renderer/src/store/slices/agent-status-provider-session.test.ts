@@ -91,7 +91,7 @@ describe('recordAgentProviderSession', () => {
     })
 
     const liveRecord = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
-    store.getState().captureAllSleepingAgentSessions()
+    store.getState().captureAllSleepingAgentSessions('periodic')
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBe(liveRecord)
 
     store.getState().captureSleepingAgentSessionsByWorktree('wt-1', ['tab-1:leaf-1'])
@@ -146,7 +146,7 @@ describe('recordAgentProviderSession', () => {
     ).toBeUndefined()
   })
 
-  it('keeps a completed Pi session resumable through manual worktree sleep', () => {
+  it('keeps a completed Pi session resumable through manual worktree sleep', async () => {
     const store = createTestStore()
     store.setState({
       tabsByWorktree: {
@@ -166,7 +166,7 @@ describe('recordAgentProviderSession', () => {
         'pi',
         providerSession,
         { updatedAt: 10 },
-        { tabId: 'tab-1', worktreeId: 'wt-1' }
+        { tabId: 'tab-1', worktreeId: 'wt-1', connectionId: 'ssh-connection-1' }
       )
     store
       .getState()
@@ -190,18 +190,29 @@ describe('recordAgentProviderSession', () => {
       )
 
     expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']?.state).toBe('done')
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+    const liveRecord = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
+    expect(liveRecord).toMatchObject({
       agent: 'pi',
       providerSession,
+      connectionId: 'ssh-connection-1',
       state: 'working',
       origin: 'live'
     })
 
-    store.getState().captureSleepingAgentSessionsByWorktree('wt-1', ['tab-1:leaf-1'])
+    store.getState().captureAllSleepingAgentSessions('periodic')
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBe(liveRecord)
 
+    await store.getState().shutdownWorktreeTerminals('wt-1', {
+      keepIdentifiers: true,
+      shutdownReason: 'manual-sleep',
+      sleepingPaneKeys: ['tab-1:leaf-1']
+    })
+
+    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']).toBeUndefined()
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
       agent: 'pi',
       providerSession,
+      connectionId: 'ssh-connection-1',
       state: 'working',
       origin: 'worktree-sleep'
     })
@@ -227,7 +238,7 @@ describe('recordAgentProviderSession', () => {
         'pi',
         providerSession,
         { updatedAt: 10 },
-        { tabId: 'tab-1', worktreeId: 'wt-1' }
+        { tabId: 'tab-1', worktreeId: 'wt-1', connectionId: 'ssh-connection-1' }
       )
     store
       .getState()
@@ -250,13 +261,25 @@ describe('recordAgentProviderSession', () => {
         { providerSession }
       )
 
-    store.getState().captureAllSleepingAgentSessions()
-
+    store.getState().captureAllSleepingAgentSessions('periodic')
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+      providerSession,
+      connectionId: 'ssh-connection-1',
+      origin: 'live'
+    })
+
+    store.getState().captureAllSleepingAgentSessions('quit')
+
+    const quitRecord = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
+    expect(quitRecord).toMatchObject({
       agent: 'pi',
       providerSession,
+      connectionId: 'ssh-connection-1',
       state: 'working',
       origin: 'quit'
     })
+
+    store.getState().captureAllSleepingAgentSessions('periodic')
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBe(quitRecord)
   })
 })
