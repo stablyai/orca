@@ -223,6 +223,23 @@ describe('hosted review slice', () => {
     )
   })
 
+  it('normalizes hosted-review responses from compatible legacy runtimes', async () => {
+    runtimeRpc.callRuntimeRpc.mockResolvedValueOnce(review)
+    const store = makeStore({
+      activeRuntimeEnvironmentId: 'env-legacy'
+    } as AppState['settings'])
+    store.setState({ repos: [] })
+
+    await expect(
+      store.getState().fetchHostedReviewForBranch('/runtime/repo', 'feature/legacy')
+    ).resolves.toEqual(review)
+    await expect(
+      store.getState().fetchHostedReviewForBranch('/runtime/repo', 'feature/legacy')
+    ).resolves.toEqual(review)
+
+    expect(runtimeRpc.callRuntimeRpc).toHaveBeenCalledTimes(1)
+  })
+
   it('routes runtime-owned review lookups through the owning runtime when local is focused', async () => {
     runtimeRpc.callRuntimeRpc.mockResolvedValueOnce(found(review))
     const store = makeStore(null)

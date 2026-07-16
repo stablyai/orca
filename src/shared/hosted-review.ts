@@ -71,6 +71,19 @@ export type HostedReviewLookupResult =
       errorType: HostedReviewLookupErrorType
     }
 
+/** Maps the pre-envelope runtime response into the current lookup result contract. */
+export function normalizeHostedReviewLookupResult(
+  result: HostedReviewLookupResult | HostedReviewInfo | null
+): HostedReviewLookupResult {
+  if (result === null) {
+    return { kind: 'not-found' }
+  }
+  if ('kind' in result) {
+    return result
+  }
+  return { kind: 'found', review: result }
+}
+
 export type HostedReviewSummary = {
   number?: number
   url: string

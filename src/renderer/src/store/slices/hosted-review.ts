@@ -1,13 +1,14 @@
 /* eslint-disable max-lines -- Why: hosted-review cache identity, runtime dispatch,
 and race protection are kept together so branch review lookup invariants stay testable. */
 import type { StateCreator } from 'zustand'
-import type {
-  CreateHostedReviewInput,
-  CreateHostedReviewResult,
-  HostedReviewCreationEligibility,
-  HostedReviewCreationEligibilityArgs,
-  HostedReviewInfo,
-  HostedReviewLookupResult
+import {
+  normalizeHostedReviewLookupResult,
+  type CreateHostedReviewInput,
+  type CreateHostedReviewResult,
+  type HostedReviewCreationEligibility,
+  type HostedReviewCreationEligibilityArgs,
+  type HostedReviewInfo,
+  type HostedReviewLookupResult
 } from '../../../../shared/hosted-review'
 import type { Repo } from '../../../../shared/types'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -368,9 +369,9 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
             linkedAzureDevOpsPR: options?.linkedAzureDevOpsPR ?? null,
             linkedGiteaPR: options?.linkedGiteaPR ?? null
           }
-          const result =
+          const rawResult =
             target.kind === 'environment'
-              ? await callRuntimeRpc<HostedReviewLookupResult>(
+              ? await callRuntimeRpc<HostedReviewLookupResult | HostedReviewInfo | null>(
                   target,
                   'hostedReview.forBranch',
                   { repo: repo?.id ?? options?.repoId ?? repoPath, repoPath, ...args },
@@ -384,6 +385,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
                   repoPath,
                   ...args
                 })
+          const result = normalizeHostedReviewLookupResult(rawResult)
           if (result.kind === 'upstream-error') {
             hostedReviewFailureDiagnostics.report(cacheKey, repoId, result)
             return hostedReviewFallbackAfterFailure(get, cacheKey, options?.currentHeadOid)
