@@ -1,5 +1,6 @@
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { subscribeViaWatcherProcess } from './parcel-watcher-process'
 import type { WorktreeBaseWatchTarget } from './worktree-base-directory-event-filter'
 import type {
   WorktreeBasePollEvent,
@@ -13,13 +14,17 @@ import {
 // Watches a repo's `<common>/.git/worktrees` metadata plus the primary
 // checkout's shallow branch/index files — the only paths the git-common event
 // filter consumes.
-// macOS: a narrow native stream rooted at `worktrees/` — a tiny, rare-churn
-// tree — gives instant detection with zero idle cost and zero wide-scope
-// fseventsd delivery; the primary files are covered by a few stat calls per
-// tick (a native stream would have to span the whole common dir, objects
-// included). Other platforms: dir-listing poll (no fseventsd to protect, and
-// on Windows an open directory handle on `worktrees/` could interfere with
-// `git worktree prune` removing it).
+// macOS: a narrow native stream rooted at `worktrees/` gives instant
+// detection with zero wide-scope fseventsd delivery; the primary files are
+// covered by a few stat calls per tick (a native stream would have to span
+// the whole common dir, objects included). Other platforms: dir-listing poll
+// (no fseventsd to protect, and on Windows an open directory handle on
+// `worktrees/` could interfere with `git worktree prune` removing it).
+// The stream runs in the crash-isolated watcher child, never in-process:
+// linked-worktree HEAD/index churn plus root deletion on worktree removal
+// hits watcher.node's FSEvents teardown race (unsynchronized deletedRoot
+// self-stop vs unsubscribe), which corrupts the heap and fail-fasts the
+// hosting process (SIGTRAP in Watcher::isIgnored on the FSEvents thread).
 
 // Why: branch switches and commits made in the primary checkout rewrite these
 // top-level files (linked-worktree equivalents live under `worktrees/`).
@@ -172,26 +177,38 @@ async function startGitCommonNarrowWatch(
       armExistencePoll()
     }
     try {
-      const watcher = await import('@parcel/watcher')
-      const sub = await watcher.subscribe(worktreesDir, (error, events) => {
-        if (disposed) {
-          return
-        }
-        if (error) {
-          onEvents([{ type: 'update', path: worktreesDir }])
-          teardownAndRearm()
-          return
-        }
-        if (events.length > 0) {
-          const rootGone = events.some(
-            (event) => event.type === 'delete' && event.path === worktreesDir
-          )
-          onEvents(events.map((event) => ({ type: event.type, path: event.path })))
-          if (rootGone) {
+      const sub = await subscribeViaWatcherProcess(
+        worktreesDir,
+        (error, events) => {
+          if (disposed) {
+            return
+          }
+          if (error) {
+            onEvents([{ type: 'update', path: worktreesDir }])
             teardownAndRearm()
+            return
+          }
+          if (events.length > 0) {
+            const rootGone = events.some(
+              (event) => event.type === 'delete' && event.path === worktreesDir
+            )
+            onEvents(events.map((event) => ({ type: event.type, path: event.path })))
+            if (rootGone) {
+              teardownAndRearm()
+            }
+          }
+        },
+        {},
+        {
+          // A watcher-child restart re-establishes the stream with an event
+          // gap; surface a root update so the repo's worktree list refreshes.
+          onInterruption: () => {
+            if (!disposed) {
+              onEvents([{ type: 'update', path: worktreesDir }])
+            }
           }
         }
-      })
+      )
       if (disposed || errored) {
         void sub.unsubscribe().catch(() => {})
         return !errored
