@@ -216,6 +216,7 @@ export function isCommandGroup(commandPath: string[]): boolean {
   return (
     (commandPath.length === 1 &&
       [
+        'account',
         'automations',
         'project',
         'repo',

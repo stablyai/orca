@@ -10692,6 +10692,17 @@ export class OrcaRuntimeService {
     return this.requireAccountServices().claudeAccounts.removeAccount(accountId)
   }
 
+  // Why: register a managed Claude account from a CLAUDE_CONFIG_DIR the caller
+  // already logged into. Lets the `orca account add` CLI drive `claude login` in
+  // the user's terminal on a headless host, then capture the credentials here —
+  // the desktop GUI's interactive add flow is unreachable over a remote runtime.
+  addClaudeAccountFromConfigDir(
+    configDir: string,
+    target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }
+  ): Promise<ClaudeRateLimitAccountsState> {
+    return this.requireAccountServices().claudeAccounts.addAccountFromConfigDir(configDir, target)
+  }
+
   removeCodexAccount(accountId: string): Promise<CodexRateLimitAccountsState> {
     return this.requireAccountServices().codexAccounts.removeAccount(accountId)
   }

@@ -56,6 +56,12 @@ const ConsumeCodexResetCreditParams = z
   })
   .strict()
 
+const AddClaudeFromConfigDirParams = z.object({
+  configDir: z.string().min(1, 'Missing configDir'),
+  runtime: z.enum(['host', 'wsl']).optional(),
+  wslDistro: z.string().nullish()
+})
+
 const AccountsUnsubscribeParams = z.object({
   subscriptionId: z
     .unknown()
@@ -64,10 +70,13 @@ const AccountsUnsubscribeParams = z.object({
 })
 
 // Why: bridges the desktop ClaudeAccountService / CodexAccountService /
-// RateLimitService into the mobile WebSocket RPC. Read + switch + remove
-// only — interactive add/re-auth flows spawn `claude login` / `codex login`
-// PTYs that need a desktop browser, so they intentionally remain
-// desktop-only. See plan in spec doc for issue #1438.
+// RateLimitService into the WebSocket / local-socket RPC. Read + switch +
+// remove for all clients; interactive add/re-auth flows spawn `claude login`
+// / `codex login` PTYs that need a desktop browser, so they intentionally
+// remain desktop-only. `accounts.addClaudeFromConfigDir` is the exception: it
+// captures an already-authenticated CLAUDE_CONFIG_DIR (no PTY) so the local
+// `orca account add` CLI can register accounts on a headless host; it is gated
+// to the local runtime connection, never a mobile device token. See #1438.
 export const ACCOUNT_METHODS: readonly RpcAnyMethod[] = [
   defineMethod({
     name: 'accounts.list',
@@ -114,6 +123,21 @@ export const ACCOUNT_METHODS: readonly RpcAnyMethod[] = [
     name: 'accounts.removeCodex',
     params: RemoveAccountParams,
     handler: async (params, { runtime }) => runtime.removeCodexAccount(params.accountId)
+  }),
+  defineMethod({
+    name: 'accounts.addClaudeFromConfigDir',
+    params: AddClaudeFromConfigDirParams,
+    handler: async (params, { runtime, clientKind }) => {
+      // Why: capturing a host filesystem path is a host-local operation; a mobile
+      // device token must never register accounts against the desktop's storage.
+      if (clientKind === 'mobile') {
+        throw new Error('Adding Claude accounts is only available on the Orca host runtime.')
+      }
+      return runtime.addClaudeAccountFromConfigDir(params.configDir, {
+        runtime: params.runtime,
+        wslDistro: params.wslDistro ?? null
+      })
+    }
   }),
   // Why: streaming counterpart so mobile usage bars refresh in place when the
   // desktop's 5-minute rate-limit poll completes or when the user switches

@@ -83,6 +83,8 @@ type ManagedClaudeAuthLocation = {
   wslLinuxAuthPath: string | null
 }
 
+class DuplicateClaudeAccountError extends Error {}
+
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`
 }
@@ -104,6 +106,17 @@ export class ClaudeAccountService {
 
   async addAccount(target?: ClaudeAccountAddTarget): Promise<ClaudeRateLimitAccountsState> {
     return this.serializeMutation(() => this.doAddAccount(target))
+  }
+
+  // Why: adds a managed account from an already-authenticated CLAUDE_CONFIG_DIR
+  // instead of driving the interactive browser login here. Enables the
+  // `orca account add` CLI to run `claude login` in the user's own terminal on a
+  // headless host, then register the captured credentials without a desktop GUI.
+  async addAccountFromConfigDir(
+    configDir: string,
+    target?: ClaudeAccountAddTarget
+  ): Promise<ClaudeRateLimitAccountsState> {
+    return this.serializeMutation(() => this.doAddAccountFromConfigDir(configDir, target))
   }
 
   async reauthenticateAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
@@ -140,65 +153,130 @@ export class ClaudeAccountService {
   ): Promise<ClaudeRateLimitAccountsState> {
     const accountId = randomUUID()
     const managedAuth = this.createManagedAuthDir(accountId, target)
-    const { managedAuthPath } = managedAuth
     const previousSettings = this.store.getSettings()
-    let duplicateIdentityFound = false
-
     try {
       const captured = await this.runClaudeLoginAndCapture(managedAuth)
-      if (!captured.identity.email) {
-        throw new Error('Claude login completed, but Orca could not resolve the account email.')
-      }
-      // Why: duplicate rows confuse account selection and rate-limit tracking;
-      // the per-row Re-authenticate action already refreshes credentials.
-      if (
-        findDuplicateClaudeAccount(previousSettings.claudeManagedAccounts, {
-          email: captured.identity.email,
-          organizationUuid: captured.identity.organizationUuid,
-          managedAuthRuntime: managedAuth.managedAuthRuntime,
-          wslDistro: managedAuth.wslDistro
-        })
-      ) {
-        duplicateIdentityFound = true
-        throw new Error('This Claude account is already added.')
-      }
-      await this.writeManagedAuth(accountId, managedAuthPath, captured)
-
-      const now = Date.now()
-      const account: ClaudeManagedAccount = {
-        id: accountId,
-        email: captured.identity.email,
-        managedAuthPath,
-        managedAuthRuntime: managedAuth.managedAuthRuntime,
-        wslDistro: managedAuth.wslDistro,
-        wslLinuxAuthPath: managedAuth.wslLinuxAuthPath,
-        authMethod: 'subscription-oauth',
-        organizationUuid: captured.identity.organizationUuid,
-        organizationName: captured.identity.organizationName,
-        createdAt: now,
-        updatedAt: now,
-        lastAuthenticatedAt: now
-      }
-
-      const selection = normalizeClaudeRuntimeSelection(previousSettings)
-      this.store.updateSettings({
-        claudeManagedAccounts: [...previousSettings.claudeManagedAccounts, account],
-        activeClaudeManagedAccountId: selection.host,
-        activeClaudeManagedAccountIdsByRuntime: selection
-      })
-      this.runtimeAuth.clearLastWrittenCredentialsJson(accountId)
-      this.rateLimits.evictInactiveClaudeCache(accountId)
-      return this.getSnapshot()
+      return await this.persistCapturedClaudeAccount(
+        accountId,
+        managedAuth,
+        previousSettings,
+        captured
+      )
     } catch (error) {
-      // Duplicate detection precedes every credential/settings write, so only
-      // its throwaway auth directory needs cleanup.
-      if (!duplicateIdentityFound) {
-        this.restoreClaudeSettings(previousSettings)
-        await this.runtimeAuth.forceMaterializeCurrentSelectionForRollback()
+      if (error instanceof DuplicateClaudeAccountError) {
+        // Why: duplicate detection precedes credential/settings writes, so rollback I/O
+        // would only add latency and could mask the useful duplicate-account error.
+        await this.safeRemoveManagedAuth(accountId, managedAuth.managedAuthPath)
+      } else {
+        await this.rollbackAddAccount(accountId, managedAuth.managedAuthPath, previousSettings)
       }
-      await this.safeRemoveManagedAuth(accountId, managedAuthPath)
       throw error
     }
+  }
+
+  private async doAddAccountFromConfigDir(
+    configDir: string,
+    target?: ClaudeAccountAddTarget
+  ): Promise<ClaudeRateLimitAccountsState> {
+    const accountId = randomUUID()
+    const managedAuth = this.createManagedAuthDir(accountId, target)
+    const previousSettings = this.store.getSettings()
+    try {
+      const captured = await this.captureFromExistingConfigDir(configDir)
+      return await this.persistCapturedClaudeAccount(
+        accountId,
+        managedAuth,
+        previousSettings,
+        captured
+      )
+    } catch (error) {
+      await this.rollbackAddAccount(accountId, managedAuth.managedAuthPath, previousSettings)
+      throw error
+    }
+  }
+
+  // Why: capture credentials from a CLAUDE_CONFIG_DIR the caller already
+  // authenticated (e.g. a temp dir the CLI ran `claude login` into), mirroring
+  // runClaudeLoginAndCapture's capture step but without spawning the interactive
+  // login. On Linux/Windows the credentials live in a plaintext `.credentials.json`.
+  private async captureFromExistingConfigDir(configDir: string): Promise<CapturedClaudeAuth> {
+    const trimmed = configDir.trim()
+    if (!trimmed) {
+      throw new Error('A Claude config directory path is required.')
+    }
+    const resolvedDir = resolve(trimmed)
+    if (!existsSync(join(resolvedDir, '.credentials.json'))) {
+      throw new Error(
+        `No Claude credentials found in ${resolvedDir}. Run \`claude login\` into this directory first.`
+      )
+    }
+    const status = await this.runClaudeCommand(
+      ['auth', 'status', '--json'],
+      { windowsPath: resolvedDir, linuxPath: null, wslDistro: null },
+      STATUS_TIMEOUT_MS,
+      { allowFailure: true }
+    )
+    return this.captureAuthFromConfigDir(resolvedDir, status, null)
+  }
+
+  private async persistCapturedClaudeAccount(
+    accountId: string,
+    managedAuth: ManagedClaudeAuthLocation,
+    previousSettings: ReturnType<Store['getSettings']>,
+    captured: CapturedClaudeAuth
+  ): Promise<ClaudeRateLimitAccountsState> {
+    if (!captured.identity.email) {
+      throw new Error('Claude login completed, but Orca could not resolve the account email.')
+    }
+    // Why: duplicate rows confuse selection and rate-limit tracking; re-authentication
+    // is the supported way to refresh an account that is already managed.
+    if (
+      findDuplicateClaudeAccount(previousSettings.claudeManagedAccounts, {
+        email: captured.identity.email,
+        organizationUuid: captured.identity.organizationUuid,
+        managedAuthRuntime: managedAuth.managedAuthRuntime,
+        wslDistro: managedAuth.wslDistro
+      })
+    ) {
+      throw new DuplicateClaudeAccountError('This Claude account is already added.')
+    }
+    await this.writeManagedAuth(accountId, managedAuth.managedAuthPath, captured)
+
+    const now = Date.now()
+    const account: ClaudeManagedAccount = {
+      id: accountId,
+      email: captured.identity.email,
+      managedAuthPath: managedAuth.managedAuthPath,
+      managedAuthRuntime: managedAuth.managedAuthRuntime,
+      wslDistro: managedAuth.wslDistro,
+      wslLinuxAuthPath: managedAuth.wslLinuxAuthPath,
+      authMethod: 'subscription-oauth',
+      organizationUuid: captured.identity.organizationUuid,
+      organizationName: captured.identity.organizationName,
+      createdAt: now,
+      updatedAt: now,
+      lastAuthenticatedAt: now
+    }
+
+    const selection = normalizeClaudeRuntimeSelection(previousSettings)
+    this.store.updateSettings({
+      claudeManagedAccounts: [...previousSettings.claudeManagedAccounts, account],
+      activeClaudeManagedAccountId: selection.host,
+      activeClaudeManagedAccountIdsByRuntime: selection
+    })
+    this.runtimeAuth.clearLastWrittenCredentialsJson(accountId)
+    this.rateLimits.evictInactiveClaudeCache(accountId)
+    return this.getSnapshot()
+  }
+
+  private async rollbackAddAccount(
+    accountId: string,
+    managedAuthPath: string,
+    previousSettings: ReturnType<Store['getSettings']>
+  ): Promise<void> {
+    this.restoreClaudeSettings(previousSettings)
+    await this.runtimeAuth.forceMaterializeCurrentSelectionForRollback()
+    await this.safeRemoveManagedAuth(accountId, managedAuthPath)
   }
 
   private async doReauthenticateAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
