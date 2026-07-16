@@ -2,12 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JiraClientForSite } from './client'
 import { credentialDecryptionMessage } from '../../shared/integration-credential-errors'
 
-const { clearTokenMock, getClientsMock, isAuthErrorMock, jiraRequestMock } = vi.hoisted(() => ({
-  clearTokenMock: vi.fn(),
-  getClientsMock: vi.fn(),
-  isAuthErrorMock: vi.fn(),
-  jiraRequestMock: vi.fn()
-}))
+const { clearTokenMock, getClientsMock, isAuthErrorMock, jiraRequestMock, jiraRequestBinaryMock } =
+  vi.hoisted(() => ({
+    clearTokenMock: vi.fn(),
+    getClientsMock: vi.fn(),
+    isAuthErrorMock: vi.fn(),
+    jiraRequestMock: vi.fn(),
+    jiraRequestBinaryMock: vi.fn()
+  }))
 
 vi.mock('./client', () => ({
   acquire: vi.fn().mockResolvedValue(undefined),
@@ -17,7 +19,15 @@ vi.mock('./client', () => ({
   clearToken: (...args: unknown[]) => clearTokenMock(...args),
   getClients: (...args: unknown[]) => getClientsMock(...args),
   isAuthError: (...args: unknown[]) => isAuthErrorMock(...args),
-  jiraRequest: (...args: unknown[]) => jiraRequestMock(...args)
+  jiraRequest: (...args: unknown[]) => jiraRequestMock(...args),
+  jiraRequestBinary: (...args: unknown[]) => jiraRequestBinaryMock(...args),
+  JiraApiError: class JiraApiError extends Error {
+    status: number | null
+    constructor(message: string, status: number | null = null) {
+      super(message)
+      this.status = status
+    }
+  }
 }))
 
 function makeEntry(id = 'site-1'): JiraClientForSite {
@@ -339,6 +349,73 @@ describe('Jira issue operations', () => {
       summary: 'Fix Jira create',
       customfield_10010: { id: 'option-1' }
     })
+  })
+
+  it('embeds resolved attachment images into getIssue descriptions', async () => {
+    const pngBytes = Uint8Array.from([137, 80, 78, 71])
+    jiraRequestBinaryMock.mockResolvedValue({
+      data: pngBytes.buffer,
+      contentType: 'image/png'
+    })
+    jiraRequestMock.mockResolvedValue({
+      id: 'issue-9',
+      key: 'CAM-9',
+      fields: {
+        summary: 'UI with screenshot',
+        description: {
+          type: 'doc',
+          version: 1,
+          content: [
+            { type: 'paragraph', content: [{ type: 'text', text: 'See image' }] },
+            {
+              type: 'mediaSingle',
+              content: [
+                {
+                  type: 'media',
+                  attrs: { id: 'media-uuid', type: 'file', alt: 'ui.png' }
+                }
+              ]
+            }
+          ]
+        },
+        attachment: [
+          {
+            id: '10001',
+            filename: 'ui.png',
+            mimeType: 'image/png',
+            size: 4
+          }
+        ],
+        project: { id: '1', key: 'CAM', name: 'CAM' },
+        issuetype: { id: '1', name: 'Story' },
+        status: {
+          id: '1',
+          name: 'To Do',
+          statusCategory: { key: 'new', name: 'To Do' }
+        },
+        labels: [],
+        created: '2026-06-18T00:00:00.000Z',
+        updated: '2026-06-18T00:00:00.000Z'
+      },
+      renderedFields: {
+        description:
+          '<p>See image</p><img src="https://example.atlassian.net/rest/api/3/attachment/content/10001" />'
+      }
+    })
+
+    const { getIssue } = await import('./issues')
+    const issue = await getIssue('CAM-9', 'site-1')
+
+    expect(jiraRequestMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining('expand=renderedFields')
+    )
+    expect(jiraRequestBinaryMock).toHaveBeenCalledWith(
+      expect.anything(),
+      '/rest/api/3/attachment/content/10001?redirect=false'
+    )
+    expect(issue?.description).toContain('See image')
+    expect(issue?.description).toContain('![ui.png](data:image/png;base64,')
   })
 
   it('maps Jira ADF descriptions into Markdown blocks and lists', async () => {

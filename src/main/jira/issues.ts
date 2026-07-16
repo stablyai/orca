@@ -31,7 +31,12 @@ import {
   release,
   type JiraClientForSite
 } from './client'
-import { adfToMarkdownText, textToAdf } from './adf-markdown'
+import { adfToMarkdownText, textToAdf, type AdfToMarkdownOptions } from './adf-markdown'
+import {
+  createMediaMarkdownResolver,
+  extractAttachmentContentIdsFromHtml,
+  loadIssueImageAttachments
+} from './attachment-images'
 
 const ISSUE_FIELDS = [
   'summary',
@@ -46,6 +51,10 @@ const ISSUE_FIELDS = [
   'created',
   'updated'
 ]
+
+// Why: detail reads need attachment metadata so inline ADF media can be resolved
+// to downloadable image content; list/search omit this for payload size.
+const ISSUE_DETAIL_FIELDS = [...ISSUE_FIELDS, 'attachment']
 
 type JiraRecord = Record<string, unknown>
 
@@ -314,7 +323,11 @@ function toBodyText(site: JiraSite, text: string): unknown {
   return site.authType === 'server' ? text : textToAdf(text)
 }
 
-export function mapJiraIssue(site: JiraSite, raw: JiraRecord): JiraIssue {
+export function mapJiraIssue(
+  site: JiraSite,
+  raw: JiraRecord,
+  adfOptions?: AdfToMarkdownOptions
+): JiraIssue {
   const fields = asRecord(raw.fields)
   const key = asString(raw.key)
   return {
@@ -323,7 +336,7 @@ export function mapJiraIssue(site: JiraSite, raw: JiraRecord): JiraIssue {
     siteId: site.id,
     siteName: site.displayName,
     title: asString(fields.summary, key || 'Untitled issue'),
-    description: adfToMarkdownText(fields.description),
+    description: adfToMarkdownText(fields.description, adfOptions),
     url: issueUrl(site, key),
     project: mapProject(fields.project, site),
     issueType: mapIssueType(fields.issuetype),
@@ -334,6 +347,25 @@ export function mapJiraIssue(site: JiraSite, raw: JiraRecord): JiraIssue {
     priority: mapPriority(fields.priority),
     createdAt: asString(fields.created, new Date().toISOString()),
     updatedAt: asString(fields.updated, new Date().toISOString())
+  }
+}
+
+async function buildIssueMediaOptions(
+  client: JiraClientForSite,
+  raw: JiraRecord
+): Promise<AdfToMarkdownOptions | undefined> {
+  const fields = asRecord(raw.fields)
+  const renderedFields = asRecord(raw.renderedFields)
+  const preferredIds = extractAttachmentContentIdsFromHtml(
+    asString(renderedFields.description) || undefined
+  )
+  const images = await loadIssueImageAttachments(client, fields.attachment, preferredIds)
+  if (images.length === 0 && preferredIds.length === 0) {
+    // Still allow external http(s) media URLs via default ADF handling.
+    return undefined
+  }
+  return {
+    resolveMedia: createMediaMarkdownResolver(images, preferredIds)
   }
 }
 
@@ -439,13 +471,18 @@ export async function getIssue(
   for (const entry of entries) {
     await acquire()
     try {
+      const params = new URLSearchParams({
+        fields: ISSUE_DETAIL_FIELDS.join(','),
+        expand: 'renderedFields'
+      })
       const issue = await jiraRequest<JiraRecord>(
         entry,
-        `${apiBasePath(entry.site)}/issue/${encodeURIComponent(key)}?fields=${encodeURIComponent(
-          ISSUE_FIELDS.join(',')
-        )}`
+        `${apiBasePath(entry.site)}/issue/${encodeURIComponent(key)}?${params.toString()}`
       )
-      return mapJiraIssue(entry.site, issue)
+      // Why: attachment downloads need the same concurrency slot; release after
+      // JSON fetch would allow other Jira calls to interleave mid-image load.
+      const mediaOptions = await buildIssueMediaOptions(entry, issue)
+      return mapJiraIssue(entry.site, issue, mediaOptions)
     } catch (error) {
       if (isAuthError(error)) {
         clearToken(entry.site.id)
@@ -597,13 +634,52 @@ export async function addIssueComment(
   }
 }
 
-function mapComment(raw: JiraRecord): JiraComment {
+function mapComment(raw: JiraRecord, adfOptions?: AdfToMarkdownOptions): JiraComment {
   return {
     id: asString(raw.id),
-    body: adfToMarkdownText(raw.body),
+    body: adfToMarkdownText(raw.body, adfOptions),
     createdAt: asString(raw.created, new Date().toISOString()),
     updatedAt: asString(raw.updated) || undefined,
     user: mapUser(raw.author)
+  }
+}
+
+async function buildCommentMediaOptions(
+  client: JiraClientForSite,
+  key: string,
+  comments: JiraRecord[]
+): Promise<AdfToMarkdownOptions | undefined> {
+  // Why: comment media usually references issue-level attachments; pull them once
+  // for the whole thread instead of per comment.
+  let attachmentField: unknown
+  try {
+    const issue = await jiraRequest<JiraRecord>(
+      client,
+      `/rest/api/3/issue/${encodeURIComponent(key)}?fields=attachment`
+    )
+    attachmentField = asRecord(issue.fields).attachment
+  } catch (error) {
+    console.warn('[jira] comment attachment lookup failed:', error)
+    return undefined
+  }
+
+  const preferredIds: string[] = []
+  const seen = new Set<string>()
+  for (const comment of comments) {
+    for (const id of extractAttachmentContentIdsFromHtml(asString(comment.renderedBody))) {
+      if (!seen.has(id)) {
+        seen.add(id)
+        preferredIds.push(id)
+      }
+    }
+  }
+
+  const images = await loadIssueImageAttachments(client, attachmentField, preferredIds)
+  if (images.length === 0) {
+    return undefined
+  }
+  return {
+    resolveMedia: createMediaMarkdownResolver(images, preferredIds)
   }
 }
 
@@ -621,11 +697,13 @@ export async function getIssueComments(
       const params = new URLSearchParams({
         maxResults: String(maxResults),
         orderBy: 'created',
-        startAt: String(startAt)
+        startAt: String(startAt),
+        expand: 'renderedBody'
       })
       return `${apiBasePath(entry.site)}/issue/${encodeURIComponent(key)}/comment?${params.toString()}`
     })
-    return comments.map(mapComment)
+    const mediaOptions = await buildCommentMediaOptions(entry, key, comments)
+    return comments.map((comment) => mapComment(comment, mediaOptions))
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.site.id)

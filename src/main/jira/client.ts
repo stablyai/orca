@@ -457,6 +457,27 @@ export async function jiraRequest<T>(
   return (await response.json()) as T
 }
 
+export async function jiraRequestBinary(
+  client: JiraClientForSite,
+  path: string
+): Promise<{ data: ArrayBuffer; contentType: string }> {
+  const headers = new Headers()
+  // Why: attachment content is binary; forcing JSON Accept/Content-Type can
+  // break downloads and confuses some Atlassian edge responses.
+  headers.set('Accept', '*/*')
+  headers.set('User-Agent', JIRA_API_USER_AGENT)
+  headers.set('Authorization', client.authorization)
+  const response = await jiraFetch(`${client.site.siteUrl}${path}`, { headers })
+  if (!response.ok) {
+    throw new JiraApiError(await readJiraError(response), response.status)
+  }
+  const contentType = response.headers.get('content-type') || 'application/octet-stream'
+  return {
+    data: await response.arrayBuffer(),
+    contentType
+  }
+}
+
 export function getClients(selection?: JiraSiteSelection | null): JiraClientForSite[] {
   const file = getSiteFile()
   const selected = selection ?? file.selectedSiteId ?? file.activeSiteId
