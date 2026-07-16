@@ -28,6 +28,9 @@ type JiraConnectDialogProps = {
 
 type ConnectState = 'idle' | 'connecting' | 'error'
 type JiraInstanceType = 'cloud' | 'server'
+// Self-hosted Jira accepts either a personal access token (Bearer) or classic
+// username + password (Basic); older Server/DC instances predate PATs.
+type ServerAuthMethod = 'pat' | 'basic'
 
 // Why: mirrors the inline Jira connect dialog in TaskPage so the onboarding
 // "Connect integrations" step can reuse the same site URL + email + API token
@@ -48,6 +51,7 @@ export function JiraConnectDialog({
   const errorId = useId()
 
   const [instanceType, setInstanceType] = useState<JiraInstanceType>('cloud')
+  const [serverAuthMethod, setServerAuthMethod] = useState<ServerAuthMethod>('pat')
   const [siteUrl, setSiteUrl] = useState('')
   const [email, setEmail] = useState('')
   const [apiToken, setApiToken] = useState('')
@@ -55,9 +59,14 @@ export function JiraConnectDialog({
   const [connectError, setConnectError] = useState<string | null>(null)
 
   const isServer = instanceType === 'server'
+  // `needsIdentity` folds "Cloud Atlassian email" and "self-hosted Basic
+  // username" — the identity slot that keys/labels the stored site. PAT auth
+  // uses no identity, so the email field is hidden and left empty.
+  const isServerBasic = isServer && serverAuthMethod === 'basic'
+  const needsIdentity = !isServer || isServerBasic
   const canSubmit =
     Boolean(siteUrl.trim()) &&
-    (isServer || Boolean(email.trim())) &&
+    (!needsIdentity || Boolean(email.trim())) &&
     Boolean(apiToken.trim()) &&
     connectState !== 'connecting'
   const credentialStorageCopy = hasRemoteProviderRuntime(settings)
@@ -83,7 +92,7 @@ export function JiraConnectDialog({
     const trimmedToken = apiToken.trim()
     if (
       !trimmedSite ||
-      (!isServer && !trimmedEmail) ||
+      (needsIdentity && !trimmedEmail) ||
       !trimmedToken ||
       connectState === 'connecting'
     ) {
@@ -94,9 +103,9 @@ export function JiraConnectDialog({
     try {
       const result = await connectJira({
         siteUrl: trimmedSite,
-        // Drop any email typed before toggling to self-hosted: the value is
-        // ignored for PAT auth but would otherwise key/label the stored site.
-        email: isServer ? '' : trimmedEmail,
+        // Cloud sends the Atlassian email; self-hosted Basic sends the username;
+        // PAT sends nothing, so a stale email can't key/label the stored site.
+        email: needsIdentity ? trimmedEmail : '',
         apiToken: trimmedToken,
         authType: instanceType
       })
@@ -108,6 +117,7 @@ export function JiraConnectDialog({
         setEmail('')
         setApiToken('')
         setInstanceType('cloud')
+        setServerAuthMethod('pat')
         setConnectState('idle')
         onOpenChange(false)
         onConnected?.()
@@ -134,15 +144,20 @@ export function JiraConnectDialog({
             {translate('auto.components.jira.connect.dialog.8388bdea2b', 'Connect Jira site')}
           </DialogTitle>
           <DialogDescription>
-            {isServer
+            {!isServer
               ? translate(
-                  'auto.components.jira.connect.dialog.2e2b69e48e',
-                  'Use a self-hosted Jira base URL and a personal access token to browse issues.'
-                )
-              : translate(
                   'auto.components.jira.connect.dialog.d785c42b8b',
                   'Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.'
-                )}
+                )
+              : isServerBasic
+                ? translate(
+                    'auto.components.jira.connect.dialog.1d947a07ab',
+                    'Use a self-hosted Jira base URL, username, and password to browse issues.'
+                  )
+                : translate(
+                    'auto.components.jira.connect.dialog.2e2b69e48e',
+                    'Use a self-hosted Jira base URL and a personal access token to browse issues.'
+                  )}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -176,6 +191,37 @@ export function JiraConnectDialog({
                 {translate('auto.components.jira.connect.dialog.bc7a831773', 'Self-hosted')}
               </ToggleGroupItem>
             </ToggleGroup>
+            {isServer ? (
+              <ToggleGroup
+                type="single"
+                variant="outline"
+                value={serverAuthMethod}
+                onValueChange={(value) => {
+                  if (!value || connectState === 'connecting') {
+                    return
+                  }
+                  setServerAuthMethod(value as ServerAuthMethod)
+                  clearErrorOnEdit()
+                }}
+                aria-label={translate(
+                  'auto.components.jira.connect.dialog.f49708c369',
+                  'Jira authentication method'
+                )}
+              >
+                <ToggleGroupItem value="pat" className="h-8 px-3 text-xs">
+                  {translate(
+                    'auto.components.jira.connect.dialog.730d973bae',
+                    'Personal access token'
+                  )}
+                </ToggleGroupItem>
+                <ToggleGroupItem value="basic" className="h-8 px-3 text-xs">
+                  {translate(
+                    'auto.components.jira.connect.dialog.84a810dd0e',
+                    'Username & password'
+                  )}
+                </ToggleGroupItem>
+              </ToggleGroup>
+            ) : null}
             <div className="space-y-2">
               <Label htmlFor={siteUrlId} className="text-xs">
                 {isServer
@@ -207,18 +253,27 @@ export function JiraConnectDialog({
                 disabled={connectState === 'connecting'}
               />
             </div>
-            {!isServer ? (
+            {needsIdentity ? (
               <div className="space-y-2">
                 <Label htmlFor={emailId} className="text-xs">
-                  {translate('auto.components.jira.connect.dialog.2849ddb295', 'Atlassian email')}
+                  {isServerBasic
+                    ? translate('auto.components.jira.connect.dialog.8d1223fa5c', 'Username')
+                    : translate(
+                        'auto.components.jira.connect.dialog.2849ddb295',
+                        'Atlassian email'
+                      )}
                 </Label>
                 <Input
                   id={emailId}
-                  type="email"
-                  placeholder={translate(
-                    'auto.components.jira.connect.dialog.e91b9a4073',
-                    'you@example.com'
-                  )}
+                  type={isServerBasic ? 'text' : 'email'}
+                  placeholder={
+                    isServerBasic
+                      ? translate('auto.components.jira.connect.dialog.be9eba0a1b', 'username')
+                      : translate(
+                          'auto.components.jira.connect.dialog.e91b9a4073',
+                          'you@example.com'
+                        )
+                  }
                   value={email}
                   onChange={(event) => {
                     setEmail(event.target.value)
@@ -230,26 +285,33 @@ export function JiraConnectDialog({
             ) : null}
             <div className="space-y-2">
               <Label htmlFor={tokenId} className="text-xs">
-                {isServer
-                  ? translate(
-                      'auto.components.jira.connect.dialog.730d973bae',
-                      'Personal access token'
-                    )
-                  : translate('auto.components.jira.connect.dialog.3d81bf3ab3', 'API token')}
+                {isServerBasic
+                  ? translate('auto.components.jira.connect.dialog.70035652d7', 'Password')
+                  : isServer
+                    ? translate(
+                        'auto.components.jira.connect.dialog.730d973bae',
+                        'Personal access token'
+                      )
+                    : translate('auto.components.jira.connect.dialog.3d81bf3ab3', 'API token')}
               </Label>
               <Input
                 id={tokenId}
                 type="password"
                 placeholder={
-                  isServer
+                  isServerBasic
                     ? translate(
-                        'auto.components.jira.connect.dialog.8b9c7b9e7b',
-                        'Jira personal access token'
+                        'auto.components.jira.connect.dialog.c50abbf340',
+                        'Jira account password'
                       )
-                    : translate(
-                        'auto.components.jira.connect.dialog.7b3967c12f',
-                        'Atlassian API token'
-                      )
+                    : isServer
+                      ? translate(
+                          'auto.components.jira.connect.dialog.8b9c7b9e7b',
+                          'Jira personal access token'
+                        )
+                      : translate(
+                          'auto.components.jira.connect.dialog.7b3967c12f',
+                          'Atlassian API token'
+                        )
                 }
                 value={apiToken}
                 onChange={(event) => {
@@ -266,7 +328,14 @@ export function JiraConnectDialog({
                 {connectError}
               </p>
             ) : null}
-            {isServer ? (
+            {isServerBasic ? (
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.jira.connect.dialog.d8737db691',
+                  'Use your Jira Server or Data Center account username and password.'
+                )}
+              </p>
+            ) : isServer ? (
               <p className="text-xs text-muted-foreground">
                 {translate(
                   'auto.components.jira.connect.dialog.ccfb086d3e',

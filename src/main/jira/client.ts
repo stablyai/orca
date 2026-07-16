@@ -328,9 +328,11 @@ function siteToViewer(site: JiraSite | null): JiraViewer | null {
 }
 
 function authHeader(email: string, apiToken: string, authType?: JiraAuthType): string {
-  // Server/DC personal access tokens are Bearer credentials; Basic auth with
-  // a PAT in the password slot is what produces the 401s users report.
-  if (authType === 'server') {
+  // Self-hosted with no username = a personal access token (Bearer); Basic auth
+  // with a PAT in the password slot is what produces the 401s users report.
+  // Self-hosted WITH a username is classic username+password Basic auth, which
+  // older Server/DC instances (predating PATs) require. Cloud is always Basic.
+  if (authType === 'server' && !email) {
     return `Bearer ${apiToken}`
   }
   return `Basic ${Buffer.from(`${email}:${apiToken}`).toString('base64')}`
@@ -514,7 +516,12 @@ export async function connect(
   const apiToken = args.apiToken.trim()
   if (authType === 'server') {
     if (!apiToken) {
-      return { ok: false, error: 'Personal access token is required.' }
+      // A username present means classic Basic auth (password); its absence
+      // means the credential is a personal access token sent as Bearer.
+      return {
+        ok: false,
+        error: email ? 'Password is required.' : 'Personal access token is required.'
+      }
     }
   } else if (!email || !apiToken) {
     return { ok: false, error: 'Email and API token are required.' }

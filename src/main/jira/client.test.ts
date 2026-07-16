@@ -437,6 +437,79 @@ describe('Jira client credential storage', () => {
     expect(headers.get('Authorization')).toBe('Bearer pat-token')
   })
 
+  it('connects to self-hosted Jira with Basic username/password against REST v2', async () => {
+    netFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ name: 'jdoe', key: 'JIRAUSER20202', displayName: 'Jane Doe' }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    )
+    const jira = await loadClientModule()
+
+    await expect(
+      jira.connect({
+        siteUrl: 'jira.example.com',
+        // A username present means classic Basic auth (older Server/DC that
+        // predate PATs); the token slot carries the account password.
+        email: 'jdoe',
+        apiToken: 'account-password',
+        authType: 'server'
+      })
+    ).resolves.toMatchObject({
+      ok: true,
+      viewer: { displayName: 'Jane Doe', accountId: 'jdoe' }
+    })
+
+    expect(netFetchMock).toHaveBeenCalledWith(
+      'https://jira.example.com/rest/api/2/myself',
+      expect.objectContaining({ headers: expect.any(Headers) })
+    )
+    const headers = netFetchMock.mock.calls[0]?.[1]?.headers as Headers
+    expect(headers.get('Authorization')).toBe(
+      `Basic ${Buffer.from('jdoe:account-password').toString('base64')}`
+    )
+  })
+
+  it('uses Basic auth for stored self-hosted sites that carry a username', async () => {
+    const siteId = 'site-server-basic'
+    const orcaDir = join(tempHome, '.orca')
+    mkdirSync(join(orcaDir, 'jira-tokens'), { recursive: true })
+    writeFileSync(
+      join(orcaDir, 'jira-sites.json'),
+      JSON.stringify({
+        version: 1,
+        activeSiteId: siteId,
+        selectedSiteId: siteId,
+        sites: [
+          {
+            id: siteId,
+            siteUrl: 'https://jira.example.com',
+            email: 'jdoe',
+            displayName: 'Jane Doe',
+            accountId: 'jdoe',
+            authType: 'server'
+          }
+        ]
+      }),
+      { encoding: 'utf-8' }
+    )
+    writeFileSync(tokenPathForSite(siteId), 'account-password')
+    netFetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ name: 'jdoe', displayName: 'Jane Doe' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    )
+    const jira = await loadClientModule()
+
+    await expect(jira.testConnection(siteId)).resolves.toMatchObject({ ok: true })
+
+    const headers = netFetchMock.mock.calls[0]?.[1]?.headers as Headers
+    expect(headers.get('Authorization')).toBe(
+      `Basic ${Buffer.from('jdoe:account-password').toString('base64')}`
+    )
+  })
+
   it('requires a token but not an email for self-hosted connections', async () => {
     const jira = await loadClientModule()
 
