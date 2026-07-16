@@ -22,9 +22,10 @@ type TerminalWithThirdLevelShift = {
  * Returns whether a Windows Ctrl+Alt chord is genuine keyboard input rather
  * than AltGr composition, and must therefore reach xterm's key encoders.
  *
- * Chromium reports AltGraph=true on a Ctrl+Alt keydown exactly when that
- * chord composes a printable character on the active layout (crbug 762557),
- * so a false AltGraph state proves the chord cannot compose text.
+ * When a Ctrl+Alt keydown composes a printable character on the active
+ * layout, Chromium replaces the Control+Alt modifiers with AltGraph
+ * (crbug 762557), so a chord still reporting Ctrl+Alt without AltGraph
+ * cannot compose text.
  */
 export function isGenuineWindowsCtrlAltChord(event: ThirdLevelShiftKeyboardEvent): boolean {
   return (
