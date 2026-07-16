@@ -4896,6 +4896,11 @@
           "cancel": "キャンセル",
           "forget": "Orcaから削除",
           "reconnectAndDelete": "再接続して削除"
+        },
+        "MarkdownImageLightbox": {
+          "close": "閉じる",
+          "image": "画像",
+          "expand": "画像を拡大"
         }
       },
       "shared": {

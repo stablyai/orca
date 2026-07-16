@@ -4919,6 +4919,11 @@
           "cancel": "Cancel",
           "forget": "Remove from Orca",
           "reconnectAndDelete": "Reconnect & Delete"
+        },
+        "MarkdownImageLightbox": {
+          "close": "Close",
+          "image": "Image",
+          "expand": "Expand image"
         }
       },
       "shared": {

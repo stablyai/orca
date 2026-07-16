@@ -4896,6 +4896,11 @@
           "cancel": "취소",
           "forget": "Orca에서 제거",
           "reconnectAndDelete": "재연결 후 삭제"
+        },
+        "MarkdownImageLightbox": {
+          "close": "닫기",
+          "image": "이미지",
+          "expand": "이미지 확대"
         }
       },
       "shared": {

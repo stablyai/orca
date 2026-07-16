@@ -4896,6 +4896,11 @@
           "cancel": "取消",
           "forget": "从 Orca 中移除",
           "reconnectAndDelete": "重新连接并删除"
+        },
+        "MarkdownImageLightbox": {
+          "close": "关闭",
+          "image": "图像",
+          "expand": "展开图像"
         }
       },
       "shared": {
