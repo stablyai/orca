@@ -15,13 +15,17 @@ import { existsSync, readFileSync } from 'node:fs'
 import type { SshConnection } from './ssh-connection'
 import { RELAY_REMOTE_DIR } from './relay-protocol'
 import { execCommand } from './ssh-relay-deploy-helpers'
+import { probeInstallLockExistsCommand } from './ssh-relay-install-lock-commands'
+import { isRelayInstallLockStale, RELAY_INSTALL_LOCK_NAME } from './ssh-relay-install-lock'
 import {
-  lockAgeSecondsCommand,
-  probeInstallLockExistsCommand
-} from './ssh-relay-install-lock-commands'
-import { INSTALL_LOCK_STALE_MS, RELAY_INSTALL_LOCK_NAME } from './ssh-relay-install-lock'
+  isRelayGcClaimOwned,
+  releaseRelayGcClaimWithRetry,
+  tryAcquireRelayGcClaim
+} from './ssh-relay-gc-claim'
+import { cleanupRelayGcTombstones } from './ssh-relay-gc-tombstone'
 import {
   listRelayBaseDirsCommand,
+  moveRemoteTreeCommand,
   probeFileExistsCommand,
   probeRelayInstalledCommand,
   relayLivenessProbeCommand,
@@ -37,6 +41,7 @@ import {
   type RemotePathFlavor
 } from './ssh-remote-platform'
 import { windowsRelayPipePathsForSocketName } from './ssh-relay-endpoints'
+import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
 
 // Why: the GC pass and the version-dir parser must agree on what counts as a
@@ -143,45 +148,27 @@ export async function isRelayAlreadyInstalled(
   }
 }
 
-async function isRelayInstallLockStale(
-  conn: SshConnection,
-  lockDir: string,
-  host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
-): Promise<boolean> {
-  try {
-    // Why: compute age on the remote host so clock skew between two Orca
-    // clients cannot make a live repair lock look older than it is.
-    const out = await execHostCommand(conn, host, lockAgeSecondsCommand(host, lockDir))
-    const ageSec = Number.parseInt(out.trim(), 10)
-    if (!Number.isFinite(ageSec) || ageSec < 0) {
-      return false
-    }
-    return ageSec * 1000 > INSTALL_LOCK_STALE_MS
-  } catch {
-    return false
-  }
-}
-
 /**
- * Mark the install as complete and release the lock. Sentinel ordering is:
- * write `.install-complete` FIRST, then remove `.install-lock`. This ensures
- * a sibling dir is never observed by GC as "complete but locked", which
- * would lead GC to skip a recoverable dir indefinitely.
+ * Mark the install as complete, then normally release the lock. Deploy keeps
+ * the lock through first launch so cross-version GC cannot move the directory
+ * between finalization and daemon liveness becoming observable.
  */
 export async function finalizeInstall(
   conn: SshConnection,
   remoteRelayDir: string,
   host: RemoteHostPlatform = DEFAULT_REMOTE_HOST,
-  options?: { signal?: AbortSignal }
+  options?: { signal?: AbortSignal; releaseLock?: boolean }
 ): Promise<void> {
   const sentinel = joinRemotePath(host, remoteRelayDir, INSTALL_COMPLETE_NAME)
   const lock = joinRemotePath(host, remoteRelayDir, RELAY_INSTALL_LOCK_NAME)
   await execHostCommand(conn, host, writeRemoteEmptyFileCommand(host, sentinel), {
     signal: options?.signal
   })
-  await execHostCommand(conn, host, removeRemoteTreeCommand(host, lock), {
-    signal: options?.signal
-  }).catch(() => {})
+  if (options?.releaseLock !== false) {
+    await execHostCommand(conn, host, removeRemoteTreeCommand(host, lock), {
+      signal: options?.signal
+    }).catch(() => {})
+  }
   options?.signal?.throwIfAborted()
 }
 
@@ -230,10 +217,14 @@ export async function gcOldRelayVersions(
   } catch {
     return
   }
-  const candidates = listing
+  const entries = listing
     .split('\n')
     .map((s) => s.trim())
     .filter(Boolean)
+
+  await cleanupRelayGcTombstones(conn, baseDir, entries, host)
+
+  const candidates = entries
     .filter((name) => RELAY_VERSION_DIR_REGEX.test(name))
     .filter((name) => name !== currentDirName)
 
@@ -251,7 +242,47 @@ export async function gcOldRelayVersions(
         kept.push(name)
         continue
       }
-      await execHostCommand(conn, host, removeRemoteTreeCommand(host, dir))
+      // Why: the claim is a sibling, so it survives moving/deleting the
+      // candidate and lets installers back out before mutating the old path.
+      const gcClaimToken = await tryAcquireRelayGcClaim(conn, dir, host)
+      if (!gcClaimToken) {
+        kept.push(name)
+        continue
+      }
+      let preserveGcClaim = false
+      let gcClaimReleaseNeeded = true
+      try {
+        // Recheck under the stable claim. New installers probe the claim both
+        // before and after creating their in-tree lock, closing both orders.
+        if (!(await isCandidateSafeToRemove(conn, dir, name, host, options))) {
+          kept.push(name)
+          continue
+        }
+        if (!(await isRelayGcClaimOwned(conn, dir, gcClaimToken, host))) {
+          kept.push(name)
+          continue
+        }
+        const tombstone = `${dir}.gc-tombstone.${process.pid}.${Date.now()}`
+        const moved = await execHostCommand(conn, host, moveRemoteTreeCommand(host, dir, tombstone))
+        if (moved.trim() !== 'MOVED') {
+          kept.push(name)
+          continue
+        }
+        // Once renamed, a fresh install at the original path is isolated from
+        // deletion of the tombstone, so the sibling claim can be released.
+        const release = await releaseRelayGcClaimWithRetry(conn, dir, gcClaimToken, host)
+        gcClaimReleaseNeeded = release === 'unknown'
+        await execHostCommand(conn, host, removeRemoteTreeCommand(host, tombstone))
+      } catch (err) {
+        if (isUnconfirmedSshCommandTermination(err)) {
+          preserveGcClaim = true
+        }
+        throw err
+      } finally {
+        if (!preserveGcClaim && gcClaimReleaseNeeded) {
+          await releaseRelayGcClaimWithRetry(conn, dir, gcClaimToken, host)
+        }
+      }
       removed.push(name)
     } catch (err) {
       console.warn(
@@ -282,12 +313,17 @@ async function isCandidateSafeToRemove(
   const isLegacy = LEGACY_RELAY_DIR_REGEX.test(name)
 
   const lockDir = joinRemotePath(host, dir, RELAY_INSTALL_LOCK_NAME)
-  const lockProbe = await execHostCommand(
-    conn,
-    host,
-    probeInstallLockExistsCommand(host, lockDir)
-  ).catch(() => 'OPEN')
-  const locked = lockProbe.trim() === 'LOCKED'
+  let lockProbe: string
+  try {
+    lockProbe = await execHostCommand(conn, host, probeInstallLockExistsCommand(host, lockDir))
+  } catch {
+    return false
+  }
+  const lockState = lockProbe.trim()
+  if (lockState !== 'OPEN' && lockState !== 'LOCKED') {
+    return false
+  }
+  const locked = lockState === 'LOCKED'
 
   if (locked) {
     // Why: a locked dir is normally unsafe to remove — but a STALE lock
@@ -354,8 +390,10 @@ async function hasLiveRelaySocket(
       host,
       relayLivenessProbeCommand(host, dir, windowsOptions)
     )
-    return out.includes('ALIVE')
+    const state = out.trim()
+    return state !== 'DEAD' && state !== 'WAITING'
   } catch {
-    return false
+    // Why: an inconclusive liveness probe must never authorize deletion.
+    return true
   }
 }

@@ -45,6 +45,24 @@ export function removeRemoteTreeCommand(host: RemoteHostPlatform, remotePath: st
   )
 }
 
+export function moveRemoteTreeCommand(
+  host: RemoteHostPlatform,
+  sourcePath: string,
+  destinationPath: string
+): string {
+  if (!isWindowsRemoteHost(host)) {
+    return `mv ${shellEscape(sourcePath)} ${shellEscape(destinationPath)} 2>&1 && echo MOVED || echo BUSY`
+  }
+  return powerShellCommand(
+    [
+      'try {',
+      `Move-Item -LiteralPath ${powerShellLiteral(sourcePath)} -Destination ${powerShellLiteral(destinationPath)} -ErrorAction Stop`,
+      "'MOVED'",
+      `} catch { 'BUSY' }`
+    ].join('; ')
+  )
+}
+
 export function writeRemoteEmptyFileCommand(host: RemoteHostPlatform, remotePath: string): string {
   if (!isWindowsRemoteHost(host)) {
     return `touch ${shellEscape(remotePath)}`
@@ -125,9 +143,9 @@ export function relayLivenessProbeCommand(
 ): string {
   if (!isWindowsRemoteHost(host)) {
     return (
-      `for f in ${shellEscape(dir)}/relay-*.sock ${shellEscape(dir)}/relay.sock; do ` +
-      `[ -S "$f" ] && echo ALIVE && break; ` +
-      'done; true'
+      `state=DEAD; for f in ${shellEscape(dir)}/relay-*.sock ${shellEscape(dir)}/relay.sock; do ` +
+      `[ -S "$f" ] && state=ALIVE && break; ` +
+      'done; echo "$state"'
     )
   }
   if (!windowsOptions) {

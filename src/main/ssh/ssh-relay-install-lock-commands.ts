@@ -18,14 +18,20 @@ export function tryCreateInstallLockCommand(host: RemoteHostPlatform, lockDir: s
   if (!isWindowsRemoteHost(host)) {
     return `mkdir ${shellEscape(lockDir)} 2>&1 && echo OK || echo BUSY`
   }
-  // Why: concurrent New-Item directory calls can both report success in Windows
-  // PowerShell 5.1. FileMode.CreateNew maps to an exclusive Win32 create.
+  // Why: old Orca clients recognize only a directory at `.install-lock`, while
+  // concurrent New-Item calls can both report success in PowerShell 5.1. Keep
+  // that directory marker and arbitrate ownership with an atomic child file.
   return powerShellCommand(
     [
+      `$lock = ${powerShellLiteral(lockDir)}`,
       '$stream = $null',
       'try {',
-      `$stream = [System.IO.File]::Open(${powerShellLiteral(lockDir)}, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)`,
+      "if (Test-Path -LiteralPath $lock) { 'BUSY' } else {",
+      '$null = New-Item -ItemType Directory -Path $lock -ErrorAction Stop',
+      "$owner = Join-Path $lock '.owner'",
+      '$stream = [System.IO.File]::Open($owner, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)',
       "'OK'",
+      '}',
       `} catch { 'BUSY' } finally { if ($null -ne $stream) { $stream.Dispose() } }`
     ].join('; ')
   )
@@ -35,7 +41,8 @@ export function probeInstallLockExistsCommand(host: RemoteHostPlatform, lockPath
   if (!isWindowsRemoteHost(host)) {
     return `test -e ${shellEscape(lockPath)} && echo LOCKED || echo OPEN`
   }
-  // Windows locks are files now, but old Orca versions may leave directories.
+  // Why: one prerelease briefly wrote file locks; accept both shapes so those
+  // hosts remain recoverable after upgrading to directory-plus-owner locks.
   return powerShellCommand(
     `if (Test-Path -LiteralPath ${powerShellLiteral(lockPath)}) { 'LOCKED' } else { 'OPEN' }`
   )
@@ -137,7 +144,7 @@ function windowsStealInstallLockCommand(lockDir: string, staleAfterSeconds: numb
       '$lockTombstone = "$lock.tombstone.$PID.$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())"',
       'Move-Item -LiteralPath $lock -Destination $lockTombstone -ErrorAction Stop',
       '$successorStream = $null',
-      "try { $successorStream = [System.IO.File]::Open($lock, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None); 'OK' } catch { 'BUSY' } finally { if ($null -ne $successorStream) { $successorStream.Dispose() } }",
+      "try { $null = New-Item -ItemType Directory -Path $lock -ErrorAction Stop; $successorOwner = Join-Path $lock '.owner'; $successorStream = [System.IO.File]::Open($successorOwner, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None); 'OK' } catch { 'BUSY' } finally { if ($null -ne $successorStream) { $successorStream.Dispose() } }",
       "} else { 'BUSY' }",
       '}',
       "} catch { 'BUSY' } finally {",

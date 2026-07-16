@@ -21,6 +21,8 @@ import {
   commandWithNodePath,
   listRelayBaseDirsCommand,
   makeRemoteDirectoryCommand,
+  moveRemoteTreeCommand,
+  probeDirectoryExistsCommand,
   probeRelayInstalledCommand,
   readRemoteHomeCommand,
   relayLivenessProbeCommand
@@ -117,7 +119,7 @@ describe('ssh remote command builders', () => {
     expect(probeRelayInstalledCommand(windows, 'C:/Users/me/relay')).toContain('-EncodedCommand')
   })
 
-  it('uses -Path for Windows directory creation and an exclusive file lock', () => {
+  it('uses a legacy-visible Windows lock directory with an exclusive owner file', () => {
     const mkdirScript = decodePowerShellCommand(
       makeRemoteDirectoryCommand(windows, 'C:/Users/me/.orca-remote')
     )
@@ -128,8 +130,29 @@ describe('ssh remote command builders', () => {
     expect(mkdirScript).toContain('New-Item -ItemType Directory -Force -Path')
     expect(lockScript).toContain('[System.IO.FileMode]::CreateNew')
     expect(lockScript).toContain('[System.IO.FileShare]::None')
+    expect(lockScript).toContain('New-Item -ItemType Directory -Path $lock')
+    expect(lockScript).toContain("Join-Path $lock '.owner'")
     expect(mkdirScript).not.toContain('New-Item -ItemType Directory -Force -LiteralPath')
-    expect(lockScript).not.toContain('New-Item -ItemType Directory')
+  })
+
+  it('moves GC candidates to a sibling tombstone with host-native commands', () => {
+    expect(moveRemoteTreeCommand(posix, '/relay/old', '/relay/old.gc-tombstone')).toContain(
+      "mv '/relay/old' '/relay/old.gc-tombstone'"
+    )
+    const windowsScript = decodePowerShellCommand(
+      moveRemoteTreeCommand(windows, 'C:/Users/me/relay/old', 'C:/Users/me/relay/old.gc-tombstone')
+    )
+    expect(windowsScript).toContain('Move-Item -LiteralPath')
+    expect(windowsScript).toContain("-Destination 'C:/Users/me/relay/old.gc-tombstone'")
+    expect(windowsScript).toContain("'MOVED'")
+  })
+
+  it('emits an explicit POSIX liveness result so GC can fail closed', () => {
+    const command = relayLivenessProbeCommand(posix, '/home/u/.orca-remote/relay-0.1.0')
+
+    expect(command).toContain('state=DEAD')
+    expect(command).toContain('[ -S "$f" ] && state=ALIVE')
+    expect(command).toContain('echo "$state"')
   })
 
   it('uses named pipe try-connect liveness for Windows GC', () => {
@@ -225,23 +248,27 @@ describe('ssh remote command builders', () => {
     expect(windowsScript).toContain('finally')
   })
 
-  it.runIf(powerShellExecutable)('emits a parseable Windows stale-lock recovery command', () => {
-    const script = decodePowerShellCommand(
-      tryStealInstallLockCommand(
-        windows,
-        'C:/Users/orca-missing/.orca-remote/relay/.install-lock',
-        20 * 60
+  it.runIf(powerShellExecutable)(
+    'emits a parseable Windows stale-lock recovery command',
+    () => {
+      const script = decodePowerShellCommand(
+        tryStealInstallLockCommand(
+          windows,
+          'C:/Users/orca-missing/.orca-remote/relay/.install-lock',
+          20 * 60
+        )
       )
-    )
-    const result = spawnSync(
-      powerShellExecutable!,
-      ['-NoProfile', '-NonInteractive', '-Command', script],
-      { encoding: 'utf8' }
-    )
+      const result = spawnSync(
+        powerShellExecutable!,
+        ['-NoProfile', '-NonInteractive', '-Command', script],
+        { encoding: 'utf8' }
+      )
 
-    expect(result.status, result.stderr).toBe(0)
-    expect(result.stdout.trim()).toBe('BUSY')
-  })
+      expect(result.status, result.stderr).toBe(0)
+      expect(result.stdout.trim()).toBe('BUSY')
+    },
+    15_000
+  )
 
   it.runIf(powerShell51Executable)(
     'lets only one Windows PowerShell 5.1 caller acquire an install lock',
@@ -255,11 +282,13 @@ describe('ssh remote command builders', () => {
         )
 
         expect(outputs.filter((output) => output.trim().endsWith('OK'))).toHaveLength(1)
-        expect(statSync(lockPath).isFile()).toBe(true)
+        expect(statSync(lockPath).isDirectory()).toBe(true)
+        expect(statSync(join(lockPath, '.owner')).isFile()).toBe(true)
       } finally {
         rmSync(root, { recursive: true, force: true })
       }
-    }
+    },
+    30_000
   )
 
   it.runIf(powerShell51Executable)(
@@ -283,13 +312,15 @@ describe('ssh remote command builders', () => {
         const output = await runPowerShellCommand(powerShell51Executable!, script)
 
         expect(output.trim()).toBe('OK')
-        expect(statSync(lockPath).isFile()).toBe(true)
+        expect(statSync(lockPath).isDirectory()).toBe(true)
+        expect(statSync(join(lockPath, '.owner')).isFile()).toBe(true)
         expect(readdirSync(root).filter((name) => name.includes('.steal.'))).toHaveLength(0)
         expect(readdirSync(root).filter((name) => name.includes('.tombstone.'))).toHaveLength(0)
       } finally {
         rmSync(root, { recursive: true, force: true })
       }
-    }
+    },
+    15_000
   )
 
   it.runIf(powerShell51Executable)(
@@ -310,12 +341,34 @@ describe('ssh remote command builders', () => {
         )
 
         expect(outputs.filter((output) => output.trim().endsWith('OK'))).toHaveLength(1)
-        expect(statSync(lockPath).isFile()).toBe(true)
+        expect(statSync(lockPath).isDirectory()).toBe(true)
+        expect(statSync(join(lockPath, '.owner')).isFile()).toBe(true)
         expect(readdirSync(root).filter((name) => name.includes('.tombstone.'))).toHaveLength(0)
       } finally {
         rmSync(root, { recursive: true, force: true })
       }
-    }
+    },
+    30_000
+  )
+
+  it.runIf(powerShellExecutable)(
+    'keeps a new Windows lock visible to the previous directory-only GC probe',
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-install-lock-windows-compat-'))
+      try {
+        const lockPath = join(root, '.install-lock')
+        const acquire = decodePowerShellCommand(tryCreateInstallLockCommand(windows, lockPath))
+        const legacyProbe = decodePowerShellCommand(probeDirectoryExistsCommand(windows, lockPath))
+
+        await expect(runPowerShellCommand(powerShellExecutable!, acquire)).resolves.toMatch(/OK/)
+        await expect(runPowerShellCommand(powerShellExecutable!, legacyProbe)).resolves.toMatch(
+          /LOCKED/
+        )
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    },
+    15_000
   )
 
   it.runIf(process.platform !== 'win32')(

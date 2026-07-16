@@ -25,6 +25,11 @@ import {
 } from './ssh-relay-versioned-install'
 import { acquireInstallLock } from './ssh-relay-install-lock'
 import { tryAcquireRelayRepairLock } from './ssh-relay-repair-lock'
+import {
+  releaseRelayGcClaimWithRetry,
+  tryAcquireRelayGcClaim,
+  waitForRelayGcClaimRelease
+} from './ssh-relay-gc-claim'
 import { NATIVE_DEPS_COMMAND_TIMEOUT_MS, RELAY_DEPLOY_TIMEOUT_MS } from './ssh-relay-deploy-timing'
 import { createSshOperationAbortError, shellEscape } from './ssh-connection-utils'
 import {
@@ -71,6 +76,15 @@ export type RelayDeployResult = {
   remoteRelayDir?: string
   nodePath?: string
   sockPath?: string
+}
+
+class RelayDirectoryGcConflictError extends Error {
+  constructor(
+    readonly remoteRelayDir: string,
+    readonly hostPlatform: RemoteHostPlatform
+  ) {
+    super(`Relay directory GC is in progress at ${remoteRelayDir}`)
+  }
 }
 
 function execHostCommand(
@@ -261,6 +275,34 @@ async function deployAndLaunchRelayInner(
   relayInstanceId?: string,
   deploySignal?: AbortSignal
 ): Promise<RelayDeployResult> {
+  while (true) {
+    deploySignal?.throwIfAborted()
+    try {
+      return await deployAndLaunchRelayAttempt(
+        conn,
+        onProgress,
+        graceTimeSeconds,
+        relayInstanceId,
+        deploySignal
+      )
+    } catch (err) {
+      if (!(err instanceof RelayDirectoryGcConflictError)) {
+        throw err
+      }
+      // Why: GC atomically moves the old install aside. Wait for its stable
+      // sibling claim to clear, then recompute install state from scratch.
+      await waitForRelayGcClaimRelease(conn, err.remoteRelayDir, err.hostPlatform, deploySignal)
+    }
+  }
+}
+
+async function deployAndLaunchRelayAttempt(
+  conn: SshConnection,
+  onProgress?: (status: string) => void,
+  graceTimeSeconds?: number,
+  relayInstanceId?: string,
+  deploySignal?: AbortSignal
+): Promise<RelayDeployResult> {
   onProgress?.('Detecting remote platform...')
   console.log('[ssh-relay] Detecting remote platform...')
   const hostPlatform = await detectRemoteHostPlatform(conn, { signal: deploySignal })
@@ -297,8 +339,10 @@ async function deployAndLaunchRelayInner(
   console.log(`[ssh-relay] Remote dir: ${remoteRelayDir}`)
   console.log(`[ssh-relay] Already installed at ${fullVersion}: ${alreadyInstalled}`)
 
+  let ownsInstallLock = false
+  let launchGcClaimToken: string | undefined
   if (alreadyInstalled) {
-    await repairInstalledNativeDeps(
+    const launchFence = await repairInstalledNativeDeps(
       conn,
       remoteRelayDir,
       platform,
@@ -306,12 +350,15 @@ async function deployAndLaunchRelayInner(
       nodePath,
       deploySignal
     )
+    ownsInstallLock = launchFence.ownsInstallLock
+    launchGcClaimToken = launchFence.gcClaimToken
     deploySignal?.throwIfAborted()
   } else {
     // Why: serialize concurrent first-installs of the same version against
     // each other via a host-native exclusive lock. The losing caller polls and either
     // re-checks `alreadyInstalled` (now true) or steals a stale lock.
     await acquireInstallLock(conn, remoteRelayDir, hostPlatform, { signal: deploySignal })
+    ownsInstallLock = true
     try {
       // Re-probe after acquiring the lock — a sibling installer may have
       // finished while we were waiting.
@@ -337,12 +384,12 @@ async function deployAndLaunchRelayInner(
         )
         console.log('[ssh-relay] Native deps installed')
 
-        // Why: write `.install-complete` BEFORE releasing the lock so a
-        // sibling never observes the dir as "complete but locked", which
-        // would lead GC to skip a recoverable dir indefinitely.
-        await finalizeInstall(conn, remoteRelayDir, hostPlatform, { signal: deploySignal })
-      } else {
-        await abandonInstall(conn, remoteRelayDir, hostPlatform)
+        // Why: mark complete but retain the lock until launch makes daemon
+        // liveness observable to cross-version GC.
+        await finalizeInstall(conn, remoteRelayDir, hostPlatform, {
+          signal: deploySignal,
+          releaseLock: false
+        })
       }
     } catch (err) {
       // Why: leave a partial install dir in place (no `.install-complete`)
@@ -351,23 +398,41 @@ async function deployAndLaunchRelayInner(
       // recovery is safer than overlapping a still-running npm process.
       if (!isUnconfirmedSshCommandTermination(err)) {
         await abandonInstall(conn, remoteRelayDir, hostPlatform)
+        ownsInstallLock = false
       }
       throw err
     }
   }
 
-  deploySignal?.throwIfAborted()
-  onProgress?.('Starting relay...')
-  console.log('[ssh-relay] Launching relay...')
-  const launched = await launchRelay(
-    conn,
-    remoteRelayDir,
-    hostPlatform,
-    nodePath,
-    graceTimeSeconds,
-    relayInstanceId,
-    deploySignal
-  )
+  let launched: Awaited<ReturnType<typeof launchRelay>>
+  let launchLivenessObserved = false
+  try {
+    deploySignal?.throwIfAborted()
+    onProgress?.('Starting relay...')
+    console.log('[ssh-relay] Launching relay...')
+    launched = await launchRelay(
+      conn,
+      remoteRelayDir,
+      hostPlatform,
+      nodePath,
+      graceTimeSeconds,
+      relayInstanceId,
+      deploySignal
+    )
+    launchLivenessObserved = true
+  } finally {
+    // Why: older clients understand only the install lock. If launch never
+    // becomes live, retain it for stale recovery so their GC cannot race a
+    // concurrent caller that was waiting behind this owner.
+    if (ownsInstallLock && launchLivenessObserved) {
+      await abandonInstall(conn, remoteRelayDir, hostPlatform)
+    }
+    // The detached start may outlive a timed-out SSH command. Preserve either
+    // fence on failed launch until stale recovery can prove the handoff ended.
+    if (launchGcClaimToken && launchLivenessObserved) {
+      await releaseRelayGcClaimWithRetry(conn, remoteRelayDir, launchGcClaimToken, hostPlatform)
+    }
+  }
   console.log('[ssh-relay] Relay started successfully')
 
   // Why: best-effort cleanup of unreferenced sibling version dirs. Errors
@@ -555,9 +620,44 @@ async function repairInstalledNativeDeps(
   hostPlatform: RemoteHostPlatform,
   nodePath: string,
   signal?: AbortSignal
-): Promise<void> {
-  if ((await probeRequiredNativeDeps(conn, remoteDir, hostPlatform, nodePath, signal)).available) {
-    return
+): Promise<{ ownsInstallLock: boolean; gcClaimToken?: string }> {
+  const initialProbe = await probeRequiredNativeDeps(
+    conn,
+    remoteDir,
+    hostPlatform,
+    nodePath,
+    signal
+  )
+  const lockResult = await tryAcquireRelayRepairLock(conn, remoteDir, hostPlatform, { signal })
+  if (lockResult === 'gc') {
+    throw new RelayDirectoryGcConflictError(remoteDir, hostPlatform)
+  }
+  if (lockResult === 'acquired') {
+    let stillInstalled: boolean
+    try {
+      stillInstalled = await isRelayAlreadyInstalled(conn, remoteDir, hostPlatform, {
+        rethrowSessionLimitErrors: true,
+        signal
+      })
+    } catch (err) {
+      await abandonInstall(conn, remoteDir, hostPlatform)
+      throw err
+    }
+    if (!stillInstalled) {
+      // Why: GC may finish its rename before our lock attempt recreates the
+      // original path. Never trust probes made before this locked recheck.
+      await abandonInstall(conn, remoteDir, hostPlatform)
+      throw new RelayDirectoryGcConflictError(remoteDir, hostPlatform)
+    }
+  }
+  const gcClaimToken =
+    lockResult === 'busy' || lockResult === 'error'
+      ? await acquireRelayLaunchGcFence(conn, remoteDir, hostPlatform, signal)
+      : undefined
+  if (initialProbe.available) {
+    // Why: even a healthy reconnect must stay fenced until launch liveness is
+    // observable; otherwise cross-version GC can rename after this probe.
+    return { ownsInstallLock: lockResult === 'acquired', gcClaimToken }
   }
 
   // Why: an already-installed relay can launch in degraded mode (fs/git/preflight
@@ -566,9 +666,11 @@ async function repairInstalledNativeDeps(
   // this path used require.resolve (which passed for a present-but-unloadable
   // binding), so a fatal repair here would be a straight regression.
   console.warn(`[ssh-relay] Repairing missing native deps at ${remoteDir}`)
-  if (!(await tryAcquireRelayRepairLock(conn, remoteDir, hostPlatform, { signal }))) {
-    console.warn(`[ssh-relay] Native-deps repair lock is busy at ${remoteDir}; launching degraded`)
-    return
+  if (lockResult === 'busy' || lockResult === 'error') {
+    console.warn(
+      `[ssh-relay] Native-deps repair lock is ${lockResult} at ${remoteDir}; launching degraded`
+    )
+    return { ownsInstallLock: false, gcClaimToken }
   }
   try {
     // Why: older complete relay dirs were created before @parcel/watcher was
@@ -584,21 +686,49 @@ async function repairInstalledNativeDeps(
         signal,
         probe.missing
       )
-      await finalizeInstall(conn, remoteDir, hostPlatform, { signal })
-    } else {
-      await abandonInstall(conn, remoteDir, hostPlatform)
+      await finalizeInstall(conn, remoteDir, hostPlatform, { signal, releaseLock: false })
     }
+    return { ownsInstallLock: true }
   } catch (err) {
-    // Release the lock and fall through to a degraded launch. The next reconnect
-    // retries, so a transient failure (offline registry) self-heals.
-    if (!isUnconfirmedSshCommandTermination(err)) {
-      await abandonInstall(conn, remoteDir, hostPlatform)
-    }
+    const terminationUnconfirmed = isUnconfirmedSshCommandTermination(err)
+    // Why: keep a confirmed-failure lock through degraded launch so GC cannot
+    // move the relay before liveness is visible. Unconfirmed remote mutation
+    // keeps its stale-recoverable lock beyond this connection.
     console.warn(
       `[ssh-relay] Native deps repair failed at ${remoteDir}; launching degraded: ${
         err instanceof Error ? err.message : String(err)
       }`
     )
+    return { ownsInstallLock: !terminationUnconfirmed }
+  }
+}
+
+async function acquireRelayLaunchGcFence(
+  conn: SshConnection,
+  remoteDir: string,
+  hostPlatform: RemoteHostPlatform,
+  signal?: AbortSignal
+): Promise<string> {
+  const token = await tryAcquireRelayGcClaim(conn, remoteDir, hostPlatform, signal)
+  if (!token) {
+    signal?.throwIfAborted()
+    throw new RelayDirectoryGcConflictError(remoteDir, hostPlatform)
+  }
+  try {
+    signal?.throwIfAborted()
+    const stillInstalled = await isRelayAlreadyInstalled(conn, remoteDir, hostPlatform, {
+      rethrowSessionLimitErrors: true,
+      signal
+    })
+    if (!stillInstalled) {
+      throw new RelayDirectoryGcConflictError(remoteDir, hostPlatform)
+    }
+    // Why: a caller that cannot own the install lock still needs its own
+    // durable fence; never borrow another connection's lock through launch.
+    return token
+  } catch (err) {
+    await releaseRelayGcClaimWithRetry(conn, remoteDir, token, hostPlatform)
+    throw err
   }
 }
 

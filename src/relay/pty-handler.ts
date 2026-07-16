@@ -289,6 +289,7 @@ export class PtyHandler {
   private worktreeRemovalCoordinator: RelayPtyWorktreeRemovalCoordinator | null = null
   private disposePromise: Promise<void> | null = null
   private ptyModule: typeof NodePty | null = null
+  private ptyModuleLoadPromise: Promise<typeof NodePty | null> | null = null
   private reloadPtyModuleFromDisk = false
   // Why: external observers need to drop per-pane state when a PTY exits.
   // Today the relay composes multiple consumers (hook-server cache eviction
@@ -314,6 +315,18 @@ export class PtyHandler {
     if (this.ptyModule) {
       return this.ptyModule
     }
+    if (this.ptyModuleLoadPromise) {
+      return this.ptyModuleLoadPromise
+    }
+    this.ptyModuleLoadPromise = this.loadPtyUncached()
+    try {
+      return await this.ptyModuleLoadPromise
+    } finally {
+      this.ptyModuleLoadPromise = null
+    }
+  }
+
+  private async loadPtyUncached(): Promise<typeof NodePty | null> {
     if (!this.reloadPtyModuleFromDisk) {
       try {
         this.ptyModule = await import('node-pty')
@@ -322,7 +335,9 @@ export class PtyHandler {
         this.reloadPtyModuleFromDisk = true
       }
     }
-    const moduleEntry = join(process.cwd(), 'node_modules', 'node-pty', 'lib', 'index.js')
+    // Why: the relay is launched from its install dir today, but module
+    // resolution must remain tied to the deployed bundle rather than cwd.
+    const moduleEntry = join(__dirname, 'node_modules', 'node-pty', 'lib', 'index.js')
     if (!existsSync(moduleEntry)) {
       return null
     }
@@ -337,7 +352,7 @@ export class PtyHandler {
   private invalidatePtyModuleAfterBindingFailure(): void {
     this.ptyModule = null
     this.reloadPtyModuleFromDisk = true
-    const moduleRoot = join(process.cwd(), 'node_modules', 'node-pty')
+    const moduleRoot = join(__dirname, 'node_modules', 'node-pty')
     for (const cachedPath of Object.keys(require.cache)) {
       if (isPathInsideOrEqual(moduleRoot, cachedPath)) {
         delete require.cache[cachedPath]

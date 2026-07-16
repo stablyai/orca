@@ -1,8 +1,10 @@
 import type { SshConnection } from './ssh-connection'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { RELAY_DEPLOY_TIMEOUT_MS } from './ssh-relay-deploy-timing'
+import { isRelayGcClaimed, waitForRelayGcClaimRelease } from './ssh-relay-gc-claim'
 import {
   acquireInstallLockParentCommand,
+  lockAgeSecondsCommand,
   tryCreateInstallLockCommand,
   tryStealInstallLockCommand
 } from './ssh-relay-install-lock-commands'
@@ -11,6 +13,7 @@ import {
   joinRemotePath,
   type RemoteHostPlatform
 } from './ssh-remote-platform'
+import { removeRemoteTreeCommand } from './ssh-remote-commands'
 
 export const RELAY_INSTALL_LOCK_NAME = '.install-lock'
 
@@ -40,10 +43,26 @@ function execHostCommand(
   })
 }
 
+export async function isRelayInstallLockStale(
+  conn: SshConnection,
+  lockDir: string,
+  host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
+): Promise<boolean> {
+  try {
+    // Why: remote time avoids clock skew between Orca clients making a live
+    // repair lock look old enough for GC or another installer to recover.
+    const out = await execHostCommand(conn, host, lockAgeSecondsCommand(host, lockDir))
+    const ageSec = Number.parseInt(out.trim(), 10)
+    return Number.isFinite(ageSec) && ageSec >= 0 && ageSec * 1000 > INSTALL_LOCK_STALE_MS
+  } catch {
+    return false
+  }
+}
+
 /**
  * Acquire the per-version install lock via a host-native exclusive create.
- * Why: POSIX mkdir and Windows FileMode.CreateNew each give one winner without
- * polling state locally.
+ * Why: POSIX mkdir and a Windows directory plus atomic owner file each give
+ * one winner while keeping the marker visible to older Windows Orca clients.
  */
 export async function acquireInstallLock(
   conn: SshConnection,
@@ -52,19 +71,35 @@ export async function acquireInstallLock(
   options?: { signal?: AbortSignal }
 ): Promise<void> {
   const lockDir = joinRemotePath(host, remoteRelayDir, RELAY_INSTALL_LOCK_NAME)
-  await execHostCommand(conn, host, acquireInstallLockParentCommand(host, remoteRelayDir), {
-    signal: options?.signal
-  })
 
   const start = Date.now()
   let lastStaleCheckAt = Number.NEGATIVE_INFINITY
   while (true) {
+    // Why: a crashed GC can leave the stable sibling claim behind. The shared
+    // waiter recovers stale claims instead of polling that orphan forever.
+    await waitForRelayGcClaimRelease(conn, remoteRelayDir, host, options?.signal)
+    options?.signal?.throwIfAborted()
+    await execHostCommand(conn, host, acquireInstallLockParentCommand(host, remoteRelayDir), {
+      signal: options?.signal
+    })
     try {
       const result = await execHostCommand(conn, host, tryCreateInstallLockCommand(host, lockDir), {
         signal: options?.signal
       })
       if (result.trim().endsWith('OK')) {
-        return
+        // Why: GC may claim the sibling path between our first probe and lock
+        // creation. Recheck while holding the in-tree lock; one side backs off.
+        const claimedAfterAcquire = await isRelayGcClaimed(
+          conn,
+          remoteRelayDir,
+          host,
+          options?.signal
+        ).catch(() => true)
+        if (!claimedAfterAcquire && !options?.signal?.aborted) {
+          return
+        }
+        await execHostCommand(conn, host, removeRemoteTreeCommand(host, lockDir)).catch(() => {})
+        options?.signal?.throwIfAborted()
       }
     } catch {
       options?.signal?.throwIfAborted()
@@ -84,7 +119,17 @@ export async function acquireInstallLock(
       options?.signal?.throwIfAborted()
       if (steal.trim().endsWith('OK')) {
         console.warn(`[ssh-relay] Stealing stale install lock at ${lockDir}`)
-        return
+        const claimedAfterSteal = await isRelayGcClaimed(
+          conn,
+          remoteRelayDir,
+          host,
+          options?.signal
+        ).catch(() => true)
+        if (!claimedAfterSteal && !options?.signal?.aborted) {
+          return
+        }
+        await execHostCommand(conn, host, removeRemoteTreeCommand(host, lockDir)).catch(() => {})
+        options?.signal?.throwIfAborted()
       }
     }
     if (Date.now() - start >= INSTALL_LOCK_TIMEOUT_MS) {

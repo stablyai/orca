@@ -68,7 +68,7 @@ vi.mock('./ssh-relay-install-lock', () => ({
 }))
 
 vi.mock('./ssh-relay-repair-lock', () => ({
-  tryAcquireRelayRepairLock: vi.fn().mockResolvedValue(true)
+  tryAcquireRelayRepairLock: vi.fn().mockResolvedValue('acquired')
 }))
 
 vi.mock('./ssh-connection-utils', () => ({
@@ -322,7 +322,10 @@ describe('deployAndLaunchRelay', () => {
 
     await deployAndLaunchRelay(conn)
 
-    expect(isRelayAlreadyInstalled).toHaveBeenCalledTimes(2)
+    expect(isRelayAlreadyInstalled).toHaveBeenCalledTimes(3)
+    expect(vi.mocked(isRelayAlreadyInstalled).mock.calls[2]?.[3]).toMatchObject({
+      rethrowSessionLimitErrors: true
+    })
     expect(resolveRemoteNodePath).toHaveBeenCalledTimes(2)
   })
 
@@ -349,13 +352,16 @@ describe('deployAndLaunchRelay', () => {
 
     await deployAndLaunchRelay(conn)
 
-    expect(isRelayAlreadyInstalled).toHaveBeenCalledTimes(2)
+    expect(isRelayAlreadyInstalled).toHaveBeenCalledTimes(3)
     expect(vi.mocked(isRelayAlreadyInstalled).mock.calls[0]?.[3]).toMatchObject({
       rethrowSessionLimitErrors: true
     })
     expect(vi.mocked(isRelayAlreadyInstalled).mock.calls[1]?.[3]).toMatchObject({
       rethrowSessionLimitErrors: undefined,
       signal: expect.any(AbortSignal)
+    })
+    expect(vi.mocked(isRelayAlreadyInstalled).mock.calls[2]?.[3]).toMatchObject({
+      rethrowSessionLimitErrors: true
     })
     expect(resolveRemoteNodePath).toHaveBeenCalledTimes(2)
   })

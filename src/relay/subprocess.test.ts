@@ -83,6 +83,22 @@ function waitForChildExit(
   })
 }
 
+function writeMockNodePty(root: string, source: string, withPackageEntry = false): void {
+  const nodePtyDir = path.join(root, 'node_modules', 'node-pty')
+  const libDir = path.join(nodePtyDir, 'lib')
+  mkdirSync(libDir, { recursive: true })
+  if (withPackageEntry) {
+    writeFileSync(path.join(nodePtyDir, 'package.json'), '{"main":"lib/index.js"}\n')
+  }
+  writeFileSync(path.join(libDir, 'index.js'), source)
+}
+
+const WORKING_NODE_PTY_MODULE = `module.exports = { spawn() { return {
+  pid: process.pid,
+  process: 'mock-shell',
+  onData() {}, onExit() {}, write() {}, resize() {}, kill() {}, clear() {}
+} } }\n`
+
 describe('Subprocess: Relay entry point', () => {
   let relay: RelayProcess | null = null
   let tmpDir: string
@@ -123,21 +139,36 @@ describe('Subprocess: Relay entry point', () => {
     const failed = await relay.waitForResponse(failedId)
     expect(failed.error?.message).toContain('node-pty is not available')
 
-    const nodePtyDir = path.join(tmpDir, 'node_modules', 'node-pty')
-    mkdirSync(nodePtyDir, { recursive: true })
-    writeFileSync(
-      path.join(nodePtyDir, 'index.js'),
-      `module.exports = { spawn() { return {
-        pid: process.pid,
-        process: 'mock-shell',
-        onData() {}, onExit() {}, write() {}, resize() {}, kill() {}, clear() {}
-      } } }\n`
-    )
+    writeMockNodePty(tmpDir, WORKING_NODE_PTY_MODULE)
 
     const repairedId = relay.send('pty.spawn', { cols: 80, rows: 24 })
     const repaired = await relay.waitForResponse(repairedId)
     expect(repaired.error).toBeUndefined()
     expect(repaired.result).toMatchObject({ id: 'pty-1' })
+  }, 10_000)
+
+  it('reloads node-pty after a late native binding failure without restarting', async () => {
+    tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-native-late-repair-'))
+    const repairedRelayEntry = path.join(tmpDir, 'relay.js')
+    copyFileSync(relayEntry, repairedRelayEntry)
+    writeMockNodePty(
+      tmpDir,
+      `module.exports = { spawn() { throw new Error('Failed to load native module: conpty.node, checked: prebuilds/win32-x64') } }\n`,
+      true
+    )
+
+    relay = spawnRelay(repairedRelayEntry)
+    await relay.sentinelReceived
+
+    const failedId = relay.send('pty.spawn', { cols: 80, rows: 24 })
+    const failed = await relay.waitForResponse(failedId)
+    expect(failed.error?.message).toContain('node-pty is not available')
+
+    writeMockNodePty(tmpDir, WORKING_NODE_PTY_MODULE, true)
+    const repairedId = relay.send('pty.spawn', { cols: 80, rows: 24 })
+    const repaired = await relay.waitForResponse(repairedId)
+    expect(repaired.error).toBeUndefined()
+    expect(repaired.result).toMatchObject({ id: 'pty-2' })
   }, 10_000)
 
   it('responds to fs.stat over stdin/stdout', async () => {
