@@ -3200,6 +3200,7 @@ export class Store {
             // Why: persisted settings can be user-edited or written by older
             // builds; keep tray-minimize false unless the stored value is true.
             minimizeToTrayOnClose: parsed.settings?.minimizeToTrayOnClose === true,
+            minimizeToTrayOnMinimize: parsed.settings?.minimizeToTrayOnMinimize === true,
             uiLanguage: normalizeUiLanguage(parsed.settings?.uiLanguage),
             defaultTaskSource: taskProviderSettings.defaultTaskSource,
             visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
@@ -5264,6 +5265,9 @@ export class Store {
     // truthy non-bool that later reads as "tray-minimize on".
     if ('minimizeToTrayOnClose' in updates) {
       sanitizedUpdates.minimizeToTrayOnClose = updates.minimizeToTrayOnClose === true
+    }
+    if ('minimizeToTrayOnMinimize' in updates) {
+      sanitizedUpdates.minimizeToTrayOnMinimize = updates.minimizeToTrayOnMinimize === true
     }
     if ('disabledTuiAgents' in updates) {
       sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)

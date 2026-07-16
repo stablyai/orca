@@ -2599,6 +2599,9 @@ export type GlobalSettings = {
    *  system tray instead of quitting Orca; off keeps the default quit-on-close.
    *  The tray icon itself is always present on Windows regardless of this flag. */
   minimizeToTrayOnClose?: boolean
+  /** Why: Windows-only. When on, minimizing the window hides it from the taskbar
+   *  while Orca continues running in the system tray. */
+  minimizeToTrayOnMinimize?: boolean
   /** Why: Windows terminals conventionally use right-click as a paste gesture,
    *  while macOS/Linux default to their existing context menu behavior. */
   terminalRightClickToPaste: boolean

@@ -266,6 +266,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalFocusFollowsMouse: false,
     windowBackgroundBlur: false,
     minimizeToTrayOnClose: false,
+    minimizeToTrayOnMinimize: false,
     terminalClipboardOnSelect: false,
     // Why: OSC 52 is a classic data-exfiltration vector (any process piping
     // untrusted output into the terminal can rewrite the clipboard). Keep the

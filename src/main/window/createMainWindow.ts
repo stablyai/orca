@@ -1024,19 +1024,20 @@ export function createMainWindow(
   let windowCloseConfirmed = false
   const confirmCloseChannel = 'window:confirm-close'
 
-  // Why: Windows minimize-to-tray. Hides the window instead of closing when the
-  // setting is on, this isn't a real quit (Ctrl+Q / tray "Quit" set
-  // getIsQuitting), and the renderer is alive. Returns true when it handled the
-  // close by hiding, so callers skip their normal close path. Shared by BOTH the
-  // renderer-drawn X (window:request-close) and the native close event (Alt+F4).
-  const hideToTrayIfEnabled = (): boolean => {
+  // Why: Windows minimize-to-tray. Hides before renderer-driven minimize and
+  // after native minimize when the setting is on, this isn't a real quit
+  // (Ctrl+Q / tray "Quit" set getIsQuitting), and the renderer is alive.
+  // Shared by the renderer-drawn X, native close, and native minimize paths.
+  const hideToTrayIfEnabled = (
+    setting: 'minimizeToTrayOnClose' | 'minimizeToTrayOnMinimize'
+  ): boolean => {
     const isRendererCrashed = mainWindow.webContents.isCrashed?.() ?? false
     if (
       process.platform !== 'win32' ||
       rendererProcessGone ||
       isRendererCrashed ||
       opts?.getIsQuitting?.() === true ||
-      store?.getSettings().minimizeToTrayOnClose !== true
+      store?.getSettings()[setting] !== true
     ) {
       return false
     }
@@ -1060,10 +1061,16 @@ export function createMainWindow(
     return true
   }
 
+  // Why: Electron emits this after native minimization, covering OS and
+  // programmatic minimize routes that bypass the renderer IPC pre-check.
+  mainWindow.on('minimize', () => {
+    hideToTrayIfEnabled('minimizeToTrayOnMinimize')
+  })
+
   mainWindow.on('close', (e) => {
     // Why: Alt+F4 and programmatic closes reach the native event; apply the same
     // minimize-to-tray guard the renderer-drawn X uses via onRequestClose.
-    if (!windowCloseConfirmed && hideToTrayIfEnabled()) {
+    if (!windowCloseConfirmed && hideToTrayIfEnabled('minimizeToTrayOnClose')) {
       e.preventDefault()
       return
     }
@@ -1129,9 +1136,10 @@ export function createMainWindow(
   // replicate the native title bar buttons hidden by custom chrome.
   const minimizeChannel = 'window:minimize'
   const onMinimize = (): void => {
-    if (!mainWindow.isDestroyed()) {
-      mainWindow.minimize()
+    if (mainWindow.isDestroyed() || hideToTrayIfEnabled('minimizeToTrayOnMinimize')) {
+      return
     }
+    mainWindow.minimize()
   }
   const maximizeChannel = 'window:maximize'
   const onMaximize = (): void => {
@@ -1160,7 +1168,7 @@ export function createMainWindow(
     // Why: the renderer-drawn X on Windows routes here (not the native close
     // event), so the minimize-to-tray guard must run on this path too — hide
     // instead of asking the renderer to close.
-    if (hideToTrayIfEnabled()) {
+    if (hideToTrayIfEnabled('minimizeToTrayOnClose')) {
       return
     }
     mainWindow.webContents.send('window:close-requested', { isQuitting: false })

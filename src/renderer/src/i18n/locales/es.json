@@ -5005,6 +5005,8 @@
           "872af9556e": "Bandeja del sistema",
           "2edf606c46": "Minimizar a la bandeja al cerrar",
           "b707773a0d": "Cuando está activado, cerrar la ventana mantiene Orca en ejecución en la bandeja del sistema en lugar de salir.",
+          "minimizeToTrayOnMinimize": "Minimizar a la bandeja al minimizar",
+          "minimizeToTrayOnMinimizeDescription": "Cuando está activado, minimizar la ventana oculta Orca de la barra de tareas y mantiene Orca en ejecución en la bandeja del sistema.",
           "interfaceDefaultFont": "Fuente predeterminada",
           "terminalDefaultFont": "Fuente predeterminada",
           "interfaceTitle": "Interfaz",

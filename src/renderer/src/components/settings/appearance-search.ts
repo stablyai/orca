@@ -227,6 +227,17 @@ const getSystemTrayEntryCatalog = createLocalizedCatalog((): SettingsSearchEntry
         { englishOnly: true }
       )
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.AppearancePane.minimizeToTrayOnMinimize',
+      'Minimize to Tray on Minimize'
+    ),
+    description: translate(
+      'auto.components.settings.AppearancePane.minimizeToTrayOnMinimizeDescription',
+      'When enabled, minimizing the window hides Orca from the taskbar while keeping it running in the system tray.'
+    ),
+    keywords: ['tray', 'system tray', 'minimize', 'taskbar', 'background']
   }
 ])
 

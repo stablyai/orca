@@ -4990,6 +4990,8 @@
           "872af9556e": "系统托盘",
           "2edf606c46": "关闭时最小化到托盘",
           "b707773a0d": "启用后，关闭窗口会让 Orca 继续在系统托盘中运行，而不是退出。",
+          "minimizeToTrayOnMinimize": "最小化时最小化到托盘",
+          "minimizeToTrayOnMinimizeDescription": "启用后，最小化窗口会将 Orca 从任务栏隐藏，同时继续在系统托盘中运行。",
           "interfaceDefaultFont": "默认字体",
           "terminalDefaultFont": "默认字体",
           "interfaceTitle": "界面",
