@@ -163,7 +163,11 @@ import {
   type KeybindingContext,
   type PhysicalModifierToken
 } from '../../shared/keybindings'
-import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
+import {
+  isRuntimeOwnedSshTargetId,
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
@@ -1000,7 +1004,13 @@ function App(): React.JSX.Element {
           // tabs through pty.attach on the relay. Passphrase-protected targets
           // are deferred to tab focus to avoid stacking credential dialogs at
           // startup before the user has context.
-          const connectionIds = sessionRead.session.activeConnectionIdsAtShutdown ?? []
+          // Why: runtime-owned (ephemeral-VM) targets must never be dialed from
+          // the renderer — ssh.connect would dispose the runtime layer's live
+          // relay session. Main's windowless-promotion path can persist such
+          // ids into this list, so filter at the consumption boundary too.
+          const connectionIds = (sessionRead.session.activeConnectionIdsAtShutdown ?? []).filter(
+            (targetId) => !isRuntimeOwnedSshTargetId(targetId)
+          )
           if (connectionIds.length > 0) {
             try {
               const SSH_RECONNECT_TIMEOUT_MS = 15_000
