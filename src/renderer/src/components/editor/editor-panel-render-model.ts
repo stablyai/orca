@@ -64,6 +64,9 @@ export function getEditorPanelRenderModel({
   // to a plain source rendering here.
   const rawReadOnly = activeFile.mode === 'edit' && activeFile.readOnly === true
   const viewerLanguage = rawReadOnly ? 'plaintext' : resolvedLanguage
+  const isMarkdownFile =
+    !rawReadOnly && (viewerLanguage === 'markdown' || /\.markdown$/i.test(activeFile.relativePath))
+  const markdownLanguage = isMarkdownFile ? 'markdown' : viewerLanguage
   const worktreeEntries = gitStatusEntries ?? []
   const branchEntries = gitBranchEntries ?? []
   const matchingWorktreeEntry =
@@ -86,22 +89,24 @@ export function getEditorPanelRenderModel({
     matchingWorktreeEntry,
     matchingBranchEntry
   )
+  const changesDiff = diffContents?.[activeFile.id]
+  const canRenderMarkdownDiffPreview =
+    changesDiff?.kind === 'text' && changesDiff.largeDiffRenderLimit?.limited !== true
   const baseMarkdownViewModes = getMarkdownViewModes({
-    language: viewerLanguage,
+    language: markdownLanguage,
     mode: activeFile.mode,
     diffSource: activeFile.diffSource
   })
-  const changesDiff = diffContents?.[activeFile.id]
   const markdownViewModes =
-    isChangesMode &&
-    viewerLanguage === 'markdown' &&
-    changesDiff?.kind === 'text' &&
-    changesDiff.largeDiffRenderLimit?.limited !== true
+    isChangesMode && isMarkdownFile && canRenderMarkdownDiffPreview
       ? [...baseMarkdownViewModes, ...(['preview'] as const)]
-      : baseMarkdownViewModes
+      : baseMarkdownViewModes.filter(
+          (mode) =>
+            mode !== 'preview' || (activeFile.mode !== 'diff' && canRenderMarkdownDiffPreview)
+        )
   const hasViewModeToggle = markdownViewModes.length > 0
   const defaultMarkdownViewMode = getDefaultMarkdownViewMode({
-    language: viewerLanguage,
+    language: markdownLanguage,
     mode: activeFile.mode,
     diffSource: activeFile.diffSource
   })
@@ -113,7 +118,7 @@ export function getEditorPanelRenderModel({
       ? storedMarkdownViewMode
       : defaultMarkdownViewMode
   const editorToggleModes = getEditorToggleModes({
-    language: viewerLanguage,
+    language: markdownLanguage,
     mode: activeFile.mode,
     diffSource: activeFile.diffSource,
     isChangesMode: markdownViewModes.includes('preview')
@@ -163,7 +168,7 @@ export function getEditorPanelRenderModel({
     worktreeEntries,
     resolvedLanguage,
     openFileState,
-    isMarkdown: viewerLanguage === 'markdown',
+    isMarkdown: isMarkdownFile,
     isMermaid: viewerLanguage === 'mermaid',
     isCsv: viewerLanguage === 'csv' || viewerLanguage === 'tsv',
     isNotebook: viewerLanguage === 'notebook',
@@ -182,10 +187,9 @@ export function getEditorPanelRenderModel({
     shouldShowMarkdownExportAction,
     canExportMarkdownToPdf,
     canShowMarkdownTableOfContents:
-      viewerLanguage === 'markdown' &&
-      (hasViewModeToggle || activeFile.mode === 'markdown-preview'),
+      isMarkdownFile && (hasViewModeToggle || activeFile.mode === 'markdown-preview'),
     canShowMarkdownPreview: canOpenMarkdownPreview({
-      language: viewerLanguage,
+      language: markdownLanguage,
       mode: activeFile.mode,
       diffSource: activeFile.diffSource
     })

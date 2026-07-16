@@ -4459,13 +4459,16 @@ function SourceControlInner(): React.JSX.Element {
       // staged content is not what the editor would be editing. Non-markdown
       // files keep the existing diff-tab flow until the diff-tab type is
       // eventually collapsed (see reviews/changes-view-mode-plan.md §"Follow-up").
-      if (language === 'markdown' && entry.area === 'unstaged') {
+      if (
+        (language === 'markdown' || /\.markdown$/i.test(entry.path)) &&
+        entry.area === 'unstaged'
+      ) {
         openFile(
           {
             filePath,
             relativePath: entry.path,
             worktreeId: activeWorktreeId,
-            language,
+            language: 'markdown',
             mode: 'edit'
           },
           { targetGroupId, preview: openAsPreview }
