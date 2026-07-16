@@ -277,19 +277,17 @@ function normalizeManualEnvironments(store: RuntimeEnvironmentStore): RuntimeEnv
     for (const entry of ordered.slice(1)) {
       removedIds.add(entry.id)
     }
-    const freshest = [...group].sort(
-      (a, b) => b.updatedAt - a.updatedAt || b.id.localeCompare(a.id)
-    )[0]!
     const freshestUse = [...group]
       .filter((entry) => entry.lastUsedAt != null)
       .sort((a, b) => b.lastUsedAt! - a.lastUsedAt! || b.id.localeCompare(a.id))[0]
-    const endpoints = freshest.endpoints.map((endpoint, index) => ({
+    const newestPairing = ordered.at(-1)!
+    const endpoints = newestPairing.endpoints.map((endpoint, index) => ({
       ...endpoint,
       id: index === 0 ? `ws-${canonical.id}` : `ws-${canonical.id}-${index}`
     }))
     const preferredIndex = Math.max(
       0,
-      freshest.endpoints.findIndex((entry) => entry.id === freshest.preferredEndpointId)
+      newestPairing.endpoints.findIndex((entry) => entry.id === newestPairing.preferredEndpointId)
     )
     replacements.set(canonical.id, {
       ...canonical,
