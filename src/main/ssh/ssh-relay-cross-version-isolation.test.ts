@@ -33,6 +33,9 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
     onData: vi.fn(),
     onClose: vi.fn()
   }),
+  isUnconfirmedSshCommandTermination: (error: unknown) =>
+    error instanceof Error &&
+    (error as Error & { sshChannelCloseConfirmed?: boolean }).sshChannelCloseConfirmed === false,
   execCommand: vi.fn()
 }))
 

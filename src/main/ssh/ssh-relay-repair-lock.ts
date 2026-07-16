@@ -11,16 +11,17 @@ import {
   joinRemotePath,
   type RemoteHostPlatform
 } from './ssh-remote-platform'
-import { INSTALL_LOCK_STALE_SECONDS, RELAY_INSTALL_LOCK_NAME } from './ssh-relay-versioned-install'
+import { INSTALL_LOCK_STALE_SECONDS, RELAY_INSTALL_LOCK_NAME } from './ssh-relay-install-lock'
 
 const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
 
 function execHostCommand(
   conn: SshConnection,
   host: RemoteHostPlatform,
-  command: string
+  command: string,
+  signal?: AbortSignal
 ): Promise<string> {
-  return execCommand(conn, command, { wrapCommand: !isWindowsRemoteHost(host) })
+  return execCommand(conn, command, { wrapCommand: !isWindowsRemoteHost(host), signal })
 }
 
 /**
@@ -32,15 +33,22 @@ function execHostCommand(
 export async function tryAcquireRelayRepairLock(
   conn: SshConnection,
   remoteRelayDir: string,
-  host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
+  host: RemoteHostPlatform = DEFAULT_REMOTE_HOST,
+  options?: { signal?: AbortSignal }
 ): Promise<boolean> {
   const lockDir = joinRemotePath(host, remoteRelayDir, RELAY_INSTALL_LOCK_NAME)
   try {
-    await execHostCommand(conn, host, acquireInstallLockParentCommand(host, remoteRelayDir))
+    await execHostCommand(
+      conn,
+      host,
+      acquireInstallLockParentCommand(host, remoteRelayDir),
+      options?.signal
+    )
     const firstAttempt = await execHostCommand(
       conn,
       host,
-      tryCreateInstallLockCommand(host, lockDir)
+      tryCreateInstallLockCommand(host, lockDir),
+      options?.signal
     )
     if (firstAttempt.trim().endsWith('OK')) {
       return true
@@ -48,7 +56,8 @@ export async function tryAcquireRelayRepairLock(
     const steal = await execHostCommand(
       conn,
       host,
-      tryStealInstallLockCommand(host, lockDir, INSTALL_LOCK_STALE_SECONDS)
+      tryStealInstallLockCommand(host, lockDir, INSTALL_LOCK_STALE_SECONDS),
+      options?.signal
     )
     if (steal.trim().endsWith('OK')) {
       console.warn(`[ssh-relay] Stealing stale install lock at ${lockDir}`)
@@ -56,6 +65,7 @@ export async function tryAcquireRelayRepairLock(
     }
     return false
   } catch {
+    options?.signal?.throwIfAborted()
     return false
   }
 }

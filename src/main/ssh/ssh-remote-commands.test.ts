@@ -163,7 +163,7 @@ describe('ssh remote command builders', () => {
     expect(windowsScript).toContain('Write-Output ($now - $mtime)')
   })
 
-  it('serializes stale install-lock recovery under a sibling steal mutex', () => {
+  it('serializes stale recovery with unbounded numbered sibling claims', () => {
     const posixCommand = tryStealInstallLockCommand(
       posix,
       '/home/me/.orca-remote/relay/.install-lock',
@@ -173,19 +173,20 @@ describe('ssh remote command builders', () => {
       tryStealInstallLockCommand(windows, 'C:/Users/me/.orca-remote/relay/.install-lock', 20 * 60)
     )
 
+    expect(posixCommand).toContain('.install-lock')
     expect(posixCommand).toContain('.install-lock.steal')
-    expect(posixCommand).toContain('$mtime')
+    expect(posixCommand).toContain('steal_generation')
+    expect(posixCommand).toContain('mtime=${lock_key%%:*}')
     expect(posixCommand).toContain('-gt 1200')
     expect(posixCommand).toContain('current_mtime')
-    expect(posixCommand).toContain('steal_age')
-    expect(posixCommand).toContain('steal="$steal.next.$steal_token"')
+    expect(posixCommand).toContain('steal_generation + 1')
+    expect(posixCommand).not.toContain('.next.')
     expect(posixCommand).toContain('trap')
-    expect(windowsScript).toContain('$lock.steal.$mtime')
+    expect(windowsScript).toContain('$lock.steal')
+    expect(windowsScript).toContain('$stealGeneration++')
     expect(windowsScript).toContain('-gt 1200')
     expect(windowsScript).toContain('$currentIdentity -eq $lockIdentity')
-    expect(windowsScript).toContain('$stealAge -le 120')
-    expect(windowsScript).toContain('$steal = "$steal.next.$stealIdentity"')
-    expect(windowsScript).toContain('New-Item -ItemType Directory -Path $steal')
+    expect(windowsScript).not.toContain('.next.')
     expect(windowsScript).toContain('finally')
   })
 
@@ -208,7 +209,7 @@ describe('ssh remote command builders', () => {
   })
 
   it.runIf(process.platform !== 'win32')(
-    'recovers a stale POSIX steal mutex left by a crashed stealer',
+    'recovers and cleans more than eight orphaned numbered steal claims',
     () => {
       const root = mkdtempSync(join(tmpdir(), 'orca-install-lock-'))
       try {
@@ -217,17 +218,18 @@ describe('ssh remote command builders', () => {
         const staleDate = new Date(Date.now() - 60 * 60_000)
         utimesSync(lockDir, staleDate, staleDate)
         const lockMtimeSeconds = Math.floor(statSync(lockDir).mtimeMs / 1000)
-        const stealDir = `${lockDir}.steal.${lockMtimeSeconds}`
-        mkdirSync(stealDir)
-        utimesSync(stealDir, staleDate, staleDate)
+        for (let i = 0; i < 12; i++) {
+          const orphan = `${lockDir}.steal.${i}`
+          mkdirSync(orphan)
+          utimesSync(orphan, staleDate, staleDate)
+        }
 
         const command = tryStealInstallLockCommand(posix, lockDir, 20 * 60)
         const output = execFileSync('/bin/sh', ['-c', command], { encoding: 'utf8' })
 
         expect(output.trim()).toBe('OK')
         expect(existsSync(lockDir)).toBe(true)
-        expect(existsSync(stealDir)).toBe(true)
-        expect(readdirSync(root).some((name) => name.includes('.next.'))).toBe(false)
+        expect(readdirSync(root).filter((name) => name.includes('.steal.'))).toHaveLength(0)
         expect(Math.floor(statSync(lockDir).mtimeMs / 1000)).toBeGreaterThan(lockMtimeSeconds)
       } finally {
         rmSync(root, { recursive: true, force: true })
@@ -236,7 +238,7 @@ describe('ssh remote command builders', () => {
   )
 
   it.runIf(process.platform !== 'win32')(
-    'lets only one POSIX stealer take over a preexisting stale steal mutex',
+    'lets only one POSIX caller move and recreate a stale install lock',
     async () => {
       const root = mkdtempSync(join(tmpdir(), 'orca-install-lock-race-'))
       try {
@@ -244,11 +246,6 @@ describe('ssh remote command builders', () => {
         mkdirSync(lockDir)
         const staleDate = new Date(Date.now() - 60 * 60_000)
         utimesSync(lockDir, staleDate, staleDate)
-        const lockMtimeSeconds = Math.floor(statSync(lockDir).mtimeMs / 1000)
-        const stealDir = `${lockDir}.steal.${lockMtimeSeconds}`
-        mkdirSync(stealDir)
-        utimesSync(stealDir, staleDate, staleDate)
-
         const command = tryStealInstallLockCommand(posix, lockDir, 20 * 60)
         const outputs = await Promise.all(
           Array.from({ length: 64 }, () => runShellCommand(command))
@@ -257,8 +254,6 @@ describe('ssh remote command builders', () => {
 
         expect(okCount).toBe(1)
         expect(existsSync(lockDir)).toBe(true)
-        expect(existsSync(stealDir)).toBe(true)
-        expect(readdirSync(root).some((name) => name.includes('.next.'))).toBe(false)
         expect(readdirSync(root).some((name) => name.includes('.tombstone'))).toBe(false)
       } finally {
         rmSync(root, { recursive: true, force: true })

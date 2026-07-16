@@ -507,6 +507,15 @@ describe('spawnSystemSsh', () => {
     expect(mockProc.stdin.end).toHaveBeenCalledWith('contents')
   })
 
+  it('marks a system command channel when local teardown is requested', () => {
+    const channel = spawnSystemSshCommand(createTarget(), 'npm install')
+
+    channel.close()
+
+    expect(channel._closeRequested).toBe(true)
+    expect(mockProc.kill).toHaveBeenCalledWith('SIGTERM')
+  })
+
   it('removes wrapped process listeners after command close', () => {
     const proc = createEventedProcess()
     spawnMock.mockReturnValue(proc)

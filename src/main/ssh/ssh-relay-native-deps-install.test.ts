@@ -30,6 +30,9 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
     onData: vi.fn(),
     onClose: vi.fn()
   }),
+  isUnconfirmedSshCommandTermination: (error: unknown) =>
+    error instanceof Error &&
+    (error as Error & { sshChannelCloseConfirmed?: boolean }).sshChannelCloseConfirmed === false,
   execCommand: vi.fn()
 }))
 
@@ -41,10 +44,13 @@ vi.mock('./ssh-relay-versioned-install', () => ({
   readLocalFullVersion: vi.fn().mockReturnValue('0.1.0+testhash'),
   computeRemoteRelayDir: (home: string, v: string) => `${home}/.orca-remote/relay-${v}`,
   isRelayAlreadyInstalled: vi.fn().mockResolvedValue(false),
-  acquireInstallLock: vi.fn().mockResolvedValue(undefined),
   finalizeInstall: vi.fn().mockResolvedValue(undefined),
   abandonInstall: vi.fn().mockResolvedValue(undefined),
   gcOldRelayVersions: vi.fn().mockResolvedValue(undefined)
+}))
+
+vi.mock('./ssh-relay-install-lock', () => ({
+  acquireInstallLock: vi.fn().mockResolvedValue(undefined)
 }))
 
 vi.mock('./ssh-relay-repair-lock', () => ({
@@ -56,15 +62,16 @@ vi.mock('./ssh-connection-utils', () => ({
 }))
 
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
-import { execCommand } from './ssh-relay-deploy-helpers'
+import { execCommand, uploadDirectory } from './ssh-relay-deploy-helpers'
+import { RELAY_DEPLOY_TIMEOUT_MS } from './ssh-relay-deploy-timing'
 import { parseUnameToRelayPlatform } from './relay-protocol'
 import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
 import {
-  acquireInstallLock,
   abandonInstall,
   finalizeInstall,
   isRelayAlreadyInstalled
 } from './ssh-relay-versioned-install'
+import { acquireInstallLock } from './ssh-relay-install-lock'
 import { tryAcquireRelayRepairLock } from './ssh-relay-repair-lock'
 import type { SshConnection } from './ssh-connection'
 
@@ -226,6 +233,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     // a leaked response. clearAllMocks doesn't drop the queue (it only clears
     // .mock.calls), so we explicitly mockReset.
     vi.mocked(execCommand).mockReset()
+    vi.mocked(uploadDirectory).mockResolvedValue(undefined)
     sftpCapture.paths.length = 0
     for (const k of Object.keys(sftpCapture.contents)) {
       delete sftpCapture.contents[k]
@@ -453,6 +461,45 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     expect(vi.mocked(abandonInstall)).toHaveBeenCalledTimes(1)
   })
 
+  it('aborts an in-progress native install and releases its lock at deploy timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      const conn = makeMockConnection(sftpCapture)
+      feed([
+        '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
+        '/home/u',
+        '', // mkdir remoteDir
+        '' // chmod +x node
+      ])
+      let installSignal: AbortSignal | undefined
+      vi.mocked(execCommand).mockImplementationOnce((_conn, command, options) => {
+        expect(command).toContain('npm install')
+        installSignal = options?.signal
+        return new Promise<string>((_resolve, reject) => {
+          installSignal?.addEventListener('abort', () => reject(installSignal?.reason), {
+            once: true
+          })
+        })
+      })
+
+      const promise = deployAndLaunchRelay(conn).catch((err: Error) => err)
+      await vi.waitFor(() => expect(installSignal).toBeDefined())
+
+      await vi.advanceTimersByTimeAsync(RELAY_DEPLOY_TIMEOUT_MS)
+
+      const result = await promise
+      expect(result).toBeInstanceOf(Error)
+      expect((result as Error).message).toBe(
+        `Relay deployment timed out after ${RELAY_DEPLOY_TIMEOUT_MS / 1000}s`
+      )
+      expect(installSignal?.aborted).toBe(true)
+      expect(vi.mocked(abandonInstall)).toHaveBeenCalledTimes(1)
+      expect(vi.mocked(finalizeInstall)).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('lets a probe SSH-channel failure bubble up rather than silently mapping to MISSING', async () => {
     const conn = makeMockConnection(sftpCapture)
     feed(
@@ -609,10 +656,8 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       '', // mkdir remoteDir
       '', // npm install native deps
       'MISSING\n', // native process exit normalized by PowerShell command
-      '', // remove probe stderr file
       '', // npm rebuild native deps
       'MISSING\n', // rebuilt native process still cannot load
-      '', // remove second probe stderr file
       '', // no persisted active pipe marker
       'WAITING',
       '', // WMI relay launch
@@ -638,6 +683,16 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       .filter((script) => script.includes('npm install') || script.includes('npm rebuild'))
     expect(npmScripts).toHaveLength(2)
     expect(npmScripts.every((script) => script.includes('--ignore-scripts=false'))).toBe(true)
+    expect(
+      npmScripts.every((script) =>
+        script.includes('if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }')
+      )
+    ).toBe(true)
+    expect(
+      vi
+        .mocked(execCommand)
+        .mock.calls.some(([, command]) => command.includes('.npty-probe.stderr'))
+    ).toBe(false)
 
     const warnMessages = warnSpy.mock.calls.map((args) => String(args[0] ?? ''))
     expect(warnMessages.some((m) => m.includes('[ssh-relay][NPTY-MISSING]'))).toBe(true)
@@ -704,6 +759,9 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     await deployAndLaunchRelay(conn)
 
     expect(vi.mocked(tryAcquireRelayRepairLock)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(tryAcquireRelayRepairLock).mock.calls[0]?.[3]?.signal).toBeInstanceOf(
+      AbortSignal
+    )
     expect(vi.mocked(finalizeInstall)).toHaveBeenCalledTimes(1)
     const execCalls = vi.mocked(execCommand).mock.calls.map(([, c]) => c)
     expect(
@@ -737,6 +795,157 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     expect(vi.mocked(abandonInstall)).toHaveBeenCalledTimes(1)
     const warnMessages = warnSpy.mock.calls.map((args) => String(args[0] ?? ''))
     expect(warnMessages.some((m) => m.includes('launching degraded'))).toBe(true)
+  })
+
+  it('retains the repair lock when remote command termination is unconfirmed', async () => {
+    vi.mocked(isRelayAlreadyInstalled).mockResolvedValue(true)
+    const conn = makeMockConnection(sftpCapture)
+    vi.mocked(execCommand)
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+      .mockResolvedValueOnce('/home/u')
+      .mockResolvedValueOnce('MISSING')
+      .mockResolvedValueOnce('MISSING')
+      .mockRejectedValueOnce(
+        Object.assign(new Error('npm termination was not confirmed'), {
+          sshChannelCloseConfirmed: false
+        })
+      )
+      .mockResolvedValueOnce('DEAD')
+      .mockResolvedValueOnce('READY')
+
+    await deployAndLaunchRelay(conn)
+
+    expect(vi.mocked(abandonInstall)).not.toHaveBeenCalled()
+    const warnMessages = warnSpy.mock.calls.map((args) => String(args[0] ?? ''))
+    expect(warnMessages.some((message) => message.includes('launching degraded'))).toBe(true)
+  })
+
+  it('retains the first-install lock when an aborted npm install has unconfirmed teardown', async () => {
+    vi.useFakeTimers()
+    try {
+      const conn = makeMockConnection(sftpCapture)
+      feed([
+        '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
+        '/home/u',
+        '', // mkdir remoteDir
+        '' // chmod +x node
+      ])
+      let installSignal: AbortSignal | undefined
+      vi.mocked(execCommand).mockImplementationOnce((_conn, command, options) => {
+        expect(command).toContain('npm install')
+        installSignal = options?.signal
+        return new Promise<string>((_resolve, reject) => {
+          installSignal?.addEventListener(
+            'abort',
+            () => {
+              // Mirrors execCommand's bounded close grace when ssh2 never
+              // confirms that the remote npm process stopped.
+              setTimeout(
+                () =>
+                  reject(
+                    Object.assign(new Error('npm teardown remained unconfirmed'), {
+                      sshChannelCloseConfirmed: false
+                    })
+                  ),
+                5_000
+              )
+            },
+            { once: true }
+          )
+        })
+      })
+
+      const deploy = deployAndLaunchRelay(conn).catch((err: Error) => err)
+      await vi.waitFor(() => expect(installSignal).toBeDefined())
+      await vi.advanceTimersByTimeAsync(RELAY_DEPLOY_TIMEOUT_MS)
+      const result = await deploy
+      expect(result).toBeInstanceOf(Error)
+      expect((result as Error).message).toContain('Relay deployment timed out')
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      expect(vi.mocked(abandonInstall)).not.toHaveBeenCalled()
+      expect(vi.mocked(finalizeInstall)).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not finalize or release a first-install lock after unconfirmed rebuild teardown', async () => {
+    const conn = makeMockConnection(sftpCapture)
+    vi.mocked(execCommand)
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+      .mockResolvedValueOnce('/home/u')
+      .mockResolvedValueOnce('')
+      .mockResolvedValueOnce('')
+      .mockResolvedValueOnce('')
+      .mockResolvedValueOnce('')
+      .mockResolvedValueOnce('MISSING')
+      .mockResolvedValueOnce('rebuild diagnostics')
+      .mockResolvedValueOnce('')
+      .mockRejectedValueOnce(
+        Object.assign(new Error('rebuild termination was not confirmed'), {
+          sshChannelCloseConfirmed: false
+        })
+      )
+
+    await expect(deployAndLaunchRelay(conn)).rejects.toThrow(
+      'rebuild termination was not confirmed'
+    )
+    expect(vi.mocked(finalizeInstall)).not.toHaveBeenCalled()
+    expect(vi.mocked(abandonInstall)).not.toHaveBeenCalled()
+  })
+
+  it('retains the first-install lock when an aborted rebuild has unconfirmed teardown', async () => {
+    vi.useFakeTimers()
+    try {
+      const conn = makeMockConnection(sftpCapture)
+      feed([
+        '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
+        '/home/u',
+        '', // mkdir remoteDir
+        '', // chmod +x node
+        '', // npm install
+        '', // chmod prebuilds
+        'MISSING',
+        'rebuild diagnostics',
+        '' // remove probe diagnostics
+      ])
+      let rebuildSignal: AbortSignal | undefined
+      vi.mocked(execCommand).mockImplementationOnce((_conn, command, options) => {
+        expect(command).toContain('npm rebuild')
+        rebuildSignal = options?.signal
+        return new Promise<string>((_resolve, reject) => {
+          rebuildSignal?.addEventListener(
+            'abort',
+            () => {
+              setTimeout(
+                () =>
+                  reject(
+                    Object.assign(new Error('rebuild teardown remained unconfirmed'), {
+                      sshChannelCloseConfirmed: false
+                    })
+                  ),
+                5_000
+              )
+            },
+            { once: true }
+          )
+        })
+      })
+
+      const deploy = deployAndLaunchRelay(conn).catch((err: Error) => err)
+      await vi.waitFor(() => expect(rebuildSignal).toBeDefined())
+      await vi.advanceTimersByTimeAsync(RELAY_DEPLOY_TIMEOUT_MS)
+      const result = await deploy
+      expect(result).toBeInstanceOf(Error)
+      expect((result as Error).message).toContain('Relay deployment timed out')
+      await vi.advanceTimersByTimeAsync(5_000)
+
+      expect(vi.mocked(abandonInstall)).not.toHaveBeenCalled()
+      expect(vi.mocked(finalizeInstall)).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('launches degraded when the repair install lock cannot be acquired', async () => {
