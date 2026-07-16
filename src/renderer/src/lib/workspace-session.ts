@@ -12,8 +12,9 @@ import type { OpenFile } from '../store/slices/editor'
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
-import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
-import { isRuntimeOwnedSshTargetId } from '../../../shared/execution-host'
+import { buildActiveConnectionIdsAtShutdown } from './workspace-session-reconnect-targets'
+
+export { buildActiveConnectionIdsAtShutdown }
 
 /** Why (issue #1158): the debounced + shutdown session writers share this
  *  gate so a hydration failure cannot overwrite orca-data.json with the
@@ -331,48 +332,6 @@ export function buildTerminalSessionData(
   }
 }
 
-export function buildActiveConnectionIdsAtShutdown(
-  snapshot: WorkspaceSessionSnapshot,
-  // Why: `null` means "computed and empty" — only recompute when the caller
-  // did not already run buildTerminalSessionData. A plain default parameter
-  // would re-run the full repo/worktree scan on the shutdown path whenever
-  // the map is legitimately undefined (no remote sessions).
-  remoteSessionIdsByTabId:
-    | WorkspaceSessionState['remoteSessionIdsByTabId']
-    | null = buildTerminalSessionData(snapshot).remoteSessionIdsByTabId ?? null
-): WorkspaceSessionState['activeConnectionIdsAtShutdown'] {
-  // Why: sshConnectionStates is a Map<string, SshConnectionState>, not a plain
-  // object. Object.entries() on a Map returns [] — must use Array.from().
-  const targetIds = new Set(
-    Array.from(snapshot.sshConnectionStates.entries())
-      .filter(([, state]) => state.status === 'connected')
-      .map(([targetId]) => targetId)
-  )
-
-  // Why: shutdown can observe SSH in a transient state (relay drop mid-quit,
-  // exhausted reconnect) after the socket closed but before the snapshot
-  // flushed. The durable PTY id still names the target Orca must reconnect to
-  // restore that surviving remote session. Two exclusions:
-  // 'disconnected'/'auth-failed'/never-observed usually mean an explicit user
-  // disconnect or a failed/cancelled connect — startup must not auto-dial a
-  // host the user left offline or stack credential dialogs (sessions still
-  // restore on tab focus via the deferred flow, so only eagerness is lost).
-  // Runtime-owned (ephemeral-VM) targets belong to the runtime layer; a
-  // renderer-driven ssh.connect would dispose the runtime's live relay session.
-  for (const sessionId of Object.values(remoteSessionIdsByTabId ?? {})) {
-    const connectionId = parseAppSshPtyId(sessionId)?.connectionId
-    if (!connectionId || isRuntimeOwnedSshTargetId(connectionId)) {
-      continue
-    }
-    const status = snapshot.sshConnectionStates.get(connectionId)?.status
-    if (status && status !== 'disconnected' && status !== 'auth-failed') {
-      targetIds.add(connectionId)
-    }
-  }
-
-  return targetIds.size > 0 ? Array.from(targetIds) : undefined
-}
-
 export function buildWorkspaceSessionPayload(
   snapshot: WorkspaceSessionSnapshot
 ): WorkspaceSessionState {
@@ -410,8 +369,6 @@ export function buildWorkspaceSessionPayload(
     // Persist only layouts backed by real tabs so a reload cannot restore a
     // blank split pane from that transient midpoint.
     ...buildPersistedUnifiedTabSessionData(snapshot),
-    // Why: `?? null` — an empty map is `undefined`, which would re-trigger the
-    // default initializer's second buildTerminalSessionData scan at shutdown.
     activeConnectionIdsAtShutdown: buildActiveConnectionIdsAtShutdown(
       snapshot,
       terminalSessionData.remoteSessionIdsByTabId ?? null

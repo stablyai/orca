@@ -83,7 +83,10 @@ export function buildWorkspaceSessionPatch(
       terminalSessionData.remoteSessionIdsByTabId ?? null
     )
   } else if (changed.has('sshConnectionStates')) {
-    patch.activeConnectionIdsAtShutdown = buildActiveConnectionIdsAtShutdown(snapshot)
+    patch.activeConnectionIdsAtShutdown = buildActiveConnectionIdsAtShutdown(
+      snapshot,
+      buildTerminalSessionData(snapshot).remoteSessionIdsByTabId ?? null
+    )
   }
   if (
     hasAnyChangedField(changed, [
