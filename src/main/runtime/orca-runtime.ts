@@ -12451,7 +12451,12 @@ export class OrcaRuntimeService {
         this.store.deleteProjectGroup?.(group.id)
       }
     }
-    this.invalidateWorktreeScanCache()
+    this.invalidateResolvedWorktreeCache()
+    for (const project of results) {
+      if (project.projectId) {
+        this.invalidateWorktreeScanCacheForRepo(project.projectId)
+      }
+    }
     this.notifyReposChanged()
     const rootGroup = groupResolver.getRootGroup()
     return {
@@ -12531,7 +12536,8 @@ export class OrcaRuntimeService {
         const adopted =
           this.store.updateRepo(existing.id, { executionHostId }) ??
           ({ ...existing, executionHostId } as Repo)
-        this.invalidateWorktreeScanCache()
+        this.invalidateResolvedWorktreeCache()
+        this.invalidateWorktreeScanCacheForRepo(existing.id)
         this.notifyReposChanged()
         return adopted
       }
@@ -12557,7 +12563,8 @@ export class OrcaRuntimeService {
     }
     this.store.addRepo(repo)
     await prepareLocalWorktreeRootForRepo(this.store, repo)
-    this.invalidateWorktreeScanCache()
+    this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCacheForRepo(repo.id)
     this.notifyReposChanged()
     return this.store.getRepo(repo.id) ?? repo
   }
@@ -12678,7 +12685,8 @@ export class OrcaRuntimeService {
     this.store.addRepo(repo)
     await prepareLocalWorktreeRootForRepo(this.store, repo)
     invalidateAuthorizedRootsCache()
-    this.invalidateWorktreeScanCache()
+    this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCacheForRepo(repo.id)
     this.notifyReposChanged()
     return { repo: this.store.getRepo(repo.id) ?? repo }
   }
@@ -12821,7 +12829,8 @@ export class OrcaRuntimeService {
         if (updated) {
           await prepareLocalWorktreeRootForRepo(this.store, updated)
           invalidateAuthorizedRootsCache()
-          this.invalidateWorktreeScanCache()
+          this.invalidateResolvedWorktreeCache()
+          this.invalidateWorktreeScanCacheForRepo(updated.id)
           this.notifyReposChanged()
           return updated
         }
@@ -12845,7 +12854,8 @@ export class OrcaRuntimeService {
     this.store.addRepo(repo)
     await prepareLocalWorktreeRootForRepo(this.store, repo)
     invalidateAuthorizedRootsCache()
-    this.invalidateWorktreeScanCache()
+    this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCacheForRepo(repo.id)
     this.notifyReposChanged()
     return this.store.getRepo(repo.id) ?? repo
   }
@@ -12939,7 +12949,8 @@ export class OrcaRuntimeService {
     }
     const repo = await this.resolveRepoSelector(repoSelector)
     this.store.removeProject(repo.id)
-    this.invalidateWorktreeScanCache()
+    this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCacheForRepo(repo.id)
     invalidateAuthorizedRootsCache()
     this.notifyReposChanged()
     return { removed: true }
@@ -20847,12 +20858,6 @@ export class OrcaRuntimeService {
     this.resolvedWorktreeCache = null
   }
 
-  private invalidateWorktreeScanCache(): void {
-    this.invalidateResolvedWorktreeCache()
-    this.worktreeScanCache.clear()
-    this.worktreeScanInFlight.clear()
-  }
-
   private invalidateWorktreeScanCacheForRepo(repoId: string): void {
     this.worktreeScanGenerations.set(repoId, (this.worktreeScanGenerations.get(repoId) ?? 0) + 1)
     this.worktreeScanCache.delete(repoId)
@@ -20869,13 +20874,7 @@ export class OrcaRuntimeService {
       this.worktreeScanCache.delete(repoId)
       this.worktreeScanInFlight.delete(repoId)
     }
-    const snapshotContainsAffectedRepo = this.resolvedWorktreeCache?.worktrees.some((worktree) =>
-      [...affectedRepoIds].some((repoId) => worktree.id.startsWith(`${repoId}::`))
-    )
-    if (
-      affectedRepoIds.size > 0 &&
-      (snapshotContainsAffectedRepo || this.resolvedWorktreeInFlight)
-    ) {
+    if (affectedRepoIds.size > 0) {
       this.resolvedWorktreeGeneration += 1
       this.resolvedWorktreeCache = null
     }
