@@ -1978,7 +1978,7 @@
         "https://github.com/stablyai/orca/pull/7054"
       ],
       "invariant": "High-volume terminal output must stay bounded across daemon socket writes, main runtime metadata, detectors, and tail checks, main-to-renderer in-flight bytes, renderer scheduler queues, and hidden-output restore without starving focused input.",
-      "oracle": "The current executable slice injects daemon socket backpressure and main-process renderer backlog pressure, then asserts write(false)/drain ordering, bounded queued daemon bytes, unchanged path-provenance history reuse for pathless output, ordinary terminal-wait detection without a joined-tail allocation and with full prompt-family continuity, per-PTY and total pending-output caps, preserved sequenced-tail metadata, active-pending protection ahead of background trimming, and ACK-gated in-flight bounds. The live Electron perf oracle adds hidden-output floods, renderer scheduler queue depth, dropped-output-zero normal scenarios, and active key latency budgets before promotion.",
+      "oracle": "The current executable slice injects main-process renderer backlog pressure, then asserts unchanged path-provenance history reuse for pathless output, ordinary terminal-wait detection without a joined-tail allocation and with full prompt-family continuity, per-PTY and total pending-output caps, preserved sequenced-tail metadata, active-pending protection ahead of background trimming, and ACK-gated in-flight bounds. The live Electron perf oracle adds hidden-output floods, renderer scheduler queue depth, dropped-output-zero normal scenarios, and active key latency budgets before promotion.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-path-candidate-history.test.ts",
@@ -2059,11 +2059,11 @@
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "Daemon stream backpressure and focused main/renderer backlog tests are deterministic unit slices. The combined perf soak still needs runtime history before promotion."
+        "evidence": "Focused main-process backlog tests are deterministic unit slices. The combined perf soak still needs runtime history before promotion."
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Tests assert daemon stream writes pause after socket write(false), later stream data queues behind the pressured socket, flush-immediate output from another session is prioritized ahead of unrelated queued background backlog on drain while preserving per-session order, queued lines resume on drain, global cleanup clears clients that only have backpressured writes, queued daemon stream bytes are bounded by keeping priority output and the newest tail under sustained pressure, pathless runtime output reuses unchanged path-provenance history with zero old-candidate byte scans, ordinary saturated terminal tails retain no rebuilt wait text or repeated phrase scans while every blocked/ready prompt family remains live, main pending renderer output is capped per PTY and in total, total-pressure trimming prefers background pending output before active pending output, trimmed pending tails preserve seq/rawLength metadata, and ACK-gated in-flight output remains bounded. Intentionally restoring the old path-history shape failed the focused scale test after 774ms and 4,096 replacements; disabling the ordinary-tail branch failed with a retained 253,999-character waitText. The fixed shapes passed their focused suites. Existing renderer tests cover replay/backlog slices. Needs broader hidden-output/input-latency perf artifacts before promotion."
+        "evidence": "Tests assert pathless runtime output reuses unchanged path-provenance history with zero old-candidate byte scans, ordinary saturated terminal tails retain no rebuilt wait text or repeated phrase scans while every blocked/ready prompt family remains live, main pending renderer output is capped per PTY and in total, total-pressure trimming prefers background pending output before active pending output, trimmed pending tails preserve seq/rawLength metadata, and ACK-gated in-flight output remains bounded. Intentionally restoring the old path-history shape failed the focused scale test after 774ms and 4,096 replacements; disabling the ordinary-tail branch failed with a retained 253,999-character waitText. The fixed shapes passed their focused suites. Existing renderer tests cover replay/backlog slices. Needs daemon-stream contract coverage and broader hidden-output/input-latency perf artifacts before promotion."
       },
       "performanceBudget": {
         "required": true,
@@ -2075,9 +2075,8 @@
         "Keep stress variants non-blocking until stable runtime history exists."
       ],
       "knownGaps": [
-        "Current command asserts daemon stream write(false)/drain/cleanup at the batcher contract layer and main pending renderer caps at the IPC contract layer.",
+        "Daemon stream write(false)/drain/cleanup and bounded queued-tail contracts are not registered in the current command.",
         "Runtime provenance coverage is deterministic and does not include a live high-throughput provider artifact.",
-        "Serve-sim detector coverage is deterministic and does not include a live external simulator helper.",
         "Terminal-wait scale evidence is deterministic and does not yet include a live saturated-tail event-loop artifact.",
         "Current command does not prove renderer parse pressure, scheduler queue depth, event-loop delay, or active key latency.",
         "Live hidden-output pressure, active input latency, and full Electron perf artifacts remain unproved."
