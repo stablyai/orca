@@ -5108,6 +5108,134 @@ describe('connectPanePty', () => {
     expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('csi-u')
   })
 
+  it('confirms an Orca-launched Droid fresh spawn in a no-OSC shell (Git Bash)', async () => {
+    // Why: PowerShell gets an OSC 133 command-start that triggers the confirming
+    // foreground read, but Git Bash / cmd.exe emit no command boundary and the
+    // launch command is injected programmatically (no typed inference). Without a
+    // fresh-spawn sample the pane never earns routing trust, so Shift+Enter falls
+    // back to Esc+CR and Droid submits instead of inserting a newline (#7620).
+    vi.useFakeTimers()
+    const { connectPanePty } = await import('./pty-connection')
+    vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('droid')
+    vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('droid')
+    const pane = createPane(1)
+    const ptyId = 'pty-launched-droid-no-osc'
+    const tabId = 'tab-launched-droid-no-osc'
+    const paneKey = makePaneKey(tabId, LEAF_1)
+    transportFactoryQueue.push(createMockTransport(ptyId))
+
+    connectPanePty(
+      pane as never,
+      createManager(1) as never,
+      createDeps({
+        tabId,
+        startup: { command: 'droid', launchAgent: 'droid' }
+      }) as never
+    )
+    await vi.advanceTimersByTimeAsync(20)
+    await flushAsyncTicks()
+    // The transport reports the fresh spawn; no OSC 133, no typed inference.
+    const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as ((id: string) => void) | undefined
+    expect(onPtySpawn).toBeTypeOf('function')
+    onPtySpawn?.(ptyId)
+    // Span the bounded confirmation retry ladder while Droid boots.
+    await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
+    await flushAsyncTicks()
+
+    expect(window.api.pty.confirmForegroundProcess).toHaveBeenCalledWith(ptyId)
+    expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      agent: 'droid',
+      routingTrusted: true,
+      shellForeground: false
+    })
+    expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('csi-u')
+  })
+
+  it('trusts a launched Droid whose no-OSC boot only becomes foreground after retries', async () => {
+    // Why: the confirmation ladder must span Droid's boot — the shell is still
+    // foreground on the first read(s) before Droid takes over.
+    vi.useFakeTimers()
+    const { connectPanePty } = await import('./pty-connection')
+    const foregroundResults = ['bash.exe', 'bash.exe', 'droid']
+    vi.mocked(window.api.pty.confirmForegroundProcess).mockImplementation(
+      async () => foregroundResults.shift() ?? 'droid'
+    )
+    const pane = createPane(1)
+    const ptyId = 'pty-launched-droid-slow-boot'
+    const tabId = 'tab-launched-droid-slow-boot'
+    const paneKey = makePaneKey(tabId, LEAF_1)
+    transportFactoryQueue.push(createMockTransport(ptyId))
+
+    connectPanePty(
+      pane as never,
+      createManager(1) as never,
+      createDeps({ tabId, startup: { command: 'droid', launchAgent: 'droid' } }) as never
+    )
+    await vi.advanceTimersByTimeAsync(20)
+    await flushAsyncTicks()
+    const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as ((id: string) => void) | undefined
+    onPtySpawn?.(ptyId)
+    await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
+    await flushAsyncTicks()
+
+    expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      agent: 'droid',
+      routingTrusted: true,
+      shellForeground: false
+    })
+    expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('csi-u')
+  })
+
+  it('stays recoverable when a launched Droid outlasts the fresh-spawn confirmation window', async () => {
+    // Why: if the bounded ladder misses (pathologically slow boot), the miss must
+    // NOT latch a known-agent shell-confirm — that would clear launch identity and
+    // block every later focus/reveal re-sample, permanently poisoning Shift+Enter
+    // for the session. A benign miss leaves the pane recoverable, so a later focus
+    // sample (once Droid is finally foreground) still earns routing trust.
+    vi.useFakeTimers()
+    const { connectPanePty } = await import('./pty-connection')
+    let foreground = 'bash.exe'
+    vi.mocked(window.api.pty.confirmForegroundProcess).mockImplementation(async () => foreground)
+    const pane = createPane(1)
+    const ptyId = 'pty-launched-droid-slow'
+    const tabId = 'tab-launched-droid-slow'
+    const paneKey = makePaneKey(tabId, LEAF_1)
+    transportFactoryQueue.push(createMockTransport(ptyId))
+
+    const binding = connectPanePty(
+      pane as never,
+      createManager(1) as never,
+      createDeps({ tabId, startup: { command: 'droid', launchAgent: 'droid' } }) as never
+    ) as unknown as { sampleForegroundAgentOnFocus: () => void }
+    await vi.advanceTimersByTimeAsync(20)
+    await flushAsyncTicks()
+    const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as ((id: string) => void) | undefined
+    onPtySpawn?.(ptyId)
+    // Whole ladder elapses while the shell is still foreground (Droid not up yet).
+    await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
+    await flushAsyncTicks()
+
+    // Benign miss: shell never latched as foreground; encoding still safe fallback.
+    expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      agent: null,
+      shellForeground: false
+    })
+    expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
+
+    // Droid finally boots and a focus event re-samples: trust is recoverable.
+    foreground = 'droid'
+    binding.sampleForegroundAgentOnFocus()
+    await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
+    await flushAsyncTicks()
+
+    expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
+      agent: 'droid',
+      routingTrusted: true,
+      shellForeground: false
+    })
+    expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('csi-u')
+  })
+
   it('revokes trusted Droid after accepted no-OSC exit input until shell confirmation', async () => {
     vi.useFakeTimers()
     const { connectPanePty } = await import('./pty-connection')

@@ -1892,6 +1892,21 @@ export function connectPanePty(
       (isTuiAgent(registeredLaunchAgent) ? registeredLaunchAgent : undefined)
     )
   }
+  // Why: the concrete TUI agent a fresh spawn is expected to launch, used to seed
+  // a command-start confirmation on no-OSC shells (Git Bash/cmd) that never emit
+  // one. Returns null when the expectation isn't a recognized TUI agent.
+  const resolveExpectedLaunchTuiAgent = (): TuiAgent | null => {
+    const state = useAppStore.getState()
+    const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find(
+      (candidate) => candidate.id === deps.tabId
+    )
+    const candidate =
+      tab?.launchAgent ??
+      paneStartup?.launchAgent ??
+      paneStartup?.initialAgentStatus?.agent ??
+      state.agentLaunchConfigByPaneKey[cacheKey]?.identity.agentType
+    return isTuiAgent(candidate) ? candidate : null
+  }
   // Why: a launched/hook-known agent pane must confirm — not trust — a 133;D so a
   // full-screen agent's leaked nested-shell 133;D can't clear its tab identity,
   // even on a restore where no command-start read has recorded evidence yet.
@@ -2734,10 +2749,25 @@ export function connectPanePty(
     // frame-level sync often runs before that async result arrives.
     scheduleRuntimeGraphSync()
     agentCompletionCoordinator.startProcessTracking()
-    // Why: fresh spawns receive future OSC command-start events; only adopted or
-    // restored PTYs may already be inside Codex with no new foreground signal.
+    // Why: fresh spawns normally rely on a future OSC 133 command-start read to
+    // identify the launched agent; only adopted or restored PTYs may already be
+    // inside Codex with no new foreground signal. But no-OSC shells (Git Bash,
+    // cmd.exe) never emit a command-start, so an expected-agent pane spawned into
+    // one would never gain the fresh process evidence that authorizes Droid's
+    // Windows Shift+Enter CSI-u routing — leaving Shift+Enter to submit (#7620).
+    // Seed the SAME command-start confirmation the manually-typed launch path
+    // uses (onCommandStarted): its bounded retry ladder spans agent boot, and a
+    // miss publishes shellForeground:false — recoverable by later focus/reveal
+    // samples. A visible-pty sample would instead let a slow boot latch a
+    // known-agent shell-confirm that clears launch identity and blocks recovery.
+    // A real OSC 133;C, if it arrives, simply supersedes this.
     if (options.sampleVisibleForegroundAgent === true) {
       sampleVisiblePaneForegroundAgent()
+    } else if (options.seedInitialAgentStatus === true) {
+      const freshSpawnLaunchAgent = resolveExpectedLaunchTuiAgent()
+      if (freshSpawnLaunchAgent) {
+        paneForegroundAgentTracker.onCommandStarted(freshSpawnLaunchAgent)
+      }
     }
   }
 
