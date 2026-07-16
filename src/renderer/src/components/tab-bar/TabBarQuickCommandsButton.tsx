@@ -165,10 +165,13 @@ export function TabBarQuickCommandsButton({
 
   const handleRun = (command: TerminalQuickCommand): void => {
     void (async () => {
-      if (!(await ensureProjectQuickCommandTrusted(command))) {
+      // Why: for project commands this returns the command re-projected from
+      // the same orca.yaml read the trust prompt covered, not the cached copy.
+      const trusted = await ensureProjectQuickCommandTrusted(command)
+      if (!trusted) {
         return
       }
-      runQuickCommandInNewTab({ command, worktreeId, groupId })
+      runQuickCommandInNewTab({ command: trusted, worktreeId, groupId })
     })()
   }
 

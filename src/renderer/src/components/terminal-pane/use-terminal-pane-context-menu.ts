@@ -456,11 +456,14 @@ export function useTerminalPaneContextMenu({
     // context menu closes and the "menu pane" reference goes stale.
     const pane = isTerminalAgentQuickCommand(command) ? null : resolveMenuPane()
     void (async () => {
-      if (!(await ensureProjectQuickCommandTrusted(command))) {
+      // Why: for project commands this returns the command re-projected from
+      // the same orca.yaml read the trust prompt covered, not the cached copy.
+      const trusted = await ensureProjectQuickCommandTrusted(command)
+      if (!trusted) {
         return
       }
-      if (isTerminalAgentQuickCommand(command)) {
-        runQuickCommandInNewTab({ command, worktreeId, groupId })
+      if (isTerminalAgentQuickCommand(trusted)) {
+        runQuickCommandInNewTab({ command: trusted, worktreeId, groupId })
         return
       }
       if (!pane) {
@@ -475,7 +478,7 @@ export function useTerminalPaneContextMenu({
         return
       }
       sendTerminalQuickCommandToPane({
-        command,
+        command: trusted,
         pane: livePane,
         tabId,
         transport: paneTransportsRef.current.get(livePane.id)

@@ -117,12 +117,20 @@ function settingsForHookRepoOwner(
     : ({ activeRuntimeEnvironmentId: runtimeEnvironmentId } as AppState['settings'])
 }
 
+export type EnsureHooksConfirmedOptions = {
+  /** Called with the parsed orca.yaml hooks from the same read that produced
+   *  the trust hash, so callers can execute exactly what was reviewed. Not
+   *  called when the read is skipped (trusted-all, local-only, errors). */
+  onSharedHooksInspected?: (yamlHooks: OrcaHooks | null) => void
+}
+
 export async function ensureHooksConfirmed(
   state: AppState,
   repoId: string,
   scriptKind: HookScriptKind,
   hostId?: ExecutionHostId,
-  runtimeOwnerEnvironmentId?: string | null
+  runtimeOwnerEnvironmentId?: string | null,
+  opts?: EnsureHooksConfirmedOptions
 ): Promise<'run' | 'skip'> {
   return enqueueTrustPrompt(async () => {
     const hasDuplicateRepoId = state.repos.filter((repo) => repo.id === repoId).length > 1
@@ -177,6 +185,7 @@ export async function ensureHooksConfirmed(
           return 'skip'
         }
         const yamlHooks = (result.hooks as OrcaHooks | null) ?? null
+        opts?.onSharedHooksInspected?.(yamlHooks)
         scriptContent =
           scriptKind === 'setup'
             ? getSetupTrustContent(yamlHooks)

@@ -264,6 +264,41 @@ describe('ensureHooksConfirmed', () => {
     await expect(promise).resolves.toBe('skip')
   })
 
+  it('reports the inspected hooks from the same read that produced the trust hash', async () => {
+    const { state, pending } = createTestState()
+    const quickCommands = [{ action: 'terminal-command', label: 'Build', command: 'make' }]
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: { scripts: {}, quickCommands },
+      mayNeedUpdate: false
+    })
+
+    const inspected: unknown[] = []
+    const promise = ensureHooksConfirmed(state, 'repo-1', 'quickCommands', undefined, undefined, {
+      onSharedHooksInspected: (yamlHooks) => inspected.push(yamlHooks)
+    })
+
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    expect(inspected).toEqual([{ scripts: {}, quickCommands }])
+    pending[0].resolve('run')
+    await expect(promise).resolves.toBe('run')
+  })
+
+  it('does not report inspected hooks when an always-trusted repo skips the read', async () => {
+    const { state } = createTestState()
+    state.trustedOrcaHooks['repo-1'] = { all: { approvedAt: 1 } }
+
+    const inspected: unknown[] = []
+    await expect(
+      ensureHooksConfirmed(state, 'repo-1', 'quickCommands', undefined, undefined, {
+        onSharedHooksInspected: (yamlHooks) => inspected.push(yamlHooks)
+      })
+    ).resolves.toBe('run')
+
+    expect(inspected).toEqual([])
+    expect(hooksCheckMock).not.toHaveBeenCalled()
+  })
+
   it('returns run without prompting when orca.yaml has no quick commands', async () => {
     const { state, pending } = createTestState()
     hooksCheckMock.mockResolvedValue({
