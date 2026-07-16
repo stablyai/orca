@@ -20,6 +20,7 @@ import {
   findIndexedRepoOwner as findRepoRecord,
   findIndexedWorktreeOwner as findWorktreeRecord
 } from './worktree-runtime-owner-index'
+import { isWebClientLocation } from '@/lib/web-client-location'
 
 type RuntimeExecutionHost = Extract<ParsedExecutionHost, { kind: 'runtime' }>
 
@@ -167,7 +168,14 @@ export function getRuntimeEnvironmentIdForWorktree(
   if (worktreeRuntimeEnvironmentId !== undefined) {
     // Why: the same repo can exist on local and remote hosts; a concrete
     // worktree host must override the repo-level default owner.
-    return worktreeRuntimeEnvironmentId
+    if (worktreeRuntimeEnvironmentId !== null) {
+      return worktreeRuntimeEnvironmentId
+    }
+    // Why: worktrees on a headless serve report hostId "local", but a web
+    // client has no browser-local host — fall through to the runtime fallback.
+    if (!isWebClientLocation() || !state.settings?.activeRuntimeEnvironmentId?.trim()) {
+      return null
+    }
   }
   const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
   const repo = findRepoRecord(state.repos, repoId)

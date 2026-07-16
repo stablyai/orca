@@ -14,6 +14,7 @@ import {
   getSettingsForWorktreeRuntimeOwner
 } from '@/lib/worktree-runtime-owner'
 import type { FileExplorerOperationOwner } from './file-explorer-types'
+import { isWebClientLocation } from '@/lib/web-client-location'
 
 export type FileExplorerOperationRoute = {
   settings: { activeRuntimeEnvironmentId: string | null }
@@ -43,6 +44,18 @@ export function getFileExplorerOperationOwnerFromState(
     }
     const exactHostId = exactHostIds.values().next().value
     if (exactHostId) {
+      // Why: worktrees on a headless serve report hostId "local", but a web
+      // client has no browser-local host — route through the active runtime.
+      if (
+        exactHostId === 'local' &&
+        isWebClientLocation() &&
+        state.settings?.activeRuntimeEnvironmentId?.trim()
+      ) {
+        return {
+          kind: 'runtime',
+          environmentId: state.settings.activeRuntimeEnvironmentId.trim()
+        }
+      }
       return operationOwnerFromHostId(exactHostId)
     }
 
