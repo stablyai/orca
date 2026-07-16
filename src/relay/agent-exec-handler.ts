@@ -1,71 +1,18 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { delimiter, join } from 'node:path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import { applyTerminalGitCredentialPromptGuard } from '../shared/terminal-git-credential-guard'
 import { mergeGitConfigEnvProtocol } from '../shared/git-credential-prompt-env'
 import { terminateRelaySubprocessTree } from './subprocess-tree-termination'
+import {
+  isBareBinaryName,
+  isEnoentSpawnError,
+  resolvePosixBinaryViaLoginShell
+} from './agent-exec-posix-login-shell-resolve'
+import { getWindowsSafeSpawn } from './agent-exec-windows-safe-spawn'
 
 const DEFAULT_TIMEOUT_MS = 60_000
 const MAX_TIMEOUT_MS = 5 * 60 * 1000
 const MAX_OUTPUT_BYTES = 4 * 1024 * 1024
-const WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR = 'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
-
-function getCmdExePath(): string {
-  return process.env.ComSpec || `${process.env.SystemRoot ?? 'C:\\Windows'}\\System32\\cmd.exe`
-}
-
-function isWindowsBatchScript(commandPath: string): boolean {
-  return process.platform === 'win32' && /\.(cmd|bat)$/i.test(commandPath)
-}
-
-function hasUnsafeWindowsBatchSyntax(value: string): boolean {
-  return /[&|<>^"%!\r\n]/.test(value)
-}
-
-function quoteWindowsBatchToken(value: string): string {
-  if (hasUnsafeWindowsBatchSyntax(value)) {
-    throw new Error(WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR)
-  }
-  return `"${value}"`
-}
-
-function resolveWindowsCommand(binary: string, env: NodeJS.ProcessEnv): string {
-  if (process.platform !== 'win32') {
-    return binary
-  }
-  if (/[\\/]/.test(binary) || /\.[a-z0-9]+$/i.test(binary)) {
-    return binary
-  }
-
-  const pathEnv = env.PATH ?? env.Path
-  if (!pathEnv) {
-    return binary
-  }
-  const names = [`${binary}.cmd`, `${binary}.exe`, `${binary}.bat`, binary]
-  for (const directory of pathEnv.split(delimiter).filter(Boolean)) {
-    for (const name of names) {
-      const candidate = join(directory, name)
-      if (existsSync(candidate)) {
-        return candidate
-      }
-    }
-  }
-  return binary
-}
-
-function getWindowsSafeSpawn(
-  binary: string,
-  args: string[],
-  env: NodeJS.ProcessEnv
-): { spawnCmd: string; spawnArgs: string[] } {
-  const resolvedBinary = resolveWindowsCommand(binary, env)
-  if (!isWindowsBatchScript(resolvedBinary)) {
-    return { spawnCmd: resolvedBinary, spawnArgs: args }
-  }
-  const commandLine = [resolvedBinary, ...args].map(quoteWindowsBatchToken).join(' ')
-  return { spawnCmd: getCmdExePath(), spawnArgs: ['/d', '/s', '/c', commandLine] }
-}
 
 type ExecParams = {
   binary: unknown
@@ -160,15 +107,17 @@ export class AgentExecHandler {
     })
 
     return new Promise<ExecResult>((resolve) => {
-      let child
-      try {
-        const { spawnCmd, spawnArgs } = getWindowsSafeSpawn(binary, args, spawnEnv)
-        child = spawn(spawnCmd, spawnArgs, {
+      let child: ChildProcess
+      const spawnChild = (spawnCmd: string, spawnArgs: string[]): ChildProcess =>
+        spawn(spawnCmd, spawnArgs, {
           cwd,
           env: spawnEnv,
           stdio: ['pipe', 'pipe', 'pipe'],
           windowsHide: true
         })
+      try {
+        const { spawnCmd, spawnArgs } = getWindowsSafeSpawn(binary, args, spawnEnv)
+        child = spawnChild(spawnCmd, spawnArgs)
       } catch (error) {
         resolve({
           stdout: '',
@@ -187,6 +136,7 @@ export class AgentExecHandler {
       let timedOut = false
       let canceled = false
       let settled = false
+      let attemptedLoginShellFallback = false
       const laneKey = typeof cwd === 'string' ? this.laneKey(cwd, params.operation) : ''
       let entry: InFlightExec | null = null
       let timer: ReturnType<typeof setTimeout> | null = null
@@ -250,28 +200,69 @@ export class AgentExecHandler {
         }
         stderr += chunk.toString('utf-8')
       }
+      const wireChild = (): void => {
+        child.stdout?.on('data', onStdoutData)
+        child.stderr?.on('data', onStderrData)
+        child.on('error', onError)
+        child.on('close', onClose)
+        detachChildListeners = () => {
+          child.stdout?.off('data', onStdoutData)
+          child.stderr?.off('data', onStderrData)
+          child.off('error', onError)
+          child.off('close', onClose)
+        }
+        if (entry) {
+          entry.child = child
+        }
+        if (stdinPayload !== null) {
+          child.stdin?.end(stdinPayload)
+        } else {
+          child.stdin?.end()
+        }
+      }
       const onError = (error: Error): void => {
-        finish({
-          stdout,
-          stderr,
-          exitCode: null,
-          timedOut,
-          spawnError: error.message
+        const canRetryViaLoginShell =
+          !attemptedLoginShellFallback &&
+          process.platform !== 'win32' &&
+          isBareBinaryName(binary) &&
+          isEnoentSpawnError(error)
+        if (!canRetryViaLoginShell) {
+          finish({ stdout, stderr, exitCode: null, timedOut, spawnError: error.message })
+          return
+        }
+        attemptedLoginShellFallback = true
+        detachChildListeners()
+        void resolvePosixBinaryViaLoginShell(binary, spawnEnv).then((resolvedPath) => {
+          if (settled) {
+            return
+          }
+          if (canceled) {
+            finish({ stdout, stderr, exitCode: null, timedOut, canceled })
+            return
+          }
+          if (!resolvedPath) {
+            finish({ stdout, stderr, exitCode: null, timedOut, spawnError: error.message })
+            return
+          }
+          try {
+            child = spawnChild(resolvedPath, args)
+          } catch (retryError) {
+            finish({
+              stdout,
+              stderr,
+              exitCode: null,
+              timedOut,
+              spawnError: retryError instanceof Error ? retryError.message : String(retryError)
+            })
+            return
+          }
+          wireChild()
         })
       }
       const onClose = (code: number | null): void => {
         finish({ stdout, stderr, exitCode: code, timedOut, canceled })
       }
-      child.stdout?.on('data', onStdoutData)
-      child.stderr?.on('data', onStderrData)
-      child.on('error', onError)
-      child.on('close', onClose)
-      detachChildListeners = () => {
-        child.stdout?.off('data', onStdoutData)
-        child.stderr?.off('data', onStderrData)
-        child.off('error', onError)
-        child.off('close', onClose)
-      }
+      wireChild()
 
       if (context?.signal) {
         if (context.signal.aborted) {
@@ -282,12 +273,6 @@ export class AgentExecHandler {
             context.signal?.removeEventListener('abort', cancelCurrent)
           }
         }
-      }
-
-      if (stdinPayload !== null) {
-        child.stdin?.end(stdinPayload)
-      } else {
-        child.stdin?.end()
       }
     })
   }
