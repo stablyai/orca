@@ -707,6 +707,7 @@
   top: 8px;
   right: 8px;
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.15s ease;
   background: none;
   border: 1px solid transparent;
@@ -721,6 +722,7 @@
 .mermaid-preview-wrapper:hover .mermaid-preview-expand-btn,
 .mermaid-preview-wrapper:focus-within .mermaid-preview-expand-btn {
   opacity: 1;
+  pointer-events: auto;
 }
 .mermaid-preview-expand-btn:hover {
   background: var(--accent);
@@ -729,6 +731,7 @@
 @media (hover: none) {
   .mermaid-preview-expand-btn {
     opacity: 1;
+    pointer-events: auto;
   }
 }
 .mermaid-error {

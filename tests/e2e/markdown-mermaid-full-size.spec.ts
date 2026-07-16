@@ -75,6 +75,16 @@ test.describe('Markdown Mermaid full-size preview', () => {
         )
         .toBe(1)
 
+      const previewWrapper = orcaPage.locator('.mermaid-preview-wrapper')
+      const previewBox = await previewWrapper.boundingBox()
+      expect(previewBox).not.toBeNull()
+      if (!previewBox) {
+        throw new Error('Expected Mermaid preview wrapper bounds before click target check')
+      }
+
+      await orcaPage.mouse.click(previewBox.x + previewBox.width - 6, previewBox.y + 6)
+      await expect(orcaPage.getByRole('dialog', { name: 'Open full size' })).toHaveCount(0)
+
       const openButton = orcaPage.getByRole('button', { name: 'Open full size' })
       await expect(openButton).toBeVisible()
       await openButton.click()
