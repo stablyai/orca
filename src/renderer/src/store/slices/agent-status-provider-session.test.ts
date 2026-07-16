@@ -145,4 +145,118 @@ describe('recordAgentProviderSession', () => {
       store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.launchConfig
     ).toBeUndefined()
   })
+
+  it('keeps a completed Pi session resumable through manual worktree sleep', () => {
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+      }
+    } as Partial<AppState>)
+    const providerSession = {
+      key: 'session_id' as const,
+      id: 'pi-session-1',
+      transcriptPath: '/tmp/pi-session-1.jsonl'
+    }
+
+    store
+      .getState()
+      .recordAgentProviderSession(
+        'tab-1:leaf-1',
+        'pi',
+        providerSession,
+        { updatedAt: 10 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' }
+      )
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'working', prompt: 'finish the task', agentType: 'pi' },
+        'Pi',
+        { updatedAt: 20, stateStartedAt: 20 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' },
+        { providerSession }
+      )
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'done', prompt: 'finish the task', agentType: 'pi' },
+        'Pi',
+        { updatedAt: 30, stateStartedAt: 30 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' },
+        { providerSession }
+      )
+
+    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']?.state).toBe('done')
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+      agent: 'pi',
+      providerSession,
+      state: 'working',
+      origin: 'live'
+    })
+
+    store.getState().captureSleepingAgentSessionsByWorktree('wt-1', ['tab-1:leaf-1'])
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+      agent: 'pi',
+      providerSession,
+      state: 'working',
+      origin: 'worktree-sleep'
+    })
+  })
+
+  it('keeps a completed Pi session resumable through quit capture', () => {
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+      }
+    } as Partial<AppState>)
+    const providerSession = {
+      key: 'session_id' as const,
+      id: 'pi-session-1',
+      transcriptPath: '/tmp/pi-session-1.jsonl'
+    }
+
+    store
+      .getState()
+      .recordAgentProviderSession(
+        'tab-1:leaf-1',
+        'pi',
+        providerSession,
+        { updatedAt: 10 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' }
+      )
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'working', prompt: 'finish the task', agentType: 'pi' },
+        'Pi',
+        { updatedAt: 20, stateStartedAt: 20 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' },
+        { providerSession }
+      )
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'done', prompt: 'finish the task', agentType: 'pi' },
+        'Pi',
+        { updatedAt: 30, stateStartedAt: 30 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' },
+        { providerSession }
+      )
+
+    store.getState().captureAllSleepingAgentSessions()
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+      agent: 'pi',
+      providerSession,
+      state: 'working',
+      origin: 'quit'
+    })
+  })
 })

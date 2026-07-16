@@ -154,7 +154,10 @@ function createHarness(args: {
 
 describe('getPiAgentStatusExtensionSource', () => {
   it('includes the session id and file path in Pi status posts after session_start', async () => {
-    const harness = createHarness({ kind: 'pi' })
+    const harness = createHarness({
+      kind: 'pi',
+      existsSync: (path) => path === '/tmp/pi-session-1.jsonl'
+    })
 
     await harness.callHook(
       'session_start',
@@ -183,6 +186,65 @@ describe('getPiAgentStatusExtensionSource', () => {
       prompt: 'resume this task',
       session_id: 'pi-session-1',
       session_file: '/tmp/pi-session-1.jsonl'
+    })
+  })
+
+  it('waits until Pi creates its planned session file before advertising resume identity', async () => {
+    let sessionFileExists = false
+    const harness = createHarness({
+      kind: 'pi',
+      existsSync: (path) => path === '/tmp/pi-session-1.jsonl' && sessionFileExists
+    })
+
+    await harness.callHook(
+      'session_start',
+      { reason: 'startup' },
+      {
+        sessionManager: {
+          getSessionId: () => 'pi-session-1',
+          getSessionFile: () => '/tmp/pi-session-1.jsonl'
+        }
+      }
+    )
+
+    expect(JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body)).payload).toEqual({
+      hook_event_name: 'session_start'
+    })
+
+    sessionFileExists = true
+    await harness.callHook('agent_end')
+
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+    expect(JSON.parse(String(harness.fetchMock.mock.calls[1]?.[1]?.body)).payload).toEqual({
+      hook_event_name: 'agent_end',
+      session_id: 'pi-session-1',
+      session_file: '/tmp/pi-session-1.jsonl'
+    })
+  })
+
+  it('refreshes Pi session metadata on reload without posting a replacement status', async () => {
+    const harness = createHarness({
+      kind: 'pi',
+      existsSync: (path) => path === '/tmp/pi-reloaded.jsonl'
+    })
+
+    await harness.callHook(
+      'session_start',
+      { reason: 'reload' },
+      {
+        sessionManager: {
+          getSessionId: () => 'pi-reloaded',
+          getSessionFile: () => '/tmp/pi-reloaded.jsonl'
+        }
+      }
+    )
+    expect(harness.fetchMock).not.toHaveBeenCalled()
+
+    await harness.callHook('agent_start')
+    expect(JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body)).payload).toEqual({
+      hook_event_name: 'agent_start',
+      session_id: 'pi-reloaded',
+      session_file: '/tmp/pi-reloaded.jsonl'
     })
   })
 

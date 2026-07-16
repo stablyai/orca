@@ -6,8 +6,11 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
   const sessionStartHandler =
     kind === 'pi'
       ? [
-          "  pi.on('session_start', (_event, ctx) => {",
+          "  pi.on('session_start', (event, ctx) => {",
           '    updateSessionMetadata(ctx)',
+          '    // Why: /reload re-registers the active session, but it is not a',
+          '    // turn boundary and must not clear the visible status or unread state.',
+          "    if (event.reason === 'reload') return",
           "    post('session_start')",
           '  })',
           ''

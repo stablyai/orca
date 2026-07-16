@@ -3093,7 +3093,9 @@ export function useIpcEvents(): void {
           {
             tabId: ownerTabId,
             worktreeId: data.worktreeId ?? owningWorktreeId,
-            connectionId: data.connectionId
+            // Why: persist the WSL-normalized ownership id, not the raw relay
+            // provenance; a `wsl:*` connectionId would misroute later resumes.
+            ...(ownershipConnectionId !== undefined ? { connectionId: ownershipConnectionId } : {})
           },
           data.launchToken ? { launchToken: data.launchToken } : undefined
         )

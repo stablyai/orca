@@ -359,6 +359,38 @@ describe('agent sleep planner', () => {
     ).toEqual([])
   })
 
+  it('still hibernates completed Pi panes that only retain live resume identity', () => {
+    const piEntry = entry({
+      agentType: 'pi',
+      providerSession: {
+        key: 'session_id',
+        id: 'pi-session-1',
+        transcriptPath: '/tmp/pi-session-1.jsonl'
+      }
+    })
+    expect(
+      plannedPaneKeys(
+        snapshot({
+          agentStatusByPaneKey: { [piEntry.paneKey]: piEntry },
+          sleepingAgentSessionsByPaneKey: {
+            [piEntry.paneKey]: {
+              paneKey: piEntry.paneKey,
+              tabId: 'tab-1',
+              worktreeId: 'wt-bg',
+              agent: 'pi',
+              providerSession: piEntry.providerSession!,
+              prompt: '',
+              state: 'working',
+              capturedAt: OLD,
+              updatedAt: OLD,
+              origin: 'live'
+            }
+          }
+        })
+      )
+    ).toEqual([piEntry.paneKey])
+  })
+
   it('rejects mobile-driven panes because paired clients can send input outside desktop xterm', () => {
     expect(plannedWorktrees(snapshot({ mobileLockedPtyIds: ['pty-1'] }))).toEqual([])
   })

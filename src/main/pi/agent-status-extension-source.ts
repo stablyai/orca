@@ -30,12 +30,25 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
           "    ...(typeof sessionFile === 'string' && sessionFile ? { session_file: sessionFile } : {}),",
           '  } : {}',
           '}',
+          '',
+          'function getPersistedSessionMetadata(): Record<string, unknown> {',
+          '  const sessionFile = sessionMetadata.session_file',
+          "  if (typeof sessionFile !== 'string' || !sessionFile) return {}",
+          '  try {',
+          "    const fs = require('fs')",
+          '    // Why: Pi publishes its planned path before creating the transcript;',
+          '    // recheck on every post so the first completed turn becomes resumable.',
+          '    return fs.existsSync(sessionFile) ? sessionMetadata : {}',
+          '  } catch {',
+          '    return {}',
+          '  }',
+          '}',
           ''
         ]
       : []
   const payloadLine =
     kind === 'pi'
-      ? '    payload: { hook_event_name: hookEventName, ...sessionMetadata, ...extra },'
+      ? '    payload: { hook_event_name: hookEventName, ...getPersistedSessionMetadata(), ...extra },'
       : '    payload: { hook_event_name: hookEventName, ...extra },'
 
   // Why: keep this string self-contained — it runs inside the pi process,

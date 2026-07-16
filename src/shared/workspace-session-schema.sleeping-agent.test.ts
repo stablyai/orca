@@ -80,6 +80,35 @@ describe('parseWorkspaceSession sleeping agents', () => {
     }
   })
 
+  it('drops Pi sleeping-agent records without an authoritative session file', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'pi',
+          providerSession: { key: 'session_id', id: 'pi-session' },
+          prompt: '',
+          state: 'done',
+          capturedAt: 10,
+          updatedAt: 10,
+          origin: 'live'
+        }
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.sleepingAgentSessionsByPaneKey).toBeUndefined()
+    }
+  })
+
   it('drops invalid sleeping agent launch config without dropping the record', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

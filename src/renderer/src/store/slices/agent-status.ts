@@ -542,6 +542,22 @@ function isValidCompletedAgentHibernationEntry(entry: AgentStatusEntry): boolean
   return entry.state === 'done' && entry.interrupted !== true
 }
 
+function isCompletedPiWithLiveRecoveryRecord(
+  entry: AgentStatusEntry | undefined,
+  record: SleepingAgentSessionRecord | undefined
+): record is SleepingAgentSessionRecord {
+  return Boolean(
+    entry?.state === 'done' &&
+    entry.agentType === 'pi' &&
+    entry.providerSession &&
+    record?.agent === 'pi' &&
+    record.origin === 'live' &&
+    (!entry.worktreeId || entry.worktreeId === record.worktreeId) &&
+    agentProviderSessionsEqual('pi', entry.providerSession, record.providerSession) &&
+    getAgentResumeArgv('pi', record.providerSession)
+  )
+}
+
 export function removeSleepingRecordsReplacedByManualWorktreeSleep(
   records: Record<string, SleepingAgentSessionRecord>,
   worktreeId: string,
@@ -584,17 +600,18 @@ export function collectSleepingAgentSessionRecordsForWorktree(
 
   if (isManualWorktreeSleep) {
     for (const existing of Object.values(state.sleepingAgentSessionsByPaneKey)) {
+      const liveEntry = state.agentStatusByPaneKey[existing.paneKey]
       if (
         existing.worktreeId !== worktreeId ||
         existing.origin !== 'live' ||
-        state.agentStatusByPaneKey[existing.paneKey] !== undefined ||
+        (liveEntry !== undefined && !isCompletedPiWithLiveRecoveryRecord(liveEntry, existing)) ||
         (allowedPaneKeys && !allowedPaneKeys.has(existing.paneKey)) ||
         !getAgentResumeArgv(existing.agent, existing.providerSession)
       ) {
         continue
       }
-      // Why: a metadata-only session_start is current pane identity even when
-      // no turn row exists; manual sleep must promote it instead of deleting it.
+      // Why: Pi identity is resumable with no turn row and while idle after
+      // done; manual sleep must promote both instead of deleting the checkpoint.
       records[existing.paneKey] = {
         ...existing,
         state: 'working',
@@ -1508,16 +1525,22 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         if (nextRetained !== s.retainedAgentsByPaneKey) {
           delete nextRetained[paneKey]
         }
-        const nextLaunchConfigs =
-          registryMatches && registryEntry
-            ? {
-                ...s.agentLaunchConfigByPaneKey,
-                [paneKey]: {
-                  ...registryEntry,
-                  identity: { ...registryEntry.identity, providerSession }
-                }
-              }
-            : s.agentLaunchConfigByPaneKey
+        // Why: on identity mismatch the sleeping record drops its launch config,
+        // so a stale registry entry must be cleared too or a later return to the
+        // old provider identity could reuse stale args/env. Mirror setAgentStatus.
+        let nextLaunchConfigs = s.agentLaunchConfigByPaneKey
+        if (registryMatches && registryEntry) {
+          nextLaunchConfigs = {
+            ...nextLaunchConfigs,
+            [paneKey]: {
+              ...registryEntry,
+              identity: { ...registryEntry.identity, providerSession }
+            }
+          }
+        } else if (registryEntry) {
+          nextLaunchConfigs = { ...nextLaunchConfigs }
+          delete nextLaunchConfigs[paneKey]
+        }
         return {
           agentStatusByPaneKey: nextLive,
           retainedAgentsByPaneKey: nextRetained,
@@ -1706,8 +1729,13 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           ? registryEntry?.launchConfig
           : undefined
         const existingSleepingRecord = s.sleepingAgentSessionsByPaneKey[paneKey]
+        const retainsPiRecoveryIdentity =
+          payload.state === 'done' &&
+          identity.agentType === 'pi' &&
+          providerSession !== undefined &&
+          getAgentResumeArgv('pi', providerSession) !== null
         const matchedSleepingLaunchConfig =
-          payload.state !== 'done' &&
+          (payload.state !== 'done' || retainsPiRecoveryIdentity) &&
           existingSleepingRecord?.launchConfig &&
           existingSleepingRecord.agent === identity.agentType &&
           providerSession &&
@@ -1863,13 +1891,17 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           (entry) => entry.paneKey === paneKey
         )
         const liveRecoveryWorktreeId =
-          entry.state === 'done'
+          entry.state === 'done' && !retainsPiRecoveryIdentity
             ? null
             : (entry.worktreeId ?? findAgentPaneWorktreeId(s, entry.paneKey))
         const liveRecoveryRecord = liveRecoveryWorktreeId
           ? sleepingRecordFromEntry({
               state: s,
-              entry,
+              // Why: a completed Pi turn leaves the TUI session alive. Keep
+              // resume identity active without representing done as pending work.
+              entry: retainsPiRecoveryIdentity
+                ? { ...entry, state: 'working', prompt: '', lastAssistantMessage: undefined }
+                : entry,
               worktreeId: liveRecoveryWorktreeId,
               capturedAt: updatedAt,
               launchConfig: launchConfigSource,
@@ -2699,9 +2731,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     captureAllSleepingAgentSessions: () => {
       // Why: the quit flush must persist provider session ids for every live
       // agent pane — otherwise agents whose daemon PTYs die while the app is
-      // closed have nothing to `--resume` from (#5232). Only live entries are
-      // captured: retained rows belong to panes the user already closed, and
-      // `done` sessions have nothing to resume.
+      // closed have nothing to `--resume` from (#5232). Retained rows belong
+      // to panes the user already closed; completed Pi is the sole done-state
+      // exception because agent_end ends a turn while its resumable TUI lives on.
       set((s) => {
         const capturedAt = Date.now()
         const next: Record<string, SleepingAgentSessionRecord> = {
@@ -2710,6 +2742,15 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         let changed = false
         for (const entry of Object.values(s.agentStatusByPaneKey)) {
           if (entry.state === 'done') {
+            const existing = next[entry.paneKey]
+            if (!isCompletedPiWithLiveRecoveryRecord(entry, existing)) {
+              continue
+            }
+            const record = { ...existing, capturedAt, origin: 'quit' as const }
+            if (!sleepingRecordsEquivalentIgnoringCaptureTime(existing, record)) {
+              next[entry.paneKey] = record
+              changed = true
+            }
             continue
           }
           const worktreeId = entry.worktreeId ?? findAgentPaneWorktreeId(s, entry.paneKey)

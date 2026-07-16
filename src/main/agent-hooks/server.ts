@@ -61,7 +61,8 @@ import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pan
 import type { LegacyPaneKeyAliasEntry } from '../../shared/types'
 import {
   getAgentResumeArgv,
-  normalizeAgentProviderSession
+  normalizeAgentProviderSession,
+  type AgentProviderSessionMetadata
 } from '../../shared/agent-session-resume'
 import { isCommandCodeNewTurnWhileWorking } from '../../shared/command-code-turn-boundary'
 
@@ -195,6 +196,15 @@ function dropHydratedIdleClaudeSubagents(
   }
 }
 
+// Why: the sole gate deciding whether a providerSessionOnly row is trustworthy
+// enough to keep. Shared so the hydrate and relay-ingest paths can't drift.
+function isValidPiProviderSessionOnly(
+  providerSession: AgentProviderSessionMetadata | undefined,
+  agentType: AgentType | undefined
+): boolean {
+  return Boolean(providerSession && agentType === 'pi' && getAgentResumeArgv('pi', providerSession))
+}
+
 function sanitizeHydratedEntry(
   paneKey: string,
   rawEntry: unknown
@@ -253,10 +263,7 @@ function sanitizeHydratedEntry(
   }
   const providerSession = normalizeAgentProviderSession(record.providerSession) ?? undefined
   const providerSessionOnly = record.providerSessionOnly === true
-  if (
-    providerSessionOnly &&
-    (!providerSession || payload.agentType !== 'pi' || !getAgentResumeArgv('pi', providerSession))
-  ) {
+  if (providerSessionOnly && !isValidPiProviderSessionOnly(providerSession, payload.agentType)) {
     return null
   }
   return {
@@ -1430,9 +1437,7 @@ export class AgentHookServer {
     }
     if (
       envelope.providerSessionOnly === true &&
-      (!providerSession ||
-        normalizedPayload.agentType !== 'pi' ||
-        !getAgentResumeArgv('pi', providerSession))
+      !isValidPiProviderSessionOnly(providerSession, normalizedPayload.agentType)
     ) {
       return
     }
