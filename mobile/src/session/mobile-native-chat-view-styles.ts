@@ -68,9 +68,16 @@ export const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: spacing.xl
   },
-  hint: {
-    color: colors.textMuted,
+  emptyTitle: {
+    color: colors.textSecondary,
     fontSize: typography.bodySize,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: spacing.xs
+  },
+  emptySubtitle: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize,
     textAlign: 'center'
   },
   fab: {

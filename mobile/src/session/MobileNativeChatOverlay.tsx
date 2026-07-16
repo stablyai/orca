@@ -39,6 +39,7 @@ export function MobileNativeChatOverlay({
         messages={session.messages}
         status={session.status}
         error={session.error}
+        agent={controller.nativeChatAgent}
         agentWorking={controller.nativeChatAgentWorking}
         streamingText={controller.nativeChatStreamingText}
         onStop={controller.handleNativeChatStop}

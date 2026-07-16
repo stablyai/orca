@@ -17,7 +17,7 @@ import { styles } from './mobile-native-chat-view-styles'
 import {
   buildMobileNativeChatTransientData,
   foldMobileNativeChatMessages,
-  statusHint
+  mobileNativeChatEmptyState
 } from './mobile-native-chat-render-data'
 import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dismiss'
 import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-gesture'
@@ -40,6 +40,8 @@ type Props = {
   messages: NativeChatMessage[]
   status: MobileNativeChatStatus
   error?: string
+  /** Resolved agent for this chat; names the empty-state copy (desktop parity). */
+  agent?: string | null
   agentWorking?: boolean
   /** Interrupt the agent mid-turn (shown as a Stop button on the working bar). */
   onStop?: () => void
@@ -89,6 +91,7 @@ export function MobileNativeChatView({
   messages,
   status,
   error,
+  agent,
   agentWorking,
   onStop,
   streamingText,
@@ -229,7 +232,7 @@ export function MobileNativeChatView({
     [pendingIds, toolsExpanded, fontScale, onScrollToMessage, onOpenFile]
   )
 
-  const hint = statusHint(status, error)
+  const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error)
   const showLoading = status === 'loading' && messages.length === 0
 
   // Composer-lock flicker guard: on a remote link, brief connState blips or lease
@@ -300,13 +303,10 @@ export function MobileNativeChatView({
                 ) : null
               }
               ListEmptyComponent={
-                hint ? (
+                emptyState ? (
                   <View style={styles.center}>
-                    <Text style={styles.hint}>{hint}</Text>
-                  </View>
-                ) : status === 'ready' ? (
-                  <View style={styles.center}>
-                    <Text style={styles.hint}>No messages yet.</Text>
+                    <Text style={styles.emptyTitle}>{emptyState.title}</Text>
+                    <Text style={styles.emptySubtitle}>{emptyState.subtitle}</Text>
                   </View>
                 ) : null
               }

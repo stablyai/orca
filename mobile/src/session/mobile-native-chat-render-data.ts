@@ -1,16 +1,34 @@
+import { formatAgentTypeLabel } from '../../../src/shared/agent-type-label'
+import {
+  formatNativeChatEmptyStateCopy,
+  type NativeChatEmptyStateCopy
+} from '../../../src/shared/native-chat-empty-state'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { foldToolMessages } from './mobile-native-chat-blocks'
 import { stripNoiseMessages } from './mobile-native-chat-noise'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 
-export function statusHint(status: MobileNativeChatStatus, error?: string): string | null {
+/** The centered empty-state copy for a chat with no messages, mirroring the
+ *  desktop `NativeChatEmptyState` (shared copy + agent label) so the two surfaces
+ *  stay in lockstep. Returns null when the list should stay bare (idle, or the
+ *  loading spinner owns the view). */
+export function mobileNativeChatEmptyState(
+  status: MobileNativeChatStatus,
+  agent: string | null,
+  error?: string
+): NativeChatEmptyStateCopy | null {
+  const agentLabel = agent ? formatAgentTypeLabel(agent) : 'the agent'
   switch (status) {
+    // A live agent with no transcript yet — and a loaded-but-empty transcript —
+    // are both "start a chat"; invite the first message instead of implying the
+    // agent is still starting up.
     case 'waiting-session':
-      // A live agent with no transcript yet is ready to chat — invite the first
-      // message instead of implying the agent is still starting up.
-      return 'Send a message to get started'
-    case 'error':
-      return error ?? 'Could not load the conversation.'
+    case 'ready':
+      return formatNativeChatEmptyStateCopy('empty', agentLabel)
+    case 'error': {
+      const copy = formatNativeChatEmptyStateCopy('error', agentLabel)
+      return error ? { ...copy, subtitle: error } : copy
+    }
     default:
       return null
   }

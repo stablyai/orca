@@ -35,6 +35,8 @@ export type MobileNativeChatController = {
   toggleTabChatView: (tabId: string) => void
   showNativeChat: boolean
   showNativeChatRef: MutableRefObject<boolean>
+  /** Resolved agent for the active chat tab (names the empty-state copy). */
+  nativeChatAgent: string | null
   chatComposerText: string
   setChatComposerText: Dispatch<SetStateAction<string>>
   chatPending: Array<{ id: string; text: string }>
@@ -290,6 +292,7 @@ export function useMobileNativeChatController(args: {
     toggleTabChatView,
     showNativeChat,
     showNativeChatRef,
+    nativeChatAgent: activeChatResolution?.agent ?? null,
     chatComposerText,
     setChatComposerText,
     chatPending,

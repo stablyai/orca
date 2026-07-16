@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { buildMobileNativeChatData, statusHint } from './mobile-native-chat-render-data'
+import {
+  buildMobileNativeChatData,
+  mobileNativeChatEmptyState
+} from './mobile-native-chat-render-data'
 
 function assistant(id: string, text: string): NativeChatMessage {
   return {
@@ -16,19 +19,32 @@ function user(id: string, text: string): NativeChatMessage {
   return { id, role: 'user', blocks: [{ type: 'text', text }], timestamp: 0, source: 'transcript' }
 }
 
-describe('statusHint', () => {
-  it('invites a first message in the waiting-session state', () => {
-    expect(statusHint('waiting-session')).toMatch(/Send a message/)
+describe('mobileNativeChatEmptyState', () => {
+  it('invites a first message naming the agent, matching desktop copy', () => {
+    // waiting-session (live agent, no transcript) and ready (loaded, empty) both
+    // resolve to the shared "empty" copy with the agent label substituted.
+    const waiting = mobileNativeChatEmptyState('waiting-session', 'claude')
+    expect(waiting).toEqual({
+      title: 'Start a chat with Claude',
+      subtitle: 'Ask Claude to inspect code, explain output, or make a change.'
+    })
+    expect(mobileNativeChatEmptyState('ready', 'codex')?.title).toBe('Start a chat with Codex')
   })
 
-  it('prefers the provided error message, falling back to a default', () => {
-    expect(statusHint('error', 'boom')).toBe('boom')
-    expect(statusHint('error')).toBe('Could not load the conversation.')
+  it('falls back to "the agent" when the agent is unknown', () => {
+    expect(mobileNativeChatEmptyState('waiting-session', null)?.title).toBe('Start a chat with the agent')
   })
 
-  it('returns null for non-hint states', () => {
-    expect(statusHint('ready')).toBeNull()
-    expect(statusHint('loading')).toBeNull()
+  it('prefers the provided error message over the default subtitle', () => {
+    expect(mobileNativeChatEmptyState('error', 'claude', 'boom')?.subtitle).toBe('boom')
+    expect(mobileNativeChatEmptyState('error', 'claude')?.subtitle).toBe(
+      'The transcript could not be read. Toggle back to the terminal to keep working.'
+    )
+  })
+
+  it('returns null for states that show no empty copy', () => {
+    expect(mobileNativeChatEmptyState('loading', 'claude')).toBeNull()
+    expect(mobileNativeChatEmptyState('idle', 'claude')).toBeNull()
   })
 })
 
