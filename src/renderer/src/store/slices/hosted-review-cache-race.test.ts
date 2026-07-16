@@ -275,6 +275,120 @@ describe('hosted review cache race protection', () => {
     }
   })
 
+  it('ignores a superseded upstream diagnostic after a newer request completes', async () => {
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    let resolveOlder: (value: HostedReviewLookupResult) => void = () => {}
+    let resolveCurrent: (value: HostedReviewLookupResult) => void = () => {}
+    const older = new Promise<HostedReviewLookupResult>((resolve) => {
+      resolveOlder = resolve
+    })
+    const current = new Promise<HostedReviewLookupResult>((resolve) => {
+      resolveCurrent = resolve
+    })
+    mockApi.hostedReview.forBranch
+      .mockReturnValueOnce(older)
+      .mockResolvedValueOnce(found(review))
+      .mockReturnValueOnce(current)
+    const store = makeStore()
+
+    try {
+      const olderRequest = store
+        .getState()
+        .fetchHostedReviewForBranch('/repo', 'feature/stale-diagnostic')
+      await store
+        .getState()
+        .fetchHostedReviewForBranch('/repo', 'feature/stale-diagnostic', { force: true })
+      const currentRequest = store
+        .getState()
+        .fetchHostedReviewForBranch('/repo', 'feature/stale-diagnostic', { force: true })
+
+      resolveOlder({ kind: 'upstream-error', provider: 'github', errorType: 'network' })
+      await olderRequest
+      resolveCurrent(found(review))
+      await currentRequest
+
+      expect(consoleWarn).not.toHaveBeenCalled()
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('does not let a superseded success clear the current failure diagnostic', async () => {
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    let resolveOlder: (value: HostedReviewLookupResult) => void = () => {}
+    let resolveCurrent: (value: HostedReviewLookupResult) => void = () => {}
+    const older = new Promise<HostedReviewLookupResult>((resolve) => {
+      resolveOlder = resolve
+    })
+    const current = new Promise<HostedReviewLookupResult>((resolve) => {
+      resolveCurrent = resolve
+    })
+    const failure = {
+      kind: 'upstream-error' as const,
+      provider: 'github' as const,
+      errorType: 'network' as const
+    }
+    mockApi.hostedReview.forBranch
+      .mockReturnValueOnce(older)
+      .mockResolvedValueOnce(failure)
+      .mockReturnValueOnce(current)
+    const store = makeStore()
+
+    try {
+      const olderRequest = store
+        .getState()
+        .fetchHostedReviewForBranch('/repo', 'feature/stale-success')
+      await store
+        .getState()
+        .fetchHostedReviewForBranch('/repo', 'feature/stale-success', { force: true })
+      const currentRequest = store
+        .getState()
+        .fetchHostedReviewForBranch('/repo', 'feature/stale-success', { force: true })
+
+      resolveOlder(found(review))
+      await olderRequest
+      resolveCurrent(failure)
+      await currentRequest
+
+      expect(consoleWarn).toHaveBeenCalledTimes(1)
+    } finally {
+      consoleWarn.mockRestore()
+    }
+  })
+
+  it('does not clear an expected failure diagnostic after an unexpected rejection', async () => {
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const failure = {
+      kind: 'upstream-error' as const,
+      provider: 'github' as const,
+      errorType: 'network' as const
+    }
+    mockApi.hostedReview.forBranch
+      .mockResolvedValueOnce(failure)
+      .mockRejectedValueOnce(new Error('unexpected lookup defect'))
+      .mockResolvedValueOnce(failure)
+    const store = makeStore()
+
+    try {
+      await store
+        .getState()
+        .fetchHostedReviewForBranch('/repo', 'feature/rejected-diagnostic', { force: true })
+      await store
+        .getState()
+        .fetchHostedReviewForBranch('/repo', 'feature/rejected-diagnostic', { force: true })
+      await store
+        .getState()
+        .fetchHostedReviewForBranch('/repo', 'feature/rejected-diagnostic', { force: true })
+
+      expect(consoleWarn).toHaveBeenCalledTimes(1)
+      expect(consoleError).toHaveBeenCalledTimes(1)
+    } finally {
+      consoleWarn.mockRestore()
+      consoleError.mockRestore()
+    }
+  })
+
   it('does not let a same-millisecond external cache write after request start be overwritten', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(100)

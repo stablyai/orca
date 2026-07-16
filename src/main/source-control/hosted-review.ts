@@ -11,6 +11,7 @@ function classifyHostedReviewProviderError(
 ): HostedReviewLookupError['errorType'] | null {
   const messages: string[] = []
   const codes = new Set<string>()
+  const names = new Set<string>()
   const visited = new Set<object>()
   let current: unknown = error
   for (let depth = 0; depth < 8 && current !== undefined && current !== null; depth++) {
@@ -30,6 +31,10 @@ function classifyHostedReviewProviderError(
     if (typeof code === 'string') {
       codes.add(code.toUpperCase())
     }
+    const name = readErrorProperty(current, 'name')
+    if (typeof name === 'string') {
+      names.add(name.toUpperCase())
+    }
     current = readErrorProperty(current, 'cause')
   }
   const message = messages.join(' ')
@@ -44,6 +49,7 @@ function classifyHostedReviewProviderError(
     lower.includes('could not resolve host') ||
     lower.includes('connection reset') ||
     /http 5\d\d/.test(lower) ||
+    names.has('ABORTERROR') ||
     [...codes].some((code) => NETWORK_ERROR_CODES.has(code))
   ) {
     return 'network'
@@ -78,7 +84,10 @@ const NETWORK_ERROR_CODES = new Set([
   'UND_ERR_SOCKET'
 ])
 
-function readErrorProperty(error: object, property: 'cause' | 'code' | 'message'): unknown {
+function readErrorProperty(
+  error: object,
+  property: 'cause' | 'code' | 'message' | 'name'
+): unknown {
   try {
     return Reflect.get(error, property)
   } catch {

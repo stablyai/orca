@@ -3,7 +3,7 @@ import { emitRelayWatcherOverflow } from './relay-watcher-event-emitter'
 import { emitRelayWatcherTerminalFailure } from './relay-watcher-terminal-notifier'
 import type { RelayWatcherTeardownState } from './relay-watcher-teardown-tracker'
 import { PromiseSettlementWaiters } from '../shared/promise-settlement-waiters'
-import { startWatcherGenerationReplacement } from '../main/ipc/watcher-generation-replacement'
+import { startWatcherGenerationReplacement } from '../shared/watcher-generation-replacement'
 
 type RelayWatcherRecoveryOptions = {
   state: RelayWatcherTeardownState

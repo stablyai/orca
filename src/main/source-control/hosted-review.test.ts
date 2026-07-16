@@ -206,6 +206,22 @@ describe('getHostedReviewForBranch', () => {
     }
   )
 
+  it.each([
+    ['top-level', Object.assign(new Error('request cancelled'), { name: 'AbortError' })],
+    [
+      'cause-chain',
+      new TypeError('fetch failed', {
+        cause: Object.assign(new Error('request cancelled'), { name: 'AbortError' })
+      })
+    ]
+  ])('classifies a standard %s AbortError as a network failure', (_location, error) => {
+    expect(hostedReviewLookupFailure(error, 'gitea')).toEqual({
+      kind: 'upstream-error',
+      provider: 'gitea',
+      errorType: 'network'
+    })
+  })
+
   it('stops safely when a malformed provider error cause cannot be read', () => {
     const error = new Error('unexpected provider defect')
     Object.defineProperty(error, 'cause', {

@@ -18,7 +18,7 @@ import {
 } from '../../shared/runtime-file-watch-limits'
 import { PromiseSettlementWaiters } from '../../shared/promise-settlement-waiters'
 import { mapRuntimeFileWatchEvents, runtimeFileWatchOverflow } from './runtime-file-watch-events'
-import { startWatcherGenerationReplacement } from '../ipc/watcher-generation-replacement'
+import { startWatcherGenerationReplacement } from '../../shared/watcher-generation-replacement'
 import { shouldRetryInitialRuntimeWatch } from './runtime-file-watch-setup-retry'
 
 const RUNTIME_FILE_WATCH_IGNORE_OPTIONS = buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)

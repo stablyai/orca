@@ -20,8 +20,8 @@ export function startWatcherGenerationReplacement(
   // Why: generation ownership must change before any teardown promise can
   // yield, or duplicate native callbacks can start competing replacements.
   const generation = ++owner.generation
-  const release = onClaim()
   const promise = (async () => {
+    const release = onClaim()
     if (release) {
       await release()
     }
