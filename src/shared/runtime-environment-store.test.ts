@@ -207,6 +207,15 @@ describe('runtime environment store', () => {
     expect(readFileSync(getEnvironmentStorePath(userDataPath), 'utf8')).toBe(invalid)
   })
 
+  it('does not rewrite a schema-invalid environment store during reconciliation', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
+    tempDirs.push(userDataPath)
+    const invalid = JSON.stringify({ version: 1, environments: [{}] })
+    writeFileSync(getEnvironmentStorePath(userDataPath), invalid)
+    expect(() => listEnvironments(userDataPath)).toThrow(RuntimeEnvironmentStoreError)
+    expect(readFileSync(getEnvironmentStorePath(userDataPath), 'utf8')).toBe(invalid)
+  })
+
   it('persists immediately when the runtimeId changes within the throttle window', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
     tempDirs.push(userDataPath)

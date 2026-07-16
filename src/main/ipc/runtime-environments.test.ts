@@ -193,6 +193,31 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(await list(null, undefined)).toEqual([])
   })
 
+  it('returns the canonical redacted environment on same-key desktop re-pair', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    const first = await add(null, { name: 'desk', pairingCode: pairingCode() })
+    const second = await add(null, {
+      name: 'renamed-desk',
+      pairingCode: pairingCode('ws://127.0.0.1:7777')
+    })
+
+    expect(second.environment).toMatchObject({
+      id: first.environment.id,
+      name: first.environment.name
+    })
+    expect(JSON.stringify(second)).not.toContain('device-token')
+    expect(JSON.stringify(second)).not.toContain('publicKeyB64')
+    const list = handler<undefined, { id: string; name: string }[]>('runtimeEnvironments:list')
+    expect(await list(null, undefined)).toMatchObject([
+      { id: first.environment.id, name: first.environment.name }
+    ])
+  })
+
   it('disconnects a saved runtime without removing it', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
 
