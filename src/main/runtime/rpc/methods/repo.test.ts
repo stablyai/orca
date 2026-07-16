@@ -389,6 +389,12 @@ describe('repo RPC methods', () => {
         updates: { name: 'Core', isCollapsed: true, parentGroupId: null }
       })
     )
+    await dispatcher.dispatch(
+      makeRequest('projectGroup.update', {
+        groupId: group.id,
+        updates: { parentGroupId: '' }
+      })
+    )
     await dispatcher.dispatch(makeRequest('projectGroup.delete', { groupId: group.id }))
     const moveResponse = await dispatcher.dispatch(
       makeRequest('projectGroup.moveProject', {
@@ -438,6 +444,7 @@ describe('repo RPC methods', () => {
       isCollapsed: true,
       parentGroupId: null
     })
+    expect(runtime.updateProjectGroup).toHaveBeenCalledWith(group.id, { parentGroupId: '' })
     expect(runtime.deleteProjectGroup).toHaveBeenCalledWith(group.id)
     expect(runtime.moveProjectToGroup).toHaveBeenCalledWith('repo-1', group.id, 2)
     expect(runtime.listFolderWorkspaces).toHaveBeenCalled()

@@ -6836,7 +6836,10 @@ const WorktreeList = React.memo(function WorktreeList({
           projectGroupNameDialog?.type === 'rename'
             ? projectGroupNameDialog.currentName
             : projectGroupNameDialog?.type === 'create-subgroup'
-              ? `${projectGroupNameDialog.parentName} subgroup`
+              ? `${projectGroupNameDialog.parentName} ${translate(
+                  'auto.components.sidebar.WorktreeList.c6d4e8a102',
+                  'subgroup'
+                )}`
               : projectGroupNameDialog
                 ? `${projectGroupNameDialog.repo.displayName} group`
                 : ''

@@ -35,12 +35,57 @@ test.describe('Project Group manual nesting @headful', () => {
       )
       .toBe(groups.parentId)
 
+    const childId = await orcaPage.evaluate(() => {
+      const child = window.__store
+        ?.getState()
+        .projectGroups.find((group) => group.name === 'E2E Child')
+      if (!child) {
+        throw new Error('E2E Child was not persisted')
+      }
+      return child.id
+    })
+    const childHeader = orcaPage.locator(`[data-project-group-header-id="${childId}"]`)
+    await expect(childHeader).toBeVisible()
+
     await parentHeader.getByRole('button', { name: /Group actions for E2E Parent/ }).click()
     await orcaPage.getByRole('menuitem', { name: 'Move to group' }).hover()
     await expect(orcaPage.getByRole('menuitem', { name: 'E2E Parent' })).toHaveCount(0)
+    await expect(orcaPage.getByRole('menuitem', { name: 'E2E Child' })).toHaveCount(0)
     await expect(orcaPage.getByRole('menuitem', { name: 'E2E Sibling' })).toBeVisible()
-    await orcaPage.screenshot({
-      path: 'D:/Repos/.claude/pr-sweep/artifacts/orca-8785-2-project-group-nesting-after-1280x800.png'
-    })
+    await orcaPage.getByRole('menuitem', { name: 'E2E Sibling', exact: true }).click()
+
+    await expect
+      .poll(() =>
+        orcaPage.evaluate(
+          (id) =>
+            window.__store?.getState().projectGroups.find((group) => group.id === id)
+              ?.parentGroupId,
+          groups.parentId
+        )
+      )
+      .toBe(groups.siblingId)
+
+    await parentHeader.getByRole('button', { name: /Group actions for E2E Parent/ }).click()
+    await orcaPage.getByRole('menuitem', { name: 'Move to root', exact: true }).click()
+    await expect
+      .poll(() =>
+        orcaPage.evaluate(
+          (id) =>
+            window.__store?.getState().projectGroups.find((group) => group.id === id)
+              ?.parentGroupId,
+          groups.parentId
+        )
+      )
+      .toBeNull()
+
+    await expect(parentHeader).toBeVisible()
+    await expect(childHeader).toBeVisible()
+    const parentPadding = await parentHeader.evaluate((element) =>
+      Number.parseFloat(getComputedStyle(element).paddingLeft)
+    )
+    const childPadding = await childHeader.evaluate((element) =>
+      Number.parseFloat(getComputedStyle(element).paddingLeft)
+    )
+    expect(childPadding).toBeGreaterThan(parentPadding)
   })
 })
