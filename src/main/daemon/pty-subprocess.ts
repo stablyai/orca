@@ -63,7 +63,7 @@ import { parsePtySessionId } from './pty-session-id'
 import { getAgentForegroundContextPaths } from '../providers/agent-foreground-context-paths'
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
-import type { TuiAgent } from '../../shared/types'
+import type { AgentId } from '../../shared/custom-agent'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
 
 const PANE_IDENTITY_ENV_KEYS = [
@@ -92,7 +92,7 @@ const PENDING_PRE_LISTENER_DATA_MAX_CHARS = 512 * 1024
 function composeGuardedDaemonGitConfigEnv(
   env: Record<string, string>,
   explicitEnv: Record<string, string> | undefined,
-  launchAgent: TuiAgent | undefined
+  launchAgent: AgentId | undefined
 ): void {
   const policy = explicitEnv?.[TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV]
   delete env[TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV]
@@ -114,7 +114,7 @@ export type PtySubprocessOptions = {
   envToDelete?: string[]
   command?: string
   startupCommandDelivery?: StartupCommandDelivery
-  launchAgent?: TuiAgent
+  launchAgent?: AgentId
   /** Explicit shell executable path/basename the renderer asked for.
    *  Overrides env.COMSPEC / env.SHELL resolution inside the daemon so a user
    *  who picks "New WSL terminal" from the "+" menu actually gets WSL. */

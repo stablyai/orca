@@ -52,11 +52,10 @@ export async function launchAgentBackgroundSession(
     throw new Error('The target workspace is no longer available.')
   }
   const agentConfig = isTuiAgent(agent) ? TUI_AGENT_CONFIG[agent] : null
-  const preflight = agentConfig?.preflightTrust
-  if (preflight && worktree.path && window.api.agentTrust?.markTrusted) {
+  if (agentConfig?.preflightTrust && worktree.path && window.api.agentTrust?.markTrusted) {
     try {
       await window.api.agentTrust.markTrusted({
-        preset: preflight,
+        preset: agentConfig.preflightTrust,
         workspacePath: worktree.path
       })
     } catch {
@@ -94,7 +93,8 @@ export async function launchAgentBackgroundSession(
     platform: launchPlatform,
     shell: startupShell,
     isRemote,
-    allowEmptyPromptLaunch: !hasPrompt || isFollowupPath
+    allowEmptyPromptLaunch: !hasPrompt || isFollowupPath,
+    customAgents: store.settings?.customAgents
   })
   if (!startupPlan) {
     return null
@@ -116,12 +116,7 @@ export async function launchAgentBackgroundSession(
   const leafId = createBrowserUuid()
   const paneKey = makePaneKey(tab.id, leafId)
   const launchToken = createBrowserUuid()
-  const launchRegistration = {
-    agentType: agent,
-    launchToken,
-    tabId: tab.id,
-    leafId
-  }
+  const launchRegistration = { agentType: agent, launchToken, tabId: tab.id, leafId }
   store.registerAgentLaunchConfig(paneKey, startupPlan.launchConfig, launchRegistration)
   // Why: `title` labels the tab/worktree entry. Pane titles render as an
   // in-terminal title row, so background sessions must not persist it there.

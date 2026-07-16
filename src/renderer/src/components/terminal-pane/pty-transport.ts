@@ -43,7 +43,6 @@ import {
 } from '../../../../shared/agent-status-osc'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { isAgentId } from '../../../../shared/custom-agent'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
 
 // Re-export public API so existing consumers keep working.
 export {
@@ -733,7 +732,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         // resolve cwd on the remote host.
         const shouldSendLocalCwdFallback =
           cwdFallback === 'worktree' && !connectionId && !admittedSessionId
-        const ptyLaunchAgent = isTuiAgent(options.launchAgent ?? launchAgent)
+        const ptyLaunchAgent = isAgentId(options.launchAgent ?? launchAgent)
           ? (options.launchAgent ?? launchAgent)
           : undefined
         const result = await window.api.pty.spawn({

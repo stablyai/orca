@@ -1149,7 +1149,9 @@ export function connectPanePty(
     ? (paneStartup.launchToken ?? createBrowserUuid())
     : undefined
   const startupDraftAgent = paneStartup?.launchAgent ?? paneStartup?.initialAgentStatus?.agent
-  const startupDraftAgentConfig = startupDraftAgent ? TUI_AGENT_CONFIG[startupDraftAgent] : null
+  const startupDraftAgentConfig = isTuiAgent(startupDraftAgent)
+    ? TUI_AGENT_CONFIG[startupDraftAgent]
+    : null
   const startupDraftPrompt =
     typeof paneStartup?.draftPrompt === 'string' && paneStartup.draftPrompt.trim()
       ? paneStartup.draftPrompt

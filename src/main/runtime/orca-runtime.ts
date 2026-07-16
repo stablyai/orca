@@ -15445,7 +15445,9 @@ export class OrcaRuntimeService {
             ...(effectiveStartup.launchConfig
               ? { launchConfig: effectiveStartup.launchConfig }
               : {}),
-            ...(effectiveCreatedWithAgent ? { launchAgent: effectiveCreatedWithAgent } : {}),
+            ...(isAgentId(effectiveCreatedWithAgent)
+              ? { launchAgent: effectiveCreatedWithAgent }
+              : {}),
             startupCommandDelivery: effectiveStartup.startupCommandDelivery,
             telemetry: effectiveStartup.telemetry
           })
@@ -16140,7 +16142,9 @@ export class OrcaRuntimeService {
             : {}),
           env: sequencedStartup.env,
           ...(sequencedStartup.launchConfig ? { launchConfig: sequencedStartup.launchConfig } : {}),
-          ...(effectiveCreatedWithAgent ? { launchAgent: effectiveCreatedWithAgent } : {}),
+          ...(isAgentId(effectiveCreatedWithAgent)
+            ? { launchAgent: effectiveCreatedWithAgent }
+            : {}),
           startupCommandDelivery: sequencedStartup.startupCommandDelivery,
           telemetry: sequencedStartup.telemetry
         })
