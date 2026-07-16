@@ -1,6 +1,9 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { sendTerminalInputAfterComposition } from './terminal-ime-deferred-newline'
+import {
+  createTerminalImeDeferredNewlineSender,
+  sendTerminalInputAfterComposition
+} from './terminal-ime-deferred-newline'
 
 describe('sendTerminalInputAfterComposition', () => {
   beforeEach(() => {
@@ -71,5 +74,82 @@ describe('sendTerminalInputAfterComposition', () => {
 
     vi.runAllTimers()
     expect(send).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('createTerminalImeDeferredNewlineSender', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('marks the pane pending until the deferred newline is sent', () => {
+    const el = document.createElement('div')
+    const send = vi.fn()
+    const sender = createTerminalImeDeferredNewlineSender()
+
+    sender.defer(1, el, send)
+    // Why: this window is when macOS Hangul's re-dispatched committing Enter
+    // keydown (isComposing=false) arrives and must be identified as a duplicate.
+    expect(sender.isDeferredNewlinePending(1)).toBe(true)
+
+    el.dispatchEvent(new Event('compositionend'))
+    vi.runAllTimers()
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(sender.isDeferredNewlinePending(1)).toBe(false)
+  })
+
+  it('clears pending via the no-compositionend fallback too', () => {
+    const el = document.createElement('div')
+    const send = vi.fn()
+    const sender = createTerminalImeDeferredNewlineSender()
+
+    sender.defer(1, el, send)
+    vi.runAllTimers()
+
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(sender.isDeferredNewlinePending(1)).toBe(false)
+  })
+
+  it('tracks panes independently', () => {
+    const el1 = document.createElement('div')
+    const el2 = document.createElement('div')
+    const sender = createTerminalImeDeferredNewlineSender()
+
+    sender.defer(1, el1, vi.fn())
+    expect(sender.isDeferredNewlinePending(1)).toBe(true)
+    expect(sender.isDeferredNewlinePending(2)).toBe(false)
+
+    sender.defer(2, el2, vi.fn())
+    el1.dispatchEvent(new Event('compositionend'))
+    vi.advanceTimersByTime(0)
+    expect(sender.isDeferredNewlinePending(1)).toBe(false)
+    expect(sender.isDeferredNewlinePending(2)).toBe(true)
+  })
+
+  it('settles fully when overlapping defers for the same pane both send', () => {
+    const el = document.createElement('div')
+    const sender = createTerminalImeDeferredNewlineSender()
+
+    sender.defer(1, el, vi.fn())
+    sender.defer(1, el, vi.fn())
+    el.dispatchEvent(new Event('compositionend'))
+    vi.runAllTimers()
+
+    expect(sender.isDeferredNewlinePending(1)).toBe(false)
+  })
+
+  it('still delivers without a terminal element and settles pending', () => {
+    const send = vi.fn()
+    const sender = createTerminalImeDeferredNewlineSender()
+
+    sender.defer(1, null, send)
+    expect(sender.isDeferredNewlinePending(1)).toBe(true)
+    vi.runAllTimers()
+
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(sender.isDeferredNewlinePending(1)).toBe(false)
   })
 })

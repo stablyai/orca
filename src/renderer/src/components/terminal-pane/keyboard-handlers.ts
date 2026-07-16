@@ -8,7 +8,7 @@ import type { PtyTransport } from './pty-transport'
 import { safeFind } from '../terminal-search-safe-find'
 import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
-import { sendTerminalInputAfterComposition } from './terminal-ime-deferred-newline'
+import { createTerminalImeDeferredNewlineSender } from './terminal-ime-deferred-newline'
 import {
   keybindingMatchesAction,
   type KeybindingOverrides,
@@ -261,6 +261,7 @@ export function useTerminalKeyboardShortcuts({
     // held. To distinguish left vs right Option, we record the Option key's
     // location from its own keydown event and clear it on keyup.
     let optionKeyLocation = 0
+    const deferredNewlineSender = createTerminalImeDeferredNewlineSender()
     const onModifierDown = (e: KeyboardEvent): void => {
       if (e.key === 'Alt') {
         optionKeyLocation = e.location
@@ -430,7 +431,13 @@ export function useTerminalKeyboardShortcuts({
         // the newline once the composition ends so the glyph lands first (the
         // committed char + newline, matching a non-composing Shift+Enter).
         if (e.isComposing && e.key === 'Enter') {
-          sendTerminalInputAfterComposition(pane.terminal.element, sendResolvedInput)
+          deferredNewlineSender.defer(pane.id, pane.terminal.element, sendResolvedInput)
+          return
+        }
+        if (e.key === 'Enter' && deferredNewlineSender.isDeferredNewlinePending(pane.id)) {
+          // Why: macOS Hangul re-dispatches the committing Enter keydown with
+          // isComposing already false ~2ms after compositionend; it is the same
+          // physical keystroke as the deferred newline still in flight.
           return
         }
         sendResolvedInput()

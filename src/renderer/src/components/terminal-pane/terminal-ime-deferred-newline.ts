@@ -53,3 +53,42 @@ export function sendTerminalInputAfterComposition(
   terminalElement.addEventListener('compositionend', onCompositionEnd)
   const fallbackTimer = window.setTimeout(finish, fallbackMs)
 }
+
+export type TerminalImeDeferredNewlineSender = {
+  /** Defers `send` until the pane's composition commits and tracks it as in
+   *  flight for that pane. */
+  defer: (paneId: number, terminalElement: HTMLElement | null | undefined, send: () => void) => void
+  /** True while a deferred newline for this pane has not been sent yet. An
+   *  Enter keydown arriving in this window is the IME's re-dispatch of the
+   *  same physical keystroke and must not send a second newline. */
+  isDeferredNewlinePending: (paneId: number) => boolean
+}
+
+/**
+ * Wraps sendTerminalInputAfterComposition with per-pane in-flight tracking.
+ *
+ * macOS Hangul delivers a committing Shift/Ctrl+Enter twice: first as an IME
+ * keydown (`keyCode 229, isComposing=true`), then — about 2 ms after
+ * compositionend — as a re-dispatched plain keydown (`keyCode 13,
+ * isComposing=false`). Deferring only the first press still lets the
+ * re-dispatch send its newline immediately, which both races ahead of xterm's
+ * pending glyph flush and doubles the newline once the deferred send fires.
+ */
+export function createTerminalImeDeferredNewlineSender(): TerminalImeDeferredNewlineSender {
+  const pendingSendsByPaneId = new Map<number, number>()
+  return {
+    defer: (paneId, terminalElement, send) => {
+      pendingSendsByPaneId.set(paneId, (pendingSendsByPaneId.get(paneId) ?? 0) + 1)
+      sendTerminalInputAfterComposition(terminalElement, () => {
+        const pending = (pendingSendsByPaneId.get(paneId) ?? 1) - 1
+        if (pending <= 0) {
+          pendingSendsByPaneId.delete(paneId)
+        } else {
+          pendingSendsByPaneId.set(paneId, pending)
+        }
+        send()
+      })
+    },
+    isDeferredNewlinePending: (paneId) => (pendingSendsByPaneId.get(paneId) ?? 0) > 0
+  }
+}
