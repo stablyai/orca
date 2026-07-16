@@ -3075,6 +3075,30 @@ export function useIpcEvents(): void {
       ) {
         return 'dropped'
       }
+      const existingStatus = store.agentStatusByPaneKey[paneKey]
+      if (existingStatus && data.receivedAt < existingStatus.updatedAt) {
+        // Why: the store rejects out-of-order status rows; keep metadata-only
+        // session identity on the same accepted event boundary.
+        return 'dropped'
+      }
+      if (data.providerSessionOnly) {
+        if (!data.providerSession || data.agentType !== 'pi') {
+          return 'dropped'
+        }
+        store.recordAgentProviderSession(
+          paneKey,
+          'pi',
+          data.providerSession,
+          { updatedAt: data.receivedAt },
+          {
+            tabId: ownerTabId,
+            worktreeId: data.worktreeId ?? owningWorktreeId,
+            connectionId: data.connectionId
+          },
+          data.launchToken ? { launchToken: data.launchToken } : undefined
+        )
+        return 'applied'
+      }
       const resolvedPayload = resolveHookPayloadAgentType(payload, identityTitle ?? title)
       const statusPayload = data.orchestration
         ? { ...resolvedPayload, orchestration: data.orchestration }
@@ -3082,12 +3106,6 @@ export function useIpcEvents(): void {
       const statusPayloadWithTurnBoundary = data.promptInteractionKey
         ? { ...statusPayload, promptInteractionKey: data.promptInteractionKey }
         : statusPayload
-      const existingStatus = store.agentStatusByPaneKey[paneKey]
-      if (existingStatus && data.receivedAt < existingStatus.updatedAt) {
-        // Why: the store rejects out-of-order status rows; keep notification and
-        // terminal lifecycle effects on the same accepted event boundary.
-        return 'dropped'
-      }
       const identity = resolveAgentStatusIdentity({
         existing: existingStatus
           ? {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  agentProviderSessionsEqual,
   extractAgentProviderSession,
   getAgentResumeArgv,
   isResumableTuiAgent,
@@ -73,6 +74,14 @@ describe('agent session resume metadata', () => {
     expect(getAgentResumeArgv('pi', { key: 'session_id', id: 'pi-session' })).toBeNull()
   })
 
+  it('compares the actual provider resume locator for each agent', () => {
+    const first = { key: 'session_id' as const, id: 'session-1', transcriptPath: '/tmp/first' }
+    const second = { key: 'session_id' as const, id: 'session-1', transcriptPath: '/tmp/second' }
+
+    expect(agentProviderSessionsEqual('pi', first, second)).toBe(false)
+    expect(agentProviderSessionsEqual('claude', first, second)).toBe(true)
+  })
+
   it('rejects devin resume when provider session key is not session_id', () => {
     expect(getAgentResumeArgv('devin', { key: 'conversation_id', id: 'x' })).toBeNull()
   })
@@ -103,5 +112,12 @@ describe('agent session resume metadata', () => {
     expect(
       normalizeAgentProviderSession({ key: 'session_id', id: 'ok', transcriptPath: '/x/r.jsonl' })
     ).toEqual({ key: 'session_id', id: 'ok', transcriptPath: '/x/r.jsonl' })
+    expect(
+      normalizeAgentProviderSession({
+        key: 'session_id',
+        id: 'ok',
+        transcriptPath: '/tmp/bad\npath.jsonl'
+      })
+    ).toEqual({ key: 'session_id', id: 'ok' })
   })
 })

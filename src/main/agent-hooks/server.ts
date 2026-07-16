@@ -59,7 +59,10 @@ import {
 } from '../../shared/agent-interrupt-intent'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import type { LegacyPaneKeyAliasEntry } from '../../shared/types'
-import { normalizeAgentProviderSession } from '../../shared/agent-session-resume'
+import {
+  getAgentResumeArgv,
+  normalizeAgentProviderSession
+} from '../../shared/agent-session-resume'
 import { isCommandCodeNewTurnWhileWorking } from '../../shared/command-code-turn-boundary'
 
 export type { AgentHookSource }
@@ -248,6 +251,14 @@ function sanitizeHydratedEntry(
   if (!payload) {
     return null
   }
+  const providerSession = normalizeAgentProviderSession(record.providerSession) ?? undefined
+  const providerSessionOnly = record.providerSessionOnly === true
+  if (
+    providerSessionOnly &&
+    (!providerSession || payload.agentType !== 'pi' || !getAgentResumeArgv('pi', providerSession))
+  ) {
+    return null
+  }
   return {
     paneKey,
     launchToken: typeof record.launchToken === 'string' ? record.launchToken : undefined,
@@ -259,7 +270,8 @@ function sanitizeHydratedEntry(
     toolUseId: typeof record.toolUseId === 'string' ? record.toolUseId : undefined,
     toolAgentId: typeof record.toolAgentId === 'string' ? record.toolAgentId : undefined,
     toolAgentType: typeof record.toolAgentType === 'string' ? record.toolAgentType : undefined,
-    providerSession: normalizeAgentProviderSession(record.providerSession) ?? undefined,
+    providerSession,
+    providerSessionOnly: providerSessionOnly ? true : undefined,
     payload,
     receivedAt,
     stateStartedAt
@@ -276,6 +288,7 @@ function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentSta
     receivedAt: entry.receivedAt,
     stateStartedAt: entry.stateStartedAt,
     ...(entry.providerSession ? { providerSession: entry.providerSession } : {}),
+    ...(entry.providerSessionOnly ? { providerSessionOnly: true } : {}),
     ...(entry.promptInteractionKey ? { promptInteractionKey: entry.promptInteractionKey } : {}),
     ...entry.payload
   }
@@ -558,6 +571,9 @@ export class AgentHookServer {
     if (!existing) {
       return false
     }
+    if (existing.providerSessionOnly) {
+      return false
+    }
     const payload = existing.payload
     const agentType: AgentType | undefined = payload.agentType
     // Why: Droid's Ctrl+C does not interrupt the current turn; repeated Ctrl+C
@@ -627,13 +643,17 @@ export class AgentHookServer {
   }
 
   getStatusChangeSnapshot(): AgentHookStatusChangeEntry[] {
-    return Array.from(this.state.lastStatusByPaneKey.entries(), ([paneKey, entry]) => {
+    return Array.from(this.state.lastStatusByPaneKey.entries()).flatMap(([paneKey, entry]) => {
       const enriched = entry as EnrichedAgentHookEventPayload
-      return {
-        state: enriched.payload.state,
-        receivedAt: enriched.receivedAt,
-        observedInCurrentRuntime: this.runtimeObservedStatusPaneKeys.has(paneKey)
-      }
+      return enriched.providerSessionOnly
+        ? []
+        : [
+            {
+              state: enriched.payload.state,
+              receivedAt: enriched.receivedAt,
+              observedInCurrentRuntime: this.runtimeObservedStatusPaneKeys.has(paneKey)
+            }
+          ]
     })
   }
 
@@ -797,6 +817,18 @@ export class AgentHookServer {
       | EnrichedAgentHookEventPayload
       | undefined
     const now = Date.now()
+    if (payload.providerSessionOnly) {
+      // Why: Pi session_start must replace stale turn state and survive snapshot
+      // replay, but it must not emit prompt telemetry or a fabricated status.
+      const enriched = this.attachStatusTiming(payload, now)
+      this.clearAssistantMessageRetry(enriched.paneKey)
+      this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
+      this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
+      this.scheduleStatusPersist()
+      this.notifyStatusChangeListeners()
+      this.onAgentStatus?.(enriched)
+      return enriched
+    }
     const identity = resolveAgentStatusIdentity({
       existing: previous
         ? {
@@ -1301,6 +1333,7 @@ export class AgentHookServer {
       toolAgentId?: string
       toolAgentType?: string
       providerSession?: unknown
+      providerSessionOnly?: unknown
       isReplay?: boolean
       payload: unknown
     },
@@ -1395,6 +1428,14 @@ export class AgentHookServer {
     if (!normalizedPayload) {
       return
     }
+    if (
+      envelope.providerSessionOnly === true &&
+      (!providerSession ||
+        normalizedPayload.agentType !== 'pi' ||
+        !getAgentResumeArgv('pi', providerSession))
+    ) {
+      return
+    }
     // Why: run the same warn-once diagnostics the HTTP path runs (cross-build
     // version mismatch, dev-vs-prod env mismatch). Use `this.env` as the
     // expected env so the messages match what the local server produces.
@@ -1416,6 +1457,7 @@ export class AgentHookServer {
       toolAgentId,
       toolAgentType,
       providerSession,
+      providerSessionOnly: envelope.providerSessionOnly === true ? true : undefined,
       isReplay: envelope.isReplay === true ? true : undefined,
       payload: normalizedPayload
     }

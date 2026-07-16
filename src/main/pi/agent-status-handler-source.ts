@@ -8,6 +8,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
       ? [
           "  pi.on('session_start', (_event, ctx) => {",
           '    updateSessionMetadata(ctx)',
+          "    post('session_start')",
           '  })',
           ''
         ]

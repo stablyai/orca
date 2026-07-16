@@ -209,6 +209,7 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../../shared/tui-agent-launch-defaults'
 import {
+  agentProviderSessionsEqual,
   isResumableTuiAgent,
   normalizeAgentProviderSession,
   type ResumableTuiAgent,
@@ -1073,14 +1074,7 @@ export function connectPanePty(
       return legacy?.numericPaneId === String(pane.id)
     })
     const providerSessionKeys = new Set(
-      legacyMatches.map(([, record]) =>
-        [
-          record.worktreeId,
-          record.agent,
-          record.providerSession.key,
-          record.providerSession.id
-        ].join('\0')
-      )
+      legacyMatches.map(([, record]) => getProviderSessionClaimKey(record))
     )
     const oldestLegacyMatch = legacyMatches
       .slice()
@@ -1110,8 +1104,11 @@ export function connectPanePty(
         paneKey !== consumed.paneKey &&
         record.worktreeId === consumed.record.worktreeId &&
         record.agent === consumed.record.agent &&
-        record.providerSession.key === consumed.record.providerSession.key &&
-        record.providerSession.id === consumed.record.providerSession.id
+        agentProviderSessionsEqual(
+          record.agent,
+          record.providerSession,
+          consumed.record.providerSession
+        )
       ) {
         // Why: legacy pane aliases can leave multiple sleeping rows for one
         // provider session; once this pane resumes it, every alias is stale.
@@ -4257,8 +4254,7 @@ export function connectPanePty(
         sleepingRecord?.launchConfig &&
         (!useLiveEntry ||
           (sleepingRecord.agent === agent &&
-            sleepingRecord.providerSession.key === providerSession.key &&
-            sleepingRecord.providerSession.id === providerSession.id))
+            agentProviderSessionsEqual(agent, sleepingRecord.providerSession, providerSession)))
           ? sleepingRecord.launchConfig
           : undefined
       const launchConfig =

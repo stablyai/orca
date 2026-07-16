@@ -296,6 +296,9 @@ export type AgentHookEventPayload = {
   toolAgentType?: string
   /** Provider-owned conversation/session id needed to resume a sleeping agent. */
   providerSession?: AgentProviderSessionMetadata
+  /** Session identity update with no turn-state transition. The receiver uses
+   *  this to refresh durable resume metadata without showing a fake status row. */
+  providerSessionOnly?: boolean
   /** True when this event is a relay cache replay rather than a live hook. */
   isReplay?: boolean
   payload: ParsedAgentStatusPayload
@@ -3873,7 +3876,17 @@ export function normalizeHookPayload(
   // stamps the real value from `mux` identity on receive. See
   // docs/design/agent-status-over-ssh.md §5.
   const providerSession = extractAgentProviderSession(source, hookPayloadRecord)
-  return payload
+  const providerSessionOnly =
+    source === 'pi' && eventName === 'session_start' && providerSession !== null
+  // Why: session_start establishes resume identity while Pi is idle. Carry a
+  // valid placeholder through the status-shaped transport; receivers discard
+  // it when providerSessionOnly is set, so no working/done row is fabricated.
+  const transportPayload =
+    payload ??
+    (providerSessionOnly
+      ? parseAgentStatusPayload(JSON.stringify({ state: 'done', prompt: '', agentType: 'pi' }))
+      : null)
+  return transportPayload
     ? {
         paneKey,
         launchToken,
@@ -3898,7 +3911,8 @@ export function normalizeHookPayload(
         toolAgentId: readFirstString(hookPayloadRecord, ['agent_id', 'agentId']),
         toolAgentType: readString(hookPayloadRecord, 'agent_type'),
         ...(providerSession ? { providerSession } : {}),
-        payload
+        ...(providerSessionOnly ? { providerSessionOnly: true } : {}),
+        payload: transportPayload
       }
     : null
 }

@@ -11,7 +11,10 @@ const agentProviderSessionSchema = z.preprocess(
   (raw) => normalizeAgentProviderSession(raw) ?? undefined,
   z.object({
     key: z.enum(['session_id', 'conversation_id']),
-    id: z.string().min(1).max(512)
+    id: z.string().min(1).max(512),
+    // Why: Pi resumes by its authoritative session file, so dropping this
+    // field during hydration makes an otherwise valid record unusable.
+    transcriptPath: z.string().min(1).optional()
   })
 )
 

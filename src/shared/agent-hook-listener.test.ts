@@ -448,7 +448,7 @@ describe('shared agent-hook-listener', () => {
     })
   })
 
-  it('clears Pi turn cache on session_start without creating a status event', () => {
+  it('clears Pi turn cache and emits only resume identity on session_start', () => {
     const start = normalizeHookPayload(
       state,
       'pi',
@@ -460,14 +460,28 @@ describe('shared agent-hook-listener', () => {
     )
     expect(start?.payload.prompt).toBe('stale turn')
 
-    expect(
-      normalizeHookPayload(
-        state,
-        'pi',
-        { paneKey: PANE_KEY, payload: { hook_event_name: 'session_start' } },
-        'production'
-      )
-    ).toBeNull()
+    const sessionStart = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'session_start',
+          session_id: 'pi-session-2',
+          session_file: '/tmp/pi-session-2.jsonl'
+        }
+      },
+      'production'
+    )
+    expect(sessionStart).toMatchObject({
+      providerSessionOnly: true,
+      providerSession: {
+        key: 'session_id',
+        id: 'pi-session-2',
+        transcriptPath: '/tmp/pi-session-2.jsonl'
+      },
+      payload: { state: 'done', prompt: '', agentType: 'pi' }
+    })
 
     const next = normalizeHookPayload(
       state,

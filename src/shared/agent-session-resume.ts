@@ -26,7 +26,8 @@ export type AgentProviderSessionMetadata = {
    *  (Claude/Codex `transcript_path`), when available. Native chat reads this
    *  directly because recent Claude Code versions name the transcript file with a
    *  UUID that differs from the hook `session_id`, so reconstructing the path from
-   *  `id` alone fails. `id` is still used for CLI resume (`--resume <id>`). */
+   *  `id` alone fails. Claude/Codex still resume by id; Pi uses its reported
+   *  `session_file` as the authoritative `--session` resume locator. */
   transcriptPath?: string
 }
 
@@ -144,11 +145,27 @@ export function normalizeAgentProviderSession(raw: unknown): AgentProviderSessio
   if (!id) {
     return null
   }
-  const transcriptPath =
-    typeof record.transcriptPath === 'string' && record.transcriptPath.trim().length > 0
-      ? record.transcriptPath
-      : undefined
+  // Why: persisted/relay metadata crosses a trust boundary too; apply the same
+  // control-character rejection used for hook-reported transcript paths.
+  const transcriptPath = readTranscriptPathFromKeys(record, ['transcriptPath'])
   return transcriptPath ? { key, id, transcriptPath } : { key, id }
+}
+
+/** Compare the provider-owned values that identify the CLI resume target.
+ *  Pi's file path is identity; other agents resume by their provider id. */
+export function agentProviderSessionsEqual(
+  agent: string | undefined,
+  left: AgentProviderSessionMetadata | undefined,
+  right: AgentProviderSessionMetadata | undefined
+): boolean {
+  if (left === undefined || right === undefined) {
+    return left === right
+  }
+  return (
+    left.key === right.key &&
+    left.id === right.id &&
+    (agent !== 'pi' || left.transcriptPath === right.transcriptPath)
+  )
 }
 
 export function extractAgentProviderSession(

@@ -80,6 +80,8 @@ export type AgentHookRelayEnvelope = {
   toolAgentType?: string
   /** Provider-owned conversation/session id needed to resume a sleeping agent. */
   providerSession?: AgentProviderSessionMetadata
+  /** True when this envelope updates resume identity without changing turn status. */
+  providerSessionOnly?: boolean
   /** True when the relay is replaying its cache after Orca reconnects. */
   isReplay?: boolean
   /** Forwarded from the agent CLI POST body. The relay default is `remote`,
