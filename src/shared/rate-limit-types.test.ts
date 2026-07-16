@@ -15,8 +15,10 @@ describe('RateLimitState', () => {
       kimi: null,
       antigravity: null,
       minimax: null,
+      zai: null,
       grok: null,
       minimaxCookieConfigured: false,
+      zaiApiKeyConfigured: false,
       grokAuthConfigured: false,
       claudeTarget: { runtime: 'host', wslDistro: null },
       codexTarget: { runtime: 'host', wslDistro: null },
@@ -26,6 +28,8 @@ describe('RateLimitState', () => {
 
     expect(state.antigravity).toBeNull()
     expect(state.minimax).toBeNull()
+    expect(state.zai).toBeNull()
     expect(state.minimaxCookieConfigured).toBe(false)
+    expect(state.zaiApiKeyConfigured).toBe(false)
   })
 })

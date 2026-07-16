@@ -51,6 +51,7 @@ export type ProviderRateLimits = {
     | 'opencode-go'
     | 'kimi'
     | 'minimax'
+    | 'zai'
     | 'grok'
     | 'antigravity'
   /** 5-hour session window, null if not available. */
@@ -59,7 +60,7 @@ export type ProviderRateLimits = {
   weekly: RateLimitWindow | null
   /** Claude Fable 7-day weekly window, null if not available. */
   fableWeekly?: RateLimitWindow | null
-  /** 30-day monthly window (OpenCode Go, Grok unified billing), null if not available. */
+  /** 30-day monthly window (e.g. OpenCode Go or Z.ai), null if not available. */
   monthly?: RateLimitWindow | null
   /** Named per-model buckets (Gemini only). */
   buckets?: RateLimitBucket[]
@@ -121,6 +122,7 @@ export type RateLimitState = {
   kimi: ProviderRateLimits | null
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
+  zai: ProviderRateLimits | null
   grok: ProviderRateLimits | null
   /**
    * True when a MiniMax session cookie is persisted on disk. The cookie lives
@@ -129,6 +131,8 @@ export type RateLimitState = {
    * between snapshot refreshes.
    */
   minimaxCookieConfigured: boolean
+  /** True when a Z.ai API key is persisted in the secure credential store. */
+  zaiApiKeyConfigured: boolean
   /** True when main finds a Grok CLI session file (~/.grok/auth.json or GROK_HOME). */
   grokAuthConfigured: boolean
   claudeTarget: RateLimitRuntimeTarget
