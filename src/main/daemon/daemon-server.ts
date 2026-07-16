@@ -47,6 +47,18 @@ export type DaemonServerOptions = {
   }) => SubprocessHandle
 }
 
+const DEFAULT_KILL_GUARD_WINDOW_MS = 1_800_000
+
+function resolveKillGuardWindowMs(value: string | undefined): number {
+  if (value === undefined || value.trim() === '') {
+    return DEFAULT_KILL_GUARD_WINDOW_MS
+  }
+  const windowMs = Number(value)
+  return Number.isFinite(windowMs) && windowMs >= 0
+    ? Math.floor(windowMs)
+    : DEFAULT_KILL_GUARD_WINDOW_MS
+}
+
 type ConnectedClient = {
   clientId: string
   controlSocket: Socket
@@ -96,6 +108,8 @@ export class DaemonServer {
   })
   private streamClientIdBySessionId = new Map<string, string>()
   private lastInputAtBySessionId = new Map<string, number>()
+  private lastOutputAtBySessionId = new Map<string, number>()
+  private killGuardWindowMs: number
   private stopStreamBacklogProbe: () => void = () => {}
 
   // Why: main-process PTY IPC has the same recent-input bypass, but daemon
@@ -120,6 +134,8 @@ export class DaemonServer {
       backgroundedSessionIdSuffixes: this.transientFactRelay.backgroundedSessionIdSuffixes()
     }))
     this.log = opts.log ?? createNoopDaemonFileLog()
+    this.killGuardWindowMs = resolveKillGuardWindowMs(process.env.ORCA_KILL_GUARD_WINDOW_MS)
+    this.log.log('kill-guard', { windowMs: this.killGuardWindowMs })
   }
 
   async start(): Promise<void> {
@@ -365,6 +381,7 @@ export class DaemonServer {
             onData: (data) => {
               // Scan BEFORE enqueue: the batcher may keep-tail drop this
               // chunk, but its facts must be captured regardless.
+              this.lastOutputAtBySessionId.set(p.sessionId, performance.now())
               this.transientFactRelay.onSessionData(p.sessionId, data)
               const lastInputAt = this.lastInputAtBySessionId.get(p.sessionId)
               const isInteractiveOutput =
@@ -394,6 +411,7 @@ export class DaemonServer {
               this.transientFactRelay.onSessionExit(p.sessionId)
               this.streamClientIdBySessionId.delete(p.sessionId)
               this.lastInputAtBySessionId.delete(p.sessionId)
+              this.lastOutputAtBySessionId.delete(p.sessionId)
             }
           }
         })
@@ -432,6 +450,7 @@ export class DaemonServer {
           this.host.write(request.payload.sessionId, request.payload.data)
         } catch (err) {
           this.lastInputAtBySessionId.delete(request.payload.sessionId)
+          this.lastOutputAtBySessionId.delete(request.payload.sessionId)
           if (err instanceof SessionNotFoundError) {
             this.sendExitEvent(client, request.payload.sessionId, -1)
           }
@@ -500,14 +519,36 @@ export class DaemonServer {
         return {}
       }
 
-      case 'kill':
-        this.lastInputAtBySessionId.delete(request.payload.sessionId)
+      case 'kill': {
+        const sessionId = request.payload.sessionId
+        const immediate = request.payload.immediate === true
+        const lastInputAt = this.lastInputAtBySessionId.get(sessionId)
+        const lastOutputAt = this.lastOutputAtBySessionId.get(sessionId)
+        const lastActivityAt = Math.max(lastInputAt ?? -Infinity, lastOutputAt ?? -Infinity)
+        const lastActivityAgoMs = performance.now() - lastActivityAt
+        if (
+          this.killGuardWindowMs > 0 &&
+          Number.isFinite(lastActivityAgoMs) &&
+          lastActivityAgoMs <= this.killGuardWindowMs
+        ) {
+          // Why: renderer-initiated tab cleanup is indistinguishable from a
+          // user close, so active sessions must remain available for reattach.
+          this.log.log('session-kill-refused', {
+            sessionId,
+            immediate,
+            lastActivityAgoMs: Math.max(0, Math.round(lastActivityAgoMs))
+          })
+          return {}
+        }
+        this.lastInputAtBySessionId.delete(sessionId)
+        this.lastOutputAtBySessionId.delete(sessionId)
         this.log.log('session-killed', {
-          sessionId: request.payload.sessionId,
-          immediate: request.payload.immediate === true
+          sessionId,
+          immediate
         })
-        await this.host.kill(request.payload.sessionId, { immediate: request.payload.immediate })
+        await this.host.kill(sessionId, { immediate: request.payload.immediate })
         return {}
+      }
 
       case 'signal':
         this.host.signal(request.payload.sessionId, request.payload.signal)

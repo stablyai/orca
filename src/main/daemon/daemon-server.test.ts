@@ -322,6 +322,91 @@ describe('DaemonServer', () => {
       expect(acknowledged).toBe(true)
     })
 
+    it('refuses to kill a recently active session unless the guard is disabled', async () => {
+      const originalWindowMs = process.env.ORCA_KILL_GUARD_WINDOW_MS
+      const log = { log: vi.fn(), close: vi.fn() }
+      try {
+        delete process.env.ORCA_KILL_GUARD_WINDOW_MS
+        let guardedSubprocess: ReturnType<typeof createMockSubprocess>
+        server = new DaemonServer({
+          socketPath,
+          tokenPath,
+          log,
+          spawnSubprocess: () => {
+            guardedSubprocess = createMockSubprocess()
+            return guardedSubprocess
+          }
+        })
+        const guardedDaemon = server as unknown as DaemonServerPrivate
+        await guardedDaemon.routeRequest('client-1', {
+          id: 'create-guarded',
+          type: 'createOrAttach',
+          payload: { sessionId: 'guarded-session', cols: 80, rows: 24 }
+        })
+        guardedSubprocess!._simulateData('recent output')
+
+        await guardedDaemon.routeRequest('client-1', {
+          id: 'kill-guarded',
+          type: 'kill',
+          payload: { sessionId: 'guarded-session', immediate: true }
+        })
+
+        expect(guardedSubprocess!.forceKill).not.toHaveBeenCalled()
+        await expect(
+          guardedDaemon.routeRequest('client-1', {
+            id: 'list-guarded',
+            type: 'listSessions'
+          })
+        ).resolves.toMatchObject({ sessions: [{ sessionId: 'guarded-session' }] })
+        expect(log.log).toHaveBeenCalledWith('kill-guard', { windowMs: 1_800_000 })
+        expect(log.log).toHaveBeenCalledWith(
+          'session-kill-refused',
+          expect.objectContaining({ sessionId: 'guarded-session', immediate: true })
+        )
+
+        await server.shutdown()
+        process.env.ORCA_KILL_GUARD_WINDOW_MS = '0'
+        let unguardedSubprocess: ReturnType<typeof createMockSubprocess>
+        server = new DaemonServer({
+          socketPath,
+          tokenPath,
+          log,
+          spawnSubprocess: () => {
+            unguardedSubprocess = createMockSubprocess()
+            return unguardedSubprocess
+          }
+        })
+        const unguardedDaemon = server as unknown as DaemonServerPrivate
+        await unguardedDaemon.routeRequest('client-1', {
+          id: 'create-unguarded',
+          type: 'createOrAttach',
+          payload: { sessionId: 'unguarded-session', cols: 80, rows: 24 }
+        })
+        unguardedSubprocess!._simulateData('recent output')
+
+        await unguardedDaemon.routeRequest('client-1', {
+          id: 'kill-unguarded',
+          type: 'kill',
+          payload: { sessionId: 'unguarded-session', immediate: true }
+        })
+
+        expect(unguardedSubprocess!.forceKill).toHaveBeenCalledTimes(1)
+        await expect(
+          unguardedDaemon.routeRequest('client-1', {
+            id: 'list-unguarded',
+            type: 'listSessions'
+          })
+        ).resolves.toEqual({ sessions: [] })
+        expect(log.log).toHaveBeenCalledWith('kill-guard', { windowMs: 0 })
+      } finally {
+        if (originalWindowMs === undefined) {
+          delete process.env.ORCA_KILL_GUARD_WINDOW_MS
+        } else {
+          process.env.ORCA_KILL_GUARD_WINDOW_MS = originalWindowMs
+        }
+      }
+    })
+
     it('handles getCwd', async () => {
       await startServer()
       const c = await connectClient()
