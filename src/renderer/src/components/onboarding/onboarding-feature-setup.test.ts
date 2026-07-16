@@ -227,6 +227,36 @@ describe('onboarding feature setup runner', () => {
     expect(deps.clipboardWrites).toEqual([ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND])
   })
 
+  it('does not open setup when the Computer Use helper is unavailable', async () => {
+    const deps = createDeps({
+      getComputerUsePermissionStatus: vi.fn(
+        async (): Promise<ComputerUsePermissionStatusResult> => ({
+          ...GRANTED_COMPUTER_USE_STATUS,
+          helperAppPath: null,
+          helperUnavailableReason: 'Orca Computer Use.app was not found',
+          permissions: [
+            { id: 'accessibility', status: 'not-granted' },
+            { id: 'screenshots', status: 'not-granted' }
+          ]
+        })
+      )
+    })
+
+    const result = await runOnboardingFeatureSetup(
+      { browserUse: false, computerUse: true, orchestration: false, linearTickets: false },
+      deps
+    )
+
+    expect(deps.openComputerUsePermissionSetup).not.toHaveBeenCalled()
+    expect(result.computerUsePermissionsOpened).toBe(false)
+    expect(result.warnings).toEqual([
+      {
+        featureId: 'computerUse',
+        message: expect.stringContaining('pnpm build:computer-macos')
+      }
+    ])
+  })
+
   it('clears feature markers when no setup items are selected', async () => {
     const deps = createDeps()
 

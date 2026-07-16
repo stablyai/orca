@@ -19,6 +19,7 @@ import {
   notifyOrchestrationSetupStateChanged
 } from '@/lib/orchestration-setup-state'
 import type { EventProps } from '../../../../shared/telemetry-events'
+import { computerUseHelperGuidance } from '../settings/computer-use-helper-guidance'
 
 export type OnboardingFeatureSetupId =
   | 'browserUse'
@@ -245,8 +246,15 @@ export async function runOnboardingFeatureSetup(
   if (selection.computerUse) {
     try {
       const status = await deps.getComputerUsePermissionStatus()
+      if (status.helperUnavailableReason) {
+        warnings.push({
+          featureId: 'computerUse',
+          message: computerUseHelperGuidance(status.helperUnavailableReason, import.meta.env.DEV)
+        })
+      }
       const needsMacPermissions =
         status.platform === 'darwin' &&
+        status.helperUnavailableReason === null &&
         status.permissions.some((permission) => permission.status !== 'granted')
       if (needsMacPermissions) {
         await deps.openComputerUsePermissionSetup()
