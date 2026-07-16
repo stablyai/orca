@@ -434,6 +434,44 @@ describe('quick-open-search', () => {
     }
   })
 
+  it('re-anchors nested-directory matches for slash- and backslash-leading queries', () => {
+    const files = prepareQuickOpenFiles(['src/components/user/UserProfile/index.tsx'])
+
+    // Why: a leading '/' (or '\' after normalization) makes the first matched
+    // char a separator; segment re-anchoring must still fire so the file isn't
+    // dropped entirely.
+    for (const query of ['/user-profile', '\\user-profile', '/user_profile']) {
+      expect(rankQuickOpenFiles(query, files).map((item) => item.path)).toEqual([
+        'src/components/user/UserProfile/index.tsx'
+      ])
+    }
+  })
+
+  it('does not boost dot-separated basenames for identifier-separated queries', () => {
+    const files = prepareQuickOpenFiles([
+      'apps/product-suite/product.detail.dart',
+      'apps/product-suite/product_detail.dart'
+    ])
+
+    // Why: `product-detail` matches via the hyphenated directory, but `.` is not
+    // an identifier separator, so the dot-separated basename must not earn the
+    // -100 filename boost and leapfrog the real product_detail.dart.
+    const results = rankQuickOpenFiles('product-detail', files)
+    expect(results[0].path).toBe('apps/product-suite/product_detail.dart')
+    expect(results[0].score).toBeLessThan(-100)
+    // The dot-separated basename must stay unboosted (boost would put it near
+    // -91); anything above -50 proves the -100 filename boost was not applied.
+    const dotVariant = results.find((r) => r.path === 'apps/product-suite/product.detail.dart')
+    expect(dotVariant?.score).toBeGreaterThan(-50)
+
+    // Why: a spaced query may bridge `.` (space matches any separator), so it
+    // still boosts the dot-separated basename.
+    expect(
+      rankQuickOpenFiles('product detail', prepareQuickOpenFiles(['lib/product.detail.dart']))[0]
+        .score
+    ).toBeLessThan(-100)
+  })
+
   it('does not let a bare separator query match a file without separators', () => {
     const files = prepareQuickOpenFiles(['a.ts'])
 

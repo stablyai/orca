@@ -14,6 +14,7 @@ export type PreparedQuickOpenQuery = {
   /** Query with ` `/`_`/`-` stripped; null when the query has none of them. */
   compactFilename: string | null
   hasIdentifierSeparator: boolean
+  hasSpace: boolean
 }
 
 export function prepareQuickOpenQuery(normalized: string): PreparedQuickOpenQuery {
@@ -22,7 +23,8 @@ export function prepareQuickOpenQuery(normalized: string): PreparedQuickOpenQuer
   return {
     normalized,
     compactFilename: /[ _-]/.test(normalized) ? normalized.replace(/[ _-]/g, '') : null,
-    hasIdentifierSeparator: normalized.includes('_') || normalized.includes('-')
+    hasIdentifierSeparator: normalized.includes('_') || normalized.includes('-'),
+    hasSpace: normalized.includes(' ')
   }
 }
 
@@ -55,17 +57,19 @@ export function fuzzyMatchIndexedFile(
     let slashIdx = -1
     let segmentMatched = false
     for (let i = 0; i < path.length; i++) {
-      if (path[i] === '/') {
-        slashIdx = i
-        segmentMatched = false
-        continue
-      }
+      // Why: test the first-char match before consuming a '/' boundary so a
+      // '/'-leading query (typed '/', or '\' after normalization) still re-anchors
+      // — its first matched char is itself a '/', anchored at the preceding slash.
       if (!segmentMatched && slashIdx !== -1 && searchCharactersMatch(path[i], first)) {
         segmentMatched = true
         const anchoredScore = matchQueryFromAnchor(query.normalized, file, slashIdx)
         if (anchoredScore !== null && (score === null || anchoredScore < score)) {
           score = anchoredScore
         }
+      }
+      if (path[i] === '/') {
+        slashIdx = i
+        segmentMatched = false
       }
     }
   }
@@ -192,8 +196,10 @@ function filenameMatchesQuery(lowerFilename: string, query: PreparedQuickOpenQue
   if (!query.compactFilename) {
     return false
   }
-  // Why: users type words with spaces; basenames use `_` / `-` / camelCase.
-  return includesIgnoringSeparators(lowerFilename, query.compactFilename)
+  // Why: users type words with spaces; basenames use `_` / `-` / camelCase. Only
+  // a spaced query may bridge `/`/`.`; a typed `-`/`_` keeps them distinct so it
+  // doesn't wrongly boost a dot-separated basename (product-detail vs a.b.c).
+  return includesIgnoringSeparators(lowerFilename, query.compactFilename, query.hasSpace)
 }
 
 function includesWithIdentifierSeparatorEquivalence(value: string, wanted: string): boolean {
@@ -210,7 +216,7 @@ function includesWithIdentifierSeparatorEquivalence(value: string, wanted: strin
   return false
 }
 
-function includesIgnoringSeparators(value: string, wanted: string): boolean {
+function includesIgnoringSeparators(value: string, wanted: string, crossPathSeparators: boolean): boolean {
   for (let start = 0; start < value.length; start++) {
     if (value[start] !== wanted[0]) {
       continue
@@ -219,10 +225,13 @@ function includesIgnoringSeparators(value: string, wanted: string): boolean {
     let wantedIndex = 0
     while (valueIndex < value.length && wantedIndex < wanted.length) {
       const ch = value[valueIndex]
-      // Why: skip only a value separator we aren't currently matching, so an
-      // extension dot in the query ("product-detail.dart") still lands on the
-      // basename's dot instead of being skipped past into a dead-end.
-      if (isPathSeparator(ch) && ch !== wanted[wantedIndex]) {
+      // Why: always ignore `-`/`_`/space (the separators the compact query
+      // dropped); ignore `/`/`.` only for spaced queries, and never when the
+      // value char is the one we're currently matching (an extension dot in the
+      // query must still land on the basename's dot).
+      const ignorable =
+        isIdentifierSeparator(ch) || ch === ' ' || (crossPathSeparators && (ch === '/' || ch === '.'))
+      if (ignorable && ch !== wanted[wantedIndex]) {
         valueIndex++
         continue
       }
