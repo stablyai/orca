@@ -472,6 +472,28 @@ describe('quick-open-search', () => {
     ).toBeLessThan(-100)
   })
 
+  it('matches names with a spaced separator run and their exact-filename paste', () => {
+    const files = prepareQuickOpenFiles(['notes/Meeting - 2026.md', 'audio/a _ b.mp3'])
+
+    // Why: a query space consumes the whole path separator run; a literal
+    // separator typed right after (" - ", " _ ") must not dead-end, so pasting
+    // an exact filename or typing "Meeting - 2026" still finds the file.
+    expect(rankQuickOpenFiles('meeting - 2026', files)[0]?.path).toBe('notes/Meeting - 2026.md')
+    expect(rankQuickOpenFiles('Meeting - 2026.md', files)[0]?.path).toBe('notes/Meeting - 2026.md')
+    expect(rankQuickOpenFiles('a _ b', files)[0]?.path).toBe('audio/a _ b.mp3')
+  })
+
+  it('does not blank a spaced-separator query mid-keystroke', () => {
+    const files = prepareQuickOpenFiles(['notes/Meeting - 2026.md'])
+
+    // Why: results must not vanish between "meeting -" and "meeting - 2".
+    for (const query of ['meeting -', 'meeting - ', 'meeting - 2', 'meeting - 2026']) {
+      expect(rankQuickOpenFiles(query, files).map((item) => item.path)).toEqual([
+        'notes/Meeting - 2026.md'
+      ])
+    }
+  })
+
   it('does not let a bare separator query match a file without separators', () => {
     const files = prepareQuickOpenFiles(['a.ts'])
 

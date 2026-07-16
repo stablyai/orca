@@ -115,6 +115,13 @@ function matchQueryFromAnchor(
         while (sepIdx + 1 < path.length && isPathSeparator(path[sepIdx + 1])) {
           sepIdx++
         }
+        // Why: a pasted literal separator run ("Meeting - 2026") puts a query
+        // separator right after the space. The consumed path run already covers
+        // it, so absorb following query separators/spaces instead of dead-ending;
+        // stays strict for '/' and '.' (only absorbed if the run holds one).
+        while (qi < query.length && pathRunCoversQueryChar(path, nextIdx, sepIdx, query[qi])) {
+          qi++
+        }
         lastMatchIdx = sepIdx
         requireWordStart = false
       } else {
@@ -242,6 +249,23 @@ function includesIgnoringSeparators(value: string, wanted: string, crossPathSepa
       wantedIndex++
     }
     if (wantedIndex === wanted.length) {
+      return true
+    }
+  }
+  return false
+}
+
+function pathRunCoversQueryChar(
+  path: string,
+  from: number,
+  to: number,
+  queryChar: string
+): boolean {
+  if (queryChar === ' ') {
+    return true
+  }
+  for (let index = from; index <= to; index++) {
+    if (searchCharactersMatch(path[index], queryChar)) {
       return true
     }
   }
