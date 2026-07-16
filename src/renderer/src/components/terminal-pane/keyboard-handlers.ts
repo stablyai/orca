@@ -434,10 +434,11 @@ export function useTerminalKeyboardShortcuts({
           deferredNewlineSender.defer(pane.id, pane.terminal.element, sendResolvedInput)
           return
         }
-        if (e.key === 'Enter' && deferredNewlineSender.isDeferredNewlinePending(pane.id)) {
+        if (e.key === 'Enter' && deferredNewlineSender.absorbRedispatchedEnter(pane.id)) {
           // Why: macOS Hangul re-dispatches the committing Enter keydown with
           // isComposing already false ~2ms after compositionend; it is the same
-          // physical keystroke as the deferred newline still in flight.
+          // physical keystroke as the deferred newline, and can land on either
+          // side of that send's macrotask.
           return
         }
         sendResolvedInput()
