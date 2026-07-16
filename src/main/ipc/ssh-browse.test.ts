@@ -25,6 +25,12 @@ function createMockChannel(): EventEmitter & { stderr: EventEmitter } {
   })
 }
 
+// The POSIX listing appends `/` via `[ -d ]` (which follows symlinks) instead of
+// `ls -p` (which does not), so symlinked directories classify as directories.
+function posixBrowseCommand(cdTarget: string): string {
+  return `cd ${cdTarget} && pwd && entries=$(command ls -1A) && printf '%s\\n' "$entries" | while IFS= read -r f; do if [ -d "$f" ]; then printf '%s/\\n' "$f"; else printf '%s\\n' "$f"; fi; done`
+}
+
 // Recover the PowerShell script from a `powershell.exe ... -EncodedCommand <b64>`
 // command so tests can assert on the actual (UTF-16LE) payload sent to the host.
 function decodeEncodedCommand(command: string): string {
@@ -68,13 +74,41 @@ describe('registerSshBrowseHandler', () => {
         { name: 'README.md', isDirectory: false }
       ]
     })
-    expect(exec).toHaveBeenCalledWith('cd "$HOME" && pwd && command ls -1Ap')
+    expect(exec).toHaveBeenCalledWith(posixBrowseCommand('"$HOME"'))
     expect(channel.listenerCount('data')).toBe(0)
     expect(channel.listenerCount('exit')).toBe(0)
     expect(channel.listenerCount('close')).toBe(0)
     expect(channel.listenerCount('error')).toBe(0)
     expect(channel.stderr.listenerCount('data')).toBe(0)
     expect(channel.stderr.listenerCount('error')).toBe(0)
+  })
+
+  it('classifies remote symlinked directories as directories', async () => {
+    const channel = createMockChannel()
+    const exec = vi.fn().mockResolvedValue(channel)
+    const getConnectionManager = () => ({
+      getConnection: () => ({ exec })
+    })
+    registerSshBrowseHandler(getConnectionManager as never)
+
+    const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/srv' })
+    await Promise.resolve()
+    // `[ -d ]` follows symlinks, so the remote loop emits `linked-dir/` even
+    // though it is a symlink; `ls -p` alone would have printed it bare.
+    channel.emit('data', Buffer.from('/srv\nlinked-dir/\nreal-dir/\nbroken-link\nlinked-file\n'))
+    channel.emit('exit', 0)
+    channel.emit('close')
+
+    await expect(resultPromise).resolves.toEqual({
+      resolvedPath: '/srv',
+      entries: [
+        { name: 'linked-dir', isDirectory: true },
+        { name: 'real-dir', isDirectory: true },
+        { name: 'broken-link', isDirectory: false },
+        { name: 'linked-file', isDirectory: false }
+      ]
+    })
+    expect(exec).toHaveBeenCalledWith(posixBrowseCommand("'/srv'"))
   })
 
   it('escapes remote browse paths before invoking command ls', async () => {
@@ -95,7 +129,7 @@ describe('registerSshBrowseHandler', () => {
       resolvedPath: "/tmp/it's here",
       entries: []
     })
-    expect(exec).toHaveBeenCalledWith("cd '/tmp/it'\\''s here' && pwd && command ls -1Ap")
+    expect(exec).toHaveBeenCalledWith(posixBrowseCommand("'/tmp/it'\\''s here'"))
   })
 
   it('falls back to PowerShell when a Windows SSH shell rejects POSIX exec', async () => {
@@ -134,7 +168,7 @@ describe('registerSshBrowseHandler', () => {
       ]
     })
     expect(exec).toHaveBeenCalledTimes(2)
-    expect(exec).toHaveBeenNthCalledWith(1, "cd 'C:/Users/alice' && pwd && command ls -1Ap")
+    expect(exec).toHaveBeenNthCalledWith(1, posixBrowseCommand("'C:/Users/alice'"))
     expect(exec.mock.calls[1]?.[0]).toMatch(/^powershell\.exe /)
     expect(exec.mock.calls[1]?.[1]).toEqual({ wrapCommand: false })
 

@@ -95,12 +95,18 @@ function browseWithPosixShell(
 ): Promise<{ entries: RemoteDirEntry[]; resolvedPath: string }> {
   // Why: using one line per entry preserves filenames containing spaces.
   // `command ls` bypasses user aliases/functions like `ls='eza ...'`.
-  // The -1 flag outputs one entry per line. The -p flag appends / to directories.
   // We resolve ~ and get the absolute path via `cd <path> && pwd`.
-  // `cd` and `ls` are chained with `&&` so a failing `ls` (e.g. permission
-  // denied after a readable `cd ... && pwd`) propagates as a non-zero exit
-  // code rather than being indistinguishable from an empty directory.
-  return runBrowseCommand(conn, `cd ${shellEscape(dirPath)} && pwd && command ls -1Ap`)
+  // The trailing `/` dir marker comes from `[ -d ]`, which follows symlinks,
+  // instead of `ls -p`, which does not — otherwise a symlinked directory is
+  // listed as a file and can't be descended into from Add Remote Project.
+  // Capturing `ls` output into a variable keeps a failing `ls` (e.g.
+  // permission denied after a readable `cd ... && pwd`) propagating through
+  // the `&&` chain as a non-zero exit code rather than being masked by the
+  // while-loop pipeline and misread as an empty directory.
+  return runBrowseCommand(
+    conn,
+    `cd ${shellEscape(dirPath)} && pwd && entries=$(command ls -1A) && printf '%s\\n' "$entries" | while IFS= read -r f; do if [ -d "$f" ]; then printf '%s/\\n' "$f"; else printf '%s\\n' "$f"; fi; done`
+  )
 }
 
 function browseWithWindowsPowerShell(
