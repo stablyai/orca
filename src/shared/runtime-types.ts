@@ -287,7 +287,10 @@ export type RuntimeMobileSessionTabMoveResult = {
 }
 
 export type RuntimeMobileSessionTabCloseResult = {
-  closed: true
+  // Why: the close policy soft-denies inside a success envelope; blockedReason
+  // is the wire proof callers must check instead of assuming closed.
+  closed: boolean
+  blockedReason?: string
   refused?: true
   refusalReason?:
     | 'missing-intent'
@@ -677,6 +680,8 @@ export type RuntimeTerminalClose = {
   /** Present for the durable whole-tab lifecycle without changing legacy receipts. */
   closeMode?: 'tab'
   ptyKilled: boolean
+  /** Why: the close policy soft-denies inside a success envelope; callers must check ptyKilled and this marker instead of assuming the host pane died. */
+  blockedReason?: string
 }
 
 export type RuntimeTerminalWaitCondition = 'exit' | 'tui-idle'

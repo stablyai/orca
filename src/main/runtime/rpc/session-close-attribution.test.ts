@@ -70,7 +70,7 @@ describe('session.tabs.close attribution', () => {
         type: 'effect-span',
         name: 'session.tabs.close',
         attributes: expect.objectContaining({
-          attribution: 'session-close',
+          attribution: 'runtime-close',
           clientKind: 'mobile',
           deviceId: 'device-uuid-123',
           connectionId: 'conn-7',
@@ -99,6 +99,71 @@ describe('session.tabs.close attribution', () => {
 
     expect(sink.records).toHaveLength(1)
     expect(JSON.stringify(sink.records)).not.toContain(DEVICE_TOKEN)
+  })
+
+  it('soft-denies a runtime client close without explicit intent', async () => {
+    const runtime = makeRuntime()
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+    const replies: string[] = []
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('session.tabs.close', { worktree: 'id:wt-1', tabId: 'tab-1' }),
+      (message) => replies.push(message),
+      { connectionId: 'conn-runtime', deviceId: 'runtime-device', clientKind: 'runtime' }
+    )
+
+    expect(runtime.closeMobileSessionTab).not.toHaveBeenCalled()
+    expect(JSON.parse(replies[0]!)).toMatchObject({
+      ok: true,
+      result: { closed: false, blockedReason: 'close_intent_required' }
+    })
+    expect(sink.records).toEqual([
+      expect.objectContaining({
+        name: 'session.tabs.close',
+        attributes: expect.objectContaining({
+          clientKind: 'runtime',
+          decision: 'blocked',
+          decisionReason: 'close_intent_required'
+        })
+      })
+    ])
+  })
+
+  it('allows an explicit runtime user close and records its intent', async () => {
+    const runtime = makeRuntime()
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+    const replies: string[] = []
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('session.tabs.close', {
+        worktree: 'id:wt-1',
+        tabId: 'host-tab-1',
+        closeIntent: {
+          source: 'user-tab-close',
+          userInitiated: true,
+          requestId: 'close-request-1',
+          occurredAt: Date.now(),
+          worktreeId: 'wt-1',
+          clientTabId: 'mirror-tab-1',
+          hostTabId: 'host-tab-1'
+        }
+      }),
+      (message) => replies.push(message),
+      { connectionId: 'conn-runtime', deviceId: 'runtime-device', clientKind: 'runtime' }
+    )
+
+    expect(runtime.closeMobileSessionTab).toHaveBeenCalledWith('id:wt-1', 'host-tab-1')
+    expect(JSON.parse(replies[0]!)).toMatchObject({ ok: true, result: { closed: true } })
+    expect(sink.records).toEqual([
+      expect.objectContaining({
+        name: 'session.tabs.close',
+        attributes: expect.objectContaining({
+          decision: 'allowed',
+          closeSource: 'user-tab-close',
+          closeRequestId: 'close-request-1'
+        })
+      })
+    ])
   })
 
   it('records the real outcome when the close fails', async () => {

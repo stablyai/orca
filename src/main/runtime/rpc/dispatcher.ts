@@ -25,20 +25,31 @@ import { recordRuntimeFeatureInteraction } from './runtime-feature-interaction'
 import { OrchestrationLegacyCompatibility } from './orchestration-legacy-compatibility'
 import type { RpcDispatchStreamingOptions } from './dispatcher-stream-options'
 import { invalidArgumentResponse, mapDispatcherError } from './dispatcher-error-response'
+import { RuntimeClosePolicy } from './runtime-close-policy'
 
-export type DispatcherOptions = { runtime: OrcaRuntimeService; methods?: readonly RpcAnyMethod[] }
+export type DispatcherOptions = {
+  runtime: OrcaRuntimeService
+  methods?: readonly RpcAnyMethod[]
+  runtimeClosePolicy?: RuntimeClosePolicy
+}
 
 export class RpcDispatcher {
   private readonly runtime: OrcaRuntimeService
   private readonly registry: RpcRegistry
   private readonly orchestrationMutations: OrchestrationMutationExecutor
   private readonly legacyOrchestration: OrchestrationLegacyCompatibility
+  private readonly runtimeClosePolicy: RuntimeClosePolicy
 
-  constructor({ runtime, methods = ALL_RPC_METHODS }: DispatcherOptions) {
+  constructor({
+    runtime,
+    methods = ALL_RPC_METHODS,
+    runtimeClosePolicy = new RuntimeClosePolicy()
+  }: DispatcherOptions) {
     this.runtime = runtime
     this.registry = buildRegistry(methods)
     this.orchestrationMutations = getOrchestrationMutationExecutor(runtime)
     this.legacyOrchestration = new OrchestrationLegacyCompatibility(runtime)
+    this.runtimeClosePolicy = runtimeClosePolicy
   }
 
   async dispatch(request: RpcRequest, options?: { signal?: AbortSignal }): Promise<RpcResponse> {
@@ -104,7 +115,8 @@ export class RpcDispatcher {
           legacyCoordinatorAuthority: legacyCoordinator?.authority,
           revalidateLegacyCoordinator: legacyCoordinator?.revalidate,
           orchestrationCompatibilityCallerAuthority:
-            compatibility.orchestrationCompatibilityCallerAuthority
+            compatibility.orchestrationCompatibilityCallerAuthority,
+          runtimeClosePolicy: this.runtimeClosePolicy
         })
       }
       const result = await this.orchestrationMutations.run(
@@ -193,6 +205,7 @@ export class RpcDispatcher {
               mutation?.identity.callerFingerprint ?? authenticatedCallerFingerprint(request),
             recordMutationReceipt: mutation?.recordReceipt,
             orchestrationMutation: mutation?.identity,
+            runtimeClosePolicy: this.runtimeClosePolicy,
             pairing: options?.pairing,
             sendBinary: options?.sendBinary,
             registerBinaryStreamHandler: options?.registerBinaryStreamHandler,
@@ -251,6 +264,7 @@ export class RpcDispatcher {
           clientKind: options?.clientKind,
           clientCapabilities: options?.clientCapabilities,
           orchestrationCapability: request.orchestrationCapability,
+          runtimeClosePolicy: this.runtimeClosePolicy,
           pairing: options?.pairing,
           sendBinary: options?.sendBinary,
           registerBinaryStreamHandler: options?.registerBinaryStreamHandler

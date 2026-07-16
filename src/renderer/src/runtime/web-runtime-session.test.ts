@@ -1589,7 +1589,13 @@ describe('web runtime session tab actions', () => {
       params: {
         worktree: `id:${WORKTREE_ID}`,
         tabId: 'host-browser-unified',
-        reason: 'user'
+        reason: 'user',
+        closeIntent: expect.objectContaining({
+          source: 'user-tab-close',
+          userInitiated: true,
+          worktreeId: WORKTREE_ID,
+          hostTabId: 'host-browser-unified'
+        })
       },
       timeoutMs: 15_000
     })
@@ -1654,10 +1660,60 @@ describe('web runtime session tab actions', () => {
       params: {
         worktree: `id:${WORKTREE_ID}`,
         tabId: 'host-browser-unified',
-        reason: 'user'
+        reason: 'user',
+        closeIntent: expect.objectContaining({
+          source: 'user-tab-close',
+          userInitiated: true,
+          worktreeId: WORKTREE_ID,
+          hostTabId: 'host-browser-unified'
+        })
       },
       timeoutMs: 15_000
     })
+  })
+
+  it('reports a policy soft-denial as failure and resyncs from the host snapshot', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const runtimeCall = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'close-1',
+        ok: true,
+        result: { closed: false, blockedReason: 'close_rate_limited' }
+      })
+      .mockResolvedValueOnce({ id: 'list-1', ok: true, result: makeSnapshot() })
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          call: runtimeCall
+        }
+      }
+    })
+
+    await expect(
+      closeWebRuntimeSessionTab({
+        worktreeId: WORKTREE_ID,
+        tabId: 'local-browser-unified',
+        reason: 'user'
+      })
+    ).resolves.toBe(false)
+
+    // Why: the optimistic local prune must be undone from the host snapshot —
+    // the close RPC plus one list refresh, nothing more. A denial does not
+    // republish, so the refresh must explicitly re-accept the current version.
+    expect(runtimeCall).toHaveBeenCalledTimes(2)
+    expect(runtimeCall).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ method: 'session.tabs.list' })
+    )
+    expect(mocks.acceptReplayedWebSessionTabsSnapshot).toHaveBeenCalledWith(
+      ENVIRONMENT_ID,
+      WORKTREE_ID
+    )
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[web-runtime-session] close blocked by host policy',
+      { blockedReason: 'close_rate_limited' }
+    )
   })
 
   it('suppresses lifecycle closes when terminal-incarnation evidence is missing', async () => {
@@ -1980,6 +2036,10 @@ describe('closeWebRuntimeTerminal', () => {
   })
 
   it('delegates remote pane close to the host runtime', async () => {
+    mocks.getState.mockReturnValue({
+      tabsByWorktree: { [WORKTREE_ID]: [{ id: 'tab-1', type: 'terminal' }] },
+      ptyIdsByTabId: { 'tab-1': ['remote:web-env-1@@terminal-1'] }
+    })
     const runtimeCall = vi.fn().mockResolvedValue({
       id: 'close',
       ok: true,
@@ -2006,13 +2066,88 @@ describe('closeWebRuntimeTerminal', () => {
       selector: 'web-env-1',
       method: 'terminal.close',
       params: {
-        terminal: 'terminal-1'
+        terminal: 'terminal-1',
+        closeIntent: expect.objectContaining({
+          source: 'user-pane-close',
+          userInitiated: true,
+          worktreeId: WORKTREE_ID,
+          ptyOrHandle: 'terminal-1'
+        })
       },
       timeoutMs: 15_000
     })
   })
 
+  it('warns when the host policy soft-denies the pane close', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mocks.getState.mockReturnValue({
+      tabsByWorktree: { [WORKTREE_ID]: [{ id: 'tab-1', type: 'terminal' }] },
+      ptyIdsByTabId: { 'tab-1': ['remote:web-env-1@@terminal-1'] }
+    })
+    const runtimeCall = vi.fn().mockResolvedValue({
+      id: 'close',
+      ok: true,
+      result: {
+        close: {
+          handle: 'terminal-1',
+          tabId: 'tab-1',
+          ptyKilled: false,
+          blockedReason: 'close_rate_limited'
+        }
+      }
+    })
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          call: runtimeCall
+        }
+      }
+    })
+
+    expect(closeWebRuntimeTerminal('remote:web-env-1@@terminal-1')).toBe(true)
+
+    await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(2))
+    expect(runtimeCall).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ method: 'session.tabs.list' })
+    )
+    await vi.waitFor(() =>
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[web-runtime-session] terminal close not confirmed by host',
+        { blockedReason: 'close_rate_limited' }
+      )
+    )
+    // Why: the caller deletes the local pane optimistically; the denial
+    // resync must re-accept the unrevised host snapshot to resurrect it.
+    expect(mocks.acceptReplayedWebSessionTabsSnapshot).toHaveBeenCalledWith(
+      ENVIRONMENT_ID,
+      WORKTREE_ID
+    )
+  })
+
+  it('refuses to close a remote pane this client does not own', () => {
+    mocks.getState.mockReturnValue({
+      tabsByWorktree: { [WORKTREE_ID]: [{ id: 'tab-1', type: 'terminal' }] },
+      ptyIdsByTabId: { 'tab-1': ['remote:web-env-1@@terminal-2'] }
+    })
+    const runtimeCall = vi.fn()
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          call: runtimeCall
+        }
+      }
+    })
+
+    expect(closeWebRuntimeTerminal('remote:web-env-1@@terminal-1')).toBe(false)
+    expect(runtimeCall).not.toHaveBeenCalled()
+  })
+
   it('ignores local panes but delegates remote runtime panes from desktop or web clients', async () => {
+    mocks.getState.mockReturnValue({
+      tabsByWorktree: { [WORKTREE_ID]: [{ id: 'tab-1', type: 'terminal' }] },
+      ptyIdsByTabId: { 'tab-1': ['remote:web-env-1@@terminal-1'] }
+    })
     const runtimeCall = vi.fn().mockResolvedValue({
       id: 'close',
       ok: true,

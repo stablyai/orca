@@ -237,21 +237,36 @@ export const AGENT_SESSION_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.ensureAgentSession',
     params: EnsureAgentSessionParams,
-    handler: (params, { runtime, pairedDeviceId, clientId, clientKind, signal }) =>
-      (runtime as AgentSessionRuntime).ensureAgentSession(
+    handler: async (params, ctx) => {
+      const { runtime, pairedDeviceId, clientId, clientKind, signal } = ctx
+      const result = await (runtime as AgentSessionRuntime).ensureAgentSession(
         withExecutionHostAgentPresentation(params, clientKind),
         callerContext(pairedDeviceId ?? clientId, clientKind, signal)
       )
+      // Why: match terminal.create — only a fresh creation earns this connection
+      // the narrow non-user rollback intent; adopted sessions predate it.
+      if (result.disposition === 'created') {
+        ctx.runtimeClosePolicy?.recordTerminalCreated(ctx, result.terminal.handle)
+      }
+      return result
+    }
   }),
   defineMethod({
     name: 'terminal.createAgentSession',
     params: CreateAgentSessionParams,
-    handler: (params, { runtime, pairedDeviceId, clientId, clientKind, signal }) => {
+    handler: async (params, ctx) => {
+      const { runtime, pairedDeviceId, clientId, clientKind, signal } = ctx
       assertOperationTimestampWithinFutureSkew(params.clientOperationId)
-      return (runtime as AgentSessionRuntime).createAgentSession(
+      const result = await (runtime as AgentSessionRuntime).createAgentSession(
         withExecutionHostAgentPresentation(params, clientKind),
         callerContext(pairedDeviceId ?? clientId, clientKind, signal)
       )
+      // Why: match terminal.create — replayed idempotent results did not create
+      // anything for this connection, so they must not earn rollback ownership.
+      if (result.disposition === 'created') {
+        ctx.runtimeClosePolicy?.recordTerminalCreated(ctx, result.terminal.handle)
+      }
+      return result
     }
   })
 ]

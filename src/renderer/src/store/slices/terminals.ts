@@ -89,6 +89,8 @@ import {
 } from '@/components/terminal-pane/terminal-layout-leaf-ids'
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import type { RuntimeTerminalClose } from '../../../../shared/runtime-types'
+import type { RuntimeCloseIntent } from '../../../../shared/runtime-close-intent'
 import { parseRemoteRuntimePtyId, toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { requestRemoteWorktreeSleep } from '@/runtime/remote-worktree-sleep'
@@ -1502,11 +1504,23 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           }
           const environmentId =
             terminal.environmentId ?? fallbackWorktreeRoute?.runtimeEnvironmentId
+          // Why: hosts refuse reasonless closes from paired runtime clients, so
+          // retirements must carry structured intent or the host PTY leaks.
+          const closeIntent: RuntimeCloseIntent | undefined = retirementPlan.worktreeId
+            ? {
+                source: 'user-tab-close',
+                userInitiated: true,
+                requestId: createBrowserUuid(),
+                occurredAt: Date.now(),
+                worktreeId: retirementPlan.worktreeId,
+                ptyOrHandle: terminal.handle
+              }
+            : undefined
           retirementTasks.push(
             callRuntimeRpc(
               environmentId ? { kind: 'environment', environmentId } : { kind: 'local' },
               'terminal.close',
-              { terminal: terminal.handle }
+              { terminal: terminal.handle, closeIntent }
             )
           )
         }
@@ -1525,9 +1539,17 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         const localOrSshFailures = results
           .slice(0, localOrSshTaskCount)
           .filter((result) => result.status === 'rejected').length
+        // Why: the close policy soft-denies inside a success envelope, so a
+        // fulfilled promise is not proof the host PTY died — count those too.
         const runtimeFailures = results
           .slice(localOrSshTaskCount)
-          .filter((result) => result.status === 'rejected').length
+          .filter((result) => {
+            if (result.status === 'rejected') {
+              return true
+            }
+            const close = (result.value as { close?: RuntimeTerminalClose } | undefined)?.close
+            return close?.ptyKilled !== true
+          }).length
         if (localOrSshFailures > 0 || runtimeFailures > 0) {
           console.warn('[terminal-retirement] provider teardown failed', {
             tabId,

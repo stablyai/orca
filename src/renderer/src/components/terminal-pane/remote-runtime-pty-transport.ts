@@ -13,10 +13,12 @@ import type {
   RuntimeMobileSessionTerminalClientTab,
   RuntimeMobileSessionTabsResult,
   RuntimeStatus,
+  RuntimeTerminalClose,
   RuntimeTerminalCreate,
   RuntimeTerminalResolvePane,
   RuntimeTerminalSend
 } from '../../../../shared/runtime-types'
+import type { RuntimeCloseIntent } from '../../../../shared/runtime-close-intent'
 import {
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
@@ -902,8 +904,34 @@ export function createRemoteRuntimePtyTransport(
     if (!targetHandle) {
       return
     }
+    // Why: this path rolls back a terminal the transport itself created, and
+    // the host policy only honors that proof as a structured closeIntent.
+    const closeIntent: RuntimeCloseIntent | undefined = worktreeId
+      ? {
+          source: 'client-created-rollback',
+          userInitiated: false,
+          requestId: createBrowserUuid(),
+          occurredAt: Date.now(),
+          worktreeId,
+          ptyOrHandle: targetHandle
+        }
+      : undefined
     try {
-      await callRuntimeForEnvironment(environmentId, 'terminal.close', { terminal: targetHandle })
+      const result = await callRuntimeForEnvironment<{ close?: RuntimeTerminalClose }>(
+        environmentId,
+        'terminal.close',
+        {
+          terminal: targetHandle,
+          closeIntent
+        }
+      )
+      // Why: the close policy soft-denies inside a success envelope; surface
+      // it so a denied rollback doesn't read as a silent clean teardown.
+      if (result?.close && result.close.ptyKilled !== true) {
+        console.warn('[remote-runtime-pty-transport] terminal close not confirmed by host', {
+          blockedReason: result.close.blockedReason
+        })
+      }
     } catch {
       // Best-effort parity with local disconnect/kill.
     }

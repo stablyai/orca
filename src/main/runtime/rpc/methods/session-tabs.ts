@@ -127,7 +127,8 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   defineStreamingMethod({
     name: 'session.tabs.subscribe',
     params: WorktreeTabSelector,
-    handler: async (params, { runtime, connectionId, requestId, pairedDeviceId }, emit) => {
+    handler: async (params, ctx, emit) => {
+      const { runtime, connectionId, requestId, pairedDeviceId } = ctx
       let subscribedWorktree: string | null = null
       let unsubscribe = (): void => {}
       let closed = false
@@ -137,6 +138,11 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
         return
       }
       subscribedWorktree = initial.worktree
+      ctx.runtimeClosePolicy?.recordAttachedTarget(ctx, {
+        kind: 'session-tab',
+        worktree: params.worktree,
+        tabId: '*'
+      })
       const cleanupPrefix = `session.tabs:${connectionId ?? 'local'}:${subscribedWorktree}`
       const subscriptionId = requestId ? `${cleanupPrefix}:${requestId}` : cleanupPrefix
       // Why: shared-control can carry multiple subscribers for one worktree on
@@ -192,7 +198,8 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   defineStreamingMethod({
     name: 'session.tabs.subscribeAll',
     params: null,
-    handler: async (_params, { runtime, connectionId, requestId, pairedDeviceId }, emit) => {
+    handler: async (_params, ctx, emit) => {
+      const { runtime, connectionId, requestId, pairedDeviceId } = ctx
       let unsubscribe = (): void => {}
       let closed = false
       // Why: initial listAll errors should return one RPC error, not a leaked
@@ -225,6 +232,13 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
       })
       if (closed) {
         return
+      }
+      for (const snapshot of snapshots) {
+        ctx.runtimeClosePolicy?.recordAttachedTarget(ctx, {
+          kind: 'session-tab',
+          worktree: `id:${snapshot.worktree}`,
+          tabId: '*'
+        })
       }
       emit({ type: 'snapshots', snapshots })
       initialized = true

@@ -6,7 +6,8 @@ import {
   createAgentBackgroundSessionTestState,
   expectReservedAgentBackgroundTabId,
   expectStableAgentBackgroundPaneSpawn,
-  resetAgentBackgroundSessionTestHarness
+  resetAgentBackgroundSessionTestHarness,
+  useRemoteAgentBackgroundRuntime
 } from '@/lib/agent-background-session-test-state'
 
 const mockSpawn = vi.fn()
@@ -596,4 +597,87 @@ describe('launchAgentBackgroundSession', () => {
       })
     )
   })
+  it('closes a runtime terminal with a creation-rollback intent when the worktree disappears mid-create', async () => {
+    useRemoteAgentBackgroundRuntime(state)
+    let resolveCreate!: (result: {
+      ok: true
+      result: { terminal: { handle: string; worktreeId: string; title: null } }
+    }) => void
+    const createResult = new Promise<{
+      ok: true
+      result: { terminal: { handle: string; worktreeId: string; title: null } }
+    }>((resolve) => {
+      resolveCreate = resolve
+    })
+    mockRuntimeEnvironmentCall.mockImplementation((args: { method: string }) => {
+      if (args.method === 'terminal.createAgentSession') {
+        return createResult
+      }
+      return Promise.resolve({ ok: true, result: {} })
+    })
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    const launch = launchAgentBackgroundSession({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'run remotely'
+    })
+    await vi.waitFor(() =>
+      expect(mockRuntimeEnvironmentCall).toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'terminal.createAgentSession' })
+      )
+    )
+    // The worktree disappears while the create is in flight.
+    state.getKnownWorktreeById = () => undefined
+    resolveCreate({
+      ok: true,
+      result: { terminal: { handle: 'terminal-after-close', worktreeId: 'wt-1', title: null } }
+    })
+
+    await expect(launch).resolves.toBeNull()
+    expect(mockRuntimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.close',
+        params: expect.objectContaining({
+          terminal: 'terminal-after-close',
+          closeIntent: expect.objectContaining({
+            source: 'client-created-rollback',
+            userInitiated: false,
+            worktreeId: 'wt-1',
+            ptyOrHandle: 'terminal-after-close'
+          })
+        })
+      })
+    )
+  })
+
+  it('closes a created runtime terminal with a creation-rollback intent when its data subscription fails', async () => {
+    useRemoteAgentBackgroundRuntime(state)
+    mockRuntimeEnvironmentSubscribe.mockRejectedValueOnce(new Error('subscription failed'))
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await expect(
+      launchAgentBackgroundSession({
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        prompt: 'run the automation'
+      })
+    ).rejects.toThrow('subscription failed')
+
+    expect(mockRuntimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.close',
+        params: expect.objectContaining({
+          terminal: 'terminal-1',
+          closeIntent: expect.objectContaining({
+            source: 'client-created-rollback',
+            userInitiated: false,
+            worktreeId: 'wt-1',
+            ptyOrHandle: 'terminal-1'
+          })
+        })
+      })
+    )
+  })
+
 })

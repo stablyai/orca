@@ -140,7 +140,15 @@ describe('terminal tab retirement store boundary', () => {
 
     expect(mockRuntimeCall).toHaveBeenCalledWith({
       method: 'terminal.close',
-      params: { terminal: 'terminal-1' }
+      params: {
+        terminal: 'terminal-1',
+        closeIntent: expect.objectContaining({
+          source: 'user-tab-close',
+          userInitiated: true,
+          worktreeId: 'wt-1',
+          ptyOrHandle: 'terminal-1'
+        })
+      }
     })
     expect(mockKill).not.toHaveBeenCalled()
   })
@@ -261,6 +269,37 @@ describe('terminal tab retirement store boundary', () => {
         tabId: 'tab-1',
         localOrSshFailures: 1,
         runtimeFailures: 0
+      })
+    )
+
+    expect(store.getState().tabsByWorktree['wt-1']).toEqual([])
+    warn.mockRestore()
+  })
+
+  it('counts a runtime soft-denial as a teardown failure', async () => {
+    const store = createRetirementStore()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockRuntimeCall.mockResolvedValueOnce({
+      id: 'rpc-1',
+      ok: true,
+      result: {
+        close: { handle: 'terminal-1', tabId: 'tab-1', ptyKilled: false, blockedReason: 'close_rate_limited' }
+      },
+      _meta: { runtimeId: 'local-runtime' }
+    })
+    seedStore(store, {
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1', ptyId: 'remote:terminal-1' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['remote:terminal-1'] }
+    })
+
+    store.getState().closeTab('tab-1')
+    await vi.waitFor(() =>
+      expect(warn).toHaveBeenCalledWith('[terminal-retirement] provider teardown failed', {
+        tabId: 'tab-1',
+        localOrSshFailures: 0,
+        runtimeFailures: 1
       })
     )
 

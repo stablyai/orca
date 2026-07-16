@@ -13,6 +13,7 @@ import {
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcRequest, RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
+import { RuntimeClosePolicy } from '../runtime-close-policy'
 import { AGENT_SESSION_METHODS } from './agent-session'
 import { TERMINAL_METHODS } from './terminal'
 
@@ -190,6 +191,69 @@ describe('agent session RPC methods', () => {
     expect(opaque).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
     expect(malformed).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
     expect(runtime.createAgentSession).not.toHaveBeenCalled()
+  })
+
+  it('registers creation-rollback ownership for freshly created structured sessions', async () => {
+    const runtime = runtimeStub()
+    const runtimeClosePolicy = new RuntimeClosePolicy()
+    const recordTerminalCreated = vi.spyOn(runtimeClosePolicy, 'recordTerminalCreated')
+    const dispatcher = new RpcDispatcher({
+      runtime: runtime as unknown as OrcaRuntimeService,
+      methods: AGENT_SESSION_METHODS,
+      runtimeClosePolicy
+    })
+
+    const created = await dispatcher.dispatch(
+      request('terminal.createAgentSession', {
+        clientOperationId: '1752883200000-0123456789abcdef0123456789abcdef',
+        worktree: 'id:worktree-1',
+        agent: 'codex'
+      })
+    )
+    const ensured = await dispatcher.dispatch(
+      request('terminal.ensureAgentSession', {
+        kind: 'explicit',
+        worktree: 'id:worktree-1',
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'provider-session-1' }
+      })
+    )
+
+    expect(created).toMatchObject({ ok: true })
+    expect(ensured).toMatchObject({ ok: true })
+    expect(recordTerminalCreated).toHaveBeenCalledTimes(2)
+    expect(recordTerminalCreated).toHaveBeenCalledWith(expect.anything(), 'term_1')
+  })
+
+  it('skips creation-rollback ownership for replayed and adopted sessions', async () => {
+    const runtime = runtimeStub()
+    runtime.createAgentSession.mockResolvedValue(terminalResult('replayed'))
+    runtime.ensureAgentSession.mockResolvedValue(terminalResult('adopted'))
+    const runtimeClosePolicy = new RuntimeClosePolicy()
+    const recordTerminalCreated = vi.spyOn(runtimeClosePolicy, 'recordTerminalCreated')
+    const dispatcher = new RpcDispatcher({
+      runtime: runtime as unknown as OrcaRuntimeService,
+      methods: AGENT_SESSION_METHODS,
+      runtimeClosePolicy
+    })
+
+    await dispatcher.dispatch(
+      request('terminal.createAgentSession', {
+        clientOperationId: '1752883200000-0123456789abcdef0123456789abcdef',
+        worktree: 'id:worktree-1',
+        agent: 'codex'
+      })
+    )
+    await dispatcher.dispatch(
+      request('terminal.ensureAgentSession', {
+        kind: 'explicit',
+        worktree: 'id:worktree-1',
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'provider-session-1' }
+      })
+    )
+
+    expect(recordTerminalCreated).not.toHaveBeenCalled()
   })
 
   it('preserves legacy agent-bearing terminal.create requests for mixed-version clients', async () => {

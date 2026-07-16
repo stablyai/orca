@@ -12,6 +12,7 @@ import type {
   RuntimeTerminalClose,
   RuntimeTerminalSplit
 } from '../../../shared/runtime-types'
+import type { RuntimeCloseIntent } from '../../../shared/runtime-close-intent'
 import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type {
@@ -28,6 +29,7 @@ import type {
 import type { TerminalPaneLayoutNode, TuiAgent } from '../../../shared/types'
 import type { AppState } from '../store/types'
 import { getRuntimeEnvironmentIdForWorktree } from '../lib/worktree-runtime-owner'
+import { createBrowserUuid } from '../lib/browser-uuid'
 import { useAppStore } from '../store'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
 import {
@@ -877,6 +879,18 @@ async function callWebRuntimeSessionTabMethod(
   }
 
   const immediateHostTabId = toHostSessionTabId(args.tabId)
+  // Why: paired runtime hosts refuse reasonless closes without structured intent;
+  // mint it before the async id resolution so the request can never go out bare.
+  const closeIntent: RuntimeCloseIntent | undefined = isClose
+    ? {
+        source: 'user-tab-close',
+        userInitiated: true,
+        requestId: createBrowserUuid(),
+        occurredAt: Date.now(),
+        worktreeId: args.worktreeId,
+        hostTabId: immediateHostTabId
+      }
+    : undefined
   if (isClose) {
     // Why: record before async id resolution so a stale snapshot cannot flash the closed tab back.
     closeIntentTabIds.add(immediateHostTabId)
@@ -896,6 +910,9 @@ async function callWebRuntimeSessionTabMethod(
       // Why: suppress until the host confirms removal, else an in-flight pre-close snapshot flashes the tab back.
       closeIntentTabIds.add(hostTabId)
       recordWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId, Date.now())
+      if (closeIntent && hostTabId !== immediateHostTabId) {
+        closeIntent.hostTabId = hostTabId
+      }
     }
     const response = await callEnvironment({
       // Why: old hosts cannot route this additive method, so a generation
@@ -918,7 +935,7 @@ async function callWebRuntimeSessionTabMethod(
               terminal: args.terminalHandle
             }
           : isClose
-            ? { reason: args.reason }
+            ? { reason: args.reason, closeIntent }
             : {})
       },
       timeoutMs: 15_000
@@ -935,6 +952,27 @@ async function callWebRuntimeSessionTabMethod(
         const { acceptReplayedWebSessionTabsSnapshot } = await import('./web-session-tabs-sync')
         acceptReplayedWebSessionTabsSnapshot(environmentId, args.worktreeId)
       }
+      if (result && result.closed === false) {
+        // Why: the close policy soft-denies inside a success envelope; treat it
+        // as the refusal it is so callers stop reporting a phantom close. The
+        // local mirror was already pruned optimistically, so pull the host's
+        // authoritative snapshot to resurrect the still-live tab.
+        clearWebSessionCloseIntent(intentOwner, args.worktreeId, immediateHostTabId)
+        clearWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId)
+        console.warn('[web-runtime-session] close blocked by host policy', {
+          blockedReason: result.blockedReason ?? 'unknown'
+        })
+        await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId, {
+          // Why: a policy denial does not republish, so the resync re-offers the
+          // exact current epoch/version; without this the freshness gate drops it.
+          acceptCurrentSnapshot: true,
+          expectedEnvironmentPairingRevision: intentOwner.pairingRevision
+        })
+        return false
+      }
+      // Why: pre-policy hosts return `{}` on a successful close; only the
+      // policy's explicit denial marker above may veto. Anything else counts
+      // as closed, same as before the envelope field existed.
       await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId, {
         expectedEnvironmentPairingRevision: intentOwner.pairingRevision
       })
@@ -1090,17 +1128,49 @@ export function closeWebRuntimeTerminal(ptyId: string | null | undefined): boole
   }
 
   // Why: host owns the real pane graph; close the host terminal first so later snapshots can't resurrect the removed pane.
+  const state = useAppStore.getState()
+  let owningWorktreeId: string | null = null
+  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
+    if (tabs.some((tab) => (state.ptyIdsByTabId[tab.id] ?? []).includes(ptyId))) {
+      owningWorktreeId = worktreeId
+      break
+    }
+  }
+  if (!owningWorktreeId) {
+    return false
+  }
+  const closeIntent: RuntimeCloseIntent = {
+    source: 'user-pane-close',
+    userInitiated: true,
+    requestId: createBrowserUuid(),
+    occurredAt: Date.now(),
+    worktreeId: owningWorktreeId,
+    ptyOrHandle: remote.handle
+  }
   void window.api.runtimeEnvironments
     .call({
       selector: environmentId,
       method: 'terminal.close',
       params: {
-        terminal: remote.handle
+        terminal: remote.handle,
+        closeIntent
       },
       timeoutMs: 15_000
     })
-    .then((response) => {
-      unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ close: RuntimeTerminalClose }>)
+    .then(async (response) => {
+      const result = unwrapRuntimeRpcResult(
+        response as RuntimeRpcResponse<{ close: RuntimeTerminalClose }>
+      )
+      if (result?.close?.ptyKilled !== true) {
+        console.warn('[web-runtime-session] terminal close not confirmed by host', {
+          blockedReason: result?.close?.blockedReason
+        })
+        // Why: the caller deleted the local pane optimistically; a denial did
+        // not republish, so re-accept the current snapshot to resurrect it.
+        await refreshWebRuntimeSessionTabsSnapshot(environmentId, owningWorktreeId, {
+          acceptCurrentSnapshot: true
+        })
+      }
     })
     .catch((error) => {
       console.warn(

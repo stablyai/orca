@@ -5,6 +5,7 @@ import type { TuiAgent } from '../../../../shared/types'
 import { sleepingAgentLaunchConfigSchema } from '../../../../shared/workspace-session-sleeping-agents'
 import { RUNTIME_NAVIGATION_TARGETS } from '../../../../shared/runtime-navigation'
 import { OptionalBoolean } from '../schemas'
+import { RuntimeCloseIntentSchema } from '../runtime-close-intent-schema'
 
 export const WorktreeTabSelector = z.object({
   worktree: z
@@ -30,7 +31,10 @@ export const ActivateTab = WorktreeTabSelector.extend({
 export const CloseTab = ActivateTab.extend({
   // Why: optional preserves authenticated legacy user closes; lifecycle intent
   // uses the additive evidence-bearing method instead.
-  reason: z.literal('user').optional()
+  reason: z.literal('user').optional(),
+  // Why: runtime/shared-control clients must prove an explicit user close intent;
+  // mobile/legacy clients may omit it and keep legacy behavior.
+  closeIntent: RuntimeCloseIntentSchema.optional()
 })
 
 export const CloseLifecycleTab = ActivateTab.extend({

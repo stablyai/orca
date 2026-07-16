@@ -90,7 +90,8 @@ export async function adoptAgentBackgroundSessionTab(args: {
     await retireProvider({
       ptyId,
       runtimeTarget: args.runtimeTarget,
-      runtimeTerminalHandle: args.runtimeTerminalHandle
+      runtimeTerminalHandle: args.runtimeTerminalHandle,
+      owner: { worktreeId: args.worktreeId }
     })
     return null
   }

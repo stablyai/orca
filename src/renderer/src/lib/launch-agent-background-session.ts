@@ -311,7 +311,7 @@ export async function launchAgentBackgroundSession(
     }
     runBestEffortAgentBackgroundCleanups(() => store.clearAgentLaunchConfig(paneKey))
     if (ptyId) {
-      await retireProvider({ ptyId, runtimeTarget, runtimeTerminalHandle })
+      await retireProvider({ ptyId, runtimeTarget, runtimeTerminalHandle, owner: { worktreeId } })
     }
     if (createdTab) {
       // Cleanup closes must not enter the reopen stack.

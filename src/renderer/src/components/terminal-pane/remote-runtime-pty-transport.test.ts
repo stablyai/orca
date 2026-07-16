@@ -2024,7 +2024,14 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(runtimeCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'terminal.close',
-      params: { terminal: 'terminal-late' },
+      params: {
+        terminal: 'terminal-late',
+        closeIntent: expect.objectContaining({
+          source: 'client-created-rollback',
+          userInitiated: false,
+          ptyOrHandle: 'terminal-late'
+        })
+      },
       timeoutMs: 15_000
     })
   })
@@ -2056,7 +2063,14 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(runtimeCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'terminal.close',
-      params: { terminal: 'terminal-late' },
+      params: {
+        terminal: 'terminal-late',
+        closeIntent: expect.objectContaining({
+          source: 'client-created-rollback',
+          userInitiated: false,
+          ptyOrHandle: 'terminal-late'
+        })
+      },
       timeoutMs: 15_000
     })
     transport.destroy?.()
