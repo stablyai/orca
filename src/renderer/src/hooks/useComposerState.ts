@@ -78,6 +78,7 @@ import {
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
   buildLinearIssueLinkedWorkItem,
+  getLinearLinkedWorkItemBranchName,
   isLinearLinkedWorkItem
 } from '@/lib/linear-linked-work-item'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
@@ -960,9 +961,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [linkedWorkItem, setLinkedWorkItem] = useState<LinkedWorkItemSummary | null>(
     () => linkedWorkItemSeed
   )
-  const initialLinearBranchName = linkedWorkItemSeed?.linearBranchName?.trim()
-    ? linkedWorkItemSeed.linearBranchName
-    : undefined
+  const initialLinearBranchName = getLinearLinkedWorkItemBranchName(linkedWorkItemSeed)
   const taskSourceContext = useMemo(() => {
     if (
       persistDraft &&
@@ -2090,6 +2089,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
       if (!options.preserveBranchNameOverride) {
         setBranchNameOverride(undefined)
+        setBranchNameOverridePreservesNameEdits(false)
+        branchAutoNameRef.current = ''
       }
     },
     [name]
@@ -2327,6 +2328,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         lastAutoNameRef.current = nextName
       }
       setBranchNameOverride(undefined)
+      setBranchNameOverridePreservesNameEdits(false)
+      branchAutoNameRef.current = ''
     },
     [name]
   )
@@ -2354,6 +2357,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const handleRemoveLinkedWorkItem = useCallback((): void => {
     smartGitHubPrStartPointSelectionRef.current = null
+    const removedLinearItem = isLinearLinkedWorkItem(linkedWorkItem)
     setLinkedWorkItem(null)
     setLinkedIssue('')
     setLinkedPR(null)
@@ -2361,7 +2365,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     if (name === lastAutoNameRef.current) {
       lastAutoNameRef.current = ''
     }
-  }, [name])
+    if (removedLinearItem) {
+      // Why: a Linear branch override belongs to its linked issue; unlinking
+      // must not leave provider metadata driving a later worktree create.
+      setBranchNameOverride(undefined)
+      setBranchNameOverridePreservesNameEdits(false)
+      branchAutoNameRef.current = ''
+    }
+  }, [linkedWorkItem, name])
 
   const handleNameValueChange = useCallback(
     (nextName: string): void => {
@@ -2652,6 +2663,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         }
       }
       const preserveLinearLinkedWorkItem = isLinearLinkedWorkItem(linkedWorkItem)
+      const preservedLinearBranchName = preserveLinearLinkedWorkItem
+        ? getLinearLinkedWorkItemBranchName(linkedWorkItem)
+        : undefined
       setRepoId(value)
       if (!options.preserveStartFrom) {
         smartGitHubPrStartPointSelectionRef.current = null
@@ -2678,10 +2692,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setBaseBranch(undefined)
         setCompareBaseRef(undefined)
         setPushTarget(undefined)
-        setBranchNameOverride(undefined)
+        // Why: Linear sources are workspace-scoped, so their canonical branch
+        // survives choosing a different implementation repo with the issue.
+        setBranchNameOverride(preservedLinearBranchName)
+        setBranchNameOverridePreservesNameEdits(Boolean(preservedLinearBranchName))
+        branchAutoNameRef.current = preservedLinearBranchName ?? ''
         // Why (#5181): reuse state is branch-scoped, so a repo switch must clear
-        // it alongside the branch override (matches the other reset paths).
-        setBranchNameOverridePreservesNameEdits(false)
+        // it even when a workspace-scoped Linear override is restored.
         setReuseEligibleBranch(null)
         setReuseSelectedBranch(false)
         setForkPushWarning(null)
@@ -3216,7 +3233,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setLinkedPR(null)
       setLinkedGitLabIssue(null)
       setLinkedGitLabMR(null)
-      setLinkedWorkItem(buildLinearIssueLinkedWorkItem(issue))
+      const linkedLinearIssue = buildLinearIssueLinkedWorkItem(issue)
+      setLinkedWorkItem(linkedLinearIssue)
       const suggestedName = getLinearIssueWorkspaceName(issue)
       // Why: same lookup-text rule as applyLinkedWorkItem, plus the typed
       // Linear identifier ("STA-123") that matched this issue.
@@ -3230,7 +3248,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setName(suggestedName)
         lastAutoNameRef.current = suggestedName
       }
-      const linearBranchName = issue.branchName?.trim() ? issue.branchName : undefined
+      const linearBranchName = getLinearLinkedWorkItemBranchName(linkedLinearIssue)
       setBranchNameOverride(linearBranchName)
       setBranchNameOverridePreservesNameEdits(Boolean(linearBranchName))
       setForkPushWarning(null)

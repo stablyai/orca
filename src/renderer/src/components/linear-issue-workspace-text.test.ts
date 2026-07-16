@@ -22,7 +22,7 @@ function makeIssue(branchName?: string): LinearIssue {
 
 describe('buildLinearIssueBranchName', () => {
   it('prefers Linear’s branch name', () => {
-    expect(buildLinearIssueBranchName(makeIssue('team/eng-123-fix-launch-context'))).toBe(
+    expect(buildLinearIssueBranchName(makeIssue('  team/eng-123-fix-launch-context  '))).toBe(
       'team/eng-123-fix-launch-context'
     )
   })
