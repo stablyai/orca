@@ -1,0 +1,310 @@
+import { homedir } from 'node:os'
+import { join, posix } from 'node:path'
+import type { SFTPWrapper } from 'ssh2'
+import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import {
+  buildManagedCommandHook,
+  createManagedCommandMatcher,
+  buildWindowsAgentHookCurlPostCommand,
+  getSharedManagedScriptPath,
+  readHooksJson,
+  removeManagedCommands,
+  wrapPosixHookCommand,
+  wrapWindowsHookCommand,
+  writeHooksJson,
+  writeManagedScript,
+  type HookDefinition
+} from '../agent-hooks/installer-utils'
+import {
+  readHooksJsonRemote,
+  writeHooksJsonRemote,
+  writeManagedScriptRemote
+} from '../agent-hooks/installer-utils-remote'
+import {
+  buildPosixHookPayloadCapture,
+  buildWindowsHookEnvironmentGuardLines,
+  buildWindowsHookStdinDrainEpilogue
+} from '../agent-hooks/hook-stdin-contract'
+
+// Why: qodercli supports regex matchers for tool events. Bare `*` is not valid;
+// `.*` matches every tool name (same pattern as Grok's managed hooks).
+const QODER_TOOL_EVENT_MATCHER = '.*'
+
+const QODER_EVENTS = [
+  { eventName: 'SessionStart', definition: { hooks: [{ type: 'command' as const, command: '' }] } },
+  {
+    eventName: 'UserPromptSubmit',
+    definition: { hooks: [{ type: 'command' as const, command: '' }] }
+  },
+  { eventName: 'Stop', definition: { hooks: [{ type: 'command' as const, command: '' }] } },
+  // Why: qodercli can end a turn on API error without a normal Stop; without
+  // this the sidebar can stick on working (same rationale as Claude StopFailure).
+  { eventName: 'StopFailure', definition: { hooks: [{ type: 'command' as const, command: '' }] } },
+  { eventName: 'SessionEnd', definition: { hooks: [{ type: 'command' as const, command: '' }] } },
+  {
+    eventName: 'PreToolUse',
+    definition: {
+      matcher: QODER_TOOL_EVENT_MATCHER,
+      hooks: [{ type: 'command' as const, command: '' }]
+    }
+  },
+  {
+    eventName: 'PermissionRequest',
+    definition: {
+      matcher: QODER_TOOL_EVENT_MATCHER,
+      hooks: [{ type: 'command' as const, command: '' }]
+    }
+  },
+  {
+    eventName: 'PostToolUse',
+    definition: {
+      matcher: QODER_TOOL_EVENT_MATCHER,
+      hooks: [{ type: 'command' as const, command: '' }]
+    }
+  },
+  {
+    eventName: 'PostToolUseFailure',
+    definition: {
+      matcher: QODER_TOOL_EVENT_MATCHER,
+      hooks: [{ type: 'command' as const, command: '' }]
+    }
+  },
+  { eventName: 'Notification', definition: { hooks: [{ type: 'command' as const, command: '' }] } }
+] as const
+
+function getConfigPath(): string {
+  // Why: qodercli loads hooks from ~/.qoder/settings.json under the `hooks` key.
+  return join(homedir(), '.qoder', 'settings.json')
+}
+
+function getManagedScriptFileName(): string {
+  return process.platform === 'win32' ? 'qoder-hook.cmd' : 'qoder-hook.sh'
+}
+
+function getManagedScriptPath(): string {
+  return getSharedManagedScriptPath(getManagedScriptFileName())
+}
+
+function getManagedCommand(scriptPath: string): string {
+  return process.platform === 'win32'
+    ? wrapWindowsHookCommand(scriptPath)
+    : wrapPosixHookCommand(scriptPath)
+}
+
+function getManagedScript(target: 'local' | 'posix' = 'local'): string {
+  if (target === 'local' && process.platform === 'win32') {
+    return [
+      '@echo off',
+      'setlocal',
+      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
+      ...buildWindowsHookEnvironmentGuardLines(),
+      buildWindowsAgentHookCurlPostCommand('qoder'),
+      'exit /b 0',
+      ...buildWindowsHookStdinDrainEpilogue(),
+      ''
+    ].join('\r\n')
+  }
+
+  return [
+    '#!/bin/sh',
+    ...buildPosixHookPayloadCapture(),
+    'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
+    '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
+    'fi',
+    'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
+    '  exit 0',
+    'fi',
+    // Why: pipe payload to curl's stdin (`payload@-`) instead of an inline
+    // `payload=$VALUE` arg, so tens-of-KB tool output stays off the curl
+    // command line (EDR command-line false positives). Wire body is identical.
+    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/qoder" \\',
+    '  --connect-timeout 0.5 --max-time 1.5 \\',
+    '  -H "Content-Type: application/x-www-form-urlencoded" \\',
+    '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
+    '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
+    '  --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
+    '  --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
+    '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
+    '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
+    '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
+    '  --data-urlencode "payload@-" >/dev/null 2>&1 || true',
+    'exit 0',
+    ''
+  ].join('\n')
+}
+
+function buildInstalledConfig(
+  config: NonNullable<ReturnType<typeof readHooksJson>>,
+  command: string,
+  scriptFileName: string
+): void {
+  const nextHooks = { ...config.hooks }
+  const isManagedCommand = createManagedCommandMatcher(scriptFileName)
+  const managedEvents = new Set<string>(QODER_EVENTS.map((event) => event.eventName))
+
+  // Why: Orca owns only qoder-hook.* entries. Sweep stale managed commands out
+  // of retired events while preserving any user-authored hooks in this file.
+  for (const [eventName, definitions] of Object.entries(nextHooks)) {
+    if (managedEvents.has(eventName) || !Array.isArray(definitions)) {
+      continue
+    }
+    const cleaned = removeManagedCommands(definitions, isManagedCommand)
+    if (cleaned.length === 0) {
+      delete nextHooks[eventName]
+    } else {
+      nextHooks[eventName] = cleaned
+    }
+  }
+
+  for (const event of QODER_EVENTS) {
+    const current = Array.isArray(nextHooks[event.eventName]) ? nextHooks[event.eventName] : []
+    const cleaned = removeManagedCommands(current, isManagedCommand)
+    const definition: HookDefinition = {
+      ...event.definition,
+      hooks: [buildManagedCommandHook(command)]
+    }
+    nextHooks[event.eventName] = [...cleaned, definition]
+  }
+
+  config.hooks = nextHooks
+}
+
+export class QoderHookService {
+  getStatus(): AgentHookInstallStatus {
+    const configPath = getConfigPath()
+    const scriptPath = getManagedScriptPath()
+    const config = readHooksJson(configPath)
+    if (!config) {
+      return {
+        agent: 'qoder',
+        state: 'error',
+        configPath,
+        managedHooksPresent: false,
+        detail: 'Could not parse qodercli settings.json'
+      }
+    }
+
+    const command = getManagedCommand(scriptPath)
+    const missing: string[] = []
+    let presentCount = 0
+    for (const event of QODER_EVENTS) {
+      const definitions = Array.isArray(config.hooks?.[event.eventName])
+        ? config.hooks![event.eventName]!
+        : []
+      const hasCommand = definitions.some((definition) =>
+        (definition.hooks ?? []).some((hook) => hook.command === command)
+      )
+      if (hasCommand) {
+        presentCount += 1
+      } else {
+        missing.push(event.eventName)
+      }
+    }
+
+    const managedHooksPresent = presentCount > 0
+    let state: AgentHookInstallState
+    let detail: string | null
+    if (missing.length === 0) {
+      state = 'installed'
+      detail = null
+    } else if (presentCount === 0) {
+      state = 'not_installed'
+      detail = null
+    } else {
+      state = 'partial'
+      detail = `Managed hook missing for events: ${missing.join(', ')}`
+    }
+    return { agent: 'qoder', state, configPath, managedHooksPresent, detail }
+  }
+
+  install(): AgentHookInstallStatus {
+    const configPath = getConfigPath()
+    const scriptPath = getManagedScriptPath()
+    const config = readHooksJson(configPath)
+    if (!config) {
+      return {
+        agent: 'qoder',
+        state: 'error',
+        configPath,
+        managedHooksPresent: false,
+        detail: 'Could not parse qodercli settings.json'
+      }
+    }
+
+    buildInstalledConfig(config, getManagedCommand(scriptPath), getManagedScriptFileName())
+    writeManagedScript(scriptPath, getManagedScript())
+    writeHooksJson(configPath, config)
+    return this.getStatus()
+  }
+
+  async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
+    const remoteConfigPath = posix.join(remoteHome, '.qoder', 'settings.json')
+    const remoteScriptPath = posix.join(remoteHome, '.orca', 'agent-hooks', 'qoder-hook.sh')
+    try {
+      const config = await readHooksJsonRemote(sftp, remoteConfigPath)
+      if (!config) {
+        return {
+          agent: 'qoder',
+          state: 'error',
+          configPath: remoteConfigPath,
+          managedHooksPresent: false,
+          detail: 'Could not parse remote qodercli settings.json'
+        }
+      }
+
+      buildInstalledConfig(config, wrapPosixHookCommand(remoteScriptPath), 'qoder-hook.sh')
+      await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
+      await writeHooksJsonRemote(sftp, remoteConfigPath, config)
+
+      return {
+        agent: 'qoder',
+        state: 'installed',
+        configPath: remoteConfigPath,
+        managedHooksPresent: true,
+        detail: null
+      }
+    } catch (err) {
+      return {
+        agent: 'qoder',
+        state: 'error',
+        configPath: remoteConfigPath,
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  }
+
+  remove(): AgentHookInstallStatus {
+    const configPath = getConfigPath()
+    const config = readHooksJson(configPath)
+    if (!config) {
+      return {
+        agent: 'qoder',
+        state: 'error',
+        configPath,
+        managedHooksPresent: false,
+        detail: 'Could not parse qodercli settings.json'
+      }
+    }
+
+    const nextHooks = { ...config.hooks }
+    const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
+    for (const [eventName, definitions] of Object.entries(nextHooks)) {
+      if (!Array.isArray(definitions)) {
+        continue
+      }
+      const cleaned = removeManagedCommands(definitions, isManagedCommand)
+      if (cleaned.length === 0) {
+        delete nextHooks[eventName]
+      } else {
+        nextHooks[eventName] = cleaned
+      }
+    }
+
+    config.hooks = nextHooks
+    writeHooksJson(configPath, config)
+    return this.getStatus()
+  }
+}
+
+export const qoderHookService = new QoderHookService()

@@ -67,3 +67,11 @@ export const DROID_AGENT_NAME_RE = /(?<![\w./\\-])droid(?![\w./\\-])/i
 // cwd/path titles like `~/hermes/working` would otherwise count as activity.
 export const HERMES_AGENT_NAME_RE = /(?<![\w./\\-])hermes(?![\w./\\-])/i
 export const AGY_AGENT_NAME_RE = /(?<![\w./\\-])agy(?![\w./\\-])/i
+// Why: Qoder's published binary is `qodercli`; token-match the full name so
+// cwd fragments like "qoder-demo" do not mint a false agent identity.
+export const QODER_AGENT_NAME_RE = /(?<![\w./\\-])qodercli(?![\w./\\-])/i
+export const QODER_TERMINAL_LABEL = 'Qoder CLI'
+
+export function isQoderTerminalTitle(title: string): boolean {
+  return QODER_AGENT_NAME_RE.test(title)
+}

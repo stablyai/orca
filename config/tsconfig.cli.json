@@ -36,6 +36,7 @@
     "../src/main/kimi/hook-service.ts",
     "../src/main/kimi/kimi-hook-config-toml.ts",
     "../src/main/openclaude/hook-service.ts",
+    "../src/main/qoder/hook-service.ts",
     "../src/main/runtime/runtime-metadata.ts",
     "../src/main/win32-utils.ts"
   ],

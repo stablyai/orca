@@ -2305,6 +2305,8 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
       // (clears turn cache, returns null) so it never reaches this branch.
       // UserPromptSubmit is the real new-turn boundary for Devin.
       return eventName === 'UserPromptSubmit'
+    case 'qoder':
+      return eventName === 'UserPromptSubmit'
   }
 }
 
@@ -2402,6 +2404,9 @@ function extractToolFields(
     case 'hermes':
       return extractHermesToolFields(eventName, hookPayload)
     case 'devin':
+      return extractClaudeToolFields(eventName, hookPayload)
+    case 'qoder':
+      // Why: qodercli uses Claude-compatible tool_name/tool_input payload fields.
       return extractClaudeToolFields(eventName, hookPayload)
   }
 }
@@ -2859,6 +2864,73 @@ function normalizeKimiEvent(
         resetOnNewTurn: isNewTurnEvent('kimi', eventName)
       }),
       agentType: 'kimi',
+      toolName: snapshot.toolName,
+      toolInput: snapshot.toolInput,
+      lastAssistantMessage: snapshot.lastAssistantMessage,
+      interrupted
+    })
+  )
+}
+
+// Why: qodercli emits Claude-compatible hook events (UserPromptSubmit, PreToolUse,
+// PostToolUse, PostToolUseFailure, Stop, StopFailure) plus a Notification event
+// with notification_type (permission_prompt, idle_prompt) that Claude does not
+// use. Modeled on normalizeKimiEvent with notification handling added.
+function normalizeQoderEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  if (eventName === 'SessionStart') {
+    clearPaneTurnCacheState(state, paneKey)
+    return null
+  }
+
+  const toolName = readString(hookPayload, 'tool_name')
+  const isUserInputTool = isAskUserQuestionTool(toolName)
+  const notificationType = readString(hookPayload, 'notification_type')
+
+  let stateName: 'working' | 'waiting' | 'done' | null = null
+  if (
+    eventName === 'UserPromptSubmit' ||
+    eventName === 'PostToolUse' ||
+    eventName === 'PostToolUseFailure' ||
+    (eventName === 'PreToolUse' && !isUserInputTool)
+  ) {
+    stateName = 'working'
+  } else if (eventName === 'PermissionRequest' || (eventName === 'PreToolUse' && isUserInputTool)) {
+    stateName = 'waiting'
+  } else if (eventName === 'Stop' || eventName === 'StopFailure' || eventName === 'SessionEnd') {
+    stateName = 'done'
+  } else if (eventName === 'Notification' && notificationType === 'permission_prompt') {
+    stateName = 'waiting'
+  } else if (eventName === 'Notification' && notificationType === 'idle_prompt') {
+    stateName = 'done'
+  }
+
+  if (!stateName) {
+    return null
+  }
+
+  const snapshot = resolveToolState(
+    state,
+    paneKey,
+    extractToolFields('qoder', eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent('qoder', eventName) }
+  )
+
+  const interrupted =
+    eventName === 'Stop' && hookPayload['is_interrupt'] === true ? true : undefined
+
+  return parseAgentStatusPayload(
+    JSON.stringify({
+      state: stateName,
+      prompt: resolvePrompt(state, paneKey, eventName === 'Notification' ? '' : promptText, {
+        resetOnNewTurn: isNewTurnEvent('qoder', eventName)
+      }),
+      agentType: 'qoder',
       toolName: snapshot.toolName,
       toolInput: snapshot.toolInput,
       lastAssistantMessage: snapshot.lastAssistantMessage,
@@ -3859,6 +3931,9 @@ export function normalizeHookPayload(
     case 'kimi':
       payload = normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
+    case 'qoder':
+      payload = normalizeQoderEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
   }
 
   // Why: connectionId stays null at the listener layer. The local server keeps
@@ -3915,7 +3990,8 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/copilot': 'copilot',
   '/hook/hermes': 'hermes',
   '/hook/devin': 'devin',
-  '/hook/kimi': 'kimi'
+  '/hook/kimi': 'kimi',
+  '/hook/qoder': 'qoder'
 })
 
 export function resolveHookSource(pathname: string): AgentHookSource | null {

@@ -2,6 +2,7 @@ import {
   AGY_AGENT_NAME_RE,
   DROID_AGENT_NAME_RE,
   HERMES_AGENT_NAME_RE,
+  isQoderTerminalTitle,
   titleHasAgentName,
   titleHasAnyLegacyAgentName
 } from './agent-name-token-match'
@@ -48,6 +49,11 @@ export const CURSOR_NATIVE_TITLE_LOWER = 'cursor agent'
 export const BRAILLE_SPINNER_RE = /[\u2800-\u28ff]/g
 
 export function isGeminiTerminalTitle(title: string): boolean {
+  // Why: Qoder reuses Gemini OSC glyphs (✦ ◇ etc.) but is a separate product.
+  // Explicit qodercli markers win first so the tab shows Qoder, not Gemini.
+  if (isQoderTerminalTitle(title)) {
+    return false
+  }
   // Why: Gemini OSC glyphs are stronger evidence than any cwd/session text.
   if (
     title.includes(GEMINI_PERMISSION) ||

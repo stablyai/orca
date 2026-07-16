@@ -130,6 +130,15 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // the composed prompt after startup to keep the hosted session alive.
     promptInjectionMode: 'stdin-after-start'
   },
+  qoder: {
+    detectCmd: 'qodercli',
+    launchCmd: 'qodercli',
+    expectedProcess: 'qodercli',
+    // Why: qodercli's `-p` flag runs in headless mode (exits on completion),
+    // so the bare TUI must be launched and the prompt injected after startup
+    // to keep the hosted session alive — same pattern as aider, devin, goose.
+    promptInjectionMode: 'stdin-after-start'
+  },
   opencode: {
     detectCmd: 'opencode',
     launchCmd: 'opencode',
