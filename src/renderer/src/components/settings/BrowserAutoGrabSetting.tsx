@@ -16,9 +16,9 @@ export function BrowserAutoGrabSetting({
 }: BrowserAutoGrabSettingProps): React.JSX.Element {
   // Why: label the copy chord for the current platform (⌘C on Mac, Ctrl+C else).
   const copyShortcut = getBrowserCopyShortcutLabel({ isMac: isMacUserAgent() })
-  const title = translate('auto.components.settings.BrowserAutoGrabSetting.title', 'Auto Grab')
+  const title = translate('auto.components.settings.BrowserAutoGrabSetting.77e7d32a84', 'Auto Grab')
   const description = translate(
-    'auto.components.settings.BrowserAutoGrabSetting.description',
+    'auto.components.settings.BrowserAutoGrabSetting.2d7508cc24',
     "Grab a page element's context for agents with {{value0}} or the crosshair button in the browser toolbar. Off by default — the browser works like a normal web browser, and {{value0}} copies. Turn this on to enable grabbing.",
     { value0: copyShortcut }
   )

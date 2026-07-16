@@ -7337,10 +7337,8 @@
             "c3903322d2": "デフォルトのホームページ",
             "19ea5607cf": "ローカルホストのワークツリーのラベル",
             "4e0fdf0a3f": "ワークスペース ポートをワークツリー固有の Orca localhost URL として開くと、ブラウザーのタブを区別しやすくなります。",
-            "autograb": {
-              "title": "Auto Grab",
-              "description": "Repurpose {{value0}} in the browser to grab a page element for agents. Off by default so the browser behaves like a normal web browser and {{value0}} copies."
-            }
+            "efae61c9ec": "Auto Grab",
+            "08989a32f7": "Repurpose {{value0}} in the browser to grab a page element for agents. Off by default so the browser behaves like a normal web browser and {{value0}} copies."
           },
           "use": {
             "search": {
@@ -9097,8 +9095,8 @@
           "androidApk": "Android APK"
         },
         "BrowserAutoGrabSetting": {
-          "title": "Auto Grab",
-          "description": "Grab a page element's context for agents with {{value0}} or the crosshair button in the browser toolbar. Off by default — the browser works like a normal web browser, and {{value0}} copies. Turn this on to enable grabbing."
+          "77e7d32a84": "Auto Grab",
+          "2d7508cc24": "Grab a page element's context for agents with {{value0}} or the crosshair button in the browser toolbar. Off by default — the browser works like a normal web browser, and {{value0}} copies. Turn this on to enable grabbing."
         }
       },
       "right": {

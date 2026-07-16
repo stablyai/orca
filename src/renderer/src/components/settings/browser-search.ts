@@ -155,9 +155,9 @@ export function getBrowserPaneSearchEntries(
       ]
     },
     {
-      title: translate('auto.components.settings.browser.search.autograb.title', 'Auto Grab'),
+      title: translate('auto.components.settings.browser.search.efae61c9ec', 'Auto Grab'),
       description: translate(
-        'auto.components.settings.browser.search.autograb.description',
+        'auto.components.settings.browser.search.08989a32f7',
         'Repurpose {{value0}} in the browser to grab a page element for agents. Off by default so the browser behaves like a normal web browser and {{value0}} copies.',
         { value0: getBrowserCopyShortcutLabel(platform) }
       ),

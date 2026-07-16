@@ -1,16 +1,10 @@
-// Why: the browser repurposes Cmd/Ctrl+C to enter element-grab mode. This gate
-// keeps that hijack behind the opt-in `browserAutoGrabEnabled` setting so the
-// copy gesture stays native until the user turns Auto Grab on.
+// Why: the browser repurposes Cmd/Ctrl+C to enter element-grab mode. Callers
+// only reach this gate once the opt-in `browserAutoGrabEnabled` setting is on;
+// it decides whether this particular keystroke is a grab or a native copy.
 export function shouldGrabOnCopyShortcut(args: {
-  autoGrabEnabled: boolean
   isEditableTarget: boolean
   markupActive: boolean
   matchesGrabKeybinding: boolean
 }): boolean {
-  return (
-    !args.isEditableTarget &&
-    args.autoGrabEnabled &&
-    !args.markupActive &&
-    args.matchesGrabKeybinding
-  )
+  return !args.isEditableTarget && !args.markupActive && args.matchesGrabKeybinding
 }

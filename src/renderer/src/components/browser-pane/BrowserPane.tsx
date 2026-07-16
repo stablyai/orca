@@ -4214,7 +4214,6 @@ function BrowserPagePane({
       // overlay is closed, and the grab keybinding matched.
       if (
         !shouldGrabOnCopyShortcut({
-          autoGrabEnabled,
           isEditableTarget: isEditableKeyboardTarget(e.target),
           markupActive: markup.isActive,
           matchesGrabKeybinding: keybindingMatchesAction(
