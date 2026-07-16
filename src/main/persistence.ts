@@ -4009,11 +4009,24 @@ export class Store {
 
   updateProjectGroup(
     groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
+    updates: Partial<
+      Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color' | 'parentGroupId'>
+    >
   ): ProjectGroup | null {
     const group = (this.state.projectGroups ?? []).find((entry) => entry.id === groupId)
     if (!group) {
       return null
+    }
+    if (updates.parentGroupId !== undefined) {
+      const subtreeIds = getProjectGroupSubtreeIds(this.state.projectGroups ?? [], groupId)
+      if (
+        (updates.parentGroupId !== null &&
+          !this.state.projectGroups?.some((entry) => entry.id === updates.parentGroupId)) ||
+        subtreeIds.has(updates.parentGroupId ?? '')
+      ) {
+        return null
+      }
+      group.parentGroupId = updates.parentGroupId
     }
     if (updates.name !== undefined) {
       group.name = normalizeProjectGroupName(updates.name, group.name)

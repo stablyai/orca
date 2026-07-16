@@ -1064,7 +1064,9 @@ export type PreloadApi = {
     }) => Promise<ProjectGroup>
     update: (args: {
       groupId: string
-      updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
+      updates: Partial<
+        Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color' | 'parentGroupId'>
+      >
     }) => Promise<ProjectGroup | null>
     delete: (args: { groupId: string }) => Promise<boolean>
     moveProject: (args: {
@@ -1411,7 +1413,13 @@ export type PreloadApi = {
     onClearBufferRequest: (callback: (data: { ptyId: string }) => void) => () => void
     sendSerializedBuffer: (
       requestId: string,
-      snapshot: { data: string; cols: number; rows: number; seq?: number; lastTitle?: string } | null
+      snapshot: {
+        data: string
+        cols: number
+        rows: number
+        seq?: number
+        lastTitle?: string
+      } | null
     ) => void
     declarePendingPaneSerializer: (paneKey: string) => Promise<number>
     settlePaneSerializer: (paneKey: string, gen: number) => Promise<void>

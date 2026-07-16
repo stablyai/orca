@@ -4235,7 +4235,12 @@
           "hostDisconnected": "연결 끊김",
           "failedNestWorkspace": "워크스페이스를 중첩하지 못했습니다",
           "sidebarRowMissing": "대상이 더 이상 존재하지 않습니다",
-          "failedUnnestWorkspace": "워크트리 펼치기 실패"
+          "failedUnnestWorkspace": "워크트리 펼치기 실패",
+          "a7f5c2d901": "New subgroup",
+          "b8e6d3f012": "Move to root",
+          "c4d8e6f201": "New Subgroup",
+          "d5e9f7a302": "Create a subgroup under {{value0}}.",
+          "e6f8a4c302": "Create"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "취소",

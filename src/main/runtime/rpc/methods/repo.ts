@@ -59,7 +59,8 @@ const ProjectGroupUpdate = z.object({
     name: OptionalString,
     isCollapsed: z.boolean().optional(),
     tabOrder: OptionalFiniteNumber,
-    color: OptionalString.nullable().optional()
+    color: OptionalString.nullable().optional(),
+    parentGroupId: OptionalString.nullable().optional()
   })
 })
 

@@ -40,6 +40,7 @@ import {
   getRepoHeaderSectionEndByRepoId
 } from './worktree-header-section-boundaries'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
+import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
 import { PendingWorktreeRow } from './PendingWorktreeRow'
 import { SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT } from './WorktreeCardAgents'
 import { Button } from '@/components/ui/button'
@@ -294,6 +295,7 @@ export {
 
 type ProjectGroupNameDialogState =
   | { type: 'create-from-repo'; repo: Repo }
+  | { type: 'create-subgroup'; parentGroupId: string; parentName: string }
   | { type: 'rename'; groupId: string; currentName: string }
 
 type ProjectGroupDeleteDialogState = {
@@ -630,6 +632,8 @@ type VirtualizedWorktreeViewportProps = {
   handleCreateGroupFromRepo: (repo: Repo) => void
   handleMoveProjectToGroup: (repo: Repo, groupId: string) => void
   handleRemoveProjectFromGroup: (repo: Repo) => void
+  handleCreateProjectGroup: (parentGroupId: string) => void
+  handleMoveProjectGroup: (groupId: string, parentGroupId: string | null) => void
   handleRenameProjectGroup: (groupId: string, currentName: string) => void
   handleDeleteProjectGroup: (groupId: string, groupName: string) => void
   handleCreateFolderWorkspace: (projectGroup: ProjectGroup) => void
@@ -1269,6 +1273,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   handleCreateGroupFromRepo,
   handleMoveProjectToGroup,
   handleRemoveProjectFromGroup,
+  handleCreateProjectGroup,
+  handleMoveProjectGroup,
   handleRenameProjectGroup,
   handleDeleteProjectGroup,
   handleCreateFolderWorkspace,
@@ -4370,6 +4376,63 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                             <DropdownMenuItem
                               onSelect={() => {
                                 if (row.projectGroup?.id) {
+                                  handleCreateProjectGroup(row.projectGroup.id)
+                                }
+                              }}
+                            >
+                              <FolderPlus className="size-3.5" />
+                              {translate(
+                                'auto.components.sidebar.WorktreeList.a7f5c2d901',
+                                'New subgroup'
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuSub>
+                              <DropdownMenuSubTrigger>
+                                <FolderInput className="size-3.5" />
+                                {translate(
+                                  'auto.components.sidebar.WorktreeList.4a08fb55f2',
+                                  'Move to group'
+                                )}
+                              </DropdownMenuSubTrigger>
+                              <DropdownMenuSubContent>
+                                {projectGroups
+                                  .filter(
+                                    (group) =>
+                                      !getProjectGroupSubtreeIds(
+                                        projectGroups,
+                                        row.projectGroup!.id as string
+                                      ).has(group.id)
+                                  )
+                                  .map((group) => (
+                                    <DropdownMenuItem
+                                      key={group.id}
+                                      onSelect={() =>
+                                        handleMoveProjectGroup(
+                                          row.projectGroup!.id as string,
+                                          group.id
+                                        )
+                                      }
+                                    >
+                                      <span className="max-w-48 truncate">{group.name}</span>
+                                    </DropdownMenuItem>
+                                  ))}
+                              </DropdownMenuSubContent>
+                            </DropdownMenuSub>
+                            <DropdownMenuItem
+                              disabled={!row.projectGroup.parentGroupId}
+                              onSelect={() =>
+                                handleMoveProjectGroup(row.projectGroup!.id as string, null)
+                              }
+                            >
+                              {translate(
+                                'auto.components.sidebar.WorktreeList.b8e6d3f012',
+                                'Move to root'
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onSelect={() => {
+                                if (row.projectGroup?.id) {
                                   handleRenameProjectGroup(row.projectGroup.id, row.label)
                                 }
                               }}
@@ -6228,6 +6291,27 @@ const WorktreeList = React.memo(function WorktreeList({
     setProjectGroupNameDialog({ type: 'create-from-repo', repo })
   }, [])
 
+  const handleCreateProjectGroup = useCallback(
+    (parentGroupId: string) => {
+      const parent = projectGroups.find((group) => group.id === parentGroupId)
+      if (parent) {
+        setProjectGroupNameDialog({
+          type: 'create-subgroup',
+          parentGroupId,
+          parentName: parent.name
+        })
+      }
+    },
+    [projectGroups]
+  )
+
+  const handleMoveProjectGroup = useCallback(
+    (groupId: string, parentGroupId: string | null) => {
+      void updateProjectGroup(groupId, { parentGroupId })
+    },
+    [updateProjectGroup]
+  )
+
   const handleMoveProjectToGroup = useCallback(
     (repo: Repo, groupId: string) => {
       if (repo.projectGroupId === groupId) {
@@ -6259,6 +6343,10 @@ const WorktreeList = React.memo(function WorktreeList({
         if (group) {
           await moveProjectToGroup(projectGroupNameDialog.repo.id, group.id)
         }
+        return
+      }
+      if (projectGroupNameDialog.type === 'create-subgroup') {
+        await createProjectGroup(name, projectGroupNameDialog.parentGroupId)
         return
       }
       await updateProjectGroup(projectGroupNameDialog.groupId, { name })
@@ -6723,7 +6811,9 @@ const WorktreeList = React.memo(function WorktreeList({
         title={
           projectGroupNameDialog?.type === 'rename'
             ? translate('auto.components.sidebar.WorktreeList.f9dc6cc5d3', 'Rename Project Group')
-            : translate('auto.components.sidebar.WorktreeList.13757c053c', 'New Project Group')
+            : projectGroupNameDialog?.type === 'create-subgroup'
+              ? translate('auto.components.sidebar.WorktreeList.c4d8e6f201', 'New Subgroup')
+              : translate('auto.components.sidebar.WorktreeList.13757c053c', 'New Project Group')
         }
         description={
           projectGroupNameDialog?.type === 'rename'
@@ -6731,19 +6821,31 @@ const WorktreeList = React.memo(function WorktreeList({
                 'auto.components.sidebar.WorktreeList.bc1460beb3',
                 'Update the group name shown in the sidebar.'
               )
-            : translate(
-                'auto.components.sidebar.WorktreeList.d880ea0744',
-                'Create a group and move this project into it.'
-              )
+            : projectGroupNameDialog?.type === 'create-subgroup'
+              ? translate(
+                  'auto.components.sidebar.WorktreeList.d5e9f7a302',
+                  'Create a subgroup under {{value0}}.',
+                  { value0: projectGroupNameDialog.parentName }
+                )
+              : translate(
+                  'auto.components.sidebar.WorktreeList.d880ea0744',
+                  'Create a group and move this project into it.'
+                )
         }
         initialName={
           projectGroupNameDialog?.type === 'rename'
             ? projectGroupNameDialog.currentName
-            : projectGroupNameDialog
-              ? `${projectGroupNameDialog.repo.displayName} group`
-              : ''
+            : projectGroupNameDialog?.type === 'create-subgroup'
+              ? `${projectGroupNameDialog.parentName} subgroup`
+              : projectGroupNameDialog
+                ? `${projectGroupNameDialog.repo.displayName} group`
+                : ''
         }
-        confirmLabel={projectGroupNameDialog?.type === 'rename' ? 'Rename' : 'Create'}
+        confirmLabel={
+          projectGroupNameDialog?.type === 'rename'
+            ? 'Rename'
+            : translate('auto.components.sidebar.WorktreeList.e6f8a4c302', 'Create')
+        }
         onOpenChange={(open) => {
           if (!open) {
             setProjectGroupNameDialog(null)
@@ -6824,6 +6926,8 @@ const WorktreeList = React.memo(function WorktreeList({
         handleCreateGroupFromRepo={handleCreateGroupFromRepo}
         handleMoveProjectToGroup={handleMoveProjectToGroup}
         handleRemoveProjectFromGroup={handleRemoveProjectFromGroup}
+        handleCreateProjectGroup={handleCreateProjectGroup}
+        handleMoveProjectGroup={handleMoveProjectGroup}
         handleRenameProjectGroup={handleRenameProjectGroup}
         handleDeleteProjectGroup={handleDeleteProjectGroup}
         handleCreateFolderWorkspace={handleCreateFolderWorkspace}

@@ -1432,7 +1432,7 @@ export type RepoSlice = {
     scanId?: string
     mode: 'group' | 'separate'
   }) => Promise<ProjectGroupImportResult | null>
-  createProjectGroup: (name: string) => Promise<ProjectGroup | null>
+  createProjectGroup: (name: string, parentGroupId?: string) => Promise<ProjectGroup | null>
   createFolderWorkspace: (
     args: {
       projectGroupId: string
@@ -1482,7 +1482,9 @@ export type RepoSlice = {
   deleteFolderWorkspace: (folderWorkspaceId: string) => Promise<boolean>
   updateProjectGroup: (
     groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
+    updates: Partial<
+      Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color' | 'parentGroupId'>
+    >
   ) => Promise<boolean>
   deleteProjectGroup: (groupId: string) => Promise<boolean>
   deleteProjectGroupWithContainedProjects: (
@@ -2033,20 +2035,21 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  createProjectGroup: async (name) => {
+  createProjectGroup: async (name, parentGroupId) => {
     try {
       const target = getActiveRuntimeTarget(get().settings)
       const group =
         target.kind === 'local'
           ? await window.api.projectGroups.create({
               name,
+              ...(parentGroupId ? { parentGroupId } : {}),
               createdFrom: 'manual'
             })
           : (
               await callRuntimeRpc<{ group: ProjectGroup }>(
                 target,
                 'projectGroup.create',
-                { name, createdFrom: 'manual' },
+                { name, ...(parentGroupId ? { parentGroupId } : {}), createdFrom: 'manual' },
                 { timeoutMs: 15_000 }
               )
             ).group

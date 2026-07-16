@@ -136,6 +136,32 @@ describe('project group store routing', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
+  it('carries subgroup creation and three-state parent updates through local IPC', async () => {
+    projectGroupsCreate.mockResolvedValue({ ...projectGroup, parentGroupId: 'parent' })
+    const projectGroupsUpdate = vi.fn()
+    projectGroupsUpdate.mockResolvedValue({ ...projectGroup, parentGroupId: 'parent' })
+    const store = createTestStore()
+    window.api.projectGroups.update = projectGroupsUpdate
+
+    await store.getState().createProjectGroup('Child', 'parent')
+    await store.getState().updateProjectGroup('group-1', { parentGroupId: 'parent' })
+    await store.getState().updateProjectGroup('group-1', { parentGroupId: null })
+
+    expect(projectGroupsCreate).toHaveBeenCalledWith({
+      name: 'Child',
+      parentGroupId: 'parent',
+      createdFrom: 'manual'
+    })
+    expect(projectGroupsUpdate).toHaveBeenNthCalledWith(1, {
+      groupId: 'group-1',
+      updates: { parentGroupId: 'parent' }
+    })
+    expect(projectGroupsUpdate).toHaveBeenNthCalledWith(2, {
+      groupId: 'group-1',
+      updates: { parentGroupId: null }
+    })
+  })
+
   it('stamps local fetched folder groups with the local owner', async () => {
     const folderGroup = { ...projectGroup, parentPath: '/workspace/platform' }
     projectGroupsList.mockResolvedValue([folderGroup])

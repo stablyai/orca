@@ -4235,7 +4235,12 @@
           "hostDisconnected": "切断済み",
           "failedNestWorkspace": "ワークスペースをネストできませんでした",
           "sidebarRowMissing": "対象はもう存在しません",
-          "failedUnnestWorkspace": "ワークスペースの展開に失敗しました"
+          "failedUnnestWorkspace": "ワークスペースの展開に失敗しました",
+          "a7f5c2d901": "New subgroup",
+          "b8e6d3f012": "Move to root",
+          "c4d8e6f201": "New Subgroup",
+          "d5e9f7a302": "Create a subgroup under {{value0}}.",
+          "e6f8a4c302": "Create"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "キャンセル",

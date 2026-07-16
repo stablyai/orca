@@ -3113,6 +3113,26 @@ describe('Store', () => {
     expect(store.getRepo('sibling')?.projectGroupId).toBe(sibling.id)
   })
 
+  it('rejects invalid project group parents without mutating the group', async () => {
+    const store = await createStore()
+    const root = store.createProjectGroup({ name: 'Root', createdFrom: 'manual' })
+    const child = store.createProjectGroup({
+      name: 'Child',
+      parentGroupId: root.id,
+      createdFrom: 'manual'
+    })
+    const sibling = store.createProjectGroup({ name: 'Sibling', createdFrom: 'manual' })
+
+    expect(store.updateProjectGroup(root.id, { parentGroupId: child.id })).toBeNull()
+    expect(store.updateProjectGroup(root.id, { parentGroupId: root.id })).toBeNull()
+    expect(store.updateProjectGroup(child.id, { parentGroupId: 'missing' })).toBeNull()
+    expect(store.getProjectGroups().find((group) => group.id === root.id)?.parentGroupId).toBeNull()
+    expect(store.updateProjectGroup(child.id, { parentGroupId: sibling.id })?.parentGroupId).toBe(
+      sibling.id
+    )
+    expect(store.updateProjectGroup(child.id, { parentGroupId: null })?.parentGroupId).toBeNull()
+  })
+
   it('adapts flat folder-scan groups into sparse nested folder scopes on load', async () => {
     writeDataFile({
       schemaVersion: 1,

@@ -379,13 +379,14 @@ describe('repo RPC methods', () => {
       makeRequest('projectGroup.create', {
         name: 'Platform',
         parentPath: '/srv/platform',
+        parentGroupId: 'parent-group',
         createdFrom: 'folder-scan'
       })
     )
     await dispatcher.dispatch(
       makeRequest('projectGroup.update', {
         groupId: group.id,
-        updates: { name: 'Core', isCollapsed: true }
+        updates: { name: 'Core', isCollapsed: true, parentGroupId: null }
       })
     )
     await dispatcher.dispatch(makeRequest('projectGroup.delete', { groupId: group.id }))
@@ -429,11 +430,13 @@ describe('repo RPC methods', () => {
     expect(runtime.createProjectGroup).toHaveBeenCalledWith({
       name: 'Platform',
       parentPath: '/srv/platform',
+      parentGroupId: 'parent-group',
       createdFrom: 'folder-scan'
     })
     expect(runtime.updateProjectGroup).toHaveBeenCalledWith(group.id, {
       name: 'Core',
-      isCollapsed: true
+      isCollapsed: true,
+      parentGroupId: null
     })
     expect(runtime.deleteProjectGroup).toHaveBeenCalledWith(group.id)
     expect(runtime.moveProjectToGroup).toHaveBeenCalledWith('repo-1', group.id, 2)

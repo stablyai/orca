@@ -4235,7 +4235,12 @@
           "hostDisconnected": "已断开连接",
           "failedNestWorkspace": "无法嵌套工作区",
           "sidebarRowMissing": "目标不再存在",
-          "failedUnnestWorkspace": "展开工作区失败"
+          "failedUnnestWorkspace": "展开工作区失败",
+          "a7f5c2d901": "New subgroup",
+          "b8e6d3f012": "Move to root",
+          "c4d8e6f201": "New Subgroup",
+          "d5e9f7a302": "Create a subgroup under {{value0}}.",
+          "e6f8a4c302": "Create"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "取消",
