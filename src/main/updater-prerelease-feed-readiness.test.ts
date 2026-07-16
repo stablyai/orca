@@ -133,6 +133,17 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
     })
   })
 
+  it('does not classify a non-positive tag limit as feed unavailability', async () => {
+    respondWithAtom(['v1.4.27'])
+
+    const { fetchNewerReleaseTagsWithReadiness } = await import('./updater-prerelease-feed')
+
+    await expect(fetchNewerReleaseTagsWithReadiness('1.4.26', 0)).resolves.toEqual({
+      tags: [],
+      state: 'no-newer'
+    })
+  })
+
   it('reproduces the v1.4.142 publishing incident as not-ready', async () => {
     respondWithAtom(
       publishingIncident.atomTags,

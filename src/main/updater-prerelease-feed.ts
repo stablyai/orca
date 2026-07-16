@@ -203,8 +203,11 @@ export async function fetchNewerReleaseTagsWithReadiness(
 ): Promise<FetchNewerReleaseTagsResult> {
   const includePrerelease = options.includePrerelease ?? true
   const tags = await fetchReleaseFeedTags()
-  if (!tags || maxTags <= 0) {
+  if (!tags) {
     return { tags: [], state: 'unavailable', unavailableReason: 'feed' }
+  }
+  if (maxTags <= 0) {
+    return { tags: [], state: 'no-newer' }
   }
 
   // Why: perf builds are explicit opt-in; regular prerelease checks should

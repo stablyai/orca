@@ -2852,7 +2852,9 @@ describe('updater', () => {
       fetchNudgeMock.mockResolvedValueOnce({ id: 'campaign-1', minVersion: '1.0.0' })
       fetchNudgeMock.mockResolvedValue(null)
       shouldApplyNudgeMock.mockReturnValue(true)
-      fetchNewerReleaseTagsMock.mockResolvedValueOnce(result).mockResolvedValueOnce(['v1.4.27'])
+      fetchNewerReleaseTagsMock
+        .mockResolvedValueOnce(result)
+        .mockResolvedValueOnce({ tags: ['v1.4.27'], state: 'ready' })
       autoUpdaterMock.checkForUpdates.mockImplementation(() => {
         autoUpdaterMock.emit('checking-for-update')
         return Promise.resolve(undefined)
