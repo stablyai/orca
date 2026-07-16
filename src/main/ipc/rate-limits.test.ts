@@ -19,13 +19,16 @@ import type { RateLimitState } from '../../shared/rate-limit-types'
 function makeService(): {
   service: RateLimitService
   refresh: ReturnType<typeof vi.fn>
+  refreshZai: ReturnType<typeof vi.fn>
   refreshGrok: ReturnType<typeof vi.fn>
 } {
   const refresh = vi.fn(() => Promise.resolve({} as RateLimitState))
+  const refreshZai = vi.fn(() => Promise.resolve({} as RateLimitState))
   const refreshGrok = vi.fn(() => Promise.resolve({} as RateLimitState))
   const service = {
     getState: vi.fn(() => ({}) as RateLimitState),
     refresh,
+    refreshZai,
     refreshGrok,
     refreshCodexForTarget: vi.fn(() => Promise.resolve({} as RateLimitState)),
     refreshClaudeForTarget: vi.fn(() => Promise.resolve({} as RateLimitState)),
@@ -36,7 +39,7 @@ function makeService(): {
     fetchInactiveClaudeAccountsOnOpen: vi.fn(() => Promise.resolve()),
     fetchInactiveCodexAccountsOnOpen: vi.fn(() => Promise.resolve())
   }
-  return { service: service as unknown as RateLimitService, refresh, refreshGrok }
+  return { service: service as unknown as RateLimitService, refresh, refreshZai, refreshGrok }
 }
 
 describe('registerRateLimitHandlers', () => {
@@ -59,7 +62,17 @@ describe('registerRateLimitHandlers', () => {
     expect(ipcState.handleHandlers.has('rateLimits:get')).toBe(true)
     expect(ipcState.handleHandlers.has('rateLimits:refresh')).toBe(true)
     expect(ipcState.handleHandlers.has('rateLimits:refreshMiniMax')).toBe(true)
+    expect(ipcState.handleHandlers.has('rateLimits:refreshZai')).toBe(true)
     expect(ipcState.handleHandlers.has('rateLimits:refreshGrok')).toBe(true)
+  })
+
+  it('registers a refreshZai channel that delegates to refresh()', async () => {
+    const { service, refresh } = makeService()
+    registerRateLimitHandlers(service)
+    const handler = ipcState.handleHandlers.get('rateLimits:refreshZai')
+    expect(handler).toBeDefined()
+    await handler!({})
+    expect(refresh).toHaveBeenCalledTimes(1)
   })
 
   it('registers a refreshGrok channel that delegates to refreshGrok()', async () => {
