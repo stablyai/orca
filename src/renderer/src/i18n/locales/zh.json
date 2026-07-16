@@ -11983,6 +11983,11 @@
         },
         "richMarkdownSourceOwningCutFeedback": {
           "selectLessContent": "请选择较少的内容，或使用代码模式剪切保留的 HTML 引用。"
+        },
+        "MermaidPreviewBlock": {
+          "98c6dc1f8b": "Open full size",
+          "907bf1c86a": "Full-size Mermaid diagram preview",
+          "3c6c89f5fb": "Press Esc to close"
         }
       },
       "diff": {

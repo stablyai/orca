@@ -699,6 +699,38 @@
   max-width: 100%;
   height: auto;
 }
+.mermaid-preview-wrapper {
+  position: relative;
+}
+.mermaid-preview-expand-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--muted-foreground);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mermaid-preview-wrapper:hover .mermaid-preview-expand-btn,
+.mermaid-preview-wrapper:focus-within .mermaid-preview-expand-btn {
+  opacity: 1;
+}
+.mermaid-preview-expand-btn:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+@media (hover: none) {
+  .mermaid-preview-expand-btn {
+    opacity: 1;
+  }
+}
 .mermaid-error {
   color: var(--color-warning, #d29922);
   font-size: 0.85em;

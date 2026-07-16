@@ -11983,6 +11983,11 @@
         },
         "richMarkdownSourceOwningCutFeedback": {
           "selectLessContent": "保持されたHTML引用を切り取るには、選択範囲を小さくするかコードモードを使用してください。"
+        },
+        "MermaidPreviewBlock": {
+          "98c6dc1f8b": "Open full size",
+          "907bf1c86a": "Full-size Mermaid diagram preview",
+          "3c6c89f5fb": "Press Esc to close"
         }
       },
       "diff": {
