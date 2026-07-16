@@ -25,6 +25,14 @@ type CreatedBrowserTab = {
   pageId: string | null
 }
 
+type BrowserAnnotationSeed = {
+  id: string
+  comment: string
+  url: string
+  title: string
+  label: string
+}
+
 async function createBrowserTab(
   page: Parameters<typeof getActiveWorktreeId>[0],
   worktreeId: string,
@@ -153,6 +161,47 @@ async function readBrowserInputValue(
   }, browserTabId)
 }
 
+async function readBrowserAnnotationOverlayCount(
+  page: Parameters<typeof getActiveWorktreeId>[0],
+  browserTabId: string
+): Promise<number> {
+  return page.evaluate(async (targetBrowserTabId) => {
+    const slot = [...document.querySelectorAll('[data-browser-overlay-tab-id]')].find(
+      (candidate) => candidate.getAttribute('data-browser-overlay-tab-id') === targetBrowserTabId
+    )
+    const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
+    return webview
+      ? await webview.executeJavaScript(
+          'document.querySelectorAll("[data-orca-browser-annotation-overlay]").length'
+        )
+      : -1
+  }, browserTabId)
+}
+
+async function readBrowserAnnotationMarkerIds(
+  page: Parameters<typeof getActiveWorktreeId>[0],
+  browserTabId: string
+): Promise<string[] | null> {
+  return page.evaluate((targetBrowserTabId) => {
+    const slot = [...document.querySelectorAll('[data-browser-overlay-tab-id]')].find(
+      (candidate) => candidate.getAttribute('data-browser-overlay-tab-id') === targetBrowserTabId
+    )
+    const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
+    const rawMarkerIds = webview?.getAttribute('data-orca-browser-annotation-marker-ids')
+    if (!rawMarkerIds) {
+      return null
+    }
+    try {
+      const markerIds = JSON.parse(rawMarkerIds)
+      return Array.isArray(markerIds) && markerIds.every((markerId) => typeof markerId === 'string')
+        ? markerIds
+        : null
+    } catch {
+      return null
+    }
+  }, browserTabId)
+}
+
 async function writeBrowserInputValue(
   page: Parameters<typeof getActiveWorktreeId>[0],
   browserTabId: string,
@@ -181,6 +230,81 @@ async function writeBrowserInputValue(
   await expect
     .poll(async () => readBrowserInputValue(page, browserTabId), { timeout: 5_000 })
     .toBe(value)
+}
+
+async function addBrowserAnnotations(
+  page: Parameters<typeof getActiveWorktreeId>[0],
+  pageId: string,
+  annotations: BrowserAnnotationSeed[]
+): Promise<void> {
+  await page.evaluate(
+    ({ targetPageId, targetAnnotations }) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('Browser store is unavailable')
+      }
+
+      for (const annotation of targetAnnotations) {
+        store.getState().addBrowserPageAnnotation({
+          id: annotation.id,
+          browserPageId: targetPageId,
+          comment: annotation.comment,
+          intent: 'change',
+          priority: 'important',
+          createdAt: new Date().toISOString(),
+          payload: {
+            page: {
+              sanitizedUrl: annotation.url,
+              title: annotation.title,
+              viewportWidth: 1280,
+              viewportHeight: 720,
+              scrollX: 0,
+              scrollY: 0,
+              devicePixelRatio: 1,
+              capturedAt: new Date().toISOString()
+            },
+            target: {
+              tagName: 'button',
+              selector: '#q',
+              textSnippet: annotation.label,
+              htmlSnippet: '<input id="q">',
+              attributes: {},
+              accessibility: {
+                role: 'textbox',
+                accessibleName: `${annotation.label} marker`,
+                ariaLabel: null,
+                ariaLabelledBy: null
+              },
+              rectViewport: { x: 10, y: 10, width: 100, height: 30 },
+              rectPage: { x: 10, y: 10, width: 100, height: 30 },
+              computedStyles: {
+                display: 'block',
+                position: 'static',
+                width: '100px',
+                height: '30px',
+                margin: '0',
+                padding: '0',
+                color: 'black',
+                backgroundColor: 'white',
+                border: '0',
+                borderRadius: '0',
+                fontFamily: 'sans-serif',
+                fontSize: '16px',
+                fontWeight: '400',
+                lineHeight: 'normal',
+                textAlign: 'left',
+                zIndex: 'auto'
+              }
+            },
+            nearbyText: [],
+            ancestorPath: [],
+            screenshot: null
+          }
+        })
+      }
+    },
+    { targetPageId: pageId, targetAnnotations: annotations }
+  )
 }
 
 test.describe('Browser Tab', () => {
@@ -298,6 +422,129 @@ test.describe('Browser Tab', () => {
         .toBe('second typed value')
     } finally {
       await formServer.close()
+    }
+  })
+
+  test('browser annotations survive navigation without stale guest markers', async ({
+    orcaPage
+  }, testInfo) => {
+    const server = await startBrowserFormServer()
+    try {
+      const worktreeId = (await getActiveWorktreeId(orcaPage))!
+      const pageA = server.url('Page A')
+      const pageB = server.url('Page B')
+      const browserTab = await createBrowserTab(orcaPage, worktreeId, pageA, 'Annotations')
+      expect(browserTab?.id).toBeTruthy()
+      expect(browserTab?.pageId).toBeTruthy()
+      const pageAAnnotations = Array.from({ length: 20 }, (_, index) => ({
+        id: `page-a-annotation-${index}`,
+        comment: `Page A feedback ${index}`,
+        url: pageA,
+        title: 'Page A',
+        label: `Page A ${index}`
+      }))
+      const pageBAnnotationId = 'page-b-annotation'
+
+      await addBrowserAnnotations(orcaPage, browserTab!.pageId!, pageAAnnotations)
+      await expect
+        .poll(
+          async () =>
+            orcaPage.evaluate(
+              (targetPageId) =>
+                window.__store?.getState().browserAnnotationsByPageId[targetPageId]?.length ?? -1,
+              browserTab!.pageId
+            ),
+          { timeout: 5_000 }
+        )
+        .toBe(20)
+      await expect(orcaPage.locator('body')).toContainText('Page A feedback 19')
+      await expect
+        .poll(async () => readBrowserAnnotationMarkerIds(orcaPage, browserTab!.id))
+        .toEqual(pageAAnnotations.map(({ id }) => id))
+      await expect
+        .poll(async () => readBrowserAnnotationOverlayCount(orcaPage, browserTab!.id))
+        .toBe(1)
+
+      await orcaPage.evaluate(
+        async ({ targetBrowserTabId, targetUrl }) => {
+          const slot = [...document.querySelectorAll('[data-browser-overlay-tab-id]')].find(
+            (candidate) =>
+              candidate.getAttribute('data-browser-overlay-tab-id') === targetBrowserTabId
+          )
+          const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
+          if (!webview) {
+            throw new Error('Missing browser webview')
+          }
+          await webview.executeJavaScript(`location.href = ${JSON.stringify(targetUrl)}`)
+        },
+        { targetBrowserTabId: browserTab!.id, targetUrl: pageB }
+      )
+      await expect
+        .poll(async () =>
+          orcaPage.evaluate(async (targetBrowserTabId) => {
+            const slot = [...document.querySelectorAll('[data-browser-overlay-tab-id]')].find(
+              (candidate) =>
+                candidate.getAttribute('data-browser-overlay-tab-id') === targetBrowserTabId
+            )
+            const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
+            return webview ? await webview.executeJavaScript('window.location.href') : null
+          }, browserTab!.id)
+        )
+        .toBe(pageB)
+      await expect(orcaPage.locator('body')).toContainText('Page A feedback 19')
+      await expect
+        .poll(async () => readBrowserAnnotationOverlayCount(orcaPage, browserTab!.id))
+        .toBe(0)
+      await addBrowserAnnotations(orcaPage, browserTab!.pageId!, [
+        {
+          id: pageBAnnotationId,
+          comment: 'Page B feedback',
+          url: pageB,
+          title: 'Page B',
+          label: 'Page B'
+        }
+      ])
+      await expect
+        .poll(
+          async () =>
+            orcaPage.evaluate(
+              (targetPageId) =>
+                window.__store?.getState().browserAnnotationsByPageId[targetPageId]?.length ?? -1,
+              browserTab!.pageId
+            ),
+          { timeout: 5_000 }
+        )
+        .toBe(20)
+      await expect
+        .poll(
+          async () =>
+            orcaPage.evaluate(
+              ({ targetPageId, targetAnnotationId }) =>
+                (window.__store?.getState().browserAnnotationsByPageId[targetPageId] ?? []).some(
+                  ({ id }) => id === targetAnnotationId
+                ),
+              { targetPageId: browserTab!.pageId, targetAnnotationId: pageBAnnotationId }
+            ),
+          { timeout: 5_000 }
+        )
+        .toBe(true)
+      await expect(orcaPage.locator('body')).toContainText('Page A feedback 19')
+      await expect(orcaPage.locator('body')).toContainText('Page B feedback')
+      await expect
+        .poll(async () => readBrowserAnnotationMarkerIds(orcaPage, browserTab!.id))
+        .toEqual([pageBAnnotationId])
+      await expect
+        .poll(async () => readBrowserAnnotationOverlayCount(orcaPage, browserTab!.id))
+        .toBe(1)
+      await orcaPage.screenshot({
+        path: testInfo.outputPath('browser-annotations-after-navigation.png')
+      })
+      await testInfo.attach('browser-annotations-after-navigation.png', {
+        path: testInfo.outputPath('browser-annotations-after-navigation.png'),
+        contentType: 'image/png'
+      })
+    } finally {
+      await server.close()
     }
   })
 

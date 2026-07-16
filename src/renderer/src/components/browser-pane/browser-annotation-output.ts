@@ -3,6 +3,7 @@ import type {
   BrowserGrabPayload,
   BrowserPageAnnotation
 } from '../../../../shared/browser-grab-types'
+import { groupBrowserAnnotationsByDocument } from './browser-annotation-page-identity'
 
 function formatPageHeading(payload: BrowserGrabPayload): string {
   try {
@@ -152,12 +153,12 @@ function inlineCode(content: string): string {
   return `${marker}${padding}${content}${padding}${marker}`
 }
 
-export function formatBrowserAnnotationsAsMarkdown(annotations: BrowserPageAnnotation[]): string {
-  if (annotations.length === 0) {
+function formatBrowserAnnotationGroup(annotations: BrowserPageAnnotation[]): string {
+  const firstAnnotation = annotations[0]
+  if (!firstAnnotation) {
     return ''
   }
 
-  const firstAnnotation = annotations[0]
   const first = firstAnnotation.payload
   const lines: string[] = [
     `## Design Feedback: ${formatPageHeading(first)}`,
@@ -225,4 +226,12 @@ export function formatBrowserAnnotationsAsMarkdown(annotations: BrowserPageAnnot
   })
 
   return lines.join('\n').trimEnd()
+}
+
+export function formatBrowserAnnotationsAsMarkdown(annotations: BrowserPageAnnotation[]): string {
+  const groups = groupBrowserAnnotationsByDocument(annotations)
+  if (groups.length === 0) {
+    return ''
+  }
+  return groups.map(formatBrowserAnnotationGroup).join('\n\n')
 }
