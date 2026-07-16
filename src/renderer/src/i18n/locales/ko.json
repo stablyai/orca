@@ -3824,7 +3824,8 @@
           "51001182e3": "빈 디렉토리",
           "971d85cc84": "이 호스트에서 프로젝트로 열립니다 · {{value0}}",
           "00c4235c10": "'{{value0}}'과(와) 일치하는 항목이 없습니다.",
-          "largeInputNoMatches": "이 긴 입력과 일치하는 항목 없음"
+          "largeInputNoMatches": "이 긴 입력과 일치하는 항목 없음",
+          "3fcce89fa7": "심볼릭 링크"
         },
         "RemoveFolderDialog": {
           "4dc5b5065b": "제거",

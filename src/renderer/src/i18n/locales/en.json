@@ -3858,7 +3858,8 @@
           "51001182e3": "Empty directory",
           "971d85cc84": "Opens as a project on this host · {{value0}}",
           "00c4235c10": "No matches for '{{value0}}'",
-          "largeInputNoMatches": "No matches for this long input"
+          "largeInputNoMatches": "No matches for this long input",
+          "3fcce89fa7": "Symbolic link"
         },
         "RemoveFolderDialog": {
           "4dc5b5065b": "Remove",

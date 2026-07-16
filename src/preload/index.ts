@@ -4219,7 +4219,7 @@ const api = {
       targetId: string
       dirPath: string
     }): Promise<{
-      entries: { name: string; isDirectory: boolean }[]
+      entries: { name: string; isDirectory: boolean; isSymlink: boolean }[]
       resolvedPath: string
     }> => ipcRenderer.invoke('ssh:browseDir', args),
 

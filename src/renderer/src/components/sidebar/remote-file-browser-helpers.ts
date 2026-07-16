@@ -4,6 +4,7 @@ import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard
 export type DirEntry = {
   name: string
   isDirectory: boolean
+  isSymlink: boolean
 }
 
 export const REMOTE_FILE_BROWSER_FILTER_QUERY_MAX_BYTES = 2 * 1024

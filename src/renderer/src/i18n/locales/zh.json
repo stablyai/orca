@@ -3824,7 +3824,8 @@
           "51001182e3": "空目录",
           "971d85cc84": "作为远程项目打开 · {{value0}}",
           "00c4235c10": "没有匹配“{{value0}}”",
-          "largeInputNoMatches": "没有匹配此长输入的结果"
+          "largeInputNoMatches": "没有匹配此长输入的结果",
+          "3fcce89fa7": "符号链接"
         },
         "RemoveFolderDialog": {
           "4dc5b5065b": "移除",
