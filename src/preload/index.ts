@@ -4100,6 +4100,14 @@ const api = {
       ipcRenderer.invoke('rateLimits:fetchInactiveCodexAccounts'),
     refreshMiniMax: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refreshMiniMax'),
     refreshGrok: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refreshGrok'),
+    selectAntigravityAccount: (id: string): Promise<void> =>
+      ipcRenderer.invoke('rateLimits:selectAntigravityAccount', id),
+    addCurrentAntigravityAccount: (): Promise<{ ok: boolean; email: string | null }> =>
+      ipcRenderer.invoke('rateLimits:addCurrentAntigravityAccount'),
+    removeAntigravityAccount: (id: string): Promise<void> =>
+      ipcRenderer.invoke('rateLimits:removeAntigravityAccount', id),
+    refreshAntigravityAccounts: (): Promise<void> =>
+      ipcRenderer.invoke('rateLimits:refreshAntigravityAccounts'),
     onUpdate: (callback: (state: RateLimitState) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, state: RateLimitState) => callback(state)
       ipcRenderer.on('rateLimits:update', listener)

@@ -57,6 +57,7 @@ import {
 } from './tooltip'
 import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { AgentIcon } from '@/lib/agent-catalog'
+import { AntigravityAccountSwitcher } from './antigravity-account-switcher'
 import { formatWindowLabel } from '@/lib/window-label-formatter'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
@@ -1175,7 +1176,10 @@ export function ProviderSegment({
   // Has data (ok, fetching with stale data, or error with stale data)
   const isStale = p.status === 'error'
 
-  if (p.buckets && p.buckets.length > 0) {
+  // Why: Antigravity keeps per-model buckets for the popover detail, but its
+  // status-bar segment mirrors session-window providers (MiniBar + %) rather
+  // than Gemini-style bucket names.
+  if (p.buckets && p.buckets.length > 0 && provider !== 'antigravity') {
     const visibleBuckets = p.buckets.filter((b) => STATUS_BAR_BUCKET_NAMES.has(b.name))
     return (
       <span className="inline-flex items-center gap-1.5">
@@ -2133,7 +2137,9 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                   'auto.components.status.bar.StatusBar.antigravityUsageDetails',
                   'Open Antigravity usage details'
                 )}
-              />
+              >
+                <AntigravityAccountSwitcher />
+              </ProviderDetailsMenu>
             )}
             {showOpencodeGo && (
               <ProviderDetailsMenu
