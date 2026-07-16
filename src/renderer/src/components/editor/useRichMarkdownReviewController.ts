@@ -201,9 +201,11 @@ export function useRichMarkdownReviewController({
     ]
   )
 
-  const openAnnotationPopover = useCallback((): void => {
+  // Why: reports whether a composer actually opened so keyboard callers can
+  // leave the chord unconsumed when this no-ops (mouse callers ignore it).
+  const openAnnotationPopover = useCallback((): boolean => {
     if (!canAnnotateRichMarkdown) {
-      return
+      return false
     }
     const editor = editorRef.current
     const root = rootRef.current
@@ -212,7 +214,7 @@ export function useRichMarkdownReviewController({
     const liveTarget = editor && root ? getRichMarkdownAnnotationTarget(editor, root) : null
     const baseTarget = liveTarget ?? annotationTarget
     if (!baseTarget) {
-      return
+      return false
     }
     const target = editor ? clampRichMarkdownAnnotationTarget(editor, baseTarget) : baseTarget
     if (
@@ -220,7 +222,7 @@ export function useRichMarkdownReviewController({
       hasRichMarkdownCommentForRange(markdownComments, target, markdownSourceLineOffset)
     ) {
       setAnnotationTarget(null)
-      return
+      return false
     }
     editor?.view.dispatch(
       editor.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, {
@@ -231,6 +233,7 @@ export function useRichMarkdownReviewController({
     setReviewRailOpen(true)
     setAnnotationPopover(target)
     setAnnotationTarget(null)
+    return true
   }, [
     annotationTarget,
     canAnnotateRichMarkdown,

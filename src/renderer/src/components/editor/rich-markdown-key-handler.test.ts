@@ -88,7 +88,7 @@ function createContext(editor: Editor, typedMarker: boolean): KeyHandlerContext 
       subscribe: () => () => {},
       update: () => {}
     },
-    openAnnotationPopoverRef: { current: vi.fn() },
+    openAnnotationPopoverRef: { current: vi.fn(() => true) },
     setIsEditingLink: vi.fn(),
     setLinkBubble: vi.fn(),
     setSelectedCommandIndex: vi.fn(),
@@ -121,6 +121,22 @@ describe('rich markdown key handler', () => {
 
       expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(true)
       expect(event.preventDefault).toHaveBeenCalled()
+      expect(ctx.openAnnotationPopoverRef.current).toHaveBeenCalledTimes(1)
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('leaves the add-review-note chord unconsumed when no composer opens', () => {
+    const editor = createEditor(emptyTopLevelOrderedList())
+
+    try {
+      const ctx = createContext(editor, false)
+      ctx.openAnnotationPopoverRef.current = vi.fn(() => false)
+      const event = keyEvent('n', { metaKey: true, altKey: true, code: 'KeyN' })
+
+      expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(false)
+      expect(event.preventDefault).not.toHaveBeenCalled()
       expect(ctx.openAnnotationPopoverRef.current).toHaveBeenCalledTimes(1)
     } finally {
       editor.destroy()

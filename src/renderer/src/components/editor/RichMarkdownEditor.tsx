@@ -106,7 +106,7 @@ export default function RichMarkdownEditor({
   const onOpenDocLinkRef = useRef(onOpenDocLink)
   const handleLocalImagePickRef = useRef<() => void>(() => {})
   const openSearchRef = useRef<() => void>(() => {})
-  const openAnnotationPopoverRef = useRef<() => void>(() => {})
+  const openAnnotationPopoverRef = useRef<() => boolean>(() => false)
   // Why: ProseMirror keeps the initial handleKeyDown closure, so `editor` stays
   // stuck at the first-render null value unless we read the live instance here.
   const editorRef = useRef<Editor | null>(null)
