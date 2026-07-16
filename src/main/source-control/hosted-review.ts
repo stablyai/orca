@@ -9,7 +9,30 @@ import type { HostedReviewExecutionOptions } from './hosted-review-git-options'
 function classifyHostedReviewProviderError(
   error: unknown
 ): HostedReviewLookupError['errorType'] | null {
-  const message = error instanceof Error ? error.message : String(error)
+  const messages: string[] = []
+  const codes = new Set<string>()
+  const visited = new Set<object>()
+  let current: unknown = error
+  for (let depth = 0; depth < 8 && current !== undefined && current !== null; depth++) {
+    if (typeof current === 'string') {
+      messages.push(current)
+      break
+    }
+    if ((typeof current !== 'object' && typeof current !== 'function') || visited.has(current)) {
+      break
+    }
+    visited.add(current)
+    const message = readErrorProperty(current, 'message')
+    if (typeof message === 'string') {
+      messages.push(message)
+    }
+    const code = readErrorProperty(current, 'code')
+    if (typeof code === 'string') {
+      codes.add(code.toUpperCase())
+    }
+    current = readErrorProperty(current, 'cause')
+  }
+  const message = messages.join(' ')
   const lower = message.toLowerCase()
   if (lower.includes('rate limit') || lower.includes('http 429')) {
     return 'rate_limited'
@@ -20,7 +43,8 @@ function classifyHostedReviewProviderError(
     lower.includes('no such host') ||
     lower.includes('could not resolve host') ||
     lower.includes('connection reset') ||
-    /http 5\d\d/.test(lower)
+    /http 5\d\d/.test(lower) ||
+    [...codes].some((code) => NETWORK_ERROR_CODES.has(code))
   ) {
     return 'network'
   }
@@ -37,6 +61,29 @@ function classifyHostedReviewProviderError(
     return 'cli_unavailable'
   }
   return null
+}
+
+const NETWORK_ERROR_CODES = new Set([
+  'ABORT_ERR',
+  'EAI_AGAIN',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'EHOSTUNREACH',
+  'ENETDOWN',
+  'ENETUNREACH',
+  'ENOTFOUND',
+  'ETIMEDOUT',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_HEADERS_TIMEOUT',
+  'UND_ERR_SOCKET'
+])
+
+function readErrorProperty(error: object, property: 'cause' | 'code' | 'message'): unknown {
+  try {
+    return Reflect.get(error, property)
+  } catch {
+    return undefined
+  }
 }
 
 function reviewLinkForProvider(
@@ -73,7 +120,8 @@ type HostedReviewLookupInput = {
   currentHeadOid?: string | null
 } & HostedReviewExecutionOptions
 
-/** Resolves a branch review, throwing classified provider failures to legacy callers. */
+// Why: older internal callers still consume null-or-review and require the
+// typed failure value to be projected back into their exception contract.
 export async function getHostedReviewForBranch(
   input: HostedReviewLookupInput
 ): Promise<HostedReviewInfo | null> {
@@ -92,7 +140,6 @@ export async function getHostedReviewForBranch(
   }
 }
 
-/** Resolves a branch review with expected discovery and provider failures as values. */
 export async function lookupHostedReviewForBranch(
   input: HostedReviewLookupInput
 ): Promise<HostedReviewLookupResult> {
@@ -139,8 +186,6 @@ export async function lookupHostedReviewForBranch(
   }
 }
 
-/** Projects an expected lookup failure into a redaction-safe transport result.
- * @throws The original value when it is not a classified provider failure. */
 export function hostedReviewLookupFailure(
   error: unknown,
   provider: ForgeProviderId | 'unknown' = 'unknown'

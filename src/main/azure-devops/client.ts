@@ -17,6 +17,7 @@ import {
   requestAzureDevOpsJson,
   requestAzureDevOpsJsonAtBase
 } from './azure-devops-api-request'
+import type { HostedReviewRequestFailurePolicy } from '../source-control/hosted-review-request-failure-policy'
 export { normalizeAzureDevOpsApiBaseUrl } from './azure-devops-api-request'
 
 export type AzureDevOpsAuthStatus = {
@@ -44,7 +45,7 @@ function encodePathSegment(value: string): string {
 
 async function getRepository(
   repo: AzureDevOpsRepoRef,
-  failureMode: 'return-null' | 'throw-transient' | 'throw-all' = 'return-null'
+  failureMode: HostedReviewRequestFailurePolicy = 'return-null'
 ): Promise<{ idOrName: string; webBaseUrl: string } | null> {
   const raw = await requestAzureDevOpsJson<RawAzureDevOpsRepository>(
     repo,

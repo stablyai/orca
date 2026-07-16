@@ -12,6 +12,11 @@ import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
+import {
+  resolveHostedReviewRequestFailure,
+  shouldThrowHostedReviewHttpStatus,
+  type HostedReviewRequestFailurePolicy
+} from '../source-control/hosted-review-request-failure-policy'
 
 const DEFAULT_API_BASE_URL = 'https://api.bitbucket.org/2.0'
 const REQUEST_TIMEOUT_MS = 5000
@@ -33,7 +38,7 @@ export type BitbucketAuthStatus = {
 type RequestOptions = {
   searchParams?: Record<string, string | readonly string[]>
   timeoutMs?: number
-  failureMode?: 'return-null' | 'throw-transient' | 'throw-all'
+  failureMode?: HostedReviewRequestFailurePolicy
 }
 
 function envValue(name: string): string | null {
@@ -98,20 +103,14 @@ async function requestJson<T>(path: string, options: RequestOptions = {}): Promi
       signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
     })
     if (!response.ok) {
-      if (
-        options.failureMode === 'throw-all' ||
-        (options.failureMode === 'throw-transient' && response.status !== 404)
-      ) {
+      if (shouldThrowHostedReviewHttpStatus(options.failureMode, response.status)) {
         throw new Error(`HTTP ${response.status}: Bitbucket request failed`)
       }
       return null
     }
     return (await response.json()) as T
   } catch (error) {
-    if (options.failureMode && options.failureMode !== 'return-null') {
-      throw error
-    }
-    return null
+    return resolveHostedReviewRequestFailure(options.failureMode, error)
   }
 }
 

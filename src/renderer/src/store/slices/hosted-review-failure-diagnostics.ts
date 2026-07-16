@@ -19,7 +19,8 @@ function registryFromHotData(hotData: HotData): Map<string, string> {
   return registry
 }
 
-/** Creates the session diagnostic owner, reusing Vite HMR data across module reloads. */
+// Why: Vite retains hot data across reloads, so one upstream outage does not
+// restart warning spam every time the renderer accepts an HMR update.
 export function createHostedReviewFailureDiagnostics(
   hotData: HotData,
   warn?: Warn

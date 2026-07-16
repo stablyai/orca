@@ -52,7 +52,6 @@ export type HostedReviewForBranchArgs = {
   currentHeadOid?: string | null
 }
 
-/** Stable, redaction-safe reason for a hosted-review lookup failure. */
 export type HostedReviewLookupErrorType =
   | 'rate_limited'
   | 'auth'
@@ -61,7 +60,6 @@ export type HostedReviewLookupErrorType =
   | 'repo_unavailable'
   | 'cli_unavailable'
 
-/** Serializable branch-review lookup result shared by desktop IPC and runtime RPC. */
 export type HostedReviewLookupResult =
   | { kind: 'found'; review: HostedReviewInfo }
   | { kind: 'not-found' }
@@ -71,7 +69,7 @@ export type HostedReviewLookupResult =
       errorType: HostedReviewLookupErrorType
     }
 
-/** Maps the pre-envelope runtime response into the current lookup result contract. */
+// Why: compatible older runtimes return null-or-review without the typed envelope.
 export function normalizeHostedReviewLookupResult(
   result: HostedReviewLookupResult | HostedReviewInfo | null
 ): HostedReviewLookupResult {

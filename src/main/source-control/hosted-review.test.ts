@@ -54,7 +54,11 @@ vi.mock('../gitea/client', () => ({
   getGiteaPullRequest: vi.fn()
 }))
 
-import { getHostedReviewForBranch, lookupHostedReviewForBranch } from './hosted-review'
+import {
+  getHostedReviewForBranch,
+  hostedReviewLookupFailure,
+  lookupHostedReviewForBranch
+} from './hosted-review'
 
 describe('getHostedReviewForBranch', () => {
   beforeEach(() => {
@@ -182,6 +186,35 @@ describe('getHostedReviewForBranch', () => {
       provider: 'unknown',
       errorType: 'network'
     })
+  })
+
+  it.each([
+    ['gitlab', 'ENOTFOUND'],
+    ['bitbucket', 'ECONNREFUSED'],
+    ['azure-devops', 'EAI_AGAIN'],
+    ['gitea', 'UND_ERR_CONNECT_TIMEOUT']
+  ] as const)(
+    'classifies native %s fetch cause chains without exposing details',
+    (provider, code) => {
+      const cause = Object.assign(new Error('private host and token detail'), { code })
+      const fetchError = new TypeError('fetch failed', { cause })
+
+      const result = hostedReviewLookupFailure(fetchError, provider)
+
+      expect(result).toEqual({ kind: 'upstream-error', provider, errorType: 'network' })
+      expect(JSON.stringify(result)).not.toContain('private host')
+    }
+  )
+
+  it('stops safely when a malformed provider error cause cannot be read', () => {
+    const error = new Error('unexpected provider defect')
+    Object.defineProperty(error, 'cause', {
+      get: () => {
+        throw new Error('secret getter failure')
+      }
+    })
+
+    expect(() => hostedReviewLookupFailure(error, 'gitea')).toThrow(error)
   })
 
   it('routes local WSL project branch lookup through provider detection and the selected provider', async () => {
