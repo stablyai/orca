@@ -118,7 +118,7 @@ export class HostedReviewLookupError extends Error {
 
   /** Retains the original cause in-process while exposing a safe classification. */
   constructor(
-    readonly provider: ForgeProviderId,
+    readonly provider: ForgeProviderId | 'unknown',
     readonly errorType: HostedReviewLookupErrorType,
     message: string,
     options?: ErrorOptions

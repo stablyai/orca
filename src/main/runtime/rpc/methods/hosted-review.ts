@@ -1,7 +1,6 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { requiredString } from '../schemas'
-import { hostedReviewLookupFailure } from '../../../source-control/hosted-review'
 
 const HostedReviewForBranch = z.object({
   repo: requiredString('Missing repo selector'),
@@ -51,22 +50,17 @@ export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => {
       const fallbackGitHubPR =
         params.linkedGitHubPR == null ? (params.fallbackGitHubPR ?? null) : null
-      try {
-        const review = await runtime.getHostedReviewForBranch({
-          repoSelector: params.repo,
-          branch: params.branch,
-          currentHeadOid: params.currentHeadOid ?? null,
-          linkedGitHubPR: params.linkedGitHubPR ?? null,
-          ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),
-          linkedGitLabMR: params.linkedGitLabMR ?? null,
-          linkedBitbucketPR: params.linkedBitbucketPR ?? null,
-          linkedAzureDevOpsPR: params.linkedAzureDevOpsPR ?? null,
-          linkedGiteaPR: params.linkedGiteaPR ?? null
-        })
-        return review ? { kind: 'found', review } : { kind: 'not-found' }
-      } catch (error) {
-        return hostedReviewLookupFailure(error)
-      }
+      return runtime.lookupHostedReviewForBranch({
+        repoSelector: params.repo,
+        branch: params.branch,
+        currentHeadOid: params.currentHeadOid ?? null,
+        linkedGitHubPR: params.linkedGitHubPR ?? null,
+        ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),
+        linkedGitLabMR: params.linkedGitLabMR ?? null,
+        linkedBitbucketPR: params.linkedBitbucketPR ?? null,
+        linkedAzureDevOpsPR: params.linkedAzureDevOpsPR ?? null,
+        linkedGiteaPR: params.linkedGiteaPR ?? null
+      })
     }
   }),
   defineMethod({

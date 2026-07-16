@@ -3,7 +3,6 @@ import {
   forgetRuntimeWatcherProcessRoot,
   resetRuntimeWatcherProcessForTest,
   subscribeViaRuntimeWatcherProcess,
-  type WatcherProcessEvent,
   type WatcherProcessSubscription
 } from '../ipc/parcel-watcher-process'
 import {
@@ -21,6 +20,7 @@ import {
   RUNTIME_FILE_WATCH_MAX_SETUP_ATTEMPTS
 } from '../../shared/runtime-file-watch-limits'
 import { PromiseSettlementWaiters } from '../../shared/promise-settlement-waiters'
+import { mapRuntimeFileWatchEvents, runtimeFileWatchOverflow } from './runtime-file-watch-events'
 
 const RUNTIME_FILE_WATCH_IGNORE_OPTIONS = buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)
 const RUNTIME_FILE_WATCH_EVENT_LIMIT = 200
@@ -49,18 +49,6 @@ const {
   release: releaseRuntimeRootOwnership,
   releaseAfterFailure: releaseRuntimeRootAfterFailure
 } = createRuntimeRootOwnershipReleaser(runtimeRootWatches, forgetRuntimeWatcherProcessRoot)
-
-function overflowEvent(rootPath: string): FsChangeEvent[] {
-  return [{ kind: 'overflow', absolutePath: rootPath }]
-}
-
-function mapWatcherEvents(events: readonly WatcherProcessEvent[]): FsChangeEvent[] {
-  return events.map((event) => ({
-    kind: event.type,
-    absolutePath: event.path,
-    isDirectory: event.isDirectory
-  }))
-}
 
 function emitToSubscribers(root: RuntimeRootWatch, events: FsChangeEvent[]): void {
   if (root.closed) {
@@ -96,7 +84,6 @@ function closeInitialRootWatch(root: RuntimeRootWatch, error: unknown): void {
   )
   root.subscribers.clear()
 }
-
 function shouldRetryInitialWatch(error: unknown): boolean {
   return (
     isWatcherProcessFailure(error) &&
@@ -106,12 +93,11 @@ function shouldRetryInitialWatch(error: unknown): boolean {
     (error.scope === 'supervisor' || error.code === 'subscribe_timeout')
   )
 }
-
 function subscribeRuntimeRootWatch(root: RuntimeRootWatch): Promise<void> {
   const generation = ++root.generation
   const emitOverflow = (): void => {
     if (root.generation === generation) {
-      emitToSubscribers(root, overflowEvent(root.rootPath))
+      emitToSubscribers(root, runtimeFileWatchOverflow(root.rootPath))
     }
   }
   return subscribeViaRuntimeWatcherProcess(
@@ -125,10 +111,11 @@ function subscribeRuntimeRootWatch(root: RuntimeRootWatch): Promise<void> {
           rootPath: root.rootPath,
           error: err.message
         })
-        emitOverflow()
+        // Why: callback errors mean the native subscription is untrustworthy; overflow has its own hook.
+        recoverRuntimeRootWatch(root, generation, err, true)
         return
       }
-      emitToSubscribers(root, mapWatcherEvents(events))
+      emitToSubscribers(root, mapRuntimeFileWatchEvents(events))
     },
     RUNTIME_FILE_WATCH_IGNORE_OPTIONS,
     {
@@ -139,8 +126,7 @@ function subscribeRuntimeRootWatch(root: RuntimeRootWatch): Promise<void> {
       onInterruption: emitOverflow,
       onOverflow: emitOverflow,
       onTerminalError: (error) => recoverRuntimeRootWatch(root, generation, error),
-      // Why: the transport bounds initial setup at 15 seconds, but a later
-      // crash-resubscribe has no request deadline and must not freeze its shard forever.
+      // Why: later crash-resubscribe needs a deadline independent of initial setup.
       subscribeTimeoutMs: RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS,
       signal: root.abortController.signal
     }
@@ -152,13 +138,12 @@ function subscribeRuntimeRootWatch(root: RuntimeRootWatch): Promise<void> {
     root.subscription = subscription
   })
 }
-
 async function startInitialRuntimeRootWatch(root: RuntimeRootWatch): Promise<void> {
   for (let attempt = 0; attempt < RUNTIME_FILE_WATCH_MAX_SETUP_ATTEMPTS; attempt++) {
     try {
       await subscribeRuntimeRootWatch(root)
       if (attempt > 0) {
-        emitToSubscribers(root, overflowEvent(root.rootPath))
+        emitToSubscribers(root, runtimeFileWatchOverflow(root.rootPath))
       }
       return
     } catch (error) {
@@ -173,18 +158,22 @@ async function startInitialRuntimeRootWatch(root: RuntimeRootWatch): Promise<voi
     }
   }
 }
-
 function recoverRuntimeRootWatch(
   root: RuntimeRootWatch,
   failedGeneration: number,
-  terminalError: Error
+  terminalError: Error,
+  releaseFailedSubscription = false
 ): void {
   if (root.closed || root.generation !== failedGeneration) {
     return
   }
+  const failedSubscription = releaseFailedSubscription ? root.subscription : null
   root.subscription = null
-  emitToSubscribers(root, overflowEvent(root.rootPath))
-  const recovery = subscribeRuntimeRootWatch(root).catch((recoveryError: unknown) => {
+  emitToSubscribers(root, runtimeFileWatchOverflow(root.rootPath))
+  const replacement = failedSubscription
+    ? failedSubscription.unsubscribe().then(() => subscribeRuntimeRootWatch(root))
+    : subscribeRuntimeRootWatch(root)
+  const recovery = replacement.catch((recoveryError: unknown) => {
     if (!root.closed) {
       terminateRootWatch(root, recoveryError instanceof Error ? recoveryError : terminalError)
       return

@@ -67,7 +67,7 @@ export type HostedReviewLookupResult =
   | { kind: 'not-found' }
   | {
       kind: 'upstream-error'
-      provider: Exclude<HostedReviewProvider, 'unsupported'>
+      provider: Exclude<HostedReviewProvider, 'unsupported'> | 'unknown'
       errorType: HostedReviewLookupErrorType
     }
 

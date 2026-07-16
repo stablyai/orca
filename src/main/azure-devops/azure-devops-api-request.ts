@@ -13,6 +13,7 @@ type AzureDevOpsAuthConfig = {
 export type AzureDevOpsRequestOptions = {
   searchParams?: Record<string, string | number>
   timeoutMs?: number
+  failureMode?: 'return-null' | 'throw-transient' | 'throw-all'
 }
 
 function envValue(name: string): string | null {
@@ -84,10 +85,19 @@ export async function requestAzureDevOpsJsonAtBase<T>(
       signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
     })
     if (!response.ok) {
+      if (
+        options.failureMode === 'throw-all' ||
+        (options.failureMode === 'throw-transient' && response.status !== 404)
+      ) {
+        throw new Error(`HTTP ${response.status}: Azure DevOps request failed`)
+      }
       return null
     }
     return (await response.json()) as T
-  } catch {
+  } catch (error) {
+    if (options.failureMode && options.failureMode !== 'return-null') {
+      throw error
+    }
     return null
   }
 }

@@ -129,19 +129,40 @@ describe('RelayFilesystemWatchRegistry', () => {
     expect(pool.installed[1].unsubscribe).toHaveBeenCalledTimes(1)
   })
 
+  it('replaces a genuinely failed subscription while overflow remains non-terminal', async () => {
+    await registry.watch('/repo', context(1))
+    const first = pool.installed[0]
+
+    first.hooks.onOverflow?.()
+    first.callback(null, [{ type: 'update', path: '/repo/after-overflow.txt' }])
+    expect(pool.installed).toHaveLength(1)
+
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    try {
+      first.callback(new Error('watched root backend failed'), [])
+      await vi.waitFor(() => expect(pool.installed).toHaveLength(2))
+      pool.installed[1].callback(null, [{ type: 'create', path: '/repo/recovered.txt' }])
+
+      expect(first.unsubscribe).toHaveBeenCalledTimes(1)
+      expect(dispatcher.notify.mock.calls).toEqual([
+        ['fs.changed', { events: [{ kind: 'overflow', absolutePath: '/repo' }] }],
+        ['fs.changed', { events: [{ kind: 'update', absolutePath: '/repo/after-overflow.txt' }] }],
+        ['fs.changed', { events: [{ kind: 'overflow', absolutePath: '/repo' }] }],
+        ['fs.changed', { events: [{ kind: 'create', absolutePath: '/repo/recovered.txt' }] }]
+      ])
+    } finally {
+      stderr.mockRestore()
+    }
+  })
+
   it('notifies each owning client when bounded recovery terminates a live watch', async () => {
     await registry.watch('/repo', context(1), 101)
     await registry.watch('/repo', context(2), 202)
     const first = pool.installed[0]
     vi.spyOn(pool, 'subscribe').mockRejectedValueOnce(new Error('quarantine recovery failed'))
 
-    first.hooks.onTerminalError?.(
-      new WatcherProcessFailure(
-        'file watcher process crashed repeatedly',
-        'supervisor',
-        'supervisor_crash_fuse'
-      )
-    )
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    first.callback(new Error('watched root backend failed'), [])
 
     await vi.waitFor(() => expect(dispatcher.notifyClient).toHaveBeenCalledTimes(2))
     expect(dispatcher.notifyClient).toHaveBeenNthCalledWith(1, 1, 'fs.watchFailed', {
@@ -154,6 +175,7 @@ describe('RelayFilesystemWatchRegistry', () => {
       watchId: 202,
       message: 'quarantine recovery failed'
     })
+    stderr.mockRestore()
   })
 
   it('aborts a pending crawl only after the last same-root client leaves', async () => {

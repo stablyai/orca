@@ -153,17 +153,37 @@ describe('watchFileExplorerInWatcherProcess', () => {
     ])
   })
 
-  it('turns child overflow and recoverable watcher errors into a conservative refresh', async () => {
+  it('keeps delivering through the same subscription after child overflow', async () => {
     const watch = installSuccessfulWatch()
+    const onEvents = vi.fn<(events: FsChangeEvent[]) => void>()
+    await watchFileExplorerInWatcherProcess('/repo', onEvents)
+
+    watch.hooks.onOverflow?.()
+    watch.callback(null, [{ type: 'update', path: '/repo/after-overflow.txt' }])
+
+    expect(onEvents).toHaveBeenNthCalledWith(1, [{ kind: 'overflow', absolutePath: '/repo' }])
+    expect(onEvents).toHaveBeenNthCalledWith(2, [
+      { kind: 'update', absolutePath: '/repo/after-overflow.txt', isDirectory: undefined }
+    ])
+    expect(subscribeViaRuntimeWatcherProcessMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('replaces a genuinely failed subscription before delivering later events', async () => {
+    const watch = installSuccessfulWatch()
+    const replacement = installSuccessfulWatch()
     const onEvents = vi.fn<(events: FsChangeEvent[]) => void>()
     vi.spyOn(console, 'error').mockImplementation(() => undefined)
     await watchFileExplorerInWatcherProcess('/repo', onEvents)
 
-    watch.hooks.onOverflow?.()
-    watch.callback(new Error('Events were dropped by the FSEvents client.'), [])
+    watch.callback(new Error('watched root backend failed'), [])
+    await vi.waitFor(() => expect(subscribeViaRuntimeWatcherProcessMock).toHaveBeenCalledTimes(2))
+    replacement.callback(null, [{ type: 'update', path: '/repo/recovered.txt' }])
 
+    expect(watch.unsubscribe).toHaveBeenCalledTimes(1)
     expect(onEvents).toHaveBeenNthCalledWith(1, [{ kind: 'overflow', absolutePath: '/repo' }])
-    expect(onEvents).toHaveBeenNthCalledWith(2, [{ kind: 'overflow', absolutePath: '/repo' }])
+    expect(onEvents).toHaveBeenNthCalledWith(2, [
+      { kind: 'update', absolutePath: '/repo/recovered.txt', isDirectory: undefined }
+    ])
   })
 
   it('refreshes only after the child has resubscribed', async () => {
@@ -186,9 +206,7 @@ describe('watchFileExplorerInWatcherProcess', () => {
     await watchFileExplorerInWatcherProcess('/repo', firstEvents, firstError)
     await watchFileExplorerInWatcherProcess('/repo', secondEvents, secondError)
 
-    watch.hooks.onTerminalError?.(
-      new WatcherProcessFailure('crashed repeatedly', 'supervisor', 'supervisor_crash_fuse')
-    )
+    watch.callback(new Error('watched root backend failed'), [])
     await vi.waitFor(() => expect(subscribeViaRuntimeWatcherProcessMock).toHaveBeenCalledTimes(2))
     watch.callback(null, [{ type: 'update', path: '/repo/late.txt' }])
     replacement.callback(null, [{ type: 'update', path: '/repo/recovered.txt' }])
@@ -312,16 +330,14 @@ describe('watchFileExplorerInWatcherProcess', () => {
     expect(replacement.unsubscribe).not.toHaveBeenCalled()
   })
 
-  it('ends subscribers only after isolated recovery also fails', async () => {
+  it('ends subscribers only after genuine-error recovery also fails', async () => {
     const watch = installSuccessfulWatch()
     subscribeViaRuntimeWatcherProcessMock.mockRejectedValueOnce(new Error('isolated failure'))
     const onEvents = vi.fn<(events: FsChangeEvent[]) => void>()
     const onTerminalError = vi.fn()
     await watchFileExplorerInWatcherProcess('/repo', onEvents, onTerminalError)
 
-    watch.hooks.onTerminalError?.(
-      new WatcherProcessFailure('crashed repeatedly', 'supervisor', 'supervisor_crash_fuse')
-    )
+    watch.callback(new Error('watched root backend failed'), [])
 
     await vi.waitFor(() =>
       expect(onTerminalError).toHaveBeenCalledWith(

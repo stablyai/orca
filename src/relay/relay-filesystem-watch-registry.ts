@@ -220,7 +220,9 @@ export class RelayFilesystemWatchRegistry {
             process.stderr.write(
               `[relay] File watcher error for ${state.rootPath}: ${error.message}\n`
             )
-            emitOverflow()
+            // Why: overflow has a dedicated live-subscription hook. Callback
+            // errors require bounded replacement of the untrustworthy watcher.
+            this.recoverWatch(state, generation, error, true)
             return
           }
           emitRelayWatcherEvents(this.dispatcher, state.closed, events)
@@ -251,14 +253,18 @@ export class RelayFilesystemWatchRegistry {
   private recoverWatch(
     state: RelayWatcherTeardownState,
     failedGeneration: number,
-    error: Error
+    error: Error,
+    releaseFailedSubscription = false
   ): void {
     if (state.closed || state.generation !== failedGeneration) {
       return
     }
+    const failedSubscription = releaseFailedSubscription ? state.subscription : null
     state.subscription = null
     emitRelayWatcherOverflow(this.dispatcher, state.rootPath, state.closed)
-    const recovery = this.subscribeState(state)
+    const recovery = failedSubscription
+      ? failedSubscription.unsubscribe().then(() => this.subscribeState(state))
+      : this.subscribeState(state)
     state.setupWaiters = new PromiseSettlementWaiters(recovery)
     void recovery.catch((recoveryError: unknown) => {
       if (!state.closed) {

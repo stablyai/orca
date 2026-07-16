@@ -33,6 +33,7 @@ export type BitbucketAuthStatus = {
 type RequestOptions = {
   searchParams?: Record<string, string | readonly string[]>
   timeoutMs?: number
+  failureMode?: 'return-null' | 'throw-transient' | 'throw-all'
 }
 
 function envValue(name: string): string | null {
@@ -97,10 +98,19 @@ async function requestJson<T>(path: string, options: RequestOptions = {}): Promi
       signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
     })
     if (!response.ok) {
+      if (
+        options.failureMode === 'throw-all' ||
+        (options.failureMode === 'throw-transient' && response.status !== 404)
+      ) {
+        throw new Error(`HTTP ${response.status}: Bitbucket request failed`)
+      }
       return null
     }
     return (await response.json()) as T
-  } catch {
+  } catch (error) {
+    if (options.failureMode && options.failureMode !== 'return-null') {
+      throw error
+    }
     return null
   }
 }
@@ -211,7 +221,8 @@ export async function getBitbucketPullRequestForBranch(
           sort: '-updated_on',
           q: query,
           state: ALL_PULL_REQUEST_STATES
-        }
+        },
+        failureMode: 'throw-all'
       }
     )
     const raw = list?.values?.[0]
@@ -224,7 +235,8 @@ export async function getBitbucketPullRequestForBranch(
     return null
   }
   const raw = await requestJson<RawBitbucketPullRequest>(
-    `/repositories/${encodedRepoPath(repo)}/pullrequests/${encodeURIComponent(String(linkedPRNumber))}`
+    `/repositories/${encodedRepoPath(repo)}/pullrequests/${encodeURIComponent(String(linkedPRNumber))}`,
+    { failureMode: 'throw-transient' }
   )
   return raw ? normalizePullRequest(repo, raw) : null
 }

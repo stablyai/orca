@@ -19,7 +19,8 @@ function classifyHostedReviewProviderError(
     lower.includes('network') ||
     lower.includes('no such host') ||
     lower.includes('could not resolve host') ||
-    lower.includes('connection reset')
+    lower.includes('connection reset') ||
+    /http 5\d\d/.test(lower)
   ) {
     return 'network'
   }
@@ -29,7 +30,7 @@ function classifyHostedReviewProviderError(
   if (lower.includes('http 404') || lower.includes('could not resolve to a repository')) {
     return 'repo_unavailable'
   }
-  if (/auth|login|credential/i.test(message)) {
+  if (lower.includes('http 401') || /auth|login|credential/i.test(message)) {
     return 'auth'
   }
   if (/command not found|enoent|not installed/i.test(message)) {
@@ -39,7 +40,7 @@ function classifyHostedReviewProviderError(
 }
 
 function reviewLinkForProvider(
-  input: Parameters<typeof getHostedReviewForBranch>[0],
+  input: HostedReviewLookupInput,
   provider: ForgeProviderId
 ): { linkedReviewNumber?: number | null; fallbackReviewNumber?: number | null } {
   switch (provider) {
@@ -59,20 +60,42 @@ function reviewLinkForProvider(
   }
 }
 
+type HostedReviewLookupInput = {
+  repoPath: string
+  connectionId?: string | null
+  branch: string
+  linkedGitHubPR?: number | null
+  fallbackGitHubPR?: number | null
+  linkedGitLabMR?: number | null
+  linkedBitbucketPR?: number | null
+  linkedAzureDevOpsPR?: number | null
+  linkedGiteaPR?: number | null
+  currentHeadOid?: string | null
+} & HostedReviewExecutionOptions
+
+/** Resolves a branch review, throwing classified provider failures to legacy callers. */
 export async function getHostedReviewForBranch(
-  input: {
-    repoPath: string
-    connectionId?: string | null
-    branch: string
-    linkedGitHubPR?: number | null
-    fallbackGitHubPR?: number | null
-    linkedGitLabMR?: number | null
-    linkedBitbucketPR?: number | null
-    linkedAzureDevOpsPR?: number | null
-    linkedGiteaPR?: number | null
-    currentHeadOid?: string | null
-  } & HostedReviewExecutionOptions
+  input: HostedReviewLookupInput
 ): Promise<HostedReviewInfo | null> {
+  const result = await lookupHostedReviewForBranch(input)
+  switch (result.kind) {
+    case 'found':
+      return result.review
+    case 'not-found':
+      return null
+    case 'upstream-error':
+      throw new HostedReviewLookupError(
+        result.provider,
+        result.errorType,
+        'Hosted review lookup failed.'
+      )
+  }
+}
+
+/** Resolves a branch review with expected discovery and provider failures as values. */
+export async function lookupHostedReviewForBranch(
+  input: HostedReviewLookupInput
+): Promise<HostedReviewLookupResult> {
   const branchName = input.branch.replace(/^refs\/heads\//, '')
   // Why: detached HEAD cannot use branch lookup, but provider-specific exact
   // ids can still resolve the review without probing an empty branch name.
@@ -85,19 +108,24 @@ export async function getHostedReviewForBranch(
     input.linkedAzureDevOpsPR == null &&
     input.linkedGiteaPR == null
   ) {
-    return null
+    return { kind: 'not-found' }
   }
 
-  const provider = await getForgeProviderForRepository({
-    repoPath: input.repoPath,
-    connectionId: input.connectionId,
-    ...(input.localGitExecOptions ? { localGitExecOptions: input.localGitExecOptions } : {})
-  })
+  let provider
+  try {
+    provider = await getForgeProviderForRepository({
+      repoPath: input.repoPath,
+      connectionId: input.connectionId,
+      ...(input.localGitExecOptions ? { localGitExecOptions: input.localGitExecOptions } : {})
+    })
+  } catch (error) {
+    return hostedReviewLookupFailure(error, 'unknown')
+  }
   if (!provider) {
-    return null
+    return { kind: 'not-found' }
   }
   try {
-    return await provider.getReviewForBranch({
+    const review = await provider.getReviewForBranch({
       repoPath: input.repoPath,
       connectionId: input.connectionId,
       branch: branchName,
@@ -105,25 +133,18 @@ export async function getHostedReviewForBranch(
       githubCurrentHeadOid: input.currentHeadOid ?? null,
       ...reviewLinkForProvider(input, provider.id)
     })
+    return review ? { kind: 'found', review } : { kind: 'not-found' }
   } catch (error) {
-    if (error instanceof HostedReviewLookupError) {
-      throw error
-    }
-    const errorType = classifyHostedReviewProviderError(error)
-    if (!errorType) {
-      throw error
-    }
-    // Why: provider clients may throw secrets or command text; retain the cause
-    // in-process while exposing only a stable, safe classification to IPC/RPC.
-    throw new HostedReviewLookupError(provider.id, errorType, 'Hosted review lookup failed.', {
-      cause: error
-    })
+    return hostedReviewLookupFailure(error, provider.id)
   }
 }
 
 /** Projects an expected lookup failure into a redaction-safe transport result.
  * @throws The original value when it is not a classified provider failure. */
-export function hostedReviewLookupFailure(error: unknown): HostedReviewLookupResult {
+export function hostedReviewLookupFailure(
+  error: unknown,
+  provider: ForgeProviderId | 'unknown' = 'unknown'
+): HostedReviewLookupResult {
   if (error instanceof HostedReviewLookupError) {
     return {
       kind: 'upstream-error',
@@ -131,17 +152,11 @@ export function hostedReviewLookupFailure(error: unknown): HostedReviewLookupRes
       errorType: error.errorType
     }
   }
-  throw error
-}
-
-/** Looks up a branch review without throwing expected provider failures across IPC. */
-export async function getHostedReviewForBranchResult(
-  input: Parameters<typeof getHostedReviewForBranch>[0]
-): Promise<HostedReviewLookupResult> {
-  try {
-    const review = await getHostedReviewForBranch(input)
-    return review ? { kind: 'found', review } : { kind: 'not-found' }
-  } catch (error) {
-    return hostedReviewLookupFailure(error)
+  const errorType = classifyHostedReviewProviderError(error)
+  if (!errorType) {
+    throw error
   }
+  // Why: provider clients may throw secrets or command text; serialize only a
+  // stable classification while the original failure remains local.
+  return { kind: 'upstream-error', provider, errorType }
 }

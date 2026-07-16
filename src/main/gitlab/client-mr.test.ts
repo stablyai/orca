@@ -364,6 +364,24 @@ describe('gitlab client — MR operations', () => {
       await expect(getMergeRequestForBranch('/repo', 'feature')).resolves.toBeNull()
     })
 
+    it('does not collapse a transient branch lookup failure into no review', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock.mockRejectedValueOnce(new Error('could not resolve host: gitlab.com'))
+
+      await expect(getMergeRequestForBranch('/repo', 'feature')).rejects.toThrow(
+        'could not resolve host'
+      )
+    })
+
+    it('keeps a missing exact linked MR as a genuine no-review result', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock
+        .mockResolvedValueOnce({ stdout: '[]' })
+        .mockRejectedValueOnce(new Error('HTTP 404: merge request not found'))
+
+      await expect(getMergeRequestForBranch('/repo', 'feature', 404)).resolves.toBeNull()
+    })
+
     it('falls back to a linked MR iid when the branch lookup misses', async () => {
       getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
       glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({

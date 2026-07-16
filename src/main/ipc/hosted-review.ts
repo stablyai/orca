@@ -12,7 +12,7 @@ import {
   createHostedReview,
   getHostedReviewCreationEligibility
 } from '../source-control/hosted-review-creation'
-import { getHostedReviewForBranchResult } from '../source-control/hosted-review'
+import { lookupHostedReviewForBranch } from '../source-control/hosted-review'
 import { resolveRegisteredWorktreePath } from './filesystem-auth'
 import { listRepoWorktrees } from '../repo-worktrees'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
@@ -79,7 +79,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
   ipcMain.handle('hostedReview:forBranch', async (_event, args: HostedReviewForBranchArgs) => {
     const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
     const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
-    const result = await getHostedReviewForBranchResult({
+    const result = await lookupHostedReviewForBranch({
       repoPath: repo.path,
       connectionId: repo.connectionId,
       branch: args.branch,

@@ -190,6 +190,7 @@ const {
   createHostedReviewMock,
   getHostedReviewCreationEligibilityMock,
   getHostedReviewForBranchMock,
+  lookupHostedReviewForBranchMock,
   getPRForBranchMock,
   getRepoSlugMock,
   getRepoUpstreamMock,
@@ -284,6 +285,7 @@ const {
     createHostedReviewMock: vi.fn(),
     getHostedReviewCreationEligibilityMock: vi.fn(),
     getHostedReviewForBranchMock: vi.fn(),
+    lookupHostedReviewForBranchMock: vi.fn(),
     getPRForBranchMock: vi.fn().mockResolvedValue(null),
     getRepoSlugMock: vi.fn().mockResolvedValue(null),
     getRepoUpstreamMock: vi.fn().mockResolvedValue(null),
@@ -441,7 +443,8 @@ vi.mock('../source-control/hosted-review-creation', () => ({
 }))
 
 vi.mock('../source-control/hosted-review', () => ({
-  getHostedReviewForBranch: getHostedReviewForBranchMock
+  getHostedReviewForBranch: getHostedReviewForBranchMock,
+  lookupHostedReviewForBranch: lookupHostedReviewForBranchMock
 }))
 
 vi.mock('../github/client', async (importOriginal) => {
@@ -651,6 +654,8 @@ function resetRuntimeTestMocks(): void {
   })
   getHostedReviewForBranchMock.mockReset()
   getHostedReviewForBranchMock.mockResolvedValue(null)
+  lookupHostedReviewForBranchMock.mockReset()
+  lookupHostedReviewForBranchMock.mockResolvedValue({ kind: 'not-found' })
   getPRForBranchMock.mockReset()
   getPRForBranchMock.mockResolvedValue(null)
   getRepoSlugMock.mockReset()
@@ -5622,15 +5627,18 @@ describe('OrcaRuntimeService', () => {
       })
     }
     const runtime = new OrcaRuntimeService(wslStore as never)
-    getHostedReviewForBranchMock.mockResolvedValueOnce({
-      provider: 'github',
-      number: 76,
-      title: 'Feature WSL',
-      state: 'open',
-      url: 'https://github.com/acme/orca/pull/76',
-      status: 'success',
-      updatedAt: '2026-06-16T00:00:00.000Z',
-      mergeable: 'MERGEABLE'
+    lookupHostedReviewForBranchMock.mockResolvedValueOnce({
+      kind: 'found',
+      review: {
+        provider: 'github',
+        number: 76,
+        title: 'Feature WSL',
+        state: 'open',
+        url: 'https://github.com/acme/orca/pull/76',
+        status: 'success',
+        updatedAt: '2026-06-16T00:00:00.000Z',
+        mergeable: 'MERGEABLE'
+      }
     })
     createHostedReviewMock.mockResolvedValueOnce({
       ok: true,
@@ -5670,7 +5678,7 @@ describe('OrcaRuntimeService', () => {
         localGitExecOptions: { wslDistro: 'Ubuntu' }
       })
     )
-    expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
+    expect(lookupHostedReviewForBranchMock).toHaveBeenCalledWith(
       expect.objectContaining({
         repoPath: TEST_REPO_PATH,
         connectionId: null,

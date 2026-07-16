@@ -36,6 +36,7 @@ export type GiteaAuthStatus = {
 type RequestOptions = {
   searchParams?: Record<string, string | number>
   timeoutMs?: number
+  failureMode?: 'return-null' | 'throw-transient' | 'throw-all'
 }
 
 function envValue(name: string): string | null {
@@ -89,10 +90,19 @@ async function requestJsonAtBase<T>(
       signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
     })
     if (!response.ok) {
+      if (
+        options.failureMode === 'throw-all' ||
+        (options.failureMode === 'throw-transient' && response.status !== 404)
+      ) {
+        throw new Error(`HTTP ${response.status}: Gitea request failed`)
+      }
       return null
     }
     return (await response.json()) as T
-  } catch {
+  } catch (error) {
+    if (options.failureMode && options.failureMode !== 'return-null') {
+      throw error
+    }
     return null
   }
 }
@@ -252,7 +262,8 @@ export async function getGiteaPullRequestForBranch(
             page,
             limit: PULL_REQUEST_PAGE_LIMIT
           },
-          timeoutMs: PULL_REQUEST_LIST_TIMEOUT_MS
+          timeoutMs: PULL_REQUEST_LIST_TIMEOUT_MS,
+          failureMode: 'throw-all'
         }),
       PULL_REQUEST_PAGE_LIMIT,
       MAX_PULL_REQUEST_PAGES
@@ -268,7 +279,8 @@ export async function getGiteaPullRequestForBranch(
   }
   const raw = await requestJson<RawGiteaPullRequest>(
     repo,
-    `/repos/${encodedRepoPath(repo)}/pulls/${encodeURIComponent(String(linkedPRNumber))}`
+    `/repos/${encodedRepoPath(repo)}/pulls/${encodeURIComponent(String(linkedPRNumber))}`,
+    { failureMode: 'throw-transient' }
   )
   return raw ? normalizePullRequest(repo, raw) : null
 }

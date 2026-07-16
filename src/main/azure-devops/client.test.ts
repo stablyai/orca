@@ -176,4 +176,17 @@ describe('Azure DevOps client', () => {
       headSha: 'newsha'
     })
   })
+
+  it('does not collapse a transient branch request into no review', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'https://dev.azure.com/acme/Project/_git/repo\n'
+    })
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ message: 'temporary failure' }), { status: 503 })
+    ) as never
+
+    await expect(getAzureDevOpsPullRequestForBranch('/repo', 'feature/azure')).rejects.toThrow(
+      'HTTP 503'
+    )
+  })
 })

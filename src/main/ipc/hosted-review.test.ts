@@ -14,14 +14,14 @@ const {
   handleMock,
   createHostedReviewMock,
   getHostedReviewCreationEligibilityMock,
-  getHostedReviewForBranchResultMock,
+  lookupHostedReviewForBranchMock,
   resolveRegisteredWorktreePathMock,
   listRepoWorktreesMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   createHostedReviewMock: vi.fn(),
   getHostedReviewCreationEligibilityMock: vi.fn(),
-  getHostedReviewForBranchResultMock: vi.fn(),
+  lookupHostedReviewForBranchMock: vi.fn(),
   resolveRegisteredWorktreePathMock: vi.fn(),
   listRepoWorktreesMock: vi.fn()
 }))
@@ -38,7 +38,7 @@ vi.mock('../source-control/hosted-review-creation', () => ({
 }))
 
 vi.mock('../source-control/hosted-review', () => ({
-  getHostedReviewForBranchResult: getHostedReviewForBranchResultMock
+  lookupHostedReviewForBranch: lookupHostedReviewForBranchMock
 }))
 
 vi.mock('./filesystem-auth', () => ({
@@ -88,7 +88,7 @@ describe('registerHostedReviewHandlers', () => {
     handleMock.mockReset()
     createHostedReviewMock.mockReset()
     getHostedReviewCreationEligibilityMock.mockReset()
-    getHostedReviewForBranchResultMock.mockReset()
+    lookupHostedReviewForBranchMock.mockReset()
     resolveRegisteredWorktreePathMock.mockReset()
     listRepoWorktreesMock.mockReset()
     store.getRepo.mockReset()
@@ -192,7 +192,7 @@ describe('registerHostedReviewHandlers', () => {
         updatedAt: 0
       }
     ])
-    getHostedReviewForBranchResultMock.mockResolvedValueOnce({
+    lookupHostedReviewForBranchMock.mockResolvedValueOnce({
       kind: 'found',
       review: {
         provider: 'github',
@@ -215,7 +215,7 @@ describe('registerHostedReviewHandlers', () => {
       linkedGitHubPR: 42
     })
 
-    expect(getHostedReviewForBranchResultMock).toHaveBeenCalledWith(
+    expect(lookupHostedReviewForBranchMock).toHaveBeenCalledWith(
       expect.objectContaining({
         repoPath: localRepo.path,
         connectionId: undefined,

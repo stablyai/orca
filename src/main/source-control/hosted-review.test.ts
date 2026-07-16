@@ -54,7 +54,7 @@ vi.mock('../gitea/client', () => ({
   getGiteaPullRequest: vi.fn()
 }))
 
-import { getHostedReviewForBranch, getHostedReviewForBranchResult } from './hosted-review'
+import { getHostedReviewForBranch, lookupHostedReviewForBranch } from './hosted-review'
 
 describe('getHostedReviewForBranch', () => {
   beforeEach(() => {
@@ -103,6 +103,21 @@ describe('getHostedReviewForBranch', () => {
     expect(getPRForBranchOutcomeMock).not.toHaveBeenCalled()
   })
 
+  it('returns a typed GitLab transient failure instead of a no-review result', async () => {
+    getProjectSlugMock.mockResolvedValue({ host: 'gitlab.com', path: 'g/p' })
+    getMergeRequestForBranchMock.mockRejectedValue(
+      new Error('could not resolve host: gitlab.com private-project')
+    )
+
+    await expect(
+      lookupHostedReviewForBranch({ repoPath: '/repo', branch: 'feature' })
+    ).resolves.toEqual({
+      kind: 'upstream-error',
+      provider: 'gitlab',
+      errorType: 'network'
+    })
+  })
+
   it('falls through to GitHub when origin is not GitLab', async () => {
     getProjectSlugMock.mockResolvedValue(null)
     getRepoSlugMock.mockResolvedValue({ owner: 'o', repo: 'r' })
@@ -147,11 +162,25 @@ describe('getHostedReviewForBranch', () => {
     })
 
     await expect(
-      getHostedReviewForBranchResult({ repoPath: '/repo', branch: 'feature' })
+      lookupHostedReviewForBranch({ repoPath: '/repo', branch: 'feature' })
     ).resolves.toEqual({
       kind: 'upstream-error',
       provider: 'github',
       errorType: 'repo_unavailable'
+    })
+  })
+
+  it('classifies provider discovery failures inside the redacted result boundary', async () => {
+    getProjectSlugMock.mockRejectedValueOnce(
+      new Error('could not resolve host: private-gitlab.example.com secret-token')
+    )
+
+    await expect(
+      lookupHostedReviewForBranch({ repoPath: '/repo', branch: 'feature' })
+    ).resolves.toEqual({
+      kind: 'upstream-error',
+      provider: 'unknown',
+      errorType: 'network'
     })
   })
 

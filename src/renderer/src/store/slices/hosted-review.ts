@@ -19,6 +19,7 @@ import {
 } from './hosted-review-cache-identity'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
+import { hostedReviewFailureDiagnostics } from './hosted-review-failure-diagnostics'
 
 export { getHostedReviewCacheKey, linkedReviewHintKey } from './hosted-review-cache-identity'
 
@@ -33,32 +34,6 @@ type CreateHostedReviewStoreInput = CreateHostedReviewInput & { repoId?: string 
 
 const CACHE_TTL_MS = 60_000
 const HOSTED_REVIEW_CACHE_MAX = 500
-const hostedReviewFailureDiagnostics = new Map<string, string>()
-
-function reportHostedReviewLookupFailure(
-  cacheKey: string,
-  repoId: string | undefined,
-  result: Extract<HostedReviewLookupResult, { kind: 'upstream-error' }>
-): void {
-  const signature = `${result.provider}:${result.errorType}`
-  if (hostedReviewFailureDiagnostics.get(cacheKey) === signature) {
-    return
-  }
-  hostedReviewFailureDiagnostics.delete(cacheKey)
-  hostedReviewFailureDiagnostics.set(cacheKey, signature)
-  while (hostedReviewFailureDiagnostics.size > HOSTED_REVIEW_CACHE_MAX) {
-    const oldestKey = hostedReviewFailureDiagnostics.keys().next().value
-    if (oldestKey === undefined) {
-      break
-    }
-    hostedReviewFailureDiagnostics.delete(oldestKey)
-  }
-  console.warn('[hosted-review] lookup unavailable', {
-    repoId: repoId ?? 'path-only',
-    provider: result.provider,
-    errorType: result.errorType
-  })
-}
 
 const inflightHostedReviewRequests = new Map<
   string,
@@ -144,6 +119,19 @@ function isStaleMergedGitHubReviewForHead(
     data.headSha !== head &&
     data.confirmedContainedHeadOid !== head
   )
+}
+
+function hostedReviewFallbackAfterFailure(
+  get: () => AppState,
+  cacheKey: string,
+  currentHeadOid: string | null | undefined
+): HostedReviewInfo | null {
+  const preserved = get().hostedReviewCache[cacheKey]
+  // Why: don't preserve a merged GitHub review the worktree has moved off of;
+  // that PR is only valid while checked out at its head.
+  return isStaleMergedGitHubReviewForHead(preserved, currentHeadOid)
+    ? null
+    : (preserved?.data ?? null)
 }
 
 function hasNewerHostedReviewCacheEntry(
@@ -397,16 +385,10 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
                   ...args
                 })
           if (result.kind === 'upstream-error') {
-            reportHostedReviewLookupFailure(cacheKey, repoId, result)
-            const preserved = get().hostedReviewCache[cacheKey]
-            // Why: don't preserve a merged GitHub review the worktree has moved
-            // off of; that PR is only valid while checked out at its head.
-            if (isStaleMergedGitHubReviewForHead(preserved, options?.currentHeadOid)) {
-              return null
-            }
-            return preserved?.data ?? null
+            hostedReviewFailureDiagnostics.report(cacheKey, repoId, result)
+            return hostedReviewFallbackAfterFailure(get, cacheKey, options?.currentHeadOid)
           }
-          hostedReviewFailureDiagnostics.delete(cacheKey)
+          hostedReviewFailureDiagnostics.clear(cacheKey)
           const review = result.kind === 'found' ? result.review : null
           if (requestGenerations.get(cacheKey) === generation) {
             set((state) => {
@@ -463,14 +445,9 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
           // the sidebar card to branch-only and suppresses retry for the full
           // cache TTL. Preserve the last known review and let the next visible
           // poll retry instead.
+          hostedReviewFailureDiagnostics.clear(cacheKey)
           console.error('Failed to fetch hosted review:', error)
-          const preserved = get().hostedReviewCache[cacheKey]
-          // Why: don't preserve a merged GitHub review the worktree has moved
-          // off of; that PR is only valid while checked out at its head.
-          if (isStaleMergedGitHubReviewForHead(preserved, options?.currentHeadOid)) {
-            return null
-          }
-          return preserved?.data ?? null
+          return hostedReviewFallbackAfterFailure(get, cacheKey, options?.currentHeadOid)
         } finally {
           const activeRequest = inflightHostedReviewRequests.get(cacheKey)
           if (activeRequest?.generation === generation) {
