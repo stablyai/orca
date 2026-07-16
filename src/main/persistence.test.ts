@@ -3094,13 +3094,13 @@ describe('Store', () => {
 
   it('deleteProjectGroup ungroups repos from the deleted group subtree', async () => {
     const store = await createStore()
-    const root = store.createProjectGroup({ name: 'Platform', createdFrom: 'folder-scan' })
+    const root = store.createProjectGroup({ name: 'Platform', createdFrom: 'folder-scan' })!
     const child = store.createProjectGroup({
       name: 'Services',
       parentGroupId: root.id,
       createdFrom: 'folder-scan'
-    })
-    const sibling = store.createProjectGroup({ name: 'Tools', createdFrom: 'manual' })
+    })!
+    const sibling = store.createProjectGroup({ name: 'Tools', createdFrom: 'manual' })!
     store.addRepo(makeRepo({ id: 'direct', path: '/direct', projectGroupId: root.id }))
     store.addRepo(makeRepo({ id: 'nested', path: '/nested', projectGroupId: child.id }))
     store.addRepo(makeRepo({ id: 'sibling', path: '/sibling', projectGroupId: sibling.id }))
@@ -3115,13 +3115,13 @@ describe('Store', () => {
 
   it('rejects invalid project group parents without mutating the group', async () => {
     const store = await createStore()
-    const root = store.createProjectGroup({ name: 'Root', createdFrom: 'manual' })
+    const root = store.createProjectGroup({ name: 'Root', createdFrom: 'manual' })!
     const child = store.createProjectGroup({
       name: 'Child',
       parentGroupId: root.id,
       createdFrom: 'manual'
-    })
-    const sibling = store.createProjectGroup({ name: 'Sibling', createdFrom: 'manual' })
+    })!
+    const sibling = store.createProjectGroup({ name: 'Sibling', createdFrom: 'manual' })!
 
     expect(store.updateProjectGroup(root.id, { parentGroupId: child.id })).toBeNull()
     expect(store.updateProjectGroup(root.id, { parentGroupId: root.id })).toBeNull()
@@ -3131,6 +3131,26 @@ describe('Store', () => {
       sibling.id
     )
     expect(store.updateProjectGroup(child.id, { parentGroupId: null })?.parentGroupId).toBeNull()
+  })
+
+  it('rejects project-group creation under a missing parent', async () => {
+    const store = await createStore()
+
+    expect(
+      store.createProjectGroup({
+        name: 'Orphan',
+        parentGroupId: '',
+        createdFrom: 'manual'
+      })
+    ).toBeNull()
+    expect(
+      store.createProjectGroup({
+        name: 'Missing parent',
+        parentGroupId: 'missing',
+        createdFrom: 'manual'
+      })
+    ).toBeNull()
+    expect(store.getProjectGroups()).toEqual([])
   })
 
   it('adapts flat folder-scan groups into sparse nested folder scopes on load', async () => {
@@ -3208,14 +3228,14 @@ describe('Store', () => {
     })
     const store = await createStore()
 
-    const group = store.createProjectGroup({ name: 'New group', createdFrom: 'manual' })
+    const group = store.createProjectGroup({ name: 'New group', createdFrom: 'manual' })!
 
     expect(group.tabOrder).toBe(projectGroups.length)
   })
 
   it('sanitizes invalid project group updates before persisting a repo', async () => {
     const store = await createStore()
-    const group = store.createProjectGroup({ name: 'Platform', createdFrom: 'manual' })
+    const group = store.createProjectGroup({ name: 'Platform', createdFrom: 'manual' })!
     store.addRepo(makeRepo({ id: 'r1', projectGroupId: group.id, projectGroupOrder: 1 }))
 
     const updated = store.updateRepo('r1', {
@@ -4221,7 +4241,7 @@ describe('Store', () => {
       name: 'Platform',
       parentPath: '/workspace/platform',
       createdFrom: 'folder-scan'
-    })
+    })!
     const linkedTask = {
       provider: 'linear' as const,
       type: 'issue' as const,
@@ -4258,7 +4278,7 @@ describe('Store', () => {
 
   it('rejects folder workspace creation for non-folder-backed project groups', async () => {
     const store = await createStore()
-    const group = store.createProjectGroup({ name: 'Manual', createdFrom: 'manual' })
+    const group = store.createProjectGroup({ name: 'Manual', createdFrom: 'manual' })!
 
     expect(() => store.createFolderWorkspace({ projectGroupId: group.id })).toThrow(
       'Folder-backed project group not found.'
@@ -4458,7 +4478,7 @@ describe('Store', () => {
       name: 'Platform',
       parentPath: '/workspace/platform',
       createdFrom: 'folder-scan'
-    })
+    })!
     store.addRepo(
       makeRepo({ id: 'api', path: '/workspace/platform/api', projectGroupId: group.id })
     )
@@ -9200,7 +9220,7 @@ describe('Store', () => {
       name: 'Platform',
       parentPath: '/workspace/platform',
       createdFrom: 'folder-scan'
-    })
+    })!
     const workspace = store.createFolderWorkspace({
       projectGroupId: group.id,
       name: 'Folder parent'

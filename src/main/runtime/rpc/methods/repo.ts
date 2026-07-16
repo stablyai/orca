@@ -49,7 +49,7 @@ const ProjectGroupCreate = z.object({
   name: requiredString('Missing group name'),
   parentPath: OptionalString,
   connectionId: OptionalString.nullable().optional(),
-  parentGroupId: OptionalString.nullable().optional(),
+  parentGroupId: z.string().nullable().optional(),
   createdFrom: z.enum(['manual', 'folder-scan', 'migration']).optional()
 })
 

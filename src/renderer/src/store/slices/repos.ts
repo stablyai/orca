@@ -2046,13 +2046,16 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
               createdFrom: 'manual'
             })
           : (
-              await callRuntimeRpc<{ group: ProjectGroup }>(
+              await callRuntimeRpc<{ group: ProjectGroup | null }>(
                 target,
                 'projectGroup.create',
                 { name, ...(parentGroupId ? { parentGroupId } : {}), createdFrom: 'manual' },
                 { timeoutMs: 15_000 }
               )
             ).group
+      if (!group) {
+        return null
+      }
       const ownedGroup = projectGroupWithFetchedOwner(group, target)
       set((s) => ({
         projectGroups: [...s.projectGroups, ownedGroup],

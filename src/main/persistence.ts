@@ -3992,11 +3992,18 @@ export class Store {
     connectionId?: string | null
     parentGroupId?: string | null
     createdFrom: ProjectGroup['createdFrom']
-  }): ProjectGroup {
+  }): ProjectGroup | null {
     let maxOrder = -1
     // Why: persisted group lists can be large enough to exceed spread limits.
     for (const existingGroup of this.state.projectGroups ?? []) {
       maxOrder = Math.max(maxOrder, existingGroup.tabOrder)
+    }
+    if (
+      input.parentGroupId !== undefined &&
+      input.parentGroupId !== null &&
+      !(this.state.projectGroups ?? []).some((group) => group.id === input.parentGroupId)
+    ) {
+      return null
     }
     const group = createProjectGroup({
       ...input,

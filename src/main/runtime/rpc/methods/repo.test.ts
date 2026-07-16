@@ -384,6 +384,13 @@ describe('repo RPC methods', () => {
       })
     )
     await dispatcher.dispatch(
+      makeRequest('projectGroup.create', {
+        name: 'Invalid child',
+        parentGroupId: '',
+        createdFrom: 'manual'
+      })
+    )
+    await dispatcher.dispatch(
       makeRequest('projectGroup.update', {
         groupId: group.id,
         updates: { name: 'Core', isCollapsed: true, parentGroupId: null }
@@ -438,6 +445,11 @@ describe('repo RPC methods', () => {
       parentPath: '/srv/platform',
       parentGroupId: 'parent-group',
       createdFrom: 'folder-scan'
+    })
+    expect(runtime.createProjectGroup).toHaveBeenCalledWith({
+      name: 'Invalid child',
+      parentGroupId: '',
+      createdFrom: 'manual'
     })
     expect(runtime.updateProjectGroup).toHaveBeenCalledWith(group.id, {
       name: 'Core',

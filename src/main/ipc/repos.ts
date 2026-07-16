@@ -1416,7 +1416,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     return deleted
   })
 
-  ipcMain.handle('projectGroups:create', (_event, rawArgs: unknown): ProjectGroup => {
+  ipcMain.handle('projectGroups:create', (_event, rawArgs: unknown): ProjectGroup | null => {
     const args = parseProjectGroupIpcArgs(
       ProjectGroupCreateArgs,
       rawArgs,
@@ -1429,7 +1429,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       parentGroupId: args.parentGroupId ?? null,
       createdFrom: args.createdFrom ?? 'manual'
     })
-    notifyReposChanged(mainWindow)
+    if (group) {
+      notifyReposChanged(mainWindow)
+    }
     return group
   })
 
@@ -1522,7 +1524,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         mode: args.mode,
         connectionId: args.connectionId ?? null,
         repoPaths: selection.selectedPaths,
-        createGroup: (input) => store.createProjectGroup(input)
+        createGroup: (input) => {
+          const group = store.createProjectGroup(input)
+          if (!group) {
+            throw new Error('Failed to create nested project group')
+          }
+          return group
+        }
       })
       const results: ProjectGroupImportResult['projects'] = selection.rejectedPaths.map(
         (repoPath) => ({

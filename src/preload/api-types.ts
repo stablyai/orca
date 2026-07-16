@@ -1061,7 +1061,7 @@ export type PreloadApi = {
       connectionId?: string | null
       parentGroupId?: string | null
       createdFrom?: ProjectGroup['createdFrom']
-    }) => Promise<ProjectGroup>
+    }) => Promise<ProjectGroup | null>
     update: (args: {
       groupId: string
       updates: Partial<

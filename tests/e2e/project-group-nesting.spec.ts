@@ -45,7 +45,16 @@ test.describe('Project Group manual nesting @headful', () => {
       return child.id
     })
     const childHeader = orcaPage.locator(`[data-project-group-header-id="${childId}"]`)
+    const siblingHeader = orcaPage.locator(`[data-project-group-header-id="${groups.siblingId}"]`)
     await expect(childHeader).toBeVisible()
+    await expect(siblingHeader).toBeVisible()
+    const initialRootPadding = await parentHeader.evaluate((element) =>
+      Number.parseFloat(getComputedStyle(element).paddingLeft)
+    )
+    const initialChildPadding = await childHeader.evaluate((element) =>
+      Number.parseFloat(getComputedStyle(element).paddingLeft)
+    )
+    const nestedIndent = initialChildPadding - initialRootPadding
 
     await parentHeader.getByRole('button', { name: /Group actions for E2E Parent/ }).click()
     await orcaPage.getByRole('menuitem', { name: 'Move to group' }).hover()
@@ -80,12 +89,16 @@ test.describe('Project Group manual nesting @headful', () => {
 
     await expect(parentHeader).toBeVisible()
     await expect(childHeader).toBeVisible()
+    const siblingPadding = await siblingHeader.evaluate((element) =>
+      Number.parseFloat(getComputedStyle(element).paddingLeft)
+    )
     const parentPadding = await parentHeader.evaluate((element) =>
       Number.parseFloat(getComputedStyle(element).paddingLeft)
     )
     const childPadding = await childHeader.evaluate((element) =>
       Number.parseFloat(getComputedStyle(element).paddingLeft)
     )
-    expect(childPadding).toBeGreaterThan(parentPadding)
+    expect(parentPadding).toBe(siblingPadding)
+    expect(childPadding).toBe(parentPadding + nestedIndent)
   })
 })

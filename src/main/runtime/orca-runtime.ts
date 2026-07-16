@@ -12141,7 +12141,7 @@ export class OrcaRuntimeService {
     connectionId?: string | null
     parentGroupId?: string | null
     createdFrom?: ProjectGroup['createdFrom']
-  }): Promise<ProjectGroup> {
+  }): Promise<ProjectGroup | null> {
     if (!this.store?.createProjectGroup) {
       throw new Error('runtime_unavailable')
     }
@@ -12152,7 +12152,9 @@ export class OrcaRuntimeService {
       parentGroupId: input.parentGroupId ?? null,
       createdFrom: input.createdFrom ?? 'manual'
     })
-    this.notifyReposChanged()
+    if (group) {
+      this.notifyReposChanged()
+    }
     return group
   }
 
@@ -12371,7 +12373,13 @@ export class OrcaRuntimeService {
       mode: args.mode,
       connectionId: null,
       repoPaths: selection.selectedPaths,
-      createGroup: (input) => this.store!.createProjectGroup!(input)
+      createGroup: (input) => {
+        const group = this.store!.createProjectGroup!(input)
+        if (!group) {
+          throw new Error('Failed to create nested project group')
+        }
+        return group
+      }
     })
     const results: ProjectGroupImportResult['projects'] = selection.rejectedPaths.map(
       (repoPath) => ({
