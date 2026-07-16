@@ -15,11 +15,13 @@ import { existsSync, readFileSync } from 'node:fs'
 import type { SshConnection } from './ssh-connection'
 import { RELAY_REMOTE_DIR } from './relay-protocol'
 import { execCommand } from './ssh-relay-deploy-helpers'
-import { lockAgeSecondsCommand } from './ssh-relay-install-lock-commands'
+import {
+  lockAgeSecondsCommand,
+  probeInstallLockExistsCommand
+} from './ssh-relay-install-lock-commands'
 import { INSTALL_LOCK_STALE_MS, RELAY_INSTALL_LOCK_NAME } from './ssh-relay-install-lock'
 import {
   listRelayBaseDirsCommand,
-  probeDirectoryExistsCommand,
   probeFileExistsCommand,
   probeRelayInstalledCommand,
   relayLivenessProbeCommand,
@@ -283,7 +285,7 @@ async function isCandidateSafeToRemove(
   const lockProbe = await execHostCommand(
     conn,
     host,
-    probeDirectoryExistsCommand(host, lockDir)
+    probeInstallLockExistsCommand(host, lockDir)
   ).catch(() => 'OPEN')
   const locked = lockProbe.trim() === 'LOCKED'
 

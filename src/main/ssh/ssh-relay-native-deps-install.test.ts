@@ -676,6 +676,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     const probeScript = decodePowerShellCommand(probeCommand) ?? ''
     expect(probeScript).toContain('$LASTEXITCODE -ne 0')
     expect(probeScript).toContain("'MISSING'")
+    expect(probeScript).toContain('loadNativeModule')
 
     const npmScripts = vi
       .mocked(execCommand)
@@ -746,8 +747,8 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     feed([
       '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
       '/home/u',
-      'MISSING', // first native-deps probe before lock
-      'MISSING', // re-probe after lock
+      'ORCA-NATIVE-DEPS-MISSING:@parcel/watcher\nMISSING', // first probe before lock
+      'ORCA-NATIVE-DEPS-MISSING:@parcel/watcher\nMISSING', // re-probe after lock
       '', // npm install native deps
       '', // chmod prebuilds
       'ORCA-NPTY-PROBE-OK\n',
@@ -769,6 +770,10 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
         (c) => c.includes('npm install') && c.includes('node-pty') && c.includes('@parcel/watcher')
       )
     ).toBe(true)
+    const installCommand = execCalls.find((c) => c.includes('npm install')) ?? ''
+    expect(installCommand).toContain('node_modules/@parcel/watcher')
+    expect(installCommand).toContain("-name 'watcher-*'")
+    expect(installCommand).not.toContain("rm -rf 'node_modules/node-pty'")
   })
 
   it('launches an already-installed relay in degraded mode when repair throws', async () => {
@@ -990,6 +995,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       .mock.calls.map(([, c]) => c)
       .find((c) => c.includes('ORCA-NATIVE-DEPS-OK'))
     expect(healthProbe).toContain('require("node-pty")')
+    expect(healthProbe).toContain('loadNativeModule')
     expect(healthProbe).toContain('require("@parcel/watcher")')
     expect(healthProbe).not.toContain('require.resolve')
   })

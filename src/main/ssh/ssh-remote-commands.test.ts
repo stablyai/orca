@@ -37,6 +37,13 @@ const powerShellExecutable = (
   })
   return result.status === 0
 })
+const powerShell51Executable =
+  process.platform === 'win32' &&
+  spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', 'exit 0'], {
+    stdio: 'ignore'
+  }).status === 0
+    ? 'powershell.exe'
+    : undefined
 
 function decodePowerShellCommand(command: string): string {
   const match = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/)
@@ -69,6 +76,32 @@ function runShellCommand(command: string): Promise<string> {
   })
 }
 
+function runPowerShellCommand(executable: string, script: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(executable, ['-NoProfile', '-NonInteractive', '-Command', script], {
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.setEncoding('utf8')
+    child.stderr.setEncoding('utf8')
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk
+    })
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk
+    })
+    child.on('error', reject)
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve(stdout)
+        return
+      }
+      reject(new Error(`PowerShell exited ${code}: ${stderr}`))
+    })
+  })
+}
+
 describe('ssh remote command builders', () => {
   it('keeps POSIX deploy commands POSIX-native', () => {
     expect(readRemoteHomeCommand(posix)).toBe('echo $HOME')
@@ -84,7 +117,7 @@ describe('ssh remote command builders', () => {
     expect(probeRelayInstalledCommand(windows, 'C:/Users/me/relay')).toContain('-EncodedCommand')
   })
 
-  it('uses -Path for Windows New-Item commands', () => {
+  it('uses -Path for Windows directory creation and an exclusive file lock', () => {
     const mkdirScript = decodePowerShellCommand(
       makeRemoteDirectoryCommand(windows, 'C:/Users/me/.orca-remote')
     )
@@ -93,9 +126,10 @@ describe('ssh remote command builders', () => {
     )
 
     expect(mkdirScript).toContain('New-Item -ItemType Directory -Force -Path')
-    expect(lockScript).toContain('New-Item -ItemType Directory -Path')
+    expect(lockScript).toContain('[System.IO.FileMode]::CreateNew')
+    expect(lockScript).toContain('[System.IO.FileShare]::None')
     expect(mkdirScript).not.toContain('New-Item -ItemType Directory -Force -LiteralPath')
-    expect(lockScript).not.toContain('New-Item -ItemType Directory -LiteralPath')
+    expect(lockScript).not.toContain('New-Item -ItemType Directory')
   })
 
   it('uses named pipe try-connect liveness for Windows GC', () => {
@@ -146,7 +180,7 @@ describe('ssh remote command builders', () => {
       tryCreateInstallLockCommand(windows, 'C:/Users/me/.orca-remote/relay/.install-lock')
     )
 
-    expect(script).toContain('$ErrorActionPreference = "Stop"; try {')
+    expect(script).toContain('$stream = $null; try {')
     expect(script).toContain("} catch { 'BUSY' }")
     expect(script).not.toContain('}; catch')
   })
@@ -186,6 +220,7 @@ describe('ssh remote command builders', () => {
     expect(windowsScript).toContain('$stealGeneration++')
     expect(windowsScript).toContain('-gt 1200')
     expect(windowsScript).toContain('$currentIdentity -eq $lockIdentity')
+    expect(windowsScript).toContain('[System.IO.FileMode]::CreateNew')
     expect(windowsScript).not.toContain('.next.')
     expect(windowsScript).toContain('finally')
   })
@@ -207,6 +242,81 @@ describe('ssh remote command builders', () => {
     expect(result.status, result.stderr).toBe(0)
     expect(result.stdout.trim()).toBe('BUSY')
   })
+
+  it.runIf(powerShell51Executable)(
+    'lets only one Windows PowerShell 5.1 caller acquire an install lock',
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-install-lock-windows-race-'))
+      try {
+        const lockPath = join(root, '.install-lock')
+        const script = decodePowerShellCommand(tryCreateInstallLockCommand(windows, lockPath))
+        const outputs = await Promise.all(
+          Array.from({ length: 16 }, () => runPowerShellCommand(powerShell51Executable!, script))
+        )
+
+        expect(outputs.filter((output) => output.trim().endsWith('OK'))).toHaveLength(1)
+        expect(statSync(lockPath).isFile()).toBe(true)
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.runIf(powerShell51Executable)(
+    'recovers a stale Windows lock past abandoned steal generations',
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-install-lock-windows-stale-'))
+      try {
+        const lockPath = join(root, '.install-lock')
+        mkdirSync(lockPath)
+        const staleDate = new Date(Date.now() - 60 * 60_000)
+        utimesSync(lockPath, staleDate, staleDate)
+        for (let i = 0; i < 12; i++) {
+          const orphan = `${lockPath}.steal.${i}`
+          mkdirSync(orphan)
+          utimesSync(orphan, staleDate, staleDate)
+        }
+        const script = decodePowerShellCommand(
+          tryStealInstallLockCommand(windows, lockPath, 20 * 60)
+        )
+
+        const output = await runPowerShellCommand(powerShell51Executable!, script)
+
+        expect(output.trim()).toBe('OK')
+        expect(statSync(lockPath).isFile()).toBe(true)
+        expect(readdirSync(root).filter((name) => name.includes('.steal.'))).toHaveLength(0)
+        expect(readdirSync(root).filter((name) => name.includes('.tombstone.'))).toHaveLength(0)
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.runIf(powerShell51Executable)(
+    'lets only one Windows PowerShell 5.1 caller replace a stale lock',
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-install-lock-windows-steal-race-'))
+      try {
+        const lockPath = join(root, '.install-lock')
+        mkdirSync(lockPath)
+        const staleDate = new Date(Date.now() - 60 * 60_000)
+        utimesSync(lockPath, staleDate, staleDate)
+        const script = decodePowerShellCommand(
+          tryStealInstallLockCommand(windows, lockPath, 20 * 60)
+        )
+
+        const outputs = await Promise.all(
+          Array.from({ length: 16 }, () => runPowerShellCommand(powerShell51Executable!, script))
+        )
+
+        expect(outputs.filter((output) => output.trim().endsWith('OK'))).toHaveLength(1)
+        expect(statSync(lockPath).isFile()).toBe(true)
+        expect(readdirSync(root).filter((name) => name.includes('.tombstone.'))).toHaveLength(0)
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    }
+  )
 
   it.runIf(process.platform !== 'win32')(
     'recovers and cleans more than eight orphaned numbered steal claims',

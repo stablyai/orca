@@ -1,6 +1,8 @@
 /* oxlint-disable max-lines */
 import type { IPty } from 'node-pty'
 import type * as NodePty from 'node-pty'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { resolveWindowsGitBashShellPath } from '../main/git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../shared/windows-terminal-shell'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
@@ -38,28 +40,11 @@ import {
 import { isTuiAgent } from '../shared/tui-agent-config'
 import { forceKillPosixPtyProcessGroups } from '../main/pty/posix-pty-process-groups'
 
-// Why: node-pty is a native addon that may not be installed on the remote.
-// Dynamic import keeps the require() lazy so loadPty() returns null gracefully
-// when the native module is unavailable. The static type import lets vitest
-// intercept it in tests.
-let ptyModule: typeof NodePty | null = null
-async function loadPty(): Promise<typeof NodePty | null> {
-  if (ptyModule) {
-    return ptyModule
-  }
-  try {
-    ptyModule = await import('node-pty')
-    return ptyModule
-  } catch {
-    try {
-      // Why: Node caches rejected dynamic imports, while a failed CommonJS
-      // load remains retryable after deploy repairs node_modules in place.
-      ptyModule = require('node-pty') as typeof NodePty
-      return ptyModule
-    } catch {
-      return null
-    }
-  }
+function isMissingNodePtyNativeBinding(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    /Failed to load native module: (?:conpty|pty)\.node(?:,|$)/.test(error.message)
+  )
 }
 
 type ManagedPty = {
@@ -303,6 +288,8 @@ export class PtyHandler {
   private pendingCreationDrainResolvers = new Set<() => void>()
   private worktreeRemovalCoordinator: RelayPtyWorktreeRemovalCoordinator | null = null
   private disposePromise: Promise<void> | null = null
+  private ptyModule: typeof NodePty | null = null
+  private reloadPtyModuleFromDisk = false
   // Why: external observers need to drop per-pane state when a PTY exits.
   // Today the relay composes multiple consumers (hook-server cache eviction
   // and plugin-overlay dir cleanup) into a single callback at the call site
@@ -321,6 +308,41 @@ export class PtyHandler {
     this.dispatcher = dispatcher
     this.graceTimeMs = graceTimeMs
     this.registerHandlers()
+  }
+
+  private async loadPty(): Promise<typeof NodePty | null> {
+    if (this.ptyModule) {
+      return this.ptyModule
+    }
+    if (!this.reloadPtyModuleFromDisk) {
+      try {
+        this.ptyModule = await import('node-pty')
+        return this.ptyModule
+      } catch {
+        this.reloadPtyModuleFromDisk = true
+      }
+    }
+    const moduleEntry = join(process.cwd(), 'node_modules', 'node-pty', 'lib', 'index.js')
+    if (!existsSync(moduleEntry)) {
+      return null
+    }
+    try {
+      this.ptyModule = require(moduleEntry) as typeof NodePty
+      return this.ptyModule
+    } catch {
+      return null
+    }
+  }
+
+  private invalidatePtyModuleAfterBindingFailure(): void {
+    this.ptyModule = null
+    this.reloadPtyModuleFromDisk = true
+    const moduleRoot = join(process.cwd(), 'node_modules', 'node-pty')
+    for (const cachedPath of Object.keys(require.cache)) {
+      if (isPathInsideOrEqual(moduleRoot, cachedPath)) {
+        delete require.cache[cachedPath]
+      }
+    }
   }
 
   setGraceTimeMs(graceTimeMs: number): void {
@@ -748,7 +770,7 @@ export class PtyHandler {
     params: Record<string, unknown>,
     context?: RequestContext
   ): Promise<{ id: string }> {
-    const pty = await loadPty()
+    const pty = await this.loadPty()
     if (!pty) {
       throw new Error('node-pty is not available on this remote host')
     }
@@ -821,17 +843,28 @@ export class PtyHandler {
     // includes Homebrew, nvm, and user-installed CLIs (claude, codex, gh).
     // When overlays are injected, the launch wrapper keeps those paths after
     // user startup files re-export their defaults.
-    const term = pty.spawn(shell, shellLaunch.args, {
-      // Why: node-pty overwrites env.TERM with `name`; keep caller-selected
-      // terminal identities instead of losing them at the final spawn boundary.
-      name: spawnEnv.TERM ?? 'xterm-256color',
-      cols,
-      rows,
-      cwd,
-      // Why: relay shells inherit process.env; never let an ambient Orca marker
-      // enable shell-ready behavior unless this spawn explicitly requested it.
-      env: { ...spawnEnv, ORCA_SHELL_READY_MARKER: '0', ...shellLaunch.env }
-    })
+    let term: IPty
+    try {
+      term = pty.spawn(shell, shellLaunch.args, {
+        // Why: node-pty overwrites env.TERM with `name`; keep caller-selected
+        // terminal identities instead of losing them at the final spawn boundary.
+        name: spawnEnv.TERM ?? 'xterm-256color',
+        cols,
+        rows,
+        cwd,
+        // Why: relay shells inherit process.env; never let an ambient Orca marker
+        // enable shell-ready behavior unless this spawn explicitly requested it.
+        env: { ...spawnEnv, ORCA_SHELL_READY_MARKER: '0', ...shellLaunch.env }
+      })
+    } catch (error) {
+      // Why: Windows node-pty loads conpty.node only on first spawn, after the
+      // wrapper import succeeded. Keep that late failure on the degraded path.
+      if (isMissingNodePtyNativeBinding(error)) {
+        this.invalidatePtyModuleAfterBindingFailure()
+        throw new Error('node-pty is not available on this remote host')
+      }
+      throw error
+    }
 
     // Why: capture the renderer-supplied paneKey on the managed entry so the
     // exit listener can evict per-pane caches without the relay needing a
@@ -1222,7 +1255,7 @@ export class PtyHandler {
   }
 
   private async reviveEntry(entry: SerializedPtyEntry): Promise<void> {
-    const ptyMod = await loadPty()
+    const ptyMod = await this.loadPty()
     if (!ptyMod) {
       return
     }

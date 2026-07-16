@@ -309,7 +309,7 @@ async function deployAndLaunchRelayInner(
     deploySignal?.throwIfAborted()
   } else {
     // Why: serialize concurrent first-installs of the same version against
-    // each other via an atomic mkdir lock. The losing caller polls and either
+    // each other via a host-native exclusive lock. The losing caller polls and either
     // re-checks `alreadyInstalled` (now true) or steals a stale lock.
     await acquireInstallLock(conn, remoteRelayDir, hostPlatform, { signal: deploySignal })
     try {
@@ -487,41 +487,64 @@ const RELAY_NATIVE_DEPS = {
   '@parcel/watcher': '2.5.6'
 } as const
 
+type RelayNativeDepName = keyof typeof RELAY_NATIVE_DEPS
+const RELAY_NATIVE_DEP_NAMES = Object.keys(RELAY_NATIVE_DEPS) as RelayNativeDepName[]
+const NATIVE_DEPS_MISSING_PREFIX = 'ORCA-NATIVE-DEPS-MISSING:'
+
 // Why: npm 12 blocks dependency lifecycle scripts unless each exact package
 // version is approved, even when ignore-scripts is explicitly disabled.
 const RELAY_NATIVE_DEP_SCRIPT_ALLOWLIST = Object.fromEntries(
   Object.entries(RELAY_NATIVE_DEPS).map(([name, version]) => [`${name}@${version}`, true])
 )
 
-const LOAD_RELAY_NATIVE_DEPS = 'require("node-pty"); require("@parcel/watcher")'
+function nativeDepsProbeJs(successToken: string): string {
+  // Why: node-pty's Windows wrapper defers loading conpty.node until first
+  // spawn, so require("node-pty") alone cannot prove the binding is healthy.
+  const loadNodePty =
+    'require("node-pty"); require("node-pty/lib/utils").loadNativeModule(process.platform==="win32"&&Number(require("os").release().split(".")[2])>=18309?"conpty":"pty")'
+  return `(()=>{const missing=[];try{${loadNodePty}}catch{missing.push("node-pty")}try{require("@parcel/watcher")}catch{missing.push("@parcel/watcher")}if(missing.length){console.log("${NATIVE_DEPS_MISSING_PREFIX}"+missing.join(","));process.exitCode=1}else{console.log(${JSON.stringify(successToken)})}})()`
+}
 
-async function hasRequiredNativeDeps(
+function missingNativeDepsFromProbe(output: string): RelayNativeDepName[] {
+  const marker = output
+    .split(/\r?\n/)
+    .find((line) => line.trim().startsWith(NATIVE_DEPS_MISSING_PREFIX))
+  if (!marker) {
+    return [...RELAY_NATIVE_DEP_NAMES]
+  }
+  const reported = marker.trim().slice(NATIVE_DEPS_MISSING_PREFIX.length).split(',')
+  return RELAY_NATIVE_DEP_NAMES.filter((name) => reported.includes(name))
+}
+
+async function probeRequiredNativeDeps(
   conn: SshConnection,
   remoteDir: string,
   hostPlatform: RemoteHostPlatform,
   nodePath: string,
   signal?: AbortSignal
-): Promise<boolean> {
+): Promise<{ available: boolean; missing: RelayNativeDepName[] }> {
   const escapedNode = shellEscape(nodePath)
+  const probeJs = nativeDepsProbeJs('ORCA-NATIVE-DEPS-OK')
   try {
     const command = isWindowsRemoteHost(hostPlatform)
       ? commandWithNodePath(
           hostPlatform,
           nodePath,
           remoteDir,
-          `try { & ${powerShellLiteral(nodePath)} -e ${powerShellNativeArg(`${LOAD_RELAY_NATIVE_DEPS}; console.log("ORCA-NATIVE-DEPS-OK")`)} } catch { 'MISSING' }`
+          `try { & ${powerShellLiteral(nodePath)} -e ${powerShellNativeArg(probeJs)} } catch { 'MISSING' }`
         )
       : commandWithNodePath(
           hostPlatform,
           nodePath,
           remoteDir,
-          `(${escapedNode} -e ${shellEscape(`${LOAD_RELAY_NATIVE_DEPS}; console.log("ORCA-NATIVE-DEPS-OK")`)} 2>/dev/null || echo MISSING)`
+          `(${escapedNode} -e ${shellEscape(probeJs)} 2>/dev/null || echo MISSING)`
         )
     const probe = await execHostCommand(conn, hostPlatform, command, { signal })
-    return probe.includes('ORCA-NATIVE-DEPS-OK')
+    const available = probe.includes('ORCA-NATIVE-DEPS-OK')
+    return { available, missing: available ? [] : missingNativeDepsFromProbe(probe) }
   } catch {
     signal?.throwIfAborted()
-    return false
+    return { available: false, missing: [...RELAY_NATIVE_DEP_NAMES] }
   }
 }
 
@@ -533,7 +556,7 @@ async function repairInstalledNativeDeps(
   nodePath: string,
   signal?: AbortSignal
 ): Promise<void> {
-  if (await hasRequiredNativeDeps(conn, remoteDir, hostPlatform, nodePath, signal)) {
+  if ((await probeRequiredNativeDeps(conn, remoteDir, hostPlatform, nodePath, signal)).available) {
     return
   }
 
@@ -550,8 +573,17 @@ async function repairInstalledNativeDeps(
   try {
     // Why: older complete relay dirs were created before @parcel/watcher was
     // installed. Re-probe under the lock so only one reconnect mutates the dir.
-    if (!(await hasRequiredNativeDeps(conn, remoteDir, hostPlatform, nodePath, signal))) {
-      await installNativeDeps(conn, remoteDir, platform, hostPlatform, nodePath, signal)
+    const probe = await probeRequiredNativeDeps(conn, remoteDir, hostPlatform, nodePath, signal)
+    if (!probe.available) {
+      await installNativeDeps(
+        conn,
+        remoteDir,
+        platform,
+        hostPlatform,
+        nodePath,
+        signal,
+        probe.missing
+      )
       await finalizeInstall(conn, remoteDir, hostPlatform, { signal })
     } else {
       await abandonInstall(conn, remoteDir, hostPlatform)
@@ -584,7 +616,8 @@ async function installNativeDeps(
   platform: RelayPlatform,
   hostPlatform: RemoteHostPlatform,
   nodePath: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  resetDeps: RelayNativeDepName[] = []
 ): Promise<void> {
   // Why: commandWithNodePath puts node's bin directory in PATH for npm's child processes.
   // npm install runs node-pty's prebuild script (`node scripts/prebuild.js`)
@@ -614,12 +647,16 @@ async function installNativeDeps(
     const installArgs = Object.entries(RELAY_NATIVE_DEPS)
       .map(([dep, version]) => shellEscape(`${dep}@${version}`))
       .join(' ')
+    // Why: npm reports a present package as up to date even when one packaged
+    // native file was deleted. Reset only dependencies the probe found broken.
+    const resetCommand = resetNativeDepsCommand(hostPlatform, resetDeps)
+    const resetPrefix = resetCommand ? `${resetCommand}; ` : ''
     const command = isWindowsRemoteHost(hostPlatform)
       ? commandWithNodePath(
           hostPlatform,
           nodePath,
           remoteDir,
-          `npm install --ignore-scripts=false --omit=dev --no-audit --no-fund ${Object.entries(
+          `${resetPrefix}npm install --ignore-scripts=false --omit=dev --no-audit --no-fund ${Object.entries(
             RELAY_NATIVE_DEPS
           )
             .map(([dep, version]) => powerShellLiteral(`${dep}@${version}`))
@@ -629,7 +666,7 @@ async function installNativeDeps(
           hostPlatform,
           nodePath,
           remoteDir,
-          `npm install --ignore-scripts=false --omit=dev --no-audit --no-fund ${installArgs} 2>&1`
+          `${resetPrefix}npm install --ignore-scripts=false --omit=dev --no-audit --no-fund ${installArgs} 2>&1`
         )
     await execHostCommand(conn, hostPlatform, command, {
       timeoutMs: NATIVE_DEPS_COMMAND_TIMEOUT_MS,
@@ -696,6 +733,44 @@ async function installNativeDeps(
   }
 }
 
+function resetNativeDepsCommand(
+  hostPlatform: RemoteHostPlatform,
+  resetDeps: RelayNativeDepName[]
+): string {
+  if (resetDeps.length === 0) {
+    return ''
+  }
+  const resetNodePty = resetDeps.includes('node-pty')
+  const resetWatcher = resetDeps.includes('@parcel/watcher')
+  if (isWindowsRemoteHost(hostPlatform)) {
+    const commands: string[] = []
+    if (resetNodePty) {
+      commands.push(
+        `Remove-Item -LiteralPath ${powerShellLiteral('node_modules/node-pty')} -Recurse -Force -ErrorAction SilentlyContinue`
+      )
+    }
+    if (resetWatcher) {
+      commands.push(
+        `Remove-Item -LiteralPath ${powerShellLiteral('node_modules/@parcel/watcher')} -Recurse -Force -ErrorAction SilentlyContinue`,
+        `$parcelScope = ${powerShellLiteral('node_modules/@parcel')}`,
+        `Get-ChildItem -LiteralPath $parcelScope -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name.StartsWith('watcher-', [StringComparison]::Ordinal) } | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue`
+      )
+    }
+    return commands.join('; ')
+  }
+  const commands: string[] = []
+  if (resetNodePty) {
+    commands.push(`rm -rf ${shellEscape('node_modules/node-pty')}`)
+  }
+  if (resetWatcher) {
+    commands.push(
+      `rm -rf ${shellEscape('node_modules/@parcel/watcher')}`,
+      `find ${shellEscape('node_modules/@parcel')} -maxdepth 1 -name 'watcher-*' -exec rm -rf {} + 2>/dev/null || true`
+    )
+  }
+  return commands.join('; ')
+}
+
 async function rebuildNativeDeps(
   conn: SshConnection,
   remoteDir: string,
@@ -748,13 +823,18 @@ async function probeInstalledNativeDeps(
   hostPlatform: RemoteHostPlatform,
   nodePath: string,
   signal?: AbortSignal
-): Promise<{ available: boolean; output: string; stderr: string }> {
+): Promise<{
+  available: boolean
+  missing: RelayNativeDepName[]
+  output: string
+  stderr: string
+}> {
   // require() catches unloadable installs (wrong arch, missing prebuild, or a
   // skipped lifecycle script) that require.resolve() and test -d both miss.
   const PROBE_OK = 'ORCA-NPTY-PROBE-OK'
   const stderrFile = joinRemotePath(hostPlatform, remoteDir, '.npty-probe.stderr')
   const escapedStderr = shellEscape(stderrFile)
-  const probeJs = `${LOAD_RELAY_NATIVE_DEPS}; console.log(process.argv[1])`
+  const probeJs = nativeDepsProbeJs(PROBE_OK)
   const probeCommand = isWindowsRemoteHost(hostPlatform)
     ? commandWithNodePath(
         hostPlatform,
@@ -785,6 +865,7 @@ async function probeInstalledNativeDeps(
   }
   return {
     available: probeOutput.includes(PROBE_OK),
+    missing: probeOutput.includes(PROBE_OK) ? [] : missingNativeDepsFromProbe(probeOutput),
     output: probeOutput,
     stderr: remoteStderr
   }

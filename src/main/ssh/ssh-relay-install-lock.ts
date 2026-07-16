@@ -41,8 +41,9 @@ function execHostCommand(
 }
 
 /**
- * Acquire the per-version install lock via atomic `mkdir`.
- * Why: `mkdir` gives every supported remote shell one winner without polling state locally.
+ * Acquire the per-version install lock via a host-native exclusive create.
+ * Why: POSIX mkdir and Windows FileMode.CreateNew each give one winner without
+ * polling state locally.
  */
 export async function acquireInstallLock(
   conn: SshConnection,

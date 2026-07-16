@@ -18,9 +18,26 @@ export function tryCreateInstallLockCommand(host: RemoteHostPlatform, lockDir: s
   if (!isWindowsRemoteHost(host)) {
     return `mkdir ${shellEscape(lockDir)} 2>&1 && echo OK || echo BUSY`
   }
-  // New-Item has no -LiteralPath parameter; using it breaks stock Windows PowerShell.
+  // Why: concurrent New-Item directory calls can both report success in Windows
+  // PowerShell 5.1. FileMode.CreateNew maps to an exclusive Win32 create.
   return powerShellCommand(
-    `$ErrorActionPreference = "Stop"; try { $null = New-Item -ItemType Directory -Path ${powerShellLiteral(lockDir)}; 'OK' } catch { 'BUSY' }`
+    [
+      '$stream = $null',
+      'try {',
+      `$stream = [System.IO.File]::Open(${powerShellLiteral(lockDir)}, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)`,
+      "'OK'",
+      `} catch { 'BUSY' } finally { if ($null -ne $stream) { $stream.Dispose() } }`
+    ].join('; ')
+  )
+}
+
+export function probeInstallLockExistsCommand(host: RemoteHostPlatform, lockPath: string): string {
+  if (!isWindowsRemoteHost(host)) {
+    return `test -e ${shellEscape(lockPath)} && echo LOCKED || echo OPEN`
+  }
+  // Windows locks are files now, but old Orca versions may leave directories.
+  return powerShellCommand(
+    `if (Test-Path -LiteralPath ${powerShellLiteral(lockPath)}) { 'LOCKED' } else { 'OPEN' }`
   )
 }
 
@@ -96,7 +113,8 @@ function windowsStealInstallLockCommand(lockDir: string, staleAfterSeconds: numb
       'try {',
       'while (-not $ownsSteal) {',
       'try {',
-      '$null = New-Item -ItemType Directory -Path $steal -ErrorAction Stop',
+      '$stealStream = [System.IO.File]::Open($steal, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)',
+      '$stealStream.Dispose()',
       '$ownsSteal = $true',
       'break',
       '} catch {',
@@ -118,7 +136,8 @@ function windowsStealInstallLockCommand(lockDir: string, staleAfterSeconds: numb
       `if (($currentIdentity -eq $lockIdentity) -and (($currentNow - $currentMtime) -gt ${staleAfterSeconds})) {`,
       '$lockTombstone = "$lock.tombstone.$PID.$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())"',
       'Move-Item -LiteralPath $lock -Destination $lockTombstone -ErrorAction Stop',
-      "try { $null = New-Item -ItemType Directory -Path $lock -ErrorAction Stop; 'OK' } catch { 'BUSY' }",
+      '$successorStream = $null',
+      "try { $successorStream = [System.IO.File]::Open($lock, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None); 'OK' } catch { 'BUSY' } finally { if ($null -ne $successorStream) { $successorStream.Dispose() } }",
       "} else { 'BUSY' }",
       '}',
       "} catch { 'BUSY' } finally {",
