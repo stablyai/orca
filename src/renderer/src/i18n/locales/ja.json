@@ -4235,7 +4235,12 @@
           "hostDisconnected": "切断済み",
           "failedNestWorkspace": "ワークスペースをネストできませんでした",
           "sidebarRowMissing": "対象はもう存在しません",
-          "failedUnnestWorkspace": "ワークスペースの展開に失敗しました"
+          "failedUnnestWorkspace": "ワークスペースの展開に失敗しました",
+          "b9a6987eb4": "グループを移動できませんでした",
+          "c817bd77b9": "新規サブグループ",
+          "964fdd76a8": "このホストはネストされたグループをサポートしていません",
+          "4fa704cc2e": "新規サブグループ",
+          "8de19ba6f9": "「{{value0}}」内にグループを作成します。"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "キャンセル",

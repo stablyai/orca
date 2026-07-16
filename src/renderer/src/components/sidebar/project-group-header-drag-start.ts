@@ -1,6 +1,7 @@
 import type { PointerEvent } from 'react'
 
 import {
+  getParentGroupIdForHeaderDragBucketKey,
   getProjectGroupHeaderDragBucketKey,
   measureProjectGroupHeaderDragRects,
   type ProjectGroupHeaderDragBucketKey
@@ -10,6 +11,7 @@ import {
   isProjectGroupHeaderDragHandleTarget,
   type ProjectGroupHeaderDragSession
 } from './project-group-header-drag-contract'
+import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
 import type { ProjectGroup } from '../../../../shared/types'
 
 export function createProjectGroupHeaderDragSession(args: {
@@ -38,8 +40,13 @@ export function createProjectGroupHeaderDragSession(args: {
   const bucketKey = getProjectGroupHeaderDragBucketKey(group, args.projectGroupById)
   const sidebarProjectGroupHeaderIds =
     args.sidebarProjectGroupHeaderIdsByBucket.get(bucketKey) ?? []
-  // Why: a lone group in a parent bucket cannot move without reparenting.
-  if (sidebarProjectGroupHeaderIds.length <= 1) {
+  // Why: drops can now reparent across buckets, so a drag is meaningful as
+  // long as any other group header exists anywhere in the sidebar.
+  let totalHeaderCount = 0
+  for (const headerIds of args.sidebarProjectGroupHeaderIdsByBucket.values()) {
+    totalHeaderCount += headerIds.length
+  }
+  if (totalHeaderCount <= 1) {
     return null
   }
   const container = args.getScrollContainer()
@@ -52,9 +59,15 @@ export function createProjectGroupHeaderDragSession(args: {
   return {
     groupId: args.groupId,
     bucketKey,
+    sourceParentGroupId: getParentGroupIdForHeaderDragBucketKey(bucketKey),
     sidebarProjectGroupHeaderIds,
+    sidebarProjectGroupHeaderIdsByBucket: args.sidebarProjectGroupHeaderIdsByBucket,
+    draggedSubtreeGroupIds: getProjectGroupSubtreeIds(
+      [...args.projectGroupById.values()],
+      args.groupId
+    ),
     pointerId: args.event.pointerId,
-    headerRects: measureProjectGroupHeaderDragRects(container, bucketKey),
+    headerRects: measureProjectGroupHeaderDragRects(container),
     handleEl,
     startX: args.event.clientX,
     startY: args.event.clientY,

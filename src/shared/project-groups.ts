@@ -3,6 +3,15 @@ import type { Repo, ProjectGroup, ProjectGroupCreatedFrom } from './types'
 
 export const UNGROUPED_PROJECT_GROUP_KEY = 'project-group:ungrouped'
 
+/** Levels counted from 1 at root. Caps manual nesting (drag, "New subgroup");
+ *  folder-scan imports are exempt so deep scanned trees keep their shape. */
+export const MAX_MANUAL_PROJECT_GROUP_DEPTH = 3
+
+// Why: corruption guard only — must stay above the folder-scan depth limit
+// (scan maxDepth <= 8 plus the import root) so normalize never restructures
+// legitimately imported trees.
+export const MAX_PERSISTED_PROJECT_GROUP_DEPTH = 10
+
 function createProjectGroupId(): string {
   const randomUUID = globalThis.crypto?.randomUUID
   if (randomUUID) {
@@ -96,7 +105,148 @@ export function normalizeProjectGroups(value: unknown): ProjectGroup[] {
       group.parentGroupId = null
     }
   }
+  breakProjectGroupParentCycles(groups)
+  // Why: clamp from pre-clamp depths so one corrupt over-deep chain collapses
+  // predictably instead of cascading as earlier clamps shorten the chain.
+  // Depths are memoized across groups; per-group chain walks are quadratic on
+  // the huge imported catalogs this loader must handle.
+  const groupById = new Map(groups.map((group) => [group.id, group]))
+  const depthById = new Map<string, number>()
+  for (const group of groups) {
+    const path: ProjectGroup[] = []
+    let current: ProjectGroup | undefined = group
+    while (current && !depthById.has(current.id)) {
+      path.push(current)
+      current = current.parentGroupId ? groupById.get(current.parentGroupId) : undefined
+    }
+    let depth = current ? depthById.get(current.id)! : 0
+    for (let index = path.length - 1; index >= 0; index -= 1) {
+      depth += 1
+      depthById.set(path[index]!.id, depth)
+    }
+  }
+  for (const group of groups) {
+    if ((depthById.get(group.id) ?? 1) > MAX_PERSISTED_PROJECT_GROUP_DEPTH) {
+      group.parentGroupId = null
+    }
+  }
   return groups
+}
+
+// Why: persisted data may contain parent cycles (hand-edited state, sync
+// races); rendering walks parent chains, so cycles must clamp to root here.
+function breakProjectGroupParentCycles(groups: ProjectGroup[]): void {
+  const groupById = new Map(groups.map((group) => [group.id, group]))
+  const resolvesToRoot = new Set<string>()
+  for (const group of groups) {
+    const path: ProjectGroup[] = []
+    const pathIds = new Set<string>()
+    let current: ProjectGroup | undefined = group
+    while (current && !resolvesToRoot.has(current.id)) {
+      if (pathIds.has(current.id)) {
+        for (const member of path.slice(path.indexOf(current))) {
+          member.parentGroupId = null
+        }
+        break
+      }
+      path.push(current)
+      pathIds.add(current.id)
+      current = current.parentGroupId ? groupById.get(current.parentGroupId) : undefined
+    }
+    for (const member of path) {
+      resolvesToRoot.add(member.id)
+    }
+  }
+}
+
+/** 1-based depth of a group counting resolvable ancestors; cycle-safe. */
+export function getProjectGroupDepth(
+  groups: readonly Pick<ProjectGroup, 'id' | 'parentGroupId'>[],
+  groupId: string
+): number {
+  const groupById = new Map(groups.map((group) => [group.id, group]))
+  const visited = new Set<string>()
+  let depth = 0
+  let current = groupById.get(groupId)
+  while (current && !visited.has(current.id)) {
+    visited.add(current.id)
+    depth += 1
+    current = current.parentGroupId ? groupById.get(current.parentGroupId) : undefined
+  }
+  return depth
+}
+
+/** Levels below the group inside its own subtree (0 for a leaf). */
+export function getProjectGroupSubtreeHeight(
+  groups: readonly Pick<ProjectGroup, 'id' | 'parentGroupId'>[],
+  groupId: string
+): number {
+  const childGroupsByParentId = new Map<string, string[]>()
+  for (const group of groups) {
+    if (!group.parentGroupId) {
+      continue
+    }
+    const children = childGroupsByParentId.get(group.parentGroupId) ?? []
+    children.push(group.id)
+    childGroupsByParentId.set(group.parentGroupId, children)
+  }
+  let height = 0
+  const seen = new Set<string>([groupId])
+  let frontier = [groupId]
+  while (frontier.length > 0) {
+    const next: string[] = []
+    for (const id of frontier) {
+      for (const childId of childGroupsByParentId.get(id) ?? []) {
+        if (!seen.has(childId)) {
+          seen.add(childId)
+          next.push(childId)
+        }
+      }
+    }
+    if (next.length > 0) {
+      height += 1
+    }
+    frontier = next
+  }
+  return height
+}
+
+export type ProjectGroupReparentViolation =
+  | 'missing-group'
+  | 'missing-parent'
+  | 'self'
+  | 'cycle'
+  | 'depth'
+
+/** Preflight/authoritative check shared by renderer drop targeting and the
+ *  main-process update path. `null` parent (move to root) is always valid. */
+export function getProjectGroupReparentViolation(
+  groups: readonly Pick<ProjectGroup, 'id' | 'parentGroupId'>[],
+  groupId: string,
+  parentGroupId: string | null
+): ProjectGroupReparentViolation | null {
+  const groupIds = new Set(groups.map((group) => group.id))
+  if (!groupIds.has(groupId)) {
+    return 'missing-group'
+  }
+  if (parentGroupId === null) {
+    return null
+  }
+  if (parentGroupId === groupId) {
+    return 'self'
+  }
+  if (!groupIds.has(parentGroupId)) {
+    return 'missing-parent'
+  }
+  if (getProjectGroupSubtreeIds(groups, groupId).has(parentGroupId)) {
+    return 'cycle'
+  }
+  const resultingDepth =
+    getProjectGroupDepth(groups, parentGroupId) + 1 + getProjectGroupSubtreeHeight(groups, groupId)
+  if (resultingDepth > MAX_MANUAL_PROJECT_GROUP_DEPTH) {
+    return 'depth'
+  }
+  return null
 }
 
 export function clearMissingProjectGroupMemberships(repos: Repo[], groups: ProjectGroup[]): Repo[] {

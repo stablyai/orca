@@ -4235,7 +4235,12 @@
           "hostDisconnected": "已断开连接",
           "failedNestWorkspace": "无法嵌套工作区",
           "sidebarRowMissing": "目标不再存在",
-          "failedUnnestWorkspace": "展开工作区失败"
+          "failedUnnestWorkspace": "展开工作区失败",
+          "b9a6987eb4": "无法移动组",
+          "c817bd77b9": "新建子组",
+          "964fdd76a8": "此主机不支持嵌套组",
+          "4fa704cc2e": "新建子组",
+          "8de19ba6f9": "在 \"{{value0}}\" 内创建组。"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "取消",

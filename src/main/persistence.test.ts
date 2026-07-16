@@ -3193,6 +3193,76 @@ describe('Store', () => {
     expect(group.tabOrder).toBe(projectGroups.length)
   })
 
+  it('reparents a project group and rejects invalid parents atomically', async () => {
+    const store = await createStore()
+    const root = store.createProjectGroup({ name: 'Root', createdFrom: 'manual' })
+    const child = store.createProjectGroup({ name: 'Child', createdFrom: 'manual' })
+    const grandchild = store.createProjectGroup({ name: 'Grandchild', createdFrom: 'manual' })
+
+    expect(store.updateProjectGroup(child.id, { parentGroupId: root.id })?.parentGroupId).toBe(
+      root.id
+    )
+    expect(
+      store.updateProjectGroup(grandchild.id, { parentGroupId: child.id })?.parentGroupId
+    ).toBe(child.id)
+
+    // A rejected reparent must not apply the accompanying tabOrder either.
+    const rootTabOrderBefore = store.getProjectGroups().find((g) => g.id === root.id)?.tabOrder
+    expect(
+      store.updateProjectGroup(root.id, { parentGroupId: grandchild.id, tabOrder: 99 })
+    ).toBeNull()
+    expect(store.getProjectGroups().find((g) => g.id === root.id)?.tabOrder).toBe(
+      rootTabOrderBefore
+    )
+
+    const extra = store.createProjectGroup({ name: 'Extra', createdFrom: 'manual' })
+    expect(store.updateProjectGroup(extra.id, { parentGroupId: grandchild.id })).toBeNull()
+    expect(store.updateProjectGroup(extra.id, { parentGroupId: 'missing' })).toBeNull()
+
+    expect(
+      store.updateProjectGroup(grandchild.id, { parentGroupId: null })?.parentGroupId
+    ).toBeNull()
+  })
+
+  it('clamps manual subgroup creation to root for invalid or over-deep parents', async () => {
+    const store = await createStore()
+    const root = store.createProjectGroup({ name: 'Root', createdFrom: 'manual' })
+    const nested = store.createProjectGroup({
+      name: 'Nested',
+      createdFrom: 'manual',
+      parentGroupId: root.id
+    })
+    expect(nested.parentGroupId).toBe(root.id)
+    const deep = store.createProjectGroup({
+      name: 'Deep',
+      createdFrom: 'manual',
+      parentGroupId: nested.id
+    })
+    expect(deep.parentGroupId).toBe(nested.id)
+
+    const clampedByDepth = store.createProjectGroup({
+      name: 'Clamped',
+      createdFrom: 'manual',
+      parentGroupId: deep.id
+    })
+    expect(clampedByDepth.parentGroupId).toBeNull()
+
+    const clampedByMissingParent = store.createProjectGroup({
+      name: 'Orphan',
+      createdFrom: 'manual',
+      parentGroupId: 'missing-group'
+    })
+    expect(clampedByMissingParent.parentGroupId).toBeNull()
+
+    // Folder-scan imports keep deeper trees; the cap is manual-only.
+    const scanned = store.createProjectGroup({
+      name: 'Scanned',
+      createdFrom: 'folder-scan',
+      parentGroupId: deep.id
+    })
+    expect(scanned.parentGroupId).toBe(deep.id)
+  })
+
   it('sanitizes invalid project group updates before persisting a repo', async () => {
     const store = await createStore()
     const group = store.createProjectGroup({ name: 'Platform', createdFrom: 'manual' })

@@ -40,6 +40,7 @@ const reposRemove = vi.fn()
 const ptyKill = vi.fn()
 const projectGroupsList = vi.fn()
 const projectGroupsCreate = vi.fn()
+const projectGroupsUpdate = vi.fn()
 const projectGroupsDelete = vi.fn()
 const projectGroupsMoveProject = vi.fn()
 const projectGroupsImportNested = vi.fn()
@@ -71,6 +72,7 @@ beforeEach(() => {
   ptyKill.mockReset()
   projectGroupsList.mockReset()
   projectGroupsCreate.mockReset()
+  projectGroupsUpdate.mockReset()
   projectGroupsDelete.mockReset()
   projectGroupsMoveProject.mockReset()
   projectGroupsImportNested.mockReset()
@@ -99,6 +101,7 @@ beforeEach(() => {
       projectGroups: {
         list: projectGroupsList,
         create: projectGroupsCreate,
+        update: projectGroupsUpdate,
         delete: projectGroupsDelete,
         moveProject: projectGroupsMoveProject,
         scanNested: projectGroupsScanNested,
@@ -131,6 +134,7 @@ describe('project group store routing', () => {
     expect(store.getState().projectGroups).toEqual([{ ...projectGroup, executionHostId: 'local' }])
     expect(projectGroupsCreate).toHaveBeenCalledWith({
       name: 'Platform',
+      parentGroupId: null,
       createdFrom: 'manual'
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()

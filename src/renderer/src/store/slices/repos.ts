@@ -45,7 +45,10 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { applyManualRepoOrder, getManualRepoOrder } from '../../../../shared/manual-repo-order'
-import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
+import {
+  getProjectGroupReparentViolation,
+  getProjectGroupSubtreeIds
+} from '../../../../shared/project-groups'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 import { selectProjectGroupRemovalTargets } from './project-group-removal-targets'
@@ -1432,7 +1435,10 @@ export type RepoSlice = {
     scanId?: string
     mode: 'group' | 'separate'
   }) => Promise<ProjectGroupImportResult | null>
-  createProjectGroup: (name: string) => Promise<ProjectGroup | null>
+  createProjectGroup: (
+    name: string,
+    options?: { parentGroupId?: string | null }
+  ) => Promise<ProjectGroup | null>
   createFolderWorkspace: (
     args: {
       projectGroupId: string
@@ -1482,7 +1488,9 @@ export type RepoSlice = {
   deleteFolderWorkspace: (folderWorkspaceId: string) => Promise<boolean>
   updateProjectGroup: (
     groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
+    updates: Partial<
+      Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color' | 'parentGroupId'>
+    >
   ) => Promise<boolean>
   deleteProjectGroup: (groupId: string) => Promise<boolean>
   deleteProjectGroupWithContainedProjects: (
@@ -2033,20 +2041,22 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  createProjectGroup: async (name) => {
+  createProjectGroup: async (name, options) => {
     try {
       const target = getActiveRuntimeTarget(get().settings)
+      const parentGroupId = options?.parentGroupId ?? null
       const group =
         target.kind === 'local'
           ? await window.api.projectGroups.create({
               name,
+              parentGroupId,
               createdFrom: 'manual'
             })
           : (
               await callRuntimeRpc<{ group: ProjectGroup }>(
                 target,
                 'projectGroup.create',
-                { name, createdFrom: 'manual' },
+                { name, parentGroupId, createdFrom: 'manual' },
                 { timeoutMs: 15_000 }
               )
             ).group
@@ -2154,6 +2164,13 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   updateProjectGroup: async (groupId, updates) => {
     try {
+      if (
+        updates.parentGroupId !== undefined &&
+        getProjectGroupReparentViolation(get().projectGroups, groupId, updates.parentGroupId) !==
+          null
+      ) {
+        return false
+      }
       // Why: project groups are focused-host-scoped by design — fetch/create/update/
       // delete all route by the focused host, and the list is replaced (not merged).
       const target = getActiveRuntimeTarget(get().settings)
@@ -2169,6 +2186,15 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
               )
             ).group
       if (!updated) {
+        return false
+      }
+      // Why: remote hosts older than nested groups strip parentGroupId from the
+      // update schema; surface that as failure instead of desyncing the sidebar.
+      if (
+        updates.parentGroupId !== undefined &&
+        (updated.parentGroupId ?? null) !== (updates.parentGroupId ?? null)
+      ) {
+        console.warn('Project group reparent not supported by focused host:', groupId)
         return false
       }
       const ownedGroup = projectGroupWithFetchedOwner(updated, target)

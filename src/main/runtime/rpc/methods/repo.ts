@@ -59,7 +59,10 @@ const ProjectGroupUpdate = z.object({
     name: OptionalString,
     isCollapsed: z.boolean().optional(),
     tabOrder: OptionalFiniteNumber,
-    color: OptionalString.nullable().optional()
+    color: OptionalString.nullable().optional(),
+    // Why: older remote hosts strip this unknown key; callers detect that by
+    // comparing the returned group's parentGroupId to what they sent.
+    parentGroupId: OptionalString.nullable().optional()
   })
 })
 

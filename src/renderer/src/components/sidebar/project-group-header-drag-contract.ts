@@ -10,12 +10,14 @@ export type ProjectGroupDragState = {
   draggingGroupId: string | null
   dropIndex: number | null
   dropIndicatorY: number | null
+  nestTargetGroupId: string | null
 }
 
 export const INITIAL_PROJECT_GROUP_DRAG_STATE: ProjectGroupDragState = {
   draggingGroupId: null,
   dropIndex: null,
-  dropIndicatorY: null
+  dropIndicatorY: null,
+  nestTargetGroupId: null
 }
 
 export type UseProjectGroupHeaderDragArgs = {
@@ -25,6 +27,11 @@ export type UseProjectGroupHeaderDragArgs = {
   >
   projectGroupById: ReadonlyMap<string, ProjectGroup>
   onCommitProjectGroupTabOrder: (groupId: string, tabOrder: number) => void
+  onCommitProjectGroupReparent: (
+    groupId: string,
+    parentGroupId: string | null,
+    tabOrder: number
+  ) => void
   getScrollContainer: () => HTMLElement | null
 }
 
@@ -36,7 +43,15 @@ export type ProjectGroupHeaderDragController = {
 export type ProjectGroupHeaderDragSession = {
   groupId: string
   bucketKey: ProjectGroupHeaderDragBucketKey
+  sourceParentGroupId: string | null
   sidebarProjectGroupHeaderIds: readonly string[]
+  // Why: nest/reparent drops can target any bucket, so the session snapshots
+  // the full bucket map and the dragged subtree instead of one sibling list.
+  sidebarProjectGroupHeaderIdsByBucket: ReadonlyMap<
+    ProjectGroupHeaderDragBucketKey,
+    readonly string[]
+  >
+  draggedSubtreeGroupIds: ReadonlySet<string>
   pointerId: number
   headerRects: ProjectGroupHeaderDragRect[]
   handleEl: HTMLElement

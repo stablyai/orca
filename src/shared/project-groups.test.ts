@@ -4,6 +4,9 @@ import {
   createProjectGroup,
   getEffectiveProjectGroupManualRank,
   getNextProjectGroupOrder,
+  getProjectGroupDepth,
+  getProjectGroupReparentViolation,
+  getProjectGroupSubtreeHeight,
   getProjectGroupSubtreeIds,
   normalizeProjectGroupName,
   normalizeProjectGroups
@@ -154,5 +157,86 @@ describe('project-groups', () => {
     expect(subtreeIds.size).toBe(130_001)
     expect(subtreeIds.has('root')).toBe(true)
     expect(subtreeIds.has('child-129999')).toBe(true)
+  })
+
+  it('computes group depth and subtree height', () => {
+    const groups = [
+      { id: 'root', parentGroupId: null },
+      { id: 'child', parentGroupId: 'root' },
+      { id: 'grandchild', parentGroupId: 'child' },
+      { id: 'lone', parentGroupId: null }
+    ]
+
+    expect(getProjectGroupDepth(groups, 'root')).toBe(1)
+    expect(getProjectGroupDepth(groups, 'grandchild')).toBe(3)
+    expect(getProjectGroupDepth(groups, 'missing')).toBe(0)
+    expect(getProjectGroupSubtreeHeight(groups, 'root')).toBe(2)
+    expect(getProjectGroupSubtreeHeight(groups, 'child')).toBe(1)
+    expect(getProjectGroupSubtreeHeight(groups, 'lone')).toBe(0)
+  })
+
+  it('validates reparent targets', () => {
+    const groups = [
+      { id: 'root', parentGroupId: null },
+      { id: 'child', parentGroupId: 'root' },
+      { id: 'grandchild', parentGroupId: 'child' },
+      { id: 'other', parentGroupId: null }
+    ]
+
+    expect(getProjectGroupReparentViolation(groups, 'other', null)).toBeNull()
+    expect(getProjectGroupReparentViolation(groups, 'other', 'root')).toBeNull()
+    expect(getProjectGroupReparentViolation(groups, 'missing', 'root')).toBe('missing-group')
+    expect(getProjectGroupReparentViolation(groups, 'other', 'missing')).toBe('missing-parent')
+    expect(getProjectGroupReparentViolation(groups, 'other', 'other')).toBe('self')
+    expect(getProjectGroupReparentViolation(groups, 'root', 'grandchild')).toBe('cycle')
+    // other (leaf) under grandchild would land at depth 4 with a 3-level cap.
+    expect(getProjectGroupReparentViolation(groups, 'other', 'grandchild')).toBe('depth')
+  })
+
+  it('rejects reparenting a subtree that would poke through the depth cap', () => {
+    const groups = [
+      { id: 'root', parentGroupId: null },
+      { id: 'tall', parentGroupId: null },
+      { id: 'tall-child', parentGroupId: 'tall' }
+    ]
+
+    // tall itself fits under root, but its child would land at depth 4.
+    expect(getProjectGroupReparentViolation(groups, 'tall', 'root')).toBeNull()
+
+    const deeper = [...groups, { id: 'tall-grandchild', parentGroupId: 'tall-child' }]
+    expect(getProjectGroupReparentViolation(deeper, 'tall', 'root')).toBe('depth')
+  })
+
+  it('breaks persisted parent cycles by clamping cycle members to root', () => {
+    const groups = normalizeProjectGroups([
+      { id: 'a', name: 'A', parentGroupId: 'b' },
+      { id: 'b', name: 'B', parentGroupId: 'a' },
+      { id: 'entry', name: 'Entry', parentGroupId: 'a' }
+    ])
+
+    const byId = new Map(groups.map((group) => [group.id, group]))
+    expect(byId.get('a')?.parentGroupId).toBeNull()
+    expect(byId.get('b')?.parentGroupId).toBeNull()
+    // Pointing into a broken cycle stays valid once the cycle is gone.
+    expect(byId.get('entry')?.parentGroupId).toBe('a')
+  })
+
+  it('clamps over-deep persisted chains to root while keeping folder-scan depth intact', () => {
+    const chain = (length: number) =>
+      Array.from({ length }, (_, index) => ({
+        id: `level-${index + 1}`,
+        name: `Level ${index + 1}`,
+        parentGroupId: index === 0 ? null : `level-${index}`,
+        createdFrom: 'folder-scan'
+      }))
+
+    const intact = normalizeProjectGroups(chain(8))
+    expect(intact.every((group, index) => index === 0 || group.parentGroupId !== null)).toBe(true)
+
+    const clamped = normalizeProjectGroups(chain(12))
+    const byId = new Map(clamped.map((group) => [group.id, group]))
+    expect(byId.get('level-10')?.parentGroupId).toBe('level-9')
+    expect(byId.get('level-11')?.parentGroupId).toBeNull()
+    expect(byId.get('level-12')?.parentGroupId).toBeNull()
   })
 })

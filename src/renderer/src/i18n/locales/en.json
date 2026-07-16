@@ -4277,7 +4277,12 @@
           "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed.",
           "failedNestWorkspace": "Failed to nest workspace",
           "sidebarRowMissing": "Target no longer exists",
-          "failedUnnestWorkspace": "Failed to unnest workspace"
+          "failedUnnestWorkspace": "Failed to unnest workspace",
+          "b9a6987eb4": "Could not move group",
+          "c817bd77b9": "New subgroup",
+          "964fdd76a8": "Nested groups are not supported by this host",
+          "4fa704cc2e": "New Subgroup",
+          "8de19ba6f9": "Create a group inside \"{{value0}}\"."
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",

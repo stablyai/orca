@@ -4235,7 +4235,12 @@
           "hostDisconnected": "연결 끊김",
           "failedNestWorkspace": "워크스페이스를 중첩하지 못했습니다",
           "sidebarRowMissing": "대상이 더 이상 존재하지 않습니다",
-          "failedUnnestWorkspace": "워크트리 펼치기 실패"
+          "failedUnnestWorkspace": "워크트리 펼치기 실패",
+          "b9a6987eb4": "그룹을 이동하지 못했습니다",
+          "c817bd77b9": "새 하위 그룹",
+          "964fdd76a8": "이 호스트는 중첩 그룹을 지원하지 않습니다",
+          "4fa704cc2e": "새 하위 그룹",
+          "8de19ba6f9": "\"{{value0}}\" 안에 그룹을 만듭니다."
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "취소",

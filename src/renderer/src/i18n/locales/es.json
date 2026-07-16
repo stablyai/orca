@@ -4254,7 +4254,12 @@
           "hostDisconnected": "Desconectado",
           "failedNestWorkspace": "No se pudo anidar el espacio de trabajo",
           "sidebarRowMissing": "El destino ya no existe",
-          "failedUnnestWorkspace": "Error al expandir el espacio de trabajo"
+          "failedUnnestWorkspace": "Error al expandir el espacio de trabajo",
+          "b9a6987eb4": "No se pudo mover el grupo",
+          "c817bd77b9": "Nuevo subgrupo",
+          "964fdd76a8": "Este host no admite grupos anidados",
+          "4fa704cc2e": "Nuevo subgrupo",
+          "8de19ba6f9": "Crea un grupo dentro de \"{{value0}}\"."
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancelar",
