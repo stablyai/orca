@@ -3,6 +3,7 @@ import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { RuntimeClosePolicy } from '../runtime-close-policy'
 import { SESSION_TAB_METHODS } from './session-tabs'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
@@ -598,16 +599,26 @@ describe('session tab RPC methods', () => {
       }),
       registerSubscriptionCleanup: vi.fn()
     } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+    const runtimeClosePolicy = new RuntimeClosePolicy()
+    const dispatcher = new RpcDispatcher({
+      runtime,
+      methods: SESSION_TAB_METHODS,
+      runtimeClosePolicy
+    })
     const messages: string[] = []
+    const runtimeClient = {
+      connectionId: 'conn-1',
+      deviceId: 'device-1',
+      clientKind: 'runtime' as const
+    }
 
     await dispatcher.dispatchStreaming(
       makeRequest('session.tabs.subscribeAll'),
       (message) => messages.push(message),
-      { connectionId: 'conn-1' }
+      runtimeClient
     )
     listeners[0]?.({
-      worktree: 'wt-1',
+      worktree: 'wt-3',
       publicationEpoch: 'epoch-3',
       snapshotVersion: 2,
       activeGroupId: null,
@@ -622,6 +633,13 @@ describe('session tab RPC methods', () => {
       'conn-1'
     )
     expect(runtime.onMobileSessionTabsChanged).toHaveBeenCalledTimes(1)
+    expect(
+      runtimeClosePolicy.evaluate(runtimeClient, {
+        kind: 'session-tab',
+        worktree: 'id:wt-3',
+        tabId: 'tab-3'
+      })
+    ).toMatchObject({ recentlyAttached: true })
     expect(messages.map((message) => JSON.parse(message).result)).toEqual([
       {
         type: 'snapshots',
@@ -630,7 +648,7 @@ describe('session tab RPC methods', () => {
           expect.objectContaining({ worktree: 'wt-2' })
         ]
       },
-      expect.objectContaining({ type: 'updated', worktree: 'wt-1', snapshotVersion: 2 })
+      expect.objectContaining({ type: 'updated', worktree: 'wt-3', snapshotVersion: 2 })
     ])
   })
 

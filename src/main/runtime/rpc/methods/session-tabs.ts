@@ -247,6 +247,11 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
         return
       }
       unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => {
+        ctx.runtimeClosePolicy?.recordAttachedTarget(ctx, {
+          kind: 'session-tab',
+          worktree: `id:${snapshot.worktree}`,
+          tabId: '*'
+        })
         emit({ type: 'updated', ...snapshot })
       }, pairedDeviceId)
     }

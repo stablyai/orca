@@ -84,6 +84,34 @@ describe('runtime terminal close policy', () => {
     }
   )
 
+  it('does not record a scrollback-only terminal read as a live attachment', async () => {
+    const runtime = {
+      getRuntimeId: () => 'runtime-test',
+      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
+      readTerminal: vi.fn().mockResolvedValue({ tail: ['disconnected'], truncated: false })
+    } as unknown as OrcaRuntimeService
+    const runtimeClosePolicy = new RuntimeClosePolicy()
+    const recordAttachedTarget = vi.spyOn(runtimeClosePolicy, 'recordAttachedTarget')
+    const dispatcher = new RpcDispatcher({
+      runtime,
+      methods: TERMINAL_METHODS,
+      runtimeClosePolicy
+    })
+    const replies: string[] = []
+
+    await dispatcher.dispatchStreaming(
+      request('req-subscribe', 'terminal.subscribe', { terminal: 'terminal-1' }),
+      (reply) => replies.push(reply),
+      RUNTIME_CLIENT
+    )
+
+    expect(recordAttachedTarget).not.toHaveBeenCalled()
+    expect(replies.map((reply) => JSON.parse(reply).result)).toEqual([
+      expect.objectContaining({ type: 'subscribed', streamId: null }),
+      { type: 'end' }
+    ])
+  })
+
   it('allows an explicit user close whose target matches the RPC', async () => {
     const runtime = runtimeStub()
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
@@ -217,6 +245,73 @@ describe('runtime terminal close policy', () => {
     expect(runtime.closeTerminal).toHaveBeenCalledTimes(1)
   })
 
+  it('denies a creation-ownership rollback through terminal.closeTab', async () => {
+    // Why: closeTab destroys sibling panes the creating connection never owned,
+    // so rollback authority stays scoped to plain terminal.close.
+    const runtime = runtimeStub()
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    await call(
+      dispatcher,
+      request('req-create', 'terminal.create', { worktree: 'id:wt-1' }),
+      RUNTIME_CLIENT
+    )
+    const escalated = await call(
+      dispatcher,
+      request('req-close-tab', 'terminal.closeTab', {
+        terminal: 'created-terminal',
+        closeIntent: {
+          source: 'client-created-rollback',
+          userInitiated: false,
+          requestId: 'rollback-close-tab',
+          occurredAt: Date.now(),
+          worktreeId: 'wt-1',
+          ptyOrHandle: 'created-terminal'
+        }
+      }),
+      RUNTIME_CLIENT
+    )
+
+    expect(escalated).toMatchObject({
+      result: { close: { blockedReason: 'close_rollback_not_owned' } }
+    })
+    expect(runtime.closeTerminalTab).not.toHaveBeenCalled()
+  })
+
+  it('spends the per-device rate budget on owned rollbacks', async () => {
+    const now = 1_000_000
+    const policy = new RuntimeClosePolicy({
+      now: () => now,
+      maxClosesPerWindow: 1
+    })
+    policy.recordTerminalCreated(RUNTIME_CLIENT, 'terminal-owned')
+    policy.recordTerminalCreated(RUNTIME_CLIENT, 'terminal-owned-2')
+
+    const rollbackIntent = (terminal: string, requestId: string): RuntimeCloseIntent => ({
+      source: 'client-created-rollback',
+      userInitiated: false,
+      requestId,
+      occurredAt: now,
+      worktreeId: 'wt-1',
+      ptyOrHandle: terminal
+    })
+
+    expect(
+      policy.evaluate(
+        RUNTIME_CLIENT,
+        { kind: 'terminal', terminal: 'terminal-owned' },
+        rollbackIntent('terminal-owned', 'rollback-first')
+      )
+    ).toMatchObject({ allowed: true, reason: 'owned-rollback' })
+    expect(
+      policy.evaluate(
+        RUNTIME_CLIENT,
+        { kind: 'terminal', terminal: 'terminal-owned-2' },
+        rollbackIntent('terminal-owned-2', 'rollback-second')
+      )
+    ).toMatchObject({ allowed: false, reason: 'close_rate_limited' })
+  })
+
   it('rate-limits explicit destructive requests per runtime connection', async () => {
     const runtime = runtimeStub()
     const now = 1_000_000
@@ -251,6 +346,101 @@ describe('runtime terminal close policy', () => {
       result: { close: { blockedReason: 'close_rate_limited' } }
     })
     expect(runtime.closeTerminal).toHaveBeenCalledTimes(1)
+  })
+
+  it('shares the rate budget across connections of one device but not across devices', async () => {
+    const now = 1_000_000
+    const policy = new RuntimeClosePolicy({
+      now: () => now,
+      maxClosesPerWindow: 1
+    })
+    const target = { kind: 'terminal' as const, terminal: 'terminal-1' }
+    const sameDeviceOtherConnection = { ...RUNTIME_CLIENT, connectionId: 'runtime-connection-2' }
+    const otherDevice = { ...RUNTIME_CLIENT, deviceId: 'other-device' }
+
+    expect(
+      policy.evaluate(RUNTIME_CLIENT, target, userCloseIntent({ requestId: 'budget-1' }))
+    ).toMatchObject({ allowed: true })
+    expect(
+      policy.evaluate(
+        sameDeviceOtherConnection,
+        target,
+        userCloseIntent({ requestId: 'budget-2' })
+      )
+    ).toMatchObject({ allowed: false, reason: 'close_rate_limited' })
+    expect(
+      policy.evaluate(otherDevice, target, userCloseIntent({ requestId: 'budget-3' }))
+    ).toMatchObject({ allowed: true })
+  })
+
+  it('does not evict another runtime actor replay record at per-actor capacity', () => {
+    const now = 1_000_000
+    const policy = new RuntimeClosePolicy({
+      now: () => now,
+      maxTrackedEntriesPerActor: 1
+    })
+    const target = { kind: 'terminal' as const, terminal: 'terminal-1' }
+    const otherRuntime = {
+      ...RUNTIME_CLIENT,
+      connectionId: 'other-connection',
+      deviceId: 'other-device'
+    }
+
+    expect(
+      policy.evaluate(RUNTIME_CLIENT, target, userCloseIntent({ requestId: 'first' }))
+    ).toEqual({
+      allowed: true,
+      reason: 'explicit-user',
+      recentlyAttached: false
+    })
+    expect(
+      policy.evaluate(RUNTIME_CLIENT, target, userCloseIntent({ requestId: 'at-capacity' }))
+    ).toMatchObject({ allowed: false, reason: 'close_rate_limited' })
+    expect(
+      policy.evaluate(otherRuntime, target, userCloseIntent({ requestId: 'other-actor' }))
+    ).toMatchObject({ allowed: true })
+    expect(
+      policy.evaluate(RUNTIME_CLIENT, target, userCloseIntent({ requestId: 'first' }))
+    ).toEqual({
+      allowed: false,
+      reason: 'close_intent_duplicate',
+      recentlyAttached: false
+    })
+  })
+
+  it('keeps unexpired rollback ownership when the same actor reaches capacity', () => {
+    const now = 1_000_000
+    const policy = new RuntimeClosePolicy({
+      now: () => now,
+      maxTrackedEntriesPerActor: 1
+    })
+    const rollbackIntent = (terminal: string, requestId: string): RuntimeCloseIntent => ({
+      source: 'client-created-rollback',
+      userInitiated: false,
+      requestId,
+      occurredAt: now,
+      worktreeId: 'wt-1',
+      clientTabId: 'mirror-tab-1',
+      ptyOrHandle: terminal
+    })
+
+    policy.recordTerminalCreated(RUNTIME_CLIENT, 'terminal-owned')
+    policy.recordTerminalCreated(RUNTIME_CLIENT, 'terminal-over-capacity')
+
+    expect(
+      policy.evaluate(
+        { ...RUNTIME_CLIENT, deviceId: 'over-capacity-device' },
+        { kind: 'terminal', terminal: 'terminal-over-capacity' },
+        rollbackIntent('terminal-over-capacity', 'rollback-over-capacity')
+      )
+    ).toMatchObject({ allowed: false, reason: 'close_rollback_not_owned' })
+    expect(
+      policy.evaluate(
+        { ...RUNTIME_CLIENT, deviceId: 'owned-device' },
+        { kind: 'terminal', terminal: 'terminal-owned' },
+        rollbackIntent('terminal-owned', 'rollback-owned')
+      )
+    ).toMatchObject({ allowed: true, reason: 'owned-rollback' })
   })
 
   it('blocks lifecycle-only intent while retaining recent-attach evidence', () => {

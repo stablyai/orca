@@ -27,7 +27,7 @@ export function recordRuntimeCloseAttribution<T>(
         target.kind === 'session-tab'
           ? target.tabId
           : (intent?.hostTabId ?? intent?.clientTabId ?? 'unknown'),
-      terminal: target.kind === 'terminal' ? target.terminal : 'unknown',
+      terminal: target.kind === 'session-tab' ? 'unknown' : target.terminal,
       decision: decision.allowed ? 'allowed' : 'blocked',
       decisionReason: decision.reason,
       recentlyAttached: decision.recentlyAttached,

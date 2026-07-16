@@ -806,11 +806,11 @@ const TerminalClose = TerminalHandle.extend({
 
 function resolveRuntimeTerminalCloseDecision(
   ctx: RpcContext,
-  terminal: string,
+  target: { kind: 'terminal' | 'terminal-tab'; terminal: string },
   closeIntent: RuntimeCloseIntent | undefined
 ): RuntimeCloseDecision {
   return (
-    ctx.runtimeClosePolicy?.evaluate(ctx, { kind: 'terminal', terminal }, closeIntent) ??
+    ctx.runtimeClosePolicy?.evaluate(ctx, target, closeIntent) ??
     (ctx.clientKind === 'runtime'
       ? { allowed: false, reason: 'close_intent_required', recentlyAttached: false }
       : { allowed: true, reason: 'legacy-client', recentlyAttached: false })
@@ -1520,7 +1520,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     params: TerminalClose,
     handler: async (params, ctx) => {
       const target = { kind: 'terminal' as const, terminal: params.terminal }
-      const decision = resolveRuntimeTerminalCloseDecision(ctx, params.terminal, params.closeIntent)
+      const decision = resolveRuntimeTerminalCloseDecision(ctx, target, params.closeIntent)
       return {
         close: await recordRuntimeCloseAttribution(
           'terminal.close',
@@ -1540,8 +1540,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     name: 'terminal.closeTab',
     params: TerminalClose,
     handler: async (params, ctx) => {
-      const target = { kind: 'terminal' as const, terminal: params.terminal }
-      const decision = resolveRuntimeTerminalCloseDecision(ctx, params.terminal, params.closeIntent)
+      // Why: closing a whole tab is broader than closing one pane, so the
+      // policy sees a distinct target kind and never grants it via rollback.
+      const target = { kind: 'terminal-tab' as const, terminal: params.terminal }
+      const decision = resolveRuntimeTerminalCloseDecision(ctx, target, params.closeIntent)
       return {
         close: await recordRuntimeCloseAttribution(
           'terminal.closeTab',
@@ -2377,12 +2379,6 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           emit({ type: 'end', streamId: request.streamId })
           return
         }
-        // Why: mark attach for close-policy attribution so later destructive
-        // closes can be soft-denied when unattributed (#8888).
-        ctx.runtimeClosePolicy?.recordAttachedTarget(ctx, {
-          kind: 'terminal',
-          terminal: request.terminal
-        })
 
         const isMobile = request.client?.type === 'mobile'
         let leaf: { ptyId: string | null } | null
@@ -2594,6 +2590,15 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           const layoutSeq = runtime.getLayout(ptyId)?.seq
           const snapshotFrameSeq = serialized?.seq ?? layoutSeq
           const snapshotOutputSeq = serialized?.seq
+          if (closed || signal?.aborted || streams.get(request.streamId) !== stream) {
+            return
+          }
+          // Why: only record close-policy attachment after the stream is live so a
+          // failed mid-subscribe cannot authorize later destructive closes.
+          ctx.runtimeClosePolicy?.recordAttachedTarget(ctx, {
+            kind: 'terminal',
+            terminal: request.terminal
+          })
           emit({
             type: 'subscribed',
             streamId: request.streamId,
@@ -2832,10 +2837,6 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     params: TerminalSubscribe,
     handler: async (params, ctx, emit) => {
       const { runtime, connectionId, sendBinary, registerBinaryStreamHandler, signal } = ctx
-      ctx.runtimeClosePolicy?.recordAttachedTarget(ctx, {
-        kind: 'terminal',
-        terminal: params.terminal
-      })
       let leaf = runtime.resolveLeafForHandle(params.terminal)
       const isMobile = params.client?.type === 'mobile'
       const serializerGenerationBeforeAnyMount = isMobile
@@ -3029,6 +3030,14 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               cols: event.cols,
               rows: event.rows
             })
+          })
+          if (closed || signal?.aborted) {
+            runtime.cleanupSubscription(subscriptionId)
+            return
+          }
+          ctx.runtimeClosePolicy?.recordAttachedTarget(ctx, {
+            kind: 'terminal',
+            terminal: params.terminal
           })
           // Why: bind the exit-waiter to the connection signal so socket close/error removes it instead of leaking until real exit.
           void runtime
@@ -3393,6 +3402,14 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         const snapshotFrameSeq = serialized?.seq ?? layoutSeq
         // Why: track the seq that actually covered the buffered chunks (recovery snapshots advance it) or an absorbed query gets zero replies.
         let snapshotOutputSeq = serialized?.seq
+        if (closed || signal?.aborted) {
+          runtime.cleanupSubscription(subscriptionId)
+          return
+        }
+        ctx.runtimeClosePolicy?.recordAttachedTarget(ctx, {
+          kind: 'terminal',
+          terminal: params.terminal
+        })
         emit({
           type: 'subscribed',
           streamId,
