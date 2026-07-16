@@ -2,46 +2,52 @@ import { spawn } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { CommandHandler } from '../dispatch'
+import type { CommandHandler, HandlerContext } from '../dispatch'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
-import type { ClaudeManagedAccountSummary, ClaudeRateLimitAccountsState } from '../../shared/types'
+import type { ClaudeRateLimitAccountsState, CodexRateLimitAccountsState } from '../../shared/types'
 
-// Why: the runtime returns just the Claude state from add; list returns the full
-// accounts snapshot. Type only the Claude slice we render either way.
-type ClaudeAccountsSnapshot = { claude: ClaudeRateLimitAccountsState }
+// Why: add returns just that provider's state; list returns the full snapshot.
+type AccountsListSnapshot = {
+  claude: ClaudeRateLimitAccountsState
+  codex: CodexRateLimitAccountsState
+}
 
-function formatAccountLine(
-  account: ClaudeManagedAccountSummary,
+// Why: Claude and Codex managed-account summaries both carry id+email+active id,
+// so one formatter renders either provider's block.
+type AccountsBlock = {
+  accounts: readonly { id: string; email: string }[]
   activeAccountId: string | null
-): string {
-  const active = account.id === activeAccountId ? ' (active)' : ''
-  const org = account.organizationName ? ` — ${account.organizationName}` : ''
-  return `  ${account.email}${org}${active}`
 }
 
-function formatClaudeAccounts(state: ClaudeRateLimitAccountsState): string {
-  if (state.accounts.length === 0) {
-    return 'No managed Claude accounts.'
+function formatAccountsBlock(label: string, block: AccountsBlock): string {
+  if (block.accounts.length === 0) {
+    return `No managed ${label} accounts.`
   }
-  const lines = state.accounts.map((account) => formatAccountLine(account, state.activeAccountId))
-  return `Managed Claude accounts (${state.accounts.length}):\n${lines.join('\n')}`
+  const lines = block.accounts.map(
+    (account) => `  ${account.email}${account.id === block.activeAccountId ? ' (active)' : ''}`
+  )
+  return `Managed ${label} accounts (${block.accounts.length}):\n${lines.join('\n')}`
 }
 
-// Why: run the real `claude login` attached to the user's terminal so the OAuth
+// Why: run the real agent login attached to the user's terminal so the OAuth
 // URL/device-code prompt is visible and the code can be pasted back — the desktop
 // GUI flow drives this via a browser Orca can't reach on a headless host.
-async function runClaudeLoginInTerminal(configDir: string): Promise<void> {
+async function runAgentLoginInTerminal(
+  command: string,
+  args: string[],
+  extraEnv: Record<string, string>
+): Promise<void> {
   await new Promise<void>((resolvePromise, rejectPromise) => {
-    const child = spawn('claude', ['auth', 'login', '--claudeai'], {
+    const child = spawn(command, args, {
       stdio: 'inherit',
-      env: { ...process.env, CLAUDE_CONFIG_DIR: configDir }
+      env: { ...process.env, ...extraEnv }
     })
     child.on('error', (error) =>
       rejectPromise(
         new RuntimeClientError(
           'internal',
-          `Could not launch \`claude\`. Is Claude Code installed and on PATH? (${
+          `Could not launch \`${command}\`. Is it installed and on PATH? (${
             error instanceof Error ? error.message : String(error)
           })`
         )
@@ -53,29 +59,64 @@ async function runClaudeLoginInTerminal(configDir: string): Promise<void> {
         : rejectPromise(
             new RuntimeClientError(
               'internal',
-              `\`claude login\` exited with code ${code ?? 'null'}.`
+              `\`${command} ${args.join(' ')}\` exited with code ${code ?? 'null'}.`
             )
           )
     )
   })
 }
 
+async function addClaudeAccount({ client, json }: HandlerContext): Promise<void> {
+  const configDir = mkdtempSync(join(tmpdir(), 'orca-account-add-claude-'))
+  try {
+    await runAgentLoginInTerminal('claude', ['auth', 'login', '--claudeai'], {
+      CLAUDE_CONFIG_DIR: configDir
+    })
+    const result = await client.call<ClaudeRateLimitAccountsState>(
+      'accounts.addClaudeFromConfigDir',
+      { configDir }
+    )
+    printResult(result, json, (state) => formatAccountsBlock('Claude', state))
+  } finally {
+    rmSync(configDir, { recursive: true, force: true })
+  }
+}
+
+async function addCodexAccount({ client, json }: HandlerContext): Promise<void> {
+  const codexHome = mkdtempSync(join(tmpdir(), 'orca-account-add-codex-'))
+  try {
+    await runAgentLoginInTerminal('codex', ['login'], { CODEX_HOME: codexHome })
+    const result = await client.call<CodexRateLimitAccountsState>('accounts.addCodexFromHome', {
+      sourceHome: codexHome
+    })
+    printResult(result, json, (state) => formatAccountsBlock('Codex', state))
+  } finally {
+    rmSync(codexHome, { recursive: true, force: true })
+  }
+}
+
 export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
-  'account add': async ({ client, json }) => {
-    const configDir = mkdtempSync(join(tmpdir(), 'orca-account-add-'))
-    try {
-      await runClaudeLoginInTerminal(configDir)
-      const result = await client.call<ClaudeRateLimitAccountsState>(
-        'accounts.addClaudeFromConfigDir',
-        { configDir }
+  'account add': async (ctx) => {
+    const agentFlag = ctx.flags.get('agent')
+    const agent = typeof agentFlag === 'string' && agentFlag.length > 0 ? agentFlag : 'claude'
+    if (agent === 'claude') {
+      await addClaudeAccount(ctx)
+    } else if (agent === 'codex') {
+      await addCodexAccount(ctx)
+    } else {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `Unsupported --agent "${agent}". Use "claude" or "codex".`
       )
-      printResult(result, json, formatClaudeAccounts)
-    } finally {
-      rmSync(configDir, { recursive: true, force: true })
     }
   },
   'account list': async ({ client, json }) => {
-    const result = await client.call<ClaudeAccountsSnapshot>('accounts.list')
-    printResult(result, json, (snapshot) => formatClaudeAccounts(snapshot.claude))
+    const result = await client.call<AccountsListSnapshot>('accounts.list')
+    printResult(
+      result,
+      json,
+      (snapshot) =>
+        `${formatAccountsBlock('Claude', snapshot.claude)}\n\n${formatAccountsBlock('Codex', snapshot.codex)}`
+    )
   }
 }

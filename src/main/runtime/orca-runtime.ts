@@ -10707,6 +10707,16 @@ export class OrcaRuntimeService {
     return this.requireAccountServices().codexAccounts.removeAccount(accountId)
   }
 
+  // Why: Codex counterpart of addClaudeAccountFromConfigDir — register a managed
+  // Codex account from a CODEX_HOME the caller already logged into, so headless
+  // hosts can add accounts via `orca account add --agent codex`.
+  addCodexAccountFromHome(
+    sourceHome: string,
+    target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }
+  ): Promise<CodexRateLimitAccountsState> {
+    return this.requireAccountServices().codexAccounts.addAccountFromHome(sourceHome, target)
+  }
+
   // Why: rate-limit polling fires every 5 minutes and on account switch.
   // Mobile clients subscribe to receive a fresh AccountsSnapshot whenever
   // RateLimitService pushes new usage data, mirroring the existing

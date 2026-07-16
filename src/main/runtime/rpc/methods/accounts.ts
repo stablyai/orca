@@ -62,6 +62,12 @@ const AddClaudeFromConfigDirParams = z.object({
   wslDistro: z.string().nullish()
 })
 
+const AddCodexFromHomeParams = z.object({
+  sourceHome: z.string().min(1, 'Missing sourceHome'),
+  runtime: z.enum(['host', 'wsl']).optional(),
+  wslDistro: z.string().nullish()
+})
+
 const AccountsUnsubscribeParams = z.object({
   subscriptionId: z
     .unknown()
@@ -134,6 +140,19 @@ export const ACCOUNT_METHODS: readonly RpcAnyMethod[] = [
         throw new Error('Adding Claude accounts is only available on the Orca host runtime.')
       }
       return runtime.addClaudeAccountFromConfigDir(params.configDir, {
+        runtime: params.runtime,
+        wslDistro: params.wslDistro ?? null
+      })
+    }
+  }),
+  defineMethod({
+    name: 'accounts.addCodexFromHome',
+    params: AddCodexFromHomeParams,
+    handler: async (params, { runtime, clientKind }) => {
+      if (clientKind === 'mobile') {
+        throw new Error('Adding Codex accounts is only available on the Orca host runtime.')
+      }
+      return runtime.addCodexAccountFromHome(params.sourceHome, {
         runtime: params.runtime,
         wslDistro: params.wslDistro ?? null
       })
