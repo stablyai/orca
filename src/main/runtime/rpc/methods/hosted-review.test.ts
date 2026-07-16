@@ -3,6 +3,7 @@ import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { HOSTED_REVIEW_METHODS } from './hosted-review'
+import { HostedReviewLookupError } from '../../../source-control/forge-provider'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
@@ -45,7 +46,29 @@ describe('hosted review RPC methods', () => {
     })
     expect(response).toMatchObject({
       ok: true,
-      result: { provider: 'github', number: 12 }
+      result: { kind: 'found', review: { provider: 'github', number: 12 } }
+    })
+  })
+
+  it('returns expected provider failures as RPC results', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getHostedReviewForBranch: vi.fn().mockRejectedValue(
+        new HostedReviewLookupError('github', 'network', 'safe message', {
+          cause: new Error('secret command output')
+        })
+      )
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: HOSTED_REVIEW_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('hostedReview.forBranch', { repo: 'repo-1', branch: 'feature/network' })
+    )
+
+    expect(response).toMatchObject({
+      id: 'req-1',
+      ok: true,
+      result: { kind: 'upstream-error', provider: 'github', errorType: 'network' }
     })
   })
 

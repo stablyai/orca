@@ -52,6 +52,25 @@ export type HostedReviewForBranchArgs = {
   currentHeadOid?: string | null
 }
 
+/** Stable, redaction-safe reason for a hosted-review lookup failure. */
+export type HostedReviewLookupErrorType =
+  | 'rate_limited'
+  | 'auth'
+  | 'network'
+  | 'permission'
+  | 'repo_unavailable'
+  | 'cli_unavailable'
+
+/** Serializable branch-review lookup result shared by desktop IPC and runtime RPC. */
+export type HostedReviewLookupResult =
+  | { kind: 'found'; review: HostedReviewInfo }
+  | { kind: 'not-found' }
+  | {
+      kind: 'upstream-error'
+      provider: Exclude<HostedReviewProvider, 'unsupported'>
+      errorType: HostedReviewLookupErrorType
+    }
+
 export type HostedReviewSummary = {
   number?: number
   url: string

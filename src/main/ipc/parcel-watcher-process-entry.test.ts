@@ -386,32 +386,69 @@ describe('parcel watcher process canary', () => {
       })
     const sendMock = vi.fn()
     process.send = sendMock
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
 
-    await import('./parcel-watcher-process-entry')
-    await vi.advanceTimersByTimeAsync(0)
-    process.emit('message', { op: 'subscribe', id: 1, dir: '/repo', opts: {} })
-    await vi.advanceTimersByTimeAsync(0)
+    try {
+      await import('./parcel-watcher-process-entry')
+      await vi.advanceTimersByTimeAsync(0)
+      process.emit('message', { op: 'subscribe', id: 1, dir: '/repo', opts: {} })
+      await vi.advanceTimersByTimeAsync(0)
 
-    callback?.(
-      new Error('Events were dropped by the FSEvents client. File system must be re-scanned.'),
-      []
-    )
-    callback?.(null, [{ type: 'update', path: '/repo/after-overflow.txt' }])
-    await vi.advanceTimersByTimeAsync(0)
+      callback?.(
+        new Error('Events were dropped by the FSEvents client. File system must be re-scanned.'),
+        []
+      )
+      callback?.(null, [{ type: 'update', path: '/repo/after-overflow.txt' }])
+      await vi.advanceTimersByTimeAsync(0)
 
-    expect(sendMock).toHaveBeenCalledWith({
-      op: 'watch-error',
-      id: 1,
-      message: 'Events were dropped by the FSEvents client. File system must be re-scanned.'
-    })
-    expect(sendMock).toHaveBeenCalledWith(
-      {
-        op: 'events',
+      expect(sendMock).toHaveBeenCalledWith({ op: 'overflow', id: 1 })
+      expect(sendMock).not.toHaveBeenCalledWith(expect.objectContaining({ op: 'watch-error' }))
+      expect(sendMock).toHaveBeenCalledWith(
+        {
+          op: 'events',
+          id: 1,
+          events: [{ type: 'update', path: '/repo/after-overflow.txt' }]
+        },
+        expect.any(Function)
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
+  it('keeps non-overflow watcher errors terminal on macOS', async () => {
+    let callback:
+      | ((err: Error | null, events: { type: string; path: string }[]) => void)
+      | undefined
+    subscribeMock
+      .mockResolvedValueOnce({ unsubscribe: vi.fn() })
+      .mockImplementationOnce(async (_dir, nextCallback) => {
+        callback = nextCallback
+        return { unsubscribe: vi.fn() }
+      })
+    const sendMock = vi.fn()
+    process.send = sendMock
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+
+    try {
+      await import('./parcel-watcher-process-entry')
+      await vi.advanceTimersByTimeAsync(0)
+      process.emit('message', { op: 'subscribe', id: 1, dir: '/repo', opts: {} })
+      await vi.advanceTimersByTimeAsync(0)
+
+      callback?.(new Error('watched root was deleted'), [])
+
+      expect(sendMock).toHaveBeenCalledWith({
+        op: 'watch-error',
         id: 1,
-        events: [{ type: 'update', path: '/repo/after-overflow.txt' }]
-      },
-      expect.any(Function)
-    )
+        message: 'watched root was deleted'
+      })
+      expect(sendMock).not.toHaveBeenCalledWith({ op: 'overflow', id: 1 })
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
   })
 
   it('bounds pending event batches while child IPC reports backpressure', async () => {

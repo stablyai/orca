@@ -7,7 +7,7 @@ import {
   createHostedReviewSlice,
   getHostedReviewCacheKey
 } from './hosted-review'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { HostedReviewInfo, HostedReviewLookupResult } from '../../../../shared/hosted-review'
 
 const runtimeRpc = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn()
@@ -62,6 +62,12 @@ const review: HostedReviewInfo = {
   mergeable: 'MERGEABLE'
 }
 
+const found = (value: HostedReviewInfo): HostedReviewLookupResult => ({
+  kind: 'found',
+  review: value
+})
+const notFound: HostedReviewLookupResult = { kind: 'not-found' }
+
 describe('hosted review cache revalidation', () => {
   beforeEach(() => {
     mockApi.hostedReview.forBranch.mockReset()
@@ -77,11 +83,11 @@ describe('hosted review cache revalidation', () => {
   })
 
   it('dedupes repeated linked PR retries while a stronger lookup is in flight', async () => {
-    let resolveLinkedLookup: (value: typeof review) => void = () => {}
-    const linkedLookup = new Promise<typeof review>((resolve) => {
+    let resolveLinkedLookup: (value: HostedReviewLookupResult) => void = () => {}
+    const linkedLookup = new Promise<HostedReviewLookupResult>((resolve) => {
       resolveLinkedLookup = resolve
     })
-    mockApi.hostedReview.forBranch.mockResolvedValueOnce(null).mockReturnValueOnce(linkedLookup)
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce(notFound).mockReturnValueOnce(linkedLookup)
     const store = makeStore()
 
     await expect(store.getState().fetchHostedReviewForBranch('/repo', 'feature/pr')).resolves.toBe(
@@ -96,7 +102,7 @@ describe('hosted review cache revalidation', () => {
     })
 
     expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
-    resolveLinkedLookup(review)
+    resolveLinkedLookup(found(review))
     await expect(firstLinkedFetch).resolves.toEqual(review)
     await expect(secondLinkedFetch).resolves.toEqual(review)
   })
@@ -110,13 +116,11 @@ describe('hosted review cache revalidation', () => {
       status: 'failure',
       updatedAt: '2026-05-10T00:01:01.000Z'
     }
-    let resolveRefresh: (value: typeof updatedReview) => void = () => {}
-    const refresh = new Promise<typeof updatedReview>((resolve) => {
+    let resolveRefresh: (value: HostedReviewLookupResult) => void = () => {}
+    const refresh = new Promise<HostedReviewLookupResult>((resolve) => {
       resolveRefresh = resolve
     })
-    mockApi.hostedReview.forBranch
-      .mockResolvedValueOnce(review)
-      .mockReturnValueOnce(refresh as Promise<HostedReviewInfo>)
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce(found(review)).mockReturnValueOnce(refresh)
     const store = makeStore()
 
     await expect(
@@ -150,7 +154,7 @@ describe('hosted review cache revalidation', () => {
     )
     expect(store.getState().hostedReviewCache[cacheKey]?.data).toEqual(review)
 
-    resolveRefresh(updatedReview)
+    resolveRefresh(found(updatedReview))
     await refresh
     await Promise.resolve()
 
@@ -167,7 +171,9 @@ describe('hosted review cache revalidation', () => {
       title: 'Exact linked PR',
       url: 'https://github.com/acme/orca/pull/42'
     }
-    mockApi.hostedReview.forBranch.mockResolvedValueOnce(review).mockResolvedValueOnce(linkedReview)
+    mockApi.hostedReview.forBranch
+      .mockResolvedValueOnce(found(review))
+      .mockResolvedValueOnce(found(linkedReview))
     const store = makeStore()
 
     await expect(store.getState().fetchHostedReviewForBranch('/repo', 'feature/pr')).resolves.toBe(
@@ -187,11 +193,13 @@ describe('hosted review cache revalidation', () => {
   it('bounds cached hosted review branches by evicting the oldest entries', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
-    mockApi.hostedReview.forBranch.mockImplementation(async ({ branch }: { branch: string }) => ({
-      ...review,
-      number: Number(branch.replace('feature/cache-', '')) || review.number,
-      title: branch
-    }))
+    mockApi.hostedReview.forBranch.mockImplementation(async ({ branch }: { branch: string }) =>
+      found({
+        ...review,
+        number: Number(branch.replace('feature/cache-', '')) || review.number,
+        title: branch
+      })
+    )
     const store = makeStore()
 
     for (let i = 0; i < 501; i += 1) {

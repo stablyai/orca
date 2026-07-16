@@ -6,7 +6,8 @@ import type {
   CreateHostedReviewResult,
   HostedReviewCreationEligibility,
   HostedReviewCreationEligibilityArgs,
-  HostedReviewInfo
+  HostedReviewInfo,
+  HostedReviewLookupResult
 } from '../../../../shared/hosted-review'
 import type { Repo } from '../../../../shared/types'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -32,6 +33,32 @@ type CreateHostedReviewStoreInput = CreateHostedReviewInput & { repoId?: string 
 
 const CACHE_TTL_MS = 60_000
 const HOSTED_REVIEW_CACHE_MAX = 500
+const hostedReviewFailureDiagnostics = new Map<string, string>()
+
+function reportHostedReviewLookupFailure(
+  cacheKey: string,
+  repoId: string | undefined,
+  result: Extract<HostedReviewLookupResult, { kind: 'upstream-error' }>
+): void {
+  const signature = `${result.provider}:${result.errorType}`
+  if (hostedReviewFailureDiagnostics.get(cacheKey) === signature) {
+    return
+  }
+  hostedReviewFailureDiagnostics.delete(cacheKey)
+  hostedReviewFailureDiagnostics.set(cacheKey, signature)
+  while (hostedReviewFailureDiagnostics.size > HOSTED_REVIEW_CACHE_MAX) {
+    const oldestKey = hostedReviewFailureDiagnostics.keys().next().value
+    if (oldestKey === undefined) {
+      break
+    }
+    hostedReviewFailureDiagnostics.delete(oldestKey)
+  }
+  console.warn('[hosted-review] lookup unavailable', {
+    repoId: repoId ?? 'path-only',
+    provider: result.provider,
+    errorType: result.errorType
+  })
+}
 
 const inflightHostedReviewRequests = new Map<
   string,
@@ -353,9 +380,9 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
             linkedAzureDevOpsPR: options?.linkedAzureDevOpsPR ?? null,
             linkedGiteaPR: options?.linkedGiteaPR ?? null
           }
-          const review =
+          const result =
             target.kind === 'environment'
-              ? await callRuntimeRpc<HostedReviewInfo | null>(
+              ? await callRuntimeRpc<HostedReviewLookupResult>(
                   target,
                   'hostedReview.forBranch',
                   { repo: repo?.id ?? options?.repoId ?? repoPath, repoPath, ...args },
@@ -369,6 +396,18 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
                   repoPath,
                   ...args
                 })
+          if (result.kind === 'upstream-error') {
+            reportHostedReviewLookupFailure(cacheKey, repoId, result)
+            const preserved = get().hostedReviewCache[cacheKey]
+            // Why: don't preserve a merged GitHub review the worktree has moved
+            // off of; that PR is only valid while checked out at its head.
+            if (isStaleMergedGitHubReviewForHead(preserved, options?.currentHeadOid)) {
+              return null
+            }
+            return preserved?.data ?? null
+          }
+          hostedReviewFailureDiagnostics.delete(cacheKey)
+          const review = result.kind === 'found' ? result.review : null
           if (requestGenerations.get(cacheKey) === generation) {
             set((state) => {
               if (

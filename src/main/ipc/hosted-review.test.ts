@@ -14,14 +14,14 @@ const {
   handleMock,
   createHostedReviewMock,
   getHostedReviewCreationEligibilityMock,
-  getHostedReviewForBranchMock,
+  getHostedReviewForBranchResultMock,
   resolveRegisteredWorktreePathMock,
   listRepoWorktreesMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   createHostedReviewMock: vi.fn(),
   getHostedReviewCreationEligibilityMock: vi.fn(),
-  getHostedReviewForBranchMock: vi.fn(),
+  getHostedReviewForBranchResultMock: vi.fn(),
   resolveRegisteredWorktreePathMock: vi.fn(),
   listRepoWorktreesMock: vi.fn()
 }))
@@ -38,7 +38,7 @@ vi.mock('../source-control/hosted-review-creation', () => ({
 }))
 
 vi.mock('../source-control/hosted-review', () => ({
-  getHostedReviewForBranch: getHostedReviewForBranchMock
+  getHostedReviewForBranchResult: getHostedReviewForBranchResultMock
 }))
 
 vi.mock('./filesystem-auth', () => ({
@@ -88,7 +88,7 @@ describe('registerHostedReviewHandlers', () => {
     handleMock.mockReset()
     createHostedReviewMock.mockReset()
     getHostedReviewCreationEligibilityMock.mockReset()
-    getHostedReviewForBranchMock.mockReset()
+    getHostedReviewForBranchResultMock.mockReset()
     resolveRegisteredWorktreePathMock.mockReset()
     listRepoWorktreesMock.mockReset()
     store.getRepo.mockReset()
@@ -192,15 +192,18 @@ describe('registerHostedReviewHandlers', () => {
         updatedAt: 0
       }
     ])
-    getHostedReviewForBranchMock.mockResolvedValueOnce({
-      provider: 'github',
-      number: 42,
-      title: 'Feature PR',
-      state: 'open',
-      url: 'https://github.com/acme/orca/pull/42',
-      status: 'success',
-      updatedAt: '2026-06-16T00:00:00.000Z',
-      mergeable: 'MERGEABLE'
+    getHostedReviewForBranchResultMock.mockResolvedValueOnce({
+      kind: 'found',
+      review: {
+        provider: 'github',
+        number: 42,
+        title: 'Feature PR',
+        state: 'open',
+        url: 'https://github.com/acme/orca/pull/42',
+        status: 'success',
+        updatedAt: '2026-06-16T00:00:00.000Z',
+        mergeable: 'MERGEABLE'
+      }
     })
 
     registerHostedReviewHandlers(store as never, stats as never)
@@ -212,7 +215,7 @@ describe('registerHostedReviewHandlers', () => {
       linkedGitHubPR: 42
     })
 
-    expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
+    expect(getHostedReviewForBranchResultMock).toHaveBeenCalledWith(
       expect.objectContaining({
         repoPath: localRepo.path,
         connectionId: undefined,

@@ -54,7 +54,7 @@ vi.mock('../gitea/client', () => ({
   getGiteaPullRequest: vi.fn()
 }))
 
-import { getHostedReviewForBranch } from './hosted-review'
+import { getHostedReviewForBranch, getHostedReviewForBranchResult } from './hosted-review'
 
 describe('getHostedReviewForBranch', () => {
   beforeEach(() => {
@@ -133,6 +133,25 @@ describe('getHostedReviewForBranch', () => {
     })
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith('/repo', 'feature', 3, undefined, null, {
       currentHeadOid: null
+    })
+  })
+
+  it('returns a typed provider failure without exposing the upstream message', async () => {
+    getProjectSlugMock.mockResolvedValue(null)
+    getRepoSlugMock.mockResolvedValue({ owner: 'o', repo: 'r' })
+    getPRForBranchOutcomeMock.mockResolvedValue({
+      kind: 'upstream-error',
+      errorType: 'repo_unavailable',
+      message: 'secret command output and repository URL',
+      fetchedAt: 1
+    })
+
+    await expect(
+      getHostedReviewForBranchResult({ repoPath: '/repo', branch: 'feature' })
+    ).resolves.toEqual({
+      kind: 'upstream-error',
+      provider: 'github',
+      errorType: 'repo_unavailable'
     })
   })
 
