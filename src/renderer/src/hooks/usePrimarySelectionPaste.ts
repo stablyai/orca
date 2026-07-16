@@ -3,7 +3,8 @@ import { isLinuxUserAgent, isMacUserAgent } from '@/components/terminal-pane/pan
 import {
   readPrimarySelectionText,
   setPrimarySelectionEnabled,
-  setPrimarySelectionText
+  setPrimarySelectionText,
+  shouldSuppressPrimarySelectionNativePaste
 } from '@/lib/primary-selection'
 import {
   findEditablePrimarySelectionPasteTarget,
@@ -84,12 +85,21 @@ export function usePrimarySelectionPaste(enabled: boolean): void {
         typeof InputEvent !== 'function' ||
         !(event instanceof InputEvent) ||
         event.inputType === 'insertFromPaste'
+      if (!isPasteInputEvent) {
+        return
+      }
       if (
         pendingMiddleTarget &&
         Date.now() <= pendingMiddleUntil &&
-        targetMatchesPending(event.target) &&
-        isPasteInputEvent
+        targetMatchesPending(event.target)
       ) {
+        suppressEvent(event)
+        return
+      }
+      // Why: the integrated terminal owns its middle-click paste and cannot mark
+      // a pending DOM target, so honor its armed window to swallow the follow-up
+      // native X11 paste that xterm would otherwise forward to the PTY.
+      if (shouldSuppressPrimarySelectionNativePaste()) {
         suppressEvent(event)
       }
     }
