@@ -58,6 +58,38 @@ describe('eventToAccelerator', () => {
       'Alt+Up'
     )
   })
+
+  it('rejects Shift-only chords: Shift is never a sufficient modifier', () => {
+    // Every Shift+<key> combo collides with ordinary Shift usage (capitals,
+    // symbols, soft-newline, reverse-tab, selection), so a global grab would
+    // swallow that keystroke in every application.
+    expect(eventToAccelerator(keyEvent({ shiftKey: true, key: 'A', code: 'KeyA' }))).toBeNull()
+    expect(eventToAccelerator(keyEvent({ shiftKey: true, key: '1', code: 'Digit1' }))).toBeNull()
+    expect(eventToAccelerator(keyEvent({ shiftKey: true, key: ' ', code: 'Space' }))).toBeNull()
+    expect(eventToAccelerator(keyEvent({ shiftKey: true, key: 'Enter', code: 'Enter' }))).toBeNull()
+    expect(eventToAccelerator(keyEvent({ shiftKey: true, key: 'Tab', code: 'Tab' }))).toBeNull()
+    expect(
+      eventToAccelerator(keyEvent({ shiftKey: true, key: 'ArrowUp', code: 'ArrowUp' }))
+    ).toBeNull()
+    expect(eventToAccelerator(keyEvent({ shiftKey: true, key: 'F5', code: 'F5' }))).toBeNull()
+    // Shift combined with a real modifier stays valid.
+    expect(
+      eventToAccelerator(keyEvent({ altKey: true, shiftKey: true, key: 'A', code: 'KeyA' }))
+    ).toBe('Alt+Shift+A')
+    expect(
+      eventToAccelerator(keyEvent({ ctrlKey: true, shiftKey: true, key: 'F5', code: 'F5' }))
+    ).toBe('Control+Shift+F5')
+  })
+
+  it('escapes "+" and rejects non-ASCII or multi-char fallback keys', () => {
+    // "+" is the accelerator separator; it must serialize to the literal "Plus".
+    expect(eventToAccelerator(keyEvent({ altKey: true, key: '+', code: 'Equal' }))).toBe('Alt+Plus')
+    expect(eventToAccelerator(keyEvent({ altKey: true, key: '=', code: 'Equal' }))).toBe('Alt+=')
+    // "ß".toUpperCase() === "SS" (multi-char) and "ö" is non-ASCII: both would
+    // make Electron reject the accelerator, so the recorder must ignore them.
+    expect(eventToAccelerator(keyEvent({ altKey: true, key: 'ß', code: 'Semicolon' }))).toBeNull()
+    expect(eventToAccelerator(keyEvent({ altKey: true, key: 'ö', code: 'Semicolon' }))).toBeNull()
+  })
 })
 
 describe('acceleratorToKeys', () => {

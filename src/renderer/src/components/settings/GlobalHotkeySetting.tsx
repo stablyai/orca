@@ -115,7 +115,13 @@ export function eventToAccelerator(event: {
     keyPart = 'Left'
   } else if (key === 'ArrowRight') {
     keyPart = 'Right'
-  } else if (key.length === 1) {
+  } else if (key === '+') {
+    // Why: "+" is the accelerator separator, so Electron requires the literal "Plus".
+    keyPart = 'Plus'
+  } else if (key.length === 1 && key.charCodeAt(0) <= 0x7f) {
+    // Why: only single ASCII characters are valid accelerator key codes. A
+    // non-ASCII key or a multi-char uppercase (e.g. "ß" -> "SS") would make
+    // Electron reject the accelerator and silently drop the previous binding.
     keyPart = key.toUpperCase()
   }
 
@@ -123,9 +129,12 @@ export function eventToAccelerator(event: {
     return null
   }
 
-  // Why: an OS-global chord without a modifier would shadow plain typing keys
-  // in every application, so require at least one modifier.
-  if (parts.length === 0) {
+  // Why: Shift alone is never a sufficient modifier for a system-wide chord.
+  // Every Shift+<key> combo collides with ordinary Shift usage — capitals and
+  // symbols (Shift+A, Shift+1), Shift+Enter soft-newlines, Shift+Tab, and
+  // Shift+Arrow selection — so a global grab would swallow it in every app.
+  // Require at least one of Control, Alt, or Super/Command.
+  if (!event.metaKey && !event.ctrlKey && !event.altKey) {
     return null
   }
 
@@ -169,9 +178,13 @@ export function GlobalHotkeySetting({
     [recording, onChange]
   )
 
+  // Why: Shift alone is rejected (see eventToAccelerator), so name the accepted
+  // modifiers per platform instead of the misleading "any modifier".
+  const modifierHint = isMac ? '⌘, Ctrl, or Option' : 'Ctrl, Alt, or Win'
   const recordingLabel = translate(
     'auto.components.settings.GlobalHotkeySetting.recording',
-    'Press a key combination (at least one modifier). Escape cancels.'
+    'Press a key combination that includes {{value0}}. Escape cancels.',
+    { value0: modifierHint }
   )
 
   return (

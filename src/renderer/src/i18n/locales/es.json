@@ -9166,7 +9166,7 @@
           "androidApk": "APK de Android"
         },
         "GlobalHotkeySetting": {
-          "recording": "Press a key combination (at least one modifier). Escape cancels.",
+          "recording": "Press a key combination that includes {{value0}}. Escape cancels.",
           "pressKeys": "Press keys…",
           "clickToRecord": "Click to record",
           "disable": "Disable global hotkey",
