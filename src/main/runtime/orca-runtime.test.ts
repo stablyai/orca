@@ -13093,6 +13093,58 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('keeps consecutive background grid creates headless when no renderer tab owns the grid', async () => {
+    let ptyIndex = 0
+    const revealTerminalSession = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn(async () => ({ id: `pty-headless-grid-${++ptyIndex}` })),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession,
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
+    const first = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      title: 'Hidden A',
+      placement: 'orchestration-grid',
+      presentation: 'background'
+    })
+    const second = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      title: 'Hidden B',
+      placement: 'orchestration-grid',
+      presentation: 'background'
+    })
+    const published = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    const gridTabs = published.tabs.filter(
+      (tab): tab is RuntimeMobileSessionTerminalClientTab => tab.type === 'terminal'
+    )
+
+    expect(first.tabId).toBe(second.tabId)
+    expect(first.surface).toBe('background')
+    expect(second.surface).toBe('background')
+    expect(revealTerminalSession).not.toHaveBeenCalled()
+    expect(gridTabs.map((tab) => tab.title)).toEqual(['Hidden A', 'Hidden B'])
+    expect(collectTestTerminalLayoutLeafIds(gridTabs[0]?.parentLayout?.root ?? null)).toEqual(
+      gridTabs.map((tab) => tab.leafId)
+    )
+  })
+
   it('serializes concurrent equivalent workspace selectors into one ordered orchestration grid', async () => {
     let ptyIndex = 0
     const spawn = vi.fn(async () => {

@@ -1408,6 +1408,7 @@ type OrchestrationGridTarget = {
   layout: TerminalLayoutSnapshot
   sourceLeafId: string
   sourceLeafIds: string[]
+  rendererAttached: boolean
 }
 
 function mergeTerminalEnvDeletionKeys(
@@ -1708,6 +1709,7 @@ type RuntimePtyController = {
     resumeProviderSession?: AgentProviderSessionMetadata
     telemetry?: WorktreeStartupLaunch['telemetry']
     connectionId?: string | null
+    hostId?: ExecutionHostId
     worktreeId?: string
     preAllocatedHandle?: string
     tabId?: string
@@ -2766,6 +2768,7 @@ export class OrcaRuntimeService {
   // Why: paired graph transactions need foreground timer cadence only until their publication settles.
   private readonly rendererPublicationThrottle = new RendererPublicationThrottle()
   private tabs = new Map<string, RuntimeSyncedTab>()
+  private rendererAttachedOrchestrationGridTabIds = new Set<string>()
   private orchestrationGridCreateQueues = new Map<string, Promise<void>>()
   private mobileSessionTabsByWorktree = new Map<string, RuntimeMobileSessionTabsSnapshot>()
   // Why: renderer publication ordering must be judged against the renderer's
@@ -5682,13 +5685,10 @@ export class OrcaRuntimeService {
     const previousTabs = this.tabs
     const previousLeaves = this.leaves
     this.tabs = new Map(graph.tabs.map((tab) => [tab.tabId, tab]))
-    const lifecycleLeaves = this.reconcileMobileSessionRetirementFences(graph.leaves)
-    const mobileSessionResyncWorktrees = new Set<string>()
-    const changedMobileWorktrees = this.syncMobileSessionTabs(
-      graph.mobileSessionTabs,
-      graph.unchangedMobileSessionWorktrees,
-      mobileSessionResyncWorktrees
+    this.rendererAttachedOrchestrationGridTabIds = new Set(
+      graph.tabs.filter((tab) => tab.layoutMode === 'orchestration-grid').map((tab) => tab.tabId)
     )
+    this.syncMobileSessionTabs(graph.mobileSessionTabs)
     const nextLeaves = new Map<string, RuntimeLeafRecord>()
     const graphSyncedAt = this.nextTitleObservationSequence()
 
@@ -25496,7 +25496,8 @@ export class OrcaRuntimeService {
     const session = this.store?.getWorkspaceSession?.(hostId)
     const toTarget = (
       tabId: string,
-      layout: TerminalLayoutSnapshot | undefined
+      layout: TerminalLayoutSnapshot | undefined,
+      rendererAttached: boolean
     ): OrchestrationGridTarget | null => {
       if (
         (requiredTabId && tabId !== requiredTabId) ||
@@ -25561,7 +25562,9 @@ export class OrcaRuntimeService {
         : this.cloneTerminalLayoutSnapshot(layout)
       const sourceLeafIds = getOrchestrationGridAppendSourceLeafIds(mergedLayout.root)
       const sourceLeafId = sourceLeafIds.at(-1)
-      return sourceLeafId ? { tabId, layout: mergedLayout, sourceLeafId, sourceLeafIds } : null
+      return sourceLeafId
+        ? { tabId, layout: mergedLayout, sourceLeafId, sourceLeafIds, rendererAttached }
+        : null
     }
 
     for (const tab of this.tabs.values()) {
@@ -25573,13 +25576,17 @@ export class OrcaRuntimeService {
           .filter((leaf) => leaf.tabId === tab.tabId && leaf.ptyId)
           .map((leaf) => [leaf.leafId, leaf.ptyId!])
       )
-      const target = toTarget(tab.tabId, {
-        root: tab.layout,
-        activeLeafId: tab.activeLeafId,
-        expandedLeafId: null,
-        layoutMode: 'orchestration-grid',
-        ...(Object.keys(ptyIdsByLeafId).length > 0 ? { ptyIdsByLeafId } : {})
-      })
+      const target = toTarget(
+        tab.tabId,
+        {
+          root: tab.layout,
+          activeLeafId: tab.activeLeafId,
+          expandedLeafId: null,
+          layoutMode: 'orchestration-grid',
+          ...(Object.keys(ptyIdsByLeafId).length > 0 ? { ptyIdsByLeafId } : {})
+        },
+        true
+      )
       if (target) {
         return target
       }
@@ -25590,14 +25597,22 @@ export class OrcaRuntimeService {
       if (tab.type !== 'terminal') {
         continue
       }
-      const target = toTarget(tab.parentTabId, tab.parentLayout)
+      const target = toTarget(
+        tab.parentTabId,
+        tab.parentLayout,
+        this.rendererAttachedOrchestrationGridTabIds.has(tab.parentTabId)
+      )
       if (target) {
         return target
       }
     }
 
     for (const tab of session?.tabsByWorktree[worktreeId] ?? []) {
-      const target = toTarget(tab.id, session?.terminalLayoutsByTabId[tab.id])
+      const target = toTarget(
+        tab.id,
+        session?.terminalLayoutsByTabId[tab.id],
+        this.rendererAttachedOrchestrationGridTabIds.has(tab.id)
+      )
       if (target) {
         return target
       }
@@ -25851,6 +25866,7 @@ export class OrcaRuntimeService {
         // placement, must attach its exact external PTY before durable publish.
         gridLayout !== null &&
         orchestrationGridTarget !== null &&
+        orchestrationGridTarget.rendererAttached &&
         this.notifier?.revealTerminalSession !== undefined
       const spawnedCommand = sequencedStartupCommand
         ? launchOpts.command
@@ -25876,6 +25892,7 @@ export class OrcaRuntimeService {
           envToDelete: agentTeamsPlan?.envToDelete,
           telemetry: launchOpts.telemetry,
           connectionId: workspace.connectionId,
+          hostId: executionHostId,
           worktreeId: workspace.id,
           preAllocatedHandle,
           tabId,
@@ -26140,6 +26157,11 @@ export class OrcaRuntimeService {
                 }
               : {})
           })
+          if (launchOpts.placement === 'orchestration-grid') {
+            // Why: a second create can arrive before graph sync publishes the
+            // newly revealed tab; remember that it already has a renderer owner.
+            this.rendererAttachedOrchestrationGridTabIds.add(tabId)
+          }
           surface = 'visible'
         } catch (err) {
           console.warn(`[terminal-create] failed to create inactive tab for ${result.id}:`, err)
@@ -26300,6 +26322,9 @@ export class OrcaRuntimeService {
         this.scheduleRendererTerminalHandleRelease(rendererTerminalHandle)
       }
       rendererCreateSucceeded = true
+      if (launchOpts.placement === 'orchestration-grid') {
+        this.rendererAttachedOrchestrationGridTabIds.add(reply.tabId)
+      }
       return {
         handle,
         tabId: reply.tabId,
@@ -27748,6 +27773,7 @@ export class OrcaRuntimeService {
       env: this.buildTerminalWorkspaceEnv(workspace, opts.env ?? {}, paneKey, parentTabId),
       envToDelete: opts.envToDelete,
       connectionId: workspace.connectionId,
+      hostId: this.getTerminalWorkspaceExecutionHostId(workspace),
       worktreeId: workspace.id,
       preAllocatedHandle,
       tabId: parentTabId,
@@ -28669,6 +28695,7 @@ export class OrcaRuntimeService {
     // Why: a renderer reload tears down the live graph, so live handles must go stale immediately, not be reused against the rebuild.
     this.rendererGraphEpoch += 1
     this.graphStatus = 'reloading'
+    this.rendererAttachedOrchestrationGridTabIds.clear()
     this.setTerminalSideEffectConsumerAvailable(false)
     this.rememberDetachedPreAllocatedLeaves()
     this.handles.clear()
@@ -28698,6 +28725,7 @@ export class OrcaRuntimeService {
     this.graphStatus = 'unavailable'
     this.setTerminalSideEffectConsumerAvailable(false)
     this.authoritativeWindowId = null
+    this.rendererAttachedOrchestrationGridTabIds.clear()
     this.rememberDetachedPreAllocatedLeaves()
     this.tabs.clear()
     this.leaves.clear()

@@ -233,8 +233,7 @@ import {
 } from '../project-groups/folder-workspace-path-status'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
-import { isPtyIncarnationId } from '../../shared/pty-incarnation'
-import type { PtyListedSession } from '../../shared/pty-listed-session'
+import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations by connectionId (null = local provider).
@@ -4378,8 +4377,11 @@ export function registerPtyHandlers(
       const shouldPersistHostSessionBinding = args.persistHostSessionBinding === true
       const shouldDeferHostSessionPersistence = args.deferHostSessionPersistence === true
       const shouldDeferRuntimeRegistration = args.deferRuntimeRegistration === true
+      const hostSessionId =
+        args.hostId ?? (args.connectionId ? toSshExecutionHostId(args.connectionId) : undefined)
       let hostSessionBinding: {
         store: NonNullable<typeof store>
+        hostId?: ExecutionHostId
         worktreeId: string
         tabId: string
         leafId: string
@@ -4400,6 +4402,7 @@ export function registerPtyHandlers(
         }
         hostSessionBinding = {
           store,
+          ...(hostSessionId ? { hostId: hostSessionId } : {}),
           worktreeId: args.worktreeId,
           tabId: args.tabId,
           leafId: args.leafId,
@@ -5036,7 +5039,8 @@ export function registerPtyHandlers(
         }
         if (hostSessionBinding && !shouldDeferHostSessionPersistence) {
           try {
-            const binding = {
+            hostSessionBinding.store.persistPtyBinding({
+              ...(hostSessionBinding.hostId ? { hostId: hostSessionBinding.hostId } : {}),
               worktreeId: hostSessionBinding.worktreeId,
               tabId: hostSessionBinding.tabId,
               leafId: hostSessionBinding.leafId,
@@ -6632,7 +6636,8 @@ export function registerPtyHandlers(
           !stablePaneBindingPersisted
         ) {
           try {
-            const binding = {
+            store.persistPtyBinding({
+              ...(args.connectionId ? { hostId: toSshExecutionHostId(args.connectionId) } : {}),
               worktreeId: args.worktreeId,
               tabId: args.tabId,
               leafId: validatedLeafId,

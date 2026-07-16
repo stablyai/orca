@@ -5395,6 +5395,13 @@ describe('registerPtyHandlers', () => {
           },
           'ssh:ssh-1'
         )
+        expect(store.persistPtyBinding).toHaveBeenCalledWith({
+          hostId: 'ssh:ssh-1',
+          worktreeId: 'wt-1',
+          tabId: 'tab-1',
+          leafId,
+          ptyId: 'ssh-pty'
+        })
 
         store.upsertSshRemotePtyLease.mockClear()
         store.persistPtyBinding.mockClear()
@@ -10836,6 +10843,13 @@ describe('registerPtyHandlers', () => {
       },
       'ssh:ssh-1'
     )
+    expect(store.persistPtyBinding).toHaveBeenCalledWith({
+      hostId: 'ssh:ssh-1',
+      worktreeId: 'wt-remote',
+      tabId: 'tab-remote',
+      leafId,
+      ptyId: 'ssh:ssh-1@@relay-pty'
+    })
     expect(store.persistPtyBinding.mock.invocationCallOrder[0]!).toBeLessThan(
       store.upsertSshRemotePtyLease.mock.invocationCallOrder[0]!
     )
@@ -11133,6 +11147,13 @@ describe('registerPtyHandlers', () => {
         },
         'ssh:ssh-reattach-ok'
       )
+      expect(store.persistPtyBinding).toHaveBeenCalledWith({
+        hostId: 'ssh:ssh-reattach-ok',
+        worktreeId: 'wt-remote',
+        tabId: 'tab-remote',
+        leafId,
+        ptyId: 'ssh:ssh-reattach-ok@@relay-pty'
+      })
       expect(store.upsertSshRemotePtyLease).toHaveBeenCalledWith(
         expect.objectContaining({
           targetId: 'ssh-reattach-ok',
