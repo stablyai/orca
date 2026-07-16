@@ -138,6 +138,7 @@ export function validateWorkingDirectory(cwd: string): void {
 export type WindowsShellSpawnAttempt = {
   shellPath: string
   shellArgs: string[]
+  logicalShellPath?: string
   effectiveCwd: string
   validationCwd: string
   startupCommandDeliveredInShellArgs: boolean
@@ -168,6 +169,7 @@ export type ShellSpawnParams = {
 export type ShellSpawnResult = {
   process: pty.IPty
   shellPath: string
+  logicalShellPath?: string
   /** True when the winning shell's startup command was already embedded in its
    *  argv, so callers must not re-deliver it through stdin. Only set when a
    *  Windows fallback attempt other than the primary was used. */
@@ -213,6 +215,7 @@ function spawnWindowsFallbackChain(
       return {
         process: proc,
         shellPath: attempt.shellPath,
+        ...(attempt.logicalShellPath ? { logicalShellPath: attempt.logicalShellPath } : {}),
         startupCommandDeliveredInShellArgs: attempt.startupCommandDeliveredInShellArgs
       }
     } catch {
@@ -257,7 +260,10 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
           env,
           ...windowsConptyDllOptions()
         }),
-        shellPath
+        shellPath,
+        ...(params.windowsFallbackAttempts?.[0]?.logicalShellPath
+          ? { logicalShellPath: params.windowsFallbackAttempts[0].logicalShellPath }
+          : {})
       }
     } catch (err) {
       primaryError = err instanceof Error ? err.message : String(err)

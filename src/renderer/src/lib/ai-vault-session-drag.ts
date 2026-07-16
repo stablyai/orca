@@ -49,10 +49,12 @@ function isLaunchConfig(value: unknown): value is SleepingAgentLaunchConfig {
     return false
   }
   const config = value as Partial<SleepingAgentLaunchConfig>
+  // Why: serialized drag data is untrusted; only literal true may enable the shell handoff.
   return (
     (config.agentCommand === undefined || typeof config.agentCommand === 'string') &&
     typeof config.agentArgs === 'string' &&
-    isStringRecord(config.agentEnv)
+    isStringRecord(config.agentEnv) &&
+    (config.windowsCodexShellHandoff === undefined || config.windowsCodexShellHandoff === true)
   )
 }
 

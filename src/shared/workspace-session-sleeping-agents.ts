@@ -57,7 +57,8 @@ const sleepingAgentLaunchEnvSchema = z.preprocess(
 const sleepingAgentLaunchConfigBaseSchema = z.object({
   agentCommand: z.string().optional(),
   agentArgs: z.string(),
-  agentEnv: sleepingAgentLaunchEnvSchema
+  agentEnv: sleepingAgentLaunchEnvSchema,
+  windowsCodexShellHandoff: z.literal(true).optional()
 })
 
 export const sleepingAgentLaunchConfigSchema = z.preprocess((raw) => {

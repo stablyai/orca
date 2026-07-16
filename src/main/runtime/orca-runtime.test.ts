@@ -10053,7 +10053,8 @@ describe('OrcaRuntimeService', () => {
         launchConfig: {
           agentCommand: "codex '--dangerously-bypass-approvals-and-sandbox'",
           agentArgs: '--dangerously-bypass-approvals-and-sandbox',
-          agentEnv: { CODEX_PROFILE: 'captured' }
+          agentEnv: { CODEX_PROFILE: 'captured' },
+          windowsCodexShellHandoff: true
         }
       })
     )

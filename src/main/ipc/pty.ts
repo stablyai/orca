@@ -3135,6 +3135,9 @@ export function registerPtyHandlers(
       if (isTuiAgent(args.launchAgent)) {
         spawnOptions.launchAgent = args.launchAgent
       }
+      if (args.windowsCodexShellHandoff === true) {
+        spawnOptions.windowsCodexShellHandoff = true
+      }
       if (args.worktreeId !== undefined) {
         spawnOptions.worktreeId = args.worktreeId
       }
@@ -4060,6 +4063,9 @@ export function registerPtyHandlers(
       }
       if (isTuiAgent(args.launchAgent)) {
         spawnOptions.launchAgent = args.launchAgent
+      }
+      if (args.launchConfig?.windowsCodexShellHandoff === true) {
+        spawnOptions.windowsCodexShellHandoff = true
       }
       if (args.worktreeId !== undefined) {
         spawnOptions.worktreeId = args.worktreeId

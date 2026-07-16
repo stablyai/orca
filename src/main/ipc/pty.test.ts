@@ -1407,6 +1407,7 @@ describe('registerPtyHandlers', () => {
             env: Record<string, string>
             sessionId?: string
             isNewSession?: boolean
+            windowsCodexShellHandoff?: boolean
           }) => ({
             id: options.sessionId ?? 'daemon-pty'
           })
@@ -1433,6 +1434,7 @@ describe('registerPtyHandlers', () => {
         shellOverride?: string
         terminalWindowsWslDistro?: string | null
         terminalWindowsPowerShellImplementation?: string
+        windowsCodexShellHandoff?: boolean
       }
 
       async function withWin32Platform<T>(fn: () => Promise<T>): Promise<T> {
@@ -1490,6 +1492,12 @@ describe('registerPtyHandlers', () => {
           shellOverride?: string
           command?: string
           envToDelete?: string[]
+          launchConfig?: {
+            agentCommand?: string
+            agentArgs: string
+            agentEnv: Record<string, string>
+            windowsCodexShellHandoff?: true
+          }
         },
         supportsGitCredentialGuardHost = true
       ): Promise<DaemonSpawnCall> {
@@ -1813,6 +1821,52 @@ describe('registerPtyHandlers', () => {
         )
         expect(spawnOptions.env.ORCA_AGENT_HOOK_PORT).toBe('5678')
         expect(spawnOptions.env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
+      })
+
+      it('forwards the explicit Windows Codex shell handoff marker from runtime-created PTYs', async () => {
+        type RuntimeSpawnController = {
+          spawn(args: {
+            cols: number
+            rows: number
+            worktreeId?: string
+            command?: string
+            windowsCodexShellHandoff?: boolean
+          }): Promise<{ id: string }>
+        }
+        const daemonSpawn = setupDaemonAdapter()
+        const runtime = {
+          setPtyController: vi.fn(),
+          registerPty: vi.fn(),
+          noteTerminalSpawnCommand: vi.fn(),
+          onPtySpawned: vi.fn(),
+          onPtyExit: vi.fn(),
+          onPtyData: vi.fn()
+        }
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
+
+        await controller.spawn({
+          cols: 80,
+          rows: 24,
+          worktreeId: 'wt-runtime',
+          command: "codex 'fix it'",
+          windowsCodexShellHandoff: true
+        })
+        const markedSpawnOptions = daemonSpawn.mock.calls.at(-1)?.[0] as DaemonSpawnCall | undefined
+        expect(markedSpawnOptions?.windowsCodexShellHandoff).toBe(true)
+
+        await controller.spawn({
+          cols: 80,
+          rows: 24,
+          worktreeId: 'wt-runtime',
+          command: "codex 'fix it'",
+          windowsCodexShellHandoff: false
+        })
+        const unmarkedSpawnOptions = daemonSpawn.mock.calls.at(-1)?.[0] as
+          | DaemonSpawnCall
+          | undefined
+        expect(unmarkedSpawnOptions?.windowsCodexShellHandoff).toBeUndefined()
       })
 
       it('threads the validated pane identity into registerPty for a runtime-created daemon PTY (#7587)', async () => {
@@ -2165,6 +2219,31 @@ describe('registerPtyHandlers', () => {
         expect((sessionId ?? '').length).toBeGreaterThan(0)
         expect(spawnOpts.isNewSession).toBe(true)
         expect(piBuildPtyEnvMock).toHaveBeenCalledWith(sessionId, undefined, 'pi')
+      })
+
+      it('derives Windows Codex handoff provenance from the renderer launch config', async () => {
+        const marked = await daemonSpawnAndGetOptions(undefined, undefined, undefined, undefined, {
+          command: "codex 'fix it'",
+          launchConfig: {
+            agentCommand: 'codex',
+            agentArgs: '',
+            agentEnv: {},
+            windowsCodexShellHandoff: true
+          }
+        })
+        const unmarked = await daemonSpawnAndGetOptions(
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          {
+            command: "codex 'fix it'",
+            launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} }
+          }
+        )
+
+        expect(marked.windowsCodexShellHandoff).toBe(true)
+        expect(unmarked.windowsCodexShellHandoff).toBeUndefined()
       })
 
       it('respects a caller-provided sessionId instead of minting a new one', async () => {

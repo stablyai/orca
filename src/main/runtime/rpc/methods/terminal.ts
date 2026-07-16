@@ -26,6 +26,7 @@ import {
 } from '../../../../shared/terminal-input'
 import { measureClipboardTextByteLength } from '../../../../shared/clipboard-text'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { sleepingAgentLaunchConfigSchema } from '../../../../shared/workspace-session-sleeping-agents'
 import { isTerminalQueryReply } from '../../../../shared/terminal-query-reply'
 import {
   EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
@@ -923,13 +924,9 @@ const TerminalCreateParams = z.object({
   command: OptionalString,
   startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
   env: z.record(z.string(), z.string()).optional(),
-  launchConfig: z
-    .object({
-      agentCommand: z.string().optional(),
-      agentArgs: z.string(),
-      agentEnv: z.record(z.string(), z.string())
-    })
-    .optional(),
+  // Why: launch config is untrusted RPC data; the shared schema fail-closes malformed
+  // fields and permits only literal true to opt into the Windows Codex handoff.
+  launchConfig: sleepingAgentLaunchConfigSchema,
   launchToken: OptionalString,
   launchAgent: z.string().refine(isTuiAgent).optional(),
   title: OptionalString,

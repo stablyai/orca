@@ -20,6 +20,7 @@ import {
 } from './daemon-stream-backlog-probe'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
 import type { SubprocessHandle } from './session'
+import type { TerminalHostSubprocessOptions } from './terminal-host-create-contract'
 import { checkPtySpawnHealth } from './pty-subprocess'
 import { createNoopDaemonFileLog, type DaemonFileLog } from './daemon-file-log'
 import { isTuiAgent } from '../../shared/tui-agent-config'
@@ -36,15 +37,7 @@ export type DaemonServerOptions = {
   tokenPath: string
   ptySpawnHealthCheck?: () => Promise<void>
   log?: DaemonFileLog
-  spawnSubprocess: (opts: {
-    sessionId: string
-    cols: number
-    rows: number
-    cwd?: string
-    env?: Record<string, string>
-    command?: string
-    shellOverride?: string
-  }) => SubprocessHandle
+  spawnSubprocess: (opts: TerminalHostSubprocessOptions) => SubprocessHandle
 }
 
 type ConnectedClient = {
@@ -353,6 +346,7 @@ export class DaemonServer {
           // Why: daemon RPC payloads are untrusted JSON. Persist only the
           // allowlisted enum used for byte routing, never arbitrary identity.
           ...(isTuiAgent(p.launchAgent) ? { launchAgent: p.launchAgent } : {}),
+          ...(p.windowsCodexShellHandoff === true ? { windowsCodexShellHandoff: true } : {}),
           shellOverride: p.shellOverride,
           terminalWindowsWslDistro: p.terminalWindowsWslDistro,
           terminalWindowsPowerShellImplementation: p.terminalWindowsPowerShellImplementation,

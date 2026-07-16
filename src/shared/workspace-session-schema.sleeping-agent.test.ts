@@ -161,6 +161,43 @@ describe('parseWorkspaceSession sleeping agents', () => {
     }
   })
 
+  it('preserves the literal Windows Codex handoff provenance marker', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-session' },
+          prompt: 'continue',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 9,
+          launchConfig: {
+            agentCommand: 'codex',
+            agentArgs: '',
+            agentEnv: {},
+            windowsCodexShellHandoff: true
+          }
+        }
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(
+        result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.launchConfig
+          ?.windowsCodexShellHandoff
+      ).toBe(true)
+    }
+  })
+
   it('drops sleeping agent launch config with NUL env values without dropping the record', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

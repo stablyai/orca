@@ -209,6 +209,40 @@ describe('DaemonServer', () => {
       expect(unknown).not.toHaveProperty('launchAgent')
     })
 
+    it('forwards only literal true Windows Codex handoff provenance', async () => {
+      const spawnSubprocess = vi.fn((_opts: { windowsCodexShellHandoff?: boolean }) =>
+        createMockSubprocess()
+      )
+      server = new DaemonServer({ socketPath, tokenPath, spawnSubprocess })
+      await server.start()
+      const c = await connectClient()
+
+      await c.request('createOrAttach', {
+        sessionId: 'handoff-true',
+        cols: 80,
+        rows: 24,
+        windowsCodexShellHandoff: true
+      })
+      await c.request('createOrAttach', {
+        sessionId: 'handoff-false',
+        cols: 80,
+        rows: 24,
+        windowsCodexShellHandoff: false
+      })
+      await c.request('createOrAttach', {
+        sessionId: 'handoff-string',
+        cols: 80,
+        rows: 24,
+        windowsCodexShellHandoff: 'true'
+      } as never)
+
+      expect(spawnSubprocess.mock.calls[0]?.[0]).toMatchObject({
+        windowsCodexShellHandoff: true
+      })
+      expect(spawnSubprocess.mock.calls[1]?.[0]).not.toHaveProperty('windowsCodexShellHandoff')
+      expect(spawnSubprocess.mock.calls[2]?.[0]).not.toHaveProperty('windowsCodexShellHandoff')
+    })
+
     it('handles listSessions', async () => {
       await startServer()
       const c = await connectClient()

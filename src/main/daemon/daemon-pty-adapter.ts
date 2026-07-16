@@ -233,7 +233,12 @@ export class DaemonPtyAdapter implements IPtyProvider {
     let effectiveCols = restoreInfo?.cols ?? opts.cols
     let effectiveRows = restoreInfo?.rows ?? opts.rows
 
-    const shellReadySupported = opts.command ? supportsPtyStartupBarrier(opts.env ?? {}) : false
+    // Why: this handoff delivers Codex in shell argv, so there is no interactive
+    // shell that can emit the daemon's readiness marker.
+    const shellReadySupported =
+      opts.windowsCodexShellHandoff !== true && opts.command
+        ? supportsPtyStartupBarrier(opts.env ?? {})
+        : false
     const isCodexStartupCommand =
       recognizeAgentProcessFromCommandLine(opts.command)?.agent === 'codex'
     const shouldWaitForShellReady =
@@ -258,6 +263,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
         command: opts.command,
         startupCommandDelivery: opts.startupCommandDelivery,
         launchAgent: opts.launchAgent,
+        ...(opts.windowsCodexShellHandoff === true ? { windowsCodexShellHandoff: true } : {}),
         // Why: without this, the daemon always spawns cmd.exe (COMSPEC) or
         // PowerShell as a fallback — regardless of which shell the renderer
         // asked for in the "+" menu or persisted as the default. Forwarding

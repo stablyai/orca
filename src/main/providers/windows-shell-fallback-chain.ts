@@ -5,12 +5,15 @@ import {
   resolveWindowsPowerShellSpawnChain,
   type WindowsPowerShellResolveOptions
 } from './windows-powershell-executable'
+import { buildWindowsCodexShellHandoffAttempt } from './windows-codex-shell-handoff'
 
 /** A single attempt in the Windows shell-spawn fallback chain: the absolute
  *  executable plus the launch args + cwd computed for it. */
 export type WindowsShellSpawnAttempt = {
   shellPath: string
   shellArgs: string[]
+  /** User-selected shell represented by a lightweight launch host. */
+  logicalShellPath?: string
   effectiveCwd: string
   validationCwd: string
   startupCommandDeliveredInShellArgs: boolean
@@ -68,4 +71,37 @@ export function buildWindowsPowerShellSpawnAttempts(args: {
   return chain.map((candidate) =>
     toAttempt(candidate, args.cwd, args.defaultCwd, args.wslContext, args.startupCommand)
   )
+}
+
+export function prependWindowsCodexShellHandoffAttempt(args: {
+  attempts: WindowsShellSpawnAttempt[]
+  cwd: string
+  defaultCwd: string
+  wslContext?: WindowsShellWslContext
+  startupCommand?: string
+  launchAgent?: string
+  windowsCodexShellHandoff?: boolean
+  env: Record<string, string>
+}): WindowsShellSpawnAttempt[] {
+  const powerShellAttempt = args.attempts[0]
+  if (!powerShellAttempt) {
+    return args.attempts
+  }
+  const powerShellBasename = pathWin32.basename(powerShellAttempt.shellPath).toLowerCase()
+  if (powerShellBasename !== 'pwsh.exe' && powerShellBasename !== 'powershell.exe') {
+    return args.attempts
+  }
+  const handoff = buildWindowsCodexShellHandoffAttempt({
+    fallbackAttempts: args.attempts,
+    cwd: args.cwd,
+    defaultCwd: args.defaultCwd,
+    wslContext: args.wslContext,
+    startupCommand: args.startupCommand,
+    launchAgent: args.launchAgent,
+    windowsCodexShellHandoff: args.windowsCodexShellHandoff,
+    env: args.env
+  })
+  // Why: keep the established PowerShell -> cmd chain behind the optimized
+  // host so an unavailable Node/native Codex target still fails open safely.
+  return handoff ? [handoff, ...args.attempts] : args.attempts
 }

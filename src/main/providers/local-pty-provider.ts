@@ -10,7 +10,10 @@ import {
   shouldProbeWindowsPowerShellAvailability,
   type WindowsPowerShellShellFamily
 } from './windows-powershell'
-import { buildWindowsPowerShellSpawnAttempts } from './windows-shell-fallback-chain'
+import {
+  buildWindowsPowerShellSpawnAttempts,
+  prependWindowsCodexShellHandoffAttempt
+} from './windows-shell-fallback-chain'
 import { resolveProcessCwd } from './process-cwd'
 import { existsSync } from 'node:fs'
 import * as pty from 'node-pty'
@@ -790,6 +793,27 @@ export class LocalPtyProvider implements IPtyProvider {
       logHistoryInjection(worktreeId, historyResult)
     }
 
+    if (process.platform === 'win32' && windowsFallbackAttempts.length > 0) {
+      windowsFallbackAttempts = prependWindowsCodexShellHandoffAttempt({
+        attempts: windowsFallbackAttempts,
+        cwd,
+        defaultCwd,
+        wslContext: worktreeWslContext ?? preferredWslContext,
+        startupCommand: args.command,
+        launchAgent: args.launchAgent,
+        windowsCodexShellHandoff: args.windowsCodexShellHandoff,
+        env: finalEnv
+      })
+      const primaryAttempt = windowsFallbackAttempts[0]
+      if (primaryAttempt) {
+        shellPath = primaryAttempt.shellPath
+        shellArgs = primaryAttempt.shellArgs
+        effectiveCwd = primaryAttempt.effectiveCwd
+        validationCwd = primaryAttempt.validationCwd
+        startupCommandDeliveredInShellArgs = primaryAttempt.startupCommandDeliveredInShellArgs
+      }
+    }
+
     const spawnResult = spawnShellWithFallback({
       shellPath,
       shellArgs,
@@ -808,7 +832,7 @@ export class LocalPtyProvider implements IPtyProvider {
         : undefined,
       windowsFallbackAttempts
     })
-    shellPath = spawnResult.shellPath
+    shellPath = spawnResult.logicalShellPath ?? spawnResult.shellPath
     // Why: a Windows fallback (e.g. cmd.exe) embeds its own startup command in
     // argv, so honor the winning shell's delivery flag to avoid a double write.
     if (spawnResult.startupCommandDeliveredInShellArgs !== undefined) {

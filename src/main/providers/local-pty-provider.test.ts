@@ -9,6 +9,7 @@ const {
   mkdirSyncMock,
   writeFileSyncMock,
   spawnMock,
+  buildWindowsCodexShellHandoffAttemptMock,
   resolveAgentForegroundProcessMock,
   captureDescendantSnapshotMock,
   terminateDescendantSnapshotMock
@@ -19,6 +20,7 @@ const {
   mkdirSyncMock: vi.fn(),
   writeFileSyncMock: vi.fn(),
   spawnMock: vi.fn(),
+  buildWindowsCodexShellHandoffAttemptMock: vi.fn(),
   resolveAgentForegroundProcessMock: vi.fn(),
   captureDescendantSnapshotMock: vi.fn(),
   terminateDescendantSnapshotMock: vi.fn()
@@ -42,6 +44,10 @@ vi.mock('electron', () => ({
 
 vi.mock('node-pty', () => ({
   spawn: spawnMock
+}))
+
+vi.mock('./windows-codex-shell-handoff', () => ({
+  buildWindowsCodexShellHandoffAttempt: buildWindowsCodexShellHandoffAttemptMock
 }))
 
 vi.mock('../pty-descendant-termination', () => ({
@@ -170,6 +176,8 @@ describe('LocalPtyProvider', () => {
       pid: 12345
     }
     spawnMock.mockReturnValue(mockProc)
+    buildWindowsCodexShellHandoffAttemptMock.mockReset()
+    buildWindowsCodexShellHandoffAttemptMock.mockReturnValue(null)
 
     provider = new LocalPtyProvider()
   })
@@ -714,6 +722,52 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[0]).toBe(PWSH7_ABS)
       expect(spawnCall[1]).toContain('-EncodedCommand')
       expect(pwshAvailable).not.toHaveBeenCalled()
+    })
+
+    it('spawns the Windows Codex handoff host while preserving the selected shell identity', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      mockProc.process = 'xterm-256color'
+      const nodeHost = 'C:\\Program Files\\nodejs\\node.exe'
+      buildWindowsCodexShellHandoffAttemptMock.mockReturnValue({
+        shellPath: nodeHost,
+        shellArgs: ['-e', 'handoff-script', 'encoded-config'],
+        logicalShellPath: PWSH7_ABS,
+        effectiveCwd: 'C:\\repo',
+        validationCwd: 'C:\\repo',
+        startupCommandDeliveredInShellArgs: true
+      })
+
+      provider.configure({
+        getWindowsShell: () => 'powershell.exe',
+        getWindowsPowerShellImplementation: () => 'pwsh.exe'
+      })
+      const result = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\repo',
+        command: "codex '--version'",
+        launchAgent: 'codex',
+        windowsCodexShellHandoff: true
+      })
+
+      expect(buildWindowsCodexShellHandoffAttemptMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          launchAgent: 'codex',
+          startupCommand: "codex '--version'",
+          windowsCodexShellHandoff: true
+        })
+      )
+      expect(spawnMock).toHaveBeenCalledWith(
+        nodeHost,
+        ['-e', 'handoff-script', 'encoded-config'],
+        expect.objectContaining({ cwd: 'C:\\repo' })
+      )
+      expect(await provider.getForegroundProcess(result.id)).toBe('pwsh.exe')
+      expect(resolveAgentForegroundProcessMock).toHaveBeenCalledWith(
+        mockProc.pid,
+        'pwsh.exe',
+        expect.any(Object)
+      )
     })
 
     it('marks Orca terminal handle for WSL import when buildSpawnEnv opts in', async () => {

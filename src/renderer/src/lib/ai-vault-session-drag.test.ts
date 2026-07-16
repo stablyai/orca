@@ -131,6 +131,50 @@ describe('Session History session drag data', () => {
     expect(readAiVaultSessionDragData(transfer)).toBeNull()
   })
 
+  it('preserves a literal-true Windows Codex shell handoff marker', () => {
+    const transfer = createTransfer()
+    const payload: AiVaultSessionDragPayload = {
+      agent: 'codex',
+      sessionId: 'session-codex-handoff',
+      title: 'Resume Codex shell handoff',
+      command: 'codex resume session-codex-handoff',
+      launchConfig: {
+        agentArgs: '',
+        agentEnv: {},
+        windowsCodexShellHandoff: true
+      }
+    }
+
+    writeAiVaultSessionDragData(transfer, payload)
+
+    expect(readAiVaultSessionDragData(transfer)).toEqual(payload)
+  })
+
+  it.each([false, 'true', 1])(
+    'rejects a malformed Windows Codex shell handoff marker (%j)',
+    (windowsCodexShellHandoff) => {
+      const transfer = createTransfer()
+      transfer.setData(
+        AI_VAULT_SESSION_DRAG_TYPE,
+        JSON.stringify({
+          kind: 'ai-vault-session',
+          version: 1,
+          agent: 'codex',
+          sessionId: 'session-codex-handoff',
+          title: 'Malformed Codex shell handoff',
+          command: 'codex resume session-codex-handoff',
+          launchConfig: {
+            agentArgs: '',
+            agentEnv: {},
+            windowsCodexShellHandoff
+          }
+        })
+      )
+
+      expect(readAiVaultSessionDragData(transfer)).toBeNull()
+    }
+  )
+
   it('rejects oversized serialized payloads before parsing', () => {
     const transfer = createTransfer()
     const secret = 'ai-vault-drag-secret'
