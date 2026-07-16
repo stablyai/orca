@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -207,7 +207,8 @@ describe('createSequencedSetupAgentCommands', () => {
   it.skipIf(process.platform !== 'win32')(
     'executes the native Windows setup-to-agent sequence through cmd.exe',
     async () => {
-      const tempDir = makeTempDir()
+      const tempDir = join(makeTempDir(), 'path with spaces')
+      mkdirSync(tempDir)
       const runnerScriptPath = join(tempDir, 'setup runner.cmd')
       const startupScriptPath = join(tempDir, 'agent-startup.cmd')
       const logPath = join(tempDir, 'sequence.log')
@@ -225,7 +226,7 @@ describe('createSequencedSetupAgentCommands', () => {
 
       const commands = createSequencedSetupAgentCommands({
         runnerScriptPath,
-        startupCommand: `cmd.exe /d /s /c "${startupScriptPath}"`,
+        startupCommand: `cmd.exe /d /c "${startupScriptPath}"`,
         platform: 'windows',
         nonce: 'windows-sequence',
         waitTimeoutSeconds: 2
@@ -470,10 +471,10 @@ function spawnWindowsCommand(
   env: Record<string, string> = {}
 ): ReturnType<typeof spawn> {
   const scriptPath = join(dir, filename)
-  // Why: putting the generated command on a batch line exercises cmd.exe's
-  // native parser without Node/libuv adding another argument-quoting layer.
+  // Why: /s strips the quotes Node adds for batch paths containing spaces;
+  // argv spawning still exercises cmd.exe's native parser without that loss.
   writeFileSync(scriptPath, `@echo off\r\n${command}\r\nexit /b %ERRORLEVEL%\r\n`, 'utf8')
-  return spawn('cmd.exe', ['/d', '/s', '/c', scriptPath], {
+  return spawn('cmd.exe', ['/d', '/c', scriptPath], {
     stdio: 'pipe',
     env: { ...process.env, ...env }
   })
