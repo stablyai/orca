@@ -11063,20 +11063,25 @@ export class OrcaRuntimeService {
     // the unexpected exit on its next check cycle, even if the circuit breaker
     // hasn't tripped yet.
     const run = this._orchestrationDb.getActiveCoordinatorRun()
-    if (run) {
-      this._orchestrationDb.insertMessage({
-        from: handle,
-        to: run.coordinator_handle,
-        subject: `Agent exited unexpectedly (code ${exitCode})`,
-        type: 'escalation',
-        priority: 'high',
-        payload: JSON.stringify({
-          taskId: dispatch.task_id,
-          exitCode,
-          handle
-        })
-      })
+    if (!run) {
+      // Why: a direct dispatch has no coordinator loop to consume the ready
+      // retry. Mark it failed so an exited agent cannot silently lose the task.
+      this._orchestrationDb.updateTaskStatus(dispatch.task_id, 'failed', errorContext)
+      return
     }
+
+    this._orchestrationDb.insertMessage({
+      from: handle,
+      to: run.coordinator_handle,
+      subject: `Agent exited unexpectedly (code ${exitCode})`,
+      type: 'escalation',
+      priority: 'high',
+      payload: JSON.stringify({
+        taskId: dispatch.task_id,
+        exitCode,
+        handle
+      })
+    })
   }
 
   async listTerminals(
