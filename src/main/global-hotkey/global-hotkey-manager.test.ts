@@ -144,6 +144,12 @@ describe('GlobalHotkeyManager', () => {
     expect(warn).toHaveBeenCalledTimes(1)
   })
 
+  it('treats a non-string persisted value as disabled instead of throwing', () => {
+    const { manager } = createManager({ globalHotkey: 12345 as unknown as string })
+    expect(() => manager.start()).not.toThrow()
+    expect(registerMock).not.toHaveBeenCalled()
+  })
+
   it('stop() unregisters and stops listening for settings changes', () => {
     const { manager, emitSettingsChange, unsubscribed } = createManager({
       globalHotkey: 'Alt+Space'

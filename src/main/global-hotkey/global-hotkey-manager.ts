@@ -47,7 +47,9 @@ export class GlobalHotkeyManager {
     // Always unregister the previous binding first.
     this.unregister()
 
-    const trimmed = accelerator.trim()
+    // Why: the store load path does not sanitize this field, so a hand-edited
+    // settings file must not be able to throw during startup registration.
+    const trimmed = typeof accelerator === 'string' ? accelerator.trim() : ''
     if (!trimmed) {
       return
     }
