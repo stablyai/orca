@@ -566,9 +566,12 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     title: 'New mobile emulator tab',
     group: 'Tabs',
     scope: 'tabs',
+    // Why: routed from terminal focus, so it competes with global chords;
+    // flag overlaps (e.g. the former Cmd+Shift+E clash with Show Explorer).
+    conflictGroup: 'global',
     searchKeywords: ['shortcut', 'tab', 'simulator', 'emulator', 'mobile', 'ios', 'new'],
     defaultBindings: {
-      darwin: ['Mod+Shift+E'],
+      darwin: ['Mod+Shift+S'],
       linux: [],
       win32: []
     }

@@ -764,6 +764,21 @@ describe('keybindings', () => {
     })
   })
 
+  it('keeps the mobile emulator tab off the Show Explorer chord (#4754 regression)', () => {
+    expect(getEffectiveKeybindingsForAction('tab.newSimulator', 'darwin')).toEqual(['Mod+Shift+S'])
+    expect(getEffectiveKeybindingsForAction('sidebar.explorer.toggle', 'darwin')).toEqual([
+      'Mod+Shift+E'
+    ])
+
+    // conflictGroup: 'global' makes rebinding it back onto Cmd+Shift+E a reported conflict.
+    expect(findKeybindingConflicts('darwin', { 'tab.newSimulator': ['Mod+Shift+E'] })).toContainEqual(
+      {
+        binding: 'Mod+Shift+E',
+        actionIds: expect.arrayContaining(['sidebar.explorer.toggle', 'tab.newSimulator'])
+      }
+    )
+  })
+
   it('keeps Orca-first terminal context backward compatible', () => {
     const ctrlP = {
       key: 'p',

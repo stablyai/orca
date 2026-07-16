@@ -1848,7 +1848,7 @@ function Terminal(): React.JSX.Element | null {
         return
       }
 
-      // Cmd/Ctrl+Shift+E — new mobile emulator tab (macOS only)
+      // Cmd/Ctrl+Shift+S — new mobile emulator tab (macOS only)
       if (!e.repeat && mobileEmulatorEnabled && matchShortcut('tab.newSimulator')) {
         e.preventDefault()
         notifyTerminalCapture('tab.newSimulator')
