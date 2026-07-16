@@ -4951,15 +4951,13 @@
           "codexSessionSource": "Codex home to import from",
           "codexSessionSourceInfo": "About importing Codex history",
           "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex.",
-          "customAgents": "Custom agents",
-          "customAgentsDescription": "Launch your own agent CLI with the same terminal workflow as built-in agents.",
-          "addCustomAgent": "Add agent",
-          "disabled": "Disabled",
-          "enabled": "Enabled",
-          "enable": "Enable",
-          "editCustomAgent": "Edit custom agent",
-          "removeCustomAgent": "Remove custom agent",
-          "noCustomAgents": "No custom agents configured."
+          "35ff8538b5": "No custom agents configured.",
+          "d4f613087c": "Remove custom agent",
+          "89fef859c2": "Edit custom agent",
+          "e393cf0325": "Enable",
+          "f76af13b0c": "Add agent",
+          "b2d7383d2a": "Launch your own agent CLI with the same terminal workflow as built-in agents.",
+          "7ae5b0421d": "Custom agents"
         },
         "AppIconSelector": {
           "d5a112dc9b": "Next icon",

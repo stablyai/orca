@@ -2,7 +2,17 @@
    selection, per-agent controls, and runtime location together so settings
    reconciliation stays visible in one file. */
 import { useId, useMemo, useState } from 'react'
-import { Check, ChevronDown, ExternalLink, Info, Pencil, Plus, RefreshCw, Terminal, Trash2 } from 'lucide-react'
+import {
+  Check,
+  ChevronDown,
+  ExternalLink,
+  Info,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Terminal,
+  Trash2
+} from 'lucide-react'
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
 import type { AgentId, CustomAgentDefinition } from '../../../../shared/custom-agent'
 import {
@@ -717,7 +727,12 @@ export function AgentsPane({
   }
 
   const saveCustomAgent = (value: Omit<CustomAgentDefinition, 'id'>): void => {
-    const id = editingCustomAgent?.id ?? createCustomAgentId(value.name, customAgents.map((agent) => agent.id))
+    const id =
+      editingCustomAgent?.id ??
+      createCustomAgentId(
+        value.name,
+        customAgents.map((agent) => agent.id)
+      )
     const next = editingCustomAgent
       ? customAgents.map((agent) => (agent.id === id ? { ...value, id } : agent))
       : [...customAgents, { ...value, id }]
@@ -796,8 +811,7 @@ export function AgentsPane({
   // so the Auto pill should only light up when the default is null OR when a
   // selected agent id is no longer detected on PATH.
   const isCustomDefault =
-    isCustomAgentId(defaultAgent) &&
-    customAgentForId(defaultAgent, customAgents)?.enabled === true
+    isCustomAgentId(defaultAgent) && customAgentForId(defaultAgent, customAgents)?.enabled === true
   const isAutoDefault =
     defaultAgent === null ||
     (defaultAgent !== 'blank' &&
@@ -846,13 +860,19 @@ export function AgentsPane({
               </DefaultAgentPill>
             )
           })}
-          {customAgents.filter((agent) => agent.enabled).map((agent) => (
-            <DefaultAgentPill key={agent.id} active={defaultAgent === agent.id} onClick={() => setDefault(agent.id)}>
-              <AgentIcon agent={agent.id} size={14} customAgents={customAgents} />
-              {agent.name}
-              {defaultAgent === agent.id && <Check className="size-3.5" />}
-            </DefaultAgentPill>
-          ))}
+          {customAgents
+            .filter((agent) => agent.enabled)
+            .map((agent) => (
+              <DefaultAgentPill
+                key={agent.id}
+                active={defaultAgent === agent.id}
+                onClick={() => setDefault(agent.id)}
+              >
+                <AgentIcon agent={agent.id} size={14} customAgents={customAgents} />
+                {agent.name}
+                {defaultAgent === agent.id && <Check className="size-3.5" />}
+              </DefaultAgentPill>
+            ))}
         </div>
       </section>
 
@@ -987,9 +1007,24 @@ export function AgentsPane({
 
       <section className="space-y-3">
         <SettingsSubsectionHeader
-          title={translate('auto.components.settings.AgentsPane.customAgents', 'Custom agents')}
-          description={translate('auto.components.settings.AgentsPane.customAgentsDescription', 'Launch your own agent CLI with the same terminal workflow as built-in agents.')}
-          action={<Button type="button" size="sm" onClick={() => { setEditingCustomAgent(undefined); setCustomAgentDialogOpen(true) }}><Plus data-icon="inline-start" />{translate('auto.components.settings.AgentsPane.addCustomAgent', 'Add agent')}</Button>}
+          title={translate('auto.components.settings.AgentsPane.7ae5b0421d', 'Custom agents')}
+          description={translate(
+            'auto.components.settings.AgentsPane.b2d7383d2a',
+            'Launch your own agent CLI with the same terminal workflow as built-in agents.'
+          )}
+          action={
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => {
+                setEditingCustomAgent(undefined)
+                setCustomAgentDialogOpen(true)
+              }}
+            >
+              <Plus data-icon="inline-start" />
+              {translate('auto.components.settings.AgentsPane.f76af13b0c', 'Add agent')}
+            </Button>
+          }
         />
         {customAgents.length > 0 ? (
           <div className="divide-y divide-border/40">
@@ -1001,21 +1036,71 @@ export function AgentsPane({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 text-sm font-medium">
                     <span className="truncate">{agent.name}</span>
-                    {!agent.enabled && <SettingsBadge tone="muted">{translate('auto.components.settings.AgentsPane.disabled', 'Disabled')}</SettingsBadge>}
+                    {!agent.enabled && (
+                      <SettingsBadge tone="muted">
+                        {translate('auto.components.settings.AgentsPane.8dc0192e48', 'Disabled')}
+                      </SettingsBadge>
+                    )}
                   </div>
-                  <div className="truncate font-mono text-[11px] text-muted-foreground">{agent.command}</div>
+                  <div className="truncate font-mono text-[11px] text-muted-foreground">
+                    {agent.command}
+                  </div>
                 </div>
-                <Button type="button" variant={agent.enabled ? 'secondary' : 'outline'} size="xs" onClick={() => updateSettings({ customAgents: customAgents.map((item) => item.id === agent.id ? { ...item, enabled: !item.enabled } : item), ...(defaultAgent === agent.id && agent.enabled ? { defaultTuiAgent: null } : {}) })}>
-                  {agent.enabled ? translate('auto.components.settings.AgentsPane.enabled', 'Enabled') : translate('auto.components.settings.AgentsPane.enable', 'Enable')}
+                <Button
+                  type="button"
+                  variant={agent.enabled ? 'secondary' : 'outline'}
+                  size="xs"
+                  onClick={() =>
+                    updateSettings({
+                      customAgents: customAgents.map((item) =>
+                        item.id === agent.id ? { ...item, enabled: !item.enabled } : item
+                      ),
+                      ...(defaultAgent === agent.id && agent.enabled
+                        ? { defaultTuiAgent: null }
+                        : {})
+                    })
+                  }
+                >
+                  {agent.enabled
+                    ? translate('auto.components.settings.AgentsPane.d4d2a45d63', 'Enabled')
+                    : translate('auto.components.settings.AgentsPane.e393cf0325', 'Enable')}
                 </Button>
-                <Button type="button" variant="ghost" size="icon-sm" aria-label={translate('auto.components.settings.AgentsPane.editCustomAgent', 'Edit custom agent')} onClick={() => { setEditingCustomAgent(agent); setCustomAgentDialogOpen(true) }}><Pencil /></Button>
-                <Button type="button" variant="ghost" size="icon-sm" aria-label={translate('auto.components.settings.AgentsPane.removeCustomAgent', 'Remove custom agent')} onClick={() => removeCustomAgent(agent.id)}><Trash2 /></Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={translate(
+                    'auto.components.settings.AgentsPane.89fef859c2',
+                    'Edit custom agent'
+                  )}
+                  onClick={() => {
+                    setEditingCustomAgent(agent)
+                    setCustomAgentDialogOpen(true)
+                  }}
+                >
+                  <Pencil />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={translate(
+                    'auto.components.settings.AgentsPane.d4f613087c',
+                    'Remove custom agent'
+                  )}
+                  onClick={() => removeCustomAgent(agent.id)}
+                >
+                  <Trash2 />
+                </Button>
               </div>
             ))}
           </div>
         ) : (
           <div className="rounded-md border border-dashed border-border/50 py-6 text-center text-sm text-muted-foreground">
-            {translate('auto.components.settings.AgentsPane.noCustomAgents', 'No custom agents configured.')}
+            {translate(
+              'auto.components.settings.AgentsPane.35ff8538b5',
+              'No custom agents configured.'
+            )}
           </div>
         )}
       </section>
