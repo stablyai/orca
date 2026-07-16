@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { joinPath } from '@/lib/path'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
@@ -381,6 +382,43 @@ describe('SourceControl preview row opens', () => {
       '/repo/wt',
       expect.objectContaining({ path: 'src/conflict.ts' }),
       'typescript',
+      { targetGroupId: undefined, preview: true }
+    )
+  })
+
+  it('canonicalizes .markdown rows for both unstaged and staged opens', () => {
+    const expectedGuidePath = joinPath(mocks.activeWorktree.path, 'docs/guide.markdown')
+    const expectedStagedPath = joinPath(mocks.activeWorktree.path, 'docs/staged.markdown')
+    resetState({
+      gitStatusByWorktree: {
+        [mocks.activeWorktree.id]: [
+          gitEntry({ path: 'docs/guide.markdown' }),
+          gitEntry({ path: 'docs/staged.markdown', area: 'staged' })
+        ]
+      }
+    })
+    renderSourceControl()
+
+    clickUncommitted('docs/guide.markdown')
+    clickUncommitted('docs/staged.markdown')
+
+    expect(mocks.calls.openFile).toHaveBeenCalledWith(
+      {
+        filePath: expectedGuidePath,
+        relativePath: 'docs/guide.markdown',
+        worktreeId: mocks.activeWorktree.id,
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { targetGroupId: undefined, preview: true }
+    )
+    expect(mocks.state.setEditorViewMode).toHaveBeenCalledWith(expectedGuidePath, 'changes')
+    expect(mocks.calls.openDiff).toHaveBeenCalledWith(
+      mocks.activeWorktree.id,
+      expectedStagedPath,
+      'docs/staged.markdown',
+      'markdown',
+      true,
       { targetGroupId: undefined, preview: true }
     )
   })

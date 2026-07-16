@@ -4449,7 +4449,7 @@ function SourceControlInner(): React.JSX.Element {
         })
         return
       }
-      const language = detectLanguage(entry.path)
+      const language = /\.markdown$/i.test(entry.path) ? 'markdown' : detectLanguage(entry.path)
       const filePath = joinPath(worktreePath, entry.path)
       // Why: unstaged markdown diffs open as a normal edit tab in Changes
       // view mode rather than a dedicated diff tab. This unifies sidebar
@@ -4459,16 +4459,13 @@ function SourceControlInner(): React.JSX.Element {
       // staged content is not what the editor would be editing. Non-markdown
       // files keep the existing diff-tab flow until the diff-tab type is
       // eventually collapsed (see reviews/changes-view-mode-plan.md §"Follow-up").
-      if (
-        (language === 'markdown' || /\.markdown$/i.test(entry.path)) &&
-        entry.area === 'unstaged'
-      ) {
+      if (language === 'markdown' && entry.area === 'unstaged') {
         openFile(
           {
             filePath,
             relativePath: entry.path,
             worktreeId: activeWorktreeId,
-            language: 'markdown',
+            language,
             mode: 'edit'
           },
           { targetGroupId, preview: openAsPreview }
