@@ -196,14 +196,21 @@ describe('resolveWindowsShellLaunchArgs', () => {
     ])
   })
 
-  it('starts Git Bash as an interactive login shell without changing cwd', () => {
+  it('starts Git Bash as an interactive login shell with UTF-8 console setup', () => {
     const result = resolveWindowsShellLaunchArgs(
       'C:\\Program Files\\Git\\bin\\bash.exe',
       'C:\\Users\\alice\\code',
       'C:\\Users\\alice'
     )
 
-    expect(result.shellArgs).toEqual(['--login', '-i'])
+    // Why: Git Bash inherits the ConPTY OEM code page (CP437), so a byte-writing
+    // UTF-8 TUI mojibakes unless the console is switched to UTF-8 before it runs.
+    // chcp.com must precede the interactive login shell, which is then exec'd so
+    // normal `--login -i` behavior (and the shell's foreground identity) survives.
+    expect(result.shellArgs).toEqual([
+      '-c',
+      'chcp.com 65001 >/dev/null 2>&1 || true; exec "$BASH" --login -i'
+    ])
     expect(result.effectiveCwd).toBe('C:\\Users\\alice\\code')
     expect(result.validationCwd).toBe('C:\\Users\\alice\\code')
   })
