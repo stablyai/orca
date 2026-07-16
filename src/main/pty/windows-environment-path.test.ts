@@ -41,6 +41,30 @@ describe('readPersistedWindowsPathSegments', () => {
     expect(segments).toEqual(['C:\\Windows\\System32', 'C:\\Tools', 'C:\\Users\\me\\bin'])
   })
 
+  it('invokes reg.exe by absolute System32 path so a stripped Electron PATH still probes the registry', () => {
+    // Why: Electron's main process can inherit a PATH without System32 (Start
+    // Menu / service launches). node-pty spawns the shell via ConPTY, which
+    // always searches System32, so the terminal still opens -- but a bare
+    // `reg.exe` through execFileSync/libuv throws ENOENT, silently skipping the
+    // registry refresh and leaving freshly installed CLIs off the in-app PATH
+    // (stablyai/orca#8834). Absolute-path invocation mirrors win32-utils.ts.
+    const execFileSync = vi
+      .fn()
+      .mockReturnValueOnce('    Path    REG_SZ    C:\\Machine\r\n')
+      .mockReturnValueOnce('    Path    REG_SZ    C:\\User\r\n')
+
+    readPersistedWindowsPathSegments({
+      platform: 'win32',
+      execFileSync,
+      env: { SystemRoot: 'C:\\Windows' }
+    })
+
+    expect(execFileSync).toHaveBeenCalledTimes(2)
+    for (const call of execFileSync.mock.calls) {
+      expect(call[0]).toBe('C:\\Windows\\System32\\reg.exe')
+    }
+  })
+
   it('returns an empty list outside Windows', () => {
     const execFileSync = vi.fn()
 

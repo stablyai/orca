@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { getRegExePath } from '../win32-utils'
 
 type ExecFileSync = typeof execFileSync
 
@@ -78,7 +79,7 @@ export function readPersistedWindowsPathSegments(options: ReadWindowsPathOptions
 
   for (const [key, valueName] of WINDOWS_PATH_REGISTRY_KEYS) {
     try {
-      const output = run('reg.exe', ['query', key, '/v', valueName], {
+      const output = run(getRegExePath(env), ['query', key, '/v', valueName], {
         encoding: 'utf8',
         windowsHide: true
       })

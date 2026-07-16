@@ -32,6 +32,17 @@ export function getWhoamiExePath(): string {
 }
 
 /**
+ * Full path to reg.exe. A bare `reg.exe` through execFileSync throws ENOENT
+ * when Electron's main process inherited a PATH without System32 (Start Menu
+ * and service launches), so registry probes must use the absolute path. Accepts
+ * an env override so callers that inject a test environment resolve SystemRoot
+ * from it.
+ */
+export function getRegExePath(env: NodeJS.ProcessEnv = process.env): string {
+  return `${env.SystemRoot ?? 'C:\\Windows'}\\System32\\reg.exe`
+}
+
+/**
  * Full path to cmd.exe, respecting the ComSpec convention used elsewhere in
  * the codebase (hooks.ts, repo.ts, ssh-connection-utils.ts).
  * Falls back to SystemRoot-based path if ComSpec is unset.
