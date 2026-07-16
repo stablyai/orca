@@ -3,6 +3,8 @@ import type { Store } from '../persistence'
 import { discoverSkills } from '../skills/discovery'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../../shared/skills'
 import { getDefaultWslDistro, getWslHome } from '../wsl'
+import { adaptCodexEffectiveSkills } from '../skills/codex-effective-skill-adapter'
+import { codexSkillInventory } from '../skills/codex-skill-inventory-service'
 
 type SkillDiscoveryRuntimeTarget =
   | { runtime: 'host' }
@@ -32,6 +34,27 @@ function getSkillDiscoveryRuntimeTarget(
 }
 
 export function registerSkillsHandlers(store: Store): void {
+  const subscribers = new Set<Electron.WebContents>()
+  codexSkillInventory.on('changed', () => {
+    for (const webContents of subscribers) {
+      if (webContents.isDestroyed()) {
+        subscribers.delete(webContents)
+      } else {
+        webContents.send('skills:codex-changed')
+      }
+    }
+  })
+  ipcMain.handle('skills:list-codex', async (event, cwd: string, forceReload = false) => {
+    const normalizedCwd = cwd.trim()
+    if (!normalizedCwd) {
+      throw new Error('Codex skill inventory requires a working directory.')
+    }
+    if (!subscribers.has(event.sender)) {
+      subscribers.add(event.sender)
+      event.sender.once('destroyed', () => subscribers.delete(event.sender))
+    }
+    return adaptCodexEffectiveSkills(await codexSkillInventory.list(normalizedCwd, forceReload))
+  })
   ipcMain.handle(
     'skills:discover',
     async (_event, target?: SkillDiscoveryTarget): Promise<SkillDiscoveryResult> => {

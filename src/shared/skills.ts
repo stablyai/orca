@@ -35,6 +35,14 @@ export type SkillDiscoveryResult = {
   scannedAt: number
 }
 
+export type CodexEffectiveSkill = {
+  name: string
+  description: string
+  path: string
+  scope: 'user' | 'repo' | 'system' | 'admin'
+  enabled: boolean
+}
+
 export type SkillDiscoveryTarget = {
   runtime?: 'host' | 'wsl'
   wslDistro?: string | null

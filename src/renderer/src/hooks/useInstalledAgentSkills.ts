@@ -83,6 +83,11 @@ export function notifyInstalledAgentSkillsChanged(): void {
   }
 }
 
+export function onInstalledAgentSkillsChanged(listener: () => void): () => void {
+  window.addEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, listener)
+  return () => window.removeEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, listener)
+}
+
 function normalizeSkillDiscoveryTarget(
   target: SkillDiscoveryTarget | undefined
 ): SkillDiscoveryTarget | undefined {

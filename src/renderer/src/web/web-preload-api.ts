@@ -34,7 +34,7 @@ import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../../../shared/types'
-import type { SkillDiscoveryResult } from '../../../shared/skills'
+import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../shared/skills'
 import type { SshConnectionState, SshTarget } from '../../../shared/ssh-types'
 import {
   getDefaultOnboardingState,
@@ -2657,7 +2657,10 @@ function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
         skills: [],
         sources: [],
         scannedAt: Date.now()
-      }))
+      })),
+    listCodex: (cwd, forceReload = false) =>
+      callRuntimeResult<DiscoveredSkill[]>('skills.codexList', { cwd, forceReload }, 15_000),
+    onCodexChanged: () => () => {}
   }
 }
 

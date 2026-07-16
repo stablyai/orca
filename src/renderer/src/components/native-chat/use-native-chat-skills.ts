@@ -2,19 +2,13 @@ import { useEffect, useState } from 'react'
 import { useAppStore } from '../../store'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { DiscoveredSkill } from '../../../../shared/skills'
+import { onInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
+import { createNativeChatSkillRequest } from './native-chat-skill-request'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 
 type NativeChatSkillWorktreeState = {
   tabsByWorktree: Record<string, readonly { id: string }[]>
   worktreesByRepo: Record<string, readonly { id: string; path: string }[]>
-}
-
-export function isNativeChatSkillForAgent(agent: AgentType, skill: DiscoveredSkill): boolean {
-  if (agent !== 'codex') {
-    return false
-  }
-  // Why: Codex sessions can see both Codex-native skills and generic agent
-  // skills (for example ~/.agents/skills), so the picker should mirror that.
-  return skill.providers.includes('codex') || skill.providers.includes('agent-skills')
 }
 
 export function resolveNativeChatSkillDiscoveryCwd(
@@ -40,32 +34,45 @@ export function resolveNativeChatSkillDiscoveryCwd(
   return null
 }
 
-export function useNativeChatSkills(agent: AgentType, terminalTabId: string): DiscoveredSkill[] {
+export function useNativeChatSkills(
+  agent: AgentType,
+  terminalTabId: string,
+  runtimeEnvironmentId: string | null = null
+): DiscoveredSkill[] {
   const [skills, setSkills] = useState<DiscoveredSkill[]>([])
   const cwd = useAppStore((state) => resolveNativeChatSkillDiscoveryCwd(state, terminalTabId))
 
   useEffect(() => {
-    let cancelled = false
-    if (agent !== 'codex') {
+    if (agent !== 'codex' || !cwd) {
       setSkills([])
       return
     }
-    void window.api.skills
-      .discover(cwd ? { cwd } : undefined)
-      .then((result) => {
-        if (!cancelled) {
-          setSkills(result.skills.filter((skill) => isNativeChatSkillForAgent(agent, skill)))
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSkills([])
-        }
-      })
+    const request = createNativeChatSkillRequest({
+      cwd,
+      list: (requestCwd, forceReload) =>
+        runtimeEnvironmentId
+          ? callRuntimeRpc<DiscoveredSkill[]>(
+              { kind: 'environment', environmentId: runtimeEnvironmentId },
+              'skills.codexList',
+              { cwd: requestCwd, forceReload },
+              { timeoutMs: 15_000 }
+            )
+          : window.api.skills.listCodex(requestCwd, forceReload),
+      apply: setSkills
+    })
+    request.refresh()
+    // Remote runtime inventory is queried on mount/lifecycle invalidation; local
+    // app-server watcher notifications additionally hot-reload immediately.
+    const unsubscribeCodex = runtimeEnvironmentId
+      ? () => {}
+      : window.api.skills.onCodexChanged(() => request.refresh())
+    const unsubscribeLifecycle = onInstalledAgentSkillsChanged(() => request.refresh(true))
     return () => {
-      cancelled = true
+      request.cancel()
+      unsubscribeCodex()
+      unsubscribeLifecycle()
     }
-  }, [agent, cwd])
+  }, [agent, cwd, runtimeEnvironmentId])
 
   return skills
 }

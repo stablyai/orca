@@ -320,7 +320,7 @@ import type {
 import type { ResolvedSourceControlAiGenerationParams } from '../shared/source-control-ai'
 import type { SourceControlAiSettings } from '../shared/source-control-ai-types'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
-import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
+import type { DiscoveredSkill, SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
 import type {
   CrashReportBreadcrumbData,
   CrashReportCopyDiagnosticsArgs,
@@ -2247,6 +2247,8 @@ export type PreloadApi = {
   }
   skills: {
     discover: (target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>
+    listCodex: (cwd: string, forceReload?: boolean) => Promise<DiscoveredSkill[]>
+    onCodexChanged: (listener: () => void) => () => void
   }
   pet: {
     import: () => Promise<CustomPet | null>

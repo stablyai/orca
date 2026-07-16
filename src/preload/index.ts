@@ -71,7 +71,7 @@ import type {
 } from '../shared/terminal-custom-themes'
 import type { GitHistoryOptions, GitHistoryResult } from '../shared/git-history'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
-import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
+import type { DiscoveredSkill, SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
 import type {
   RuntimeBrowserDriverState,
   RuntimeMobileSessionTabMove,
@@ -2215,7 +2215,13 @@ const api = {
 
   skills: {
     discover: (target?: SkillDiscoveryTarget): Promise<SkillDiscoveryResult> =>
-      ipcRenderer.invoke('skills:discover', target)
+      ipcRenderer.invoke('skills:discover', target),
+    listCodex: (cwd: string, forceReload = false): Promise<DiscoveredSkill[]> =>
+      ipcRenderer.invoke('skills:list-codex', cwd, forceReload),
+    onCodexChanged: (listener: () => void): (() => void) => {
+      ipcRenderer.on('skills:codex-changed', listener)
+      return () => ipcRenderer.removeListener('skills:codex-changed', listener)
+    }
   },
 
   pet: {

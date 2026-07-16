@@ -454,6 +454,7 @@ function NativeChatResolvedView({
           terminalTabId={terminalTabId}
           targetPtyId={targetPtyId}
           agent={agent}
+          runtimeEnvironmentId={runtimeEnvironmentId}
           canSend={canSend}
           isWorking={isWorking}
           onStop={stopAgent}

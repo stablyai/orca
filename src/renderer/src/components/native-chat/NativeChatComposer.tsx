@@ -59,6 +59,7 @@ export type NativeChatComposerProps = {
   /** Specific split-pane PTY this chat view owns. */
   targetPtyId: string | null
   agent: AgentType
+  runtimeEnvironmentId?: string | null
   /**
    * Mobile presence-lock seam (R8): when a mobile client holds the pty, desktop
    * sends must be guarded rather than silently dropped. U9 wires the real lock
@@ -111,6 +112,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       terminalTabId,
       targetPtyId,
       agent,
+      runtimeEnvironmentId = null,
       canSend = true,
       isWorking = false,
       onStop,
@@ -129,7 +131,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
     const [activeSuggestion, setActiveSuggestion] = useState(0)
     const [notice, setNotice] = useState<string | null>(null)
     const [dictationPressed, setDictationPressed] = useState(false)
-    const skills = useNativeChatSkills(agent, terminalTabId)
+    const skills = useNativeChatSkills(agent, terminalTabId, runtimeEnvironmentId)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const { cancelPendingSends, trackPendingSend } = useNativeChatSendLifecycle(
       terminalTabId,
