@@ -44,17 +44,22 @@ export function registerSkillsHandlers(store: Store): void {
       }
     }
   })
-  ipcMain.handle('skills:list-codex', async (event, cwd: string, forceReload = false) => {
-    const normalizedCwd = cwd.trim()
-    if (!normalizedCwd) {
-      throw new Error('Codex skill inventory requires a working directory.')
+  ipcMain.handle(
+    'skills:list-codex',
+    async (event, cwd: string, forceReload = false, codexHome?: string) => {
+      const normalizedCwd = cwd.trim()
+      if (!normalizedCwd) {
+        throw new Error('Codex skill inventory requires a working directory.')
+      }
+      if (!subscribers.has(event.sender)) {
+        subscribers.add(event.sender)
+        event.sender.once('destroyed', () => subscribers.delete(event.sender))
+      }
+      return adaptCodexEffectiveSkills(
+        await codexSkillInventory.list(normalizedCwd, forceReload, codexHome)
+      )
     }
-    if (!subscribers.has(event.sender)) {
-      subscribers.add(event.sender)
-      event.sender.once('destroyed', () => subscribers.delete(event.sender))
-    }
-    return adaptCodexEffectiveSkills(await codexSkillInventory.list(normalizedCwd, forceReload))
-  })
+  )
   ipcMain.handle(
     'skills:discover',
     async (_event, target?: SkillDiscoveryTarget): Promise<SkillDiscoveryResult> => {

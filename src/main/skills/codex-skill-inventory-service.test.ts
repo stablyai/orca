@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { spawn } from 'node:child_process'
 
 const { child, stdinWrite } = vi.hoisted(() => {
   function emitter() {
@@ -39,10 +40,11 @@ import { CodexSkillInventoryService } from './codex-skill-inventory-service'
 describe('CodexSkillInventoryService', () => {
   beforeEach(() => {
     stdinWrite.mockReset()
+    vi.mocked(spawn).mockClear()
   })
 
   it('uses skills/list for the requested cwd and forwards watcher invalidation', async () => {
-    const service = new CodexSkillInventoryService()
+    const service = new CodexSkillInventoryService('/profiles/active-codex-home')
     const changed = vi.fn()
     service.on('changed', changed)
     stdinWrite.mockImplementation((line: string) => {
@@ -89,6 +91,9 @@ describe('CodexSkillInventoryService', () => {
     await expect(service.list('/repo')).resolves.toEqual([
       expect.objectContaining({ name: 'plugin:active' })
     ])
+    expect(vi.mocked(spawn).mock.calls[0]?.[2]?.env).toMatchObject({
+      CODEX_HOME: '/profiles/active-codex-home'
+    })
     expect(
       stdinWrite.mock.calls
         .map(([line]) => JSON.parse(line as string))

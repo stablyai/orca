@@ -15,6 +15,9 @@ export function createNativeChatSkillRequest(args: {
   return {
     refresh(forceReload = false): void {
       const requestGeneration = ++generation
+      // Why: once the effective inventory is invalidated, keeping the previous
+      // list clickable would violate the callable-for-this-turn invariant.
+      args.apply([])
       void args
         .list(args.cwd, forceReload)
         .then((skills) => {

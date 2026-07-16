@@ -16,10 +16,14 @@ type SkillsListResponse = {
 
 export class CodexSkillInventoryService extends EventEmitter {
   private child: ChildProcessWithoutNullStreams | null = null
-  private buffer = ''
+  private buffers = new WeakMap<ChildProcessWithoutNullStreams, string>()
   private nextId = 0
   private initialized: Promise<void> | null = null
   private pending = new Map<number, PendingRequest>()
+
+  constructor(private readonly codexHome?: string) {
+    super()
+  }
 
   async list(cwd: string, forceReload = false): Promise<CodexEffectiveSkill[]> {
     await this.ensureInitialized()
@@ -53,12 +57,17 @@ export class CodexSkillInventoryService extends EventEmitter {
       const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(codexCommand, ['app-server'])
       const child = spawn(spawnCmd, spawnArgs, {
         stdio: ['pipe', 'pipe', 'pipe'],
-        windowsHide: true
+        windowsHide: true,
+        env: { ...process.env, ...(this.codexHome ? { CODEX_HOME: this.codexHome } : {}) }
       })
       this.child = child
-      child.stdout.on('data', (chunk: Buffer) => this.onData(chunk))
-      child.on('error', (error) => this.onExit(error))
-      child.on('close', () => this.onExit(new Error('Codex app-server exited.')))
+      this.buffers.set(child, '')
+      // Why: app-server can emit diagnostics for the lifetime of the session;
+      // leaving stderr unread can fill the pipe and deadlock skills/list.
+      child.stderr.resume()
+      child.stdout.on('data', (chunk: Buffer) => this.onData(child, chunk))
+      child.on('error', (error) => this.onExit(child, error))
+      child.on('close', () => this.onExit(child, new Error('Codex app-server exited.')))
       this.request('initialize', { clientInfo: { name: 'orca', version: '1.0.0' } })
         .then(() => {
           child.stdin.write(
@@ -66,7 +75,14 @@ export class CodexSkillInventoryService extends EventEmitter {
           )
           resolve()
         })
-        .catch(reject)
+        .catch((error) => {
+          if (this.child === child) {
+            this.child = null
+            this.initialized = null
+          }
+          child.kill()
+          reject(error)
+        })
     })
     return this.initialized
   }
@@ -87,12 +103,12 @@ export class CodexSkillInventoryService extends EventEmitter {
     })
   }
 
-  private onData(chunk: Buffer): void {
-    this.buffer += chunk.toString()
+  private onData(child: ChildProcessWithoutNullStreams, chunk: Buffer): void {
+    let buffer = (this.buffers.get(child) ?? '') + chunk.toString()
     let newlineIndex: number
-    while ((newlineIndex = this.buffer.indexOf('\n')) >= 0) {
-      const line = this.buffer.slice(0, newlineIndex).trim()
-      this.buffer = this.buffer.slice(newlineIndex + 1)
+    while ((newlineIndex = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, newlineIndex).trim()
+      buffer = buffer.slice(newlineIndex + 1)
       if (!line) {
         continue
       }
@@ -121,9 +137,13 @@ export class CodexSkillInventoryService extends EventEmitter {
         pending.resolve(message.result)
       }
     }
+    this.buffers.set(child, buffer)
   }
 
-  private onExit(error: Error): void {
+  private onExit(child: ChildProcessWithoutNullStreams, error: Error): void {
+    if (this.child !== child) {
+      return
+    }
     this.rejectPending(error)
     this.child = null
     this.initialized = null
@@ -138,4 +158,19 @@ export class CodexSkillInventoryService extends EventEmitter {
   }
 }
 
-export const codexSkillInventory = new CodexSkillInventoryService()
+export class CodexSkillInventoryRegistry extends EventEmitter {
+  private services = new Map<string, CodexSkillInventoryService>()
+
+  list(cwd: string, forceReload = false, codexHome?: string): Promise<CodexEffectiveSkill[]> {
+    const key = codexHome?.trim() || '<default>'
+    let service = this.services.get(key)
+    if (!service) {
+      service = new CodexSkillInventoryService(codexHome?.trim() || undefined)
+      service.on('changed', () => this.emit('changed'))
+      this.services.set(key, service)
+    }
+    return service.list(cwd, forceReload)
+  }
+}
+
+export const codexSkillInventory = new CodexSkillInventoryRegistry()

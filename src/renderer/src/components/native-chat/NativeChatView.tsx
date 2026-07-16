@@ -146,8 +146,6 @@ function NativeChatResolvedView({
   onSwitchToTerminal?: () => void
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }): React.JSX.Element {
-  // Primitive owner selection (no useShallow): routes the pane's read/subscribe to
-  // the remote runtime host for a runtime-owned pane; null keeps the local path.
   const runtimeEnvironmentId = useAppStore((s) =>
     selectNativeChatRuntimeEnvironmentId(s, terminalTabId)
   )
@@ -161,16 +159,10 @@ function NativeChatResolvedView({
   const launchPrompt = useAppStore((s) => s.nativeChatLaunchPromptByTabId[terminalTabId] ?? null)
   const clearNativeChatLaunchPrompt = useAppStore((s) => s.clearNativeChatLaunchPrompt)
   const paneLaunchPrompt = launchPrompt?.agent === agent ? launchPrompt : null
-  // Live hook state for this pane, selected directly so the working indicator
-  // flips the instant the agent reports 'working' — even when switching to chat
-  // mid-turn before the transcript merge has caught up.
   const hookWorking = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.state === 'working')
-  // The agent's in-progress reply preview (hook), shown as a live streaming
-  // bubble while it works — before the completed turn flushes to the transcript.
   const hookPreview = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.lastAssistantMessage)
   const canSend = useNativeChatCanSend(targetPtyId)
-  // Reuse the verified composer send path for interactive cards and composer
-  // stop (Stop sends ESC, the agent-TUI interrupt key).
+  // Reuse the verified composer send path for interactive cards and stop.
   const interactiveSend = useNativeChatInteractiveSend(terminalTabId, targetPtyId, agent)
   const [workingInterrupted, setWorkingInterrupted] = useState(false)
   // True while a question card owns the input region, so the composer is hidden.
@@ -454,7 +446,7 @@ function NativeChatResolvedView({
           terminalTabId={terminalTabId}
           targetPtyId={targetPtyId}
           agent={agent}
-          runtimeEnvironmentId={runtimeEnvironmentId}
+          paneKey={paneKey}
           canSend={canSend}
           isWorking={isWorking}
           onStop={stopAgent}

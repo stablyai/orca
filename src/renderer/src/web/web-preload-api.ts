@@ -2658,8 +2658,12 @@ function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
         sources: [],
         scannedAt: Date.now()
       })),
-    listCodex: (cwd, forceReload = false) =>
-      callRuntimeResult<DiscoveredSkill[]>('skills.codexList', { cwd, forceReload }, 15_000),
+    listCodex: (cwd, forceReload = false, codexHome) =>
+      callRuntimeResult<DiscoveredSkill[]>(
+        'skills.codexList',
+        { cwd, forceReload, codexHome },
+        15_000
+      ),
     onCodexChanged: () => () => {}
   }
 }

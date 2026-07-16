@@ -54,12 +54,10 @@ import { useNativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
 const ESC = '\x1b'
 
 export type NativeChatComposerProps = {
-  /** Tab hosting the agent; used to resolve the live ptyId + runtime settings. */
   terminalTabId: string
-  /** Specific split-pane PTY this chat view owns. */
   targetPtyId: string | null
   agent: AgentType
-  runtimeEnvironmentId?: string | null
+  paneKey: string
   /**
    * Mobile presence-lock seam (R8): when a mobile client holds the pty, desktop
    * sends must be guarded rather than silently dropped. U9 wires the real lock
@@ -67,7 +65,6 @@ export type NativeChatComposerProps = {
    * already renders the guarded/disabled affordance when it is `false`.
    */
   canSend?: boolean
-  /** True while the hosted TUI reports an in-flight turn; swaps Send to Stop. */
   isWorking?: boolean
   /** Interrupt the hosted agent, usually by sending ESC into the PTY. */
   onStop?: () => void
@@ -112,7 +109,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       terminalTabId,
       targetPtyId,
       agent,
-      runtimeEnvironmentId = null,
+      paneKey,
       canSend = true,
       isWorking = false,
       onStop,
@@ -131,7 +128,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
     const [activeSuggestion, setActiveSuggestion] = useState(0)
     const [notice, setNotice] = useState<string | null>(null)
     const [dictationPressed, setDictationPressed] = useState(false)
-    const skills = useNativeChatSkills(agent, terminalTabId, runtimeEnvironmentId)
+    const skills = useNativeChatSkills(agent, terminalTabId, paneKey)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const { cancelPendingSends, trackPendingSend } = useNativeChatSendLifecycle(
       terminalTabId,

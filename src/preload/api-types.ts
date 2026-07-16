@@ -2247,7 +2247,11 @@ export type PreloadApi = {
   }
   skills: {
     discover: (target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>
-    listCodex: (cwd: string, forceReload?: boolean) => Promise<DiscoveredSkill[]>
+    listCodex: (
+      cwd: string,
+      forceReload?: boolean,
+      codexHome?: string
+    ) => Promise<DiscoveredSkill[]>
     onCodexChanged: (listener: () => void) => () => void
   }
   pet: {

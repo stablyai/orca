@@ -2216,8 +2216,8 @@ const api = {
   skills: {
     discover: (target?: SkillDiscoveryTarget): Promise<SkillDiscoveryResult> =>
       ipcRenderer.invoke('skills:discover', target),
-    listCodex: (cwd: string, forceReload = false): Promise<DiscoveredSkill[]> =>
-      ipcRenderer.invoke('skills:list-codex', cwd, forceReload),
+    listCodex: (cwd: string, forceReload = false, codexHome?: string): Promise<DiscoveredSkill[]> =>
+      ipcRenderer.invoke('skills:list-codex', cwd, forceReload, codexHome),
     onCodexChanged: (listener: () => void): (() => void) => {
       ipcRenderer.on('skills:codex-changed', listener)
       return () => ipcRenderer.removeListener('skills:codex-changed', listener)

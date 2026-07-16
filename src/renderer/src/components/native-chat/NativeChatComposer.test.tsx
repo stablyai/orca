@@ -89,6 +89,7 @@ describe('NativeChatComposer', () => {
     const onStop = vi.fn()
     render(
       <NativeChatComposer
+        paneKey="tab-1:leaf-1"
         terminalTabId="tab-1"
         targetPtyId="pty-1"
         agent="codex"
@@ -110,6 +111,7 @@ describe('NativeChatComposer', () => {
     const onOptimisticSend = vi.fn(() => 'pending-1')
     render(
       <NativeChatComposer
+        paneKey="tab-1:leaf-1"
         terminalTabId="tab-1"
         targetPtyId="pty-1"
         agent="codex"

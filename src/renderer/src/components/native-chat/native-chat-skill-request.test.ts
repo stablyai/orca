@@ -36,12 +36,13 @@ describe('createNativeChatSkillRequest', () => {
     const request = createNativeChatSkillRequest({ cwd: '/repo', list, apply })
     request.refresh()
     request.refresh(true)
+    expect(apply).toHaveBeenLastCalledWith([])
     second.resolve([skill('installed')])
     await second.promise
     first.resolve([skill('stale')])
     await first.promise
     expect(list).toHaveBeenNthCalledWith(2, '/repo', true)
-    expect(apply).toHaveBeenCalledTimes(1)
+    expect(apply).toHaveBeenCalledTimes(3)
     expect(apply).toHaveBeenCalledWith([expect.objectContaining({ name: 'installed' })])
   })
 
@@ -54,9 +55,10 @@ describe('createNativeChatSkillRequest', () => {
       apply
     })
     request.refresh()
+    expect(apply).toHaveBeenCalledWith([])
     request.cancel()
     pending.resolve([skill('wrong-cwd')])
     await pending.promise
-    expect(apply).not.toHaveBeenCalled()
+    expect(apply).toHaveBeenCalledTimes(1)
   })
 })
