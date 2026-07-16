@@ -1148,6 +1148,8 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
       return 'A'
     case 'minimax':
       return 'M'
+    case 'zai':
+      return 'Z'
     case 'grok':
       return 'R'
     case 'codex':
@@ -2151,6 +2153,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     showOpencodeGo ? visibleOpencodeGo : null,
     showKimi ? visibleKimi : null,
     showMiniMax ? visibleMiniMax : null,
+    showZai ? visibleZai : null,
     showGrok ? visibleGrok : null
   ].filter((p): p is ProviderRateLimits => p !== null)
 
