@@ -2266,15 +2266,12 @@ function App(): React.JSX.Element {
                 'The app is still running. Retry the shell or use the menu to report the crash details.'
               )}
             >
-              {/* Why: in overlay layout mode the right sidebar is absolutely
-              positioned, so this row must be its positioning context — the
-              sidebar then spans the workspace rows (above the status bar)
-              instead of the whole viewport. */}
-              <div
-                className={`flex flex-row flex-1 min-h-0 overflow-hidden${
-                  settings?.rightSidebarLayoutMode === 'overlay' ? ' relative' : ''
-                }`}
-              >
+              {/* Why: `relative` makes this row the positioning context for the
+              overlay-mode right sidebar, which spans the workspace rows
+              (above the status bar) instead of the whole viewport. Inert
+              otherwise: every absolute descendant anchors to a nearer
+              positioned wrapper, and no z-index means no stacking context. */}
+              <div className="relative flex flex-row flex-1 min-h-0 overflow-hidden">
                 {/* Why: the non-workspace titlebar lives inside this left+center
               wrapper so it does not span over the right-sidebar column —
               when the right sidebar is open, its own header anchors at the
