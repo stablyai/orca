@@ -53,6 +53,7 @@ import { registerSpeechHandlers } from './speech'
 import { registerOrcaProfileHandlers } from './orca-profiles'
 import { registerCodexAccountHandlers } from './codex-accounts'
 import { registerAgentHookHandlers } from './agent-hooks'
+import { getPtyIdForPaneKey } from './pty'
 import { registerAgentTrustHandlers } from './agent-trust'
 import { registerClaudeAccountHandlers } from './claude-accounts'
 import { registerMiniMaxCredentialsHandlers } from './minimax-credentials'
@@ -81,6 +82,8 @@ let registered = false
 
 type CoreHandlerLifecycleOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
+  onOrcaProfileAuthMutation?: () => void
+  onBeforeOrcaProfileSignOut?: () => void
   getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
 }
 
@@ -122,7 +125,7 @@ export function registerCoreHandlers(
   registerCodexUsageHandlers(codexUsage)
   registerOpenCodeUsageHandlers(openCodeUsage)
   registerCodexAccountHandlers(codexAccounts)
-  registerAgentHookHandlers(runtime)
+  registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
   registerAgentTrustHandlers()
   registerClaudeAccountHandlers(claudeAccounts)
   registerMiniMaxCredentialsHandlers(rateLimits)
@@ -160,7 +163,9 @@ export function registerCoreHandlers(
   }
   registerTelemetryHandlers(store)
   registerOrcaProfileHandlers(store, {
-    onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch
+    onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch,
+    onAuthMutation: lifecycleOptions.onOrcaProfileAuthMutation,
+    onBeforeSignOut: lifecycleOptions.onBeforeOrcaProfileSignOut
   })
   registerBrowserHandlers()
   registerShellHandlers()

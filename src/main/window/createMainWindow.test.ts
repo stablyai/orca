@@ -2390,7 +2390,7 @@ describe('createMainWindow', () => {
     expect(onRendererProcessGone).toHaveBeenCalledWith(details, 142)
   })
 
-  it('passes the renderer webContents id through crash classification callbacks', () => {
+  it('passes the renderer webContents id through crash recording and recovery callbacks', () => {
     vi.useFakeTimers()
 
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
@@ -2423,13 +2423,11 @@ describe('createMainWindow', () => {
       return browserWindowInstance
     })
     const onRendererProcessGone = vi.fn()
-    const shouldRecordRendererCrash = vi.fn(() => true)
     const shouldRecoverRenderer = vi.fn(() => true)
 
     try {
       createMainWindow(null, {
         onRendererProcessGone,
-        shouldRecordRendererCrash,
         shouldRecoverRenderer
       })
 
@@ -2437,7 +2435,6 @@ describe('createMainWindow', () => {
       windowHandlers['render-process-gone']?.({} as never, details)
       vi.advanceTimersByTime(250)
 
-      expect(shouldRecordRendererCrash).toHaveBeenCalledWith(details, 424)
       expect(onRendererProcessGone).toHaveBeenCalledWith(details, 424)
       expect(shouldRecoverRenderer).toHaveBeenCalledWith(details, 424)
     } finally {
@@ -2445,9 +2442,10 @@ describe('createMainWindow', () => {
     }
   })
 
-  it('does not notify the crash recorder for an expected renderer teardown', () => {
+  it('forwards expected renderer teardowns so the recorder can diagnose suppression', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
+      id: 142,
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
       }),
@@ -2476,10 +2474,7 @@ describe('createMainWindow', () => {
     })
     const onRendererProcessGone = vi.fn()
 
-    createMainWindow(null, {
-      onRendererProcessGone,
-      shouldRecordRendererCrash: () => false
-    })
+    createMainWindow(null, { onRendererProcessGone })
 
     windowHandlers['render-process-gone']?.(
       {} as never,
@@ -2489,7 +2484,10 @@ describe('createMainWindow', () => {
       } as Electron.RenderProcessGoneDetails
     )
 
-    expect(onRendererProcessGone).not.toHaveBeenCalled()
+    expect(onRendererProcessGone).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: 'killed', exitCode: 15 }),
+      expect.any(Number)
+    )
 
     consoleError.mockRestore()
   })
@@ -2839,11 +2837,39 @@ describe('createMainWindow', () => {
     })
   })
 
-  it('does not install the startup reveal fallback off Windows', () => {
+  it('reveals the startup window on Linux when ready-to-show never fires', () => {
     vi.useFakeTimers()
     const { browserWindowInstance } = createStartupRevealWindowFixture()
 
     withPlatform('linux', () => {
+      createMainWindow(null)
+      vi.advanceTimersByTime(9_999)
+      expect(browserWindowInstance.show).not.toHaveBeenCalled()
+
+      vi.advanceTimersByTime(1)
+
+      expect(browserWindowInstance.show).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('cancels the Linux startup reveal fallback after ready-to-show', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+
+    withPlatform('linux', () => {
+      createMainWindow(null)
+      windowHandlers['ready-to-show']()
+      vi.advanceTimersByTime(10_000)
+
+      expect(browserWindowInstance.show).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('does not install the startup reveal fallback on macOS', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance } = createStartupRevealWindowFixture()
+
+    withPlatform('darwin', () => {
       createMainWindow(null)
       vi.advanceTimersByTime(10_000)
 
@@ -2894,6 +2920,57 @@ describe('createMainWindow', () => {
     const { browserWindowInstance } = createStartupRevealWindowFixture()
 
     withPlatform('win32', () => {
+      createMainWindow(createStartupRevealStore(true) as never)
+      browserWindowInstance.isDestroyed.mockReturnValue(true)
+      vi.advanceTimersByTime(10_000)
+
+      expect(browserWindowInstance.show).not.toHaveBeenCalled()
+      expect(browserWindowInstance.maximize).not.toHaveBeenCalled()
+    })
+  })
+
+  it('keeps the headless E2E window hidden when the Linux fallback fires', () => {
+    vi.useFakeTimers()
+    const previousHeadless = process.env.ORCA_E2E_HEADLESS
+    process.env.ORCA_E2E_HEADLESS = '1'
+    const { browserWindowInstance } = createStartupRevealWindowFixture()
+
+    try {
+      withPlatform('linux', () => {
+        createMainWindow(createStartupRevealStore(true) as never)
+        vi.advanceTimersByTime(10_000)
+
+        expect(browserWindowInstance.show).not.toHaveBeenCalled()
+        expect(browserWindowInstance.maximize).not.toHaveBeenCalled()
+      })
+    } finally {
+      if (previousHeadless === undefined) {
+        delete process.env.ORCA_E2E_HEADLESS
+      } else {
+        process.env.ORCA_E2E_HEADLESS = previousHeadless
+      }
+    }
+  })
+
+  it('clears the Linux startup reveal fallback when the window is closed', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
+
+    withPlatform('linux', () => {
+      createMainWindow(createStartupRevealStore(true) as never)
+      windowHandlers.closed()
+      vi.advanceTimersByTime(10_000)
+
+      expect(browserWindowInstance.show).not.toHaveBeenCalled()
+      expect(browserWindowInstance.maximize).not.toHaveBeenCalled()
+    })
+  })
+
+  it('does not show or maximize a destroyed window when the Linux fallback fires', () => {
+    vi.useFakeTimers()
+    const { browserWindowInstance } = createStartupRevealWindowFixture()
+
+    withPlatform('linux', () => {
       createMainWindow(createStartupRevealStore(true) as never)
       browserWindowInstance.isDestroyed.mockReturnValue(true)
       vi.advanceTimersByTime(10_000)

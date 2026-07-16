@@ -150,6 +150,27 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
 
     expect(selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')).toEqual([childEntry])
   })
+
+  it('does not use worktree attribution for a completed row whose tab is gone', () => {
+    const closedEntry = makeEntry(PANE_KEY_1, 1000, {
+      state: 'done',
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      agentType: 'pi'
+    })
+    const state = {
+      tabsByWorktree: {
+        'wt-1': [makeTab('tab-live')]
+      },
+      agentStatusByPaneKey: {
+        [PANE_KEY_1]: closedEntry
+      },
+      migrationUnsupportedByPtyId: {},
+      retainedAgentsByPaneKey: {}
+    }
+
+    expect(selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')).toEqual([])
+  })
 })
 
 describe('selectRuntimeAgentOrchestrationForWorktree', () => {

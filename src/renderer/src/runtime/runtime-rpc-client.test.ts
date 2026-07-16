@@ -20,15 +20,20 @@ import {
 
 const runtimeCall = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
+const runtimeEnvironmentSubscribe = vi.fn()
 
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   runtimeCall.mockReset()
   runtimeEnvironmentCall.mockReset()
+  runtimeEnvironmentSubscribe.mockReset()
   vi.stubGlobal('window', {
     api: {
       runtime: { call: runtimeCall },
-      runtimeEnvironments: { call: runtimeEnvironmentCall }
+      runtimeEnvironments: {
+        call: runtimeEnvironmentCall,
+        subscribe: runtimeEnvironmentSubscribe
+      }
     }
   })
 })
@@ -107,6 +112,49 @@ describe('runtime RPC client routing', () => {
       timeoutMs: 50
     })
     expect(runtimeCall).not.toHaveBeenCalled()
+  })
+
+  it('uses an abortable subscription for paired-runtime requests', async () => {
+    const controller = new AbortController()
+    const unsubscribe = vi.fn()
+    runtimeEnvironmentSubscribe.mockResolvedValue({ unsubscribe, sendBinary: vi.fn() })
+
+    const request = callRuntimeRpc(
+      { kind: 'environment', environmentId: 'env-1' },
+      'status.get',
+      undefined,
+      { signal: controller.signal }
+    )
+    await vi.waitFor(() => expect(runtimeEnvironmentSubscribe).toHaveBeenCalled())
+    controller.abort()
+
+    await expect(request).rejects.toMatchObject({ name: 'AbortError' })
+    await vi.waitFor(() => expect(unsubscribe).toHaveBeenCalledTimes(1))
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('rejects an abortable paired-runtime request at the response deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      const controller = new AbortController()
+      const unsubscribe = vi.fn()
+      runtimeEnvironmentSubscribe.mockResolvedValue({ unsubscribe, sendBinary: vi.fn() })
+
+      const request = callRuntimeRpc(
+        { kind: 'environment', environmentId: 'env-1' },
+        'status.get',
+        undefined,
+        { signal: controller.signal, timeoutMs: 15_000 }
+      )
+      await vi.waitFor(() => expect(runtimeEnvironmentSubscribe).toHaveBeenCalled())
+      const rejection = expect(request).rejects.toThrow('timed out before status.get completed')
+      await vi.advanceTimersByTimeAsync(15_000)
+
+      await rejection
+      await vi.waitFor(() => expect(unsubscribe).toHaveBeenCalledTimes(1))
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('preflights remote runtime compatibility before non-status calls', async () => {

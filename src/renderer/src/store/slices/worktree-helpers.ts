@@ -42,6 +42,8 @@ export type WorktreeMetaUpdateGuard = (worktree: Worktree | DetectedWorktree | u
 
 export type WorktreeMetaUpdateOptions = {
   shouldApply?: WorktreeMetaUpdateGuard
+  /** Skip the automatic review refetch when the caller owns an equivalent refresh. */
+  suppressHostedReviewRefresh?: boolean
 }
 
 export type WorktreeRenameRequest = {
@@ -243,6 +245,14 @@ export type WorktreeSlice = {
    */
   seedActiveWorktreeLastVisitedIfMissing: () => void
   setActiveWorktree: (worktreeId: string | null) => void
+  /**
+   * Health-driven remount of one terminal tab: bumps the tab's generation so
+   * TerminalPane unmounts, detaches (preserving a live PTY), and remounts with
+   * a fresh xterm that reattaches and replays. Used by terminal-pane-recovery
+   * when a pane's write pipeline is certified dead or its input is
+   * undeliverable while the PTY is alive. Returns false when the tab is gone.
+   */
+  remountTerminalTabForRecovery: (tabId: string) => boolean
   setActiveFolderWorkspace: (folderWorkspaceId: string) => void
   setRenamingWorktreeId: (request: string | WorktreeRenameRequest | null) => void
   allWorktrees: () => Worktree[]

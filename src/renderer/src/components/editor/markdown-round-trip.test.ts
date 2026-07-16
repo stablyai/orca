@@ -2,14 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
+import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import type { SlashCommandId } from './rich-markdown-slash-commands'
 import { slashCommands } from './rich-markdown-slash-commands'
 
 function roundTripMarkdown(content: string): string {
+  const codec = createRichMarkdownEditorCodec()
   const editor = new Editor({
     element: null,
-    extensions: createRichMarkdownExtensions(),
-    content: encodeRawMarkdownHtmlForRichEditor(content),
+    extensions: createRichMarkdownExtensions({ codec }),
+    content: encodeRawMarkdownHtmlForRichEditor(content, codec),
     contentType: 'markdown'
   })
 
@@ -21,10 +23,11 @@ function roundTripMarkdown(content: string): string {
 }
 
 function markdownAfterTextReplace(content: string, search: string, replacement: string): string {
+  const codec = createRichMarkdownEditorCodec()
   const editor = new Editor({
     element: null,
-    extensions: createRichMarkdownExtensions(),
-    content: encodeRawMarkdownHtmlForRichEditor(content),
+    extensions: createRichMarkdownExtensions({ codec }),
+    content: encodeRawMarkdownHtmlForRichEditor(content, codec),
     contentType: 'markdown'
   })
 
@@ -50,9 +53,10 @@ function markdownAfterTextReplace(content: string, search: string, replacement: 
 }
 
 function slashCommandMarkdown(commandId: SlashCommandId): string {
+  const codec = createRichMarkdownEditorCodec()
   const editor = new Editor({
     element: null,
-    extensions: createRichMarkdownExtensions(),
+    extensions: createRichMarkdownExtensions({ codec }),
     content: '',
     contentType: 'markdown'
   })
@@ -71,9 +75,10 @@ function slashCommandMarkdown(commandId: SlashCommandId): string {
 }
 
 function slashCommandSelectionParent(commandId: SlashCommandId): string {
+  const codec = createRichMarkdownEditorCodec()
   const editor = new Editor({
     element: null,
-    extensions: createRichMarkdownExtensions(),
+    extensions: createRichMarkdownExtensions({ codec }),
     content: '',
     contentType: 'markdown'
   })
@@ -127,6 +132,29 @@ describe('rich markdown round trip', () => {
     )
   })
 
+  it.each(['heading-2', 'heading-3', 'heading-4'])(
+    'preserves %s-styled details blocks',
+    (variant) => {
+      expect(
+        roundTripMarkdown(
+          `<details data-orca-toggle="${variant}"><summary>Toggle</summary><p>Body</p></details>\n`
+        )
+      ).toBe(
+        `<details class="orca-details" data-orca-toggle="${variant}">\n<summary>Toggle</summary>\n\nBody\n\n</details>`
+      )
+    }
+  )
+
+  it('preserves a heading toggle when its attribute uses HTML whitespace around equals', () => {
+    expect(
+      roundTripMarkdown(
+        '<details data-orca-toggle = "heading-4"><summary>Toggle</summary><p>Body</p></details>\n'
+      )
+    ).toBe(
+      '<details class="orca-details" data-orca-toggle="heading-4">\n<summary>Toggle</summary>\n\nBody\n\n</details>'
+    )
+  })
+
   it('preserves details blocks with raw html as passthrough html', () => {
     const input = '<details><summary><span>Toggle</span></summary><p><em>Body</em></p></details>\n'
     expect(roundTripMarkdown(input)).toBe(input.trimEnd())
@@ -175,6 +203,17 @@ describe('rich markdown round trip', () => {
       '<details class="orca-details" data-orca-toggle="heading-1" open>\n<summary></summary>\n\n\n\n</details>'
     )
     expect(slashCommandSelectionParent('toggle-h1')).toBe('detailsSummary')
+  })
+
+  it.each([
+    ['toggle-h2', 'heading-2'],
+    ['toggle-h3', 'heading-3'],
+    ['toggle-h4', 'heading-4']
+  ] as const)('inserts editable %s toggles from slash commands', (commandId, variant) => {
+    expect(slashCommandMarkdown(commandId)).toBe(
+      `<details class="orca-details" data-orca-toggle="${variant}" open>\n<summary></summary>\n\n\n\n</details>`
+    )
+    expect(slashCommandSelectionParent(commandId)).toBe('detailsSummary')
   })
 
   it('preserves markdown tables', () => {

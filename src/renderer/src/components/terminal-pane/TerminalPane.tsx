@@ -88,10 +88,11 @@ import { connectPanePty } from './pty-connection'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { shouldPreserveTerminalScrollbackBuffers } from '../../../../shared/workspace-session-terminal-buffers'
 import {
-  getAllOverrides,
+  getMobileFitOverridePtyIds,
   getFitOverrideForPty,
   onOverrideChange
 } from '@/lib/pane-manager/mobile-fit-overrides'
+import { shouldShowMobileDriverOverlay } from './mobile-driver-overlay-visibility'
 import {
   getAllDrivers,
   getDriverForPty,
@@ -100,9 +101,15 @@ import {
 } from '@/lib/pane-manager/mobile-driver-state'
 import { shouldChatTakeOverMobileSurface } from '../native-chat/native-chat-send-eligibility'
 import { canToggleNativeChat } from '../native-chat/native-chat-availability'
+import {
+  nativeChatLaunchAgentForLeaf,
+  resolveNativeChatLeafRoute
+} from '../native-chat/native-chat-leaf-routing'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
-import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
+import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
+import { applyDesktopFitFallbackAfterReplay } from './desktop-fit-fallback'
+import { clearTerminalScrollbackAndFollowOutput } from '@/lib/pane-manager/terminal-scrollback-clear'
 import { captureTerminalShutdownLayout } from './terminal-shutdown-layout-capture'
 import { getOverrideAffectedPanes, getPanesNeedingOverrideFit } from './override-affected-panes'
 import {
@@ -375,10 +382,8 @@ export default function TerminalPane({
   // list via managerRef.current?.getPanes()) re-runs when a pane is split or
   // closed. managerRef is imperative and doesn't trigger React's dependency
   // tracking. The lifecycle hook updates this via setPaneCount on
-  // onPaneCreated / onPaneClosed / onLayoutChanged. The value is never
-  // read — the portal map at line ~914 calls `managerRef.current?.getPanes()`
-  // imperatively, so `setPaneCount` is used only as a render-trigger side
-  // effect to force that map to re-run when a pane is split or closed.
+  // onPaneCreated / onPaneClosed / onLayoutChanged. The portal map reads the
+  // manager imperatively; the count also wakes leaf-ownership initialization.
   const [paneCount, setPaneCount] = useState<number>(0)
   // Why: pane reorders can move panes without changing count or size, so
   // overlay rects need an explicit layout-change render trigger.
@@ -393,6 +398,9 @@ export default function TerminalPane({
   } | null>(null)
   const [quickCommandEditorOpen, setQuickCommandEditorOpen] = useState(false)
   const [chatLeafId, setChatLeafId] = useState<string | null>(null)
+  const [tabWideAgentHintLeafId, setTabWideAgentHintLeafId] = useState<string | null | undefined>(
+    undefined
+  )
   // Why: the terminal menu can be the first quick-command entry point, so each
   // Add action starts with a fresh draft instead of reusing cancelled text.
   const [quickCommandDraft, setQuickCommandDraft] = useState(createTerminalQuickCommandDraft)
@@ -441,7 +449,7 @@ export default function TerminalPane({
           (paneId) => paneTransportsRef.current.get(paneId)?.getPtyId(),
           event.ptyId
         )
-      if (event.mode === 'mobile-fit') {
+      if (event.mode === 'mobile-fit' || event.mode === 'remote-desktop-fit') {
         // Why: when mobile starts driving, the agent re-renders its output at
         // phone width and that phone-wrapped byte stream flows live into this
         // passive watcher's xterm. xterm must shrink to the phone dims now or
@@ -511,15 +519,12 @@ export default function TerminalPane({
             if (rect.width === 0 || rect.height === 0) {
               continue
             }
-            safeFit(pane)
-            const stuckAtMobile =
-              event.priorCols != null &&
-              event.priorRows != null &&
-              pane.terminal.cols === event.priorCols &&
-              pane.terminal.rows === event.priorRows
-            if (stuckAtMobile && event.cols > 0 && event.rows > 0) {
-              pane.terminal.resize(event.cols, event.rows)
-            }
+            applyDesktopFitFallbackAfterReplay(pane, {
+              ...event,
+              // Why: the timeout/replay queue can outlive this pane binding;
+              // never apply old server dimensions to a replacement PTY.
+              shouldApply: () => getAffectedPanes().includes(pane)
+            })
           }
         })
       }
@@ -684,52 +689,105 @@ export default function TerminalPane({
     selectTerminalTabAgentTypesByLeaf(store.agentStatusByPaneKey, tabId)
   )
   const toggleTabViewMode = useAppStore((store) => store.toggleTabViewMode)
+  const setTabViewMode = useAppStore((store) => store.setTabViewMode)
   const savedLayout = useAppStore((store) => store.terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT)
   const terminalTab = useAppStore((store) =>
     getCachedTerminalTabForWorktree(store.tabsByWorktree, worktreeId, tabId)
   )
+  const restoredLayout = useMemo(
+    () => (terminalTab ? sanitizeTerminalLayoutPaneTitles(savedLayout, terminalTab) : savedLayout),
+    [savedLayout, terminalTab]
+  )
+  const expectedLayoutLeafIds = useMemo(
+    () => collectLeafIdsInOrder(restoredLayout.root),
+    [restoredLayout.root]
+  )
+  const getNativeChatLeafIds = useCallback((): string[] => {
+    const mountedLeafIds = managerRef.current?.getPanes().map((pane) => pane.leafId) ?? []
+    // Why: a partially hydrated manager can expose one pane from a restored
+    // split. Union both sources so tab-wide evidence stays disabled meanwhile.
+    return [...new Set([...expectedLayoutLeafIds, ...mountedLeafIds])]
+  }, [expectedLayoutLeafIds])
+  const getTabWideAgentHintLeafId = useCallback((): string | null => {
+    if (tabWideAgentHintLeafId !== undefined) {
+      return tabWideAgentHintLeafId
+    }
+    const leafIds = getNativeChatLeafIds()
+    return leafIds.length === 1 ? leafIds[0] : null
+  }, [getNativeChatLeafIds, tabWideAgentHintLeafId])
+  useEffect(() => {
+    if (tabWideAgentHintLeafId !== undefined) {
+      return
+    }
+    const leafIds = getNativeChatLeafIds()
+    if (leafIds.length === 0) {
+      return
+    }
+    // Why: tab-wide launch/title metadata predates leaf ownership. Bind it only
+    // when the first concrete topology proves which sole leaf it can describe.
+    setTabWideAgentHintLeafId(leafIds.length === 1 ? leafIds[0] : null)
+  }, [getNativeChatLeafIds, paneCount, tabWideAgentHintLeafId])
   const resolveTitleAgentForLeaf = useCallback(
-    (leafId: string | null) =>
-      resolveNativeChatLeafTitleAgent({
+    (leafId: string | null) => {
+      const hasSingleKnownLeaf =
+        getNativeChatLeafIds().length === 1 && getTabWideAgentHintLeafId() === leafId
+      return resolveNativeChatLeafTitleAgent({
         leafId,
         panes: managerRef.current?.getPanes() ?? [],
         runtimePaneTitlesByPaneId,
-        tabLabel: unifiedTabLabel,
-        terminalTitle: terminalTab?.title
-      }),
-    [runtimePaneTitlesByPaneId, terminalTab?.title, unifiedTabLabel]
+        tabLabel: hasSingleKnownLeaf ? unifiedTabLabel : null,
+        terminalTitle: hasSingleKnownLeaf ? terminalTab?.title : null
+      })
+    },
+    [
+      getNativeChatLeafIds,
+      getTabWideAgentHintLeafId,
+      runtimePaneTitlesByPaneId,
+      terminalTab?.title,
+      unifiedTabLabel
+    ]
   )
   // Per-leaf eligibility: a split can mix a supported agent in one leaf with an
   // unsupported one in another, so the toggle is gated by the specific leaf.
   // A leaf's own live agent is authoritative; the tab-wide launch/title hints
   // only fill in before hooks arrive (or for the single-pane case) so they
   // can't enable the toggle on a sibling actually running an unsupported agent.
-  const canToggleChatForLeaf = useCallback(
+  const isChatEligibleForLeaf = useCallback(
     (leafId: string | null): boolean => {
       const detectedAgent = leafId ? (tabAgentTypeByLeaf[leafId] ?? null) : null
-      // Scope the "always allow toggling back" rule to the leaf actually showing
-      // chat — passing the tab-wide flag would re-enable the toggle on an
-      // unsupported sibling whenever any leaf in the split is in chat view.
-      const isChatViewForLeaf = effectiveChatViewMode && leafId !== null && chatLeafId === leafId
+      const launchAgent = nativeChatLaunchAgentForLeaf({
+        launchAgent: terminalTab?.launchAgent,
+        launchAgentLeafId: getTabWideAgentHintLeafId(),
+        leafId,
+        leafIds: getNativeChatLeafIds()
+      })
       return canToggleNativeChat({
         experimentalNativeChatEnabled: nativeChatEnabled,
         contentType: 'terminal',
-        launchAgent: detectedAgent ? null : terminalTab?.launchAgent,
+        launchAgent: detectedAgent ? null : launchAgent,
         detectedAgent,
         resolvedAgent: detectedAgent ? null : resolveTitleAgentForLeaf(leafId),
-        nativeChatTranscriptIsLocalReadable,
-        isChatViewMode: isChatViewForLeaf
+        nativeChatTranscriptIsLocalReadable
       })
     },
     [
       tabAgentTypeByLeaf,
-      effectiveChatViewMode,
-      chatLeafId,
       nativeChatEnabled,
       nativeChatTranscriptIsLocalReadable,
       terminalTab?.launchAgent,
+      getNativeChatLeafIds,
+      getTabWideAgentHintLeafId,
       resolveTitleAgentForLeaf
     ]
+  )
+  const canToggleChatForLeaf = useCallback(
+    (leafId: string | null): boolean => {
+      // Scope the "always allow toggling back" rule to the leaf actually showing
+      // chat; it must not make an unsupported sibling look eligible.
+      const isChatViewForLeaf = effectiveChatViewMode && leafId !== null && chatLeafId === leafId
+      return (nativeChatEnabled && isChatViewForLeaf) || isChatEligibleForLeaf(leafId)
+    },
+    [chatLeafId, effectiveChatViewMode, isChatEligibleForLeaf, nativeChatEnabled]
   )
   const toggleNativeChatForLeaf = useCallback(
     (leafId: string) => {
@@ -756,14 +814,6 @@ export default function TerminalPane({
     toggleNativeChatForLeaf(activeLeafId)
   }, [toggleNativeChatForLeaf])
   const setTabLayout = useAppStore((store) => store.setTabLayout)
-  const restoredLayout = useMemo(
-    () => (terminalTab ? sanitizeTerminalLayoutPaneTitles(savedLayout, terminalTab) : savedLayout),
-    [savedLayout, terminalTab]
-  )
-  const expectedLayoutLeafIds = useMemo(
-    () => collectLeafIdsInOrder(restoredLayout.root),
-    [restoredLayout.root]
-  )
   const expectedLayoutLeafIdsAttr =
     expectedLayoutLeafIds.length > 0 ? expectedLayoutLeafIds.join(' ') : undefined
   const initialLayoutRef = useRef(restoredLayout)
@@ -784,11 +834,7 @@ export default function TerminalPane({
   const updateSettings = useAppStore((store) => store.updateSettings)
   const requestLinkRoutingPreference = useLinkRoutingPreferenceDialog()
   const keybindings = useAppStore((store) => store.keybindings)
-  // Why: Windows is the only platform where bare right-click is repurposed as
-  // a paste gesture; on macOS/Linux the terminal still owns right-click for the
-  // context menu. The settings default keeps the Windows shortcut feeling native
-  // without changing the other platforms' interaction model.
-  const rightClickToPaste = isWindowsUserAgent() && (settings?.terminalRightClickToPaste ?? true)
+  const rightClickToPaste = settings?.terminalRightClickToPaste ?? isWindowsUserAgent()
   // Why: Windows ConPTY does not forward DECSET 2004 from foreground TUIs, so
   // xterm may not know multi-line text needs bracketed-paste protection.
   const forceBracketedMultilineTextPaste = isWindowsUserAgent()
@@ -1083,7 +1129,7 @@ export default function TerminalPane({
   const clearPaneScrollback = useCallback(
     (pane: ManagedPane): void => {
       clearedScrollbackLeafIdsRef.current.add(pane.leafId)
-      pane.terminal.clear()
+      clearTerminalScrollbackAndFollowOutput(pane.terminal)
       // Why: also clear the host buffer for remote-server panes, or the next
       // host snapshot replays the scrollback we just cleared locally.
       const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
@@ -1837,26 +1883,27 @@ export default function TerminalPane({
         return
       }
       for (const pane of manager.getPanes()) {
-        safeFit(pane)
-        const transport = paneTransportsRef.current.get(pane.id)
-        if (!transport?.isConnected()) {
-          continue
-        }
-        const ptyId = transport.getPtyId()
-        if (!ptyId) {
-          continue
-        }
-        // Why: match pty-connection resize guards so web refit retries do not
-        // forward SIGWINCH while mobile-lock or phone-fit overrides are active.
-        if (getFitOverrideForPty(ptyId) || isPtyLocked(ptyId)) {
-          continue
-        }
-        // Why: skip forwarding a stale near-zero fit to the host PTY while the
-        // overlay is still settling after a worktree switch.
-        if (pane.terminal.cols < 8 || pane.terminal.rows < 4) {
-          continue
-        }
-        transport.resize(pane.terminal.cols, pane.terminal.rows)
+        safeFitAndThen(pane, 'web-client-pty-resize', () => {
+          const transport = paneTransportsRef.current.get(pane.id)
+          if (!transport?.isConnected()) {
+            return
+          }
+          const ptyId = transport.getPtyId()
+          if (!ptyId) {
+            return
+          }
+          // Why: match pty-connection resize guards so web refit retries do not
+          // forward SIGWINCH while mobile-lock or phone-fit overrides are active.
+          if (getFitOverrideForPty(ptyId) || isPtyLocked(ptyId)) {
+            return
+          }
+          // Why: skip forwarding a stale near-zero fit to the host PTY while the
+          // overlay is still settling after a worktree switch.
+          if (pane.terminal.cols < 8 || pane.terminal.rows < 4) {
+            return
+          }
+          transport.resize(pane.terminal.cols, pane.terminal.rows)
+        })
       }
     }
     const scheduleFrame = (): void => {
@@ -2659,7 +2706,7 @@ export default function TerminalPane({
   }, [getContextMenuLeafId, toggleNativeChatForLeaf])
 
   const getMobileOwnedTerminalPtyIds = useCallback((): string[] => {
-    const ptyIds = new Set(getAllOverrides().keys())
+    const ptyIds = new Set(getMobileFitOverridePtyIds())
     for (const [ptyId, driver] of getAllDrivers()) {
       if (driver.kind === 'mobile') {
         ptyIds.add(ptyId)
@@ -2923,23 +2970,31 @@ export default function TerminalPane({
     ? managedPanes.some((pane) => pane.leafId === chatLeafId)
     : false
   useEffect(() => {
-    if (!isChatViewMode) {
-      if (chatLeafId !== null) {
-        setChatLeafId(null)
-      }
-      return
-    }
     const activeLeafId = activePane?.leafId ?? null
-    if (!chatLeafId) {
-      if (activeLeafId) {
-        setChatLeafId(activeLeafId)
-      }
-      return
+    const route = resolveNativeChatLeafRoute({
+      isChatViewMode,
+      chatLeafId,
+      activeLeafId,
+      chatLeafStillMounted,
+      chatLeafIsEligible: isChatEligibleForLeaf(chatLeafId),
+      activeLeafIsEligible: isChatEligibleForLeaf(activeLeafId)
+    })
+    if (route.chatLeafId !== chatLeafId) {
+      setChatLeafId(route.chatLeafId)
     }
-    if (!chatLeafStillMounted) {
-      setChatLeafId(activeLeafId)
+    if (route.exitChat && unifiedTabId) {
+      // Why: effect replay must not flip terminal mode back to chat.
+      setTabViewMode(unifiedTabId, 'terminal')
     }
-  }, [isChatViewMode, chatLeafId, activePane?.leafId, chatLeafStillMounted])
+  }, [
+    isChatViewMode,
+    chatLeafId,
+    activePane?.leafId,
+    chatLeafStillMounted,
+    isChatEligibleForLeaf,
+    unifiedTabId,
+    setTabViewMode
+  ])
   const chatPane =
     isChatViewMode && chatLeafId
       ? (managedPanes.find((pane) => pane.leafId === chatLeafId) ?? null)
@@ -2948,6 +3003,12 @@ export default function TerminalPane({
     ? (paneTransportsRef.current.get(chatPane.id)?.getPtyId() ?? null)
     : null
   const chatPaneResolvedAgent = chatPane ? resolveTitleAgentForLeaf(chatPane.leafId) : null
+  const chatPaneLaunchAgent = nativeChatLaunchAgentForLeaf({
+    launchAgent: terminalTab?.launchAgent,
+    launchAgentLeafId: getTabWideAgentHintLeafId(),
+    leafId: chatPane?.leafId ?? null,
+    leafIds: getNativeChatLeafIds()
+  })
   const activePaneIsChatLeaf = Boolean(
     isChatViewMode && activePane?.leafId && activePane.leafId === chatLeafId
   )
@@ -3048,7 +3109,7 @@ export default function TerminalPane({
                 terminalTabId={tabId}
                 paneKey={makePaneKey(tabId, chatPane.leafId)}
                 targetPtyId={chatPanePtyId}
-                launchAgent={terminalTab?.launchAgent}
+                launchAgent={chatPaneLaunchAgent}
                 resolvedAgent={chatPaneResolvedAgent}
                 onSwitchToTerminal={() => toggleNativeChatForLeaf(chatPane.leafId)}
                 contextMenuActions={{
@@ -3183,9 +3244,9 @@ export default function TerminalPane({
         // treatment and collapse-to-chip state; both branches share the
         // same local/remote desktop-restore route.
         const driver = getDriverForPty(ptyId)
-        const isMobileDriving = driver.kind === 'mobile'
-        const hasFitOverride = getFitOverrideForPty(ptyId) !== null
-        if (!isMobileDriving && !hasFitOverride) {
+        const fitMode = getFitOverrideForPty(ptyId)?.mode ?? null
+        const hasFitOverride = fitMode === 'mobile-fit'
+        if (!shouldShowMobileDriverOverlay(driver.kind, fitMode)) {
           return null
         }
         // Why: only the pane replaced by native chat should hide terminal-owned

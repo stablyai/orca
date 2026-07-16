@@ -63,6 +63,7 @@ import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
 import { StatusBarUsageEmptyCta } from './StatusBarUsageEmptyCta'
+import { UsagePercentageDisplayChangeNotice } from './UsagePercentageDisplayChangeNotice'
 import { shouldOpenStatusBarContextMenu } from './status-bar-context-menu-policy'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -79,6 +80,12 @@ import {
   selectCodexProviderAccount
 } from '@/runtime/runtime-provider-accounts-client'
 import { translate } from '@/i18n/i18n'
+import {
+  getDisplayedUsagePercentage,
+  normalizeUsagePercentageDisplay,
+  type UsagePercentageDisplay
+} from '../../../../shared/usage-percentage-display'
+import { formatUsagePercentageLabel } from './usage-percentage-label'
 
 type StatusBarProps = {
   floatingTerminalOpen: boolean
@@ -938,15 +945,21 @@ function ClaudeSwitcherMenu({
 }
 
 // ---------------------------------------------------------------------------
-// Mini progress bar (shows consumption / % used, grey)
+// Mini progress bar (follows the selected usage percentage meaning, grey)
 // ---------------------------------------------------------------------------
 
-function MiniBar({ usedPct }: { usedPct: number }): React.JSX.Element {
+function MiniBar({
+  usedPct,
+  display
+}: {
+  usedPct: number
+  display: UsagePercentageDisplay
+}): React.JSX.Element {
   return (
     <div className="w-[48px] h-[6px] rounded-full bg-muted overflow-hidden flex-shrink-0">
       <div
         className="h-full rounded-full transition-all duration-300 bg-muted-foreground/40"
-        style={{ width: `${clampUsedPercent(usedPct)}%` }}
+        style={{ width: `${getDisplayedUsagePercentage(usedPct, display)}%` }}
       />
     </div>
   )
@@ -963,9 +976,9 @@ export function InlineUsageBars({
   limits: ProviderRateLimits
   isFetching: boolean
 }): React.JSX.Element {
-  // Why: show % used (consumption), not remaining — matches harness meters (#7551).
-  // Keep the "used" word in compact labels so bare "32% 5h" is not read as remaining.
-  const usedSuffix = translate('auto.components.status.bar.tooltip.cedb7b99e3', '% used')
+  const display = normalizeUsagePercentageDisplay(
+    useAppStore((state) => state.usagePercentageDisplay)
+  )
   const usageWindows = [
     limits.session
       ? {
@@ -1000,14 +1013,14 @@ export function InlineUsageBars({
       {usageWindows.map((window) => (
         <div key={window.key} className="flex min-w-0 items-center gap-1">
           <div className="h-[4px] min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+            {/* Why: fill follows the selected percentage; color still signals consumption urgency. */}
             <div
               className={`h-full rounded-full ${barColor(window.used)}`}
-              style={{ width: `${window.used}%` }}
+              style={{ width: `${getDisplayedUsagePercentage(window.used, display)}%` }}
             />
           </div>
           <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground">
-            {window.used}
-            {usedSuffix} {window.label}
+            {formatUsagePercentageLabel(window.used, display)} {window.label}
           </span>
         </div>
       ))}
@@ -1080,16 +1093,21 @@ function InlineUsageSkeleton(): React.JSX.Element {
 }
 
 // ---------------------------------------------------------------------------
-// Window label (shows percent used / consumption)
+// Window label
 // ---------------------------------------------------------------------------
 
-function WindowLabel({ w, label }: { w: RateLimitWindow; label: string }): React.JSX.Element {
-  const used = clampUsedPercent(w.usedPercent)
-  // Why: "32% 5h" is ambiguous after the remaining→used flip; keep "used" explicit.
+function WindowLabel({
+  w,
+  label,
+  display
+}: {
+  w: RateLimitWindow
+  label: string
+  display: UsagePercentageDisplay
+}): React.JSX.Element {
   return (
     <span className="tabular-nums">
-      {used}
-      {translate('auto.components.status.bar.tooltip.cedb7b99e3', '% used')} {label}
+      {formatUsagePercentageLabel(w.usedPercent, display)} {label}
     </span>
   )
 }
@@ -1102,12 +1120,14 @@ function WindowLabel({ w, label }: { w: RateLimitWindow; label: string }): React
 // the rest (Flash Lite, experimental) are secondary and would clutter the bar.
 const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
 
-function ProviderSegment({
+export function ProviderSegment({
   p,
-  compact
+  compact,
+  display
 }: {
   p: ProviderRateLimits | null
   compact: boolean
+  display: UsagePercentageDisplay
 }): React.JSX.Element {
   const provider = p?.provider ?? 'claude'
   const statusLabel = p ? getProviderUsageStatusLabel(p) : ''
@@ -1123,7 +1143,7 @@ function ProviderSegment({
   }
 
   // Fetching with no prior data
-  if (p.status === 'fetching' && !p.session && !p.weekly && !p.fableWeekly) {
+  if (p.status === 'fetching' && !p.session && !p.weekly && !p.fableWeekly && !p.monthly) {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
@@ -1142,7 +1162,7 @@ function ProviderSegment({
   }
 
   // Error with no data
-  if (p.status === 'error' && !p.session && !p.weekly && !p.fableWeekly) {
+  if (p.status === 'error' && !p.session && !p.weekly && !p.fableWeekly && !p.monthly) {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
@@ -1160,20 +1180,20 @@ function ProviderSegment({
     return (
       <span className="inline-flex items-center gap-1.5">
         <ProviderIcon provider={provider} />
-        {visibleBuckets.map((bucket, i) => {
-          const used = clampUsedPercent(bucket.usedPercent)
-          return (
-            <React.Fragment key={bucket.name}>
-              {i > 0 && <span className="text-muted-foreground">·</span>}
-              <span className="tabular-nums">
-                {bucket.name} {used}
-                {translate('auto.components.status.bar.tooltip.cedb7b99e3', '% used')}
-              </span>
-            </React.Fragment>
-          )
-        })}
+        {visibleBuckets.map((bucket, i) => (
+          <React.Fragment key={bucket.name}>
+            {i > 0 && <span className="text-muted-foreground">·</span>}
+            <span className="tabular-nums">
+              {bucket.name} {formatUsagePercentageLabel(bucket.usedPercent, display)}
+            </span>
+          </React.Fragment>
+        ))}
         {visibleBuckets.length === 0 && p.session && (
-          <WindowLabel w={p.session} label={formatWindowLabel(p.session.windowMinutes)} />
+          <WindowLabel
+            w={p.session}
+            label={formatWindowLabel(p.session.windowMinutes)}
+            display={display}
+          />
         )}
         {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
       </span>
@@ -1201,17 +1221,29 @@ function ProviderSegment({
           window: p.fableWeekly,
           label: translate('auto.components.status.bar.StatusBar.a79c64f87e', 'Fable')
         }
+      : null,
+    // Why: monthly is chip-visible only when it's the sole window (Grok
+    // unified billing); providers with session/weekly data (OpenCode Go)
+    // keep monthly tooltip-only so the chip stays uncluttered.
+    p.monthly && !p.session && !p.weekly
+      ? {
+          key: 'monthly',
+          window: p.monthly,
+          label: formatWindowLabel(p.monthly.windowMinutes)
+        }
       : null
   ].filter((w): w is { key: string; window: RateLimitWindow; label: string } => w !== null)
 
   return (
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
-      {p.session && !compact && <MiniBar usedPct={clampUsedPercent(p.session.usedPercent)} />}
+      {p.session && !compact && (
+        <MiniBar usedPct={clampUsedPercent(p.session.usedPercent)} display={display} />
+      )}
       {visibleWindows.map((window, index) => (
         <React.Fragment key={window.key}>
           {index > 0 && <span className="text-muted-foreground">·</span>}
-          <WindowLabel w={window.window} label={window.label} />
+          <WindowLabel w={window.window} label={window.label} display={display} />
         </React.Fragment>
       ))}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
@@ -1745,6 +1777,9 @@ export function ProviderDetailsMenu({
   children?: React.ReactNode
 }): React.JSX.Element {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  const usagePercentageDisplay = normalizeUsagePercentageDisplay(
+    useAppStore((s) => s.usagePercentageDisplay)
+  )
   const skipCloseAutoFocusRef = useRef(false)
 
   const handleOpenChange = (nextOpen: boolean): void => {
@@ -1766,7 +1801,7 @@ export function ProviderDetailsMenu({
           {iconOnly ? (
             <span className="inline-flex items-center gap-1">
               <span
-                className={`inline-block h-2 w-2 rounded-full ${provider.session || provider.weekly || provider.fableWeekly ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
+                className={`inline-block h-2 w-2 rounded-full ${provider.session || provider.weekly || provider.fableWeekly || provider.monthly ? 'bg-muted-foreground/60' : 'bg-muted-foreground/30'}`}
               />
               <span className="text-muted-foreground">
                 {provider.provider === 'claude'
@@ -1787,7 +1822,7 @@ export function ProviderDetailsMenu({
               </span>
             </span>
           ) : (
-            <ProviderSegment p={provider} compact={compact} />
+            <ProviderSegment p={provider} compact={compact} display={usagePercentageDisplay} />
           )}
         </button>
       </DropdownMenuTrigger>
@@ -1812,7 +1847,11 @@ export function ProviderDetailsMenu({
         {topContent}
         <div className="p-2">
           {/* Why: provider-specific action sections may render richer reset-credit UI. */}
-          <ProviderPanel p={provider} showResetCredits={!hidePanelResetCredits} />
+          <ProviderPanel
+            p={provider}
+            showResetCredits={!hidePanelResetCredits}
+            usagePercentageDisplay={usagePercentageDisplay}
+          />
         </div>
         {children ? (
           <>
@@ -1995,7 +2034,10 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const showPorts = statusBarItems.includes('ports')
   const showFloatingTerminalToggle =
     floatingTerminalEnabled && floatingTerminalTriggerLocation === 'status-bar'
-  const anyVisible =
+  // Why: which usage-meter children actually render — excludes resource-usage
+  // and other non-meter status items so the % display change callout only
+  // opens when there is a real meter cluster to anchor to.
+  const hasVisibleUsageMeters =
     showClaude ||
     showCodex ||
     showGemini ||
@@ -2003,8 +2045,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     showKimi ||
     showAntigravity ||
     showMiniMax ||
-    showGrok ||
-    showResourceUsage
+    showGrok
+  const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: a brand-new user with no provider configured would otherwise see an
   // empty left side of the status bar and wonder what's missing. Settings are
   // included because managed accounts are durable even when live usage
@@ -2062,7 +2104,9 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             <StatusBarUsageEmptyCta />
           ) : null
         ) : (
-          <>
+          // Why: one-time usage-display change callout anchors to this cluster so
+          // it sits next to the meters the user is confused by, not a global toast.
+          <UsagePercentageDisplayChangeNotice hasVisibleUsageMeters={hasVisibleUsageMeters}>
             {showClaude && (
               <ClaudeSwitcherMenu claude={visibleClaude} compact={compact} iconOnly={iconOnly} />
             )}
@@ -2135,7 +2179,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                 )}
               />
             )}
-          </>
+          </UsagePercentageDisplayChangeNotice>
         )}
         {anyVisible && !isEmptyUsageState && (
           <Tooltip>

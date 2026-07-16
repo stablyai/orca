@@ -1,12 +1,20 @@
 // Pure logic for desktop optimistic "queued" composer sends (mobile parity).
 // A sent prompt is echoed immediately as a queued entry and pruned once its real
 // user turn lands in the transcript. Kept separate from the view so the prune
-// rule (match on normalized user-message text) is unit-testable without React.
+// rule (match on normalized user-message content) is unit-testable without React.
 
-import { isTextBlock, type NativeChatMessage } from '../../../../shared/native-chat-types'
-import { stripImagePromptMarker } from './native-chat-image-transcript-markers'
+import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
 import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
+import {
+  advancedNativeChatUserContentCounts,
+  assignNativeChatPendingOccurrence,
+  matchingNativeChatUserContentCounts,
+  nativeChatPendingContentKey,
+  nativeChatPendingMatchKey,
+  nativeChatPendingMatchingAfter,
+  nativeChatPendingOccurrence
+} from './native-chat-pending-occurrence'
 
 /** An optimistic, not-yet-confirmed composer send. */
 export type NativeChatPendingSend = {
@@ -18,6 +26,15 @@ export type NativeChatPendingSend = {
   imagePaths?: string[]
   /** Epoch ms when the send was issued, so the queued bubble sorts to the end. */
   sentAt: number
+  /** Last authoritative transcript message visible when this send was issued.
+   * Matching starts after it so repeated prompts cannot bind to an old turn. */
+  afterMessageId?: string | null
+  /** Timestamp of that boundary in the transcript host's clock domain. */
+  afterMessageTimestamp?: number | null
+  /** 1-based occurrence among identical sends sharing the same boundary. */
+  matchingOccurrence?: number
+  /** Shared time boundary when that message boundary is unavailable. */
+  matchingAfterTimestamp?: number
 }
 
 export type NativeChatPendingSendScope = {
@@ -27,6 +44,7 @@ export type NativeChatPendingSendScope = {
 
 const PENDING_SEND_LIMIT = 8
 const pendingSendCache = new Map<string, NativeChatPendingSend[]>()
+let pendingSendCounter = 0
 
 function pendingSendScopeKey(scope: NativeChatPendingSendScope): string {
   return `${scope.paneKey}\0${scope.agent}`
@@ -57,56 +75,48 @@ export function appendPendingSendCache(
   scope: NativeChatPendingSendScope,
   entry: NativeChatPendingSend
 ): NativeChatPendingSend[] {
-  return writePendingSendCache(scope, [...readPendingSendCache(scope), entry])
+  const existing = readPendingSendCache(scope)
+  const next = assignNativeChatPendingOccurrence(existing, entry)
+  return writePendingSendCache(scope, [...existing, next])
 }
 
 export function clearPendingSendCacheForTests(): void {
   pendingSendCache.clear()
+  pendingSendCounter = 0
 }
 
-function normalize(text: string): string {
-  return stripImagePromptMarker(text).trim().replace(/\s+/g, ' ')
-}
-
-/** The prose of a user message, normalized for matching against a pending send. */
-function userMessageText(message: NativeChatMessage): string | null {
-  if (message.role !== 'user') {
-    return null
+function messagesAfterPendingBoundary(
+  messages: readonly NativeChatMessage[],
+  pending: NativeChatPendingSend
+): readonly NativeChatMessage[] {
+  if (pending.afterMessageId === undefined) {
+    return messages
   }
-  const text = message.blocks
-    .filter(isTextBlock)
-    .map((block) => block.text)
-    .join(' ')
-  return normalize(text)
+  if (pending.afterMessageId === null) {
+    return messages.filter((message) => messageIsAfterPendingTimestamp(message, pending))
+  }
+  const boundaryIndex = messages.findIndex((message) => message.id === pending.afterMessageId)
+  if (boundaryIndex >= 0) {
+    return messages.slice(boundaryIndex + 1)
+  }
+  // A bounded authoritative read can page the boundary out. Fall back to the
+  // send time instead of matching an arbitrary older identical prompt.
+  return messages.filter((message) => messageIsAfterPendingTimestamp(message, pending))
 }
 
-function matchingUserMessageTexts(messages: NativeChatMessage[]): Set<string> {
-  const texts = new Set<string>()
-  for (const message of messages) {
-    const text = userMessageText(message)
-    if (text) {
-      texts.add(text)
-    }
+function messageIsAfterPendingTimestamp(
+  message: NativeChatMessage,
+  pending: NativeChatPendingSend
+): boolean {
+  if (message.timestamp === null) {
+    return false
   }
-  return texts
-}
-
-function advancedPastUserMessageTexts(messages: NativeChatMessage[]): Set<string> {
-  const advanced = new Set<string>()
-  const waiting = new Set<string>()
-  for (const message of messages) {
-    if (message.role === 'user') {
-      const text = userMessageText(message)
-      if (text) {
-        waiting.add(text)
-      }
-      continue
-    }
-    for (const text of waiting) {
-      advanced.add(text)
-    }
-  }
-  return advanced
+  const boundary = nativeChatPendingMatchingAfter(pending)
+  // A transcript-clock boundary describes an existing message, so exclude ties.
+  // Local send time has no existing record and remains inclusive.
+  return pending.afterMessageTimestamp == null
+    ? message.timestamp >= boundary
+    : message.timestamp > boundary
 }
 
 /**
@@ -122,8 +132,22 @@ export function prunePendingSends(
   if (pending.length === 0) {
     return pending
   }
-  const advanced = advancedPastUserMessageTexts(messages)
-  const next = pending.filter((entry) => !advanced.has(normalize(entry.text)))
+  const consumed = new Map<string, number>()
+  const next = pending.filter((entry) => {
+    const contentKey = nativeChatPendingContentKey(entry)
+    const key = nativeChatPendingMatchKey(entry)
+    const available =
+      advancedNativeChatUserContentCounts(messagesAfterPendingBoundary(messages, entry)).get(
+        contentKey
+      ) ?? 0
+    const used = consumed.get(key) ?? 0
+    const occurrence = nativeChatPendingOccurrence(entry, used)
+    consumed.set(key, Math.max(used, occurrence))
+    if (occurrence > available) {
+      return true
+    }
+    return false
+  })
   return next.length === pending.length ? pending : next
 }
 
@@ -137,9 +161,23 @@ export function pendingSendsAsMessages(
   pending: NativeChatPendingSend[],
   existingMessages: NativeChatMessage[] = []
 ): NativeChatMessage[] {
-  const represented = matchingUserMessageTexts(existingMessages)
+  const consumed = new Map<string, number>()
   return pending
-    .filter((entry) => !represented.has(normalize(entry.text)))
+    .filter((entry) => {
+      const contentKey = nativeChatPendingContentKey(entry)
+      const key = nativeChatPendingMatchKey(entry)
+      const represented =
+        matchingNativeChatUserContentCounts(
+          messagesAfterPendingBoundary(existingMessages, entry)
+        ).get(contentKey) ?? 0
+      const used = consumed.get(key) ?? 0
+      const occurrence = nativeChatPendingOccurrence(entry, used)
+      consumed.set(key, Math.max(used, occurrence))
+      if (occurrence > represented) {
+        return true
+      }
+      return false
+    })
     .map((entry) => ({
       id: `pending:${entry.id}`,
       role: 'user' as const,
@@ -167,8 +205,12 @@ export function launchPromptAsMessage(
   if (!entry) {
     return null
   }
-  const represented = matchingUserMessageTexts(existingMessages)
-  if (represented.has(normalize(entry.text))) {
+  const represented = matchingNativeChatUserContentCounts(
+    existingMessages.filter(
+      (message) => message.timestamp !== null && message.timestamp >= entry.createdAt
+    )
+  )
+  if ((represented.get(nativeChatPendingContentKey(entry)) ?? 0) > 0) {
     return null
   }
   return {
@@ -187,7 +229,17 @@ export function shouldPruneLaunchPrompt(
   entry: NativeChatLaunchPrompt,
   messages: NativeChatMessage[]
 ): boolean {
-  return advancedPastUserMessageTexts(messages).has(normalize(entry.text))
+  const relevant = messages.filter(
+    (message) => message.timestamp !== null && message.timestamp >= entry.createdAt
+  )
+  return (
+    (advancedNativeChatUserContentCounts(relevant).get(nativeChatPendingContentKey(entry)) ?? 0) > 0
+  )
+}
+
+export function nextNativeChatPendingSendId(now = Date.now()): string {
+  pendingSendCounter += 1
+  return `${now}-${pendingSendCounter}`
 }
 
 export function isLaunchPromptMessageId(id: string): boolean {

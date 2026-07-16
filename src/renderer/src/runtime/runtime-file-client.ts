@@ -99,8 +99,10 @@ type RuntimeImportResult =
     }
 
 type RuntimeFileWatchEvent =
+  | { type: 'starting'; subscriptionId: string }
   | { type: 'ready'; subscriptionId: string }
   | { type: 'changed'; worktree: string; events: FsChangedPayload['events'] }
+  | { type: 'error'; message: string }
   | { type: 'end' }
 
 const REMOTE_UPLOAD_BASE64_CHUNK_CHARS = 512 * 1024
@@ -886,10 +888,10 @@ function createSharedRuntimeFileWatch(
       },
       {
         onResponse: (response) => {
-          handleSharedRuntimeFileWatchResponse(shared, worktreePath, response)
+          handleSharedRuntimeFileWatchResponse(key, shared, worktreePath, response)
         },
         onError: (error) => {
-          notifySharedRuntimeFileWatchError(shared, new Error(error.message))
+          failSharedRuntimeFileWatch(key, shared, new Error(error.message))
         },
         onClose: () => {
           if (sharedRuntimeFileWatches.get(key) === shared) {
@@ -911,17 +913,14 @@ function createSharedRuntimeFileWatch(
       }
     })
     .catch((err) => {
-      if (sharedRuntimeFileWatches.get(key) === shared) {
-        sharedRuntimeFileWatches.delete(key)
-      }
-      shared.closed = true
-      notifySharedRuntimeFileWatchError(shared, err instanceof Error ? err : new Error(String(err)))
+      failSharedRuntimeFileWatch(key, shared, err instanceof Error ? err : new Error(String(err)))
       throw err
     })
   return shared
 }
 
 function handleSharedRuntimeFileWatchResponse(
+  key: string,
   shared: SharedRuntimeFileWatch,
   worktreePath: string,
   response: unknown
@@ -930,7 +929,7 @@ function handleSharedRuntimeFileWatchResponse(
     const event = unwrapRuntimeRpcResult<RuntimeFileWatchEvent>(
       response as RuntimeRpcResponse<RuntimeFileWatchEvent>
     )
-    if (event.type === 'ready') {
+    if (event.type === 'starting' || event.type === 'ready') {
       shared.remoteSubscriptionId = event.subscriptionId
       if (shared.closed) {
         shared.unsubscribe?.()
@@ -943,14 +942,44 @@ function handleSharedRuntimeFileWatchResponse(
       for (const listener of Array.from(shared.listeners)) {
         listener.onPayload({ worktreePath, events: event.events })
       }
+    } else if (event.type === 'error') {
+      // Why: error listeners may synchronously retry. Evict the terminal watch
+      // before callbacks run so the retry cannot join a stream awaiting `end`.
+      failSharedRuntimeFileWatch(key, shared, new Error(event.message))
+    } else if (event.type === 'end') {
+      // Why: shared-control completes without onClose; evict and release its
+      // transport handle so later listeners start cleanly without retained state.
+      if (sharedRuntimeFileWatches.get(key) === shared) {
+        sharedRuntimeFileWatches.delete(key)
+      }
+      shared.closed = true
+      const unsubscribe = shared.unsubscribe
+      shared.unsubscribe = null
+      shared.remoteSubscriptionId = null
+      shared.listeners.clear()
+      unsubscribe?.()
     }
   } catch (err) {
-    notifySharedRuntimeFileWatchError(shared, err instanceof Error ? err : new Error(String(err)))
+    failSharedRuntimeFileWatch(key, shared, err instanceof Error ? err : new Error(String(err)))
   }
 }
 
-function notifySharedRuntimeFileWatchError(shared: SharedRuntimeFileWatch, error: Error): void {
-  for (const listener of Array.from(shared.listeners)) {
+function failSharedRuntimeFileWatch(
+  key: string,
+  shared: SharedRuntimeFileWatch,
+  error: Error
+): void {
+  if (sharedRuntimeFileWatches.get(key) === shared) {
+    sharedRuntimeFileWatches.delete(key)
+  }
+  shared.closed = true
+  shared.remoteSubscriptionId = null
+  const unsubscribe = shared.unsubscribe
+  shared.unsubscribe = null
+  const listeners = Array.from(shared.listeners)
+  shared.listeners.clear()
+  unsubscribe?.()
+  for (const listener of listeners) {
     listener.onError?.(error)
   }
 }
@@ -963,7 +992,7 @@ function closeSharedRuntimeFileWatch(key: string, shared: SharedRuntimeFileWatch
   sharedRuntimeFileWatches.delete(key)
   if (shared.keepStreamUntilReady) {
     // Why: WebRuntimeClient owns shared-socket file-watch cleanup, including
-    // pre-ready fallback timers and late-ready files.unwatch.
+    // pre-ready cancellation ownership and late-ready files.unwatch.
     shared.unsubscribe?.()
     shared.unsubscribe = null
     return

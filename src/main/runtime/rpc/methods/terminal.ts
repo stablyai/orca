@@ -26,6 +26,13 @@ import {
 } from '../../../../shared/terminal-input'
 import { measureClipboardTextByteLength } from '../../../../shared/clipboard-text'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isTerminalQueryReply } from '../../../../shared/terminal-query-reply'
+import {
+  EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
+  scanTerminalReplyQuerySequences,
+  type TerminalReplyQuerySequence,
+  type TerminalReplyQueryScanState
+} from '../../../../shared/terminal-reply-query-scan'
 import {
   MOBILE_SNAPSHOT_BYTE_BUDGET,
   MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
@@ -42,6 +49,10 @@ const TERMINAL_MULTIPLEX_ACK_TOTAL_HIGH_WATER_BYTES = 2 * 1024 * 1024
 // Why: pending output is held for later binary frames, so cap the encoded
 // payload bytes rather than UTF-16 code units.
 const TERMINAL_MULTIPLEX_PENDING_MAX_BYTES = 256 * 1024
+const TERMINAL_QUERY_REPLAY_MAX_CHARS = 16 * 1024
+// Why: keep initial subscribe latency bounded; readiness remains observed after
+// this deadline and triggers an in-stream recovery snapshot when it arrives.
+const MOBILE_RENDERER_MOUNT_READY_TIMEOUT_MS = 3_000
 let nextTerminalStreamId = 1
 
 type SnapshotFrameOptions = {
@@ -88,6 +99,14 @@ type TerminalMultiplexStream = {
   isMobile: boolean
   ackOutput: boolean
   ackInFlightBytes: number
+  supportsDesktopViewportClaims: boolean
+  desktopClaimTail: Promise<boolean>
+  // Why: whether THIS stream registered a remote-desktop width driver, so
+  // detach only unregisters what it registered — a passive (viewport-less)
+  // stream sharing a client id must not release another stream's width floor.
+  registeredRemoteDesktopDriver: boolean
+  remoteDesktopSubscriptionKey: string
+  pendingRemoteDesktopViewport: { cols: number; rows: number } | null
   buffering: boolean
   ackPendingOutput: TerminalOutputFrameChunk[]
   ackPendingOutputBytes: number
@@ -316,6 +335,61 @@ function resolveMobileFloorClientId(
   return null
 }
 
+async function sendTerminalStreamInput(
+  runtime: OrcaRuntimeService,
+  args: {
+    terminal: string
+    text: string
+    client: TerminalViewportClient | undefined
+    isMobile: boolean
+  }
+): Promise<void> {
+  const action = { text: args.text, enter: false, interrupt: false }
+  const clientId = args.isMobile ? args.client?.id : undefined
+  const floorClaim: MobileInputFloorClaimHolder = { current: null }
+  try {
+    if (!clientId) {
+      await runtime.sendTerminal(args.terminal, action)
+      return
+    }
+    const result = await runtime.sendTerminal(args.terminal, action, {
+      reserveWrite: (writePtyId) => {
+        const claim = runtime.beginMobileInputFloor(writePtyId, clientId)
+        if (!claim) {
+          throw new Error('mobile_input_floor_unavailable')
+        }
+        floorClaim.current = claim
+      },
+      afterWrite: () => commitMobileInputFloorClaim(floorClaim)
+    })
+    if (!result.accepted) {
+      floorClaim.current?.rollback()
+    }
+  } catch {
+    floorClaim.current?.rollback()
+  }
+}
+
+type MobileInputFloorClaimHolder = {
+  current: ReturnType<OrcaRuntimeService['beginMobileInputFloor']>
+}
+
+async function commitMobileInputFloorClaim(claim: MobileInputFloorClaimHolder): Promise<void> {
+  const current = claim.current
+  if (!current) {
+    return
+  }
+  try {
+    await current.commit()
+  } finally {
+    // Why: the runtime may yield before the next chunk/suffix, so that write
+    // needs a fresh reservation if desktop reclaimed the floor meanwhile.
+    if (claim.current === current) {
+      claim.current = null
+    }
+  }
+}
+
 function getTerminalSendGuardRefusedReason(error: unknown): 'no-agent' | 'permission' | undefined {
   const message = error instanceof Error ? error.message : String(error)
   if (message.includes('terminal_guard_permission')) {
@@ -330,6 +404,31 @@ function getTerminalSendGuardRefusedReason(error: unknown): 'no-agent' | 'permis
 function isTerminalSendGuardNotWritable(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
   return message.includes('terminal_guard_not_writable')
+}
+
+function isTerminalAgentStatusNotWritable(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return [
+    'terminal_not_writable',
+    'terminal_handle_stale',
+    'terminal_gone',
+    'terminal_exited'
+  ].some((code) => message.includes(code))
+}
+
+function assertTerminalSendExactPtyBinding(
+  runtime: OrcaRuntimeService,
+  handle: string,
+  expectedPtyId: string | undefined
+): void {
+  try {
+    if (expectedPtyId && runtime.resolveLiveLeafForHandle(handle)?.ptyId === expectedPtyId) {
+      return
+    }
+  } catch {
+    // Fall through to the stable guarded-send result below.
+  }
+  throw new Error('terminal_guard_not_writable')
 }
 
 function appendPendingMultiplexOutput(
@@ -370,6 +469,29 @@ function getOutputAfterSnapshotSeq(
     return chunk.data
   }
   return chunk.data.slice(snapshotSeq - chunkStartSeq)
+}
+
+function stripSnapshotBoundaryQuerySuffixes(
+  data: string,
+  dataStartSeq: number,
+  snapshotSeq: number,
+  queries: TerminalReplyQuerySequence[]
+): string {
+  let output = ''
+  let offset = 0
+  for (const query of queries) {
+    if (query.startSeq >= snapshotSeq || query.endSeq <= snapshotSeq) {
+      continue
+    }
+    const removeStart = Math.max(0, query.startSeq - dataStartSeq)
+    const removeEnd = Math.min(data.length, query.endSeq - dataStartSeq)
+    if (removeEnd <= offset || removeStart >= data.length) {
+      continue
+    }
+    output += data.slice(offset, removeStart)
+    offset = removeEnd
+  }
+  return output + data.slice(offset)
 }
 
 function appendAckPendingOutput(
@@ -586,6 +708,44 @@ async function serializeBudgetedMobileSnapshot(
   return null
 }
 
+async function serializeStableMobileRendererSnapshot(
+  runtime: OrcaRuntimeService,
+  ptyId: string
+): Promise<SerializedSnapshot> {
+  const candidates = [MOBILE_SUBSCRIBE_SCROLLBACK_ROWS, 500, 250, 100, 25, 0]
+  let candidateIndex = 0
+  for (let attempt = 0; attempt < candidates.length; attempt += 1) {
+    // Why: stability retries share the six-call snapshot budget. Advance
+    // toward zero scrollback so the final attempt always has a bounded payload.
+    candidateIndex = Math.max(candidateIndex, attempt)
+    const rows = candidates[candidateIndex]
+    const outputSequenceBefore = runtime.getPtyOutputSequence(ptyId)
+    const serialized = await runtime.serializeRendererTerminalBuffer(ptyId, {
+      scrollbackRows: rows
+    })
+    const outputSequenceAfter = runtime.getPtyOutputSequence(ptyId)
+    if (outputSequenceBefore !== outputSequenceAfter) {
+      continue
+    }
+    if (!serialized) {
+      return null
+    }
+    const overByteBudget = terminalStreamByteLengthExceeds(
+      serialized.data,
+      MOBILE_SNAPSHOT_BYTE_BUDGET
+    )
+    if (!overByteBudget || rows === 0) {
+      return {
+        ...serialized,
+        scrollbackRows: rows,
+        truncatedByByteBudget: rows < MOBILE_SUBSCRIBE_SCROLLBACK_ROWS || overByteBudget
+      }
+    }
+    candidateIndex += 1
+  }
+  return null
+}
+
 // Why: mobile xterm can only re-wrap SOFT-wrapped lines on a client-side
 // term.resize(); the restored scrollback snapshot contains HARD newlines from
 // the host serialization, so a width change leaves prior output wrapped at the
@@ -631,15 +791,39 @@ async function sendMobileResizeRestream(
 async function updateViewportForClient(
   runtime: OrcaRuntimeService,
   ptyId: string,
+  subscriptionKey: string,
   client: TerminalViewportClient,
   viewport: { cols: number; rows: number },
-  defaultType: 'mobile' | 'desktop'
+  defaultType: 'mobile' | 'desktop',
+  // Why: the one-shot `terminal.updateViewport` RPC has no disconnect hook, so
+  // it must only refresh a floor the client already owns via its stream (never
+  // create a leak-prone standalone one). Stream paths that own cleanup register.
+  registration: 'register' | 'refresh' = 'register',
+  claim = false
 ): Promise<{ updated: boolean; applied: boolean }> {
   const type = client.type ?? defaultType
   if (type === 'mobile') {
     return runtime.updateMobileViewport(ptyId, client.id, viewport)
   }
-  const updated = await runtime.updateDesktopViewport(ptyId, viewport)
+  // Why: stream attachment observes geometry without taking control. Only a
+  // later activity/claim frame may make this desktop authoritative.
+  const updated =
+    registration === 'refresh'
+      ? await runtime.refreshRemoteDesktopViewer(
+          ptyId,
+          client.id,
+          viewport.cols,
+          viewport.rows,
+          claim
+        )
+      : await runtime.updateRemoteDesktopViewer(
+          ptyId,
+          subscriptionKey,
+          client.id,
+          viewport.cols,
+          viewport.rows,
+          claim
+        )
   return { updated, applied: updated }
 }
 
@@ -699,6 +883,9 @@ const TerminalSend = TerminalHandle.extend({
   enter: z.unknown().optional(),
   interrupt: z.unknown().optional(),
   requireAgentStatus: z.enum(['sendable']).optional(),
+  // Why: terminal-generated replies are valid input bytes but are not a user
+  // action that should transfer the shared terminal floor.
+  inputKind: z.enum(['query-reply']).optional(),
   // Why: identifies the caller for the driver state machine. Optional for
   // backward compatibility with older mobile clients (server falls back to
   // the most recent mobile actor when absent). New mobile builds populate
@@ -709,7 +896,14 @@ const TerminalSend = TerminalHandle.extend({
       id: requiredString('Missing client ID'),
       type: z.enum(['mobile', 'desktop']).default('desktop').optional()
     })
-    .optional()
+    .optional(),
+  viewport: z
+    .object({
+      cols: z.number().int().min(1).max(1000),
+      rows: z.number().int().min(1).max(500)
+    })
+    .optional(),
+  claimViewport: z.literal(true).optional()
 })
 
 const TerminalViewport = z.object({
@@ -806,7 +1000,9 @@ const TerminalSubscribe = TerminalHandle.extend({
   viewport: TerminalViewport.optional(),
   capabilities: z
     .object({
-      terminalBinaryStream: z.literal(1).optional()
+      terminalBinaryStream: z.literal(1).optional(),
+      desktopViewportClaims: z.literal(1).optional(),
+      mobileInputLeaseOnly: z.literal(1).optional()
     })
     .optional()
 })
@@ -824,7 +1020,8 @@ const TerminalMultiplexSubscribeFrame = TerminalHandle.extend({
   viewport: TerminalViewport.optional(),
   capabilities: z
     .object({
-      ackOutput: z.literal(1).optional()
+      ackOutput: z.literal(1).optional(),
+      desktopViewportClaims: z.literal(1).optional()
     })
     .optional()
 })
@@ -895,7 +1092,8 @@ const TerminalUpdateViewport = TerminalHandle.extend({
   viewport: z.object({
     cols: z.number().int().min(20).max(240),
     rows: z.number().int().min(8).max(120)
-  })
+  }),
+  claim: z.boolean().optional()
 })
 
 // Why: phone-fit auto-restore preference (docs/mobile-fit-hold.md). `null`
@@ -983,19 +1181,74 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.send',
     params: TerminalSend,
-    handler: async (params, { runtime }) => {
+    handler: async (params, { runtime, clientId }) => {
       await assertTerminalSendTextWithinLimit(params.text)
+      const queryReplyClientId = clientId ?? params.client?.id
+      if (
+        params.inputKind === 'query-reply' &&
+        (!params.text ||
+          !isTerminalQueryReply(params.text) ||
+          params.enter === true ||
+          params.interrupt === true ||
+          params.requireAgentStatus !== undefined ||
+          params.client?.type !== 'mobile' ||
+          !queryReplyClientId ||
+          (clientId !== undefined && params.client.id !== clientId))
+      ) {
+        throw new InvalidArgumentError('Invalid terminal query reply')
+      }
       // Why: guarded resolution — a stale handle must fail with
       // terminal_handle_stale (clients recover by re-deriving the handle)
       // instead of evaluating driver/lock state against the wrong PTY (#7718).
       const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
       const driver = leaf?.ptyId ? runtime.getDriver(leaf.ptyId) : null
+      if (
+        params.inputKind === 'query-reply' &&
+        leaf?.ptyId &&
+        !runtime.isMobileTerminalQueryReplyAuthority(leaf.ptyId, queryReplyClientId!)
+      ) {
+        return {
+          send: {
+            handle: params.terminal,
+            accepted: false,
+            bytesWritten: 0
+          }
+        }
+      }
       if (leaf?.ptyId && isTerminalInputLockedForClient(runtime, leaf.ptyId, params.client)) {
         return {
           send: {
             handle: params.terminal,
             accepted: false,
             bytesWritten: 0
+          }
+        }
+      }
+      if (
+        leaf?.ptyId &&
+        params.client?.type === 'desktop' &&
+        params.claimViewport === true &&
+        params.viewport
+      ) {
+        const claim = await updateViewportForClient(
+          runtime,
+          leaf.ptyId,
+          `send:${params.client.id}`,
+          params.client,
+          params.viewport,
+          'desktop',
+          'refresh',
+          true
+        )
+        // Why: a stream-less request has no lifecycle cleanup and cannot safely
+        // create ownership. Never write at stale geometry if no stream exists.
+        if (!claim.updated || isTerminalInputLockedForClient(runtime, leaf.ptyId, params.client)) {
+          return {
+            send: {
+              handle: params.terminal,
+              accepted: false,
+              bytesWritten: 0
+            }
           }
         }
       }
@@ -1017,10 +1270,22 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       const assertSendPreconditions =
         params.requireAgentStatus === 'sendable'
           ? async (ptyId?: string): Promise<void> => {
+              assertTerminalSendExactPtyBinding(runtime, params.terminal, ptyId)
               if (ptyId && isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
                 throw new Error('terminal_guard_not_writable')
               }
-              const agentStatus = await runtime.getTerminalAgentStatus(params.terminal)
+              let agentStatus
+              try {
+                agentStatus = await runtime.getTerminalAgentStatus(params.terminal)
+              } catch (error) {
+                if (isTerminalAgentStatusNotWritable(error)) {
+                  throw new Error('terminal_guard_not_writable')
+                }
+                throw error
+              }
+              // Why: a send callback can race a pane reconnect; status evidence
+              // must never authorize the callback's replacement PTY.
+              assertTerminalSendExactPtyBinding(runtime, params.terminal, ptyId)
               if (!agentStatus.isRunningAgent) {
                 throw new Error('terminal_guard_no_agent')
               }
@@ -1056,6 +1321,19 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           }
         }
       }
+      const mobileFloorClientId = resolveMobileFloorClientId(driver, params.client)
+      const mobileFloorClaim: MobileInputFloorClaimHolder = { current: null }
+      const beforeWrite = assertSendPreconditions
+      const reserveWrite =
+        params.inputKind !== 'query-reply' && leaf?.ptyId && mobileFloorClientId
+          ? (ptyId: string): void => {
+              const claim = runtime.beginMobileInputFloor(ptyId, mobileFloorClientId)
+              if (!claim) {
+                throw new Error('mobile_input_floor_unavailable')
+              }
+              mobileFloorClaim.current = claim
+            }
+          : undefined
       let result
       try {
         result = await runtime.sendTerminal(
@@ -1065,9 +1343,16 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             enter: params.enter === true,
             interrupt: params.interrupt === true
           },
-          { beforeWrite: assertSendPreconditions }
+          {
+            beforeWrite,
+            ...(reserveWrite ? { reserveWrite } : {}),
+            ...(params.inputKind !== 'query-reply' && mobileFloorClientId
+              ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }
+              : {})
+          }
         )
       } catch (error) {
+        mobileFloorClaim.current?.rollback()
         const refusedReason = getTerminalSendGuardRefusedReason(error)
         if (refusedReason) {
           return {
@@ -1090,15 +1375,14 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         }
         throw error
       }
+      if (result.accepted !== true) {
+        mobileFloorClaim.current?.rollback()
+      }
       // Why: deliberate mobile input is a take-floor action. Drives the
       // `* → mobile{clientId}` driver transition so the desktop banner
       // remounts (if previously reclaimed) and active phone-fit dims follow
       // the most recent actor. Clientless sends are old mobile builds, so use
       // the current mobile driver as their compatibility identity.
-      const mobileFloorClientId = resolveMobileFloorClientId(driver, params.client)
-      if (leaf?.ptyId && mobileFloorClientId) {
-        await runtime.mobileTookFloor(leaf.ptyId, mobileFloorClientId)
-      }
       return { send: result }
     }
   }),
@@ -1201,6 +1485,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     })
   }),
   defineMethod({
+    name: 'terminal.closeTab',
+    params: TerminalHandle,
+    handler: async (params, { runtime }) => ({
+      close: await runtime.closeTerminalTab(params.terminal)
+    })
+  }),
+  defineMethod({
     name: 'agentTeams.tmuxCompat',
     params: AgentTeamsTmuxCompat,
     handler: async (params, { runtime }) => ({
@@ -1280,9 +1571,14 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       const viewportUpdate = await updateViewportForClient(
         runtime,
         leaf.ptyId,
+        `viewport:${params.client.id}`,
         params.client,
         params.viewport,
-        'mobile'
+        'mobile',
+        // Why: one-shot RPC with no disconnect hook — refresh the client's
+        // existing stream-owned floor only, never create a leak-prone one.
+        'refresh',
+        params.claim === true
       )
       return { ...viewportUpdate, seq: runtime.getLayout(leaf.ptyId)?.seq }
     }
@@ -1481,7 +1777,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         ackTotalInFlightBytes = Math.max(0, ackTotalInFlightBytes - acknowledged)
         flushAllAckPendingOutput()
       }
-      const detachStream = (streamId: number, emitEnd: boolean): void => {
+      const detachStream = (
+        streamId: number,
+        emitEnd: boolean,
+        releaseRemoteDesktopDriver = true
+      ): void => {
         const stream = streams.get(streamId)
         if (!stream) {
           return
@@ -1506,6 +1806,15 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         stream.exitWaiterAbort.abort()
         if (stream.isMobile && stream.client?.id) {
           runtime.handleMobileUnsubscribe(stream.ptyId, stream.client.id)
+        } else if (
+          releaseRemoteDesktopDriver &&
+          stream.registeredRemoteDesktopDriver &&
+          stream.client?.id
+        ) {
+          // Why: release the remote-desktop width floor so the host can reclaim
+          // its own width once the last remote viewer leaves — but only if THIS
+          // stream took it (a passive stream must not release a peer's floor).
+          runtime.unregisterRemoteDesktopViewer(stream.ptyId, stream.remoteDesktopSubscriptionKey)
         }
         if (emitEnd) {
           emit({ type: 'end', streamId })
@@ -1516,8 +1825,20 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           return
         }
         closed = true
+        const remoteDesktopKeysByPty = new Map<string, string[]>()
         for (const streamId of Array.from(streams.keys())) {
-          detachStream(streamId, false)
+          const stream = streams.get(streamId)
+          if (stream?.registeredRemoteDesktopDriver && !stream.isMobile && stream.client?.id) {
+            const keys = remoteDesktopKeysByPty.get(stream.ptyId) ?? []
+            keys.push(stream.remoteDesktopSubscriptionKey)
+            remoteDesktopKeysByPty.set(stream.ptyId, keys)
+          }
+          detachStream(streamId, false, false)
+        }
+        // Why: one connection can own many panes backed by the same PTY.
+        // Remove those floors together so close scans each PTY registry once.
+        for (const [ptyId, subscriptionKeys] of remoteDesktopKeysByPty) {
+          void runtime.unregisterRemoteDesktopViewers(ptyId, subscriptionKeys)
         }
         unregisterControlHandler()
         resolveMultiplex()
@@ -1550,14 +1871,20 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           if (isTerminalInputLockedForClient(runtime, stream.ptyId, stream.client)) {
             return
           }
-          void runtime
-            .sendTerminal(stream.terminal, { text, enter: false, interrupt: false })
-            .then(async () => {
-              if (stream.isMobile && stream.client?.id) {
-                await runtime.mobileTookFloor(stream.ptyId, stream.client.id)
-              }
+          // Mobile already has the higher-priority floor; a rejected desktop
+          // viewport claim must never suppress later phone input.
+          const inputClaimTail = stream.isMobile ? Promise.resolve(true) : stream.desktopClaimTail
+          void inputClaimTail.then((claimed) => {
+            if (!claimed || isTerminalInputLockedForClient(runtime, stream.ptyId, stream.client)) {
+              return
+            }
+            return sendTerminalStreamInput(runtime, {
+              terminal: stream.terminal,
+              text,
+              client: stream.client,
+              isMobile: stream.isMobile
             })
-            .catch(() => {})
+          })
           return
         }
         if (frame.opcode === TerminalStreamOpcode.Resize && stream.client) {
@@ -1567,13 +1894,72 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           if (!viewport || typeof viewport.cols !== 'number' || typeof viewport.rows !== 'number') {
             return
           }
-          void updateViewportForClient(
-            runtime,
-            stream.ptyId,
-            stream.client,
-            { cols: viewport.cols, rows: viewport.rows },
-            stream.isMobile ? 'mobile' : 'desktop'
-          ).catch(() => {})
+          const cols = viewport.cols
+          const rows = viewport.rows
+          // Why: resize registers stream-scoped geometry so detach can release
+          // it. Older clients lack explicit claims, so Resize remains control.
+          if (!stream.isMobile && stream.client?.id) {
+            stream.registeredRemoteDesktopDriver = true
+            if (stream.buffering) {
+              stream.pendingRemoteDesktopViewport = { cols: viewport.cols, rows: viewport.rows }
+              return
+            }
+          }
+          stream.desktopClaimTail = stream.desktopClaimTail
+            .then(async (priorClaimed) => {
+              const result = await updateViewportForClient(
+                runtime,
+                stream.ptyId,
+                stream.remoteDesktopSubscriptionKey,
+                stream.client!,
+                { cols, rows },
+                stream.isMobile ? 'mobile' : 'desktop',
+                'register',
+                !stream.supportsDesktopViewportClaims
+              )
+              return stream.supportsDesktopViewportClaims
+                ? priorClaimed && result.applied
+                : result.applied
+            })
+            .catch(() => false)
+          return
+        }
+        if (
+          frame.opcode === TerminalStreamOpcode.ClaimViewport &&
+          stream.client &&
+          !stream.isMobile
+        ) {
+          const viewport = decodeTerminalStreamJson<{ cols?: unknown; rows?: unknown }>(
+            frame.payload
+          )
+          if (!viewport || typeof viewport.cols !== 'number' || typeof viewport.rows !== 'number') {
+            return
+          }
+          const cols = viewport.cols
+          const rows = viewport.rows
+          stream.registeredRemoteDesktopDriver = true
+          stream.desktopClaimTail = stream.desktopClaimTail
+            .then(
+              () =>
+                runtime.updateRemoteDesktopViewer(
+                  stream.ptyId,
+                  stream.remoteDesktopSubscriptionKey,
+                  stream.client!.id,
+                  cols,
+                  rows,
+                  true
+                ),
+              () =>
+                runtime.updateRemoteDesktopViewer(
+                  stream.ptyId,
+                  stream.remoteDesktopSubscriptionKey,
+                  stream.client!.id,
+                  cols,
+                  rows,
+                  true
+                )
+            )
+            .catch(() => false)
           return
         }
         if (frame.opcode === TerminalStreamOpcode.SnapshotRequest) {
@@ -1669,6 +2055,28 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             stream.pendingOutputBytes = 0
             stream.pendingOutputOverflowed = false
             stream.outputBatcher.flush()
+            // Why: a viewer resize that arrived during the snapshot buffering
+            // window is parked in pendingRemoteDesktopViewport; apply it now or
+            // it is silently dropped until the viewer's next resize.
+            if (
+              !stream.isMobile &&
+              stream.client?.id &&
+              stream.registeredRemoteDesktopDriver &&
+              stream.pendingRemoteDesktopViewport
+            ) {
+              const viewport = stream.pendingRemoteDesktopViewport
+              stream.pendingRemoteDesktopViewport = null
+              void updateViewportForClient(
+                runtime,
+                stream.ptyId,
+                stream.remoteDesktopSubscriptionKey,
+                stream.client,
+                viewport,
+                'desktop',
+                'register',
+                !stream.supportsDesktopViewportClaims
+              ).catch(() => {})
+            }
           }
         }
       }
@@ -1730,6 +2138,15 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           isMobile,
           ackOutput: request.capabilities?.ackOutput === 1,
           ackInFlightBytes: 0,
+          supportsDesktopViewportClaims: request.capabilities?.desktopViewportClaims === 1,
+          desktopClaimTail: Promise.resolve(true),
+          registeredRemoteDesktopDriver: false,
+          // Why: streamId is client-local, so two remote connections can both
+          // use stream 1 for the same PTY. Scope the width-floor key by
+          // connectionId (guaranteed present above) so they can't
+          // overwrite/release each other's floor.
+          remoteDesktopSubscriptionKey: `multiplex:${connectionId}:${request.streamId}`,
+          pendingRemoteDesktopViewport: null,
           buffering: true,
           ackPendingOutput: [],
           ackPendingOutputBytes: 0,
@@ -1788,13 +2205,29 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
 
           if (isMobile && request.client?.id) {
             await runtime.handleMobileSubscribe(ptyId, request.client.id, request.viewport)
-          } else if (request.viewport && request.client) {
+          } else if (request.client?.id && request.viewport) {
+            // Why: subscribe records this stream's geometry and cleanup key,
+            // but does not claim ownership. Activity frames claim later.
+            stream.registeredRemoteDesktopDriver = true
+            stream.pendingRemoteDesktopViewport = request.viewport
+          }
+          if (
+            !isMobile &&
+            request.client?.id &&
+            stream.registeredRemoteDesktopDriver &&
+            stream.pendingRemoteDesktopViewport
+          ) {
+            const viewport = stream.pendingRemoteDesktopViewport
+            stream.pendingRemoteDesktopViewport = null
             await updateViewportForClient(
               runtime,
               ptyId,
+              stream.remoteDesktopSubscriptionKey,
               request.client,
-              request.viewport,
-              'desktop'
+              viewport,
+              'desktop',
+              'register',
+              !stream.supportsDesktopViewportClaims
             )
           }
           if (closed || streams.get(request.streamId) !== stream) {
@@ -1803,10 +2236,15 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
 
           if (!isMobile) {
             stream.unsubscribeFit = runtime.subscribeToFitOverrideChanges(ptyId, (event) => {
+              const mode =
+                event.mode === 'mobile-fit'
+                  ? event.mode
+                  : (runtime.getRemoteDesktopFitHold?.(ptyId, stream.remoteDesktopSubscriptionKey)
+                      .mode ?? 'desktop-fit')
               emit({
                 type: 'fit-override-changed',
                 streamId: request.streamId,
-                mode: event.mode,
+                mode,
                 cols: event.cols,
                 rows: event.rows
               })
@@ -1849,12 +2287,16 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           const snapshotOutputSeq = serialized?.seq
           if (!isMobile) {
             const fitOverride = runtime.getTerminalFitOverride(ptyId)
+            const desktopHold = runtime.getRemoteDesktopFitHold?.(
+              ptyId,
+              stream.remoteDesktopSubscriptionKey
+            ) ?? { mode: 'desktop-fit' as const, cols: size?.cols ?? 0, rows: size?.rows ?? 0 }
             emit({
               type: 'fit-override-changed',
               streamId: request.streamId,
-              mode: fitOverride?.mode ?? 'desktop-fit',
-              cols: fitOverride?.cols ?? size?.cols ?? 0,
-              rows: fitOverride?.rows ?? size?.rows ?? 0
+              mode: fitOverride?.mode ?? desktopHold.mode,
+              cols: fitOverride?.cols ?? desktopHold.cols,
+              rows: fitOverride?.rows ?? desktopHold.rows
             })
             emit({
               type: 'driver-changed',
@@ -1906,7 +2348,6 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           stream.pendingOutputBytes = 0
           stream.pendingOutputOverflowed = false
           stream.outputBatcher.flush()
-
           stream.unsubscribeResize = runtime.subscribeToTerminalResize(ptyId, (event) => {
             stream.outputBatcher.flush()
             const resizeGeneration = stream.resizeGeneration + 1
@@ -1955,6 +2396,27 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             }
             sendResizedFrame(stream, event)
           })
+          // Install the resize listener before draining the parked viewport;
+          // applyLayout emits synchronously and the stream must observe it.
+          if (
+            !stream.isMobile &&
+            stream.client?.id &&
+            stream.registeredRemoteDesktopDriver &&
+            stream.pendingRemoteDesktopViewport
+          ) {
+            const viewport = stream.pendingRemoteDesktopViewport
+            stream.pendingRemoteDesktopViewport = null
+            void updateViewportForClient(
+              runtime,
+              ptyId,
+              stream.remoteDesktopSubscriptionKey,
+              stream.client,
+              viewport,
+              'desktop',
+              'register',
+              !stream.supportsDesktopViewportClaims
+            ).catch(() => {})
+          }
           void runtime
             .waitForTerminal(request.terminal, {
               condition: 'exit',
@@ -2011,13 +2473,25 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     ) => {
       let leaf = runtime.resolveLeafForHandle(params.terminal)
       const isMobile = params.client?.type === 'mobile'
+      const serializerGenerationBeforeAnyMount = isMobile
+        ? (runtime.getRendererTerminalSerializerGenerationForHandle?.(params.terminal) ?? 0)
+        : 0
+      let rendererMountRequestedBeforePty = false
       const useBinaryStream = params.capabilities?.terminalBinaryStream === 1 && Boolean(sendBinary)
+      // Why: a closed stream must not allocate listeners, mobile-fit state, or
+      // a hidden renderer surface that no client remains to consume.
+      if (signal?.aborted) {
+        return
+      }
 
       // Why: the left pane's PTY spawns asynchronously after the tab is created.
       // Mobile clients that subscribe before the PTY is ready would get a bare
       // scrollback+end with no live stream or phone-fit. Wait for the PTY so
       // the subscribe can proceed normally.
       if (!leaf?.ptyId && isMobile) {
+        // Why: a never-mounted tab has no graph leaf to await; mounting the
+        // exact tab lets its PTY attach without activating the worktree.
+        rendererMountRequestedBeforePty = runtime.requestRendererTerminalTabMount(params.terminal)
         try {
           const ptyId = await runtime.waitForLeafPtyId(params.terminal, 10_000, signal)
           leaf = { ptyId }
@@ -2047,40 +2521,140 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
 
       const ptyId = leaf.ptyId
       const clientId = params.client?.id
-      if (!useBinaryStream) {
-        const read = await runtime.readTerminal(params.terminal)
-        const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, false)
-        // Why: legacy JSON streams register cleanup after snapshot awaits; if
-        // the socket closed meanwhile, registering now would orphan listeners.
-        if (signal?.aborted) {
-          return
-        }
-        const size = runtime.getTerminalSize(ptyId)
-        const displayMode = runtime.getMobileDisplayMode(ptyId)
-        const seq = runtime.getLayout(ptyId)?.seq
-        emit({
-          type: 'scrollback',
-          lines: read.tail,
-          truncated: isTerminalReadPayloadIncomplete(read),
-          serialized: serialized?.data,
-          oscLinks: serialized?.oscLinks,
-          cwd: serialized?.cwd,
-          cols: serialized?.cols ?? size?.cols,
-          rows: serialized?.rows ?? size?.rows,
-          displayMode,
-          seq
+      const mobileInputLeaseOnly =
+        isMobile && params.capabilities?.mobileInputLeaseOnly === 1 && Boolean(clientId)
+      // Why: the initial mount/PTY wait and phone-fit can both emit a redraw
+      // that creates suffix-only state, so preserve the pre-mount absence signal.
+      const missingHeadlessStateBeforeMobileFit =
+        isMobile &&
+        (rendererMountRequestedBeforePty || runtime.hasHeadlessTerminalState?.(ptyId) === false)
+      const serializerGenerationBeforeMobileFit = missingHeadlessStateBeforeMobileFit
+        ? rendererMountRequestedBeforePty
+          ? serializerGenerationBeforeAnyMount
+          : runtime.getRendererTerminalSerializerGeneration(ptyId)
+        : 0
+      const supportsDesktopViewportClaims = params.capabilities?.desktopViewportClaims === 1
+      if (mobileInputLeaseOnly && clientId) {
+        let closed = false
+        let resolveStream = (): void => {}
+        const streamClosed = new Promise<void>((resolve) => {
+          resolveStream = resolve
         })
-
+        const subscriptionId = `${params.terminal}:${clientId}`
+        // Why: chat needs the input-floor acknowledgement without registering
+        // a view subscriber or transporting duplicate PTY output.
+        runtime.registerSubscriptionCleanup(
+          subscriptionId,
+          () => {
+            closed = true
+            runtime.handleMobileUnsubscribe(ptyId, clientId)
+            emit({ type: 'end' })
+            resolveStream()
+          },
+          connectionId
+        )
+        void runtime
+          .waitForTerminal(params.terminal, { condition: 'exit', signal })
+          .then(() => runtime.cleanupSubscription(subscriptionId))
+          .catch(() => runtime.cleanupSubscription(subscriptionId))
+        try {
+          await runtime.handleMobileSubscribe(ptyId, clientId, params.viewport)
+          if (closed || signal?.aborted) {
+            // Why: a disconnect can win the awaited subscribe and otherwise
+            // resurrect mobile presence after cleanup already released it.
+            runtime.handleMobileUnsubscribe(ptyId, clientId)
+            if (!closed) {
+              runtime.cleanupSubscription(subscriptionId)
+            }
+            return
+          }
+          emit({ type: 'subscribed', streamId: null, lines: [], truncated: false })
+          await streamClosed
+        } catch (error) {
+          runtime.cleanupSubscription(subscriptionId)
+          throw error
+        }
+        return
+      }
+      // Why: only unregister the width floor this subscription took (see the
+      // multiplex stream's registeredRemoteDesktopDriver note).
+      let registeredRemoteDesktopDriver = false
+      if (!useBinaryStream) {
         // Why: desktop can have both a hidden automation watcher and a visible
         // pane subscribed to the same terminal. Key by client when provided so
         // one stream cannot evict the other.
         const subscriptionId = clientId ? `${params.terminal}:${clientId}` : params.terminal
-        await new Promise<void>((resolve) => {
-          const outputBatcher = createTerminalOutputBatcher((chunk) => {
+        const remoteDesktopSubscriptionKey = `json:${nextTerminalStreamId++}`
+        let closed = false
+        let outputBatcher: ReturnType<typeof createTerminalOutputBatcher> | null = null
+        let unsubscribeData = (): void => {}
+        let unsubscribeFit = (): void => {}
+        let resolveStream = (): void => {}
+        const streamClosed = new Promise<void>((resolve) => {
+          resolveStream = resolve
+        })
+        // Why: register before viewport/snapshot awaits so a socket close cannot
+        // orphan either the stream listeners or its remote-desktop width floor.
+        runtime.registerSubscriptionCleanup(
+          subscriptionId,
+          () => {
+            closed = true
+            outputBatcher?.flush()
+            outputBatcher?.dispose()
+            unsubscribeData()
+            unsubscribeFit()
+            if (registeredRemoteDesktopDriver && clientId) {
+              runtime.unregisterRemoteDesktopViewer(ptyId, remoteDesktopSubscriptionKey)
+            }
+            emit({ type: 'end' })
+            resolveStream()
+          },
+          connectionId
+        )
+        try {
+          if (clientId && params.client && params.viewport) {
+            registeredRemoteDesktopDriver = true
+            await updateViewportForClient(
+              runtime,
+              ptyId,
+              remoteDesktopSubscriptionKey,
+              params.client,
+              params.viewport,
+              'desktop',
+              'register',
+              !supportsDesktopViewportClaims
+            )
+          }
+          if (closed || signal?.aborted) {
+            runtime.cleanupSubscription(subscriptionId)
+            return
+          }
+          const read = await runtime.readTerminal(params.terminal)
+          const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, false)
+          if (closed || signal?.aborted) {
+            runtime.cleanupSubscription(subscriptionId)
+            return
+          }
+          const size = runtime.getTerminalSize(ptyId)
+          const displayMode = runtime.getMobileDisplayMode(ptyId)
+          const seq = runtime.getLayout(ptyId)?.seq
+          emit({
+            type: 'scrollback',
+            lines: read.tail,
+            truncated: isTerminalReadPayloadIncomplete(read),
+            serialized: serialized?.data,
+            oscLinks: serialized?.oscLinks,
+            cwd: serialized?.cwd,
+            cols: serialized?.cols ?? size?.cols,
+            rows: serialized?.rows ?? size?.rows,
+            displayMode,
+            seq
+          })
+          outputBatcher = createTerminalOutputBatcher((chunk) => {
             emit({ type: 'data', chunk })
           })
           const unsubscribeStreamData = runtime.subscribeToTerminalData(ptyId, (data) => {
-            outputBatcher.push(data)
+            outputBatcher?.push(data)
           })
           // Why: this legacy JSON stream can feed a live xterm view too
           // (older web/desktop subscribers), so it conservatively registers
@@ -2088,56 +2662,62 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           // a withheld model reply — the pre-Phase-5 status quo — which is
           // strictly safer than a double reply under a view consumer.
           const releaseViewSubscriber = runtime.registerRemoteTerminalViewSubscriber(ptyId)
-          const unsubscribeData = (): void => {
+          unsubscribeData = () => {
             releaseViewSubscriber()
             unsubscribeStreamData()
           }
-          const unsubscribeFit = runtime.subscribeToFitOverrideChanges(ptyId, (event) => {
-            outputBatcher.flush()
+          unsubscribeFit = runtime.subscribeToFitOverrideChanges(ptyId, (event) => {
+            outputBatcher?.flush()
+            const mode =
+              event.mode === 'mobile-fit'
+                ? event.mode
+                : (runtime.getRemoteDesktopFitHold?.(ptyId, remoteDesktopSubscriptionKey).mode ??
+                  'desktop-fit')
             emit({
               type: 'fit-override-changed',
-              mode: event.mode,
+              mode,
               cols: event.cols,
               rows: event.rows
             })
           })
-          runtime.registerSubscriptionCleanup(
-            subscriptionId,
-            () => {
-              outputBatcher.flush()
-              outputBatcher.dispose()
-              unsubscribeData()
-              unsubscribeFit()
-              emit({ type: 'end' })
-              resolve()
-            },
-            connectionId
-          )
           // Why: bind the exit-waiter to the connection dispatch signal so it is
           // removed on socket close/error instead of leaking until real exit.
           void runtime
             .waitForTerminal(params.terminal, { condition: 'exit', signal })
             .then(() => runtime.cleanupSubscription(subscriptionId))
             .catch(() => runtime.cleanupSubscription(subscriptionId))
-        })
+          await streamClosed
+        } catch (error) {
+          runtime.cleanupSubscription(subscriptionId)
+          throw error
+        }
         return
       }
 
       const streamId = nextTerminalStreamId++
+      const remoteDesktopSubscriptionKey = `stream:${streamId}`
       let cursor = 0
       let closed = false
       let buffering = true
+      let pendingRemoteDesktopViewport: { cols: number; rows: number } | null = null
       // Why: the cols the mobile client last rewrapped to; gate the
       // resize re-stream so it only fires on an actual width change.
       let lastResizeCols: number | undefined
       let resizeGeneration = 0
       let pendingOutput: TerminalOutputChunk[] = []
+      let desktopClaimTail: Promise<boolean> = Promise.resolve(true)
       let pendingOutputBytes = 0
       let pendingOutputOverflowed = false
+      let pendingQueryScanState: TerminalReplyQueryScanState = EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE
+      const pendingQuerySequences: TerminalReplyQuerySequence[] = []
+      let pendingQueryChars = 0
+      let pendingQueryOverflowed = false
       let unsubscribeData = (): void => {}
       let unsubscribeResize = (): void => {}
       let unsubscribeFit = (): void => {}
       let unregisterBinaryHandler = (): void => {}
+      let abortRendererMountWait = (): void => {}
+      let lateRendererReadyPromise: Promise<boolean> | null = null
       let outputBatcher: ReturnType<typeof createTerminalOutputBatcher> | null = null
       let resolveStream = (): void => {}
       const streamClosed = new Promise<void>((resolve) => {
@@ -2157,8 +2737,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           unsubscribeResize()
           unsubscribeFit()
           unregisterBinaryHandler()
+          abortRendererMountWait()
           if (isMobile && clientId) {
             runtime.handleMobileUnsubscribe(ptyId, clientId)
+          } else if (registeredRemoteDesktopDriver && clientId) {
+            runtime.unregisterRemoteDesktopViewer(ptyId, remoteDesktopSubscriptionKey)
           }
           emit({ type: 'end' })
           resolveStream()
@@ -2206,14 +2789,17 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             if (isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
               return
             }
-            void runtime
-              .sendTerminal(params.terminal, { text, enter: false, interrupt: false })
-              .then(async () => {
-                if (isMobile && clientId) {
-                  await runtime.mobileTookFloor(ptyId, clientId)
-                }
+            void desktopClaimTail.then(async (claimed) => {
+              if (!claimed || isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
+                return
+              }
+              await sendTerminalStreamInput(runtime, {
+                terminal: params.terminal,
+                text,
+                client: params.client,
+                isMobile
               })
-              .catch(() => {})
+            })
             return
           }
           if (frame.opcode === TerminalStreamOpcode.Resize && params.client) {
@@ -2227,58 +2813,223 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             ) {
               return
             }
-            void updateViewportForClient(
-              runtime,
-              ptyId,
-              params.client,
-              { cols: viewport.cols, rows: viewport.rows },
-              'desktop'
-            ).catch(() => {})
+            const cols = viewport.cols
+            const rows = viewport.rows
+            if (clientId) {
+              registeredRemoteDesktopDriver = true
+              if (buffering) {
+                pendingRemoteDesktopViewport = { cols: viewport.cols, rows: viewport.rows }
+                return
+              }
+            }
+            desktopClaimTail = desktopClaimTail
+              .then(async (priorClaimed) => {
+                const result = await updateViewportForClient(
+                  runtime,
+                  ptyId,
+                  remoteDesktopSubscriptionKey,
+                  params.client!,
+                  { cols, rows },
+                  'desktop',
+                  'register',
+                  !supportsDesktopViewportClaims
+                )
+                return supportsDesktopViewportClaims
+                  ? priorClaimed && result.applied
+                  : result.applied
+              })
+              .catch(() => false)
+            return
+          }
+          if (
+            frame.opcode === TerminalStreamOpcode.ClaimViewport &&
+            params.client &&
+            clientId &&
+            !isMobile
+          ) {
+            const viewport = decodeTerminalStreamJson<{ cols?: unknown; rows?: unknown }>(
+              frame.payload
+            )
+            if (
+              !viewport ||
+              typeof viewport.cols !== 'number' ||
+              typeof viewport.rows !== 'number'
+            ) {
+              return
+            }
+            const cols = viewport.cols
+            const rows = viewport.rows
+            registeredRemoteDesktopDriver = true
+            desktopClaimTail = desktopClaimTail
+              .then(
+                () =>
+                  runtime.updateRemoteDesktopViewer(
+                    ptyId,
+                    remoteDesktopSubscriptionKey,
+                    clientId,
+                    cols,
+                    rows,
+                    true
+                  ),
+                () =>
+                  runtime.updateRemoteDesktopViewer(
+                    ptyId,
+                    remoteDesktopSubscriptionKey,
+                    clientId,
+                    cols,
+                    rows,
+                    true
+                  )
+              )
+              .catch(() => false)
           }
         }) ?? (() => {})
+      const unsubscribeStreamData = runtime.subscribeToTerminalData(ptyId, (data, meta) => {
+        if (closed) {
+          return
+        }
+        if (buffering) {
+          const rawLength = meta?.rawLength
+          if (
+            typeof meta?.seq === 'number' &&
+            typeof rawLength === 'number' &&
+            rawLength === data.length
+          ) {
+            const scan = scanTerminalReplyQuerySequences(
+              data,
+              meta.seq - rawLength,
+              pendingQueryScanState
+            )
+            pendingQueryScanState = scan.state
+            for (const query of scan.queries) {
+              if (pendingQueryChars + query.data.length > TERMINAL_QUERY_REPLAY_MAX_CHARS) {
+                pendingQueryOverflowed = true
+                break
+              }
+              pendingQuerySequences.push(query)
+              pendingQueryChars += query.data.length
+            }
+          } else {
+            pendingQueryScanState = EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE
+          }
+          const remainingBudget = Math.max(
+            1,
+            TERMINAL_MULTIPLEX_PENDING_MAX_BYTES - pendingOutputBytes
+          )
+          const measurement = measureTerminalStreamByteLength(data, {
+            stopAfterBytes: remainingBudget
+          })
+          pendingOutput.push({ data, bytes: measurement.byteLength, meta })
+          pendingOutputBytes += measurement.byteLength
+          const trimmed = trimPendingOutputToBudget(pendingOutput, pendingOutputBytes)
+          pendingOutputBytes = trimmed.bytes
+          pendingOutputOverflowed ||= trimmed.overflowed
+          return
+        }
+        outputBatcher?.push(data, meta)
+      })
+      // Why: live bytes must be captured before mobile fit awaits. Registering
+      // mobile presence first would suppress main while no view held the query.
+      const releaseViewSubscriber = runtime.registerRemoteTerminalViewSubscriber(ptyId)
+      unsubscribeData = () => {
+        releaseViewSubscriber()
+        unsubscribeStreamData()
+      }
       // Server-side auto-fit: resize PTY to phone dims before serializing scrollback
       try {
         if (isMobile && clientId) {
           await runtime.handleMobileSubscribe(ptyId, clientId, params.viewport)
+        } else if (clientId && params.viewport) {
+          // Why: legacy subscribe records geometry without taking ownership;
+          // only an explicit activity/claim frame may suppress the host.
+          registeredRemoteDesktopDriver = true
+          pendingRemoteDesktopViewport = params.viewport
         }
         if (closed) {
           return
-        }
-
-        const unsubscribeStreamData = runtime.subscribeToTerminalData(ptyId, (data, meta) => {
-          if (closed) {
-            return
-          }
-          if (buffering) {
-            const remainingBudget = Math.max(
-              1,
-              TERMINAL_MULTIPLEX_PENDING_MAX_BYTES - pendingOutputBytes
-            )
-            const measurement = measureTerminalStreamByteLength(data, {
-              stopAfterBytes: remainingBudget
-            })
-            pendingOutput.push({ data, bytes: measurement.byteLength, meta })
-            pendingOutputBytes += measurement.byteLength
-            const trimmed = trimPendingOutputToBudget(pendingOutput, pendingOutputBytes)
-            pendingOutputBytes = trimmed.bytes
-            pendingOutputOverflowed ||= trimmed.overflowed
-            return
-          }
-          outputBatcher?.push(data, meta)
-        })
-        // Why: binary subscribe streams feed remote xterm views (mobile and
-        // binary-capable desktop clients) that answer queries with view
-        // authority; the main model responder yields while attached.
-        const releaseViewSubscriber = runtime.registerRemoteTerminalViewSubscriber(ptyId)
-        unsubscribeData = () => {
-          releaseViewSubscriber()
-          unsubscribeStreamData()
         }
 
         let read = await runtime.readTerminal(params.terminal)
         let serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
         if (closed) {
           return
+        }
+        // Why: missing model state—not snapshot text—is the signal that this
+        // PTY may never have attached; avoid remounting legitimate blank panes.
+        // A renderer-sourced snapshot also proves the exact pane is already
+        // attached, so waiting for a fresh mount generation would only stall.
+        const mountRequested =
+          missingHeadlessStateBeforeMobileFit &&
+          serialized?.source !== 'renderer' &&
+          (rendererMountRequestedBeforePty ||
+            runtime.requestRendererTerminalTabMount(params.terminal))
+        if (missingHeadlessStateBeforeMobileFit && mountRequested) {
+          // Why: an idle legacy PTY emits no later byte; a fresh settle proves
+          // this exact remount completed before we replay its restored screen.
+          const mountWaitController = new AbortController()
+          const abortMountWait = (): void => mountWaitController.abort()
+          abortRendererMountWait = abortMountWait
+          if (signal?.aborted) {
+            abortMountWait()
+          } else {
+            signal?.addEventListener('abort', abortMountWait, { once: true })
+          }
+          const rendererReadyPromise = runtime
+            .waitForRendererTerminalSerializer(
+              ptyId,
+              serializerGenerationBeforeMobileFit,
+              undefined,
+              mountWaitController.signal
+            )
+            .catch(() => false)
+          const finishMountWait = (): void => {
+            signal?.removeEventListener('abort', abortMountWait)
+            if (abortRendererMountWait === abortMountWait) {
+              abortRendererMountWait = () => {}
+            }
+          }
+          void rendererReadyPromise.then(finishMountWait, finishMountWait)
+          let deadlineTimer: ReturnType<typeof setTimeout> | null = null
+          const initialDeadline = new Promise<boolean>((resolve) => {
+            deadlineTimer = setTimeout(() => resolve(false), MOBILE_RENDERER_MOUNT_READY_TIMEOUT_MS)
+            if (typeof deadlineTimer.unref === 'function') {
+              deadlineTimer.unref()
+            }
+          })
+          const rendererReady = await Promise.race([rendererReadyPromise, initialDeadline])
+          if (deadlineTimer) {
+            clearTimeout(deadlineTimer)
+          }
+          if (closed || signal?.aborted) {
+            return
+          }
+          if (rendererReady) {
+            read = await runtime.readTerminal(params.terminal)
+            const stableRendererSnapshot = await serializeStableMobileRendererSnapshot(
+              runtime,
+              ptyId
+            )
+            if (closed) {
+              return
+            }
+            if (stableRendererSnapshot?.data.length) {
+              serialized = stableRendererSnapshot
+              const trailingOutput = pendingOutput.flatMap((item) => {
+                const data = getOutputAfterSnapshotSeq(item, stableRendererSnapshot.seq)
+                const seq = item.meta?.seq
+                return data && typeof seq === 'number' ? [{ data, seq }] : []
+              })
+              runtime.replaceHeadlessTerminalFromRendererSnapshotForRecovery(
+                ptyId,
+                stableRendererSnapshot,
+                trailingOutput
+              )
+            }
+          } else {
+            // Why: a renderer can settle after the bounded initial response.
+            // Keep observing it so an idle PTY still self-heals without bytes.
+            lateRendererReadyPromise = rendererReadyPromise
+          }
         }
         let initialOutputOverflowed = false
         if (pendingOutputOverflowed) {
@@ -2305,7 +3056,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         // See docs/mobile-terminal-layout-state-machine.md.
         const layoutSeq = runtime.getLayout(ptyId)?.seq
         const snapshotFrameSeq = serialized?.seq ?? layoutSeq
-        const snapshotOutputSeq = serialized?.seq
+        // Why: recovery snapshots advance output coverage past the initial
+        // snapshot seq; query replay and boundary trims must track the seq
+        // that actually covered the buffered chunks or a query absorbed by a
+        // recovery snapshot gets zero replies.
+        let snapshotOutputSeq = serialized?.seq
         emit({
           type: 'subscribed',
           streamId,
@@ -2392,12 +3147,43 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           const trimmed = trimPendingOutputCoveredBySnapshot(pendingOutput, recovery.seq)
           pendingOutput = trimmed.chunks
           pendingOutputBytes = trimmed.bytes
+          snapshotOutputSeq = recovery.seq
         }
         buffering = false
         const bufferedOutput = pendingOutput.splice(0)
+        const queryReplayData = pendingQueryOverflowed
+          ? ''
+          : pendingQuerySequences
+              .filter(
+                (query) =>
+                  initialOutputOverflowed ||
+                  (typeof snapshotOutputSeq === 'number' && query.startSeq < snapshotOutputSeq)
+              )
+              .map((query) => query.data)
+              .join('')
+        if (queryReplayData) {
+          // Why: serialized snapshots omit control queries, yet their output seq
+          // can trim the live chunk. Replay only the query after snapshot so the
+          // mobile xterm answers once while ordinary output stays deduplicated.
+          outputBatcher.push(queryReplayData)
+        }
         if (!initialOutputOverflowed) {
           for (const item of bufferedOutput) {
-            const uncoveredData = getOutputAfterSnapshotSeq(item, snapshotOutputSeq)
+            let uncoveredData = getOutputAfterSnapshotSeq(item, snapshotOutputSeq)
+            if (
+              uncoveredData &&
+              uncoveredData !== item.data &&
+              typeof snapshotOutputSeq === 'number' &&
+              typeof item.meta?.seq === 'number' &&
+              typeof item.meta.rawLength === 'number'
+            ) {
+              uncoveredData = stripSnapshotBoundaryQuerySuffixes(
+                uncoveredData,
+                snapshotOutputSeq,
+                snapshotOutputSeq,
+                pendingQuerySequences
+              )
+            }
             if (uncoveredData) {
               outputBatcher.push(uncoveredData, item.meta)
             }
@@ -2405,7 +3191,54 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         }
         pendingOutputBytes = 0
         outputBatcher.flush()
-
+        const lateRendererReady = lateRendererReadyPromise
+        lateRendererReadyPromise = null
+        if (lateRendererReady) {
+          void lateRendererReady
+            .then(async (rendererReady) => {
+              if (!rendererReady || closed) {
+                return
+              }
+              outputBatcher?.flush()
+              const recovery = await serializeStableMobileRendererSnapshot(runtime, ptyId)
+              if (closed) {
+                return
+              }
+              if (!recovery?.data.length) {
+                return
+              }
+              // Why: late recovery has no buffered-output gate. Only an exact
+              // renderer high-water may reset mobile without erasing live bytes.
+              if (recovery.seq !== runtime.getPtyOutputSequence(ptyId)) {
+                return
+              }
+              runtime.replaceHeadlessTerminalFromRendererSnapshotForRecovery(ptyId, recovery)
+              // Why: shipped mobile clients apply resized snapshots in place,
+              // allowing a blank initialized xterm to recover without resubscribe.
+              const recoveryStats = sendSnapshotFrames(sendFrame, {
+                kind: 'resized',
+                cols: recovery.cols,
+                rows: recovery.rows,
+                displayMode,
+                reason: 'renderer-mount-ready',
+                source: recovery.source,
+                truncated: false,
+                truncatedByByteBudget: recovery.truncatedByByteBudget,
+                data: recovery.data
+              })
+              lastResizeCols = recovery.cols
+              console.log('[mobile-terminal-stream] recovery snapshot', {
+                terminal: params.terminal,
+                streamId,
+                reason: 'renderer-mount-ready',
+                bytes: recoveryStats.bytes,
+                chunks: recoveryStats.chunks,
+                scrollbackRows: recovery.scrollbackRows,
+                truncatedByByteBudget: recovery.truncatedByByteBudget === true
+              })
+            })
+            .catch(() => {})
+        }
         const sendResizedFrame = (event: {
           cols: number
           rows: number
@@ -2465,12 +3298,39 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           sendResizedFrame(event)
         })
 
+        // Install the resize listener before draining the parked viewport;
+        // applyLayout emits synchronously and the stream must observe it.
+        if (
+          clientId &&
+          params.client &&
+          registeredRemoteDesktopDriver &&
+          pendingRemoteDesktopViewport
+        ) {
+          const viewport = pendingRemoteDesktopViewport
+          pendingRemoteDesktopViewport = null
+          void updateViewportForClient(
+            runtime,
+            ptyId,
+            remoteDesktopSubscriptionKey,
+            params.client,
+            viewport,
+            'desktop',
+            'register',
+            !supportsDesktopViewportClaims
+          ).catch(() => {})
+        }
+
         // Legacy fit-override-changed for non-mobile (desktop) subscribers
         unsubscribeFit = !isMobile
           ? runtime.subscribeToFitOverrideChanges(ptyId, (event) => {
+              const mode =
+                event.mode === 'mobile-fit'
+                  ? event.mode
+                  : (runtime.getRemoteDesktopFitHold?.(ptyId, remoteDesktopSubscriptionKey).mode ??
+                    'desktop-fit')
               emit({
                 type: 'fit-override-changed',
-                mode: event.mode,
+                mode,
                 cols: event.cols,
                 rows: event.rows
               })

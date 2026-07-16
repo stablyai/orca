@@ -3,22 +3,26 @@ import { isMethodNotFoundError, readFileViaStream } from '../ssh/ssh-filesystem-
 import { uploadBuffer } from '../ssh/sftp-upload'
 import { fastGetViaSftp, lstatViaSftp } from './ssh-filesystem-provider-sftp'
 import {
-  notifySshFilesystemUnwatch,
+  openSshFileUploadSession,
+  type SftpFactory,
+  type SshRawTransferOptions
+} from './ssh-filesystem-file-upload'
+import {
+  closeSshFilesystemWatch,
   registerSshFilesystemWatch,
+  stopSshFilesystemWatchRegistration,
   type WatchRegistration
 } from './ssh-filesystem-provider-watch'
 import type {
   IFilesystemProvider,
   FileStat,
   FileReadResult,
+  FileUploadSession,
   TerminalArtifactAccessOptions
 } from './types'
 import type { DirEntry, FsChangeEvent, SearchOptions, SearchResult } from '../../shared/types'
-import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
+import { routeSshFilesystemWatchNotification } from './ssh-filesystem-watch-notifications'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
-import type { SFTPWrapper } from 'ssh2'
-
-type SftpFactory = () => Promise<SFTPWrapper>
 const WORKSPACE_SPACE_SCAN_TIMEOUT_MS = 130_000
 
 export class SshFilesystemProvider implements IFilesystemProvider {
@@ -33,24 +37,15 @@ export class SshFilesystemProvider implements IFilesystemProvider {
   constructor(
     connectionId: string,
     mux: SshChannelMultiplexer,
-    private readonly createSftp?: SftpFactory
+    private readonly createSftp?: SftpFactory,
+    private readonly rawTransfer?: SshRawTransferOptions
   ) {
     this.connectionId = connectionId
     this.mux = mux
 
-    this.unsubscribeNotifications = mux.onNotification((method, params) => {
-      if (method === 'fs.changed') {
-        const events = params.events as FsChangeEvent[]
-        for (const [rootPath, registration] of this.watchListeners) {
-          const matching = events.filter((e) => isPathInsideOrEqual(rootPath, e.absolutePath))
-          if (matching.length > 0) {
-            for (const cb of registration.callbacks) {
-              cb(matching)
-            }
-          }
-        }
-      }
-    })
+    this.unsubscribeNotifications = mux.onNotification((method, params) =>
+      routeSshFilesystemWatchNotification(this.watchListeners, method, params)
+    )
   }
 
   dispose(): void {
@@ -62,8 +57,8 @@ export class SshFilesystemProvider implements IFilesystemProvider {
       this.unsubscribeNotifications()
       this.unsubscribeNotifications = null
     }
-    for (const rootPath of this.watchListeners.keys()) {
-      notifySshFilesystemUnwatch(this.mux, rootPath)
+    for (const registration of this.watchListeners.values()) {
+      stopSshFilesystemWatchRegistration(this.mux, registration)
     }
     this.watchListeners.clear()
   }
@@ -120,6 +115,10 @@ export class SshFilesystemProvider implements IFilesystemProvider {
   }
 
   async downloadFile(sourcePath: string, destinationPath: string): Promise<void> {
+    if (this.rawTransfer?.downloadFile) {
+      await this.rawTransfer.downloadFile(sourcePath, destinationPath)
+      return
+    }
     if (!this.createSftp) {
       throw new Error('Remote file download is unavailable. Reconnect the SSH target and retry.')
     }
@@ -129,6 +128,10 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     } finally {
       sftp.end()
     }
+  }
+
+  async openFileUploadSession(): Promise<FileUploadSession> {
+    return openSshFileUploadSession(this.createSftp, this.rawTransfer)
   }
 
   async getTempDir(): Promise<string> {
@@ -186,6 +189,11 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     contentBase64: string,
     append: boolean
   ): Promise<void> {
+    const contents = Buffer.from(contentBase64, 'base64')
+    if (this.rawTransfer?.writeBuffer) {
+      await this.rawTransfer.writeBuffer(filePath, contents, { append, exclusive: !append })
+      return
+    }
     if (!this.createSftp) {
       throw new Error('remote_binary_upload_unavailable')
     }
@@ -193,7 +201,7 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     try {
       // Why: relay fs.writeFile is text-only. SFTP writes the decoded bytes
       // directly so runtime uploads do not corrupt images, PDFs, or archives.
-      await uploadBuffer(sftp, Buffer.from(contentBase64, 'base64'), filePath, {
+      await uploadBuffer(sftp, contents, filePath, {
         append,
         exclusive: !append
       })
@@ -285,11 +293,14 @@ export class SshFilesystemProvider implements IFilesystemProvider {
 
   async listFiles(
     rootPath: string,
-    options?: { excludePaths?: string[]; signal?: AbortSignal }
+    options?: { excludePaths?: string[]; signal?: AbortSignal; maxResults?: number }
   ): Promise<string[]> {
     const params: Record<string, unknown> = { rootPath }
     if (options?.excludePaths && options.excludePaths.length > 0) {
       params.excludePaths = options.excludePaths
+    }
+    if (options?.maxResults !== undefined) {
+      params.maxResults = options.maxResults
     }
     // Why #7721: the signal lets a workspace switch send rpc.cancel so the
     // relay aborts the full-tree scan instead of stacking abandoned scans
@@ -299,13 +310,23 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     })) as string[]
   }
 
-  async watch(rootPath: string, callback: (events: FsChangeEvent[]) => void): Promise<() => void> {
+  async watch(
+    rootPath: string,
+    callback: (events: FsChangeEvent[]) => void,
+    options?: { signal?: AbortSignal; onTerminalError?: (error: Error) => void }
+  ): Promise<() => void> {
     return registerSshFilesystemWatch({
       mux: this.mux,
       disposed: () => this.disposed,
       registrations: this.watchListeners,
       rootPath,
-      callback
+      callback,
+      onTerminalError: options?.onTerminalError,
+      signal: options?.signal
     })
+  }
+
+  async closeWatch(rootPath: string): Promise<void> {
+    await closeSshFilesystemWatch(this.mux, this.watchListeners, rootPath)
   }
 }

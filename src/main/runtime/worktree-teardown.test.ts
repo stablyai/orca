@@ -8,12 +8,10 @@ vi.mock('../memory/pty-registry', () => ({
   listRegisteredPtys: listRegisteredPtysMock
 }))
 
-import { killAllProcessesForWorktree } from './worktree-teardown'
-import type { IPtyProvider } from '../providers/types'
+import { killAllProcessesForWorktree, WORKTREE_PROCESS_SWEEP_TIMEOUT_MS } from './worktree-teardown'
+import type { IPtyProvider, PtyProcessInfo } from '../providers/types'
 
-function createProviderStub(
-  listProcesses: () => Promise<{ id: string; cwd: string; title: string }[]>
-): IPtyProvider {
+function createProviderStub(listProcesses: () => Promise<PtyProcessInfo[]>): IPtyProvider {
   return {
     spawn: vi.fn(),
     attach: vi.fn(),
@@ -92,6 +90,69 @@ describe('killAllProcessesForWorktree', () => {
     expect(onPtyStopped).toHaveBeenCalledWith('1')
   })
 
+  it('stops cwd-owned PTYs even when their ids have no worktree prefix', async () => {
+    const localProvider = createProviderStub(async () => [
+      { id: 'floating-1', cwd: '/repo/app/nested', title: 'shell' },
+      { id: 'outside-2', cwd: '/repo/application', title: 'shell' },
+      { id: 'repo-1::/repo/app@@legacy-3', title: 'shell' } as PtyProcessInfo
+    ])
+    listRegisteredPtysMock.mockReturnValue([])
+
+    const result = await killAllProcessesForWorktree('repo-1::/repo/app', {
+      localProvider,
+      requirePhysicalStop: true
+    })
+
+    expect(localProvider.shutdown).toHaveBeenCalledWith('floating-1', { immediate: true })
+    expect(localProvider.shutdown).toHaveBeenCalledWith('repo-1::/repo/app@@legacy-3', {
+      immediate: true
+    })
+    expect(localProvider.shutdown).not.toHaveBeenCalledWith('outside-2', { immediate: true })
+    expect(result.providerStopped).toBe(2)
+  })
+
+  it('does not use cwd fallback against a different authoritative worktree id', async () => {
+    const localProvider = createProviderStub(async () => [
+      {
+        id: 'owned-by-sibling',
+        cwd: '/repo/app/nested',
+        title: 'shell',
+        worktreeId: 'repo-1::/repo/sibling'
+      }
+    ])
+    listRegisteredPtysMock.mockReturnValue([])
+
+    const result = await killAllProcessesForWorktree('repo-1::/repo/app', {
+      localProvider,
+      requirePhysicalStop: true
+    })
+
+    expect(localProvider.shutdown).not.toHaveBeenCalled()
+    expect(result.providerStopped).toBe(0)
+  })
+
+  it('uses authoritative remote worktree ownership without sweeping the local registry', async () => {
+    const remoteProvider = createProviderStub(async () => [
+      { id: 'pty-remote', cwd: '/remote/w1', title: 'shell', worktreeId: 'w1' },
+      { id: 'pty-sibling', cwd: '/remote/w2', title: 'shell', worktreeId: 'w2' }
+    ])
+    listRegisteredPtysMock.mockReturnValue([
+      { ptyId: 'local-1', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 200 }
+    ])
+
+    const result = await killAllProcessesForWorktree('w1', {
+      localProvider: remoteProvider,
+      includeLocalRegistry: false,
+      requirePhysicalStop: true
+    })
+
+    expect(remoteProvider.shutdown).toHaveBeenCalledWith('pty-remote', { immediate: true })
+    expect(remoteProvider.shutdown).not.toHaveBeenCalledWith('pty-sibling', { immediate: true })
+    expect(remoteProvider.shutdown).not.toHaveBeenCalledWith('local-1', { immediate: true })
+    expect(listRegisteredPtysMock).not.toHaveBeenCalled()
+    expect(result).toEqual({ runtimeStopped: 0, providerStopped: 1, registryStopped: 0 })
+  })
+
   it('best-effort: swallows errors from listProcesses and shutdown', async () => {
     const localProvider = createProviderStub(() => Promise.reject(new Error('boom')))
     listRegisteredPtysMock.mockReturnValue([
@@ -146,6 +207,71 @@ describe('killAllProcessesForWorktree', () => {
     expect(r2.providerStopped).toBe(1)
   })
 
+  it('starts owned provider shutdowns together so agent snapshots can coalesce', async () => {
+    const localProvider = createProviderStub(async () => [
+      { id: 'w1@@aaaa', cwd: '/tmp', title: 'shell' },
+      { id: 'w1@@bbbb', cwd: '/tmp', title: 'shell' }
+    ])
+    listRegisteredPtysMock.mockReturnValue([])
+    const releases: (() => void)[] = []
+    ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releases.push(resolve)
+        })
+    )
+
+    const teardown = killAllProcessesForWorktree('w1', { localProvider })
+    await vi.waitFor(() => expect(localProvider.shutdown).toHaveBeenCalledTimes(2))
+    expect(releases).toHaveLength(2)
+
+    for (const release of releases) {
+      release()
+    }
+    await expect(teardown).resolves.toEqual({
+      runtimeStopped: 0,
+      providerStopped: 2,
+      registryStopped: 0
+    })
+  })
+
+  it('bounds provider shutdown fanout while preserving concurrent batches', async () => {
+    const sessions = Array.from({ length: 40 }, (_, index) => ({
+      id: `w1@@${index}`,
+      cwd: '/tmp',
+      title: 'shell'
+    }))
+    const localProvider = createProviderStub(async () => sessions)
+    listRegisteredPtysMock.mockReturnValue([])
+    let active = 0
+    let maxActive = 0
+    const releases: (() => void)[] = []
+    ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          active += 1
+          maxActive = Math.max(maxActive, active)
+          releases.push(() => {
+            active -= 1
+            resolve()
+          })
+        })
+    )
+
+    const teardown = killAllProcessesForWorktree('w1', { localProvider })
+    await vi.waitFor(() => expect(localProvider.shutdown).toHaveBeenCalledTimes(32))
+    expect(maxActive).toBe(32)
+    releases.splice(0).forEach((release) => release())
+    await vi.waitFor(() => expect(localProvider.shutdown).toHaveBeenCalledTimes(40))
+    releases.splice(0).forEach((release) => release())
+
+    await expect(teardown).resolves.toEqual({
+      runtimeStopped: 0,
+      providerStopped: 40,
+      registryStopped: 0
+    })
+  })
+
   it('invokes runtime.stopTerminalsForWorktree when runtime is provided', async () => {
     const stopTerminalsForWorktree = vi.fn().mockResolvedValue({ stopped: 3 })
     const runtime = {
@@ -157,12 +283,147 @@ describe('killAllProcessesForWorktree', () => {
 
     const result = await killAllProcessesForWorktree('w1', { runtime, localProvider })
 
-    expect(stopTerminalsForWorktree).toHaveBeenCalledWith('w1')
+    expect(stopTerminalsForWorktree).toHaveBeenCalledWith('w1', {
+      deadline: expect.any(Number),
+      stopPty: expect.any(Function)
+    })
     expect(result.runtimeStopped).toBe(3)
   })
 
+  it('claims duplicate provider and registry PTY ids only once', async () => {
+    const localProvider = createProviderStub(async () => [
+      { id: 'w1@@same', cwd: '/tmp/w1', title: 'shell' }
+    ])
+    listRegisteredPtysMock.mockReturnValue([
+      { ptyId: 'w1@@same', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 100 }
+    ])
+
+    const result = await killAllProcessesForWorktree('w1', { localProvider })
+
+    expect(localProvider.shutdown).toHaveBeenCalledTimes(1)
+    expect(localProvider.shutdown).toHaveBeenCalledWith('w1@@same', { immediate: true })
+    expect(result.providerStopped + result.registryStopped).toBe(1)
+  })
+
+  it('falls back to provider shutdown when the runtime cannot stop an overlapping PTY', async () => {
+    const stopTerminalsForWorktree = vi.fn(
+      async (
+        _worktreeId: string,
+        options: {
+          stopPty: (
+            ptyId: string,
+            stop: () => boolean
+          ) => Promise<{ stopped: boolean; owner: boolean }>
+        }
+      ) => ({
+        stopped: (await options.stopPty('w1@@same', () => false)).owner ? 1 : 0
+      })
+    )
+    const runtime = {
+      stopTerminalsForWorktree
+    } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+    const localProvider = createProviderStub(async () => [])
+    listRegisteredPtysMock.mockReturnValue([
+      { ptyId: 'w1@@same', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 100 }
+    ])
+
+    const result = await killAllProcessesForWorktree('w1', { runtime, localProvider })
+
+    expect(result.runtimeStopped).toBe(0)
+    expect(result.registryStopped).toBe(1)
+    expect(localProvider.shutdown).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps duplicate sweeps behind the runtime physical-stop promise', async () => {
+    let releasePhysicalStop: () => void = () => undefined
+    const physicalStop = new Promise<boolean>((resolve) => {
+      releasePhysicalStop = () => resolve(true)
+    })
+    const stopTerminalsForWorktree = vi.fn(
+      async (
+        _worktreeId: string,
+        options: {
+          stopPty: (
+            ptyId: string,
+            stop: () => Promise<boolean>
+          ) => Promise<{ stopped: boolean; owner: boolean }>
+        }
+      ) => ({
+        stopped: (await options.stopPty('w1@@same', () => physicalStop)).owner ? 1 : 0
+      })
+    )
+    const runtime = {
+      stopTerminalsForWorktree
+    } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+    const localProvider = createProviderStub(async () => [
+      { id: 'w1@@same', cwd: '/tmp/w1', title: 'shell' }
+    ])
+    listRegisteredPtysMock.mockReturnValue([
+      { ptyId: 'w1@@same', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 100 }
+    ])
+
+    const teardown = killAllProcessesForWorktree('w1', { runtime, localProvider })
+    await vi.waitFor(() => expect(stopTerminalsForWorktree).toHaveBeenCalledTimes(1))
+    expect(localProvider.shutdown).not.toHaveBeenCalled()
+
+    releasePhysicalStop()
+    await expect(teardown).resolves.toEqual({
+      runtimeStopped: 1,
+      providerStopped: 0,
+      registryStopped: 0
+    })
+    expect(localProvider.shutdown).not.toHaveBeenCalled()
+  })
+
+  it('fails destructive teardown closed when physical stop misses the deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      const physicalStop = new Promise<boolean>(() => {})
+      const stopTerminalsForWorktree = vi.fn(
+        async (
+          _worktreeId: string,
+          options: {
+            stopPty: (
+              ptyId: string,
+              stop: () => Promise<boolean>
+            ) => Promise<{ stopped: boolean; owner: boolean }>
+          }
+        ) => ({
+          stopped: (await options.stopPty('w1@@same', () => physicalStop)).owner ? 1 : 0
+        })
+      )
+      const runtime = {
+        stopTerminalsForWorktree
+      } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+      const localProvider = createProviderStub(async () => [
+        { id: 'w1@@same', cwd: '/tmp/w1', title: 'shell' }
+      ])
+      listRegisteredPtysMock.mockReturnValue([
+        { ptyId: 'w1@@same', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 100 }
+      ])
+
+      const teardown = killAllProcessesForWorktree('w1', {
+        runtime,
+        localProvider,
+        timeoutMs: 25,
+        requirePhysicalStop: true
+      })
+      const failure = expect(teardown).rejects.toThrow(
+        'Timed out waiting for physical PTY teardown'
+      )
+      await vi.advanceTimersByTimeAsync(24)
+      expect(localProvider.shutdown).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+
+      await failure
+      expect(localProvider.shutdown).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('tolerates runtime.stopTerminalsForWorktree throwing (headless assertGraphReady reject)', async () => {
-    const stopTerminalsForWorktree = vi.fn().mockRejectedValue(new Error('graph not ready'))
+    const stopTerminalsForWorktree = vi.fn().mockRejectedValue(new Error('runtime_unavailable'))
     const runtime = {
       stopTerminalsForWorktree
     } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
@@ -173,5 +434,110 @@ describe('killAllProcessesForWorktree', () => {
     const result = await killAllProcessesForWorktree('w1', { runtime, localProvider })
 
     expect(result.runtimeStopped).toBe(0)
+  })
+
+  it('fails destructive teardown closed when the runtime sweep rejects', async () => {
+    const stopTerminalsForWorktree = vi.fn().mockRejectedValue(new Error('runtime sweep failed'))
+    const runtime = {
+      stopTerminalsForWorktree
+    } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+    const localProvider = createProviderStub(async () => [])
+    listRegisteredPtysMock.mockReturnValue([])
+
+    await expect(
+      killAllProcessesForWorktree('w1', {
+        runtime,
+        localProvider,
+        requirePhysicalStop: true
+      })
+    ).rejects.toThrow('runtime sweep failed')
+  })
+
+  it('bounds the entire process sweep when a provider never settles', async () => {
+    vi.useFakeTimers()
+    try {
+      const localProvider = createProviderStub(() => new Promise(() => {}))
+      listRegisteredPtysMock.mockReturnValue([
+        { ptyId: 'registry-1', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 12 }
+      ])
+      let completed = false
+      const teardown = killAllProcessesForWorktree('w1', {
+        localProvider,
+        timeoutMs: WORKTREE_PROCESS_SWEEP_TIMEOUT_MS
+      }).then((result) => {
+        completed = true
+        return result
+      })
+
+      await vi.advanceTimersByTimeAsync(WORKTREE_PROCESS_SWEEP_TIMEOUT_MS - 1)
+      expect(completed).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+
+      await expect(teardown).resolves.toEqual({
+        runtimeStopped: 0,
+        providerStopped: 0,
+        registryStopped: 1
+      })
+      expect(localProvider.shutdown).toHaveBeenCalledWith('registry-1', { immediate: true })
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not issue shutdown after a timed-out provider list settles late', async () => {
+    vi.useFakeTimers()
+    try {
+      let resolveList: (sessions: { id: string; cwd: string; title: string }[]) => void = () => {}
+      const localProvider = createProviderStub(
+        () =>
+          new Promise((resolve) => {
+            resolveList = resolve
+          })
+      )
+      listRegisteredPtysMock.mockReturnValue([])
+      const teardown = killAllProcessesForWorktree('w1', { localProvider, timeoutMs: 25 })
+
+      await vi.advanceTimersByTimeAsync(25)
+      await expect(teardown).resolves.toMatchObject({ providerStopped: 0 })
+      resolveList([{ id: 'w1@@replacement', cwd: '/new', title: 'new' }])
+      await Promise.resolve()
+
+      expect(localProvider.shutdown).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not mutate PTY state after a shutdown settles beyond the deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      let resolveShutdown: () => void = () => {}
+      const localProvider = createProviderStub(async () => [])
+      ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveShutdown = resolve
+          })
+      )
+      listRegisteredPtysMock.mockReturnValue([
+        { ptyId: 'registry-1', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 12 }
+      ])
+      const onPtyStopped = vi.fn()
+      const teardown = killAllProcessesForWorktree('w1', {
+        localProvider,
+        onPtyStopped,
+        timeoutMs: 25
+      })
+
+      await vi.advanceTimersByTimeAsync(25)
+      await expect(teardown).resolves.toMatchObject({ registryStopped: 0 })
+      resolveShutdown()
+      await Promise.resolve()
+
+      expect(onPtyStopped).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

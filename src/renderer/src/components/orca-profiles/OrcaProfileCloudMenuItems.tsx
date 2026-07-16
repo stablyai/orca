@@ -14,17 +14,20 @@ import type {
   OrcaProfileSummary
 } from '../../../../shared/orca-profiles'
 
-function getConnectLabel(authStatus: OrcaProfileAuthStatus | null): string {
+function getConnectLabel(authStatus: OrcaProfileAuthStatus | null, connecting: boolean): string {
+  if (connecting) {
+    return translate('auto.components.orca.profiles.switcher.signInWaiting', 'Waiting for sign-in…')
+  }
   if (authStatus?.configured !== true) {
     return translate(
       'auto.components.orca.profiles.switcher.cloud.unavailable',
-      'Cloud sign-in unavailable'
+      'Orca sign-in unavailable'
     )
   }
-  if (authStatus.state === 'connected' || authStatus.state === 'reconnect-required') {
-    return translate('auto.components.orca.profiles.switcher.reconnect', 'Reconnect profile')
+  if (authStatus.state === 'reconnect-required') {
+    return translate('auto.components.orca.profiles.switcher.signInAgain', 'Sign in again')
   }
-  return translate('auto.components.orca.profiles.switcher.connect', 'Connect profile')
+  return translate('auto.components.orca.profiles.switcher.signIn', 'Sign in to Orca')
 }
 
 export function OrcaProfileCloudMenuItems({
@@ -33,6 +36,7 @@ export function OrcaProfileCloudMenuItems({
   connecting,
   profileActionDisabled,
   allowProfileCreation,
+  separateAuthActions,
   onConnect,
   onCreateProfileForOrg,
   onSelectOrg,
@@ -43,6 +47,7 @@ export function OrcaProfileCloudMenuItems({
   connecting: boolean
   profileActionDisabled: boolean
   allowProfileCreation: boolean
+  separateAuthActions: boolean
   onConnect: () => void
   onCreateProfileForOrg: (organization: OrcaCloudOrgSummary) => void
   onSelectOrg: (orgId: string) => void
@@ -57,6 +62,7 @@ export function OrcaProfileCloudMenuItems({
     allowProfileCreation && activeProfile.kind === 'cloud-linked' && organizations.length > 0
   const orgActionDisabled = profileActionDisabled || authStatus?.state !== 'connected'
   const activeOrgId = activeProfile.cloud?.activeOrgId
+  const showSignIn = authStatus?.state !== 'connected'
 
   return (
     <>
@@ -110,11 +116,15 @@ export function OrcaProfileCloudMenuItems({
         </>
       ) : null}
 
-      <DropdownMenuSeparator />
-      <DropdownMenuItem disabled={profileActionDisabled || !cloudConfigured} onSelect={onConnect}>
-        {connecting ? <Loader2 className="size-4 animate-spin" /> : <LogIn />}
-        {getConnectLabel(authStatus)}
-      </DropdownMenuItem>
+      {separateAuthActions || showOrganizationChoices || showCloudProfileCreation ? (
+        <DropdownMenuSeparator />
+      ) : null}
+      {showSignIn ? (
+        <DropdownMenuItem disabled={profileActionDisabled || !cloudConfigured} onSelect={onConnect}>
+          {connecting ? <Loader2 className="size-4 animate-spin" /> : <LogIn />}
+          {getConnectLabel(authStatus, connecting)}
+        </DropdownMenuItem>
+      ) : null}
       {activeProfile.kind === 'cloud-linked' ? (
         <DropdownMenuItem disabled={profileActionDisabled} onSelect={onRequestSignOut}>
           <LogOut />

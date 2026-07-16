@@ -101,9 +101,12 @@ export async function ensureHooksConfirmed(
     try {
       if (scriptKind === 'issueCommand') {
         // Local overrides are user-owned; only shared orca.yaml commands need repo trust.
+        // Why: hostId disambiguates duplicate repo ids on the local IPC path,
+        // matching the checkRuntimeHooks call below.
         const result = await readRuntimeIssueCommand(
           settingsForHookRepoOwner(state, repoId, hostId),
-          repoId
+          repoId,
+          hostId
         )
         if (result.source === 'local') {
           return 'run'

@@ -11,7 +11,9 @@ function readSkill() {
 
 function getSection(markdown, heading) {
   const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const match = markdown.match(new RegExp(`## ${escapedHeading}\\n([\\s\\S]*?)(?=\\n## |$)`))
+  const match = markdown.match(
+    new RegExp(`## ${escapedHeading}\\r?\\n([\\s\\S]*?)(?=\\r?\\n## |$)`)
+  )
 
   expect(match).not.toBeNull()
 
@@ -187,5 +189,49 @@ describe('orchestration skill guidance', () => {
     expect(agentGuidance).toContain('fresh preamble + TASK block delivered as new terminal input')
     expect(skill).not.toContain('post-completion polling messages')
     expect(skill).not.toContain('every 2 minutes')
+  })
+
+  it('documents @grok in the Messaging group address list', () => {
+    const skill = readSkill()
+    const messaging = getSection(skill, 'Messaging')
+
+    expect(messaging).toContain('`@grok`')
+  })
+
+  it('documents @cursor in the Messaging group address list', () => {
+    const skill = readSkill()
+    const messaging = getSection(skill, 'Messaging')
+
+    expect(messaging).toContain('`@cursor`')
+  })
+
+  it('keeps agent-first launch, handle recovery, and inbox injection distinct', () => {
+    const skill = readSkill()
+    const messaging = getSection(skill, 'Messaging')
+    const workerTerminals = getSection(skill, 'Worker Terminals')
+    const agentFirstExample = workerTerminals.match(
+      /```bash\norca worktree create --name <task-name> --agent codex --json\n[\s\S]*?```/
+    )?.[0]
+
+    expect(workerTerminals).toContain('Agent-first (required for ordinary agent workers)')
+    expect(workerTerminals).toContain('fallback shell + agent pair')
+    expect(workerTerminals).toContain(
+      'Repo setup or default-terminal settings may still add tabs or splits'
+    )
+    expect(workerTerminals).toContain('without configured default tabs')
+    expect(workerTerminals).toContain(
+      'only after `terminal list` or `terminal show` confirms it is an unused shell'
+    )
+    expect(workerTerminals).not.toContain('bare create opens a default shell')
+    expect(workerTerminals).not.toContain('ends with **one** agent tab')
+    expect(agentFirstExample).toBeDefined()
+    expect(agentFirstExample).not.toContain('orca terminal list')
+    expect(agentFirstExample).toContain('startupTerminal.handle')
+    expect(messaging).toContain(
+      'Use `startupTerminal.handle` from the create response when present'
+    )
+    expect(messaging).toContain('continue with the replacement only')
+    expect(messaging).toContain('it does not remotely wake another terminal')
+    expect(messaging).toContain('Use `orchestration dispatch --inject` to deliver a tracked task')
   })
 })

@@ -23,6 +23,7 @@ describe('AgentStateDot', () => {
     expect(markup).toContain('border-yellow-500')
     expect(markup).toContain('border-t-transparent')
     expect(markup).toContain('[animation:spin_1s_steps(12,end)_infinite]')
+    expect(markup).toContain('motion-reduce:animate-none')
     expect(markup).not.toContain('animate-spin')
   })
 

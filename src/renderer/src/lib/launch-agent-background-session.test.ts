@@ -22,6 +22,7 @@ const mockSubscribeToPtyExit = vi.fn()
 const mockPasteDraftWhenAgentReady = vi.fn()
 const mockMarkTrusted = vi.fn()
 const mockDispatchEvent = vi.fn()
+const mockGetAgentLaunchPlatformForRepo = vi.fn<() => NodeJS.Platform>()
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
 function expectStablePaneSpawn(): string {
@@ -67,6 +68,7 @@ const state = {
       }
     ]
   },
+  tabsByWorktree: { 'wt-1': [] as { id: string; title: string }[] },
   allWorktrees: vi.fn(() => state.worktreesByRepo['repo-1']),
   createTab: mockCreateTab,
   setTabCustomTitle: mockSetTabCustomTitle,
@@ -94,6 +96,10 @@ vi.mock('@/lib/agent-paste-draft', () => ({
   pasteDraftWhenAgentReady: mockPasteDraftWhenAgentReady
 }))
 
+vi.mock('@/lib/agent-launch-platform', () => ({
+  getAgentLaunchPlatformForRepo: mockGetAgentLaunchPlatformForRepo
+}))
+
 vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   registerEagerPtyBuffer: mockRegisterEagerPtyBuffer,
   subscribeToPtyExit: mockSubscribeToPtyExit
@@ -108,6 +114,7 @@ describe('launchAgentBackgroundSession', () => {
     resetRemoteRuntimeTerminalMultiplexersForTests()
     clearRuntimeCompatibilityCacheForTests()
     vi.clearAllMocks()
+    mockGetAgentLaunchPlatformForRepo.mockReturnValue('linux')
     mockRuntimeEnvironmentTransportCall.mockImplementation(
       (args) =>
         createCompatibleRuntimeStatusResponseIfNeeded(args) ?? mockRuntimeEnvironmentCall(args)
@@ -137,7 +144,15 @@ describe('launchAgentBackgroundSession', () => {
         }
       ]
     }
-    mockCreateTab.mockReturnValue({ id: 'tab-1', title: 'Terminal 1' })
+    state.tabsByWorktree = { 'wt-1': [] }
+    mockCreateTab.mockImplementation(() => {
+      const tab = { id: 'tab-1', title: 'Terminal 1' }
+      state.tabsByWorktree['wt-1'].push(tab)
+      return tab
+    })
+    mockCloseTab.mockImplementation((tabId: string) => {
+      state.tabsByWorktree['wt-1'] = state.tabsByWorktree['wt-1'].filter((tab) => tab.id !== tabId)
+    })
     mockSpawn.mockResolvedValue({ id: 'pty-1' })
     mockRuntimeEnvironmentCall.mockResolvedValue({
       ok: true,
@@ -265,6 +280,84 @@ describe('launchAgentBackgroundSession', () => {
     expect(mockDispatchEvent).toHaveBeenCalledWith(
       expect.objectContaining({ detail: { worktreeId: 'wt-1', tabIds: ['tab-1'] } })
     )
+  })
+
+  it('kills a local PTY when its tab closes before spawn resolves', async () => {
+    let resolveSpawn!: (result: { id: string }) => void
+    mockSpawn.mockReturnValueOnce(
+      new Promise<{ id: string }>((resolve) => {
+        resolveSpawn = resolve
+      })
+    )
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    const launch = launchAgentBackgroundSession({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'run slowly'
+    })
+    await vi.waitFor(() => expect(mockCreateTab).toHaveBeenCalledOnce())
+    state.tabsByWorktree['wt-1'] = []
+    resolveSpawn({ id: 'pty-after-close' })
+
+    await expect(launch).resolves.toBeNull()
+    expect(mockKill).toHaveBeenCalledWith('pty-after-close')
+    expect(mockUpdateTabPtyId).not.toHaveBeenCalled()
+    expect(mockSubscribeToPtyData).not.toHaveBeenCalled()
+    expect(mockDispatchEvent).not.toHaveBeenCalled()
+  })
+
+  it('closes a runtime terminal when its tab closes before creation resolves', async () => {
+    state.settings = {
+      agentCmdOverrides: {},
+      activeRuntimeEnvironmentId: 'env-1',
+      terminalMainSideEffectAuthority: undefined
+    }
+    let resolveCreate!: (result: {
+      ok: true
+      result: { terminal: { handle: string; worktreeId: string; title: null } }
+    }) => void
+    const createResult = new Promise<{
+      ok: true
+      result: { terminal: { handle: string; worktreeId: string; title: null } }
+    }>((resolve) => {
+      resolveCreate = resolve
+    })
+    mockRuntimeEnvironmentCall.mockImplementation((args: { method: string }) => {
+      if (args.method === 'terminal.create') {
+        return createResult
+      }
+      return Promise.resolve({ ok: true, result: {} })
+    })
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    const launch = launchAgentBackgroundSession({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'run remotely'
+    })
+    await vi.waitFor(() => expect(mockCreateTab).toHaveBeenCalledOnce())
+    await vi.waitFor(() =>
+      expect(mockRuntimeEnvironmentCall).toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'terminal.create' })
+      )
+    )
+    state.tabsByWorktree['wt-1'] = []
+    resolveCreate({
+      ok: true,
+      result: { terminal: { handle: 'terminal-after-close', worktreeId: 'wt-1', title: null } }
+    })
+
+    await expect(launch).resolves.toBeNull()
+    expect(mockRuntimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.close',
+        params: { terminal: 'terminal-after-close' }
+      })
+    )
+    expect(mockUpdateTabPtyId).not.toHaveBeenCalled()
+    expect(mockRuntimeEnvironmentSubscribe).not.toHaveBeenCalled()
+    expect(mockDispatchEvent).not.toHaveBeenCalled()
   })
 
   it('records effective launch config returned by local PTY spawn', async () => {
@@ -466,7 +559,10 @@ describe('launchAgentBackgroundSession', () => {
       })
     ).rejects.toThrow('spawn failed')
 
-    expect(mockCloseTab).toHaveBeenCalledWith('tab-1', { recordInteraction: false })
+    expect(mockCloseTab).toHaveBeenCalledWith('tab-1', {
+      recordInteraction: false,
+      reason: 'cleanup'
+    })
     expect(mockUpdateTabPtyId).not.toHaveBeenCalled()
   })
 
@@ -488,6 +584,62 @@ describe('launchAgentBackgroundSession', () => {
         content: 'run the automation',
         agent: 'aider',
         submit: true
+      })
+    )
+  })
+
+  it('passes Hermes automation prompts through the native startup query', async () => {
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'hermes',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation'
+    })
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: expect.stringContaining('ORCA_HERMES_STARTUP_QUERY'),
+        env: expect.objectContaining({ ORCA_HERMES_STARTUP_QUERY: 'run the automation' })
+      })
+    )
+    expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
+  })
+
+  it('uses the configured cmd shell for Windows Hermes background launches', async () => {
+    mockGetAgentLaunchPlatformForRepo.mockReturnValue('win32')
+    Object.assign(state.settings, { terminalWindowsShell: 'cmd.exe' })
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'hermes',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation'
+    })
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: expect.stringContaining('powershell.exe -NoProfile -EncodedCommand'),
+        env: expect.objectContaining({ ORCA_HERMES_STARTUP_QUERY: 'run the automation' })
+      })
+    )
+  })
+
+  it('forwards Hermes startup queries through SSH command transport', async () => {
+    state.repos = [{ id: 'repo-1', connectionId: 'ssh-1', path: '/repo' }]
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'hermes',
+      worktreeId: 'wt-1',
+      prompt: 'remote automation prompt'
+    })
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: expect.stringContaining('ORCA_HERMES_STARTUP_QUERY'),
+        connectionId: 'ssh-1',
+        env: expect.objectContaining({ ORCA_HERMES_STARTUP_QUERY: 'remote automation prompt' })
       })
     )
   })
@@ -726,7 +878,10 @@ describe('launchAgentBackgroundSession', () => {
     })
     expect(state.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'remote:env-1@@terminal-1')
     expect(state.clearAgentLaunchConfig).toHaveBeenCalledWith(expect.stringMatching(/^tab-1:/))
-    expect(mockCloseTab).toHaveBeenCalledWith('tab-1', { recordInteraction: false })
+    expect(mockCloseTab).toHaveBeenCalledWith('tab-1', {
+      recordInteraction: false,
+      reason: 'cleanup'
+    })
     expect(mockDispatchEvent).not.toHaveBeenCalled()
   })
 })

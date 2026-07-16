@@ -24,7 +24,7 @@ import {
 } from '../../shared/git-worktree-command-capabilities'
 import { getLocalGitCapabilityCache } from './git-capability-state'
 import { gitExecFileAsync, translateWslOutputPaths } from './runner'
-import { resolveGitDir } from './status'
+import { resolveGitDir, runWithGitReadCacheInvalidation } from './status'
 import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
 
 export type AddWorktreeResult = {
@@ -39,6 +39,11 @@ type SparseWorktreeCreateError = Error & {
 export type GitWorktreeExecOptions = {
   wslDistro?: string
   signal?: AbortSignal
+  timeout?: number
+}
+
+type WorktreeRemovalPreflightOptions = GitWorktreeExecOptions & {
+  ignoredUntrackedPaths?: readonly string[]
 }
 
 export type AddWorktreeOptions = GitWorktreeExecOptions & {
@@ -76,20 +81,24 @@ type LocalBaseRefRefreshability =
 
 const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
 
+const PRUNABLE_EXISTENCE_PROBE_CONCURRENCY = 8
+
 // Why: bound `git worktree add` so a OneDrive cloud-placeholder base path can't
 // stall its checkout writes for minutes (STA-1292) — a stuck create then fails
 // fast instead of spinning forever. Generous enough not to kill a legit large
 // checkout (mirrors the SYNC runner's cloud-placeholder floor, #7225).
 export const WORKTREE_ADD_TIMEOUT_MS = 180_000
+export const WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS = 30_000
 
 function gitExecOptions(
   cwd: string,
   options: GitWorktreeExecOptions = {}
-): { cwd: string; wslDistro?: string; signal?: AbortSignal } {
+): { cwd: string; wslDistro?: string; signal?: AbortSignal; timeout?: number } {
   return {
     cwd,
     ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
-    ...(options.signal ? { signal: options.signal } : {})
+    ...(options.signal ? { signal: options.signal } : {}),
+    ...(options.timeout ? { timeout: options.timeout } : {})
   }
 }
 
@@ -498,6 +507,8 @@ export function parseWorktreeList(
     let isSparse = false
     let locked = false
     let lockReason = ''
+    let prunable = false
+    let prunableReason = ''
 
     for (const line of lines) {
       if (line.startsWith('worktree ')) {
@@ -514,6 +525,12 @@ export function parseWorktreeList(
         locked = true
         const rawReason = line.slice('locked'.length).trim()
         lockReason = options.nulDelimited ? rawReason : decodeGitCQuotedPath(rawReason)
+      } else if (line === 'prunable' || line.startsWith('prunable ')) {
+        // Why: Git ≥ 2.36 flags registrations whose directory is gone; ignoring
+        // it surfaces the stale worktree as a live workspace (issue #8389).
+        prunable = true
+        const rawReason = line.slice('prunable'.length).trim()
+        prunableReason = options.nulDelimited ? rawReason : decodeGitCQuotedPath(rawReason)
       }
     }
 
@@ -527,6 +544,8 @@ export function parseWorktreeList(
         ...(isSparse ? { isSparse } : {}),
         ...(locked ? { locked: true } : {}),
         ...(lockReason ? { lockReason } : {}),
+        ...(prunable ? { prunable: true } : {}),
+        ...(prunableReason ? { prunableReason } : {}),
         isMainWorktree: worktrees.length === 0
       })
     }
@@ -596,10 +615,62 @@ async function readWorktreeList(
         cwd: repoPath,
         ...options
       })
-      return normalizeMainWorktreePath(repoPath, parseWorktreeList(stdout), options)
+      const normalized = await normalizeMainWorktreePath(
+        repoPath,
+        parseWorktreeList(stdout),
+        options
+      )
+      // Why: this `-z`-unsupported fallback (Git <2.36) also serves Git <2.31,
+      // which emits no `prunable` annotation; probe each linked worktree path
+      // for existence instead of treating stale registrations as live. On Git
+      // 2.31–2.35 `parseWorktreeList` already set `prunable`, so the probe is a
+      // harmless backstop that skips those entries (issue #8389).
+      return annotatePrunableByExistence(normalized, repoPath, options)
     },
     isUnsupportedWorktreeListZError
   )
+}
+
+async function annotatePrunableByExistence(
+  worktrees: GitWorktreeInfo[],
+  repoPath: string,
+  options: GitWorktreeExecOptions = {}
+): Promise<GitWorktreeInfo[]> {
+  const annotated = [...worktrees]
+  let nextIndex = 0
+
+  async function probeNext(): Promise<void> {
+    while (nextIndex < worktrees.length) {
+      const index = nextIndex
+      nextIndex += 1
+      const worktree = worktrees[index]
+      // Git only marks linked worktrees prunable, and never locked ones (a
+      // lock shields the registration even when the directory is missing). The
+      // `locked` annotation is only parsed on Git >=2.31, so on older Git a
+      // locked+missing worktree cannot be shielded here. A missing main
+      // worktree is handled by the repo-level ENOENT paths.
+      if (
+        !worktree ||
+        worktree.isMainWorktree ||
+        worktree.isBare ||
+        worktree.locked ||
+        worktree.prunable
+      ) {
+        continue
+      }
+      try {
+        await stat(translateWorktreePath(worktree.path, repoPath, options))
+      } catch (err) {
+        if (getErrorCode(err) === 'ENOENT') {
+          annotated[index] = { ...worktree, prunable: true }
+        }
+      }
+    }
+  }
+
+  const workerCount = Math.min(PRUNABLE_EXISTENCE_PROBE_CONCURRENCY, worktrees.length)
+  await Promise.all(Array.from({ length: workerCount }, () => probeNext()))
+  return annotated
 }
 
 async function readTranslatedWorktreeGraph(
@@ -650,8 +721,46 @@ const inFlightWorktreeScans = new Map<string, Promise<GitWorktreeInfo[]>>()
 // settle for their original callers).
 const worktreeScanGenerations = new Map<string, number>()
 
+function hasInFlightWorktreeScanForRepo(repoPath: string): boolean {
+  const keyPrefix = `${repoPath}\0`
+  for (const key of inFlightWorktreeScans.keys()) {
+    if (key.startsWith(keyPrefix)) {
+      return true
+    }
+  }
+  return false
+}
+
 function bumpWorktreeScanGeneration(repoPath: string): void {
+  // Why: generations only prevent joining a pre-mutation scan. Without an
+  // active scan, retaining the repo path just leaks completed mutation keys.
+  if (!hasInFlightWorktreeScanForRepo(repoPath)) {
+    return
+  }
   worktreeScanGenerations.set(repoPath, (worktreeScanGenerations.get(repoPath) ?? 0) + 1)
+}
+
+function pruneWorktreeScanGeneration(repoPath: string): void {
+  // Why: ordinary scan settlement should stay O(1); only repos invalidated
+  // during an active scan need the cross-generation in-flight check.
+  if (!worktreeScanGenerations.has(repoPath)) {
+    return
+  }
+  if (!hasInFlightWorktreeScanForRepo(repoPath)) {
+    worktreeScanGenerations.delete(repoPath)
+  }
+}
+
+export function _getWorktreeScanCacheSizesForTests(): { inFlight: number; generations: number } {
+  return {
+    inFlight: inFlightWorktreeScans.size,
+    generations: worktreeScanGenerations.size
+  }
+}
+
+export function _resetWorktreeScanCacheForTests(): void {
+  inFlightWorktreeScans.clear()
+  worktreeScanGenerations.clear()
 }
 
 /**
@@ -676,6 +785,7 @@ export function listWorktrees(
     if (inFlightWorktreeScans.get(key) === scan) {
       inFlightWorktreeScans.delete(key)
     }
+    pruneWorktreeScanGeneration(repoPath)
   })
   inFlightWorktreeScans.set(key, scan)
   return scan
@@ -838,14 +948,16 @@ export async function addWorktree(
   options: AddWorktreeOptions = {}
 ): Promise<AddWorktreeResult> {
   try {
-    return await performAddWorktree(
-      repoPath,
-      worktreePath,
-      branch,
-      baseBranch,
-      refreshLocalBaseRef,
-      noCheckout,
-      options
+    return await runWithGitReadCacheInvalidation(() =>
+      performAddWorktree(
+        repoPath,
+        worktreePath,
+        branch,
+        baseBranch,
+        refreshLocalBaseRef,
+        noCheckout,
+        options
+      )
     )
   } finally {
     bumpWorktreeScanGeneration(repoPath)
@@ -1056,7 +1168,9 @@ export async function moveWorktree(
   newPath: string
 ): Promise<void> {
   try {
-    await gitExecFileAsync(['worktree', 'move', oldPath, newPath], { cwd: repoPath })
+    await runWithGitReadCacheInvalidation(() =>
+      gitExecFileAsync(['worktree', 'move', oldPath, newPath], { cwd: repoPath })
+    )
   } finally {
     bumpWorktreeScanGeneration(repoPath)
   }
@@ -1076,7 +1190,9 @@ export async function removeWorktree(
   options: RemoveWorktreeOptions = {}
 ): Promise<RemoveWorktreeResult> {
   try {
-    return await performRemoveWorktree(repoPath, worktreePath, force, options)
+    return await runWithGitReadCacheInvalidation(() =>
+      performRemoveWorktree(repoPath, worktreePath, force, options)
+    )
   } finally {
     bumpWorktreeScanGeneration(repoPath)
   }
@@ -1303,22 +1419,52 @@ async function isLocalBranchCheckedOut(
 export async function assertWorktreeCleanForRemoval(
   worktreePath: string,
   force = false,
-  options: GitWorktreeExecOptions = {}
+  options: WorktreeRemovalPreflightOptions = {}
 ): Promise<void> {
   if (force) {
     return
   }
 
-  const { stdout } = await gitExecFileAsync(['status', '--porcelain', '--untracked-files=all'], {
-    ...gitExecOptions(worktreePath, options)
-  })
-  if (!stdout.trim()) {
+  const { ignoredUntrackedPaths = [], ...gitOptions } = options
+  const useNullTerminatedStatus = ignoredUntrackedPaths.length > 0
+  const { stdout } = await gitExecFileAsync(
+    ['status', '--porcelain', ...(useNullTerminatedStatus ? ['-z'] : []), '--untracked-files=all'],
+    {
+      ...gitExecOptions(worktreePath, gitOptions),
+      timeout: gitOptions.timeout ?? WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS
+    }
+  )
+  if (
+    useNullTerminatedStatus
+      ? hasOnlyIgnoredUntrackedStatus(stdout, ignoredUntrackedPaths)
+      : !stdout.trim()
+  ) {
     return
   }
 
   const error = new Error('Worktree has uncommitted or untracked changes.')
   ;(error as Error & { stdout?: string }).stdout = stdout
   throw error
+}
+
+function hasOnlyIgnoredUntrackedStatus(
+  status: string,
+  ignoredUntrackedPaths: readonly string[]
+): boolean {
+  const ignored = new Set(
+    ignoredUntrackedPaths
+      .map((entry) =>
+        entry
+          .trim()
+          .replace(/^[\\/]+/, '')
+          .replace(/\\/g, '/')
+      )
+      .filter((entry) => entry && !entry.split('/').includes('..'))
+  )
+  return status
+    .split('\0')
+    .filter(Boolean)
+    .every((entry) => entry.startsWith('?? ') && ignored.has(entry.slice(3).replace(/\\/g, '/')))
 }
 
 function translateWorktreePath(

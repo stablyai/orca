@@ -22,9 +22,34 @@ function okResponse(): Response {
   return { ok: true, status: 200 } as unknown as Response
 }
 
-function postedBody(): Record<string, unknown> {
-  const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined
-  return JSON.parse(String(init?.body)) as Record<string, unknown>
+function errorResponse(status: number): Response {
+  return { ok: false, status } as unknown as Response
+}
+
+function requestInit(callIndex = 0): RequestInit {
+  return fetchMock.mock.calls[callIndex]?.[1] as RequestInit
+}
+
+function postedBody(callIndex = 0): Record<string, unknown> {
+  return JSON.parse(String(requestInit(callIndex).body)) as Record<string, unknown>
+}
+
+function diagnosticSubmitArgs(): Parameters<typeof submitFeedback>[0] {
+  return {
+    feedback: '[Crash Report]\n\nDiagnostic log:\n- Status: attached',
+    feedbackWithoutDiagnosticBundle:
+      '[Crash Report]\n\nDiagnostic log:\n- Status: not uploaded\n- Reason: attachment failed',
+    submissionType: 'crash',
+    submitAnonymously: true,
+    githubLogin: null,
+    githubEmail: null,
+    diagnosticBundle: {
+      bundleSubmissionId: 'bundleabcdefghijklmnop',
+      content: '{"type":"bundle-header"}\n',
+      bytes: 25,
+      spanCount: 1
+    }
+  }
 }
 
 describe('submitFeedback', () => {
@@ -139,6 +164,118 @@ describe('submitFeedback', () => {
     expect(JSON.parse(String(feedbackInit?.body))).not.toHaveProperty('diagnosticBundle')
   })
 
+  it('retries a rejected diagnostic attachment as report-only JSON on the website API', async () => {
+    fetchMock.mockResolvedValueOnce(errorResponse(413)).mockResolvedValueOnce(okResponse())
+
+    await expect(submitFeedback(diagnosticSubmitArgs())).resolves.toEqual({
+      ok: true,
+      diagnosticBundleFailure: { status: 413, error: 'status 413' }
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://www.onorca.dev/v1/feedback')
+    expect(requestInit(0).body).toBeInstanceOf(FormData)
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('https://www.onorca.dev/v1/feedback')
+    expect(requestInit(1).headers).toEqual({
+      'Content-Type': 'application/json'
+    })
+    expect(postedBody(1)).toMatchObject({
+      feedback:
+        '[Crash Report]\n\nDiagnostic log:\n- Status: not uploaded\n- Reason: attachment failed',
+      submissionType: 'crash'
+    })
+    expect(postedBody(1)).not.toHaveProperty('diagnosticBundle')
+  })
+
+  it('retries a diagnostic attachment server error as report-only JSON on the fallback API', async () => {
+    fetchMock.mockResolvedValueOnce(errorResponse(500)).mockResolvedValueOnce(okResponse())
+
+    await expect(submitFeedback(diagnosticSubmitArgs())).resolves.toEqual({
+      ok: true,
+      diagnosticBundleFailure: { status: 500, error: 'status 500' }
+    })
+
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('https://api.onorca.dev/v1/feedback')
+    expect(requestInit(1).headers).toEqual({ 'Content-Type': 'application/json' })
+    expect(postedBody(1)).not.toHaveProperty('diagnosticBundle')
+  })
+
+  it('retries a diagnostic attachment network error as report-only JSON on the fallback API', async () => {
+    fetchMock.mockRejectedValueOnce(new Error('attachment network failed'))
+    fetchMock.mockResolvedValueOnce(okResponse())
+
+    await expect(submitFeedback(diagnosticSubmitArgs())).resolves.toEqual({
+      ok: true,
+      diagnosticBundleFailure: { status: null, error: 'attachment network failed' }
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('https://api.onorca.dev/v1/feedback')
+    expect(requestInit(1).body).not.toBeInstanceOf(FormData)
+    expect(postedBody(1)).not.toHaveProperty('diagnosticBundle')
+  })
+
+  it('allows 60 seconds for a diagnostic attachment before retrying report-only JSON', async () => {
+    vi.useFakeTimers()
+    fetchMock.mockImplementationOnce((_url: string, init?: RequestInit) => {
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new Error('runtime abort text')))
+      })
+    })
+    fetchMock.mockResolvedValueOnce(okResponse())
+    const result = submitFeedback(diagnosticSubmitArgs())
+
+    await vi.advanceTimersByTimeAsync(59_999)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+
+    await expect(result).resolves.toEqual({
+      ok: true,
+      diagnosticBundleFailure: { status: null, error: 'request timed out after 60 seconds' }
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('https://api.onorca.dev/v1/feedback')
+    expect(postedBody(1)).not.toHaveProperty('diagnosticBundle')
+  })
+
+  it('retries a proxy-rejected diagnostic attachment as website JSON', async () => {
+    fetchMock.mockResolvedValueOnce(errorResponse(403)).mockResolvedValueOnce(okResponse())
+
+    await expect(submitFeedback(diagnosticSubmitArgs())).resolves.toEqual({
+      ok: true,
+      diagnosticBundleFailure: { status: 403, error: 'status 403' }
+    })
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('https://www.onorca.dev/v1/feedback')
+    expect(requestInit(1).body).not.toBeInstanceOf(FormData)
+  })
+
+  it.each([401, 409, 429])(
+    'does not retry a diagnostic attachment rejected with status %s',
+    async (status) => {
+      fetchMock.mockResolvedValueOnce(errorResponse(status))
+
+      await expect(submitFeedback(diagnosticSubmitArgs())).resolves.toEqual({
+        ok: false,
+        status,
+        error: `status ${status}`
+      })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('preserves attachment and report-only failures when the degraded retry fails', async () => {
+    fetchMock.mockRejectedValueOnce(new Error('attachment network failed'))
+    fetchMock.mockRejectedValueOnce(new Error('report-only network failed'))
+
+    await expect(submitFeedback(diagnosticSubmitArgs())).resolves.toEqual({
+      ok: false,
+      status: null,
+      error: 'report-only network failed',
+      diagnosticBundleFailure: { status: null, error: 'attachment network failed' }
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
   it('falls back when the primary feedback request stalls', async () => {
     vi.useFakeTimers()
     fetchMock.mockImplementation((url: string, init?: RequestInit) => {
@@ -184,7 +321,7 @@ describe('submitFeedback', () => {
     await expect(Promise.race([result, Promise.resolve('pending')])).resolves.toEqual({
       ok: false,
       status: null,
-      error: 'fallback aborted'
+      error: 'request timed out after 10 seconds'
     })
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })

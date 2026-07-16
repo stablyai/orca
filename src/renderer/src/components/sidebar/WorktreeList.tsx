@@ -71,6 +71,7 @@ import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
 import { buildWorktreeComparator, compareWorktreeSortLabel } from './smart-sort'
 import {
   buildAttentionByWorktree,
+  hasFreshAttributedAgentStatus,
   type SmartClass,
   type WorktreeAttention
 } from './smart-attention'
@@ -117,6 +118,7 @@ import {
   setVisibleWorktreeIds,
   sidebarHasActiveFilters
 } from './visible-worktrees'
+import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
 import { getEmptyProjectPlaceholderRepoIds } from './empty-project-placeholder-repos'
 import {
   getVisibleWorktreeBrowserActivityTabs,
@@ -140,7 +142,10 @@ import {
   type ScrollToCurrentWorkspaceRevealRequestDetail
 } from '@/lib/scroll-to-current-workspace-status'
 import { isRepoHeaderActionTarget, useRepoHeaderDrag } from './project-header-drag'
-import { getSidebarOrderedRepoHeaderIdsByBucket } from './project-header-drop'
+import {
+  getLogicalRepoOrderRankById,
+  getSidebarOrderedRepoHeaderIdsByBucket
+} from './project-header-drop'
 import { useProjectGroupHeaderDrag } from './project-group-header-drag'
 import { getSidebarOrderedProjectGroupHeaderIdsByBucket } from './project-group-header-drop'
 import {
@@ -203,14 +208,12 @@ import {
   pruneWorktreeSelection,
   updateWorktreeSelection
 } from './worktree-multi-selection'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { splitWorktreeSortOrderByHost } from '@/lib/worktree-sort-order-host-split'
+import { persistWorktreeSortOrderByHost } from '@/lib/worktree-sort-order-persistence'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
-  type ExecutionHostId,
-  parseExecutionHostId
+  type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { getRepoHeaderCreateState } from './repo-header-create-state'
 import type { PendingSidebarRowReveal, PendingSidebarWorktreeReveal } from '@/store/slices/ui'
@@ -269,7 +272,7 @@ import { buildSidebarHostOptions } from './sidebar-host-options'
 import { HostSectionHeaderMenu } from './HostSectionHeaderMenu'
 import { ProjectHeaderActions } from './ProjectHeaderActions'
 import { translate } from '@/i18n/i18n'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey, getActiveSidebarWorkspaceId } from '../../../../shared/workspace-scope'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import {
   isConfirmedStaleFolderPathStatus,
@@ -309,6 +312,7 @@ const SORT_SETTLE_MS = 3_000
 const USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS = 500
 const EMPTY_PROJECT_GROUPS: readonly ProjectGroup[] = []
 const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] = {}
+const EMPTY_WORKTREE_ID_SET: ReadonlySet<string> = new Set()
 const EMPTY_TABS_BY_WORKTREE: AppState['tabsByWorktree'] = {}
 const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: AppState['terminalLayoutsByTabId'] = {}
 const EMPTY_PTY_IDS_BY_TAB_ID: AppState['ptyIdsByTabId'] = {}
@@ -404,22 +408,6 @@ function shouldIgnoreRepoHeaderToggle(event: React.SyntheticEvent<HTMLElement>):
 
 function getWorktreeOptionId(rowKey: string): string {
   return `worktree-list-option-${encodeURIComponent(rowKey)}`
-}
-
-// Why: folder workspaces are tracked by the scoped active key, while older
-// worktree-only paths still read activeWorktreeId.
-function getActiveSidebarWorkspaceId(
-  activeWorkspaceKey: string | null,
-  activeWorktreeId: string | null
-): string | null {
-  const scope = activeWorkspaceKey ? parseWorkspaceKey(activeWorkspaceKey) : null
-  if (scope?.type === 'folder') {
-    return folderWorkspaceKey(scope.folderWorkspaceId)
-  }
-  if (scope?.type === 'worktree') {
-    return scope.worktreeId
-  }
-  return activeWorktreeId
 }
 
 function getMountedWorktreeOptions(worktreeId: string, root?: ParentNode | null): HTMLElement[] {
@@ -5187,6 +5175,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const setSortBy = useAppStore((s) => s.setSortBy)
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
+  const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
@@ -5325,13 +5314,10 @@ const WorktreeList = React.memo(function WorktreeList({
     return () => clearTimeout(timer)
   }, [sortEpoch, debouncedSortEpoch, worktreeCount, sortBy])
 
-  // Why a latching ref: we need to distinguish "app just started, no PTYs
-  // have spawned yet" from "user closed all terminals mid-session." The
-  // former should use the persisted sortOrder; the latter should keep using
-  // the live smart score. A point-in-time `hasAnyLivePty` check conflates
-  // the two. This ref flips to true once any PTY is observed and never
-  // reverts, so the cold-start path is only used on actual cold start.
-  const sessionHasHadPty = useRef(false)
+  // Why a latching ref: persisted order is only a cold-start fallback. A live
+  // PTY or fresh attributed headless agent makes Smart authoritative, and it
+  // must stay authoritative after that activity ends.
+  const sessionHasHadLiveSmartSignal = useRef(false)
 
   // ── Stable sort order ──────────────────────────────────────────
   // The sort order is cached and only recomputed when `sortEpoch` changes
@@ -5355,24 +5341,27 @@ const WorktreeList = React.memo(function WorktreeList({
     const nonArchivedWorktrees = getAllWorktreesFromState(state).filter(
       (worktree) => !worktree.isArchived
     )
+    const now = Date.now()
 
     // Why cold-start detection: smart-class resolution depends on the
     // agent-status snapshot (agentStatusByPaneKey) hydrating from the hook
     // server, which lands asynchronously after launch. Running the warm
     // comparator before that arrives would collapse every worktree to Class 4
     // and shuffle the sidebar against the comparator's tiebreakers. Restore
-    // the pre-shutdown order from the persisted sortOrder snapshot until any
-    // live PTY appears, then switch to the live class layer. See Edge case 8
-    // in docs/smart-worktree-order-redesign.md.
-    if (sortBy === 'smart' && !sessionHasHadPty.current) {
+    // the pre-shutdown order from the persisted sortOrder snapshot until a
+    // live PTY or attributed headless agent appears, then use live classes.
+    if (sortBy === 'smart' && !sessionHasHadLiveSmartSignal.current) {
       // Why: `tabHasLivePty` (over `ptyIdsByTabId`) is the source of truth for
       // liveness — slept terminals retain `tab.ptyId` as a wake hint, so reading
       // it directly would falsely keep cold-start ordering off after restart.
       const hasAnyLivePty = Object.values(state.tabsByWorktree)
         .flat()
         .some((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
-      if (hasAnyLivePty) {
-        sessionHasHadPty.current = true
+      if (
+        hasAnyLivePty ||
+        hasFreshAttributedAgentStatus(state.agentStatusByPaneKey, now, state.tabsByWorktree)
+      ) {
+        sessionHasHadLiveSmartSignal.current = true
       } else {
         nonArchivedWorktrees.sort(
           (a, b) => b.sortOrder - a.sortOrder || compareWorktreeSortLabel(a, b)
@@ -5383,7 +5372,6 @@ const WorktreeList = React.memo(function WorktreeList({
     }
 
     const currentTabs = state.tabsByWorktree
-    const now = Date.now()
     // Why precompute: this is the hot sidebar sort. Array.sort invokes the
     // comparator O(N log N) times. Build the per-worktree attention map ONCE
     // (O(E + N×T×H) where H = stateHistory length, bounded at 20) so the
@@ -5500,41 +5488,37 @@ const WorktreeList = React.memo(function WorktreeList({
   }, [sortBy])
 
   // Persist the computed sort order so the sidebar can be restored after
-  // restart. Only persist during live sessions (sessionHasHadPty latched) —
+  // restart. Only persist during live sessions (live signal latched) —
   // on cold start we are *reading* the persisted order, not overwriting it.
   useEffect(() => {
-    if (sortBy !== 'smart' || sortedIds.length === 0 || !sessionHasHadPty.current) {
+    if (sortBy !== 'smart' || sortedIds.length === 0 || !sessionHasHadLiveSmartSignal.current) {
       return
     }
     // Why: sortOrder is persisted in each host's worktreeMeta and enriched from
     // the owner host, so persist each host's ids on that host.
     const state = useAppStore.getState()
-    for (const group of splitWorktreeSortOrderByHost(state, sortedIds)) {
-      const parsed = parseExecutionHostId(group.hostId)
-      const target =
-        parsed?.kind === 'runtime'
-          ? ({ kind: 'environment', environmentId: parsed.environmentId } as const)
-          : ({ kind: 'local' } as const)
-      void (target.kind === 'environment'
-        ? callRuntimeRpc(
-            target,
-            'worktree.persistSortOrder',
-            { orderedIds: group.orderedIds },
-            { timeoutMs: 15_000 }
-          )
-        : window.api.worktrees.persistSortOrder({ orderedIds: group.orderedIds }))
-    }
+    persistWorktreeSortOrderByHost(state, sortedIds)
   }, [sortedIds, sortBy])
 
   // Flatten, filter, and apply stable sort order via the shared utility so
   // the card order always matches the Cmd+1–9 shortcut numbering.
   const visibleWorktrees = useMemo(() => {
+    void agentStatusEpoch
     const ids = computeVisibleWorktreeIds(worktreesByRepo, sortedIds, {
       filterRepoIds,
       showSleepingWorkspaces,
       tabsByWorktree,
       ptyIdsByTabId,
       browserTabsByWorktree,
+      // Why snapshot on agentStatusEpoch: membership must update immediately,
+      // while subscribing to the full map would repaint on every hook ping.
+      worktreeIdsWithLiveAgent: showSleepingWorkspaces
+        ? EMPTY_WORKTREE_ID_SET
+        : getWorktreeIdsWithLiveAgent(
+            useAppStore.getState().agentStatusByPaneKey,
+            tabsByWorktree,
+            Date.now()
+          ),
       hideDefaultBranchWorkspace,
       hideAutomationGeneratedWorkspaces,
       repoMap,
@@ -5556,6 +5540,7 @@ const WorktreeList = React.memo(function WorktreeList({
     return ids.map((id) => worktreeMap.get(id)).filter((w): w is Worktree => w != null)
   }, [
     agentSendTargetWorktreeId,
+    agentStatusEpoch,
     filterRepoIds,
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,
@@ -5688,9 +5673,7 @@ const WorktreeList = React.memo(function WorktreeList({
     })
   }, [defaultHostId, folderWorkspaces, projectGroups, visibleHostIdSet])
   const repoOrder = useMemo(() => {
-    const map = new Map<string, number>()
-    repos.forEach((r, i) => map.set(r.id, i))
-    return map
+    return getLogicalRepoOrderRankById(repos.map((repo) => repo.id))
   }, [repos])
   const [importedWorktreeCardActionState, setImportedWorktreeCardActionState] = useState<
     Map<string, ImportedWorktreeCardActionState>

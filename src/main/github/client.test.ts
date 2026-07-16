@@ -118,6 +118,7 @@ import {
   updatePRState,
   updatePRTitle,
   _getMergeQueueCacheSizeForTests,
+  _getTrackedUpstreamBranchCacheSizesForTests,
   _resetOwnerRepoCache,
   _resetMergeQueueCacheForTests,
   __resetTrackedUpstreamBranchCacheForTests
@@ -925,7 +926,11 @@ describe('getPRForBranch', () => {
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     expect(outcome).toMatchObject({
       kind: 'found',
-      pr: { number: 6012, confirmedContainedHeadOid: 'cccc3333cccc3333' }
+      pr: {
+        number: 6012,
+        headRefName: 'fix-hibernation-wake',
+        confirmedContainedHeadOid: 'cccc3333cccc3333'
+      }
     })
   })
 
@@ -1784,6 +1789,119 @@ describe('getPRForBranch', () => {
       (args as string[]).includes('refs/heads')
     )
     expect(trackedUpstreamCalls).toHaveLength(1)
+  })
+
+  it('releases tracked-upstream probe generations across runtime identities', async () => {
+    const sshGitProvider = {
+      exec: vi.fn().mockResolvedValue({ stdout: 'feature\0\n', stderr: '' })
+    }
+    getSshGitProviderMock.mockReturnValue(sshGitProvider)
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValue({ stdout: JSON.stringify([]) })
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'feature\0\n', stderr: '' })
+
+    await getPRForBranch('/repo-root', 'feature')
+    await getPRForBranch('/repo-root', 'feature', null, null, null, {
+      localGitExecOptions: { wslDistro: 'Ubuntu' }
+    })
+    await getPRForBranch('/repo-root', 'feature', null, 'ssh-1')
+
+    expect(_getTrackedUpstreamBranchCacheSizesForTests()).toEqual({
+      snapshots: 3,
+      inFlight: 0,
+      generations: 0
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(sshGitProvider.exec).toHaveBeenCalledTimes(1)
+  })
+
+  it('bounds unique tracked-upstream snapshots and sweeps expired identities', async () => {
+    vi.useFakeTimers()
+    try {
+      getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+      ghExecFileAsyncMock.mockResolvedValue({ stdout: JSON.stringify([]) })
+      gitExecFileAsyncMock.mockResolvedValue({ stdout: 'feature\0\n', stderr: '' })
+
+      for (let index = 0; index < 513; index += 1) {
+        await getPRForBranch(`/repo-root-${index}`, 'feature')
+      }
+      await getPRForBranch('/repo-root-512', 'feature')
+
+      expect(_getTrackedUpstreamBranchCacheSizesForTests()).toEqual({
+        snapshots: 512,
+        inFlight: 0,
+        generations: 0
+      })
+      expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(513)
+
+      await vi.advanceTimersByTimeAsync(30_001)
+      await getPRForBranch('/repo-root-fresh', 'feature')
+
+      expect(_getTrackedUpstreamBranchCacheSizesForTests()).toEqual({
+        snapshots: 1,
+        inFlight: 0,
+        generations: 0
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps stale probe cleanup from releasing a replacement generation', async () => {
+    let resolveOldProbe: (value: { stdout: string; stderr: string }) => void
+    let resolveCurrentProbe: (value: { stdout: string; stderr: string }) => void
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValue({ stdout: JSON.stringify([]) })
+    gitExecFileAsyncMock
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveOldProbe = resolve
+          })
+      )
+      .mockResolvedValueOnce({ stdout: 'replacement\0\n', stderr: '' })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveCurrentProbe = resolve
+          })
+      )
+
+    const oldLookup = getPRForBranch('/repo-root', 'old')
+    await vi.waitFor(() => expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1))
+    __resetTrackedUpstreamBranchCacheForTests()
+    await getPRForBranch('/repo-root', 'replacement')
+    const currentLookup = getPRForBranch('/repo-root', 'current')
+    await vi.waitFor(() => expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(3))
+
+    resolveOldProbe!({ stdout: 'old\0\n', stderr: '' })
+    await oldLookup
+    expect(_getTrackedUpstreamBranchCacheSizesForTests()).toEqual({
+      snapshots: 0,
+      inFlight: 1,
+      generations: 1
+    })
+
+    resolveCurrentProbe!({ stdout: 'current\0\n', stderr: '' })
+    await currentLookup
+    expect(_getTrackedUpstreamBranchCacheSizesForTests()).toEqual({
+      snapshots: 1,
+      inFlight: 0,
+      generations: 0
+    })
+  })
+
+  it('releases tracked-upstream probe state when setup rejects', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValue({ stdout: JSON.stringify([]) })
+    readLocalGitConfigSignatureMock.mockRejectedValue(new Error('git config unavailable'))
+
+    await expect(getPRForBranch('/repo-root', 'feature')).resolves.toBeNull()
+    expect(_getTrackedUpstreamBranchCacheSizesForTests()).toEqual({
+      snapshots: 0,
+      inFlight: 0,
+      generations: 0
+    })
   })
 
   it('does not fan out tracked-upstream probes after a transient for-each-ref failure', async () => {

@@ -108,3 +108,25 @@ export function isClaudeManagementTitle(title: string): boolean {
 export function isCursorNativeAgentTitle(title: string): boolean {
   return title.trim().toLowerCase() === CURSOR_NATIVE_TITLE_LOWER
 }
+
+// Why: `cursor` is also an ordinary editor noun that other agents type into their own
+// task-summary titles, so a name token is not identity. Cursor's identifying titles are
+// a closed set (the native literal plus the labels Orca synthesizes from Cursor hooks),
+// so match that vocabulary instead.
+export function isCursorAgentTitle(title: string | null | undefined): boolean {
+  if (typeof title !== 'string') {
+    return false
+  }
+  const trimmed = title.trim()
+  const lower = trimmed.toLowerCase()
+  if (
+    lower === CURSOR_NATIVE_TITLE_LOWER ||
+    lower === 'cursor ready' ||
+    lower === 'cursor - action required'
+  ) {
+    return true
+  }
+  // Why: display labels can mention Cursor in another agent's task text. Only
+  // treat the controlled synthetic Cursor spinner title as Cursor identity.
+  return /^[\u2800-\u28ff] Cursor Agent$/u.test(trimmed)
+}

@@ -2,22 +2,57 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 
 const PINS_PREFIX = 'orca:pins:'
 const NOTIF_KEY = 'orca:pushNotificationsEnabled'
+const NATIVE_CHAT_TABS_PREFIX = 'orca:nativeChatTabs:'
 
-// Why: default-off so the iOS notification permission prompt never
-// fires until the user explicitly opts in via Settings → Notifications.
-// Apple's review guideline 4.5.4 and HIG both prefer user-initiated
-// permission prompts; default-on would fire the prompt the moment the
-// desktop sent its first notification, which can read as unsolicited.
-export async function loadPushNotificationsEnabled(): Promise<boolean> {
+function nativeChatTabIdsKey(hostId: string, worktreeId: string): string {
+  return `${NATIVE_CHAT_TABS_PREFIX}${encodeURIComponent(hostId)}:${encodeURIComponent(worktreeId)}`
+}
+
+/** Tab ids currently showing native chat, scoped to the paired host and worktree
+ *  so colliding remote ids cannot activate a transcript watcher on another host. */
+export async function loadNativeChatTabIds(hostId: string, worktreeId: string): Promise<string[]> {
+  try {
+    const raw = await AsyncStorage.getItem(nativeChatTabIdsKey(hostId, worktreeId))
+    const parsed = raw ? (JSON.parse(raw) as unknown) : null
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+export async function saveNativeChatTabIds(
+  hostId: string,
+  worktreeId: string,
+  ids: string[]
+): Promise<void> {
+  try {
+    await AsyncStorage.setItem(nativeChatTabIdsKey(hostId, worktreeId), JSON.stringify(ids))
+  } catch {
+    // Best-effort persistence; a failed write just forgets the view choice.
+  }
+}
+
+export type PushNotificationsPreference = {
+  readonly value: boolean | null
+  readonly loaded: boolean
+}
+
+// Why: null distinguishes people who have never made the one-time onboarding
+// decision from people who explicitly chose Not now or disabled notifications.
+export async function readPushNotificationsPreference(): Promise<PushNotificationsPreference> {
   try {
     const raw = await AsyncStorage.getItem(NOTIF_KEY)
-    if (raw === null) {
-      return false
-    }
-    return raw === 'true'
+    return { value: raw === null ? null : raw === 'true', loaded: true }
   } catch {
-    return false
+    return { value: null, loaded: false }
   }
+}
+
+// Why: default-off prevents background notification events from opening the
+// system prompt; only the onboarding CTA or Settings switch requests permission.
+export async function loadPushNotificationsEnabled(): Promise<boolean> {
+  const preference = await readPushNotificationsPreference()
+  return preference.value ?? false
 }
 
 export async function savePushNotificationsEnabled(enabled: boolean): Promise<void> {

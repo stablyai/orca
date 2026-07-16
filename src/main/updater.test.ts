@@ -130,6 +130,16 @@ vi.mock('./updater-nudge', () => ({
   shouldApplyNudge: shouldApplyNudgeMock
 }))
 
+const { armExitWatchdogMock, disarmExitWatchdogMock } = vi.hoisted(() => ({
+  armExitWatchdogMock: vi.fn(),
+  disarmExitWatchdogMock: vi.fn()
+}))
+
+vi.mock('./update-install-exit-watchdog', () => ({
+  armUpdateInstallExitWatchdog: armExitWatchdogMock,
+  disarmUpdateInstallExitWatchdog: disarmExitWatchdogMock
+}))
+
 const { fetchNewerReleaseTagsMock } = vi.hoisted(() => ({
   fetchNewerReleaseTagsMock: vi.fn()
 }))
@@ -158,6 +168,8 @@ describe('updater', () => {
     appMock.isPackaged = true
     isMock.dev = false
     killAllPtyMock.mockReset()
+    armExitWatchdogMock.mockReset()
+    disarmExitWatchdogMock.mockReset()
     powerMonitorOnMock.mockReset()
     fetchNudgeMock.mockReset().mockResolvedValue(null)
     shouldApplyNudgeMock.mockReset().mockReturnValue(false)
@@ -1337,6 +1349,79 @@ describe('updater', () => {
     // Why: handoff still owns the process after commit — no recovery message
     // and no general check/download error status either.
     expect(sendMock).not.toHaveBeenCalled()
+  })
+
+  it('arms the forced-exit watchdog once the install commits', async () => {
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+    fetchNewerReleaseTagsMock.mockResolvedValue({ tags: ['v1.0.61'], state: 'ready' })
+    autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+      autoUpdaterMock.emit('checking-for-update')
+      queueMicrotask(() => {
+        autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+      })
+      return Promise.resolve(undefined)
+    })
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu, quitAndInstall } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => Date.now() })
+    checkForUpdatesFromMenu()
+
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'available',
+        version: '1.0.61',
+        changelog: null
+      })
+    })
+
+    autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+    // Why: on macOS install only commits once Squirrel is ready; mark it ready
+    // so this test covers the committed path on all platforms.
+    if (process.platform === 'darwin') {
+      const nativeDownloadedHandler = nativeUpdaterMock.on.mock.calls.find(
+        ([eventName]) => eventName === 'update-downloaded'
+      )?.[1] as (() => void) | undefined
+      expect(nativeDownloadedHandler).toBeTypeOf('function')
+      nativeDownloadedHandler?.()
+    }
+
+    expect(armExitWatchdogMock).not.toHaveBeenCalled()
+
+    quitAndInstall()
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
+    })
+
+    // Why: the installer (ShipIt/NSIS) waits for this process to exit; the
+    // watchdog guarantees a wedged async shutdown cannot strand the update.
+    expect(armExitWatchdogMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('disarms the forced-exit watchdog when sync install error recovery keeps the app open', async () => {
+    vi.useFakeTimers()
+
+    autoUpdaterMock.quitAndInstall.mockImplementation(() => {
+      autoUpdaterMock.emit(
+        'error',
+        new Error("No update filepath provided, can't quit and install")
+      )
+    })
+
+    const mainWindow = { webContents: { send: vi.fn() } }
+    const { setupAutoUpdater, quitAndInstall, isQuittingForUpdate } = await import('./updater')
+
+    setupAutoUpdater(mainWindow as never)
+    quitAndInstall()
+
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(isQuittingForUpdate()).toBe(false)
+    // Why: recovery leaves the app running — a live watchdog would force-exit
+    // a healthy session 20s later.
+    expect(armExitWatchdogMock).not.toHaveBeenCalled()
+    expect(disarmExitWatchdogMock).toHaveBeenCalled()
   })
 
   it('does not treat pre-native autoUpdater errors as quitAndInstall recovery', async () => {

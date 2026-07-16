@@ -111,13 +111,6 @@ type CreateMainWindowOptions = {
     details: Electron.RenderProcessGoneDetails,
     webContentsId: number
   ) => void
-  /** Returns true when a renderer loss should be reported as a crash. Why:
-   *  intentional reload/update/quit paths can emit crash-like `killed`
-   *  renderer exits, but surfacing those as crash reports is noise. */
-  shouldRecordRendererCrash?: (
-    details: Electron.RenderProcessGoneDetails,
-    webContentsId: number
-  ) => boolean
   /** Returns true when Orca should reload after an unexpected renderer loss.
    *  Why: update relaunch and app quit intentionally tear down child
    *  processes; recovering those paths can fight Electron's shutdown. */
@@ -344,10 +337,11 @@ export function createMainWindow(
   // the window back to full-screen after the user already resized it (#591).
   let handledInitialReadyToShow = false
   let initialRevealFallbackTimer: ReturnType<typeof setTimeout> | null =
-    process.platform === 'win32'
+    process.platform === 'win32' || process.platform === 'linux'
       ? setTimeout(() => {
-          // Why: GPU/driver failures on Windows can prevent ready-to-show forever,
-          // leaving the only app window hidden while the main process stays alive.
+          // Why: GPU/driver failures on Windows and Linux/X11 can prevent
+          // ready-to-show forever, leaving the only app window hidden while the
+          // main process stays alive (#8421).
           initialRevealFallbackTimer = null
           revealInitialWindow()
         }, 10_000)
@@ -713,10 +707,9 @@ export function createMainWindow(
     resetShortcutRecorderFocus()
     // Why: macOS can report BrowserWindow teardown as renderer `killed`/SIGKILL
     // after a confirmed close; that is window lifecycle noise, not a crash.
-    if (
-      !windowClosing &&
-      opts?.shouldRecordRendererCrash?.(details, rendererWebContentsId) !== false
-    ) {
+    if (!windowClosing) {
+      // Why: the recorder owns crash classification and durable suppression
+      // diagnostics; filtering here made expected-teardown evidence unreachable.
       opts?.onRendererProcessGone?.(details, rendererWebContentsId)
     }
     if (!windowClosing) {

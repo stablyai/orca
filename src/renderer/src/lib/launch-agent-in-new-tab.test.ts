@@ -300,13 +300,16 @@ describe('launchAgentInNewTab', () => {
       environmentId: 'web-runtime',
       targetGroupId: 'group-1',
       activate: true,
-      agent: 'claude'
+      agent: 'claude',
+      viewMode: 'terminal'
     })
     expect(mockCreateTab).not.toHaveBeenCalled()
     expect(mockQueueTabStartupCommand).not.toHaveBeenCalled()
     await Promise.resolve()
     expect(mockSetActiveTabType).toHaveBeenCalledWith('terminal')
-    expect(store.closeTab).toHaveBeenCalledWith('stale-agent-tab')
+    expect(store.closeTab).toHaveBeenCalledWith('stale-agent-tab', {
+      reason: 'cleanup'
+    })
   })
 
   it('forwards prompt launch env and captured config to paired web runtime hosts', async () => {
@@ -345,10 +348,59 @@ describe('launchAgentInNewTab', () => {
         agentArgs: '--model gpt-5 --reasoning-effort high',
         agentEnv: { CODEX_PROFILE: 'captured' }
       },
-      launchAgent: 'codex'
+      launchAgent: 'codex',
+      viewMode: 'terminal'
     })
     expect(mockCreateTab).not.toHaveBeenCalled()
     expect(mockQueueTabStartupCommand).not.toHaveBeenCalled()
+  })
+
+  it('propagates the default chat mode to paired web runtime launches', async () => {
+    mockIsWebRuntimeSessionActive.mockReturnValue(true)
+    store.settings = {
+      agentCmdOverrides: {},
+      agentDefaultArgs: {},
+      agentDefaultEnv: {},
+      activeRuntimeEnvironmentId: 'web-runtime',
+      experimentalNativeChat: true,
+      openAgentTabsInChatByDefault: true
+    }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+
+    expect(mockCreateWebRuntimeSessionTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId: 'wt-1',
+        environmentId: 'web-runtime',
+        agent: 'codex',
+        viewMode: 'chat'
+      })
+    )
+  })
+
+  it('propagates the resolved terminal mode to paired web runtime launches', async () => {
+    mockIsWebRuntimeSessionActive.mockReturnValue(true)
+    store.settings = {
+      agentCmdOverrides: {},
+      agentDefaultArgs: {},
+      agentDefaultEnv: {},
+      activeRuntimeEnvironmentId: 'web-runtime',
+      experimentalNativeChat: true,
+      openAgentTabsInChatByDefault: false
+    }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+
+    expect(mockCreateWebRuntimeSessionTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId: 'wt-1',
+        environmentId: 'web-runtime',
+        agent: 'codex',
+        viewMode: 'terminal'
+      })
+    )
   })
 
   it('surfaces a toast when host agent launch fails in paired web clients', async () => {

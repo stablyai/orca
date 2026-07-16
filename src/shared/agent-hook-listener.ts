@@ -38,10 +38,10 @@ import {
   claudeRosterHasWorkingSubagent,
   claudeRosterToSnapshots,
   claudeTeammateIdMatchesName,
+  finishClaudeSubagent,
   foldClaudeBackgroundTasksIntoRoster,
-  markClaudeSubagentIdle,
-  markClaudeTeammateIdleByName,
   readClaudeBackgroundAgentTasks,
+  removeClaudeTeammateByName,
   upsertWorkingClaudeSubagent,
   type ClaudeSubagentRoster
 } from './claude-subagent-roster'
@@ -52,7 +52,7 @@ import {
   type AgentProviderSessionMetadata
 } from './agent-session-resume'
 import { parsePaneKey } from './stable-pane-id'
-import { isHarnessInjectedUserTurnText } from './harness-injected-user-turns'
+import { isKnownHarnessInjectedUserTurnText } from './harness-injected-user-turns'
 import {
   buildGrokChatHistoryPathCandidates,
   findGrokChatHistoryBySessionId,
@@ -152,6 +152,47 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   deletePaneScopedSetEntry(state.ampCompletedCacheKeys, paneKey)
   state.claudeSubagentRosterByPaneKey.delete(paneKey)
   state.claudeLeadStateByPaneKey.delete(paneKey)
+}
+
+function movePaneScopedMapEntries<T>(
+  map: Map<string, T>,
+  fromPaneKey: string,
+  toPaneKey: string
+): void {
+  for (const [key, value] of Array.from(map.entries())) {
+    if (key !== fromPaneKey && !key.startsWith(`${fromPaneKey}\0`)) {
+      continue
+    }
+    map.delete(key)
+    map.set(`${toPaneKey}${key.slice(fromPaneKey.length)}`, value)
+  }
+}
+
+function movePaneScopedSetEntries(set: Set<string>, fromPaneKey: string, toPaneKey: string): void {
+  for (const key of Array.from(set)) {
+    if (key !== fromPaneKey && !key.startsWith(`${fromPaneKey}\0`)) {
+      continue
+    }
+    set.delete(key)
+    set.add(`${toPaneKey}${key.slice(fromPaneKey.length)}`)
+  }
+}
+
+export function movePaneCacheState(
+  state: HookListenerState,
+  fromPaneKey: string,
+  toPaneKey: string
+): void {
+  if (fromPaneKey === toPaneKey) {
+    return
+  }
+  movePaneScopedMapEntries(state.lastPromptByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.lastToolByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.lastStatusByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.antigravityCompletedTranscriptByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedSetEntries(state.ampCompletedCacheKeys, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.claudeSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.claudeLeadStateByPaneKey, fromPaneKey, toPaneKey)
 }
 
 function clearPaneTurnCacheState(state: HookListenerState, paneKey: string): void {
@@ -451,8 +492,10 @@ function resolvePrompt(
 ): string {
   // Why: harness-injected turns (task notifications, system reminders) fire
   // UserPromptSubmit but are not the user's ask — keep the cached real prompt
-  // instead of surfacing raw machinery tags in status labels.
-  if (isHarnessInjectedUserTurnText(promptText)) {
+  // instead of surfacing raw machinery tags in status labels. Match only known
+  // harness tags: a real prompt pasting a custom `<my-element>` must reset the
+  // turn, not be mistaken for machinery and leave the pane on a stale prompt.
+  if (isKnownHarnessInjectedUserTurnText(promptText)) {
     return state.lastPromptByPaneKey.get(paneKey) ?? ''
   }
   if (options?.resetOnNewTurn) {
@@ -688,6 +731,17 @@ function toolUpdate(
     hasToolUpdate: true,
     hasToolInputField: options?.hasToolInputField === true
   }
+}
+
+/** Clear the active-tool metadata (name/input/prompt) so a just-failed tool
+ *  stops looking in-flight. Why: the compact sidebar prioritizes current-tool
+ *  metadata over the failure message, so a completed failed tool must no
+ *  longer look active or the error text stays hidden behind the tool name. */
+function clearActiveToolFieldsUpdate(): ToolSnapshot {
+  return toolUpdate(
+    { toolName: undefined, toolInput: undefined, interactivePrompt: undefined },
+    { hasToolInputField: true }
+  )
 }
 
 /** True for the AskUserQuestion tool across the casing variants different
@@ -1373,10 +1427,11 @@ function extractClaudeToolFields(
   hookPayload: Record<string, unknown>
 ): ToolSnapshot {
   const update: ToolSnapshot = {}
-  if (
+  if (eventName === 'PostToolUseFailure') {
+    Object.assign(update, clearActiveToolFieldsUpdate())
+  } else if (
     eventName === 'PreToolUse' ||
     eventName === 'PostToolUse' ||
-    eventName === 'PostToolUseFailure' ||
     eventName === 'PermissionRequest'
   ) {
     const toolName = readString(hookPayload, 'tool_name')
@@ -1598,12 +1653,20 @@ function extractCursorToolFields(
     eventName === 'postToolUse' ||
     eventName === 'postToolUseFailure'
   ) {
-    const toolName = readString(hookPayload, 'tool_name')
-    const toolInput = deriveToolInputPreview(toolName, hookPayload.tool_input)
-    const update: ToolSnapshot = toolUpdate(
-      { toolName, toolInput },
-      { hasToolInputField: hasOwnField(hookPayload, 'tool_input') }
-    )
+    const update: ToolSnapshot = {}
+    if (eventName === 'postToolUseFailure') {
+      Object.assign(update, clearActiveToolFieldsUpdate())
+    } else {
+      const toolName = readString(hookPayload, 'tool_name')
+      const toolInput = deriveToolInputPreview(toolName, hookPayload.tool_input)
+      Object.assign(
+        update,
+        toolUpdate(
+          { toolName, toolInput },
+          { hasToolInputField: hasOwnField(hookPayload, 'tool_input') }
+        )
+      )
+    }
     if (eventName === 'postToolUse') {
       const responseText = extractToolResponseText(hookPayload.tool_output)
       if (responseText) {
@@ -1748,10 +1811,11 @@ function extractCopilotToolFields(
   hookPayload: Record<string, unknown>
 ): ToolSnapshot {
   const update: ToolSnapshot = {}
-  if (
+  if (eventName === 'PostToolUseFailure' || eventName === 'ErrorOccurred') {
+    Object.assign(update, clearActiveToolFieldsUpdate())
+  } else if (
     eventName === 'PreToolUse' ||
     eventName === 'PostToolUse' ||
-    eventName === 'PostToolUseFailure' ||
     eventName === 'PermissionRequest'
   ) {
     const copilotToolCall = readCopilotToolCall(hookPayload)
@@ -2014,29 +2078,40 @@ function extractGrokToolFields(
   grokHome?: string
 ): ToolSnapshot {
   if (isGrokEvent(eventName, 'pre_tool_use', 'post_tool_use', 'post_tool_use_failure')) {
-    const toolName =
-      readString(hookPayload, 'toolName') ??
-      readString(hookPayload, 'tool_name') ??
-      readString(hookPayload, 'name')
-    const rawInput =
-      hookPayload.toolInput ?? hookPayload.tool_input ?? hookPayload.input ?? hookPayload.arguments
-    const toolInput =
-      deriveToolInputPreview(toolName, rawInput) ?? deriveFallbackToolInputPreview(rawInput)
-    // Why: Grok's ask_user_question is auto-allowed and arrives as PreToolUse
-    // (not PermissionRequest). Capture the full question payload so the live
-    // card path can render options instead of only a waiting Notification.
-    const interactivePrompt = deriveInteractivePrompt(toolName, rawInput, eventName)
-    const update: ToolSnapshot = toolUpdate(
-      { toolName, toolInput, interactivePrompt },
-      {
-        hasToolInputField: hasAnyOwnField(hookPayload, [
-          'toolInput',
-          'tool_input',
-          'input',
-          'arguments'
-        ])
-      }
-    )
+    const update: ToolSnapshot = {}
+    if (isGrokEvent(eventName, 'post_tool_use_failure')) {
+      Object.assign(update, clearActiveToolFieldsUpdate())
+    } else {
+      const toolName =
+        readString(hookPayload, 'toolName') ??
+        readString(hookPayload, 'tool_name') ??
+        readString(hookPayload, 'name')
+      const rawInput =
+        hookPayload.toolInput ??
+        hookPayload.tool_input ??
+        hookPayload.input ??
+        hookPayload.arguments
+      const toolInput =
+        deriveToolInputPreview(toolName, rawInput) ?? deriveFallbackToolInputPreview(rawInput)
+      // Why: Grok's ask_user_question is auto-allowed and arrives as PreToolUse
+      // (not PermissionRequest). Capture the full question payload so the live
+      // card path can render options instead of only a waiting Notification.
+      const interactivePrompt = deriveInteractivePrompt(toolName, rawInput, eventName)
+      Object.assign(
+        update,
+        toolUpdate(
+          { toolName, toolInput, interactivePrompt },
+          {
+            hasToolInputField: hasAnyOwnField(hookPayload, [
+              'toolInput',
+              'tool_input',
+              'input',
+              'arguments'
+            ])
+          }
+        )
+      )
+    }
     if (isGrokEvent(eventName, 'post_tool_use', 'post_tool_use_failure')) {
       const responseText =
         extractToolResponseText(hookPayload.toolResponse) ??
@@ -2266,7 +2341,10 @@ function hasExplicitUserPrompt(
   }
   // Why: harness-injected machinery turns are not proof of a user submit —
   // they must not count for prompt-sent telemetry or permission stickiness.
-  if (isHarnessInjectedUserTurnText(extractedPrompt.text)) {
+  // Match only known harness tags: a real prompt starting with a custom
+  // `<my-element>` is an explicit user turn and must survive interrupt recovery
+  // (a false "not explicit" leaves the agent visibly done after Ctrl+C).
+  if (isKnownHarnessInjectedUserTurnText(extractedPrompt.text)) {
     return false
   }
   // Why: bare `message` fields often contain permission or status copy. They
@@ -2357,7 +2435,10 @@ function normalizeClaudeSubagentLifecycleEvent(
     if (!teammateName) {
       return null
     }
-    markClaudeTeammateIdleByName(roster, teammateName)
+    // Why: idle means not working, and only working children keep a row. This
+    // is the fallback finish signal for a named agent whose SubagentStop was
+    // lost — its background_tasks entry never stops reading "running".
+    removeClaudeTeammateByName(roster, teammateName)
     clearClaudePendingWaitForAgent(state, paneKey, (waitingAgentId) =>
       claudeTeammateIdMatchesName(waitingAgentId, teammateName)
     )
@@ -2374,7 +2455,11 @@ function normalizeClaudeSubagentLifecycleEvent(
         Date.now()
       )
     } else {
-      markClaudeSubagentIdle(roster, agentId)
+      // Why: a finished child (one-shot, workflow lane, or named teammate)
+      // leaves the sidebar at once. SubagentStop is the reliable finish
+      // signal even for teammate-shaped ids — their background_tasks entries
+      // stay "running" forever — and a resumed teammate re-earns its row.
+      finishClaudeSubagent(roster, agentId)
       // Why: a blocked child that dies (killed, errored) without another tool
       // event would otherwise pin its permission/question wait on the pane
       // forever — nothing else references that agent again.
@@ -2392,11 +2477,9 @@ export function markClaudeLeadTurnInterrupted(state: HookListenerState, paneKey:
   state.claudeLeadStateByPaneKey.set(paneKey, { state: 'done', interrupted: true })
 }
 
-/** Rebuild a pane's roster from a persisted status snapshot during hydration.
- *  Restart loses the in-memory roster while the renderer replays the child
- *  rows from disk; without reseeding, the next teammate-bearing Stop (whose
- *  task ids never match lifecycle ids) would silently drop those rows. Stale
- *  seeds self-heal: an empty background_tasks clears, activity refreshes. */
+/** Rebuild a pane's working roster from a persisted status snapshot. Live
+ *  activity confirms a seed after restart; a complete task inventory may reap
+ *  an unconfirmed seed whose finish hook arrived while Orca was offline. */
 export function seedClaudeSubagentRosterFromSnapshots(
   state: HookListenerState,
   paneKey: string,
@@ -2407,14 +2490,19 @@ export function seedClaudeSubagentRosterFromSnapshots(
   }
   const roster = getOrCreateClaudeSubagentRoster(state, paneKey)
   for (const snapshot of snapshots) {
+    // Why: the roster only tracks working children now. A persisted idle
+    // snapshot (from a build that kept idle rows) is a finished child — drop
+    // it so restart doesn't resurrect the stale pile this fix removes.
+    if (snapshot.state !== 'working') {
+      continue
+    }
     roster.set(snapshot.id, {
-      state: snapshot.state === 'working' ? 'working' : 'idle',
       startedAt: snapshot.startedAt,
       agentType: snapshot.agentType,
       description: snapshot.description,
       // Why: the seed can be a phantom (child finished while Orca was down,
       // its SubagentStop lost). Let a PRESENT background_tasks list that
-      // omits the id demote it instead of gating the pane 'working' forever.
+      // omits the id remove it instead of gating the pane 'working' forever.
       backgroundTasksAuthoritative: true
     })
   }
@@ -2572,7 +2660,8 @@ function normalizeClaudeEvent(
       foldClaudeBackgroundTasksIntoRoster(
         getOrCreateClaudeSubagentRoster(state, paneKey),
         backgroundTasks.tasks,
-        Date.now()
+        Date.now(),
+        { inventoryComplete: !backgroundTasks.truncated }
       )
     }
   }
@@ -3308,7 +3397,7 @@ function normalizePiCompatibleEvent(
     eventName === 'tool_execution_end' ||
     eventName === 'message_end'
       ? 'working'
-      : eventName === 'agent_end' || eventName === 'session_shutdown'
+      : eventName === 'agent_end'
         ? 'done'
         : null
 

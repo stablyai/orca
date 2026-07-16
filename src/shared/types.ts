@@ -40,6 +40,7 @@ import type {
   GlobalWindowsRuntimeDefault,
   LocalWindowsRuntimePreference
 } from './project-execution-runtime'
+import type { UsagePercentageDisplay } from './usage-percentage-display'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -271,11 +272,9 @@ export type Repo = {
   importedExternalWorktreePaths?: string[]
   /** User permanently opted out of the new-external-worktree inbox for this repo. */
   externalWorktreeDiscoverySuppressedAt?: number
-  /** Paths (relative to the primary checkout) that should be symlinked into
-   *  newly created worktrees of this repo. Consumed only when the global
-   *  `experimentalWorktreeSymlinks` flag is on — the per-repo list is the
-   *  "what to link", the global flag is the "whether to link at all" switch.
-   *  Undefined/empty means no symlinks are created for this repo. */
+  /** Paths (relative to the primary checkout) that should be APFS clone-copied
+   *  on macOS when possible, otherwise symlinked, into newly created worktrees.
+   *  Undefined/empty means no shared paths are created for this repo. */
   symlinkPaths?: string[]
   /** Durable sidebar-only repo organization. Execution remains repo-scoped. */
   projectGroupId?: string | null
@@ -429,9 +428,25 @@ export type GitWorktreeInfo = {
   isSparse?: boolean
   locked?: boolean
   lockReason?: string
+  /** True when Git reports the worktree as prunable (its directory is gone but
+   *  the registration remains). Detected via the `prunable` porcelain field
+   *  (Git ≥ 2.36) or a path-existence probe on older Git. */
+  prunable?: boolean
+  prunableReason?: string
   /** True for the repo's main working tree (the first entry from `git worktree list`).
    *  Linked worktrees created via `git worktree add` have this set to false. */
   isMainWorktree: boolean
+}
+
+/** Head/branch snapshot read from Git metadata files without spawning Git.
+ *  Carries background-worktree freshness when status-only churn includes a
+ *  real head move (external commit/amend/reset) that must not re-enter the
+ *  structural `worktrees:changed` fanout. */
+export type WorktreeHeadIdentity = {
+  worktreePath: string
+  head: string
+  /** Full ref (e.g. `refs/heads/main`), or null for a detached HEAD. */
+  branch: string | null
 }
 
 // ─── Worktree (app-level, enriched) ──────────────────────────────────
@@ -1156,6 +1171,9 @@ export type PRInfo = {
   headDivergedFromMergedPRAtOid?: string
   /** Target branch name for PR-created worktree compare-base repair. */
   baseRefName?: string
+  /** PR head branch name. Lets linked-PR consumers detect that the worktree
+   *  has switched to a different branch and the durable link is stale. */
+  headRefName?: string
   prRepo?: GitHubRepositoryIdentity
   headRepo?: GitHubRepositoryIdentity
   conflictSummary?: PRConflictSummary
@@ -1530,6 +1548,9 @@ export type GitHubWorkItemDetails = {
   pullRequestId?: string
   checks?: PRCheckDetail[]
   files?: GitHubPRFile[]
+  /** Only set for PRs. True when the file fetch failed (rate limit, auth,
+   *  unresolved remote) rather than the PR genuinely having no changed files. */
+  filesUnavailable?: boolean
   participants?: GitHubAssignableUser[]
   /** Logins of current assignees. Only set for issues. */
   assignees?: string[]
@@ -1585,6 +1606,7 @@ export type LinearIssue = {
   workspaceName?: string
   identifier: string
   title: string
+  branchName?: string
   description?: string
   url: string
   state: {
@@ -1841,6 +1863,7 @@ export type {
 } from './gitlab-types'
 
 export type {
+  JiraAuthType,
   JiraComment,
   JiraConnectArgs,
   JiraConnectionStatus,
@@ -2510,6 +2533,8 @@ export type GlobalSettings = {
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number
   editorMinimapEnabled: boolean
+  /** Defaults on for profiles saved before file-editor wrapping became configurable. */
+  editorWordWrap?: boolean
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */
   richMarkdownSpellcheckEnabled?: boolean
   /** Whether local markdown review note controls and the review panel are shown. */
@@ -2574,10 +2599,15 @@ export type GlobalSettings = {
    *  system tray instead of quitting Orca; off keeps the default quit-on-close.
    *  The tray icon itself is always present on Windows regardless of this flag. */
   minimizeToTrayOnClose?: boolean
-  /** Why: Windows terminals conventionally use right-click as a paste gesture.
-   *  The setting stays Windows-only so macOS/Linux keep their existing context
-   *  menu behavior and users can still reach the menu with Ctrl+right-click. */
+  /** Why: macOS keeps Orca running after its last window closes, so this
+   *  controls the additive menu-bar entry without changing Dock behavior. */
+  showMenuBarIcon?: boolean
+  /** Why: Windows terminals conventionally use right-click as a paste gesture,
+   *  while macOS/Linux default to their existing context menu behavior. */
   terminalRightClickToPaste: boolean
+  /** One-shot guard that distinguishes the old global true default from a
+   *  choice made after the setting became available on every platform. */
+  terminalRightClickToPasteDefaultedForPlatform?: boolean
   /** Why: COMSPEC always points to cmd.exe on stock Windows, so without an
    *  explicit setting the terminal would always open CMD instead of the
    *  user's preferred shell. Defaults to 'powershell.exe' which is the
@@ -2707,6 +2737,11 @@ export type GlobalSettings = {
   diffDefaultView: 'inline' | 'side-by-side'
   diffWordWrap: boolean
   combinedDiffFileTreeVisibleByDefault: boolean
+  /** Comment author logins the user manually marked as bots (stored lowercased).
+   *  Why: some review bots use regular user accounts that defeat both provider
+   *  metadata and login heuristics, so the Humans/Bots comment filter needs a
+   *  user-supplied escape hatch. */
+  prBotAuthorOverrides: string[]
   notifications: NotificationSettings
   /** When true, a countdown timer is shown after a Claude agent becomes idle,
    *  indicating time remaining before the prompt cache expires. Disabled by default. */
@@ -2840,6 +2875,9 @@ export type GlobalSettings = {
   /** Why: disabling must persist so startup does not reinstall global agent
    *  hook entries right after the user removes them from Settings or CLI. */
   agentStatusHooksEnabled: boolean
+  /** Dismissed freshness tuples grant no write authority; they only keep the
+   *  same exact official placement/revision from nudging more than once. */
+  dismissedSkillFreshnessNudges?: string[]
   /** Why: generated tab titles are semantic but subjective, so they stay opt-in
    *  and manual renames remain the stronger user intent. */
   tabAutoGenerateTitle: boolean
@@ -2921,13 +2959,6 @@ export type GlobalSettings = {
   /** Legacy persisted key from the Experimental rollout. New writes use
    *  compactWorktreeCards. */
   experimentalCompactWorktreeCards?: boolean
-  /** Experimental: when creating a worktree, automatically symlink a
-   *  user-configured set of files/folders from the primary checkout (e.g.
-   *  `.env`, `node_modules`) into the new worktree. Opt-in while the
-   *  configuration surface and edge cases (conflicts with existing paths,
-   *  cleanup on worktree delete) are still being worked out. */
-  experimentalWorktreeSymlinks: boolean
-
   /** Active non-local runtime environment for client-routed RPC. `null`
    *  preserves the current local desktop behavior. */
   activeRuntimeEnvironmentId?: string | null
@@ -3229,10 +3260,30 @@ export type ProjectOrderBy = 'manual' | 'recent'
 export type WorkspaceHostScope = 'all' | 'local' | `ssh:${string}` | `runtime:${string}`
 export type VisibleWorkspaceHostIds = Exclude<WorkspaceHostScope, 'all'>[] | null
 export type WorkspaceHostOrder = Exclude<WorkspaceHostScope, 'all'>[]
+export type ManualRepoOrderEntry = {
+  hostId: WorkspaceHostOrder[number]
+  repoId: string
+}
+
+/** The active top-level section shown in the main content area. */
+export type TopLevelView =
+  | 'terminal'
+  | 'settings'
+  | 'tasks'
+  | 'activity'
+  | 'automations'
+  | 'space'
+  | 'skills'
+  | 'mobile'
 
 export type PersistedUIState = {
   lastActiveRepoId: string | null
   lastActiveWorktreeId: string | null
+  /** Active top-level view at save time, restored on reload/relaunch so the app
+   *  reopens where the user left off instead of snapping back to the terminal.
+   *  Sanitized on hydration (unknown value or a now-gated view falls back to
+   *  'terminal'). */
+  activeView: TopLevelView
   sidebarWidth: number
   rightSidebarOpen: boolean
   rightSidebarTab: RightSidebarTab
@@ -3260,6 +3311,9 @@ export type PersistedUIState = {
   /** User-defined sidebar order for host sections. Missing/new hosts append in
    *  the discovered host order. */
   workspaceHostOrder?: WorkspaceHostOrder
+  /** Desktop-owned all-host repo order. Host-qualified identities preserve a
+   *  manual cross-host interleaving while each host owns its local permutation. */
+  manualRepoOrder?: ManualRepoOrderEntry[]
   /** Deprecated legacy positive-form setting. Ignored on hydration. */
   showSleepingWorkspaces?: boolean
   /** Deprecated legacy name used by a short-lived build. Ignored on hydration. */
@@ -3311,6 +3365,8 @@ export type PersistedUIState = {
   _grokStatusBarDefaultAdded?: boolean
   statusBarItems: StatusBarItem[]
   statusBarVisible: boolean
+  /** Why: this is client-side presentation, not a provider/account or execution-host setting. */
+  usagePercentageDisplay?: UsagePercentageDisplay
   dismissedUpdateVersion: string | null
   lastUpdateCheckAt: number | null
   pendingUpdateNudgeId?: string | null
@@ -3354,6 +3410,10 @@ export type PersistedUIState = {
   /** One-shot rollout notice for manual project ordering becoming the default.
    *  Absent or true means the sidebar callout stays hidden. */
   projectOrderManualDefaultNoticeDismissed?: boolean
+  /** One-shot notice that status-bar usage meters now show percent used (not
+   *  remaining). Absent is resolved on load: brand-new profiles default to
+   *  dismissed; upgraded profiles see the notice once. */
+  usagePercentageDisplayChangeNoticeDismissed?: boolean
   /** User-hidden empty-state usage CTA in the status bar. Permanently hides the
    *  "Connect AI accounts to see usage" prompt even if all providers are later
    *  disconnected — a dismissed teaching nudge stays dismissed. */
@@ -3532,7 +3592,10 @@ export type PersistedTrustedOrcaHooks = Record<string, PersistedTrustedOrcaHookR
 
 export type LegacyPaneKeyAliasEntry = {
   ptyId: string
+  /** Physical pane key retained by the live process. Field name is persisted
+   *  for compatibility; UUID keys are used after pane-to-tab detach. */
   legacyPaneKey: string
+  /** Current logical owner pane key. May belong to another tab after detach. */
   stablePaneKey: string
   updatedAt: number
 }

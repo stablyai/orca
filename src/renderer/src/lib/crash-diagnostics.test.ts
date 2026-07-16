@@ -116,6 +116,43 @@ describe('renderer crash diagnostics', () => {
     })
   })
 
+  it('suppresses benign ResizeObserver loop errors instead of recording them', () => {
+    diagnostics.installRendererCrashDiagnostics()
+    recordBreadcrumbMock.mockClear()
+
+    const preventDefault = vi.fn()
+    listeners.get('error')?.[0]?.({
+      message: 'ResizeObserver loop completed with undelivered notifications.',
+      preventDefault
+    })
+    listeners.get('error')?.[0]?.({
+      message: 'ResizeObserver loop limit exceeded',
+      preventDefault
+    })
+
+    expect(preventDefault).toHaveBeenCalledTimes(2)
+    expect(recordBreadcrumbMock).not.toHaveBeenCalled()
+  })
+
+  it('records application errors that only mention a ResizeObserver loop', () => {
+    diagnostics.installRendererCrashDiagnostics()
+    recordBreadcrumbMock.mockClear()
+
+    const preventDefault = vi.fn()
+    listeners.get('error')?.[0]?.({
+      message: 'ResizeObserver loop failed while rendering the terminal',
+      preventDefault
+    })
+
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(recordBreadcrumbMock).toHaveBeenCalledWith({
+      name: 'renderer_error',
+      data: expect.objectContaining({
+        message: 'ResizeObserver loop failed while rendering the terminal'
+      })
+    })
+  })
+
   it('disposes global listeners and the memory interval', () => {
     diagnostics.installRendererCrashDiagnostics()
 

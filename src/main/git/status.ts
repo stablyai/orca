@@ -51,6 +51,12 @@ import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight
 import type { GitRuntimeOptions } from './git-runtime-options'
 import { gitOptionsForWorktree } from './git-runtime-options'
 import { parseGitRevListFirstParentOid } from '../../shared/git-rev-list-output'
+import {
+  beginGitStatusLineStatsCacheWrite,
+  clearGitStatusLineStatsCache,
+  clearGitStatusLineStatsCacheKey,
+  reuseOrRecomputeGitStatusLineStats
+} from '../../shared/git-status-line-stats-cache'
 
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
@@ -64,8 +70,10 @@ type EffectiveUpstreamStatusCacheEntry = {
 }
 
 const SUBMODULE_PATHS_CACHE_TTL_MS = 5_000
+export const MAX_SUBMODULE_PATHS_CACHE_ENTRIES = 512
 type SubmodulePathsCacheEntry = { paths: string[]; expiresAt: number }
 const submodulePathsCache = new Map<string, SubmodulePathsCacheEntry>()
+let submodulePathsCacheGeneration = 0
 
 // Why: the effective-upstream resolution chain (symbolic-ref + rev-parse ×2-3
 // + config snapshot) costs 4-5 subprocess spawns and only changes when branch
@@ -92,15 +100,38 @@ const statusReadsInFlight = new Map<string, Promise<GitStatusResult>>()
 // Why: a mutation invalidates both in-flight diff reads and in-flight status
 // coalescing; clearing only the diff dedupe would let a post-mutation
 // getStatus() join a pre-mutation read and return stale entries.
-function clearGitReadInvalidationState(): void {
+export function invalidateGitReadCaches(): void {
   gitDiffReadDedupe.clear()
   statusReadsInFlight.clear()
-  submodulePathsCache.clear()
+  clearGitStatusLineStatsCache()
+  clearSubmodulePathsCache()
   resolvedUpstreamNameCache.clear()
 }
 
+export async function runWithGitReadCacheInvalidation<T>(run: () => Promise<T>): Promise<T> {
+  invalidateGitReadCaches()
+  try {
+    return await run()
+  } finally {
+    // Why: a read that started during the mutation can be stale too, so the
+    // post-mutation boundary retires both pre-existing and overlapping reads.
+    invalidateGitReadCaches()
+  }
+}
+
 export function clearSubmodulePathsCacheForTests(): void {
+  clearSubmodulePathsCache()
+}
+
+function clearSubmodulePathsCache(): void {
   submodulePathsCache.clear()
+  // Why: a pre-mutation .gitmodules read must not repopulate the cache after
+  // the mutation invalidated it.
+  submodulePathsCacheGeneration += 1
+}
+
+export function getSubmodulePathsCacheCountForTests(): number {
+  return submodulePathsCache.size
 }
 
 function gitRuntimeOptionsKey(options: GitRuntimeOptions): readonly unknown[] {
@@ -113,6 +144,44 @@ function getSubmodulePathsCacheKey(worktreePath: string, options: GitRuntimeOpti
   return [worktreePath, ...gitRuntimeOptionsKey(options)].join('\0')
 }
 
+function pruneExpiredSubmodulePathsCache(now: number): void {
+  for (const [cacheKey, entry] of submodulePathsCache) {
+    if (entry.expiresAt <= now) {
+      submodulePathsCache.delete(cacheKey)
+    }
+  }
+}
+
+function trimSubmodulePathsCache(): void {
+  while (submodulePathsCache.size > MAX_SUBMODULE_PATHS_CACHE_ENTRIES) {
+    const oldestKey = submodulePathsCache.keys().next().value
+    if (oldestKey === undefined) {
+      break
+    }
+    submodulePathsCache.delete(oldestKey)
+  }
+}
+
+function getCachedSubmodulePaths(cacheKey: string, now: number): string[] | null {
+  const cached = submodulePathsCache.get(cacheKey)
+  if (!cached) {
+    return null
+  }
+  if (cached.expiresAt <= now) {
+    submodulePathsCache.delete(cacheKey)
+    return null
+  }
+  submodulePathsCache.delete(cacheKey)
+  submodulePathsCache.set(cacheKey, cached)
+  return cached.paths
+}
+
+function rememberSubmodulePaths(cacheKey: string, paths: string[], now: number): void {
+  submodulePathsCache.delete(cacheKey)
+  submodulePathsCache.set(cacheKey, { paths, expiresAt: now + SUBMODULE_PATHS_CACHE_TTL_MS })
+  trimSubmodulePathsCache()
+}
+
 // Why: status tests reuse this reset hook, so every cross-call memoization layer
 // must reset together even though the historical name mentions upstream only.
 export function clearEffectiveUpstreamStatusCacheForTests(): void {
@@ -120,7 +189,7 @@ export function clearEffectiveUpstreamStatusCacheForTests(): void {
   effectiveUpstreamStatusInFlight.clear()
   retiredEffectiveUpstreamStatusInFlight.clear()
   effectiveUpstreamStatusWriteGeneration.clear()
-  clearGitReadInvalidationState()
+  invalidateGitReadCaches()
 }
 
 export function getEffectiveUpstreamStatusCacheCountForTests(): number {
@@ -133,6 +202,7 @@ export function getEffectiveUpstreamStatusGenerationCountForTests(): number {
 
 export type GetStatusOptions = GitRuntimeOptions & {
   includeIgnored?: boolean
+  reuseLineStats?: boolean
   /**
    * Max changed-file entries before git is stopped and the result is marked
    * `didHitLimit`. Defaults to DEFAULT_GIT_STATUS_LIMIT; 0 disables the cap.
@@ -181,6 +251,7 @@ function getStatusReadKey(worktreePath: string, options: GetStatusOptions): stri
     worktreePath,
     options.wslDistro ?? '',
     options.includeIgnored === true,
+    options.reuseLineStats === true,
     options.bypassEffectiveUpstreamNegativeCache === true,
     limit
   ].join('\0')
@@ -190,6 +261,8 @@ async function runGetStatus(
   worktreePath: string,
   options: GetStatusOptions = {}
 ): Promise<GitStatusResult> {
+  const lineStatsCacheKey = getStatusLineStatsCacheKey(worktreePath, options)
+  const lineStatsWriteToken = beginGitStatusLineStatsCacheWrite(lineStatsCacheKey)
   let effectiveUpstreamStatus: GitUpstreamStatus | undefined
   let statusSucceeded = false
   // Why: a negative/fractional/NaN limit would trigger spurious early-stop or
@@ -241,7 +314,12 @@ async function runGetStatus(
     }
     didHitLimit = stoppedEarly
     statusSucceeded = true
-  } catch {
+  } catch (error) {
+    // Why: an aborted scan must reject, not resolve — swallowing here would let
+    // a cancelled request be mistaken for a completed (empty) status result.
+    if (options.signal?.aborted) {
+      throw error
+    }
     // Not a git repo or git not available
   }
 
@@ -272,11 +350,17 @@ async function runGetStatus(
         options
       )
       try {
+        // Why: the probe promise and its name/negative caches are shared by
+        // concurrent status reads, so one caller's abort must not reject the
+        // shared probe or evict warm cache state for the others. The probe is
+        // small and its cached result stays useful, so run it unbound from
+        // this request's signal.
+        const { signal: _requestSignal, ...sharedProbeOptions } = options
         effectiveUpstreamStatus = await readOrProbeEffectiveUpstreamStatus(
           cacheKey,
           worktreePath,
           branchName,
-          options,
+          sharedProbeOptions,
           options.bypassEffectiveUpstreamNegativeCache === true
         )
       } catch {
@@ -293,7 +377,25 @@ async function runGetStatus(
   // running numstat over a huge change set would reintroduce the cost the limit
   // exists to avoid, matching how a "huge" repo disables extra git features.
   if (!didHitLimit) {
-    await attachLineStats(worktreePath, entries, options)
+    await reuseOrRecomputeGitStatusLineStats({
+      cacheKey: lineStatsCacheKey,
+      head,
+      entries,
+      writeToken: lineStatsWriteToken,
+      reuse: options.reuseLineStats === true,
+      isAborted: () => options.signal?.aborted === true,
+      recompute: () => attachLineStats(worktreePath, entries, options)
+    })
+  } else {
+    clearGitStatusLineStatsCacheKey(lineStatsCacheKey, lineStatsWriteToken)
+  }
+
+  // Why: abort after the stream (e.g. during unmerged/upstream/line-stats work)
+  // must still reject — never resolve a cancelled scan as a completed result.
+  if (options.signal?.aborted) {
+    const error = new Error('The operation was aborted.')
+    error.name = 'AbortError'
+    throw error
   }
 
   return {
@@ -318,6 +420,12 @@ async function runGetStatus(
         }
       : {})
   }
+}
+
+function getStatusLineStatsCacheKey(worktreePath: string, options: GitRuntimeOptions = {}): string {
+  // Why: identical path strings can address different Linux filesystems in
+  // different WSL distros, so derived stats must follow Git's execution host.
+  return `${options.wslDistro ?? 'native'}\0${worktreePath}`
 }
 
 /**
@@ -443,7 +551,7 @@ async function runNumstat(
   worktreePath: string,
   cached: boolean,
   options: GitRuntimeOptions = {}
-): Promise<Map<string, GitLineStats>> {
+): Promise<Map<string, GitLineStats> | null> {
   try {
     const { stdout } = await gitExecFileAsync(
       [
@@ -458,20 +566,28 @@ async function runNumstat(
       { ...gitOptionsForWorktree(worktreePath, options), env: gitOptionalLocksDisabledEnv() }
     )
     return parseNumstat(stdout)
-  } catch {
+  } catch (error) {
+    // Why: an aborted pass must reject so a cancelled scan is never treated as
+    // a completed one; only a genuine (non-abort) numstat failure degrades to
+    // uncounted rows below.
+    if (options.signal?.aborted) {
+      throw error
+    }
     // Why: a numstat failure (e.g. transient lock) should leave rows without
-    // counts rather than break the whole status refresh.
-    return new Map()
+    // counts rather than break the whole status refresh. Null (vs an empty
+    // map) tells the caller the pass is incomplete and must not be cached.
+    return null
   }
 }
 
+/** Returns false when a numstat pass failed, so callers skip caching it. */
 async function attachLineStats(
   worktreePath: string,
   entries: GitStatusEntry[],
   options: GitRuntimeOptions = {}
-): Promise<void> {
+): Promise<boolean> {
   if (entries.length === 0) {
-    return
+    return true
   }
   const hasStaged = entries.some((entry) => entry.area === 'staged')
   const hasUnstaged = entries.some((entry) => entry.area === 'unstaged')
@@ -482,18 +598,19 @@ async function attachLineStats(
   const [stagedStats, unstagedStats, untrackedStats] = await Promise.all([
     hasStaged ? runNumstat(worktreePath, true, options) : Promise.resolve(emptyStats),
     hasUnstaged ? runNumstat(worktreePath, false, options) : Promise.resolve(emptyStats),
-    collectUntrackedAdditions(worktreePath, untrackedPaths)
+    collectUntrackedAdditions(worktreePath, untrackedPaths, options.signal)
   ])
   for (const entry of entries) {
     applyLineStats(
       entry,
       entry.area === 'staged'
-        ? stagedStats.get(entry.path)
+        ? (stagedStats ?? emptyStats).get(entry.path)
         : entry.area === 'unstaged'
-          ? unstagedStats.get(entry.path)
+          ? (unstagedStats ?? emptyStats).get(entry.path)
           : untrackedStats.get(entry.path)
     )
   }
+  return stagedStats !== null && unstagedStats !== null
 }
 
 function getShortBranchName(branch: string | undefined): string | null {
@@ -691,7 +808,12 @@ async function probeOrRevalidateEffectiveUpstreamStatus(
         cached.upstreamName
       )
       return { status, probedSameNameOriginRef: false }
-    } catch {
+    } catch (error) {
+      // Why: an aborted probe says nothing about the ref; evicting the warm
+      // name cache here would force a pointless full re-resolve next scan.
+      if (options.signal?.aborted) {
+        throw error
+      }
       // Ref deleted or repo state changed — fall through to a full re-resolve.
       resolvedUpstreamNameCache.delete(cacheKey)
     }
@@ -908,14 +1030,18 @@ export async function abortMerge(
   worktreePath: string,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  await gitExecFileAsync(['merge', '--abort'], gitOptionsForWorktree(worktreePath, options))
+  await runWithGitReadCacheInvalidation(() =>
+    gitExecFileAsync(['merge', '--abort'], gitOptionsForWorktree(worktreePath, options))
+  )
 }
 
 export async function abortRebase(
   worktreePath: string,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  await gitExecFileAsync(['rebase', '--abort'], gitOptionsForWorktree(worktreePath, options))
+  await runWithGitReadCacheInvalidation(() =>
+    gitExecFileAsync(['rebase', '--abort'], gitOptionsForWorktree(worktreePath, options))
+  )
 }
 
 export async function resolveGitDir(worktreePath: string): Promise<string> {
@@ -945,10 +1071,14 @@ export async function listSubmodulePaths(
 ): Promise<string[]> {
   const now = Date.now()
   const cacheKey = getSubmodulePathsCacheKey(worktreePath, options)
-  const cached = submodulePathsCache.get(cacheKey)
-  if (cached && cached.expiresAt > now) {
-    return cached.paths
+  const cached = getCachedSubmodulePaths(cacheKey, now)
+  if (cached) {
+    return cached
   }
+  // Why: prune on misses so removed worktrees do not accumulate while hot
+  // cache hits stay O(1).
+  pruneExpiredSubmodulePathsCache(now)
+  const cacheGeneration = submodulePathsCacheGeneration
   let paths: string[] = []
   try {
     const { stdout } = await gitExecFileAsync(
@@ -971,7 +1101,9 @@ export async function listSubmodulePaths(
     // No .gitmodules (or git config failure) — treat as a repo without submodules.
     paths = []
   }
-  submodulePathsCache.set(cacheKey, { paths, expiresAt: now + SUBMODULE_PATHS_CACHE_TTL_MS })
+  if (cacheGeneration === submodulePathsCacheGeneration) {
+    rememberSubmodulePaths(cacheKey, paths, Date.now())
+  }
   return paths
 }
 
@@ -1834,14 +1966,14 @@ export async function stageFile(
   filePath: string,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  clearGitReadInvalidationState()
+  invalidateGitReadCaches()
   try {
     await gitExecFileAsync(
       ['add', '--', literalPathspec(filePath, options)],
       gitOptionsForWorktree(worktreePath, options)
     )
   } finally {
-    clearGitReadInvalidationState()
+    invalidateGitReadCaches()
   }
 }
 
@@ -1853,13 +1985,13 @@ export async function unstageFile(
   filePath: string,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  clearGitReadInvalidationState()
+  invalidateGitReadCaches()
   try {
     await gitExecFileAsync(['restore', '--staged', '--', literalPathspec(filePath, options)], {
       ...gitOptionsForWorktree(worktreePath, options)
     })
   } finally {
-    clearGitReadInvalidationState()
+    invalidateGitReadCaches()
   }
 }
 
@@ -1916,7 +2048,7 @@ export async function commitChanges(
   message: string,
   options: GitRuntimeOptions = {}
 ): Promise<{ success: boolean; error?: string }> {
-  clearGitReadInvalidationState()
+  invalidateGitReadCaches()
   try {
     await gitExecFileAsync(['commit', '-m', message], gitOptionsForWorktree(worktreePath, options))
     return { success: true }
@@ -1939,7 +2071,7 @@ export async function commitChanges(
       (error instanceof Error ? error.message : 'Commit failed')
     return { success: false, error: errorMessage }
   } finally {
-    clearGitReadInvalidationState()
+    invalidateGitReadCaches()
   }
 }
 
@@ -1951,7 +2083,7 @@ export async function discardChanges(
   filePath: string,
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  clearGitReadInvalidationState()
+  invalidateGitReadCaches()
   const resolvedWorktree = path.resolve(worktreePath)
   const resolvedTarget = path.resolve(worktreePath, filePath)
   try {
@@ -1986,7 +2118,7 @@ export async function discardChanges(
       cleanUntrackedPaths(worktreePath, [targetPath], options)
     )
   } finally {
-    clearGitReadInvalidationState()
+    invalidateGitReadCaches()
   }
 }
 
@@ -2061,7 +2193,7 @@ export async function bulkDiscardChanges(
   filePaths: string[],
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  clearGitReadInvalidationState()
+  invalidateGitReadCaches()
   if (filePaths.length === 0) {
     return
   }
@@ -2105,7 +2237,7 @@ export async function bulkDiscardChanges(
       }
     )
   } finally {
-    clearGitReadInvalidationState()
+    invalidateGitReadCaches()
   }
 }
 
@@ -2131,7 +2263,7 @@ export async function bulkStageFiles(
   filePaths: string[],
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  clearGitReadInvalidationState()
+  invalidateGitReadCaches()
   if (filePaths.length === 0) {
     return
   }
@@ -2144,7 +2276,7 @@ export async function bulkStageFiles(
       )
     }
   } finally {
-    clearGitReadInvalidationState()
+    invalidateGitReadCaches()
   }
 }
 
@@ -2156,7 +2288,7 @@ export async function bulkUnstageFiles(
   filePaths: string[],
   options: GitRuntimeOptions = {}
 ): Promise<void> {
-  clearGitReadInvalidationState()
+  invalidateGitReadCaches()
   if (filePaths.length === 0) {
     return
   }
@@ -2176,6 +2308,6 @@ export async function bulkUnstageFiles(
       )
     }
   } finally {
-    clearGitReadInvalidationState()
+    invalidateGitReadCaches()
   }
 }

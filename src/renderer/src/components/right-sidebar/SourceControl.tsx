@@ -59,6 +59,11 @@ import {
   type RemoteOpKind
 } from './source-control-primary-action'
 import {
+  beginHugeRepoWarningProbe,
+  hasDismissedHugeRepoWarning,
+  markHugeRepoWarningDismissed
+} from '@/lib/source-control-huge-repo-warning-dismissals'
+import {
   resolveDropdownItems,
   type DropdownActionKind,
   type DropdownEntry
@@ -486,11 +491,6 @@ function rewriteCompareBaseBranchFromCandidate(
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
 const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
 
-// Why: the "too many changes — add folder to .gitignore?" warning shows at most
-// once per worktree per session (the analog of a "Don't show again" gate), so a
-// repo that stays huge across polls doesn't re-toast every refresh.
-const hugeRepoWarningDismissed = new Set<string>()
-
 // Why: directional signifiers ahead of each primary action label. Commit
 // (✓) is affirmative; Push (↑) points in the direction data flows; Sync
 // (↕) is bidirectional; Publish gets a cloud-up to distinguish the
@@ -815,6 +815,7 @@ function SourceControlInner(): React.JSX.Element {
   const commitInFlightRef = useRef<Record<string, boolean>>({})
   const activeWorktree = useActiveWorktree()
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activeWorktreeInstanceId = activeWorktree?.instanceId
   const activeGroupId = useAppStore((s) =>
     activeWorktreeId ? s.activeGroupIdByWorktree[activeWorktreeId] : undefined
   )
@@ -1321,18 +1322,23 @@ function SourceControlInner(): React.JSX.Element {
     if (!repositoryHuge || !activeWorktreeId || !worktreePath || activeConnectionId) {
       return
     }
-    if (hugeRepoWarningDismissed.has(activeWorktreeId)) {
+    const warningProbe = beginHugeRepoWarningProbe({
+      id: activeWorktreeId,
+      instanceId: activeWorktreeInstanceId
+    })
+    if (hasDismissedHugeRepoWarning(warningProbe)) {
       return
     }
-    const worktreeId = activeWorktreeId
     let cancelled = false
     void window.api.git
       .findHugeFoldersToIgnore({ worktreePath })
       .then((folders) => {
-        if (cancelled || folders.length === 0 || hugeRepoWarningDismissed.has(worktreeId)) {
+        if (cancelled || folders.length === 0 || hasDismissedHugeRepoWarning(warningProbe)) {
           return
         }
-        hugeRepoWarningDismissed.add(worktreeId)
+        if (!markHugeRepoWarningDismissed(warningProbe)) {
+          return
+        }
         const folderName = folders[0]
         toast.warning(
           translate(
@@ -1347,6 +1353,11 @@ function SourceControlInner(): React.JSX.Element {
                 'Add to .gitignore'
               ),
               onClick: () => {
+                // Why: the toast can outlive its worktree; a purged probe must
+                // not write .gitignore in a same-path replacement.
+                if (!hasDismissedHugeRepoWarning(warningProbe)) {
+                  return
+                }
                 void window.api.git
                   .appendGitignore({ worktreePath, folderName })
                   .then(() => refreshActiveGitStatus())
@@ -1360,7 +1371,14 @@ function SourceControlInner(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [repositoryHuge, activeWorktreeId, worktreePath, activeConnectionId, refreshActiveGitStatus])
+  }, [
+    repositoryHuge,
+    activeWorktreeId,
+    activeWorktreeInstanceId,
+    worktreePath,
+    activeConnectionId,
+    refreshActiveGitStatus
+  ])
 
   const refreshGitStatusAfterPullRequestGeneration = useCallback(
     async (context: PullRequestGenerationContext): Promise<void> => {
@@ -1651,6 +1669,7 @@ function SourceControlInner(): React.JSX.Element {
     !activeRepo?.connectionId && hasHostedReviewLink && hostedReviewEntry === undefined
   const hasResolvableReviewPushTargetLink = hasResolvableHostedReviewPushTargetLink({
     linkedGitHubPR,
+    fallbackGitHubPR: fallbackGitHubPRNumber,
     linkedGitLabMR
   })
   useEffect(() => {
@@ -1669,9 +1688,7 @@ function SourceControlInner(): React.JSX.Element {
     ensureHostedReviewPushTarget,
     hasResolvableReviewPushTargetLink,
     isBranchVisible,
-    isFolder,
-    linkedGitHubPR,
-    linkedGitLabMR
+    isFolder
   ])
   const canUseHostedReviewPushTarget = hasUsableHostedReviewPushTarget({
     pushTarget: activeWorktree?.pushTarget,

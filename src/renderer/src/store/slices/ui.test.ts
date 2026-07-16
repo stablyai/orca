@@ -7,6 +7,7 @@ import type {
   JiraIssue,
   LinearIssue,
   PersistedUIState,
+  Repo,
   TerminalTab,
   Worktree
 } from '../../../../shared/types'
@@ -725,6 +726,98 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(createUIStore().getState().visibleWorkspaceHostIds).toBeNull()
     expect(getDefaultUIState().workspaceHostOrder).toEqual([])
     expect(createUIStore().getState().workspaceHostOrder).toEqual([])
+    expect(getDefaultUIState().manualRepoOrder).toEqual([])
+    expect(createUIStore().getState().manualRepoOrder).toEqual([])
+  })
+
+  it('defaults the persisted active view to terminal', () => {
+    expect(getDefaultUIState().activeView).toBe('terminal')
+    expect(createUIStore().getState().activeView).toBe('terminal')
+  })
+
+  it('restores the persisted active top-level view on hydration', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'tasks' }), 'startup')
+
+    expect(store.getState().activeView).toBe('tasks')
+  })
+
+  it('falls back to terminal when persisted active view is missing (older data)', () => {
+    const store = createUIStore()
+    store.setState({ activeView: 'tasks' })
+
+    store.getState().hydratePersistedUI(
+      {
+        ...makePersistedUI(),
+        activeView: undefined as unknown as PersistedUIState['activeView']
+      },
+      'startup'
+    )
+
+    expect(store.getState().activeView).toBe('terminal')
+  })
+
+  it('falls back to terminal when the persisted active view is not a known view', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        activeView: 'not-a-real-view' as unknown as PersistedUIState['activeView']
+      }),
+      'startup'
+    )
+
+    expect(store.getState().activeView).toBe('terminal')
+  })
+
+  it('drops a persisted activity view when experimental activity is disabled', () => {
+    const store = createUIStore()
+    store.setState({
+      settings: { experimentalActivity: false } as AppState['settings']
+    })
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'activity' }), 'startup')
+
+    expect(store.getState().activeView).toBe('terminal')
+  })
+
+  it('restores a persisted activity view when experimental activity is enabled', () => {
+    const store = createUIStore()
+    store.setState({
+      settings: { experimentalActivity: true } as AppState['settings']
+    })
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'activity' }), 'startup')
+
+    expect(store.getState().activeView).toBe('activity')
+  })
+
+  it('restores a default-on view (mobile) even when its nav button is hidden', () => {
+    const store = createUIStore()
+    store.setState({
+      settings: { showMobileButton: false } as AppState['settings']
+    })
+
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'mobile' }), 'startup')
+
+    expect(store.getState().activeView).toBe('mobile')
+  })
+
+  it('does not overwrite the current view on a later cross-window sync hydration', () => {
+    const store = createUIStore()
+    store.getState().hydratePersistedUI(makePersistedUI({ activeView: 'tasks' }), 'startup')
+    expect(store.getState().activeView).toBe('tasks')
+
+    store
+      .getState()
+      .hydratePersistedUI(
+        makePersistedUI({ activeView: 'terminal', rightSidebarOpen: false }),
+        'sync'
+      )
+
+    expect(store.getState().activeView).toBe('tasks')
+    expect(store.getState().rightSidebarOpen).toBe(false)
   })
 
   it('preserves the current right sidebar width when older persisted UI omits it', () => {
@@ -881,6 +974,41 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().workspaceHostOrder).toEqual(['ssh:win%20vm', 'local'])
   })
 
+  it('hydrates and immediately applies the manual cross-host repo order', () => {
+    const store = createUIStore()
+    const local: Repo = {
+      id: 'same',
+      path: '/local',
+      displayName: 'Local',
+      badgeColor: '#000',
+      addedAt: 1,
+      executionHostId: 'local'
+    }
+    const remote: Repo = {
+      ...local,
+      path: '/remote',
+      displayName: 'Remote',
+      executionHostId: 'runtime:node-b'
+    }
+    store.setState({ repos: [local, remote] })
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        manualRepoOrder: [
+          { hostId: 'runtime:node-b', repoId: 'same' },
+          { hostId: 'invalid' as never, repoId: 'ignored' },
+          { hostId: 'local', repoId: 'same' }
+        ]
+      })
+    )
+
+    expect(store.getState().manualRepoOrder).toEqual([
+      { hostId: 'runtime:node-b', repoId: 'same' },
+      { hostId: 'local', repoId: 'same' }
+    ])
+    expect(store.getState().repos).toEqual([remote, local])
+  })
+
   it('falls back to all hosts for invalid persisted workspace host scopes', () => {
     const store = createUIStore()
 
@@ -892,6 +1020,20 @@ describe('createUISlice hydratePersistedUI', () => {
 
     expect(store.getState().workspaceHostScope).toBe('all')
     expect(store.getState().visibleWorkspaceHostIds).toBeNull()
+  })
+
+  it('tracks the per-project settings host selection without persisting it', () => {
+    const setUI = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().setSettingsProjectHostSelection('git:acme/app', 'runtime:home-mac')
+
+    expect(store.getState().settingsProjectHostSelection).toEqual({
+      'git:acme/app': 'runtime:home-mac'
+    })
+    // Ephemeral: never written through the UI persistence pipeline.
+    expect(setUI).not.toHaveBeenCalled()
   })
 
   it('persists workspace host scope changes', () => {
@@ -1258,6 +1400,56 @@ describe('createUISlice hydratePersistedUI', () => {
 
     expect(store.getState().statusBarItems).toEqual(['claude', 'resource-usage'])
     expect(setUI).not.toHaveBeenCalled()
+  })
+
+  it('persists and hydrates the usage percentage display preference', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().setUsagePercentageDisplay('used')
+
+    expect(store.getState().usagePercentageDisplay).toBe('used')
+    // Why: adapting the control also permanently dismisses the one-time change notice.
+    expect(setUI).toHaveBeenCalledWith({
+      usagePercentageDisplay: 'used',
+      usagePercentageDisplayChangeNoticeDismissed: true
+    })
+    expect(store.getState().usagePercentageDisplayChangeNoticeDismissed).toBe(true)
+
+    store.getState().hydratePersistedUI(makePersistedUI({ usagePercentageDisplay: 'remaining' }))
+    expect(store.getState().usagePercentageDisplay).toBe('remaining')
+  })
+
+  it('hydrates and dismisses the usage percentage display change notice', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ usagePercentageDisplayChangeNoticeDismissed: false }))
+    expect(store.getState().usagePercentageDisplayChangeNoticeDismissed).toBe(false)
+
+    store.getState().dismissUsagePercentageDisplayChangeNotice()
+    expect(store.getState().usagePercentageDisplayChangeNoticeDismissed).toBe(true)
+    expect(setUI).toHaveBeenCalledWith({ usagePercentageDisplayChangeNoticeDismissed: true })
+
+    setUI.mockClear()
+    store.getState().dismissUsagePercentageDisplayChangeNotice()
+    expect(setUI).not.toHaveBeenCalled()
+  })
+
+  it('defaults invalid usage percentage display values to used', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        usagePercentageDisplay: 'left' as PersistedUIState['usagePercentageDisplay']
+      })
+    )
+
+    expect(store.getState().usagePercentageDisplay).toBe('used')
   })
 
   it('clamps persisted workspace board column width', () => {

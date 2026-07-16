@@ -90,6 +90,8 @@ export type KeybindingActionId =
   | 'editor.save'
   | 'editor.markdownPreview'
   | 'editor.copyContext'
+  | 'editor.previousChange'
+  | 'editor.nextChange'
   | 'editor.addReviewNote'
   | 'fileExplorer.undo'
   | 'fileExplorer.redo'
@@ -827,6 +829,26 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     searchKeywords: ['shortcut', 'editor', 'copy', 'context'],
     defaultBindings: platformBindings(['Mod+Alt+C'])
   },
+  // Why: F7 / Shift+F7 gives VS Code / JetBrains diff-change navigation. Function
+  // keys are safe as bare / Shift bindings, so both opt into allowBareKeybindings.
+  {
+    id: 'editor.previousChange',
+    title: 'Go to Previous Change',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'editor', 'diff', 'change', 'hunk', 'previous'],
+    defaultBindings: platformBindings(['Shift+F7']),
+    allowBareKeybindings: true
+  },
+  {
+    id: 'editor.nextChange',
+    title: 'Go to Next Change',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'editor', 'diff', 'change', 'hunk', 'next'],
+    defaultBindings: platformBindings(['F7']),
+    allowBareKeybindings: true
+  },
   {
     id: 'editor.addReviewNote',
     title: 'Add Review Note',
@@ -1098,6 +1120,10 @@ function hasModifier(
   return Boolean(input.shift ?? input.shiftKey)
 }
 
+function isFunctionKeyToken(key: string): boolean {
+  return /^F([1-9]|1[0-9]|2[0-4])$/.test(key)
+}
+
 function normalizeKeyToken(token: string): string | null {
   if (token === ' ') {
     return 'Space'
@@ -1111,6 +1137,10 @@ function normalizeKeyToken(token: string): string | null {
     return upper
   }
   if (upper.length === 1 && upper >= '0' && upper <= '9') {
+    return upper
+  }
+  // Function keys F1–F24 (event.key/event.code report them verbatim, e.g. F7).
+  if (isFunctionKeyToken(upper)) {
     return upper
   }
 
@@ -1312,22 +1342,31 @@ function canonicalizeParsedKeybinding(parsed: ParsedKeybinding): string {
 }
 
 function isSafeBareKey(parsed: ParsedKeybinding): boolean {
-  if (parsed.shift || parsed.mod || parsed.meta || parsed.control || parsed.alt) {
+  if (parsed.mod || parsed.meta || parsed.control || parsed.alt) {
     return false
   }
-  return [
-    'Backspace',
-    'Delete',
-    'Enter',
-    'Escape',
-    'Tab',
-    'ArrowLeft',
-    'ArrowRight',
-    'ArrowUp',
-    'ArrowDown',
-    'PageUp',
-    'PageDown'
-  ].includes(parsed.key)
+  // Function keys produce no text, so they're safe standalone or with Shift
+  // (e.g. F7 / Shift+F7 for diff-change navigation). Shift is only permitted
+  // alongside a function key — Shift+letter stays unsafe.
+  if (parsed.shift) {
+    return isFunctionKeyToken(parsed.key)
+  }
+  return (
+    isFunctionKeyToken(parsed.key) ||
+    [
+      'Backspace',
+      'Delete',
+      'Enter',
+      'Escape',
+      'Tab',
+      'ArrowLeft',
+      'ArrowRight',
+      'ArrowUp',
+      'ArrowDown',
+      'PageUp',
+      'PageDown'
+    ].includes(parsed.key)
+  )
 }
 
 function normalizeKeybindingWithOptions(

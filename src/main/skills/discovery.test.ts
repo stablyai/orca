@@ -57,6 +57,67 @@ describe('skill discovery', () => {
     expect(rootPaths).toContain('/workspace/current/.claude/skills')
   })
 
+  it('scans each provider home skill root that npx skills --global writes to', () => {
+    const roots = buildSkillDiscoverySources({
+      homeDir: '/home/test',
+      cwd: '/workspace/current'
+    })
+
+    const rootPaths = roots.map((root) => root.path.replace(/\\/g, '/'))
+    expect(rootPaths).toEqual(
+      expect.arrayContaining([
+        '/home/test/.grok/skills',
+        '/home/test/.config/opencode/skills',
+        '/home/test/.pi/agent/skills',
+        '/home/test/.gemini/skills',
+        '/home/test/.gemini/antigravity/skills',
+        '/home/test/.cursor/skills'
+      ])
+    )
+    // Why: these live outside ~/.agents/skills, so they must carry the shared
+    // agent-skills provider to feed per-agent orchestration coverage.
+    for (const root of roots) {
+      if (root.path.replace(/\\/g, '/') === '/home/test/.grok/skills') {
+        expect(root.providers).toEqual(['agent-skills'])
+      }
+    }
+  })
+
+  it('does not add runtime-owned repository paths to local scan roots', () => {
+    const runtimeRepo = makeRepo('/runtime/repo')
+    runtimeRepo.executionHostId = 'runtime:environment-1'
+
+    const roots = buildSkillDiscoverySources({
+      homeDir: '/home/test',
+      cwd: '/workspace/current',
+      repos: [runtimeRepo]
+    })
+
+    expect(roots.map((root) => root.path.replace(/\\/g, '/'))).not.toContain(
+      '/runtime/repo/.agents/skills'
+    )
+  })
+
+  it('can exclude the implicit cwd without excluding explicit local repositories', () => {
+    const defaultRoots = buildSkillDiscoverySources({
+      homeDir: '/home/test',
+      cwd: '/workspace/current',
+      repos: [makeRepo('/workspace/known')]
+    })
+    const explicitRoots = buildSkillDiscoverySources({
+      homeDir: '/home/test',
+      cwd: '/workspace/current',
+      repos: [makeRepo('/workspace/known')],
+      includeCwd: false
+    })
+
+    const normalizedDefaultPaths = defaultRoots.map((root) => root.path.replace(/\\/g, '/'))
+    const normalizedExplicitPaths = explicitRoots.map((root) => root.path.replace(/\\/g, '/'))
+    expect(normalizedDefaultPaths).toContain('/workspace/current/.agents/skills')
+    expect(normalizedExplicitPaths).not.toContain('/workspace/current/.agents/skills')
+    expect(normalizedExplicitPaths).toContain('/workspace/known/.agents/skills')
+  })
+
   it('discovers skill packages through symlinked skill directories', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
     const home = join(root, 'home')
@@ -75,6 +136,27 @@ describe('skill discovery', () => {
     const skill = result.skills.find((entry) => entry.name === 'Orca CLI')
     expect(skill?.sourceKind).toBe('home')
     expect(skill?.directoryPath).toBe(linkedSkill)
+  })
+
+  it('discovers a symlinked skill inside a provider home root (#8256/#8503)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const realSkill = join(root, 'central-skills', 'orchestration')
+    const linkedSkill = join(home, '.pi', 'agent', 'skills', 'orchestration')
+    await mkdir(realSkill, { recursive: true })
+    await mkdir(join(home, '.pi', 'agent', 'skills'), { recursive: true })
+    await writeFile(join(realSkill, 'SKILL.md'), '# orchestration\n\nCoordinate agents.')
+    await symlink(realSkill, linkedSkill, process.platform === 'win32' ? 'junction' : 'dir')
+
+    const result = await discoverSkills({
+      homeDir: home,
+      cwd: join(root, 'missing-cwd')
+    })
+
+    const skill = result.skills.find((entry) => entry.name === 'orchestration')
+    expect(skill?.sourceKind).toBe('home')
+    expect(skill?.directoryPath).toBe(linkedSkill)
+    expect(skill?.providers).toEqual(['agent-skills'])
   })
 
   it('discovers worktree .agents skill symlinks from the requested cwd', async () => {

@@ -1,7 +1,6 @@
 import { useRef, useCallback, forwardRef, useImperativeHandle, useEffect, useMemo } from 'react'
 import { Platform, View } from 'react-native'
-import { WebView } from 'react-native-webview'
-import type { WebViewMessageEvent } from 'react-native-webview'
+import { WebView, type WebViewMessageEvent } from 'react-native-webview'
 import type { TerminalOscLinkRange } from './terminal-osc-link-ranges'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
 import {
@@ -13,6 +12,7 @@ import { useTerminalWebReadyWatchdog } from './terminal-webview-ready-watchdog'
 import { XTERM_WEBVIEW_SOURCE } from './terminal-webview-html'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
 import { createTerminalWebViewPendingMessages } from './terminal-webview-pending-messages'
+import { routeTerminalQueryReply } from './terminal-webview-query-reply-routing'
 
 type Props = TerminalWebViewProps
 
@@ -32,6 +32,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     onKeyboardAvoidanceMetrics,
     onHaptic,
     onTerminalInput,
+    onTerminalQueryReply,
     onTerminalTap,
     onFileTap,
     onOpenUrl,
@@ -115,6 +116,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       } catch {
         return
       }
+      routeTerminalQueryReply(msg, onTerminalQueryReply)
 
       if (msg.type === 'web-ready') {
         confirmWebReady(true)
@@ -228,6 +230,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       onKeyboardAvoidanceMetrics,
       onHaptic,
       onTerminalInput,
+      onTerminalQueryReply,
       onTerminalTap,
       onFileTap,
       onOpenUrl,

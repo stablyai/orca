@@ -142,7 +142,7 @@ describe('settings navigation metadata', () => {
     expect(repoSection?.searchEntries.some((entry) => entry.title === 'Project Runtime')).toBe(true)
   })
 
-  it('keeps Windows client-only terminal settings out of Windows-host metadata', () => {
+  it('surfaces Windows-host and universal terminal settings in Windows-host metadata', () => {
     const sections = buildSettingsNavigationMetadata({
       isMac: false,
       isWindows: false,
@@ -155,8 +155,10 @@ describe('settings navigation metadata', () => {
 
     expect(terminal?.searchEntries.some((entry) => entry.title === 'Default Shell')).toBe(true)
     expect(terminal?.searchEntries.some((entry) => entry.title === 'PowerShell Version')).toBe(true)
+    // Right-click to paste is now exposed on every platform (#8322), so it is
+    // indexed even when only the terminal host — not the client — is Windows.
     expect(terminal?.searchEntries.some((entry) => entry.title === 'Right-click to paste')).toBe(
-      false
+      true
     )
   })
 
@@ -177,6 +179,42 @@ describe('settings navigation metadata', () => {
     expect(ids()).not.toContain('dev')
     expect(ids({ isDev: true })).toContain('dev')
     expect(ids({ isDev: true, isWebClient: true })).not.toContain('dev')
+  })
+
+  it('renders one repo nav section per project even across execution hosts', () => {
+    const gitRemote = {
+      canonicalKey: 'gitlab.com/acme/app',
+      remoteName: 'origin',
+      remoteUrl: 'git@gitlab.com:acme/app.git'
+    }
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [
+        {
+          id: 'local-1',
+          path: '/a',
+          displayName: 'App',
+          badgeColor: '#000',
+          addedAt: 0,
+          gitRemoteIdentity: gitRemote
+        },
+        {
+          id: 'remote-9',
+          path: '/b',
+          displayName: 'App',
+          badgeColor: '#000',
+          addedAt: 0,
+          gitRemoteIdentity: gitRemote,
+          executionHostId: 'runtime:home-mac'
+        }
+      ]
+    })
+
+    const repoSections = sections.filter((section) => section.id.startsWith('repo-'))
+    expect(repoSections).toHaveLength(1)
+    expect(repoSections[0].id).toBe('repo-local-1')
   })
 
   it('keeps macOS permissions mac-only', () => {

@@ -1,8 +1,10 @@
 import { z } from 'zod'
 import type { NativeChatBlock, NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { AgentType } from '../../../../shared/native-chat-types'
-import { readNativeChatTranscriptCached } from '../../../native-chat/transcript-read-cache'
-import { subscribeNativeChatTranscript } from '../../../native-chat/transcript-watch'
+import {
+  readNativeChatTranscriptTail,
+  subscribeNativeChatTranscript
+} from '../../../native-chat/transcript-watch'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod, type RpcContext } from '../core'
 
 // Why: native chat renders an agent's own transcript (Claude/Codex JSONL). The
@@ -39,7 +41,8 @@ const NativeChatSession = z.object({
   // Authoritative transcript path from the agent hook (providerSession), used to
   // locate the file directly when the session id no longer names it (recent
   // Claude Code). Optional for back-compat with older clients.
-  transcriptPath: z.string().min(1).optional()
+  transcriptPath: z.string().min(1).optional(),
+  beforeOffset: z.number().int().nonnegative().optional()
 })
 
 const NativeChatUnsubscribe = z.object({
@@ -59,6 +62,8 @@ const MOBILE_NATIVE_CHAT_MAX_WINDOW = 2000
 // The mobile view only previews block bodies, so truncate them on the wire to
 // keep the payload small; the marker tells the user content was clipped.
 const MOBILE_BLOCK_CHAR_CAP = 4000
+const MOBILE_TOOL_INPUT_ITEMS_CAP = 20
+const MOBILE_TOOL_INPUT_NODE_CAP = 100
 const TRUNCATION_MARKER = '\n… (truncated)'
 
 function clip(text: string): string {
@@ -76,11 +81,75 @@ function clipBlock(block: NativeChatBlock): NativeChatBlock {
       ? { ...block, output: clip(block.output) }
       : block
   }
+  if (block.type === 'tool-call') {
+    const budget = { remaining: MOBILE_BLOCK_CHAR_CAP, nodes: MOBILE_TOOL_INPUT_NODE_CAP }
+    return { ...block, input: sanitizeToolInput(block.input, budget, 0) }
+  }
   return block
+}
+
+function sanitizeToolInput(
+  value: unknown,
+  budget: { remaining: number; nodes: number },
+  depth: number
+): unknown {
+  budget.nodes--
+  if (budget.nodes < 0 || budget.remaining <= 0) {
+    return '… (truncated)'
+  }
+  if (typeof value === 'string') {
+    const length = Math.min(value.length, budget.remaining)
+    budget.remaining -= length
+    return length < value.length ? `${value.slice(0, length)}… (truncated)` : value
+  }
+  if (!value || typeof value !== 'object' || depth >= 5) {
+    return value && typeof value === 'object' ? '… (truncated)' : value
+  }
+  if (Array.isArray(value)) {
+    const result = value
+      .slice(0, MOBILE_TOOL_INPUT_ITEMS_CAP)
+      .map((item) => sanitizeToolInput(item, budget, depth + 1))
+    if (value.length > MOBILE_TOOL_INPUT_ITEMS_CAP) {
+      result.push('… (truncated)')
+    }
+    return result
+  }
+  const result: Record<string, unknown> = {}
+  let count = 0
+  for (const key in value) {
+    if (!Object.prototype.hasOwnProperty.call(value, key)) {
+      continue
+    }
+    if (count >= MOBILE_TOOL_INPUT_ITEMS_CAP || budget.remaining <= 0) {
+      result['…'] = 'truncated'
+      break
+    }
+    let boundedKey = key.slice(0, Math.min(key.length, budget.remaining, 128))
+    // Why: sibling keys sharing a >=128-char (or budget-truncated) prefix collapse
+    // to the same bounded key; suffix collisions so neither field is silently lost.
+    if (Object.prototype.hasOwnProperty.call(result, boundedKey)) {
+      boundedKey = `${boundedKey}~${count}`
+    }
+    budget.remaining -= boundedKey.length
+    result[boundedKey] = sanitizeToolInput(
+      (value as Record<string, unknown>)[key],
+      budget,
+      depth + 1
+    )
+    count++
+  }
+  return result
 }
 
 function sanitizeMessage(message: NativeChatMessage): NativeChatMessage {
   return { ...message, blocks: message.blocks.map(clipBlock) }
+}
+
+function sanitizeAppendForClient(
+  messages: readonly NativeChatMessage[],
+  clientKind: RpcContext['clientKind']
+): NativeChatMessage[] {
+  return clientKind === 'mobile' ? messages.map(sanitizeMessage) : messages.slice()
 }
 
 /** Window a transcript to its most recent `limit` messages so a long session
@@ -113,14 +182,20 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
     name: 'nativeChat.readSession',
     params: NativeChatSession,
     handler: async (params, { clientKind }) => {
-      const result = await readNativeChatTranscriptCached(
-        params.agent,
-        params.sessionId,
-        params.transcriptPath
-      )
-      // Window to the conversation tail (all clients); clip blocks for mobile only.
+      const limit = params.limit ?? MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
+      const result = await readNativeChatTranscriptTail({
+        agent: params.agent,
+        sessionId: params.sessionId,
+        transcriptPath: params.transcriptPath,
+        limit,
+        beforeOffset: params.beforeOffset
+      })
       return 'messages' in result
-        ? { messages: windowForClient(result.messages, clientKind, params.limit) }
+        ? {
+            messages: windowForClient(result.messages, clientKind, limit),
+            hasMore: result.hasMore,
+            beforeOffset: result.beforeOffset
+          }
         : result
     }
   }),
@@ -130,10 +205,8 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
     handler: async (params, { runtime, connectionId, clientKind }, emit) => {
       let closed = false
       let unsubscribe = (): void => {}
-      // Why: the subscriber seeds its read offset at 0, so the first drain emits
-      // the whole transcript and later drains emit only appended turns. The first
-      // batch is windowed to the tail (a full transcript would freeze mobile);
-      // later incremental batches are smaller than the window so they pass through.
+      // Why: the first drain is a bounded tail snapshot; later drains emit only
+      // appended turns. This avoids parsing or shipping full long transcripts.
       // Clients merge by message id, so the initial windowed batch doubles as the
       // snapshot. Keyed by the client-supplied subscriptionId when present so
       // registration and unsubscribe derive from the same token; otherwise by
@@ -141,6 +214,7 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
       // unsubscribe (no wire break).
       const cleanupToken = params.subscriptionId ?? `${params.agent}:${params.sessionId}`
       const subscriptionId = `nativeChat:${connectionId ?? 'local'}:${cleanupToken}`
+      const limit = params.limit ?? MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
       runtime.registerSubscriptionCleanup(
         subscriptionId,
         () => {
@@ -157,17 +231,46 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
         agent: params.agent,
         sessionId: params.sessionId,
         transcriptPath: params.transcriptPath,
+        initialLimit: limit,
+        onInitialSnapshot: (messages, hasMore, beforeOffset, error) => {
+          if (closed) {
+            return
+          }
+          // Forward an initial-drain error so a watching client's first frame carries it
+          // instead of stranding the view at 'loading' when the read keeps throwing.
+          emit({
+            type: 'snapshot',
+            messages: windowForClient(messages, clientKind, limit),
+            hasMore,
+            beforeOffset,
+            ...(error ? { error } : {})
+          })
+        },
+        onReplace: (messages, hasMore, beforeOffset) => {
+          if (closed) {
+            return
+          }
+          emit({
+            type: 'replacement',
+            messages: windowForClient(messages, clientKind, limit),
+            hasMore,
+            beforeOffset
+          })
+        },
         onAppend: (messages) => {
           if (closed) {
             return
           }
-          emit({ type: 'appended', messages: windowForClient(messages, clientKind) })
+          emit({ type: 'appended', messages: sanitizeAppendForClient(messages, clientKind) })
         }
       })
       // The connection may have closed while the file was being resolved.
       if (closed) {
         subscription.unsubscribe()
         return
+      }
+      if (!subscription.watching) {
+        emit({ type: 'snapshot', messages: [], hasMore: false, error: 'Transcript unavailable' })
       }
       unsubscribe = subscription.unsubscribe
     }

@@ -64,7 +64,7 @@ function createMockStore() {
     reassignSshTargetId: vi.fn((oldTargetId: string, newTargetId: string) => {
       reassignments.push({ oldTargetId, newTargetId })
       // Pretend one repo referenced the old id.
-      return 1
+      return ['repo-1']
     })
   }
 }
@@ -257,6 +257,34 @@ describe('SshConnectionStore', () => {
           username: 'newuser',
           jumpHost: 'bastion'
         })
+      )
+    })
+
+    it('refreshes gssapiAuthentication on sync', () => {
+      mockStore.addSshTarget({
+        id: 'ssh-1',
+        label: 'krb-box',
+        configHost: 'krb-box',
+        host: 'krb.example.com',
+        port: 22,
+        username: 'dev',
+        source: 'ssh-config'
+      })
+      loadUserSshConfigMock.mockReturnValue([{ host: 'krb-box' }])
+      sshConfigHostsToTargetsMock.mockReturnValue([
+        candidate({
+          configHost: 'krb-box',
+          host: 'krb.example.com',
+          username: 'dev',
+          gssapiAuthentication: true
+        })
+      ])
+
+      sshStore.importFromSshConfig()
+
+      expect(mockStore.updateSshTarget).toHaveBeenCalledWith(
+        'ssh-1',
+        expect.objectContaining({ gssapiAuthentication: true })
       )
     })
 
@@ -458,6 +486,39 @@ describe('SshConnectionStore', () => {
       )
       expect(result).toHaveLength(1)
     })
+
+    it('reports every exact repo migration from a multi-host re-import', () => {
+      mockStore.addRemovedSshTargetTombstone({
+        oldTargetId: 'ssh-old-a',
+        configHost: 'host-a',
+        host: 'host-a.example.com',
+        port: 22,
+        username: '',
+        label: 'host-a',
+        removedAt: 1
+      })
+      mockStore.addRemovedSshTargetTombstone({
+        oldTargetId: 'ssh-old-b',
+        configHost: 'host-b',
+        host: 'host-b.example.com',
+        port: 22,
+        username: '',
+        label: 'host-b',
+        removedAt: 1
+      })
+      loadUserSshConfigMock.mockReturnValue([{ host: 'host-a' }, { host: 'host-b' }])
+      sshConfigHostsToTargetsMock.mockReturnValue([
+        candidate({ configHost: 'host-a' }),
+        candidate({ configHost: 'host-b' })
+      ])
+
+      sshStore.importFromSshConfig({ reAdopt: true })
+
+      expect(sshStore.lastRepoReadoptions).toEqual([
+        { oldTargetId: 'ssh-old-a', newTargetId: 'tmp-host-a', repoIds: ['repo-1'] },
+        { oldTargetId: 'ssh-old-b', newTargetId: 'tmp-host-b', repoIds: ['repo-1'] }
+      ])
+    })
   })
 
   describe('re-adoption of orphaned workspaces', () => {
@@ -520,8 +581,9 @@ describe('SshConnectionStore', () => {
       const [oldId, newId] = mockStore.reassignSshTargetId.mock.calls[0]
       expect(oldId).toBe('ssh-old')
       expect(newId).toMatch(/^ssh-/)
-      // Re-adoption count surfaces so the IPC layer can refresh the repo list.
-      expect(sshStore.lastReadoptedRepoCount).toBe(1)
+      expect(sshStore.lastRepoReadoptions).toEqual([
+        { oldTargetId: 'ssh-old', newTargetId: newId, repoIds: ['repo-1'] }
+      ])
     })
 
     // Why: drive the real remove→re-add path so the tombstone carries the
@@ -549,7 +611,9 @@ describe('SshConnectionStore', () => {
       })
 
       expect(mockStore.reassignSshTargetId).toHaveBeenCalledWith(added.id, readded.id)
-      expect(sshStore.lastReadoptedRepoCount).toBe(1)
+      expect(sshStore.lastRepoReadoptions).toEqual([
+        { oldTargetId: added.id, newTargetId: readded.id, repoIds: ['repo-1'] }
+      ])
     })
 
     // A different account on the SAME host must NOT re-adopt, even though both
@@ -592,7 +656,7 @@ describe('SshConnectionStore', () => {
       })
 
       expect(mockStore.reassignSshTargetId).not.toHaveBeenCalled()
-      expect(sshStore.lastReadoptedRepoCount).toBe(0)
+      expect(sshStore.lastRepoReadoptions).toEqual([])
     })
   })
 })

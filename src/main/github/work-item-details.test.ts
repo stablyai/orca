@@ -498,4 +498,74 @@ describe('getWorkItemDetails', () => {
       true
     )
   })
+
+  // Why: a rate-limited/auth-failed file fetch must not render as an empty PR;
+  // the Files tab keys its retry state off details.filesUnavailable.
+  it('flags filesUnavailable when the PR file fetch fails but leaves the PR empty otherwise intact', async () => {
+    getWorkItemMock.mockResolvedValueOnce({
+      id: 'pr:8305',
+      type: 'pr',
+      number: 8305,
+      title: 'Files fetch fails',
+      state: 'open',
+      url: 'https://github.com/acme/widgets/pull/8305',
+      labels: [],
+      updatedAt: '2026-07-11T00:00:00Z',
+      author: 'pr-author'
+    })
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    getPRCommentsMock.mockResolvedValue([])
+    getPRChecksMock.mockResolvedValue([])
+    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      const target = args.at(-1)
+      if (target === 'repos/acme/widgets/pulls/8305') {
+        return {
+          stdout: JSON.stringify({ head: { sha: 'head-sha' }, base: { sha: 'base-sha' } })
+        }
+      }
+      if (target === 'repos/acme/widgets/pulls/8305/files?per_page=100') {
+        throw new Error('gh: API rate limit exceeded (403)')
+      }
+      return { stdout: JSON.stringify({ data: {} }) }
+    })
+
+    const details = await getWorkItemDetails('/repo-root', 8305, 'pr')
+
+    expect(details?.filesUnavailable).toBe(true)
+    expect(details?.files).toBeUndefined()
+  })
+
+  it('treats an empty file list as a genuinely empty PR, not an unavailable one', async () => {
+    getWorkItemMock.mockResolvedValueOnce({
+      id: 'pr:8306',
+      type: 'pr',
+      number: 8306,
+      title: 'Empty PR',
+      state: 'open',
+      url: 'https://github.com/acme/widgets/pull/8306',
+      labels: [],
+      updatedAt: '2026-07-11T00:00:00Z',
+      author: 'pr-author'
+    })
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    getPRCommentsMock.mockResolvedValue([])
+    getPRChecksMock.mockResolvedValue([])
+    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      const target = args.at(-1)
+      if (target === 'repos/acme/widgets/pulls/8306') {
+        return {
+          stdout: JSON.stringify({ head: { sha: 'head-sha' }, base: { sha: 'base-sha' } })
+        }
+      }
+      if (target === 'repos/acme/widgets/pulls/8306/files?per_page=100') {
+        return { stdout: '[]' }
+      }
+      return { stdout: JSON.stringify({ data: {} }) }
+    })
+
+    const details = await getWorkItemDetails('/repo-root', 8306, 'pr')
+
+    expect(details?.filesUnavailable).toBe(false)
+    expect(details?.files).toEqual([])
+  })
 })

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Editor } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
-import { Markdown } from '@tiptap/markdown'
+import { createIsolatedMarkdownExtensionForTests } from './isolated-markdown-extension-for-tests'
 import { createRichMarkdownKeyHandler, type KeyHandlerContext } from './rich-markdown-key-handler'
 
 // Why: keybinding matching resolves the platform from navigator.userAgent,
@@ -10,7 +10,7 @@ vi.mock('@/lib/shortcut-platform', () => ({
   getShortcutPlatform: () => 'darwin' as NodeJS.Platform
 }))
 
-const extensions = [StarterKit, Markdown.configure({ markedOptions: { gfm: true } })]
+const extensions = [StarterKit, createIsolatedMarkdownExtensionForTests()]
 
 function createEditor(content: object): Editor {
   return new Editor({
@@ -59,6 +59,9 @@ function createContext(editor: Editor, typedMarker: boolean): KeyHandlerContext 
     editorRef: { current: editor },
     rootRef: { current: null },
     lastCommittedMarkdownRef: { current: '' },
+    originalSourceRef: { current: '' },
+    baseCanonicalRef: { current: '' },
+    reconcileRoundTripRef: { current: () => null },
     onContentChangeRef: { current: vi.fn() },
     onSaveRef: { current: vi.fn() },
     isEditingLinkRef: { current: false },
@@ -73,6 +76,18 @@ function createContext(editor: Editor, typedMarker: boolean): KeyHandlerContext 
     typedEmptyOrderedListMarkerRef: { current: typedMarker },
     flushPendingSerialization: vi.fn(),
     openSearchRef: { current: vi.fn() },
+    linkBubbleOwnerId: 'test-owner',
+    htmlSuperscriptLinkContext: {
+      getSnapshot: () => ({
+        sourceFilePath: '/repo/README.md',
+        worktreeId: 'worktree-1',
+        worktreeRoot: '/repo',
+        sourceOwner: { kind: 'local' as const },
+        version: 0
+      }),
+      subscribe: () => () => {},
+      update: () => {}
+    },
     openAnnotationPopoverRef: { current: vi.fn() },
     setIsEditingLink: vi.fn(),
     setLinkBubble: vi.fn(),

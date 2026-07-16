@@ -6,8 +6,10 @@ import { TERMINAL_TEXT_SCALES } from '../storage/preferences'
 import { TERMINAL_PATH_TAP_JS } from './terminal-path-tap-injected'
 import { XTERM_ENGINE_CSS, XTERM_ENGINE_JS } from './terminal-webview-engine.generated'
 import { TERMINAL_REFLOW_JS } from './terminal-webview-reflow-injected'
+import { TERMINAL_SURFACE_SWAP_JS } from './terminal-webview-surface-swap-injected'
 import { TERMINAL_TAP_DISPATCH_JS } from './terminal-webview-tap-dispatch-injected'
 import { TERMINAL_WEBVIEW_THEME_JS } from './terminal-webview-theme-injected'
+import { TERMINAL_QUERY_REPLY_JS } from './terminal-webview-query-reply-injected'
 import { URL_TAP_WEBVIEW_JS } from './terminal-webview-url-tap'
 import { TERMINAL_WEBGL_RECOVERY_JS } from './terminal-webview-webgl-recovery-injected'
 
@@ -215,7 +217,8 @@ window.onerror = function(msg) {
   var CLAUDE_STATUS_DOT_PATTERN = new RegExp(CLAUDE_STATUS_DOT + '[' + TEXT_PRESENTATION_SELECTOR + EMOJI_PRESENTATION_SELECTOR + ']*', 'g');
   var statusDotPendingSelector = false;
   var PRIVATE_MODE_SCAN_TAIL_LIMIT = 4096;
-  var term = null;
+  var term = null; ${TERMINAL_QUERY_REPLY_JS}
+  ${TERMINAL_SURFACE_SWAP_JS}
   var scrollIndicator = document.getElementById('scroll-indicator');
   var scrollThumb = document.getElementById('scroll-thumb');
   var scrollIndicatorHideTimer = null;
@@ -599,6 +602,10 @@ ${TERMINAL_WEBVIEW_THEME_JS}
     writeQueue.push(normalizeStatusDotPresentation(data));
   }
 
+  function enqueueWriteBoundary(callback) {
+    writeQueue.push(callback);
+  }
+
   function nextQueuedWrite() {
     if (writeQueueHead >= writeQueue.length) {
       resetWriteQueue();
@@ -644,6 +651,7 @@ ${TERMINAL_WEBVIEW_THEME_JS}
     if (!ready || !term || writesDraining || gen !== terminalGeneration) return;
     var next = nextQueuedWrite();
     if (typeof next !== 'string') {
+      if (typeof next === 'function') return next(), pumpWrites(gen);
       var callbacks = afterDrainCallbacks;
       afterDrainCallbacks = [];
       for (var i = 0; i < callbacks.length; i++) callbacks[i]();
@@ -675,6 +683,9 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     var scrollAnchorRows = prevB ? Math.max(0, (prevB.baseY || 0) - (prevB.viewportY || 0)) : -1;
     terminalGeneration++;
     var gen = terminalGeneration;
+    // Why: snapshot replay can contain old queries whose replies must never
+    // re-enter the live PTY. Each replacement terminal earns authority anew.
+    resetTerminalDataReplyAuthority();
     cancelWebglContextRecovery();
     webglAddon = null;
     ready = false;
@@ -704,22 +715,8 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     initialOscLinks = Array.isArray(nextOscLinks) ? nextOscLinks : [];
     initialOscLinkRowOffset = 0;
     initialOscLinkEvictionReady = false;
-    var oldTerm = term;
-    var oldSurface = surface;
-    var nextSurface = null;
-    disposeTermObservers();
-    if (oldTerm) {
-      nextSurface = document.createElement('div');
-      nextSurface.id = 'terminal-surface';
-      nextSurface.style.visibility = 'hidden';
-      nextSurface.style.position = 'absolute';
-      nextSurface.style.left = '0';
-      nextSurface.style.top = '0';
-      document.getElementById('terminal-container').appendChild(nextSurface);
-      surface = nextSurface;
-      attachSurfaceEventHandlers(surface);
-      oldSurface.removeAttribute('id');
-    }
+    var surfaceSwap = beginTerminalSurfaceSwap();
+    var nextSurface = surfaceSwap.nextSurface;
 
     applyTerminalTheme(nextTheme);
     term = new Terminal({
@@ -731,13 +728,17 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
       fontWeight: '300',
       fontWeightBold: '500',
       scrollback: 5000,
-      disableStdin: true,
+      // Why: xterm suppresses parser-generated query replies when disableStdin
+      // is true. Native accepts only validated reply grammars from onData.
+      disableStdin: false,
       cursorBlink: false,
       cursorStyle: 'bar',
       cursorInactiveStyle: 'none',
       convertEol: false,
       allowProposedApi: true
     });
+    var nextTerm = term;
+    pendingTerm = nextTerm;
     term.open(surface);
     attachWebglAddon(true);
     if (window.Unicode11Addon && window.Unicode11Addon.Unicode11Addon) try { term.loadAddon(new window.Unicode11Addon.Unicode11Addon()); term.unicode.activeVersion = '11'; } catch (e) {}
@@ -749,6 +750,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
     resetEvictionCounter();
     cancelSelect();
     attachTermObservers();
+    attachTerminalQueryReplyBridge(term, gen);
 
     requestAnimationFrame(function() {
       if (gen !== terminalGeneration) return;
@@ -756,14 +758,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
       everReady = true;
       afterWritesDrained(function() {
         if (gen !== terminalGeneration) return;
-        if (nextSurface && oldSurface) {
-          nextSurface.style.visibility = 'visible';
-          nextSurface.style.position = '';
-          nextSurface.style.left = '';
-          nextSurface.style.top = '';
-          oldSurface.remove();
-          if (oldTerm) oldTerm.dispose();
-        }
+        commitTerminalSurfaceSwap(surfaceSwap, nextTerm);
         // Why: restore the reader's place after the rewrapped buffer replays.
         // Replay lands at bottom, so only act when they were scrolled up (rows>0).
         if (scrollAnchorRows > 0 && term && term.buffer && term.buffer.active) {
@@ -943,7 +938,7 @@ ${TERMINAL_WEBGL_RECOVERY_JS}
       write(msg.data);
     } else if (msg.type === 'clear') {
       terminalGeneration++;
-      resetWriteQueue();
+      resetWriteQueue(); resumeTerminalDataReplyAuthority(); // Why: clear drops the replay boundary.
       statusDotPendingSelector = false;
       afterDrainCallbacks = [];
       writesDraining = false;

@@ -313,10 +313,10 @@ export function EditorContent({
     // Why: Without a key, React reuses the same MonacoEditor instance when
     // switching tabs or split panes, just updating props. That means
     // useLayoutEffect cleanup (which snapshots scroll position) never fires.
-    // Keying on the visible pane identity forces unmount/remount so each split
-    // tab keeps its own viewport state even when the underlying file is shared.
+    // Keying on the visible pane and path forces remount before a retained target
+    // model mounts, so the old path cannot receive the new file's reconciliation.
     <MonacoEditor
-      key={viewStateScopeId}
+      key={`${viewStateScopeId}\u0000${activeFile.filePath}`}
       fileId={activeFile.id}
       filePath={activeFile.filePath}
       viewStateKey={editorViewStateKey}
@@ -327,6 +327,7 @@ export function EditorContent({
       // the change/save callbacks so no draft, dirty state, or write can occur —
       // mirrors the conflict-review read-only rendering pattern.
       readOnly={activeFile.readOnly === true}
+      liveTail={activeFile.liveTail === true}
       onContentChange={activeFile.readOnly === true ? noopEditorContentChange : handleContentChange}
       onSave={activeFile.readOnly === true ? noopEditorSave : isMarkdown ? md.mdSave : handleSave}
       worktreeId={activeFile.worktreeId}

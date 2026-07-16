@@ -5,6 +5,7 @@ import {
   extractAllOscTitles,
   extractLastOscTitle,
   getAgentLabel,
+  isCursorAgentTitle,
   MAX_OSC_TITLE_CHARS,
   normalizeTerminalTitle
 } from './agent-detection'
@@ -14,6 +15,7 @@ import {
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
 } from './agent-title-owner'
+import { SYNTHETIC_AGENT_TITLE_PROFILES } from './synthetic-agent-title'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -176,4 +178,51 @@ describe('Pi-compatible title detection', () => {
       expect(detectAgentStatusFromTitle(title)).toBeNull()
     }
   )
+})
+
+describe('Cursor agent title identity', () => {
+  // Why: the accepted vocabulary is the set of labels Orca actually synthesizes for Cursor.
+  // Pin it to that profile so renaming a label there cannot silently drop @cursor to zero
+  // recipients (and desync the auto-Enter suppression that shares this predicate).
+  it('accepts every label Orca synthesizes for Cursor', () => {
+    const profile = SYNTHETIC_AGENT_TITLE_PROFILES.cursor
+
+    for (const label of [
+      profile.workingLabel,
+      `⠋ ${profile.workingLabel}`,
+      profile.idleLabel,
+      profile.permissionLabel
+    ]) {
+      expect(isCursorAgentTitle(label)).toBe(true)
+    }
+  })
+
+  it.each([
+    'Cursor Agent',
+    '  cursor agent  ',
+    '⠋ Cursor Agent',
+    '⣿ Cursor Agent',
+    'Cursor ready',
+    'Cursor - action required'
+  ])('accepts the native or Orca-synthesized Cursor title %j', (title) => {
+    expect(isCursorAgentTitle(title)).toBe(true)
+  })
+
+  // Why: "cursor" is ordinary editor vocabulary in another agent's task-summary title,
+  // so a whole-token name match is not Cursor identity.
+  it.each([
+    '⠋ fix the text cursor blink',
+    '✳ Fix the text cursor blink',
+    '. fix cursor position',
+    '* cursor rendering done',
+    'Terminal Cursor and Orca slows down',
+    'cursor-agent',
+    'cursor.exe',
+    '~/cursor-rules',
+    '',
+    null,
+    undefined
+  ])('rejects the non-Cursor title %j', (title) => {
+    expect(isCursorAgentTitle(title)).toBe(false)
+  })
 })

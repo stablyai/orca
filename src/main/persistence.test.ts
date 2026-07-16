@@ -21,6 +21,7 @@ import type {
   ProjectGroup,
   ProjectHostSetup,
   Repo,
+  GlobalSettings,
   TerminalPaneLayoutNode,
   TerminalTab,
   WorktreeLineage,
@@ -41,6 +42,7 @@ import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../shared/execut
 import { SshConnectionStore } from './ssh/ssh-connection-store'
 import { setSourceControlActionDefault } from '../shared/source-control-ai-actions'
 import { LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
+import { closeTerminalTabInWorkspaceSession } from '../shared/workspace-session-terminal-tab-close'
 
 // Shared mutable state so the electron mock can reference a per-test directory
 const testState = { dir: '' }
@@ -337,6 +339,58 @@ describe('Store', () => {
     expect(store.getRepos()).toEqual([])
   }, 15_000)
 
+  it('does not restore a terminal tab after its durable close flush returns', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-1::/tmp/worktree-1'
+    const tabId = 'terminal-1'
+    const session: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      activeWorktreeId: worktreeId,
+      activeTabId: tabId,
+      tabsByWorktree: {
+        [worktreeId]: [
+          {
+            id: tabId,
+            ptyId: 'pty-1',
+            worktreeId,
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        [tabId]: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-1' }
+        }
+      },
+      activeTabIdByWorktree: { [worktreeId]: tabId },
+      defaultTerminalTabsAppliedByWorktreeId: { [worktreeId]: true }
+    }
+    store.setWorkspaceSession(session)
+    store.flushOrThrow()
+
+    const closed = closeTerminalTabInWorkspaceSession(
+      store.getWorkspaceSession(),
+      worktreeId,
+      tabId
+    )
+    store.setWorkspaceSession(closed.session)
+    store.flushOrThrow()
+
+    const reloaded = await createStore()
+    expect(reloaded.getWorkspaceSession().tabsByWorktree[worktreeId]).toEqual([])
+    expect(reloaded.getWorkspaceSession().terminalLayoutsByTabId[tabId]).toBeUndefined()
+    expect(
+      reloaded.getWorkspaceSession().defaultTerminalTabsAppliedByWorktreeId?.[worktreeId]
+    ).toBe(true)
+  })
+
   it('loads state from an explicit profile data file path', async () => {
     const profileDataDirectory = join(testState.dir, 'profiles', 'local-default')
     const profileDataFile = join(profileDataDirectory, 'orca-data.json')
@@ -562,6 +616,50 @@ describe('Store', () => {
     expect(ui.setupGuideSidebarDismissed).toBe(false)
     expect(ui.setupGuideBrowserMilestoneMigrated).toBe(true)
     expect(ui.setupGuideBrowserMilestoneLegacyComplete).toBe(false)
+    // Why: brand-new profiles never saw remaining-as-default.
+    expect(ui.usagePercentageDisplayChangeNoticeDismissed).toBe(true)
+  })
+
+  it('surfaces the usage percentage display change notice for upgraded profiles', async () => {
+    const persisted = getDefaultPersistedState(testState.dir)
+    writeDataFile({
+      ...persisted,
+      onboarding: {
+        ...persisted.onboarding,
+        closedAt: 1,
+        outcome: 'completed'
+      },
+      ui: {
+        ...persisted.ui,
+        // Why: omit the notice key so load resolves eligibility for existing profiles.
+        usagePercentageDisplayChangeNoticeDismissed: undefined
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getUI().usagePercentageDisplayChangeNoticeDismissed).toBe(false)
+  })
+
+  it('keeps the usage percentage display change notice dismissed when remaining was chosen', async () => {
+    const persisted = getDefaultPersistedState(testState.dir)
+    writeDataFile({
+      ...persisted,
+      onboarding: {
+        ...persisted.onboarding,
+        closedAt: 1,
+        outcome: 'completed'
+      },
+      ui: {
+        ...persisted.ui,
+        usagePercentageDisplay: 'remaining',
+        usagePercentageDisplayChangeNoticeDismissed: undefined
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getUI().usagePercentageDisplayChangeNoticeDismissed).toBe(true)
   })
 
   it('defaults minimizeToTrayOnClose to false when unset', async () => {
@@ -602,6 +700,72 @@ describe('Store', () => {
     expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
     store.updateSettings({ minimizeToTrayOnClose: null as unknown as boolean })
     expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
+  })
+
+  it('defaults the menu bar icon on regardless of platform', async () => {
+    await withPlatform('darwin', async () => {
+      const store = await createStore()
+      expect(store.getSettings().showMenuBarIcon).toBe(true)
+    })
+
+    await withPlatform('linux', async () => {
+      const store = await createStore()
+      expect(store.getSettings().showMenuBarIcon).toBe(true)
+    })
+  })
+
+  it('enables the menu bar icon when an existing macOS profile has no stored value', async () => {
+    await withPlatform('darwin', async () => {
+      const persisted = getDefaultPersistedState(testState.dir)
+      delete (persisted.settings as Partial<GlobalSettings>).showMenuBarIcon
+      writeDataFile(persisted)
+
+      const store = await createStore()
+
+      expect(store.getSettings().showMenuBarIcon).toBe(true)
+    })
+  })
+
+  it('persists an explicit macOS menu bar opt-out', async () => {
+    await withPlatform('darwin', async () => {
+      const store = await createStore()
+      store.updateSettings({ showMenuBarIcon: false })
+      store.flush()
+
+      expect((readDataFile() as PersistedState).settings.showMenuBarIcon).toBe(false)
+      expect((await createStore()).getSettings().showMenuBarIcon).toBe(false)
+    })
+  })
+
+  it('normalizes menu bar icon writes to a strict boolean', async () => {
+    await withPlatform('darwin', async () => {
+      const store = await createStore()
+      store.updateSettings({ showMenuBarIcon: 'true' as unknown as boolean })
+      expect(store.getSettings().showMenuBarIcon).toBe(false)
+      store.updateSettings({ showMenuBarIcon: true })
+      expect(store.getSettings().showMenuBarIcon).toBe(true)
+    })
+  })
+
+  it('round-trips a macOS menu bar opt-out through a non-mac host unchanged', async () => {
+    await withPlatform('darwin', async () => {
+      const store = await createStore()
+      store.updateSettings({ showMenuBarIcon: false })
+      store.flush()
+    })
+
+    // Why: a profile opened on another OS must not rewrite the mac preference
+    // on its next flush; only the darwin consumers act on the value.
+    await withPlatform('win32', async () => {
+      const store = await createStore()
+      store.updateSettings({ minimizeToTrayOnClose: true })
+      store.flush()
+      expect((readDataFile() as PersistedState).settings.showMenuBarIcon).toBe(false)
+    })
+
+    await withPlatform('darwin', async () => {
+      expect((await createStore()).getSettings().showMenuBarIcon).toBe(false)
+    })
   })
 
   it('defaults trayMinimizeNoticeShown to false and persists it strictly', async () => {
@@ -3273,6 +3437,62 @@ describe('Store', () => {
     expect(store.getWorktreeMeta('shared::/remote/repo/wt')).toBeUndefined()
   })
 
+  it('reorderReposForHost independently reorders local and SSH rows with shared ids', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'shared', path: '/local/shared' }))
+    store.addRepo(
+      makeRepo({
+        id: 'shared',
+        path: '/ssh/shared',
+        connectionId: 'target'
+      })
+    )
+    store.addRepo(makeRepo({ id: 'local-two', path: '/local/two' }))
+    store.addRepo(
+      makeRepo({
+        id: 'ssh-two',
+        path: '/ssh/two',
+        connectionId: 'target'
+      })
+    )
+
+    expect(store.reorderReposForHost(['local-two', 'shared'], 'local')).toBe(true)
+    expect(store.getRepos().map((repo) => repo.path)).toEqual([
+      '/local/two',
+      '/ssh/shared',
+      '/local/shared',
+      '/ssh/two'
+    ])
+
+    expect(store.reorderReposForHost(['ssh-two', 'shared'], 'ssh:target')).toBe(true)
+    expect(store.getRepos().map((repo) => repo.path)).toEqual([
+      '/local/two',
+      '/ssh/two',
+      '/local/shared',
+      '/ssh/shared'
+    ])
+  })
+
+  it('reorderReposForHost rejects stale or duplicate host permutations without mutation', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'local-one', path: '/local/one' }))
+    store.addRepo(makeRepo({ id: 'local-two', path: '/local/two' }))
+    store.addRepo(
+      makeRepo({
+        id: 'ssh-one',
+        path: '/ssh/one',
+        connectionId: 'target',
+        executionHostId: 'ssh:target'
+      })
+    )
+    const originalPaths = store.getRepos().map((repo) => repo.path)
+
+    expect(store.reorderReposForHost(['local-two'], 'local')).toBe(false)
+    expect(store.reorderReposForHost(['local-one', 'local-one'], 'local')).toBe(false)
+    expect(store.reorderReposForHost(['missing', 'local-two'], 'local')).toBe(false)
+    expect(store.getRepos().map((repo) => repo.path)).toEqual(originalPaths)
+  })
+
   it('removeProjectForHost prunes the SSH host meta (tagged hostId) for a shared id', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'shared', path: '/local/repo' }))
@@ -3317,9 +3537,9 @@ describe('Store', () => {
     store.addRepo(makeRepo({ id: 'r1', connectionId: 'ssh-old', executionHostId: 'ssh:ssh-old' }))
     store.setWorktreeMeta('r1::/repo/wt', { displayName: 'wt', hostId: 'ssh:ssh-old' })
 
-    const count = store.reassignSshTargetId('ssh-old', 'ssh-new')
+    const repoIds = store.reassignSshTargetId('ssh-old', 'ssh-new')
 
-    expect(count).toBe(1)
+    expect(repoIds).toEqual(['r1'])
     const repo = store.getRepo('r1')!
     expect(repo.connectionId).toBe('ssh-new')
     expect(repo.executionHostId).toBe('ssh:ssh-new')
@@ -3338,9 +3558,9 @@ describe('Store', () => {
       })
     )
 
-    const count = store.reassignSshTargetId('ssh-old', 'ssh-new')
+    const repoIds = store.reassignSshTargetId('ssh-old', 'ssh-new')
 
-    expect(count).toBe(1)
+    expect(repoIds).toEqual(['ssh-repo'])
     expect(store.getRepo('local-repo')!.connectionId).toBeUndefined()
     expect(store.getRepo('ssh-repo')!.connectionId).toBe('ssh-new')
   })
@@ -3350,9 +3570,9 @@ describe('Store', () => {
     // SSH repos created via addRemoteRepoFromPath leave executionHostId unset.
     store.addRepo(makeRepo({ id: 'r1', connectionId: 'ssh-old' }))
 
-    const count = store.reassignSshTargetId('ssh-old', 'ssh-new')
+    const repoIds = store.reassignSshTargetId('ssh-old', 'ssh-new')
 
-    expect(count).toBe(1)
+    expect(repoIds).toEqual(['r1'])
     const repo = store.getRepo('r1')!
     expect(repo.connectionId).toBe('ssh-new')
     // Must not stamp an executionHostId where there wasn't one.
@@ -3365,8 +3585,8 @@ describe('Store', () => {
     // must still be saved, not left in memory only.
     store.setWorktreeMeta('r1::/remote/wt', { displayName: 'wt', hostId: 'ssh:ssh-old' })
 
-    const count = store.reassignSshTargetId('ssh-old', 'ssh-new')
-    expect(count).toBe(0) // no repo matched
+    const repoIds = store.reassignSshTargetId('ssh-old', 'ssh-new')
+    expect(repoIds).toEqual([]) // no repo matched
     store.flush()
 
     const reloaded = await createStore()
@@ -4433,6 +4653,27 @@ describe('Store', () => {
     expect(updated.branchPrefix).toBe('git-username')
   })
 
+  it('normalizes bot-author overrides on load and every settings write', async () => {
+    writeDataFile({
+      settings: {
+        prBotAuthorOverrides: [' GretelFlux ', 'gretelflux', 42, '', 'another-bot']
+      }
+    })
+    const store = await createStore()
+
+    expect(store.getSettings().prBotAuthorOverrides).toEqual(['another-bot', 'gretelflux'])
+
+    const oversized = Array.from(
+      { length: 600 },
+      (_, index) => ` bot-${String(index).padStart(4, '0')} `
+    )
+    const updated = store.updateSettings({ prBotAuthorOverrides: oversized })
+
+    expect(updated.prBotAuthorOverrides).toHaveLength(500)
+    expect(updated.prBotAuthorOverrides[0]).toBe('bot-0000')
+    expect(updated.prBotAuthorOverrides[499]).toBe('bot-0499')
+  })
+
   it('notifies settings listeners with changed keys only', async () => {
     const store = await createStore()
     const listener = vi.fn()
@@ -5233,6 +5474,25 @@ describe('Store', () => {
     expect(ui.dismissedUpdateVersion).toBeNull()
   })
 
+  it('round-trips and normalizes the host-qualified manual repo order', async () => {
+    const store = await createStore()
+    store.updateUI({
+      manualRepoOrder: [
+        { hostId: 'runtime:node-b', repoId: 'shared' },
+        { hostId: 'bogus', repoId: 'ignored' },
+        { hostId: 'runtime:node-b', repoId: 'shared' },
+        { hostId: 'local', repoId: 'alpha' }
+      ] as never
+    })
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getUI().manualRepoOrder).toEqual([
+      { hostId: 'runtime:node-b', repoId: 'shared' },
+      { hostId: 'local', repoId: 'alpha' }
+    ])
+  })
+
   it('updateUI persists sanitized per-worktree dotfile visibility', async () => {
     const store = await createStore()
     store.updateUI({
@@ -6015,6 +6275,65 @@ describe('Store', () => {
     const store = await createStore()
     expect(store.getSettings().terminalMacOptionAsAlt).toBe('auto')
     expect(store.getSettings().terminalMacOptionAsAltMigrated).toBe(true)
+  })
+
+  it('migrates inherited right-click paste to each platform default once', async () => {
+    for (const [platform, expected] of [
+      ['win32', true],
+      ['darwin', false],
+      ['linux', false]
+    ] as const) {
+      await withPlatform(platform, async () => {
+        writeDataFile({
+          schemaVersion: 1,
+          repos: [],
+          worktreeMeta: {},
+          settings: { terminalRightClickToPaste: true },
+          ui: {},
+          githubCache: { pr: {}, issue: {} },
+          workspaceSession: {}
+        })
+        const store = await createStore()
+        expect(store.getSettings().terminalRightClickToPaste).toBe(expected)
+        expect(store.getSettings().terminalRightClickToPasteDefaultedForPlatform).toBe(true)
+      })
+    }
+  })
+
+  it('preserves an explicit Windows right-click paste opt-out during migration', async () => {
+    await withPlatform('win32', async () => {
+      writeDataFile({
+        schemaVersion: 1,
+        repos: [],
+        worktreeMeta: {},
+        settings: { terminalRightClickToPaste: false },
+        ui: {},
+        githubCache: { pr: {}, issue: {} },
+        workspaceSession: {}
+      })
+      const store = await createStore()
+      expect(store.getSettings().terminalRightClickToPaste).toBe(false)
+      expect(store.getSettings().terminalRightClickToPasteDefaultedForPlatform).toBe(true)
+    })
+  })
+
+  it('preserves right-click paste choices after the platform migration', async () => {
+    await withPlatform('darwin', async () => {
+      writeDataFile({
+        schemaVersion: 1,
+        repos: [],
+        worktreeMeta: {},
+        settings: {
+          terminalRightClickToPaste: true,
+          terminalRightClickToPasteDefaultedForPlatform: true
+        },
+        ui: {},
+        githubCache: { pr: {}, issue: {} },
+        workspaceSession: {}
+      })
+      const store = await createStore()
+      expect(store.getSettings().terminalRightClickToPaste).toBe(true)
+    })
   })
 
   it('migrates inherited terminal bar cursor defaults to block on first load', async () => {
@@ -7229,6 +7548,44 @@ describe('Store', () => {
     } finally {
       agentHookServer.stop()
     }
+  })
+
+  it('restores cross-tab pane authority aliases before hook ingestion', async () => {
+    const physicalPaneKey = makePaneKey('tab-source', TEST_LEAF_1)
+    const ownerPaneKey = makePaneKey('tab-target', TEST_LEAF_2)
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      legacyPaneKeyAliasEntries: [
+        {
+          ptyId: 'pty-detached',
+          legacyPaneKey: physicalPaneKey,
+          stablePaneKey: ownerPaneKey,
+          updatedAt: 10
+        }
+      ]
+    })
+
+    await createStore()
+    const { agentHookServer } = await import('./agent-hooks/server')
+    agentHookServer.ingestTerminalStatus({
+      paneKey: physicalPaneKey,
+      tabId: 'tab-source',
+      worktreeId: 'wt1',
+      payload: { state: 'working', prompt: 'detached after restart' }
+    })
+
+    expect(agentHookServer.getStatusSnapshot()).toEqual([
+      expect.objectContaining({
+        paneKey: ownerPaneKey,
+        tabId: 'tab-target',
+        prompt: 'detached after restart'
+      })
+    ])
   })
 
   it('persists fallback aliases when a legacy split layout has no PTY leaf bindings', async () => {

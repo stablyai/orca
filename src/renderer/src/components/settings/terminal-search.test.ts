@@ -24,7 +24,7 @@ describe('getTerminalPaneSearchEntries', () => {
 
     expect(entries.some((entry) => entry.title === 'Default Shell')).toBe(true)
     expect(entries.some((entry) => entry.title === 'PowerShell Version')).toBe(true)
-    expect(entries.some((entry) => entry.title === 'Right-click to paste')).toBe(false)
+    expect(entries.some((entry) => entry.title === 'Right-click to paste')).toBe(true)
   })
 
   it('omits legacy WSL distribution terminal settings on Windows', () => {
@@ -33,9 +33,11 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(matchesSettingsSearch('ubuntu distro', entries)).toBe(false)
   })
 
-  it('omits the Windows right-click setting elsewhere', () => {
+  it('includes the right-click setting on macOS and Linux', () => {
     const entries = getTerminalPaneSearchEntries({ isWindows: false, isMac: false })
-    expect(entries.some((entry) => entry.title === 'Right-click to paste')).toBe(false)
+    const macEntries = getTerminalPaneSearchEntries({ isWindows: false, isMac: true })
+    expect(entries.some((entry) => entry.title === 'Right-click to paste')).toBe(true)
+    expect(macEntries.some((entry) => entry.title === 'Right-click to paste')).toBe(true)
   })
 
   it('omits the PowerShell version setting elsewhere', () => {
@@ -168,6 +170,15 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(webEntries.some((entry) => entry.title === 'Minimize to Tray on Close')).toBe(false)
     expect(matchesSettingsSearch('tray', desktopEntries)).toBe(true)
     expect(matchesSettingsSearch('tray', webEntries)).toBe(false)
+  })
+
+  it('includes the macOS menu bar entry only when its desktop control is shown', () => {
+    const macEntries = getAppearancePaneSearchEntries({ showMenuBarIcon: true })
+    const otherEntries = getAppearancePaneSearchEntries({ showMenuBarIcon: false })
+
+    expect(macEntries.some((entry) => entry.title === 'Show Menu Bar Icon')).toBe(true)
+    expect(otherEntries.some((entry) => entry.title === 'Show Menu Bar Icon')).toBe(false)
+    expect(matchesSettingsSearch('status item', macEntries)).toBe(true)
   })
 
   it('keeps sidebar shortcut restore settings in the Appearance search index', () => {

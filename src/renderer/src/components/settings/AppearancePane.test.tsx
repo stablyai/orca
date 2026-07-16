@@ -10,6 +10,7 @@ import type { GlobalSettings, StatusBarItem } from '../../../../shared/types'
 
 const mocks = vi.hoisted(() => ({
   state: {
+    appPlatform: 'linux' as NodeJS.Platform,
     availableStatusBarToggles: [] as {
       description: string
       id: StatusBarItem
@@ -20,8 +21,12 @@ const mocks = vi.hoisted(() => ({
     settingsSearchQuery: 'automations',
     statusBarItems: [],
     toggleStatusBarItem: vi.fn(),
+    usagePercentageDisplay: 'used' as 'used' | 'remaining',
+    setUsagePercentageDisplay: vi.fn(),
     recordFeatureInteraction: vi.fn(),
-    setWorktreeCardMode: vi.fn()
+    setWorktreeCardMode: vi.fn(),
+    appearanceAccordionDeepLink: null as 'interface' | 'terminal' | 'window' | null,
+    clearAppearanceAccordionDeepLink: vi.fn()
   }
 }))
 
@@ -175,11 +180,16 @@ describe('AppearancePane', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.state.availableStatusBarToggles = []
+    mocks.state.appPlatform = 'linux'
     mocks.state.settingsSearchQuery = 'automations'
+    mocks.state.usagePercentageDisplay = 'used'
     // UIZoomControl reads window.api.ui on mount; the inline-expansion pane can
     // render the full Interface section, so provide a minimal renderer bridge
     // without clobbering happy-dom's window.location.
     ;(window as unknown as { api: unknown }).api = {
+      platform: {
+        get: () => ({ platform: mocks.state.appPlatform })
+      },
       ui: {
         getZoomLevel: () => 0,
         onTerminalZoom: () => () => {},
@@ -354,6 +364,23 @@ describe('AppearancePane', () => {
     ).not.toBeNull()
   })
 
+  it('shows and updates the menu bar icon preference only on desktop macOS', async () => {
+    mocks.state.appPlatform = 'darwin'
+    mocks.state.settingsSearchQuery = 'menu bar'
+    const updateSettings = vi.fn()
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'), updateSettings)
+    const toggle = container.querySelector<HTMLButtonElement>(
+      'button[role="switch"][aria-label="Show Menu Bar Icon"]'
+    )
+
+    expect(toggle).not.toBeNull()
+    expect(container.textContent).not.toContain('Minimize to Tray on Close')
+    await act(async () => {
+      toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(updateSettings).toHaveBeenCalledWith({ showMenuBarIcon: false })
+  })
+
   it('keeps description-only search matches visible after helper text is hidden', async () => {
     mocks.state.settingsSearchQuery = 'app window'
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))
@@ -385,6 +412,23 @@ describe('AppearancePane', () => {
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))
 
     expect(container.querySelector('button[role="switch"][aria-label="Ports"]')).not.toBeNull()
+  })
+
+  it('updates the usage percentage display from the latest status bar settings section', async () => {
+    mocks.state.settingsSearchQuery = 'remaining'
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'))
+    const remainingButton = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('button[role="radio"]')
+    ).find((button) => button.textContent === 'Remaining')
+
+    expect(container.textContent).toContain('Usage percentages')
+    expect(remainingButton).toBeDefined()
+
+    await act(async () => {
+      remainingButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(mocks.state.setUsagePercentageDisplay).toHaveBeenCalledWith('remaining')
   })
 
   it('records MiniMax status bar toggles as usage tracking interactions', async () => {

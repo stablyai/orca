@@ -6,6 +6,7 @@ export type AgentPromptInjectionMode =
   | 'flag-prompt'
   | 'flag-prompt-interactive'
   | 'flag-interactive'
+  | 'hermes-query'
   | 'stdin-after-start'
 
 export type DraftPasteReadySignal =
@@ -325,7 +326,9 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // `--tui` starts the full-screen agent UI Orca is designed to host.
     launchCmd: 'hermes --tui',
     expectedProcess: 'hermes',
-    promptInjectionMode: 'stdin-after-start'
+    // Why: Hermes owns prompt delivery through its startup-query contract,
+    // which submits only after the TUI composer and session are ready.
+    promptInjectionMode: 'hermes-query'
   },
   openclaw: {
     detectCmd: 'openclaw',

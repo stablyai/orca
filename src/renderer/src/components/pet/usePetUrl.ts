@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CustomPet } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import { BUNDLED_PET, findBundledPet, isBundledPetId } from './pet-models'
 import {
-  blobUrlCache,
   detectedSpriteCache,
   loadCustomBlobUrl,
+  peekCustomPetBlobUrl,
+  readCustomPetBlobUrl,
+  retainCustomPetBlobCacheEntry,
   type DetectedSpriteCacheEntry
 } from './pet-blob-cache'
 
@@ -36,7 +38,7 @@ export function usePetUrl(): ResolvedPet {
   const customMeta = bundled ? null : customPets.find((m) => m.id === petId)
 
   const [customUrl, setCustomUrl] = useState<string | null>(() =>
-    customMeta ? (blobUrlCache.get(customMeta.id) ?? null) : null
+    customMeta ? peekCustomPetBlobUrl(customMeta.id) : null
   )
   // Why: track the last id we started loading so a rapid switch between
   // custom pets doesn't let a slower earlier response clobber the newer
@@ -58,12 +60,20 @@ export function usePetUrl(): ResolvedPet {
     customMeta.sprite.frameWidth > 0 &&
     customMeta.sprite.frameHeight > 0 &&
     customMeta.sprite.fps > 0
+  useLayoutEffect(() => {
+    if (!customId) {
+      return
+    }
+    // Why: cancelled older loads may finish after the active pet. Pin the
+    // committed URL/bitmaps so their cache insertion cannot evict active media.
+    return retainCustomPetBlobCacheEntry(customId)
+  }, [customId])
   useEffect(() => {
     if (!customId || !customFileName) {
       setCustomUrl(null)
       return
     }
-    const cached = blobUrlCache.get(customId)
+    const cached = readCustomPetBlobUrl(customId)
     if (cached) {
       setCustomUrl(cached)
       return

@@ -139,6 +139,22 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.isGitRepo')
   })
 
+  it('runs remote worktree deletion inside the relay watcher fence', async () => {
+    const removalError = new Error('fenced before Git')
+    const runWithRemovalFence = vi.fn(async () => {
+      throw removalError
+    })
+    handler.dispose()
+    handler = new GitHandler(dispatcher as unknown as RelayDispatcher, new RelayContext(), {
+      runWithRemovalFence
+    })
+
+    await expect(
+      dispatcher.callRequest('git.removeWorktree', { worktreePath: '/repo-feature' })
+    ).rejects.toBe(removalError)
+    expect(runWithRemovalFence).toHaveBeenCalledWith('/repo-feature', expect.any(Function))
+  })
+
   describe('abortMerge', () => {
     it('aborts an in-progress merge', async () => {
       gitInit(tmpDir)
@@ -1192,7 +1208,11 @@ describe('GitHandler', () => {
       await Promise.all([first, second])
 
       expect(gitBufferSpy).toHaveBeenCalledTimes(2)
-      expect(gitSpy).toHaveBeenCalledWith(['add', '--', 'src/file.ts'], tmpDir)
+      expect(gitSpy).toHaveBeenCalledWith(['add', '--', ':(literal)src/file.ts'], tmpDir)
+      const submodulePathReads = gitSpy.mock.calls.filter(
+        ([args]) => args[0] === 'config' && args.includes('.gitmodules')
+      )
+      expect(submodulePathReads).toHaveLength(2)
     })
 
     it('clears pending git.diff reads when a narrow ref fetch runs', async () => {

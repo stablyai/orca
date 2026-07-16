@@ -15,7 +15,11 @@ import { registerFileSearchSelectedTextProvider } from '@/lib/file-search-select
 
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MAX_REVEAL_CONTENT_WAIT_FRAMES, performReveal } from './monaco-reveal'
-import { syncContentOnMount, syncContentUpdate } from './monaco-content-sync'
+import {
+  syncContentOnMount,
+  syncContentUpdate,
+  type MonacoContentSyncMode
+} from './monaco-content-sync'
 import { getMonacoCodebaseSearchQuery } from './monaco-codebase-search'
 import {
   beginProgrammaticContentSync,
@@ -56,11 +60,13 @@ import {
 } from './monaco-markdown-selection-annotation'
 import { translate } from '@/i18n/i18n'
 import { handleMonacoLargeTextPaste } from './monaco-large-text-paste'
+import { buildFileEditorWordWrapOptions } from './file-editor-word-wrap-options'
 import {
   clampMonacoAutoHeight,
   getMonacoAutoHeightForContent,
   isMonacoAutoHeightCapped
 } from './monaco-auto-height'
+import { installMonacoE2EProbe } from './monaco-e2e-probe'
 
 type MonacoEditorProps = {
   fileId: string
@@ -79,6 +85,7 @@ type MonacoEditorProps = {
   markdownAnnotationsEnabled?: boolean
   conflictDecorationsEnabled?: boolean
   readOnly?: boolean
+  liveTail?: boolean
   autoHeight?: boolean
 }
 
@@ -103,6 +110,7 @@ export default function MonacoEditor({
   markdownAnnotationsEnabled = false,
   conflictDecorationsEnabled = false,
   readOnly = false,
+  liveTail = false,
   autoHeight = false
 }: MonacoEditorProps): React.JSX.Element {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
@@ -133,6 +141,8 @@ export default function MonacoEditor({
   propsRef.current = { relativePath, language, onSave, onContentChange }
   const readOnlyRef = useRef(readOnly)
   readOnlyRef.current = readOnly
+  const contentSyncModeRef = useRef<MonacoContentSyncMode>('undoable')
+  contentSyncModeRef.current = readOnly && liveTail ? 'read-only-live-tail' : 'undoable'
 
   const settings = useAppStore((s) => s.settings)
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
@@ -150,6 +160,8 @@ export default function MonacoEditor({
     settings?.terminalFontSize ?? 13,
     editorFontZoomLevel
   )
+  const editorFontFamily = settings?.terminalFontFamily || 'monospace'
+  const editorWordWrap = settings?.editorWordWrap
   const estimatedAutoHeight = useMemo(() => {
     if (!autoHeight) {
       return null
@@ -337,6 +349,7 @@ export default function MonacoEditor({
     (editorInstance, monaco) => {
       editorRef.current = editorInstance
       setMountedEditor(editorInstance)
+      const uninstallE2EProbe = installMonacoE2EProbe(editorInstance, filePath)
       let autoHeightSub: { dispose: () => void } | null = null
       let autoHeightFrame: number | null = null
       const updateAutoHeight = (): void => {
@@ -373,7 +386,11 @@ export default function MonacoEditor({
       beginProgrammaticContentSync(filePath)
       isApplyingProgrammaticContentRef.current = true
       try {
-        const didSyncOnMount = syncContentOnMount(editorInstance, contentRef.current)
+        const didSyncOnMount = syncContentOnMount(
+          editorInstance,
+          contentRef.current,
+          contentSyncModeRef.current
+        )
         if (didSyncOnMount) {
           lastSyncedContentRef.current = contentRef.current
         }
@@ -523,6 +540,7 @@ export default function MonacoEditor({
         }
         conflictDecorationsRef.current?.clear()
         conflictDecorationsRef.current = null
+        uninstallE2EProbe()
         editorRef.current = null
         setMountedEditor(null)
         setCommentPopover(null)
@@ -685,7 +703,7 @@ export default function MonacoEditor({
     beginProgrammaticContentSync(filePath)
     isApplyingProgrammaticContentRef.current = true
     try {
-      syncContentUpdate(ed, content)
+      syncContentUpdate(ed, content, contentSyncModeRef.current)
       lastSyncedContentRef.current = content
     } finally {
       isApplyingProgrammaticContentRef.current = false
@@ -726,14 +744,15 @@ export default function MonacoEditor({
 
   // Update editor options when settings change
   useEffect(() => {
-    if (!editorRef.current || !settings) {
+    if (!editorRef.current) {
       return
     }
     editorRef.current.updateOptions({
       fontSize: editorFontSize,
-      fontFamily: settings.terminalFontFamily || 'monospace'
+      fontFamily: editorFontFamily,
+      ...buildFileEditorWordWrapOptions(editorWordWrap)
     })
-  }, [editorFontSize, settings])
+  }, [editorFontFamily, editorFontSize, editorWordWrap])
 
   useEffect(() => {
     markdownDocLinkDecorationsRef.current?.refresh()
@@ -841,7 +860,9 @@ export default function MonacoEditor({
       <Editor
         height={renderedEditorHeight === null ? '100%' : `${renderedEditorHeight}px`}
         language={language}
-        value={content}
+        // Why: Orca's mount/layout reconciliation is the sole post-mount content
+        // owner; the wrapper's controlled read-only path would also call setValue.
+        defaultValue={content}
         theme={isDark ? 'vs-dark' : 'vs'}
         onChange={handleChange}
         onMount={handleMount}
@@ -852,9 +873,9 @@ export default function MonacoEditor({
           // setting into DiffViewer/DiffSectionItem would have no effect.
           minimap: { enabled: settings?.editorMinimapEnabled ?? false },
           scrollBeyondLastLine: false,
-          wordWrap: 'on',
+          ...buildFileEditorWordWrapOptions(editorWordWrap),
           fontSize: editorFontSize,
-          fontFamily: settings?.terminalFontFamily || 'monospace',
+          fontFamily: editorFontFamily,
           lineNumbers: 'on',
           renderLineHighlight: 'line',
           automaticLayout: true,

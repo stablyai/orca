@@ -11,8 +11,7 @@ import {
   sendNativeChatMessage,
   sendNativeChatMessageWithImageAttachments,
   submitNativeChatPrompt,
-  sendNativeChatAnswer,
-  nativeChatQuestionOffsets,
+  sendNativeChatAskAnswer,
   NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS,
   NATIVE_CHAT_SUBMIT_DELAY_MS,
   NATIVE_CHAT_QUESTION_STEP_MS,
@@ -37,7 +36,7 @@ describe('sendNativeChatMessage', () => {
   })
 
   it('writes the framed body immediately, before the Enter', () => {
-    sendNativeChatMessage(SETTINGS, PTY, 'hello world')
+    const handle = sendNativeChatMessage(SETTINGS, PTY, 'hello world')
     // Body lands synchronously; Enter is still pending on the timer.
     expect(sendRuntimePtyInput).toHaveBeenCalledTimes(1)
     expect(sendRuntimePtyInput).toHaveBeenCalledWith(
@@ -45,6 +44,7 @@ describe('sendNativeChatMessage', () => {
       PTY,
       buildNativeChatPasteBytes('hello world')
     )
+    expect(handle.settleAfterMs).toBe(NATIVE_CHAT_SUBMIT_DELAY_MS)
   })
 
   it('does not fire Enter before the proven 500ms gap (busy-agent safety)', () => {
@@ -62,6 +62,14 @@ describe('sendNativeChatMessage', () => {
     expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, NATIVE_CHAT_SUBMIT)
   })
 
+  it('cancels the delayed Enter when its owning composer is detached', () => {
+    const handle = sendNativeChatMessage(SETTINGS, PTY, 'hi')
+    handle.cancel()
+    vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
+
+    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(1)
+  })
+
   it('matches orca-runtime writeTerminalAction Enter gap (500ms)', () => {
     expect(NATIVE_CHAT_SUBMIT_DELAY_MS).toBe(500)
   })
@@ -77,9 +85,13 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
   })
 
   it('bracket-pastes image paths before prompt text so the TUI creates image chips', () => {
-    sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, 'what do you see?', [
+    const handle = sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, 'what do you see?', [
       '/tmp/orca-paste-image.png'
     ])
+
+    expect(handle.settleAfterMs).toBe(
+      NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS + NATIVE_CHAT_SUBMIT_DELAY_MS
+    )
 
     expect(sendRuntimePtyInput).toHaveBeenCalledTimes(1)
     expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(
@@ -102,7 +114,11 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
   })
 
   it('waits the normal submit gap for an attachment-only send', () => {
-    sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, '', ['/tmp/orca-paste-image.png'])
+    const handle = sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, '', [
+      '/tmp/orca-paste-image.png'
+    ])
+
+    expect(handle.settleAfterMs).toBe(NATIVE_CHAT_SUBMIT_DELAY_MS)
 
     vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS - 1)
     expect(sendRuntimePtyInput).toHaveBeenCalledTimes(1)
@@ -110,6 +126,16 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
     vi.advanceTimersByTime(1)
     expect(sendRuntimePtyInput).toHaveBeenCalledTimes(2)
     expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, NATIVE_CHAT_SUBMIT)
+  })
+
+  it('cancels deferred prompt and Enter writes after the attachment path', () => {
+    const handle = sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, 'describe', [
+      '/tmp/orca-paste-image.png'
+    ])
+    handle.cancel()
+    vi.runAllTimers()
+
+    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -126,17 +152,7 @@ describe('empty prompt submit', () => {
   })
 })
 
-describe('nativeChatQuestionOffsets', () => {
-  it('paces each question a full step apart, Enter 500ms after its body', () => {
-    expect(NATIVE_CHAT_QUESTION_STEP_MS).toBe(800)
-    expect(NATIVE_CHAT_ADVANCE_BUFFER_MS).toBe(300)
-    expect(nativeChatQuestionOffsets(0)).toEqual({ bodyAt: 0, enterAt: 500 })
-    expect(nativeChatQuestionOffsets(1)).toEqual({ bodyAt: 800, enterAt: 1300 })
-    expect(nativeChatQuestionOffsets(2)).toEqual({ bodyAt: 1600, enterAt: 2100 })
-  })
-})
-
-describe('sendNativeChatAnswer', () => {
+describe('sendNativeChatAskAnswer', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     sendRuntimePtyInput.mockClear()
@@ -145,85 +161,72 @@ describe('sendNativeChatAnswer', () => {
     vi.useRealTimers()
   })
 
-  it('single-line answer behaves exactly like sendNativeChatMessage', () => {
-    sendNativeChatAnswer(SETTINGS, PTY, ['only one'])
-    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(1)
-    expect(sendRuntimePtyInput).toHaveBeenCalledWith(
-      SETTINGS,
-      PTY,
-      buildNativeChatPasteBytes('only one')
-    )
-    vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
-    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(2)
-    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, NATIVE_CHAT_SUBMIT)
+  it('paces each keystroke a full step apart (the proven submit gap + advance buffer)', () => {
+    expect(NATIVE_CHAT_QUESTION_STEP_MS).toBe(1000)
+    expect(NATIVE_CHAT_ADVANCE_BUFFER_MS).toBe(500)
   })
 
-  it('multi-line: 3 bodies + 3 Enters in order, each Enter 500ms after its body, next body only after prior Enter+buffer', () => {
-    const lines = ['answer one', 'answer two', 'answer three']
-    sendNativeChatAnswer(SETTINGS, PTY, lines)
-
-    // Nothing fires synchronously: even question 0's body is scheduled (setTimeout 0).
+  it('no writes and 0 settle for an empty keystroke list', () => {
+    const handle = sendNativeChatAskAnswer(SETTINGS, PTY, [])
+    expect(handle.settleAfterMs).toBe(0)
+    vi.runAllTimers()
     expect(sendRuntimePtyInput).toHaveBeenCalledTimes(0)
+  })
 
-    // t=0: question 0 body.
+  it('single option-number keystroke: fires at t=0, settles a submit gap later', () => {
+    // The STA-1860 fix: a lone single-select pick is delivered as the option
+    // NUMBER, with no trailing Enter (the number both selects and commits).
+    const handle = sendNativeChatAskAnswer(SETTINGS, PTY, [{ raw: '2' }])
+    expect(handle.settleAfterMs).toBe(NATIVE_CHAT_SUBMIT_DELAY_MS)
+
+    // Scheduled at t=0 (setTimeout 0), not written synchronously.
+    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(0)
     vi.advanceTimersByTime(0)
     expect(sendRuntimePtyInput).toHaveBeenCalledTimes(1)
-    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(
-      SETTINGS,
-      PTY,
-      buildNativeChatPasteBytes('answer one')
-    )
-
-    // t=500: question 0 Enter (500ms after its body); question 1 body NOT yet.
-    vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
-    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(2)
-    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, NATIVE_CHAT_SUBMIT)
-
-    // Question 1 body must wait the advance buffer past question 0's Enter.
-    vi.advanceTimersByTime(NATIVE_CHAT_ADVANCE_BUFFER_MS - 1)
-    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(2)
-
-    // t=800: question 1 body.
-    vi.advanceTimersByTime(1)
-    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(3)
-    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(
-      SETTINGS,
-      PTY,
-      buildNativeChatPasteBytes('answer two')
-    )
-
-    // t=1300: question 1 Enter.
-    vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
-    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(4)
-    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, NATIVE_CHAT_SUBMIT)
-
-    // t=1600: question 2 body.
-    vi.advanceTimersByTime(NATIVE_CHAT_ADVANCE_BUFFER_MS)
-    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(5)
-    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(
-      SETTINGS,
-      PTY,
-      buildNativeChatPasteBytes('answer three')
-    )
-
-    // t=2100: question 2 Enter — the final submit. No trailing writes after.
-    vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
-    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(6)
-    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, NATIVE_CHAT_SUBMIT)
-
-    // Exactly 3 bodies + 3 Enters; running all timers adds nothing more.
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, '2')
     vi.runAllTimers()
-    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(6)
+    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(1)
+  })
 
-    // Verify body/Enter ordering across the whole sequence.
+  it('writes each group a step apart; text groups go through the paste framer', () => {
+    const groups = [{ raw: '3' }, { text: 'custom answer' }, { raw: '\r' }]
+    const handle = sendNativeChatAskAnswer(SETTINGS, PTY, groups)
+    expect(handle.settleAfterMs).toBe(
+      2 * NATIVE_CHAT_QUESTION_STEP_MS + NATIVE_CHAT_SUBMIT_DELAY_MS
+    )
+
+    vi.advanceTimersByTime(0)
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, '3')
+
+    // The next group must wait a full step so the "Type something" row renders.
+    vi.advanceTimersByTime(NATIVE_CHAT_QUESTION_STEP_MS - 1)
+    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(1)
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(
+      SETTINGS,
+      PTY,
+      buildNativeChatPasteBytes('custom answer')
+    )
+
+    vi.advanceTimersByTime(NATIVE_CHAT_QUESTION_STEP_MS)
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, NATIVE_CHAT_SUBMIT)
+
+    vi.runAllTimers()
     const calls = sendRuntimePtyInput.mock.calls.map((c) => c[2])
-    expect(calls).toEqual([
-      buildNativeChatPasteBytes('answer one'),
-      NATIVE_CHAT_SUBMIT,
-      buildNativeChatPasteBytes('answer two'),
-      NATIVE_CHAT_SUBMIT,
-      buildNativeChatPasteBytes('answer three'),
-      NATIVE_CHAT_SUBMIT
+    expect(calls).toEqual(['3', buildNativeChatPasteBytes('custom answer'), NATIVE_CHAT_SUBMIT])
+  })
+
+  it('cancel clears every pending keystroke', () => {
+    const handle = sendNativeChatAskAnswer(SETTINGS, PTY, [
+      { raw: '1' },
+      { raw: '\x1b[C' },
+      { raw: '\r' }
     ])
+    vi.advanceTimersByTime(0)
+    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(1)
+    handle.cancel()
+    vi.runAllTimers()
+    // Only the first keystroke landed; the rest were cancelled.
+    expect(sendRuntimePtyInput).toHaveBeenCalledTimes(1)
   })
 })

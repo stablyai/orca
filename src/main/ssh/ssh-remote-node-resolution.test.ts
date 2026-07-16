@@ -272,6 +272,41 @@ describe('resolveRemoteNodePath', () => {
     })
   })
 
+  it('uses -c (not -lc) for a csh login shell, which rejects combined -lc', async () => {
+    // Why: csh/tcsh reject `-lc` and mis-handle `-l` here ("Bad : modifier",
+    // issue #8701), so the login-shell probe must drop to plain `-c`.
+    execCommandMock
+      .mockResolvedValueOnce('\n') // path probe: empty
+      .mockResolvedValueOnce('/bin/csh\n') // $SHELL
+      .mockResolvedValueOnce('/usr/local/bin/node\n')
+      .mockResolvedValueOnce('v20.0.0\n')
+
+    await expect(resolveRemoteNodePath(conn)).resolves.toBe('/usr/local/bin/node')
+    expect(execCommandMock).toHaveBeenNthCalledWith(3, conn, `'/bin/csh' -c 'command -v node'`, {
+      wrapCommand: false,
+      timeoutMs: 8_000
+    })
+  })
+
+  it('uses -c (not -lc) for a tcsh login shell', async () => {
+    execCommandMock
+      .mockResolvedValueOnce('\n') // path probe: empty
+      .mockResolvedValueOnce('/usr/bin/tcsh\n') // $SHELL
+      .mockResolvedValueOnce('/usr/local/bin/node\n')
+      .mockResolvedValueOnce('v20.0.0\n')
+
+    await expect(resolveRemoteNodePath(conn)).resolves.toBe('/usr/local/bin/node')
+    expect(execCommandMock).toHaveBeenNthCalledWith(
+      3,
+      conn,
+      `'/usr/bin/tcsh' -c 'command -v node'`,
+      {
+        wrapCommand: false,
+        timeoutMs: 8_000
+      }
+    )
+  })
+
   // ── Failure ───────────────────────────────────────────────────────────
 
   it('throws when both strategies find no usable node', async () => {

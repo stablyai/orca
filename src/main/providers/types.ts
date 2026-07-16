@@ -23,6 +23,7 @@ import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-s
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
+import type { GitProviderStatusOptions } from './git-provider-status-options'
 
 // ─── PTY Provider ───────────────────────────────────────────────────
 
@@ -117,6 +118,12 @@ export type PtySpawnResult = {
    *  writing the snapshot so ANSI cursor positions land correctly. */
   snapshotCols?: number
   snapshotRows?: number
+  /** Provider sequence at the attach boundary. `reset` starts a new provider
+   *  generation; `continued` resumes the existing absolute domain. */
+  providerSequence?: {
+    value: number
+    generation: 'continued' | 'reset'
+  }
   /** Kitty keyboard flags persisted in the daemon snapshot, threaded so the
    *  re-seeded runtime emulator answers hidden `CSI ? u` with the real flags
    *  (terminal-query-authority.md §kitty). Never replayed into a renderer
@@ -148,12 +155,16 @@ export type PtyProcessInfo = {
   id: string
   cwd: string
   title: string
+  /** Owning worktree when the provider can report it authoritatively. */
+  worktreeId?: string
   /** Trusted ORCA_TERMINAL_HANDLE exported into this PTY, when known. */
   terminalHandle?: string
 }
 
 export type IPtyProvider = {
   spawn(opts: PtySpawnOptions): Promise<PtySpawnResult>
+  /** Whether this spawn target can append the Git guard after its final env merge. */
+  supportsGitCredentialGuardHost?: (sessionId?: string) => boolean
   attach(id: string): Promise<void>
   hasPty?: (id: string) => boolean
   write(id: string, data: string): void
@@ -188,6 +199,8 @@ export type IPtyProvider = {
     id: string,
     opts?: { scrollbackRows?: number }
   ) => Promise<PtyProviderBufferSnapshot | null>
+  /** Whether this exact PTY can return a sequence-safe provider snapshot. */
+  canProvideAuthoritativeBufferSnapshot?: (id: string) => boolean
   /**
    * The size the PTY has ACTUALLY applied, not the last size requested.
    * resize() is fire-and-forget for remote providers (daemon/SSH `notify`),
@@ -250,6 +263,7 @@ export type IFilesystemProvider = {
     options: TerminalArtifactAccessOptions
   ): Promise<FileReadResult>
   downloadFile?(sourcePath: string, destinationPath: string): Promise<void>
+  openFileUploadSession?(): Promise<FileUploadSession>
   getTempDir?(): Promise<string>
   writeFile(filePath: string, content: string): Promise<void>
   writeTerminalArtifact?(
@@ -272,13 +286,27 @@ export type IFilesystemProvider = {
   search(opts: SearchOptions): Promise<SearchResult>
   listFiles(
     rootPath: string,
-    options?: { excludePaths?: string[]; signal?: AbortSignal }
+    options?: { excludePaths?: string[]; signal?: AbortSignal; maxResults?: number }
   ): Promise<string[]>
   scanWorkspaceSpace?(
     rootPath: string,
     options?: { signal?: AbortSignal }
   ): Promise<WorkspaceSpaceDirectoryScanResult>
-  watch(rootPath: string, callback: (events: FsChangeEvent[]) => void): Promise<() => void>
+  watch(
+    rootPath: string,
+    callback: (events: FsChangeEvent[]) => void,
+    options?: { signal?: AbortSignal; onTerminalError?: (error: Error) => void }
+  ): Promise<() => void>
+  closeWatch?(rootPath: string): Promise<void>
+}
+
+export type FileUploadSession = {
+  uploadFile(
+    sourcePath: string,
+    destinationPath: string,
+    options?: { exclusive?: boolean }
+  ): Promise<void>
+  close(): void
 }
 
 export type TerminalArtifactAccessOptions = {
@@ -289,11 +317,7 @@ export type TerminalArtifactAccessOptions = {
 
 // ─── Git Provider ───────────────────────────────────────────────────
 
-export type GitProviderStatusOptions = {
-  includeIgnored?: boolean
-  bypassEffectiveUpstreamNegativeCache?: boolean
-  signal?: AbortSignal
-}
+export type { GitProviderStatusOptions } from './git-provider-status-options'
 
 export type IGitProvider = {
   getStatus(worktreePath: string, options?: GitProviderStatusOptions): Promise<GitStatusResult>

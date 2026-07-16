@@ -112,6 +112,17 @@ export function setActiveSink(sink: TracerSink | null): void {
   activeSink = sink
 }
 
+/** Force records already handed to the tracer onto disk. Reserve this for
+ * crash boundaries where the process may not survive the normal batch window. */
+export function flushActiveSink(): void {
+  try {
+    activeSink?.flush()
+  } catch {
+    // Why: a disk/rotation failure in optional local diagnostics must never
+    // turn a recoverable renderer crash into a main-process crash.
+  }
+}
+
 /** Get the current parent context, or `undefined` if we are at the top of
  *  the trace tree. Renderer-IPC entry points capture this, embed it in
  *  span-event attributes (so cross-process spans can be visually linked
@@ -221,7 +232,12 @@ export function startSpan(
     // Wrap in a `type: 'effect-span'` envelope so the NDJSON file is
     // compatible with Effect-style span output. Effect-oriented consumers
     // (the LGTM stack, jq cookbooks) can read the file unchanged.
-    activeSink?.push({ type: 'effect-span', ...redacted })
+    try {
+      activeSink?.push({ type: 'effect-span', ...redacted })
+    } catch {
+      // Why: tracing is optional; a local file rotation failure must not turn
+      // the instrumented operation into an application failure.
+    }
   }
 
   return {

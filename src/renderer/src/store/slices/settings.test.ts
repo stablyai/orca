@@ -242,7 +242,7 @@ describe('createSettingsSlice runtime switching', () => {
       editorDrafts: { '/env-1/repo/stale.md': 'stale' },
       markdownViewMode: { '/env-1/repo/stale.md': 'rich' },
       editorViewMode: { '/env-1/repo/stale.md': 'changes' },
-      markdownFrontmatterVisible: { '/env-1/repo/stale.md': true },
+      markdownFrontmatterVisible: { '/env-1/repo/stale.md': false },
       editorCursorLine: { '/env-1/repo/stale.md': 4 },
       showDotfilesByWorktree: { 'repo-env-1::/env-1/repo': false },
       gitIgnoredPathsByWorktree: { 'repo-env-1::/env-1/repo': ['dist/'] },
@@ -300,7 +300,7 @@ describe('createSettingsSlice runtime switching', () => {
     expect(store.getState().markdownViewMode).toEqual({ '/env-1/repo/stale.md': 'rich' })
     expect(store.getState().editorViewMode).toEqual({ '/env-1/repo/stale.md': 'changes' })
     expect(store.getState().markdownFrontmatterVisible).toEqual({
-      '/env-1/repo/stale.md': true
+      '/env-1/repo/stale.md': false
     })
     expect(store.getState().editorCursorLine).toEqual({ '/env-1/repo/stale.md': 4 })
     expect(store.getState().showDotfilesByWorktree).toEqual({ 'repo-env-1::/env-1/repo': false })

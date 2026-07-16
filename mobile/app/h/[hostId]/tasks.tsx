@@ -34,11 +34,11 @@ import {
 } from 'lucide-react-native'
 import type { RpcClient } from '../../../src/transport/rpc-client'
 import type { RpcSuccess } from '../../../src/transport/types'
+import { useHostClient } from '../../../src/transport/client-context'
 import {
-  useHostClient,
   useLastConnectedAt,
   useReconnectAttempt
-} from '../../../src/transport/client-context'
+} from '../../../src/transport/client-context-connection-metrics'
 import { classifyConnection } from '../../../src/transport/connection-health'
 import { StatusDot } from '../../../src/components/StatusDot'
 import { ActionSheetModal } from '../../../src/components/ActionSheetModal'
@@ -61,6 +61,7 @@ import {
 } from '../../../src/session/mobile-file-syntax'
 import { buildGitHubCheckSummary } from '../../../src/tasks/github-check-summary'
 import { buildTaskWorkspaceCreateParams } from '../../../src/tasks/workspace-create-params'
+import { MOBILE_TASKS_CAPABILITY } from '../../../src/tasks/mobile-tasks-capability'
 import {
   filterWorkspaceAgents,
   isWorkspaceAgentEnabled,
@@ -858,7 +859,6 @@ const GITHUB_REPO_CONCURRENCY = 3
 const MAX_RENDERED_PR_DIFF_LINES = 400
 const GITLAB_PER_PAGE = 50
 const LINEAR_LIMIT = 50
-const MOBILE_TASKS_CAPABILITY = 'mobile.tasks.v1'
 // Why: task detail drawers can launch child sheets; children must layer above
 // the still-mounted parent while its dismissal animation/state remains alive.
 const TASK_SECONDARY_DRAWER_Z_INDEX = 1100

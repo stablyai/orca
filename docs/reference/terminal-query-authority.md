@@ -96,20 +96,40 @@ ingestion and an async write; the decision must not be re-read at reply time):
    stream (CLI `terminal.read`, automation observers) do not suppress — they
    also do not answer; that bounded no-reply case matches today's behavior.
 
+Mobile streams preserve that singularity across snapshot startup and multiple
+views. The mobile WebView suppresses `onData` during snapshot replay, then
+enables replies at an explicit live-output boundary. Clearing the WebView drops
+that replay queue and resumes live reply authority immediately. If a live query
+arrived while the initial snapshot was being built and its output sequence is
+covered by that snapshot, runtime RPC re-emits only the bounded query sequence
+after the snapshot; ordinary covered output stays deduplicated. `terminal.send`
+accepts the resulting `inputKind: query-reply` only from the earliest active
+phone-fitted mobile subscriber while mobile owns the terminal driver. Earliest
+is determined by preserved `subscribedAt`, so a soft-leave resubscribe does not
+change reply ownership; passive desktop-mode watchers are excluded. Peer phones
+are rejected, the next subscriber is promoted on unsubscribe, and desktop
+parser and capability handlers stay silent until desktop retakes the driver.
+Mixed versions: hosts advertise `terminal.query-reply-input.v1`; a mobile
+client never forwards replies to a host that lacks it, because such hosts
+strip `inputKind` and would treat the bytes as floor-taking shell input.
+Residual: a desktop→mobile driver handoff has a bounded double-reply window
+until the async driver-change event reaches the desktop renderer's cached
+driver map (`isPtyLocked`).
+
 Everything the emulator emits outside a forwarding window is discarded, which
 also swallows unsolicited core emissions (e.g. native 997 color-scheme pushes
 triggered by option mutations).
 
 ## Reply classes
 
-| Class | Queries | Answer source |
-| --- | --- | --- |
-| Static | DA1 `CSI c` (ConPTY override below), DA2, DSR 5n, XTVERSION, DECRQM unknown → `0`, kitty `CSI ? u` | xterm core constants + kitty flag state |
-| Model-state | CPR `6n`/`?6n`, DECRPM mode table (?1 ?6 ?7 ?25 mouse ?1004 ?1006 ?1016 ?1049 ?2004 ?2026, insert), DECRQSS DECSTBM/DECSCA/SGR, kitty flags | emulator buffer/mode state — for a hidden pane it is the only state, hence authoritative |
-| View-attribute | OSC 4/10/11/12 `;?` queries, DSR ?996n | responder parser handlers + renderer attribute push (below); **silent until first push** |
-| View-attribute (via options) | DECRQSS DECSCUSR, DECRQM 12 | xterm core, from pushed `cursorStyle`/`cursorBlink` emulator options |
-| Silent | XTWINOPS, XTGETTCAP, ?15n/?25n/?26n/?53n | nobody, visible or hidden |
-| Mode 2031 | DECSET 2031 subscribe | unchanged in Phase 5: main emits the `2031-subscribe` fact, the renderer replies (`handleHiddenMode2031SubscribeFact`, `pty-connection.ts`; parked watcher fact callback). Emulator-native 2031/997 output is suppressed by the forwarding guard |
+| Class                        | Queries                                                                                                                                     | Answer source                                                                                                                                                                                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Static                       | DA1 `CSI c` (ConPTY override below), DA2, DSR 5n, XTVERSION, DECRQM unknown → `0`, kitty `CSI ? u`                                          | xterm core constants + kitty flag state                                                                                                                                                                                                          |
+| Model-state                  | CPR `6n`/`?6n`, DECRPM mode table (?1 ?6 ?7 ?25 mouse ?1004 ?1006 ?1016 ?1049 ?2004 ?2026, insert), DECRQSS DECSTBM/DECSCA/SGR, kitty flags | emulator buffer/mode state — for a hidden pane it is the only state, hence authoritative                                                                                                                                                         |
+| View-attribute               | OSC 4/10/11/12 `;?` queries, DSR ?996n                                                                                                      | responder parser handlers + renderer attribute push (below); **silent until first push**                                                                                                                                                         |
+| View-attribute (via options) | DECRQSS DECSCUSR, DECRQM 12                                                                                                                 | xterm core, from pushed `cursorStyle`/`cursorBlink` emulator options                                                                                                                                                                             |
+| Silent                       | XTWINOPS, XTGETTCAP, ?15n/?25n/?26n/?53n                                                                                                    | nobody, visible or hidden                                                                                                                                                                                                                        |
+| Mode 2031                    | DECSET 2031 subscribe                                                                                                                       | unchanged in Phase 5: main emits the `2031-subscribe` fact, the renderer replies (`handleHiddenMode2031SubscribeFact`, `pty-connection.ts`; parked watcher fact callback). Emulator-native 2031/997 output is suppressed by the forwarding guard |
 
 ### View-attribute bridge
 
@@ -237,7 +257,8 @@ any spawn-window drops).
    the documented ConPTY DA1 variant and the view-attribute parser handlers
    the headless core cannot serve.
 6. Remote views keep view authority; main yields whenever a remote view
-   subscriber is attached.
+   subscriber is attached. When multiple desktop/mobile views coexist, the
+   terminal driver and server-side mobile election keep one reply writer.
 
 **Contract amendment** — `terminal-model-view-contract.md` invariant 6 is
 replaced by:
