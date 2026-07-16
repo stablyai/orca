@@ -1,0 +1,1 @@
+printf '\033[1mBOLD DEFAULT FG\033[0m\n'
