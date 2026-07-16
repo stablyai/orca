@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: centralizes polling, stale-data handling, account-switch fetch semantics, and renderer push coordination in one place */
 import type { BrowserWindow } from 'electron'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import type {
   CodexRateLimitResetResult,
   RateLimitState,
@@ -23,7 +23,9 @@ import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
 import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
+import { fetchZaiRateLimits } from './zai-fetcher'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
+import { hasZaiApiKey } from '../zai/zai-api-key-store'
 import {
   normalizeCodexAccountSelectionTarget,
   type CodexAccountSelectionTarget,
@@ -53,6 +55,15 @@ type MiniMaxRateLimitConfig = {
 
 type MiniMaxResolvedConfig = {
   config: MiniMaxRateLimitConfig
+  error: string | null
+}
+
+type ZaiRateLimitConfig = {
+  apiKey: string
+}
+
+type ZaiResolvedConfig = {
+  config: ZaiRateLimitConfig
   error: string | null
 }
 
@@ -95,6 +106,7 @@ type InternalRateLimitState = {
   kimi: ProviderRateLimits | null
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
+  zai: ProviderRateLimits | null
   grok: ProviderRateLimits | null
 }
 
@@ -129,6 +141,7 @@ export class RateLimitService {
     kimi: null,
     antigravity: null,
     minimax: null,
+    zai: null,
     grok: null
   }
   private grokAuthConfigured = readGrokAuthSession().status === 'ok'
@@ -143,6 +156,7 @@ export class RateLimitService {
     'opencode-go': 0,
     kimi: 0,
     minimax: 0,
+    zai: 0,
     grok: 0,
     antigravity: 0
   }
@@ -154,6 +168,7 @@ export class RateLimitService {
     'opencode-go': 0,
     kimi: 0,
     minimax: 0,
+    zai: 0,
     grok: 0,
     antigravity: 0
   }
@@ -170,8 +185,10 @@ export class RateLimitService {
   private claudeFetchGeneration = 0
   private opencodeFetchGeneration = 0
   private minimaxFetchGeneration = 0
+  private zaiFetchGeneration = 0
   private lastOpencodeConfigHash = ''
   private lastMiniMaxConfigHash = ''
+  private lastZaiConfigHash = ''
   private codexHomePathResolver: CodexHomePathResolver | null = null
   private codexFetchTarget: NormalizedCodexAccountSelectionTarget = {
     runtime: 'host',
@@ -184,6 +201,7 @@ export class RateLimitService {
   }
   private openCodeGoConfigResolver: (() => OpenCodeGoRateLimitConfig) | null = null
   private miniMaxConfigResolver: (() => MiniMaxRateLimitConfig) | null = null
+  private zaiConfigResolver: (() => ZaiRateLimitConfig) | null = null
   private geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
   private inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null
   private inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
@@ -229,6 +247,10 @@ export class RateLimitService {
 
   setMiniMaxConfigResolver(resolver: () => MiniMaxRateLimitConfig): void {
     this.miniMaxConfigResolver = resolver
+  }
+
+  setZaiConfigResolver(resolver: () => ZaiRateLimitConfig): void {
+    this.zaiConfigResolver = resolver
   }
 
   setGeminiCliOAuthEnabledResolver(resolver: GeminiCliOAuthEnabledResolver): void {
@@ -308,6 +330,7 @@ export class RateLimitService {
       ...this.state,
       // Why: the cookie lives on the filesystem, not GlobalSettings; surface its presence so the renderer keeps the MiniMax bar across reloads.
       minimaxCookieConfigured: hasMiniMaxSessionCookie(),
+      zaiApiKeyConfigured: hasZaiApiKey(),
       grokAuthConfigured: this.grokAuthConfigured,
       claudeTarget: this.claudeFetchTarget,
       codexTarget: this.codexFetchTarget,
@@ -346,6 +369,15 @@ export class RateLimitService {
     this.updateState({
       ...this.state,
       minimax: this.withFetchingStatus(null, 'minimax')
+    })
+  }
+
+  invalidateZaiCredentialState(): void {
+    this.zaiFetchGeneration += 1
+    this.lastZaiConfigHash = ''
+    this.updateState({
+      ...this.state,
+      zai: this.withFetchingStatus(null, 'zai')
     })
   }
 
@@ -735,6 +767,7 @@ export class RateLimitService {
       'opencode-go': this.state.opencodeGo,
       kimi: this.state.kimi,
       minimax: this.state.minimax,
+      zai: this.state.zai,
       grok: this.state.grok,
       antigravity: this.state.antigravity
     }
@@ -1230,6 +1263,20 @@ export class RateLimitService {
     }
   }
 
+  private resolveZaiConfig(): ZaiResolvedConfig {
+    try {
+      return {
+        config: this.zaiConfigResolver?.() ?? { apiKey: '' },
+        error: null
+      }
+    } catch (error) {
+      return {
+        config: { apiKey: '' },
+        error: toErrorMessage(error)
+      }
+    }
+  }
+
   private getMiniMaxCredentialError(message: string): ProviderRateLimits {
     return {
       provider: 'minimax',
@@ -1240,6 +1287,23 @@ export class RateLimitService {
       status: 'error',
       usageMetadata: { failureKind: 'keychain-unavailable', source: 'web' }
     }
+  }
+
+  private getZaiCredentialError(message: string): ProviderRateLimits {
+    return {
+      provider: 'zai',
+      session: null,
+      weekly: null,
+      monthly: null,
+      updatedAt: Date.now(),
+      error: message,
+      status: 'error',
+      usageMetadata: { failureKind: 'keychain-unavailable', source: 'web' }
+    }
+  }
+
+  private getZaiConfigFingerprint(apiKey: string): string {
+    return apiKey ? createHash('sha256').update(apiKey).digest('hex') : ''
   }
 
   private trackActiveFailureStreak(
@@ -1267,6 +1331,7 @@ export class RateLimitService {
       | 'opencode-go'
       | 'kimi'
       | 'minimax'
+      | 'zai'
       | 'grok'
       | 'antigravity'
   ): ProviderRateLimits {
@@ -1310,6 +1375,8 @@ export class RateLimitService {
     const miniMaxCookie = miniMaxConfigResult.config.sessionCookie
     const miniMaxGroupId = miniMaxConfigResult.config.groupId
     const miniMaxModels = miniMaxConfigResult.config.models
+    const zaiConfigResult = this.resolveZaiConfig()
+    const zaiApiKey = zaiConfigResult.config.apiKey
     const geminiCliOAuthEnabled = this.geminiCliOAuthEnabledResolver?.() ?? false
     // Why: getState() is hot (renderer pushes + mobile snapshots); keep Grok's sync auth-file probe on fetch cycles instead.
     const grokAuthReadResult = readGrokAuthSession()
@@ -1332,6 +1399,14 @@ export class RateLimitService {
     }
     const miniMaxGeneration = this.minimaxFetchGeneration
 
+    const currentZaiConfigHash = `${this.getZaiConfigFingerprint(zaiApiKey)}|${zaiConfigResult.error ?? ''}`
+    const zaiConfigChanged = currentZaiConfigHash !== this.lastZaiConfigHash
+    if (zaiConfigChanged) {
+      this.lastZaiConfigHash = currentZaiConfigHash
+      this.zaiFetchGeneration += 1
+    }
+    const zaiGeneration = this.zaiFetchGeneration
+
     // Mark all providers fetching while keeping previous data visible (Codex is cleared separately on account change).
     this.updateState({
       ...previousState,
@@ -1346,6 +1421,9 @@ export class RateLimitService {
       minimax: miniMaxConfigChanged
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
+      zai: zaiConfigChanged
+        ? this.withFetchingStatus(null, 'zai')
+        : this.withFetchingStatus(previousState.zai, 'zai'),
       grok: this.withFetchingStatus(previousState.grok, 'grok')
     })
 
@@ -1360,32 +1438,42 @@ export class RateLimitService {
       (reason) => ({ status: 'rejected', reason }) as const
     )
 
-    const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
-      await Promise.allSettled([
-        fetchClaudeRateLimits({
-          authPreparation: claudeAuthPreparation,
-          allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
-          allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
-          networkProxySettings: this.networkProxySettingsResolver?.(),
+    const [
+      claudeResult,
+      codexResult,
+      geminiResult,
+      opencodeGoResult,
+      kimiResult,
+      miniMaxResult,
+      zaiResult
+    ] = await Promise.allSettled([
+      fetchClaudeRateLimits({
+        authPreparation: claudeAuthPreparation,
+        allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+        allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+        networkProxySettings: this.networkProxySettingsResolver?.(),
+        signal
+      }),
+      missingWslCodexHome ??
+        fetchCodexRateLimits({
+          codexHomePath,
+          allowPtyFallback: this.shouldAllowCodexPtyFallback(),
           signal
         }),
-        missingWslCodexHome ??
-          fetchCodexRateLimits({
-            codexHomePath,
-            allowPtyFallback: this.shouldAllowCodexPtyFallback(),
-            signal
+      fetchGeminiRateLimits(geminiCliOAuthEnabled),
+      fetchOpenCodeGoRateLimits(cookie, workspaceIdOverride || undefined),
+      fetchKimiRateLimits(),
+      miniMaxConfigResult.error
+        ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
+        : fetchMiniMaxRateLimits({
+            cookie: miniMaxCookie,
+            groupId: miniMaxGroupId,
+            models: miniMaxModels
           }),
-        fetchGeminiRateLimits(geminiCliOAuthEnabled),
-        fetchOpenCodeGoRateLimits(cookie, workspaceIdOverride || undefined),
-        fetchKimiRateLimits(),
-        miniMaxConfigResult.error
-          ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
-          : fetchMiniMaxRateLimits({
-              cookie: miniMaxCookie,
-              groupId: miniMaxGroupId,
-              models: miniMaxModels
-            })
-      ])
+      zaiConfigResult.error
+        ? Promise.resolve(this.getZaiCredentialError(zaiConfigResult.error))
+        : fetchZaiRateLimits({ apiKey: zaiApiKey })
+    ])
 
     if (signal.aborted) {
       return
@@ -1479,6 +1567,19 @@ export class RateLimitService {
             status: 'error'
           } satisfies ProviderRateLimits)
 
+    const zai =
+      zaiResult.status === 'fulfilled'
+        ? zaiResult.value
+        : ({
+            provider: 'zai',
+            session: null,
+            weekly: null,
+            monthly: null,
+            updatedAt: Date.now(),
+            error: zaiResult.reason instanceof Error ? zaiResult.reason.message : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
+
     const latestCodexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
     const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
@@ -1494,6 +1595,7 @@ export class RateLimitService {
       this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
     const shouldApplyOpencode = opencodeGeneration === this.opencodeFetchGeneration
     const shouldApplyMiniMax = miniMaxGeneration === this.minimaxFetchGeneration
+    const shouldApplyZai = zaiGeneration === this.zaiFetchGeneration
 
     if (shouldApplyClaude) {
       this.trackActiveFailureStreak('claude', claude)
@@ -1509,6 +1611,9 @@ export class RateLimitService {
     this.trackActiveFailureStreak('kimi', kimi)
     if (shouldApplyMiniMax) {
       this.trackActiveFailureStreak('minimax', miniMax)
+    }
+    if (shouldApplyZai) {
+      this.trackActiveFailureStreak('zai', zai)
     }
 
     // Why: apply a Codex result only when provenance and generation still match, else a raced in-flight fetch overwrites the new account.
@@ -1532,7 +1637,12 @@ export class RateLimitService {
         ? miniMaxConfigChanged
           ? miniMax
           : this.applyStalePolicy(miniMax, previousState.minimax)
-        : this.state.minimax
+        : this.state.minimax,
+      zai: shouldApplyZai
+        ? zaiConfigChanged
+          ? zai
+          : this.applyStalePolicy(zai, previousState.zai)
+        : this.state.zai
     })
 
     const grokResult = await grokResultPromise
