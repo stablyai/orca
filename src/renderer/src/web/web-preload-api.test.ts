@@ -837,6 +837,27 @@ describe('web MiniMax preload API', () => {
   })
 })
 
+describe('web Z.ai preload API', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('exposes desktop-only Z.ai credential storage as unconfigured and rejects saves', async () => {
+    const { api } = await installApi('Linux')
+
+    await expect(api.zaiCredentials.getStatus()).resolves.toEqual({ configured: false })
+    await expect(api.zaiCredentials.saveApiKey('glm-key')).rejects.toThrow(/desktop app/i)
+    await expect(api.zaiCredentials.clearApiKey()).resolves.toEqual({ configured: false })
+    await expect(api.rateLimits.refreshZai()).resolves.toEqual(
+      expect.objectContaining({ zai: null, zaiApiKeyConfigured: false })
+    )
+  })
+})
+
 describe('web AI Vault preload API', () => {
   beforeEach(() => {
     vi.resetModules()
