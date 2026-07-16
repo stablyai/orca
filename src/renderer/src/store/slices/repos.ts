@@ -2195,6 +2195,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         (updated.parentGroupId ?? null) !== (updates.parentGroupId ?? null)
       ) {
         console.warn('Project group reparent not supported by focused host:', groupId)
+        // Why: the host may still have persisted the rest of a compound update
+        // (e.g. tabOrder); refetch so local order doesn't drift from the host.
+        await get().fetchProjectGroups()
         return false
       }
       const ownedGroup = projectGroupWithFetchedOwner(updated, target)

@@ -17,15 +17,19 @@ const projectGroup: ProjectGroup = {
 
 const projectGroupsCreate = vi.fn()
 const projectGroupsUpdate = vi.fn()
+const projectGroupsList = vi.fn()
 
 beforeEach(() => {
   projectGroupsCreate.mockReset()
   projectGroupsUpdate.mockReset()
+  projectGroupsList.mockReset()
+  projectGroupsList.mockResolvedValue([])
   vi.stubGlobal('window', {
     api: {
       projectGroups: {
         create: projectGroupsCreate,
-        update: projectGroupsUpdate
+        update: projectGroupsUpdate,
+        list: projectGroupsList
       }
     }
   })
@@ -92,6 +96,7 @@ describe('project group nesting', () => {
     const child = { ...projectGroup, id: 'child-group', name: 'Child' }
     // Hosts that predate nested groups return the group unchanged.
     projectGroupsUpdate.mockResolvedValue({ ...child, parentGroupId: null })
+    projectGroupsList.mockResolvedValue([parent, child])
     const store = createTestStore()
     store.setState({ projectGroups: [parent, child] })
 
@@ -102,5 +107,22 @@ describe('project group nesting', () => {
     expect(
       store.getState().projectGroups.find((group) => group.id === child.id)?.parentGroupId
     ).toBeNull()
+  })
+
+  it('resyncs from the host when a compound update is partially persisted', async () => {
+    const parent = { ...projectGroup, id: 'parent-group', name: 'Parent' }
+    const child = { ...projectGroup, id: 'child-group', name: 'Child', tabOrder: 3 }
+    // An old host strips parentGroupId but still persists the new tabOrder.
+    projectGroupsUpdate.mockResolvedValue({ ...child, parentGroupId: null, tabOrder: 0 })
+    projectGroupsList.mockResolvedValue([parent, { ...child, tabOrder: 0 }])
+    const store = createTestStore()
+    store.setState({ projectGroups: [parent, child] })
+
+    await expect(
+      store.getState().updateProjectGroup(child.id, { parentGroupId: parent.id, tabOrder: 0 })
+    ).resolves.toBe(false)
+
+    expect(projectGroupsList).toHaveBeenCalled()
+    expect(store.getState().projectGroups.find((group) => group.id === child.id)?.tabOrder).toBe(0)
   })
 })
