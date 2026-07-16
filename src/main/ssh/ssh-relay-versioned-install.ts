@@ -15,16 +15,20 @@ import { existsSync, readFileSync } from 'node:fs'
 import type { SshConnection } from './ssh-connection'
 import { RELAY_REMOTE_DIR } from './relay-protocol'
 import { execCommand } from './ssh-relay-deploy-helpers'
+import { RELAY_DEPLOY_TIMEOUT_MS } from './ssh-relay-deploy-timing'
 import {
   acquireInstallLockParentCommand,
+  lockAgeSecondsCommand,
+  tryCreateInstallLockCommand,
+  tryStealInstallLockCommand
+} from './ssh-relay-install-lock-commands'
+import {
   listRelayBaseDirsCommand,
-  lockMtimeEpochCommand,
   probeDirectoryExistsCommand,
   probeFileExistsCommand,
   probeRelayInstalledCommand,
   relayLivenessProbeCommand,
   removeRemoteTreeCommand,
-  tryCreateInstallLockCommand,
   writeRemoteEmptyFileCommand
 } from './ssh-remote-commands'
 import {
@@ -51,18 +55,21 @@ const RELAY_VERSION_DIR_REGEX = /^relay-(v?\d+\.\d+\.\d+(\+[0-9a-f]+)?)$/
 // living on remote disks forever.
 const LEGACY_RELAY_DIR_REGEX = /^relay-v\d+\.\d+\.\d+$/
 
-const INSTALL_LOCK_NAME = '.install-lock'
+export const RELAY_INSTALL_LOCK_NAME = '.install-lock'
 const INSTALL_COMPLETE_NAME = '.install-complete'
 
 const INSTALL_LOCK_POLL_MS = 1_000
-const INSTALL_LOCK_TIMEOUT_MS = 120_000
+// Why: the lock holder can legitimately use the full deploy bound for upload,
+// native install/rebuild, probes, and finalization. A concurrent first install
+// must not fail earlier; completed-relay repair uses a separate one-shot path.
+const INSTALL_LOCK_TIMEOUT_MS = RELAY_DEPLOY_TIMEOUT_MS
 // Why: a stale lock dir from a crashed installer must be recoverable without
 // user intervention. After the timeout we check the lock's mtime; if it's
 // older than this window the previous installer is assumed dead and we steal
-// the lock. 2 minutes is well above a normal `npm install node-pty` runtime
-// (10–60s on slow hosts) so a slow concurrent installer is not falsely
-// declared dead.
-const INSTALL_LOCK_STALE_MS = 120_000
+// the lock. Native-deps repair can keep running after the deploy backstop wins
+// Promise.race, so leave enough room for its bounded under-lock exec sequence.
+const INSTALL_LOCK_STALE_MS = 20 * 60_000
+export const INSTALL_LOCK_STALE_SECONDS = INSTALL_LOCK_STALE_MS / 1000
 const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
 
 type RelayInstalledProbeOptions = {
@@ -166,13 +173,12 @@ export async function acquireInstallLock(
   remoteRelayDir: string,
   host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
 ): Promise<void> {
-  const lockDir = joinRemotePath(host, remoteRelayDir, INSTALL_LOCK_NAME)
+  const lockDir = joinRemotePath(host, remoteRelayDir, RELAY_INSTALL_LOCK_NAME)
   // Why: the parent dir may not exist yet on a first install. mkdir -p is
   // safe to run multiple times — it's a no-op if the dir already exists.
   await execHostCommand(conn, host, acquireInstallLockParentCommand(host, remoteRelayDir))
 
   let start = Date.now()
-  let recoveredOnce = false
   while (true) {
     try {
       const result = await execHostCommand(conn, host, tryCreateInstallLockCommand(host, lockDir))
@@ -183,24 +189,16 @@ export async function acquireInstallLock(
       /* mkdir failed with non-zero — fall through to BUSY treatment */
     }
     if (Date.now() - start >= INSTALL_LOCK_TIMEOUT_MS) {
-      if (recoveredOnce) {
-        throw new Error(
-          `Could not acquire relay install lock at ${lockDir} after ${
-            INSTALL_LOCK_TIMEOUT_MS / 1000
-          }s; another install is in progress or the lock is wedged.`
-        )
-      }
-      // Stale-lock recovery: if the lock dir's mtime is older than the stale
-      // window, the previous installer crashed. Steal it and retry once,
-      // resetting the timeout window so a single post-recovery race doesn't
-      // immediately exhaust the budget.
-      const ageOk = await isLockStale(conn, lockDir, host)
-      if (ageOk) {
+      // Stale-lock recovery is one remote command so two observers cannot both
+      // delete a lock that the other one just recreated.
+      const steal = await execHostCommand(
+        conn,
+        host,
+        tryStealInstallLockCommand(host, lockDir, INSTALL_LOCK_STALE_SECONDS)
+      ).catch(() => 'BUSY')
+      if (steal.trim().endsWith('OK')) {
         console.warn(`[ssh-relay] Stealing stale install lock at ${lockDir}`)
-        await execHostCommand(conn, host, removeRemoteTreeCommand(host, lockDir)).catch(() => {})
-        recoveredOnce = true
-        start = Date.now()
-        continue
+        return
       }
       throw new Error(
         `Could not acquire relay install lock at ${lockDir} after ${
@@ -212,22 +210,20 @@ export async function acquireInstallLock(
   }
 }
 
-async function isLockStale(
+export async function isRelayInstallLockStale(
   conn: SshConnection,
   lockDir: string,
   host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
 ): Promise<boolean> {
   try {
-    // Why: `stat` flags differ between GNU coreutils (Linux) and BSD (macOS).
-    // We try GNU first, then BSD; both produce a Unix epoch in seconds on
-    // stdout. If both fail we conservatively treat the lock as not stale.
-    const out = await execHostCommand(conn, host, lockMtimeEpochCommand(host, lockDir))
-    const mtimeSec = Number.parseInt(out.trim(), 10)
-    if (!Number.isFinite(mtimeSec)) {
+    // Why: compute age on the remote host so clock skew between two Orca
+    // clients cannot make a live repair lock look older than it is.
+    const out = await execHostCommand(conn, host, lockAgeSecondsCommand(host, lockDir))
+    const ageSec = Number.parseInt(out.trim(), 10)
+    if (!Number.isFinite(ageSec) || ageSec < 0) {
       return false
     }
-    const ageMs = Date.now() - mtimeSec * 1000
-    return ageMs > INSTALL_LOCK_STALE_MS
+    return ageSec * 1000 > INSTALL_LOCK_STALE_MS
   } catch {
     return false
   }
@@ -245,7 +241,7 @@ export async function finalizeInstall(
   host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
 ): Promise<void> {
   const sentinel = joinRemotePath(host, remoteRelayDir, INSTALL_COMPLETE_NAME)
-  const lock = joinRemotePath(host, remoteRelayDir, INSTALL_LOCK_NAME)
+  const lock = joinRemotePath(host, remoteRelayDir, RELAY_INSTALL_LOCK_NAME)
   await execHostCommand(conn, host, writeRemoteEmptyFileCommand(host, sentinel))
   await execHostCommand(conn, host, removeRemoteTreeCommand(host, lock)).catch(() => {})
 }
@@ -260,7 +256,7 @@ export async function abandonInstall(
   remoteRelayDir: string,
   host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
 ): Promise<void> {
-  const lock = joinRemotePath(host, remoteRelayDir, INSTALL_LOCK_NAME)
+  const lock = joinRemotePath(host, remoteRelayDir, RELAY_INSTALL_LOCK_NAME)
   await execHostCommand(conn, host, removeRemoteTreeCommand(host, lock)).catch(() => {})
 }
 
@@ -346,7 +342,7 @@ async function isCandidateSafeToRemove(
 ): Promise<boolean> {
   const isLegacy = LEGACY_RELAY_DIR_REGEX.test(name)
 
-  const lockDir = joinRemotePath(host, dir, INSTALL_LOCK_NAME)
+  const lockDir = joinRemotePath(host, dir, RELAY_INSTALL_LOCK_NAME)
   const lockProbe = await execHostCommand(
     conn,
     host,
@@ -356,13 +352,13 @@ async function isCandidateSafeToRemove(
 
   if (locked) {
     // Why: a locked dir is normally unsafe to remove — but a STALE lock
-    // (mtime older than INSTALL_LOCK_STALE_MS) means the previous installer
+    // (remote age older than INSTALL_LOCK_STALE_MS) means the previous installer
     // crashed and is never coming back. If the dir also has the
     // .install-complete sentinel (touch succeeded but the rm-lock at the
     // end of finalizeInstall failed), removing the dir is safe — no
     // installer is racing us, and the daemon (if any) keeps running off
     // its already-loaded code regardless of disk state.
-    if (!(await isLockStale(conn, lockDir, host))) {
+    if (!(await isRelayInstallLockStale(conn, lockDir, host))) {
       return false
     }
     process.stderr.write?.(`[ssh-relay] GC: lock at ${lockDir} is stale; treating as recoverable\n`)

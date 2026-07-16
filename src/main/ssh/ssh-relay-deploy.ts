@@ -19,6 +19,8 @@ import {
   abandonInstall,
   gcOldRelayVersions
 } from './ssh-relay-versioned-install'
+import { tryAcquireRelayRepairLock } from './ssh-relay-repair-lock'
+import { NATIVE_DEPS_COMMAND_TIMEOUT_MS, RELAY_DEPLOY_TIMEOUT_MS } from './ssh-relay-deploy-timing'
 import { shellEscape } from './ssh-connection-utils'
 import {
   probeBuildToolchain,
@@ -65,22 +67,6 @@ export type RelayDeployResult = {
   nodePath?: string
   sockPath?: string
 }
-
-// npm install on a cold Windows cache plus antivirus scanning can exceed the
-// default 30s exec timeout. The same bound covers the post-install `npm rebuild`
-// retry that repairs a native binding skipped by an ignore-scripts host.
-const NATIVE_DEPS_INSTALL_TIMEOUT_MS = 240_000
-
-// Why: individual exec commands have their own timeouts, but the full deploy
-// pipeline (detect platform → check existing → upload → npm install → rebuild →
-// launch) has no overall bound, so a hanging step or slow SFTP upload could
-// block the connection indefinitely. This is a backstop, sized so the common
-// native-deps case — a first install AND its follow-up rebuild, each up to
-// NATIVE_DEPS_INSTALL_TIMEOUT_MS — plus headroom is not falsely timed out.
-// (Adding heavy install-lock contention on top could still trip it; that stays
-// a rare, self-healing-on-retry edge rather than a reason to loosen the
-// backstop further.)
-const RELAY_DEPLOY_TIMEOUT_MS = 2 * NATIVE_DEPS_INSTALL_TIMEOUT_MS + 60_000
 
 function execHostCommand(
   conn: SshConnection,
@@ -443,6 +429,12 @@ const RELAY_NATIVE_DEPS = {
   '@parcel/watcher': '2.5.6'
 } as const
 
+// Why: npm 12 blocks dependency lifecycle scripts unless each exact package
+// version is approved, even when ignore-scripts is explicitly disabled.
+const RELAY_NATIVE_DEP_SCRIPT_ALLOWLIST = Object.fromEntries(
+  Object.entries(RELAY_NATIVE_DEPS).map(([name, version]) => [`${name}@${version}`, true])
+)
+
 const LOAD_RELAY_NATIVE_DEPS = 'require("node-pty"); require("@parcel/watcher")'
 
 async function hasRequiredNativeDeps(
@@ -484,22 +476,14 @@ async function repairInstalledNativeDeps(
     return
   }
 
-  // Why: an already-installed relay can ALWAYS launch in degraded mode (fs/git/
-  // preflight still work — only native-backed ops fail), so native-deps repair
-  // is best-effort and must never block the connection: not on lock contention,
-  // and not on an offline/unbuildable repair. Pre-repair this path used
-  // require.resolve (which passed for a present-but-unloadable binding), so a
-  // fatal repair here would be a straight regression. launchRelay still surfaces
-  // a genuinely dead transport on its own.
+  // Why: an already-installed relay can launch in degraded mode (fs/git/preflight
+  // still work; native-backed ops fail), so native-deps repair is best-effort:
+  // lock contention and repair failures must not abort the connection. Pre-repair
+  // this path used require.resolve (which passed for a present-but-unloadable
+  // binding), so a fatal repair here would be a straight regression.
   console.warn(`[ssh-relay] Repairing missing native deps at ${remoteDir}`)
-  try {
-    await acquireInstallLock(conn, remoteDir, hostPlatform)
-  } catch (err) {
-    console.warn(
-      `[ssh-relay] Could not lock native-deps repair at ${remoteDir}; launching degraded: ${
-        err instanceof Error ? err.message : String(err)
-      }`
-    )
+  if (!(await tryAcquireRelayRepairLock(conn, remoteDir, hostPlatform))) {
+    console.warn(`[ssh-relay] Native-deps repair lock is busy at ${remoteDir}; launching degraded`)
     return
   }
   try {
@@ -551,7 +535,8 @@ async function installNativeDeps(
     version: '1.0.0',
     private: true,
     type: 'commonjs',
-    dependencies: RELAY_NATIVE_DEPS
+    dependencies: RELAY_NATIVE_DEPS,
+    allowScripts: RELAY_NATIVE_DEP_SCRIPT_ALLOWLIST
   })}\n`
   await writeRemoteFile(
     conn,
@@ -582,7 +567,7 @@ async function installNativeDeps(
           `npm install --ignore-scripts=false --omit=dev --no-audit --no-fund ${installArgs} 2>&1`
         )
     await execHostCommand(conn, hostPlatform, command, {
-      timeoutMs: NATIVE_DEPS_INSTALL_TIMEOUT_MS
+      timeoutMs: NATIVE_DEPS_COMMAND_TIMEOUT_MS
     })
   } catch (err) {
     // Don't write .install-complete on hard fail; reconnect retries on a
@@ -657,7 +642,7 @@ async function rebuildNativeDeps(
         `npm rebuild --ignore-scripts=false ${depNames.map(shellEscape).join(' ')} 2>&1`
       )
   await execHostCommand(conn, hostPlatform, command, {
-    timeoutMs: NATIVE_DEPS_INSTALL_TIMEOUT_MS
+    timeoutMs: NATIVE_DEPS_COMMAND_TIMEOUT_MS
   })
 }
 

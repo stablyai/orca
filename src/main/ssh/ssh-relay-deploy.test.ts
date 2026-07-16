@@ -62,6 +62,10 @@ vi.mock('./ssh-relay-versioned-install', () => ({
   gcOldRelayVersions: vi.fn().mockResolvedValue(undefined)
 }))
 
+vi.mock('./ssh-relay-repair-lock', () => ({
+  tryAcquireRelayRepairLock: vi.fn().mockResolvedValue(true)
+}))
+
 vi.mock('./ssh-connection-utils', () => ({
   shellEscape: (s: string) => `'${s}'`
 }))

@@ -1,5 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it, afterEach } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { rm } from 'node:fs/promises'
 import * as path from 'node:path'
 import { tmpdir } from 'node:os'
@@ -102,6 +110,35 @@ describe('Subprocess: Relay entry point', () => {
   it('keeps the Node-18 relay bundle free of unsupported array copy methods', () => {
     expect(readFileSync(relayEntry, 'utf8')).not.toContain('.toReversed(')
   })
+
+  it('loads node-pty after an in-place dependency repair without restarting', async () => {
+    tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-native-repair-'))
+    const repairedRelayEntry = path.join(tmpDir, 'relay.js')
+    copyFileSync(relayEntry, repairedRelayEntry)
+
+    relay = spawnRelay(repairedRelayEntry)
+    await relay.sentinelReceived
+
+    const failedId = relay.send('pty.spawn', { cols: 80, rows: 24 })
+    const failed = await relay.waitForResponse(failedId)
+    expect(failed.error?.message).toContain('node-pty is not available')
+
+    const nodePtyDir = path.join(tmpDir, 'node_modules', 'node-pty')
+    mkdirSync(nodePtyDir, { recursive: true })
+    writeFileSync(
+      path.join(nodePtyDir, 'index.js'),
+      `module.exports = { spawn() { return {
+        pid: process.pid,
+        process: 'mock-shell',
+        onData() {}, onExit() {}, write() {}, resize() {}, kill() {}, clear() {}
+      } } }\n`
+    )
+
+    const repairedId = relay.send('pty.spawn', { cols: 80, rows: 24 })
+    const repaired = await relay.waitForResponse(repairedId)
+    expect(repaired.error).toBeUndefined()
+    expect(repaired.result).toMatchObject({ id: 'pty-1' })
+  }, 10_000)
 
   it('responds to fs.stat over stdin/stdout', async () => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-sub-'))

@@ -47,6 +47,10 @@ vi.mock('./ssh-relay-versioned-install', () => ({
   gcOldRelayVersions: vi.fn().mockResolvedValue(undefined)
 }))
 
+vi.mock('./ssh-relay-repair-lock', () => ({
+  tryAcquireRelayRepairLock: vi.fn().mockResolvedValue(true)
+}))
+
 vi.mock('./ssh-connection-utils', () => ({
   shellEscape: (s: string) => `'${s}'`
 }))
@@ -61,6 +65,7 @@ import {
   finalizeInstall,
   isRelayAlreadyInstalled
 } from './ssh-relay-versioned-install'
+import { tryAcquireRelayRepairLock } from './ssh-relay-repair-lock'
 import type { SshConnection } from './ssh-connection'
 
 type SftpWriteCapture = {
@@ -270,6 +275,10 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     // break `require('node-pty')`.
     expect(parsed.type).toBe('commonjs')
     expect(parsed.dependencies).toEqual({ '@parcel/watcher': '2.5.6', 'node-pty': '1.1.0' })
+    expect(parsed.allowScripts).toEqual({
+      '@parcel/watcher@2.5.6': true,
+      'node-pty@1.1.0': true
+    })
 
     const execCalls = vi.mocked(execCommand).mock.calls.map(([, c]) => c)
     const npmInstallIdx = execCalls.findIndex(
@@ -694,7 +703,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
 
     await deployAndLaunchRelay(conn)
 
-    expect(vi.mocked(acquireInstallLock)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(tryAcquireRelayRepairLock)).toHaveBeenCalledTimes(1)
     expect(vi.mocked(finalizeInstall)).toHaveBeenCalledTimes(1)
     const execCalls = vi.mocked(execCommand).mock.calls.map(([, c]) => c)
     expect(
@@ -734,9 +743,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     // Why: lock contention/wedge must not block a completed relay from launching
     // in degraded mode — repair is best-effort and we hold no lock to release.
     vi.mocked(isRelayAlreadyInstalled).mockResolvedValue(true)
-    vi.mocked(acquireInstallLock).mockRejectedValueOnce(
-      new Error('Could not acquire relay install lock at /x; another install is in progress')
-    )
+    vi.mocked(tryAcquireRelayRepairLock).mockResolvedValueOnce(false)
     const conn = makeMockConnection(sftpCapture)
     feed([
       '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
@@ -753,7 +760,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     const execCalls = vi.mocked(execCommand).mock.calls.map(([, c]) => c)
     expect(execCalls.some((c) => c.includes('npm install'))).toBe(false)
     const warnMessages = warnSpy.mock.calls.map((args) => String(args[0] ?? ''))
-    expect(warnMessages.some((m) => m.includes('Could not lock native-deps repair'))).toBe(true)
+    expect(warnMessages.some((m) => m.includes('repair lock is busy'))).toBe(true)
   })
 
   it('loads native bindings when checking whether a completed relay needs repair', async () => {
@@ -792,6 +799,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     await deployAndLaunchRelay(conn)
 
     expect(vi.mocked(acquireInstallLock)).not.toHaveBeenCalled()
+    expect(vi.mocked(tryAcquireRelayRepairLock)).not.toHaveBeenCalled()
     expect(vi.mocked(finalizeInstall)).not.toHaveBeenCalled()
     const execCalls = vi.mocked(execCommand).mock.calls.map(([, c]) => c)
     expect(execCalls.some((c) => c.includes('npm install'))).toBe(false)

@@ -81,36 +81,6 @@ export function probeRelayInstalledCommand(
   )
 }
 
-export function acquireInstallLockParentCommand(
-  host: RemoteHostPlatform,
-  remoteRelayDir: string
-): string {
-  return makeRemoteDirectoryCommand(host, remoteRelayDir)
-}
-
-export function tryCreateInstallLockCommand(host: RemoteHostPlatform, lockDir: string): string {
-  if (!isWindowsRemoteHost(host)) {
-    return `mkdir ${shellEscape(lockDir)} 2>&1 && echo OK || echo BUSY`
-  }
-  // New-Item has no -LiteralPath parameter; using it breaks stock Windows PowerShell.
-  return powerShellCommand(
-    `$ErrorActionPreference = "Stop"; try { $null = New-Item -ItemType Directory -Path ${powerShellLiteral(lockDir)}; 'OK' } catch { 'BUSY' }`
-  )
-}
-
-export function lockMtimeEpochCommand(host: RemoteHostPlatform, lockDir: string): string {
-  if (!isWindowsRemoteHost(host)) {
-    return `stat -c %Y ${shellEscape(lockDir)} 2>/dev/null || stat -f %m ${shellEscape(lockDir)} 2>/dev/null || echo`
-  }
-  return powerShellCommand(
-    [
-      `$item = Get-Item -LiteralPath ${powerShellLiteral(lockDir)} -ErrorAction Stop`,
-      '$dto = [DateTimeOffset]$item.LastWriteTimeUtc',
-      'Write-Output $dto.ToUnixTimeSeconds()'
-    ].join('; ')
-  )
-}
-
 export function listRelayBaseDirsCommand(host: RemoteHostPlatform, baseDir: string): string {
   if (!isWindowsRemoteHost(host)) {
     return `ls -1 ${shellEscape(baseDir)} 2>/dev/null || true`

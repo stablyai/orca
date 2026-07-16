@@ -51,7 +51,14 @@ async function loadPty(): Promise<typeof NodePty | null> {
     ptyModule = await import('node-pty')
     return ptyModule
   } catch {
-    return null
+    try {
+      // Why: Node caches rejected dynamic imports, while a failed CommonJS
+      // load remains retryable after deploy repairs node_modules in place.
+      ptyModule = require('node-pty') as typeof NodePty
+      return ptyModule
+    } catch {
+      return null
+    }
   }
 }
 

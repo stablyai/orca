@@ -23,6 +23,7 @@ import {
   abandonInstall,
   gcOldRelayVersions
 } from './ssh-relay-versioned-install'
+import { tryAcquireRelayRepairLock } from './ssh-relay-repair-lock'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { SshConnection } from './ssh-connection'
@@ -131,6 +132,38 @@ describe('acquireInstallLock', () => {
     expect(mockExec).toHaveBeenCalledTimes(2)
   })
 
+  it('returns immediately when a best-effort repair lock is busy', async () => {
+    mockExec.mockResolvedValueOnce('').mockResolvedValueOnce('BUSY').mockResolvedValueOnce('BUSY')
+
+    await expect(tryAcquireRelayRepairLock(conn, '/r')).resolves.toBe(false)
+
+    const commands = mockExec.mock.calls.map(([, command]) => command)
+    expect(commands.some((command) => command.includes('.install-lock.steal'))).toBe(true)
+    expect(commands.filter((command) => command.startsWith('rm -rf'))).toHaveLength(0)
+  })
+
+  it('does not steal a live repair lock that exceeds the deploy backstop', async () => {
+    // Why: repair can run npm install plus rebuild under the same lock; a
+    // second reconnect must launch degraded rather than corrupt node_modules.
+    mockExec.mockResolvedValueOnce('').mockResolvedValueOnce('BUSY').mockResolvedValueOnce('BUSY')
+
+    await expect(tryAcquireRelayRepairLock(conn, '/r')).resolves.toBe(false)
+
+    const commands = mockExec.mock.calls.map(([, command]) => command)
+    expect(commands.some((command) => command.includes('.install-lock.steal'))).toBe(true)
+    expect(commands.filter((command) => command.startsWith('rm -rf'))).toHaveLength(0)
+  })
+
+  it('recovers a stale best-effort repair lock without polling', async () => {
+    mockExec.mockResolvedValueOnce('').mockResolvedValueOnce('BUSY').mockResolvedValueOnce('OK')
+
+    await expect(tryAcquireRelayRepairLock(conn, '/r')).resolves.toBe(true)
+
+    const commands = mockExec.mock.calls.map(([, command]) => command)
+    expect(commands.some((command) => command.includes('.install-lock.steal'))).toBe(true)
+    expect(commands.filter((command) => command.includes('.install-lock.steal'))).toHaveLength(1)
+  })
+
   it('polls until the lock becomes available (concurrent installer wins, then we acquire)', async () => {
     vi.useFakeTimers()
     try {
@@ -159,36 +192,29 @@ describe('acquireInstallLock', () => {
     }
   })
 
-  it('steals a stale lock and retries with a reset timeout window', async () => {
+  it('steals a stale lock with a serialized remote steal command', async () => {
     vi.useFakeTimers({ now: 1_700_000_000_000 })
     try {
-      let mkdirCalls = 0
       mockExec.mockImplementation(async (_conn: unknown, cmd: string) => {
         if (cmd.startsWith('mkdir -p')) {
           return ''
         }
+        if (cmd.includes('.install-lock.steal')) {
+          return 'OK'
+        }
         if (cmd.includes('mkdir') && cmd.includes('.install-lock')) {
-          mkdirCalls++
-          return mkdirCalls > 200 ? 'OK' : 'BUSY'
-        }
-        if (cmd.includes('stat')) {
-          return `${Math.floor((Date.now() - 10 * 60 * 1000) / 1000)}\n`
-        }
-        if (cmd.startsWith('rm -rf')) {
-          mkdirCalls = 1000
-          return ''
+          return 'BUSY'
         }
         return ''
       })
 
       const promise = acquireInstallLock(conn, '/r')
-      // Drive through the full timeout (120s) so the stale-recovery branch
-      // fires, then drive a few more seconds for the post-recovery retry.
-      await vi.advanceTimersByTimeAsync(125_000)
+      // Drive through the full deploy bound so stale recovery fires.
+      await vi.advanceTimersByTimeAsync(545_000)
       await promise
 
       const cmds = mockExec.mock.calls.map(([, c]) => c)
-      expect(cmds.some((c) => c.includes('rm -rf') && c.includes('.install-lock'))).toBe(true)
+      expect(cmds.some((c) => c.includes('.install-lock.steal'))).toBe(true)
     } finally {
       vi.useRealTimers()
     }
@@ -201,18 +227,45 @@ describe('acquireInstallLock', () => {
         if (cmd.startsWith('mkdir -p')) {
           return ''
         }
+        if (cmd.includes('.install-lock.steal')) {
+          return 'BUSY'
+        }
         if (cmd.includes('mkdir') && cmd.includes('.install-lock')) {
           return 'BUSY'
         }
         if (cmd.includes('stat')) {
-          return `${Math.floor(Date.now() / 1000)}\n`
+          return '0\n'
         }
         return ''
       })
 
       const rejection = expect(acquireInstallLock(conn, '/r')).rejects.toThrow(/not yet stale/i)
-      await vi.advanceTimersByTimeAsync(125_000)
+      await vi.advanceTimersByTimeAsync(545_000)
       await rejection
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps waiting while a slow first installer is within the deploy bound', async () => {
+    vi.useFakeTimers({ now: 1_700_000_000_000 })
+    try {
+      const availableAt = Date.now() + 500_000
+      mockExec.mockImplementation(async (_conn: unknown, cmd: string) => {
+        if (cmd.startsWith('mkdir -p')) {
+          return ''
+        }
+        if (cmd.includes('mkdir') && cmd.includes('.install-lock')) {
+          return Date.now() >= availableAt ? 'OK' : 'BUSY'
+        }
+        return ''
+      })
+
+      const promise = acquireInstallLock(conn, '/r')
+      await vi.advanceTimersByTimeAsync(501_000)
+
+      await expect(promise).resolves.toBeUndefined()
+      expect(mockExec.mock.calls.some(([, cmd]) => cmd.includes('.install-lock.steal'))).toBe(false)
     } finally {
       vi.useRealTimers()
     }
@@ -273,8 +326,8 @@ describe('gcOldRelayVersions', () => {
   it('skips siblings whose .install-lock is held and fresh', async () => {
     mockExec.mockResolvedValueOnce('relay-0.1.0+aaa\n')
     mockExec.mockResolvedValueOnce('LOCKED')
-    // isLockStale: mtime ~now → not stale.
-    mockExec.mockResolvedValueOnce(`${Math.floor(Date.now() / 1000)}\n`)
+    // isLockStale: age ~now → not stale.
+    mockExec.mockResolvedValueOnce('0\n')
     await gcOldRelayVersions(conn, '/home/u', '/home/u/.orca-remote/relay-0.1.0+bbb')
     const cmds = mockExec.mock.calls.map(([, c]) => c)
     expect(cmds.some((c) => c.includes('rm -rf'))).toBe(false)
@@ -283,9 +336,8 @@ describe('gcOldRelayVersions', () => {
   it('removes a sibling with a stale lock + .install-complete (rm-lock failed mid-finalize)', async () => {
     mockExec.mockResolvedValueOnce('relay-0.1.0+aaa\n')
     mockExec.mockResolvedValueOnce('LOCKED')
-    // isLockStale: mtime well in the past → stale.
-    const staleSec = Math.floor((Date.now() - 10 * 60 * 1000) / 1000)
-    mockExec.mockResolvedValueOnce(`${staleSec}\n`)
+    // isLockStale: age well above the stale window → stale.
+    mockExec.mockResolvedValueOnce(`${21 * 60}\n`)
     mockExec.mockResolvedValueOnce('COMPLETE') // .install-complete present
     mockExec.mockResolvedValueOnce('') // socket probe → no ALIVE
     mockExec.mockResolvedValueOnce('') // rm -rf

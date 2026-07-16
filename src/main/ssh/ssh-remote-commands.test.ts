@@ -1,4 +1,21 @@
+import { execFileSync, spawn, spawnSync } from 'node:child_process'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  utimesSync
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import {
+  lockAgeSecondsCommand,
+  tryCreateInstallLockCommand,
+  tryStealInstallLockCommand
+} from './ssh-relay-install-lock-commands'
 import {
   commandInRemoteDirectory,
   commandWithNodePath,
@@ -6,17 +23,50 @@ import {
   makeRemoteDirectoryCommand,
   probeRelayInstalledCommand,
   readRemoteHomeCommand,
-  relayLivenessProbeCommand,
-  tryCreateInstallLockCommand
+  relayLivenessProbeCommand
 } from './ssh-remote-commands'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 const posix = getRemoteHostPlatform('linux-x64')
 const windows = getRemoteHostPlatform('win32-x64')
+const powerShellExecutable = (
+  process.platform === 'win32' ? ['pwsh.exe', 'powershell.exe'] : ['pwsh']
+).find((candidate) => {
+  const result = spawnSync(candidate, ['-NoProfile', '-NonInteractive', '-Command', 'exit 0'], {
+    stdio: 'ignore'
+  })
+  return result.status === 0
+})
 
 function decodePowerShellCommand(command: string): string {
   const match = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/)
   return match ? Buffer.from(match[1], 'base64').toString('utf16le') : ''
+}
+
+function runShellCommand(command: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('/bin/sh', ['-c', command], {
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.setEncoding('utf8')
+    child.stderr.setEncoding('utf8')
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk
+    })
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk
+    })
+    child.on('error', reject)
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve(stdout)
+        return
+      }
+      reject(new Error(`shell exited ${code}: ${stderr}`))
+    })
+  })
 }
 
 describe('ssh remote command builders', () => {
@@ -100,6 +150,121 @@ describe('ssh remote command builders', () => {
     expect(script).toContain("} catch { 'BUSY' }")
     expect(script).not.toContain('}; catch')
   })
+
+  it('computes install-lock age on the remote host clock', () => {
+    const posixCommand = lockAgeSecondsCommand(posix, '/home/me/.orca-remote/relay/.install-lock')
+    const windowsScript = decodePowerShellCommand(
+      lockAgeSecondsCommand(windows, 'C:/Users/me/.orca-remote/relay/.install-lock')
+    )
+
+    expect(posixCommand).toContain('date +%s')
+    expect(posixCommand).toContain('echo "$age"')
+    expect(windowsScript).toContain('[DateTimeOffset]::UtcNow.ToUnixTimeSeconds()')
+    expect(windowsScript).toContain('Write-Output ($now - $mtime)')
+  })
+
+  it('serializes stale install-lock recovery under a sibling steal mutex', () => {
+    const posixCommand = tryStealInstallLockCommand(
+      posix,
+      '/home/me/.orca-remote/relay/.install-lock',
+      20 * 60
+    )
+    const windowsScript = decodePowerShellCommand(
+      tryStealInstallLockCommand(windows, 'C:/Users/me/.orca-remote/relay/.install-lock', 20 * 60)
+    )
+
+    expect(posixCommand).toContain('.install-lock.steal')
+    expect(posixCommand).toContain('$mtime')
+    expect(posixCommand).toContain('-gt 1200')
+    expect(posixCommand).toContain('current_mtime')
+    expect(posixCommand).toContain('steal_age')
+    expect(posixCommand).toContain('steal="$steal.next.$steal_token"')
+    expect(posixCommand).toContain('trap')
+    expect(windowsScript).toContain('$lock.steal.$mtime')
+    expect(windowsScript).toContain('-gt 1200')
+    expect(windowsScript).toContain('$currentIdentity -eq $lockIdentity')
+    expect(windowsScript).toContain('$stealAge -le 120')
+    expect(windowsScript).toContain('$steal = "$steal.next.$stealIdentity"')
+    expect(windowsScript).toContain('New-Item -ItemType Directory -Path $steal')
+    expect(windowsScript).toContain('finally')
+  })
+
+  it.runIf(powerShellExecutable)('emits a parseable Windows stale-lock recovery command', () => {
+    const script = decodePowerShellCommand(
+      tryStealInstallLockCommand(
+        windows,
+        'C:/Users/orca-missing/.orca-remote/relay/.install-lock',
+        20 * 60
+      )
+    )
+    const result = spawnSync(
+      powerShellExecutable!,
+      ['-NoProfile', '-NonInteractive', '-Command', script],
+      { encoding: 'utf8' }
+    )
+
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.stdout.trim()).toBe('BUSY')
+  })
+
+  it.runIf(process.platform !== 'win32')(
+    'recovers a stale POSIX steal mutex left by a crashed stealer',
+    () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-install-lock-'))
+      try {
+        const lockDir = join(root, '.install-lock')
+        mkdirSync(lockDir)
+        const staleDate = new Date(Date.now() - 60 * 60_000)
+        utimesSync(lockDir, staleDate, staleDate)
+        const lockMtimeSeconds = Math.floor(statSync(lockDir).mtimeMs / 1000)
+        const stealDir = `${lockDir}.steal.${lockMtimeSeconds}`
+        mkdirSync(stealDir)
+        utimesSync(stealDir, staleDate, staleDate)
+
+        const command = tryStealInstallLockCommand(posix, lockDir, 20 * 60)
+        const output = execFileSync('/bin/sh', ['-c', command], { encoding: 'utf8' })
+
+        expect(output.trim()).toBe('OK')
+        expect(existsSync(lockDir)).toBe(true)
+        expect(existsSync(stealDir)).toBe(true)
+        expect(readdirSync(root).some((name) => name.includes('.next.'))).toBe(false)
+        expect(Math.floor(statSync(lockDir).mtimeMs / 1000)).toBeGreaterThan(lockMtimeSeconds)
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.runIf(process.platform !== 'win32')(
+    'lets only one POSIX stealer take over a preexisting stale steal mutex',
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-install-lock-race-'))
+      try {
+        const lockDir = join(root, '.install-lock')
+        mkdirSync(lockDir)
+        const staleDate = new Date(Date.now() - 60 * 60_000)
+        utimesSync(lockDir, staleDate, staleDate)
+        const lockMtimeSeconds = Math.floor(statSync(lockDir).mtimeMs / 1000)
+        const stealDir = `${lockDir}.steal.${lockMtimeSeconds}`
+        mkdirSync(stealDir)
+        utimesSync(stealDir, staleDate, staleDate)
+
+        const command = tryStealInstallLockCommand(posix, lockDir, 20 * 60)
+        const outputs = await Promise.all(
+          Array.from({ length: 64 }, () => runShellCommand(command))
+        )
+        const okCount = outputs.filter((output) => output.trim().endsWith('OK')).length
+
+        expect(okCount).toBe(1)
+        expect(existsSync(lockDir)).toBe(true)
+        expect(existsSync(stealDir)).toBe(true)
+        expect(readdirSync(root).some((name) => name.includes('.next.'))).toBe(false)
+        expect(readdirSync(root).some((name) => name.includes('.tombstone'))).toBe(false)
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    }
+  )
 
   it('makes Windows remote directory changes fail before running scoped commands', () => {
     const scopedCommand = decodePowerShellCommand(
