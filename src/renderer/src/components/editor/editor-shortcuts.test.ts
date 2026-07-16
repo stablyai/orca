@@ -182,6 +182,27 @@ describe('installEditorFindShortcut', () => {
     expect(fixture.onDownstreamKeyDown).toHaveBeenCalledTimes(1)
   })
 
+  it('runs Monaco existing find action through the shared bridge', () => {
+    const container = document.createElement('div')
+    const input = document.createElement('textarea')
+    const run = vi.fn()
+    const getAction = vi.fn((_id: string) => ({ run }))
+    container.appendChild(input)
+    document.body.appendChild(container)
+    const dispose = installMonacoEditorFindShortcut({
+      getAction,
+      getContainerDomNode: () => container
+    })
+
+    dispatchKeyDown(input, { key: 'f', code: 'KeyU', metaKey: true })
+
+    expect(getAction).toHaveBeenCalledWith('actions.find')
+    expect(run).toHaveBeenCalledTimes(1)
+    dispose()
+  })
+})
+
+describe('installEditorAddReviewNoteShortcut', () => {
   it('invokes add-review-note on its default binding and honors overrides', () => {
     const container = document.createElement('div')
     const input = document.createElement('textarea')
@@ -223,25 +244,6 @@ describe('installEditorFindShortcut', () => {
     dispose()
     dispatchKeyDown(input, { key: 'a', code: 'KeyA', metaKey: true, shiftKey: true })
     expect(onAddReviewNote).toHaveBeenCalledTimes(2)
-  })
-
-  it('runs Monaco existing find action through the shared bridge', () => {
-    const container = document.createElement('div')
-    const input = document.createElement('textarea')
-    const run = vi.fn()
-    const getAction = vi.fn((_id: string) => ({ run }))
-    container.appendChild(input)
-    document.body.appendChild(container)
-    const dispose = installMonacoEditorFindShortcut({
-      getAction,
-      getContainerDomNode: () => container
-    })
-
-    dispatchKeyDown(input, { key: 'f', code: 'KeyU', metaKey: true })
-
-    expect(getAction).toHaveBeenCalledWith('actions.find')
-    expect(run).toHaveBeenCalledTimes(1)
-    dispose()
   })
 })
 
