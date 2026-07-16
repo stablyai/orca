@@ -397,7 +397,9 @@ describe('project quick commands', () => {
         id: 'orca-yaml:insert-only',
         label: 'Insert only',
         action: 'terminal-command',
-        command: 'git rebase -i',
+        // Why: the trailing cursor space is the point of insert-only commands;
+        // projection must not trim what the orca.yaml parse preserved.
+        command: 'git rebase -i ',
         appendEnter: false,
         scope: { type: 'repo', repoId: 'repo-1' }
       }

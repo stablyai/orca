@@ -146,7 +146,11 @@ export function normalizeTerminalQuickCommands(input: unknown): TerminalQuickCom
         )
       })
     } else {
-      const command = hasCommand ? String(record.command).trimEnd() : ''
+      const rawCommand = hasCommand ? String(record.command) : ''
+      // Why: insert-only commands may end with an intentional cursor space, so
+      // strip only trailing newlines for them instead of a full trimEnd.
+      const command =
+        record.appendEnter === false ? rawCommand.replace(/[\r\n]+$/, '') : rawCommand.trimEnd()
       normalized.push({
         ...base,
         action: 'terminal-command',
