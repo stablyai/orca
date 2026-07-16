@@ -145,10 +145,10 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     type: 'senseVoice',
     provider: 'local',
     language: 'multilingual',
-    sizeBytes: 1_047_870_769,
+    sizeBytes: 163_002_883,
     downloadUrl:
-      'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17.tar.bz2',
-    archiveSha256: 'f6b2a72ebcb1ac7a764d4cfccd886e6bcb2a95c4657c2199d0ba95ed4b9ea71a',
+      'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2',
+    archiveSha256: '7d1efa2138a65b0b488df37f8b89e3d91a60676e416f515b952358d83dfd347e',
     archiveFormat: 'tar.bz2',
     files: ['model.int8.onnx', 'tokens.txt'],
     sampleRate: 16000,
