@@ -6652,7 +6652,7 @@ describe('registerWorktreeHandlers', () => {
 
     await expect(
       handlers['worktrees:remove'](null, { worktreeId: 'repo-1::/workspace/feature-wt' })
-    ).rejects.toThrow('Worktree contains submodule commits that exist only in this workspace.')
+    ).rejects.toThrow('Worktree contains submodule work that may exist only in this workspace.')
 
     expect(removeWorktreeMock).toHaveBeenCalledTimes(1)
     expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
@@ -7354,7 +7354,7 @@ describe('registerWorktreeHandlers', () => {
 
     await expect(
       handlers['worktrees:remove'](null, { worktreeId: 'repo-ssh::/remote/feature-wt' })
-    ).rejects.toThrow('Worktree contains submodule commits that exist only in this workspace.')
+    ).rejects.toThrow('Worktree contains submodule work that may exist only in this workspace.')
 
     expect(provider.removeWorktree).toHaveBeenCalledTimes(1)
     expect(store.removeWorktreeMeta).not.toHaveBeenCalled()

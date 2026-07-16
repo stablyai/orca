@@ -427,7 +427,7 @@ describe('forceRemoveWorktreeAfterSubmoduleRefusal', () => {
         originalRemovalForced: false,
         closeWatcher: vi.fn().mockResolvedValue(undefined)
       })
-    ).rejects.toThrow('Worktree contains submodule commits that exist only in this workspace.')
+    ).rejects.toThrow('Worktree contains submodule work that may exist only in this workspace.')
 
     expect(removeWorktreeMock).not.toHaveBeenCalled()
   })

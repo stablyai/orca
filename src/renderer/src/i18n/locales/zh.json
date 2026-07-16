@@ -4321,7 +4321,7 @@
               "0899ebdb28": "Git 已经忘记了这个工作区，但它的目录仍然在磁盘上。使用强制删除来删除孤立目录。",
               "locked": "此工作区被 Git 锁定。请在其仓库中运行 git worktree unlock <worktree-path>，然后重试删除。",
               "lockedReason": "此工作区被 Git 锁定。Git 报告：{{value0}}。请在其仓库中运行 git worktree unlock <worktree-path>，然后重试删除。",
-              "unpushedSubmodules": "Its submodules have commits that exist only in this workspace. Push them first, or use Force Delete to discard them permanently."
+              "unpushedSubmodules": "Its submodules may have commits or other work that exists only in this workspace. Push or back them up first, or use Force Delete to discard them permanently."
             }
           }
         },

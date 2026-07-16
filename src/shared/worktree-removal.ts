@@ -4,10 +4,11 @@ export const LOCKED_WORKTREE_REMOVAL_PREFIX = 'Worktree is locked by Git.'
 
 // Why: a linked worktree's initialized submodules keep their entire git
 // database under .git/worktrees/<id>/modules, which any completed removal
-// deletes. Commits that exist only there are unrecoverable, so removal must
-// refuse to auto-force until the user explicitly opts in.
+// deletes — including databases left behind by `git submodule deinit`.
+// Commits that exist only there are unrecoverable, so removal must refuse to
+// auto-force until the user explicitly opts in.
 export const UNPUSHED_SUBMODULE_WORKTREE_REMOVAL_MESSAGE =
-  'Worktree contains submodule commits that exist only in this workspace.'
+  'Worktree contains submodule work that may exist only in this workspace.'
 
 export type WorktreeForceDeleteReason =
   | 'dirty'

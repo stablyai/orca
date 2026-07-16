@@ -74,7 +74,7 @@ export function getDeleteWorktreeToastCopy(
         ),
         description: translate(
           'auto.components.sidebar.delete.worktree.toast.unpushedSubmodules',
-          'Its submodules have commits that exist only in this workspace. Push them first, or use Force Delete to discard them permanently.'
+          'Its submodules may have commits or other work that exists only in this workspace. Push or back them up first, or use Force Delete to discard them permanently.'
         ),
         isDestructive: false
       }

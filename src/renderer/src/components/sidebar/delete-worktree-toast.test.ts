@@ -39,17 +39,17 @@ describe('getDeleteWorktreeToastCopy', () => {
     })
   })
 
-  it('uses unpushed-submodule guidance when submodule commits exist only in the workspace', () => {
+  it('uses unpushed-submodule guidance when submodule work exists only in the workspace', () => {
     expect(
       getDeleteWorktreeToastCopy(
         'feature/foo',
         'unpushed-submodules',
-        'Worktree contains submodule commits that exist only in this workspace.'
+        'Worktree contains submodule work that may exist only in this workspace.'
       )
     ).toEqual({
       title: 'Failed to delete workspace feature/foo',
       description:
-        'Its submodules have commits that exist only in this workspace. Push them first, or use Force Delete to discard them permanently.',
+        'Its submodules may have commits or other work that exists only in this workspace. Push or back them up first, or use Force Delete to discard them permanently.',
       isDestructive: false
     })
   })

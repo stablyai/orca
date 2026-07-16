@@ -4340,7 +4340,7 @@
               "0899ebdb28": "Git ya olvidó este espacio de trabajo, pero su directorio todavía está en disco. Usa Forzar eliminación para eliminar el directorio huérfano.",
               "locked": "Este espacio de trabajo está bloqueado por Git. Ejecute git worktree unlock <worktree-path> desde su repositorio, luego intente la eliminación de nuevo.",
               "lockedReason": "Este espacio de trabajo está bloqueado por Git. Git reportó: {{value0}}. Ejecute git worktree unlock <worktree-path> desde su repositorio, luego intente la eliminación de nuevo.",
-              "unpushedSubmodules": "Its submodules have commits that exist only in this workspace. Push them first, or use Force Delete to discard them permanently."
+              "unpushedSubmodules": "Its submodules may have commits or other work that exists only in this workspace. Push or back them up first, or use Force Delete to discard them permanently."
             }
           }
         },

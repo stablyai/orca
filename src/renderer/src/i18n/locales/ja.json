@@ -4321,7 +4321,7 @@
               "0899ebdb28": "Git はすでにこのワークスペースを忘れていますが、そのディレクトリはまだディスク上にあります。孤立したディレクトリを削除するには、強制削除を使用します。",
               "locked": "このワークスペースはGitによってロックされています。リポジトリでgit worktree unlock <worktree-path>を実行してから、削除を再試行してください。",
               "lockedReason": "このワークスペースはGitによってロックされています。Gitレポート: {{value0}}。リポジトリでgit worktree unlock <worktree-path>を実行してから、削除を再試行してください。",
-              "unpushedSubmodules": "Its submodules have commits that exist only in this workspace. Push them first, or use Force Delete to discard them permanently."
+              "unpushedSubmodules": "Its submodules may have commits or other work that exists only in this workspace. Push or back them up first, or use Force Delete to discard them permanently."
             }
           }
         },

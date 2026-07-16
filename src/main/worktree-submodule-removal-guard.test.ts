@@ -9,10 +9,13 @@ const originalError = Object.assign(new Error('Command failed: git worktree remo
   stderr: 'fatal: working trees containing submodules cannot be moved or removed'
 })
 
-function guardExec(statusStdout: string, foreachStdout: string) {
+function guardExec(statusStdout: string, foreachStdout: string, submoduleStatusStdout = '') {
   return vi.fn(async (args: string[]) => {
     if (args[0] === 'status') {
       return { stdout: statusStdout }
+    }
+    if (args[0] === 'submodule' && args[1] === 'status') {
+      return { stdout: submoduleStatusStdout }
     }
     return { stdout: foreachStdout }
   })
@@ -20,7 +23,7 @@ function guardExec(statusStdout: string, foreachStdout: string) {
 
 describe('assertSubmoduleWorktreeSafeToForceRemove', () => {
   it('passes for a clean tree whose submodule commits all exist on a remote', async () => {
-    const exec = guardExec('', '0\n0\n')
+    const exec = guardExec('', '0\n0\n', ' f00bbe3 vendor/sub (heads/main)\n')
     await expect(
       assertSubmoduleWorktreeSafeToForceRemove(exec, originalError, '/workspaces/feature')
     ).resolves.toBeUndefined()
@@ -32,6 +35,7 @@ describe('assertSubmoduleWorktreeSafeToForceRemove', () => {
       '--untracked-files=all',
       '--ignore-submodules=none'
     ])
+    expect(exec).toHaveBeenCalledWith(['submodule', 'status', '--recursive'])
     expect(exec).toHaveBeenCalledWith([
       'submodule',
       'foreach',
@@ -55,6 +59,19 @@ describe('assertSubmoduleWorktreeSafeToForceRemove', () => {
     await expect(
       assertSubmoduleWorktreeSafeToForceRemove(
         guardExec('', '0\n2\n'),
+        originalError,
+        '/workspaces/feature'
+      )
+    ).rejects.toThrow(UNPUSHED_SUBMODULE_WORKTREE_REMOVAL_MESSAGE)
+  })
+
+  it('throws the unpushed-submodules error for a deinit-leftover or inactive submodule', async () => {
+    // Why: `git submodule deinit` keeps the submodule database under the
+    // worktree admin dir where `submodule foreach` cannot see it; a dash
+    // entry means the state cannot be verified, so force must be explicit.
+    await expect(
+      assertSubmoduleWorktreeSafeToForceRemove(
+        guardExec('', '', '-f00bbe3 vendor/sub\n'),
         originalError,
         '/workspaces/feature'
       )

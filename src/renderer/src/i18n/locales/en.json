@@ -4363,7 +4363,7 @@
               "0899ebdb28": "Git already forgot this workspace, but its directory is still on disk. Use Force Delete to remove the orphaned directory.",
               "locked": "This workspace is locked by Git. Run git worktree unlock <worktree-path> from its repository, then retry deletion.",
               "lockedReason": "This workspace is locked by Git. Git reported: {{value0}}. Run git worktree unlock <worktree-path> from its repository, then retry deletion.",
-              "unpushedSubmodules": "Its submodules have commits that exist only in this workspace. Push them first, or use Force Delete to discard them permanently."
+              "unpushedSubmodules": "Its submodules may have commits or other work that exists only in this workspace. Push or back them up first, or use Force Delete to discard them permanently."
             }
           }
         },

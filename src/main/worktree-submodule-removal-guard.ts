@@ -56,8 +56,13 @@ export function sshSubmoduleRemovalGuardGitExec(
  *    submodule git database is their only copy, and the preserved branch's
  *    gitlink would reference a commit that no longer exists anywhere.
  *
- * Uninitialized submodules and deinit-leftover git databases under the admin
- * dir are not probed; they are not reachable through `git submodule foreach`.
+ * Submodules that are declared but not active (`git submodule status` shows a
+ * leading `-`, e.g. after `git submodule deinit`) cannot be verified — a
+ * deinit leaves the submodule's database under the admin dir, invisible to
+ * `git submodule foreach` — so they require explicit force too. The one
+ * residual gap is a leftover database whose submodule was also removed from
+ * .gitmodules: no porcelain command can see it, and git's own sanctioned
+ * `worktree remove --force` destroys it identically.
  * Throws a force-classifiable error when unsafe; rethrows the original
  * removal error when the state cannot be verified.
  */
@@ -67,6 +72,7 @@ export async function assertSubmoduleWorktreeSafeToForceRemove(
   worktreePath: string
 ): Promise<void> {
   let statusStdout: string
+  let submoduleStates: string
   let localOnlyCommitCounts: string
   try {
     statusStdout = (
@@ -77,6 +83,7 @@ export async function assertSubmoduleWorktreeSafeToForceRemove(
         '--ignore-submodules=none'
       ])
     ).stdout
+    submoduleStates = (await runGitInWorktree(['submodule', 'status', '--recursive'])).stdout
     localOnlyCommitCounts = (
       await runGitInWorktree([
         'submodule',
@@ -98,10 +105,11 @@ export async function assertSubmoduleWorktreeSafeToForceRemove(
     throw dirtyError
   }
 
+  const hasUnverifiableSubmodule = submoduleStates.split('\n').some((line) => line.startsWith('-'))
   const hasLocalOnlySubmoduleCommits = localOnlyCommitCounts
     .split('\n')
     .some((line) => Number.parseInt(line.trim(), 10) > 0)
-  if (hasLocalOnlySubmoduleCommits) {
+  if (hasUnverifiableSubmodule || hasLocalOnlySubmoduleCommits) {
     throw new Error(UNPUSHED_SUBMODULE_WORKTREE_REMOVAL_MESSAGE)
   }
 }
