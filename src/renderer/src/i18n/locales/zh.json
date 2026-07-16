@@ -11990,6 +11990,19 @@
         },
         "richMarkdownSourceOwningCutFeedback": {
           "selectLessContent": "请选择较少的内容，或使用代码模式剪切保留的 HTML 引用。"
+        },
+        "OfficeDocumentViewer": {
+          "loading": "Loading document...",
+          "slide": "Slide",
+          "renderEmptyFallback": "PowerPoint visual preview rendered no slides. Showing extracted slide text instead.",
+          "renderErrorFallback": "PowerPoint visual preview failed. Showing extracted slide text instead.",
+          "renderLoadFallback": "PowerPoint visual preview could not load. Showing extracted slide text instead.",
+          "renderingPresentation": "Rendering presentation...",
+          "stillRenderingPresentation": "This deck is still rendering visuals.",
+          "manualTextFallback": "Showing extracted slide text.",
+          "showExtractedText": "Show extracted text",
+          "formatWarning": "Some document formatting could not be reproduced.",
+          "spreadsheetPreviewLimited": "Preview limited to the first {{rows}} rows and {{columns}} columns."
         }
       },
       "diff": {

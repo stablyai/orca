@@ -33,7 +33,10 @@ export const DEFAULT_MAX_RESULTS = 2000
 
 export const IMAGE_MIME_TYPES: Record<string, string> = {
   ...IMAGE_FILE_MIME_TYPES,
-  '.pdf': 'application/pdf'
+  '.pdf': 'application/pdf',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 }
 
 // ─── Binary detection ────────────────────────────────────────────────

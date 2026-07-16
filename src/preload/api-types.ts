@@ -14,6 +14,11 @@ import type {
   TerminalTabCloseResponse
 } from '../shared/terminal-tab-close'
 import type {
+  NativePowerPointPreviewCancelRequest,
+  NativePowerPointPreviewRequest,
+  NativePowerPointPreviewResult
+} from '../shared/powerpoint-preview'
+import type {
   LocalLogTailChangedPayload,
   LocalLogTailReadArgs,
   LocalLogTailReadResult,
@@ -919,6 +924,10 @@ export type AppApi = {
 
 export type PreloadApi = {
   app: AppApi
+  powerpointPreview?: {
+    render: (request: NativePowerPointPreviewRequest) => Promise<NativePowerPointPreviewResult>
+    cancel: (request: NativePowerPointPreviewCancelRequest) => Promise<void>
+  }
   orcaProfiles: {
     list: () => Promise<OrcaProfileListResult>
     authStatus: () => Promise<OrcaProfileAuthStatus>

@@ -238,7 +238,10 @@ export const PREVIEWABLE_MIME: Record<string, string> = {
   '.webp': 'image/webp',
   '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
-  '.pdf': 'application/pdf'
+  '.pdf': 'application/pdf',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 }
 
 export function bufferToBlob(

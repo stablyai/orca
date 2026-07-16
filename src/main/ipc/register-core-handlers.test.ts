@@ -14,6 +14,7 @@ const {
   registerStatsHandlersMock,
   registerMemoryHandlersMock,
   registerNotebookHandlersMock,
+  registerPowerPointPreviewHandlersMock,
   registerNotificationHandlersMock,
   registerDeveloperPermissionHandlersMock,
   registerComputerUsePermissionHandlersMock,
@@ -75,6 +76,7 @@ const {
   registerStatsHandlersMock: vi.fn(),
   registerMemoryHandlersMock: vi.fn(),
   registerNotebookHandlersMock: vi.fn(),
+  registerPowerPointPreviewHandlersMock: vi.fn(),
   registerNotificationHandlersMock: vi.fn(),
   registerDeveloperPermissionHandlersMock: vi.fn(),
   registerComputerUsePermissionHandlersMock: vi.fn(),
@@ -188,6 +190,10 @@ vi.mock('./memory', () => ({
 
 vi.mock('./notebook', () => ({
   registerNotebookHandlers: registerNotebookHandlersMock
+}))
+
+vi.mock('./powerpoint-preview', () => ({
+  registerPowerPointPreviewHandlers: registerPowerPointPreviewHandlersMock
 }))
 
 vi.mock('./notifications', () => ({
@@ -373,6 +379,7 @@ describe('registerCoreHandlers', () => {
     registerStatsHandlersMock.mockReset()
     registerMemoryHandlersMock.mockReset()
     registerNotebookHandlersMock.mockReset()
+    registerPowerPointPreviewHandlersMock.mockReset()
     registerNotificationHandlersMock.mockReset()
     registerDeveloperPermissionHandlersMock.mockReset()
     registerComputerUsePermissionHandlersMock.mockReset()
@@ -483,6 +490,7 @@ describe('registerCoreHandlers', () => {
     expect(registerStatsHandlersMock).toHaveBeenCalledWith(stats)
     expect(registerMemoryHandlersMock).toHaveBeenCalledWith(store)
     expect(registerNotebookHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerPowerPointPreviewHandlersMock).toHaveBeenCalled()
     expect(registerNotificationHandlersMock).toHaveBeenCalledWith(store, runtime)
     expect(registerDeveloperPermissionHandlersMock).toHaveBeenCalled()
     expect(registerComputerUsePermissionHandlersMock).toHaveBeenCalled()

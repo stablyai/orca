@@ -873,6 +873,11 @@ describe('registerFilesystemHandlers', () => {
     { ext: 'png', mime: 'image/png', data: [0x89, 0x50, 0x4e, 0x47, 0x00] },
     { ext: 'pdf', mime: 'application/pdf', data: [0x25, 0x50, 0x44, 0x46, 0x00] },
     {
+      ext: 'docx',
+      mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      data: [0x50, 0x4b, 0x03, 0x04, 0x00]
+    },
+    {
       ext: 'svg',
       mime: 'image/svg+xml',
       data: Array.from(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" />'))

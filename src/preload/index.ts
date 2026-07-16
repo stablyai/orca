@@ -6,6 +6,11 @@ import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
+import type {
+  NativePowerPointPreviewCancelRequest,
+  NativePowerPointPreviewRequest,
+  NativePowerPointPreviewResult
+} from '../shared/powerpoint-preview'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
 import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
@@ -505,6 +510,12 @@ const api = {
     pickFloatingWorkspaceDirectory: (): Promise<string | null> =>
       ipcRenderer.invoke('app:pickFloatingWorkspaceDirectory')
   },
+  powerpointPreview: {
+    render: (request: NativePowerPointPreviewRequest): Promise<NativePowerPointPreviewResult> =>
+      ipcRenderer.invoke('powerpointPreview:render', request),
+    cancel: (request: NativePowerPointPreviewCancelRequest): Promise<void> =>
+      ipcRenderer.invoke('powerpointPreview:cancel', request)
+  } satisfies NonNullable<PreloadApi['powerpointPreview']>,
 
   orcaProfiles: {
     list: () => ipcRenderer.invoke('orcaProfiles:list'),

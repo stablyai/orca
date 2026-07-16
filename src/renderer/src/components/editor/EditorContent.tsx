@@ -34,6 +34,7 @@ import { getDiffContentSignature } from './diff-content-signature'
 import { translate } from '@/i18n/i18n'
 import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
 import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
+import { isOfficeDocumentPath } from './office-document-file'
 
 const MonacoEditor = lazy(() => import('./MonacoEditor'))
 const DiffViewer = lazy(() => import('./DiffViewer'))
@@ -45,6 +46,7 @@ const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 const MermaidViewer = lazy(() => import('./MermaidViewer'))
 const CsvViewer = lazy(() => import('./CsvViewer'))
 const IpynbViewer = lazy(() => import('./IpynbViewer'))
+const OfficeDocumentViewer = lazy(() => import('./OfficeDocumentViewer'))
 
 // Why: stable no-op callbacks for read-only tabs so Monaco never routes a
 // content-change or save through the writable pipeline (and so we don't create
@@ -522,6 +524,9 @@ export function EditorContent({
       )
     }
     if (fc.isBinary) {
+      if (isOfficeDocumentPath(contentFile.filePath)) {
+        return <OfficeDocumentViewer content={fc.content} filePath={contentFile.filePath} />
+      }
       if (fc.isImage) {
         return (
           <div className={className}>
@@ -768,6 +773,9 @@ export function EditorContent({
       return <FileLoadErrorView message={fc.loadError} onRetry={() => reloadContent(activeFile)} />
     }
     if (fc.isBinary) {
+      if (isOfficeDocumentPath(activeFile.filePath)) {
+        return <OfficeDocumentViewer content={fc.content} filePath={activeFile.filePath} />
+      }
       if (fc.isImage) {
         return (
           <ImageViewer content={fc.content} filePath={activeFile.filePath} mimeType={fc.mimeType} />

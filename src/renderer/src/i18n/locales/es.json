@@ -11990,6 +11990,19 @@
         },
         "richMarkdownSourceOwningCutFeedback": {
           "selectLessContent": "Selecciona menos contenido o usa el modo de código para cortar citas HTML conservadas."
+        },
+        "OfficeDocumentViewer": {
+          "loading": "Loading document...",
+          "slide": "Slide",
+          "renderEmptyFallback": "PowerPoint visual preview rendered no slides. Showing extracted slide text instead.",
+          "renderErrorFallback": "PowerPoint visual preview failed. Showing extracted slide text instead.",
+          "renderLoadFallback": "PowerPoint visual preview could not load. Showing extracted slide text instead.",
+          "renderingPresentation": "Rendering presentation...",
+          "stillRenderingPresentation": "This deck is still rendering visuals.",
+          "manualTextFallback": "Showing extracted slide text.",
+          "showExtractedText": "Show extracted text",
+          "formatWarning": "Some document formatting could not be reproduced.",
+          "spreadsheetPreviewLimited": "Preview limited to the first {{rows}} rows and {{columns}} columns."
         }
       },
       "diff": {

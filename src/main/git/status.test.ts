@@ -476,6 +476,22 @@ describe('getDiff', () => {
     })
   })
 
+  it('keeps Office document diffs out of the image preview path', async () => {
+    const pptxBuffer = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00])
+    gitExecFileAsyncBufferMock.mockResolvedValueOnce({ stdout: pptxBuffer })
+    readFileMock.mockResolvedValue(pptxBuffer)
+
+    const result = await getDiff('/repo', 'slides/demo.pptx', false)
+
+    expect(result).toEqual({
+      kind: 'binary',
+      originalContent: '',
+      modifiedContent: '',
+      originalIsBinary: true,
+      modifiedIsBinary: true
+    })
+  })
+
   it('coalesces concurrent identical staged diff reads while in flight', async () => {
     const leftBlob = deferredBuffer('head-content\n')
     const rightBlob = deferredBuffer('index-content\n')
