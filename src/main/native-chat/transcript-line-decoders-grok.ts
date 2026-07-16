@@ -87,10 +87,18 @@ export function decodeGrokTranscriptLine(
       extractString(record.name) ??
       extractString(record.tool) ??
       'tool'
+    const callId = grokCallId(record, true)
     return {
       id,
       role: 'assistant',
-      blocks: [{ type: 'tool-call', name, input: record.kind ?? record.arguments ?? record.input }],
+      blocks: [
+        {
+          type: 'tool-call',
+          name,
+          input: record.kind ?? record.arguments ?? record.input,
+          ...(callId ? { callId } : {})
+        }
+      ],
       timestamp,
       source: 'transcript'
     }
@@ -98,6 +106,7 @@ export function decodeGrokTranscriptLine(
 
   if (type === 'tool_result') {
     const output = toolResultOutput(record.content ?? record.output ?? record.result)
+    const callId = grokCallId(record, false)
     return {
       id,
       role: 'tool',
@@ -105,7 +114,8 @@ export function decodeGrokTranscriptLine(
         {
           type: 'tool-result',
           output,
-          ...(record.is_error === true || record.isError === true ? { isError: true } : {})
+          ...(record.is_error === true || record.isError === true ? { isError: true } : {}),
+          ...(callId ? { callId } : {})
         }
       ],
       timestamp,
@@ -127,6 +137,7 @@ function grokToolCallBlocks(value: unknown): NativeChatBlock[] {
       continue
     }
     const name = extractString(record.name) ?? extractString(record.tool) ?? 'tool'
+    const callId = grokCallId(record, true)
     let input: unknown = record.arguments ?? record.input ?? record.args
     if (typeof input === 'string') {
       try {
@@ -135,9 +146,18 @@ function grokToolCallBlocks(value: unknown): NativeChatBlock[] {
         // keep string
       }
     }
-    blocks.push({ type: 'tool-call', name, input })
+    blocks.push({ type: 'tool-call', name, input, ...(callId ? { callId } : {}) })
   }
   return blocks
+}
+
+function grokCallId(record: Record<string, unknown>, allowRecordId: boolean): string | null {
+  return (
+    extractString(record.tool_call_id) ??
+    extractString(record.call_id) ??
+    extractString(record.tool_use_id) ??
+    (allowRecordId ? extractString(record.id) : null)
+  )
 }
 
 function grokSummaryText(value: unknown): string | null {

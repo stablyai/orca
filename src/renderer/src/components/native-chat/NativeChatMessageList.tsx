@@ -20,6 +20,7 @@ import { isNativeChatPastedImagePath } from './native-chat-image-paste'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
+import { activeNativeChatToolMessageId } from './native-chat-turn-activity'
 
 function geometryOf(el: HTMLElement): ScrollGeometry {
   return { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }
@@ -128,7 +129,8 @@ function MessageRow({
   onScrollMessageToTop,
   onLinkClick,
   allowFileUriLinks = false,
-  deliveryFailed = false
+  deliveryFailed = false,
+  isToolRunWorking = false
 }: {
   message: NativeChatMessage
   expandSignal: boolean
@@ -137,6 +139,7 @@ function MessageRow({
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   deliveryFailed?: boolean
+  isToolRunWorking?: boolean
 }): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
   const { prose, tools } = useMemo(() => splitNativeChatBlocks(message.blocks), [message.blocks])
@@ -228,7 +231,14 @@ function MessageRow({
           allowFileUriLinks={allowFileUriLinks}
         />
       ) : null}
-      {tools.length > 0 ? <NativeChatToolRun blocks={tools} expandSignal={expandSignal} /> : null}
+      {tools.length > 0 ? (
+        <NativeChatToolRun
+          blocks={tools}
+          expandSignal={expandSignal}
+          isWorking={isToolRunWorking}
+          onLinkClick={onLinkClick}
+        />
+      ) : null}
     </div>
   )
 }
@@ -273,6 +283,10 @@ export function NativeChatMessageList({
   const messages = useMemo(
     () => foldToolMessages(orderNativeChatMessages(stripNoiseMessages(session.messages))),
     [session.messages]
+  )
+  const activeToolMessageId = useMemo(
+    () => activeNativeChatToolMessageId(messages, isWorking),
+    [isWorking, messages]
   )
   const showTypingIndicator =
     isWorking && !messages.some((message) => message.id === NATIVE_CHAT_STREAMING_ID)
@@ -406,6 +420,7 @@ export function NativeChatMessageList({
               onLinkClick={onLinkClick}
               allowFileUriLinks={allowFileUriLinks}
               deliveryFailed={failedDeliveryMessageIds?.has(message.id) === true}
+              isToolRunWorking={message.id === activeToolMessageId}
             />
           ))}
           {showTypingIndicator ? <TypingIndicatorRow /> : null}

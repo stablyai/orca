@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { diffFromText, diffFromToolCall } from './native-chat-diff'
+import {
+  diffFromText,
+  diffFromToolCall,
+  projectDiffFromText,
+  projectDiffFromToolCall
+} from './native-chat-diff'
 
 describe('diffFromToolCall', () => {
   it('returns null for non-edit tools', () => {
@@ -33,6 +38,16 @@ describe('diffFromToolCall', () => {
   it('returns null when there is no old/new payload', () => {
     expect(diffFromToolCall('Edit', { file_path: '/x' })).toBeNull()
   })
+
+  it('bounds before splitting and marks synthetic output as truncated', () => {
+    const diff = projectDiffFromToolCall(
+      'Write',
+      { path: '/large.ts', content: 'one\ntwo\nthree\nfour' },
+      { maxChars: 13, maxLines: 3 }
+    )
+    expect(diff).toMatchObject({ source: 'synthetic', truncated: true })
+    expect(diff?.lines).toHaveLength(3)
+  })
 })
 
 describe('diffFromText', () => {
@@ -59,5 +74,21 @@ describe('diffFromText', () => {
     const diff = diffFromText('--- a/x\n+++ b/x\n-old\n+new')
     expect(diff?.filter((l) => l.kind === 'add').map((l) => l.text)).toEqual(['new'])
     expect(diff?.filter((l) => l.kind === 'del').map((l) => l.text)).toEqual(['old'])
+  })
+
+  it('accepts a one-line change when unified headers prove it is a diff', () => {
+    expect(projectDiffFromText('--- /dev/null\n+++ b/new.ts\n+export {}')).toMatchObject({
+      source: 'unified',
+      truncated: false
+    })
+  })
+
+  it('caps unified text and reports truncation', () => {
+    const diff = projectDiffFromText('@@ -1 +1 @@\n-old\n+new\n context', {
+      maxChars: 100,
+      maxLines: 3
+    })
+    expect(diff?.lines).toHaveLength(3)
+    expect(diff?.truncated).toBe(true)
   })
 })

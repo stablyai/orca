@@ -13119,7 +13119,25 @@
       },
       "tool": {
         "running": "実行中…",
-        "result": "結果"
+        "result": "結果",
+        "failed": "失敗",
+        "completed": "完了",
+        "incomplete": "未完了",
+        "input": "入力",
+        "output": "出力",
+        "fileAdded": "追加",
+        "fileModified": "変更",
+        "fileDeleted": "削除",
+        "fileRenamed": "名前変更",
+        "showFileDiff": "{{path}} の差分を表示",
+        "hideFileDiff": "{{path}} の差分を非表示",
+        "diffTruncated": "差分は省略されています",
+        "partial": "一部のみ",
+        "binary": "バイナリ",
+        "activityOne": "1 件のアクティビティ",
+        "activityMany": "{{count}} 件のアクティビティ",
+        "reportedFileOne": "報告されたファイル 1 件",
+        "reportedFileMany": "報告されたファイル {{count}} 件"
       },
       "status": {
         "responding": "Agent が応答中です"

@@ -38,6 +38,30 @@ describe('foldToolMessages', () => {
     expect(folded[0]?.blocks).toHaveLength(3)
   })
 
+  it('keeps the final assistant response outside the folded activity', () => {
+    const folded = foldToolMessages([
+      msg({ id: 'intro', blocks: [{ type: 'text', text: 'I will inspect it.' }] }),
+      msg({
+        id: 'call',
+        blocks: [{ type: 'tool-call', name: 'Read', input: { path: 'src/app.ts' } }]
+      }),
+      msg({
+        id: 'result',
+        role: 'tool',
+        blocks: [{ type: 'tool-result', output: 'contents' }]
+      }),
+      msg({ id: 'final', blocks: [{ type: 'text', text: 'The file is correct.' }] })
+    ])
+
+    expect(folded.map((message) => message.id)).toEqual(['intro', 'final'])
+    expect(folded[0]?.blocks.map((block) => block.type)).toEqual([
+      'text',
+      'tool-call',
+      'tool-result'
+    ])
+    expect(folded[1]?.blocks).toEqual([{ type: 'text', text: 'The file is correct.' }])
+  })
+
   it('leaves an orphan tool message standalone when no assistant precedes it', () => {
     const folded = foldToolMessages([
       msg({ id: 'u', role: 'user', blocks: [{ type: 'text', text: 'hi' }] }),

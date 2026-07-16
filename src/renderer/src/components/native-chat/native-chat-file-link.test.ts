@@ -140,6 +140,14 @@ describe('resolveNativeChatFileLink', () => {
     })
   })
 
+  it('keeps an encoded colon-number suffix as literal filename text', () => {
+    expect(resolveNativeChatFileLink('src/name%23draft%3F.ts%3A12', context)).toEqual({
+      absolutePath: '/repo/worktree/src/name#draft?.ts:12',
+      line: null,
+      column: null
+    })
+  })
+
   it('ignores http links so normal markdown navigation can handle them', () => {
     expect(resolveNativeChatFileLink('https://example.com/docs/guide.md', context)).toBeNull()
   })

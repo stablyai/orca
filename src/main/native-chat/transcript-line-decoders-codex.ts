@@ -60,24 +60,78 @@ function codexResponseItem(
       source: 'transcript'
     }
   }
-  if (payload.type === 'function_call' || payload.type === 'local_shell_call') {
+  if (payload.type === 'function_call') {
     const name = extractString(payload.name) ?? 'tool'
+    const callId = extractString(payload.call_id)
     return {
       id,
       role: 'assistant',
-      blocks: [{ type: 'tool-call', name, input: codexCallInput(payload) }],
+      blocks: [
+        {
+          type: 'tool-call',
+          name,
+          input: codexCallInput(payload),
+          ...(callId ? { callId } : {})
+        }
+      ],
       timestamp,
       source: 'transcript'
     }
   }
-  if (payload.type === 'function_call_output') {
+  if (payload.type === 'local_shell_call') {
+    const callId = extractString(payload.call_id)
+    const status = codexCallStatus(payload.status)
     return {
       id,
-      role: 'tool',
-      blocks: [codexToolResult(payload.output)],
+      role: 'assistant',
+      blocks: [
+        {
+          type: 'tool-call',
+          name: extractString(payload.name) ?? 'shell',
+          input: payload.action ?? null,
+          ...(callId ? { callId } : {}),
+          ...(status ? { status } : {})
+        }
+      ],
       timestamp,
       source: 'transcript'
     }
+  }
+  if (payload.type === 'custom_tool_call') {
+    const name = extractString(payload.name) ?? 'tool'
+    const callId = extractString(payload.call_id)
+    const status = codexCallStatus(payload.status)
+    return {
+      id,
+      role: 'assistant',
+      blocks: [
+        {
+          type: 'tool-call',
+          name,
+          // Why: custom tools such as Codex apply_patch use freeform input;
+          // parsing it as function arguments would destroy the patch envelope.
+          input: payload.input ?? '',
+          ...(callId ? { callId } : {}),
+          ...(status ? { status } : {})
+        }
+      ],
+      timestamp,
+      source: 'transcript'
+    }
+  }
+  if (payload.type === 'function_call_output' || payload.type === 'custom_tool_call_output') {
+    return {
+      id,
+      role: 'tool',
+      blocks: [codexToolResult(payload.output, extractString(payload.call_id))],
+      timestamp,
+      source: 'transcript'
+    }
+  }
+  if (payload.type === 'tool_search_call' || payload.type === 'tool_search_output') {
+    // Why: tool-search records describe provider-side tool discovery, not an
+    // executed operation with user-auditable command or filesystem output.
+    return null
   }
   return null
 }
@@ -104,19 +158,65 @@ function codexEventMessage(
 
 function codexCallInput(payload: Record<string, unknown>): unknown {
   if (payload.arguments !== undefined) {
-    return payload.arguments
+    return parseCodexFunctionArguments(payload.arguments)
   }
   return payload.input ?? payload.action ?? null
 }
 
-function codexToolResult(output: unknown): NativeChatBlock {
+function codexToolResult(output: unknown, callId: string | null): NativeChatBlock {
   const record = asRecord(output)
-  const isError = record?.success === false || record?.is_error === true
+  const text = toolResultOutput(record?.content ?? record?.output ?? output)
+  const outcome = codexToolResultOutcome(record, text)
   return {
     type: 'tool-result',
-    output: toolResultOutput(record?.content ?? record?.output ?? output),
-    ...(isError ? { isError: true } : {})
+    output: text,
+    ...(outcome === 'error' ? { isError: true } : {}),
+    ...(callId ? { callId } : {}),
+    outcome
   }
+}
+
+function parseCodexFunctionArguments(value: unknown): unknown {
+  if (typeof value !== 'string') {
+    return value
+  }
+  try {
+    return JSON.parse(value) as unknown
+  } catch {
+    return value
+  }
+}
+
+function codexCallStatus(value: unknown): 'in-progress' | 'completed' | 'incomplete' | null {
+  if (value === 'in_progress') {
+    return 'in-progress'
+  }
+  return value === 'completed' || value === 'incomplete' ? value : null
+}
+
+function codexToolResultOutcome(
+  record: Record<string, unknown> | null,
+  output: string
+): 'success' | 'error' | 'unknown' {
+  if (record?.success === false || record?.is_error === true) {
+    return 'error'
+  }
+  if (record?.success === true) {
+    return 'success'
+  }
+  const normalized = output.replace(/\r\n/g, '\n')
+  // Why: these are the success/error envelopes emitted by Codex's native
+  // apply_patch handler; arbitrary function output remains explicitly unknown.
+  if (
+    normalized.startsWith('Success.\nUpdated the following files:') ||
+    normalized.startsWith('Success. Updated the following files:')
+  ) {
+    return 'success'
+  }
+  if (normalized.startsWith('apply_patch verification failed:')) {
+    return 'error'
+  }
+  return 'unknown'
 }
 
 function codexSummaryText(summary: unknown): string | null {

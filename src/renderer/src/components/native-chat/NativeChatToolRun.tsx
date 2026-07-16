@@ -1,171 +1,137 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
+import type { NativeChatBlock } from '../../../../shared/native-chat-types'
+import { briefToolArg } from './native-chat-tool-summary'
 import {
-  isToolCallBlock,
-  isToolResultBlock,
-  type NativeChatBlock
-} from '../../../../shared/native-chat-types'
-import { diffFromText, diffFromToolCall, type DiffLine } from './native-chat-diff'
-import {
-  countToolCalls,
-  formatToolInput,
-  summarizeToolInput,
-  summarizeToolRun
-} from './native-chat-tool-summary'
-import { NativeChatDiffView } from './NativeChatDiffView'
+  buildNativeChatTurnActivity,
+  type NativeChatActivityStatus,
+  type NativeChatActivityStep
+} from './native-chat-turn-activity'
+import { collectNativeChatReportedFileChanges } from './native-chat-reported-file-changes'
+import { NativeChatActivityStatusIcon, NativeChatToolStep } from './NativeChatToolStep'
+import { NativeChatReportedFiles } from './NativeChatReportedFiles'
 
-const MAX_TOOL_RESULT_CHARS = 4000
+function summaryText(activityStep: NativeChatActivityStep): string {
+  const { call, result } = activityStep.step
+  if (!call) {
+    return (
+      result.output.split('\n')[0]?.slice(0, 80) ||
+      translate('components.native-chat.tool.result', 'Result')
+    )
+  }
+  const detail = briefToolArg(call.input)
+  return detail ? `${call.name} ${detail}` : call.name
+}
 
-/** A single inline tool line — `▸ ToolName  preview` — that expands in place to
- *  show the call's diff/input or the result's body. Tool calls read as flat
- *  lines in the conversation rather than boxed blocks (mobile parity). Lines only
- *  mount while the parent run is open, so each starts expanded (opening the run
- *  reveals every line at once) and is then individually collapsible. */
-function ToolLine({ block }: { block: NativeChatBlock }): React.JSX.Element | null {
-  const [expanded, setExpanded] = useState(true)
+function statusText(status: NativeChatActivityStatus): string {
+  if (status === 'running') {
+    return translate('components.native-chat.tool.running', 'Running…')
+  }
+  if (status === 'failed') {
+    return translate('components.native-chat.tool.failed', 'Failed')
+  }
+  if (status === 'incomplete') {
+    return translate('components.native-chat.tool.incomplete', 'Incomplete')
+  }
+  return translate('components.native-chat.tool.completed', 'Completed')
+}
 
-  let name: string
-  let preview: string
-  let diff: DiffLine[] | null = null
-  let body: { output: string; isError?: boolean } | null = null
-  // Full, formatted input shown when a diff-less tool call is expanded.
-  let detail: string | null = null
+/** A compact operation run. Completed work stays collapsed by default; opening
+ * it reveals one row per call/result lifecycle, each with its own details. */
+export function NativeChatToolRun({
+  blocks,
+  expandSignal,
+  isWorking = false,
+  onLinkClick
+}: {
+  blocks: NativeChatBlock[]
+  expandSignal: boolean
+  isWorking?: boolean
+  onLinkClick?: CommentMarkdownLinkClickHandler
+}): React.JSX.Element | null {
+  const [open, setOpen] = useState(expandSignal)
+  useEffect(() => setOpen(expandSignal), [expandSignal])
 
-  if (isToolCallBlock(block)) {
-    name = block.name
-    preview = summarizeToolInput(block.input)
-    diff = diffFromToolCall(block.name, block.input)
-    detail = diff ? null : formatToolInput(block.input)
-  } else if (isToolResultBlock(block)) {
-    name = translate('components.native-chat.tool.result', 'Result')
-    preview = block.output.split('\n')[0]?.slice(0, 80) ?? ''
-    diff = diffFromText(block.output)
-    body = { output: block.output, isError: block.isError }
-  } else {
+  const activity = useMemo(
+    () => buildNativeChatTurnActivity(blocks, isWorking),
+    [blocks, isWorking]
+  )
+  const reportedFiles = useMemo(
+    () => collectNativeChatReportedFileChanges(activity?.steps.map((item) => item.step) ?? []),
+    [activity]
+  )
+  if (!activity) {
     return null
   }
 
-  // Only offer expansion when there's more than the inline preview already shows —
-  // avoids re-rendering the same truncated string in a box below it.
-  const detailAddsInfo = detail !== null && detail.replace(/\s+/g, ' ').trim() !== preview
-  const hasDetail = diff !== null || body !== null || detailAddsInfo
+  const activityLabel = translate(
+    activity.steps.length === 1
+      ? 'components.native-chat.tool.activityOne'
+      : 'components.native-chat.tool.activityMany',
+    activity.steps.length === 1 ? '1 activity' : `${activity.steps.length} activities`,
+    { count: activity.steps.length }
+  )
+  const runningStep = activity.steps.findLast((item) => item.status === 'running') ?? null
+  const showConcurrentRunning = activity.status === 'failed' && Boolean(isWorking || runningStep)
+  // Why: a failed retry must remain visible without hiding the operation that
+  // is currently running or the latest work while the provider continues.
+  const collapsedSummaryStep = showConcurrentRunning
+    ? (runningStep ?? activity.steps.at(-1)!)
+    : activity.summaryStep
+  const stateLabel = statusText(activity.status)
 
   return (
-    <div>
-      <button
-        type="button"
-        onClick={() => hasDetail && setExpanded((v) => !v)}
-        className={cn(
-          'group flex w-full items-center gap-1.5 py-0.5 text-left',
-          hasDetail ? 'cursor-pointer' : 'cursor-default'
-        )}
-      >
-        <code className="shrink-0 font-mono text-xs font-semibold text-foreground/90 transition-colors group-hover:text-foreground">
-          {name}
-        </code>
-        {preview ? (
-          <span
-            className="min-w-0 truncate font-mono text-[11px] text-muted-foreground transition-colors group-hover:text-foreground/70"
-            title={preview}
-          >
-            {preview}
-          </span>
-        ) : null}
-        {hasDetail ? (
-          // Chevron sits on the right; hidden until hover when collapsed, always
-          // shown (pointing down) when expanded — mirrors Codex's disclosure affordance.
-          <ChevronRight
-            className={cn(
-              'size-3.5 shrink-0 text-muted-foreground transition-all',
-              expanded ? 'rotate-90 opacity-100' : 'opacity-0 group-hover:opacity-100'
-            )}
-          />
-        ) : null}
-      </button>
-      {hasDetail && expanded ? (
-        <div className="space-y-1.5 py-1">
-          {diff ? <NativeChatDiffView lines={diff} /> : null}
-          {!diff && body ? (
-            <pre
-              className={cn(
-                'max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-accent p-2 font-mono text-[11px] scrollbar-sleek',
-                body.isError ? 'text-destructive' : 'text-foreground/80'
-              )}
-            >
-              {body.output.length > MAX_TOOL_RESULT_CHARS
-                ? `${body.output.slice(0, MAX_TOOL_RESULT_CHARS)}…`
-                : body.output}
-            </pre>
-          ) : null}
-          {!diff && !body && detail ? (
-            <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-accent p-2 font-mono text-[11px] text-foreground/80 scrollbar-sleek">
-              {detail.length > MAX_TOOL_RESULT_CHARS
-                ? `${detail.slice(0, MAX_TOOL_RESULT_CHARS)}…`
-                : detail}
-            </pre>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
-/** A run of a message's tool calls/results, collapsed to a one-line summary that
- *  expands to the individual inline tool lines. `expandSignal` lets the global
- *  toolbar toggle drive every run at once while still allowing per-run override. */
-export function NativeChatToolRun({
-  blocks,
-  expandSignal
-}: {
-  blocks: NativeChatBlock[]
-  /** Toolbar-driven desired open state. Each change re-syncs this run's state. */
-  expandSignal: boolean
-}): React.JSX.Element {
-  const [open, setOpen] = useState(expandSignal)
-  // Re-sync when the global toolbar toggle flips.
-  useEffect(() => setOpen(expandSignal), [expandSignal])
-
-  const callCount = countToolCalls(blocks) || blocks.length
-  const summary = summarizeToolRun(blocks)
-  const fallbackLabel = translate(
-    callCount === 1 ? 'components.native-chat.tool.countOne' : 'components.native-chat.tool.countN',
-    callCount === 1 ? '1 tool call' : `${callCount} tool calls`,
-    { count: callCount }
-  )
-
-  return (
-    // Extra top margin sets the tool run apart from the assistant prose above it
-    // so the turn's activity doesn't crowd the message text.
     <div className="mt-3">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="group flex w-full items-center gap-1.5 py-0.5 text-left"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        className="group flex w-full items-center gap-1.5 rounded-sm py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <span className="shrink-0 font-mono text-[11px] font-bold text-muted-foreground transition-colors group-hover:text-foreground/80">
-          {callCount}×
+        <NativeChatActivityStatusIcon status={activity.status} />
+        <span className="shrink-0 font-mono text-[11px] font-semibold text-muted-foreground group-hover:text-foreground/80">
+          {activityLabel}
         </span>
-        <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground transition-colors group-hover:text-foreground/80">
-          {summary || fallbackLabel}
+        <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground group-hover:text-foreground/80">
+          · {summaryText(collapsedSummaryStep)}
         </span>
-        {/* Chevron on the right, revealed on hover when collapsed and pointing
-            down when open — matches Codex's tool-run disclosure. */}
+        <span
+          className={cn(
+            activity.status === 'completed'
+              ? 'sr-only'
+              : 'ml-auto shrink-0 text-[11px] text-muted-foreground',
+            activity.status === 'failed' && 'text-destructive'
+          )}
+        >
+          {stateLabel}
+        </span>
+        {showConcurrentRunning ? (
+          <span className="shrink-0 text-[11px] text-muted-foreground">
+            · {statusText('running')}
+          </span>
+        ) : null}
         <ChevronRight
           className={cn(
-            'size-3.5 shrink-0 text-muted-foreground transition-all',
-            open ? 'rotate-90 opacity-100' : 'opacity-0 group-hover:opacity-100'
+            'size-3.5 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none',
+            open && 'rotate-90'
           )}
         />
       </button>
       {open ? (
-        <div className="mt-1">
-          {blocks.map((block, i) => (
-            <ToolLine key={i} block={block} />
+        <div className="ml-1.5 border-l border-border pl-3">
+          {activity.steps.map((item) => (
+            <NativeChatToolStep key={item.step.operationKey} activityStep={item} />
           ))}
         </div>
       ) : null}
+      <NativeChatReportedFiles
+        collection={reportedFiles}
+        steps={activity.steps.map((item) => item.step)}
+        onLinkClick={onLinkClick}
+      />
     </div>
   )
 }
