@@ -13,6 +13,7 @@ import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
+import { isRuntimeOwnedSshTargetId } from '../../../shared/execution-host'
 
 /** Why (issue #1158): the debounced + shutdown session writers share this
  *  gate so a hydration failure cannot overwrite orca-data.json with the
@@ -332,7 +333,13 @@ export function buildTerminalSessionData(
 
 export function buildActiveConnectionIdsAtShutdown(
   snapshot: WorkspaceSessionSnapshot,
-  remoteSessionIdsByTabId = buildTerminalSessionData(snapshot).remoteSessionIdsByTabId
+  // Why: `null` means "computed and empty" — only recompute when the caller
+  // did not already run buildTerminalSessionData. A plain default parameter
+  // would re-run the full repo/worktree scan on the shutdown path whenever
+  // the map is legitimately undefined (no remote sessions).
+  remoteSessionIdsByTabId:
+    | WorkspaceSessionState['remoteSessionIdsByTabId']
+    | null = buildTerminalSessionData(snapshot).remoteSessionIdsByTabId ?? null
 ): WorkspaceSessionState['activeConnectionIdsAtShutdown'] {
   // Why: sshConnectionStates is a Map<string, SshConnectionState>, not a plain
   // object. Object.entries() on a Map returns [] — must use Array.from().
@@ -342,12 +349,23 @@ export function buildActiveConnectionIdsAtShutdown(
       .map(([targetId]) => targetId)
   )
 
-  // Why: shutdown can observe SSH as disconnected after the relay socket closes
-  // but before the session snapshot flushes. The durable PTY id still names the
-  // target Orca must reconnect to restore that surviving remote session.
+  // Why: shutdown can observe SSH in a transient state (relay drop mid-quit,
+  // exhausted reconnect) after the socket closed but before the snapshot
+  // flushed. The durable PTY id still names the target Orca must reconnect to
+  // restore that surviving remote session. Two exclusions keep intent honest:
+  // 'disconnected'/'auth-failed'/never-observed only arise from an explicit
+  // user disconnect or a failed/cancelled connect, and startup must not dial a
+  // host the user chose to leave offline (its sessions still restore on tab
+  // focus via the deferred flow). Runtime-owned (ephemeral-VM) targets belong
+  // to the runtime layer; a renderer-driven ssh.connect would dispose the
+  // runtime's live relay session.
   for (const sessionId of Object.values(remoteSessionIdsByTabId ?? {})) {
     const connectionId = parseAppSshPtyId(sessionId)?.connectionId
-    if (connectionId) {
+    if (!connectionId || isRuntimeOwnedSshTargetId(connectionId)) {
+      continue
+    }
+    const status = snapshot.sshConnectionStates.get(connectionId)?.status
+    if (status && status !== 'disconnected' && status !== 'auth-failed') {
       targetIds.add(connectionId)
     }
   }
@@ -392,9 +410,11 @@ export function buildWorkspaceSessionPayload(
     // Persist only layouts backed by real tabs so a reload cannot restore a
     // blank split pane from that transient midpoint.
     ...buildPersistedUnifiedTabSessionData(snapshot),
+    // Why: `?? null` — an empty map is `undefined`, which would re-trigger the
+    // default initializer's second buildTerminalSessionData scan at shutdown.
     activeConnectionIdsAtShutdown: buildActiveConnectionIdsAtShutdown(
       snapshot,
-      terminalSessionData.remoteSessionIdsByTabId
+      terminalSessionData.remoteSessionIdsByTabId ?? null
     ),
     remoteSessionIdsByTabId: terminalSessionData.remoteSessionIdsByTabId,
     // Why: per-worktree focus-recency for Cmd+J's empty-query ordering.
