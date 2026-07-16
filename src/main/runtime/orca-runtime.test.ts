@@ -58,7 +58,8 @@ import {
 import { HeadlessEmulator } from '../daemon/headless-emulator'
 import {
   HEADLESS_RUNTIME_WINDOW_ID,
-  type RuntimeMobileSessionTabsResult
+  type RuntimeMobileSessionTabsResult,
+  type RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import {
@@ -872,6 +873,26 @@ const TEST_FOLDER_WORKSPACE_PATH = '/tmp/platform'
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 const HEADLESS_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const HEADLESS_SECOND_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
+const DEAD_SERVE_SESSION_SNAPSHOT: RuntimeMobileSessionTabsSnapshot = {
+  worktree: TEST_WORKTREE_ID,
+  publicationEpoch: 'headless:stale',
+  snapshotVersion: 1,
+  activeGroupId: 'group-1',
+  activeTabId: `stale-tab::${HEADLESS_LEAF_ID}`,
+  activeTabType: 'terminal',
+  tabs: [
+    {
+      type: 'terminal',
+      id: `stale-tab::${HEADLESS_LEAF_ID}`,
+      parentTabId: 'stale-tab',
+      leafId: HEADLESS_LEAF_ID,
+      title: 'Stale Agent',
+      ptyId: 'serve-stale-pty',
+      isActive: true
+    }
+  ]
+}
 
 function isOriginMainBaseRefProbe(args: string[]): boolean {
   return (
@@ -17965,6 +17986,233 @@ describe('OrcaRuntimeService', () => {
     ])
   })
 
+  it('prunes an unpersisted dead serve-owned tab omitted by the desktop graph', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => []
+    })
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [DEAD_SERVE_SESSION_SNAPSHOT]
+    })
+
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(listed.tabs).toEqual([])
+  })
+
+  it('does not materialize a dead serve-owned tab selected before a refresh', async () => {
+    const spawn = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => []
+    })
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [DEAD_SERVE_SESSION_SNAPSHOT]
+    })
+
+    await expect(
+      runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'stale-tab')
+    ).rejects.toThrow('tab_not_found')
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
+  it('treats a stale serve-owned tab closed after reconciliation as closed', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => []
+    })
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [DEAD_SERVE_SESSION_SNAPSHOT]
+    })
+
+    await expect(
+      runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'stale-tab')
+    ).resolves.toEqual({ closed: true })
+  })
+
+  it('prunes dead serve-owned tabs from listAll results', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => []
+    })
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [DEAD_SERVE_SESSION_SNAPSHOT]
+    })
+
+    const snapshots = await runtime.listAllMobileSessionTabs()
+
+    expect(snapshots.find((snapshot) => snapshot.worktree === TEST_WORKTREE_ID)?.tabs).toEqual([])
+  })
+
+  it('publishes pruned serve-owned tabs during navigation-free worktree refresh', async () => {
+    const events: RuntimeMobileSessionTabsResult[] = []
+    const runtime = new OrcaRuntimeService(store)
+    runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => []
+    })
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [DEAD_SERVE_SESSION_SNAPSHOT]
+    })
+    events.length = 0
+
+    await runtime.activateManagedWorktree(`id:${TEST_WORKTREE_ID}`, { notifyClients: false })
+
+    expect(events.at(-1)?.tabs).toEqual([])
+  })
+
+  it('keeps a serve-owned tab when its PTY is still live', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        { id: 'serve-stale-pty', cwd: TEST_WORKTREE_PATH, title: 'Live Agent' }
+      ]
+    })
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [DEAD_SERVE_SESSION_SNAPSHOT]
+    })
+
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(listed.tabs).toContainEqual(
+      expect.objectContaining({ type: 'terminal', parentTabId: 'stale-tab' })
+    )
+  })
+
+  it('keeps a stale-looking tab when PTY liveness cannot be confirmed', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => {
+        throw new Error('controller unavailable')
+      }
+    })
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [DEAD_SERVE_SESSION_SNAPSHOT]
+    })
+
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(listed.tabs).toHaveLength(1)
+  })
+
+  it('does not prune a pinned headless tab automatically', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => []
+    })
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          ...DEAD_SERVE_SESSION_SNAPSHOT,
+          tabs: DEAD_SERVE_SESSION_SNAPSHOT.tabs.map((tab) => ({ ...tab, isPinned: true }))
+        }
+      ]
+    })
+
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(listed.tabs).toHaveLength(1)
+  })
+
+  it('prunes only the dead serve-owned parent from a mixed snapshot', async () => {
+    const liveParentTabId = 'live-tab'
+    const liveLeafId = HEADLESS_SECOND_LEAF_ID
+    const livePtyId = 'live-renderer-pty'
+    const stale = DEAD_SERVE_SESSION_SNAPSHOT
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [{ id: livePtyId, cwd: TEST_WORKTREE_PATH, title: 'Live' }]
+    })
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: liveParentTabId,
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Live',
+          activeLeafId: liveLeafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: liveParentTabId,
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: liveLeafId,
+          paneRuntimeId: 2,
+          ptyId: livePtyId,
+          paneTitle: 'Live'
+        }
+      ],
+      mobileSessionTabs: [
+        {
+          ...stale,
+          tabs: [
+            ...stale.tabs,
+            {
+              type: 'terminal',
+              id: `${liveParentTabId}::${liveLeafId}`,
+              parentTabId: liveParentTabId,
+              leafId: liveLeafId,
+              title: 'Live',
+              ptyId: livePtyId,
+              isActive: false
+            }
+          ]
+        }
+      ]
+    })
+
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(listed.tabs).toEqual([
+      expect.objectContaining({ type: 'terminal', parentTabId: liveParentTabId })
+    ])
+  })
+
   it('publishes laptop-created remote runtime terminals to phone session tabs', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
     const runtime = new OrcaRuntimeService(store)
@@ -20288,6 +20536,7 @@ describe('OrcaRuntimeService', () => {
     )
     const kill = vi.fn(() => true)
     const closeTerminal = vi.fn()
+    const closeTerminalTab = vi.fn()
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.setPtyController({
       write: () => true,
@@ -20295,9 +20544,9 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
-    // Why: an attached renderer means closeTerminal exists, so the close goes
-    // down the renderer-attached path that historically leaked serve-owned tabs.
-    runtime.setNotifier({ closeTerminal } as never)
+    // Why: even with the durable renderer close available, serve-owned state
+    // must be removed by the runtime that owns its persisted PTY binding.
+    runtime.setNotifier({ closeTerminal, closeTerminalTab } as never)
     runtime.syncWindowGraph(1, {
       tabs: [
         {
@@ -20328,6 +20577,7 @@ describe('OrcaRuntimeService', () => {
     expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()
     // Best-effort renderer notify so no adopted pane is left dead.
     expect(closeTerminal).toHaveBeenCalledWith('host-tab')
+    expect(closeTerminalTab).not.toHaveBeenCalled()
   })
 
   it('delegates a renderer-owned daemon-session (worktreeId@@uuid) local terminal to the renderer', async () => {
