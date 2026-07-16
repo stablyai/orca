@@ -23,6 +23,9 @@ export function getProviderDisplayName(provider: ProviderRateLimits['provider'])
   if (provider === 'minimax') {
     return 'MiniMax'
   }
+  if (provider === 'zai') {
+    return 'Z.ai GLM'
+  }
   if (provider === 'grok') {
     return 'Grok'
   }
