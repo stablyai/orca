@@ -438,7 +438,8 @@ describe('tui agent startup plans', () => {
       platform: 'win32'
     })
 
-    expect(plan?.launchConfig.windowsCodexShellHandoff).toBeUndefined()
+    expect(plan).not.toBeNull()
+    expect(plan!.launchConfig.windowsCodexShellHandoff).toBeUndefined()
   })
 
   it.each([
@@ -460,7 +461,8 @@ describe('tui agent startup plans', () => {
       isRemote
     })
 
-    expect(plan?.launchConfig.windowsCodexShellHandoff).toBeUndefined()
+    expect(plan).not.toBeNull()
+    expect(plan!.launchConfig.windowsCodexShellHandoff).toBeUndefined()
   })
 
   it('keeps plain empty Codex startup on the fast delivery path', () => {

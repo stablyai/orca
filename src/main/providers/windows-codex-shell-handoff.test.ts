@@ -489,6 +489,68 @@ describe('buildWindowsCodexShellHandoffAttempt', () => {
 })
 
 describe('WINDOWS_CODEX_SHELL_HANDOFF_HOST_SCRIPT', () => {
+  it('keeps the inline host compatible with legacy PATH Node runtimes', () => {
+    expect(WINDOWS_CODEX_SHELL_HANDOFF_HOST_SCRIPT).not.toContain("require('node:")
+    expect(WINDOWS_CODEX_SHELL_HANDOFF_HOST_SCRIPT).not.toContain("'base64url'")
+    expect(WINDOWS_CODEX_SHELL_HANDOFF_HOST_SCRIPT).not.toContain(".once('spawn'")
+  })
+
+  it('recognizes a successful child from its pid without a spawn event', () => {
+    const config: WindowsCodexShellHandoffConfig = {
+      agentFile: 'virtual-codex.exe',
+      agentArgs: [],
+      agentEnvToDelete: [],
+      agentEnv: {},
+      shellAttempts: [
+        {
+          file: process.execPath,
+          args: ['-e', "process.stdout.write('shell\\n')"],
+          cwd: process.cwd()
+        }
+      ],
+      agentFallbackAttempts: [
+        {
+          file: process.execPath,
+          args: ['-e', "process.stdout.write('wrong-fallback\\n')"],
+          cwd: process.cwd()
+        }
+      ]
+    }
+    const encoded = encodeWindowsCodexShellHandoffConfig(config)
+    const wrapper = `
+const { EventEmitter } = require('events')
+const childProcess = require('child_process')
+const actualSpawn = childProcess.spawn
+let spawnCount = 0
+
+childProcess.spawn = (...args) => {
+  spawnCount += 1
+  if (spawnCount > 1) return actualSpawn(...args)
+  const child = new EventEmitter()
+  child.pid = 1234
+  child.killed = false
+  child.kill = () => {
+    child.killed = true
+    return true
+  }
+  process.nextTick(() => child.emit('exit', 0))
+  return child
+}
+
+eval(${JSON.stringify(WINDOWS_CODEX_SHELL_HANDOFF_HOST_SCRIPT)})
+`
+
+    const result = spawnSync(process.execPath, ['-e', wrapper, encoded], {
+      encoding: 'utf8',
+      timeout: 5_000
+    })
+
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(0)
+    expect(result.stderr).toBe('')
+    expect(result.stdout).toBe('shell\n')
+  })
+
   it('runs the agent before the shell without leaking agent-only env', () => {
     const config: WindowsCodexShellHandoffConfig = {
       agentFile: process.execPath,

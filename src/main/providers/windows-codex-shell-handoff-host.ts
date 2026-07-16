@@ -18,22 +18,24 @@ export type WindowsCodexShellHandoffConfig = {
 // Why: this process owns the ConPTY while Codex runs, then starts the selected
 // PowerShell only after Codex exits so the pane still returns to its normal shell.
 export const WINDOWS_CODEX_SHELL_HANDOFF_HOST_SCRIPT = String.raw`
-const { spawn } = require('node:child_process')
-const { inflateRawSync } = require('node:zlib')
-const config = JSON.parse(inflateRawSync(Buffer.from(process.argv[1], 'base64url')).toString('utf8'))
+const { spawn } = require('child_process')
+const { inflateRawSync } = require('zlib')
+const config = JSON.parse(inflateRawSync(Buffer.from(process.argv[1], 'base64')).toString('utf8'))
 let activeChild = null
 let phase = 'agent'
 let shuttingDown = false
 
 const run = (attempt, env) => new Promise((resolve) => {
   let settled = false
-  let spawned = false
   const child = spawn(attempt.file, attempt.args, {
     cwd: attempt.cwd,
     env,
     stdio: 'inherit',
     windowsHide: true
   })
+  // Why: child.pid is set synchronously after a successful native spawn, and
+  // unlike the spawn event it is available on the older PATH Node hosts we support.
+  const spawned = typeof child.pid === 'number'
   activeChild = child
   const finish = (code) => {
     if (settled) return
@@ -41,7 +43,6 @@ const run = (attempt, env) => new Promise((resolve) => {
     if (activeChild === child) activeChild = null
     resolve({ spawned, code: typeof code === 'number' ? code : 1 })
   }
-  child.once('spawn', () => { spawned = true })
   child.once('error', (error) => {
     process.stderr.write('[orca] Failed to launch ' + attempt.file + ': ' + error.message + '\n')
     finish(1)
@@ -97,7 +98,7 @@ process.on('SIGHUP', () => forwardSignal('SIGHUP', true))
 export function encodeWindowsCodexShellHandoffConfig(
   config: WindowsCodexShellHandoffConfig
 ): string {
-  return deflateRawSync(Buffer.from(JSON.stringify(config), 'utf8')).toString('base64url')
+  return deflateRawSync(Buffer.from(JSON.stringify(config), 'utf8')).toString('base64')
 }
 
 export function decodeWindowsCodexShellHandoffConfig(attempt: {
@@ -108,6 +109,6 @@ export function decodeWindowsCodexShellHandoffConfig(attempt: {
     throw new Error('Windows Codex shell handoff is missing its encoded configuration.')
   }
   return JSON.parse(
-    inflateRawSync(Buffer.from(encoded, 'base64url')).toString('utf8')
+    inflateRawSync(Buffer.from(encoded, 'base64')).toString('utf8')
   ) as WindowsCodexShellHandoffConfig
 }
