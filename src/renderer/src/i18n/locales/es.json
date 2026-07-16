@@ -2975,7 +2975,8 @@
             "b8f4a2c1d0e3": "{{value0}} huérfanos",
             "c7e3b1a0d9f2": "Terminar {{value0}} terminal huérfano",
             "d8f4c2b1e0a3": "Terminar {{value0}} terminales huérfanos",
-            "e9a5d3c2b1f0": "¿Terminar {{value0}}?"
+            "e9a5d3c2b1f0": "¿Terminar {{value0}}?",
+            "1a3f9d7c22": "Detached"
           },
           "SshStatusSegment": {
             "3ad70e0365": "Administrar hosts remotos…",

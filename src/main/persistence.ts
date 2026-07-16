@@ -6372,6 +6372,21 @@ export class Store {
       normalizedLease.ptyId
     )
     const now = Date.now()
+    if (normalizedLease.state === 'attached' && normalizedLease.tabId && normalizedLease.leafId) {
+      for (const entry of this.state.sshRemotePtyLeases) {
+        if (
+          entry.targetId === normalizedLease.targetId &&
+          entry.tabId === normalizedLease.tabId &&
+          entry.leafId === normalizedLease.leafId &&
+          entry.ptyId !== normalizedLease.ptyId &&
+          entry.state !== 'terminated' &&
+          entry.state !== 'expired'
+        ) {
+          entry.state = 'expired'
+          entry.updatedAt = now
+        }
+      }
+    }
     const existingIndex = this.state.sshRemotePtyLeases.findIndex(
       (entry) =>
         entry.targetId === normalizedLease.targetId && entry.ptyId === normalizedLease.ptyId

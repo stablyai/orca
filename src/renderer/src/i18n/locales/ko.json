@@ -2975,7 +2975,8 @@
             "b8f4a2c1d0e3": "고아 {{value0}}개",
             "c7e3b1a0d9f2": "고아 terminal {{value0}}개 종료",
             "d8f4c2b1e0a3": "고아 terminals {{value0}}개 종료",
-            "e9a5d3c2b1f0": "{{value0}}을(를) 종료할까요?"
+            "e9a5d3c2b1f0": "{{value0}}을(를) 종료할까요?",
+            "1a3f9d7c22": "Detached"
           },
           "SshStatusSegment": {
             "3ad70e0365": "원격 호스트 관리…",

@@ -47,7 +47,8 @@ import type {
   Metric,
   UnifiedProjectGroup,
   UnifiedSessionRow,
-  UnifiedWorktreeRow
+  UnifiedWorktreeRow,
+  RuntimeTerminalAttribution
 } from './resource-usage-merge-types'
 import { WorkspaceSpaceCompactPanel } from './WorkspaceSpaceCompactPanel'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
@@ -79,6 +80,8 @@ import {
 } from './resource-session-bindings'
 import { createClosedResourceSessionCountSelector } from './resource-session-count-selector'
 import { translate } from '@/i18n/i18n'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import type { RuntimeTerminalListResult } from '../../../../shared/runtime-types'
 
 const POLL_MS = 2_000
 const selectClosedResourceSessionCount = createClosedResourceSessionCountSelector()
@@ -120,6 +123,22 @@ function formatMetricCpu(value: Metric): string {
 
 function formatMetricMemory(value: Metric): string {
   return value === null ? '—' : formatMemory(value)
+}
+
+function formatSessionDiagnostics(session: UnifiedSessionRow): string | null {
+  const details: string[] = []
+  if (session.hostLabel) {
+    details.push(
+      session.relayPtyId ? `${session.hostLabel} · ${session.relayPtyId}` : session.hostLabel
+    )
+  }
+  if (session.originLeafId) {
+    details.push(`leaf ${session.originLeafId}`)
+  }
+  if (session.orphanReason) {
+    details.push(session.orphanReason)
+  }
+  return details.length > 0 ? details.join(' · ') : null
 }
 
 // ─── Sparkline ──────────────────────────────────────────────────────
@@ -406,8 +425,23 @@ export function SessionRow({
           session.bound ? 'bg-emerald-500' : 'bg-muted-foreground/40'
         )}
       />
-      <span className="text-[11px] text-muted-foreground truncate min-w-0 flex-1">
-        {session.label}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[11px] text-muted-foreground">
+          {session.label}
+          {!session.bound && (
+            <span className="ml-1 rounded bg-yellow-500/10 px-1 py-0.5 text-[9px] uppercase tracking-wide text-yellow-600 dark:text-yellow-400">
+              {translate(
+                'auto.components.status.bar.ResourceUsageStatusSegment.1a3f9d7c22',
+                'Detached'
+              )}
+            </span>
+          )}
+        </span>
+        {formatSessionDiagnostics(session) && (
+          <span className="block truncate font-mono text-[10px] text-muted-foreground/60">
+            {formatSessionDiagnostics(session)}
+          </span>
+        )}
       </span>
       <MetricPair cpu={session.cpu} memory={session.memory} size="small" />
       {/* Why: kill X lives inside the shared trailing gutter so CPU/Memory
@@ -758,6 +792,7 @@ export function ResourceUsageStatusSegment({
   const fetchSnapshot = useAppStore((s) => s.fetchMemorySnapshot)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const closedSessionCount = useAppStore(selectClosedResourceSessionCount)
+  const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const setActiveView = useAppStore((s) => s.setActiveView)
   const openModal = useAppStore((s) => s.openModal)
   const openSpacePage = useAppStore((s) => s.openSpacePage)
@@ -773,6 +808,9 @@ export function ResourceUsageStatusSegment({
   const [collapsedWorktrees, setCollapsedWorktrees] = useState<Set<string>>(new Set())
   const [appCollapsed, setAppCollapsed] = useState(true)
   const [sessions, setSessions] = useState<DaemonSession[]>([])
+  const [runtimeTerminals, setRuntimeTerminals] = useState<RuntimeTerminalListResult['terminals']>(
+    []
+  )
   const [sessionsError, setSessionsError] = useState(false)
   const [killConfirm, setKillConfirm] = useState<UnifiedSessionRow | null>(null)
   const [killing, setKilling] = useState(false)
@@ -851,11 +889,35 @@ export function ResourceUsageStatusSegment({
     }
   }, [mountedRef])
 
+  const refreshRuntimeTerminals = useCallback(async () => {
+    try {
+      // Why: pty.listSessions inventories the local daemon even when the UI is
+      // focused on a remote runtime, so attribution must come from that owner.
+      const result = await callRuntimeRpc<RuntimeTerminalListResult>(
+        { kind: 'local' },
+        'terminal.list',
+        // Why: terminal.list defaults to 200 and has no pagination cursor; its
+        // complete local inventory is needed to match every daemon session.
+        { limit: Number.MAX_SAFE_INTEGER },
+        { timeoutMs: 10_000, suppressFeatureInteraction: true }
+      )
+      if (mountedRef.current) {
+        setRuntimeTerminals(result.terminals)
+      }
+    } catch (err) {
+      console.error('[resource-usage] terminal.list attribution failed', err)
+      if (mountedRef.current) {
+        setRuntimeTerminals([])
+      }
+    }
+  }, [mountedRef])
+
   const daemonActions = useDaemonActions({
     onRestartSettled: () => {
       setSessionsError(false)
       void fetchSnapshot()
       void refreshSessions()
+      void refreshRuntimeTerminals()
     },
     onKillAllSettled: () => {
       void refreshSessions()
@@ -892,6 +954,7 @@ export function ResourceUsageStatusSegment({
     }
     void fetchSnapshot()
     void refreshSessions()
+    void refreshRuntimeTerminals()
     // Why: only the memory snapshot keeps an interval while the popover is
     // open. Session inventory is explicit-on-open/action because it can be
     // expensive with many daemon-preserved terminals.
@@ -901,7 +964,7 @@ export function ResourceUsageStatusSegment({
     return () => {
       window.clearInterval(memTimer)
     }
-  }, [open, fetchSnapshot, refreshSessions])
+  }, [open, fetchSnapshot, refreshSessions, refreshRuntimeTerminals])
 
   const repoDisplayNameById = useMemo(() => {
     const map = new Map<string, string>()
@@ -926,6 +989,26 @@ export function ResourceUsageStatusSegment({
     }
     return map
   }, [repos])
+
+  const runtimeTerminalByPtyId = useMemo(() => {
+    const map = new Map<string, RuntimeTerminalAttribution>()
+    for (const terminal of runtimeTerminals) {
+      if (!terminal.ptyId) {
+        continue
+      }
+      map.set(terminal.ptyId, {
+        worktreeId: terminal.worktreeId,
+        worktreePath: terminal.worktreePath,
+        handle: terminal.handle,
+        title: terminal.title,
+        originTabId: terminal.originTabId ?? null,
+        originLeafId: terminal.originLeafId ?? null,
+        originConnectionId: terminal.originConnectionId ?? null,
+        orphanReason: terminal.orphanReason ?? null
+      })
+    }
+    return map
+  }, [runtimeTerminals])
 
   // Why: runtime-hosted repos never have local daemon samples or killable
   // local sessions; this map drives their per-row exclusion in the merge.
@@ -976,6 +1059,8 @@ export function ResourceUsageStatusSegment({
             repoDisplayNameById,
             repoConnectionIdById,
             repoRuntimeScopedById,
+            sshTargetLabelById: sshTargetLabels,
+            runtimeTerminalByPtyId,
             browserTabsByWorktree,
             worktreeById
           })
@@ -992,6 +1077,8 @@ export function ResourceUsageStatusSegment({
       repoDisplayNameById,
       repoConnectionIdById,
       repoRuntimeScopedById,
+      sshTargetLabels,
+      runtimeTerminalByPtyId,
       browserTabsByWorktree,
       worktreeById
     ]

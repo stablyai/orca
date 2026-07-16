@@ -253,6 +253,56 @@ describe('mergeSnapshotAndSessions', () => {
     })
   })
 
+  it('uses runtime terminal attribution to keep detached SSH PTYs out of unattributed', () => {
+    const sessionId = 'ssh:ssh-bumblebee@@pty-4'
+    const worktreeId = 'teal-bumblebee::/Users/daveagent/workspaces/teal'
+    const ds: DaemonSession[] = [{ id: sessionId, cwd: '', title: 'shell' }]
+    const ctx = baseCtx({
+      repoDisplayNameById: new Map([['teal-bumblebee', 'Teal']]),
+      repoConnectionIdById: new Map([['teal-bumblebee', 'ssh-bumblebee']]),
+      runtimeTerminalByPtyId: new Map([
+        [
+          sessionId,
+          {
+            handle: 'term-bumblebee',
+            ptyId: sessionId,
+            worktreeId,
+            worktreePath: '/Users/daveagent/workspaces/teal',
+            title: 'Terminal 1',
+            originTabId: 'tab-bumblebee',
+            originLeafId: 'leaf-bumblebee',
+            originConnectionId: 'ssh-bumblebee',
+            orphanReason: 'live PTY has a workspace but no renderer pane binding'
+          }
+        ]
+      ])
+    })
+
+    const out = mergeSnapshotAndSessions(null, ds, ctx)
+
+    expect(out.find((repo) => repo.repoId === UNATTRIBUTED_REPO_ID)).toBeUndefined()
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatchObject({
+      repoId: 'teal-bumblebee',
+      repoName: 'Teal',
+      hasRemoteChildren: true
+    })
+    expect(out[0].worktrees[0]).toMatchObject({
+      worktreeId,
+      worktreeName: 'workspaces/teal',
+      isRemote: true
+    })
+    expect(out[0].worktrees[0].sessions[0]).toMatchObject({
+      sessionId,
+      label: 'Terminal 1',
+      connectionId: 'ssh-bumblebee',
+      relayPtyId: 'pty-4',
+      originLeafId: 'leaf-bumblebee',
+      originSource: 'layout-wake',
+      orphanReason: 'live PTY has a workspace but no renderer pane binding'
+    })
+  })
+
   it('repo aggregate sums only worktrees with numeric metrics; remote-by-connectionId flags chip', () => {
     // Why: a single repo can be both reflected as a snapshot worktree
     // (covered by the local collector) and a daemon-only session

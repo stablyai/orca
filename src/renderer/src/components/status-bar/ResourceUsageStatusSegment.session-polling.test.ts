@@ -14,10 +14,20 @@ describe('ResourceUsageStatusSegment session polling', () => {
 
     const openEffectIndex = source.indexOf('if (!open)')
     const refreshIndex = source.indexOf('void refreshSessions()', openEffectIndex)
+    const runtimeRefreshIndex = source.indexOf('void refreshRuntimeTerminals()', openEffectIndex)
 
     // Why: pty.listSessions() is a global daemon inventory and can pause input
     // with large preserved-session sets. Keep it on explicit Resource Manager use.
     expect(openEffectIndex).toBeGreaterThanOrEqual(0)
     expect(refreshIndex).toBeGreaterThan(openEffectIndex)
+    expect(runtimeRefreshIndex).toBeGreaterThan(openEffectIndex)
+  })
+
+  it('attributes the complete local daemon session inventory', () => {
+    const source = readFileSync(SOURCE_PATH, 'utf8')
+
+    expect(source).toContain("{ kind: 'local' },\n        'terminal.list'")
+    expect(source).toContain('{ limit: Number.MAX_SAFE_INTEGER }')
+    expect(source).not.toContain('getActiveRuntimeTarget(settings)')
   })
 })

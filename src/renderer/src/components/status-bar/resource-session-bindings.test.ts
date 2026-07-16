@@ -61,6 +61,21 @@ describe('resource session bindings', () => {
       'pty-live',
       'pty-restored'
     ])
+    expect(index.originByPtyId.get('pty-live')).toMatchObject({
+      tabId: 'tab-active',
+      source: 'live',
+      leafId: null
+    })
+    expect(index.originByPtyId.get('pty-restored')).toMatchObject({
+      tabId: 'tab-restored',
+      source: 'tab-wake',
+      leafId: null
+    })
+    expect(index.originByPtyId.get('pty-leaf-a')).toMatchObject({
+      tabId: 'tab-restored',
+      source: 'layout-wake',
+      leafId: 'leaf-1'
+    })
   })
 
   it('ignores stale layout-only PTYs after their tab is gone', () => {

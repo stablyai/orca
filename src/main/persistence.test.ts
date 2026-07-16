@@ -8252,6 +8252,69 @@ describe('Store', () => {
     expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({})
   })
 
+  it('retires older SSH leases for the same terminal pane when a replacement attaches', async () => {
+    const store = await createStore()
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'remote-pty-1',
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      leafId: TEST_LEAF_1,
+      state: 'attached'
+    })
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'remote-pty-2',
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      leafId: TEST_LEAF_1,
+      state: 'attached'
+    })
+
+    const leases = store.getSshRemotePtyLeases('ssh-1')
+    expect(leases).toEqual([
+      expect.objectContaining({
+        ptyId: 'remote-pty-1',
+        state: 'expired'
+      }),
+      expect.objectContaining({
+        ptyId: 'remote-pty-2',
+        state: 'attached'
+      })
+    ])
+  })
+
+  it('keeps SSH leases for different leaves attached when another pane attaches', async () => {
+    const store = await createStore()
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'remote-pty-1',
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      leafId: TEST_LEAF_1,
+      state: 'attached'
+    })
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'remote-pty-2',
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      leafId: TEST_LEAF_2,
+      state: 'attached'
+    })
+
+    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([
+      expect.objectContaining({
+        ptyId: 'remote-pty-1',
+        state: 'attached'
+      }),
+      expect.objectContaining({
+        ptyId: 'remote-pty-2',
+        state: 'attached'
+      })
+    ])
+  })
+
   it('does not let an expired lease for another tab suppress a matching pty id', async () => {
     const store = await createStore()
     store.upsertSshRemotePtyLease({

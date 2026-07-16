@@ -21223,7 +21223,9 @@ export class OrcaRuntimeService {
       connected: leaf.connected,
       writable: leaf.writable,
       lastOutputAt: leaf.lastOutputAt,
-      preview: leaf.preview
+      preview: leaf.preview,
+      presentation: 'visible',
+      presentationSource: 'renderer_graph'
     }
   }
 
@@ -22435,6 +22437,7 @@ export class OrcaRuntimeService {
     worktreesById: Map<string, ResolvedWorktree>
   ): RuntimeTerminalSummary {
     const worktree = worktreesById.get(pty.worktreeId)
+    const origin = this.findPersistedTerminalOriginForPty(pty.ptyId)
 
     return {
       handle: this.issuePtyHandle(pty),
@@ -22448,8 +22451,60 @@ export class OrcaRuntimeService {
       connected: pty.connected,
       writable: pty.connected,
       lastOutputAt: pty.lastOutputAt,
-      preview: pty.preview
+      preview: pty.preview,
+      presentation: 'orphaned',
+      presentationSource: 'pty_record',
+      orphanReason: 'live_pty_without_renderer_leaf',
+      originTabId: pty.tabId ?? origin?.tabId ?? null,
+      originLeafId: origin?.leafId ?? null,
+      originPaneKey: pty.paneKey ?? origin?.paneKey ?? null,
+      originConnectionId: pty.connectionId
     }
+  }
+
+  private findPersistedTerminalOriginForPty(ptyId: string): {
+    tabId: string
+    leafId: string | null
+    paneKey: string | null
+  } | null {
+    const session = this.store?.getWorkspaceSession?.()
+    if (!session) {
+      return null
+    }
+
+    const findLeafId = (tabId: string): string | null => {
+      const ptyIdsByLeafId = session.terminalLayoutsByTabId?.[tabId]?.ptyIdsByLeafId ?? {}
+      for (const [leafId, savedPtyId] of Object.entries(ptyIdsByLeafId)) {
+        if (savedPtyId === ptyId) {
+          return leafId
+        }
+      }
+      return null
+    }
+
+    for (const [tabId, savedPtyId] of Object.entries(session.remoteSessionIdsByTabId ?? {})) {
+      if (savedPtyId === ptyId) {
+        const leafId = findLeafId(tabId)
+        return {
+          tabId,
+          leafId,
+          paneKey: leafId ? makePaneKey(tabId, leafId) : null
+        }
+      }
+    }
+
+    for (const tabId of Object.keys(session.terminalLayoutsByTabId ?? {})) {
+      const leafId = findLeafId(tabId)
+      if (leafId) {
+        return {
+          tabId,
+          leafId,
+          paneKey: makePaneKey(tabId, leafId)
+        }
+      }
+    }
+
+    return null
   }
 
   private getLiveLeafForHandle(handle: string): {

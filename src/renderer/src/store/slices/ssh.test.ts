@@ -190,6 +190,98 @@ describe('createSshSlice', () => {
     expect(store.getState().sshConnectedGeneration).toBe(1)
   })
 
+  it('downgrades transient workspace sync disconnect errors when the SSH target is connected', () => {
+    const store = createTestStore()
+    store.setState({
+      sshConnectionStates: new Map([
+        ['ssh-1', { targetId: 'ssh-1', status: 'connected', error: null, reconnectAttempt: 0 }]
+      ])
+    })
+
+    store.getState().setRemoteWorkspaceSyncStatus('ssh-1', {
+      phase: 'error',
+      direction: 'pull',
+      message: 'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
+    })
+
+    expect(store.getState().remoteWorkspaceSyncStatusByTargetId['ssh-1']).toMatchObject({
+      phase: 'offline',
+      direction: 'pull',
+      message: 'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
+    })
+  })
+
+  it('keeps transient workspace sync disconnect errors destructive while the SSH target is disconnected', () => {
+    const store = createTestStore()
+    store.setState({
+      sshConnectionStates: new Map([
+        ['ssh-1', { targetId: 'ssh-1', status: 'disconnected', error: null, reconnectAttempt: 0 }]
+      ])
+    })
+
+    store.getState().setRemoteWorkspaceSyncStatus('ssh-1', {
+      phase: 'error',
+      direction: 'pull',
+      message: 'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
+    })
+
+    expect(store.getState().remoteWorkspaceSyncStatusByTargetId['ssh-1']).toMatchObject({
+      phase: 'error',
+      direction: 'pull'
+    })
+  })
+
+  it('downgrades a stale transient sync error when the SSH target reconnects', () => {
+    const store = createTestStore()
+    store.setState({
+      sshConnectionStates: new Map([
+        ['ssh-1', { targetId: 'ssh-1', status: 'disconnected', error: null, reconnectAttempt: 0 }]
+      ]),
+      remoteWorkspaceSyncStatusByTargetId: {
+        'ssh-1': {
+          phase: 'error',
+          direction: 'pull',
+          message: 'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
+        }
+      }
+    })
+
+    store.getState().setSshConnectionState('ssh-1', {
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+
+    expect(store.getState().remoteWorkspaceSyncStatusByTargetId['ssh-1']).toMatchObject({
+      phase: 'offline',
+      direction: 'pull',
+      message: 'Remote connection dropped. Click Reconnect on the SSH target before retrying.'
+    })
+    expect(store.getState().sshConnectedGeneration).toBe(1)
+  })
+
+  it('keeps non-transient workspace sync errors destructive even when connected', () => {
+    const store = createTestStore()
+    store.setState({
+      sshConnectionStates: new Map([
+        ['ssh-1', { targetId: 'ssh-1', status: 'connected', error: null, reconnectAttempt: 0 }]
+      ])
+    })
+
+    store.getState().setRemoteWorkspaceSyncStatus('ssh-1', {
+      phase: 'error',
+      direction: 'pull',
+      message: 'Failed to apply remote workspace'
+    })
+
+    expect(store.getState().remoteWorkspaceSyncStatusByTargetId['ssh-1']).toMatchObject({
+      phase: 'error',
+      direction: 'pull',
+      message: 'Failed to apply remote workspace'
+    })
+  })
+
   it('does not publish state when cleanup finds no removed SSH target state', () => {
     const store = createTestStore()
     const previousState = store.getState()

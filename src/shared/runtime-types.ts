@@ -388,6 +388,13 @@ export type RuntimeTerminalSummary = {
   writable: boolean
   lastOutputAt: number | null
   preview: string
+  presentation: 'visible' | 'orphaned'
+  presentationSource?: 'renderer_graph' | 'pty_record'
+  orphanReason?: 'live_pty_without_renderer_leaf'
+  originTabId?: string | null
+  originLeafId?: string | null
+  originPaneKey?: string | null
+  originConnectionId?: string | null
 }
 
 export type RuntimeTerminalVisualTerminalNode = {

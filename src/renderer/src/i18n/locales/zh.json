@@ -2975,7 +2975,8 @@
             "b8f4a2c1d0e3": "{{value0}} 个孤立项",
             "c7e3b1a0d9f2": "终止 {{value0}} 个孤立终端",
             "d8f4c2b1e0a3": "终止 {{value0}} 个孤立终端",
-            "e9a5d3c2b1f0": "终止 {{value0}}？"
+            "e9a5d3c2b1f0": "终止 {{value0}}？",
+            "1a3f9d7c22": "Detached"
           },
           "SshStatusSegment": {
             "3ad70e0365": "管理远程主机",

@@ -14,6 +14,17 @@ export type DaemonSession = {
   title: string
 }
 
+export type RuntimeTerminalAttribution = {
+  worktreeId: string
+  worktreePath: string
+  handle: string
+  title: string | null
+  originTabId: string | null
+  originLeafId: string | null
+  originConnectionId: string | null
+  orphanReason: string | null
+}
+
 export type UnifiedSessionRow = {
   sessionId: string
   paneKey: string | null
@@ -24,6 +35,12 @@ export type UnifiedSessionRow = {
   cpu: Metric
   memory: Metric
   hasLocalSamples: boolean
+  connectionId: string | null
+  hostLabel: string | null
+  relayPtyId: string | null
+  originLeafId: string | null
+  originSource: 'live' | 'tab-wake' | 'layout-wake' | null
+  orphanReason: string | null
 }
 
 export type UnifiedWorktreeRow = {
@@ -68,6 +85,10 @@ export type MergeContext = {
   repoConnectionIdById: Map<string, string | null>
   /** Repo runtime-host scope by repo id (missing == keep row). */
   repoRuntimeScopedById: Map<string, boolean>
+  /** SSH target label by target id for detached terminal diagnostics. */
+  sshTargetLabelById?: Map<string, string>
+  /** Runtime terminal list attribution by daemon PTY id. */
+  runtimeTerminalByPtyId?: Map<string, RuntimeTerminalAttribution>
   /** Browser inventory is open-only; the Resource Manager never scans it in the background. */
   browserTabsByWorktree?: Record<string, BrowserWorkspace[]>
   /** Canonical worktrees keep browser-only workspace rows out of synthetic buckets. */

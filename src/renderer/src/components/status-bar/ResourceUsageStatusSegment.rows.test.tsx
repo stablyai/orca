@@ -49,6 +49,12 @@ function makeSession(overrides: Partial<UnifiedSessionRow>): UnifiedSessionRow {
     cpu: 1,
     memory: 100,
     hasLocalSamples: true,
+    connectionId: null,
+    hostLabel: null,
+    relayPtyId: null,
+    originLeafId: null,
+    originSource: null,
+    orphanReason: null,
     ...overrides
   }
 }
@@ -132,6 +138,33 @@ describe('resource manager row presentation', () => {
     )
 
     expect(container.querySelector('button[aria-label="Kill session orphan-a"]')).not.toBeNull()
+  })
+
+  it('shows detached session diagnostics', () => {
+    renderWorktreeRow(
+      makeWorktree({
+        sessions: [
+          makeSession({
+            sessionId: 'ssh:ssh-bumblebee@@pty-4',
+            bound: false,
+            tabId: null,
+            cpu: null,
+            memory: null,
+            connectionId: 'ssh-bumblebee',
+            hostLabel: 'Bumblebee',
+            relayPtyId: 'pty-4',
+            originLeafId: 'leaf-1',
+            originSource: 'layout-wake',
+            orphanReason: 'live PTY has a workspace but no renderer pane binding'
+          })
+        ]
+      })
+    )
+
+    expect(container.textContent).toContain('Detached')
+    expect(container.textContent).toContain('Bumblebee · pty-4')
+    expect(container.textContent).toContain('leaf leaf-1')
+    expect(container.textContent).toContain('live PTY has a workspace but no renderer pane binding')
   })
 
   it('shows browsers as read-only workspace resources', () => {

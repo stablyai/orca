@@ -333,7 +333,8 @@ describe('orchestration RPC methods', () => {
         connected: opts.connected ?? true,
         writable: opts.writable ?? true,
         lastOutputAt: opts.lastOutputAt ?? null,
-        preview: opts.preview ?? ''
+        preview: opts.preview ?? '',
+        presentation: opts.presentation ?? 'visible'
       }
     }
 
