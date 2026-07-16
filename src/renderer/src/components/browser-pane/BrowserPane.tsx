@@ -111,6 +111,7 @@ import {
 } from '../../../../shared/browser-grab-types'
 import { BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX } from '../../../../shared/browser-annotation-viewport-bridge'
 import { useGrabMode } from './useGrabMode'
+import { shouldGrabOnCopyShortcut } from './browser-auto-grab-gate'
 import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
 import { formatBrowserAnnotationsAsMarkdown } from './browser-annotation-output'
 import { isEditableKeyboardTarget } from './browser-keyboard'
@@ -2793,6 +2794,8 @@ function BrowserPagePane({
   const handleInternalFileDragOverRef = useRef<(event: DragEvent<HTMLDivElement>) => void>(() => {})
   const handleInternalFileDropRef = useRef<(event: DragEvent<HTMLDivElement>) => void>(() => {})
   const keybindings = useAppStore((state) => state.keybindings)
+  // Why: Cmd/Ctrl+C-to-grab is opt-in; when off the browser keeps native copy.
+  const autoGrabEnabled = useAppStore((state) => state.settings?.browserAutoGrabEnabled === true)
   const browserDefaultZoomLevel = useAppStore(
     (state) => state.browserDefaultZoomLevel ?? DEFAULT_BROWSER_PAGE_ZOOM_LEVEL
   )
@@ -4198,31 +4201,38 @@ function BrowserPagePane({
   useEffect(() => {
     // Why: without the isActive gate, every mounted BrowserPagePane registers
     // a global keydown listener, so Cmd+C would toggle grab mode on all panes
-    // simultaneously — not just the active one.
-    if (!isActive) {
+    // simultaneously — not just the active one. Skip entirely when Auto Grab is
+    // off (the default) so no listener runs and Cmd/Ctrl+C stays native copy.
+    if (!isActive || !autoGrabEnabled) {
       return
     }
     const shortcutPlatform = getShortcutPlatform()
     const handleKeyDown = (e: KeyboardEvent): void => {
       // Why: let native Cmd+C work in text inputs (address bar, search fields,
-      // contentEditable regions). Only intercept when focus is on a non-input
-      // element so grab-mode toggle doesn't swallow copy in form controls.
-      if (isEditableKeyboardTarget(e.target)) {
+      // contentEditable regions), and keep it native entirely when Auto Grab is
+      // off. Only intercept when focus is on non-input page content, the markup
+      // overlay is closed, and the grab keybinding matched.
+      if (
+        !shouldGrabOnCopyShortcut({
+          autoGrabEnabled,
+          isEditableTarget: isEditableKeyboardTarget(e.target),
+          markupActive: markup.isActive,
+          matchesGrabKeybinding: keybindingMatchesAction(
+            'browser.grabElement',
+            e,
+            shortcutPlatform,
+            keybindings
+          )
+        })
+      ) {
         return
       }
-      // Why: while the markup overlay is open, don't let the grab shortcut start
-      // the in-guest picker behind it — matching the disabled grab toolbar buttons.
-      if (
-        !markup.isActive &&
-        keybindingMatchesAction('browser.grabElement', e, shortcutPlatform, keybindings)
-      ) {
-        e.preventDefault()
-        startGrabIntent('copy')
-      }
+      e.preventDefault()
+      startGrabIntent('copy')
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isActive, keybindings, markup.isActive, startGrabIntent])
+  }, [autoGrabEnabled, isActive, keybindings, markup.isActive, startGrabIntent])
 
   useEffect(() => {
     if (!isActive) {
@@ -4250,11 +4260,13 @@ function BrowserPagePane({
   // content without stealing real copy from inputs or selections.
   useEffect(() => {
     return window.api.browser.onGrabModeToggle((tabId) => {
-      if (tabId === browserTab.id) {
+      // Why: ignore the chord forwarded from a focused guest when Auto Grab is
+      // off so Cmd/Ctrl+C stays native copy.
+      if (tabId === browserTab.id && autoGrabEnabled) {
         startGrabIntent('copy')
       }
     })
-  }, [browserTab.id, startGrabIntent])
+  }, [autoGrabEnabled, browserTab.id, startGrabIntent])
 
   // Why: single-key shortcuts (C / S) let the user copy the hovered element
   // without clicking. During 'armed'/'awaiting' state, the shortcut calls the
@@ -5042,38 +5054,42 @@ function BrowserPagePane({
 
           <BrowserImportHintButton profileId={sessionProfileId} />
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="inline-flex">
-                <Button
-                  size="icon"
-                  variant={grab.state !== 'idle' && grabIntent === 'copy' ? 'default' : 'ghost'}
-                  className={cn(
-                    'h-8 w-8',
-                    grab.state !== 'idle' &&
-                      grabIntent === 'copy' &&
-                      'bg-foreground/80 text-background hover:bg-foreground/90'
-                  )}
-                  onClick={() => startGrabIntent('copy')}
-                  disabled={isBlankTab || markup.isActive}
-                  aria-label={translate(
-                    'auto.components.browser.pane.BrowserPane.fdfc7fe0ef',
-                    'Grab page element'
-                  )}
-                  data-contextual-tour-target="browser-grab-control"
-                >
-                  <Crosshair className="size-4" />
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={4}>
-              {translate(
-                'auto.components.browser.pane.BrowserPane.acbe79fd01',
-                'Grab page element ({{value0}})',
-                { value0: grabElementShortcut }
-              )}
-            </TooltipContent>
-          </Tooltip>
+          {/* Why: the crosshair grab button is hidden unless Auto Grab is on,
+              so the browser toolbar stays like a normal web browser by default. */}
+          {autoGrabEnabled ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button
+                    size="icon"
+                    variant={grab.state !== 'idle' && grabIntent === 'copy' ? 'default' : 'ghost'}
+                    className={cn(
+                      'h-8 w-8',
+                      grab.state !== 'idle' &&
+                        grabIntent === 'copy' &&
+                        'bg-foreground/80 text-background hover:bg-foreground/90'
+                    )}
+                    onClick={() => startGrabIntent('copy')}
+                    disabled={isBlankTab || markup.isActive}
+                    aria-label={translate(
+                      'auto.components.browser.pane.BrowserPane.fdfc7fe0ef',
+                      'Grab page element'
+                    )}
+                    data-contextual-tour-target="browser-grab-control"
+                  >
+                    <Crosshair className="size-4" />
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={4}>
+                {translate(
+                  'auto.components.browser.pane.BrowserPane.acbe79fd01',
+                  'Grab page element ({{value0}})',
+                  { value0: grabElementShortcut }
+                )}
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
 
           <Tooltip>
             <TooltipTrigger asChild>

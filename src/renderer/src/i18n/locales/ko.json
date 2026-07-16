@@ -7299,7 +7299,11 @@
             "a942905148": "새 브라우저 탭을 만들 때 열리는 URL입니다. 빈 탭을 열려면 비워 두세요.",
             "c3903322d2": "기본 홈 페이지",
             "19ea5607cf": "로컬호스트 작업 트리 레이블",
-            "4e0fdf0a3f": "브라우저 탭을 더 쉽게 구분할 수 있도록 작업 트리별 Orca 로컬 호스트 URL로 워크스페이스 포트를 엽니다."
+            "4e0fdf0a3f": "브라우저 탭을 더 쉽게 구분할 수 있도록 작업 트리별 Orca 로컬 호스트 URL로 워크스페이스 포트를 엽니다.",
+            "autograb": {
+              "title": "Auto Grab",
+              "description": "Repurpose {{value0}} in the browser to grab a page element for agents. Off by default so the browser behaves like a normal web browser and {{value0}} copies."
+            }
           },
           "use": {
             "search": {
@@ -9091,6 +9095,10 @@
           "availability": "이용 가능:",
           "testFlight": "TestFlight",
           "androidApk": "Android APK"
+        },
+        "BrowserAutoGrabSetting": {
+          "title": "Auto Grab",
+          "description": "Grab a page element's context for agents with {{value0}} or the crosshair button in the browser toolbar. Off by default — the browser works like a normal web browser, and {{value0}} copies. Turn this on to enable grabbing."
         }
       },
       "right": {

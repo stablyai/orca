@@ -2667,6 +2667,10 @@ export type GlobalSettings = {
    *  in external browsers. Opt-in (default off): serving the app under a different
    *  host can break dev apps that bind cookies/sessions to localhost. */
   localhostWorktreeLabelsEnabled?: boolean
+  /** Why: the browser repurposes Cmd/Ctrl+C to enter element-grab mode, which
+   *  hijacks the normal copy gesture. Opt-in (default off) so the browser
+   *  behaves like a normal web browser until the user wants grabbing. */
+  browserAutoGrabEnabled?: boolean
   /** Why: terminal link routing asks once at first use instead of silently
    *  changing where links open for new users. */
   openLinksInAppPreferencePrompted: boolean

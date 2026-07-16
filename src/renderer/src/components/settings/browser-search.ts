@@ -16,6 +16,10 @@ export function getBrowserLinkRoutingShortcutLabel(platform: BrowserShortcutPlat
   return platform.isMac ? '⇧⌘-click' : 'Shift+Ctrl+click'
 }
 
+export function getBrowserCopyShortcutLabel(platform: BrowserShortcutPlatform): string {
+  return platform.isMac ? '⌘C' : 'Ctrl+C'
+}
+
 export function getBrowserLinkRoutingDescription(platform: BrowserShortcutPlatform): string {
   return `Open http(s) links in Orca's built-in browser — from the terminal, markdown, and the editor. ${getBrowserLinkRoutingShortcutLabel(platform)} always uses your system browser.`
 }
@@ -148,6 +152,25 @@ export function getBrowserPaneSearchEntries(
         ...translateSearchKeyword('auto.components.settings.browser.search.533a253deb', 'edge'),
         ...translateSearchKeyword('auto.components.settings.browser.search.1c1e097985', 'arc'),
         ...translateSearchKeyword('auto.components.settings.browser.search.7539f6336c', 'profile')
+      ]
+    },
+    {
+      title: translate('auto.components.settings.browser.search.autograb.title', 'Auto Grab'),
+      description: translate(
+        'auto.components.settings.browser.search.autograb.description',
+        'Repurpose {{value0}} in the browser to grab a page element for agents. Off by default so the browser behaves like a normal web browser and {{value0}} copies.',
+        { value0: getBrowserCopyShortcutLabel(platform) }
+      ),
+      keywords: [
+        ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
+        'grab',
+        'auto grab',
+        'copy',
+        // Why: list both chords so the setting is findable regardless of platform.
+        'cmd+c',
+        'ctrl+c',
+        'element',
+        'capture'
       ]
     }
   ]

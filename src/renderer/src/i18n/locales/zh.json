@@ -7299,7 +7299,11 @@
             "a942905148": "创建新浏览器选项卡时打开的 URL。留空以打开空白选项卡。",
             "c3903322d2": "默认主页",
             "19ea5607cf": "本地主机工作区标签",
-            "4e0fdf0a3f": "将工作区端口打开为特定于工作区的 Orca localhost URL，便于区分浏览器标签页。"
+            "4e0fdf0a3f": "将工作区端口打开为特定于工作区的 Orca localhost URL，便于区分浏览器标签页。",
+            "autograb": {
+              "title": "Auto Grab",
+              "description": "Repurpose {{value0}} in the browser to grab a page element for agents. Off by default so the browser behaves like a normal web browser and {{value0}} copies."
+            }
           },
           "use": {
             "search": {
@@ -9091,6 +9095,10 @@
           "availability": "可用平台：",
           "testFlight": "TestFlight",
           "androidApk": "Android APK"
+        },
+        "BrowserAutoGrabSetting": {
+          "title": "Auto Grab",
+          "description": "Grab a page element's context for agents with {{value0}} or the crosshair button in the browser toolbar. Off by default — the browser works like a normal web browser, and {{value0}} copies. Turn this on to enable grabbing."
         }
       },
       "right": {

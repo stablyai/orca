@@ -7314,7 +7314,11 @@
             "a942905148": "URL abierta al crear una nueva pestaña del navegador. Déjelo vacío para abrir una pestaña en blanco.",
             "c3903322d2": "Página de inicio predeterminada",
             "19ea5607cf": "Etiquetas de localhost para worktrees",
-            "4e0fdf0a3f": "Abre los puertos del workspace como URL localhost de Orca específicas del worktree para que las pestañas del navegador sean más fáciles de distinguir."
+            "4e0fdf0a3f": "Abre los puertos del workspace como URL localhost de Orca específicas del worktree para que las pestañas del navegador sean más fáciles de distinguir.",
+            "autograb": {
+              "title": "Auto Grab",
+              "description": "Repurpose {{value0}} in the browser to grab a page element for agents. Off by default so the browser behaves like a normal web browser and {{value0}} copies."
+            }
           },
           "use": {
             "search": {
@@ -9091,6 +9095,10 @@
           "availability": "Disponible en",
           "testFlight": "TestFlight",
           "androidApk": "APK de Android"
+        },
+        "BrowserAutoGrabSetting": {
+          "title": "Auto Grab",
+          "description": "Grab a page element's context for agents with {{value0}} or the crosshair button in the browser toolbar. Off by default — the browser works like a normal web browser, and {{value0}} copies. Turn this on to enable grabbing."
         }
       },
       "right": {

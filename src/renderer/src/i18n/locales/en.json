@@ -7351,7 +7351,11 @@
             "a942905148": "URL opened when creating a new browser tab. Leave empty to open a blank tab.",
             "c3903322d2": "Default Home Page",
             "19ea5607cf": "Localhost Worktree Labels",
-            "4e0fdf0a3f": "Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart."
+            "4e0fdf0a3f": "Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart.",
+            "autograb": {
+              "title": "Auto Grab",
+              "description": "Repurpose {{value0}} in the browser to grab a page element for agents. Off by default so the browser behaves like a normal web browser and {{value0}} copies."
+            }
           },
           "use": {
             "search": {
@@ -9091,6 +9095,10 @@
           "availability": "Available on",
           "testFlight": "TestFlight",
           "androidApk": "Android APK"
+        },
+        "BrowserAutoGrabSetting": {
+          "title": "Auto Grab",
+          "description": "Grab a page element's context for agents with {{value0}} or the crosshair button in the browser toolbar. Off by default — the browser works like a normal web browser, and {{value0}} copies. Turn this on to enable grabbing."
         }
       },
       "right": {

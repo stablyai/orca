@@ -11,6 +11,7 @@ import { BrowserUseSetup } from './BrowserUsePane'
 import { BrowserSearchEngineSetting } from './BrowserSearchEngineSetting'
 import { BrowserLinkRoutingSetting } from './BrowserLinkRoutingSetting'
 import { BrowserLocalhostWorktreeLabelsSetting } from './BrowserLocalhostWorktreeLabelsSetting'
+import { BrowserAutoGrabSetting } from './BrowserAutoGrabSetting'
 import { BrowserSessionCookiesSection } from './BrowserSessionCookiesSection'
 import { BrowserNewProfileDialog } from './BrowserNewProfileDialog'
 import {
@@ -100,6 +101,7 @@ export function BrowserPane({
   const showLinkRouting = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[3]])
   const showLocalhostLabels = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[4]])
   const showCookies = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[5]])
+  const showAutoGrab = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[6]])
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
   const linkRoutingDescription = getBrowserLinkRoutingDescription({ isMac })
@@ -233,6 +235,10 @@ export function BrowserPane({
           settings={settings}
           updateSettings={updateSettings}
         />
+      ) : null}
+
+      {showAutoGrab ? (
+        <BrowserAutoGrabSetting settings={settings} updateSettings={updateSettings} />
       ) : null}
 
       {showCookies ? (
