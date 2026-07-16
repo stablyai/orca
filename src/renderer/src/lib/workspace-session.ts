@@ -352,13 +352,13 @@ export function buildActiveConnectionIdsAtShutdown(
   // Why: shutdown can observe SSH in a transient state (relay drop mid-quit,
   // exhausted reconnect) after the socket closed but before the snapshot
   // flushed. The durable PTY id still names the target Orca must reconnect to
-  // restore that surviving remote session. Two exclusions keep intent honest:
-  // 'disconnected'/'auth-failed'/never-observed only arise from an explicit
-  // user disconnect or a failed/cancelled connect, and startup must not dial a
-  // host the user chose to leave offline (its sessions still restore on tab
-  // focus via the deferred flow). Runtime-owned (ephemeral-VM) targets belong
-  // to the runtime layer; a renderer-driven ssh.connect would dispose the
-  // runtime's live relay session.
+  // restore that surviving remote session. Two exclusions:
+  // 'disconnected'/'auth-failed'/never-observed usually mean an explicit user
+  // disconnect or a failed/cancelled connect — startup must not auto-dial a
+  // host the user left offline or stack credential dialogs (sessions still
+  // restore on tab focus via the deferred flow, so only eagerness is lost).
+  // Runtime-owned (ephemeral-VM) targets belong to the runtime layer; a
+  // renderer-driven ssh.connect would dispose the runtime's live relay session.
   for (const sessionId of Object.values(remoteSessionIdsByTabId ?? {})) {
     const connectionId = parseAppSshPtyId(sessionId)?.connectionId
     if (!connectionId || isRuntimeOwnedSshTargetId(connectionId)) {

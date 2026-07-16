@@ -189,6 +189,11 @@ describe('workspace session live PTY persistence', () => {
         },
         ptyIdsByTabId: { 'tab-vm': [] },
         lastKnownRelayPtyIdByTabId: { 'tab-vm': 'ssh:runtime-ssh-vm1@@pty-7' },
+        // Why a status entry: without one the status gate already excludes the
+        // target and the runtime-owned check would be untested dead weight.
+        // A pane-driven optimistic write CAN stamp runtime-owned states
+        // (TerminalSshReconnectOverlay), so pin the exclusion independently.
+        sshConnectionStates: new Map([['runtime-ssh-vm1', { status: 'reconnecting' } as never]]),
         repos: [
           {
             id: 'repo-vm',
