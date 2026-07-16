@@ -18,6 +18,8 @@ description: >-
 
 Use `orca` when Orca's running editor/runtime is the source of truth. Inside Orca-managed terminals, `orca` always resolves to the Orca CLI on every platform. In any other shell on Linux, use `orca-ide` wherever this file says `orca` — outside Orca's terminals, bare `orca` on Linux is usually the GNOME Orca screen reader (`/usr/bin/orca`), and running it starts speech on the user's machine.
 
+Running `orca-ide` inside a WSL distro from a plain Windows `cmd.exe` console (not an Orca-managed terminal) can garble non-ASCII output (e.g. Chinese text) because `wsl.exe` re-encodes for that console's active codepage. Run `chcp 65001` in `cmd.exe` first, or use Windows Terminal, to see correct output.
+
 **Dev builds (`pnpm dev`):** after `pnpm build:cli`, the dev CLI is exposed as `orca-dev` (the global shim points at this checkout's wrapper + out/cli). Inside a dev Orca's terminals use `orca-dev emulator ...` (or `./config/scripts/orca-dev.mjs emulator ...` for worktree-local invocation that does not depend on the /usr/local/bin symlink). Plain `orca` targets any installed production Orca. The app's own agent preambles use `orca-dev` automatically in dev mode.
 
 Use plain shell tools when Orca state does not matter.

@@ -105,7 +105,14 @@ function scheduleWslLinuxPathCanonicalization(
   execFile(
     'wsl.exe',
     args,
-    { encoding: 'utf-8', timeout: WSL_CANONICALIZE_TIMEOUT_MS, windowsHide: true },
+    {
+      // Why: WSL_UTF8=1 forces UTF-8 output; without it wsl.exe emits
+      // UTF-16LE that reads as NUL-riddled text.
+      env: { ...process.env, WSL_UTF8: '1' },
+      encoding: 'utf-8',
+      timeout: WSL_CANONICALIZE_TIMEOUT_MS,
+      windowsHide: true
+    },
     (error, stdout) => {
       const canonicalPath = stdout.trim()
       const resolvedPath = !error && canonicalPath.startsWith('/') ? canonicalPath : null

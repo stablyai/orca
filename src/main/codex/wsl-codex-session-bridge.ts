@@ -143,6 +143,9 @@ function execFileUtf8(command: string, args: string[]): Promise<string> {
       command,
       args,
       {
+        // Why: WSL_UTF8=1 forces UTF-8 output; without it wsl.exe emits
+        // UTF-16LE that reads as NUL-riddled text.
+        env: { ...process.env, WSL_UTF8: '1' },
         encoding: 'utf-8',
         maxBuffer: 1024 * 1024,
         timeout: WSL_SESSION_BRIDGE_TIMEOUT_MS,

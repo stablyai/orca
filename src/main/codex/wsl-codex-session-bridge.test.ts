@@ -52,13 +52,16 @@ describe('syncWslCodexSessionsIntoManagedHome', () => {
     const [command, args, options] = firstCall as [
       string,
       string[],
-      { timeout?: number; windowsHide?: boolean }
+      { env?: Record<string, string | undefined>; timeout?: number; windowsHide?: boolean }
     ]
     expect(command).toBe('wsl.exe')
     expect(args.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--', 'bash', '-lc'])
     expect(args).toHaveLength(6)
     expect(options.timeout).toBe(30_000)
     expect(options.windowsHide).toBe(true)
+    // Why: without WSL_UTF8, wsl.exe emits UTF-16LE that reads as NUL-riddled
+    // mojibake instead of UTF-8 (e.g. non-ASCII session file contents).
+    expect(options.env?.WSL_UTF8).toBe('1')
 
     const shellCommand = args[5]
     expect(shellCommand).toContain("source_sessions_root='/home/alice/.codex/sessions'")

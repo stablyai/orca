@@ -99,6 +99,9 @@ describe('canonicalizeWslLinuxPath', () => {
       windowsPath
     ])
     expect(options).toMatchObject({ timeout: 5000, windowsHide: true })
+    // Why: without WSL_UTF8, wsl.exe emits UTF-16LE that reads as NUL-riddled
+    // mojibake instead of UTF-8 (e.g. non-ASCII paths).
+    expect((options as { env?: Record<string, string | undefined> }).env?.WSL_UTF8).toBe('1')
 
     callback(null, '/windows/d/orca/codex-runtime-home/home\n')
     expect(settled).toHaveBeenCalledWith({
