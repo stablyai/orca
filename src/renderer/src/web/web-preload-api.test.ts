@@ -1780,6 +1780,14 @@ describe('web repos preload API', () => {
     vi.doUnmock('./web-runtime-client')
   })
 
+  it('rejects desktop host-scoped reorders in paired web clients', async () => {
+    const { api } = await installApi('Linux')
+
+    await expect(
+      api.repos.reorderForHost({ hostId: 'ssh:target', orderedIds: ['repo-1'] })
+    ).rejects.toThrow('Host-scoped project reordering is unavailable in paired web clients.')
+  })
+
   it.each([
     ['/home/alice', '/home/alice/orca/projects'],
     ['/', '/orca/projects'],
@@ -2513,13 +2521,13 @@ describe('web GitHub preload API', () => {
       },
       {
         key: 'listWorkItems',
-        args: { repoPath, limit: 20, query: 'is:pr', before: 'cursor', noCache: true },
+        args: { repoPath, limit: 20, query: 'is:pr', page: 2, noCache: true },
         expectedMethod: 'github.listWorkItems',
         expectedParams: withRepo({
           repoPath,
           limit: 20,
           query: 'is:pr',
-          before: 'cursor',
+          page: 2,
           noCache: true
         })
       },

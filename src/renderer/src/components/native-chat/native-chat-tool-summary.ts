@@ -21,6 +21,26 @@ export function summarizeToolInput(input: unknown): string {
   return `${collapsed.slice(0, MAX_PREVIEW_LENGTH - 1)}…`
 }
 
+/** Full, pretty-printed tool-call input for the expanded detail view. Strings
+ *  pass through as-is; objects/arrays print as indented JSON so a diff-less call
+ *  (e.g. a question payload) reads cleanly instead of one long minified line. */
+export function formatToolInput(input: unknown): string {
+  if (input === null || input === undefined) {
+    return ''
+  }
+  if (typeof input === 'string') {
+    return input
+  }
+  if (typeof input === 'number' || typeof input === 'boolean') {
+    return String(input)
+  }
+  try {
+    return JSON.stringify(input, null, 2) ?? ''
+  } catch {
+    return ''
+  }
+}
+
 /** A very short hint for a tool call in a one-line run summary: the target file's
  *  basename when present, else a clipped preview of the input. */
 export function briefToolArg(input: unknown): string {

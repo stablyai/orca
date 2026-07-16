@@ -2,9 +2,11 @@ import { app, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
 import { networkInterfaces } from 'node:os'
 import QRCode from 'qrcode'
 import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
+import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
 import { isTailnetIPv4Address } from '../../shared/tailnet-address'
 import type { DeviceEntry } from '../runtime/device-registry'
 import type { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
+import type { RelayBrokerStatus } from '../runtime/relay/relay-session-broker'
 import {
   getWebSocketPort,
   inspectWindowsMobileFirewall,
@@ -60,6 +62,7 @@ function toRuntimeAccessGrant(device: DeviceEntry): RuntimeAccessGrant {
 export type MobileHandlerDependencies = {
   firewallEnvironment?: WindowsMobileFirewallEnvironment
   openWindowsNetworkSettings?: () => Promise<void>
+  getRelayStatus?: () => RelayBrokerStatus
 }
 
 export function registerMobileHandlers(
@@ -78,7 +81,14 @@ export function registerMobileHandlers(
 
   ipcMain.handle(
     'mobile:getPairingQR',
-    async (_event, args?: { address?: string; rotate?: boolean }) => {
+    async (
+      _event,
+      args?: {
+        address?: string
+        connectionMode?: MobilePairingConnectionMode
+        rotate?: boolean
+      }
+    ) => {
       // Why: allow the caller to specify which network interface address to
       // embed in the QR code. This supports overlay networks (Tailscale,
       // ZeroTier) where the default LAN IP isn't reachable from the phone.
@@ -94,11 +104,11 @@ export function registerMobileHandlers(
       // `rotate: true` (explicit "Regenerate" intent because the prior token
       // may have been exposed), we discard any pending token and mint a fresh
       // one so the new QR carries a different credential.
-      const offer = rpcServer.createPairingOffer({
+      const offer = await rpcServer.createMobilePairingOffer({
         address: ip,
+        connectionMode: args?.connectionMode,
         rotate: args?.rotate,
-        name: `Mobile ${new Date().toLocaleDateString()}`,
-        scope: 'mobile'
+        name: `Mobile ${new Date().toLocaleDateString()}`
       })
       if (!offer.available) {
         return { available: false as const }
@@ -187,12 +197,12 @@ export function registerMobileHandlers(
     }
   })
 
-  ipcMain.handle('mobile:revokeDevice', (_event, args: { deviceId: string }) => {
+  ipcMain.handle('mobile:revokeDevice', async (_event, args: { deviceId: string }) => {
     const registry = rpcServer.getDeviceRegistry()
     if (!registry) {
       return { revoked: false }
     }
-    return { revoked: rpcServer.revokeMobileDevice(args.deviceId) }
+    return { revoked: await rpcServer.revokeMobileDevice(args.deviceId) }
   })
 
   ipcMain.handle('mobile:revokeRuntimeAccess', (_event, args: { deviceId: string }) => {
@@ -234,6 +244,10 @@ export function registerMobileHandlers(
     await openSettings()
     return true
   })
+
+  ipcMain.handle('mobile:getRelayStatus', () => ({
+    status: dependencies.getRelayStatus?.() ?? 'offline'
+  }))
 }
 
 function isWindowRenderer(event: IpcMainInvokeEvent): boolean {

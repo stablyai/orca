@@ -1,5 +1,5 @@
 import type { ManagedPane, ManagedPaneInternal } from './pane-manager-types'
-import { safeFit } from './pane-tree-ops'
+import { cancelPendingSafeFitContinuations, safeFitAndThen } from './pane-tree-ops'
 
 type ProposedDimensions = {
   cols: number
@@ -77,7 +77,8 @@ function flushStableFitCallbacks(pane: StableFitPane): void {
 function finishStableFit(pane: StableFitPane, shouldFit: boolean): void {
   setPendingObservedFitRafId(pane, null)
   if (shouldFit) {
-    safeFit(pane)
+    safeFitAndThen(pane, 'stable-pane-fit', () => flushStableFitCallbacks(pane))
+    return
   }
   flushStableFitCallbacks(pane)
 }
@@ -164,4 +165,5 @@ export function detachPaneFitResizeObserver(pane: ManagedPaneInternal): void {
     setPendingObservedFitRafId(pane, null)
   }
   stableFitCallbacks.delete(pane)
+  cancelPendingSafeFitContinuations(pane)
 }

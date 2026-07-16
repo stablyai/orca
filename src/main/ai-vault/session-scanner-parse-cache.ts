@@ -1,6 +1,7 @@
 import { createReadStream } from 'node:fs'
 import { open } from 'node:fs/promises'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
+import { createAntigravitySessionResumeState } from './session-scanner-antigravity-parser'
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
 import { createCodexSessionResumeState } from './session-scanner-codex-parser'
 import { createDroidSessionResumeState } from './session-scanner-droid-parser'
@@ -67,6 +68,8 @@ function resumableStateFactoryFor(
       return candidate.file.path.endsWith('.jsonl')
         ? () => createGeminiJsonlSessionResumeState(candidate.file)
         : null
+    case 'antigravity':
+      return () => createAntigravitySessionResumeState(candidate.file)
     case 'devin':
     case 'grok':
     case 'hermes':

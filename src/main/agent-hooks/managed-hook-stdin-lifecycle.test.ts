@@ -40,7 +40,6 @@ import { KimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import {
   wrapPosixHookCommand,
-  wrapWindowsCmdHookCommand,
   wrapWindowsGitBashHookCommand,
   wrapWindowsHookCommand
 } from './installer-utils'
@@ -292,16 +291,18 @@ describe('Windows managed hook stdin structure', () => {
         }
 
         const missingScript = 'C:\\missing\\orca-hook.cmd'
+        // Why: the cmd fast path is intentionally a bare, directly-spawnable .cmd
+        // path (Codex/Antigravity/Devin launch it as argv[0], not via cmd.exe), so
+        // it cannot own stdin for a missing script — a cmd-builtin drain would make
+        // argv[0] unspawnable and fail every hook (#8430 regression). Only launchers
+        // that already require a real interpreter (encoded PowerShell, Git Bash)
+        // drain a missing script; the bare path's missing-script behavior is a
+        // normal launch failure, covered in installer-utils.test.ts.
         const launcherCases = [
           {
             name: 'encoded PowerShell',
             executable: 'cmd.exe',
             args: ['/d', '/c', wrapWindowsHookCommand(missingScript)]
-          },
-          {
-            name: 'cmd fast path',
-            executable: 'cmd.exe',
-            args: ['/d', '/c', wrapWindowsCmdHookCommand(missingScript)]
           },
           {
             name: 'Git Bash fast path',

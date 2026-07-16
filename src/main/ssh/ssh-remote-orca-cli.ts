@@ -158,7 +158,11 @@ async function dispatchRemoteCli(
       }
       const status = response.result as RuntimeStatus
       const cliStatus: CliStatusResult = {
-        app: { running: true, pid: null },
+        app: {
+          running: true,
+          pid: null,
+          ...(status.desktopWindowStatus ? { desktopWindowStatus: status.desktopWindowStatus } : {})
+        },
         runtime: {
           state: status.graphStatus === 'ready' ? 'ready' : 'graph_not_ready',
           reachable: true,

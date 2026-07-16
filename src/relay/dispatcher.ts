@@ -189,6 +189,21 @@ export class RelayDispatcher {
     }
   }
 
+  notifyClient(clientId: number, method: string, params?: Record<string, unknown>): void {
+    if (this.disposed) {
+      return
+    }
+    const client = this.clients.get(clientId)
+    if (!client || client.closed) {
+      return
+    }
+    this.sendFrame(client, {
+      jsonrpc: '2.0',
+      method,
+      ...(params !== undefined ? { params } : {})
+    })
+  }
+
   /**
    * Bulk-lane notification. Sends are serialized per client and the returned
    * promise resolves only after the sink accepted the frame without reporting

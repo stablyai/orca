@@ -112,8 +112,14 @@ path. This mirrors POSIX ownership without starting an additional process.
 - Encoded PowerShell launchers use `Test-Path -PathType Leaf`. A missing script
   calls `[Console]::In.ReadToEnd()` and exits zero; an existing script preserves
   `$LASTEXITCODE`.
-- Codex's cmd.exe fast path remains PowerShell-free. It rejects missing paths
-  and directories, using the same qualified `more.com` drain for both.
+- Codex's (and Antigravity's/Devin's) cmd fast path is the bare, directly
+  spawnable `.cmd` path. These agents launch the hook command as a program
+  (argv[0]), not through cmd.exe, so the launcher cannot lead with a cmd builtin
+  such as `if` — that argv[0] is unspawnable and fails every hook. A missing
+  script therefore surfaces a normal launch failure on this fast path; only
+  launchers that already require a real interpreter (encoded PowerShell, Git
+  Bash) drain a missing script. Paths cmd.exe cannot invoke verbatim fall back to
+  the encoded PowerShell launcher, which owns stdin for the missing case.
 - Claude's Git Bash fast path uses a POSIX file guard and drain while continuing
   to execute the `.cmd` directly rather than interpreting it as shell source.
 - Agent-specific direct launchers, including Antigravity event wrappers and

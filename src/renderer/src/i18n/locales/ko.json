@@ -73,6 +73,7 @@
     "matchLabel": {
       "comment": "댓글",
       "issue": "이슈",
+      "mr": "MR",
       "port": "포트",
       "pr": "PR"
     }
@@ -698,7 +699,8 @@
         "devSearchKeywordToast": "toast",
         "devSearchKeywordSonner": "sonner",
         "devSearchKeywordError": "error",
-        "devSearchKeywordNotification": "notification"
+        "devSearchKeywordNotification": "notification",
+        "projectHostsSummary": "호스트 {{value0}}개"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "붙여넣기 내용이 너무 큽니다."
@@ -2883,6 +2885,9 @@
           },
           "TerminalTabSplitMenuSection": {
             "splitTerminal": "터미널 분할"
+          },
+          "TerminalTabLeadingIcon": {
+            "7ab2964bea": "읽지 않은 에이전트 완료"
           }
         }
       },
@@ -5390,10 +5395,10 @@
           "0df2e4fd12": "자동 저장 파일",
           "d21136d9ef": "Orca가 파일 편집을 유지하는 방법을 구성합니다.",
           "45c6e85c4d": "편집기",
-          "8f1afdfbd8": "차이점 단어 줄 바꿈",
+          "8f1afdfbd8": "Diff 자동 줄 바꿈",
           "4aa4d9fb73": "가로 스크롤을 요구하는 대신 diff 편집기에서 긴 줄을 줄 바꿈합니다.",
-          "bf16ef0af2": "끄다",
-          "3f6892f307": "~에",
+          "bf16ef0af2": "사용 안 함",
+          "3f6892f307": "사용",
           "b82f86d7d2": "Rich Markdown Spellcheck",
           "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown.",
           "7ddd66fede": "편집기 자동 줄 바꿈",
@@ -6080,7 +6085,7 @@
           "26fef02bf3": "프로젝트 아이콘",
           "c7ef4415de": "표시 이름",
           "b0a0c14a1c": "사이드바 및 탭에 대한 프로젝트별 표시 세부 정보입니다.",
-          "170624bdfb": "Orca에서 이 프로젝트를 제거하세요.",
+          "removeProjectAllHosts": "구성된 모든 호스트의 Orca에서 이 프로젝트를 제거합니다.",
           "0909e5d650": "프로젝트 제거",
           "ee5a290616": "폴더로 열렸습니다. 이 워크스페이스에서는 Git 기능을 사용할 수 없습니다.",
           "323debba71": "유형:",
@@ -8674,7 +8679,9 @@
                 "fe9231215b": "설정 작업을 표시하기 전에 Linear 액세스를 확인하는 중입니다.",
                 "e1f5e6424c": "{{value0}}개 워크스페이스{{value1}} 연결됨",
                 "disconnect_all": "연결 해제",
-                "account_scope_prefix": "계정 범위"
+                "account_scope_prefix": "계정 범위",
+                "2d60ec7921": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.",
+                "977e360b71": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are stored locally and encrypted when local runtime storage supports it."
               }
             }
           }
@@ -9032,7 +9039,9 @@
           "3325d996cb": "사용량 새로 고침",
           "a8f3e2c1b4": "주간 크레딧",
           "b7e2d9f0a3": "터미널의 grok /usage 화면과 같은 주간 크레딧 비율입니다.",
-          "c6d1a8f4e2": "{{when}}에 재설정"
+          "c6d1a8f4e2": "{{when}}에 재설정",
+          "e6dadc1e2b": "Monthly usage",
+          "75e396bf42": "Included monthly usage for Grok unified-billing accounts."
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "사용",
@@ -9061,6 +9070,56 @@
           "save": "Save agent",
           "commandPlaceholder": "my-agent --interactive",
           "importIconFailed": "Failed to import icon"
+        },
+        "MobileRelayStatusSection": {
+          "registered": "Registered",
+          "connecting": "Connecting",
+          "reconnecting": "Reconnecting",
+          "offline": "Offline",
+          "title": "Orca Relay",
+          "automatic": "Connect from anywhere when a phone is paired",
+          "signInPrompt": "Sign in on this desktop to connect from anywhere",
+          "directStillAvailable": "LAN and Tailscale connections remain available.",
+          "directNeedsNoAccount": "LAN and Tailscale pairing still work without an account.",
+          "signIn": "Sign in",
+          "unavailable": "Unavailable",
+          "standby": "Standby — no relay devices"
+        },
+        "MobilePairingConnectionOptions": {
+          "ready": "준비됨",
+          "connecting": "연결 중",
+          "available": "사용 가능",
+          "reconnecting": "다시 연결 중",
+          "unavailable": "사용할 수 없음",
+          "title": "새 휴대폰을 어떻게 연결할까요?",
+          "anywhere": "Orca Relay로 연결",
+          "recommended": "권장",
+          "automaticDescription": "가능하면 직접 연결하고, 그렇지 않으면 Orca Relay를 사용합니다.",
+          "signInDescription": "Orca Relay를 사용하려면 이 데스크톱에서 로그인하세요.",
+          "signIn": "로그인",
+          "localOnly": "로컬 네트워크만",
+          "localShort": "LAN 또는 Tailscale",
+          "localDescription": "이 휴대폰을 Orca Relay에 연결하지 않고 LAN 또는 Tailscale을 사용합니다."
+        },
+        "MobilePairingSetupSection": {
+          "title": "휴대폰 페어링",
+          "automaticDescription": "페어링 코드에는 직접 연결과 암호화된 Orca Relay 대체 연결이 포함됩니다.",
+          "localDescription": "페어링 코드는 아래의 로컬 네트워크 주소로만 연결합니다.",
+          "regenerate": "다시 생성",
+          "generate": "QR 코드 생성",
+          "localSettings": "로컬 연결 설정",
+          "localAddressDescription": "Orca Mobile에서 이 컴퓨터에 직접 연결할 수 있는 LAN 또는 사설 네트워크 주소를 선택하세요.",
+          "refresh": "네트워크 인터페이스 새로 고침",
+          "tailnet": "내 tailnet으로 연결",
+          "tailnetDescription": "이 컴퓨터와 휴대폰에 Tailscale을 설치하고 같은 tailnet에 로그인한 다음 위에서 100.x.y.z 주소를 선택하세요.",
+          "getTailscale": "Tailscale 받기"
+        },
+        "MobileRelayBetaAvailability": {
+          "about": "Orca Relay 베타 정보",
+          "beta": "베타",
+          "availability": "이용 가능:",
+          "testFlight": "TestFlight",
+          "androidApk": "Android APK"
         }
       },
       "right": {
@@ -10675,14 +10734,18 @@
         },
         "WindowsFirewallNotice": {
           "repair-success": "Windows Firewall now allows Orca Mobile on private networks",
-          "repair-failed": "Could not add the Windows Firewall rule",
+          "repair-failed": "Could not update the Windows Firewall rules",
           "public-title": "Windows marks this network as public",
           "missing-title": "Allow phone connections through Windows Firewall",
           "public-description": "Change this trusted Wi-Fi network to Private before allowing Orca Mobile connections.",
           "missing-description": "Windows may block the pairing server. Add a rule for this Orca app and TCP port {{port}} on Private networks.",
           "open-settings": "Open network settings",
           "waiting": "Waiting for Windows…",
-          "allow": "Allow phone connections"
+          "allow": "Allow phone connections",
+          "repair-unverified": "Windows Firewall access could not be verified",
+          "blocked-title": "Windows may be blocking Orca Mobile",
+          "blocked-description": "An existing inbound Block rule can override the pairing exception. Repair removes conflicting TCP rules for this Orca app, then allows port {{port}} on Private networks.",
+          "repair": "Repair firewall access"
         }
       },
       "gitlab": {
@@ -11819,7 +11882,13 @@
                 "5f9a0ed7c4": "제목 4",
                 "01a71dbbdd": "중첩된 섹션 제목.",
                 "8440fa4acf": "제목 5",
-                "b287b93c66": "깊은 섹션 제목."
+                "b287b93c66": "깊은 섹션 제목.",
+                "7a2c1f9b04": "토글 제목 2",
+                "b3e5d8a1c6": "중간 제목 요약이 포함된 접을 수 있는 섹션을 만듭니다.",
+                "2f9d6b4e10": "토글 제목 3",
+                "8c1a3e7d52": "작은 제목 요약이 포함된 접을 수 있는 섹션을 만듭니다.",
+                "5e0b9c2a71": "토글 제목 4",
+                "d4f16a8b39": "중첩된 제목 요약이 포함된 접을 수 있는 섹션을 만듭니다."
               }
             }
           }
@@ -12654,7 +12723,24 @@
             "70fcd360c4": "https://example.atlassian.net",
             "e176f9d0c5": "Jira Cloud 사이트 URL",
             "d785c42b8b": "Jira Cloud 사이트 URL, Atlassian 이메일, API 토큰을 사용해 이슈를 탐색합니다.",
-            "8388bdea2b": "Jira 사이트 연결"
+            "8388bdea2b": "Jira 사이트 연결",
+            "2e2b69e48e": "Use a self-hosted Jira base URL and a personal access token to browse issues.",
+            "b67e919bd5": "Jira instance type",
+            "17787d6e4b": "Atlassian Cloud",
+            "bc7a831773": "Self-hosted",
+            "3489e186d6": "Jira site URL",
+            "cbc27fa599": "https://jira.example.com",
+            "730d973bae": "Personal access token",
+            "8b9c7b9e7b": "Jira personal access token",
+            "ccfb086d3e": "Create a personal access token in your Jira profile under Personal Access Tokens.",
+            "1d947a07ab": "Use a self-hosted Jira base URL, username, and password to browse issues.",
+            "f49708c369": "Jira authentication method",
+            "84a810dd0e": "Username & password",
+            "8d1223fa5c": "Username",
+            "be9eba0a1b": "username",
+            "70035652d7": "Password",
+            "c50abbf340": "Jira account password",
+            "d8737db691": "Use your Jira Server or Data Center account username and password."
           }
         }
       },
@@ -12815,7 +12901,7 @@
         "profiles": {
           "switcher": {
             "cloud": {
-              "unavailable": "클라우드 로그인 사용 불가"
+              "unavailable": "Orca 로그인 사용 불가"
             },
             "reconnect": "프로필 다시 연결",
             "connect": "프로필 연결",
@@ -12839,7 +12925,14 @@
             "account": "계정",
             "org": {
               "members": "조직 구성원"
-            }
+            },
+            "signInWaiting": "로그인 대기 중…",
+            "signInAgain": "다시 로그인",
+            "signIn": "Orca에 로그인",
+            "accountTitle": "Orca 계정",
+            "accountSignedIn": "로그인됨",
+            "accountSignInRequired": "로그인 필요",
+            "accountSignedOut": "로그아웃됨"
           },
           "management": {
             "04e7bd2a23": "전송",
@@ -12882,8 +12975,8 @@
           },
           "signout": {
             "confirm": {
-              "title": "로그아웃하시겠습니까?",
-              "description": "{{profileName}}에서 로그아웃하고 프로젝트, 워크트리 및 로컬 메타데이터를 이 장치에 유지합니다.",
+              "title": "Orca에서 로그아웃할까요?",
+              "description": "이 기기의 Orca에서 로그아웃됩니다. 로컬 프로젝트와 워크트리에는 영향을 주지 않습니다.",
               "cancel": "취소",
               "action": "로그아웃"
             }
@@ -12985,6 +13078,37 @@
         "searchLabels": "레이블 필터…",
         "searchAssignee": "담당자 필터…",
         "back": "뒤로"
+      },
+      "browser-pane": {
+        "markup": {
+          "cancel": "취소",
+          "clear": "모두 지우기",
+          "copiedToast": "마크업을 복사했습니다 — 에이전트에 붙여넣으세요 ({{value0}})",
+          "copy": "마크업 복사",
+          "drawButton": "스크린샷에 그리기",
+          "drawHint": "페이지에 그린 다음 마크업을 복사해 에이전트에 붙여넣으세요.",
+          "drawHintBadge": "새 기능",
+          "drawHintDismiss": "확인",
+          "drawHintTry": "사용해 보기",
+          "errorAttach": "마크업 스크린샷을 첨부하지 못했습니다.",
+          "errorCapture": "그릴 페이지를 캡처하지 못했습니다.",
+          "errorUnavailable": "이 페이지에서는 스크린샷 마크업을 사용할 수 없습니다.",
+          "fontSize": "글자 크기",
+          "hint": "페이지에 그린 다음 마크업을 복사해 에이전트에 붙여넣으세요.",
+          "redo": "다시 실행",
+          "style": "색상 및 두께",
+          "textInput": "주석 텍스트",
+          "tool": {
+            "arrow": "화살표",
+            "ellipse": "타원",
+            "highlight": "형광펜",
+            "pen": "펜",
+            "rect": "사각형",
+            "text": "텍스트"
+          },
+          "undo": "실행 취소",
+          "widthOption": "{{value0}} px"
+        }
       }
     },
     "i18n": {
@@ -13066,7 +13190,9 @@
         "otherPlaceholder": "답변을 입력하세요",
         "cancel": "취소",
         "send": "답변 보내기",
-        "next": "다음"
+        "next": "다음",
+        "skip": "건너뛰기",
+        "sending": "전송 중…"
       },
       "approval": {
         "title": "{{value0}}을(를) 허용하시겠습니까?",

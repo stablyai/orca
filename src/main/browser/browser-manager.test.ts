@@ -250,6 +250,165 @@ describe('browserManager', () => {
     expect(shellOpenExternalMock).not.toHaveBeenCalled()
   })
 
+  it('keeps plain links current and routes explicit new-tab gestures to Orca tabs', async () => {
+    const rendererSendMock = vi.fn()
+    const executeJavaScriptInIsolatedWorldMock = vi.fn().mockResolvedValue(undefined)
+    const guest = {
+      id: 141,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock,
+      executeJavaScriptInIsolatedWorld: executeJavaScriptInIsolatedWorldMock
+    }
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-1',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+
+    const domReadyHandler = guestOnMock.mock.calls.find(([event]) => event === 'dom-ready')?.[1] as
+      | (() => void)
+      | undefined
+    domReadyHandler?.()
+    await vi.waitFor(() => expect(executeJavaScriptInIsolatedWorldMock).toHaveBeenCalledTimes(1))
+
+    const managerState = browserManager as unknown as {
+      clickedLinkFrameNameByGuestId: Map<number, string>
+    }
+    const clickedLinkFrameName = managerState.clickedLinkFrameNameByGuestId.get(guest.id)
+    if (!clickedLinkFrameName) {
+      throw new Error('Expected a private clicked-link frame name')
+    }
+    expect(clickedLinkFrameName).toMatch(/^__orca_clicked_link_foreground_/)
+    expect(executeJavaScriptInIsolatedWorldMock).toHaveBeenCalledWith(
+      expect.any(Number),
+      [
+        expect.objectContaining({
+          code: expect.stringContaining(
+            `${JSON.stringify(clickedLinkFrameName)},${process.platform === 'darwin'})`
+          )
+        })
+      ],
+      false
+    )
+
+    const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
+      url: string
+      frameName: string
+    }) => { action: 'allow' | 'deny' }
+    expect(
+      handler({
+        url: 'https://docs.example.com/guide',
+        frameName: clickedLinkFrameName
+      })
+    ).toEqual({ action: 'deny' })
+
+    expect(rendererSendMock).toHaveBeenCalledWith('browser:open-link-in-orca-tab', {
+      browserPageId: 'browser-1',
+      url: 'https://docs.example.com/guide'
+    })
+    expect(rendererSendMock).toHaveBeenCalledWith('browser:popup', {
+      browserPageId: 'browser-1',
+      origin: 'https://docs.example.com',
+      action: 'opened-in-orca'
+    })
+    expect(openPopupWithOriginBarMock).not.toHaveBeenCalled()
+    expect(shellOpenExternalMock).not.toHaveBeenCalled()
+  })
+
+  it('routes child-frame gestures with one-use tokens', async () => {
+    const rendererSendMock = vi.fn()
+    const executeJavaScriptMock = vi.fn().mockResolvedValue(undefined)
+    const frameOnceMock = vi.fn()
+    const frame = {
+      parent: {},
+      isDestroyed: vi.fn(() => false),
+      executeJavaScript: executeJavaScriptMock,
+      once: frameOnceMock,
+      off: vi.fn()
+    }
+    const guest = {
+      id: 142,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'webview'),
+      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+      on: guestOnMock,
+      off: guestOffMock,
+      openDevTools: guestOpenDevToolsMock,
+      executeJavaScriptInIsolatedWorld: vi.fn().mockResolvedValue(undefined)
+    }
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === guest.id) {
+        return guest
+      }
+      if (id === rendererWebContentsId) {
+        return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
+      }
+      return null
+    })
+
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'browser-frame',
+      webContentsId: guest.id,
+      rendererWebContentsId
+    })
+    const frameCreatedHandler = guestOnMock.mock.calls.find(
+      ([event]) => event === 'frame-created'
+    )?.[1] as ((event: Electron.Event, details: Electron.FrameCreatedDetails) => void) | undefined
+    frameCreatedHandler?.({} as Electron.Event, { frame } as never)
+    const frameDomReadyHandler = frameOnceMock.mock.calls.find(
+      ([event]) => event === 'dom-ready'
+    )?.[1] as (() => void) | undefined
+    frameDomReadyHandler?.()
+
+    await vi.waitFor(() => expect(executeJavaScriptMock).toHaveBeenCalledTimes(1))
+    const firstScript = executeJavaScriptMock.mock.calls[0][0] as string
+    const foregroundFrameName = firstScript.match(
+      /__orca_clicked_link_iframe_foreground_[0-9a-f-]+/
+    )?.[0]
+    if (!foregroundFrameName) {
+      throw new Error('Expected a private child-frame routing token')
+    }
+    expect(firstScript).toContain('installBrowserIframeClickedLinkRouting')
+    expect(executeJavaScriptMock).toHaveBeenCalledWith(firstScript, false)
+
+    const popupHandler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
+      url: string
+      frameName: string
+    }) => { action: string }
+    expect(
+      popupHandler({
+        url: 'https://docs.example.com/from-frame',
+        frameName: foregroundFrameName
+      })
+    ).toEqual({ action: 'deny' })
+    expect(rendererSendMock).toHaveBeenCalledWith('browser:open-link-in-orca-tab', {
+      browserPageId: 'browser-frame',
+      url: 'https://docs.example.com/from-frame'
+    })
+
+    await vi.waitFor(() => expect(executeJavaScriptMock).toHaveBeenCalledTimes(2))
+    const secondScript = executeJavaScriptMock.mock.calls[1][0] as string
+    expect(secondScript).not.toContain(foregroundFrameName)
+  })
+
   it('hosts allowed popups in an origin-bar window with inherited guest policies', () => {
     const rendererSendMock = vi.fn()
     const guestOnceMock = vi.fn()
@@ -320,6 +479,7 @@ describe('browserManager', () => {
     // attached directly here.
     expect(popupContents.setWindowOpenHandler).toHaveBeenCalledTimes(1)
     expect(popupContents.setBackgroundThrottling).toHaveBeenCalledWith(false)
+    expect(popupContents.on.mock.calls.some(([event]) => event === 'dom-ready')).toBe(false)
     // The renderer notice carries only the sanitized origin, never the URL.
     expect(rendererSendMock).toHaveBeenCalledWith('browser:popup', {
       browserPageId: 'browser-1',
@@ -1000,12 +1160,19 @@ describe('browserManager', () => {
       webContentsId: 102,
       rendererWebContentsId
     })
+    // Why: attach-before-registration teardown skips unregisterGuest, so global
+    // cleanup must independently release the private click-routing token.
+    browserManager.attachGuestPolicies({ ...guest, id: 103 } as never)
 
     browserManager.unregisterAll()
 
     expect(browserManager.getGuestWebContentsId('browser-1')).toBeNull()
     expect(browserManager.getGuestWebContentsId('browser-2')).toBeNull()
     expect(guestOffMock).toHaveBeenCalled()
+    const managerState = browserManager as unknown as {
+      clickedLinkFrameNameByGuestId: Map<number, unknown>
+    }
+    expect(managerState.clickedLinkFrameNameByGuestId.size).toBe(0)
   })
 
   it('rejects non-webview guest types to prevent privilege escalation', () => {

@@ -316,11 +316,9 @@ export function useTabGroupWorkspaceModel({
           worktreeId
         )
         if (item.contentType === 'terminal' && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-          void closeWebRuntimeSessionTab({
-            worktreeId,
-            tabId: item.entityId,
-            environmentId: runtimeEnvironmentId
-          })
+          // Why: paired-host bulk close must revoke local resume and hook
+          // authority before asking the host to remove its canonical tab.
+          closeTerminalTab(item.entityId)
           continue
         }
         if (item.contentType === 'browser') {

@@ -120,7 +120,9 @@ export function openPopupWithOriginBar(
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true }
   })
   const contentView = new WebContentsView({
-    webContents: options.webContents,
+    // Why: Electron rejects an explicitly undefined webContents; omitting it
+    // lets WebContentsView create contents for Cmd/Ctrl-click popups.
+    ...(options.webContents === undefined ? {} : { webContents: options.webContents }),
     webPreferences: options.webPreferences
   })
   window.contentView.addChildView(contentView)

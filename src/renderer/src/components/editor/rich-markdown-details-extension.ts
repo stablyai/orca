@@ -2,6 +2,7 @@ import { decodeHtmlEntities, type AnyExtension, type Editor } from '@tiptap/core
 import { Details, DetailsContent, DetailsSummary } from '@tiptap/extension-details'
 import type { PlaceholderOptions } from '@tiptap/extension-placeholder'
 import { TextSelection } from '@tiptap/pm/state'
+import { translate } from '@/i18n/i18n'
 import {
   detailsBodyHtmlToMarkdown,
   escapeDetailsHtml,
@@ -9,13 +10,25 @@ import {
   isEditableDetailsHtmlBlock,
   matchDetailsHtmlBlock,
   parseDetailsAttributes,
+  parseToggleHeadingVariant,
   renderDetailsAttributes,
-  type DetailsHtmlToken
+  type DetailsHtmlToken,
+  type ToggleHeadingVariant
 } from './details-markdown-html'
 
 const RICH_MARKDOWN_PLACEHOLDER = 'Write markdown… Type / for blocks.'
 const TOGGLE_TEXT_PLACEHOLDER = 'text'
-const TOGGLE_HEADING_PLACEHOLDER = 'Heading 1'
+const TOGGLE_HEADING_PLACEHOLDERS: Record<ToggleHeadingVariant, readonly [string, string]> = {
+  'heading-1': ['auto.components.editor.rich.markdown.slash.commands.e66e7f04c6', 'Heading 1'],
+  'heading-2': ['auto.components.editor.rich.markdown.slash.commands.c209a116b7', 'Heading 2'],
+  'heading-3': ['auto.components.editor.rich.markdown.slash.commands.30566ee962', 'Heading 3'],
+  'heading-4': ['auto.components.editor.rich.markdown.slash.commands.5f9a0ed7c4', 'Heading 4']
+}
+
+function toggleHeadingPlaceholder(variant: ToggleHeadingVariant): string {
+  const [key, fallback] = TOGGLE_HEADING_PLACEHOLDERS[variant]
+  return translate(key, fallback)
+}
 
 export function getRichMarkdownPlaceholder({
   editor,
@@ -29,9 +42,12 @@ export function getRichMarkdownPlaceholder({
   }
 
   const parent = editor.state.doc.resolve(pos).parent
-  return parent.type.name === 'details' && parent.attrs.variant === 'heading-1'
-    ? TOGGLE_HEADING_PLACEHOLDER
-    : TOGGLE_TEXT_PLACEHOLDER
+  if (parent.type.name !== 'details') {
+    return TOGGLE_TEXT_PLACEHOLDER
+  }
+
+  const variant = parseToggleHeadingVariant(parent.attrs.variant)
+  return variant ? toggleHeadingPlaceholder(variant) : TOGGLE_TEXT_PLACEHOLDER
 }
 
 export function moveDetailsSummarySelectionToContent(editor: Editor): boolean {
@@ -191,10 +207,11 @@ const OrcaDetails = Details.extend({
       ...this.parent?.(),
       variant: {
         default: null,
-        parseHTML: (element) =>
-          element.getAttribute('data-orca-toggle') === 'heading-1' ? 'heading-1' : null,
-        renderHTML: ({ variant }) =>
-          variant === 'heading-1' ? { 'data-orca-toggle': 'heading-1' } : {}
+        parseHTML: (element) => parseToggleHeadingVariant(element.getAttribute('data-orca-toggle')),
+        renderHTML: ({ variant }) => {
+          const parsed = parseToggleHeadingVariant(variant)
+          return parsed ? { 'data-orca-toggle': parsed } : {}
+        }
       }
     }
   },

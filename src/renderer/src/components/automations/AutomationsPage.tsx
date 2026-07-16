@@ -23,6 +23,7 @@ import {
 } from '../../../../shared/custom-agent'
 import type { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -1066,8 +1067,11 @@ export default function AutomationsPage(): React.JSX.Element {
   }, [fetchAllWorktrees, refresh])
 
   useEffect(() => {
-    const timer = window.setInterval(() => setRelativeNow(Date.now()), 60 * 1000)
-    return () => window.clearInterval(timer)
+    // Pause the relative-time clock while the window is hidden.
+    return installWindowVisibilityInterval({
+      run: () => setRelativeNow(Date.now()),
+      intervalMs: 60 * 1000
+    })
   }, [])
 
   useEffect(() => {

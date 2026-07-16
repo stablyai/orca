@@ -7,6 +7,8 @@ import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { replayIntoTerminal, type ReplayingPanesRef } from './replay-guard'
 import type { RestoredViewportBlankingPanesRef } from './terminal-restored-viewport'
+import { isXtermInstanceDisposed } from '@/lib/pane-manager/xterm-instance-disposed'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import {
   getLeftmostLeafId,
   normalizeTerminalLayoutSnapshot,
@@ -264,6 +266,17 @@ export function restoreScrollbackBuffers(
     if (!pane) {
       continue
     }
+    // Why this breadcrumb: a restore write into an already-disposed xterm is
+    // fully silent (no throw; completion callbacks are dropped) and is the
+    // suspected deterministic producer of zombie panes at startup — the field
+    // signature is a wedged-release drip with zero error breadcrumbs. Naming
+    // the moment here turns the last unproven link into a logged fact.
+    if (isXtermInstanceDisposed(pane.terminal)) {
+      recordRendererCrashBreadcrumb('terminal_restore_write_target_disposed', {
+        paneId: pane.id
+      })
+      continue
+    }
     try {
       const renderOptions = {
         shouldRefreshViewportSynchronously: () => !manager.hasWebglRenderer(pane.id)
@@ -293,8 +306,14 @@ export function restoreScrollbackBuffers(
         // fresh-shell paths should move these visible rows into scrollback.
         restoredViewportBlankingPanesRef?.current.add(pane.id)
       }
-    } catch {
-      // If restore fails, continue with blank terminal.
+    } catch (error: unknown) {
+      // If restore fails, continue with blank terminal — but leave a trace:
+      // this catch was fully silent while zombie panes went undiagnosed.
+      recordRendererCrashBreadcrumb('terminal_restore_write_failed', {
+        paneId: pane.id,
+        errorName: error instanceof Error ? error.name : typeof error,
+        errorMessage: error instanceof Error ? error.message : String(error)
+      })
     }
   }
 }

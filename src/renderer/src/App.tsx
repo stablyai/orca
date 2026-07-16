@@ -128,6 +128,7 @@ import {
   timeRendererStartupStep,
   timeRendererStartupSyncStep
 } from './startup/startup-diagnostics'
+import { reconnectSshTargetForRendererStartup } from './startup/ssh-startup-reconnect'
 import { shouldRenderPetOverlay } from './components/pet/pet-overlay-visibility'
 import { applyDocumentTheme } from './lib/document-theme'
 import { getSystemPrefersDark } from './lib/terminal-theme'
@@ -163,7 +164,11 @@ import {
   type KeybindingContext,
   type PhysicalModifierToken
 } from '../../shared/keybindings'
-import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
+import {
+  isRuntimeOwnedSshTargetId,
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
@@ -1000,7 +1005,13 @@ function App(): React.JSX.Element {
           // tabs through pty.attach on the relay. Passphrase-protected targets
           // are deferred to tab focus to avoid stacking credential dialogs at
           // startup before the user has context.
-          const connectionIds = sessionRead.session.activeConnectionIdsAtShutdown ?? []
+          // Why: runtime-owned (ephemeral-VM) targets must never be dialed from
+          // the renderer — ssh.connect would dispose the runtime layer's live
+          // relay session. Main's windowless-promotion path can persist such
+          // ids into this list, so filter at the consumption boundary too.
+          const connectionIds = (sessionRead.session.activeConnectionIdsAtShutdown ?? []).filter(
+            (targetId) => !isRuntimeOwnedSshTargetId(targetId)
+          )
           if (connectionIds.length > 0) {
             try {
               const SSH_RECONNECT_TIMEOUT_MS = 15_000
@@ -1030,25 +1041,21 @@ function App(): React.JSX.Element {
               await timeRendererStartupStep(
                 'ssh-reconnect',
                 () =>
-                  Promise.allSettled(
-                    eagerTargets.map(({ targetId }) =>
-                      Promise.race([
-                        window.api.ssh.connect({ targetId }),
-                        new Promise((_, reject) =>
-                          setTimeout(
-                            () => reject(new Error('SSH reconnect timeout')),
-                            SSH_RECONNECT_TIMEOUT_MS
-                          )
-                        )
-                      ]).catch((err) => {
-                        const isTimeout =
-                          err instanceof Error && err.message === 'SSH reconnect timeout'
-                        if (isTimeout) {
-                          timedOutTargets.push(targetId)
+                  Promise.all(
+                    eagerTargets.map(async ({ targetId }) => {
+                      const result = await reconnectSshTargetForRendererStartup({
+                        targetId,
+                        timeoutMs: SSH_RECONNECT_TIMEOUT_MS,
+                        connect: (id) => window.api.ssh.connect({ targetId: id }),
+                        publishState: actions.setSshConnectionState,
+                        onFailure: (id, error) => {
+                          console.warn(`SSH auto-reconnect failed for ${id}:`, error)
                         }
-                        console.warn(`SSH auto-reconnect failed for ${targetId}:`, err)
                       })
-                    )
+                      if (result.timedOut) {
+                        timedOutTargets.push(targetId)
+                      }
+                    })
                   ),
                 {
                   eagerTargets: eagerTargets.length,
@@ -1062,11 +1069,9 @@ function App(): React.JSX.Element {
                 ])
               }
 
-              // Why: ssh.connect() resolves before the ssh:state-changed IPC
-              // event updates sshConnectionStates in the store. Without this,
-              // reconnectPersistedTerminals reads stale state and misclassifies
-              // successfully connected targets as disconnected, stranding their
-              // persisted PTYs. Polling getState ensures the store is current.
+              // Why: connect's returned state is published above, but older or
+              // wrapped providers may return no state. Poll main once as a
+              // compatibility fallback before terminal restoration.
               for (const { targetId } of eagerTargets) {
                 if (timedOutTargets.includes(targetId)) {
                   continue

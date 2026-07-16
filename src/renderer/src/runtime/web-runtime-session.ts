@@ -57,6 +57,7 @@ export async function createWebRuntimeSessionTerminal(args: {
   launchConfig?: SleepingAgentLaunchConfig
   agent?: AgentId
   launchAgent?: AgentId
+  viewMode?: 'terminal' | 'chat'
   activate?: boolean
   selectWorktree?: boolean
 }): Promise<boolean> {
@@ -86,6 +87,7 @@ export async function createWebRuntimeSessionTerminal(args: {
         ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
         agent: args.agent,
         ...(args.launchAgent ? { launchAgent: args.launchAgent } : {}),
+        ...(args.viewMode ? { viewMode: args.viewMode } : {}),
         activate: args.activate !== false
       },
       timeoutMs: 15_000

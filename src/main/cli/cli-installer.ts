@@ -356,7 +356,9 @@ export class CliInstaller {
     }
 
     if (this.platform === 'win32') {
-      return join(this.localAppDataPath, 'Programs', 'Orca', 'resources', 'bin', 'orca.exe')
+      // Why: NSIS /D installs can live outside LOCALAPPDATA. The packaged
+      // resources directory is the authoritative native launcher location.
+      return getBundledLauncherPath(this.platform, this.resourcesPath)
     }
 
     return null

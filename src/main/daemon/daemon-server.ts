@@ -149,7 +149,15 @@ export class DaemonServer {
   async shutdown(): Promise<void> {
     this.stopStreamBacklogProbe()
     this.transientFactRelay.dispose()
-    this.host.dispose()
+    try {
+      await this.host.dispose()
+    } catch (err) {
+      // Why: an unreapable child must not block daemon exit — after exit it
+      // reparents to init, while a blocked daemon would orphan alongside it.
+      this.log.log('shutdown-dispose-failed', {
+        error: err instanceof Error ? err.message : String(err)
+      })
+    }
     this.streamDataBatcher.clear()
 
     for (const [, client] of this.clients) {
@@ -498,7 +506,7 @@ export class DaemonServer {
           sessionId: request.payload.sessionId,
           immediate: request.payload.immediate === true
         })
-        this.host.kill(request.payload.sessionId, { immediate: request.payload.immediate })
+        await this.host.kill(request.payload.sessionId, { immediate: request.payload.immediate })
         return {}
 
       case 'signal':
@@ -580,7 +588,16 @@ export class DaemonServer {
           killSessions: request.payload.killSessions === true
         })
         if (request.payload.killSessions) {
-          this.host.dispose()
+          try {
+            await this.host.dispose()
+          } catch (err) {
+            // Why: the shutdown RPC contract is that the daemon always
+            // self-terminates; dispose keeps failed owners retryable, and the
+            // follow-up shutdown() below retries them once more before exit.
+            this.log.log('shutdown-dispose-failed', {
+              error: err instanceof Error ? err.message : String(err)
+            })
+          }
         }
         process.nextTick(() => this.shutdown())
         return {}

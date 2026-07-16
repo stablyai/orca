@@ -11,6 +11,7 @@ import {
   isLaunchPromptMessageId,
   isPendingMessageId,
   launchPromptAsMessage,
+  nextNativeChatPendingSendId,
   pendingSendsAsMessages,
   prunePendingSends,
   readCommandMarkerCache,
@@ -37,6 +38,16 @@ function assistantMessage(id: string, text: string): NativeChatMessage {
     role: 'assistant',
     blocks: [{ type: 'text', text }],
     timestamp: 2,
+    source: 'transcript'
+  }
+}
+
+function imageMessage(id: string, ...paths: string[]): NativeChatMessage {
+  return {
+    id,
+    role: 'user',
+    blocks: paths.map((path) => ({ type: 'image-ref' as const, path })),
+    timestamp: 1,
     source: 'transcript'
   }
 }
@@ -84,6 +95,16 @@ describe('prunePendingSends', () => {
     expect(next).toEqual([])
   })
 
+  it('drops an attachment-only pending send once its image turn advances', () => {
+    const pending = [{ ...pendingOf('p1', ''), imagePaths: ['/tmp/first.png', '/tmp/second.png'] }]
+    const transcript = [
+      imageMessage('m1', '/tmp/first.png', '/tmp/second.png'),
+      assistantMessage('m2', 'two images')
+    ]
+
+    expect(prunePendingSends(pending, transcript)).toEqual([])
+  })
+
   it('keeps a pending send that has not landed yet', () => {
     const pending = [pendingOf('p1', 'not yet')]
     const next = prunePendingSends(pending, [assistantMessage('m1', 'working on it')])
@@ -103,6 +124,21 @@ describe('prunePendingSends', () => {
       assistantMessage('m2', 'first answer')
     ])
     expect(next).toEqual([pendingOf('p2', 'second')])
+  })
+
+  it('does not prune a repeated prompt against a turn before its send boundary', () => {
+    const oldUser = userMessage('old-user', 'run tests')
+    const oldAnswer = assistantMessage('old-answer', 'passed')
+    const pending = [{ ...pendingOf('new-send', 'run tests'), afterMessageId: oldAnswer.id }]
+
+    expect(prunePendingSends(pending, [oldUser, oldAnswer])).toEqual(pending)
+  })
+
+  it('prunes only one of two identical pending sends for one completed turn', () => {
+    const pending = [pendingOf('p1', 'repeat'), pendingOf('p2', 'repeat')]
+    expect(
+      prunePendingSends(pending, [userMessage('u1', 'repeat'), assistantMessage('a1', 'done')])
+    ).toEqual([pendingOf('p2', 'repeat')])
   })
 })
 
@@ -130,11 +166,64 @@ describe('pendingSendsAsMessages', () => {
     ])
   })
 
+  it('hides an attachment-only pending send while its real image turn is visible', () => {
+    const pending = [{ ...pendingOf('p1', ''), imagePaths: ['/tmp/shot.png'] }]
+
+    expect(pendingSendsAsMessages(pending, [imageMessage('u1', '/tmp/shot.png')])).toEqual([])
+  })
+
   it('hides a pending send while its real user turn is visible', () => {
     const pending = [pendingOf('p1', 'first prompt')]
 
     expect(pendingSendsAsMessages(pending, [userMessage('u1', 'first prompt')])).toEqual([])
     expect(pendingSendsAsMessages(pending, [])).toHaveLength(1)
+  })
+
+  it('keeps a repeated prompt visible when its only match predates the send boundary', () => {
+    const history = [userMessage('old-user', 'run tests'), assistantMessage('old-answer', 'passed')]
+    const pending = [{ ...pendingOf('new-send', 'run tests'), afterMessageId: 'old-answer' }]
+
+    expect(pendingSendsAsMessages(pending, history).map((message) => message.id)).toEqual([
+      'pending:new-send'
+    ])
+  })
+
+  it('keeps a loading-time send visible when older matching history arrives later', () => {
+    const history = [
+      { ...userMessage('old-user', 'run tests'), timestamp: 10 },
+      { ...assistantMessage('old-answer', 'passed'), timestamp: 20 }
+    ]
+    const pending = [{ ...pendingOf('new-send', 'run tests'), sentAt: 100, afterMessageId: null }]
+
+    expect(pendingSendsAsMessages(pending, history).map((message) => message.id)).toEqual([
+      'pending:new-send'
+    ])
+    expect(prunePendingSends(pending, history)).toEqual(pending)
+  })
+
+  it('uses the transcript boundary clock after pagination, not the renderer send clock', () => {
+    const pending = [
+      {
+        ...pendingOf('new-send', 'run tests'),
+        sentAt: 100_000,
+        afterMessageId: 'paged-out-answer',
+        afterMessageTimestamp: 20
+      }
+    ]
+    const remoteTranscript = [
+      { ...userMessage('new-user', 'run tests'), timestamp: 30 },
+      { ...assistantMessage('new-answer', 'passed'), timestamp: 40 }
+    ]
+
+    expect(pendingSendsAsMessages(pending, remoteTranscript)).toEqual([])
+    expect(prunePendingSends(pending, remoteTranscript)).toEqual([])
+  })
+
+  it('hides only one of two identical pending sends for one real user turn', () => {
+    const pending = [pendingOf('p1', 'repeat'), pendingOf('p2', 'repeat')]
+    expect(pendingSendsAsMessages(pending, [userMessage('u1', 'repeat')]).map((m) => m.id)).toEqual(
+      ['pending:p2']
+    )
   })
 })
 
@@ -165,7 +254,7 @@ describe('launchPromptAsMessage', () => {
           text: 'Fix failing checks',
           createdAt: 42
         },
-        [userMessage('u1', 'Fix failing checks')]
+        [{ ...userMessage('u1', 'Fix failing checks'), timestamp: 43 }]
       )
     ).toBeNull()
   })
@@ -180,11 +269,14 @@ describe('launchPromptAsMessage', () => {
       '  fix spacing'
     ].join('\n')
     const transcript = [
-      userMessage(
-        'u1',
-        'Resolve the failing checks: Resolve the failing checks: - lint failed fix spacing'
-      ),
-      assistantMessage('a1', 'I will fix it')
+      {
+        ...userMessage(
+          'u1',
+          'Resolve the failing checks: Resolve the failing checks: - lint failed fix spacing'
+        ),
+        timestamp: 43
+      },
+      { ...assistantMessage('a1', 'I will fix it'), timestamp: 44 }
     ]
 
     expect(
@@ -208,13 +300,33 @@ describe('launchPromptAsMessage', () => {
       createdAt: 42
     }
 
-    expect(shouldPruneLaunchPrompt(prompt, [userMessage('u1', 'Fix failing checks')])).toBe(false)
     expect(
       shouldPruneLaunchPrompt(prompt, [
-        userMessage('u1', 'Fix failing checks'),
-        assistantMessage('a1', 'working')
+        { ...userMessage('u1', 'Fix failing checks'), timestamp: 43 }
+      ])
+    ).toBe(false)
+    expect(
+      shouldPruneLaunchPrompt(prompt, [
+        { ...userMessage('u1', 'Fix failing checks'), timestamp: 43 },
+        { ...assistantMessage('a1', 'working'), timestamp: 44 }
       ])
     ).toBe(true)
+  })
+
+  it('does not bind a launch prompt to an older identical completed turn', () => {
+    const entry = {
+      tabId: 'tab-1',
+      agent: 'claude' as const,
+      text: 'run tests',
+      createdAt: 100
+    }
+    const oldHistory = [
+      { ...userMessage('old-user', 'run tests'), timestamp: 10 },
+      { ...assistantMessage('old-answer', 'passed'), timestamp: 20 }
+    ]
+
+    expect(launchPromptAsMessage(entry, oldHistory)).not.toBeNull()
+    expect(shouldPruneLaunchPrompt(entry, oldHistory)).toBe(false)
   })
 })
 
@@ -228,6 +340,13 @@ describe('pending send cache', () => {
     expect(appended).toEqual([pendingOf('p1', 'first prompt')])
     expect(readPendingSendCache(scope)).toEqual(appended)
     expect(readPendingSendCache({ ...scope, agent: 'claude' })).toEqual([])
+  })
+
+  it('mints unique ids across chat-view remounts while the cache survives', () => {
+    clearPendingSendCacheForTests()
+    const first = nextNativeChatPendingSendId(100)
+    const second = nextNativeChatPendingSendId(100)
+    expect(second).not.toBe(first)
   })
 
   it('clears cached pending sends when pruning removes all entries', () => {

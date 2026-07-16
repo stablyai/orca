@@ -155,14 +155,9 @@ function isInterpreterProcessName(normalized: string): boolean {
   return STATIC_INTERPRETER_PROCESS_NAMES.has(normalized) || PYTHON_PROCESS_RE.test(normalized)
 }
 
-function isPythonProcessName(normalized: string): boolean {
-  return PYTHON_PROCESS_RE.test(normalized)
-}
+const isPythonProcessName = (normalized: string): boolean => PYTHON_PROCESS_RE.test(normalized)
 
-function optionName(token: string): string {
-  const eq = token.indexOf('=')
-  return eq === -1 ? token : token.slice(0, eq)
-}
+const optionName = (token: string): string => token.split('=', 1)[0] ?? ''
 
 function findInterpreterEntrypointToken(tokens: string[], firstNormalized: string): string | null {
   if (!isInterpreterProcessName(firstNormalized)) {
@@ -285,18 +280,26 @@ export function recognizeAgentProcess(
   }
   return { agent, processName: normalized }
 }
+
 export function recognizeAgentProcessFromCommandLine(
-  commandLine: string | null | undefined
+  commandLine: string | null | undefined,
+  // Why: TUI consumers (status hooks, shell shadows) filter out headless
+  // one-shots (`claude -p …`); non-interactivity guards include them — a
+  // one-shot agent can't answer a prompt either.
+  options?: { includeHeadlessOneShot?: boolean }
 ): RecognizedAgentProcess | null {
   if (!commandLine) {
     return null
   }
+  const keep = options?.includeHeadlessOneShot === true
   const tokens = tokenizeCommandLine(commandLine)
   const firstNormalized = normalizeProcessName(tokens[0])
-  const directRecognition = filterHeadlessOneShotAgentCommand(
-    recognizeAgentProcess(tokens[0]),
-    tokens
-  )
+  let direct = recognizeAgentProcess(tokens[0])
+  // Why: the generic Orca CLI is not an agent; only this subcommand launches its TUI mode.
+  if (direct?.agent === 'claude-agent-teams' && tokens[1]?.toLowerCase() !== 'claude-teams') {
+    direct = null
+  }
+  const directRecognition = keep ? direct : filterHeadlessOneShotAgentCommand(direct, tokens)
   if (directRecognition) {
     return directRecognition
   }
@@ -304,10 +307,16 @@ export function recognizeAgentProcessFromCommandLine(
   if (!entrypoint) {
     return null
   }
-  const entrypointRecognition = isPythonProcessName(firstNormalized)
+  const viaEntrypoint = isPythonProcessName(firstNormalized)
     ? recognizePythonEntrypoint(tokens, entrypoint)
     : (recognizeAgentProcess(entrypoint) ?? recognizeNodeScriptEntrypoint(entrypoint))
-  return filterHeadlessOneShotAgentCommand(entrypointRecognition, tokens)
+  if (
+    viaEntrypoint?.agent === 'claude-agent-teams' &&
+    tokens[tokens.indexOf(entrypoint, 1) + 1]?.toLowerCase() !== 'claude-teams'
+  ) {
+    return null
+  }
+  return keep ? viaEntrypoint : filterHeadlessOneShotAgentCommand(viaEntrypoint, tokens)
 }
 export function isAgentForegroundWrapperProcess(processName: string | null | undefined): boolean {
   const normalized = normalizeProcessName(processName)

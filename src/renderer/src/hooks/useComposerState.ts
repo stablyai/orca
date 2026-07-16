@@ -89,6 +89,7 @@ import {
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
   buildLinearIssueLinkedWorkItem,
+  getLinearLinkedWorkItemBranchName,
   isLinearLinkedWorkItem
 } from '@/lib/linear-linked-work-item'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
@@ -158,6 +159,10 @@ import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-sug
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
 import type { SmartNameMode } from '@/components/new-workspace/smart-workspace-source-results'
 import { getForkPushWarning } from './fork-push-warning'
+import {
+  buildWorkspaceSourceSelection,
+  shouldApplyWorkspaceSourceAutoName
+} from '../../../shared/new-workspace/workspace-source'
 import { CONTEXTUAL_TOUR_ENABLE_AUTO_WORKSPACE_NAME_EVENT } from '@/components/contextual-tours/contextual-tour-composer-events'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { normalizeSparseDirectoryLines, sparseDirectoriesMatch } from '@/lib/sparse-paths'
@@ -175,12 +180,10 @@ import {
 } from '@/lib/workspace-create-error-format'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import {
-  isBranchCheckedOutInWorktrees,
   resolveComposerBranchNameOverrideForCreate,
-  resolveComposerBranchReuse,
-  resolveComposerBranchSelection,
+  resolveComposerBranchPick,
   resolveComposerManualBranchNameChange,
-  resolveComposerReuseOverride
+  getComposerRepoWorktreeBranches
 } from './composer-branch-selection'
 import { isCurrentComposerDropOwner } from './composer-drop-owner'
 import {
@@ -981,6 +984,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [linkedWorkItem, setLinkedWorkItem] = useState<LinkedWorkItemSummary | null>(
     () => linkedWorkItemSeed
   )
+  const initialLinearBranchName = getLinearLinkedWorkItemBranchName(linkedWorkItemSeed)
   const taskSourceContext = useMemo(() => {
     if (
       persistDraft &&
@@ -1103,9 +1107,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [compareBaseRef, setCompareBaseRef] = useState<string | undefined>(
     persistDraft ? newWorkspaceDraft?.compareBaseRef : undefined
   )
-  const [branchNameOverride, setBranchNameOverride] = useState<string | undefined>(undefined)
-  const [branchNameOverridePreservesNameEdits, setBranchNameOverridePreservesNameEdits] =
-    useState(false)
+  const [branchNameOverride, setBranchNameOverride] = useState<string | undefined>(
+    initialLinearBranchName
+  )
+  const [branchNameOverridePreservesNameEdits, setBranchNameOverridePreservesNameEdits] = useState(
+    Boolean(initialLinearBranchName)
+  )
   const [smartNameMode, setSmartNameMode] = useState<SmartNameMode>('smart')
   // Why (#5181): when the user picks an existing LOCAL branch, let them reuse it
   // (check it out) instead of creating a new branch from it. `reuseEligibleBranch`
@@ -2096,13 +2103,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       // name or it silently becomes a slugified-URL workspace name.
       if (
         suggestedName &&
-        (!name.trim() || name === lastAutoNameRef.current || isWorkItemLookupText(name))
+        shouldApplyWorkspaceSourceAutoName({
+          currentName: name,
+          lastAutoName: lastAutoNameRef.current
+        })
       ) {
         setName(suggestedName)
         lastAutoNameRef.current = suggestedName
       }
       if (!options.preserveBranchNameOverride) {
         setBranchNameOverride(undefined)
+        setBranchNameOverridePreservesNameEdits(false)
+        branchAutoNameRef.current = ''
       }
     },
     [name]
@@ -2331,12 +2343,17 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       const nextName = titleName?.seedName ?? suggestedName
       if (
         nextName &&
-        (!name.trim() || name === lastAutoNameRef.current || isWorkItemLookupText(name))
+        shouldApplyWorkspaceSourceAutoName({
+          currentName: name,
+          lastAutoName: lastAutoNameRef.current
+        })
       ) {
         setName(nextName)
         lastAutoNameRef.current = nextName
       }
       setBranchNameOverride(undefined)
+      setBranchNameOverridePreservesNameEdits(false)
+      branchAutoNameRef.current = ''
     },
     [name]
   )
@@ -2364,6 +2381,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const handleRemoveLinkedWorkItem = useCallback((): void => {
     smartGitHubPrStartPointSelectionRef.current = null
+    const removedLinearItem = isLinearLinkedWorkItem(linkedWorkItem)
     setLinkedWorkItem(null)
     setLinkedIssue('')
     setLinkedPR(null)
@@ -2371,7 +2389,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     if (name === lastAutoNameRef.current) {
       lastAutoNameRef.current = ''
     }
-  }, [name])
+    if (removedLinearItem) {
+      // Why: a Linear branch override belongs to its linked issue; unlinking
+      // must not leave provider metadata driving a later worktree create.
+      setBranchNameOverride(undefined)
+      setBranchNameOverridePreservesNameEdits(false)
+      branchAutoNameRef.current = ''
+    }
+  }, [linkedWorkItem, name])
 
   const handleNameValueChange = useCallback(
     (nextName: string): void => {
@@ -2662,6 +2687,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         }
       }
       const preserveLinearLinkedWorkItem = isLinearLinkedWorkItem(linkedWorkItem)
+      const preservedLinearBranchName = preserveLinearLinkedWorkItem
+        ? getLinearLinkedWorkItemBranchName(linkedWorkItem)
+        : undefined
       setRepoId(value)
       if (!options.preserveStartFrom) {
         smartGitHubPrStartPointSelectionRef.current = null
@@ -2688,10 +2716,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setBaseBranch(undefined)
         setCompareBaseRef(undefined)
         setPushTarget(undefined)
-        setBranchNameOverride(undefined)
+        // Why: Linear sources are workspace-scoped, so their canonical branch
+        // survives choosing a different implementation repo with the issue.
+        setBranchNameOverride(preservedLinearBranchName)
+        setBranchNameOverridePreservesNameEdits(Boolean(preservedLinearBranchName))
+        branchAutoNameRef.current = preservedLinearBranchName ?? ''
         // Why (#5181): reuse state is branch-scoped, so a repo switch must clear
-        // it alongside the branch override (matches the other reset paths).
-        setBranchNameOverridePreservesNameEdits(false)
+        // it even when a workspace-scoped Linear override is restored.
         setReuseEligibleBranch(null)
         setReuseSelectedBranch(false)
         setForkPushWarning(null)
@@ -2933,7 +2964,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         const nextName = getLinkedItemDisplayName(linkedItem)
         if (
           nextName &&
-          (!name.trim() || name === lastAutoNameRef.current || isWorkItemLookupText(name))
+          shouldApplyWorkspaceSourceAutoName({
+            currentName: name,
+            lastAutoName: lastAutoNameRef.current
+          })
         ) {
           setName(nextName)
           lastAutoNameRef.current = nextName
@@ -2942,6 +2976,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
       setStartFromResetHint(null)
       setBranchNameOverride(undefined)
+      setBranchNameOverridePreservesNameEdits(false)
       setForkPushWarning(null)
       branchAutoNameRef.current = ''
       smartGitHubPrStartPointSelectionRef.current = null
@@ -3037,7 +3072,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         const nextName = getLinkedItemDisplayName(linkedItem)
         if (
           nextName &&
-          (!name.trim() || name === lastAutoNameRef.current || isWorkItemLookupText(name))
+          shouldApplyWorkspaceSourceAutoName({
+            currentName: name,
+            lastAutoName: lastAutoNameRef.current
+          })
         ) {
           setName(nextName)
           lastAutoNameRef.current = nextName
@@ -3047,6 +3085,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       applyLinkedGitLabWorkItem(item)
       setStartFromResetHint(null)
       setBranchNameOverride(undefined)
+      setBranchNameOverridePreservesNameEdits(false)
       setForkPushWarning(null)
       branchAutoNameRef.current = ''
       // Why: MR metadata can be sourced from one host/account while the
@@ -3134,11 +3173,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const handleSmartBranchSelect = useCallback(
     (refName: string, localBranchName: string): void => {
       smartGitHubPrStartPointSelectionRef.current = null
-      const selection = resolveComposerBranchSelection({
+      const selection = resolveComposerBranchPick({
         refName,
         localBranchName,
         currentName: name,
-        lastAutoName: lastAutoNameRef.current
+        lastAutoName: lastAutoNameRef.current,
+        worktreeBranches: getComposerRepoWorktreeBranches(worktreesByRepo[repoId] ?? [], repoId)
       })
       setBaseBranch(selection.baseBranch)
       setCompareBaseRef(undefined)
@@ -3154,34 +3194,18 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       // Note: worktreesByRepo only covers visible worktrees; a branch busy only
       // in a hidden external worktree falls through to the backend conflict
       // check, which rejects it with a clear "already exists locally" error.
-      const branchCheckedOutElsewhere = isBranchCheckedOutInWorktrees(
-        localBranchName,
-        (worktreesByRepo[repoId] ?? []).map((worktree) => worktree.branch)
-      )
-      const { reuseEligibleBranch: nextReuseEligibleBranch, defaultReuse } =
-        resolveComposerBranchReuse({
-          refName,
-          localBranchName,
-          selectionProducedOverride: selection.branchNameOverride !== undefined,
-          branchCheckedOutElsewhere
-        })
+      const { reuseEligibleBranch: nextReuseEligibleBranch, defaultReuse } = selection
       setReuseEligibleBranch(nextReuseEligibleBranch)
       setReuseSelectedBranch(defaultReuse)
       setBranchNameOverridePreservesNameEdits(defaultReuse)
-      const effectiveOverride = resolveComposerReuseOverride({
-        refName,
-        localBranchName,
-        branchNameOverride: selection.branchNameOverride,
-        branchCheckedOutElsewhere
-      })
       if (selection.name !== undefined && selection.lastAutoName !== undefined) {
         setName(selection.name)
         lastAutoNameRef.current = selection.lastAutoName
-        branchAutoNameRef.current = effectiveOverride ? selection.branchAutoName : ''
-        setBranchNameOverride(effectiveOverride)
+        branchAutoNameRef.current = selection.branchNameOverride ? selection.branchAutoName : ''
+        setBranchNameOverride(selection.branchNameOverride)
       } else {
-        setBranchNameOverride(effectiveOverride)
-        branchAutoNameRef.current = effectiveOverride ? selection.branchAutoName : ''
+        setBranchNameOverride(selection.branchNameOverride)
+        branchAutoNameRef.current = selection.branchNameOverride ? selection.branchAutoName : ''
       }
     },
     [name, worktreesByRepo, repoId]
@@ -3218,9 +3242,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         const suggestedName =
           getLinkedItemDisplayName(linkedItem) ?? getLinearIssueWorkspaceName(issue)
         if (
-          !name.trim() ||
-          name === lastAutoNameRef.current ||
-          isWorkItemLookupText(name) ||
+          shouldApplyWorkspaceSourceAutoName({
+            currentName: name,
+            lastAutoName: lastAutoNameRef.current
+          }) ||
           name.trim().toLowerCase() === issue.identifier.toLowerCase()
         ) {
           setName(suggestedName)
@@ -3232,22 +3257,26 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setLinkedPR(null)
       setLinkedGitLabIssue(null)
       setLinkedGitLabMR(null)
-      setLinkedWorkItem(buildLinearIssueLinkedWorkItem(issue))
+      const linkedLinearIssue = buildLinearIssueLinkedWorkItem(issue)
+      setLinkedWorkItem(linkedLinearIssue)
       const suggestedName = getLinearIssueWorkspaceName(issue)
       // Why: same lookup-text rule as applyLinkedWorkItem, plus the typed
       // Linear identifier ("STA-123") that matched this issue.
       if (
-        !name.trim() ||
-        name === lastAutoNameRef.current ||
-        isWorkItemLookupText(name) ||
+        shouldApplyWorkspaceSourceAutoName({
+          currentName: name,
+          lastAutoName: lastAutoNameRef.current
+        }) ||
         name.trim().toLowerCase() === issue.identifier.toLowerCase()
       ) {
         setName(suggestedName)
         lastAutoNameRef.current = suggestedName
       }
-      setBranchNameOverride(undefined)
+      const linearBranchName = getLinearLinkedWorkItemBranchName(linkedLinearIssue)
+      setBranchNameOverride(linearBranchName)
+      setBranchNameOverridePreservesNameEdits(Boolean(linearBranchName))
       setForkPushWarning(null)
-      branchAutoNameRef.current = ''
+      branchAutoNameRef.current = linearBranchName ?? ''
       // Why: match the GitHub issue/PR flow by drafting linked context for
       // review instead of auto-submitting. Auto-filling the note here would
       // turn a source selection into user-authored instructions.
@@ -3286,33 +3315,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     if (isProjectGroupTarget) {
       return getFolderSmartNameSelection(linkedWorkItem)
     }
-    if (linkedWorkItem) {
-      const provider = getLinkedWorkItemProvider(linkedWorkItem)
-      const isLinear = provider === 'linear'
-      const kind: SmartWorkspaceNameSelection['kind'] = isLinear
-        ? 'linear'
-        : provider === 'jira'
-          ? 'jira'
-          : provider === 'gitlab'
-            ? linkedWorkItem.type === 'mr'
-              ? 'gitlab-mr'
-              : 'gitlab-issue'
-            : linkedWorkItem.type === 'pr'
-              ? 'github-pr'
-              : 'github-issue'
-      return {
-        kind,
-        label:
-          isLinear || provider === 'jira' || linkedWorkItem.number === 0
-            ? linkedWorkItem.title
-            : `#${linkedWorkItem.number} ${linkedWorkItem.title}`,
-        url: linkedWorkItem.url
-      }
-    }
-    if (baseBranch) {
-      return { kind: 'branch', label: baseBranch }
-    }
-    return null
+    return buildWorkspaceSourceSelection({
+      linkedWorkItem,
+      baseBranch
+    }) as SmartWorkspaceNameSelection | null
   }, [baseBranch, isProjectGroupTarget, linkedWorkItem])
 
   const handleOpenAgentSettings = useCallback((): void => {

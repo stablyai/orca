@@ -2,7 +2,8 @@ import type { GlobalSettings } from '../../../shared/types'
 import {
   BRACKETED_PASTE_END,
   BRACKETED_PASTE_START,
-  sanitizeTerminalPasteText
+  normalizeTerminalPasteLineEndings,
+  wrapTerminalBracketedPasteText
 } from '@/components/terminal-pane/terminal-bracketed-paste'
 import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-inspection'
 
@@ -28,26 +29,27 @@ export async function sendAgentDraftPasteContent(
     return false
   }
 
-  const directMeasurement = measureSanitizedUtf8ByteLength(content, {
+  const terminalContent = normalizeTerminalPasteLineEndings(content)
+  const directMeasurement = measureSanitizedUtf8ByteLength(terminalContent, {
     stopAfterBytes: AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES
   })
   if (!directMeasurement.exceededLimit) {
     return await writeAgentDraftPtyInput(
       settings,
       ptyId,
-      [BRACKETED_PASTE_START, sanitizeTerminalPasteText(content), BRACKETED_PASTE_END].join(''),
+      wrapTerminalBracketedPasteText(terminalContent),
       writePty
     )
   }
 
   // Why: generated prompts can be paste-sized; yield during accepted-size
   // preflight before starting any PTY writes so the renderer is not pinned.
-  if (await isSanitizedDraftPasteOverLimit(content, AGENT_DRAFT_PASTE_MAX_BYTES)) {
+  if (await isSanitizedDraftPasteOverLimit(terminalContent, AGENT_DRAFT_PASTE_MAX_BYTES)) {
     return false
   }
 
   let bracketedPasteOpen = false
-  for (const chunk of iterateAgentDraftPasteContentChunks(content)) {
+  for (const chunk of iterateAgentDraftPasteContentChunks(terminalContent)) {
     let accepted = false
     try {
       accepted = await writeAgentDraftPtyInput(settings, ptyId, chunk, writePty)
@@ -85,16 +87,19 @@ export function* iterateAgentDraftPasteContentChunks(
 ): Generator<string> {
   const safeMaxChunkBytes = Math.max(4, maxChunkBytes)
   yield BRACKETED_PASTE_START
+  // Why: normalize the complete draft before chunking so a CRLF pair cannot
+  // straddle chunks and leak its LF half to a Windows ConPTY agent.
+  const terminalContent = normalizeTerminalPasteLineEndings(content)
   let chunk = ''
   let chunkBytes = 0
 
-  for (let index = 0; index < content.length; index += 1) {
-    const codePoint = content.codePointAt(index) ?? 0
+  for (let index = 0; index < terminalContent.length; index += 1) {
+    const codePoint = terminalContent.codePointAt(index) ?? 0
     const codeUnitLength = codePoint > 0xffff ? 2 : 1
     const sanitizedEscape = codePoint === AGENT_DRAFT_PASTE_ESCAPE_CODE_POINT
     const sanitized = sanitizedEscape
       ? AGENT_DRAFT_PASTE_INERT_ESCAPE
-      : content.slice(index, index + codeUnitLength)
+      : terminalContent.slice(index, index + codeUnitLength)
     const characterBytes = getUtf8ByteLengthForCodePoint(
       sanitizedEscape ? AGENT_DRAFT_PASTE_INERT_ESCAPE_CODE_POINT : codePoint
     )

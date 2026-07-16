@@ -20,12 +20,7 @@ import {
   getRestorableAiVaultScope,
   normalizeAiVaultScopeForContext
 } from './ai-vault-scope-state'
-import {
-  countAiVaultViewAdjustments,
-  DEFAULT_AI_VAULT_GROUP,
-  DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS,
-  DEFAULT_AI_VAULT_SORT
-} from './ai-vault-view-defaults'
+import { countAiVaultViewAdjustments } from './ai-vault-view-defaults'
 import { buildAiVaultProjectContext } from './ai-vault-session-projects'
 import {
   resolveAiVaultSessionResumeActions,
@@ -35,14 +30,7 @@ import { useAiVaultSessionLaunchActions } from './ai-vault-session-launch-action
 import { useAiVaultSessionWorktreeMap } from './ai-vault-session-worktree'
 import { openAiVaultSessionLogInOrca } from './ai-vault-session-log-open'
 import { useAiVaultOriginalPaneActions } from './ai-vault-original-pane-actions'
-import {
-  AI_VAULT_AGENTS,
-  type AiVaultAgent,
-  type AiVaultGroup,
-  type AiVaultScope,
-  type AiVaultSession,
-  type AiVaultSort
-} from '../../../../shared/ai-vault-types'
+import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
 import { AiVaultPanelHeader } from './AiVaultPanelHeader'
 import { AiVaultSessionVirtualList } from './AiVaultSessionVirtualList'
@@ -52,6 +40,7 @@ import {
   buildRuntimeAiVaultHostScopeOptions,
   useAiVaultExecutionHostScope
 } from './ai-vault-host-scope'
+import { usePersistedAiVaultViewOptions } from './use-persisted-ai-vault-view-options'
 
 export default function AiVaultPanel(): React.JSX.Element {
   const activeWorktreeId = useActiveWorktreeId()
@@ -74,11 +63,19 @@ export default function AiVaultPanel(): React.JSX.Element {
   const { getOriginalPaneTarget, getSessionLiveState, jumpToOriginalPane, jumpToWorktree } =
     useAiVaultOriginalPaneActions()
   const [query, setQuery] = useState('')
+  // Why: scope depends on current workspace/project availability, so only stable view options persist.
   const [scope, setScope] = useState<AiVaultScope>(DEFAULT_AI_VAULT_SCOPE)
-  const [sort, setSort] = useState<AiVaultSort>(DEFAULT_AI_VAULT_SORT)
-  const [group, setGroup] = useState<AiVaultGroup>(DEFAULT_AI_VAULT_GROUP)
-  const [hideEmptySessions, setHideEmptySessions] = useState(DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS)
-  const [agents, setAgents] = useState<AiVaultAgent[]>([...AI_VAULT_AGENTS])
+  const {
+    agents,
+    sort,
+    group,
+    hideEmptySessions,
+    setSort,
+    setGroup,
+    setHideEmptySessions,
+    setAgentEnabled,
+    resetViewOptions
+  } = usePersistedAiVaultViewOptions()
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
   const userChangedScopeRef = useRef(false)
   const preferredScopeRef = useRef<AiVaultScope>(DEFAULT_AI_VAULT_SCOPE)
@@ -280,23 +277,6 @@ export default function AiVaultPanel(): React.JSX.Element {
       sessionWorktreeById
     ]
   )
-
-  const setAgentEnabled = useCallback((agent: AiVaultAgent, enabled: boolean) => {
-    setAgents((current) => {
-      if (enabled) {
-        return current.includes(agent) ? current : [...current, agent]
-      }
-      const next = current.filter((entry) => entry !== agent)
-      return next.length > 0 ? next : current
-    })
-  }, [])
-
-  const resetViewOptions = useCallback(() => {
-    setAgents([...AI_VAULT_AGENTS])
-    setSort(DEFAULT_AI_VAULT_SORT)
-    setGroup(DEFAULT_AI_VAULT_GROUP)
-    setHideEmptySessions(DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS)
-  }, [])
 
   const handleScopeChange = useCallback((nextScope: AiVaultScope) => {
     preferredScopeRef.current = nextScope

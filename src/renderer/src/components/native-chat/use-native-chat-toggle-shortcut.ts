@@ -1,31 +1,33 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../../store'
 import type { AgentType } from '../../../../shared/agent-status-types'
-import type { TerminalPaneLayoutNode } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/types'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import { canToggleNativeChat } from './native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { isMacPlatform, matchesNativeChatToggleShortcut } from './native-chat-shortcut'
 import { getConnectionIdFromState } from '@/lib/connection-context'
-
-export function isNativeChatShortcutTitleFallbackSafe(
-  root: TerminalPaneLayoutNode | null | undefined
-): boolean {
-  return !root || root.type === 'leaf'
-}
+import {
+  isNativeChatTabWideFallbackSafe,
+  resolveNativeChatActiveLayoutLeafId
+} from './native-chat-leaf-routing'
 
 export function resolveNativeChatToggleShortcutDetectedAgent({
   terminalTabId,
-  activeLeafId,
+  terminalLayout,
   agentStatusByPaneKey
 }: {
   terminalTabId: string
-  activeLeafId: string | null
+  terminalLayout?: TerminalLayoutSnapshot | null
   agentStatusByPaneKey: Record<string, { agentType?: AgentType }>
 }): AgentType | null {
+  const activeLeafId = resolveNativeChatActiveLayoutLeafId(terminalLayout)
   if (activeLeafId) {
     return agentStatusByPaneKey[`${terminalTabId}:${activeLeafId}`]?.agentType ?? null
+  }
+  if (!isNativeChatTabWideFallbackSafe(terminalLayout)) {
+    return null
   }
   return (
     Object.entries(agentStatusByPaneKey).find(([paneKey]) =>
@@ -68,13 +70,13 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
       // Pane keys are `${entityId}:${leafId}` — the backing terminal tab id, not
       // the unified tab id.
       const terminalLayout = state.terminalLayoutsByTabId[tab.entityId]
-      const activeLeafId = terminalLayout?.activeLeafId ?? null
+      const tabWideFallbackSafe = isNativeChatTabWideFallbackSafe(terminalLayout)
       const detectedAgent = resolveNativeChatToggleShortcutDetectedAgent({
         terminalTabId: tab.entityId,
-        activeLeafId,
+        terminalLayout,
         agentStatusByPaneKey: state.agentStatusByPaneKey
       })
-      const titleFallbackAgent = isNativeChatShortcutTitleFallbackSafe(terminalLayout?.root)
+      const titleFallbackAgent = tabWideFallbackSafe
         ? (resolveCommittedTitleAgentType(tab.label ?? '') ??
           (terminalTab ? resolveCommittedTitleAgentType(terminalTab.title) : null))
         : null
@@ -82,11 +84,12 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
         !canToggleNativeChat({
           experimentalNativeChatEnabled: state.settings?.experimentalNativeChat === true,
           contentType: 'terminal',
-          launchAgent: detectedAgent
-            ? null
-            : terminalTab?.launchAgent && isTuiAgent(terminalTab.launchAgent)
-              ? terminalTab.launchAgent
-              : null,
+          launchAgent:
+            detectedAgent || !tabWideFallbackSafe
+              ? null
+              : terminalTab?.launchAgent && isTuiAgent(terminalTab.launchAgent)
+                ? terminalTab.launchAgent
+                : null,
           detectedAgent,
           resolvedAgent: detectedAgent ? null : titleFallbackAgent,
           nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(

@@ -14,6 +14,8 @@ import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/wake-sleeping
 import { OPEN_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/useWorkspaceBoardPanel'
 import { SPLIT_TERMINAL_PANE_EVENT, CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
+import { planMobileTerminalTabMount } from '@/lib/mobile-terminal-tab-mount'
+import { hasRegisteredRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
 import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
@@ -96,6 +98,7 @@ import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-seriali
 import { track } from '@/lib/telemetry'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
+import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import type { AppState } from '../store/types'
@@ -124,6 +127,7 @@ import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
 import { titleHasAgentName } from '../../../shared/agent-detection'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
 import { translate } from '@/i18n/i18n'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
@@ -251,10 +255,14 @@ let remoteWorkspaceSnapshotWriteSuppressUntil = 0
 const REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS = 1000
 
 function isAgentStatusForRecentlyClosedTab(
-  store: Pick<AppState, 'recentlyClosedAgentStatusTabIds'>,
+  store: Pick<AppState, 'recentlyClosedAgentStatusTabIds' | 'recentlyRetiredAgentStatusPaneKeys'>,
   paneKey: string
 ): boolean {
-  const tabId = parsePaneKey(paneKey)?.tabId
+  const ownerPaneKey = resolveAgentPaneAuthorityKey(paneKey)
+  if (store.recentlyRetiredAgentStatusPaneKeys?.[ownerPaneKey] === true) {
+    return true
+  }
+  const tabId = parsePaneKey(ownerPaneKey)?.tabId
   if (!tabId) {
     return false
   }
@@ -842,6 +850,11 @@ export function useIpcEvents(): void {
     type AgentStatusApplyResult = 'applied' | 'pending' | 'dropped'
     const pendingAgentStatusEvents: PendingAgentStatusEvent[] = []
     let pendingAgentStatusRetryTimer: ReturnType<typeof setTimeout> | null = null
+    // Why: applyAgentStatus -> store.setAgentStatus notifies the store
+    // subscriber synchronously, which re-enters flushPendingAgentStatuses while
+    // the queue is still mid-drain. Guard against that re-entrancy so the same
+    // event is not reprocessed forever (crash 9fc89529: stack overflow).
+    let isFlushingAgentStatuses = false
 
     unsubs.push(attachMobileMarkdownBridge())
 
@@ -1434,6 +1447,7 @@ export function useIpcEvents(): void {
           launchConfig,
           launchToken,
           launchAgent,
+          viewMode,
           title,
           ptyId,
           activate,
@@ -1502,13 +1516,17 @@ export function useIpcEvents(): void {
                     ...(launchAgent
                       ? {
                           launchAgent,
-                          ...initialAgentTabViewModeProps(store.settings, {
-                            agent: launchAgent,
-                            nativeChatTranscriptIsLocalReadable:
-                              isNativeChatTranscriptLocalReadable(
-                                getConnectionIdFromState(store, worktreeId)
-                              )
-                          })
+                          // Why: a paired client resolved explicit mode before
+                          // PTY materialization; only omitted mode uses host defaults.
+                          ...(viewMode
+                            ? { viewMode }
+                            : initialAgentTabViewModeProps(store.settings, {
+                                agent: launchAgent,
+                                nativeChatTranscriptIsLocalReadable:
+                                  isNativeChatTranscriptLocalReadable(
+                                    getConnectionIdFromState(store, worktreeId)
+                                  )
+                              }))
                         }
                       : {}),
                     ...(cwd ? { startupCwd: cwd } : {}),
@@ -1651,6 +1669,32 @@ export function useIpcEvents(): void {
       )
     )
 
+    // Why: background-mounting a mobile-subscribed tab attaches a PTY that this
+    // renderer never mounted, without navigating the desktop (STA-1840).
+    unsubs.push(
+      window.api.ui.onRequestTerminalTabMount(({ worktreeId, tabId, ptyId }) => {
+        if (!worktreeId) {
+          return
+        }
+        // Why: synthetic pty handles need persisted-tab resolution, but a miss
+        // must not mount every saved terminal in a large hidden worktree.
+        const mount = planMobileTerminalTabMount(
+          useAppStore.getState(),
+          {
+            worktreeId,
+            ...(tabId ? { tabId } : {}),
+            ...(ptyId ? { ptyId } : {})
+          },
+          {
+            isTabMounted: hasRegisteredRuntimeTerminalTab
+          }
+        )
+        if (mount) {
+          requestBackgroundTerminalWorktreeMount(mount)
+        }
+      })
+    )
+
     // Why: CLI-driven terminal creation sends a request and waits for the
     // tabId reply so it can resolve a handle the caller can use immediately.
     // This mirrors the browser's onRequestTabCreate/replyTabCreate pattern.
@@ -1684,16 +1728,20 @@ export function useIpcEvents(): void {
           if (shouldActivate) {
             activateTerminalInitiatedWorktree(store, worktreeId)
           }
+          // Why: the paired launch client already resolved the initial mode, so
+          // its explicit choice must win over this host renderer's local default.
           const tabOptions = data.launchAgent
             ? {
                 ...(shouldActivate ? {} : { activate: false, recordInteraction: false }),
                 launchAgent: data.launchAgent,
-                ...initialAgentTabViewModeProps(store.settings, {
-                  agent: data.launchAgent,
-                  nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-                    getConnectionIdFromState(store, worktreeId)
-                  )
-                }),
+                ...(data.viewMode
+                  ? { viewMode: data.viewMode }
+                  : initialAgentTabViewModeProps(store.settings, {
+                      agent: data.launchAgent,
+                      nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
+                        getConnectionIdFromState(store, worktreeId)
+                      )
+                    })),
                 ...(data.cwd ? { startupCwd: data.cwd } : {})
               }
             : shouldActivate
@@ -1962,6 +2010,40 @@ export function useIpcEvents(): void {
       })
     )
 
+    // Why: during an in-place renderer reload, an older preload can briefly
+    // remain installed. Keep the new request listener additive at that seam.
+    if (window.api.ui.onTerminalTabCloseRequest) {
+      unsubs.push(
+        window.api.ui.onTerminalTabCloseRequest(({ requestId, tabId }) => {
+          let responded = false
+          const respond = (error?: string): void => {
+            if (responded) {
+              return
+            }
+            responded = true
+            window.api.ui.respondTerminalTabClose({ requestId, ...(error ? { error } : {}) })
+          }
+          closeTerminalTab(tabId, {
+            rejectPinned: true,
+            onCancel: () => respond('terminal_tab_pinned'),
+            onClosed: () => {
+              void (async () => {
+                const state = useAppStore.getState()
+                await persistWorkspaceSessionByHost(
+                  window.api.session,
+                  buildWorkspaceSessionPayload(state),
+                  state
+                )
+                respond()
+              })().catch((error: unknown) => {
+                respond(error instanceof Error ? error.message : 'terminal_tab_close_failed')
+              })
+            }
+          })
+        })
+      )
+    }
+
     unsubs.push(
       window.api.ui.onSleepWorktree(({ worktreeId }) => {
         void runSleepWorktree(worktreeId)
@@ -2081,10 +2163,8 @@ export function useIpcEvents(): void {
         if (getRuntimeEnvironmentIdForWorktree(store, sourcePage.worktreeId)) {
           return
         }
-        // Why: the guest process can request "open this link in Orca", but it
-        // does not own Orca's worktree/tab model. Resolve the source page's
-        // worktree and create a new outer browser tab so the link opens as a
-        // separate tab in the outer Orca tab bar.
+        // Why: only the renderer owns Orca's tab model. Creating the tab with
+        // the default activation behavior brings the clicked link forward.
         store.createBrowserTab(sourcePage.worktreeId, url, { title: url })
       })
     )
@@ -2908,25 +2988,37 @@ export function useIpcEvents(): void {
     }
 
     function flushPendingAgentStatuses(): void {
+      // Why: a re-entrant call (store subscriber firing during a setAgentStatus
+      // inside the loop below) must not reprocess the still-queued events — the
+      // outer flush already owns them. Bailing here breaks the infinite
+      // recursion without dropping work; the outer loop finishes the drain.
+      if (isFlushingAgentStatuses) {
+        return
+      }
       if (pendingAgentStatusEvents.length === 0) {
         return
       }
-      const now = Date.now()
-      const remaining: PendingAgentStatusEvent[] = []
-      for (const event of pendingAgentStatusEvents) {
-        if (now - event.firstSeenAt > PENDING_AGENT_STATUS_TTL_MS) {
-          continue
+      isFlushingAgentStatuses = true
+      try {
+        const now = Date.now()
+        const remaining: PendingAgentStatusEvent[] = []
+        for (const event of pendingAgentStatusEvents) {
+          if (now - event.firstSeenAt > PENDING_AGENT_STATUS_TTL_MS) {
+            continue
+          }
+          const result = applyAgentStatus(event.data, { retry: true })
+          if (result === 'pending') {
+            remaining.push(event)
+          }
         }
-        const result = applyAgentStatus(event.data, { retry: true })
-        if (result === 'pending') {
-          remaining.push(event)
+        pendingAgentStatusEvents.length = 0
+        pendingAgentStatusEvents.push(...remaining)
+        if (pendingAgentStatusEvents.length === 0 && pendingAgentStatusRetryTimer !== null) {
+          globalThis.clearTimeout(pendingAgentStatusRetryTimer)
+          pendingAgentStatusRetryTimer = null
         }
-      }
-      pendingAgentStatusEvents.length = 0
-      pendingAgentStatusEvents.push(...remaining)
-      if (pendingAgentStatusEvents.length === 0 && pendingAgentStatusRetryTimer !== null) {
-        globalThis.clearTimeout(pendingAgentStatusRetryTimer)
-        pendingAgentStatusRetryTimer = null
+      } finally {
+        isFlushingAgentStatuses = false
       }
       schedulePendingAgentStatusFlush()
     }
@@ -2942,6 +3034,8 @@ export function useIpcEvents(): void {
       if (isAgentStatusForRecentlyClosedTab(store, data.paneKey)) {
         return 'dropped'
       }
+      const paneKey = resolveAgentPaneAuthorityKey(data.paneKey)
+      const ownerTabId = parsePaneKey(paneKey)?.tabId ?? data.tabId
       const payload = normalizeAgentStatusPayload({
         state: data.state,
         prompt: data.prompt,
@@ -2967,7 +3061,7 @@ export function useIpcEvents(): void {
         repoConnectionId,
         repoConnectionResolved,
         owningWorktreeId
-      } = resolvePaneKey(store, data.paneKey)
+      } = resolvePaneKey(store, paneKey)
       if (!exists && data.worktreeId && hasRuntimeBackedWorktreeAttribution(data)) {
         // Why: orchestration worker hooks can carry main-side worktree
         // attribution before this renderer has a terminal tab for the pane.
@@ -3049,7 +3143,7 @@ export function useIpcEvents(): void {
       const statusPayloadWithTurnBoundary = data.promptInteractionKey
         ? { ...statusPayload, promptInteractionKey: data.promptInteractionKey }
         : statusPayload
-      const existingStatus = store.agentStatusByPaneKey[data.paneKey]
+      const existingStatus = store.agentStatusByPaneKey[paneKey]
       if (existingStatus && data.receivedAt < existingStatus.updatedAt) {
         // Why: the store rejects out-of-order status rows; keep notification and
         // terminal lifecycle effects on the same accepted event boundary.
@@ -3079,8 +3173,8 @@ export function useIpcEvents(): void {
       }
       if (
         shouldSuppressCodexAutoApprovalStatus(statusPayload, {
-          paneKey: data.paneKey,
-          tabId: data.tabId,
+          paneKey,
+          tabId: ownerTabId,
           terminalHandle: data.terminalHandle,
           launchToken: data.launchToken,
           providerSession: data.providerSession,
@@ -3094,7 +3188,7 @@ export function useIpcEvents(): void {
       const terminalTitle = resolveAgentStatusTerminalTitle(statusPayload, title)
       const statusWorktreeId = data.worktreeId ?? owningWorktreeId
       store.setAgentStatus(
-        data.paneKey,
+        paneKey,
         statusPayloadWithTurnBoundary,
         terminalTitle,
         {
@@ -3102,7 +3196,7 @@ export function useIpcEvents(): void {
           stateStartedAt: data.stateStartedAt
         },
         {
-          tabId: data.tabId,
+          tabId: ownerTabId,
           worktreeId: statusWorktreeId,
           terminalHandle: data.terminalHandle
         },
@@ -3113,7 +3207,7 @@ export function useIpcEvents(): void {
             }
           : undefined
       )
-      applyResolvedAgentTerminalTitleToTab(store, data.paneKey, title, terminalTitle)
+      applyResolvedAgentTerminalTitleToTab(store, paneKey, title, terminalTitle)
       if (options?.replay !== true && statusWorktreeId) {
         // Why: local Codex/Claude hooks arrive through this main-process IPC
         // path, not the PTY OSC fallback, so task-complete notifications must
@@ -3123,7 +3217,7 @@ export function useIpcEvents(): void {
             ? { ...resolvedPayload, stateStartedAt: data.stateStartedAt }
             : resolvedPayload
         observeAgentHookCompletionForNotification({
-          paneKey: data.paneKey,
+          paneKey,
           worktreeId: statusWorktreeId,
           payload: notificationPayload
         })

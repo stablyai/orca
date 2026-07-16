@@ -72,6 +72,9 @@ export type ParkedTerminalByteWatcherOptions = {
    *  tracker so an agent that was working when the pane unmounted still
    *  fires its completion when it goes idle while parked. */
   initialTitle?: string
+  /** Pull main's title-only snapshot when a watcher starts before its pane
+   *  has ever mounted. Ordinary park cycles already have a current title. */
+  restoreTitleOnRegister?: boolean
   /** Out-of-band reply channel to the PTY (mode-2031 color-scheme answers). */
   sendInput: (data: string) => void
 }
@@ -262,8 +265,8 @@ export function startParkedTerminalByteWatcher(
   const unregisterFactConsumer = mainSideEffectAuthority
     ? registerTerminalSideEffectFactConsumer({
         ptyId,
-        // Why: no title snapshot on park — the pane's runtime title slot is
-        // already current at park time, exactly like the byte-parser mode.
+        // Why: ordinary park already has a current pane-owned title; the cold
+        // activation flag below requests a snapshot only when no pane did.
         callbacks: {
           ...sideEffectCallbacks,
           onPrLink: (link) =>
@@ -273,7 +276,10 @@ export function startParkedTerminalByteWatcher(
           // The reply is still sent from here — query authority stays with
           // the view/watcher (model/view contract invariant 6).
           ...(hiddenDeliveryGateActive ? { onMode2031Subscribe: sendMode2031Reply } : {})
-        }
+        },
+        // Why: activation-deferred tabs can start a watcher before any pane
+        // restored the current title; ordinary parked tabs avoid this IPC.
+        restoreTitleOnRegister: options.restoreTitleOnRegister === true
       })
     : null
 
