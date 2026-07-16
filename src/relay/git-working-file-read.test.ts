@@ -35,4 +35,31 @@ describe('readWorkingDiffFile', () => {
       isBinary: true
     })
   })
+
+  it('returns base64 content for previewable image working-tree files', async () => {
+    tmpDir = await mkdtemp(path.join(tmpdir(), 'relay-working-file-'))
+    const filePath = path.join(tmpDir, 'image.png')
+    // Why: PNG signature + trailing null byte forces the binary-detection heuristic to trip.
+    const pngBuffer = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.from([0x00])
+    ])
+    await writeFile(filePath, pngBuffer)
+
+    await expect(readWorkingDiffFile(filePath)).resolves.toEqual({
+      content: pngBuffer.toString('base64'),
+      isBinary: true
+    })
+  })
+
+  it('returns empty content for non-previewable binary working-tree files', async () => {
+    tmpDir = await mkdtemp(path.join(tmpdir(), 'relay-working-file-'))
+    const filePath = path.join(tmpDir, 'archive.bin')
+    await writeFile(filePath, Buffer.from([0x00, 0x01, 0x02, 0x00, 0x03]))
+
+    await expect(readWorkingDiffFile(filePath)).resolves.toEqual({
+      content: '',
+      isBinary: true
+    })
+  })
 })

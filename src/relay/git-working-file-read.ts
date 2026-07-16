@@ -16,7 +16,7 @@ export async function readWorkingDiffFile(
       return { content: '', isBinary: true }
     }
     const buffer = await readFile(absPath)
-    return bufferToBlob(buffer)
+    return bufferToBlob(buffer, absPath)
   } catch {
     return { content: '', isBinary: false }
   }
