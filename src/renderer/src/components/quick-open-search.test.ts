@@ -399,6 +399,50 @@ describe('quick-open-search', () => {
     ])
   })
 
+  it('reaches camelCase names nested in a directory shadowed by an ancestor', () => {
+    const files = prepareQuickOpenFiles(['src/components/user/UserProfile/index.tsx'])
+
+    // Why: the meaningful token lives in an inner directory (Component/index.tsx
+    // layout), so anchoring only at the basename ('index.tsx') dead-ends. Every
+    // separator style must still reach it.
+    for (const query of ['user-profile', 'user_profile', 'user profile']) {
+      expect(rankQuickOpenFiles(query, files).map((item) => item.path)).toEqual([
+        'src/components/user/UserProfile/index.tsx'
+      ])
+    }
+  })
+
+  it('boosts camelCase filenames for identifier-separated queries with an extension', () => {
+    const files = prepareQuickOpenFiles(['src/fooBar.ts', 'src/unrelated-foo-bxar.ts'])
+
+    // Why: an extension dot in the query must not skip past the basename dot and
+    // strip the camelCase file's filename boost, letting junk outrank it.
+    const results = rankQuickOpenFiles('foo-bar.ts', files)
+    expect(results[0].path).toBe('src/fooBar.ts')
+    expect(results[0].score).toBeLessThan(-100)
+  })
+
+  it('treats a typed identifier separator as equivalent to a literal space in a name', () => {
+    const files = prepareQuickOpenFiles(['notes/Meeting Notes 2026.md'])
+
+    // Why: spaces, `_`, and `-` are equivalent separators in both directions, so
+    // a hyphen/underscore query still reaches a space-named file.
+    for (const query of ['meeting-notes', 'meeting_notes', 'meeting notes']) {
+      expect(rankQuickOpenFiles(query, files).map((item) => item.path)).toEqual([
+        'notes/Meeting Notes 2026.md'
+      ])
+    }
+  })
+
+  it('does not let a bare separator query match a file without separators', () => {
+    const files = prepareQuickOpenFiles(['a.ts'])
+
+    // Why: trailing-separator forgiveness only applies once a real char matched;
+    // a lone `-`/`_` must not match every file.
+    expect(rankQuickOpenFiles('-', files)).toEqual([])
+    expect(rankQuickOpenFiles('_', files)).toEqual([])
+  })
+
   it('does not confuse a valid negative-one score with no match', () => {
     expect(rankQuickOpenFiles('ab', prepareQuickOpenFiles(['axxx_b/file.txt']))).toEqual([
       { path: 'axxx_b/file.txt', score: -1 }

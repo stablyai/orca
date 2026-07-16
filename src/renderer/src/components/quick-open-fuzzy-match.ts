@@ -41,15 +41,31 @@ export function fuzzyMatchIndexedFile(
   let score = matchQueryFromAnchor(query.normalized, file, -1)
   if (query.compactFilename !== null) {
     // Why: greedy matching can anchor query tokens in a same-named ancestor
-    // directory (tab_bar_create_entry vs tab-bar/TabBarCreateEntry.tsx) and
-    // then dead-end or pay junk gaps at the '/'. Score the basename anchor
-    // too so every candidate competes from its best interpretation; plain
-    // queries skip this because a subrange can never beat the full range.
-    const lastSlash = file.lowerPath.lastIndexOf('/')
-    if (lastSlash !== -1) {
-      const basenameScore = matchQueryFromAnchor(query.normalized, file, lastSlash)
-      if (basenameScore !== null && (score === null || basenameScore < score)) {
-        score = basenameScore
+    // directory (user-profile vs user/UserProfile/index.tsx, or
+    // tab_bar_create_entry vs tab-bar/TabBarCreateEntry.tsx) and then dead-end
+    // at the next '/'. Re-anchor at segment boundaries so each candidate competes
+    // from its best interpretation, whether the meaningful name is the basename
+    // or an inner directory. The optimal anchor for any match is the '/' just
+    // before the first matched char, so only segments that actually contain a
+    // first-char match are worth re-anchoring; that keeps this bounded on deep
+    // 100k-file paths. Plain queries skip this to preserve the previous scorer's
+    // whole-path-only ranking.
+    const path = file.lowerPath
+    const first = query.normalized[0]
+    let slashIdx = -1
+    let segmentMatched = false
+    for (let i = 0; i < path.length; i++) {
+      if (path[i] === '/') {
+        slashIdx = i
+        segmentMatched = false
+        continue
+      }
+      if (!segmentMatched && slashIdx !== -1 && searchCharactersMatch(path[i], first)) {
+        segmentMatched = true
+        const anchoredScore = matchQueryFromAnchor(query.normalized, file, slashIdx)
+        if (anchoredScore !== null && (score === null || anchoredScore < score)) {
+          score = anchoredScore
+        }
       }
     }
   }
@@ -203,7 +219,10 @@ function includesIgnoringSeparators(value: string, wanted: string): boolean {
     let wantedIndex = 0
     while (valueIndex < value.length && wantedIndex < wanted.length) {
       const ch = value[valueIndex]
-      if (isPathSeparator(ch)) {
+      // Why: skip only a value separator we aren't currently matching, so an
+      // extension dot in the query ("product-detail.dart") still lands on the
+      // basename's dot instead of being skipped past into a dead-end.
+      if (isPathSeparator(ch) && ch !== wanted[wantedIndex]) {
         valueIndex++
         continue
       }
@@ -221,9 +240,13 @@ function includesIgnoringSeparators(value: string, wanted: string): boolean {
 }
 
 function searchCharactersMatch(valueChar: string, queryChar: string): boolean {
+  // Why: `-`/`_`/space are equivalent human separators, so a typed identifier
+  // separator also matches a literal space in a filename ("Meeting Notes.md").
+  // `/` and `.` stay distinct so path/extension boundaries aren't crossed.
   return (
     valueChar === queryChar ||
-    (isIdentifierSeparator(valueChar) && isIdentifierSeparator(queryChar))
+    (isIdentifierSeparator(queryChar) &&
+      (isIdentifierSeparator(valueChar) || valueChar === ' '))
   )
 }
 
