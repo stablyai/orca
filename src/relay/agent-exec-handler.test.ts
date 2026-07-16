@@ -332,7 +332,9 @@ describe('AgentExecHandler', () => {
     })
     expect(child.stdout.listenerCount('data')).toBe(0)
     expect(child.stderr.listenerCount('data')).toBe(0)
-    expect(child.listenerCount('error')).toBe(0)
+    // Why 1, not 0: a no-op replaces the real error listener so a late 'error'
+    // on this now-irrelevant child can't crash the relay as an uncaught exception.
+    expect(child.listenerCount('error')).toBe(1)
     expect(child.listenerCount('close')).toBe(0)
   })
 
@@ -449,7 +451,9 @@ describe('AgentExecHandler', () => {
       }
       expect(child.stdout.listenerCount('data')).toBe(0)
       expect(child.stderr.listenerCount('data')).toBe(0)
-      expect(child.listenerCount('error')).toBe(0)
+      // Why 1, not 0: a no-op replaces the real error listener so a late 'error'
+      // on this now-irrelevant child can't crash the relay as an uncaught exception.
+      expect(child.listenerCount('error')).toBe(1)
       expect(child.listenerCount('close')).toBe(0)
     } finally {
       vi.useRealTimers()

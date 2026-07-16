@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process'
+import { basename } from 'node:path'
 
 const LOGIN_SHELL_RESOLVE_TIMEOUT_MS = 5_000
 // Why: csh/tcsh reject combined -lc; sh/dash don't need login mode. Mirrors
@@ -11,7 +12,7 @@ function shellQuote(value: string): string {
 }
 
 export function isBareBinaryName(binary: string): boolean {
-  return !binary.includes('/')
+  return basename(binary) === binary
 }
 
 export function isEnoentSpawnError(error: Error): boolean {
@@ -32,7 +33,7 @@ export function resolvePosixBinaryViaLoginShell(
 ): Promise<string | null> {
   return new Promise((resolve) => {
     const shell = env.SHELL || '/bin/sh'
-    const shellName = shell.split('/').at(-1)
+    const shellName = basename(shell)
     const mode = shellName && COMMAND_ONLY_LOGIN_SHELLS.has(shellName) ? '-c' : '-lc'
 
     let child: ChildProcess

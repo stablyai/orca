@@ -209,6 +209,9 @@ export class AgentExecHandler {
           child.stdout?.off('data', onStdoutData)
           child.stderr?.off('data', onStderrData)
           child.off('error', onError)
+          // Why: a late 'error' after we've stopped caring (timeout/cancel/retry)
+          // would otherwise have zero listeners and crash the relay process.
+          child.on('error', () => {})
           child.off('close', onClose)
         }
         if (entry) {
