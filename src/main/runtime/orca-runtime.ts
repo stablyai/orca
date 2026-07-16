@@ -153,6 +153,7 @@ import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resum
 import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import { toRuntimeActivateWorktreeEvent } from '../../shared/runtime-client-events'
 import type { SshConnectionState } from '../../shared/ssh-types'
+import { closeTerminalTabInWorkspaceSession } from '../../shared/workspace-session-terminal-tab-close'
 import type {
   LinearCurrentIssueContextHints,
   LinearAttachResult,
@@ -850,6 +851,7 @@ type RuntimeStore = {
   getGitHubCache: Store['getGitHubCache']
   getWorkspaceSession?: Store['getWorkspaceSession']
   setWorkspaceSession?: Store['setWorkspaceSession']
+  flushOrThrow?: Store['flushOrThrow']
   persistPtyBinding?: Store['persistPtyBinding']
   getUI?: Store['getUI']
   updateUI?: Store['updateUI']
@@ -1406,6 +1408,7 @@ type RuntimeNotifier = {
     content: string
   ): Promise<RuntimeMarkdownSaveTabResult>
   closeTerminal(tabId: string, paneRuntimeId?: number): void
+  closeTerminalTab?(tabId: string): Promise<void>
   sleepWorktree(worktreeId: string): void
   // Why: a phone opening a worktree wakes its slept agents by asking the host
   // renderer to run its own navigation-free wake (experimental agent sleep);
@@ -4310,33 +4313,20 @@ export class OrcaRuntimeService {
     }
   }
 
-  private removePersistedHeadlessTerminalTab(worktreeId: string, parentTabId: string): void {
+  private removePersistedHeadlessTerminalTab(worktreeId: string, parentTabId: string): string[] {
     const session = this.store?.getWorkspaceSession?.()
     if (!session || !this.store?.setWorkspaceSession) {
-      return
+      throw new Error('workspace_session_unavailable')
     }
-    const tabs = session.tabsByWorktree[worktreeId] ?? []
-    const nextTabs = tabs.filter((tab) => tab.id !== parentTabId)
-    const nextTabsByWorktree = {
-      ...session.tabsByWorktree,
-      [worktreeId]: nextTabs
+    const result = closeTerminalTabInWorkspaceSession(session, worktreeId, parentTabId)
+    if (result.pinned) {
+      throw new Error('terminal_tab_pinned')
     }
-    const nextLayouts = { ...session.terminalLayoutsByTabId }
-    delete nextLayouts[parentTabId]
-    const nextActiveTabId =
-      session.activeTabIdByWorktree?.[worktreeId] === parentTabId
-        ? (nextTabs[0]?.id ?? null)
-        : (session.activeTabIdByWorktree?.[worktreeId] ?? null)
-    this.store.setWorkspaceSession({
-      ...session,
-      activeTabId: session.activeTabId === parentTabId ? nextActiveTabId : session.activeTabId,
-      tabsByWorktree: nextTabsByWorktree,
-      terminalLayoutsByTabId: nextLayouts,
-      activeTabIdByWorktree: {
-        ...session.activeTabIdByWorktree,
-        [worktreeId]: nextActiveTabId
-      }
-    })
+    if (!result.closed) {
+      throw new Error('tab_not_found')
+    }
+    this.store.setWorkspaceSession(result.session)
+    return result.ptyIdsToKill
   }
 
   private persistHeadlessTerminalTabOrder(worktreeId: string, tabOrder: readonly string[]): void {
@@ -4683,8 +4673,19 @@ export class OrcaRuntimeService {
       throw new Error('tab_not_found')
     }
     if (tab.type === 'terminal') {
+      const parentLeafCount = snapshot!.tabs.filter(
+        (candidate) => candidate.type === 'terminal' && candidate.parentTabId === tab.parentTabId
+      ).length
+      const closingWholeParent = tab.id !== tabId || parentLeafCount <= 1
+      if (closingWholeParent && this.notifier?.closeTerminalTab) {
+        // Why: whole-tab close is a lifecycle transaction. The renderer reply
+        // arrives only after canonical retirement and a forced session flush.
+        await this.notifier.closeTerminalTab(tab.parentTabId)
+        return { closed: true }
+      }
       if (!this.notifier?.closeTerminal) {
         this.closeHeadlessMobileTerminalTab(worktreeId, snapshot!, tab)
+        this.store?.flushOrThrow?.()
         return { closed: true }
       }
       // Why: a runtime-owned headless tab whose whole parent is being closed must
@@ -4693,13 +4694,10 @@ export class OrcaRuntimeService {
       // keeps republishing the "closed" tab with a live PTY. Best-effort notify the
       // renderer too so any adopted pane closes (no dead pane). A single split leaf
       // (exact id, multi-leaf parent) keeps the per-leaf path so siblings survive.
-      const parentLeafCount = snapshot!.tabs.filter(
-        (candidate) => candidate.type === 'terminal' && candidate.parentTabId === tab.parentTabId
-      ).length
-      const closingWholeParent = tab.id !== tabId || parentLeafCount <= 1
       if (closingWholeParent && this.isRuntimeOwnedHeadlessMobileTab(worktreeId, tab)) {
         this.closeHeadlessMobileTerminalTab(worktreeId, snapshot!, tab)
         this.notifier?.closeTerminal(tab.parentTabId)
+        this.store?.flushOrThrow?.()
         return { closed: true }
       }
       if (tab.id === tabId) {
@@ -4819,24 +4817,39 @@ export class OrcaRuntimeService {
     tab: RuntimeMobileSessionTerminalTab
   ): void {
     const closedParentTabId = tab.parentTabId
+    const projectedPtyIds = this.removePersistedHeadlessTerminalTab(worktreeId, closedParentTabId)
+    // Why: local provider ids can be reused after restart, so a dormant
+    // persisted id is not kill authority. SSH relay ids remain durable exact
+    // identities even before pane metadata reconnects.
+    const ptyIdsToKill = new Set(projectedPtyIds.filter((ptyId) => parseAppSshPtyId(ptyId)))
+    for (const candidate of snapshot.tabs) {
+      if (candidate.type !== 'terminal' || candidate.parentTabId !== closedParentTabId) {
+        continue
+      }
+      const livePty = this.findPtyForMobileTerminalTab(worktreeId, candidate)
+      const ptyId = livePty?.ptyId ?? candidate.ptyId
+      const hasOtherOwner = snapshot.tabs.some(
+        (other) =>
+          other.type === 'terminal' &&
+          other.parentTabId !== closedParentTabId &&
+          other.ptyId === ptyId
+      )
+      if (ptyId && !hasOtherOwner && (livePty || parseAppSshPtyId(ptyId))) {
+        // Why: a live serve leaf can exist before its debounced binding reaches
+        // persistence. Include it from the authoritative snapshot so split
+        // close cannot leave a provider process behind.
+        ptyIdsToKill.add(ptyId)
+      }
+    }
+    for (const ptyId of ptyIdsToKill) {
+      this.ptyController?.kill(ptyId)
+    }
     const nextTabs = snapshot.tabs.filter((candidate) => {
       if (candidate.type !== 'terminal' || candidate.parentTabId !== closedParentTabId) {
         return true
       }
-      const pty = this.findPtyForMobileTerminalTab(worktreeId, candidate)
-      if (pty?.connected) {
-        this.ptyController?.kill(pty.ptyId)
-      } else {
-        const persistedSshPtyId = this.getPersistedSshPtyIdForMobileTerminalTab(candidate)
-        if (persistedSshPtyId) {
-          // Why: close is an explicit deletion. Hydrated SSH PTYs can be known
-          // only by durable id before reconnect repopulates pane metadata.
-          this.ptyController?.kill(persistedSshPtyId)
-        }
-      }
       return false
     })
-    this.removePersistedHeadlessTerminalTab(worktreeId, closedParentTabId)
     const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
@@ -19397,6 +19410,24 @@ export class OrcaRuntimeService {
     return { handle, tabId: leaf.tabId, ptyKilled }
   }
 
+  async closeTerminalTab(handle: string): Promise<RuntimeTerminalClose> {
+    const pty = this.getLivePtyForHandle(handle)
+    if (pty) {
+      const tabId = pty.pty.tabId
+      if (!tabId) {
+        throw new Error('terminal_tab_not_found')
+      }
+      await this.closeMobileSessionTab(`id:${pty.pty.worktreeId}`, tabId)
+      this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
+      return { handle, tabId, closeMode: 'tab', ptyKilled: false }
+    }
+    this.assertGraphReady()
+    const { leaf } = this.getLiveLeafForHandle(handle)
+    await this.closeMobileSessionTab(`id:${leaf.worktreeId}`, leaf.tabId)
+    this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
+    return { handle, tabId: leaf.tabId, closeMode: 'tab', ptyKilled: false }
+  }
+
   async splitTerminal(
     handle: string,
     opts: {
@@ -21905,13 +21936,6 @@ export class OrcaRuntimeService {
       }
     }
     return null
-  }
-
-  private getPersistedSshPtyIdForMobileTerminalTab(
-    tab: RuntimeMobileSessionTerminalTab
-  ): string | null {
-    const ptyId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] ?? null
-    return ptyId && parseAppSshPtyId(ptyId) ? ptyId : null
   }
 
   private getMobileTerminalPaneKey(tab: RuntimeMobileSessionTerminalTab): string {

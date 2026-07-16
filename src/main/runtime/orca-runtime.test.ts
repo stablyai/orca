@@ -18438,6 +18438,110 @@ describe('OrcaRuntimeService', () => {
     expect(kill).toHaveBeenCalledWith('laptop-created-pty')
   })
 
+  it('waits for renderer acknowledgement before returning a whole-tab close receipt', async () => {
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal()
+    )
+    const acknowledged = makeDeferred()
+    const closeTerminalTab = vi.fn(() => acknowledged.promise)
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setNotifier({ closeTerminal: vi.fn(), closeTerminalTab } as never)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => []
+    })
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Durable',
+          activeLeafId: HEADLESS_LEAF_ID,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'host-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: HEADLESS_LEAF_ID,
+          paneRuntimeId: 1,
+          ptyId: 'persisted-pty'
+        }
+      ]
+    })
+    const [terminal] = (await runtime.listTerminals()).terminals
+    const pending = runtime.closeTerminalTab(terminal.handle)
+    let settled = false
+    void pending.finally(() => {
+      settled = true
+    })
+
+    await vi.waitFor(() => expect(closeTerminalTab).toHaveBeenCalledWith('host-tab'))
+    expect(settled).toBe(false)
+
+    acknowledged.resolve()
+    await expect(pending).resolves.toEqual({
+      handle: terminal.handle,
+      tabId: 'host-tab',
+      closeMode: 'tab',
+      ptyKilled: false
+    })
+  })
+
+  it('durably closes every split leaf without a renderer', async () => {
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        tabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'durable-tab',
+              ptyId: null,
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Durable',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          'durable-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: undefined })
+        }
+      })
+    )
+    const flushOrThrow = vi.fn()
+    const spawn = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'headless-left' })
+      .mockResolvedValueOnce({ id: 'headless-right' })
+    const kill = vi.fn(() => true)
+    const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow } as never)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill,
+      getForegroundProcess: async () => null
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    const terminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'durable-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+    await runtime.splitTerminal(terminal.handle, { direction: 'vertical' })
+
+    await runtime.closeTerminalTab(terminal.handle)
+
+    expect(kill).toHaveBeenCalledWith('headless-left')
+    expect(kill).toHaveBeenCalledWith('headless-right')
+    expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
+    expect(getSession().terminalLayoutsByTabId['durable-tab']).toBeUndefined()
+    expect(flushOrThrow).toHaveBeenCalledTimes(1)
+  })
+
   it('lists PTY-backed mobile session terminals without a renderer graph', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
     const runtime = new OrcaRuntimeService(store)

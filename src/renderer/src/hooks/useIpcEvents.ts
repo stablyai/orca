@@ -98,6 +98,7 @@ import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-seriali
 import { track } from '@/lib/telemetry'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
+import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import type { AppState } from '../store/types'
@@ -2008,6 +2009,40 @@ export function useIpcEvents(): void {
         }
       })
     )
+
+    // Why: during an in-place renderer reload, an older preload can briefly
+    // remain installed. Keep the new request listener additive at that seam.
+    if (window.api.ui.onTerminalTabCloseRequest) {
+      unsubs.push(
+        window.api.ui.onTerminalTabCloseRequest(({ requestId, tabId }) => {
+          let responded = false
+          const respond = (error?: string): void => {
+            if (responded) {
+              return
+            }
+            responded = true
+            window.api.ui.respondTerminalTabClose({ requestId, ...(error ? { error } : {}) })
+          }
+          closeTerminalTab(tabId, {
+            rejectPinned: true,
+            onCancel: () => respond('terminal_tab_pinned'),
+            onClosed: () => {
+              void (async () => {
+                const state = useAppStore.getState()
+                await persistWorkspaceSessionByHost(
+                  window.api.session,
+                  buildWorkspaceSessionPayload(state),
+                  state
+                )
+                respond()
+              })().catch((error: unknown) => {
+                respond(error instanceof Error ? error.message : 'terminal_tab_close_failed')
+              })
+            }
+          })
+        })
+      )
+    }
 
     unsubs.push(
       window.api.ui.onSleepWorktree(({ worktreeId }) => {

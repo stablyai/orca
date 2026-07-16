@@ -2711,6 +2711,7 @@ const api = {
     get: (hostId) => ipcRenderer.invoke('session:get', hostId),
     set: (args, hostId) => ipcRenderer.invoke('session:set', args, hostId),
     patch: (args, hostId) => ipcRenderer.invoke('session:patch', args, hostId),
+    flush: () => ipcRenderer.invoke('session:flush'),
     readTerminalScrollback: (args) =>
       ipcRenderer.sendSync('session:read-terminal-scrollback-sync', args),
     /** Synchronous session save for beforeunload — blocks until flushed to disk. */
@@ -3691,6 +3692,17 @@ const api = {
       ) => callback(data)
       ipcRenderer.on('ui:closeTerminal', listener)
       return () => ipcRenderer.removeListener('ui:closeTerminal', listener)
+    },
+    onTerminalTabCloseRequest: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        request: Parameters<typeof callback>[0]
+      ) => callback(request)
+      ipcRenderer.on('ui:terminalTabCloseRequest', listener)
+      return () => ipcRenderer.removeListener('ui:terminalTabCloseRequest', listener)
+    },
+    respondTerminalTabClose: (response) => {
+      ipcRenderer.send('ui:terminalTabCloseResponse', response)
     },
     onSleepWorktree: (callback: (data: { worktreeId: string }) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, data: { worktreeId: string }) =>

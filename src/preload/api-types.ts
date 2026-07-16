@@ -10,6 +10,10 @@ import type {
 } from '../shared/hosted-review'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type {
+  TerminalTabCloseRequest,
+  TerminalTabCloseResponse
+} from '../shared/terminal-tab-close'
+import type {
   LocalLogTailChangedPayload,
   LocalLogTailReadArgs,
   LocalLogTailReadResult,
@@ -2361,6 +2365,7 @@ export type PreloadApi = {
     get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
     set: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => Promise<void>
     patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
+    flush: () => Promise<void>
     readTerminalScrollback: (args: { ref: string }) => string | null
     setSync: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => void
   }
@@ -2915,6 +2920,8 @@ export type PreloadApi = {
     onCloseTerminal: (
       callback: (data: { tabId: string; paneRuntimeId?: number }) => void
     ) => () => void
+    onTerminalTabCloseRequest: (callback: (request: TerminalTabCloseRequest) => void) => () => void
+    respondTerminalTabClose: (response: TerminalTabCloseResponse) => void
     onSleepWorktree: (callback: (data: { worktreeId: string }) => void) => () => void
     onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void) => () => void
     onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void

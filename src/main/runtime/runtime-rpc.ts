@@ -376,6 +376,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'agentTeams.tmuxCompat',
   'terminal.clearBuffer',
   'terminal.close',
+  'terminal.closeTab',
   'terminal.create',
   'terminal.focus',
   'terminal.agentStatus',

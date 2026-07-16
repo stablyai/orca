@@ -650,6 +650,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
           })
         )
       },
+      // localStorage writes synchronously, so there is no deferred web flush.
+      flush: async () => {},
       readTerminalScrollback: () => null,
       setSync: (session, hostId) => {
         writeJson(sessionStorageKeyForHost(hostId), sanitizeWebRuntimeWorkspaceSession(session))
@@ -2437,6 +2439,8 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onMobileMarkdownRequest: () => noopUnsubscribe,
     respondMobileMarkdownRequest: () => {},
     onCloseTerminal: () => noopUnsubscribe,
+    onTerminalTabCloseRequest: () => noopUnsubscribe,
+    respondTerminalTabClose: () => {},
     onSleepWorktree: () => noopUnsubscribe,
     // Why: paired web is a full renderer that wakes on activation; mobile wake is
     // desktop-host-scoped, so the web client never receives this signal.
