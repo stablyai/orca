@@ -8,7 +8,15 @@ const HTTP_STATUS_ROW_PATTERN = /^HTTP\/\d(?:\.\d)?:\d{3}(?:\s|$)/i
 const VERTICAL_LAYOUT_FRAME_PATTERN = /[│┃║╎╏┆┇┊┋|]/
 const EMPTY_LABEL_ROW_PATTERN = /^[^\s:][^:]*:$/
 const LABEL_WITH_SPACING_ROW_PATTERN = /^[^\s:][^:]*:\s/
-const MAX_EDGE_WRAPPED_HTTP_ROWS = 20
+
+function maxEdgeWrappedHttpRows(lineLength: number): number {
+  // Why: every continued row reaches the terminal edge, so even all-width-2
+  // cells carry at least floor(columns / 2) characters per row; the URL length
+  // limit then bounds the scan without truncating URLs on narrow terminals.
+  // The +2 covers the start and tail rows, which may hold only a fragment.
+  const minCharsPerFullRow = Math.max(1, Math.floor(lineLength / 2))
+  return Math.ceil(TERMINAL_HTTP_URL_MAX_LENGTH / minCharsPerFullRow) + 2
+}
 
 type TrimmedTranslatedLine = {
   text: string
@@ -98,9 +106,11 @@ export function buildEdgeWrappedHttpLogicalLineCandidates(
   // Why: cursor-positioned output lacks xterm wrap metadata, but an HTTP URL
   // may still continue when each earlier row reaches the terminal edge.
   const currentY = bufferLineNumber - 1
-  if (!buffer.getLine(currentY)) {
+  const currentLine = buffer.getLine(currentY)
+  if (!currentLine) {
     return []
   }
+  const maxRows = maxEdgeWrappedHttpRows(currentLine.length)
 
   const candidates: WrappedLogicalLine[] = []
   const translatedLines = new Map<number, TrimmedTranslatedLine | null>()
@@ -113,7 +123,7 @@ export function buildEdgeWrappedHttpLogicalLineCandidates(
     translatedLines.set(rowY, translated)
     return translated
   }
-  const minY = Math.max(0, currentY - MAX_EDGE_WRAPPED_HTTP_ROWS + 1)
+  const minY = Math.max(0, currentY - maxRows + 1)
   for (let startY = currentY; startY >= minY; startY--) {
     const start = getTranslatedLine(startY)
     const schemeIndex = start ? findHttpSchemeIndex(start.text) : -1
@@ -123,7 +133,7 @@ export function buildEdgeWrappedHttpLogicalLineCandidates(
 
     let text = ''
     const rows: WrappedLogicalLine['rows'] = []
-    for (let rowY = startY; rowY < startY + MAX_EDGE_WRAPPED_HTTP_ROWS; rowY++) {
+    for (let rowY = startY; rowY < startY + maxRows; rowY++) {
       const line = buffer.getLine(rowY)
       const translated = getTranslatedLine(rowY)
       if (!line || !translated) {

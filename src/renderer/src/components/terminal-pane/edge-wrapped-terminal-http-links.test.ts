@@ -285,6 +285,70 @@ describe('edge-wrapped terminal HTTP links', () => {
     expect(openUrlMock).toHaveBeenCalledWith(url)
   })
 
+  it('reconstructs a narrow-terminal URL spanning more than 20 rows from either end', () => {
+    const url = `https://example.com/${'a'.repeat(1_000)}`
+    const rowTexts = Array.from({ length: Math.ceil(url.length / COLS) }, (_value, index) =>
+      url.slice(index * COLS, (index + 1) * COLS)
+    )
+    const rows = rowTexts.map((row) => makeBufferLine(row))
+    const buffer = { getLine: (y: number) => rows[y] }
+
+    expect(url.length).toBeLessThanOrEqual(2_048)
+    expect(rowTexts.length).toBeGreaterThan(20)
+    expect(
+      openHttpLinkAtBufferPosition(buffer, { x: 11, y: 1 }, COLS, {
+        worktreeId: 'wt-1',
+        forceSystemBrowser: true
+      })
+    ).toBe(true)
+    expect(openUrlMock).toHaveBeenCalledOnce()
+    expect(openUrlMock).toHaveBeenCalledWith(url)
+
+    openUrlMock.mockReset()
+    expect(
+      openHttpLinkAtBufferPosition(buffer, { x: 5, y: rowTexts.length }, COLS, {
+        worktreeId: 'wt-1',
+        forceSystemBrowser: true
+      })
+    ).toBe(true)
+    expect(openUrlMock).toHaveBeenCalledOnce()
+    expect(openUrlMock).toHaveBeenCalledWith(url)
+  })
+
+  it('reconstructs a wide-glyph URL whose row span exceeds the single-width column bound', () => {
+    const wideCount = 1_100
+    const url = `https://example.com/${WIDE_GLYPH.repeat(wideCount)}`
+    const rowTexts: string[] = []
+    let row = ''
+    let width = 0
+    for (const char of url) {
+      const charWidth = char === WIDE_GLYPH ? 2 : 1
+      if (width + charWidth > COLS) {
+        rowTexts.push(row)
+        row = ''
+        width = 0
+      }
+      row += char
+      width += charWidth
+    }
+    if (row.length > 0) {
+      rowTexts.push(row)
+    }
+    const rows = rowTexts.map((rowText) => makeBufferLine(rowText))
+    const buffer = { getLine: (y: number) => rows[y] }
+
+    expect(url.length).toBeLessThanOrEqual(2_048)
+    expect(rowTexts.length).toBeGreaterThan(Math.ceil(2_048 / COLS) + 1)
+    expect(
+      openHttpLinkAtBufferPosition(buffer, { x: 5, y: rowTexts.length }, COLS, {
+        worktreeId: 'wt-1',
+        forceSystemBrowser: true
+      })
+    ).toBe(true)
+    expect(openUrlMock).toHaveBeenCalledOnce()
+    expect(openUrlMock).toHaveBeenCalledWith(new URL(url).toString())
+  })
+
   it('does not create an edge candidate for a scheme embedded in a word', () => {
     const embeddedUrl = `abchttps://example.com/${'a'.repeat(
       COLS - 'abchttps://example.com/'.length
