@@ -67,8 +67,7 @@ export function useProjectGroupHeaderDrag({
     return computeProjectGroupHeaderDropTargetForSession({
       pointerY,
       container,
-      session,
-      projectGroups: [...projectGroupByIdRef.current.values()]
+      session
     })
   }, [])
 

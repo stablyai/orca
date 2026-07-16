@@ -4,6 +4,7 @@ import type {
   ProjectGroupHeaderDragBucketKey,
   ProjectGroupHeaderDragRect
 } from './project-group-header-drop'
+import type { ProjectGroupReparentValidator } from '../../../../shared/project-group-reparent'
 import type { ProjectGroup } from '../../../../shared/types'
 
 export type ProjectGroupDragState = {
@@ -52,6 +53,10 @@ export type ProjectGroupHeaderDragSession = {
     readonly string[]
   >
   draggedSubtreeGroupIds: ReadonlySet<string>
+  // Why: reparent validation indexes are snapshotted at drag start so per-frame
+  // drop targeting doesn't rescan the catalog; the commit path revalidates
+  // against live state, so a mid-drag catalog change only risks a stale preview.
+  validateReparent: ProjectGroupReparentValidator
   pointerId: number
   headerRects: ProjectGroupHeaderDragRect[]
   handleEl: HTMLElement

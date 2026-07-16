@@ -9,8 +9,7 @@ import type {
   ProjectGroupDragState,
   ProjectGroupHeaderDragSession
 } from './project-group-header-drag-contract'
-import { getProjectGroupReparentViolation } from '../../../../shared/project-groups'
-import type { ProjectGroup } from '../../../../shared/types'
+import type { ProjectGroupReparentValidator } from '../../../../shared/project-group-reparent'
 
 export type ProjectGroupHeaderDropTarget =
   | {
@@ -39,7 +38,7 @@ export type ComputeProjectGroupHeaderDropTargetArgs = {
     ProjectGroupHeaderDragBucketKey,
     readonly string[]
   >
-  projectGroups: readonly Pick<ProjectGroup, 'id' | 'parentGroupId'>[]
+  validateReparent: ProjectGroupReparentValidator
 }
 
 export function getProjectGroupDragStateForDropTarget(
@@ -74,10 +73,10 @@ export function computeProjectGroupHeaderDropTargetForSession(args: {
     | 'bucketKey'
     | 'sourceParentGroupId'
     | 'draggedSubtreeGroupIds'
+    | 'validateReparent'
     | 'sidebarProjectGroupHeaderIdsByBucket'
     | 'headerRects'
   >
-  projectGroups: readonly Pick<ProjectGroup, 'id' | 'parentGroupId'>[]
 }): ProjectGroupHeaderDropTarget | null {
   const containerRect = args.container.getBoundingClientRect()
   return computeProjectGroupHeaderDropTarget({
@@ -91,7 +90,7 @@ export function computeProjectGroupHeaderDropTargetForSession(args: {
     sourceParentGroupId: args.session.sourceParentGroupId,
     draggedSubtreeGroupIds: args.session.draggedSubtreeGroupIds,
     sidebarProjectGroupHeaderIdsByBucket: args.session.sidebarProjectGroupHeaderIdsByBucket,
-    projectGroups: args.projectGroups
+    validateReparent: args.session.validateReparent
   })
 }
 
@@ -115,11 +114,7 @@ export function computeProjectGroupHeaderDropTarget(
     if (
       inNestZone &&
       hoveredRect.groupId !== args.sourceParentGroupId &&
-      getProjectGroupReparentViolation(
-        args.projectGroups,
-        args.draggedGroupId,
-        hoveredRect.groupId
-      ) === null
+      args.validateReparent(hoveredRect.groupId) === null
     ) {
       return { kind: 'nest', targetGroupId: hoveredRect.groupId }
     }
@@ -145,11 +140,7 @@ function computeBucketReorderDropTarget(
   // explicit nest drop.
   if (
     bucketKey !== args.sourceBucketKey &&
-    getProjectGroupReparentViolation(
-      args.projectGroups,
-      args.draggedGroupId,
-      getParentGroupIdForHeaderDragBucketKey(bucketKey)
-    ) !== null
+    args.validateReparent(getParentGroupIdForHeaderDragBucketKey(bucketKey)) !== null
   ) {
     return null
   }

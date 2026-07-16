@@ -12,6 +12,7 @@ import {
   type ProjectGroupHeaderDragSession
 } from './project-group-header-drag-contract'
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
+import { createProjectGroupReparentValidator } from '../../../../shared/project-group-reparent'
 import type { ProjectGroup } from '../../../../shared/types'
 
 export function createProjectGroupHeaderDragSession(args: {
@@ -54,6 +55,7 @@ export function createProjectGroupHeaderDragSession(args: {
     return null
   }
   const handleEl = args.event.currentTarget
+  const projectGroups = [...args.projectGroupById.values()]
   // Why: defer pointer capture until the threshold so ordinary group header
   // clicks still toggle collapse through the row handler.
   return {
@@ -62,10 +64,8 @@ export function createProjectGroupHeaderDragSession(args: {
     sourceParentGroupId: getParentGroupIdForHeaderDragBucketKey(bucketKey),
     sidebarProjectGroupHeaderIds,
     sidebarProjectGroupHeaderIdsByBucket: args.sidebarProjectGroupHeaderIdsByBucket,
-    draggedSubtreeGroupIds: getProjectGroupSubtreeIds(
-      [...args.projectGroupById.values()],
-      args.groupId
-    ),
+    draggedSubtreeGroupIds: getProjectGroupSubtreeIds(projectGroups, args.groupId),
+    validateReparent: createProjectGroupReparentValidator(projectGroups, args.groupId),
     pointerId: args.event.pointerId,
     headerRects: measureProjectGroupHeaderDragRects(container),
     handleEl,

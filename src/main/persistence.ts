@@ -190,11 +190,11 @@ import {
   createProjectGroup,
   getNextProjectGroupOrder,
   getProjectGroupDepth,
-  getProjectGroupReparentViolation,
   getProjectGroupSubtreeIds,
   normalizeProjectGroupName,
   normalizeProjectGroups
 } from '../shared/project-groups'
+import { getProjectGroupReparentViolation } from '../shared/project-group-reparent'
 import { createNestedProjectGroupResolver } from './project-groups/nested-repo-import'
 import {
   mergeLegacyCommitMessageAiIntoSourceControlAi,

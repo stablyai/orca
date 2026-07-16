@@ -33,6 +33,7 @@ function makeSession(
     sidebarProjectGroupHeaderIds,
     sidebarProjectGroupHeaderIdsByBucket: new Map([['root', sidebarProjectGroupHeaderIds]]),
     draggedSubtreeGroupIds: new Set([groupId]),
+    validateReparent: () => null,
     pointerId: 1,
     headerRects: [],
     handleEl: document.createElement('div'),

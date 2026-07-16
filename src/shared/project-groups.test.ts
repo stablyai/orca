@@ -5,7 +5,6 @@ import {
   getEffectiveProjectGroupManualRank,
   getNextProjectGroupOrder,
   getProjectGroupDepth,
-  getProjectGroupReparentViolation,
   getProjectGroupSubtreeHeight,
   getProjectGroupSubtreeIds,
   normalizeProjectGroupName,
@@ -173,38 +172,6 @@ describe('project-groups', () => {
     expect(getProjectGroupSubtreeHeight(groups, 'root')).toBe(2)
     expect(getProjectGroupSubtreeHeight(groups, 'child')).toBe(1)
     expect(getProjectGroupSubtreeHeight(groups, 'lone')).toBe(0)
-  })
-
-  it('validates reparent targets', () => {
-    const groups = [
-      { id: 'root', parentGroupId: null },
-      { id: 'child', parentGroupId: 'root' },
-      { id: 'grandchild', parentGroupId: 'child' },
-      { id: 'other', parentGroupId: null }
-    ]
-
-    expect(getProjectGroupReparentViolation(groups, 'other', null)).toBeNull()
-    expect(getProjectGroupReparentViolation(groups, 'other', 'root')).toBeNull()
-    expect(getProjectGroupReparentViolation(groups, 'missing', 'root')).toBe('missing-group')
-    expect(getProjectGroupReparentViolation(groups, 'other', 'missing')).toBe('missing-parent')
-    expect(getProjectGroupReparentViolation(groups, 'other', 'other')).toBe('self')
-    expect(getProjectGroupReparentViolation(groups, 'root', 'grandchild')).toBe('cycle')
-    // other (leaf) under grandchild would land at depth 4 with a 3-level cap.
-    expect(getProjectGroupReparentViolation(groups, 'other', 'grandchild')).toBe('depth')
-  })
-
-  it('rejects reparenting a subtree that would poke through the depth cap', () => {
-    const groups = [
-      { id: 'root', parentGroupId: null },
-      { id: 'tall', parentGroupId: null },
-      { id: 'tall-child', parentGroupId: 'tall' }
-    ]
-
-    // tall itself fits under root, but its child would land at depth 4.
-    expect(getProjectGroupReparentViolation(groups, 'tall', 'root')).toBeNull()
-
-    const deeper = [...groups, { id: 'tall-grandchild', parentGroupId: 'tall-child' }]
-    expect(getProjectGroupReparentViolation(deeper, 'tall', 'root')).toBe('depth')
   })
 
   it('breaks persisted parent cycles by clamping cycle members to root', () => {

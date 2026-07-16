@@ -211,44 +211,6 @@ export function getProjectGroupSubtreeHeight(
   return height
 }
 
-export type ProjectGroupReparentViolation =
-  | 'missing-group'
-  | 'missing-parent'
-  | 'self'
-  | 'cycle'
-  | 'depth'
-
-/** Preflight/authoritative check shared by renderer drop targeting and the
- *  main-process update path. `null` parent (move to root) is always valid. */
-export function getProjectGroupReparentViolation(
-  groups: readonly Pick<ProjectGroup, 'id' | 'parentGroupId'>[],
-  groupId: string,
-  parentGroupId: string | null
-): ProjectGroupReparentViolation | null {
-  const groupIds = new Set(groups.map((group) => group.id))
-  if (!groupIds.has(groupId)) {
-    return 'missing-group'
-  }
-  if (parentGroupId === null) {
-    return null
-  }
-  if (parentGroupId === groupId) {
-    return 'self'
-  }
-  if (!groupIds.has(parentGroupId)) {
-    return 'missing-parent'
-  }
-  if (getProjectGroupSubtreeIds(groups, groupId).has(parentGroupId)) {
-    return 'cycle'
-  }
-  const resultingDepth =
-    getProjectGroupDepth(groups, parentGroupId) + 1 + getProjectGroupSubtreeHeight(groups, groupId)
-  if (resultingDepth > MAX_MANUAL_PROJECT_GROUP_DEPTH) {
-    return 'depth'
-  }
-  return null
-}
-
 export function clearMissingProjectGroupMemberships(repos: Repo[], groups: ProjectGroup[]): Repo[] {
   const groupIds = new Set(groups.map((group) => group.id))
   return repos.map((repo) =>

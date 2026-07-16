@@ -45,10 +45,8 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { applyManualRepoOrder, getManualRepoOrder } from '../../../../shared/manual-repo-order'
-import {
-  getProjectGroupReparentViolation,
-  getProjectGroupSubtreeIds
-} from '../../../../shared/project-groups'
+import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
+import { getProjectGroupReparentViolation } from '../../../../shared/project-group-reparent'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 import { selectProjectGroupRemovalTargets } from './project-group-removal-targets'

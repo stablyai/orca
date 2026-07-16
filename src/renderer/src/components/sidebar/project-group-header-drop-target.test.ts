@@ -5,6 +5,7 @@ import {
   type ComputeProjectGroupHeaderDropTargetArgs
 } from './project-group-header-drop-target'
 import type { ProjectGroupHeaderDragRect } from './project-group-header-drop'
+import { createProjectGroupReparentValidator } from '../../../../shared/project-group-reparent'
 
 type GroupNode = { id: string; parentGroupId: string | null }
 
@@ -36,9 +37,10 @@ const IDS_BY_BUCKET = new Map<string, readonly string[]>([
 ])
 
 function makeArgs(
-  overrides: Partial<ComputeProjectGroupHeaderDropTargetArgs>
+  overrides: Partial<ComputeProjectGroupHeaderDropTargetArgs> & { groups?: GroupNode[] }
 ): ComputeProjectGroupHeaderDropTargetArgs {
-  return {
+  const { groups = GROUPS, ...rest } = overrides
+  const merged = {
     pointerY: 0,
     containerTop: 0,
     scrollTop: 0,
@@ -48,8 +50,12 @@ function makeArgs(
     sourceParentGroupId: 'alpha',
     draggedSubtreeGroupIds: new Set(['gamma']),
     sidebarProjectGroupHeaderIdsByBucket: IDS_BY_BUCKET,
-    projectGroups: GROUPS,
-    ...overrides
+    ...rest
+  }
+  return {
+    ...merged,
+    validateReparent:
+      merged.validateReparent ?? createProjectGroupReparentValidator(groups, merged.draggedGroupId)
   }
 }
 
@@ -121,7 +127,7 @@ describe('computeProjectGroupHeaderDropTarget', () => {
         sourceParentGroupId: null,
         draggedSubtreeGroupIds: new Set(['solo']),
         sidebarProjectGroupHeaderIdsByBucket: idsByBucket,
-        projectGroups: groups
+        groups
       })
     )
     expect(target).toMatchObject({ kind: 'reorder', bucketKey: 'parent:l2' })
