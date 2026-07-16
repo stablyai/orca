@@ -198,6 +198,32 @@ describe('agent process recognition', () => {
     ).toEqual({ agent: 'gemini', processName: 'gemini' })
   })
 
+  it('recognizes agent CLIs prefixed with POSIX env-variable assignments', () => {
+    expect(
+      recognizeAgentProcessFromCommandLine('CLAUDE_CONFIG_DIR=~/.claude_sub claude --model sonnet')
+    ).toEqual({ agent: 'claude', processName: 'claude' })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'TERM=x CLAUDE_CONFIG_DIR=~/.claude_sub claude --model sonnet'
+      )
+    ).toEqual({ agent: 'claude', processName: 'claude' })
+    expect(recognizeAgentProcessFromCommandLine('PYTHONPATH=/opt/lib python3 -m aider')).toEqual({
+      agent: 'aider',
+      processName: 'aider'
+    })
+    expect(
+      recognizeAgentProcessFromCommandLine('CLAUDE_CONFIG_DIR=~/.claude_sub claude -p summarize')
+    ).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('NODE_ENV=test npm test')).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        "PROMPT='claude --model sonnet' printf '%s\\n' \"$PROMPT\""
+      )
+    ).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('BAD-NAME=value claude --model sonnet')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('CLAUDE_CONFIG_DIR=~/.claude_sub')).toBeNull()
+  })
+
   it('recognizes only the agent subcommand of the generic Orca CLI', () => {
     expect(recognizeAgentProcessFromCommandLine('orca claude-teams')).toEqual({
       agent: 'claude-agent-teams',

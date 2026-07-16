@@ -109,6 +109,12 @@ describe('resolveAgentForegroundProcess', () => {
     await expect(resolveAgentForegroundProcess(100, 'node')).resolves.toBe('codex')
   })
 
+  it('recognizes env-prefixed agent relaunches after restart', async () => {
+    mockPs(['101 100 S+   CLAUDE_CONFIG_DIR=~/.claude_sub claude --model sonnet'].join('\n'))
+
+    await expect(resolveAgentForegroundProcess(100, 'zsh')).resolves.toBe('claude')
+  })
+
   it('treats a fresh POSIX snapshot missing the PTY root as unavailable', async () => {
     mockPs('101 999 S+ node /Users/dev/.nvm/versions/node/bin/codex')
 

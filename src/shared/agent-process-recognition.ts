@@ -69,9 +69,7 @@ for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG) as [
   ]) {
     const normalized = normalizeProcessName(candidate)
     if (normalized) {
-      // Why: claude-agent-teams is an Orca wrapper whose child process is the
-      // real `claude` binary. Do not let wrapper configs overwrite canonical
-      // CLI ownership for the same foreground process name.
+      // Why: preserve canonical `claude` ownership over the claude-agent-teams wrapper.
       if (!PROCESS_TO_AGENT.has(normalized)) {
         PROCESS_TO_AGENT.set(normalized, agent)
       }
@@ -84,8 +82,7 @@ function agentForNormalizedProcess(normalized: string): TuiAgent | undefined {
   if (exact) {
     return exact
   }
-  // Why: node-pty can report Codex's packaged platform binary
-  // (for example codex-aarch64-ap) instead of the launch command.
+  // Why: node-pty can report Codex's packaged platform binary instead of the launch command.
   if (normalized.startsWith('codex-')) {
     return PROCESS_TO_AGENT.get('codex')
   }
@@ -137,6 +134,7 @@ function tokenizeCommandLine(commandLine: string): string[] {
   return tokens
 }
 
+const POSIX_ASSIGNMENT_WORD_RE = /^[A-Za-z_][A-Za-z0-9_]*=/
 function tokenLooksExecutable(token: string, index: number, firstNormalized: string): boolean {
   if (index === 0) {
     return true
@@ -144,17 +142,12 @@ function tokenLooksExecutable(token: string, index: number, firstNormalized: str
   if (!isInterpreterProcessName(firstNormalized)) {
     return false
   }
-  // Why: only inspect interpreter script paths. Prompt text can mention other
-  // agents ("compare opencode vs orca"), and treating every argv token as an
-  // executable would reintroduce the substring-style false identity class that
-  // foreground-process detection is meant to avoid.
+  // Why: inspect interpreter script paths only, so prompt text can't create false identities.
   return token.includes('/') || token.includes('\\') || PROCESS_EXTENSION_RE.test(token)
 }
-
 function isInterpreterProcessName(normalized: string): boolean {
   return STATIC_INTERPRETER_PROCESS_NAMES.has(normalized) || PYTHON_PROCESS_RE.test(normalized)
 }
-
 const isPythonProcessName = (normalized: string): boolean => PYTHON_PROCESS_RE.test(normalized)
 
 const optionName = (token: string): string => token.split('=', 1)[0] ?? ''
@@ -288,11 +281,10 @@ export function recognizeAgentProcessFromCommandLine(
   // one-shot agent can't answer a prompt either.
   options?: { includeHeadlessOneShot?: boolean }
 ): RecognizedAgentProcess | null {
-  if (!commandLine) {
-    return null
-  }
   const keep = options?.includeHeadlessOneShot === true
-  const tokens = tokenizeCommandLine(commandLine)
+  const tokens = tokenizeCommandLine(commandLine ?? '')
+  const firstExecutableIndex = tokens.findIndex((token) => !POSIX_ASSIGNMENT_WORD_RE.test(token))
+  tokens.splice(0, firstExecutableIndex < 0 ? tokens.length : firstExecutableIndex)
   const firstNormalized = normalizeProcessName(tokens[0])
   let direct = recognizeAgentProcess(tokens[0])
   // Why: the generic Orca CLI is not an agent; only this subcommand launches its TUI mode.
