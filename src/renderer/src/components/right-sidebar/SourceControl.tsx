@@ -7974,6 +7974,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
     <SourceControlEntryContextMenu
       currentWorktreeId={currentWorktreeId}
       absolutePath={joinPath(worktreePath, entry.path)}
+      relativePath={entry.path}
       connectionId={connectionId}
       onView={() => onOpen(entry)}
       onRevealInExplorer={onRevealInExplorer}
@@ -8229,6 +8230,7 @@ function BranchEntryRow({
     <SourceControlEntryContextMenu
       currentWorktreeId={currentWorktreeId}
       absolutePath={joinPath(worktreePath, entry.path)}
+      relativePath={entry.path}
       connectionId={connectionId}
       onView={() => onOpen()}
       onRevealInExplorer={onRevealInExplorer}
