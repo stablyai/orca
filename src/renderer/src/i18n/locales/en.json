@@ -9193,7 +9193,8 @@
           "pressKeys": "Press keys…",
           "clickToRecord": "Click to record",
           "disable": "Disable global hotkey",
-          "description": "Press this key combination anywhere to show or hide the Orca window."
+          "description": "Press this key combination anywhere to show or hide the Orca window.",
+          "label": "Global hotkey"
         }
       },
       "right": {

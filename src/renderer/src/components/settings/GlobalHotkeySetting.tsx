@@ -1,5 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react'
 import { Button } from '../ui/button'
+import { SettingsRow } from './SettingsFormControls'
 import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
@@ -174,68 +175,70 @@ export function GlobalHotkeySetting({
   )
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <button
-          ref={recordButtonRef}
-          type="button"
-          aria-label={recording ? recordingLabel : undefined}
-          aria-pressed={recording}
-          onClick={() => {
-            setRecording(true)
-            // Why: recording listens on this button's keydown, so it must own
-            // focus even when the click did not focus it.
-            recordButtonRef.current?.focus()
-          }}
-          onKeyDown={handleKeyDown}
-          onBlur={() => setRecording(false)}
-          className={cn(
-            'flex min-h-8 min-w-[8rem] items-center justify-center gap-1 rounded-md border px-3 py-1.5 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
-            recording
-              ? 'border-ring bg-accent text-accent-foreground ring-[3px] ring-ring/30'
-              : 'border-border/70 bg-background hover:bg-accent/50'
-          )}
-        >
-          {recording ? (
-            <span className="text-xs text-muted-foreground">
-              {translate('auto.components.settings.GlobalHotkeySetting.pressKeys', 'Press keys…')}
-            </span>
-          ) : displayKeys.length > 0 ? (
-            <ShortcutKeyCombo keys={displayKeys} />
-          ) : (
-            <span className="text-xs text-muted-foreground">
-              {translate(
-                'auto.components.settings.GlobalHotkeySetting.clickToRecord',
-                'Click to record'
-              )}
-            </span>
-          )}
-        </button>
-
-        {accelerator !== '' && !recording ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => onChange('')}
-            title={translate(
-              'auto.components.settings.GlobalHotkeySetting.disable',
-              'Disable global hotkey'
-            )}
-          >
-            <CircleX className="size-4" />
-          </Button>
-        ) : null}
-      </div>
-
-      <p className="text-xs text-muted-foreground">
-        {recording
+    <SettingsRow
+      label={translate('auto.components.settings.GlobalHotkeySetting.label', 'Global hotkey')}
+      description={
+        recording
           ? recordingLabel
           : translate(
               'auto.components.settings.GlobalHotkeySetting.description',
               'Press this key combination anywhere to show or hide the Orca window.'
+            )
+      }
+      control={
+        <div className="flex items-center gap-2">
+          <button
+            ref={recordButtonRef}
+            type="button"
+            aria-label={recording ? recordingLabel : undefined}
+            aria-pressed={recording}
+            onClick={() => {
+              setRecording(true)
+              // Why: recording listens on this button's keydown, so it must own
+              // focus even when the click did not focus it.
+              recordButtonRef.current?.focus()
+            }}
+            onKeyDown={handleKeyDown}
+            onBlur={() => setRecording(false)}
+            className={cn(
+              'flex min-h-8 min-w-[8rem] items-center justify-center gap-1 rounded-md border px-3 py-1.5 text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+              recording
+                ? 'border-ring bg-accent text-accent-foreground ring-[3px] ring-ring/30'
+                : 'border-border/70 bg-background hover:bg-accent/50'
             )}
-      </p>
-    </div>
+          >
+            {recording ? (
+              <span className="text-xs text-muted-foreground">
+                {translate('auto.components.settings.GlobalHotkeySetting.pressKeys', 'Press keys…')}
+              </span>
+            ) : displayKeys.length > 0 ? (
+              <ShortcutKeyCombo keys={displayKeys} />
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.GlobalHotkeySetting.clickToRecord',
+                  'Click to record'
+                )}
+              </span>
+            )}
+          </button>
+
+          {accelerator !== '' && !recording ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onChange('')}
+              title={translate(
+                'auto.components.settings.GlobalHotkeySetting.disable',
+                'Disable global hotkey'
+              )}
+            >
+              <CircleX className="size-4" />
+            </Button>
+          ) : null}
+        </div>
+      }
+    />
   )
 }
