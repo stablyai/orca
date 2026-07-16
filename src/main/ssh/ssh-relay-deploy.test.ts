@@ -202,7 +202,7 @@ describe('deployAndLaunchRelay', () => {
       assertionError = err
     } finally {
       // Drain the rest of the happy path so a failed assertion does not leave
-      // the deploy promise pending until its 300s timeout.
+      // the deploy promise pending until the overall deploy timeout.
       mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
       mockExecCommand.mockResolvedValueOnce('DEAD') // socket probe
       mockExecCommand.mockResolvedValueOnce('READY') // socket poll
@@ -499,7 +499,10 @@ describe('deployAndLaunchRelay', () => {
     expect(sawLegacyDir).toBe(false)
   })
 
-  it('has a 300-second overall timeout', async () => {
+  it('bounds the overall deploy so install + rebuild both fit under the timeout', async () => {
+    // Why: the outer bound must exceed the worst-case sequential native-deps
+    // work — a first install (240s) AND a follow-up rebuild (240s) — so a
+    // legitimate install-then-rebuild is not falsely timed out mid-repair.
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
 
@@ -511,11 +514,15 @@ describe('deployAndLaunchRelay', () => {
     // Catch the rejection immediately to avoid unhandled rejection warning
     const promise = deployAndLaunchRelay(conn).catch((err: Error) => err)
 
+    // Not timed out yet at the old 300s bound (install + rebuild need more).
     await vi.advanceTimersByTimeAsync(301_000)
+    expect(await Promise.race([promise, Promise.resolve('pending')])).toBe('pending')
+
+    await vi.advanceTimersByTimeAsync(240_000)
 
     const result = await promise
     expect(result).toBeInstanceOf(Error)
-    expect((result as Error).message).toBe('Relay deployment timed out after 300s')
+    expect((result as Error).message).toBe('Relay deployment timed out after 540s')
 
     vi.useRealTimers()
   })

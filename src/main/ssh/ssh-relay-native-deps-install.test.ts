@@ -415,6 +415,35 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     expect(vi.mocked(finalizeInstall)).toHaveBeenCalledTimes(1)
   })
 
+  it('propagates an SSH-channel failure from the post-rebuild re-probe', async () => {
+    // Why: the rebuild itself degrades gracefully, but the verification probe
+    // after it must still surface transport death — conflating a dead channel
+    // with "native deps missing" would finalize a half-repaired install.
+    const conn = makeMockConnection(sftpCapture)
+    feed([
+      '__ORCA_REMOTE_PLATFORM__ Linux x86_64', // uname
+      '/home/u', // $HOME
+      '', // mkdir remoteDir (uploadRelay)
+      '', // chmod +x node
+      '', // npm install native deps
+      '', // chmod prebuilds
+      'MISSING\n', // first probe: require() fails
+      '', // cat probe stderr
+      '', // rm probe stderr
+      '', // npm rebuild native deps
+      '', // chmod prebuilds after rebuild
+      { reject: 'SSH channel closed during native deps re-probe' } // re-probe rejects
+    ])
+
+    await expect(deployAndLaunchRelay(conn)).rejects.toThrow(/SSH channel closed/)
+
+    // Rebuild failure is swallowed; a re-probe transport failure must not be.
+    const warnMessages = warnSpy.mock.calls.map((args) => String(args[0] ?? ''))
+    expect(warnMessages.some((m) => m.includes('[ssh-relay][NPTY-MISSING]'))).toBe(false)
+    expect(vi.mocked(finalizeInstall)).not.toHaveBeenCalled()
+    expect(vi.mocked(abandonInstall)).toHaveBeenCalledTimes(1)
+  })
+
   it('lets a probe SSH-channel failure bubble up rather than silently mapping to MISSING', async () => {
     const conn = makeMockConnection(sftpCapture)
     feed(
@@ -673,6 +702,58 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
         (c) => c.includes('npm install') && c.includes('node-pty') && c.includes('@parcel/watcher')
       )
     ).toBe(true)
+  })
+
+  it('launches an already-installed relay in degraded mode when repair throws', async () => {
+    // Why: a repair failure on a completed dir (e.g. offline/proxy-locked npm)
+    // must not block the connection — the relay still serves fs/git/preflight.
+    // Pre-fix this rethrew and aborted the whole deploy. The next reconnect
+    // retries, so a transient failure self-heals.
+    vi.mocked(isRelayAlreadyInstalled).mockResolvedValue(true)
+    const conn = makeMockConnection(sftpCapture)
+    feed([
+      '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
+      '/home/u',
+      'MISSING', // health probe: require() fails
+      'MISSING', // re-probe after lock
+      { reject: 'npm ERR! network ETIMEDOUT' }, // npm install fails (offline)
+      'DEAD',
+      'READY'
+    ])
+
+    // Deploy must resolve (degraded), not reject.
+    await deployAndLaunchRelay(conn)
+
+    expect(vi.mocked(finalizeInstall)).not.toHaveBeenCalled()
+    expect(vi.mocked(abandonInstall)).toHaveBeenCalledTimes(1)
+    const warnMessages = warnSpy.mock.calls.map((args) => String(args[0] ?? ''))
+    expect(warnMessages.some((m) => m.includes('launching degraded'))).toBe(true)
+  })
+
+  it('launches degraded when the repair install lock cannot be acquired', async () => {
+    // Why: lock contention/wedge must not block a completed relay from launching
+    // in degraded mode — repair is best-effort and we hold no lock to release.
+    vi.mocked(isRelayAlreadyInstalled).mockResolvedValue(true)
+    vi.mocked(acquireInstallLock).mockRejectedValueOnce(
+      new Error('Could not acquire relay install lock at /x; another install is in progress')
+    )
+    const conn = makeMockConnection(sftpCapture)
+    feed([
+      '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
+      '/home/u',
+      'MISSING', // health probe: require() fails
+      'DEAD',
+      'READY'
+    ])
+
+    await deployAndLaunchRelay(conn)
+
+    expect(vi.mocked(finalizeInstall)).not.toHaveBeenCalled()
+    expect(vi.mocked(abandonInstall)).not.toHaveBeenCalled()
+    const execCalls = vi.mocked(execCommand).mock.calls.map(([, c]) => c)
+    expect(execCalls.some((c) => c.includes('npm install'))).toBe(false)
+    const warnMessages = warnSpy.mock.calls.map((args) => String(args[0] ?? ''))
+    expect(warnMessages.some((m) => m.includes('Could not lock native-deps repair'))).toBe(true)
   })
 
   it('loads native bindings when checking whether a completed relay needs repair', async () => {

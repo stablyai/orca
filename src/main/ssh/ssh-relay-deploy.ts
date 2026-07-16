@@ -66,16 +66,21 @@ export type RelayDeployResult = {
   sockPath?: string
 }
 
-// Why: individual exec commands have 30s timeouts, but the full deploy
-// pipeline (detect platform → check existing → upload → npm install →
-// launch) has no overall bound. A hanging `npm install` or slow SFTP
-// upload could block the connection indefinitely. First-time installs need
-// room for the longer native dependency install bound below.
-const RELAY_DEPLOY_TIMEOUT_MS = 300_000
-
 // npm install on a cold Windows cache plus antivirus scanning can exceed the
-// default 30s exec timeout.
+// default 30s exec timeout. The same bound covers the post-install `npm rebuild`
+// retry that repairs a native binding skipped by an ignore-scripts host.
 const NATIVE_DEPS_INSTALL_TIMEOUT_MS = 240_000
+
+// Why: individual exec commands have their own timeouts, but the full deploy
+// pipeline (detect platform → check existing → upload → npm install → rebuild →
+// launch) has no overall bound, so a hanging step or slow SFTP upload could
+// block the connection indefinitely. This is a backstop, sized so the common
+// native-deps case — a first install AND its follow-up rebuild, each up to
+// NATIVE_DEPS_INSTALL_TIMEOUT_MS — plus headroom is not falsely timed out.
+// (Adding heavy install-lock contention on top could still trip it; that stays
+// a rare, self-healing-on-retry edge rather than a reason to loosen the
+// backstop further.)
+const RELAY_DEPLOY_TIMEOUT_MS = 2 * NATIVE_DEPS_INSTALL_TIMEOUT_MS + 60_000
 
 function execHostCommand(
   conn: SshConnection,
@@ -459,7 +464,7 @@ async function hasRequiredNativeDeps(
           hostPlatform,
           nodePath,
           remoteDir,
-          `(${escapedNode} -e '${LOAD_RELAY_NATIVE_DEPS}; console.log("ORCA-NATIVE-DEPS-OK")' 2>/dev/null || echo MISSING)`
+          `(${escapedNode} -e ${shellEscape(`${LOAD_RELAY_NATIVE_DEPS}; console.log("ORCA-NATIVE-DEPS-OK")`)} 2>/dev/null || echo MISSING)`
         )
     const probe = await execHostCommand(conn, hostPlatform, command)
     return probe.includes('ORCA-NATIVE-DEPS-OK')
@@ -479,8 +484,24 @@ async function repairInstalledNativeDeps(
     return
   }
 
+  // Why: an already-installed relay can ALWAYS launch in degraded mode (fs/git/
+  // preflight still work — only native-backed ops fail), so native-deps repair
+  // is best-effort and must never block the connection: not on lock contention,
+  // and not on an offline/unbuildable repair. Pre-repair this path used
+  // require.resolve (which passed for a present-but-unloadable binding), so a
+  // fatal repair here would be a straight regression. launchRelay still surfaces
+  // a genuinely dead transport on its own.
   console.warn(`[ssh-relay] Repairing missing native deps at ${remoteDir}`)
-  await acquireInstallLock(conn, remoteDir, hostPlatform)
+  try {
+    await acquireInstallLock(conn, remoteDir, hostPlatform)
+  } catch (err) {
+    console.warn(
+      `[ssh-relay] Could not lock native-deps repair at ${remoteDir}; launching degraded: ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    )
+    return
+  }
   try {
     // Why: older complete relay dirs were created before @parcel/watcher was
     // installed. Re-probe under the lock so only one reconnect mutates the dir.
@@ -491,8 +512,14 @@ async function repairInstalledNativeDeps(
       await abandonInstall(conn, remoteDir, hostPlatform)
     }
   } catch (err) {
+    // Release the lock and fall through to a degraded launch. The next reconnect
+    // retries, so a transient failure (offline registry) self-heals.
     await abandonInstall(conn, remoteDir, hostPlatform)
-    throw err
+    console.warn(
+      `[ssh-relay] Native deps repair failed at ${remoteDir}; launching degraded: ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    )
   }
 }
 
@@ -674,7 +701,7 @@ async function probeInstalledNativeDeps(
         hostPlatform,
         nodePath,
         remoteDir,
-        `(${shellEscape(nodePath)} -e '${probeJs}' ${shellEscape(PROBE_OK)} 2>${escapedStderr} || echo MISSING)`
+        `(${shellEscape(nodePath)} -e ${shellEscape(probeJs)} ${shellEscape(PROBE_OK)} 2>${escapedStderr} || echo MISSING)`
       )
   const probeOutput = await execHostCommand(conn, hostPlatform, probeCommand)
   const remoteStderr =
