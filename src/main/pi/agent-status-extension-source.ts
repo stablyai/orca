@@ -16,21 +16,21 @@ import { getPiAgentStatusHandlerSourceLines } from './agent-status-handler-sourc
 export const ORCA_PI_AGENT_STATUS_EXTENSION_FILE = 'orca-agent-status.ts'
 
 export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): string {
-  const sessionMetadataSourceLines =
-    kind === 'pi'
+  const sessionMetadataSourceLines = [
+    'let sessionMetadata: Record<string, unknown> = {}',
+    '',
+    'function updateSessionMetadata(ctx: unknown): void {',
+    '  const sessionManager = (ctx as { sessionManager?: { getSessionId?: () => unknown; getSessionFile?: () => unknown } } | null)?.sessionManager',
+    '  const sessionId = sessionManager?.getSessionId?.()',
+    '  const sessionFile = sessionManager?.getSessionFile?.()',
+    "  sessionMetadata = typeof sessionId === 'string' && sessionId ? {",
+    '    session_id: sessionId,',
+    "    ...(typeof sessionFile === 'string' && sessionFile ? { session_file: sessionFile } : {}),",
+    '  } : {}',
+    '}',
+    '',
+    ...(kind === 'pi'
       ? [
-          'let sessionMetadata: Record<string, unknown> = {}',
-          '',
-          'function updateSessionMetadata(ctx: unknown): void {',
-          '  const sessionManager = (ctx as { sessionManager?: { getSessionId?: () => unknown; getSessionFile?: () => unknown } } | null)?.sessionManager',
-          '  const sessionId = sessionManager?.getSessionId?.()',
-          '  const sessionFile = sessionManager?.getSessionFile?.()',
-          "  sessionMetadata = typeof sessionId === 'string' && sessionId ? {",
-          '    session_id: sessionId,',
-          "    ...(typeof sessionFile === 'string' && sessionFile ? { session_file: sessionFile } : {}),",
-          '  } : {}',
-          '}',
-          '',
           'function getPersistedSessionMetadata(): Record<string, unknown> {',
           '  const sessionFile = sessionMetadata.session_file',
           "  if (typeof sessionFile !== 'string' || !sessionFile) return {}",
@@ -45,11 +45,15 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
           '}',
           ''
         ]
-      : []
+      : [])
+  ]
+  // Why: Pi resumes by transcript file, so its metadata is gated on the file
+  // actually existing; OMP resumes by session id alone (`omp --resume <id>`,
+  // #8962), so the latest handler-captured metadata rides every post as-is.
   const payloadLine =
     kind === 'pi'
       ? '    payload: { hook_event_name: hookEventName, ...getPersistedSessionMetadata(), ...extra },'
-      : '    payload: { hook_event_name: hookEventName, ...extra },'
+      : '    payload: { hook_event_name: hookEventName, ...sessionMetadata, ...extra },'
 
   // Why: keep this string self-contained — it runs inside the pi process,
   // so it cannot import from Orca's main bundle. fs/http coords come from

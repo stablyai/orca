@@ -12,7 +12,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'mimo-code',
   'droid',
   'grok',
-  'devin'
+  'devin',
+  'omp'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -212,9 +213,14 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['session_id', 'sessionId'])
       return id ? { key: 'session_id', id } : null
     }
+    // OMP's managed extension posts the authoritative id from
+    // ctx.sessionManager.getSessionId(); the CLI resumes it via `omp --resume <id>`.
+    case 'omp': {
+      const id = readSessionId(payload, ['session_id'])
+      return id ? { key: 'session_id', id } : null
+    }
     case 'amp':
     case 'cursor':
-    case 'omp':
     case 'command-code':
     case 'copilot':
     case 'hermes':
@@ -250,5 +256,7 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['grok', '--resume', id] : null
     case 'devin':
       return providerSession.key === 'session_id' ? ['devin', '--resume', id] : null
+    case 'omp':
+      return providerSession.key === 'session_id' ? ['omp', '--resume', id] : null
   }
 }

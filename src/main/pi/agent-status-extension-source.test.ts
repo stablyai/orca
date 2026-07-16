@@ -325,6 +325,50 @@ describe('getPiAgentStatusExtensionSource', () => {
     )
   })
 
+  it('attaches the OMP handler-context session_id to a posted snapshot', async () => {
+    // Why: OMP cold-restore needs the provider session id, sourced from the
+    // second handler argument (ctx.sessionManager.getSessionId()).
+    const harness = createHarness({ kind: 'omp' })
+    const ctx = { sessionManager: { getSessionId: () => 'omp-session-9' } }
+
+    await harness.callHook('agent_start', undefined, ctx)
+
+    expect(harness.fetchMock).toHaveBeenCalledTimes(1)
+    const startBody = JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body))
+    expect(startBody.payload).toEqual({
+      hook_event_name: 'agent_start',
+      session_id: 'omp-session-9'
+    })
+  })
+
+  it('carries the OMP session_id alongside a prompt-bearing snapshot', async () => {
+    // Why: refreshing on every event (not just the first) matters because the
+    // transport keeps only the latest pending post and sessions can switch.
+    const harness = createHarness({ kind: 'omp' })
+
+    await harness.callHook(
+      'before_agent_start',
+      { prompt: 'hi' },
+      { sessionManager: { getSessionId: () => 'omp-session-9' } }
+    )
+
+    const body = JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body))
+    expect(body.payload).toEqual({
+      hook_event_name: 'before_agent_start',
+      prompt: 'hi',
+      session_id: 'omp-session-9'
+    })
+  })
+
+  it('omits the OMP session_id when the handler context exposes no session manager', async () => {
+    const harness = createHarness({ kind: 'omp' })
+
+    await harness.callHook('agent_end', undefined, {})
+
+    const body = JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body))
+    expect(body.payload).toEqual({ hook_event_name: 'agent_end' })
+  })
+
   it('routes an OMP executable through /hook/omp', async () => {
     const harness = createHarness({
       kind: 'pi',
