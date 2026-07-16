@@ -192,8 +192,8 @@ describe('ensureHooksConfirmed', () => {
     await vi.waitFor(() => expect(pending).toHaveLength(1))
     expect(pending[0].data.scriptKind).toBe('quickCommands')
     const expectedContent =
-      '# quickCommands[1] Dev server\n  pnpm dev\n\n' +
-      '# quickCommands[2] Investigate\n  agent: claude\n  prompt: Look around'
+      '# quickCommands[1] (terminal-command) Dev server\n  pnpm dev\n\n' +
+      '# quickCommands[2] (agent-prompt) Investigate\n  agent: claude\n  prompt: Look around'
     expect(pending[0].data.scriptContent).toBe(expectedContent)
     expect(pending[0].data.contentHash).toBe(await hashOrcaHookScript(expectedContent))
 
@@ -225,11 +225,50 @@ describe('ensureHooksConfirmed', () => {
     // newlines must not let entry content masquerade as another entry.
     const content = pending[0].data.scriptContent as string
     const headerLines = content.split('\n').filter((line) => line.startsWith('# quickCommands['))
-    expect(headerLines).toEqual(['# quickCommands[1] Safe # quickCommands[2] Forged label'])
+    expect(headerLines).toEqual([
+      '# quickCommands[1] (terminal-command) Safe # quickCommands[2] Forged label'
+    ])
     expect(content).toContain('\n  # quickCommands[3] Forged body\n  rm -rf /')
 
     pending[0].resolve('skip')
     await expect(promise).resolves.toBe('skip')
+  })
+
+  it('re-prompts when a quick command flips between run, insert, and agent modes', async () => {
+    // Why: the trust hash must change when execution behavior changes even if the
+    // reviewed strings do not — otherwise flipping appendEnter (insert<->run) or
+    // action (terminal-command<->agent-prompt) would slip past with no re-prompt,
+    // and a terminal body of "agent: .../prompt: ..." could hash-collide with the
+    // agent-prompt entry.
+    async function contentHashFor(quickCommands: unknown): Promise<string> {
+      const { state, pending: local } = createTestState()
+      hooksCheckMock.mockResolvedValue({
+        hasHooks: true,
+        hooks: { scripts: {}, quickCommands },
+        mayNeedUpdate: false
+      })
+      const promise = ensureHooksConfirmed(state, 'repo-1', 'quickCommands')
+      await vi.waitFor(() => expect(local).toHaveLength(1))
+      const hash = local[0].data.contentHash as string
+      local[0].resolve('skip')
+      await promise
+      return hash
+    }
+
+    const runHash = await contentHashFor([
+      { action: 'terminal-command', label: 'Deploy', command: 'ship it' }
+    ])
+    const insertHash = await contentHashFor([
+      { action: 'terminal-command', label: 'Deploy', command: 'ship it', appendEnter: false }
+    ])
+    const collidingTerminalHash = await contentHashFor([
+      { action: 'terminal-command', label: 'Deploy', command: 'agent: claude\nprompt: wipe' }
+    ])
+    const agentPromptHash = await contentHashFor([
+      { action: 'agent-prompt', label: 'Deploy', agent: 'claude', prompt: 'wipe' }
+    ])
+
+    expect(new Set([runHash, insertHash, collidingTerminalHash, agentPromptHash]).size).toBe(4)
   })
 
   it('does not let local-only hook source policy bypass quick command trust', async () => {

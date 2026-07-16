@@ -100,6 +100,22 @@ describe('ensureProjectQuickCommandTrusted', () => {
     expect(checkRuntimeHooksMock).not.toHaveBeenCalled()
   })
 
+  it('fails closed when the repo id is ambiguous across hosts', async () => {
+    // Why: mirrors the store slice's dup-repo-id fail-safe — an ambiguous bare id
+    // can't be routed to one owner host, so a click from a pre-collision menu must
+    // not trust-check (and possibly run) another host's command.
+    seedStore({
+      repos: [
+        { id: 'repo-1', displayName: 'Local' },
+        { id: 'repo-1', displayName: 'SSH', connectionId: 'ssh-1' }
+      ]
+    })
+
+    await expect(ensureProjectQuickCommandTrusted(cachedProjectCommand)).resolves.toBeNull()
+    expect(checkRuntimeHooksMock).not.toHaveBeenCalled()
+    expect(pending).toHaveLength(0)
+  })
+
   it('returns the freshly read command, not the stale cached copy', async () => {
     checkRuntimeHooksMock.mockResolvedValue(
       okHooksResult([
@@ -136,7 +152,7 @@ describe('ensureProjectQuickCommandTrusted', () => {
     // Why: an orca.yaml change can be reverted after the menu cached it; the
     // reverted content hash is already trusted so no prompt appears, and the
     // never-reviewed cached command must not be what runs.
-    const approvedContent = '# quickCommands[1] Dev server\n  echo approved-safe'
+    const approvedContent = '# quickCommands[1] (terminal-command) Dev server\n  echo approved-safe'
     seedStore({
       trustedOrcaHooks: {
         'repo-1': {

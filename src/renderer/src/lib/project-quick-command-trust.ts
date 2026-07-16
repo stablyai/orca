@@ -29,6 +29,13 @@ export async function ensureProjectQuickCommandTrusted(
     // Fail closed: a project command without a repo scope cannot be trust-checked.
     return null
   }
+  // Fail closed: duplicate bare repo ids cannot be routed to one owner host, so
+  // the store slice refuses to cache them (see loadProjectQuickCommands). A click
+  // from a menu that rendered before the collision must not slip a wrong-host
+  // command past the trust gate either.
+  if (useAppStore.getState().repos.filter((repo) => repo.id === scope.repoId).length > 1) {
+    return null
+  }
   let inspectedHooks: OrcaHooks | null | undefined
   const decision = await ensureHooksConfirmed(
     useAppStore.getState(),

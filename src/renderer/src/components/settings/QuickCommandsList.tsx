@@ -177,16 +177,23 @@ export function QuickCommandsList({
         </div>
       ) : (
         <div className="max-h-[60vh] space-y-2 overflow-y-auto p-2 scrollbar-sleek">
-          {visibleCommands.map((command) => (
-            <QuickCommandRow
-              key={command.id}
-              command={command}
-              repoById={repoById}
-              onEdit={onEdit}
-              onRemove={onRemove}
-              onCopyToPersonal={onCopyToPersonal}
-            />
-          ))}
+          {visibleCommands.map((command) => {
+            // Why: project ids (orca-yaml:<slug>) are only unique per repo, so two
+            // repos sharing a command label (e.g. "Build") would collide on
+            // command.id in this cross-repo list; scope the key by repo.
+            const scope = getTerminalQuickCommandScope(command)
+            const rowKey = scope.type === 'repo' ? `${scope.repoId}:${command.id}` : command.id
+            return (
+              <QuickCommandRow
+                key={rowKey}
+                command={command}
+                repoById={repoById}
+                onEdit={onEdit}
+                onRemove={onRemove}
+                onCopyToPersonal={onCopyToPersonal}
+              />
+            )
+          })}
         </div>
       )}
     </div>

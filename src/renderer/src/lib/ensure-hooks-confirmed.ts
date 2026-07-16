@@ -54,11 +54,21 @@ function indentTrustBodyLines(value: string): string {
 // Why: one hash covers the whole project quick-command set, so any orca.yaml
 // quick-command change re-prompts once instead of per command. Repo-authored
 // fields are flattened/indented so embedded newlines cannot forge
-// "# quickCommands[...]" section headers in the review dialog.
+// "# quickCommands[...]" section headers in the review dialog. The action and
+// insert/run mode are encoded in the header so a behavior-changing edit
+// (terminal-command<->agent-prompt, or an appendEnter flip) changes the hash
+// and re-prompts, and so a terminal body of "agent: .../prompt: ..." cannot
+// hash-collide with an agent-prompt entry.
 function getQuickCommandsTrustContent(yamlHooks: OrcaHooks | null): string {
   return (yamlHooks?.quickCommands ?? [])
     .map((command, index) => {
-      const header = `# quickCommands[${index + 1}] ${toSingleTrustLine(command.label)}`
+      const mode =
+        command.action === 'agent-prompt'
+          ? 'agent-prompt'
+          : command.appendEnter === false
+            ? 'terminal-command, insert'
+            : 'terminal-command'
+      const header = `# quickCommands[${index + 1}] (${mode}) ${toSingleTrustLine(command.label)}`
       const body =
         command.action === 'agent-prompt'
           ? `agent: ${toSingleTrustLine(command.agent)}\nprompt: ${command.prompt}`
