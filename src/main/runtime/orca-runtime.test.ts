@@ -1387,6 +1387,182 @@ computeWorktreePathMock.mockImplementation(
 )
 ensurePathWithinWorkspaceMock.mockImplementation((targetPath: string) => targetPath)
 
+describe('OrcaRuntimeService.removeProject (repo unregister, issue #9028)', () => {
+  // Why: unregister must remove Orca registration only, never touch the
+  // checkout, fail closed on live terminals when the CLI opts in, and treat an
+  // already-absent repo as idempotent success. These cover each acceptance
+  // criterion without spinning up a full PTY harness.
+  type RepoLike = {
+    id: string
+    path: string
+    displayName: string
+    badgeColor: string
+    addedAt: number
+  }
+
+  function buildRuntime(repos: RepoLike[]) {
+    const storeMock = {
+      getRepos: () => repos,
+      removeProject: vi.fn((id: string) => {
+        const idx = repos.findIndex((repo) => repo.id === id)
+        if (idx >= 0) {
+          repos.splice(idx, 1)
+        }
+      })
+    }
+    const runtime = new OrcaRuntimeService(storeMock as never)
+    const internals = runtime as unknown as {
+      ptysById: Map<string, { ptyId: string; worktreeId: string; connected: boolean }>
+    }
+    return { runtime, storeMock, internals }
+  }
+
+  it('removes the repo and returns removed:true when idle', async () => {
+    const repos: RepoLike[] = [
+      { id: 'repo-1', path: '/abs/repo-1', displayName: 'one', badgeColor: 'blue', addedAt: 1 }
+    ]
+    const { runtime, storeMock } = buildRuntime(repos)
+
+    const result = await runtime.removeProject('id:repo-1', { requireIdle: true })
+
+    expect(result).toEqual({ removed: true, repoId: 'repo-1' })
+    expect(storeMock.removeProject).toHaveBeenCalledWith('repo-1')
+    expect(repos).toHaveLength(0)
+  })
+
+  it('resolves selectors by path and name like repo show', async () => {
+    const repos: RepoLike[] = [
+      { id: 'repo-1', path: '/abs/repo-1', displayName: 'one', badgeColor: 'blue', addedAt: 1 }
+    ]
+    const { runtime } = buildRuntime(repos)
+
+    await expect(runtime.removeProject('path:/abs/repo-1')).resolves.toMatchObject({
+      removed: true,
+      repoId: 'repo-1'
+    })
+  })
+
+  it('preserves the filesystem checkout (only calls store.removeProject, no fs mutation)', async () => {
+    const repos: RepoLike[] = [
+      { id: 'repo-1', path: '/abs/repo-1', displayName: 'one', badgeColor: 'blue', addedAt: 1 }
+    ]
+    const { runtime, storeMock } = buildRuntime(repos)
+    const rmSpy = vi.spyOn(require('node:fs/promises'), 'rm')
+
+    await runtime.removeProject('id:repo-1')
+
+    expect(storeMock.removeProject).toHaveBeenCalledTimes(1)
+    expect(rmSpy).not.toHaveBeenCalled()
+  })
+
+  it('treats an already-absent repo as idempotent success', async () => {
+    const { runtime, storeMock } = buildRuntime([])
+
+    const result = await runtime.removeProject('id:gone')
+
+    expect(result).toEqual({ removed: false, reason: 'absent' })
+    expect(storeMock.removeProject).not.toHaveBeenCalled()
+  })
+
+  it('still propagates selector_ambiguous instead of swallowing it', async () => {
+    const repos: RepoLike[] = [
+      { id: 'repo-1', path: '/abs/a', displayName: 'dupe', badgeColor: 'blue', addedAt: 1 },
+      { id: 'repo-2', path: '/abs/b', displayName: 'dupe', badgeColor: 'red', addedAt: 1 }
+    ]
+    const { runtime } = buildRuntime(repos)
+
+    await expect(runtime.removeProject('name:dupe')).rejects.toThrow('selector_ambiguous')
+  })
+
+  it('fails closed on live terminals when requireIdle is set', async () => {
+    const repos: RepoLike[] = [
+      { id: 'repo-1', path: '/abs/repo-1', displayName: 'one', badgeColor: 'blue', addedAt: 1 }
+    ]
+    const { runtime, storeMock, internals } = buildRuntime(repos)
+    internals.ptysById.set('pty-live', {
+      ptyId: 'pty-live',
+      worktreeId: 'repo-1::/abs/repo-1',
+      connected: true
+    })
+
+    await expect(runtime.removeProject('id:repo-1', { requireIdle: true })).rejects.toMatchObject({
+      code: 'repo_has_active_terminals'
+    })
+    // Why: fail-closed must not mutate the repo row.
+    expect(storeMock.removeProject).not.toHaveBeenCalled()
+    expect(repos).toHaveLength(1)
+  })
+
+  it('includes actionable nextSteps (stop terminals / --force) on the fail-closed error', async () => {
+    const repos: RepoLike[] = [
+      { id: 'repo-1', path: '/abs/repo-1', displayName: 'one', badgeColor: 'blue', addedAt: 1 }
+    ]
+    const { runtime, internals } = buildRuntime(repos)
+    internals.ptysById.set('pty-live', {
+      ptyId: 'pty-live',
+      worktreeId: 'repo-1::/abs/repo-1',
+      connected: true
+    })
+
+    await expect(runtime.removeProject('id:repo-1', { requireIdle: true })).rejects.toMatchObject({
+      data: {
+        activeTerminalCount: 1,
+        nextSteps: expect.arrayContaining([expect.stringContaining('--force')])
+      }
+    })
+  })
+
+  it('does not fail closed when requireIdle is omitted (renderer path is unchanged)', async () => {
+    const repos: RepoLike[] = [
+      { id: 'repo-1', path: '/abs/repo-1', displayName: 'one', badgeColor: 'blue', addedAt: 1 }
+    ]
+    const { runtime, internals } = buildRuntime(repos)
+    internals.ptysById.set('pty-live', {
+      ptyId: 'pty-live',
+      worktreeId: 'repo-1::/abs/repo-1',
+      connected: true
+    })
+
+    // Why: the renderer calls repo.rm with only { repo }, no requireIdle, and
+    // kills PTYs afterwards — it must keep working exactly as before.
+    await expect(runtime.removeProject('id:repo-1')).resolves.toMatchObject({ removed: true })
+  })
+
+  it('bypasses the guard when requireIdle is false (--force)', async () => {
+    const repos: RepoLike[] = [
+      { id: 'repo-1', path: '/abs/repo-1', displayName: 'one', badgeColor: 'blue', addedAt: 1 }
+    ]
+    const { runtime, internals } = buildRuntime(repos)
+    internals.ptysById.set('pty-live', {
+      ptyId: 'pty-live',
+      worktreeId: 'repo-1::/abs/repo-1',
+      connected: true
+    })
+
+    await expect(runtime.removeProject('id:repo-1', { requireIdle: false })).resolves.toMatchObject(
+      {
+        removed: true
+      }
+    )
+  })
+
+  it('ignores disconnected ptys when checking for active terminals', async () => {
+    const repos: RepoLike[] = [
+      { id: 'repo-1', path: '/abs/repo-1', displayName: 'one', badgeColor: 'blue', addedAt: 1 }
+    ]
+    const { runtime, internals } = buildRuntime(repos)
+    internals.ptysById.set('pty-dead', {
+      ptyId: 'pty-dead',
+      worktreeId: 'repo-1::/abs/repo-1',
+      connected: false
+    })
+
+    await expect(runtime.removeProject('id:repo-1', { requireIdle: true })).resolves.toMatchObject({
+      removed: true
+    })
+  })
+})
+
 describe('OrcaRuntimeService', () => {
   it('projects runtime-backed settings to paired clients', () => {
     const runtime = new OrcaRuntimeService({

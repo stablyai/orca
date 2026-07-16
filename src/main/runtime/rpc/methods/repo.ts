@@ -41,6 +41,13 @@ const RepoSearchRefs = z.object({
   limit: OptionalFiniteNumber
 })
 
+// Why: the CLI opt-in idle guard lets `orca repo rm` fail closed on live
+// terminals while the renderer (which kills PTYs after removal) omits it and
+// keeps its existing behavior. Issue #9028.
+const RepoRemove = RepoSelector.extend({
+  requireIdle: z.boolean().optional()
+})
+
 const RepoReorder = z.object({
   orderedIds: z.array(z.string())
 })
@@ -216,8 +223,9 @@ export const REPO_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'repo.rm',
-    params: RepoSelector,
-    handler: async (params, { runtime }) => runtime.removeProject(params.repo)
+    params: RepoRemove,
+    handler: async (params, { runtime }) =>
+      runtime.removeProject(params.repo, { requireIdle: params.requireIdle === true })
   }),
   defineMethod({
     name: 'repo.reorder',

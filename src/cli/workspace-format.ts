@@ -5,6 +5,7 @@ import { formatAutomationSchedule } from '../shared/automation-schedules'
 import type { PublicKnownRuntimeEnvironment } from '../shared/runtime-environments'
 import type {
   RuntimeRepoList,
+  RuntimeRepoRemoveResult,
   RuntimeRepoSearchRefs,
   RuntimeWorktreeListResult,
   RuntimeWorktreePsResult,
@@ -138,6 +139,14 @@ export function formatRepoRefs(result: RuntimeRepoSearchRefs): string {
     return 'No refs found.'
   }
   return result.truncated ? `${result.refs.join('\n')}\n\ntruncated: yes` : result.refs.join('\n')
+}
+
+export function formatRepoRemove(result: RuntimeRepoRemoveResult): string {
+  // Why: unregister is idempotent — distinguish "removed now" from "already
+  // absent" so cleanup scripts can tell whether the repo was actually present.
+  return result.removed
+    ? `removed: ${result.repoId} (checkout preserved on disk)`
+    : 'no changes: repo was not registered'
 }
 
 export function formatWorktreeList(result: RuntimeWorktreeListResult): string {

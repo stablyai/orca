@@ -53,6 +53,7 @@ Repos:
   repo list                 List repos registered in Orca
   repo add                  Add a project to Orca by filesystem path
   repo show                 Show one registered repo
+  repo rm                   Unregister a repo from Orca (preserves the checkout)
   repo set-base-ref         Set the repo's default base ref for future worktrees
   repo search-refs          Search branch/tag refs within a repo
 
@@ -235,6 +236,7 @@ Common Commands:
   orca repo list [--json]
   orca repo add --path <path> [--json]
   orca repo show --repo <selector> [--json]
+  orca repo rm --repo <selector> [--force] [--json]
   orca repo set-base-ref --repo <selector> --ref <ref> [--json]
   orca repo search-refs --repo <selector> --query <text> [--limit <n>] [--json]
 
@@ -486,7 +488,8 @@ export function formatFlagHelp(flag: string): string {
     'element-index': '--element-index <n>   Element index from get-app-state',
     title: '--title <text>         Custom title for the terminal tab (omit to reset)',
     enter: '--enter                Append Enter after sending text',
-    force: '--force                Force worktree removal when supported',
+    force:
+      '--force                Bypass a removal safety guard (e.g. live-terminal check for repo rm, dirty-tree guard for worktree rm)',
     focus: '--focus                Reveal the created terminal session in Orca',
     for: '--for exit|tui-idle    Wait condition to satisfy',
     'from-element-index': '--from-element-index <n> Source element index from get-app-state',

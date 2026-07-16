@@ -101,6 +101,7 @@ Common commands:
 ORCA repo list --json
 ORCA repo show --repo id:<repoId> --json
 ORCA repo add --path /abs/repo --json
+ORCA repo rm --repo id:<repoId> --json
 ORCA repo set-base-ref --repo id:<repoId> --ref origin/main --json
 ORCA repo search-refs --repo id:<repoId> --query main --limit 10 --json
 ORCA worktree list --repo id:<repoId> --json
@@ -116,6 +117,17 @@ ORCA worktree set --worktree id:<repoId>::<worktreePath> --display-name "My Task
 ORCA worktree set --worktree active --comment "reproduced bug; testing fix" --json
 ORCA worktree set --worktree active --workspace-status in-review --json
 ORCA worktree rm --worktree id:<repoId>::<worktreePath> --force --json
+```
+
+Unregistering a repo:
+
+- `orca repo rm --repo <selector>` removes Orca's registration metadata only; it never deletes the filesystem checkout. Use it (not `project setup-delete`) as the symmetric cleanup for `repo add`.
+- It fails closed with an actionable error when live terminals are attached to the repo's worktrees; rerun with `--force` to unregister anyway (terminals are orphaned, the checkout is still preserved).
+- It is idempotent: unregistering an already-absent repo reports `removed: false` (no error), so it is safe in cleanup/teardown scripts.
+
+```text
+ORCA repo rm --repo id:<repoId> --json
+ORCA repo rm --repo id:<repoId> --force --json
 ```
 
 Selectors:
