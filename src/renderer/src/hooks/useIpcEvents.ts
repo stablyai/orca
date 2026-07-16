@@ -56,6 +56,7 @@ import {
   rememberPrelaunchedSimulatorSession
 } from '@/lib/simulator-launch-coordination'
 import {
+  hasRuntimeBackedAttribution,
   normalizeAgentStatusPayload,
   type AgentStatusIpcPayload,
   type ParsedAgentStatusPayload
@@ -3086,7 +3087,7 @@ export function useIpcEvents(): void {
         repoConnectionResolved,
         owningWorktreeId
       } = resolvePaneKey(store, paneKey)
-      if (!exists && data.worktreeId && hasRuntimeBackedWorktreeAttribution(data)) {
+      if (!exists && data.worktreeId && hasRuntimeBackedAttribution(data)) {
         // Why: orchestration worker hooks can carry main-side worktree
         // attribution before this renderer has a terminal tab for the pane.
         // Require runtime identity too; durable snapshots with only worktreeId
@@ -3492,13 +3493,6 @@ export function useIpcEvents(): void {
       resetAgentHookCompletionNotificationCoordinators()
     }
   }, [])
-}
-
-function hasRuntimeBackedWorktreeAttribution(data: AgentStatusIpcPayload): boolean {
-  return (
-    (typeof data.terminalHandle === 'string' && data.terminalHandle.length > 0) ||
-    data.orchestration !== undefined
-  )
 }
 
 function tryMakePaneKey(tabId: string, leafId: string): string | null {

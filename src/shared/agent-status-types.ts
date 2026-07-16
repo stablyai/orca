@@ -263,6 +263,28 @@ export function isFreshNonDoneAgentStatus(
   return Boolean(entry && entry.state !== 'done' && now - entry.updatedAt <= staleAfterMs)
 }
 
+/** Whether an agent-status entry carries a runtime reference — an orchestration
+ *  dispatch context or a runtime terminal handle — proving it is backed by a
+ *  live runtime allocation rather than only a durable worktree attribution.
+ *
+ *  Why: orchestration workers can report worktree-attributed status before the
+ *  renderer has a terminal tab for them (the legitimate mid-spawn hydration
+ *  case). Such runtime-backed rows are kept visible while their tab hydrates;
+ *  rows that merely carry a worktreeId with no runtime backing and no
+ *  resolvable tab are stale remnants (e.g. an agent whose SSH relay daemon
+ *  restarted) and must not linger as silently unclickable. This is the single
+ *  discriminator used by both the snapshot-replay hydration path in
+ *  useIpcEvents and the sidebar activation guard in WorktreeCardAgents, so they
+ *  cannot drift apart on what counts as "still hydrating". */
+export function hasRuntimeBackedAttribution(
+  entry: Pick<AgentStatusEntry, 'terminalHandle' | 'orchestration'>
+): boolean {
+  return (
+    (typeof entry.terminalHandle === 'string' && entry.terminalHandle.length > 0) ||
+    entry.orchestration !== undefined
+  )
+}
+
 // Why: typed as ReadonlySet<string> so .has() accepts any string without
 // requiring `state as AgentStatusState` at the check site. The narrowing
 // cast stays on the return line, where it's actually proven safe.

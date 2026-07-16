@@ -50,7 +50,15 @@ function mockAgent({
 let mockAgents: DashboardAgentRowData[] = []
 let mockAgentActivityDisplayMode: 'compact' | 'full' | undefined
 let mockTabsByWorktree: Record<string, { id: string }[]> = {}
-let mockAgentStatusByPaneKey: Record<string, { worktreeId?: string }> = {}
+// Why: the activation guard keeps a worktree-attributed row alive only while it
+// is runtime-backed (orchestration context or a terminal handle) — the same
+// hydration signal applyAgentStatus uses for snapshot replay. The mock store
+// entry therefore carries those fields so each test can model either a
+// hydrating orchestration worker or a stale non-runtime-backed row faithfully.
+let mockAgentStatusByPaneKey: Record<
+  string,
+  { worktreeId?: string; orchestration?: unknown; terminalHandle?: string }
+> = {}
 let mockActiveTabId: string | null = null
 let mockActiveTabType: string = 'editor'
 const mockSetActiveTab = vi.fn((tabId: string) => {
@@ -247,7 +255,12 @@ describe('WorktreeCardAgents activation', () => {
         worktreeId: 'wt-1'
       })
     ]
-    mockAgentStatusByPaneKey = { [paneKey]: { worktreeId: 'wt-1' } }
+    // Why: a hydrating orchestration worker is runtime-backed (it carries an
+    // orchestration dispatch context), which is the signal that distinguishes
+    // legitimate mid-spawn hydration from a stale relay-restart remnant.
+    mockAgentStatusByPaneKey = {
+      [paneKey]: { worktreeId: 'wt-1', orchestration: { taskId: 't-1' } }
+    }
     const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
 
     renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
@@ -273,7 +286,9 @@ describe('WorktreeCardAgents activation', () => {
         worktreeId: 'wt-1'
       })
     ]
-    mockAgentStatusByPaneKey = { [paneKey]: { worktreeId: 'wt-1' } }
+    mockAgentStatusByPaneKey = {
+      [paneKey]: { worktreeId: 'wt-1', orchestration: { taskId: 't-1' } }
+    }
     // Why: activation may create/select a different terminal before the
     // automation worker hydrates; the row must only pane-focus its exact tab.
     activationMocks.activateAndRevealWorktree.mockImplementation(() => {
@@ -359,6 +374,40 @@ describe('WorktreeCardAgents activation', () => {
       })
     ]
     mockAgentStatusByPaneKey = { [paneKey]: { worktreeId: 'wt-2' } }
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+    expect(capturedRowActivations).toHaveLength(1)
+    capturedRowActivations[0].onActivate(tabId, paneKey)
+
+    expect(activationMocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1')
+    expect(activationMocks.activateTabAndFocusPane).not.toHaveBeenCalled()
+    expect(staleAgentRowMocks.dismissStaleAgentRowByKey).toHaveBeenCalledWith(paneKey)
+  })
+
+  it('dismisses a stale relay-restart row whose worktree still matches but has no runtime backing', async () => {
+    // Regression for issue #9030: after an SSH relay daemon restarts the agent's
+    // terminal tab is gone for good, but the renderer-memory status entry still
+    // carries a matching worktreeId and counts as fresh for 30 minutes. The row
+    // must not stay silently unclickable forever. Because the entry lacks runtime
+    // backing (it is a plain terminal agent, not a hydrating orchestration
+    // worker), the click dismisses it with truthful feedback instead of no-op'ing.
+    mockAgentActivityDisplayMode = 'full'
+    const tabId = 'relay-restart-tab'
+    const paneKey = makePaneKey(tabId, LEAF_A)
+    mockAgents = [
+      mockAgent({
+        paneKey,
+        tabId,
+        agentType: 'codex',
+        prompt: 'Worker on a relay that restarted',
+        worktreeId: 'wt-1'
+      })
+    ]
+    // Why: worktreeId matches wt-1 (so the old guard kept it), but there is no
+    // orchestration context and no terminal handle — the row is not a runtime
+    // allocation whose tab is still hydrating.
+    mockAgentStatusByPaneKey = { [paneKey]: { worktreeId: 'wt-1' } }
     const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
 
     renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
