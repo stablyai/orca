@@ -74,6 +74,19 @@ describe('tui agent startup plans', () => {
     expect(plan?.followupPrompt).toBeNull()
   })
 
+  it('keeps empty Windows Cursor launches clean with no synthetic followup', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'cursor',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'win32',
+      allowEmptyPromptLaunch: true
+    })
+
+    expect(plan?.launchCommand).toBe('cursor-agent')
+    expect(plan?.followupPrompt).toBeNull()
+  })
+
   it('keeps other Windows argv agents on argv', () => {
     const plan = buildAgentStartupPlan({
       agent: 'codex',

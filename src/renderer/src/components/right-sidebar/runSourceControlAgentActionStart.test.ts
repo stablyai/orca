@@ -18,6 +18,10 @@ vi.mock('@/lib/launch-agent-in-new-tab', () => ({
   launchAgentInNewTab: mocks.launchAgentInNewTab
 }))
 
+vi.mock('@/lib/new-workspace', () => ({
+  CLIENT_PLATFORM: 'win32'
+}))
+
 vi.mock('sonner', () => ({
   toast: { error: mocks.toastError }
 }))
@@ -285,6 +289,33 @@ describe('runSourceControlAgentActionStart', () => {
         agent: 'cursor',
         promptDelivery: 'submit-after-ready',
         launchPlatform: 'win32'
+      })
+    )
+  })
+
+  it('uses the Windows client platform when launchPlatform is omitted', async () => {
+    mocks.launchAgentInNewTab.mockReturnValue({
+      tabId: 'tab-1',
+      startupPlan: {} as never,
+      pasteDraftAfterLaunch: true,
+      promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
+    })
+
+    await expect(
+      runSourceControlAgentActionStart(
+        buildArgs({
+          selectedAgent: 'cursor',
+          promptDelivery: 'auto-submit',
+          launchPlatform: undefined
+        })
+      )
+    ).resolves.toBe(true)
+
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: 'cursor',
+        promptDelivery: 'submit-after-ready',
+        launchPlatform: undefined
       })
     )
   })
