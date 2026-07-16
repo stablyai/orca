@@ -81,15 +81,19 @@ export function installMonacoDiffChangeNavigationShortcut(
 
 export function installEditorAddReviewNoteShortcut(
   target: HTMLElement,
-  onAddReviewNote: () => void
+  onAddReviewNote: () => boolean
 ): () => void {
   const handleKeyDown = (event: KeyboardEvent): void => {
     if (event.repeat || !editorShortcutMatches('editor.addReviewNote', event)) {
       return
     }
-    event.preventDefault()
-    event.stopPropagation()
-    onAddReviewNote()
+    // Why: only consume the chord when a composer actually opens; on files
+    // where review notes can never apply the key must stay available to
+    // whatever else the user bound it to.
+    if (onAddReviewNote()) {
+      event.preventDefault()
+      event.stopPropagation()
+    }
   }
 
   target.addEventListener('keydown', handleKeyDown, true)

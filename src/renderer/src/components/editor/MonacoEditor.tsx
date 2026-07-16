@@ -421,15 +421,17 @@ export default function MonacoEditor({
         propsRef.current.onSave(value)
       })
       const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
-      // Opens the same composer as the selection "+" button; the target ref is
-      // null unless markdown annotations are enabled and text is selected.
+      // Opens the same composer as the selection "+" button; the target ref
+      // mirrors the last-rendered selection target and is null unless markdown
+      // annotations are enabled and text is selected.
       const cleanupAddReviewNoteShortcut = installEditorAddReviewNoteShortcut(editorDomNode, () => {
         const target = selectionAnnotationTargetRef.current
         if (!target) {
-          return
+          return false
         }
         setCommentPopover(target)
         setSelectionAnnotationTarget(null)
+        return true
       })
       const searchInFilesAction = editorInstance.addAction({
         id: 'orca.searchInFiles',

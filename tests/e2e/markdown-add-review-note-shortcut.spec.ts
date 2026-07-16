@@ -86,6 +86,79 @@ test.describe('Markdown add-review-note shortcut', () => {
     }
   })
 
+  test('opens the inline composer for the selected block in the markdown preview', async ({
+    orcaPage
+  }, testInfo) => {
+    const context = await getActiveWorktreeContext(orcaPage)
+    let filePath: string | null = null
+
+    try {
+      filePath = await createMarkdownFixture(
+        context,
+        'add-review-note-preview',
+        testInfo.workerIndex,
+        'A paragraph to annotate from the preview.\n'
+      )
+      await openMarkdownFixture(orcaPage, context, filePath)
+      await waitForRichMarkdownEditor(orcaPage)
+      await orcaPage.evaluate(() => {
+        // Why: open the real markdown-preview tab through the store — preview
+        // is a separate file mode, not a view mode of the edit tab, and the
+        // toolbar entry point is an icon menu that is brittle to locate.
+        const store = window.__store
+        if (!store) {
+          throw new Error('window.__store is not available')
+        }
+        const state = store.getState()
+        const file = state.openFiles.find((f) => f.id === state.activeFileId)
+        if (!file) {
+          throw new Error('No active editor file')
+        }
+        state.openMarkdownPreview(
+          {
+            filePath: file.filePath,
+            relativePath: file.relativePath,
+            worktreeId: file.worktreeId,
+            runtimeEnvironmentId: file.runtimeEnvironmentId,
+            language: 'markdown'
+          },
+          { sourceFileId: file.id }
+        )
+      })
+      await expect(orcaPage.locator('[data-annotation-block-key]').first()).toBeVisible({
+        timeout: 25_000
+      })
+
+      await orcaPage.evaluate(() => {
+        // Why: mirror a reader selecting rendered text — focus lands on the
+        // preview's tabIndex=0 root and the DOM selection covers the block.
+        const block = document.querySelector<HTMLElement>('[data-annotation-block-key]')
+        if (!block) {
+          throw new Error('No annotation block found in preview')
+        }
+        const focusable = block.closest<HTMLElement>('[tabindex]')
+        if (!focusable) {
+          throw new Error('No focusable preview root above the annotation block')
+        }
+        focusable.focus()
+        const paragraph = block.querySelector('p') ?? block
+        const selection = window.getSelection()
+        const range = document.createRange()
+        range.selectNodeContents(paragraph)
+        selection?.removeAllRanges()
+        selection?.addRange(range)
+      })
+
+      await orcaPage.keyboard.press('ControlOrMeta+Alt+N')
+
+      await expect(orcaPage.getByPlaceholder('Add note for the AI')).toBeVisible({
+        timeout: 5_000
+      })
+    } finally {
+      await cleanupMarkdownFixture(filePath)
+    }
+  })
+
   test('does not open the composer without a text selection', async ({ orcaPage }, testInfo) => {
     const context = await getActiveWorktreeContext(orcaPage)
     let filePath: string | null = null
