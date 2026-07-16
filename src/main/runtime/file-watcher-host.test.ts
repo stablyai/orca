@@ -186,6 +186,69 @@ describe('watchFileExplorerInWatcherProcess', () => {
     ])
   })
 
+  it('claims callback-error recovery before asynchronous unsubscribe yields', async () => {
+    let finishUnsubscribe: () => void = () => undefined
+    const unsubscribe = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishUnsubscribe = resolve
+        })
+    )
+    let callback: WatcherProcessCallback | undefined
+    subscribeViaRuntimeWatcherProcessMock.mockImplementationOnce(
+      async (_rootPath, installedCallback): Promise<WatcherProcessSubscription> => {
+        callback = installedCallback
+        return { unsubscribe }
+      }
+    )
+    const replacement = installSuccessfulWatch()
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    await watchFileExplorerInWatcherProcess('/repo', vi.fn())
+    if (!callback) {
+      throw new Error('watch callback not installed')
+    }
+
+    callback(new Error('first native callback failure'), [])
+    callback(new Error('duplicate native callback failure'), [])
+
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
+    expect(subscribeViaRuntimeWatcherProcessMock).toHaveBeenCalledTimes(1)
+    finishUnsubscribe()
+    await vi.waitFor(() => expect(subscribeViaRuntimeWatcherProcessMock).toHaveBeenCalledTimes(2))
+    expect(replacement.unsubscribe).not.toHaveBeenCalled()
+  })
+
+  it('ignores a stale recovery rejection after a newer generation becomes healthy', async () => {
+    const first = installSuccessfulWatch()
+    let recoveringCallback: WatcherProcessCallback | undefined
+    let rejectStaleRecovery: (error: Error) => void = () => undefined
+    subscribeViaRuntimeWatcherProcessMock.mockImplementationOnce(
+      (_rootPath, callback) =>
+        new Promise<WatcherProcessSubscription>((_resolve, reject) => {
+          recoveringCallback = callback
+          rejectStaleRecovery = reject
+        })
+    )
+    const healthy = installSuccessfulWatch()
+    const onEvents = vi.fn<(events: FsChangeEvent[]) => void>()
+    const onTerminalError = vi.fn()
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    await watchFileExplorerInWatcherProcess('/repo', onEvents, onTerminalError)
+
+    first.hooks.onTerminalError?.(new Error('first generation terminated'))
+    await vi.waitFor(() => expect(recoveringCallback).toBeDefined())
+    recoveringCallback?.(new Error('recovery generation callback failed'), [])
+    await vi.waitFor(() => expect(subscribeViaRuntimeWatcherProcessMock).toHaveBeenCalledTimes(3))
+    rejectStaleRecovery(new Error('stale recovery rejected'))
+    await Promise.resolve()
+    healthy.callback(null, [{ type: 'update', path: '/repo/healthy.txt' }])
+
+    expect(onTerminalError).not.toHaveBeenCalled()
+    expect(onEvents).toHaveBeenLastCalledWith([
+      { kind: 'update', absolutePath: '/repo/healthy.txt', isDirectory: undefined }
+    ])
+  })
+
   it('refreshes only after the child has resubscribed', async () => {
     const watch = installSuccessfulWatch()
     const onEvents = vi.fn<(events: FsChangeEvent[]) => void>()

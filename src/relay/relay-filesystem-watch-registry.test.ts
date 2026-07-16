@@ -155,6 +155,57 @@ describe('RelayFilesystemWatchRegistry', () => {
     }
   })
 
+  it('claims callback-error recovery before asynchronous unsubscribe yields', async () => {
+    await registry.watch('/repo', context(1))
+    const first = pool.installed[0]
+    let finishUnsubscribe: () => void = () => undefined
+    first.unsubscribe.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishUnsubscribe = resolve
+        })
+    )
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+
+    first.callback(new Error('first native callback failure'), [])
+    first.callback(new Error('duplicate native callback failure'), [])
+
+    expect(first.unsubscribe).toHaveBeenCalledTimes(1)
+    expect(pool.installed).toHaveLength(1)
+    finishUnsubscribe()
+    await vi.waitFor(() => expect(pool.installed).toHaveLength(2))
+    stderr.mockRestore()
+  })
+
+  it('ignores a stale recovery rejection after a newer generation becomes healthy', async () => {
+    await registry.watch('/repo', context(1), 101)
+    const first = pool.installed[0]
+    let recoveringCallback: WatcherProcessCallback | undefined
+    let rejectStaleRecovery: (error: Error) => void = () => undefined
+    vi.spyOn(pool, 'subscribe').mockImplementationOnce(
+      (_rootPath, callback) =>
+        new Promise<WatcherProcessSubscription>((_resolve, reject) => {
+          recoveringCallback = callback
+          rejectStaleRecovery = reject
+        })
+    )
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+
+    first.hooks.onTerminalError?.(new Error('first generation terminated'))
+    await vi.waitFor(() => expect(recoveringCallback).toBeDefined())
+    recoveringCallback?.(new Error('recovery generation callback failed'), [])
+    await vi.waitFor(() => expect(pool.installed).toHaveLength(2))
+    rejectStaleRecovery(new Error('stale recovery rejected'))
+    await Promise.resolve()
+    pool.installed[1].callback(null, [{ type: 'update', path: '/repo/healthy.txt' }])
+
+    expect(dispatcher.notifyClient).not.toHaveBeenCalled()
+    expect(dispatcher.notify).toHaveBeenLastCalledWith('fs.changed', {
+      events: [{ kind: 'update', absolutePath: '/repo/healthy.txt' }]
+    })
+    stderr.mockRestore()
+  })
+
   it('notifies each owning client when bounded recovery terminates a live watch', async () => {
     await registry.watch('/repo', context(1), 101)
     await registry.watch('/repo', context(2), 202)
