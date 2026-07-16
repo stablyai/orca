@@ -376,9 +376,21 @@ export class PtyHandler {
     ctx: { id: string; paneKey?: string; shell: string; command?: string },
     envToDelete: readonly string[] = []
   ): Record<string, string> {
+    // Why: Orca's own process carries NODE_ENV (`development` in local dev /
+    // electron-dev builds). That's *Orca's* build mode, not the user's — and
+    // forwarding it into integrated terminals breaks any tool that keys off
+    // NODE_ENV. For example a Next.js app's `next build` expects to set
+    // `production` itself (a pre-set `development` yields a dev/prod React
+    // mismatch that crashes prerender), and Vitest only defaults NODE_ENV to
+    // `test` when it's unset (so a leaked `development` silently changes
+    // test-only branches). Strip it here so the login shell's profile or the
+    // invoked tool decides; anything the user genuinely wants can still be
+    // re-exported from their shell rc, rendererEnv, or an augmenter below.
+    const inheritedEnv: NodeJS.ProcessEnv = { ...process.env }
+    delete inheritedEnv.NODE_ENV
     const baseEnv = mergeGitConfigEnvProtocol(
       {
-        ...process.env,
+        ...inheritedEnv,
         TERM: 'xterm-256color',
         COLORTERM: 'truecolor',
         TERM_PROGRAM: 'Orca',

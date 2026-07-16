@@ -181,6 +181,52 @@ describe('PtyHandler', () => {
     expect(handler.activePtyCount).toBe(1)
   })
 
+  it("does not forward Orca's own NODE_ENV into the spawned shell", async () => {
+    // Why: Orca's process carries NODE_ENV (`development` in dev/electron-dev
+    // builds). Forwarding it into integrated terminals breaks tools that key
+    // off NODE_ENV (e.g. `next build` / Vitest). It must be stripped from the
+    // inherited env; other inherited vars (PATH) must survive.
+    const original = process.env.NODE_ENV
+    process.env.NODE_ENV = 'development'
+    try {
+      await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
+
+      const spawnOptions = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+      expect(spawnOptions.env).not.toHaveProperty('NODE_ENV')
+      expect(spawnOptions.env.PATH).toBe(process.env.PATH)
+    } finally {
+      if (original === undefined) {
+        delete process.env.NODE_ENV
+      } else {
+        process.env.NODE_ENV = original
+      }
+    }
+  })
+
+  it('lets a renderer-supplied NODE_ENV through (only the ambient Orca value is stripped)', async () => {
+    // Why: stripping targets the *inherited* process env, not an explicit
+    // caller request. A shell profile or startup plan that deliberately sets
+    // NODE_ENV must still win.
+    const original = process.env.NODE_ENV
+    process.env.NODE_ENV = 'development'
+    try {
+      await dispatcher.callRequest('pty.spawn', {
+        cols: 80,
+        rows: 24,
+        env: { NODE_ENV: 'test' }
+      })
+
+      const spawnOptions = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
+      expect(spawnOptions.env.NODE_ENV).toBe('test')
+    } finally {
+      if (original === undefined) {
+        delete process.env.NODE_ENV
+      } else {
+        process.env.NODE_ENV = original
+      }
+    }
+  })
+
   it('atomically caps concurrent PTY spawn admission', async () => {
     const results = await Promise.allSettled(
       Array.from({ length: MAX_RELAY_PTY_SESSIONS + 1 }, () =>
