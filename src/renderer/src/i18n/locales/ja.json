@@ -3224,7 +3224,11 @@
             "42fdd4da1d": "Claude サインインを更新中です。エージェントセッションはまだサインイン済みの場合があります。",
             "c06c1d215d": "ネットワークリクエストに失敗したため、Claude 使用量を更新できませんでした。",
             "cabdc2a9e0": "Claude サインイン認証情報を読み取れませんでした。",
-            "a7517cccb6": "Claude 使用量は現在利用できません。"
+            "a7517cccb6": "Claude 使用量は現在利用できません。",
+            "e2c6a4f917": "Run Grok to refresh",
+            "d1b7f509ac": "Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.",
+            "f90b3d7a16": "Run Kimi to refresh",
+            "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage."
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH ホスト"
@@ -9037,7 +9041,9 @@
           "b7e2d9f0a3": "ターミナルの grok /usage 画面と同じ週次クレジット率です。",
           "c6d1a8f4e2": "{{when}} にリセット",
           "e6dadc1e2b": "Monthly usage",
-          "75e396bf42": "Included monthly usage for Grok unified-billing accounts."
+          "75e396bf42": "Included monthly usage for Grok unified-billing accounts.",
+          "b36fa2c908": "Signed in. Orca reads the Grok CLI session stored on disk.",
+          "f08c41de73": "Session expired — run grok on the computer running Orca and wait for it to start. If prompted, complete sign-in, then click Refresh usage. No chat message is needed."
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "使用済み",

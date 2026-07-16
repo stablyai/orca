@@ -1,5 +1,9 @@
 import { net } from 'electron'
-import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
+import type {
+  ProviderRateLimits,
+  RateLimitWindow,
+  UsageRateLimitMetadata
+} from '../../shared/rate-limit-types'
 import {
   isGrokAccessTokenFresh,
   readGrokAuthSession,
@@ -47,14 +51,19 @@ type GrokBillingResponse = GrokBillingConfig & {
   config?: GrokBillingConfig
 }
 
-function result(status: ProviderRateLimits['status'], error: string | null): ProviderRateLimits {
+function result(
+  status: ProviderRateLimits['status'],
+  error: string | null,
+  usageMetadata?: UsageRateLimitMetadata
+): ProviderRateLimits {
   return {
     provider: 'grok',
     session: null,
     weekly: null,
     updatedAt: Date.now(),
     error,
-    status
+    status,
+    ...(usageMetadata ? { usageMetadata } : {})
   }
 }
 
@@ -225,7 +234,11 @@ export async function fetchGrokRateLimits(
     // Why: a genuine sign-out returns 'missing' earlier, so reaching here always
     // means a stored, refreshable session — Grok CLI refreshes the access token
     // on its next run, so don't tell users to re-run `grok login` (#8497).
-    return result('error', 'Grok access token expired — Grok CLI will refresh it on next use')
+    return result(
+      'error',
+      'Grok sign-in expired — run grok on the computer running Orca; sign in if prompted. No chat message is needed.',
+      { failureKind: 'delegated-refresh-required', source: 'oauth' }
+    )
   }
 
   try {
