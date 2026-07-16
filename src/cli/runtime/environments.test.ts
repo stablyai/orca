@@ -11,12 +11,16 @@ import {
   resolveEnvironmentPairingOffer
 } from './environments'
 
-function pairingCode(endpoint = 'ws://127.0.0.1:6768'): string {
+function pairingCode(
+  endpoint = 'ws://127.0.0.1:6768',
+  key = 1,
+  deviceToken = 'device-token'
+): string {
   return encodePairingOffer({
     v: 2,
     endpoint,
-    deviceToken: 'device-token',
-    publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
+    deviceToken,
+    publicKeyB64: Buffer.from(new Uint8Array(32).fill(key)).toString('base64')
   })
 }
 
@@ -71,7 +75,7 @@ describe('CLI runtime environments', () => {
     expect(() =>
       addEnvironmentFromPairingCode(userDataPath, {
         name: 'workstation',
-        pairingCode: pairingCode('ws://127.0.0.1:2222'),
+        pairingCode: pairingCode('ws://127.0.0.1:2222', 2),
         now: 200
       })
     ).toThrow('A server named "workstation" already exists.')
@@ -80,5 +84,25 @@ describe('CLI runtime environments', () => {
       'ws://127.0.0.1:1111'
     )
     expect(listEnvironments(userDataPath)[0]?.id).toBe(first.id)
+  })
+
+  it('reuses a saved identity when the pinned key is paired again', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-env-store-'))
+    const first = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'workstation',
+      pairingCode: pairingCode('ws://127.0.0.1:1111', 1, 'old-token'),
+      now: 100
+    })
+    const second = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'renamed workstation',
+      pairingCode: pairingCode('ws://127.0.0.1:2222', 1, 'new-token'),
+      now: 200
+    })
+
+    expect(second).toMatchObject({ id: first.id, name: 'workstation', updatedAt: 200 })
+    expect(resolveEnvironmentPairingOffer(userDataPath, first.id)).toMatchObject({
+      endpoint: 'ws://127.0.0.1:2222',
+      deviceToken: 'new-token'
+    })
   })
 })

@@ -10,7 +10,8 @@ import {
   RuntimeEnvironmentStoreSchema,
   type KnownRuntimeEnvironment,
   type RuntimeEnvironmentSource,
-  type RuntimeEnvironmentStore
+  type RuntimeEnvironmentStore,
+  isUserManagedRuntimeEnvironment
 } from './runtime-environments'
 
 const ENVIRONMENTS_FILE = 'orca-environments.json'
@@ -48,6 +49,39 @@ export function addEnvironmentFromPairingCode(
   }
   const store = readEnvironmentStore(userDataPath)
   const now = args.now ?? Date.now()
+  const source = args.source
+  const incomingKey = offer.publicKeyB64
+  const existingByKey =
+    source === 'ephemeral-vm'
+      ? undefined
+      : store.environments.find(
+          (entry) =>
+            isUserManagedRuntimeEnvironment(entry) &&
+            getPreferredPairingOffer(entry).publicKeyB64 === incomingKey
+        )
+  if (existingByKey) {
+    const environment = createEnvironmentFromPairingOffer({
+      id: existingByKey.id,
+      name: existingByKey.name,
+      now: existingByKey.createdAt,
+      offer,
+      runtimeId: existingByKey.runtimeId,
+      ...(existingByKey.source ? { source: existingByKey.source } : {})
+    })
+    const next = {
+      ...environment,
+      createdAt: existingByKey.createdAt,
+      updatedAt: now,
+      lastUsedAt: existingByKey.lastUsedAt
+    }
+    writeEnvironmentStore(userDataPath, {
+      version: 1,
+      environments: store.environments
+        .map((entry) => (entry.id === existingByKey.id ? next : entry))
+        .sort((a, b) => a.name.localeCompare(b.name))
+    })
+    return next
+  }
   const existing = store.environments.find((entry) => entry.name === args.name)
   if (existing) {
     throw new RuntimeEnvironmentStoreError(
@@ -61,7 +95,7 @@ export function addEnvironmentFromPairingCode(
     now,
     offer,
     runtimeId: null,
-    ...(args.source ? { source: args.source } : {})
+    ...(source ? { source } : {})
   })
   const next = {
     version: 1 as const,
@@ -199,17 +233,80 @@ function readEnvironmentStore(userDataPath: string): RuntimeEnvironmentStore {
   try {
     hardenExistingSecureFile(path)
     const parsed = RuntimeEnvironmentStoreSchema.parse(JSON.parse(readFileSync(path, 'utf8')))
-    return {
+    const store: RuntimeEnvironmentStore = {
       version: 1,
       environments: parsed.environments
         .map((entry) => KnownRuntimeEnvironmentSchema.parse(entry))
         .sort((a, b) => a.name.localeCompare(b.name))
     }
+    const normalized = normalizeManualEnvironments(store)
+    if (normalized !== store) {
+      writeEnvironmentStore(userDataPath, normalized)
+    }
+    return normalized
   } catch {
     throw new RuntimeEnvironmentStoreError(
       'runtime_error',
       `Could not read Orca environments at ${path}; the file is invalid.`
     )
+  }
+}
+
+function normalizeManualEnvironments(store: RuntimeEnvironmentStore): RuntimeEnvironmentStore {
+  const groups = new Map<string, KnownRuntimeEnvironment[]>()
+  for (const environment of store.environments) {
+    if (!isUserManagedRuntimeEnvironment(environment)) {
+      continue
+    }
+    const key = getPreferredPairingOffer(environment).publicKeyB64
+    const group = groups.get(key) ?? []
+    group.push(environment)
+    groups.set(key, group)
+  }
+
+  const duplicates = [...groups.values()].filter((group) => group.length > 1)
+  if (duplicates.length === 0) {
+    return store
+  }
+
+  const removedIds = new Set<string>()
+  const replacements = new Map<string, KnownRuntimeEnvironment>()
+  for (const group of duplicates) {
+    const ordered = [...group].sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id))
+    const canonical = ordered[0]!
+    for (const entry of ordered.slice(1)) {
+      removedIds.add(entry.id)
+    }
+    const freshest = [...group].sort(
+      (a, b) => b.updatedAt - a.updatedAt || b.id.localeCompare(a.id)
+    )[0]!
+    const freshestUse = [...group]
+      .filter((entry) => entry.lastUsedAt != null)
+      .sort((a, b) => b.lastUsedAt! - a.lastUsedAt! || b.id.localeCompare(a.id))[0]
+    const endpoints = freshest.endpoints.map((endpoint, index) => ({
+      ...endpoint,
+      id: index === 0 ? `ws-${canonical.id}` : `ws-${canonical.id}-${index}`
+    }))
+    const preferredIndex = Math.max(
+      0,
+      freshest.endpoints.findIndex((entry) => entry.id === freshest.preferredEndpointId)
+    )
+    replacements.set(canonical.id, {
+      ...canonical,
+      endpoints,
+      preferredEndpointId: endpoints[preferredIndex]!.id,
+      updatedAt: Math.max(...group.map((entry) => entry.updatedAt)),
+      lastUsedAt: freshestUse?.lastUsedAt ?? null,
+      runtimeId: freshestUse?.runtimeId ?? canonical.runtimeId
+    })
+  }
+
+  return {
+    version: 1 as const,
+    environments: store.environments
+      .filter((entry) => !removedIds.has(entry.id))
+      .map((entry) => replacements.get(entry.id) ?? entry)
+      .sort((a, b) => a.name.localeCompare(b.name))
   }
 }
 
