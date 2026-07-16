@@ -542,7 +542,7 @@ prepareDevComputerHelper({
   runBuild: () => {
     execFileSync(
       process.execPath,
-      [path.join(repoRoot, 'config/scripts/build-computer-macos.mjs')],
+      [path.join(repoRoot, 'config', 'scripts', 'build-computer-macos.mjs')],
       {
         cwd: repoRoot,
         stdio: 'inherit',

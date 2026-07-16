@@ -6,7 +6,10 @@ export const COMPUTER_USE_HELPER_DEVELOPMENT_ACTION =
 export const COMPUTER_USE_HELPER_PACKAGED_GUIDANCE =
   'Update or reinstall Orca to restore the bundled helper.'
 
-/** Formats environment-specific recovery copy for an unavailable helper. */
+/**
+ * Returns a complete, user-facing recovery sentence for a safe unavailable
+ * reason, selecting source-build instructions only in development builds.
+ */
 export function computerUseHelperGuidance(reason: string, isDevelopment: boolean): string {
   const detail = `Computer Use is unavailable because ${reason}.`
   const recovery = isDevelopment

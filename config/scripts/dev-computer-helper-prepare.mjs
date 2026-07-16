@@ -2,8 +2,13 @@ import { existsSync } from 'node:fs'
 import path from 'node:path'
 
 /**
- * Prepares the optional macOS Computer Use helper for local development.
- * Missing helpers are advisory unless the caller explicitly opts into a build.
+ * Checks the runtime-selected macOS Computer Use helper during development.
+ * Missing worktree helpers are advisory unless ORCA_DEV_COMPUTER_PREPARE=1;
+ * incomplete explicit overrides remain advisory because rebuilding the
+ * worktree helper cannot repair an override owned by the caller.
+ *
+ * The injected build callback runs synchronously only for an opted-in missing
+ * or incomplete worktree helper, and its failures propagate to stop startup.
  */
 export function prepareDevComputerHelper(options) {
   const {

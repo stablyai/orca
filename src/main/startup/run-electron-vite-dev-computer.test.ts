@@ -24,14 +24,18 @@ describe('run-electron-vite-dev Computer Use preparation', () => {
 
       const wrapper = spawn(
         process.execPath,
-        [resolve('config/scripts/run-electron-vite-dev.mjs'), '--remote-debugging-port=9451'],
+        [resolve('config', 'scripts', 'run-electron-vite-dev.mjs'), '--remote-debugging-port=9451'],
         {
           cwd: resolve('.'),
           env: {
             ...process.env,
             ORCA_COMPUTER_MACOS_HELPER_APP_PATH: incompleteOverride,
             ORCA_ELECTRON_VITE_CLI: resolve(
-              'src/main/startup/__fixtures__/fake-electron-vite-once-cli.mjs'
+              'src',
+              'main',
+              'startup',
+              '__fixtures__',
+              'fake-electron-vite-once-cli.mjs'
             ),
             ORCA_SKIP_DEV_CLI_PREPARE: '1',
             ORCA_SKIP_DEV_ELECTRON_APP_PREPARE: '1',
@@ -46,9 +50,11 @@ describe('run-electron-vite-dev Computer Use preparation', () => {
         stderr += String(chunk)
       })
 
-      const exitCode = await new Promise<number | null>((resolveExit, reject) => {
+      const exitCode = await new Promise<number | null>((resolveClose, reject) => {
         wrapper.once('error', reject)
-        wrapper.once('exit', resolveExit)
+        // Why: close fires only after stderr is drained, so diagnostics below
+        // cannot race buffered output from the runner.
+        wrapper.once('close', resolveClose)
       })
 
       expect(exitCode).toBe(0)

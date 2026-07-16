@@ -1,10 +1,10 @@
 import './assets/main.css'
 
-import { bootstrapDesktopRenderer } from './desktop-renderer-bootstrap'
+import { startDesktopRenderer } from './desktop-renderer-bootstrap'
 
-void bootstrapDesktopRenderer({
+startDesktopRenderer({
   rootElement: document.getElementById('root'),
   preloadBridgeAvailable: typeof window.api === 'object',
-  loadDesktopRenderer: () => import('./desktop-renderer'),
+  loadDesktopRenderer: async () => (await import('./desktop-renderer')).mountDesktopRenderer,
   webClientPath: import.meta.env.DEV ? '/web-index.html' : null
 })
