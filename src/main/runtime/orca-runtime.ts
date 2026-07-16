@@ -2412,6 +2412,15 @@ export class OrcaRuntimeService {
   // `applyMobileDisplayMode` to pick the active phone-fit viewport. See
   // docs/mobile-presence-lock.md.
   private currentDriver = new Map<string, DriverState>()
+  private mobileInputFloorClaims = new Map<
+    string,
+    {
+      base: DriverState
+      generation: number
+      committedGeneration: number
+      pending: Map<symbol, { clientId: string; generation: number }>
+    }
+  >()
   private currentBrowserDriver = new Map<string, RuntimeBrowserDriverState>()
 
   // Why: remote (relay/shared-control) desktop viewers of a PTY are keyed by
@@ -5472,6 +5481,8 @@ export class OrcaRuntimeService {
   listMobileFiles: RuntimeFileCommands['listMobileFiles'] = this.fileCommands.listMobileFiles.bind(
     this.fileCommands
   )
+  searchMobileFilePaths: RuntimeFileCommands['searchMobileFilePaths'] =
+    this.fileCommands.searchMobileFilePaths.bind(this.fileCommands)
   openMobileFile: RuntimeFileCommands['openMobileFile'] = this.fileCommands.openMobileFile.bind(
     this.fileCommands
   )
@@ -9151,18 +9162,108 @@ export class OrcaRuntimeService {
     this.setDriver(ptyId, { kind: 'mobile', clientId })
   }
 
+  beginMobileInputFloor(
+    ptyId: string,
+    clientId: string
+  ): { commit: () => Promise<void>; rollback: () => void } | null {
+    // Why: admit a client still inside its soft-leave grace (mirrors
+    // mobileTookFloor) so a write landing in that window reserves the floor
+    // instead of being dropped; post-grace/orphaned writers stay rejected.
+    const softLeaver = this.pendingSoftLeavers.get(ptyId)
+    if (!this.mobileSubscribers.get(ptyId)?.has(clientId) && softLeaver?.clientId !== clientId) {
+      return null
+    }
+    const state = this.mobileInputFloorClaims.get(ptyId) ?? {
+      base: this.getDriver(ptyId),
+      generation: 0,
+      committedGeneration: 0,
+      pending: new Map<symbol, { clientId: string; generation: number }>()
+    }
+    this.mobileInputFloorClaims.set(ptyId, state)
+    const token = Symbol('mobile-input-floor')
+    const generation = ++state.generation
+    state.pending.set(token, { clientId, generation })
+    this.setDriver(ptyId, { kind: 'mobile', clientId })
+    let settled = false
+    return {
+      commit: async () => {
+        if (settled) {
+          return
+        }
+        settled = true
+        state.pending.delete(token)
+        // Why: a newer accepted write owns the floor; an older claim that was
+        // delayed before commit must not replace its rollback baseline or driver.
+        if (generation < state.committedGeneration) {
+          if (state.pending.size === 0 && this.mobileInputFloorClaims.get(ptyId) === state) {
+            this.mobileInputFloorClaims.delete(ptyId)
+          }
+          return
+        }
+        const previousFloor = state.base
+        // Why: a successful write becomes the rollback baseline for any
+        // overlapping reservations that have not reached the PTY yet.
+        state.committedGeneration = generation
+        state.base = { kind: 'mobile', clientId }
+        await this.mobileTookFloor(
+          ptyId,
+          clientId,
+          previousFloor,
+          () =>
+            this.mobileInputFloorClaims.get(ptyId) === state &&
+            state.committedGeneration === generation
+        )
+        if (state.pending.size === 0 && this.mobileInputFloorClaims.get(ptyId) === state) {
+          this.mobileInputFloorClaims.delete(ptyId)
+        }
+      },
+      rollback: () => {
+        if (settled) {
+          return
+        }
+        settled = true
+        state.pending.delete(token)
+        if (this.mobileInputFloorClaims.get(ptyId) !== state) {
+          return
+        }
+        const current = this.getDriver(ptyId)
+        if (current.kind === 'mobile' && current.clientId === clientId) {
+          const pendingClientId = Array.from(state.pending.values()).at(-1)?.clientId
+          this.setDriver(
+            ptyId,
+            pendingClientId ? { kind: 'mobile', clientId: pendingClientId } : state.base
+          )
+        }
+        if (state.pending.size === 0) {
+          this.mobileInputFloorClaims.delete(ptyId)
+        }
+      }
+    }
+  }
+
   // Why: invoked from mobile RPC method handlers (terminal.send / setDisplayMode /
   // resizeForClient / fresh subscribe with auto). Records the actor as the
   // most recent mobile driver and re-applies phone-fit if we were previously
   // in `desktop` mode (mobile reclaims a take-back). Mobile-to-mobile hand-offs
   // are no-ops for resize.
-  async mobileTookFloor(ptyId: string, clientId: string): Promise<void> {
+  async mobileTookFloor(
+    ptyId: string,
+    clientId: string,
+    previousFloor?: DriverState,
+    isCurrent: () => boolean = () => true
+  ): Promise<void> {
     const inner = this.mobileSubscribers.get(ptyId)
     const sub = inner?.get(clientId)
+    const softLeaver = this.pendingSoftLeavers.get(ptyId)
+    // Why: native chat pauses terminal output, so its later sends have no
+    // subscriber lifecycle that could release a newly-created desktop lock.
+    if (!sub && softLeaver?.clientId !== clientId) {
+      return
+    }
     if (sub) {
       sub.lastActedAt = Date.now()
     }
-    const prev = this.getDriver(ptyId)
+    const prev = previousFloor ?? this.getDriver(ptyId)
     const currentMode = this.mobileDisplayModes.get(ptyId)
     // Why: a deliberate mobile action implies mobile is resuming control.
     // If the display mode is currently 'desktop' (set by an earlier
@@ -9173,6 +9274,11 @@ export class OrcaRuntimeService {
         this.mobileDisplayModes.delete(ptyId)
       }
       await this.applyMobileDisplayMode(ptyId)
+    }
+    // Why: display changes are async; a later PTY write must keep the floor
+    // when an older phone-fit operation eventually completes.
+    if (!isCurrent()) {
+      return
     }
     this.setDriver(ptyId, { kind: 'mobile', clientId })
   }
@@ -10825,6 +10931,8 @@ export class OrcaRuntimeService {
     },
     options: {
       beforeWrite?: (ptyId: string) => void | Promise<void>
+      reserveWrite?: (ptyId: string) => void
+      afterWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string
     } = {}
   ): Promise<RuntimeTerminalSend> {
@@ -11237,6 +11345,8 @@ export class OrcaRuntimeService {
     payload: string,
     options: {
       beforeWrite?: (ptyId: string) => void | Promise<void>
+      reserveWrite?: (ptyId: string) => void
+      afterWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string
     } = {}
   ): Promise<void> {
@@ -11254,6 +11364,7 @@ export class OrcaRuntimeService {
       }
       try {
         await options.beforeWrite?.(ptyId)
+        options.reserveWrite?.(ptyId)
       } catch (error) {
         if (options.suffixFailureError) {
           throw new Error(options.suffixFailureError)
@@ -11264,6 +11375,7 @@ export class OrcaRuntimeService {
       if (!suffixWrote) {
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
       }
+      await options.afterWrite?.(ptyId)
       return
     }
     if (hasText) {
@@ -11271,10 +11383,12 @@ export class OrcaRuntimeService {
     }
 
     await options.beforeWrite?.(ptyId)
+    options.reserveWrite?.(ptyId)
     const wrote = this.ptyController?.write(ptyId, payload) ?? false
     if (!wrote) {
       throw new Error('terminal_not_writable')
     }
+    await options.afterWrite?.(ptyId)
   }
 
   private async writeTerminalInputChunks(
@@ -11282,16 +11396,20 @@ export class OrcaRuntimeService {
     text: string,
     options: {
       beforeWrite?: (ptyId: string) => void | Promise<void>
+      reserveWrite?: (ptyId: string) => void
+      afterWrite?: (ptyId: string) => void | Promise<void>
     } = {}
   ): Promise<void> {
     const chunks = iterateTerminalInputChunks(text)
     let chunk = chunks.next()
     while (!chunk.done) {
       await options.beforeWrite?.(ptyId)
+      options.reserveWrite?.(ptyId)
       const wrote = this.ptyController?.write(ptyId, chunk.value) ?? false
       if (!wrote) {
         throw new Error('terminal_not_writable')
       }
+      await options.afterWrite?.(ptyId)
       chunk = chunks.next()
       if (!chunk.done) {
         await new Promise((resolve) => setTimeout(resolve, 0))

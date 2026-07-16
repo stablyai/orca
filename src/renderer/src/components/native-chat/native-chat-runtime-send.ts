@@ -6,36 +6,19 @@ import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import type { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import type { AskAnswerKeyGroup } from './native-chat-interactive-prompt'
 import {
+  NATIVE_CHAT_ADVANCE_BUFFER_MS,
+  NATIVE_CHAT_QUESTION_STEP_MS,
+  NATIVE_CHAT_SUBMIT_DELAY_MS
+} from '../../../../shared/native-chat-answer-stepping'
+import {
   buildNativeChatImagePasteBytes,
   buildNativeChatPasteBytes,
   NATIVE_CHAT_SUBMIT
 } from './native-chat-send'
 
-// Why: agent TUIs swallow a `\r` bundled into the same pty write as a framed
-// paste, so a one-shot send leaves the text sitting in the input box, unsent.
-// Write the body first, then the Enter after a delay so the agent processes the
-// paste before the submit. The gap must clear the agent's paste-handling latency
-// even while it's BUSY (Codex): a short gap (60ms) fires Enter before a busy
-// Codex has landed the paste into its input, so the submit hits an empty box and
-// the message sits "Queued" forever. 500ms is orca-runtime's proven value in
-// writeTerminalAction({enter:true}), so match it here.
-export const NATIVE_CHAT_SUBMIT_DELAY_MS = 500
+export { NATIVE_CHAT_ADVANCE_BUFFER_MS, NATIVE_CHAT_QUESTION_STEP_MS, NATIVE_CHAT_SUBMIT_DELAY_MS }
+
 export const NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS = 300
-
-// Why: answering Claude's AskUserQuestion is a MULTI-STEP keystroke sequence
-// (select an option, advance to the next question, land on Submit). Each step
-// re-renders the selector, and a keystroke sent before the next step has
-// rendered — or an Enter batched with the navigation before it — lands on the
-// wrong (or no) row. This buffer pads the between-keystroke gap so each step
-// renders first; kept generous so it still holds on slower machines / under SSH
-// round-trip latency, where a tighter cadence misfires the answer.
-export const NATIVE_CHAT_ADVANCE_BUFFER_MS = 500
-
-/** Wall-clock gap between successive AskUserQuestion keystroke groups: the proven
- *  pty submit gap plus the advance buffer that lets each selector step render
- *  before the next keystroke is written. */
-export const NATIVE_CHAT_QUESTION_STEP_MS =
-  NATIVE_CHAT_SUBMIT_DELAY_MS + NATIVE_CHAT_ADVANCE_BUFFER_MS
 
 /** Cancels an in-flight send's pending pty writes (the delayed Enter, and any
  *  later question bodies/Enters). Safe to call after the send completes. */

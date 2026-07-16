@@ -199,6 +199,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'files.readTerminalArtifact',
   'files.readTerminalArtifactPreview',
   'files.resolveTerminalPath',
+  'files.searchPaths',
   'files.writeTerminalArtifact',
   'folderWorkspace.list',
   'git.abortMerge',

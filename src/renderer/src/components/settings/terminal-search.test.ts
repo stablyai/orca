@@ -172,6 +172,15 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(matchesSettingsSearch('tray', webEntries)).toBe(false)
   })
 
+  it('includes the macOS menu bar entry only when its desktop control is shown', () => {
+    const macEntries = getAppearancePaneSearchEntries({ showMenuBarIcon: true })
+    const otherEntries = getAppearancePaneSearchEntries({ showMenuBarIcon: false })
+
+    expect(macEntries.some((entry) => entry.title === 'Show Menu Bar Icon')).toBe(true)
+    expect(otherEntries.some((entry) => entry.title === 'Show Menu Bar Icon')).toBe(false)
+    expect(matchesSettingsSearch('status item', macEntries)).toBe(true)
+  })
+
   it('keeps sidebar shortcut restore settings in the Appearance search index', () => {
     const automationsEntry = getSidebarEntries().find(
       (entry) => entry.title === 'Show Automations Button'

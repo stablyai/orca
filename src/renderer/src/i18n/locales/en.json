@@ -31,6 +31,10 @@
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
         "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI."
+      },
+      "menuBarIcon": {
+        "title": "Show Menu Bar Icon",
+        "description": "Keep an Orca shortcut and activity indicator in the macOS menu bar."
       }
     }
   },
@@ -67,7 +71,8 @@
     "quit": "Quit",
     "minimizeNotice": {
       "body": "Orca is still running in the system tray"
-    }
+    },
+    "activityWaiting": "Orca - activity waiting"
   },
   "worktreeJumpPalette": {
     "matchLabel": {
@@ -13165,6 +13170,7 @@
           "title": "Could not load conversation",
           "subtitle": "The transcript could not be read. Toggle back to the terminal to keep working."
         },
+        "pairHost": "Pair a host to view agent chat history.",
         "notAgent": {
           "title": "No conversation here",
           "subtitle": "This terminal is not running a recognized coding agent."

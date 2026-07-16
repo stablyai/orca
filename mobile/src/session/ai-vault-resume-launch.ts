@@ -6,6 +6,7 @@ import {
 import { isResumableTuiAgent } from '../../../src/shared/agent-session-resume'
 import type { SleepingAgentLaunchConfig } from '../../../src/shared/agent-session-resume'
 import { buildAgentResumeStartupPlan } from '../../../src/shared/tui-agent-startup'
+import { isTuiAgent } from '../../../src/shared/tui-agent-config'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
@@ -112,7 +113,7 @@ export function buildMobileAiVaultResumeLaunch(args: {
         }),
         ...(startupPlan.env ? { env: startupPlan.env } : {}),
         launchConfig: startupPlan.launchConfig,
-        launchAgent: startupPlan.agent
+        launchAgent: isTuiAgent(startupPlan.agent) ? startupPlan.agent : undefined
       }
     }
   }

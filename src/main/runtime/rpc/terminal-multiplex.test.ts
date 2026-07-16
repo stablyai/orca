@@ -692,6 +692,9 @@ describe('terminal multiplex RPC', () => {
         }) => void)
       | undefined
     const restreamResolves: ((value: { data: string; cols: number; rows: number }) => void)[] = []
+    const write = vi.fn()
+    const commit = vi.fn().mockResolvedValue(undefined)
+    const beginMobileInputFloor = vi.fn(() => ({ commit, rollback: vi.fn() }))
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -723,7 +726,13 @@ describe('terminal multiplex RPC', () => {
         cleanups.set(id, cleanup)
       }),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
-      sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
+      sendTerminal: vi.fn().mockImplementation(async (_handle, _action, options) => {
+        options.reserveWrite('pty-1')
+        write()
+        await options.afterWrite('pty-1')
+        return { accepted: true }
+      }),
+      beginMobileInputFloor,
       updateMobileViewport: vi.fn().mockResolvedValue({ updated: false, applied: false })
     })
     const dispatcher = new RpcDispatcher({
@@ -787,12 +796,16 @@ describe('terminal multiplex RPC', () => {
       )!
     )
     await vi.waitFor(() =>
-      expect(runtime.sendTerminal).toHaveBeenCalledWith('terminal-1', {
-        text: 'x',
-        enter: false,
-        interrupt: false
-      })
+      expect(runtime.sendTerminal).toHaveBeenCalledWith(
+        'terminal-1',
+        { text: 'x', enter: false, interrupt: false },
+        { reserveWrite: expect.any(Function), afterWrite: expect.any(Function) }
+      )
     )
+    expect(beginMobileInputFloor.mock.invocationCallOrder[0]).toBeLessThan(
+      write.mock.invocationCallOrder[0]!
+    )
+    expect(write.mock.invocationCallOrder[0]).toBeLessThan(commit.mock.invocationCallOrder[0]!)
     binaryFrames.splice(0)
 
     resizeListener?.({

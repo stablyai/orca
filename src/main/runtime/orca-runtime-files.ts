@@ -81,9 +81,16 @@ import {
 } from '../ipc/parcel-watcher-process-failure'
 import { assertNoClobberRenameDestinationAvailable } from '../../shared/filesystem-rename-collision'
 import { joinWorktreeRelativePath, normalizeRuntimeRelativePath } from './runtime-relative-paths'
+import {
+  rankRuntimeMobileFilePaths,
+  RuntimeMobileFilePathSearchCache
+} from './runtime-mobile-file-path-search'
 import { beginWatcherInstall } from '../ipc/watcher-removal-gate'
 
 const MOBILE_FILE_LIST_LIMIT = 5000
+const MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT = 20_000
+const MOBILE_FILE_PATH_SEARCH_CACHE_ENTRIES = 8
+const MOBILE_FILE_PATH_SEARCH_CACHE_TTL_MS = 30_000
 const MOBILE_FILE_READ_MAX_BYTES = 512 * 1024
 const RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES = 10 * 1024 * 1024
 const WINDOWS_RUNTIME_FILE_WATCH_DEBOUNCE_MS = 150
@@ -408,6 +415,10 @@ export type RuntimeFileCommandHost = {
 export class RuntimeFileCommands {
   private activeRuntimeTextSearches = new Map<string, ChildProcess>()
   private terminalFileGrants = new Map<string, TerminalFileGrant>()
+  private mobileFilePathSearchCache = new RuntimeMobileFilePathSearchCache(
+    MOBILE_FILE_PATH_SEARCH_CACHE_ENTRIES,
+    MOBILE_FILE_PATH_SEARCH_CACHE_TTL_MS
+  )
 
   constructor(private readonly host: RuntimeFileCommandHost) {}
 
@@ -434,6 +445,52 @@ export class RuntimeFileCommands {
       files: entries,
       totalCount: files.length,
       truncated: files.length > MOBILE_FILE_LIST_LIMIT
+    }
+  }
+
+  async searchMobileFilePaths(
+    worktreeSelector: string,
+    query: string,
+    limit: number
+  ): Promise<RuntimeFileListResult> {
+    const store = this.host.requireStore()
+    const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
+    const { worktree, connectionId } = target
+    const cacheKey = `${connectionId ?? 'local'}:${worktree.id}:${worktree.path}`
+    const inventory = await this.mobileFilePathSearchCache.get(cacheKey, async () => {
+      const listed = connectionId
+        ? await this.listRemoteMobileFiles(
+            worktree.path,
+            connectionId,
+            MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT + 1
+          )
+        : await listQuickOpenFiles(
+            worktree.path,
+            store,
+            undefined,
+            undefined,
+            MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT + 1
+          )
+      const safePaths = listed
+        .filter((relativePath) => isSafeMobileRelativePath(relativePath))
+        .sort((a, b) => a.localeCompare(b))
+      return {
+        paths: safePaths.slice(0, MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT),
+        totalCount: safePaths.length,
+        truncated: safePaths.length > MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT
+      }
+    })
+    const matches = rankRuntimeMobileFilePaths(inventory.paths, query, limit)
+    return {
+      worktree: worktree.id,
+      rootPath: worktree.path,
+      files: matches.paths.map((relativePath) => ({
+        relativePath,
+        basename: basenameFromRelativePath(relativePath),
+        kind: isMobileBinaryPath(relativePath) ? ('binary' as const) : ('text' as const)
+      })),
+      totalCount: matches.totalCount,
+      truncated: inventory.truncated || matches.totalCount > limit
     }
   }
 
@@ -1730,12 +1787,16 @@ export class RuntimeFileCommands {
     }
   }
 
-  private async listRemoteMobileFiles(rootPath: string, connectionId: string): Promise<string[]> {
+  private async listRemoteMobileFiles(
+    rootPath: string,
+    connectionId: string,
+    maxResults?: number
+  ): Promise<string[]> {
     const provider = getSshFilesystemProvider(connectionId)
     if (!provider) {
       return []
     }
-    return provider.listFiles(rootPath)
+    return provider.listFiles(rootPath, { maxResults })
   }
 
   private async readRemoteMobileFile(filePath: string, connectionId: string): Promise<string> {

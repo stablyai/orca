@@ -833,10 +833,15 @@ export type NativeChatReadSessionResult =
 /** Messages appended to a live-tailed transcript since the previous emit. */
 export type NativeChatAppendedMessages = NativeChatMessage[]
 
+export type NativeChatSubscriptionFrame =
+  | { type: 'snapshot'; messages: NativeChatMessage[]; hasMore: boolean; error?: string }
+  | { type: 'replacement'; messages: NativeChatMessage[]; hasMore: boolean }
+  | { type: 'appended'; messages: NativeChatMessage[] }
+
 /** Wire payload for the `nativeChat:appended` push channel. */
 export type NativeChatAppendedPayload = {
   subscriptionId: string
-  messages: NativeChatAppendedMessages
+  frame: NativeChatSubscriptionFrame
 }
 
 export type NativeChatSubscribeArgs = {
@@ -847,6 +852,8 @@ export type NativeChatSubscribeArgs = {
   sessionId: string
   /** Authoritative transcript path from the agent hook (providerSession). */
   transcriptPath?: string
+  /** First snapshot size; later readSession calls grow this for pagination. */
+  limit?: number
 }
 
 export type NativeChatApi = {
@@ -860,11 +867,11 @@ export type NativeChatApi = {
     limit?: number,
     transcriptPath?: string
   ) => Promise<NativeChatReadSessionResult>
-  /** Live-tail a transcript: `onAppended` fires with only newly-appended
-   *  messages. Returns an unsubscribe fn that closes the main-process watcher. */
+  /** Live-tail a transcript. The first frame is a bounded race-safe snapshot;
+   *  later frames contain only newly appended messages. */
   subscribe: (
     args: NativeChatSubscribeArgs,
-    onAppended: (messages: NativeChatAppendedMessages) => void
+    onFrame: (frame: NativeChatSubscriptionFrame) => void
   ) => () => void
 }
 
@@ -2759,6 +2766,8 @@ export type PreloadApi = {
     recordFeatureInteraction: (id: FeatureInteractionId) => Promise<PersistedUIState>
     onStateChanged: (callback: (ui: PersistedUIState) => void) => () => void
     onOpenSettings: (callback: () => void) => () => void
+    /** Consumes a one-shot tray/menu-bar "open settings" intent queued before mount. */
+    consumePendingOpenSettings: () => Promise<boolean>
     onOpenSetupGuide: (callback: () => void) => () => void
     onOpenFeatureTour: (callback: () => void) => () => void
     onOpenCrashReport: (callback: () => void) => () => void

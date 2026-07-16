@@ -31,6 +31,10 @@
         "portsToggleDescription": "Muestra los puertos activos de los espacios de trabajo. Haz clic para ver los puertos de cada espacio de trabajo y los puertos externos.",
         "antigravityToggleDescription": "Muestra el uso de suscripción de Antigravity para el espacio de trabajo activo.",
         "grokToggleDescription": "Muestra el uso de créditos de suscripción de Grok cuando has iniciado sesión con Grok CLI."
+      },
+      "menuBarIcon": {
+        "title": "Mostrar icono en la barra de menús",
+        "description": "Mantén un acceso directo de Orca e indicador de actividad en la barra de menús de macOS."
       }
     }
   },
@@ -67,7 +71,8 @@
     "quit": "Salir",
     "minimizeNotice": {
       "body": "Orca sigue ejecutándose en la bandeja del sistema"
-    }
+    },
+    "activityWaiting": "Orca: actividad en espera"
   },
   "worktreeJumpPalette": {
     "matchLabel": {
@@ -13165,6 +13170,7 @@
           "title": "No se pudo cargar la conversación",
           "subtitle": "No se pudo leer la transcripción. Vuelva a la terminal para seguir trabajando."
         },
+        "pairHost": "Empareje un host para ver el historial de chat del agente.",
         "notAgent": {
           "title": "No hay conversación aquí",
           "subtitle": "Este terminal no está ejecutando un agente de código reconocido."

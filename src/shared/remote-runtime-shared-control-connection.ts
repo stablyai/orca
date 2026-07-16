@@ -74,10 +74,7 @@ export class RemoteRuntimeSharedControlConnection {
       timeoutMs,
       ensureReady: () => this.ensureReadyWithTimeout(timeoutMs),
       send: (requestId, requestMethod, requestParams) =>
-        this.sendRequest(requestId, requestMethod, requestParams),
-      // Why: a timed-out request marks the socket as suspect (#7718) — tear
-      // it down so reconnect+replay runs instead of keeping a zombie socket.
-      onTimeout: (error) => this.handleSocketClosed(error)
+        this.sendRequest(requestId, requestMethod, requestParams)
     })
   }
 

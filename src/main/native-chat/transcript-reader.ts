@@ -1,5 +1,6 @@
 import { createReadStream } from 'node:fs'
 import type { AgentType, NativeChatMessage } from '../../shared/native-chat-types'
+import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { errorMessage } from '../ai-vault/session-scanner-values'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import {
@@ -37,13 +38,14 @@ export async function readNativeChatTranscript(
     return { error: `No transcript found for ${agent} session ${sessionId}`, notFound: true }
   }
   try {
-    if (agent === 'claude') {
+    const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
+    if (transcriptAgent === 'claude') {
       return { messages: await readTranscript(filePath, decodeClaudeTranscriptLine) }
     }
-    if (agent === 'codex') {
+    if (transcriptAgent === 'codex') {
       return { messages: await readTranscript(filePath, decodeCodexTranscriptLine) }
     }
-    if (agent === 'grok') {
+    if (transcriptAgent === 'grok') {
       return { messages: await readTranscript(filePath, decodeGrokTranscriptLine) }
     }
     return { error: `Unsupported agent for native chat transcript: ${agent}` }
