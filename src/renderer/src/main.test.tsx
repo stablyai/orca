@@ -46,8 +46,10 @@ describe('desktop renderer entry', () => {
 
     await import('./main')
 
-    await vi.waitFor(() => expect(mocks.desktopRendererLoaded).toHaveBeenCalledOnce())
-    expect(document.getElementById('root')?.textContent).toContain('Orca could not start.')
+    await vi.waitFor(() => {
+      expect(document.getElementById('root')?.textContent).toContain('Orca could not start.')
+    })
+    expect(mocks.desktopRendererLoaded).toHaveBeenCalledOnce()
     expect(document.querySelector('button')?.textContent).toBe('Retry')
   })
 })

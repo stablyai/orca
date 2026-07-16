@@ -11,7 +11,7 @@ afterEach(() => {
   })
 })
 
-describe('bootstrapDesktopRenderer', () => {
+describe('startDesktopRenderer', () => {
   it('does not load the desktop app when the preload bridge is absent', async () => {
     const rootElement = document.createElement('div')
     document.body.append(rootElement)
@@ -43,8 +43,8 @@ describe('bootstrapDesktopRenderer', () => {
       webClientPath: '/web-index.html'
     })
 
-    await vi.waitFor(() => expect(loadDesktopRenderer).toHaveBeenCalledOnce())
-    expect(mountDesktopRenderer).toHaveBeenCalledWith(rootElement)
+    await vi.waitFor(() => expect(mountDesktopRenderer).toHaveBeenCalledWith(rootElement))
+    expect(loadDesktopRenderer).toHaveBeenCalledOnce()
     expect(rootElement.childElementCount).toBe(0)
   })
 
