@@ -62,7 +62,11 @@ export function WindowsTerminalStep({
       ? [selectedWslDistroName, ...capabilities.wslDistros]
       : capabilities.wslDistros
   const showGitBashOption = capabilities.gitBashAvailable || windowsShell === WINDOWS_GIT_BASH_SHELL
-  const showWslOption = capabilities.wslAvailable || windowsShell === 'wsl.exe'
+  // Why: #5519 moved WSL out of terminalWindowsShell into Project Runtime, but
+  // Settings can no longer display a persisted 'wsl.exe' host shell (it renders as
+  // PowerShell). So onboarding must not offer WSL as a fresh default-shell choice;
+  // it stays visible only to reflect a value a prior build already persisted (#8537).
+  const showWslOption = windowsShell === 'wsl.exe'
 
   const setSelectPortalHost = useCallback((node: HTMLDivElement | null) => {
     // Why: onboarding sits above body-level portals, so the distro menu must

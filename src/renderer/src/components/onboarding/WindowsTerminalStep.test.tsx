@@ -1,8 +1,26 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 import type { GlobalSettings } from '../../../../shared/types'
+import type { WindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
 import { WindowsTerminalStep } from './WindowsTerminalStep'
+
+const mockCapabilities: WindowsTerminalCapabilities = {
+  wslAvailable: false,
+  wslDistros: [],
+  pwshAvailable: false,
+  gitBashAvailable: false,
+  hostPlatform: null,
+  isLoading: false
+}
+
+vi.mock('@/lib/windows-terminal-capabilities', () => ({
+  useWindowsTerminalCapabilities: (): WindowsTerminalCapabilities => mockCapabilities
+}))
+
+function setMockCapabilities(overrides: Partial<WindowsTerminalCapabilities>): void {
+  Object.assign(mockCapabilities, overrides)
+}
 
 function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
   return {
@@ -14,6 +32,31 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
 }
 
 describe('WindowsTerminalStep', () => {
+  beforeEach(() => {
+    setMockCapabilities({
+      wslAvailable: false,
+      wslDistros: [],
+      pwshAvailable: false,
+      gitBashAvailable: false,
+      hostPlatform: null,
+      isLoading: false
+    })
+  })
+
+  it('does not offer WSL as a fresh default-shell choice even when WSL is detected', () => {
+    // Why: #5519 moved WSL out of terminal shell selection into Project Runtime;
+    // onboarding must not persist terminalWindowsShell='wsl.exe' on fresh profiles,
+    // which Settings can no longer display back (issue #8537).
+    setMockCapabilities({ wslAvailable: true, wslDistros: ['Ubuntu'] })
+    const html = renderToStaticMarkup(
+      <WindowsTerminalStep settings={createSettings()} updateSettings={vi.fn()} />
+    )
+
+    expect(html).toContain('PowerShell')
+    expect(html).toContain('Command Prompt')
+    expect(html).not.toContain('WSL')
+  })
+
   it('renders default shell and right-click behavior choices', () => {
     const html = renderToStaticMarkup(
       <WindowsTerminalStep settings={createSettings()} updateSettings={vi.fn()} />
