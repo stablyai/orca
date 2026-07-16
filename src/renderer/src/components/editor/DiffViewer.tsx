@@ -14,8 +14,8 @@ import {
   getDiffCommentPopoverTop
 } from '../diff-comments/diff-comment-popover-position'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
-import type { DiffComment } from '../../../../shared/types'
-import { isDiffComment } from '@/lib/diff-comment-compat'
+import type { DiffComment, PRComment } from '../../../../shared/types'
+import { isDiffComment, prCommentsToDecoratedDiffComments } from '@/lib/diff-comment-compat'
 import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from './editor-shortcuts'
 import { diffEditorScrollbarOptions } from './diff-editor-scrollbar-options'
 import { LargeDiffFallback } from './LargeDiffFallback'
@@ -26,6 +26,8 @@ import type { DiffViewerProps } from './diff-viewer-props'
 import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
 import { useDiffEditorRegistration } from './diff-navigation-context'
 import { preserveDiffViewStateAcrossModelSwaps } from './diff-model-swap-view-state'
+
+const EMPTY_PR_COMMENTS: PRComment[] = []
 
 export default function DiffViewer({
   modelKey,
@@ -55,16 +57,85 @@ export default function DiffViewer({
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const scrollToDiffCommentId = useAppStore((s) => s.scrollToDiffCommentId)
   const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
+  const fetchPRComments = useAppStore((s) => s.fetchPRComments)
+  const fetchPRForBranch = useAppStore((s) => s.fetchPRForBranch)
+
+  const worktree = useAppStore((s) => (worktreeId ? s.getKnownWorktreeById(worktreeId) : undefined))
+  const wtPath = worktree?.path
+  const wtBranch = worktree?.branch
+  const wtLinkedPR = worktree?.linkedPR
+  const wtRepoId = worktree?.repoId
+
+  // Why: fetch PR comments in the background when the diff viewer mounts.
+  // The dev server restart clears the transient in-memory commentsCache; fetching on
+  // mount ensures review comments are available in the editor even if the right-sidebar
+  // ChecksPanel was never opened in this session.
+  useEffect(() => {
+    if (!wtPath) {
+      return
+    }
+    const load = async () => {
+      let pr = wtLinkedPR
+      if (!pr && wtBranch) {
+        const prInfo = await fetchPRForBranch(wtPath, wtBranch, { repoId: wtRepoId })
+        if (prInfo) {
+          pr = prInfo.number
+        }
+      }
+      if (pr) {
+        void fetchPRComments(wtPath, pr, { repoId: wtRepoId })
+      }
+    }
+    void load()
+  }, [wtPath, wtBranch, wtLinkedPR, wtRepoId, fetchPRComments, fetchPRForBranch])
+
   // Why: subscribe to the raw comments array on the worktree so selector
-  // identity only changes when diffComments actually changes on this worktree.
+  // identity only changes when localDiffComments actually changes on this worktree.
   // Filtering by relativePath happens in a memo below.
-  const allDiffComments = useAppStore((s): DiffComment[] | undefined =>
+  const localDiffComments = useAppStore((s): DiffComment[] | undefined =>
     selectWorktreeDiffComments(s, worktreeId)
   )
-  const diffComments = useMemo(
-    () => (allDiffComments ?? []).filter((c) => c.filePath === relativePath && isDiffComment(c)),
-    [allDiffComments, relativePath]
-  )
+  const rawPRComments = useAppStore((s) => {
+    if (!worktreeId) {
+      return EMPTY_PR_COMMENTS
+    }
+    const wt = s.getKnownWorktreeById(worktreeId)
+    if (!wt || !wt.repoId) {
+      return EMPTY_PR_COMMENTS
+    }
+    let pr = wt.linkedPR
+    if (!pr && wt.branch) {
+      const keys = Object.keys(s.prCache)
+      const targetKey = keys.find(
+        (k) => k.toLowerCase().includes(wt.repoId.toLowerCase()) && k.endsWith(`::${wt.branch}`)
+      )
+      const cachedPR = targetKey ? s.prCache[targetKey]?.data : null
+      if (cachedPR) {
+        pr = cachedPR.number
+      }
+    }
+    if (!pr) {
+      return EMPTY_PR_COMMENTS
+    }
+    // Why: commentsCache keys may be prefixed by host/runtime environment
+    // scope or contain the full prRepo name in the middle. Match keys
+    // dynamically to find the correct entry regardless of caching scopes.
+    const keys = Object.keys(s.commentsCache)
+    const targetKey = keys.find(
+      (k) =>
+        k.toLowerCase().includes(wt.repoId.toLowerCase()) &&
+        k.includes('::pr-comments::') &&
+        k.endsWith(`::${pr}`)
+    )
+    return (targetKey ? s.commentsCache[targetKey]?.data : null) ?? EMPTY_PR_COMMENTS
+  })
+  const allComments = useMemo(() => {
+    const local = (localDiffComments ?? []).filter(
+      (c) => c.filePath === relativePath && isDiffComment(c)
+    )
+    const pr = prCommentsToDecoratedDiffComments(rawPRComments, relativePath, worktreeId ?? '')
+    return [...local, ...pr]
+  }, [localDiffComments, rawPRComments, relativePath, worktreeId])
   const terminalFontSize = settings?.terminalFontSize ?? 13
   const diffEditorFontSize = computeDiffEditorFontSize(terminalFontSize, editorFontZoomLevel)
   const isDark =
@@ -97,8 +168,8 @@ export default function DiffViewer({
     if (!worktreeId || !scrollToDiffCommentId) {
       return null
     }
-    return diffComments.some((c) => c.id === scrollToDiffCommentId) ? scrollToDiffCommentId : null
-  }, [scrollToDiffCommentId, diffComments, worktreeId])
+    return allComments.some((c) => c.id === scrollToDiffCommentId) ? scrollToDiffCommentId : null
+  }, [scrollToDiffCommentId, allComments, worktreeId])
 
   // Why: gate the decorator on having a comment target. Local diffs persist
   // notes to worktree metadata; GitHub PR diffs post line comments remotely.
@@ -108,7 +179,7 @@ export default function DiffViewer({
     monacoModelIdentity: modifiedModelKey ?? modelKey,
     filePath: relativePath,
     worktreeId: worktreeId ?? '',
-    comments: worktreeId ? diffComments : [],
+    comments: worktreeId ? allComments : [],
     commentableLineNumbers,
     addButtonLabel: addLineCommentLabel,
     onAddCommentClick: ({ lineNumber, startLine, top }) =>

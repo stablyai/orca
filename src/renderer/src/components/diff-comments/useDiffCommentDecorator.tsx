@@ -435,7 +435,12 @@ export function useDiffCommentDecorator({
       return
     }
 
-    const relevant = comments.filter((c) => c.filePath === filePath && c.worktreeId === worktreeId)
+    const normFilePath = filePath.replace(/\\/g, '/').replace(/^\//, '').toLowerCase()
+    const relevant = comments.filter(
+      (c) =>
+        c.filePath.replace(/\\/g, '/').replace(/^\//, '').toLowerCase() === normFilePath &&
+        c.worktreeId === worktreeId
+    )
     const relevantMap = new Map(relevant.map((c) => [c.id, c] as const))
 
     const zones = zonesRef.current
@@ -714,9 +719,12 @@ export function useDiffCommentDecorator({
       pendingScrollRef.current = null
       return
     }
+    const normFilePath = filePath.replace(/\\/g, '/').replace(/^\//, '').toLowerCase()
     const target = comments.find(
       (c) =>
-        c.id === pendingScrollCommentId && c.filePath === filePath && c.worktreeId === worktreeId
+        c.id === pendingScrollCommentId &&
+        c.filePath.replace(/\\/g, '/').replace(/^\//, '').toLowerCase() === normFilePath &&
+        c.worktreeId === worktreeId
     )
     if (!target) {
       // Why: the request is for a comment this decorator doesn't own (different
