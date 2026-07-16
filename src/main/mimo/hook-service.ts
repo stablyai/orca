@@ -9,6 +9,10 @@ const ORCA_MIMOCODE_PLUGIN_FILE = 'orca-mimocode-status.js'
 const MIMOCODE_HOOKS_DIR = 'mimocode-hooks'
 const MIMOCODE_SHARED_HOME = 'shared'
 
+function getMimoCodePluginSource(): string {
+  return getOpenCodeFamilyPluginSource('/hook/mimo-code')
+}
+
 function defaultMimocodeConfigDir(): string {
   return join(homedir(), '.config', 'mimocode')
 }
@@ -66,10 +70,7 @@ export class MimoCodeHookService {
       }
       const pluginsDir = join(home, 'config', 'plugins')
       mkdirSync(pluginsDir, { recursive: true })
-      writeFileSync(
-        join(pluginsDir, ORCA_MIMOCODE_PLUGIN_FILE),
-        getOpenCodeFamilyPluginSource('/hook/mimo-code')
-      )
+      writeFileSync(join(pluginsDir, ORCA_MIMOCODE_PLUGIN_FILE), getMimoCodePluginSource())
     } catch {
       return existingMimocodeHome ? { MIMOCODE_HOME: existingMimocodeHome } : {}
     }
@@ -78,3 +79,4 @@ export class MimoCodeHookService {
 }
 
 export const mimoCodeHookService = new MimoCodeHookService()
+export const _internals = { getMimoCodePluginSource }

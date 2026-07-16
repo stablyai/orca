@@ -29,8 +29,10 @@ describe('PluginOverlayManager', () => {
 
   it('reports no source until install runs', () => {
     expect(manager.hasOpenCodeSource()).toBe(false)
+    expect(manager.hasMimoSource()).toBe(false)
     expect(manager.hasPiSource()).toBe(false)
     expect(manager.materializeOpenCode('tab-1:0')).toBeNull()
+    expect(manager.materializeMimo('tab-1:0')).toBeNull()
     expect(manager.materializePi('tab-1:0')).toBeNull()
   })
 
@@ -68,6 +70,62 @@ describe('PluginOverlayManager', () => {
     manager.setSources({ opencodePluginSource: 'orca plugin' })
 
     expect(manager.materializeOpenCode('tab-missing:0', join(homeDir, 'missing'))).toBeNull()
+  })
+
+  it('materializes a complete MiMo home with Orca plugin', () => {
+    manager.setSources({ mimoPluginSource: 'export const MimoStatus = 1' })
+
+    const home = manager.materializeMimo('tab-mimo:0')
+
+    expect(home).not.toBeNull()
+    for (const subdir of ['config', 'data', 'cache', 'state']) {
+      expect(existsSync(join(home!, subdir))).toBe(true)
+    }
+    expect(readFileSync(join(home!, 'config', 'plugins', 'orca-mimocode-status.js'), 'utf8')).toBe(
+      'export const MimoStatus = 1'
+    )
+  })
+
+  it('mirrors a remote MiMo home config before adding Orca plugin', () => {
+    const sourceHome = join(homeDir, 'company-mimo-home')
+    mkdirSync(join(sourceHome, 'config', 'plugins'), { recursive: true })
+    writeFileSync(join(sourceHome, 'config', 'mimo.json'), '{"provider":"custom"}')
+    writeFileSync(join(sourceHome, 'config', 'plugins', 'user-plugin.js'), 'user plugin')
+    writeFileSync(
+      join(sourceHome, 'config', 'plugins', 'orca-mimocode-status.js'),
+      'user same-name'
+    )
+
+    manager.setSources({ mimoPluginSource: 'orca mimo plugin' })
+    const overlayHome = manager.materializeMimo('tab-mimo-custom:0', sourceHome)
+
+    expect(overlayHome).not.toBeNull()
+    expect(readFileSync(join(overlayHome!, 'config', 'mimo.json'), 'utf8')).toBe(
+      '{"provider":"custom"}'
+    )
+    expect(readFileSync(join(overlayHome!, 'config', 'plugins', 'user-plugin.js'), 'utf8')).toBe(
+      'user plugin'
+    )
+    expect(
+      readFileSync(join(overlayHome!, 'config', 'plugins', 'orca-mimocode-status.js'), 'utf8')
+    ).toBe('orca mimo plugin')
+    expect(
+      readFileSync(join(sourceHome, 'config', 'plugins', 'orca-mimocode-status.js'), 'utf8')
+    ).toBe('user same-name')
+  })
+
+  it('mirrors the remote default MiMo config when MIMOCODE_HOME is unset', () => {
+    const defaultConfig = join(homeDir, '.config', 'mimocode')
+    mkdirSync(defaultConfig, { recursive: true })
+    writeFileSync(join(defaultConfig, 'mimo.json'), '{"theme":"remote"}')
+
+    manager.setSources({ mimoPluginSource: 'orca mimo plugin' })
+    const overlayHome = manager.materializeMimo('tab-mimo-default:0')
+
+    expect(overlayHome).not.toBeNull()
+    expect(readFileSync(join(overlayHome!, 'config', 'mimo.json'), 'utf8')).toBe(
+      '{"theme":"remote"}'
+    )
   })
 
   it('installs Pi extension into the real agent extensions dir', () => {
@@ -276,23 +334,27 @@ describe('PluginOverlayManager', () => {
     expect(manager.materializePi('tab-missing-pi:0', join(homeDir, 'missing-pi'))).toBeNull()
   })
 
-  it('clearOverlay removes OpenCode overlays without deleting real Pi/OMP homes', () => {
+  it('clearOverlay removes plugin overlays without deleting real Pi/OMP homes', () => {
     manager.setSources({
       opencodePluginSource: 'opencode',
+      mimoPluginSource: 'mimo',
       piExtensionSource: 'pi',
       ompExtensionSource: 'omp'
     })
     const opencodeDir = manager.materializeOpenCode('tab-3:0')!
+    const mimoDir = manager.materializeMimo('tab-3:0')!
     const piDir = manager.materializePi('tab-3:0', undefined, 'pi')!
     const ompDir = manager.materializePi('tab-3:0', undefined, 'omp')!
     expect(piDir).not.toBe(ompDir)
     expect(existsSync(opencodeDir)).toBe(true)
+    expect(existsSync(mimoDir)).toBe(true)
     expect(existsSync(piDir)).toBe(true)
     expect(existsSync(ompDir)).toBe(true)
 
     manager.clearOverlay('tab-3:0')
 
     expect(existsSync(opencodeDir)).toBe(false)
+    expect(existsSync(mimoDir)).toBe(false)
     expect(existsSync(piDir)).toBe(true)
     expect(existsSync(ompDir)).toBe(true)
   })

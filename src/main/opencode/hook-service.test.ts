@@ -28,14 +28,18 @@ import { OpenCodeHookService, _internals } from './hook-service'
 const { isUsableId, toSafeDirName } = _internals
 
 describe('OpenCode hook plugin source', () => {
-  it('filters child sessions via parentID lookup before forwarding events', () => {
+  it('tracks child sessions without forwarding their root-only events', () => {
     const source = _internals.getOpenCodePluginSource()
 
-    expect(source).toContain('async function isChildSession(client, sessionID)')
+    expect(source).toContain('const ORCA_CHILD_PROVIDER = "opencode";')
+    expect(source).toContain('async function resolveSessionMetadata(client, sessionID)')
     expect(source).toContain('const sessions = await client.session.list();')
-    expect(source).toContain('const isChild = !!session?.parentID;')
-    expect(source).toContain('if (sessionID && (await isChildSession(client, sessionID))) {')
-    expect(source).toContain('return true;')
+    expect(source).toContain('isChild: hasParent,')
+    expect(source).toContain('await ensureLifecycleStart(active);')
+    expect(source).toContain('await postLifecycle("SubagentStop", active.payload);')
+    expect(source).toContain('if (metadata?.isChild || knownOpenCodeChild) {')
+    expect(source).toContain('if (!metadata && !knownOpenCodeChild) return;')
+    expect(source).toContain('return ORCA_CHILD_PROVIDER + "-" + digest;')
   })
 
   it('still accepts an optional opaque plugin context instead of destructuring', () => {
@@ -68,6 +72,9 @@ describe('OpenCode hook plugin source', () => {
     expect(source).toContain('const coords = resolveHookCoords();')
     expect(source).toContain('`http://127.0.0.1:${coords.port}/hook/opencode`')
     expect(source).toContain('"X-Orca-Agent-Hook-Token": coords.token')
+    expect(source).toContain('const HOOK_POST_TIMEOUT_MS = 1000;')
+    expect(source).toContain('response?.ok === true')
+    expect(source).toContain('active.announcedGeneration === target.generation')
   })
 
   it('caches the parsed endpoint file on mtime+size+inode to skip re-reads per post', () => {

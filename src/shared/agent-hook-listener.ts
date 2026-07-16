@@ -28,10 +28,13 @@ import {
 import { isAbsolute, join } from 'node:path'
 
 import {
+  isFreshNonDoneAgentStatus,
   normalizeAgentStatusPayload,
   parseAgentStatusPayload,
+  type AgentStatusPayload,
   type AgentStatusState,
   type AgentSubagentSnapshot,
+  type AgentType,
   type ParsedAgentStatusPayload
 } from './agent-status-types'
 import {
@@ -46,12 +49,12 @@ import {
   type ClaudeSubagentRoster
 } from './claude-subagent-roster'
 import {
-  codexRosterHasWorkingSubagent,
-  codexRosterToSnapshots,
-  finishCodexSubagent,
-  upsertWorkingCodexSubagent,
-  type CodexSubagentRoster
-} from './codex-subagent-roster'
+  agentSubagentRosterToSnapshots,
+  finishSubagent,
+  rosterHasWorkingSubagent,
+  upsertWorkingSubagent,
+  type AgentSubagentRoster
+} from './agent-subagent-roster'
 import { ORCA_HOOK_PROTOCOL_VERSION } from './agent-hook-types'
 import { REMOTE_AGENT_HOOK_ENV, type AgentHookSource } from './agent-hook-relay'
 import {
@@ -120,28 +123,42 @@ export type HookListenerState = {
    *  persists here because a gated 'working' emit clamps the flag away, and
    *  the eventual done (when the last child drains) must still carry it. */
   claudeLeadStateByPaneKey: Map<string, ClaudeLeadTurnState>
-  /** Codex child lifecycle is independent of the lead turn. A lead Stop can
-   *  arrive while spawned workers are still running, so both survive turns. */
-  codexSubagentRosterByPaneKey: Map<string, CodexSubagentRoster>
-  codexLeadStateByPaneKey: Map<string, AgentStatusState>
-  /** Child permission waits temporarily own the pane status without replacing
-   *  the lead state. The set is bounded by the already-capped child roster. */
-  codexWaitingSubagentsByPaneKey: Map<string, Set<string>>
+  /** Simple child-lifecycle providers share one pane-owned record. Source
+   *  ownership prevents a reused pane from inheriting another agent's work. */
+  agentSubagentLifecycleByPaneKey: Map<string, AgentSubagentLifecycleState>
+  /** One bounded owner record per pane arbitrates Claude's specialized state
+   *  and the generic lifecycle store without confusing nested agent CLIs. */
+  agentLifecycleOwnerByPaneKey: Map<string, AgentLifecycleOwnerState>
+}
+
+export type AgentLifecycleOwnerState = {
+  source: AgentType
+  state: AgentStatusState
+  updatedAt: number
+}
+
+export type AgentSubagentLifecycleState = {
+  source: AgentType
+  roster: AgentSubagentRoster
+  leadState: AgentStatusState
+  leadInterrupted?: true
+  /** Child waits overlay the lead without replacing its underlying state. */
+  waitingSubagentIds: Set<string>
+}
+
+export type AgentLifecyclePersistenceMetadata = {
+  leadState?: AgentStatusState
+  leadInterrupted?: true
+  waitingSubagentIds?: readonly string[]
 }
 
 export type ClaudeLeadTurnState = {
+  /** Lead-owned state only. Child waits are an overlay and never replace it. */
   state: AgentStatusState
   interrupted?: true
-  /** Set when the waiting state was induced by a subagent's PermissionRequest
-   *  or AskUserQuestion (those payloads carry `agent_id`). Only that agent's
-   *  next tool activity may clear the wait — other children's churn must not
-   *  dismiss a pending human-input card. */
-  waitingAgentId?: string
-  /** The lead state a child-induced wait displaced. Restored when the wait
-   *  clears — the lead may have already finished its turn, and inventing
-   *  'working' would leave the pane spinning after the roster drains (the
-   *  done-gate only ever downgrades done → working, never back). */
-  stateBeforeWait?: Pick<ClaudeLeadTurnState, 'state' | 'interrupted'>
+  /** Only the child that owns a permission/question wait may clear it. A set
+   *  keeps concurrent children from dismissing one another's attention state. */
+  waitingAgentIds?: Set<string>
 }
 
 export function createHookListenerState(): HookListenerState {
@@ -155,9 +172,8 @@ export function createHookListenerState(): HookListenerState {
     ampCompletedCacheKeys: new Set(),
     claudeSubagentRosterByPaneKey: new Map(),
     claudeLeadStateByPaneKey: new Map(),
-    codexSubagentRosterByPaneKey: new Map(),
-    codexLeadStateByPaneKey: new Map(),
-    codexWaitingSubagentsByPaneKey: new Map()
+    agentSubagentLifecycleByPaneKey: new Map(),
+    agentLifecycleOwnerByPaneKey: new Map()
   }
 }
 
@@ -169,9 +185,8 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   deletePaneScopedSetEntry(state.ampCompletedCacheKeys, paneKey)
   state.claudeSubagentRosterByPaneKey.delete(paneKey)
   state.claudeLeadStateByPaneKey.delete(paneKey)
-  state.codexSubagentRosterByPaneKey.delete(paneKey)
-  state.codexLeadStateByPaneKey.delete(paneKey)
-  state.codexWaitingSubagentsByPaneKey.delete(paneKey)
+  state.agentSubagentLifecycleByPaneKey.delete(paneKey)
+  state.agentLifecycleOwnerByPaneKey.delete(paneKey)
 }
 
 function movePaneScopedMapEntries<T>(
@@ -213,9 +228,8 @@ export function movePaneCacheState(
   movePaneScopedSetEntries(state.ampCompletedCacheKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeLeadStateByPaneKey, fromPaneKey, toPaneKey)
-  movePaneScopedMapEntries(state.codexSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
-  movePaneScopedMapEntries(state.codexLeadStateByPaneKey, fromPaneKey, toPaneKey)
-  movePaneScopedMapEntries(state.codexWaitingSubagentsByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.agentSubagentLifecycleByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.agentLifecycleOwnerByPaneKey, fromPaneKey, toPaneKey)
 }
 
 function clearPaneTurnCacheState(state: HookListenerState, paneKey: string): void {
@@ -255,9 +269,8 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.warnedEnvs.clear()
   state.claudeSubagentRosterByPaneKey.clear()
   state.claudeLeadStateByPaneKey.clear()
-  state.codexSubagentRosterByPaneKey.clear()
-  state.codexLeadStateByPaneKey.clear()
-  state.codexWaitingSubagentsByPaneKey.clear()
+  state.agentSubagentLifecycleByPaneKey.clear()
+  state.agentLifecycleOwnerByPaneKey.clear()
 }
 
 /** Emit warn-once diagnostics for cross-build (`version`) and dev-vs-prod
@@ -316,7 +329,7 @@ export type AgentHookEventPayload = {
   hookEventName?: string
   /** Claude tool-use identifier when the hook source exposes one. */
   toolUseId?: string
-  /** Claude agent/subagent identifier when the hook source exposes one. */
+  /** Agent/subagent identifier when the hook source exposes one. */
   toolAgentId?: string
   /** Agent/subagent type from the source hook payload, when present. */
   toolAgentType?: string
@@ -857,6 +870,24 @@ function readFirstString(
     const value = readString(record, key)
     if (value) {
       return value
+    }
+  }
+  return undefined
+}
+
+function readFirstBoundedTrimmedString(
+  record: Record<string, unknown>,
+  keys: readonly string[],
+  maxLength: number
+): string | undefined {
+  for (const key of keys) {
+    const value = record[key]
+    if (typeof value !== 'string') {
+      continue
+    }
+    const trimmed = value.trim()
+    if (trimmed.length > 0 && trimmed.length <= maxLength) {
+      return trimmed
     }
   }
   return undefined
@@ -2455,7 +2486,12 @@ function normalizeClaudeSubagentLifecycleEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
-  const roster = getOrCreateClaudeSubagentRoster(state, paneKey)
+  const existingRoster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+  const roster =
+    eventName === 'SubagentStart' ? getOrCreateClaudeSubagentRoster(state, paneKey) : existingRoster
+  if (!roster) {
+    return null
+  }
   if (eventName === 'TeammateIdle') {
     const teammateName = readString(hookPayload, 'teammate_name')
     if (!teammateName) {
@@ -2481,6 +2517,9 @@ function normalizeClaudeSubagentLifecycleEvent(
         Date.now()
       )
     } else {
+      if (!roster.has(agentId)) {
+        return null
+      }
       // Why: a finished child (one-shot, workflow lane, or named teammate)
       // leaves the sidebar at once. SubagentStop is the reliable finish
       // signal even for teammate-shaped ids — their background_tasks entries
@@ -2500,7 +2539,17 @@ function normalizeClaudeSubagentLifecycleEvent(
  *  later child lifecycle event would re-emit the stale pre-interrupt lead
  *  state and resurrect a cancelled pane. */
 export function markClaudeLeadTurnInterrupted(state: HookListenerState, paneKey: string): void {
+  // Why: an inferred user interrupt cancels any child-owned attention card;
+  // retaining its wait overlay would resurrect a stale prompt on later churn.
   state.claudeLeadStateByPaneKey.set(paneKey, { state: 'done', interrupted: true })
+  const owner = state.agentLifecycleOwnerByPaneKey.get(paneKey)
+  if (!owner || owner.source === 'claude') {
+    state.agentLifecycleOwnerByPaneKey.set(paneKey, {
+      source: 'claude',
+      state: 'done',
+      updatedAt: Date.now()
+    })
+  }
 }
 
 /** Rebuild a pane's working roster from a persisted status snapshot. Live
@@ -2509,7 +2558,8 @@ export function markClaudeLeadTurnInterrupted(state: HookListenerState, paneKey:
 export function seedClaudeSubagentRosterFromSnapshots(
   state: HookListenerState,
   paneKey: string,
-  snapshots: readonly AgentSubagentSnapshot[]
+  snapshots: readonly AgentSubagentSnapshot[],
+  metadata: AgentLifecyclePersistenceMetadata = {}
 ): void {
   if (snapshots.length === 0 || state.claudeSubagentRosterByPaneKey.has(paneKey)) {
     return
@@ -2532,47 +2582,130 @@ export function seedClaudeSubagentRosterFromSnapshots(
       backgroundTasksAuthoritative: true
     })
   }
+  const waitingAgentIds = new Set(
+    metadata.waitingSubagentIds?.filter((agentId) => roster.has(agentId)) ?? []
+  )
+  if (metadata.leadState || waitingAgentIds.size > 0) {
+    state.claudeLeadStateByPaneKey.set(paneKey, {
+      state: metadata.leadState ?? 'working',
+      ...(metadata.leadState === 'done' && metadata.leadInterrupted ? { interrupted: true } : {}),
+      ...(waitingAgentIds.size > 0 ? { waitingAgentIds } : {})
+    })
+  }
 }
 
-/** Restore the visible Codex child roster after Orca restarts. New snapshots
- *  carry the underlying lead state. Legacy snapshots do not; keep those
- *  conservatively working until the next lead hook rather than show a false
- *  done indicator, with normal status freshness bounding the passive display. */
-export function seedCodexSubagentRosterFromSnapshots(
+/** Restore provider-owned child state after restart. Legacy snapshots without
+ *  lead metadata stay conservatively working until fresh lead evidence arrives. */
+export function seedAgentSubagentLifecycleFromSnapshots(
   state: HookListenerState,
   paneKey: string,
+  source: AgentType,
   snapshots: readonly AgentSubagentSnapshot[],
-  leadState?: AgentStatusState
+  metadata: AgentLifecyclePersistenceMetadata = {}
 ): void {
-  if (snapshots.length === 0 || state.codexSubagentRosterByPaneKey.has(paneKey)) {
+  if (source === 'claude') {
+    seedClaudeSubagentRosterFromSnapshots(state, paneKey, snapshots, metadata)
+    seedAgentLifecycleOwner(state, paneKey, source, snapshots, metadata)
     return
   }
-  const roster = getOrCreateCodexSubagentRoster(state, paneKey)
+  if (snapshots.length === 0 || state.agentSubagentLifecycleByPaneKey.has(paneKey)) {
+    seedAgentLifecycleOwner(state, paneKey, source, snapshots, metadata)
+    return
+  }
+  const lifecycle = getOrCreateAgentSubagentLifecycle(state, paneKey, source)
   for (const snapshot of snapshots) {
     if (snapshot.state === 'working') {
-      upsertWorkingCodexSubagent(roster, snapshot.id, snapshot.agentType, snapshot.startedAt)
+      upsertWorkingSubagent(
+        lifecycle.roster,
+        snapshot.id,
+        { agentType: snapshot.agentType, description: snapshot.description },
+        snapshot.startedAt
+      )
     }
   }
-  if (leadState) {
-    state.codexLeadStateByPaneKey.set(paneKey, leadState)
+  if (metadata.leadState) {
+    lifecycle.leadState = metadata.leadState
+    lifecycle.leadInterrupted =
+      metadata.leadState === 'done' && metadata.leadInterrupted ? true : undefined
   }
+  for (const agentId of metadata.waitingSubagentIds ?? []) {
+    if (lifecycle.roster.has(agentId)) {
+      lifecycle.waitingSubagentIds.add(agentId)
+    }
+  }
+  seedAgentLifecycleOwner(state, paneKey, source, snapshots, metadata)
 }
 
-/** Drop a child-owned waiting state when that child stops/idles, restoring
- *  the lead state the wait displaced. Without a stash (the wait was the
- *  pane's first observed lead event) fall back to 'working' and let the next
- *  lead event resolve it — a transient spinner beats a permanently stuck
- *  card. */
+function seedAgentLifecycleOwner(
+  state: HookListenerState,
+  paneKey: string,
+  source: AgentType,
+  snapshots: readonly AgentSubagentSnapshot[],
+  metadata: AgentLifecyclePersistenceMetadata
+): void {
+  if (state.agentLifecycleOwnerByPaneKey.has(paneKey)) {
+    return
+  }
+  const persisted = state.lastStatusByPaneKey.get(paneKey)
+  const persistedReceivedAt = persisted ? Reflect.get(persisted, 'receivedAt') : undefined
+  const persistedState =
+    persisted?.payload.agentType === source
+      ? (persisted.payload.lifecycleOwnerState ?? persisted.payload.state)
+      : undefined
+  const workingIds = new Set(
+    snapshots.filter((snapshot) => snapshot.state === 'working').map((snapshot) => snapshot.id)
+  )
+  const hasWaitingChild = metadata.waitingSubagentIds?.some((agentId) => workingIds.has(agentId))
+  const stateName =
+    persistedState ??
+    (hasWaitingChild
+      ? 'waiting'
+      : metadata.leadState === 'done' && workingIds.size > 0
+        ? 'working'
+        : (metadata.leadState ?? 'working'))
+  state.agentLifecycleOwnerByPaneKey.set(paneKey, {
+    source,
+    state: stateName,
+    updatedAt:
+      typeof persistedReceivedAt === 'number' &&
+      Number.isFinite(persistedReceivedAt) &&
+      persistedReceivedAt > 0
+        ? persistedReceivedAt
+        : Date.now()
+  })
+}
+
+function activeClaudeWaitingSubagentIds(
+  lead: ClaudeLeadTurnState | undefined,
+  roster: ClaudeSubagentRoster | undefined
+): string[] | undefined {
+  if (!lead?.waitingAgentIds || !roster) {
+    return undefined
+  }
+  const active = Array.from(lead.waitingAgentIds).filter((agentId) => roster.has(agentId))
+  return active.length > 0 ? active : undefined
+}
+
+/** Drop only matching child-owned waits; unrelated concurrent children keep
+ *  the attention overlay while the lead-owned state remains untouched. */
 function clearClaudePendingWaitForAgent(
   state: HookListenerState,
   paneKey: string,
   ownsWait: (waitingAgentId: string) => boolean
 ): void {
   const lead = state.claudeLeadStateByPaneKey.get(paneKey)
-  if (lead?.state !== 'waiting' || !lead.waitingAgentId || !ownsWait(lead.waitingAgentId)) {
+  if (!lead?.waitingAgentIds) {
     return
   }
-  state.claudeLeadStateByPaneKey.set(paneKey, lead.stateBeforeWait ?? { state: 'working' })
+  const remaining = new Set(Array.from(lead.waitingAgentIds).filter((id) => !ownsWait(id)))
+  if (remaining.size === lead.waitingAgentIds.size) {
+    return
+  }
+  state.claudeLeadStateByPaneKey.set(paneKey, {
+    state: lead.state,
+    ...(lead.interrupted ? { interrupted: true } : {}),
+    ...(remaining.size > 0 ? { waitingAgentIds: remaining } : {})
+  })
 }
 
 /** Emit a pane status refresh driven by child activity (lifecycle events and
@@ -2591,9 +2724,13 @@ function buildClaudeChildDrivenStatusPayload(
   const lead = state.claudeLeadStateByPaneKey.get(paneKey)
   const leadState = lead?.state ?? 'working'
   const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+  const waitingSubagentIds = activeClaudeWaitingSubagentIds(lead, roster)
   return buildClaudeStatusPayload(state, eventName, '', paneKey, hookPayload, {
-    stateName:
-      leadState === 'done' && claudeRosterHasWorkingSubagent(roster) ? 'working' : leadState,
+    stateName: waitingSubagentIds
+      ? 'waiting'
+      : leadState === 'done' && claudeRosterHasWorkingSubagent(roster)
+        ? 'working'
+        : leadState,
     updateToolSnapshot: false,
     interrupted: lead?.interrupted
   })
@@ -2656,8 +2793,9 @@ function normalizeClaudeEvent(
       eventName === 'PostToolUseFailure')
       ? eventAgentId
       : undefined
+  let eventAgentAdmitted = false
   if (eventAgentId && (subagentOriginId || isWaitingInducing)) {
-    upsertWorkingClaudeSubagent(
+    eventAgentAdmitted = upsertWorkingClaudeSubagent(
       getOrCreateClaudeSubagentRoster(state, paneKey),
       eventAgentId,
       { agentType: readString(hookPayload, 'agent_type') },
@@ -2666,20 +2804,25 @@ function normalizeClaudeEvent(
   }
   if (subagentOriginId) {
     const lead = state.claudeLeadStateByPaneKey.get(paneKey)
-    if (lead?.state !== 'waiting' || lead.waitingAgentId !== subagentOriginId) {
+    if (!lead?.waitingAgentIds?.has(subagentOriginId)) {
       return buildClaudeChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
     }
-    // Why: approval granted — update the tool snapshot exactly as the lead's
-    // own next tool event would (dropping the pending card), but restore the
-    // lead state the wait displaced instead of adopting this child event as
-    // the lead's 'working': the lead may already be done, and the done-gate
-    // never upgrades working back to done once the roster drains.
-    const restored = lead.stateBeforeWait ?? { state: 'working' as const }
-    state.claudeLeadStateByPaneKey.set(paneKey, restored)
+    // Why: approval granted — drop this child's overlay while retaining the
+    // true lead state and any other child waits that still need attention.
+    clearClaudePendingWaitForAgent(
+      state,
+      paneKey,
+      (waitingAgentId) => waitingAgentId === subagentOriginId
+    )
+    const restored = state.claudeLeadStateByPaneKey.get(paneKey) ?? {
+      state: 'working' as const
+    }
     const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+    const waitingSubagentIds = activeClaudeWaitingSubagentIds(restored, roster)
     return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
-      stateName:
-        restored.state === 'done' && claudeRosterHasWorkingSubagent(roster)
+      stateName: waitingSubagentIds
+        ? 'waiting'
+        : restored.state === 'done' && claudeRosterHasWorkingSubagent(roster)
           ? 'working'
           : restored.state,
       updateToolSnapshot: true,
@@ -2717,39 +2860,44 @@ function normalizeClaudeEvent(
   }
   const interrupted =
     eventName === 'Stop' && hookPayload['is_interrupt'] === true ? true : undefined
-  // Why: a child-induced wait displaces the lead's own state; stash it so
-  // clearing the wait restores reality (the lead may already be done). A
-  // second child wait carries the ORIGINAL stash forward, not the
-  // intermediate waiting state.
   const previousLead = state.claudeLeadStateByPaneKey.get(paneKey)
-  const stateBeforeWait =
-    isWaitingInducing && eventAgentId && previousLead
-      ? previousLead.state === 'waiting'
-        ? previousLead.stateBeforeWait
-        : {
-            state: previousLead.state,
-            ...(previousLead.interrupted ? { interrupted: true as const } : {})
-          }
-      : undefined
-  state.claudeLeadStateByPaneKey.set(paneKey, {
-    state: stateName,
-    ...(interrupted ? { interrupted } : {}),
-    ...(isWaitingInducing && eventAgentId ? { waitingAgentId: eventAgentId } : {}),
-    ...(stateBeforeWait ? { stateBeforeWait } : {})
-  })
+  if (isWaitingInducing && eventAgentId) {
+    // Why: a child permission/question is an attention overlay, not evidence
+    // that the lead itself stopped being done, working, or interrupted.
+    const waitingAgentIds = new Set(previousLead?.waitingAgentIds)
+    if (eventAgentAdmitted) {
+      waitingAgentIds.add(eventAgentId)
+    }
+    state.claudeLeadStateByPaneKey.set(paneKey, {
+      state: previousLead?.state ?? 'working',
+      ...(previousLead?.interrupted ? { interrupted: true } : {}),
+      ...(waitingAgentIds.size > 0 ? { waitingAgentIds } : {})
+    })
+  } else {
+    state.claudeLeadStateByPaneKey.set(paneKey, {
+      state: stateName,
+      ...(interrupted ? { interrupted } : {}),
+      ...(previousLead?.waitingAgentIds ? { waitingAgentIds: previousLead.waitingAgentIds } : {})
+    })
+  }
 
   // Why: the lead ending its turn is not "done" while spawned subagents or
   // teammates are still running — that reads as a finished ✅ in the sidebar
   // while a background review loop is mid-flight. Claude wakes the lead when
   // a child finishes, so a later Stop with an empty roster resolves to done.
+  const lead = state.claudeLeadStateByPaneKey.get(paneKey)!
   const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
-  const effectiveState =
-    stateName === 'done' && claudeRosterHasWorkingSubagent(roster) ? 'working' : stateName
+  const waitingSubagentIds = activeClaudeWaitingSubagentIds(lead, roster)
+  const effectiveState = waitingSubagentIds
+    ? 'waiting'
+    : lead.state === 'done' && claudeRosterHasWorkingSubagent(roster)
+      ? 'working'
+      : lead.state
 
   return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
     stateName: effectiveState,
     updateToolSnapshot: true,
-    interrupted
+    interrupted: lead.interrupted
   })
 }
 
@@ -2769,6 +2917,12 @@ function buildClaudeStatusPayload(
         resetOnNewTurn: isNewTurnEvent('claude', eventName)
       })
     : (state.lastToolByPaneKey.get(paneKey) ?? {})
+  const subagents = claudeRosterToSnapshots(state.claudeSubagentRosterByPaneKey.get(paneKey))
+  const lead = state.claudeLeadStateByPaneKey.get(paneKey)
+  const waitingSubagentIds = activeClaudeWaitingSubagentIds(
+    lead,
+    state.claudeSubagentRosterByPaneKey.get(paneKey)
+  )
 
   // Why: normalizeAgentStatusPayload validates the object directly — the
   // JSON stringify/parse round trip the other normalizers use is pure
@@ -2777,6 +2931,11 @@ function buildClaudeStatusPayload(
   // while claudeLeadStateByPaneKey preserves it for the eventual done.
   return normalizeAgentStatusPayload({
     state: options.stateName,
+    // Why: effective waiting/working can be owned by children. Persist the
+    // true lead so restart can resolve the last child without guessing.
+    leadState: subagents ? (lead?.state ?? 'working') : undefined,
+    leadInterrupted: subagents && lead?.interrupted ? true : undefined,
+    waitingSubagentIds,
     // Why: only lead-origin events (updateToolSnapshot) may reset the prompt
     // cache; a child-driven refresh must not blank the lead's prompt label.
     prompt: resolvePrompt(state, paneKey, promptText, {
@@ -2788,7 +2947,7 @@ function buildClaudeStatusPayload(
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
     interrupted: options.interrupted,
-    subagents: claudeRosterToSnapshots(state.claudeSubagentRosterByPaneKey.get(paneKey))
+    subagents
   })
 }
 
@@ -3215,16 +3374,124 @@ function hasExplicitPromptForSource(
   return eventName === 'agent.start' && promptText.length > 0
 }
 
-function getOrCreateCodexSubagentRoster(
-  state: HookListenerState,
-  paneKey: string
-): CodexSubagentRoster {
-  let roster = state.codexSubagentRosterByPaneKey.get(paneKey)
-  if (!roster) {
-    roster = new Map()
-    state.codexSubagentRosterByPaneKey.set(paneKey, roster)
+function createAgentSubagentLifecycle(source: AgentType): AgentSubagentLifecycleState {
+  return {
+    source,
+    roster: new Map(),
+    leadState: 'working',
+    waitingSubagentIds: new Set()
   }
-  return roster
+}
+
+function getOrCreateAgentSubagentLifecycle(
+  state: HookListenerState,
+  paneKey: string,
+  source: AgentType
+): AgentSubagentLifecycleState {
+  let lifecycle = state.agentSubagentLifecycleByPaneKey.get(paneKey)
+  if (!lifecycle || lifecycle.source !== source) {
+    // Why: a pane can be reused for another CLI. Never let the previous
+    // provider's children gate the new provider's status.
+    lifecycle = createAgentSubagentLifecycle(source)
+    state.agentSubagentLifecycleByPaneKey.set(paneKey, lifecycle)
+  }
+  return lifecycle
+}
+
+function resetAgentSubagentLifecycle(
+  state: HookListenerState,
+  paneKey: string,
+  source: AgentType
+): AgentSubagentLifecycleState {
+  const lifecycle = createAgentSubagentLifecycle(source)
+  state.agentSubagentLifecycleByPaneKey.set(paneKey, lifecycle)
+  return lifecycle
+}
+
+function opaqueSubagentId(source: AgentType, providerIdentity: string): string {
+  // Why: renderer-visible ids must stay bounded and must not expose transcript
+  // paths or provider session identifiers.
+  const digest = createHash('sha256').update(providerIdentity).digest('hex').slice(0, 32)
+  return `${source}:${digest}`
+}
+
+function applyOpaqueSubagentLifecycleEvent(
+  state: HookListenerState,
+  paneKey: string,
+  source: AgentType,
+  eventName: 'SubagentStart' | 'SubagentStop',
+  providerIdentity: string,
+  fields: { agentType?: string; description?: string }
+): boolean {
+  const id = opaqueSubagentId(source, providerIdentity)
+  if (eventName === 'SubagentStop') {
+    const lifecycle = state.agentSubagentLifecycleByPaneKey.get(paneKey)
+    // Why: a late stop is not evidence of live work. Only a child previously
+    // observed or hydrated in this provider's roster may drain lifecycle state.
+    if (!lifecycle || lifecycle.source !== source || !lifecycle.roster.has(id)) {
+      return false
+    }
+    finishSubagent(lifecycle.roster, id)
+    clearAgentSubagentWait(lifecycle, id)
+    return true
+  }
+  const lifecycle = getOrCreateAgentSubagentLifecycle(state, paneKey, source)
+  upsertWorkingSubagent(lifecycle.roster, id, fields, Date.now())
+  return true
+}
+
+function clearAgentSubagentWait(lifecycle: AgentSubagentLifecycleState, agentId: string): void {
+  lifecycle.waitingSubagentIds.delete(agentId)
+}
+
+function resolveAgentSubagentPaneState(lifecycle: AgentSubagentLifecycleState): AgentStatusState {
+  for (const agentId of lifecycle.waitingSubagentIds) {
+    if (lifecycle.roster.has(agentId)) {
+      return 'waiting'
+    }
+  }
+  return lifecycle.leadState === 'done' && rosterHasWorkingSubagent(lifecycle.roster)
+    ? 'working'
+    : lifecycle.leadState
+}
+
+function activeAgentSubagentWaitIds(lifecycle: AgentSubagentLifecycleState): string[] | undefined {
+  const active = Array.from(lifecycle.waitingSubagentIds).filter((agentId) =>
+    lifecycle.roster.has(agentId)
+  )
+  return active.length > 0 ? active : undefined
+}
+
+type LifecycleStatusFields = Omit<
+  AgentStatusPayload,
+  'state' | 'leadState' | 'leadInterrupted' | 'waitingSubagentIds' | 'interrupted' | 'subagents'
+>
+
+function normalizeStatusWithAgentSubagentLifecycle(
+  state: HookListenerState,
+  paneKey: string,
+  source: AgentType,
+  fields: LifecycleStatusFields,
+  leadUpdate?: { state: AgentStatusState; interrupted?: true }
+): ParsedAgentStatusPayload | null {
+  const lifecycle = getOrCreateAgentSubagentLifecycle(state, paneKey, source)
+  if (leadUpdate) {
+    lifecycle.leadState = leadUpdate.state
+    lifecycle.leadInterrupted =
+      leadUpdate.state === 'done' && leadUpdate.interrupted ? true : undefined
+  }
+  const subagents = agentSubagentRosterToSnapshots(lifecycle.roster)
+  return normalizeAgentStatusPayload({
+    ...fields,
+    state: resolveAgentSubagentPaneState(lifecycle),
+    // Why: effective state can be owned by children; persist the underlying
+    // lead only while a roster makes that distinction necessary.
+    leadState: subagents ? lifecycle.leadState : undefined,
+    leadInterrupted: subagents && lifecycle.leadInterrupted ? true : undefined,
+    waitingSubagentIds: activeAgentSubagentWaitIds(lifecycle),
+    interrupted: lifecycle.leadInterrupted,
+    subagents
+  })
 }
 
 const CODEX_CHILD_ORIGIN_EVENT_NAMES: ReadonlySet<string> = new Set([
@@ -3249,38 +3516,14 @@ function isCodexCompactSessionStart(
   return eventName === 'SessionStart' && readString(hookPayload, 'source') === 'compact'
 }
 
-function clearCodexSubagentWait(state: HookListenerState, paneKey: string, agentId: string): void {
-  const waitingAgentIds = state.codexWaitingSubagentsByPaneKey.get(paneKey)
-  if (!waitingAgentIds) {
-    return
-  }
-  waitingAgentIds.delete(agentId)
-  if (waitingAgentIds.size === 0) {
-    state.codexWaitingSubagentsByPaneKey.delete(paneKey)
-  }
-}
-
-function resolveCodexPaneState(state: HookListenerState, paneKey: string): AgentStatusState {
-  const roster = state.codexSubagentRosterByPaneKey.get(paneKey)
-  const waitingAgentIds = state.codexWaitingSubagentsByPaneKey.get(paneKey)
-  if (roster && waitingAgentIds) {
-    for (const agentId of waitingAgentIds) {
-      if (roster.has(agentId)) {
-        return 'waiting'
-      }
-    }
-  }
-  const leadState = state.codexLeadStateByPaneKey.get(paneKey) ?? 'working'
-  return leadState === 'done' && codexRosterHasWorkingSubagent(roster) ? 'working' : leadState
-}
-
 function buildCodexStatusPayload(
   state: HookListenerState,
   eventName: unknown,
   promptText: string,
   paneKey: string,
   hookPayload: Record<string, unknown>,
-  updateLeadSnapshot: boolean
+  updateLeadSnapshot: boolean,
+  leadState?: AgentStatusState
 ): ParsedAgentStatusPayload | null {
   // Why: child hooks share the parent pane key. They may refresh the roster,
   // but must not replace the lead prompt/tool snapshot with child-local work.
@@ -3293,23 +3536,22 @@ function buildCodexStatusPayload(
         resetOnNewTurn: resetLeadSnapshot
       })
     : (state.lastToolByPaneKey.get(paneKey) ?? {})
-  const subagents = codexRosterToSnapshots(state.codexSubagentRosterByPaneKey.get(paneKey))
-
-  return normalizeAgentStatusPayload({
-    state: resolveCodexPaneState(state, paneKey),
-    // Why: effective state may be clamped to working/waiting by children.
-    // Persist the underlying lead only while that distinction matters.
-    leadState: subagents ? (state.codexLeadStateByPaneKey.get(paneKey) ?? 'working') : undefined,
-    prompt: resolvePrompt(state, paneKey, updateLeadSnapshot ? promptText : '', {
-      resetOnNewTurn: resetLeadSnapshot
-    }),
-    agentType: 'codex',
-    toolName: snapshot.toolName,
-    toolInput: snapshot.toolInput,
-    interactivePrompt: snapshot.interactivePrompt,
-    lastAssistantMessage: snapshot.lastAssistantMessage,
-    subagents
-  })
+  return normalizeStatusWithAgentSubagentLifecycle(
+    state,
+    paneKey,
+    'codex',
+    {
+      prompt: resolvePrompt(state, paneKey, updateLeadSnapshot ? promptText : '', {
+        resetOnNewTurn: resetLeadSnapshot
+      }),
+      agentType: 'codex',
+      toolName: snapshot.toolName,
+      toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
+      lastAssistantMessage: snapshot.lastAssistantMessage
+    },
+    leadState ? { state: leadState } : undefined
+  )
 }
 
 function normalizeCodexSubagentEvent(
@@ -3319,26 +3561,25 @@ function normalizeCodexSubagentEvent(
   hookPayload: Record<string, unknown>,
   agentId: string
 ): ParsedAgentStatusPayload | null {
-  const roster = getOrCreateCodexSubagentRoster(state, paneKey)
   if (eventName === 'SubagentStop' || eventName === 'Stop') {
-    finishCodexSubagent(roster, agentId)
-    clearCodexSubagentWait(state, paneKey, agentId)
+    const lifecycle = state.agentSubagentLifecycleByPaneKey.get(paneKey)
+    if (!lifecycle || lifecycle.source !== 'codex' || !lifecycle.roster.has(agentId)) {
+      return null
+    }
+    finishSubagent(lifecycle.roster, agentId)
+    clearAgentSubagentWait(lifecycle, agentId)
   } else {
-    const accepted = upsertWorkingCodexSubagent(
-      roster,
+    const lifecycle = getOrCreateAgentSubagentLifecycle(state, paneKey, 'codex')
+    const accepted = upsertWorkingSubagent(
+      lifecycle.roster,
       agentId,
-      readFirstString(hookPayload, ['agent_type', 'agentType']),
+      { agentType: readFirstString(hookPayload, ['agent_type', 'agentType']) },
       Date.now()
     )
     if (eventName === 'PermissionRequest' && accepted) {
-      let waitingAgentIds = state.codexWaitingSubagentsByPaneKey.get(paneKey)
-      if (!waitingAgentIds) {
-        waitingAgentIds = new Set()
-        state.codexWaitingSubagentsByPaneKey.set(paneKey, waitingAgentIds)
-      }
-      waitingAgentIds.add(agentId)
+      lifecycle.waitingSubagentIds.add(agentId)
     } else if (accepted && (eventName === 'PreToolUse' || eventName === 'PostToolUse')) {
-      clearCodexSubagentWait(state, paneKey, agentId)
+      clearAgentSubagentWait(lifecycle, agentId)
     }
   }
   return buildCodexStatusPayload(state, eventName, '', paneKey, hookPayload, false)
@@ -3378,11 +3619,17 @@ function normalizeCodexEvent(
   if (eventName === 'SessionStart' && !isCompactSessionStart) {
     // Why: startup/resume/clear can reuse a pane for a new Codex session, but
     // compact is an in-place lead restart while its children remain live.
-    state.codexSubagentRosterByPaneKey.delete(paneKey)
-    state.codexWaitingSubagentsByPaneKey.delete(paneKey)
+    resetAgentSubagentLifecycle(state, paneKey, 'codex')
   }
-  state.codexLeadStateByPaneKey.set(paneKey, leadState)
-  return buildCodexStatusPayload(state, eventName, promptText, paneKey, hookPayload, true)
+  return buildCodexStatusPayload(
+    state,
+    eventName,
+    promptText,
+    paneKey,
+    hookPayload,
+    true,
+    leadState
+  )
 }
 
 function normalizeOpenCodeFamilyEvent(
@@ -3393,6 +3640,33 @@ function normalizeOpenCodeFamilyEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
+  if (eventName === 'SubagentStart' || eventName === 'SubagentStop') {
+    const providerIdentity = readFirstBoundedTrimmedString(
+      hookPayload,
+      ['child_id', 'childId', 'agent_id', 'agentId'],
+      512
+    )
+    if (!providerIdentity) {
+      return null
+    }
+    if (
+      !applyOpaqueSubagentLifecycleEvent(state, paneKey, source, eventName, providerIdentity, {
+        agentType: readFirstString(hookPayload, ['agent_type', 'agentType']),
+        description: readString(hookPayload, 'description')
+      })
+    ) {
+      return null
+    }
+    const snapshot = state.lastToolByPaneKey.get(paneKey) ?? {}
+    return normalizeStatusWithAgentSubagentLifecycle(state, paneKey, source, {
+      prompt: resolvePrompt(state, paneKey, '', { resetOnNewTurn: false }),
+      agentType: source,
+      toolName: snapshot.toolName,
+      toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
+      lastAssistantMessage: snapshot.lastAssistantMessage
+    })
+  }
   const stateName =
     eventName === 'SessionBusy' || eventName === 'MessagePart'
       ? 'working'
@@ -3413,9 +3687,11 @@ function normalizeOpenCodeFamilyEvent(
     { resetOnNewTurn: isNewTurnEvent(source, eventName) }
   )
 
-  return parseAgentStatusPayload(
-    JSON.stringify({
-      state: stateName,
+  return normalizeStatusWithAgentSubagentLifecycle(
+    state,
+    paneKey,
+    source,
+    {
       prompt: resolvePrompt(state, paneKey, promptText, {
         resetOnNewTurn: isNewTurnEvent(source, eventName)
       }),
@@ -3424,7 +3700,8 @@ function normalizeOpenCodeFamilyEvent(
       toolInput: snapshot.toolInput,
       interactivePrompt: snapshot.interactivePrompt,
       lastAssistantMessage: snapshot.lastAssistantMessage
-    })
+    },
+    { state: stateName }
   )
 }
 
@@ -3492,6 +3769,41 @@ function normalizeCursorEvent(
   )
 }
 
+const COPILOT_SUBAGENT_TRANSCRIPT_PATH_MAX_LENGTH = 4_096
+
+function buildCopilotStatusPayload(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>,
+  updateLeadSnapshot: boolean,
+  leadState?: AgentStatusState
+): ParsedAgentStatusPayload | null {
+  const resetLeadSnapshot = updateLeadSnapshot && isNewTurnEvent('copilot', eventName)
+  const snapshot = updateLeadSnapshot
+    ? resolveToolState(state, paneKey, extractToolFields('copilot', eventName, hookPayload), {
+        resetOnNewTurn: resetLeadSnapshot
+      })
+    : (state.lastToolByPaneKey.get(paneKey) ?? {})
+  return normalizeStatusWithAgentSubagentLifecycle(
+    state,
+    paneKey,
+    'copilot',
+    {
+      prompt: resolvePrompt(state, paneKey, updateLeadSnapshot ? promptText : '', {
+        resetOnNewTurn: resetLeadSnapshot
+      }),
+      agentType: 'copilot',
+      toolName: snapshot.toolName,
+      toolInput: snapshot.toolInput,
+      interactivePrompt: snapshot.interactivePrompt,
+      lastAssistantMessage: snapshot.lastAssistantMessage
+    },
+    leadState ? { state: leadState } : undefined
+  )
+}
+
 // Why: PermissionRequest fires before Copilot's allow/ask/deny checks, so a
 // generic PermissionRequest stays working. `ask_user` itself is a user-input
 // boundary, and notification prompts are the async user-visible blocked signal.
@@ -3505,6 +3817,34 @@ function normalizeCopilotEvent(
   const normalizedEventName = normalizeCopilotEventName(
     resolveCopilotEventName(eventName, hookPayload)
   )
+  if (normalizedEventName === 'SubagentStart' || normalizedEventName === 'SubagentStop') {
+    const transcriptPath = readFirstBoundedTrimmedString(
+      hookPayload,
+      ['transcriptPath', 'transcript_path'],
+      COPILOT_SUBAGENT_TRANSCRIPT_PATH_MAX_LENGTH
+    )
+    if (!transcriptPath) {
+      return null
+    }
+    const displayName = readFirstString(hookPayload, ['agentDisplayName', 'agent_display_name'])
+    if (
+      !applyOpaqueSubagentLifecycleEvent(
+        state,
+        paneKey,
+        'copilot',
+        normalizedEventName,
+        transcriptPath,
+        {
+          agentType: readFirstString(hookPayload, ['agentName', 'agent_name']) ?? displayName,
+          description:
+            readFirstString(hookPayload, ['agentDescription', 'agent_description']) ?? displayName
+        }
+      )
+    ) {
+      return null
+    }
+    return buildCopilotStatusPayload(state, normalizedEventName, '', paneKey, hookPayload, false)
+  }
   const notificationType = readFirstString(hookPayload, ['notification_type', 'notificationType'])
   const isBlockingNotification =
     normalizedEventName === 'Notification' &&
@@ -3534,25 +3874,18 @@ function normalizeCopilotEvent(
   if (!stateName) {
     return null
   }
-
-  const snapshot = resolveToolState(state, paneKey, toolSnapshot, {
-    resetOnNewTurn: isNewTurnEvent('copilot', normalizedEventName)
-  })
-
+  if (normalizedEventName === 'SessionStart') {
+    resetAgentSubagentLifecycle(state, paneKey, 'copilot')
+  }
   const effectivePrompt = normalizedEventName === 'Notification' ? '' : promptText
-
-  return parseAgentStatusPayload(
-    JSON.stringify({
-      state: stateName,
-      prompt: resolvePrompt(state, paneKey, effectivePrompt, {
-        resetOnNewTurn: isNewTurnEvent('copilot', normalizedEventName)
-      }),
-      agentType: 'copilot',
-      toolName: snapshot.toolName,
-      toolInput: snapshot.toolInput,
-      interactivePrompt: snapshot.interactivePrompt,
-      lastAssistantMessage: snapshot.lastAssistantMessage
-    })
+  return buildCopilotStatusPayload(
+    state,
+    normalizedEventName,
+    effectivePrompt,
+    paneKey,
+    hookPayload,
+    true,
+    stateName
   )
 }
 
@@ -3853,6 +4186,377 @@ function normalizeHermesEvent(
   )
 }
 
+type PaneAgentLifecycleSnapshot = {
+  claudeRoster?: ClaudeSubagentRoster
+  claudeLead?: ClaudeLeadTurnState
+  generic?: AgentSubagentLifecycleState
+}
+
+type AgentLifecycleNormalization =
+  | { mode: 'owned'; normalizationState: HookListenerState }
+  | {
+      mode: 'nested'
+      normalizationState: HookListenerState
+      owner: AgentLifecycleOwnerState
+      ownerEvent?: AgentHookEventPayload
+    }
+  | {
+      mode: 'tentative_claim'
+      normalizationState: HookListenerState
+      previous: PaneAgentLifecycleSnapshot
+    }
+  | { mode: 'ignore_child' }
+
+function cloneClaudeSubagentRoster(roster: ClaudeSubagentRoster): ClaudeSubagentRoster {
+  const cloned: ClaudeSubagentRoster = new Map()
+  for (const [agentId, subagent] of roster) {
+    cloned.set(agentId, { ...subagent })
+  }
+  return cloned
+}
+
+function cloneAgentSubagentLifecycle(
+  lifecycle: AgentSubagentLifecycleState
+): AgentSubagentLifecycleState {
+  const roster: AgentSubagentRoster = new Map()
+  for (const [agentId, subagent] of lifecycle.roster) {
+    roster.set(agentId, { ...subagent })
+  }
+  return {
+    source: lifecycle.source,
+    roster,
+    leadState: lifecycle.leadState,
+    ...(lifecycle.leadInterrupted ? { leadInterrupted: true } : {}),
+    waitingSubagentIds: new Set(lifecycle.waitingSubagentIds)
+  }
+}
+
+function capturePaneAgentLifecycle(
+  state: HookListenerState,
+  paneKey: string
+): PaneAgentLifecycleSnapshot {
+  const claudeRoster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+  const claudeLead = state.claudeLeadStateByPaneKey.get(paneKey)
+  const generic = state.agentSubagentLifecycleByPaneKey.get(paneKey)
+  return {
+    ...(claudeRoster ? { claudeRoster: cloneClaudeSubagentRoster(claudeRoster) } : {}),
+    ...(claudeLead
+      ? {
+          claudeLead: {
+            ...claudeLead,
+            ...(claudeLead.waitingAgentIds
+              ? { waitingAgentIds: new Set(claudeLead.waitingAgentIds) }
+              : {})
+          }
+        }
+      : {}),
+    ...(generic ? { generic: cloneAgentSubagentLifecycle(generic) } : {})
+  }
+}
+
+function clearPaneAgentLifecycleStores(state: HookListenerState, paneKey: string): void {
+  state.claudeSubagentRosterByPaneKey.delete(paneKey)
+  state.claudeLeadStateByPaneKey.delete(paneKey)
+  state.agentSubagentLifecycleByPaneKey.delete(paneKey)
+}
+
+function restorePaneAgentLifecycle(
+  state: HookListenerState,
+  paneKey: string,
+  snapshot: PaneAgentLifecycleSnapshot
+): void {
+  clearPaneAgentLifecycleStores(state, paneKey)
+  if (snapshot.claudeRoster) {
+    state.claudeSubagentRosterByPaneKey.set(paneKey, snapshot.claudeRoster)
+  }
+  if (snapshot.claudeLead) {
+    state.claudeLeadStateByPaneKey.set(paneKey, snapshot.claudeLead)
+  }
+  if (snapshot.generic) {
+    state.agentSubagentLifecycleByPaneKey.set(paneKey, snapshot.generic)
+  }
+}
+
+function isAgentAttentionState(state: AgentStatusState): boolean {
+  return state === 'blocked' || state === 'waiting'
+}
+
+function withIsolatedAgentLifecycle(
+  state: HookListenerState,
+  paneKey: string,
+  preserveOwnerTool: boolean
+): HookListenerState {
+  // Why: nested agent CLIs may update the parent pane's visible prompt/tool
+  // state, but their child rosters must never replace the pane owner's roster.
+  return {
+    ...state,
+    ...(preserveOwnerTool
+      ? {
+          // Why: an owner permission/question remains actionable while nested
+          // hooks run. A one-entry map isolates that hot cache in O(1).
+          lastToolByPaneKey: new Map(
+            state.lastToolByPaneKey.has(paneKey)
+              ? [[paneKey, { ...state.lastToolByPaneKey.get(paneKey)! }]]
+              : []
+          )
+        }
+      : {}),
+    claudeSubagentRosterByPaneKey: new Map(),
+    claudeLeadStateByPaneKey: new Map(),
+    agentSubagentLifecycleByPaneKey: new Map(),
+    agentLifecycleOwnerByPaneKey: new Map()
+  }
+}
+
+function isAgentLifecycleChildEvent(
+  source: AgentHookSource,
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): boolean {
+  switch (source) {
+    case 'claude':
+      return (
+        eventName === 'SubagentStart' ||
+        eventName === 'SubagentStop' ||
+        eventName === 'TeammateIdle' ||
+        readFirstString(hookPayload, ['agent_id', 'agentId']) !== undefined
+      )
+    case 'codex':
+      return (
+        eventName === 'SubagentStart' ||
+        eventName === 'SubagentStop' ||
+        (readFirstString(hookPayload, ['agent_id', 'agentId']) !== undefined &&
+          isCodexChildOriginEvent(eventName))
+      )
+    case 'copilot': {
+      const normalizedEventName = normalizeCopilotEventName(
+        resolveCopilotEventName(eventName, hookPayload)
+      )
+      return normalizedEventName === 'SubagentStart' || normalizedEventName === 'SubagentStop'
+    }
+    case 'opencode':
+    case 'mimo-code':
+      return eventName === 'SubagentStart' || eventName === 'SubagentStop'
+    case 'gemini':
+    case 'antigravity':
+    case 'amp':
+    case 'cursor':
+    case 'pi':
+    case 'omp':
+    case 'droid':
+    case 'command-code':
+    case 'grok':
+    case 'hermes':
+    case 'devin':
+    case 'kimi':
+      return false
+  }
+}
+
+function getAgentLifecycleOwner(
+  state: HookListenerState,
+  paneKey: string,
+  now: number
+): AgentLifecycleOwnerState | undefined {
+  const owner = state.agentLifecycleOwnerByPaneKey.get(paneKey)
+  const previous = state.lastStatusByPaneKey.get(paneKey)
+  const source = previous?.payload.agentType
+  const receivedAt = previous ? Reflect.get(previous, 'receivedAt') : undefined
+  if (owner) {
+    if (
+      previous &&
+      source === owner.source &&
+      typeof receivedAt === 'number' &&
+      Number.isFinite(receivedAt) &&
+      receivedAt > owner.updatedAt
+    ) {
+      const reconciledOwner = {
+        source: owner.source,
+        state: previous.payload.lifecycleOwnerState ?? previous.payload.state,
+        updatedAt: receivedAt
+      }
+      state.agentLifecycleOwnerByPaneKey.set(paneKey, reconciledOwner)
+      return reconciledOwner
+    }
+    return owner
+  }
+  if (!source || source === 'unknown') {
+    return undefined
+  }
+  const hydratedOwner: AgentLifecycleOwnerState = {
+    source,
+    state: previous.payload.lifecycleOwnerState ?? previous.payload.state,
+    updatedAt:
+      typeof receivedAt === 'number' && Number.isFinite(receivedAt) && receivedAt > 0
+        ? receivedAt
+        : now
+  }
+  state.agentLifecycleOwnerByPaneKey.set(paneKey, hydratedOwner)
+  return hydratedOwner
+}
+
+function prepareAgentLifecycleNormalization(
+  state: HookListenerState,
+  paneKey: string,
+  source: AgentHookSource,
+  childEvent: boolean,
+  now: number
+): AgentLifecycleNormalization {
+  const owner = getAgentLifecycleOwner(state, paneKey, now)
+  if (!owner || owner.source === source) {
+    // Why: no-owner child events are valid restart-mid-turn evidence. Once an
+    // owner exists, only that provider may mutate its lifecycle stores.
+    return { mode: 'owned', normalizationState: state }
+  }
+  if (childEvent) {
+    return { mode: 'ignore_child' }
+  }
+  if (isFreshNonDoneAgentStatus(owner, now)) {
+    const previous = state.lastStatusByPaneKey.get(paneKey)
+    return {
+      mode: 'nested',
+      normalizationState: withIsolatedAgentLifecycle(
+        state,
+        paneKey,
+        isAgentAttentionState(owner.state)
+      ),
+      owner,
+      ...(previous?.payload.agentType === owner.source ? { ownerEvent: previous } : {})
+    }
+  }
+
+  const previous = capturePaneAgentLifecycle(state, paneKey)
+  // Why: a real provider change owns a single clean lifecycle namespace. If
+  // the candidate event does not normalize, the snapshot below is restored.
+  clearPaneAgentLifecycleStores(state, paneKey)
+  return { mode: 'tentative_claim', normalizationState: state, previous }
+}
+
+type AgentLifecyclePayloadPresentation = Pick<
+  AgentStatusPayload,
+  'leadState' | 'leadInterrupted' | 'waitingSubagentIds' | 'interrupted' | 'subagents'
+>
+
+function deriveOwnerLifecyclePresentation(
+  state: HookListenerState,
+  paneKey: string,
+  preparation: Extract<AgentLifecycleNormalization, { mode: 'nested' }>
+): AgentLifecyclePayloadPresentation {
+  if (preparation.ownerEvent) {
+    const ownerPayload = preparation.ownerEvent.payload
+    return {
+      leadState: ownerPayload.leadState,
+      leadInterrupted: ownerPayload.leadInterrupted,
+      waitingSubagentIds: ownerPayload.waitingSubagentIds,
+      interrupted: ownerPayload.interrupted,
+      subagents: ownerPayload.subagents
+    }
+  }
+
+  if (preparation.owner.source === 'claude') {
+    const roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
+    const lead = state.claudeLeadStateByPaneKey.get(paneKey)
+    const subagents = claudeRosterToSnapshots(roster)
+    return {
+      leadState: subagents ? (lead?.state ?? 'working') : undefined,
+      leadInterrupted: subagents && lead?.interrupted ? true : undefined,
+      waitingSubagentIds: activeClaudeWaitingSubagentIds(lead, roster),
+      interrupted: preparation.owner.state === 'done' && lead?.interrupted ? true : undefined,
+      subagents
+    }
+  }
+
+  const lifecycle = state.agentSubagentLifecycleByPaneKey.get(paneKey)
+  if (!lifecycle || lifecycle.source !== preparation.owner.source) {
+    return {}
+  }
+  const subagents = agentSubagentRosterToSnapshots(lifecycle.roster)
+  return {
+    leadState: subagents ? lifecycle.leadState : undefined,
+    leadInterrupted: subagents && lifecycle.leadInterrupted ? true : undefined,
+    waitingSubagentIds: activeAgentSubagentWaitIds(lifecycle),
+    interrupted: preparation.owner.state === 'done' && lifecycle.leadInterrupted ? true : undefined,
+    subagents
+  }
+}
+
+function projectNestedAgentLifecyclePayload(
+  state: HookListenerState,
+  paneKey: string,
+  preparation: Extract<AgentLifecycleNormalization, { mode: 'nested' }>,
+  payload: ParsedAgentStatusPayload
+): ParsedAgentStatusPayload | null {
+  const ownerPayload = preparation.ownerEvent?.payload
+  const ownerAttention = isAgentAttentionState(preparation.owner.state)
+  const effectiveState = ownerAttention
+    ? preparation.owner.state
+    : isAgentAttentionState(payload.state)
+      ? payload.state
+      : preparation.owner.state
+  const lifecycle = deriveOwnerLifecyclePresentation(state, paneKey, preparation)
+
+  // Why: relay caches the listener result before Orca main sees it. Project
+  // nested content onto the owner here so cache/replay cannot replace the
+  // pane's provider, child roster, or underlying completion semantics.
+  return normalizeAgentStatusPayload({
+    ...payload,
+    ...lifecycle,
+    state: effectiveState,
+    lifecycleOwnerState: preparation.owner.state,
+    prompt: payload.prompt,
+    agentType: preparation.owner.source,
+    toolName: ownerAttention ? ownerPayload?.toolName : payload.toolName,
+    toolInput: ownerAttention ? ownerPayload?.toolInput : payload.toolInput,
+    interactivePrompt: ownerAttention ? ownerPayload?.interactivePrompt : payload.interactivePrompt
+  })
+}
+
+function projectNestedAgentEventIdentity(
+  preparation: AgentLifecycleNormalization,
+  event: AgentHookEventPayload
+): AgentHookEventPayload {
+  if (preparation.mode !== 'nested') {
+    return event
+  }
+  // Why: session resume and permission routing identify the pane owner, not a
+  // nested CLI that inherited ORCA_PANE_KEY from the same terminal process.
+  return {
+    ...event,
+    providerSession: preparation.ownerEvent?.providerSession,
+    toolUseId: preparation.ownerEvent?.toolUseId,
+    toolAgentId: preparation.ownerEvent?.toolAgentId,
+    toolAgentType: preparation.ownerEvent?.toolAgentType
+  }
+}
+
+function finishAgentLifecycleNormalization(
+  state: HookListenerState,
+  paneKey: string,
+  source: AgentHookSource,
+  now: number,
+  preparation: AgentLifecycleNormalization,
+  payload: ParsedAgentStatusPayload | null
+): ParsedAgentStatusPayload | null {
+  if (preparation.mode === 'ignore_child') {
+    return null
+  }
+  if (preparation.mode === 'tentative_claim' && !payload) {
+    restorePaneAgentLifecycle(state, paneKey, preparation.previous)
+    return null
+  }
+  if (preparation.mode === 'nested') {
+    return payload ? projectNestedAgentLifecyclePayload(state, paneKey, preparation, payload) : null
+  }
+  if (payload) {
+    state.agentLifecycleOwnerByPaneKey.set(paneKey, {
+      source,
+      state: payload.state,
+      updatedAt: now
+    })
+  }
+  return payload
+}
+
 function readStringField(record: Record<string, unknown>, key: string): string | undefined {
   const value = record[key]
   if (typeof value !== 'string') {
@@ -3915,6 +4619,18 @@ export function normalizeHookPayload(
     readFirstString(record, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType']) ??
     hookPayloadRecord.hook_event_name ??
     hookPayloadRecord.hookEventName
+  const lifecycleNow = Date.now()
+  const lifecyclePreparation = prepareAgentLifecycleNormalization(
+    state,
+    paneKey,
+    source,
+    isAgentLifecycleChildEvent(source, eventName, hookPayloadRecord),
+    lifecycleNow
+  )
+  if (lifecyclePreparation.mode === 'ignore_child') {
+    return null
+  }
+  const normalizationState = lifecyclePreparation.normalizationState
   const extractedPrompt = extractPromptText(hookPayload as Record<string, unknown>)
   const promptText = extractedPrompt.text
   let resolvedPromptText = promptText
@@ -3924,13 +4640,31 @@ export function normalizeHookPayload(
   let payload: ParsedAgentStatusPayload | null
   switch (source) {
     case 'claude':
-      payload = normalizeClaudeEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      payload = normalizeClaudeEvent(
+        normalizationState,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord
+      )
       break
     case 'codex':
-      payload = normalizeCodexEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      payload = normalizeCodexEvent(
+        normalizationState,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord
+      )
       break
     case 'gemini':
-      payload = normalizeGeminiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      payload = normalizeGeminiEvent(
+        normalizationState,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord
+      )
       break
     case 'antigravity':
       if (isNewTurnEvent('antigravity', eventName)) {
@@ -3941,10 +4675,22 @@ export function normalizeHookPayload(
           ) ||
           ''
       }
-      payload = normalizeAntigravityEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      payload = normalizeAntigravityEvent(
+        normalizationState,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord
+      )
       break
     case 'amp':
-      payload = normalizeAmpEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      payload = normalizeAmpEvent(
+        normalizationState,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord
+      )
       break
     case 'opencode':
     case 'mimo-code':
@@ -3959,7 +4705,7 @@ export function normalizeHookPayload(
       }
       payload = normalizeOpenCodeFamilyEvent(
         source,
-        state,
+        normalizationState,
         eventName,
         promptText,
         paneKey,
@@ -3967,11 +4713,17 @@ export function normalizeHookPayload(
       )
       break
     case 'cursor':
-      payload = normalizeCursorEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      payload = normalizeCursorEvent(
+        normalizationState,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord
+      )
       break
     case 'pi':
       payload = normalizePiCompatibleEvent(
-        state,
+        normalizationState,
         'pi',
         eventName,
         promptText,
@@ -3981,7 +4733,7 @@ export function normalizeHookPayload(
       break
     case 'omp':
       payload = normalizePiCompatibleEvent(
-        state,
+        normalizationState,
         'omp',
         eventName,
         promptText,
@@ -3990,7 +4742,13 @@ export function normalizeHookPayload(
       )
       break
     case 'droid':
-      payload = normalizeDroidEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      payload = normalizeDroidEvent(
+        normalizationState,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord
+      )
       break
     case 'command-code':
       {
@@ -4005,7 +4763,7 @@ export function normalizeHookPayload(
         }
       }
       payload = normalizeCommandCodeEvent(
-        state,
+        normalizationState,
         eventName,
         resolvedPromptText,
         paneKey,
@@ -4014,7 +4772,7 @@ export function normalizeHookPayload(
       break
     case 'grok':
       payload = normalizeGrokEvent(
-        state,
+        normalizationState,
         eventName,
         promptText,
         paneKey,
@@ -4023,52 +4781,87 @@ export function normalizeHookPayload(
       )
       break
     case 'copilot':
-      payload = normalizeCopilotEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      payload = normalizeCopilotEvent(
+        normalizationState,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord
+      )
       break
     case 'hermes':
-      payload = normalizeHermesEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      payload = normalizeHermesEvent(
+        normalizationState,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord
+      )
       break
     case 'devin':
-      payload = normalizeDevinEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      payload = normalizeDevinEvent(
+        normalizationState,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord
+      )
       break
     case 'kimi':
-      payload = normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      payload = normalizeKimiEvent(
+        normalizationState,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayloadRecord
+      )
       break
   }
+
+  payload = finishAgentLifecycleNormalization(
+    state,
+    paneKey,
+    source,
+    lifecycleNow,
+    lifecyclePreparation,
+    payload
+  )
 
   // Why: connectionId stays null at the listener layer. The local server keeps
   // it null; the relay forwards null on the wire and Orca's `ingestRemote`
   // stamps the real value from `mux` identity on receive. See
   // docs/design/agent-status-over-ssh.md §5.
   const providerSession = extractAgentProviderSession(source, hookPayloadRecord)
-  return payload
-    ? {
-        paneKey,
-        launchToken,
-        tabId,
-        worktreeId,
-        connectionId: null,
-        hasExplicitPrompt:
-          source === 'amp'
-            ? hasExplicitPromptForSource(source, eventName, promptText, hookPayloadRecord)
-              ? true
-              : undefined
-            : hasExplicitUserPrompt(
-                source,
-                eventName,
-                extractedPrompt,
-                resolvedPromptText,
-                hasTranscriptPromptEvidence
-              ),
-        promptInteractionKey,
-        hookEventName: typeof eventName === 'string' ? eventName : undefined,
-        toolUseId: readFirstString(hookPayloadRecord, ['tool_use_id', 'toolUseId']),
-        toolAgentId: readFirstString(hookPayloadRecord, ['agent_id', 'agentId']),
-        toolAgentType: readFirstString(hookPayloadRecord, ['agent_type', 'agentType']),
-        ...(providerSession ? { providerSession } : {}),
-        payload
-      }
-    : null
+  if (!payload) {
+    return null
+  }
+  const event: AgentHookEventPayload = {
+    paneKey,
+    launchToken,
+    tabId,
+    worktreeId,
+    connectionId: null,
+    hasExplicitPrompt:
+      source === 'amp'
+        ? hasExplicitPromptForSource(source, eventName, promptText, hookPayloadRecord)
+          ? true
+          : undefined
+        : hasExplicitUserPrompt(
+            source,
+            eventName,
+            extractedPrompt,
+            resolvedPromptText,
+            hasTranscriptPromptEvidence
+          ),
+    promptInteractionKey,
+    hookEventName: typeof eventName === 'string' ? eventName : undefined,
+    toolUseId: readFirstString(hookPayloadRecord, ['tool_use_id', 'toolUseId']),
+    toolAgentId: readFirstString(hookPayloadRecord, ['agent_id', 'agentId']),
+    toolAgentType: readFirstString(hookPayloadRecord, ['agent_type', 'agentType']),
+    ...(providerSession ? { providerSession } : {}),
+    payload
+  }
+  return projectNestedAgentEventIdentity(lifecyclePreparation, event)
 }
 
 // ─── URL routing ────────────────────────────────────────────────────

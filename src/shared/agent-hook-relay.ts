@@ -74,9 +74,9 @@ export type AgentHookRelayEnvelope = {
   hookEventName?: string
   /** Claude tool execution id, when the source hook provides one. */
   toolUseId?: string
-  /** Claude subagent identity, when the source hook provides one. */
+  /** Agent/subagent identity, when the source hook provides one. */
   toolAgentId?: string
-  /** Claude agent type, used only as a lower-confidence identity fallback. */
+  /** Agent/subagent type, used only as a lower-confidence identity fallback. */
   toolAgentType?: string
   /** Provider-owned conversation/session id needed to resume a sleeping agent. */
   providerSession?: AgentProviderSessionMetadata

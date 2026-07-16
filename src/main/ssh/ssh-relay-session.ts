@@ -32,6 +32,7 @@ import {
   isRemoteAgentHooksEnabled
 } from '../../shared/agent-hook-relay'
 import { _internals as openCodeInternals } from '../opencode/hook-service'
+import { _internals as mimoCodeInternals } from '../mimo/hook-service'
 import { getPiAgentStatusExtensionSource } from '../pi/agent-status-extension-source'
 import {
   registerSshPtyProvider,
@@ -840,15 +841,15 @@ export class SshRelaySession {
     })
   }
 
-  // Why: ship the OpenCode plugin / Pi extension source bodies to the relay
-  // so it can materialize overlay dirs and inject OPENCODE_CONFIG_DIR
-  // / PI_CODING_AGENT_DIR into spawn env. The strings change as we add agent
+  // Why: ship plugin / extension source bodies to the relay so it can
+  // materialize host-local overlays and inject their config homes into spawn
+  // env. The strings change as we add agent
   // events (recent additions: cursor, pi); pinning them to the relay binary
   // would force a relay redeploy on every Orca update. See
   // docs/design/agent-status-over-ssh.md §4 + §8 (commit #7).
   //
   // Best-effort: a -32601 from an older relay (no handler installed) is
-  // swallowed; the user just doesn't get OpenCode/Pi status reporting until
+  // swallowed; the user just doesn't get plugin-backed status reporting until
   // they upgrade. Hook-script-based agents use a separate explicit remote
   // installer flow because that mutates user-owned agent config files.
   private async installPluginsOnRelay(mux: SshChannelMultiplexer): Promise<void> {
@@ -858,6 +859,7 @@ export class SshRelaySession {
     try {
       await mux.request(AGENT_HOOK_INSTALL_PLUGINS_METHOD, {
         opencodePluginSource: openCodeInternals.getOpenCodePluginSource(),
+        mimoPluginSource: mimoCodeInternals.getMimoCodePluginSource(),
         piExtensionSource: getPiAgentStatusExtensionSource('pi'),
         ompExtensionSource: getPiAgentStatusExtensionSource('omp')
       })

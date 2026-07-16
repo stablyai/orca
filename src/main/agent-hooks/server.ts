@@ -34,8 +34,7 @@ import {
   readRequestBody,
   resolveHookSource,
   preparePendingGrokResultDiscovery,
-  seedClaudeSubagentRosterFromSnapshots,
-  seedCodexSubagentRosterFromSnapshots,
+  seedAgentSubagentLifecycleFromSnapshots,
   warnOnHookEnvOrVersionMismatch,
   writeEndpointFile,
   type AgentHookEventPayload,
@@ -284,8 +283,8 @@ function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentSta
 }
 
 // Why: OSC-only dedupe (ingestTerminalStatus). Deliberately omits `subagents`
-// and `leadState`: OSC payloads never carry either, and including them would
-// make every child-gated hook entry non-equivalent — the OSC ping would then
+// and lead persistence metadata: OSC payloads never carry them. Including
+// them would make every child-gated hook entry non-equivalent — the OSC ping would then
 // apply and wipe lifecycle metadata. Do not reuse this for hook comparisons.
 function equivalentParsedAgentStatusPayload(
   a: ParsedAgentStatusPayload,
@@ -1799,20 +1798,20 @@ export class AgentHookServer {
           entry.payload = hydratedPayload
         }
         this.state.lastStatusByPaneKey.set(resolvedPaneKey, entry)
-        // Why: preserve only working children across restart. Live activity
-        // confirms them; a later complete inventory may reap stale seeds.
-        if (entry.payload.agentType === 'claude' && entry.payload.subagents) {
-          seedClaudeSubagentRosterFromSnapshots(
+        // Why: child-aware providers share one persistence contract. Restore
+        // by the payload's actual provider so compatible agents do not need a
+        // new hard-coded hydration branch to keep their worktree state honest.
+        if (entry.payload.agentType && entry.payload.subagents) {
+          seedAgentSubagentLifecycleFromSnapshots(
             this.state,
             resolvedPaneKey,
-            entry.payload.subagents
-          )
-        } else if (entry.payload.agentType === 'codex' && entry.payload.subagents) {
-          seedCodexSubagentRosterFromSnapshots(
-            this.state,
-            resolvedPaneKey,
+            entry.payload.agentType,
             entry.payload.subagents,
-            entry.payload.leadState
+            {
+              leadState: entry.payload.leadState,
+              leadInterrupted: entry.payload.leadInterrupted,
+              waitingSubagentIds: entry.payload.waitingSubagentIds
+            }
           )
         }
         hydrated += 1

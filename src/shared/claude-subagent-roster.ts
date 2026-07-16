@@ -61,9 +61,9 @@ export function upsertWorkingClaudeSubagent(
   id: string,
   fields: { agentType?: string; description?: string },
   now: number
-): void {
+): boolean {
   if (id.length === 0 || id.length > CLAUDE_SUBAGENT_ID_MAX_LENGTH) {
-    return
+    return false
   }
   const existing = roster.get(id)
   if (existing) {
@@ -73,18 +73,19 @@ export function upsertWorkingClaudeSubagent(
     // background_tasks omission must stop reaping it (teammate-shaped ids
     // never appear there). The fold re-tags its own recreations after this.
     existing.backgroundTasksAuthoritative = undefined
-    return
+    return true
   }
   // Why: beyond the wire cap extra rows would be invisible anyway; with only
   // working entries tracked there is nothing safe to evict.
   if (roster.size >= AGENT_STATUS_MAX_SUBAGENTS) {
-    return
+    return false
   }
   roster.set(id, {
     startedAt: now,
     agentType: fields.agentType,
     description: fields.description
   })
+  return true
 }
 
 /** SubagentStop: the finished child leaves the sidebar immediately. This

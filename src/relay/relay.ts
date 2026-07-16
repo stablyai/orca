@@ -56,7 +56,11 @@ import {
   SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD
 } from '../shared/ssh-types'
 import { assertPluginSourceUnderByteCap } from './plugin-source-limit'
-import { resolveOpenCodeSourceConfigDir, resolvePiSourceAgentDir } from './plugin-overlay-env'
+import {
+  buildMimoCodePluginOverlayEnv,
+  resolveOpenCodeSourceConfigDir,
+  resolvePiSourceAgentDir
+} from './plugin-overlay-env'
 import { detectPiAgentKindFromCommand } from '../shared/pi-agent-kind'
 import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
 import { pickRemoteCliEnv } from './remote-cli-env'
@@ -555,7 +559,7 @@ async function main(): Promise<void> {
   ptyHandler.addEnvAugmenter(() => hookServer.buildPtyEnv())
 
   // Why: plugin install paths must be resolved on the relay host. OpenCode
-  // still needs a relay-local config overlay, while Pi/OMP receive guarded
+  // and MiMo need relay-local config overlays, while Pi/OMP receive guarded
   // status extensions in their real remote agent dirs.
   const pluginOverlay = new PluginOverlayManager()
   ptyHandler.addEnvAugmenter((ctx) => {
@@ -576,6 +580,7 @@ async function main(): Promise<void> {
         }
       }
     }
+    Object.assign(env, buildMimoCodePluginOverlayEnv(pluginOverlay, ctx))
     if (pluginOverlay.hasPiSource()) {
       // Why: source-dir defaulting is keyed on which Pi-compatible agent is
       // being launched (Pi vs OMP). Install Orca's guarded extension into that
@@ -643,19 +648,23 @@ async function main(): Promise<void> {
   // are <50 KB today; 256 KB leaves generous headroom.
   dispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async (params) => {
     const opencode = params.opencodePluginSource
+    const mimo = params.mimoPluginSource
     const pi = params.piExtensionSource
     const omp = params.ompExtensionSource
     assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
+    assertPluginSourceUnderByteCap('mimoPluginSource', mimo)
     assertPluginSourceUnderByteCap('piExtensionSource', pi)
     assertPluginSourceUnderByteCap('ompExtensionSource', omp)
     pluginOverlay.setSources({
       opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
+      mimoPluginSource: typeof mimo === 'string' ? mimo : undefined,
       piExtensionSource: typeof pi === 'string' ? pi : undefined,
       ompExtensionSource: typeof omp === 'string' ? omp : undefined
     })
     return {
       installed: {
         opencode: pluginOverlay.hasOpenCodeSource(),
+        mimo: pluginOverlay.hasMimoSource(),
         pi: pluginOverlay.hasPiSource('pi'),
         omp: pluginOverlay.hasPiSource('omp')
       }

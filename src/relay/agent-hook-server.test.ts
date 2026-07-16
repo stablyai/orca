@@ -160,10 +160,15 @@ describe('RelayAgentHookServer', () => {
         agent_type: 'reviewer'
       })
       await postCodex({ hook_event_name: 'Stop' })
+      await postCodex({
+        hook_event_name: 'PermissionRequest',
+        agent_id: 'remote-reviewer'
+      })
 
       expect(forward.mock.calls.at(-1)?.[0].payload).toMatchObject({
-        state: 'working',
+        state: 'waiting',
         leadState: 'done',
+        waitingSubagentIds: ['remote-reviewer'],
         subagents: [expect.objectContaining({ id: 'remote-reviewer' })]
       })
 
@@ -171,6 +176,137 @@ describe('RelayAgentHookServer', () => {
       expect(server.replayCachedPayloadsForPanes()).toBe(1)
       expect(forward).toHaveBeenCalledTimes(1)
       expect(forward.mock.calls[0][0].payload.leadState).toBe('done')
+      expect(forward.mock.calls[0][0].payload.waitingSubagentIds).toEqual(['remote-reviewer'])
+      expect(forward.mock.calls[0][0].isReplay).toBe(true)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('replays an owner lifecycle projection after a nested provider event', async () => {
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const post = (
+        source: 'claude' | 'codex',
+        payload: Record<string, unknown>
+      ): Promise<Response> =>
+        fetch(`http://127.0.0.1:${port}/hook/${source}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': token
+          },
+          body: JSON.stringify({
+            paneKey: PANE_KEY,
+            tabId: 'tab-1',
+            env: 'remote',
+            version: '1',
+            payload
+          })
+        })
+
+      await post('claude', {
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'remote owner review',
+        session_id: 'remote-owner-session'
+      })
+      await post('claude', {
+        hook_event_name: 'SubagentStart',
+        agent_id: 'remote-owner-reviewer',
+        agent_type: 'reviewer',
+        session_id: 'remote-owner-session'
+      })
+      await post('claude', {
+        hook_event_name: 'Stop',
+        is_interrupt: true,
+        session_id: 'remote-owner-session'
+      })
+      await post('codex', {
+        hook_event_name: 'Stop',
+        last_assistant_message: 'nested remote complete',
+        session_id: 'nested-remote-session'
+      })
+
+      expect(forward.mock.calls.at(-1)?.[0]).toMatchObject({
+        source: 'codex',
+        providerSession: { id: 'remote-owner-session' },
+        payload: {
+          state: 'working',
+          lifecycleOwnerState: 'working',
+          agentType: 'claude',
+          leadState: 'done',
+          leadInterrupted: true,
+          lastAssistantMessage: 'nested remote complete',
+          subagents: [expect.objectContaining({ id: 'remote-owner-reviewer' })]
+        }
+      })
+
+      forward.mockClear()
+      expect(server.replayCachedPayloadsForPanes()).toBe(1)
+      expect(forward).toHaveBeenCalledTimes(1)
+      expect(forward.mock.calls[0][0]).toMatchObject({
+        isReplay: true,
+        providerSession: { id: 'remote-owner-session' },
+        payload: {
+          state: 'working',
+          lifecycleOwnerState: 'working',
+          agentType: 'claude',
+          leadState: 'done',
+          leadInterrupted: true,
+          subagents: [expect.objectContaining({ id: 'remote-owner-reviewer' })]
+        }
+      })
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('preserves Copilot child-gated lead ownership through remote cache replay', async () => {
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const postCopilot = (payload: Record<string, unknown>): Promise<Response> =>
+        fetch(`http://127.0.0.1:${port}/hook/copilot`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': token
+          },
+          body: JSON.stringify({
+            paneKey: PANE_KEY,
+            tabId: 'tab-1',
+            env: 'remote',
+            version: '1',
+            payload
+          })
+        })
+
+      await postCopilot({ hook_event_name: 'UserPromptSubmit', prompt: 'remote Copilot review' })
+      await postCopilot({
+        hook_event_name: 'subagentStart',
+        transcriptPath: '/home/dev/.copilot/session/reviewer.jsonl',
+        agentName: 'reviewer'
+      })
+      await postCopilot({ hook_event_name: 'agentStop' })
+
+      expect(forward.mock.calls.at(-1)?.[0].payload).toMatchObject({
+        state: 'working',
+        leadState: 'done',
+        subagents: [expect.objectContaining({ agentType: 'reviewer' })]
+      })
+
+      forward.mockClear()
+      expect(server.replayCachedPayloadsForPanes()).toBe(1)
+      expect(forward).toHaveBeenCalledTimes(1)
+      expect(forward.mock.calls[0][0].payload).toMatchObject({
+        leadState: 'done',
+        subagents: [expect.objectContaining({ id: expect.stringMatching(/^copilot:/) })]
+      })
       expect(forward.mock.calls[0][0].isReplay).toBe(true)
     } finally {
       server.stop()

@@ -101,6 +101,7 @@ describe('AgentHookServer listener replay', () => {
         worktreeId: 'wt-1',
         payload: {
           state: 'working',
+          lifecycleOwnerState: 'working',
           leadState: 'done',
           prompt: 'remote review',
           agentType: 'codex',
@@ -2376,7 +2377,7 @@ describe('AgentHookServer listener replay', () => {
     }
   })
 
-  it('ignores local nested Claude Stop while a parent Codex hook status is active', async () => {
+  it('keeps parent Codex presentation while accepting nested Claude completion content', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
     try {
@@ -2419,8 +2420,8 @@ describe('AgentHookServer listener replay', () => {
         })
       ])
       const snapshot = server.getStatusSnapshot()[0]
-      expect(snapshot.lastAssistantMessage).toBeUndefined()
-      expect(listener).toHaveBeenCalledTimes(1)
+      expect(snapshot.lastAssistantMessage).toBe('child finished')
+      expect(listener).toHaveBeenCalledTimes(2)
       expect(listener).toHaveBeenLastCalledWith(
         expect.objectContaining({
           payload: expect.objectContaining({
@@ -6093,11 +6094,17 @@ describe('Last-status persistence', () => {
         '/hook/codex'
       )
       await postHookEvent(firstServer, buildBody({ hook_event_name: 'Stop' }), '/hook/codex')
+      await postHookEvent(
+        firstServer,
+        buildBody({ hook_event_name: 'PermissionRequest', agent_id: 'persisted-reviewer' }),
+        '/hook/codex'
+      )
       firstServer.flushStatusPersistSync()
       const persisted = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
       expect(persisted.entries[PANE].payload).toMatchObject({
-        state: 'working',
+        state: 'waiting',
         leadState: 'done',
+        waitingSubagentIds: ['persisted-reviewer'],
         subagents: [expect.objectContaining({ id: 'persisted-reviewer' })]
       })
       firstServer.stop()
@@ -6105,12 +6112,20 @@ describe('Last-status persistence', () => {
       await restartedServer.start({ env: 'production', userDataPath })
       expect(restartedServer.getStatusSnapshot()).toEqual([
         expect.objectContaining({
-          state: 'working',
+          state: 'waiting',
           agentType: 'codex',
           subagents: [expect.objectContaining({ id: 'persisted-reviewer', state: 'working' })]
         })
       ])
       expect('leadState' in restartedServer.getStatusSnapshot()[0]).toBe(false)
+      expect('waitingSubagentIds' in restartedServer.getStatusSnapshot()[0]).toBe(false)
+
+      await postHookEvent(
+        restartedServer,
+        buildBody({ hook_event_name: 'SubagentStart', agent_id: 'unrelated-reviewer' }),
+        '/hook/codex'
+      )
+      expect(restartedServer.getStatusSnapshot()[0].state).toBe('waiting')
 
       await postHookEvent(
         restartedServer,
@@ -6119,11 +6134,270 @@ describe('Last-status persistence', () => {
       )
       expect(restartedServer.getStatusSnapshot()).toEqual([
         expect.objectContaining({
-          state: 'done',
+          state: 'working',
           agentType: 'codex',
+          subagents: [expect.objectContaining({ id: 'unrelated-reviewer' })]
+        })
+      ])
+      await postHookEvent(
+        restartedServer,
+        buildBody({ hook_event_name: 'SubagentStop', agent_id: 'unrelated-reviewer' }),
+        '/hook/codex'
+      )
+      expect(restartedServer.getStatusSnapshot()[0]).toMatchObject({
+        state: 'done',
+        agentType: 'codex',
+        subagents: undefined
+      })
+    } finally {
+      firstServer.stop()
+      restartedServer.stop()
+    }
+  })
+
+  it('hydrates Copilot lead ownership so the final child stop resolves after restart', async () => {
+    const firstServer = new AgentHookServer()
+    const restartedServer = new AgentHookServer()
+    const transcriptPath = 'C:\\Users\\tester\\.copilot\\session-1\\reviewer.jsonl'
+    try {
+      await firstServer.start({ env: 'production', userDataPath })
+      await postHookEvent(
+        firstServer,
+        buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'persisted Copilot review' }),
+        '/hook/copilot'
+      )
+      await postHookEvent(
+        firstServer,
+        buildBody({
+          hook_event_name: 'subagentStart',
+          transcriptPath,
+          agentName: 'reviewer',
+          agentDisplayName: 'PR reviewer'
+        }),
+        '/hook/copilot'
+      )
+      await postHookEvent(firstServer, buildBody({ hook_event_name: 'agentStop' }), '/hook/copilot')
+      firstServer.flushStatusPersistSync()
+      const persisted = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      const persistedChildId = persisted.entries[PANE].payload.subagents[0].id
+      expect(persisted.entries[PANE].payload).toMatchObject({
+        state: 'working',
+        leadState: 'done',
+        subagents: [expect.objectContaining({ agentType: 'reviewer' })]
+      })
+      expect(persistedChildId).toMatch(/^copilot:[a-f0-9]{32}$/)
+      firstServer.stop()
+
+      await restartedServer.start({ env: 'production', userDataPath })
+      expect(restartedServer.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'working',
+          agentType: 'copilot',
+          subagents: [expect.objectContaining({ id: persistedChildId, state: 'working' })]
+        })
+      ])
+      expect('leadState' in restartedServer.getStatusSnapshot()[0]).toBe(false)
+
+      await postHookEvent(
+        restartedServer,
+        buildBody({
+          hook_event_name: 'SubagentStop',
+          transcript_path: transcriptPath,
+          agent_name: 'reviewer'
+        }),
+        '/hook/copilot'
+      )
+      expect(restartedServer.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'done',
+          agentType: 'copilot',
           subagents: undefined
         })
       ])
+    } finally {
+      firstServer.stop()
+      restartedServer.stop()
+    }
+  })
+
+  it('hydrates Claude lead completion and interruption through the final child stop', async () => {
+    const firstServer = new AgentHookServer()
+    const restartedServer = new AgentHookServer()
+    try {
+      await firstServer.start({ env: 'production', userDataPath })
+      await postHookEvent(
+        firstServer,
+        buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'persisted Claude review' })
+      )
+      await postHookEvent(
+        firstServer,
+        buildBody({
+          hook_event_name: 'SubagentStart',
+          agent_id: 'persisted-claude-reviewer',
+          agent_type: 'reviewer'
+        })
+      )
+      await postHookEvent(firstServer, buildBody({ hook_event_name: 'Stop', is_interrupt: true }))
+      await postHookEvent(
+        firstServer,
+        buildBody({
+          hook_event_name: 'PermissionRequest',
+          agent_id: 'persisted-claude-reviewer'
+        })
+      )
+      firstServer.flushStatusPersistSync()
+      const persisted = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      expect(persisted.entries[PANE].payload).toMatchObject({
+        state: 'waiting',
+        leadState: 'done',
+        leadInterrupted: true,
+        waitingSubagentIds: ['persisted-claude-reviewer'],
+        subagents: [expect.objectContaining({ id: 'persisted-claude-reviewer' })]
+      })
+      firstServer.stop()
+
+      await restartedServer.start({ env: 'production', userDataPath })
+      const restartedSnapshot = restartedServer.getStatusSnapshot()[0]
+      expect(restartedSnapshot).toMatchObject({
+        state: 'waiting',
+        agentType: 'claude',
+        subagents: [expect.objectContaining({ id: 'persisted-claude-reviewer' })]
+      })
+      expect('leadState' in restartedSnapshot).toBe(false)
+      expect('leadInterrupted' in restartedSnapshot).toBe(false)
+      expect('waitingSubagentIds' in restartedSnapshot).toBe(false)
+
+      await postHookEvent(
+        restartedServer,
+        buildBody({
+          hook_event_name: 'SubagentStart',
+          agent_id: 'unrelated-claude-reviewer'
+        })
+      )
+      expect(restartedServer.getStatusSnapshot()[0].state).toBe('waiting')
+
+      await postHookEvent(
+        restartedServer,
+        buildBody({ hook_event_name: 'SubagentStop', agent_id: 'persisted-claude-reviewer' })
+      )
+      expect(restartedServer.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'working',
+          agentType: 'claude',
+          subagents: [expect.objectContaining({ id: 'unrelated-claude-reviewer' })]
+        })
+      ])
+      await postHookEvent(
+        restartedServer,
+        buildBody({
+          hook_event_name: 'SubagentStop',
+          agent_id: 'unrelated-claude-reviewer'
+        })
+      )
+      expect(restartedServer.getStatusSnapshot()[0]).toMatchObject({
+        state: 'done',
+        agentType: 'claude',
+        interrupted: true,
+        subagents: undefined
+      })
+    } finally {
+      firstServer.stop()
+      restartedServer.stop()
+    }
+  })
+
+  it('persists the owner lifecycle after a nested provider event and restores it on restart', async () => {
+    const firstServer = new AgentHookServer()
+    const restartedServer = new AgentHookServer()
+    try {
+      await firstServer.start({ env: 'production', userDataPath })
+      await postHookEvent(
+        firstServer,
+        buildBody({
+          hook_event_name: 'UserPromptSubmit',
+          prompt: 'owner review before restart',
+          session_id: 'persisted-owner-session'
+        })
+      )
+      await postHookEvent(
+        firstServer,
+        buildBody({
+          hook_event_name: 'SubagentStart',
+          agent_id: 'persisted-owner-reviewer',
+          agent_type: 'reviewer',
+          session_id: 'persisted-owner-session'
+        })
+      )
+      await postHookEvent(
+        firstServer,
+        buildBody({
+          hook_event_name: 'Stop',
+          is_interrupt: true,
+          session_id: 'persisted-owner-session'
+        })
+      )
+      await postHookEvent(
+        firstServer,
+        buildBody({
+          hook_event_name: 'Stop',
+          last_assistant_message: 'nested completion before restart',
+          session_id: 'nested-session'
+        }),
+        '/hook/codex'
+      )
+
+      firstServer.flushStatusPersistSync()
+      const persisted = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      expect(persisted.entries[PANE]).toMatchObject({
+        providerSession: { id: 'persisted-owner-session' },
+        payload: {
+          state: 'working',
+          lifecycleOwnerState: 'working',
+          agentType: 'claude',
+          leadState: 'done',
+          leadInterrupted: true,
+          lastAssistantMessage: 'nested completion before restart',
+          subagents: [expect.objectContaining({ id: 'persisted-owner-reviewer' })]
+        }
+      })
+      firstServer.stop()
+
+      await restartedServer.start({ env: 'production', userDataPath })
+      expect(restartedServer.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          state: 'working',
+          agentType: 'claude',
+          providerSession: expect.objectContaining({ id: 'persisted-owner-session' }),
+          subagents: [expect.objectContaining({ id: 'persisted-owner-reviewer' })]
+        })
+      ])
+      expect('lifecycleOwnerState' in restartedServer.getStatusSnapshot()[0]).toBe(false)
+
+      await postHookEvent(
+        restartedServer,
+        buildBody({ hook_event_name: 'Stop', session_id: 'nested-session-after-restart' }),
+        '/hook/codex'
+      )
+      expect(restartedServer.getStatusSnapshot()[0]).toMatchObject({
+        state: 'working',
+        agentType: 'claude',
+        providerSession: { id: 'persisted-owner-session' },
+        subagents: [expect.objectContaining({ id: 'persisted-owner-reviewer' })]
+      })
+
+      await postHookEvent(
+        restartedServer,
+        buildBody({
+          hook_event_name: 'SubagentStop',
+          agent_id: 'persisted-owner-reviewer'
+        })
+      )
+      expect(restartedServer.getStatusSnapshot()[0]).toMatchObject({
+        state: 'done',
+        agentType: 'claude',
+        interrupted: true,
+        subagents: undefined
+      })
     } finally {
       firstServer.stop()
       restartedServer.stop()

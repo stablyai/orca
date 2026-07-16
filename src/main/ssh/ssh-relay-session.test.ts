@@ -290,6 +290,8 @@ describe('SshRelaySession', () => {
     expect(installPluginsCallIndex).toBeGreaterThanOrEqual(0)
     const installPluginsParams = muxRequestMock.mock.calls[installPluginsCallIndex]?.[1]
     expect(installPluginsParams).toMatchObject({
+      opencodePluginSource: expect.stringContaining('/hook/opencode'),
+      mimoPluginSource: expect.stringContaining('/hook/mimo-code'),
       piExtensionSource: expect.stringContaining('/hook/pi'),
       ompExtensionSource: expect.stringContaining('/hook/omp')
     })

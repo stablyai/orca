@@ -13,6 +13,7 @@ const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 function makeAgentStatusEntry(args: {
   paneKey: string
   state: AgentStatusEntry['state']
+  agentType?: AgentStatusEntry['agentType']
   worktreeId?: string
   parentPaneKey?: string
 }): AgentStatusEntry {
@@ -23,6 +24,7 @@ function makeAgentStatusEntry(args: {
     updatedAt: 1_000,
     stateStartedAt: 1_000,
     stateHistory: [],
+    agentType: args.agentType,
     worktreeId: args.worktreeId,
     orchestration: args.parentPaneKey
       ? {
@@ -163,6 +165,60 @@ describe('selectWorktreeAgentActivitySummary', () => {
       hasLiveDone: true
     })
     expect(nowSpy).toHaveBeenCalledTimes(2)
+  })
+
+  it('summarizes custom-agent states identically to a known agent', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    const worktreeId = 'repo::/wt-custom-agent'
+    const paneKey = makePaneKey('tab-custom-agent', LEAF_ID)
+    const cases: {
+      state: AgentStatusEntry['state']
+      expected: Pick<
+        ReturnType<typeof selectWorktreeAgentActivitySummary>,
+        'hasPermission' | 'hasLiveWorking' | 'hasLiveDone'
+      >
+    }[] = [
+      {
+        state: 'working',
+        expected: { hasPermission: false, hasLiveWorking: true, hasLiveDone: false }
+      },
+      {
+        state: 'waiting',
+        expected: { hasPermission: true, hasLiveWorking: false, hasLiveDone: false }
+      },
+      {
+        state: 'done',
+        expected: { hasPermission: false, hasLiveWorking: false, hasLiveDone: true }
+      }
+    ]
+    const summarize = (
+      agentType: NonNullable<AgentStatusEntry['agentType']>,
+      state: AgentStatusEntry['state'],
+      agentStatusEpoch: number
+    ) =>
+      selectWorktreeAgentActivitySummary(
+        {
+          tabsByWorktree: {
+            [worktreeId]: [makeTab('tab-custom-agent', worktreeId)]
+          },
+          agentStatusEpoch,
+          agentStatusByPaneKey: {
+            [paneKey]: makeAgentStatusEntry({ paneKey, state, agentType })
+          },
+          migrationUnsupportedByPtyId: {},
+          runtimeAgentOrchestrationByPaneKey: {},
+          retainedAgentsByPaneKey: {}
+        },
+        worktreeId
+      )
+
+    for (const [index, testCase] of cases.entries()) {
+      const knownAgent = summarize('codex', testCase.state, index * 2)
+      const customAgent = summarize('vendor-custom-agent', testCase.state, index * 2 + 1)
+
+      expect(customAgent).toEqual(knownAgent)
+      expect(customAgent).toMatchObject(testCase.expected)
+    }
   })
 
   it('limits summary-reference churn to the transitioning worktree at scale', () => {

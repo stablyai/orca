@@ -36,6 +36,10 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     `ORCA_AGENT_HOOK_ENDPOINT/${endpointFlag}`,
     'ORCA_WSL_HOOK_RELAY_VERSION/u',
     'ORCA_WSL_HOOK_INSTANCE/u',
+    // Why: MiMo's plugin overlay is materialized on the Windows host. DrvFS
+    // path translation lets the WSL-side MiMo process load that same home.
+    'MIMOCODE_HOME/p',
+    'ORCA_MIMOCODE_HOME/p',
     'ORCA_OMP_SOURCE_AGENT_DIR/p',
     'ORCA_OMP_STATUS_EXTENSION/p'
   ]

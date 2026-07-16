@@ -38,25 +38,61 @@ describe('parseAgentStatusPayload', () => {
     }
   })
 
-  it('normalizes optional lead state while ignoring invalid legacy values', () => {
-    expect(parseAgentStatusPayload('{"state":"working","leadState":"done"}')?.leadState).toBe(
-      'done'
+  it('normalizes optional lead metadata while ignoring invalid legacy values', () => {
+    const persisted = parseAgentStatusPayload(
+      '{"state":"working","leadState":"done","leadInterrupted":true}'
     )
+    expect(persisted?.leadState).toBe('done')
+    expect(persisted?.leadInterrupted).toBe(true)
     expect(
       parseAgentStatusPayload('{"state":"working","leadState":"running"}')?.leadState
+    ).toBeUndefined()
+    expect(
+      parseAgentStatusPayload('{"state":"working","leadState":"working","leadInterrupted":true}')
+        ?.leadInterrupted
     ).toBeUndefined()
     expect(parseAgentStatusPayload('{"state":"working"}')?.leadState).toBeUndefined()
   })
 
   it('strips lead persistence metadata without mutating the relay/server payload', () => {
     const payload = parseAgentStatusPayload(
-      '{"state":"working","leadState":"done","prompt":"review"}'
+      '{"state":"working","lifecycleOwnerState":"waiting","leadState":"done","leadInterrupted":true,"prompt":"review"}'
     )!
     const displayPayload = stripAgentStatusPersistenceMetadata(payload)
 
     expect(displayPayload).toEqual({ state: 'working', prompt: 'review' })
     expect('leadState' in displayPayload).toBe(false)
+    expect('leadInterrupted' in displayPayload).toBe(false)
+    expect('lifecycleOwnerState' in displayPayload).toBe(false)
+    expect(payload.lifecycleOwnerState).toBe('waiting')
     expect(payload.leadState).toBe('done')
+    expect(payload.leadInterrupted).toBe(true)
+  })
+
+  it('keeps only unique waits owned by normalized working children', () => {
+    const overlongId = 'x'.repeat(65)
+    const payload = normalizeAgentStatusPayload({
+      state: 'waiting',
+      subagents: [
+        { id: 'active-a', state: 'working', startedAt: 1 },
+        { id: 'active-b', state: 'working', startedAt: 2 },
+        { id: 'finished', state: 'idle', startedAt: 3 }
+      ],
+      waitingSubagentIds: [
+        ' active-a ',
+        'active-a',
+        'finished',
+        'missing',
+        overlongId,
+        123,
+        'active-b'
+      ]
+    })!
+
+    expect(payload.waitingSubagentIds).toEqual(['active-a', 'active-b'])
+    const displayPayload = stripAgentStatusPersistenceMetadata(payload)
+    expect('waitingSubagentIds' in displayPayload).toBe(false)
+    expect(payload.waitingSubagentIds).toEqual(['active-a', 'active-b'])
   })
 
   it('returns null for invalid state', () => {
@@ -534,6 +570,87 @@ Fix dispatch fallback preview for normalized status prompts`
       startedAt: 0,
       description: 'line one'
     })
+  })
+
+  it('deduplicates normalized child ids before resolving waiting membership', () => {
+    const result = normalizeAgentStatusPayload({
+      state: 'waiting',
+      subagents: [
+        {
+          id: ' first-child ',
+          state: 'working',
+          startedAt: 1,
+          agentType: 'first-type',
+          description: 'first metadata'
+        },
+        {
+          id: 'first-child',
+          state: 'idle',
+          startedAt: 2,
+          agentType: 'replacement-type',
+          description: 'replacement metadata'
+        },
+        { id: 'second-child', state: 'idle', startedAt: 3, agentType: 'idle-first' },
+        { id: ' second-child ', state: 'working', startedAt: 4, agentType: 'working-later' }
+      ],
+      waitingSubagentIds: ['first-child', 'second-child', 'first-child']
+    })
+
+    expect(result?.subagents).toEqual([
+      {
+        id: 'first-child',
+        state: 'working',
+        startedAt: 1,
+        agentType: 'first-type',
+        description: 'first metadata'
+      },
+      {
+        id: 'second-child',
+        state: 'idle',
+        startedAt: 3,
+        agentType: 'idle-first',
+        description: undefined
+      }
+    ])
+    expect(result?.waitingSubagentIds).toEqual(['first-child'])
+  })
+
+  it('gates a custom producer done payload while any normalized child is working', () => {
+    const result = normalizeAgentStatusPayload({
+      state: 'done',
+      interrupted: true,
+      agentType: 'custom-orca-agent',
+      subagents: [
+        {
+          id: 'custom-child',
+          state: 'working',
+          startedAt: 100,
+          agentType: 'reviewer'
+        }
+      ]
+    })
+
+    expect(result).toMatchObject({
+      state: 'working',
+      leadState: 'done',
+      leadInterrupted: true,
+      agentType: 'custom-orca-agent'
+    })
+    expect(result?.interrupted).toBeUndefined()
+  })
+
+  it('does not gate done on finished child snapshots', () => {
+    const result = normalizeAgentStatusPayload({
+      state: 'done',
+      interrupted: true,
+      agentType: 'custom-orca-agent',
+      subagents: [{ id: 'finished-child', state: 'idle', startedAt: 100 }]
+    })
+
+    expect(result?.state).toBe('done')
+    expect(result?.interrupted).toBe(true)
+    expect(result?.leadState).toBeUndefined()
+    expect(result?.leadInterrupted).toBeUndefined()
   })
 
   it('omits subagents when absent or empty', () => {

@@ -1,5 +1,5 @@
 // Why: relay-side equivalent of Orca's local agent integration installers.
-// OpenCode still needs a config overlay, while Pi/OMP now get Orca-managed
+// OpenCode and MiMo need config overlays, while Pi/OMP get Orca-managed
 // extension files installed into the remote agent homes. Host paths from the
 // renderer are meaningless on SSH targets, so the relay performs the remote
 // filesystem work itself.
@@ -13,8 +13,8 @@
 // We deliberately do not reuse OpenCodeHookService / PiTitlebarExtensionService
 // directly: those modules import `electron` and ride on Orca's userData
 // path. The relay's electron-free constraint forces a thin parallel
-// implementation rooted at $HOME/.orca-relay/ for OpenCode and at the remote
-// Pi/OMP homes for those agents.
+// implementation rooted at $HOME/.orca-relay/ for OpenCode/MiMo and at the
+// remote Pi/OMP homes for those agents.
 
 import { createHash } from 'node:crypto'
 import {
@@ -34,11 +34,13 @@ import type { PiAgentKind } from '../shared/pi-agent-kind'
 
 const RELAY_HOOKS_DIR = '.orca-relay'
 const OPENCODE_OVERLAY_SUBDIR = 'opencode-overlays'
+const MIMO_OVERLAY_SUBDIR = 'mimocode-overlays'
 const PI_OVERLAY_SUBDIR_BY_KIND: Record<PiAgentKind, string> = {
   pi: 'pi-overlays',
   omp: 'omp-overlays'
 }
 const OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
+const MIMO_PLUGIN_FILE = 'orca-mimocode-status.js'
 const PI_EXTENSION_FILE = 'orca-agent-status.ts'
 const PI_AGENT_SUBDIR = 'agent'
 const ORCA_MANAGED_EXTENSION_MARKER = '@orca-managed-pi-extension'
@@ -73,6 +75,8 @@ function isUsableId(id: string): boolean {
 export type PluginSources = {
   /** Source body of `orca-opencode-status.js` to drop into <overlay>/plugins/. */
   opencodePluginSource?: string
+  /** Source body of `orca-mimocode-status.js` to drop into <home>/config/plugins/. */
+  mimoPluginSource?: string
   /** Source body of Pi's `orca-agent-status.ts` to drop into <overlay>/extensions/. */
   piExtensionSource?: string
   /** Source body of OMP's `orca-agent-status.ts` to drop into <overlay>/extensions/. */
@@ -85,18 +89,21 @@ export function getRelayPiStatusExtensionPath(agentDir: string): string {
 
 export class PluginOverlayManager {
   private opencodePluginSource: string | null = null
+  private mimoPluginSource: string | null = null
   private piExtensionSources: Record<PiAgentKind, string | null> = {
     pi: null,
     omp: null
   }
   private homeDir: string
   private opencodeRoot: string
+  private mimoRoot: string
   private piRoots: Record<PiAgentKind, string>
 
   constructor(opts?: { homeDir?: string }) {
     const home = opts?.homeDir ?? homedir()
     this.homeDir = home
     this.opencodeRoot = join(home, RELAY_HOOKS_DIR, OPENCODE_OVERLAY_SUBDIR)
+    this.mimoRoot = join(home, RELAY_HOOKS_DIR, MIMO_OVERLAY_SUBDIR)
     this.piRoots = {
       pi: join(home, RELAY_HOOKS_DIR, PI_OVERLAY_SUBDIR_BY_KIND.pi),
       omp: join(home, RELAY_HOOKS_DIR, PI_OVERLAY_SUBDIR_BY_KIND.omp)
@@ -114,6 +121,9 @@ export class PluginOverlayManager {
     if (typeof sources.opencodePluginSource === 'string') {
       this.opencodePluginSource = sources.opencodePluginSource
     }
+    if (typeof sources.mimoPluginSource === 'string') {
+      this.mimoPluginSource = sources.mimoPluginSource
+    }
     if (typeof sources.piExtensionSource === 'string') {
       this.piExtensionSources.pi = withOrcaManagedPiExtensionMarker(sources.piExtensionSource)
     }
@@ -124,6 +134,10 @@ export class PluginOverlayManager {
 
   hasOpenCodeSource(): boolean {
     return this.opencodePluginSource !== null
+  }
+
+  hasMimoSource(): boolean {
+    return this.mimoPluginSource !== null
   }
 
   hasPiSource(kind?: PiAgentKind): boolean {
@@ -137,7 +151,11 @@ export class PluginOverlayManager {
     return this.piExtensionSources[kind] ?? this.piExtensionSources.pi
   }
 
-  private mirrorOpenCodeConfig(sourceDir: string, overlayDir: string): void {
+  private mirrorPluginConfig(
+    sourceDir: string,
+    overlayDir: string,
+    managedPluginFile: string
+  ): void {
     for (const entry of readdirSync(sourceDir, { withFileTypes: true })) {
       const sourcePath = join(sourceDir, entry.name)
 
@@ -157,7 +175,7 @@ export class PluginOverlayManager {
           const overlayPluginsDir = join(overlayDir, 'plugins')
           mkdirSync(overlayPluginsDir, { recursive: true })
           for (const pluginEntry of readdirSync(resolvedSource, { withFileTypes: true })) {
-            if (pluginEntry.name === OPENCODE_PLUGIN_FILE) {
+            if (pluginEntry.name === managedPluginFile) {
               continue
             }
             mirrorEntry(
@@ -206,13 +224,62 @@ export class PluginOverlayManager {
         // Why: OPENCODE_CONFIG_DIR is a single config root. Mirror the user's
         // remote root into the overlay before adding Orca's plugin so status
         // reporting does not hide their auth, models, keybinds, or plugins.
-        this.mirrorOpenCodeConfig(existingConfigDir, dir)
+        this.mirrorPluginConfig(existingConfigDir, dir, OPENCODE_PLUGIN_FILE)
       }
       this.writeOpenCodePlugin(dir)
       return dir
     } catch (err) {
       process.stderr.write(
         `[plugin-overlay] failed to materialize OpenCode overlay: ${err instanceof Error ? err.message : String(err)}\n`
+      )
+      return null
+    }
+  }
+
+  private resolveMimoSourceConfigDir(existingHome?: string): string | null {
+    if (existingHome) {
+      const sourceConfig = join(existingHome, 'config')
+      if (existsSync(sourceConfig)) {
+        return sourceConfig
+      }
+    }
+    const defaultConfig = join(this.homeDir, '.config', 'mimocode')
+    return existsSync(defaultConfig) ? defaultConfig : null
+  }
+
+  /** Materialize a complete MiMo home for one remote PTY. MiMo reads plugins
+   *  from MIMOCODE_HOME/config/plugins, so its overlay shape differs from
+   *  OpenCode's direct config root. */
+  materializeMimo(id: string, existingHome?: string): string | null {
+    if (!this.mimoPluginSource || !isUsableId(id)) {
+      return null
+    }
+    const home = join(this.mimoRoot, safeDirName(id))
+    try {
+      safeRemoveOverlay(home, this.mimoRoot)
+      for (const subdir of ['config', 'data', 'cache', 'state']) {
+        mkdirSync(join(home, subdir), { recursive: true })
+      }
+      const overlayConfig = join(home, 'config')
+      const sourceConfig = this.resolveMimoSourceConfigDir(existingHome)
+      if (sourceConfig) {
+        // Why: MIMOCODE_HOME replaces the whole MiMo home. Preserve the
+        // remote user's config and plugins before adding Orca's plugin.
+        this.mirrorPluginConfig(sourceConfig, overlayConfig, MIMO_PLUGIN_FILE)
+      }
+      const pluginsDir = join(overlayConfig, 'plugins')
+      mkdirSync(pluginsDir, { recursive: true })
+      const pluginPath = join(pluginsDir, MIMO_PLUGIN_FILE)
+      try {
+        unlinkSync(pluginPath)
+      } catch {
+        // Fresh overlay or no same-named stale symlink.
+      }
+      writeFileSync(pluginPath, this.mimoPluginSource)
+      return home
+    } catch (err) {
+      process.stderr.write(
+        `[plugin-overlay] failed to materialize MiMo overlay: ${err instanceof Error ? err.message : String(err)}\n`
       )
       return null
     }
@@ -268,10 +335,10 @@ export class PluginOverlayManager {
       return
     }
     const safe = safeDirName(id)
-    // Why: sweep all overlay roots (OpenCode + each Pi-kind) because PTY exit
+    // Why: sweep all overlay roots (OpenCode, MiMo, and each Pi-kind) because PTY exit
     // doesn't know which kind materialized this id. Per-root scoping inside
     // safeRemoveOverlay keeps each call bounded to its own tree.
-    for (const root of [this.opencodeRoot, ...Object.values(this.piRoots)]) {
+    for (const root of [this.opencodeRoot, this.mimoRoot, ...Object.values(this.piRoots)]) {
       try {
         safeRemoveOverlay(join(root, safe), root)
       } catch (err) {

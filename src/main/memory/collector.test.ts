@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MemorySnapshotStore } from './collector'
+import type { PtyRegistration } from './pty-registry'
 
 type AppMetricFixture = {
   pid: number
@@ -290,6 +291,44 @@ describe('collectMemorySnapshot', () => {
     expect(snap.app.renderer.memory).toBe(4096 * 1024)
     expect(snap.app.memory).toBe(4096 * 1024)
     expect(snap.totalMemory).toBe(4096 * 1024)
+  })
+
+  it('attributes the full process subtree for a custom-agent PTY without provider metadata', async () => {
+    mockPsResponse(
+      ['700 1 2.5 1024', '701 700 3.25 2048', '702 701 1.75 4096', '799 1 99 8192'].join('\n')
+    )
+    // Why: resource attribution is a PTY/worktree contract. A compatible or
+    // custom agent must not need a provider field or provider allowlist.
+    const customAgentPty = {
+      ptyId: 'pty-vendor-custom-agent',
+      worktreeId: 'custom-repo::/worktrees/vendor-agent',
+      sessionId: 'session-vendor-custom-agent',
+      paneKey: 'tab-vendor-custom-agent:11111111-1111-4111-8111-111111111111',
+      pid: 700
+    } satisfies PtyRegistration
+    listRegisteredPtysMock.mockReturnValue([customAgentPty])
+
+    const { collectMemorySnapshot } = await loadCollector()
+    const snap = await collectMemorySnapshot(emptyStore)
+    const worktree = snap.worktrees.find(
+      ({ worktreeId }) => worktreeId === customAgentPty.worktreeId
+    )
+
+    expect(worktree).toMatchObject({
+      cpu: 7.5,
+      memory: (1024 + 2048 + 4096) * 1024,
+      sessions: [
+        {
+          sessionId: customAgentPty.sessionId,
+          paneKey: customAgentPty.paneKey,
+          pid: customAgentPty.pid,
+          cpu: 7.5,
+          memory: (1024 + 2048 + 4096) * 1024
+        }
+      ]
+    })
+    expect(snap.totalCpu).toBe(7.5)
+    expect(snap.totalMemory).toBe((1024 + 2048 + 4096) * 1024)
   })
 
   it('attributes a process shared by two PTYs to the first registrant only', async () => {

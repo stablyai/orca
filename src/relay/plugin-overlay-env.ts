@@ -1,5 +1,8 @@
 import { readShellStartupEnvVar } from '../main/pty/shell-startup-env'
+import { getCommandTokenPathBasename, getFirstCommandToken } from '../shared/command-token-scanner'
 import type { PiAgentKind } from '../shared/pi-agent-kind'
+import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
+import type { PluginOverlayManager } from './plugin-overlay'
 
 function firstNonEmpty(...values: (string | undefined)[]): string | undefined {
   return values.find((value) => typeof value === 'string' && value.length > 0)
@@ -22,6 +25,51 @@ export function resolveOpenCodeSourceConfigDir(
     readStartupEnv('OPENCODE_CONFIG_DIR', env, shell),
     env.OPENCODE_CONFIG_DIR
   )
+}
+
+export function resolveMimoSourceHome(
+  env: Record<string, string>,
+  shell: string | undefined
+): string | undefined {
+  const sourceHome = firstNonEmpty(env.ORCA_MIMOCODE_SOURCE_HOME)
+  if (sourceHome) {
+    return sourceHome
+  }
+  const home = firstNonEmpty(readStartupEnv('MIMOCODE_HOME', env, shell), env.MIMOCODE_HOME)
+  return home && home !== env.ORCA_MIMOCODE_HOME ? home : undefined
+}
+
+function isMimoLaunchCommand(command: string | undefined): boolean {
+  const binary = getCommandTokenPathBasename(getFirstCommandToken(command ?? ''))
+    .toLowerCase()
+    .replace(/\.(?:cmd|exe|sh)$/, '')
+  return binary === 'mimo'
+}
+
+export function buildMimoCodePluginOverlayEnv(
+  pluginOverlay: Pick<PluginOverlayManager, 'hasMimoSource' | 'materializeMimo'>,
+  ctx: {
+    id: string
+    paneKey?: string
+    shell: string
+    env: Record<string, string>
+    command?: string
+  }
+): Record<string, string> {
+  const launchCommand = resolveSetupAgentSequenceLaunchCommand(ctx.env, ctx.command)
+  if (!pluginOverlay.hasMimoSource() || !isMimoLaunchCommand(launchCommand)) {
+    return {}
+  }
+  const sourceHome = resolveMimoSourceHome(ctx.env, ctx.shell)
+  const home = pluginOverlay.materializeMimo(ctx.paneKey ?? ctx.id, sourceHome)
+  if (!home) {
+    return {}
+  }
+  return {
+    MIMOCODE_HOME: home,
+    ORCA_MIMOCODE_HOME: home,
+    ...(sourceHome ? { ORCA_MIMOCODE_SOURCE_HOME: sourceHome } : {})
+  }
 }
 
 export function resolvePiSourceAgentDir(
