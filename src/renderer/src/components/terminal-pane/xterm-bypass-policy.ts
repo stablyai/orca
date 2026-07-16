@@ -24,7 +24,6 @@ export type XtermBypassEvent = {
   isComposing?: boolean
   repeat?: boolean
   defaultPrevented?: boolean
-  getModifierState?: (keyArg: string) => boolean
   metaKey: boolean
   ctrlKey: boolean
   altKey: boolean
@@ -59,7 +58,6 @@ export type XtermImeKeyboardOptions = {
 }
 
 export const TERMINAL_INTERRUPT_INPUT = '\x03'
-const TERMINAL_ALT_PREFIX = '\x1b'
 const TERMINAL_MODIFIER_KEYS = new Set(['Alt', 'AltGraph', 'Control', 'Meta', 'Shift'])
 const TERMINAL_IME_OWNED_KEYS = new Set([
   'ArrowDown',
@@ -87,35 +85,6 @@ function isSingleNonAsciiPrintableText(key: string): boolean {
 
 function isXtermHandledKeyEvent(type: string): boolean {
   return type === 'keydown' || type === 'keyup'
-}
-
-/** Resolve the bytes xterm drops when Windows mistakes physical Ctrl+Alt for AltGr. */
-export function resolveWindowsCtrlAltTerminalInput(
-  event: XtermBypassEvent,
-  isWindows: boolean
-): string | null {
-  if (
-    !isWindows ||
-    event.type !== 'keydown' ||
-    event.defaultPrevented === true ||
-    event.isComposing === true ||
-    !event.ctrlKey ||
-    !event.altKey ||
-    event.metaKey ||
-    event.shiftKey ||
-    event.getModifierState?.('AltGraph') === true
-  ) {
-    return null
-  }
-
-  const physicalLetter = /^Key([A-Z])$/.exec(event.code ?? '')?.[1]
-  if (physicalLetter) {
-    return TERMINAL_ALT_PREFIX + String.fromCharCode(physicalLetter.charCodeAt(0) - 64)
-  }
-
-  // Why: xterm's classic Alt path prefixes printable digits and punctuation
-  // with ESC; keeping that convention avoids inventing a transport encoding.
-  return Array.from(event.key).length === 1 ? TERMINAL_ALT_PREFIX + event.key : null
 }
 
 /** Returns whether xterm must not process an IME-owned keyboard event. */

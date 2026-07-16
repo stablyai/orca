@@ -83,7 +83,6 @@ import {
 } from './terminal-ime-input-source'
 import { installTerminalImeNativeTextForwarder } from './terminal-ime-native-text-forwarder'
 import {
-  resolveWindowsCtrlAltTerminalInput,
   shouldBypassXtermKeyboardEvent,
   shouldHandleTerminalInterruptKeyboardEvent,
   shouldPreventDefaultTerminalImeCandidateKey,
@@ -897,7 +896,6 @@ export function useTerminalPaneLifecycle({
         const pendingTerminalImeCandidateKeyReleases =
           createTerminalImePendingCandidateKeyReleases()
         const isMac = navigator.userAgent.includes('Mac')
-        const isWindows = navigator.userAgent.includes('Windows')
         // Why: Android/ChromeOS UAs also contain "Linux"; keep the Sogou/fcitx
         // candidate-key policy scoped to desktop Linux so paired web clients on
         // those platforms keep their previous IME behavior.
@@ -1044,16 +1042,6 @@ export function useTerminalPaneLifecycle({
           if (imeNativeTextForwarder.claimKeyEvent(e)) {
             // Why: bypass xterm's kitty encoder for native text keydowns so the
             // committed glyph survives via the input event.
-            observeLinuxCandidateEvent()
-            return false
-          }
-
-          const windowsCtrlAltInput = resolveWindowsCtrlAltTerminalInput(e, isWindows)
-          if (windowsCtrlAltInput !== null) {
-            // Why: xterm classifies every Windows Ctrl+Alt chord as AltGr and
-            // returns before onData; inject only non-AltGraph bytes at its boundary.
-            e.preventDefault()
-            pane.terminal.input(windowsCtrlAltInput)
             observeLinuxCandidateEvent()
             return false
           }

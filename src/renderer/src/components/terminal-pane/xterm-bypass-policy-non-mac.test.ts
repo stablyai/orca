@@ -1,72 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
-  resolveWindowsCtrlAltTerminalInput,
   shouldBypassXtermKeyboardEvent,
   shouldPreventDefaultTerminalImeCandidateKey,
   shouldSuppressTerminalImeKeyboardEvent
 } from './xterm-bypass-policy'
 import { event } from './xterm-bypass-event-fixture'
-
-describe('resolveWindowsCtrlAltTerminalInput', () => {
-  it('encodes physical Ctrl+Alt letters as Alt-prefixed control bytes', () => {
-    expect(
-      resolveWindowsCtrlAltTerminalInput(
-        event({ key: 'u', code: 'KeyU', ctrlKey: true, altKey: true }),
-        true
-      )
-    ).toBe('\x1b\x15')
-    expect(
-      resolveWindowsCtrlAltTerminalInput(
-        event({ key: 'j', code: 'KeyJ', ctrlKey: true, altKey: true }),
-        true
-      )
-    ).toBe('\x1b\x0a')
-  })
-
-  it('forwards Ctrl+Alt digits and punctuation instead of dropping them', () => {
-    expect(
-      resolveWindowsCtrlAltTerminalInput(
-        event({ key: '2', code: 'Digit2', ctrlKey: true, altKey: true }),
-        true
-      )
-    ).toBe('\x1b2')
-    expect(
-      resolveWindowsCtrlAltTerminalInput(
-        event({ key: ';', code: 'Semicolon', ctrlKey: true, altKey: true }),
-        true
-      )
-    ).toBe('\x1b;')
-  })
-
-  it('leaves AltGraph composition and non-Windows chords to xterm', () => {
-    const altGraph = event({
-      key: '@',
-      code: 'KeyQ',
-      ctrlKey: true,
-      altKey: true,
-      getModifierState: (modifier) => modifier === 'AltGraph'
-    })
-    expect(resolveWindowsCtrlAltTerminalInput(altGraph, true)).toBeNull()
-    expect(
-      resolveWindowsCtrlAltTerminalInput(
-        event({ key: 'u', code: 'KeyU', ctrlKey: true, altKey: true }),
-        false
-      )
-    ).toBeNull()
-  })
-
-  it('does not override handled shortcuts, IME input, keyup, or extra modifiers', () => {
-    for (const keyboardEvent of [
-      event({ key: 'u', code: 'KeyU', ctrlKey: true, altKey: true, defaultPrevented: true }),
-      event({ key: 'u', code: 'KeyU', ctrlKey: true, altKey: true, isComposing: true }),
-      event({ type: 'keyup', key: 'u', code: 'KeyU', ctrlKey: true, altKey: true }),
-      event({ key: 'u', code: 'KeyU', ctrlKey: true, altKey: true, shiftKey: true }),
-      event({ key: 'u', code: 'KeyU', ctrlKey: true, altKey: true, metaKey: true })
-    ]) {
-      expect(resolveWindowsCtrlAltTerminalInput(keyboardEvent, true)).toBeNull()
-    }
-  })
-})
 
 describe('shouldBypassXtermKeyboardEvent — Windows/Linux', () => {
   const withSel = { isMac: false, hasSelection: true }
