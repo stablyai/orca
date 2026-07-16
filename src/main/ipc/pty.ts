@@ -430,23 +430,56 @@ function stripRemotePaneEnvWhenHooksDisabled(
   connectionId: string | null | undefined,
   env: Record<string, string> | undefined
 ): Record<string, string> | undefined {
-  if (!connectionId || isRemoteAgentHooksEnabled()) {
+  if (!connectionId || !env) {
     return env
   }
-  if (
-    !env ||
-    (!('ORCA_PANE_KEY' in env) &&
-      !('ORCA_TAB_ID' in env) &&
-      !('ORCA_WORKTREE_ID' in env) &&
-      !('ORCA_AGENT_LAUNCH_TOKEN' in env))
-  ) {
+
+  const overlayKeys = [
+    {
+      primary: 'OPENCODE_CONFIG_DIR',
+      overlay: 'ORCA_OPENCODE_CONFIG_DIR',
+      source: 'ORCA_OPENCODE_SOURCE_CONFIG_DIR'
+    },
+    {
+      primary: 'MIMOCODE_CONFIG_DIR',
+      overlay: 'ORCA_MIMOCODE_CONFIG_DIR',
+      source: 'ORCA_MIMOCODE_SOURCE_CONFIG_DIR'
+    }
+  ] as const
+  const hasOverlayEnv = overlayKeys.some(({ overlay, source }) => overlay in env || source in env)
+  const shouldStripPaneEnv =
+    !isRemoteAgentHooksEnabled() &&
+    ('ORCA_PANE_KEY' in env ||
+      'ORCA_TAB_ID' in env ||
+      'ORCA_WORKTREE_ID' in env ||
+      'ORCA_AGENT_LAUNCH_TOKEN' in env)
+  if (!hasOverlayEnv && !shouldStripPaneEnv) {
     return env
   }
+
   const stripped = { ...env }
-  delete stripped.ORCA_PANE_KEY
-  delete stripped.ORCA_TAB_ID
-  delete stripped.ORCA_WORKTREE_ID
-  delete stripped.ORCA_AGENT_LAUNCH_TOKEN
+  for (const { primary, overlay, source } of overlayKeys) {
+    if (!(overlay in stripped) && !(source in stripped)) {
+      continue
+    }
+    const sourceValue = stripped[source]
+    const overlayValue = stripped[overlay]
+    // Why: Orca overlay paths are host-local. Restore a recorded source for
+    // SSH, but preserve an independently supplied remote primary value.
+    if (sourceValue && (!stripped[primary] || stripped[primary] === overlayValue)) {
+      stripped[primary] = sourceValue
+    } else if (overlayValue && stripped[primary] === overlayValue) {
+      delete stripped[primary]
+    }
+    delete stripped[overlay]
+    delete stripped[source]
+  }
+  if (shouldStripPaneEnv) {
+    delete stripped.ORCA_PANE_KEY
+    delete stripped.ORCA_TAB_ID
+    delete stripped.ORCA_WORKTREE_ID
+    delete stripped.ORCA_AGENT_LAUNCH_TOKEN
+  }
   return stripped
 }
 
@@ -797,17 +830,29 @@ function isMimoLaunchCommand(launchCommand: string | undefined): boolean {
   return binary === 'mimo'
 }
 
-function resolveMimocodeSourceHome(baseEnv: Record<string, string>): string | undefined {
-  const sourceHome = baseEnv.ORCA_MIMOCODE_SOURCE_HOME ?? process.env.ORCA_MIMOCODE_SOURCE_HOME
-  if (sourceHome) {
-    return sourceHome
+function resolveMimocodeSourceConfigDir(baseEnv: Record<string, string>): string | undefined {
+  const sourceDir =
+    baseEnv.ORCA_MIMOCODE_SOURCE_CONFIG_DIR ?? process.env.ORCA_MIMOCODE_SOURCE_CONFIG_DIR
+  if (sourceDir) {
+    return sourceDir
   }
-  const configHome = baseEnv.MIMOCODE_HOME ?? process.env.MIMOCODE_HOME
-  const orcaHome = baseEnv.ORCA_MIMOCODE_HOME ?? process.env.ORCA_MIMOCODE_HOME
-  if (configHome && orcaHome && configHome === orcaHome) {
-    return undefined
+
+  const baseConfigDir = baseEnv.MIMOCODE_CONFIG_DIR
+  const baseOverlayDir = baseEnv.ORCA_MIMOCODE_CONFIG_DIR ?? process.env.ORCA_MIMOCODE_CONFIG_DIR
+  if (baseConfigDir && baseConfigDir !== baseOverlayDir) {
+    return baseConfigDir
   }
-  return configHome
+
+  const processConfigDir = process.env.MIMOCODE_CONFIG_DIR
+  if (processConfigDir && processConfigDir !== process.env.ORCA_MIMOCODE_CONFIG_DIR) {
+    return processConfigDir
+  }
+
+  return readShellStartupEnvVar(
+    'MIMOCODE_CONFIG_DIR',
+    baseEnv.HOME ?? process.env.HOME,
+    baseEnv.SHELL ?? process.env.SHELL
+  )
 }
 
 function resolveOpenCodeSourceConfigDir(baseEnv: Record<string, string>): string | undefined {
@@ -907,15 +952,20 @@ export function buildPtyHostEnv(
       }
     }
     if (isMimoLaunchCommand(launchCommandHint)) {
-      const preexistingMimocodeHome = resolveMimocodeSourceHome(baseEnv)
-      Object.assign(baseEnv, mimoCodeHookService.buildPtyEnv(id, preexistingMimocodeHome))
-      if (baseEnv.MIMOCODE_HOME) {
-        baseEnv.ORCA_MIMOCODE_HOME = baseEnv.MIMOCODE_HOME
-        if (preexistingMimocodeHome) {
-          baseEnv.ORCA_MIMOCODE_SOURCE_HOME = preexistingMimocodeHome
+      const preexistingMimocodeConfigDir = resolveMimocodeSourceConfigDir(baseEnv)
+      const mimoEnv = mimoCodeHookService.buildPtyEnv(id, preexistingMimocodeConfigDir)
+      Object.assign(baseEnv, mimoEnv)
+      const managedMimocodeConfigDir = mimoEnv.MIMOCODE_CONFIG_DIR
+      if (managedMimocodeConfigDir && managedMimocodeConfigDir !== preexistingMimocodeConfigDir) {
+        baseEnv.ORCA_MIMOCODE_CONFIG_DIR = managedMimocodeConfigDir
+        if (preexistingMimocodeConfigDir) {
+          baseEnv.ORCA_MIMOCODE_SOURCE_CONFIG_DIR = preexistingMimocodeConfigDir
         } else {
-          delete baseEnv.ORCA_MIMOCODE_SOURCE_HOME
+          delete baseEnv.ORCA_MIMOCODE_SOURCE_CONFIG_DIR
         }
+      } else {
+        delete baseEnv.ORCA_MIMOCODE_CONFIG_DIR
+        delete baseEnv.ORCA_MIMOCODE_SOURCE_CONFIG_DIR
       }
     }
   } else {
@@ -925,9 +975,9 @@ export function buildPtyHostEnv(
       source: 'ORCA_OPENCODE_SOURCE_CONFIG_DIR'
     })
     restoreOrStripOverlayEnv(baseEnv, {
-      primary: 'MIMOCODE_HOME',
-      overlay: 'ORCA_MIMOCODE_HOME',
-      source: 'ORCA_MIMOCODE_SOURCE_HOME'
+      primary: 'MIMOCODE_CONFIG_DIR',
+      overlay: 'ORCA_MIMOCODE_CONFIG_DIR',
+      source: 'ORCA_MIMOCODE_SOURCE_CONFIG_DIR'
     })
   }
 
