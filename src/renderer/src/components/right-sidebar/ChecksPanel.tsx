@@ -159,6 +159,7 @@ import { translate } from '@/i18n/i18n'
 import { groupPRComments, type PRCommentGroup } from '@/lib/pr-comment-groups'
 import { openChecksPanelHostedReviewUrl } from './checks-panel-hosted-review-click-routing'
 import { ChecksPanelUpdatedAtMetadata } from './checks-panel-updated-at-metadata'
+import { ChecksPanelBranchRow } from './checks-panel-branch-row'
 import {
   clearPullRequestGenerationRequiresPushBeforeCreate,
   createRunningPullRequestGenerationRecord,
@@ -3758,6 +3759,12 @@ export default function ChecksPanel(): React.JSX.Element {
             <Pencil className="size-3 text-muted-foreground/40 can-hover:opacity-0 group-hover/title:opacity-100 transition-opacity shrink-0 mt-0.5" />
           </div>
         )}
+
+        {/* Merge target (and head branch when the linked PR carries it) */}
+        <ChecksPanelBranchRow
+          baseRefName={activeReview.baseRefName ?? pr?.baseRefName}
+          headRefName={pr?.headRefName}
+        />
 
         {/* Updated at */}
         {activeReview.updatedAt && (
