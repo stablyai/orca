@@ -99,11 +99,11 @@ export function AppIconSelector({
           <p className="text-left text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.AppIconSelector.4239e200e8',
-              'Restart Orca to apply this icon on Windows.'
+              'The current window icon updates immediately. Restart Orca if Windows still shows the previous icon.'
             )}{' '}
             {translate(
               'auto.components.settings.AppIconSelector.95572fdc77',
-              'If Orca is pinned, unpin the old icon and pin Orca again after restart.'
+              'For a pinned taskbar icon, unpin Orca and pin it again after restart.'
             )}
           </p>
           <div className="flex justify-center">

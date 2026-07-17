@@ -30,7 +30,7 @@ import { TerminalAppearanceSection } from './TerminalAppearanceSection'
 import type { UseGhosttyImportReturn } from './useGhosttyImport'
 import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
 import { AppIconSelector } from './AppIconSelector'
-import { normalizeAppIconId, type AppIconId } from '../../../../shared/app-icon'
+import { normalizeAppIconId } from '../../../../shared/app-icon'
 import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
@@ -54,10 +54,6 @@ type AppearancePaneProps = {
 }
 
 type AppearanceSectionKey = 'interface' | 'terminal' | 'window'
-
-// Why: the renderer lifetime matches the restart boundary, while AppearancePane
-// itself is unmounted whenever the user visits another settings section.
-let windowsStartupAppIcon: AppIconId | undefined
 
 function resolveThemeSummary(theme: GlobalSettings['theme']): string {
   if (theme === 'system') {
@@ -85,6 +81,7 @@ export function AppearancePane({
   const clearAppearanceAccordionDeepLink = useAppStore(
     (state) => state.clearAppearanceAccordionDeepLink
   )
+  const appIconAtRendererStartup = useAppStore((state) => state.appIconAtRendererStartup)
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
   const isWebClient = isWebClientLocation()
   // Why: the system tray behavior is desktop-Electron Windows-only; a Windows
@@ -92,9 +89,6 @@ export function AppearancePane({
   const isDesktopWindows = getRendererAppPlatform() === 'win32' && !isWebClient
   const isDesktopMac = getRendererAppPlatform() === 'darwin' && !isWebClient
   const persistedAppIcon = normalizeAppIconId(settings.appIcon)
-  if (isDesktopWindows && windowsStartupAppIcon === undefined) {
-    windowsStartupAppIcon = persistedAppIcon
-  }
   const [selectedAppIcon, setSelectedAppIcon] = useState(persistedAppIcon)
 
   useEffect(() => {
@@ -298,8 +292,8 @@ export function AppearancePane({
               updateSettings({ appIcon })
             }}
             restartRequired={
-              isDesktopWindows && windowsStartupAppIcon !== undefined
-                ? selectedAppIcon !== windowsStartupAppIcon
+              isDesktopWindows && appIconAtRendererStartup !== null
+                ? selectedAppIcon !== normalizeAppIconId(appIconAtRendererStartup)
                 : false
             }
             onRestart={isDesktopWindows ? () => window.api.app.restart() : undefined}

@@ -30,7 +30,9 @@ const MAC_DOCK_ICON_PATHS = {
   blue: blueMacDockIcon
 } satisfies Record<Exclude<AppIconId, 'classic'>, string>
 
-const WINDOWS_TASKBAR_ICON_PATHS = {
+// Why: Windows Shell consumers need unpacked, multi-size ICO files; the PNG
+// assets remain appropriate for renderer previews and other platforms.
+const WINDOWS_APP_ICON_PATHS = {
   classic: is.dev ? classicDevWindowsIcon : classicWindowsIcon,
   watercolor: watercolorWindowsIcon,
   blue: blueWindowsIcon
@@ -86,11 +88,11 @@ let macDockIconPersistenceQueue = Promise.resolve()
 
 export function getAppIconPath(value: unknown): string {
   const iconId = normalizeAppIconId(value)
-  return process.platform === 'win32' ? WINDOWS_TASKBAR_ICON_PATHS[iconId] : APP_ICON_PATHS[iconId]
+  return process.platform === 'win32' ? WINDOWS_APP_ICON_PATHS[iconId] : APP_ICON_PATHS[iconId]
 }
 
 export function getWindowsAppIconPath(value: unknown): string {
-  return WINDOWS_TASKBAR_ICON_PATHS[normalizeAppIconId(value)]
+  return WINDOWS_APP_ICON_PATHS[normalizeAppIconId(value)]
 }
 
 export function createAppIconImage(value: unknown): Electron.NativeImage {

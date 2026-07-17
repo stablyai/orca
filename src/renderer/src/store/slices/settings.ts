@@ -23,9 +23,11 @@ import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-con
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
 import { translate } from '@/i18n/i18n'
+import { normalizeAppIconId, type AppIconId } from '../../../../shared/app-icon'
 
 export type SettingsSlice = SettingsSearchState & {
   settings: GlobalSettings | null
+  appIconAtRendererStartup: AppIconId | null
   fetchSettings: () => Promise<void>
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
   switchRuntimeEnvironment: (environmentId: string | null) => Promise<boolean>
@@ -64,12 +66,19 @@ async function verifyRuntimeEnvironmentReachable(environmentId: string | null): 
 
 export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> = (set, get) => ({
   settings: null,
+  appIconAtRendererStartup: null,
   ...createSettingsSearchState((state) => set(state)),
 
   fetchSettings: async () => {
     try {
       const settings = await window.api.settings.get()
-      set({ settings })
+      set((state) => ({
+        settings,
+        // Why: renderer startup is the restart boundary; later settings refreshes
+        // must not move the baseline used by Windows restart guidance.
+        appIconAtRendererStartup:
+          state.appIconAtRendererStartup ?? normalizeAppIconId(settings.appIcon)
+      }))
       // Why: best-effort boot probe so sidebar host pickers show live runtime
       // health before the settings pane is ever opened. Fire-and-forget to keep
       // startup off the network round-trips.

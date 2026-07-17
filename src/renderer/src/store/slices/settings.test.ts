@@ -21,6 +21,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentGetStatus = vi.fn()
+const settingsGet = vi.fn()
 const settingsSet = vi.fn().mockResolvedValue(undefined)
 const worktreesListDetected = vi.fn()
 
@@ -49,6 +50,7 @@ beforeEach(() => {
     },
     _meta: { runtimeId: 'runtime-2' }
   })
+  settingsGet.mockResolvedValue({ appIcon: 'classic' })
   runtimeEnvironmentCall.mockImplementation(
     ({ method, params }: { method: string; params?: { repo?: string } }) => {
       const detectedRepoId = params?.repo ?? 'repo-env-2'
@@ -132,7 +134,7 @@ beforeEach(() => {
   })
   vi.stubGlobal('window', {
     api: {
-      settings: { set: settingsSet },
+      settings: { get: settingsGet, set: settingsSet },
       runtimeEnvironments: { call: runtimeEnvironmentCall, getStatus: runtimeEnvironmentGetStatus },
       worktrees: { listDetected: worktreesListDetected }
     }
@@ -140,6 +142,19 @@ beforeEach(() => {
 })
 
 describe('createSettingsSlice runtime switching', () => {
+  it('captures the app icon from the first settings load as the renderer-startup baseline', async () => {
+    settingsGet
+      .mockResolvedValueOnce({ appIcon: 'classic' })
+      .mockResolvedValueOnce({ appIcon: 'watercolor' })
+    const store = createTestStore()
+
+    await store.getState().fetchSettings()
+    await store.getState().fetchSettings()
+
+    expect(store.getState().appIconAtRendererStartup).toBe('classic')
+    expect(store.getState().settings?.appIcon).toBe('watercolor')
+  })
+
   it('repairs drifted task provider settings before sending updates', async () => {
     settingsSet.mockResolvedValueOnce({
       visibleTaskProviders: ['github', 'linear'],

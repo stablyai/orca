@@ -6,12 +6,14 @@ import { I18nextProvider } from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { i18n } from '@/i18n/i18n'
 import { getDefaultSettings } from '../../../../shared/constants'
+import type { AppIconId } from '../../../../shared/app-icon'
 import type { GlobalSettings, StatusBarItem } from '../../../../shared/types'
 
 const mocks = vi.hoisted(() => ({
   restartApp: vi.fn(),
   state: {
     appPlatform: 'linux' as NodeJS.Platform,
+    appIconAtRendererStartup: 'classic' as AppIconId | null,
     availableStatusBarToggles: [] as {
       description: string
       id: StatusBarItem
@@ -182,6 +184,7 @@ describe('AppearancePane', () => {
     vi.clearAllMocks()
     mocks.state.availableStatusBarToggles = []
     mocks.state.appPlatform = 'linux'
+    mocks.state.appIconAtRendererStartup = 'classic'
     mocks.state.settingsSearchQuery = 'automations'
     mocks.state.usagePercentageDisplay = 'used'
     mocks.restartApp.mockReset().mockResolvedValue(undefined)
@@ -366,8 +369,11 @@ describe('AppearancePane', () => {
     })
 
     expect(updateSettings).toHaveBeenCalledWith({ appIcon: 'watercolor' })
-    expect(container.textContent).toContain('Restart Orca to apply this icon on Windows.')
-    expect(container.textContent).toContain('unpin the old icon and pin Orca again after restart')
+    expect(container.textContent).toContain('The current window icon updates immediately.')
+    expect(container.textContent).toContain(
+      'Restart Orca if Windows still shows the previous icon.'
+    )
+    expect(container.textContent).toContain('unpin Orca and pin it again after restart')
 
     const restartButton = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(
       (button) => button.textContent === 'Restart now'
@@ -403,7 +409,9 @@ describe('AppearancePane', () => {
       { ...initialSettings, appIcon: 'watercolor' },
       updateSettings
     )
-    expect(remountedContainer.textContent).toContain('Restart Orca to apply this icon on Windows.')
+    expect(remountedContainer.textContent).toContain(
+      'Restart Orca if Windows still shows the previous icon.'
+    )
 
     const previousIconButton = remountedContainer.querySelector<HTMLButtonElement>(
       'button[aria-label="Previous icon"]'
@@ -414,7 +422,22 @@ describe('AppearancePane', () => {
 
     expect(updateSettings).toHaveBeenCalledWith({ appIcon: 'classic' })
     expect(remountedContainer.textContent).not.toContain(
-      'Restart Orca to apply this icon on Windows.'
+      'Restart Orca if Windows still shows the previous icon.'
+    )
+  })
+
+  it('uses the renderer-startup icon as the restart baseline on first mount', async () => {
+    mocks.state.appPlatform = 'win32'
+    mocks.state.settingsSearchQuery = ''
+    mocks.state.appIconAtRendererStartup = 'watercolor'
+
+    const container = await renderAppearancePane({
+      ...getDefaultSettings('/tmp'),
+      appIcon: 'watercolor'
+    })
+
+    expect(container.textContent).not.toContain(
+      'Restart Orca if Windows still shows the previous icon.'
     )
   })
 

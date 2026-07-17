@@ -39,6 +39,8 @@ function getOwnedShortcutPaths(
   >
 ): string[] {
   const shortcutName = `${options.appName}.lnk`
+  // Why: the per-user NSIS installer owns these Start Menu and Desktop launchers;
+  // pinned taskbar shortcuts are Shell-managed and must not be rewritten in place.
   return [
     win32.join(options.appDataPath, 'Microsoft', 'Windows', 'Start Menu', 'Programs', shortcutName),
     win32.join(options.desktopPath, shortcutName)
