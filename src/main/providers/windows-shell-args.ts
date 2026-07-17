@@ -21,12 +21,14 @@ const CMD_UTF8_SETUP_COMMAND = 'chcp 65001 > nul'
 // agents write UTF-8 straight to the console via WriteFile, not WriteConsoleW —
 // then has its output decoded as CP437 and rendered as mojibake (`❯` -> `Γ¥»`,
 // `José` -> `Jos├¬`). Set the console output CP to UTF-8 first, then exec the
-// real interactive login shell so normal `--login -i` behavior is preserved.
-// PowerShell (`[Console]::OutputEncoding`) and cmd.exe (`chcp 65001`) already do
-// the equivalent; this closes the same gap for Git Bash. `|| true` plus the
-// redirect keep terminal startup working if chcp.com is ever unavailable.
+// real interactive login shell so normal `--login -i` behavior is preserved
+// ($BASH is the bash binary running the -c command, so the exec'd shell is the
+// same one node-pty spawned). PowerShell (`[Console]::OutputEncoding`) and
+// cmd.exe (`chcp 65001`) already do the equivalent; this closes the same gap
+// for Git Bash. The `;` (not `&&`) plus bash -c having no `set -e` means the
+// exec runs even if chcp.com is missing, so terminal startup can't be broken.
 const GIT_BASH_UTF8_LOGIN_COMMAND =
-  'chcp.com 65001 >/dev/null 2>&1 || true; exec "$BASH" --login -i'
+  'chcp.com 65001 >/dev/null 2>&1; exec "$BASH" --login -i'
 
 /** Result of resolving a Windows shell to its launch args + effective cwd.
  *

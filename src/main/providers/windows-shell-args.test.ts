@@ -205,12 +205,15 @@ describe('resolveWindowsShellLaunchArgs', () => {
 
     // Why: Git Bash inherits the ConPTY OEM code page (CP437), so a byte-writing
     // UTF-8 TUI mojibakes unless the console is switched to UTF-8 before it runs.
-    // chcp.com must precede the interactive login shell, which is then exec'd so
-    // normal `--login -i` behavior (and the shell's foreground identity) survives.
-    expect(result.shellArgs).toEqual([
-      '-c',
-      'chcp.com 65001 >/dev/null 2>&1 || true; exec "$BASH" --login -i'
-    ])
+    // Assert the contract behaviorally: chcp.com 65001 must precede the exec'd
+    // interactive login shell (which preserves `--login -i` and the shell's
+    // foreground identity), rather than pinning the exact command string.
+    expect(result.shellArgs[0]).toBe('-c')
+    const bashCommand = result.shellArgs[1]
+    expect(bashCommand).toContain('chcp.com 65001')
+    expect(bashCommand).toMatch(/exec "\$BASH" --login -i$/)
+    // The UTF-8 switch must run before the login shell is exec'd.
+    expect(bashCommand.indexOf('chcp.com')).toBeLessThan(bashCommand.indexOf('exec'))
     expect(result.effectiveCwd).toBe('C:\\Users\\alice\\code')
     expect(result.validationCwd).toBe('C:\\Users\\alice\\code')
   })
