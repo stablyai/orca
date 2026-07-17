@@ -86,7 +86,11 @@ import { normalizeHostedReviewHeadRef } from '../../../../shared/hosted-review-r
 import { getHostedReviewCacheKey, refreshHostedReviewCard } from '@/store/slices/hosted-review'
 import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
-import { type ChecksPanelReview, selectChecksPanelReview } from './checks-panel-review'
+import {
+  type ChecksPanelReview,
+  selectChecksPanelBranchRefs,
+  selectChecksPanelReview
+} from './checks-panel-review'
 import { selectReviewCacheEntry } from './review-cache-entry-selection'
 import {
   checksPanelAsyncResultKey,
@@ -3761,10 +3765,7 @@ export default function ChecksPanel(): React.JSX.Element {
         )}
 
         {/* Merge target (and head branch when the linked PR carries it) */}
-        <ChecksPanelBranchRow
-          baseRefName={activeReview.baseRefName ?? pr?.baseRefName}
-          headRefName={pr?.headRefName}
-        />
+        <ChecksPanelBranchRow {...selectChecksPanelBranchRefs(activeReview, pr)} />
 
         {/* Updated at */}
         {activeReview.updatedAt && (
