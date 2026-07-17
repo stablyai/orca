@@ -77,6 +77,26 @@ describe('electron-builder config', () => {
     )
   })
 
+  // Why: the Windows CLI shim is delivered only via extraResources to
+  // resources/bin/orca.cmd (beside the native resources/bin/orca.exe). If the
+  // source tree is also packed into app.asar it gets extracted by
+  // asarUnpack:['resources/**'] to app.asar.unpacked/resources/win32/bin/orca.cmd,
+  // a duplicate with no adjacent orca.exe that fails to launch (#7351).
+  it('keeps the Windows CLI shim source tree out of app.asar', () => {
+    expect(electronBuilderConfig.files).toEqual(
+      expect.arrayContaining(['!resources/win32{,/**/*}'])
+    )
+    // Regression guard: the working shim must still ship via extraResources.
+    expect(electronBuilderConfig.win.extraResources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: 'resources/win32/bin/orca.cmd',
+          to: 'bin/orca.cmd'
+        })
+      ])
+    )
+  })
+
   // Why: on macOS 26 UNUserNotificationCenter aborts for executables launched
   // from Contents/Resources, so the helper must ship in Contents/MacOS (#7929).
   it('ships the mac notification-status helper in Contents/MacOS, not Resources', () => {
