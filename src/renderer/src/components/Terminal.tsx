@@ -119,6 +119,7 @@ import {
   createFloatingWorkspaceTerminalTab,
   handleEmptyFloatingWorkspacePanelCloseShortcut,
   isFloatingWorkspacePanelFocused,
+  openFloatingWorkspaceMarkdownTab,
   switchFloatingWorkspaceTab
 } from '@/lib/floating-workspace-terminal-actions'
 import {
@@ -308,6 +309,7 @@ function Terminal(): React.JSX.Element | null {
     (s) => s.openNewBrowserTabInActiveWorkspace
   )
   const openNewMarkdownInActiveWorkspace = useAppStore((s) => s.openNewMarkdownInActiveWorkspace)
+  const openMarkdownFileInActiveWorkspace = useAppStore((s) => s.openMarkdownFileInActiveWorkspace)
   const openNewTerminalTabInActiveWorkspace = useAppStore(
     (s) => s.openNewTerminalTabInActiveWorkspace
   )
@@ -1444,6 +1446,19 @@ function Terminal(): React.JSX.Element | null {
     await openNewMarkdownInActiveWorkspace(targetGroupId)
   }, [activeWorktreeId, openNewMarkdownInActiveWorkspace])
 
+  const handleOpenFile = useCallback(async () => {
+    if (!activeWorktreeId) {
+      return
+    }
+    const targetGroupId =
+      useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId] ??
+      useAppStore.getState().groupsByWorktree[activeWorktreeId]?.[0]?.id
+    if (!targetGroupId) {
+      return
+    }
+    await openMarkdownFileInActiveWorkspace(targetGroupId)
+  }, [activeWorktreeId, openMarkdownFileInActiveWorkspace])
+
   const handleCloseTab = useCallback((tabId: string) => {
     closeTerminalTab(tabId)
   }, [])
@@ -1899,6 +1914,24 @@ function Terminal(): React.JSX.Element | null {
         return
       }
 
+      // Cmd/Ctrl+Shift+O - open existing markdown file
+      if (!e.repeat && matchShortcut('tab.openMarkdown')) {
+        e.preventDefault()
+        notifyTerminalCapture('tab.openMarkdown')
+        if (floatingWorkspaceFocused) {
+          void openFloatingWorkspaceMarkdownTab(useAppStore.getState()).catch((err) => {
+            toast.error(
+              err instanceof Error
+                ? err.message
+                : translate('auto.components.Terminal.3a460c3322', 'Failed to open markdown file.')
+            )
+          })
+          return
+        }
+        void handleOpenFile()
+        return
+      }
+
       if (handleEmptyFloatingWorkspacePanelCloseShortcut(e, shortcutPlatform, keybindings)) {
         return
       }
@@ -2040,6 +2073,7 @@ function Terminal(): React.JSX.Element | null {
     handleNewBrowserTab,
     handleNewSimulatorTab,
     handleNewFile,
+    handleOpenFile,
     handleNewTab,
     handleNewAgentTab,
     handleCloseTab,
@@ -2199,6 +2233,7 @@ function Terminal(): React.JSX.Element | null {
             onNewSimulatorTab={mobileEmulatorEnabled ? handleNewSimulatorTab : undefined}
             onOpenEntry={handleOpenEntry}
             onNewFileTab={handleNewFile}
+            onOpenFileTab={handleOpenFile}
             onSetCustomTitle={setTabCustomTitle}
             onSetTabColor={setTabColor}
             expandedPaneByTabId={expandedPaneByTabId}

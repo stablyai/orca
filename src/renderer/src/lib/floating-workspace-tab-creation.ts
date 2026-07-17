@@ -82,3 +82,28 @@ export async function createFloatingWorkspaceMarkdownTab(
     }
   )
 }
+
+export async function openFloatingWorkspaceMarkdownTab(
+  store: FloatingWorkspaceMarkdownStore
+): Promise<void> {
+  const targetGroupId = store.activeGroupIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
+  const document = await window.api.app.pickFloatingMarkdownDocument()
+  if (!document) {
+    return
+  }
+  store.openFile(
+    {
+      filePath: document.filePath,
+      relativePath: document.relativePath,
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      language: detectLanguage(document.relativePath),
+      mode: 'edit',
+      runtimeEnvironmentId: null
+    },
+    {
+      preview: false,
+      targetGroupId,
+      suppressActiveRuntimeFallback: true
+    }
+  )
+}

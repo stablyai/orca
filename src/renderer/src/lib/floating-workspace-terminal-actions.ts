@@ -14,7 +14,8 @@ import { keybindingMatchesAction, type KeybindingOverrides } from '../../../shar
 export {
   createFloatingWorkspaceBrowserTab,
   createFloatingWorkspaceMarkdownTab,
-  createFloatingWorkspaceTerminalTab
+  createFloatingWorkspaceTerminalTab,
+  openFloatingWorkspaceMarkdownTab
 } from './floating-workspace-tab-creation'
 export {
   isFloatingWorkspacePanelShortcut,

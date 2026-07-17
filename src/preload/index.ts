@@ -503,6 +503,8 @@ const api = {
       ipcRenderer.invoke('app:getFloatingMarkdownDirectory'),
     pickFloatingMarkdownDocument: (): Promise<MarkdownDocument | null> =>
       ipcRenderer.invoke('app:pickFloatingMarkdownDocument'),
+    pickWorktreeMarkdownDocument: (cwd: string): Promise<MarkdownDocument | null> =>
+      ipcRenderer.invoke('app:pickWorktreeMarkdownDocument', cwd),
     pickFloatingWorkspaceDirectory: (): Promise<string | null> =>
       ipcRenderer.invoke('app:pickFloatingWorkspaceDirectory')
   },

@@ -356,4 +356,49 @@ describe('registerAppHandlers', () => {
     })
     expect(grantFloatingWorkspaceDirectoryMock).toHaveBeenCalledWith(store, '/Users/kaylee/notes')
   })
+
+  it('picks a markdown file rooted at the given worktree cwd', async () => {
+    showOpenDialogMock.mockResolvedValue({
+      canceled: false,
+      filePaths: ['/Users/kaylee/repo/docs/notes.md']
+    })
+    registerAppHandlers({} as never)
+
+    await expect(
+      handlers.get('app:pickWorktreeMarkdownDocument')?.({ sender: {} }, '/Users/kaylee/repo')
+    ).resolves.toMatchObject({
+      filePath: '/Users/kaylee/repo/docs/notes.md',
+      relativePath: 'docs/notes.md',
+      basename: 'notes.md',
+      name: 'notes'
+    })
+    expect(showOpenDialogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        defaultPath: '/Users/kaylee/repo',
+        properties: ['openFile'],
+        filters: [{ name: 'Markdown', extensions: ['md', 'mdx', 'markdown'] }]
+      })
+    )
+  })
+
+  it('returns null when the markdown file picker is cancelled', async () => {
+    showOpenDialogMock.mockResolvedValue({ canceled: true, filePaths: [] })
+    registerAppHandlers({} as never)
+
+    await expect(
+      handlers.get('app:pickWorktreeMarkdownDocument')?.({ sender: {} }, '/Users/kaylee/repo')
+    ).resolves.toBeNull()
+  })
+
+  it('rejects a picked file that is not a markdown document', async () => {
+    showOpenDialogMock.mockResolvedValue({
+      canceled: false,
+      filePaths: ['/Users/kaylee/repo/notes.txt']
+    })
+    registerAppHandlers({} as never)
+
+    await expect(
+      handlers.get('app:pickWorktreeMarkdownDocument')?.({ sender: {} }, '/Users/kaylee/repo')
+    ).rejects.toThrow('Selected file is not a markdown document.')
+  })
 })
