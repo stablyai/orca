@@ -1,0 +1,31 @@
+supportedArchitectures:
+  os:
+    - current
+    - darwin
+    - linux
+    - win32
+  cpu:
+    - current
+    - x64
+    - arm64
+overrides:
+  'monaco-editor>dompurify': 3.4.11
+patchedDependencies:
+  node-pty@1.1.0: config/patches/node-pty@1.1.0.patch
+  '@xterm/addon-ligatures@0.11.0-beta.287': config/patches/@xterm__addon-ligatures@0.11.0-beta.287.patch
+  '@xterm/addon-webgl@0.20.0-beta.286': config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch
+  '@xterm/addon-serialize@0.15.0-beta.287': config/patches/@xterm__addon-serialize@0.15.0-beta.287.patch
+shamefullyHoist: true
+minimumReleaseAge: 4320
+# Why: v10 onlyBuiltDependencies was an allowlist; packages that ask to
+# build but were never on that list stay false so install stays non-interactive.
+allowBuilds:
+  '@parcel/watcher': true
+  agent-browser: false
+  cpu-features: true
+  electron-winstaller: false
+  esbuild: true
+  msw: false
+  node-pty: true
+  sherpa-onnx: true
+  ssh2: false

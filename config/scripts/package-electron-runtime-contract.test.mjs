@@ -5,6 +5,7 @@ import { parse } from 'yaml'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const packageJson = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf8'))
+const pnpmWorkspace = parse(readFileSync(join(projectDir, 'pnpm-workspace.yaml'), 'utf8'))
 
 describe('Electron runtime package contract', () => {
   it('keeps shared WebGL atlas invalidation reproducible from vendored source', () => {
@@ -22,7 +23,9 @@ describe('Electron runtime package contract', () => {
 
   it('keeps root postinstall as the single Electron binary install owner', () => {
     expect(packageJson.scripts.postinstall).toBe('node config/scripts/rebuild-native-deps.mjs')
-    expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('electron')
+    // Why: pnpm 11 moved onlyBuiltDependencies → allowBuilds in pnpm-workspace.yaml.
+    // Electron must stay off the allowlist so its binary install stays owned by postinstall.
+    expect(pnpmWorkspace.allowBuilds?.electron).not.toBe(true)
   })
 
   it('guards package scripts that launch Electron tooling', () => {

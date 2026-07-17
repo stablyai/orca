@@ -53,7 +53,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           npm install -g node-gyp@11.5.0
-          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+          echo "pnpm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -140,7 +140,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           npm install -g node-gyp@11.5.0
-          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+          echo "pnpm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -205,7 +205,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           npm install -g node-gyp@11.5.0
-          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+          echo "pnpm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

@@ -47,7 +47,7 @@ jobs:
       - name: Use external node-gyp to avoid pnpm's bundled copy
         run: |
           npm install -g node-gyp@11.5.0
-          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+          echo "pnpm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
 
       - name: Prepare dependency install
         run: |
@@ -57,7 +57,7 @@ jobs:
           fi
 
       - name: Install dependencies
-        # Why: pnpm 10.24's frozen headless fast path can fail on fresh Ubuntu
+        # Why: pnpm's frozen headless fast path can fail on fresh Ubuntu
         # runners while creating the root node_modules. Use the normal resolver
         # path, then verify package metadata stayed unchanged.
         run: |
