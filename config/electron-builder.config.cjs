@@ -208,6 +208,10 @@ module.exports = {
         to: 'bin/orca.exe'
       },
       {
+        from: 'native/windows-programs-path/.build/orca-programs-path.exe',
+        to: 'bin/orca-programs-path.exe'
+      },
+      {
         from: 'node_modules/agent-browser/bin/agent-browser-win32-x64.exe',
         to: 'agent-browser-win32-x64.exe'
       },

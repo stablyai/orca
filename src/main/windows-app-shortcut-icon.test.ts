@@ -4,6 +4,8 @@ import { updateWindowsAppShortcutIcon } from './windows-app-shortcut-icon'
 
 describe('Windows app shortcut icon', () => {
   it('updates Orca-owned shortcuts without changing their launch identity', () => {
+    const programsPath = 'D:\\Redirected Start Menu\\Programs'
+    const getProgramsPath = vi.fn(() => programsPath)
     const readShortcutLink = vi.fn((shortcutPath: string) => ({
       target: 'C:\\Program Files\\Orca\\Orca.exe',
       args: shortcutPath.includes('Desktop') ? '--desktop' : '',
@@ -21,31 +23,25 @@ describe('Windows app shortcut icon', () => {
       isPackaged: true,
       pathExists: () => true,
       platform: 'win32',
+      getProgramsPath,
       readShortcutLink,
       writeShortcutLink
     })
 
     expect(result).toEqual({
       failedPaths: [],
-      updatedPaths: [
-        'C:\\Users\\Test\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Orca.lnk',
-        'C:\\Users\\Test\\Desktop\\Orca.lnk'
-      ]
+      updatedPaths: [`${programsPath}\\Orca.lnk`, 'C:\\Users\\Test\\Desktop\\Orca.lnk']
     })
-    expect(writeShortcutLink).toHaveBeenNthCalledWith(
-      1,
-      'C:\\Users\\Test\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Orca.lnk',
-      'update',
-      {
-        appUserModelId: 'com.stablyai.orca',
-        args: '',
-        cwd: 'C:\\Program Files\\Orca',
-        description: 'Orca',
-        icon: 'C:\\icons\\orca-watercolor.ico',
-        iconIndex: 0,
-        target: 'C:\\Program Files\\Orca\\Orca.exe'
-      }
-    )
+    expect(getProgramsPath).toHaveBeenCalledOnce()
+    expect(writeShortcutLink).toHaveBeenNthCalledWith(1, `${programsPath}\\Orca.lnk`, 'update', {
+      appUserModelId: 'com.stablyai.orca',
+      args: '',
+      cwd: 'C:\\Program Files\\Orca',
+      description: 'Orca',
+      icon: 'C:\\icons\\orca-watercolor.ico',
+      iconIndex: 0,
+      target: 'C:\\Program Files\\Orca\\Orca.exe'
+    })
     expect(writeShortcutLink).toHaveBeenNthCalledWith(
       2,
       'C:\\Users\\Test\\Desktop\\Orca.lnk',
@@ -69,6 +65,8 @@ describe('Windows app shortcut icon', () => {
       appUserModelId: 'com.stablyai.orca',
       desktopPath: 'C:\\Users\\Test\\Desktop',
       executablePath: 'C:\\Program Files\\Orca\\Orca.exe',
+      getProgramsPath: () =>
+        'C:\\Users\\Test\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs',
       isPackaged: true,
       pathExists: () => true,
       platform: 'win32',
@@ -87,6 +85,8 @@ describe('Windows app shortcut icon', () => {
       appName: 'Orca',
       appUserModelId: 'com.stablyai.orca',
       desktopPath: 'C:\\Users\\Test\\Desktop',
+      getProgramsPath: () =>
+        'C:\\Users\\Test\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs',
       pathExists: () => true,
       readShortcutLink: vi.fn(() => ({ target: 'C:\\Orca.exe' })),
       writeShortcutLink
@@ -120,6 +120,8 @@ describe('Windows app shortcut icon', () => {
       appUserModelId: 'com.stablyai.orca',
       desktopPath: 'C:\\Users\\Test\\Desktop',
       executablePath: 'C:\\Orca.exe',
+      getProgramsPath: () =>
+        'C:\\Users\\Test\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs',
       isPackaged: true,
       pathExists: (shortcutPath) => shortcutPath === startMenuShortcut,
       platform: 'win32',

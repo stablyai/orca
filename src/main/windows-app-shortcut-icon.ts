@@ -3,6 +3,7 @@ import { win32 } from 'node:path'
 import { app, shell } from 'electron'
 
 import { getDevInstanceIdentity } from './startup/dev-instance-identity'
+import { getWindowsProgramsPath } from './windows-programs-path'
 
 type ReadShortcutLink = (shortcutPath: string) => Electron.ShortcutDetails
 type WriteShortcutLink = (
@@ -17,6 +18,7 @@ type UpdateWindowsAppShortcutIconOptions = {
   appUserModelId?: string
   desktopPath?: string
   executablePath?: string
+  getProgramsPath?: () => string
   isPackaged?: boolean
   pathExists?: (shortcutPath: string) => boolean
   platform?: NodeJS.Platform
@@ -34,15 +36,15 @@ function normalizeWindowsExecutablePath(value: string): string {
 }
 
 function getOwnedShortcutPaths(
-  options: Required<
-    Pick<UpdateWindowsAppShortcutIconOptions, 'appDataPath' | 'appName' | 'desktopPath'>
-  >
+  options: Required<Pick<UpdateWindowsAppShortcutIconOptions, 'appName' | 'desktopPath'>> & {
+    programsPath: string
+  }
 ): string[] {
   const shortcutName = `${options.appName}.lnk`
   // Why: the per-user NSIS installer owns these Start Menu and Desktop launchers;
   // pinned taskbar shortcuts are Shell-managed and must not be rewritten in place.
   return [
-    win32.join(options.appDataPath, 'Microsoft', 'Windows', 'Start Menu', 'Programs', shortcutName),
+    win32.join(options.programsPath, shortcutName),
     win32.join(options.desktopPath, shortcutName)
   ]
 }
@@ -67,7 +69,17 @@ export function updateWindowsAppShortcutIcon(
   const readShortcutLink = options.readShortcutLink ?? shell.readShortcutLink.bind(shell)
   const writeShortcutLink = options.writeShortcutLink ?? shell.writeShortcutLink.bind(shell)
 
-  for (const shortcutPath of getOwnedShortcutPaths({ appDataPath, appName, desktopPath })) {
+  let programsPath: string
+  try {
+    programsPath = (options.getProgramsPath ?? getWindowsProgramsPath)()
+  } catch (error) {
+    // Why: failure to query the redirectable known folder must not block saving
+    // the icon choice; the documented default remains a safe compatibility path.
+    console.warn('[app-icon] failed to resolve FOLDERID_Programs:', error)
+    programsPath = win32.join(appDataPath, 'Microsoft', 'Windows', 'Start Menu', 'Programs')
+  }
+
+  for (const shortcutPath of getOwnedShortcutPaths({ appName, desktopPath, programsPath })) {
     if (!pathExists(shortcutPath)) {
       continue
     }
