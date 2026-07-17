@@ -90,7 +90,15 @@ async function terminateDaemonForColdRestart(pid: number): Promise<void> {
       }
     }
   } else {
-    process.kill(pid, 'SIGKILL')
+    try {
+      process.kill(pid, 'SIGKILL')
+    } catch (error) {
+      // Why: the daemon can self-exit between the liveness guard and this
+      // signal; tolerate ESRCH like the Windows branch re-checks liveness.
+      if ((error as NodeJS.ErrnoException).code !== 'ESRCH') {
+        throw error
+      }
+    }
   }
   await expect
     .poll(() => isProcessAlive(pid), {
