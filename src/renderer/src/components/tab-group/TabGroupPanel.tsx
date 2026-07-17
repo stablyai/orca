@@ -238,7 +238,7 @@ export default function TabGroupPanel({
           this, the empty space after tabs in the center column is dead — the
           user can only drag from the tiny left-sidebar header strip. */}
       <div
-        className="h-[32px] shrink-0 border-b border-border bg-card"
+        className="h-[36px] shrink-0 border-b border-border bg-card"
         data-tab-group-strip-id={groupId}
         data-terminal-focus-release-surface="true"
         data-worktree-id={worktreeId}
