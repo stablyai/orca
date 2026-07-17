@@ -2157,7 +2157,10 @@ private struct WindowCapture {
         // Why: probing image APIs before TCC preflight can raise Screen
         // Recording prompts, even for --no-screenshot calls.
         if captureImage {
-            self.image = Self.captureImage(windowId: candidate.windowId, bounds: candidate.bounds)
+            self.image = Self.captureModelImage(
+                targetWindowId: candidate.windowId,
+                bounds: candidate.bounds
+            )
         } else {
             self.image = nil
         }
@@ -2208,21 +2211,37 @@ private struct WindowCapture {
         )
     }
 
-    private static func captureImage(windowId: CGWindowID, bounds: CGRect) -> CapturedImage? {
+    private static func captureModelImage(
+        targetWindowId: CGWindowID,
+        bounds: CGRect
+    ) -> CapturedImage? {
+        // Why: model images are limited to one explicit target window, which
+        // structurally excludes helper-owned overlays from both capture paths.
         if ProcessInfo.processInfo.environment["ORCA_COMPUTER_USE_SCK_SCREENSHOTS"] == "1",
-           let image = captureImageWithScreenCaptureKit(windowId: windowId, bounds: bounds) {
+           let image = captureImageWithScreenCaptureKit(
+               targetWindowId: targetWindowId,
+               bounds: bounds
+           ) {
             return CapturedImage(image: image, engine: "screenCaptureKit")
         }
-        if let image = CGWindowListCreateImage(.null, [.optionIncludingWindow], windowId, [.boundsIgnoreFraming, .bestResolution]) {
+        if let image = CGWindowListCreateImage(
+            .null,
+            [.optionIncludingWindow],
+            targetWindowId,
+            [.boundsIgnoreFraming, .bestResolution]
+        ) {
             return CapturedImage(image: image, engine: "cgWindowList")
         }
         return nil
     }
 
-    private static func captureImageWithScreenCaptureKit(windowId: CGWindowID, bounds: CGRect) -> CGImage? {
+    private static func captureImageWithScreenCaptureKit(
+        targetWindowId: CGWindowID,
+        bounds: CGRect
+    ) -> CGImage? {
         try? BlockingAsync.run(timeout: 3) {
             let content = try await SCShareableContent.current
-            guard let window = content.windows.first(where: { $0.windowID == windowId }) else {
+            guard let window = content.windows.first(where: { $0.windowID == targetWindowId }) else {
                 return nil
             }
             let filter = SCContentFilter(desktopIndependentWindow: window)
@@ -2383,8 +2402,8 @@ private enum Input {
             }
             down.keyboardSetUnicodeString(stringLength: 1, unicodeString: &char)
             up.keyboardSetUnicodeString(stringLength: 1, unicodeString: &char)
-            down.post(tap: .cghidEventTap)
-            up.post(tap: .cghidEventTap)
+            down.postToPid(pid)
+            up.postToPid(pid)
         }
     }
 
@@ -2437,7 +2456,7 @@ private enum Input {
             throw ProviderError.coded("accessibility_error", "failed to create key event")
         }
         event.flags = flags
-        event.post(tap: .cghidEventTap)
+        event.postToPid(pid)
     }
 }
 
@@ -2600,6 +2619,7 @@ private final class AgentRuntime: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         listener?.stop()
+        PointerVisibility.shutdown()
     }
 }
 
@@ -3506,6 +3526,7 @@ private final class SocketListener: @unchecked Sendable {
     private let token: String?
     private let provider = Provider()
     private let providerLock = NSLock()
+    private let stateLock = NSLock()
     private var socketFd: Int32 = -1
     private var isStopped = false
 
@@ -3522,10 +3543,18 @@ private final class SocketListener: @unchecked Sendable {
     }
 
     func stop() {
+        let fd: Int32
+        stateLock.lock()
+        if isStopped {
+            stateLock.unlock()
+            return
+        }
         isStopped = true
-        if socketFd >= 0 {
-            close(socketFd)
-            socketFd = -1
+        fd = socketFd
+        socketFd = -1
+        stateLock.unlock()
+        if fd >= 0 {
+            close(fd)
         }
         // Why: the parent owns the private temp directory cleanup; the helper
         // must not unlink arbitrary caller-supplied paths on shutdown.
@@ -3578,10 +3607,11 @@ private final class SocketListener: @unchecked Sendable {
     }
 
     private func acceptLoop() {
-        while !isStopped {
-            let fd = accept(socketFd, nil, nil)
+        while true {
+            guard let listenerFd = activeSocketFd() else { return }
+            let fd = accept(listenerFd, nil, nil)
             if fd < 0 {
-                if !isStopped {
+                if !stopped() {
                     fputs("computer-use socket accept failed: \(String(cString: strerror(errno)))\n", stderr)
                 }
                 continue
@@ -3593,7 +3623,17 @@ private final class SocketListener: @unchecked Sendable {
     }
 
     private func handleConnection(_ fd: Int32) {
-        defer { close(fd) }
+        var ownsHelperLifetime = false
+        defer {
+            close(fd)
+            if ownsHelperLifetime {
+                // Why: the client starts a replacement helper after transport
+                // loss, so an authenticated connection is this process's owner.
+                DispatchQueue.main.async {
+                    NSApp.terminate(nil)
+                }
+            }
+        }
         let authorizedPeer = peerProcessId(fd).map(isAuthorizedAgentPeer) == true
         let decoder = JSONDecoder()
         while let line = readLine(from: fd) {
@@ -3601,6 +3641,14 @@ private final class SocketListener: @unchecked Sendable {
                   let request = try? decoder.decode(Request.self, from: data)
             else {
                 continue
+            }
+            if AgentConnectionOwnership.shouldClaim(
+                method: request.method,
+                requestToken: request.token,
+                expectedToken: token,
+                authorizedPeer: authorizedPeer
+            ) {
+                ownsHelperLifetime = true
             }
             let response = handleRequest(
                 provider: provider,
@@ -3611,6 +3659,18 @@ private final class SocketListener: @unchecked Sendable {
             )
             writeJSON(response, to: fd)
         }
+    }
+
+    private func activeSocketFd() -> Int32? {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return isStopped || socketFd < 0 ? nil : socketFd
+    }
+
+    private func stopped() -> Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return isStopped
     }
 }
 
@@ -3699,6 +3759,12 @@ private func runAgent(socketPath: String, token: String?) {
     app.delegate = delegate
     // Why: SCK is reliable once this code runs as a signed app with a real TCC identity.
     setenv("ORCA_COMPUTER_USE_SCK_SCREENSHOTS", "1", 1)
+    // Why: the agent owns transient overlay UI but must never activate or
+    // acquire a Dock presence while it controls another application.
+    guard app.setActivationPolicy(.accessory) else {
+        fputs("failed to configure computer-use agent activation policy\n", stderr)
+        exit(1)
+    }
     app.run()
 }
 

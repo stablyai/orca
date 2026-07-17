@@ -183,6 +183,13 @@ function verifyNativeArgumentGuardrails() {
     join(repoRoot, 'native/computer-use-macos/Sources/OrcaComputerUseMacOS/main.swift'),
     'utf8'
   )
+  const macosPointer = readFileSync(
+    join(
+      repoRoot,
+      'native/computer-use-macos/Sources/OrcaComputerUseMacOS/AgentPointerOverlay.swift'
+    ),
+    'utf8'
+  )
   const windows = readFileSync(join(repoRoot, 'native/computer-use-windows/runtime.ps1'), 'utf8')
   const failures = []
   if (linux.includes('count or 1') || linux.includes('pages or 1')) {
@@ -357,6 +364,26 @@ function verifyNativeArgumentGuardrails() {
     !macos.includes('return "[redacted]"')
   ) {
     failures.push('macOS secure fields must redact verification-code/password-style values')
+  }
+  if (/sharingType\s*=\s*(?:NSWindow\.SharingType\.)?none/.test(macosPointer)) {
+    failures.push('macOS agent pointer must not rely on legacy NSWindow capture sharing flags')
+  }
+  if (macos.includes('.post(tap:') || macosPointer.includes('.post(tap:')) {
+    failures.push('macOS synthetic input must not post to a global event tap')
+  }
+  if (
+    macos.includes('CGWarpMouseCursorPosition') ||
+    macosPointer.includes('CGWarpMouseCursorPosition')
+  ) {
+    failures.push('macOS agent pointer must not move the human native pointer')
+  }
+  if (
+    !macos.includes('captureModelImage') ||
+    !macos.includes('SCContentFilter(desktopIndependentWindow: window)') ||
+    !macos.includes('[.optionIncludingWindow]') ||
+    !macos.includes('configuration.showsCursor = false')
+  ) {
+    failures.push('macOS model screenshots must remain explicit target-window captures')
   }
   if (windows.includes('if ([bool]$Operation.restoreWindow) { return }')) {
     failures.push('Windows keyboard focus checks must verify focus after --restore-window')

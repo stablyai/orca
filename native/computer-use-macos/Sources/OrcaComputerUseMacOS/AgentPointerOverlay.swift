@@ -4,8 +4,6 @@ import Darwin
 import OrcaComputerUseMacOSCore
 
 enum PointerVisibility {
-    private static let approachSteps = 12
-    private static let approachDelayMicroseconds: useconds_t = 8_000
     private static let actionDelayMicroseconds: useconds_t = 12_000
     private static let overlay = AgentPointerOverlayController()
 
@@ -15,9 +13,16 @@ enum PointerVisibility {
             overlay.move(to: destination)
             return
         }
-        for point in PointerMotionPath.points(from: origin, to: destination, steps: approachSteps) {
+        let plan = PointerMotionPolicy.plan(
+            from: origin,
+            to: destination,
+            reduceMotion: overlay.shouldReduceMotion
+        )
+        for point in plan.points {
             overlay.move(to: point)
-            usleep(approachDelayMicroseconds)
+            if plan.delayMicroseconds > 0 {
+                usleep(plan.delayMicroseconds)
+            }
         }
     }
 
@@ -31,12 +36,18 @@ enum PointerVisibility {
 
     static func followAction(to destination: CGPoint) {
         overlay.setPressed(true, at: destination)
-        usleep(actionDelayMicroseconds)
+        if !overlay.shouldReduceMotion {
+            usleep(actionDelayMicroseconds)
+        }
     }
 
     static func release(at point: CGPoint) {
         overlay.setPressed(false, at: point)
         overlay.indicateAction(at: point)
+    }
+
+    static func shutdown() {
+        overlay.shutdown()
     }
 }
 
@@ -45,14 +56,21 @@ private final class AgentPointerOverlayController: @unchecked Sendable {
     private static let hotSpot = CGPoint(x: 20, y: 44)
     private let stateLock = NSLock()
     private var quartzPoint: CGPoint?
-    private var hideGeneration = 0
     private var panel: NSPanel?
     private var pointerView: AgentPointerView?
+    private var hideWorkItem: DispatchWorkItem?
+    private var pulseResetWorkItem: DispatchWorkItem?
 
     var currentQuartzPoint: CGPoint? {
         stateLock.lock()
         defer { stateLock.unlock() }
         return quartzPoint
+    }
+
+    var shouldReduceMotion: Bool {
+        performOnMain {
+            NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        }
     }
 
     func move(to point: CGPoint) {
@@ -70,24 +88,27 @@ private final class AgentPointerOverlayController: @unchecked Sendable {
     private func update(point: CGPoint, pressed: Bool, pulse: Bool) {
         stateLock.lock()
         quartzPoint = point
-        hideGeneration += 1
-        let generation = hideGeneration
         stateLock.unlock()
 
-        if Thread.isMainThread {
-            MainActor.assumeIsolated {
-                applyUIUpdate(point: point, pressed: pressed, pulse: pulse)
-            }
-        } else {
-            DispatchQueue.main.sync { [self] in
-                MainActor.assumeIsolated {
-                    applyUIUpdate(point: point, pressed: pressed, pulse: pulse)
-                }
-            }
+        performOnMain { [self] in
+            applyUIUpdate(point: point, pressed: pressed, pulse: pulse)
         }
+    }
 
-        schedulePulseReset(generation: generation, pressed: pressed)
-        scheduleHide(generation: generation)
+    func shutdown() {
+        stateLock.lock()
+        quartzPoint = nil
+        stateLock.unlock()
+        performOnMain { [self] in
+            hideWorkItem?.cancel()
+            pulseResetWorkItem?.cancel()
+            hideWorkItem = nil
+            pulseResetWorkItem = nil
+            panel?.orderOut(nil)
+            panel?.close()
+            panel = nil
+            pointerView = nil
+        }
     }
 
     @MainActor
@@ -102,14 +123,18 @@ private final class AgentPointerOverlayController: @unchecked Sendable {
             )
         )
         pointerView?.setState(pressed: pressed, pulse: pulse)
-        panel.orderFrontRegardless()
+        if !panel.isVisible {
+            panel.orderFrontRegardless()
+        }
+        schedulePulseReset(pressed: pressed)
+        scheduleHide()
     }
 
     @MainActor
     private func ensurePanel() -> NSPanel {
         if let panel { return panel }
 
-        let panel = NSPanel(
+        let panel = AgentPointerPanel(
             contentRect: NSRect(origin: .zero, size: Self.panelSize),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
@@ -123,11 +148,17 @@ private final class AgentPointerOverlayController: @unchecked Sendable {
         panel.ignoresMouseEvents = true
         panel.hidesOnDeactivate = false
         panel.isFloatingPanel = true
+        panel.becomesKeyOnlyIfNeeded = true
+        panel.isReleasedWhenClosed = false
         panel.level = .screenSaver
-        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
-        // Why: the overlay explains actions to the human, but model screenshots
-        // must remain an unannotated view of the target application.
-        panel.sharingType = .none
+        panel.collectionBehavior = [
+            .canJoinAllSpaces,
+            .canJoinAllApplications,
+            .fullScreenAuxiliary,
+            .stationary,
+            .ignoresCycle,
+        ]
+        pointerView.setAccessibilityElement(false)
         self.panel = panel
         self.pointerView = pointerView
         return panel
@@ -143,26 +174,47 @@ private final class AgentPointerOverlayController: @unchecked Sendable {
         }
     }
 
-    private func schedulePulseReset(generation: Int, pressed: Bool) {
+    @MainActor
+    private func schedulePulseReset(pressed: Bool) {
+        pulseResetWorkItem?.cancel()
+        pulseResetWorkItem = nil
         guard !pressed else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [weak self] in
-            guard let self, self.isCurrent(generation) else { return }
-            self.pointerView?.setState(pressed: false, pulse: false)
+        let workItem = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                self?.pointerView?.setState(pressed: false, pulse: false)
+                self?.pulseResetWorkItem = nil
+            }
         }
+        pulseResetWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18, execute: workItem)
     }
 
-    private func scheduleHide(generation: Int) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
-            guard let self, self.isCurrent(generation) else { return }
-            self.panel?.orderOut(nil)
+    @MainActor
+    private func scheduleHide() {
+        hideWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                self?.panel?.orderOut(nil)
+                self?.hideWorkItem = nil
+            }
         }
+        hideWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2, execute: workItem)
     }
 
-    private func isCurrent(_ generation: Int) -> Bool {
-        stateLock.lock()
-        defer { stateLock.unlock() }
-        return generation == hideGeneration
+    private func performOnMain<T: Sendable>(_ operation: @MainActor () -> T) -> T {
+        if Thread.isMainThread {
+            return MainActor.assumeIsolated(operation)
+        }
+        return DispatchQueue.main.sync {
+            MainActor.assumeIsolated(operation)
+        }
     }
+}
+
+private final class AgentPointerPanel: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
 }
 
 private final class AgentPointerView: NSView {
