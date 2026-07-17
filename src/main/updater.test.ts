@@ -71,6 +71,7 @@ const {
     appMock: {
       isPackaged: true,
       getVersion: vi.fn(() => '1.0.51'),
+      getPath: vi.fn(() => '/tmp/orca-test-user-data'),
       on: appOn,
       emit: appEmit,
       quit: vi.fn()
@@ -135,6 +136,20 @@ const { armExitWatchdogMock, disarmExitWatchdogMock } = vi.hoisted(() => ({
   disarmExitWatchdogMock: vi.fn()
 }))
 
+const findConflictingAppInstancePidsMock = vi.hoisted(() => vi.fn(async () => [] as number[]))
+vi.mock('./updater-conflicting-app-instances', () => ({
+  findConflictingAppInstancePids: findConflictingAppInstancePidsMock
+}))
+
+const { writeHandoffMarkerMock, clearHandoffMarkerMock } = vi.hoisted(() => ({
+  writeHandoffMarkerMock: vi.fn(),
+  clearHandoffMarkerMock: vi.fn()
+}))
+vi.mock('./startup/update-install-launch-gate', () => ({
+  writeUpdateInstallHandoffMarker: writeHandoffMarkerMock,
+  clearUpdateInstallHandoffMarker: clearHandoffMarkerMock
+}))
+
 vi.mock('./update-install-exit-watchdog', () => ({
   armUpdateInstallExitWatchdog: armExitWatchdogMock,
   disarmUpdateInstallExitWatchdog: disarmExitWatchdogMock
@@ -168,6 +183,10 @@ describe('updater', () => {
     appMock.isPackaged = true
     isMock.dev = false
     killAllPtyMock.mockReset()
+    findConflictingAppInstancePidsMock.mockReset()
+    findConflictingAppInstancePidsMock.mockResolvedValue([])
+    writeHandoffMarkerMock.mockReset()
+    clearHandoffMarkerMock.mockReset()
     armExitWatchdogMock.mockReset()
     disarmExitWatchdogMock.mockReset()
     powerMonitorOnMock.mockReset()
@@ -1275,6 +1294,17 @@ describe('updater', () => {
 
     expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledTimes(1)
     expect(isQuittingForUpdate()).toBe(false)
+    if (process.platform === 'darwin') {
+      expect(writeHandoffMarkerMock).toHaveBeenCalledWith(
+        '/tmp/orca-test-user-data',
+        process.execPath,
+        '1.0.51'
+      )
+      expect(clearHandoffMarkerMock).toHaveBeenCalledWith(
+        '/tmp/orca-test-user-data',
+        process.execPath
+      )
+    }
     // Why: destructive prep runs only after quitAndInstall returns still in
     // progress; sync recovery clears flags first so PTYs stay alive.
     expect(killAllPtyMock).not.toHaveBeenCalled()

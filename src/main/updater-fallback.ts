@@ -38,7 +38,8 @@ export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean 
         right.state === 'error' &&
         left.message === right.message &&
         left.userInitiated === right.userInitiated &&
-        left.activeNudgeId === right.activeNudgeId
+        left.activeNudgeId === right.activeNudgeId &&
+        left.retryAction === right.retryAction
       )
   }
 }

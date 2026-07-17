@@ -64,6 +64,7 @@ const {
     appMock: {
       isPackaged: true,
       getVersion: vi.fn(() => '1.0.51'),
+      getPath: vi.fn(() => '/tmp/orca-test-user-data'),
       on: appOn,
       emit: appEmit,
       quit: vi.fn()
@@ -117,6 +118,20 @@ vi.mock('./updater-nudge', () => ({
   shouldApplyNudge: vi.fn().mockReturnValue(false)
 }))
 
+const findConflictingAppInstancePidsMock = vi.hoisted(() => vi.fn(async () => [] as number[]))
+vi.mock('./updater-conflicting-app-instances', () => ({
+  findConflictingAppInstancePids: findConflictingAppInstancePidsMock
+}))
+
+const { writeHandoffMarkerMock, clearHandoffMarkerMock } = vi.hoisted(() => ({
+  writeHandoffMarkerMock: vi.fn(),
+  clearHandoffMarkerMock: vi.fn()
+}))
+vi.mock('./startup/update-install-launch-gate', () => ({
+  writeUpdateInstallHandoffMarker: writeHandoffMarkerMock,
+  clearUpdateInstallHandoffMarker: clearHandoffMarkerMock
+}))
+
 describe('updater mac install handoff', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -131,9 +146,77 @@ describe('updater mac install handoff', () => {
     appMock.isPackaged = true
     isMock.dev = false
     killAllPtyMock.mockReset()
+    findConflictingAppInstancePidsMock.mockReset()
+    findConflictingAppInstancePidsMock.mockResolvedValue([])
+    writeHandoffMarkerMock.mockReset()
+    clearHandoffMarkerMock.mockReset()
     vi.unstubAllGlobals()
     vi.useRealTimers()
   })
+
+  it.runIf(process.platform === 'darwin')(
+    'blocks the install handoff while another instance of the app bundle is running',
+    async () => {
+      const sendMock = vi.fn()
+      const mainWindow = { webContents: { send: sendMock } }
+
+      autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+      const { setupAutoUpdater, quitAndInstall } = await import('./updater')
+
+      setupAutoUpdater(mainWindow as never)
+      await vi.waitFor(() => {
+        expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+      })
+      autoUpdaterMock.emit('checking-for-update')
+      autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+      await new Promise((r) => setTimeout(r, 0))
+      autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+      const nativeDownloadedHandler = nativeUpdaterMock.on.mock.calls.find(
+        ([eventName]) => eventName === 'update-downloaded'
+      )?.[1] as (() => void) | undefined
+      nativeDownloadedHandler?.()
+
+      findConflictingAppInstancePidsMock.mockImplementation(async () => {
+        // Why: without the marker already published, a new app can launch
+        // after this snapshot and recreate Squirrel's silent install stall.
+        expect(writeHandoffMarkerMock).toHaveBeenCalledWith(
+          '/tmp/orca-test-user-data',
+          process.execPath,
+          '1.0.51'
+        )
+        return [4242]
+      })
+      quitAndInstall()
+      await vi.waitFor(() => {
+        expect(sendMock).toHaveBeenCalledWith(
+          'updater:status',
+          expect.objectContaining({
+            state: 'error',
+            message: expect.stringContaining('PID 4242'),
+            retryAction: 'install'
+          })
+        )
+      })
+      expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+      expect(killAllPtyMock).not.toHaveBeenCalled()
+      expect(clearHandoffMarkerMock).toHaveBeenCalledWith(
+        '/tmp/orca-test-user-data',
+        process.execPath
+      )
+
+      // Once the conflicting instance is gone, a retry must install normally.
+      findConflictingAppInstancePidsMock.mockResolvedValue([])
+      quitAndInstall()
+      await vi.waitFor(() => {
+        expect(autoUpdaterMock.quitAndInstall).toHaveBeenCalledWith(false, true)
+      })
+      // The retry publishes a fresh marker before the native call.
+      expect(writeHandoffMarkerMock).toHaveBeenCalledTimes(2)
+      expect(writeHandoffMarkerMock.mock.invocationCallOrder[1]).toBeLessThan(
+        autoUpdaterMock.quitAndInstall.mock.invocationCallOrder[0]
+      )
+    }
+  )
 
   it.runIf(process.platform === 'darwin')(
     'waits for Squirrel.Mac before honoring a manual quit that should install the update',
@@ -176,6 +259,58 @@ describe('updater mac install handoff', () => {
         percent: 100,
         version: '1.0.61'
       })
+    }
+  )
+
+  it.runIf(process.platform === 'darwin')(
+    'checks for blocking instances after pre-quit cleanup settles',
+    async () => {
+      let finishCleanup!: () => void
+      const onBeforeQuit = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishCleanup = resolve
+          })
+      )
+      const sendMock = vi.fn()
+      const mainWindow = { webContents: { send: sendMock } }
+
+      autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+      const { setupAutoUpdater, quitAndInstall } = await import('./updater')
+
+      setupAutoUpdater(mainWindow as never, { onBeforeQuit })
+      await vi.waitFor(() => {
+        expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+      })
+      autoUpdaterMock.emit('checking-for-update')
+      autoUpdaterMock.emit('update-available', { version: '1.0.61' })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+      const nativeDownloadedHandler = nativeUpdaterMock.on.mock.calls.find(
+        ([eventName]) => eventName === 'update-downloaded'
+      )?.[1] as (() => void) | undefined
+      nativeDownloadedHandler?.()
+
+      quitAndInstall()
+      await vi.waitFor(() => {
+        expect(onBeforeQuit).toHaveBeenCalledTimes(1)
+      })
+      expect(findConflictingAppInstancePidsMock).not.toHaveBeenCalled()
+
+      // Why: this models an agent/test instance launching during the bounded
+      // cleanup window; the last-moment scan must see it before ShipIt starts.
+      findConflictingAppInstancePidsMock.mockResolvedValue([4242])
+      finishCleanup()
+
+      await vi.waitFor(() => {
+        expect(sendMock).toHaveBeenCalledWith(
+          'updater:status',
+          expect.objectContaining({ state: 'error', retryAction: 'install' })
+        )
+      })
+      expect(findConflictingAppInstancePidsMock).toHaveBeenCalledTimes(1)
+      expect(autoUpdaterMock.quitAndInstall).not.toHaveBeenCalled()
+      expect(killAllPtyMock).not.toHaveBeenCalled()
     }
   )
 

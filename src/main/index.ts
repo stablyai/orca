@@ -100,6 +100,7 @@ import {
   shouldBypassSingleInstanceLock,
   shouldSkipSingleInstanceLock
 } from './startup/single-instance-lock'
+import { shouldDeferLaunchForUpdateInstall } from './startup/update-install-launch-gate'
 import { startEventLoopStallProbe } from './startup/event-loop-stall-probe'
 import { startMainThreadChurnProbe } from './diagnostics/main-thread-churn-probe'
 import {
@@ -441,6 +442,26 @@ const devAgentHookEndpointNamespace = devInstanceIdentity.isDev
   : undefined
 
 installUncaughtPipeErrorGuard()
+configureDevUserDataPath(is.dev)
+configureOrcaUserDataPathEnv()
+
+// Why: a launch that races Squirrel's in-flight update install would abort it
+// ("App Still Running Error") and silently strand the user on the old
+// version. Gate before PATH hydration so a rejected launch does not spawn a
+// login shell or spend more time racing ShipIt's final running-app check.
+if (
+  shouldDeferLaunchForUpdateInstall({
+    isPackaged: app.isPackaged,
+    appDataPath: app.getPath('appData'),
+    appVersion: app.getVersion()
+  })
+) {
+  console.warn(
+    '[updater] update install in flight for this bundle; exiting so the installer can finish and relaunch'
+  )
+  app.exit(0)
+}
+
 // Why: propagate the Orca app version into `process.env` so PTY-env
 // construction in both main (local-pty-provider) and the forked daemon
 // (pty-subprocess) can set `TERM_PROGRAM_VERSION` without re-importing
@@ -462,8 +483,6 @@ if (app.isPackaged && process.platform !== 'win32') {
     }
   })
 }
-configureDevUserDataPath(is.dev)
-configureOrcaUserDataPathEnv()
 
 // Why: just past createMainWindow's 10s ready-to-show reveal fallback,
 // so a window revealed on that path still gets its tray icon.

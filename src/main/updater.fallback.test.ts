@@ -4,8 +4,20 @@ import {
   isBenignCheckFailure,
   isMissingUpdateManifestFailure,
   isReleaseAssetsPublishingFailure,
-  isPrereleaseVersion
+  isPrereleaseVersion,
+  statusesEqual
 } from './updater-fallback'
+
+describe('statusesEqual', () => {
+  it('treats a changed error retry action as a user-visible status change', () => {
+    const error = { state: 'error', message: 'install blocked' } as const
+
+    expect(statusesEqual(error, { ...error, retryAction: 'install' })).toBe(false)
+    expect(
+      statusesEqual({ ...error, retryAction: 'install' }, { ...error, retryAction: 'install' })
+    ).toBe(true)
+  })
+})
 
 describe('compareVersions', () => {
   it('compares prerelease and build semver strings correctly', () => {

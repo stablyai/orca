@@ -4,7 +4,24 @@ import { getDefaultUIState } from '../../../shared/constants'
 import type { ChangelogData, UpdateStatus } from '../../../shared/types'
 import { createUISlice } from '../store/slices/ui'
 import type { AppState } from '../store/types'
-import { isHttp2ProtocolError } from './UpdateCard'
+import { getUpdateErrorRetryTarget, isHttp2ProtocolError } from './UpdateCard'
+
+describe('getUpdateErrorRetryTarget', () => {
+  it('retries a blocked install without downloading the staged release again', () => {
+    expect(
+      getUpdateErrorRetryTarget(
+        { state: 'error', message: 'another instance is running', retryAction: 'install' },
+        '1.2.0'
+      )
+    ).toBe('install')
+  })
+
+  it('keeps existing download and check recovery for unclassified errors', () => {
+    const status = { state: 'error', message: 'failed' } as const
+    expect(getUpdateErrorRetryTarget(status, '1.2.0')).toBe('download')
+    expect(getUpdateErrorRetryTarget(status, null)).toBe('check')
+  })
+})
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -324,7 +341,8 @@ function computeVisibility(input: VisibilityInput): VisibilityResult {
   const isUserInitiated = 'userInitiated' in status && status.userInitiated
   const updateUserInitiatedCycle = input.updateUserInitiatedCycle ?? false
   const shouldShowDetailedErrorCard =
-    status.state === 'error' && (hasStartedDownload || cachedVersion !== null)
+    status.state === 'error' &&
+    (hasStartedDownload || cachedVersion !== null || status.retryAction === 'install')
 
   if (status.state === 'checking' && !isUserInitiated) {
     return 'hidden'
@@ -376,6 +394,17 @@ describe('UpdateCard visibility gates', () => {
     expect(
       computeVisibility({
         status: { state: 'checking', userInitiated: true },
+        dismissedVersion: null,
+        cachedVersion: null,
+        hasStartedDownload: false
+      })
+    ).toBe('visible')
+  })
+
+  it('shows an install-retry error even after the card remounts without a cached version', () => {
+    expect(
+      computeVisibility({
+        status: { state: 'error', message: 'another instance is running', retryAction: 'install' },
         dismissedVersion: null,
         cachedVersion: null,
         hasStartedDownload: false

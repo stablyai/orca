@@ -17,6 +17,11 @@ import {
   armUpdateInstallExitWatchdog,
   disarmUpdateInstallExitWatchdog
 } from './update-install-exit-watchdog'
+import { findConflictingAppInstancePids } from './updater-conflicting-app-instances'
+import {
+  clearUpdateInstallHandoffMarker,
+  writeUpdateInstallHandoffMarker
+} from './startup/update-install-launch-gate'
 import { registerAutoUpdaterHandlers } from './updater-events'
 import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
 import {
@@ -515,15 +520,20 @@ function shouldHandleUpdaterErrorEvent(): boolean {
   )
 }
 
-function sendErrorStatus(message: string, userInitiated?: boolean): void {
+function sendErrorStatus(message: string, userInitiated?: boolean, retryAction?: 'install'): void {
   if (
     currentStatus.state === 'error' &&
     currentStatus.message === message &&
-    currentStatus.userInitiated === userInitiated
+    currentStatus.userInitiated === userInitiated &&
+    currentStatus.retryAction === retryAction
   ) {
     return
   }
-  sendStatus({ state: 'error', message, userInitiated })
+  sendStatus(
+    retryAction
+      ? { state: 'error', message, userInitiated, retryAction }
+      : { state: 'error', message, userInitiated }
+  )
 }
 
 function getKnownReleaseUrl(): string | undefined {
@@ -599,6 +609,34 @@ async function performQuitAndInstall(): Promise<void> {
       await runBeforeUpdateQuitCleanup()
       span.addEvent('pre_quit_cleanup_done')
 
+      if (process.platform === 'darwin') {
+        // Why: publish before the final conflict snapshot so a new launch
+        // cannot slip between that snapshot and ShipIt starting. Recovery and
+        // blocked handoffs clear the marker through resetQuitForUpdateState.
+        writeUpdateInstallHandoffMarker(app.getPath('appData'), process.execPath, app.getVersion())
+      }
+      // Why: scan after the bounded cleanup so an instance that starts or
+      // exits during those 2.5s cannot make the handoff decision stale. The
+      // marker above gates launches after this one process-table snapshot.
+      const conflictingPids = await findConflictingAppInstancePids()
+      if (conflictingPids.length > 0) {
+        resetQuitForUpdateState()
+        recordUpdaterLifecycle(
+          'quit_and_install_blocked_by_other_instances',
+          { pids: conflictingPids.join(','), count: conflictingPids.length },
+          {
+            level: 'warn',
+            message: `Update install blocked: ${conflictingPids.length} other running instance(s) of this app (pids ${conflictingPids.join(', ')})`
+          }
+        )
+        sendErrorStatus(
+          `Another running copy of Orca is blocking the update (PID ${conflictingPids.join(', ')}) — possibly one launched by an agent or test run. Quit it, then install the update again.`,
+          undefined,
+          'install'
+        )
+        return
+      }
+
       recordUpdaterLifecycle('quit_and_install_invoking_native', {
         version: pendingVersion || null
       })
@@ -668,6 +706,9 @@ function resetQuitForUpdateState(): void {
   quitAndInstallNativeInvoked = false
   disarmUpdateInstallExitWatchdog()
   resetMacInstallState()
+  // Why: install recovery keeps this process alive, so the handoff marker
+  // would otherwise gate the user's next manual relaunch for no reason.
+  clearUpdateInstallHandoffMarker(app.getPath('appData'), process.execPath)
 }
 
 // Why: electron-updater often reports quitAndInstall failures via the 'error'

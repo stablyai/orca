@@ -2290,7 +2290,15 @@ export type UpdateStatus =
   | { state: 'not-available'; userInitiated?: boolean }
   | { state: 'downloading'; percent: number; version: string; activeNudgeId?: string }
   | { state: 'downloaded'; version: string; releaseUrl?: string; activeNudgeId?: string }
-  | { state: 'error'; message: string; userInitiated?: boolean; activeNudgeId?: string }
+  | {
+      state: 'error'
+      message: string
+      userInitiated?: boolean
+      activeNudgeId?: string
+      // Why: a blocked handoff leaves the staged update intact, so retrying
+      // installation must not wastefully download the same release again.
+      retryAction?: 'install'
+    }
 
 // ─── Settings ────────────────────────────────────────────────────────
 export type NotificationSettings = {
