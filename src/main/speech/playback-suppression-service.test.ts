@@ -280,4 +280,41 @@ describe('PlaybackSuppressionService', () => {
 
     expect(recoveryStore.clear).toHaveBeenCalledTimes(1)
   })
+
+  it('reconciles a failed mute through the freshly validated target', async () => {
+    const before = {
+      backend: 'test',
+      endpointId: 'speaker-1',
+      endpointTarget: 'old-target',
+      muted: false
+    }
+    const current = {
+      backend: 'test',
+      endpointId: 'speaker-1',
+      endpointTarget: 'current-target',
+      muted: true
+    }
+    const adapter: PlaybackSuppressionAdapter = {
+      getCapability: vi.fn(async () => true),
+      snapshot: vi.fn().mockResolvedValueOnce(before).mockResolvedValueOnce(current),
+      setMuted: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('mute failed after changing state'))
+        .mockResolvedValueOnce(undefined)
+    }
+    const recoveryStore: PlaybackSuppressionRecoveryStore = {
+      read: vi.fn(async () => null),
+      write: vi.fn(async () => undefined),
+      clear: vi.fn(async () => undefined)
+    }
+    const service = new PlaybackSuppressionService(adapter, recoveryStore)
+
+    await expect(service.acquire('dictation:1')).resolves.toEqual({
+      active: false,
+      reason: 'unavailable'
+    })
+
+    expect(adapter.setMuted).toHaveBeenNthCalledWith(2, false, expect.any(AbortSignal), current)
+    expect(recoveryStore.clear).toHaveBeenCalledTimes(1)
+  })
 })

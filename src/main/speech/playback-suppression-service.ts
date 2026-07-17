@@ -202,7 +202,7 @@ export class PlaybackSuppressionService {
       const sameEndpoint =
         snapshot.backend === current.backend && snapshot.endpointId === current.endpointId
       if (sameEndpoint && current.muted !== snapshot.muted) {
-        await this.adapter.setMuted(snapshot.muted, new AbortController().signal, snapshot)
+        await this.adapter.setMuted(snapshot.muted, new AbortController().signal, current)
       }
       await this.recoveryStore.clear()
     } catch {
