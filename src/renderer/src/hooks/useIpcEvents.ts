@@ -15,18 +15,8 @@ import { OPEN_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/useWorkspaceBoa
 import { SPLIT_TERMINAL_PANE_EVENT, CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { planMobileTerminalTabMount } from '@/lib/mobile-terminal-tab-mount'
-import { resolveTerminalTabPtyOwnership } from '@/lib/terminal-tab-for-pty-id'
-import {
-  hasRegisteredRuntimeTerminalTab,
-  focusRuntimeTerminalSurface
-} from '@/runtime/sync-runtime-graph'
+import { hasRegisteredRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
 import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
-import { mintStablePaneId } from '@/lib/pane-manager/mint-stable-pane-id'
-import type {
-  SplitTerminalPaneAcknowledgement,
-  SplitTerminalPaneDetail,
-  CloseTerminalPaneDetail
-} from '@/constants/terminal'
 import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
 import { emitCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
@@ -41,10 +31,8 @@ import {
   addOrchestrationTerminalGridLeaf,
   collectTerminalLayoutLeafIds,
   getOrchestrationGridAppendSourceLeafIds,
-  ORCHESTRATION_TERMINAL_GRID_MAX_COLUMNS,
-  reflowOrchestrationTerminalGrid
+  ORCHESTRATION_TERMINAL_GRID_MAX_COLUMNS
 } from '../../../shared/orchestration-terminal-grid'
-import { detachTerminalLayoutLeaf } from '@/components/terminal-pane/terminal-layout-leaf-detach'
 import { TerminalGridAppendSettlementRegistry } from './terminal-grid-append-settlement'
 import type {
   RemoteWorkspacePatchResult,
@@ -118,9 +106,15 @@ import {
   cancelTerminalSurfaceActionsForRemovedTabs,
   hasTerminalSurfaceActionConsumer,
   queueTerminalSurfaceAction,
-  type TerminalSurfaceActionCallbacks,
-  type TerminalSurfaceActionCancellationReason
+  type TerminalSurfaceActionCallbacks
 } from './terminal-surface-action-queue'
+import {
+  createCommittedTerminalGridAppendRollback,
+  dispatchAcknowledgedTerminalPaneSplit,
+  runTerminalSurfaceActionTransaction,
+  terminalSurfaceActionFailureMessage,
+  terminalTransactionErrorMessage
+} from './terminal-surface-action-transaction'
 import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
 import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat-launch-draft-runtime-resolution'
 import { toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
@@ -378,250 +372,6 @@ function activateTerminalInitiatedWorktree(store: AppState, worktreeId: string):
   store.markWorktreeVisited(worktreeId)
   if (!store.isNavigatingHistory) {
     store.recordWorktreeVisit(worktreeId)
-  }
-}
-
-type SuccessfulTerminalPaneSplit = Extract<SplitTerminalPaneAcknowledgement, { status: 'success' }>
-
-function terminalTransactionErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
-function preserveTerminalTransactionError(
-  operationError: unknown,
-  cleanupError: unknown,
-  cleanupLabel: string
-): AggregateError {
-  return new AggregateError(
-    [operationError, cleanupError],
-    `${terminalTransactionErrorMessage(operationError)}; ${cleanupLabel}: ${terminalTransactionErrorMessage(cleanupError)}`
-  )
-}
-
-function rollbackAcknowledgedTerminalPaneSplit(result: SuccessfulTerminalPaneSplit): void {
-  let firstError: unknown
-  try {
-    result.rollback()
-    return
-  } catch (error) {
-    firstError = error
-  }
-  try {
-    // Why: low-level teardown keeps the rollback unlatched after cleanup throws;
-    // retry before this acknowledgement becomes unreachable to avoid a live orphan.
-    result.rollback()
-  } catch (retryError) {
-    throw new AggregateError(
-      [firstError, retryError],
-      `Terminal split rollback failed twice: ${terminalTransactionErrorMessage(firstError)}; ${terminalTransactionErrorMessage(retryError)}`
-    )
-  }
-}
-
-function rollbackAcknowledgedTerminalPaneSplits(
-  acknowledgements: readonly SplitTerminalPaneAcknowledgement[]
-): void {
-  const cleanupErrors: unknown[] = []
-  for (const acknowledgement of acknowledgements) {
-    if (acknowledgement.status !== 'success') {
-      continue
-    }
-    try {
-      rollbackAcknowledgedTerminalPaneSplit(acknowledgement)
-    } catch (error) {
-      cleanupErrors.push(error)
-    }
-  }
-  if (cleanupErrors.length === 1) {
-    throw cleanupErrors[0]
-  }
-  if (cleanupErrors.length > 1) {
-    throw new AggregateError(cleanupErrors, 'Terminal split rollbacks failed')
-  }
-}
-
-function dispatchAcknowledgedTerminalPaneSplit(
-  detail: SplitTerminalPaneDetail
-): SuccessfulTerminalPaneSplit {
-  const acknowledgements: SplitTerminalPaneAcknowledgement[] = []
-  const acknowledgedDetail: SplitTerminalPaneDetail = {
-    ...detail,
-    acknowledge: (result) => {
-      acknowledgements.push(result)
-    }
-  }
-
-  try {
-    window.dispatchEvent(
-      new CustomEvent<SplitTerminalPaneDetail>(SPLIT_TERMINAL_PANE_EVENT, {
-        detail: acknowledgedDetail
-      })
-    )
-  } catch (error) {
-    try {
-      rollbackAcknowledgedTerminalPaneSplits(acknowledgements)
-    } catch (cleanupError) {
-      throw preserveTerminalTransactionError(error, cleanupError, 'split rollback failed')
-    }
-    throw error
-  }
-
-  if (acknowledgements.length !== 1) {
-    const acknowledgementError = new Error(
-      acknowledgements.length === 0
-        ? `Terminal split event for ${detail.tabId} was not acknowledged`
-        : `Terminal split event for ${detail.tabId} was acknowledged ${acknowledgements.length} times`
-    )
-    try {
-      rollbackAcknowledgedTerminalPaneSplits(acknowledgements)
-    } catch (cleanupError) {
-      throw preserveTerminalTransactionError(
-        acknowledgementError,
-        cleanupError,
-        'split rollback failed'
-      )
-    }
-    throw acknowledgementError
-  }
-  const acknowledgement = acknowledgements[0]!
-  if (acknowledgement.status === 'failure') {
-    throw acknowledgement.error instanceof Error
-      ? acknowledgement.error
-      : new Error(String(acknowledgement.error))
-  }
-  return acknowledgement
-}
-
-function runTerminalSurfaceActionTransaction(
-  commit: (
-    store: AppState,
-    registerSplit: (split: SuccessfulTerminalPaneSplit) => void
-  ) => (() => void) | undefined
-): void {
-  const actionStore = useAppStore.getState()
-  const stateBeforeAction = { ...actionStore }
-  let split: SuccessfulTerminalPaneSplit | undefined
-  let afterCommit: (() => void) | undefined
-  try {
-    afterCommit = commit(actionStore, (nextSplit) => {
-      if (split) {
-        const duplicateSplitError = new Error(
-          'Terminal surface action registered more than one split'
-        )
-        try {
-          rollbackAcknowledgedTerminalPaneSplit(nextSplit)
-        } catch (cleanupError) {
-          throw preserveTerminalTransactionError(
-            duplicateSplitError,
-            cleanupError,
-            'duplicate split rollback failed'
-          )
-        }
-        throw duplicateSplitError
-      }
-      split = nextSplit
-    })
-  } catch (error) {
-    let cleanupError: unknown
-    try {
-      // Why: the pane owns PTY/parser/DOM resources outside Zustand, so it must
-      // disappear before the renderer snapshot becomes canonical again.
-      if (split) {
-        rollbackAcknowledgedTerminalPaneSplit(split)
-      }
-    } catch (rollbackError) {
-      cleanupError = rollbackError
-    } finally {
-      useAppStore.setState(stateBeforeAction, true)
-    }
-    if (cleanupError !== undefined) {
-      throw preserveTerminalTransactionError(error, cleanupError, 'split rollback failed')
-    }
-    throw error
-  }
-  try {
-    split?.afterCommit?.()
-  } catch {
-    // Why: the pane and store are committed; telemetry is best-effort and must
-    // not tear down a live terminal after the transaction boundary.
-  }
-  try {
-    afterCommit?.()
-  } catch {
-    // Why: focus is best-effort after the split event commits; losing focus
-    // must not cancel a live pane or reclassify its successful request.
-  }
-}
-
-function createCommittedTerminalGridAppendRollback(args: {
-  tabId: string
-  leafId: string
-  ptyId: string
-  priorLayout: TerminalLayoutSnapshot
-  split: SuccessfulTerminalPaneSplit
-}): () => void {
-  let paneRolledBack = false
-  let layoutRolledBack = false
-  let bindingCleared = false
-  return () => {
-    if (!paneRolledBack) {
-      rollbackAcknowledgedTerminalPaneSplit(args.split)
-      paneRolledBack = true
-    }
-    const store = useAppStore.getState()
-    if (!layoutRolledBack) {
-      const currentLayout = store.terminalLayoutsByTabId?.[args.tabId]
-      const currentLeafIds = collectTerminalLayoutLeafIds(currentLayout?.root)
-      if (currentLeafIds.includes(args.leafId)) {
-        const detached = detachTerminalLayoutLeaf(currentLayout, args.leafId)
-        if (!detached) {
-          throw new Error(`Terminal grid append ${args.leafId} could not be detached`)
-        }
-        const remainingLeafIds = collectTerminalLayoutLeafIds(detached.sourceLayout.root)
-        const priorActiveLeafId = args.priorLayout.activeLeafId
-        const activeLeafId =
-          priorActiveLeafId && remainingLeafIds.includes(priorActiveLeafId)
-            ? priorActiveLeafId
-            : detached.sourceLayout.activeLeafId
-        const priorExpandedLeafId = args.priorLayout.expandedLeafId
-        store.setTabLayout(args.tabId, {
-          ...reflowOrchestrationTerminalGrid(detached.sourceLayout, remainingLeafIds, activeLeafId),
-          expandedLeafId:
-            priorExpandedLeafId && remainingLeafIds.includes(priorExpandedLeafId)
-              ? priorExpandedLeafId
-              : null
-        })
-      }
-      layoutRolledBack = true
-    }
-    if (!bindingCleared) {
-      store.clearTabPtyId(args.tabId, args.ptyId)
-      bindingCleared = true
-    }
-  }
-}
-
-function terminalSurfaceActionFailureMessage(
-  tabId: string,
-  reason: TerminalSurfaceActionCancellationReason,
-  error?: unknown
-): string {
-  if (reason === 'action-failed' && error instanceof Error) {
-    return error.message
-  }
-  switch (reason) {
-    case 'timeout':
-      return `Terminal surface ${tabId} did not mount before the split deadline`
-    case 'tab-removed':
-      return `Terminal tab ${tabId} was removed before the split was applied`
-    case 'surface-unmounted':
-      return `Terminal surface ${tabId} was torn down before the split was applied`
-    case 'ipc-events-disposed':
-      return `Terminal creation was cancelled while the renderer was shutting down`
-    case 'action-failed':
-      return `Terminal split failed for ${tabId}`
-    case 'cancelled':
-      return `Terminal split was cancelled for ${tabId}`
   }
 }
 
@@ -2132,18 +1882,28 @@ export function useIpcEvents(): void {
           }
           if (existingGridTab && gridLeafId) {
             let committedGridLayout: TerminalLayoutSnapshot | undefined
-            const startup = data.command
-              ? {
-                  command: data.command,
-                  ...(data.env ? { env: data.env } : {}),
-                  ...(data.launchConfig ? { launchConfig: data.launchConfig } : {}),
-                  ...(data.launchToken ? { launchToken: data.launchToken } : {}),
-                  ...(data.launchAgent ? { launchAgent: data.launchAgent } : {}),
-                  ...(data.startupCommandDelivery
-                    ? { startupCommandDelivery: data.startupCommandDelivery }
-                    : {})
-                }
-              : undefined
+            const startup =
+              data.command || data.terminalHandle
+                ? {
+                    command: data.command ?? '',
+                    ...(data.terminalHandle
+                      ? {
+                          env: {
+                            ...data.env,
+                            ORCA_TERMINAL_HANDLE: data.terminalHandle
+                          }
+                        }
+                      : data.env
+                        ? { env: data.env }
+                        : {}),
+                    ...(data.launchConfig ? { launchConfig: data.launchConfig } : {}),
+                    ...(data.launchToken ? { launchToken: data.launchToken } : {}),
+                    ...(data.launchAgent ? { launchAgent: data.launchAgent } : {}),
+                    ...(data.startupCommandDelivery
+                      ? { startupCommandDelivery: data.startupCommandDelivery }
+                      : {})
+                  }
+                : undefined
             const replyAfterConsumption = (): void => {
               window.api.ui.replyTerminalCreate({
                 requestId: data.requestId,

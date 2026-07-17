@@ -31,12 +31,15 @@ const updateMultiPaneState = vi.hoisted(() => vi.fn())
 const applyPaneOpacity = vi.hoisted(() => vi.fn())
 const applyDividerStyles = vi.hoisted(() => vi.fn())
 const disposeDivider = vi.hoisted(() => vi.fn())
+const findPaneChildren = vi.hoisted(() => vi.fn())
+const promoteSibling = vi.hoisted(() => vi.fn())
+const removeDividers = vi.hoisted(() => vi.fn())
 
 vi.mock('./pane-tree-ops', () => ({
   captureScrollState,
-  findPaneChildren: vi.fn(),
-  promoteSibling: vi.fn(),
-  removeDividers: vi.fn(),
+  findPaneChildren,
+  promoteSibling,
+  removeDividers,
   restoreScrollState,
   safeFit: vi.fn(),
   wrapInSplit
@@ -536,6 +539,48 @@ describe('splitManagedPane', () => {
     expect(disposePane).toHaveBeenCalledTimes(2)
     expect(onPaneClosed).toHaveBeenCalledTimes(2)
   })
+
+  it('releases a disposed partial pane even when published cleanup keeps failing', () => {
+    const existingPane = createDomPane(1, null)
+    const newPane = createDomPane(2, null)
+    const panes = new Map<number, ManagedPaneInternal>([[existingPane.id, existingPane]])
+    const root = document.createElement('div')
+    root.append(existingPane.container)
+    captureScrollState.mockReturnValueOnce(createScrollState(13))
+    installDomWrap()
+    const onPaneClosed = vi.fn(() => {
+      throw new Error('persistent published cleanup failed')
+    })
+
+    expect(() =>
+      splitManagedPane({
+        paneId: existingPane.id,
+        direction: 'vertical',
+        panes,
+        root,
+        styleOptions: {},
+        managerOptions: { onPaneClosed },
+        createPaneInternal: () => {
+          panes.set(newPane.id, newPane)
+          return newPane
+        },
+        createDivider: () => document.createElement('div'),
+        publishPaneCreated: () => {
+          throw new Error('pane publication failed')
+        },
+        getDragCallbacks: () => ({}) as never,
+        getActivePaneId: () => existingPane.id,
+        setActivePaneId: vi.fn(),
+        isDestroyed: () => false
+      })
+    ).toThrow(AggregateError)
+
+    expect(disposePane).toHaveBeenCalledOnce()
+    expect(onPaneClosed).toHaveBeenCalledTimes(2)
+    expect(panes.has(newPane.id)).toBe(false)
+    expect(newPane.container.parentElement).toBeNull()
+    expect(root.firstElementChild).toBe(existingPane.container)
+  })
 })
 
 describe('closeManagedPane fault isolation', () => {
@@ -697,5 +742,49 @@ describe('closeManagedPane fault isolation', () => {
 
     expect(detachManagedPaneForExternalMove(args)).toBe(true)
     expect(releasePaneIdentity).toHaveBeenCalledTimes(2)
+  })
+
+  it('retains split structure so divider cleanup can resume after the pane is detached', () => {
+    const survivor = createDomPane(1, null)
+    const closing = createDomPane(2, null)
+    const panes = new Map<number, ManagedPaneInternal>([
+      [survivor.id, survivor],
+      [closing.id, closing]
+    ])
+    const root = document.createElement('div')
+    const split = document.createElement('div')
+    split.className = 'pane-split'
+    split.append(survivor.container, closing.container)
+    root.append(split)
+    findPaneChildren.mockReturnValueOnce([survivor.container, closing.container])
+    removeDividers
+      .mockImplementationOnce(() => {
+        throw new Error('divider cleanup failed')
+      })
+      .mockImplementationOnce(() => undefined)
+    promoteSibling.mockImplementationOnce((sibling: HTMLElement, parent: HTMLElement) => {
+      root.replaceChild(sibling, parent)
+    })
+    const args = {
+      paneId: closing.id,
+      activePaneId: survivor.id,
+      panes,
+      root,
+      styleOptions: {},
+      managerOptions: {},
+      getDragCallbacks: () => ({}) as never,
+      releasePaneIdentity: vi.fn(),
+      setActivePaneId: vi.fn()
+    }
+
+    expect(() => closeManagedPane(args)).toThrow('divider cleanup failed')
+    expect(closing.container.parentElement).toBeNull()
+    expect(panes.has(closing.id)).toBe(true)
+
+    expect(() => closeManagedPane(args)).not.toThrow()
+    expect(removeDividers).toHaveBeenCalledTimes(2)
+    expect(promoteSibling).toHaveBeenCalledOnce()
+    expect(root.firstElementChild).toBe(survivor.container)
+    expect(panes.has(closing.id)).toBe(false)
   })
 })

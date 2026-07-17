@@ -5,6 +5,7 @@ import {
   clearQueuedInitialCwdAfterFirstPane,
   createRetryableTerminalTransportDestroyCleanup,
   createTerminalPaneSplitEventHandler,
+  destroyTerminalTransportOnUnmount,
   disposeTrackedTerminalPaneResource,
   disposeTerminalPaneResources,
   getPreviousVisibleForTerminalPane,
@@ -16,6 +17,7 @@ import {
   resolveQueuedInitialCwd,
   resetTerminalKeyboardProtocolAfterInterrupt,
   retireMountedTerminalPaneSurface,
+  retryOwnedTerminalPaneClose,
   shouldDetachPaneTransportOnUnmount,
   splitPaneWithOneShotStartup,
   suppressIntentionalPaneCloseExit
@@ -399,6 +401,38 @@ describe('disposeTerminalPaneResources', () => {
     expect(() => cleanup()).not.toThrow()
     expect(destroy).toHaveBeenCalledOnce()
     expect(releaseOwnership).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('terminal pane teardown ownership', () => {
+  it('does not retry a close through a replacement manager that reused the pane id', () => {
+    const owningManager = { closePane: vi.fn() }
+    const replacementManager = { closePane: vi.fn() }
+
+    expect(
+      retryOwnedTerminalPaneClose({
+        manager: owningManager as never,
+        getCurrentManager: () => replacementManager as never,
+        paneId: 7
+      })
+    ).toBe(false)
+    expect(owningManager.closePane).not.toHaveBeenCalled()
+    expect(replacementManager.closePane).not.toHaveBeenCalled()
+  })
+
+  it('consumes an async destroy rejection while unmount cleanup continues', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const failure = Promise.reject(new Error('destroy rejected'))
+
+    destroyTerminalTransportOnUnmount({ destroy: vi.fn(() => failure) })
+    await failure.catch(() => undefined)
+    await Promise.resolve()
+
+    expect(warning).toHaveBeenCalledWith(
+      '[terminal-pane] PTY destroy failed during unmount',
+      expect.objectContaining({ message: 'destroy rejected' })
+    )
+    warning.mockRestore()
   })
 })
 

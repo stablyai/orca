@@ -503,9 +503,17 @@ function shouldRefreshNativeClaudeAgentTeamsEnv(args: {
   return /(^|\s)--teammate-mode(?:=|\s+)auto(?:\s|$)/.test(capturedLaunch)
 }
 
-function rememberPaneKeyForPty(ptyId: string, paneKey: unknown): string | null {
+function normalizePaneKey(paneKey: unknown): string | null {
   const normalizedPaneKey = typeof paneKey === 'string' ? paneKey.trim() : ''
   if (!isValidPaneKey(normalizedPaneKey)) {
+    return null
+  }
+  return normalizedPaneKey
+}
+
+function rememberPaneKeyForPty(ptyId: string, paneKey: unknown): string | null {
+  const normalizedPaneKey = normalizePaneKey(paneKey)
+  if (!normalizedPaneKey) {
     return null
   }
   ptyPaneKey.set(ptyId, normalizedPaneKey)
@@ -5223,6 +5231,18 @@ export function registerPtyHandlers(
               }
             })
           }
+        }
+        // Why: staged ownership must remain unpublished until commit; only use
+        // the normalized key here to wire serializer readiness for the receipt.
+        const paneKey = normalizePaneKey(env?.ORCA_PANE_KEY)
+        const pendingSerializer = paneKey ? pendingByPaneKey.get(paneKey) : undefined
+        const inheritRendererReadiness =
+          result.isReattach === true &&
+          !pendingSerializer &&
+          rendererSerializerReadiness.has(result.id)
+        rendererSerializerReadiness.beginIncarnation(result.id, inheritRendererReadiness)
+        if (paneKey && pendingSerializer) {
+          pendingPtyIdBySerializerGeneration.set(pendingSerializer.gen, result.id)
         }
         stagedRuntimeRegistrationReceipts.set(result.id, runtimeRegistration)
         return { id: result.id, runtimeRegistration }

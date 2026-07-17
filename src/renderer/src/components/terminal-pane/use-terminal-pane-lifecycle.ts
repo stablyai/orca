@@ -445,6 +445,33 @@ export function createRetryableTerminalTransportDestroyCleanup(args: {
   }
 }
 
+export function retryOwnedTerminalPaneClose(args: {
+  manager: Pick<PaneManager, 'closePane'>
+  getCurrentManager: () => Pick<PaneManager, 'closePane'> | null
+  paneId: number
+}): boolean {
+  if (args.getCurrentManager() !== args.manager) {
+    return false
+  }
+  args.manager.closePane(args.paneId, { notifyLayoutChanged: false })
+  return true
+}
+
+export function destroyTerminalTransportOnUnmount(transport: Pick<PtyTransport, 'destroy'>): void {
+  try {
+    const receipt = transport.destroy?.()
+    if (receipt && typeof (receipt as PromiseLike<void>).then === 'function') {
+      void Promise.resolve(receipt).catch((error) => {
+        console.warn('[terminal-pane] PTY destroy failed during unmount', error)
+      })
+    }
+  } catch (error) {
+    // Why: unmount must continue releasing the manager and remaining panes even
+    // when one transport's synchronous disposer is faulty.
+    console.warn('[terminal-pane] PTY destroy failed during unmount', error)
+  }
+}
+
 export function mapRestoredPaneTitlesByPaneId(
   savedTitles: Record<string, string> | undefined,
   restoredPaneByLeafId: ReadonlyMap<string, number>
@@ -1660,7 +1687,11 @@ export function useTerminalPaneLifecycle({
                   // destroy is pending; resume that same teardown after its receipt settles.
                   queueMicrotask(() => {
                     try {
-                      managerRef.current?.closePane(paneId, { notifyLayoutChanged: false })
+                      retryOwnedTerminalPaneClose({
+                        manager,
+                        getCurrentManager: () => managerRef.current,
+                        paneId
+                      })
                     } catch (retryError) {
                       if (
                         !(retryError instanceof Error) ||
@@ -2220,7 +2251,7 @@ export function useTerminalPaneLifecycle({
           // Why: tab-move rehome and web-mirror remount unmount a still-live tab; detach preserves the running PTY so the remount reattaches without restarting the shell.
           transport.detach?.()
         } else {
-          void transport.destroy?.()
+          destroyTerminalTransportOnUnmount(transport)
         }
       }
       for (const panePtyBinding of panePtyBindings.values()) {

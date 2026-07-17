@@ -11001,6 +11001,58 @@ describe('registerPtyHandlers', () => {
     }
   })
 
+  it('publishes a staged local PTY registry entry only once at commit', async () => {
+    type RuntimeRegistrationReceipt = { commit: () => void }
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        worktreeId: string
+        tabId: string
+        leafId: string
+        deferRuntimeRegistration: boolean
+      }): Promise<{ id: string; runtimeRegistration?: RuntimeRegistrationReceipt }>
+    }
+    let controller: RuntimeSpawnController | null = null
+    const stagedRuntimeRegistration = {
+      claim: vi.fn(),
+      commit: vi.fn(),
+      abort: vi.fn()
+    }
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      beginStagedPtyRuntimeRegistration: vi.fn(() => stagedRuntimeRegistration),
+      preAllocateHandleForPty: vi.fn(() => 'term_staged_local'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      getDriver: vi.fn(() => ({ kind: 'host' })),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+    registerPtyHandlers(mainWindow as never, runtime as never)
+
+    const result = await (controller as unknown as RuntimeSpawnController).spawn({
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-local',
+      tabId: 'tab-grid',
+      leafId: '13111111-1111-4111-8111-111111111111',
+      deferRuntimeRegistration: true
+    })
+
+    expect(registerPtyMock).not.toHaveBeenCalled()
+    result.runtimeRegistration?.commit()
+    result.runtimeRegistration?.commit()
+    expect(registerPtyMock).toHaveBeenCalledOnce()
+    expect(registerPtyMock).toHaveBeenCalledWith(
+      expect.objectContaining({ ptyId: result.id, worktreeId: 'wt-local' })
+    )
+  })
+
   it('rejects runtime-owned binding persistence without complete stable identity', async () => {
     type RuntimeSpawnController = {
       spawn(args: {
@@ -11893,6 +11945,7 @@ describe('registerPtyHandlers', () => {
     const spawnCall = spawnMock.mock.calls.at(-1)!
     const env = spawnCall[2].env as Record<string, string>
     expect(env.ORCA_TERMINAL_HANDLE).toBe('term_renderer_reserved')
+    expect(runtime.claimRendererTerminalHandle).toHaveBeenCalledWith('term_renderer_reserved')
     expect(runtime.createPreAllocatedTerminalHandle).not.toHaveBeenCalled()
     expect(runtime.preAllocateHandleForPty).not.toHaveBeenCalled()
     expect(runtime.registerPreAllocatedHandleForPty).toHaveBeenCalledWith(

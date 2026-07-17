@@ -744,6 +744,7 @@ async function syncRuntimeGraph(): Promise<void> {
     const activePaneId = manager?.getActivePane()?.id ?? null
     const root =
       container?.firstElementChild instanceof HTMLElement ? container.firstElementChild : null
+    const savedLayout = state.terminalLayoutsByTabId[tabId]
 
     graph.tabs.push({
       tabId,
@@ -751,12 +752,10 @@ async function syncRuntimeGraph(): Promise<void> {
       title: resolveRuntimeTerminalTitle(tab, generatedTitlesEnabled),
       activeLeafId: activePaneId === null ? null : (manager?.getLeafId(activePaneId) ?? null),
       layout: serializePaneTree(root),
-      ...(state.terminalLayoutsByTabId[tabId]?.layoutMode
-        ? { layoutMode: state.terminalLayoutsByTabId[tabId].layoutMode }
-        : {})
+      ...(savedLayout?.layoutMode ? { layoutMode: savedLayout.layoutMode } : {})
     })
 
-    const savedPtyIdsByLeafId = state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {}
+    const savedPtyIdsByLeafId = savedLayout?.ptyIdsByLeafId ?? {}
     for (const pane of manager?.getPanes() ?? []) {
       const leafId = pane.leafId
       const ptyId = registeredTab.getPtyIdForPane(pane.id)

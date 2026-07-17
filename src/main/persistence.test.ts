@@ -9952,6 +9952,46 @@ describe('Store', () => {
     expect(reloaded.getSshRemotePtyLeases()).toEqual(leasesBeforeCreate)
   })
 
+  it('rejects grid persistence whose SSH target does not match its host partition', async () => {
+    const store = await createStore()
+    const layout = {
+      root: { type: 'leaf' as const, leafId: TEST_LEAF_1 },
+      activeLeafId: TEST_LEAF_1,
+      expandedLeafId: null,
+      layoutMode: 'orchestration-grid' as const
+    }
+    const args = {
+      worktreeId: 'remote-worktree',
+      tabId: 'grid-tab',
+      leafId: TEST_LEAF_1,
+      ptyId: 'remote-pty',
+      layout
+    }
+
+    expect(() =>
+      store.persistOrchestrationGridPtyBinding({
+        ...args,
+        hostId: 'ssh:ssh-grid',
+        sshTargetId: 'ssh-other'
+      })
+    ).toThrow('does not match its execution host')
+    expect(() =>
+      store.persistOrchestrationGridPtyBinding({
+        ...args,
+        hostId: 'ssh:ssh-grid'
+      })
+    ).toThrow('does not match its execution host')
+    expect(() =>
+      store.persistOrchestrationGridPtyBinding({
+        ...args,
+        hostId: 'local',
+        sshTargetId: 'ssh-grid'
+      })
+    ).toThrow('requires an SSH execution host')
+    expect(store.getSshRemotePtyLeases()).toEqual([])
+    expect(store.getWorkspaceSession('ssh:ssh-grid').tabsByWorktree).toEqual({})
+  })
+
   it('preserves a sync-persisted UUID root when a stale empty layout write arrives', async () => {
     const store = await createStore()
     store.setWorkspaceSession({
@@ -10895,6 +10935,72 @@ describe('Store', () => {
     ])
     expect(session.tabsByWorktree.wt1[0].ptyId).toBeNull()
     expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({})
+  })
+
+  it('clears terminated SSH bindings from their host partition without touching local state', async () => {
+    const store = await createStore()
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'remote-pty',
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      leafId: TEST_LEAF_1,
+      state: 'attached'
+    })
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: 'ssh:ssh-1@@remote-pty'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf' as const, leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'ssh:ssh-1@@remote-pty' }
+        }
+      }
+    }
+    store.setWorkspaceSession(structuredClone(session), 'ssh:ssh-1')
+    store.setWorkspaceSession(
+      {
+        ...structuredClone(session),
+        tabsByWorktree: {
+          wt1: [{ ...session.tabsByWorktree.wt1[0], ptyId: 'local-pty' }]
+        },
+        terminalLayoutsByTabId: {
+          tab1: {
+            ...session.terminalLayoutsByTabId.tab1,
+            ptyIdsByLeafId: { [TEST_LEAF_1]: 'local-pty' }
+          }
+        }
+      },
+      'local'
+    )
+
+    store.markSshRemotePtyLeases('ssh-1', 'terminated')
+
+    expect(store.getWorkspaceSession('ssh:ssh-1').tabsByWorktree.wt1[0].ptyId).toBeNull()
+    expect(
+      store.getWorkspaceSession('ssh:ssh-1').terminalLayoutsByTabId.tab1.ptyIdsByLeafId
+    ).toEqual({})
+    expect(store.getWorkspaceSession('local').tabsByWorktree.wt1[0].ptyId).toBe('local-pty')
+    expect(store.getWorkspaceSession('local').terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({
+      [TEST_LEAF_1]: 'local-pty'
+    })
   })
 
   it('matches scoped SSH workspace bindings against raw relay leases', async () => {

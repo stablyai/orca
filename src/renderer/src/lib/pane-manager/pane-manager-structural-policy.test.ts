@@ -150,6 +150,8 @@ describe('PaneManager maintained-grid structural policy', () => {
       const manager = new PaneManager(document.createElement('div'), {})
 
       expect(manager.setMaintainOrchestrationGrid(true)).toBe(true)
+      expect(arrangeMountedPanesAsOrchestrationGrid).toHaveBeenCalledOnce()
+      arrangeMountedPanesAsOrchestrationGrid.mockClear()
       if (operation === 'close') {
         manager.closePane(1)
         expect(closeManagedPane).toHaveBeenCalledOnce()

@@ -30,8 +30,15 @@ type ManagedPaneTeardown = {
   pane: ManagedPaneInternal
   reason: 'close' | 'detach'
   resourceCleanups: (() => void)[]
+  structure: ManagedPaneTeardownStructure
   structuralOwnershipReleased: boolean
   postCleanups: (() => void)[] | null
+}
+
+type ManagedPaneTeardownStructure = {
+  parent: HTMLElement | null
+  sibling: HTMLElement | null
+  splitParent: boolean
 }
 
 const managedPaneTeardowns = new WeakMap<
@@ -73,6 +80,7 @@ export function teardownManagedPane(args: CloseManagedPaneArgs, reason: 'close' 
             reason
           })
       ],
+      structure: captureManagedPaneTeardownStructure(pane),
       structuralOwnershipReleased: false,
       postCleanups: null
     }
@@ -83,7 +91,7 @@ export function teardownManagedPane(args: CloseManagedPaneArgs, reason: 'close' 
 
   if (!teardown.structuralOwnershipReleased) {
     const cleanupErrors: unknown[] = []
-    removePaneContainer(args, pane, cleanupErrors)
+    removePaneContainer(args, pane, teardown.structure, cleanupErrors)
     if (cleanupErrors.length > 0 || pane.container.parentElement !== null) {
       // Why: the numeric/leaf identity remains claimed while either renderer
       // ownership is live, so the exact close can retry without aliasing a pane.
@@ -121,28 +129,42 @@ export function teardownManagedPane(args: CloseManagedPaneArgs, reason: 'close' 
 function removePaneContainer(
   args: CloseManagedPaneArgs,
   pane: ManagedPaneInternal,
+  structure: ManagedPaneTeardownStructure,
   cleanupErrors: unknown[]
 ): void {
   const paneContainer = pane.container
-  const parent = paneContainer.parentElement
+  const parent = structure.parent
   if (!parent) {
     return
   }
-  if (parent.classList.contains('pane-split')) {
-    let sibling: HTMLElement | null = null
-    runPaneCleanupStep(cleanupErrors, () => {
-      const siblings = findPaneChildren(parent)
-      sibling = siblings.find((candidate) => candidate !== paneContainer) ?? null
-    })
-    runPaneCleanupStep(cleanupErrors, () => paneContainer.remove())
+  if (structure.splitParent) {
+    if (paneContainer.parentElement !== null) {
+      runPaneCleanupStep(cleanupErrors, () => paneContainer.remove())
+    }
     runPaneCleanupStep(cleanupErrors, () => removeDividers(parent))
-    runPaneCleanupStep(cleanupErrors, () => promoteSibling(sibling, parent, args.root))
-  } else {
+    if (parent.parentElement !== null) {
+      runPaneCleanupStep(cleanupErrors, () => promoteSibling(structure.sibling, parent, args.root))
+    }
+  } else if (paneContainer.parentElement !== null) {
     runPaneCleanupStep(cleanupErrors, () => paneContainer.remove())
   }
   if (paneContainer.parentElement !== null) {
     // Why: a DOM removal failure must leave a discoverable pane for a safe retry.
     args.panes.set(pane.id, pane)
+  }
+}
+
+function captureManagedPaneTeardownStructure(
+  pane: ManagedPaneInternal
+): ManagedPaneTeardownStructure {
+  const parent = pane.container.parentElement
+  const splitParent = parent?.classList.contains('pane-split') === true
+  return {
+    parent,
+    sibling: splitParent
+      ? (findPaneChildren(parent!).find((candidate) => candidate !== pane.container) ?? null)
+      : null,
+    splitParent
   }
 }
 

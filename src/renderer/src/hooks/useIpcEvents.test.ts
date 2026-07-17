@@ -2753,7 +2753,7 @@ describe('useIpcEvents updater integration', () => {
       requestId: 'req-grid-second',
       worktreeId: 'wt-grid',
       title: 'Worker 2',
-      command: 'codex',
+      terminalHandle: 'term-grid-second',
       placement: 'orchestration-grid'
     })
 
@@ -2804,7 +2804,10 @@ describe('useIpcEvents updater integration', () => {
           activate: false,
           orchestrationGrid: true,
           sourceLeafIds: [expect.any(String)],
-          startup: expect.objectContaining({ command: 'codex' })
+          startup: expect.objectContaining({
+            command: '',
+            env: { ORCA_TERMINAL_HANDLE: 'term-grid-second' }
+          })
         })
       })
     )

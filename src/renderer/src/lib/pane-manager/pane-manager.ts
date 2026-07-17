@@ -330,6 +330,9 @@ export class PaneManager {
     this.options.maintainOrchestrationGrid = enabled
     if (enabled) {
       cancelActivePaneDrag(this.dragState)
+      // Why: ordinary dividers from the prior mode must become inert at the
+      // ownership boundary, before any later mount or close triggers a rebuild.
+      this.arrangeOrchestrationGrid(undefined, { notifyLayoutChanged: false })
     } else {
       this.restoreInteractiveDividers()
     }

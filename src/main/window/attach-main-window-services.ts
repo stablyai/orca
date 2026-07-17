@@ -323,10 +323,12 @@ function registerRuntimeWindowLifecycle(
   const notifierToken = ++runtimeNotifierTokenCounter
   activeRuntimeNotifierToken = notifierToken
   runtime.attachWindow(mainWindow.id)
-  const send = (channel: string, ...args: unknown[]): void => {
-    if (!mainWindow.isDestroyed()) {
-      mainWindow.webContents.send(channel, ...args)
+  const send = (channel: string, ...args: unknown[]): boolean => {
+    if (mainWindow.isDestroyed()) {
+      return false
     }
+    mainWindow.webContents.send(channel, ...args)
+    return true
   }
   runtime.setNotifier({
     worktreesChanged: (repoId, renamed) => {
@@ -363,6 +365,10 @@ function registerRuntimeWindowLifecycle(
       }),
     revealTerminalSession: (worktreeId, opts) =>
       new Promise((resolve, reject) => {
+        if (mainWindow.isDestroyed()) {
+          reject(new Error('Terminal reveal window is no longer available'))
+          return
+        }
         const requestId = randomUUID()
         const expectedIdentity = opts.expectedProcessIdentity
           ? opts.tabId && opts.leafId
@@ -399,6 +405,10 @@ function registerRuntimeWindowLifecycle(
             reject(new Error(reply.error))
             return
           }
+          if (!reply.tabId) {
+            reject(new Error('Terminal reveal reply did not include a tab id'))
+            return
+          }
           const rollbackIdentity =
             opts.placement === 'orchestration-grid' &&
             opts.splitFromLeafId !== undefined &&
@@ -410,22 +420,31 @@ function registerRuntimeWindowLifecycle(
                   leafId: opts.leafId
                 }
               : null
+          if (
+            rollbackIdentity &&
+            (reply.tabId !== rollbackIdentity.tabId || reply.leafId !== rollbackIdentity.leafId)
+          ) {
+            reject(new Error('Terminal grid reply did not match its staged identity'))
+            return
+          }
           resolve({
-            tabId: reply.tabId!,
+            tabId: reply.tabId,
             leafId: reply.leafId,
             layout: reply.layout,
             title: reply.title,
             ...(rollbackIdentity
               ? {
                   rollback: () => requestTerminalGridAppendRollback(mainWindow, rollbackIdentity),
-                  complete: () => send('ui:commitTerminalGridAppend', rollbackIdentity)
+                  complete: () => {
+                    send('ui:commitTerminalGridAppend', rollbackIdentity)
+                  }
                 }
               : {})
           })
         }
         ipcMain.on('terminal:tabCreateReply', handler)
         try {
-          send('ui:createTerminal', {
+          const sent = send('ui:createTerminal', {
             requestId,
             worktreeId,
             ptyId: opts.ptyId,
@@ -455,6 +474,11 @@ function registerRuntimeWindowLifecycle(
               : {}),
             ...(opts.placement ? { placement: opts.placement } : {})
           })
+          if (!sent) {
+            clearTimeout(timer)
+            ipcMain.removeListener('terminal:tabCreateReply', handler)
+            reject(new Error('Terminal reveal window is no longer available'))
+          }
         } catch (error) {
           // Why: a synchronous webContents failure must not leave the transaction
           // listener/timer alive after the staged PTY owner receives rejection.

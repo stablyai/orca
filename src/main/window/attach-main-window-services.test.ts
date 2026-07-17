@@ -1086,4 +1086,84 @@ describe('attachMainWindowServices', () => {
       vi.useRealTimers()
     }
   })
+
+  it('rejects a reveal immediately when its window is already destroyed', async () => {
+    vi.useFakeTimers()
+    try {
+      const sendMock = vi.fn()
+      const mainWindow = createMainWindow({ send: sendMock })
+      mainWindow.isDestroyed?.mockReturnValue(true)
+      const runtime = createRuntime()
+      attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
+      const notifier = runtime.setNotifier.mock.calls[0][0] as {
+        revealTerminalSession: (worktreeId: string, opts: { ptyId: string }) => Promise<unknown>
+      }
+      const timerCount = vi.getTimerCount()
+
+      await expect(notifier.revealTerminalSession('wt-1', { ptyId: 'pty-1' })).rejects.toThrow(
+        'window is no longer available'
+      )
+      expect(sendMock).not.toHaveBeenCalledWith('ui:createTerminal', expect.anything())
+      expect(onMock).not.toHaveBeenCalledWith('terminal:tabCreateReply', expect.anything())
+      expect(vi.getTimerCount()).toBe(timerCount)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rejects a reveal reply that omits its tab identity', async () => {
+    const sendMock = vi.fn()
+    const mainWindow = createMainWindow({ send: sendMock })
+    const runtime = createRuntime()
+    attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
+    const notifier = runtime.setNotifier.mock.calls[0][0] as {
+      revealTerminalSession: (worktreeId: string, opts: { ptyId: string }) => Promise<unknown>
+    }
+    const reveal = notifier.revealTerminalSession('wt-1', { ptyId: 'pty-1' })
+    const payload = sendMock.mock.calls.find(([channel]) => channel === 'ui:createTerminal')?.[1]
+    const handler = onMock.mock.calls.find(
+      ([channel]) => channel === 'terminal:tabCreateReply'
+    )?.[1]
+
+    handler?.({ sender: mainWindow.webContents }, { requestId: payload.requestId })
+
+    await expect(reveal).rejects.toThrow('did not include a tab id')
+  })
+
+  it('rejects a staged grid reply with a different tab or leaf identity', async () => {
+    const sendMock = vi.fn()
+    const mainWindow = createMainWindow({ send: sendMock })
+    const runtime = createRuntime()
+    attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
+    const notifier = runtime.setNotifier.mock.calls[0][0] as {
+      revealTerminalSession: (
+        worktreeId: string,
+        opts: {
+          ptyId: string
+          placement: 'orchestration-grid'
+          splitFromLeafId: string
+          tabId: string
+          leafId: string
+        }
+      ) => Promise<unknown>
+    }
+    const reveal = notifier.revealTerminalSession('wt-1', {
+      ptyId: 'pty-new',
+      placement: 'orchestration-grid',
+      splitFromLeafId: 'leaf-old',
+      tabId: 'tab-grid',
+      leafId: 'leaf-new'
+    })
+    const payload = sendMock.mock.calls.find(([channel]) => channel === 'ui:createTerminal')?.[1]
+    const handler = onMock.mock.calls.find(
+      ([channel]) => channel === 'terminal:tabCreateReply'
+    )?.[1]
+
+    handler?.(
+      { sender: mainWindow.webContents },
+      { requestId: payload.requestId, tabId: 'tab-grid', leafId: 'leaf-other' }
+    )
+
+    await expect(reveal).rejects.toThrow('did not match its staged identity')
+  })
 })

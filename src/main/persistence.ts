@@ -6840,6 +6840,15 @@ export class Store {
     if (!hostId) {
       throw new Error('Invalid orchestration grid execution host')
     }
+    const executionHost = parseExecutionHostId(hostId)
+    const sshTargetId = args.sshTargetId?.trim() || null
+    if (executionHost?.kind === 'ssh') {
+      if (!sshTargetId || sshTargetId !== executionHost.targetId) {
+        throw new Error('Orchestration grid SSH target does not match its execution host')
+      }
+    } else if (sshTargetId) {
+      throw new Error('Orchestration grid SSH target requires an SSH execution host')
+    }
     const hadPartition =
       hostId === LOCAL_EXECUTION_HOST_ID ||
       this.state.workspaceSessionsByHostId?.[hostId] !== undefined
@@ -6893,9 +6902,9 @@ export class Store {
           : (next.activeTabIdByWorktree?.[args.worktreeId] ?? args.tabId)
       }
       this.setWorkspaceSessionInMemory(hostId, next)
-      if (args.sshTargetId) {
+      if (sshTargetId) {
         this.upsertSshRemotePtyLeaseInMemory({
-          targetId: args.sshTargetId,
+          targetId: sshTargetId,
           ptyId: args.ptyId,
           worktreeId: args.worktreeId,
           tabId: args.tabId,
@@ -7487,6 +7496,27 @@ export class Store {
     if (!leases?.length) {
       return false
     }
+    const sessions = [
+      this.state.workspaceSession,
+      this.state.workspaceSessionsByHostId?.[toSshExecutionHostId(targetId)]
+    ].filter((session, index, all): session is WorkspaceSessionState => {
+      return session !== undefined && all.indexOf(session) === index
+    })
+    let changed = false
+    for (const session of sessions) {
+      changed = this.clearSshRemotePtyBindingsInSession(targetId, leases, session) || changed
+    }
+    if (changed) {
+      this.scheduleSave()
+    }
+    return changed
+  }
+
+  private clearSshRemotePtyBindingsInSession(
+    targetId: string,
+    leases: SshRemotePtyLease[],
+    session: WorkspaceSessionState
+  ): boolean {
     let changed = false
     const sessions = new Set(
       [
@@ -7540,9 +7570,6 @@ export class Store {
           changed = true
         }
       }
-    }
-    if (changed) {
-      this.scheduleSave()
     }
     return changed
   }

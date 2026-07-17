@@ -8246,6 +8246,31 @@ describe('connectPanePty', () => {
     expect(scheduleRuntimeGraphSync).not.toHaveBeenCalled()
   })
 
+  it('publishes a later replacement spawn after trusted staged adoption', async () => {
+    const splitPtyId = 'pty-local-split'
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    const pane = createPane(2)
+    const deps = createDeps({
+      restoredLeafId: LEAF_2,
+      restoredPtyIdByLeafId: { [LEAF_2]: splitPtyId },
+      trustedAdoptPtyId: splitPtyId
+    })
+
+    connectPanePty(pane as never, createManager(2) as never, deps as never)
+    expect(scheduleRuntimeGraphSync).not.toHaveBeenCalled()
+    const transportOptions = createdTransportOptions.at(-1) as {
+      onPtySpawn?: (ptyId: string) => void
+    }
+
+    transportOptions.onPtySpawn?.('pty-replacement')
+
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'pty-replacement')
+    expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-replacement')
+    expect(scheduleRuntimeGraphSync).toHaveBeenCalledOnce()
+  })
+
   it('throws a trusted split SSH attach failure synchronously to the split acknowledgement', async () => {
     const splitPtyId = 'ssh:conn-1@@pty-rejected'
     const launchConfig = { agentArgs: '--rejected-worker', agentEnv: { ORCA_ROLE: 'worker' } }

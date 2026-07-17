@@ -149,11 +149,13 @@ function createFailedSplitRollback(state: {
   sourceStyle: string
 }): () => void {
   const { args, newPane } = state
-  const resourceCleanups: (() => void)[] = []
+  const paneCleanups: (() => void)[] = []
+  const publishedResourceCleanups: (() => void)[] = []
+  const restorationCleanups: (() => void)[] = []
   if (newPane) {
-    resourceCleanups.push(() => disposePane(newPane, args.panes, { releaseOwnership: false }))
+    paneCleanups.push(() => disposePane(newPane, args.panes, { releaseOwnership: false }))
     if (state.publishStarted) {
-      resourceCleanups.push(() =>
+      publishedResourceCleanups.push(() =>
         args.managerOptions.onPaneClosed?.(newPane.id, {
           paneId: newPane.id,
           leafId: newPane.leafId,
@@ -162,14 +164,14 @@ function createFailedSplitRollback(state: {
       )
     }
   }
-  resourceCleanups.push(
+  restorationCleanups.push(
     () => {
       state.existingContainer.style.cssText = state.sourceStyle
     },
     () => args.setActivePaneId(state.previousActivePaneId)
   )
   for (const moved of state.movedPaneStates) {
-    resourceCleanups.push(
+    restorationCleanups.push(
       () => restoreScrollState(moved.pane.terminal, moved.scrollState),
       () => {
         clearPendingSplitScrollRestore(moved.pane)
@@ -177,7 +179,7 @@ function createFailedSplitRollback(state: {
       }
     )
     if (moved.shouldReattachWebgl) {
-      resourceCleanups.push(() => reattachWebglIfNeeded(moved.pane))
+      restorationCleanups.push(() => reattachWebglIfNeeded(moved.pane))
     }
   }
   const postCleanups: (() => void)[] = [
@@ -188,7 +190,28 @@ function createFailedSplitRollback(state: {
   let structuralOwnershipReleased = false
 
   return () => {
-    runPaneCleanupLedger(resourceCleanups, 'Pane split resource rollback failed')
+    const cleanupErrors: unknown[] = []
+    try {
+      runPaneCleanupLedger(paneCleanups, 'Pane split resource rollback failed')
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+    try {
+      runPaneCleanupLedger(
+        publishedResourceCleanups,
+        'Pane split published-resource rollback failed'
+      )
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+    try {
+      runPaneCleanupLedger(restorationCleanups, 'Pane split restoration failed')
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+    if (paneCleanups.length > 0) {
+      throw new AggregateError(cleanupErrors, 'Pane split resource rollback failed')
+    }
     if (!structuralOwnershipReleased) {
       const split = state.existingContainer.parentElement
       if (split && split !== state.parent && split.classList.contains('pane-split')) {
@@ -211,7 +234,17 @@ function createFailedSplitRollback(state: {
       }
       structuralOwnershipReleased = true
     }
-    runPaneCleanupLedger(postCleanups, 'Pane split rollback failed')
+    try {
+      runPaneCleanupLedger(postCleanups, 'Pane split rollback failed')
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+    if (cleanupErrors.length === 1) {
+      throw cleanupErrors[0]
+    }
+    if (cleanupErrors.length > 1) {
+      throw new AggregateError(cleanupErrors, 'Pane split rollback failed')
+    }
   }
 }
 
