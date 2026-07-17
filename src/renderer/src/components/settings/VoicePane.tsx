@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/types'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
-import type { SpeechModelManifest, VoiceSettings } from '../../../../shared/speech-types'
+import type {
+  PlaybackSuppressionCapability,
+  SpeechModelManifest,
+  VoiceSettings
+} from '../../../../shared/speech-types'
 import { Separator } from '../ui/separator'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -28,6 +32,8 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
   const markFeatureTipsSeen = useAppStore((s) => s.markFeatureTipsSeen)
   const settingsSearchQuery = useAppStore((s) => s.settingsSearchQuery ?? '')
   const [catalog, setCatalog] = useState<SpeechModelManifest[]>([])
+  const [playbackSuppressionCapability, setPlaybackSuppressionCapability] =
+    useState<PlaybackSuppressionCapability | null>(null)
   const [permissionPending, setPermissionPending] = useState(false)
   const [openAiDialogOpen, setOpenAiDialogOpen] = useState(false)
   const [openAiApiKeyDraft, setOpenAiApiKeyDraft] = useState('')
@@ -75,6 +81,28 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
       cancelled = true
     }
   }, [refreshModelStates, updateVoiceSettings, voiceSettings.openAiApiKeyConfigured])
+
+  useEffect(() => {
+    let cancelled = false
+    void window.api.speech
+      .getPlaybackSuppressionCapability()
+      .then((capability) => {
+        if (!cancelled) {
+          setPlaybackSuppressionCapability(capability)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPlaybackSuppressionCapability({
+            available: false,
+            reason: 'System audio muting is unavailable.'
+          })
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     const cleanup = window.api.speech.onDownloadProgress(() => {
@@ -202,6 +230,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     <div ref={handlePaneRef} className="space-y-1">
       <VoiceDictationSettingsSection
         voiceSettings={voiceSettings}
+        playbackSuppressionCapability={playbackSuppressionCapability}
         permissionPending={permissionPending}
         onToggleVoiceDictation={() => void toggleVoiceDictation()}
         onUpdateVoiceSettings={updateVoiceSettings}

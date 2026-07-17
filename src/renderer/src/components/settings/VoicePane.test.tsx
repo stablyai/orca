@@ -51,6 +51,10 @@ function installWindowApi(
         request: vi.fn(requestMicrophonePermission)
       },
       speech: {
+        getPlaybackSuppressionCapability: vi.fn(async () => ({
+          available: true,
+          backend: 'wpctl'
+        })),
         getCatalog: vi.fn(async () => []),
         getOpenAiApiKeyStatus: vi.fn(async () => ({ configured: false })),
         saveOpenAiApiKey: vi.fn(async () => ({ configured: true })),
@@ -224,5 +228,27 @@ describe('VoicePane dictation switch', () => {
     root.unmount()
 
     expect(recordFeatureInteraction).not.toHaveBeenCalled()
+  })
+
+  it('lets enabled dictation opt in to muting other audio', async () => {
+    const updateSettings = vi.fn()
+    const { container, root } = await renderVoicePane({
+      voiceEnabled: true,
+      markFeatureTipsSeen: vi.fn(),
+      updateSettings
+    })
+    const muteSwitch = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Mute other audio while dictating"]'
+    )
+
+    expect(muteSwitch).not.toBeNull()
+    await clickSwitch(muteSwitch!)
+    root.unmount()
+
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        voice: expect.objectContaining({ muteSystemAudioDuringDictation: true })
+      })
+    )
   })
 })

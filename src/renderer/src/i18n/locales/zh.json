@@ -6966,7 +6966,11 @@
           "f9a9cf6928": "启用语音听写之前需要麦克风许可。",
           "1eac933202": "打开 macOS 隐私和安全。授予访问权限后再次启用听写。",
           "cd9fe37556": "已授予麦克风权限",
-          "6fa734ed95": "删除 {{value0}}"
+          "6fa734ed95": "删除 {{value0}}",
+          "6b0ed79a8f": "Mute other audio while dictating",
+          "66296e0568": "Temporarily mute this computer's output while the microphone is active.",
+          "a2f0263871": "System audio muting is not available on this computer.",
+          "50504af1f2": "Checking system audio support…"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "删除 {{value0}}",
@@ -12085,7 +12089,8 @@
           "55127a3706": "听写失败：{{value0}}",
           "bb7f599ee7": "打开设置",
           "2d5b9fabf9": "麦克风访问被拒绝。在系统设置中授予访问权限，然后重新启动 Orca。",
-          "5d2c3e7ae3": "未检测到语音。"
+          "5d2c3e7ae3": "未检测到语音。",
+          "c97ad62022": "Could not mute other audio. Dictation will continue."
         }
       },
       "dashboard": {

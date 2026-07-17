@@ -1,4 +1,4 @@
-import type { VoiceSettings } from '../../../../shared/speech-types'
+import type { PlaybackSuppressionCapability, VoiceSettings } from '../../../../shared/speech-types'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -6,6 +6,7 @@ import { translate } from '@/i18n/i18n'
 
 type VoiceDictationSettingsSectionProps = {
   voiceSettings: VoiceSettings
+  playbackSuppressionCapability: PlaybackSuppressionCapability | null
   permissionPending: boolean
   onToggleVoiceDictation: () => void
   onUpdateVoiceSettings: (updates: Partial<VoiceSettings>) => void
@@ -13,6 +14,7 @@ type VoiceDictationSettingsSectionProps = {
 
 export function VoiceDictationSettingsSection({
   voiceSettings,
+  playbackSuppressionCapability,
   permissionPending,
   onToggleVoiceDictation,
   onUpdateVoiceSettings
@@ -51,6 +53,64 @@ export function VoiceDictationSettingsSection({
           <span
             className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
               voiceSettings.enabled ? 'translate-x-4' : 'translate-x-0.5'
+            }`}
+          />
+        </button>
+      </div>
+
+      <Separator />
+
+      <div className="flex items-center justify-between gap-4 py-2">
+        <div className="space-y-0.5">
+          <Label>
+            {translate(
+              'auto.components.settings.VoicePane.6b0ed79a8f',
+              'Mute other audio while dictating'
+            )}
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            {playbackSuppressionCapability?.available
+              ? translate(
+                  'auto.components.settings.VoicePane.66296e0568',
+                  "Temporarily mute this computer's output while the microphone is active."
+                )
+              : playbackSuppressionCapability
+                ? translate(
+                    'auto.components.settings.VoicePane.a2f0263871',
+                    'System audio muting is not available on this computer.'
+                  )
+                : translate(
+                    'auto.components.settings.VoicePane.50504af1f2',
+                    'Checking system audio support…'
+                  )}
+          </p>
+        </div>
+        <button
+          role="switch"
+          aria-checked={voiceSettings.muteSystemAudioDuringDictation}
+          aria-label={translate(
+            'auto.components.settings.VoicePane.6b0ed79a8f',
+            'Mute other audio while dictating'
+          )}
+          disabled={!voiceSettings.enabled || playbackSuppressionCapability?.available !== true}
+          onClick={() =>
+            onUpdateVoiceSettings({
+              muteSystemAudioDuringDictation: !voiceSettings.muteSystemAudioDuringDictation
+            })
+          }
+          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+            voiceSettings.muteSystemAudioDuringDictation
+              ? 'bg-foreground'
+              : 'bg-muted-foreground/30'
+          } ${
+            !voiceSettings.enabled || playbackSuppressionCapability?.available !== true
+              ? 'cursor-not-allowed opacity-50'
+              : ''
+          }`}
+        >
+          <span
+            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+              voiceSettings.muteSystemAudioDuringDictation ? 'translate-x-4' : 'translate-x-0.5'
             }`}
           />
         </button>

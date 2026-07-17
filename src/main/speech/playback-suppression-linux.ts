@@ -110,7 +110,7 @@ export function createLinuxPlaybackSuppressionAdapter(
       case 'amixer':
         await run('amixer', ['set', 'Master', muted ? 'mute' : 'unmute'], signal)
         return
-      default:
+      case null:
         throw new Error(UNSUPPORTED_REASON)
     }
   }

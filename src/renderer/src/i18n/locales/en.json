@@ -7018,7 +7018,11 @@
           "ad5d036ecc": "Could not request microphone permission. Voice dictation was not enabled.",
           "f9a9cf6928": "Microphone permission is required before enabling voice dictation.",
           "1eac933202": "Opened macOS Privacy & Security. Enable dictation again after granting access.",
-          "cd9fe37556": "Microphone permission granted"
+          "cd9fe37556": "Microphone permission granted",
+          "6b0ed79a8f": "Mute other audio while dictating",
+          "66296e0568": "Temporarily mute this computer's output while the microphone is active.",
+          "a2f0263871": "System audio muting is not available on this computer.",
+          "50504af1f2": "Checking system audio support…"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Remove {{value0}}",
@@ -12085,7 +12089,8 @@
           "55127a3706": "Dictation failed: {{value0}}",
           "bb7f599ee7": "Open Settings",
           "2d5b9fabf9": "Microphone access denied. Grant access in system settings, then restart Orca.",
-          "5d2c3e7ae3": "No speech detected."
+          "5d2c3e7ae3": "No speech detected.",
+          "c97ad62022": "Could not mute other audio. Dictation will continue."
         }
       },
       "dashboard": {
