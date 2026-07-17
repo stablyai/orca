@@ -1,0 +1,2038 @@
+name: SSH Relay Runtime Artifacts
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/ssh-relay-runtime-artifacts.yml'
+      - 'config/patches/node-pty@1.1.0.patch'
+      - 'config/ssh-relay-runtime-linux-builder.Containerfile'
+      - 'config/scripts/build-relay.mjs'
+      - 'config/scripts/build-windows-ssh-no-input-launcher.mjs'
+      - 'config/scripts/*ssh-relay*'
+      - 'config/ssh-relay-node-release-keys/**'
+      - 'config/ssh-relay-node-release-v24.18.0.json'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'src/main/ipc/parcel-watcher-process-entry.ts'
+      - 'src/main/ssh/ssh-relay-runtime-*'
+      - 'src/main/ssh/ssh-system-no-input-windows-openssh.test.ts'
+      - 'src/relay/**'
+      - 'native/windows-ssh-no-input-launcher/**'
+      - 'native/windows-ssh-no-input-launcher-test/**'
+  workflow_dispatch:
+  # Why: callers may gate on the native graph only after separate release wiring is reviewed.
+  workflow_call:
+    inputs:
+      include-baseline-gates:
+        description: Run separately gated oldest-baseline qualification jobs
+        required: false
+        default: true
+        type: boolean
+
+concurrency:
+  group: ssh-relay-runtime-artifacts-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-posix-runtime:
+    name: Build ${{ matrix.tuple }} runtime
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            tuple: linux-x64-glibc
+            node_archive: node-v24.18.0-linux-x64.tar.xz
+            container_image: docker.io/library/rockylinux@sha256:2d05a9266523bbf24f33ebc3a9832e4d5fd74b973c220f2204ca802286aa275d
+          - runner: ubuntu-24.04-arm
+            tuple: linux-arm64-glibc
+            node_archive: node-v24.18.0-linux-arm64.tar.xz
+            container_image: docker.io/library/rockylinux@sha256:3c2d0ce12bf79fc5ff05e43b1000e30ff062dc89405525f3307cbff71661f1a0
+          - runner: macos-15-intel
+            tuple: darwin-x64
+            node_archive: node-v24.18.0-darwin-x64.tar.xz
+          - runner: macos-15
+            tuple: darwin-arm64
+            node_archive: node-v24.18.0-darwin-arm64.tar.xz
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    env:
+      ORCA_RUNTIME_REQUESTED_RUNNER: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout exact source revision
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          # Why: artifact evidence must name the exact reviewed source, not GitHub's synthetic merge.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        with:
+          run_install: false
+
+      - name: Setup Node 24.18.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+
+      - name: Record native runner identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'requested_runner=%s\n' '${{ matrix.runner }}'
+          printf 'resolved_image_os=%s\n' "${ImageOS:-unknown}"
+          printf 'resolved_image_version=%s\n' "${ImageVersion:-unknown}"
+          printf 'runner_arch=%s\n' "$RUNNER_ARCH"
+          printf 'runner_environment=%s\n' "$RUNNER_ENVIRONMENT"
+          uname -a
+          node --version
+          printf 'source_commit=%s\n' "$(git rev-parse HEAD)"
+
+      - name: Install Linux build and verification tools
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Why: hosted ARM mirror egress can disappear; prove preinstalled tools before bounded APT fallback.
+          probe_root=$(mktemp -d)
+          trap 'rm -rf "$probe_root"' EXIT
+          required_commands=(cc c++ make ar ld strip curl gpg gpgv python3 xz)
+          missing_requirements=()
+          for required_command in "${required_commands[@]}"; do
+            if ! command -v "$required_command" >/dev/null; then
+              missing_requirements+=("$required_command")
+            fi
+          done
+          if [ ! -r /etc/ssl/certs/ca-certificates.crt ]; then
+            missing_requirements+=(ca-certificates)
+          fi
+
+          probe_c_toolchain() {
+            printf '%s\n' '#include <stdlib.h>' 'int main(void) { return EXIT_SUCCESS; }' \
+              | cc -x c - -o "$probe_root/orca-ci-c-probe" \
+              && "$probe_root/orca-ci-c-probe"
+          }
+          probe_cxx_toolchain() {
+            printf '%s\n' '#include <cstdlib>' 'int main() { return EXIT_SUCCESS; }' \
+              | c++ -x c++ - -o "$probe_root/orca-ci-cxx-probe" \
+              && "$probe_root/orca-ci-cxx-probe"
+          }
+          if command -v cc >/dev/null && command -v c++ >/dev/null; then
+            if ! probe_c_toolchain || ! probe_cxx_toolchain; then
+              missing_requirements+=(build-essential)
+            fi
+          fi
+
+          if ((${#missing_requirements[@]} > 0)); then
+            printf 'missing Linux prerequisites: %s\n' "${missing_requirements[*]}"
+            for source_file in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources; do
+              [ -f "$source_file" ] || continue
+              sudo sed -i \
+                -e 's|http://ports.ubuntu.com|https://ports.ubuntu.com|g' \
+                -e 's|http://archive.ubuntu.com|https://archive.ubuntu.com|g' \
+                -e 's|http://security.ubuntu.com|https://security.ubuntu.com|g' \
+                -e 's|http://azure.archive.ubuntu.com|https://azure.archive.ubuntu.com|g' \
+                "$source_file"
+            done
+            apt_options=(
+              -o Acquire::Retries=3
+              -o Acquire::http::Timeout=15
+              -o Acquire::https::Timeout=15
+              -o Acquire::ForceIPv4=true
+              -o DPkg::Lock::Timeout=60
+            )
+            timeout --signal=TERM --kill-after=15s 180s sudo apt-get "${apt_options[@]}" update -qq
+            timeout --signal=TERM --kill-after=15s 180s sudo apt-get "${apt_options[@]}" install -y -qq \
+              build-essential ca-certificates curl gnupg gpgv python3 xz-utils
+          fi
+
+          for required_command in "${required_commands[@]}"; do
+            command -v "$required_command" >/dev/null
+          done
+          test -r /etc/ssl/certs/ca-certificates.crt
+          probe_c_toolchain
+          probe_cxx_toolchain
+
+      - name: Install macOS signature verifier
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew list gnupg >/dev/null 2>&1 || brew install gnupg
+          command -v xz
+          xcodebuild -version
+
+      - name: Install source dependencies without native postinstall
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile --ignore-scripts
+          git diff --exit-code package.json pnpm-lock.yaml
+
+      - name: Run runtime artifact contract tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check config/scripts/ssh-relay-runtime-compatibility.mjs
+          node --check config/scripts/ssh-relay-runtime-compatibility.test.mjs
+          node --check config/scripts/ssh-relay-runtime-reproducibility.mjs
+          node --check config/scripts/ssh-relay-runtime-reproducibility.test.mjs
+          node --check config/scripts/ssh-relay-runtime-baseline.mjs
+          node --check config/scripts/ssh-relay-runtime-baseline.test.mjs
+          node --check config/scripts/ssh-relay-runtime-linux-build-evidence.mjs
+          node --check config/scripts/ssh-relay-runtime-linux-build-evidence.test.mjs
+          node --check config/scripts/ssh-relay-linux-node-gyp-compiler.mjs
+          node --check config/scripts/ssh-relay-linux-node-gyp-compiler.test.mjs
+          node --check config/scripts/build-ssh-relay-runtime.mjs
+          node --check config/scripts/ssh-relay-runtime-build.test.mjs
+          node --check config/scripts/ssh-relay-runtime-closure.mjs
+          node --check config/scripts/ssh-relay-runtime-closure.test.mjs
+          node --check config/scripts/ssh-relay-runtime-sbom.mjs
+          node --check config/scripts/ssh-relay-runtime-sbom.test.mjs
+          node --check config/scripts/ssh-relay-runtime-provenance.test.mjs
+          node --check config/scripts/ssh-relay-runtime-toolchain.mjs
+          node --check config/scripts/ssh-relay-runtime-toolchain.test.mjs
+          node --check config/scripts/ssh-relay-runtime-native-signing-plan.mjs
+          node --check config/scripts/ssh-relay-runtime-native-signing-plan.test.mjs
+          node --check config/scripts/ssh-relay-runtime-native-signing-selection.mjs
+          node --check config/scripts/ssh-relay-runtime-native-signing-selection.test.mjs
+          node --check config/scripts/ssh-relay-runtime-native-signing-payload.mjs
+          node --check config/scripts/ssh-relay-runtime-native-signing-payload.test.mjs
+          node --check config/scripts/ssh-relay-runtime-windows-authenticode-assessment.mjs
+          node --check config/scripts/ssh-relay-runtime-windows-authenticode-assessment.test.mjs
+          node --check config/scripts/ssh-relay-runtime-native-signing-stage.mjs
+          node --check config/scripts/ssh-relay-runtime-native-signing-stage.test.mjs
+          node --check config/scripts/ssh-relay-runtime-native-signing-apply.mjs
+          node --check config/scripts/ssh-relay-runtime-native-signing-apply.test.mjs
+          node --check config/scripts/ssh-relay-runtime-macos-signature-verification.mjs
+          node --check config/scripts/ssh-relay-runtime-macos-signature-verification.test.mjs
+          node --check config/scripts/ssh-relay-runtime-windows-signature-verification.mjs
+          node --check config/scripts/ssh-relay-runtime-windows-signature-verification.test.mjs
+          node --check config/scripts/ssh-relay-runtime-windows-source-signature-verification.mjs
+          node --check config/scripts/ssh-relay-runtime-windows-source-signature-verification.test.mjs
+          node --check config/scripts/ssh-relay-runtime-release-stage-gate.mjs
+          node --check config/scripts/ssh-relay-runtime-release-stage-gate.test.mjs
+          node --check config/scripts/ssh-relay-runtime-draft-recovery.mjs
+          node --check config/scripts/ssh-relay-runtime-draft-recovery.test.mjs
+          node --check config/scripts/ssh-relay-runtime-aggregate-input.mjs
+          node --check config/scripts/ssh-relay-runtime-aggregate-input.test.mjs
+          node --check config/scripts/ssh-relay-runtime-draft-readback.mjs
+          node --check config/scripts/ssh-relay-runtime-draft-readback.test.mjs
+          node --check config/scripts/ssh-relay-runtime-draft-readback-materialization.test.mjs
+          node --check config/scripts/ssh-relay-runtime-draft-release-verification.mjs
+          node --check config/scripts/ssh-relay-runtime-draft-release-verification.test.mjs
+          node --check config/scripts/ssh-relay-runtime-readback-archive-execution.mjs
+          node --check config/scripts/ssh-relay-runtime-readback-archive-execution.test.mjs
+          node --check config/scripts/ssh-relay-runtime-draft-upload.mjs
+          node --check config/scripts/ssh-relay-runtime-draft-upload.test.mjs
+          node --check config/scripts/ssh-relay-runtime-release-assets.mjs
+          node --check config/scripts/ssh-relay-runtime-release-assets.test.mjs
+          node --check config/scripts/ssh-relay-runtime-manifest-validation.mjs
+          node --check config/scripts/ssh-relay-runtime-manifest-assembly.mjs
+          node --check config/scripts/ssh-relay-runtime-manifest-assembly.test.mjs
+          node --check config/scripts/ssh-relay-runtime-manifest-signing-handoff.mjs
+          node --check config/scripts/ssh-relay-runtime-manifest-signing-handoff.test.mjs
+          node --check config/scripts/ssh-relay-runtime-manifest-seed-signing.mjs
+          node --check config/scripts/ssh-relay-runtime-manifest-seed-signing.test.mjs
+          node --check config/scripts/ssh-relay-runtime-manifest-artifact-collection.mjs
+          node --check config/scripts/ssh-relay-runtime-manifest-aggregate-command.mjs
+          node --check config/scripts/ssh-relay-runtime-manifest-aggregate-command.test.mjs
+          node --check config/scripts/ssh-relay-runtime-manifest-signing-workflow.test.mjs
+          node --check config/scripts/ssh-relay-runtime-manifest-aggregate.mjs
+          node --check config/scripts/ssh-relay-runtime-manifest-aggregate.test.mjs
+          node --check config/scripts/ssh-relay-runtime-manifest-tuple.mjs
+          node --check config/scripts/ssh-relay-runtime-manifest-tuple.test.mjs
+          node --check config/scripts/ssh-relay-runtime-post-sign-metadata.mjs
+          node --check config/scripts/ssh-relay-runtime-post-sign-metadata.test.mjs
+          node --check config/scripts/ssh-relay-runtime-archive-extraction.mjs
+          node --check config/scripts/ssh-relay-runtime-archive-extraction.test.mjs
+          node --check config/scripts/ssh-relay-runtime-portable-archive.test.mjs
+          node --check config/scripts/ssh-relay-runtime-native-signing-stage-report.mjs
+          node --check config/scripts/ssh-relay-runtime-macos-signing.mjs
+          node --check config/scripts/ssh-relay-runtime-macos-signing.test.mjs
+          node --check config/scripts/ssh-relay-runtime-native-signing-finalization.mjs
+          node --check config/scripts/ssh-relay-runtime-native-signing-finalization.test.mjs
+          node --check config/scripts/ssh-relay-runtime-linux-finalization.mjs
+          node --check config/scripts/ssh-relay-runtime-linux-finalization.test.mjs
+          node --check config/scripts/ssh-relay-runtime-native-signing-workflow.test.mjs
+          node --check config/scripts/ssh-relay-runtime-native-signing-rehearsal-workflow.test.mjs
+          node --check config/scripts/ssh-relay-runtime-build-prerequisite.test.mjs
+          node --check config/scripts/build-windows-ssh-no-input-launcher.mjs
+          node --check config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs
+          pnpm exec vitest run --config config/vitest.config.ts \
+            src/main/ssh/ssh-relay-artifact-schema.test.ts \
+            src/main/ssh/ssh-relay-manifest-signature.test.ts \
+            src/main/ssh/ssh-relay-release-asset.test.ts \
+            src/main/ssh/ssh-relay-artifact-selector.test.ts \
+            src/main/ssh/ssh-relay-libc-detection.test.ts \
+            src/main/ssh/ssh-relay-linux-kernel-detection.test.ts \
+            src/main/ssh/ssh-relay-host-evidence-detection.test.ts \
+            src/main/ssh/ssh-relay-darwin-version-detection.test.ts \
+            src/main/ssh/ssh-relay-darwin-translation-detection.test.ts \
+            src/main/ssh/ssh-relay-linux-libstdcxx-detection.test.ts \
+            src/main/ssh/ssh-relay-windows-compatibility-detection.test.ts \
+            src/main/ssh/ssh-relay-artifact-download.test.ts \
+            src/main/ssh/ssh-relay-artifact-extraction.test.ts \
+            src/main/ssh/ssh-relay-artifact-cache-lock-release.test.ts \
+            src/main/ssh/ssh-relay-artifact-cache-lock.test.ts \
+            src/main/ssh/ssh-relay-artifact-cache-entry.test.ts \
+            src/main/ssh/ssh-relay-artifact-cache-in-use-lease.test.ts \
+            src/main/ssh/ssh-relay-artifact-cache-eviction.test.ts \
+            src/main/ssh/ssh-relay-artifact-cache-root.test.ts \
+            src/main/ssh/ssh-relay-artifact-cache-resolution.test.ts \
+            src/main/ssh/ssh-relay-artifact-cache-population.test.ts \
+            src/main/ssh/ssh-relay-artifact-cache-population-integration.test.ts \
+            src/main/ssh/ssh-relay-artifact-acquisition.test.ts \
+            src/main/ssh/ssh-relay-artifact-acquisition-integration.test.ts \
+            src/main/ssh/ssh-relay-runtime-source-tree.test.ts \
+            src/main/ssh/ssh-relay-runtime-source-scan.test.ts \
+            src/main/ssh/ssh-relay-runtime-source-stream.test.ts \
+            src/main/ssh/ssh-relay-runtime-posix-control-command.test.ts \
+            src/main/ssh/ssh-relay-runtime-posix-file-destination.test.ts \
+            src/main/ssh/ssh-relay-runtime-windows-file-destination.test.ts \
+            src/main/ssh/ssh-relay-runtime-windows-staging-control.test.ts \
+            src/main/ssh/ssh-relay-runtime-windows-tree-transfer.test.ts \
+            src/main/ssh/ssh-relay-runtime-posix-tree-transfer.test.ts \
+            src/main/ssh/ssh-relay-runtime-system-ssh-file-channel.test.ts \
+            src/main/ssh/ssh-relay-runtime-sftp-file-destination.test.ts \
+            src/main/ssh/ssh-relay-runtime-sftp-connection-transfer.test.ts \
+            src/main/ssh/ssh-relay-runtime-sftp-session.test.ts \
+            src/main/ssh/ssh-relay-runtime-sftp-tree-transfer.test.ts \
+            src/main/ssh/ssh-relay-compiled-manifest-trust.test.ts \
+            src/main/ssh/ssh-relay-official-manifest.test.ts \
+            src/main/ssh/ssh-relay-manifest-accepted-keys.test.ts \
+            src/main/ssh/ssh-relay-packaged-manifest.test.ts \
+            src/main/ssh/ssh-relay-runtime-identity.test.ts \
+            config/scripts/ssh-relay-runtime-compatibility.test.mjs \
+            config/scripts/ssh-relay-node-release-verification.test.mjs \
+            config/scripts/ssh-relay-node-tar-inspection.test.mjs \
+            config/scripts/ssh-relay-linux-node-gyp-compiler.test.mjs \
+            config/scripts/ssh-relay-node-pty-build.test.mjs \
+            config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs \
+            config/scripts/ssh-relay-node-pty-windows-settlement.test.mjs \
+            config/scripts/ssh-relay-node-zip-inspection.test.mjs \
+            config/scripts/ssh-relay-runtime-artifact.test.mjs \
+            config/scripts/ssh-relay-runtime-portable-archive.test.mjs \
+            config/scripts/ssh-relay-runtime-baseline.test.mjs \
+            config/scripts/ssh-relay-runtime-build.test.mjs \
+            config/scripts/ssh-relay-runtime-linux-build-evidence.test.mjs \
+            config/scripts/ssh-relay-runtime-native-signing-plan.test.mjs \
+            config/scripts/ssh-relay-runtime-native-signing-selection.test.mjs \
+            config/scripts/ssh-relay-runtime-native-signing-payload.test.mjs \
+            config/scripts/ssh-relay-runtime-windows-authenticode-assessment.test.mjs \
+            config/scripts/ssh-relay-runtime-native-signing-stage.test.mjs \
+            config/scripts/ssh-relay-runtime-native-signing-apply.test.mjs \
+            config/scripts/ssh-relay-runtime-macos-signature-verification.test.mjs \
+            config/scripts/ssh-relay-runtime-windows-signature-verification.test.mjs \
+            config/scripts/ssh-relay-runtime-windows-source-signature-verification.test.mjs \
+            config/scripts/ssh-relay-runtime-release-stage-gate.test.mjs \
+            config/scripts/ssh-relay-runtime-draft-recovery.test.mjs \
+            config/scripts/ssh-relay-runtime-aggregate-input.test.mjs \
+            config/scripts/ssh-relay-runtime-draft-readback.test.mjs \
+            config/scripts/ssh-relay-runtime-draft-readback-materialization.test.mjs \
+            config/scripts/ssh-relay-runtime-draft-release-verification.test.mjs \
+            config/scripts/ssh-relay-runtime-readback-archive-execution.test.mjs \
+            config/scripts/ssh-relay-runtime-draft-upload.test.mjs \
+            config/scripts/ssh-relay-runtime-release-assets.test.mjs \
+            config/scripts/ssh-relay-runtime-manifest-assembly.test.mjs \
+            config/scripts/ssh-relay-runtime-manifest-signing-handoff.test.mjs \
+            config/scripts/ssh-relay-runtime-manifest-seed-signing.test.mjs \
+            config/scripts/ssh-relay-runtime-manifest-aggregate-command.test.mjs \
+            config/scripts/ssh-relay-runtime-manifest-signing-workflow.test.mjs \
+            config/scripts/ssh-relay-runtime-manifest-aggregate.test.mjs \
+            config/scripts/ssh-relay-runtime-manifest-tuple.test.mjs \
+            config/scripts/ssh-relay-runtime-post-sign-metadata.test.mjs \
+            config/scripts/ssh-relay-runtime-archive-extraction.test.mjs \
+            config/scripts/ssh-relay-runtime-macos-signing.test.mjs \
+            config/scripts/ssh-relay-runtime-native-signing-finalization.test.mjs \
+            config/scripts/ssh-relay-runtime-linux-finalization.test.mjs \
+            config/scripts/ssh-relay-runtime-native-signing-workflow.test.mjs \
+            config/scripts/ssh-relay-runtime-native-signing-rehearsal-workflow.test.mjs \
+            config/scripts/ssh-relay-runtime-build-prerequisite.test.mjs \
+            config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs \
+            config/scripts/ssh-relay-runtime-closure.test.mjs \
+            config/scripts/ssh-relay-runtime-pty-smoke.test.mjs \
+            config/scripts/ssh-relay-runtime-reproducibility.test.mjs \
+            config/scripts/ssh-relay-runtime-resource-diagnostics.test.mjs \
+            config/scripts/ssh-relay-runtime-provenance.test.mjs \
+            config/scripts/ssh-relay-runtime-sbom.test.mjs \
+            config/scripts/ssh-relay-runtime-toolchain.test.mjs \
+            config/scripts/ssh-relay-runtime-windows-tree.test.mjs \
+            config/scripts/ssh-relay-runtime-zip.test.mjs \
+            config/scripts/ssh-relay-runtime-workflow.test.mjs
+
+      - name: Download exact Node release inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          inputs="$RUNNER_TEMP/node-release-inputs"
+          mkdir -p "$inputs"
+          base='https://nodejs.org/dist/v24.18.0'
+          for asset in SHASUMS256.txt SHASUMS256.txt.sig '${{ matrix.node_archive }}'; do
+            curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+              --connect-timeout 20 --max-time 300 --retry 2 --retry-delay 2 --retry-all-errors \
+              "$base/$asset" --output "$inputs/$asset"
+          done
+          printf 'NODE_INPUTS=%s\n' "$inputs" >> "$GITHUB_ENV"
+
+      - name: Prepare digest-pinned Linux floor builder
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          image='${{ matrix.container_image }}'
+          builder="orca-ssh-relay-linux-builder:${GITHUB_RUN_ID}-${{ matrix.tuple }}"
+          docker pull "$image"
+          docker build --pull=false \
+            --build-arg "BASE_IMAGE=$image" \
+            --file config/ssh-relay-runtime-linux-builder.Containerfile \
+            --tag "$builder" .
+          docker image inspect "$image" --format 'linux_floor_base={{index .RepoDigests 0}}'
+          docker image inspect "$builder" --format 'linux_floor_builder_id={{.Id}}'
+          printf 'ORCA_LINUX_BUILDER=%s\n' "$builder" >> "$GITHUB_ENV"
+
+      - name: Build twice, inspect, smoke, and compare exact runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          output_root="$RUNNER_TEMP/ssh-relay-runtime/${{ matrix.tuple }}"
+          work_directory="$RUNNER_TEMP/orca-ssh-relay-runtime-build-work"
+          source_commit=$(git rev-parse HEAD)
+          source_date_epoch=$(git show -s --format=%ct "$source_commit")
+          if [[ '${{ matrix.tuple }}' == linux-* ]]; then
+            # Why: package installation is isolated earlier; native compilation itself has no egress.
+            docker run --rm --network none --read-only --cap-drop all \
+              --user "$(id -u):$(id -g)" \
+              --security-opt no-new-privileges --pids-limit 512 --memory 6g --cpus 4 \
+              --tmpfs /tmp:rw,nosuid,size=1g,mode=1777 \
+              --mount "type=bind,src=$GITHUB_WORKSPACE,dst=$GITHUB_WORKSPACE" \
+              --mount "type=bind,src=$RUNNER_TEMP,dst=$RUNNER_TEMP" \
+              --workdir "$GITHUB_WORKSPACE" \
+              --env "GITHUB_ACTIONS=$GITHUB_ACTIONS" \
+              --env "GITHUB_REPOSITORY=$GITHUB_REPOSITORY" \
+              --env "GITHUB_RUN_ID=$GITHUB_RUN_ID" \
+              --env "GITHUB_WORKFLOW_REF=$GITHUB_WORKFLOW_REF" \
+              --env "RUNNER_OS=$RUNNER_OS" \
+              --env "RUNNER_ARCH=$RUNNER_ARCH" \
+              --env "RUNNER_ENVIRONMENT=$RUNNER_ENVIRONMENT" \
+              --env "ORCA_RUNTIME_REQUESTED_RUNNER=$ORCA_RUNTIME_REQUESTED_RUNNER" \
+              --env 'ImageOS=rockylinux-8' \
+              --env 'ImageVersion=${{ matrix.container_image }}' \
+              --env 'HOME=/tmp' \
+              "$ORCA_LINUX_BUILDER" \
+              /usr/bin/node config/scripts/ssh-relay-runtime-linux-build-evidence.mjs \
+                --tuple '${{ matrix.tuple }}' \
+                --inputs-directory "$NODE_INPUTS" \
+                --output-root "$output_root" \
+                --work-directory "$work_directory" \
+                --evidence-directory "$GITHUB_WORKSPACE/runtime-evidence/${{ matrix.tuple }}" \
+                --source-date-epoch "$source_date_epoch" \
+                --git-commit "$source_commit"
+            first_output="$output_root/first"
+            identity="$first_output/orca-ssh-relay-runtime-${{ matrix.tuple }}.identity.json"
+            archive=$(find "$first_output" -maxdepth 1 -name '*.tar.br' -print -quit)
+            test -n "$archive"
+            executed_runtime="$output_root/readback-executed"
+            # Why: exercise only local verified bytes; release writes and remote consumers stay disconnected.
+            docker run --rm --network none --read-only --cap-drop all \
+              --user "$(id -u):$(id -g)" \
+              --security-opt no-new-privileges --pids-limit 512 --memory 6g --cpus 4 \
+              --tmpfs /tmp:rw,nosuid,size=1g,mode=1777 \
+              --mount "type=bind,src=$GITHUB_WORKSPACE,dst=$GITHUB_WORKSPACE" \
+              --mount "type=bind,src=$RUNNER_TEMP,dst=$RUNNER_TEMP" \
+              --workdir "$GITHUB_WORKSPACE" \
+              "$ORCA_LINUX_BUILDER" \
+              /usr/bin/node config/scripts/ssh-relay-runtime-readback-archive-execution.mjs \
+                --identity "$identity" \
+                --archive "$archive" \
+                --output-directory "$executed_runtime"
+            rm -rf -- "$executed_runtime"
+            test ! -e "$executed_runtime"
+            signing_stage="$output_root/signing-stage"
+            signing_report="$output_root/orca-ssh-relay-runtime-${{ matrix.tuple }}.signing-stage.json"
+            node config/scripts/ssh-relay-runtime-native-signing-stage.mjs \
+              --identity "$identity" \
+              --runtime-directory "$first_output/runtime" \
+              --staging-directory "$signing_stage" > "$signing_report"
+            node -e '
+              const { readFileSync } = require("node:fs")
+              const report = JSON.parse(readFileSync(process.argv[1], "utf8"))
+              if (report.platform !== "linux" || report.assessments.length !== 0 ||
+                  report.signingFiles.length !== 0 || report.preservedUpstreamFiles.length !== 0 ||
+                  report.payload.stagingRequired !== false || report.payload.stagedFiles.length !== 0) {
+                throw new Error("Linux signing-stage report violates the hash-only contract")
+              }
+            ' "$signing_report"
+            test ! -e "$signing_stage"
+            cp "$signing_report" "$GITHUB_WORKSPACE/runtime-evidence/${{ matrix.tuple }}/"
+            verified_at=$(node -e 'process.stdout.write(new Date().toISOString())')
+            final_output="$output_root/linux-final"
+            node config/scripts/ssh-relay-runtime-linux-finalization.mjs \
+              --source-output-directory "$first_output" \
+              --identity "$identity" \
+              --output-directory "$final_output" \
+              --verified-at "$verified_at" \
+              --native-verification-tool-version "$(node -p 'process.versions.node')"
+            cp "$final_output/assets/orca-ssh-relay-runtime-${{ matrix.tuple }}.manifest-tuple.json" \
+              "$final_output/evidence/${{ matrix.tuple }}.linux-finalization.json" \
+              "$GITHUB_WORKSPACE/runtime-evidence/${{ matrix.tuple }}/"
+            exit 0
+          fi
+          mkdir -p "$output_root"
+          first_output="$output_root/first"
+          second_output="$output_root/second"
+          for output in "$first_output" "$second_output"; do
+            printf 'clean_build_output=%s\n' "$output"
+            /usr/bin/time -p node config/scripts/build-ssh-relay-runtime.mjs \
+              --tuple '${{ matrix.tuple }}' \
+              --inputs-directory "$NODE_INPUTS" \
+              --output-directory "$output" \
+              --work-directory "$work_directory" \
+              --source-date-epoch "$source_date_epoch" \
+              --git-commit "$source_commit"
+            identity="$output/orca-ssh-relay-runtime-${{ matrix.tuple }}.identity.json"
+            archive=$(find "$output" -maxdepth 1 -name '*.tar.br' -print -quit)
+            test -n "$archive"
+            /usr/bin/time -p node config/scripts/verify-ssh-relay-runtime.mjs \
+              --runtime-directory "$output/runtime" \
+              --identity "$identity" \
+              --archive "$archive"
+            if find "$output/runtime" -type f \( -name npm -o -name npx -o -name corepack -o -name '*.map' \) -print -quit | grep -q .; then
+              echo 'Runtime contains a prohibited package manager or source map.' >&2
+              exit 1
+            fi
+            parcel_packages=$(find "$output/runtime/node_modules/@parcel" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
+            test "$parcel_packages" = 2
+          done
+          node config/scripts/ssh-relay-runtime-reproducibility.mjs \
+            --tuple '${{ matrix.tuple }}' \
+            --first-output-directory "$first_output" \
+            --second-output-directory "$second_output"
+          identity="$first_output/orca-ssh-relay-runtime-${{ matrix.tuple }}.identity.json"
+          archive=$(find "$first_output" -maxdepth 1 -name '*.tar.br' -print -quit)
+          test -n "$archive"
+          executed_runtime="$output_root/readback-executed"
+          # Why: exercise only local verified bytes; release writes and remote consumers stay disconnected.
+          node config/scripts/ssh-relay-runtime-readback-archive-execution.mjs \
+            --identity "$identity" \
+            --archive "$archive" \
+            --output-directory "$executed_runtime"
+          rm -rf -- "$executed_runtime"
+          test ! -e "$executed_runtime"
+          signing_stage="$output_root/signing-stage"
+          signing_report="$output_root/orca-ssh-relay-runtime-${{ matrix.tuple }}.signing-stage.json"
+          node config/scripts/ssh-relay-runtime-native-signing-stage.mjs \
+            --identity "$first_output/orca-ssh-relay-runtime-${{ matrix.tuple }}.identity.json" \
+            --runtime-directory "$first_output/runtime" \
+            --staging-directory "$signing_stage" > "$signing_report"
+          node -e '
+            const { readFileSync } = require("node:fs")
+            const report = JSON.parse(readFileSync(process.argv[1], "utf8"))
+            if (report.platform !== "darwin" || report.assessments.length !== 0 ||
+                report.signingFiles.length !== 3 || report.preservedUpstreamFiles.length !== 0 ||
+                report.payload.stagingRequired !== true || report.payload.stagedFiles.length !== 3) {
+              throw new Error("macOS signing-stage report violates the Developer ID contract")
+            }
+          ' "$signing_report"
+          test "$(find "$signing_stage" -type f | wc -l | tr -d ' ')" = 3
+          test ! -e "$signing_stage/bin/node"
+          rm -rf -- "$signing_stage"
+          mkdir -p "$GITHUB_WORKSPACE/runtime-evidence/${{ matrix.tuple }}"
+          cp "$first_output"/*.tar.br "$first_output"/*.spdx.json "$first_output"/*.provenance.json "$first_output"/*.identity.json \
+            "$signing_report" "$GITHUB_WORKSPACE/runtime-evidence/${{ matrix.tuple }}/"
+
+      - name: Measure full-size desktop extraction and cache boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_output="$RUNNER_TEMP/ssh-relay-runtime/${{ matrix.tuple }}/first"
+          identity="$first_output/orca-ssh-relay-runtime-${{ matrix.tuple }}.identity.json"
+          archive=$(find "$first_output" -maxdepth 1 -name '*.tar.br' -print -quit)
+          test -n "$archive"
+          extraction_output="$RUNNER_TEMP/ssh-relay-runtime/${{ matrix.tuple }}/desktop-extraction-measurement"
+          # Why: exact payload size can expose memory behavior that synthetic archive fixtures cannot.
+          ORCA_SSH_RELAY_FULL_SIZE_ARCHIVE="$archive" \
+            ORCA_SSH_RELAY_FULL_SIZE_IDENTITY="$identity" \
+            ORCA_SSH_RELAY_FULL_SIZE_OUTPUT="$extraction_output" \
+            pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 --reporter=verbose \
+              src/main/ssh/ssh-relay-artifact-extraction-full-size.test.ts
+          test ! -e "$extraction_output"
+          ORCA_SSH_RELAY_FULL_SIZE_ARCHIVE="$archive" \
+            ORCA_SSH_RELAY_FULL_SIZE_IDENTITY="$identity" \
+            ORCA_SSH_RELAY_FULL_SIZE_OUTPUT="$extraction_output" \
+            pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 --reporter=verbose \
+              src/main/ssh/ssh-relay-artifact-cache-entry-full-size.test.ts
+          test ! -e "$extraction_output"
+
+      - name: Start loopback OpenSSH SFTP fixture
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! test -x /usr/sbin/sshd; then
+            apt_options=(-o Acquire::Retries=3 -o Acquire::https::Timeout=15 -o Acquire::ForceIPv4=true)
+            timeout --signal=TERM --kill-after=15s 180s sudo apt-get "${apt_options[@]}" update -qq
+            timeout --signal=TERM --kill-after=15s 180s sudo apt-get "${apt_options[@]}" install -y -qq openssh-server
+          fi
+          fixture="$RUNNER_TEMP/orca-live-sftp"
+          mkdir -p "$fixture" "$HOME/.ssh" "$fixture/remote"
+          chmod 700 "$HOME/.ssh" "$fixture"
+          ssh-keygen -q -t ed25519 -N '' -f "$fixture/client-key"
+          ssh-keygen -q -t ed25519 -N '' -f "$fixture/host-key"
+          cp "$fixture/client-key.pub" "$HOME/.ssh/authorized_keys"
+          chmod 600 "$HOME/.ssh/authorized_keys" "$fixture/client-key" "$fixture/host-key"
+          sudo chown root:root "$fixture/host-key"
+          # Why: hosted runner accounts are shadow-locked, which sshd rejects before public-key auth.
+          random_password=$(openssl rand -hex 32)
+          sudo usermod --password "$(openssl passwd -6 "$random_password")" "$USER"
+          unset random_password
+          port=22222
+          server_version=$(/usr/sbin/sshd -V 2>&1 | head -1)
+          config="$fixture/sshd_config"
+          printf '%s\n' \
+            "Port $port" \
+            'ListenAddress 127.0.0.1' \
+            "HostKey $fixture/host-key" \
+            "PidFile $fixture/sshd.pid" \
+            "AuthorizedKeysFile $HOME/.ssh/authorized_keys" \
+            "AllowUsers $USER" \
+            'PasswordAuthentication no' \
+            'KbdInteractiveAuthentication no' \
+            'ChallengeResponseAuthentication no' \
+            'UsePAM no' \
+            'StrictModes yes' \
+            'LogLevel VERBOSE' \
+            'Subsystem sftp internal-sftp' > "$config"
+          sudo mkdir -p /run/sshd
+          sudo /usr/sbin/sshd -f "$config" -E "$fixture/sshd.log"
+          for attempt in {1..20}; do
+            if ssh -F /dev/null -i "$fixture/client-key" -p "$port" \
+              -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+              "$USER@127.0.0.1" true; then
+              break
+            fi
+            if test "$attempt" = 20; then
+              sudo tail -200 "$fixture/sshd.log"
+              exit 1
+            fi
+            sleep 0.25
+          done
+          {
+            printf 'ORCA_SSH_RELAY_LIVE_SFTP_HOST=127.0.0.1\n'
+            printf 'ORCA_SSH_RELAY_LIVE_SFTP_PORT=%s\n' "$port"
+            printf 'ORCA_SSH_RELAY_LIVE_SFTP_USER=%s\n' "$USER"
+            printf 'ORCA_SSH_RELAY_LIVE_SFTP_IDENTITY=%s\n' "$fixture/client-key"
+            printf 'ORCA_SSH_RELAY_LIVE_SFTP_REMOTE_ROOT=%s\n' "$fixture/remote"
+            printf 'ORCA_SSH_RELAY_LIVE_SFTP_SERVER_VERSION=%s\n' "$server_version"
+          } >> "$GITHUB_ENV"
+
+      - name: Measure exact full-size runtime over live OpenSSH SFTP
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_output="$RUNNER_TEMP/ssh-relay-runtime/${{ matrix.tuple }}/first"
+          ORCA_SSH_RELAY_FULL_SIZE_RUNTIME_ROOT="$first_output/runtime" \
+            ORCA_SSH_RELAY_FULL_SIZE_IDENTITY="$first_output/orca-ssh-relay-runtime-${{ matrix.tuple }}.identity.json" \
+            pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 --reporter=verbose \
+              src/main/ssh/ssh-relay-runtime-sftp-openssh-full-size.test.ts
+
+      - name: Start restricted loopback OpenSSH POSIX system-SSH fixture
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture="$RUNNER_TEMP/orca-live-sftp"
+          test -x /usr/sbin/sshd
+          test -s "$fixture/client-key"
+          test -s "$fixture/host-key"
+          system_fixture="$fixture/system-ssh"
+          primitives="$system_fixture/primitives"
+          mkdir -p "$primitives"
+          ln -s "$(command -v mkdir)" "$primitives/mkdir"
+          ln -s "$(command -v chmod)" "$primitives/chmod"
+          ln -s "$(command -v cat)" "$primitives/cat"
+          ln -s "$(command -v rm)" "$primitives/rm"
+          wrapper="$system_fixture/restricted-command"
+          printf '%s\n' \
+            '#!/bin/sh' \
+            'PATH="${0%/*}/primitives"' \
+            'export PATH' \
+            'exec /bin/sh -c "$SSH_ORIGINAL_COMMAND"' > "$wrapper"
+          chmod 755 "$wrapper"
+          port=22223
+          known_hosts="$HOME/.ssh/known_hosts"
+          printf '[127.0.0.1]:%s %s\n' "$port" "$(cat "$fixture/host-key.pub")" >> "$known_hosts"
+          chmod 600 "$known_hosts"
+          config="$system_fixture/sshd_config"
+          printf '%s\n' \
+            "Port $port" \
+            'ListenAddress 127.0.0.1' \
+            "HostKey $fixture/host-key" \
+            "PidFile $system_fixture/sshd.pid" \
+            "AuthorizedKeysFile $HOME/.ssh/authorized_keys" \
+            "AllowUsers $USER" \
+            'PasswordAuthentication no' \
+            'KbdInteractiveAuthentication no' \
+            'ChallengeResponseAuthentication no' \
+            'UsePAM no' \
+            'StrictModes yes' \
+            'LogLevel VERBOSE' \
+            "ForceCommand $wrapper" > "$config"
+          sudo /usr/sbin/sshd -f "$config" -E "$system_fixture/sshd.log"
+          for attempt in {1..20}; do
+            if ssh -F /dev/null -i "$fixture/client-key" -p "$port" \
+              -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              -o UserKnownHostsFile="$known_hosts" "$USER@127.0.0.1" true; then
+              break
+            fi
+            if test "$attempt" = 20; then
+              sudo tail -200 "$system_fixture/sshd.log"
+              exit 1
+            fi
+            sleep 0.25
+          done
+          server_version=$(/usr/sbin/sshd -V 2>&1 | head -1)
+          {
+            printf 'ORCA_SSH_RELAY_LIVE_SYSTEM_SSH_HOST=127.0.0.1\n'
+            printf 'ORCA_SSH_RELAY_LIVE_SYSTEM_SSH_PORT=%s\n' "$port"
+            printf 'ORCA_SSH_RELAY_LIVE_SYSTEM_SSH_USER=%s\n' "$USER"
+            printf 'ORCA_SSH_RELAY_LIVE_SYSTEM_SSH_IDENTITY=%s\n' "$fixture/client-key"
+            printf 'ORCA_SSH_RELAY_LIVE_SYSTEM_SSH_REMOTE_ROOT=%s\n' "$fixture/remote"
+            printf 'ORCA_SSH_RELAY_LIVE_SYSTEM_SSH_SERVER_VERSION=%s\n' "$server_version"
+          } >> "$GITHUB_ENV"
+
+      - name: Measure exact full-size runtime over POSIX system SSH
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_output="$RUNNER_TEMP/ssh-relay-runtime/${{ matrix.tuple }}/first"
+          ORCA_SSH_FORCE_SYSTEM_TRANSPORT=1 \
+            ORCA_SSH_RELAY_FULL_SIZE_RUNTIME_ROOT="$first_output/runtime" \
+            ORCA_SSH_RELAY_FULL_SIZE_IDENTITY="$first_output/orca-ssh-relay-runtime-${{ matrix.tuple }}.identity.json" \
+            pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 --reporter=verbose \
+              src/main/ssh/ssh-relay-runtime-posix-system-ssh-openssh-full-size.test.ts
+
+      - name: Stop restricted loopback OpenSSH POSIX system-SSH fixture
+        if: always() && runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          system_fixture="$RUNNER_TEMP/orca-live-sftp/system-ssh"
+          if test -s "$system_fixture/sshd.pid"; then
+            sudo kill "$(cat "$system_fixture/sshd.pid")" || true
+          fi
+          if test -f "$system_fixture/sshd.log"; then
+            sudo tail -200 "$system_fixture/sshd.log"
+          fi
+
+      - name: Stop loopback OpenSSH SFTP fixture
+        if: always() && runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture="$RUNNER_TEMP/orca-live-sftp"
+          if test -s "$fixture/sshd.pid"; then
+            sudo kill "$(cat "$fixture/sshd.pid")" || true
+          fi
+          if test -f "$fixture/sshd.log"; then
+            sudo tail -200 "$fixture/sshd.log"
+          fi
+
+      - name: Upload unpublished artifact evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ssh-relay-runtime-${{ matrix.tuple }}
+          path: runtime-evidence/${{ matrix.tuple }}/
+          if-no-files-found: error
+          retention-days: 7
+
+  build-windows-runtime:
+    name: Build ${{ matrix.tuple }} runtime
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2022
+            tuple: win32-x64
+            node_archive: node-v24.18.0-win-x64.zip
+            node_library: win-x64/node.lib
+            msvc_arch: x64
+          - runner: windows-11-arm
+            tuple: win32-arm64
+            node_archive: node-v24.18.0-win-arm64.zip
+            node_library: win-arm64/node.lib
+            msvc_arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    env:
+      ORCA_RUNTIME_REQUESTED_RUNNER: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout exact source revision
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          # Why: artifact evidence must name the exact reviewed source, not GitHub's synthetic merge.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Configure target-native MSVC
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
+        with:
+          arch: ${{ matrix.msvc_arch }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        with:
+          run_install: false
+
+      - name: Setup Node 24.18.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+
+      - name: Record native runner identity
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          "requested_runner=${{ matrix.runner }}"
+          "resolved_image_os=$env:ImageOS"
+          "resolved_image_version=$env:ImageVersion"
+          "runner_arch=$env:RUNNER_ARCH"
+          "runner_environment=$env:RUNNER_ENVIRONMENT"
+          Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, OsBuildNumber
+          node --version
+          "source_commit=$(git rev-parse HEAD)"
+
+      - name: Select bundled Git signature tools
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $gitUsrBin = Join-Path $env:ProgramFiles 'Git/usr/bin'
+          foreach ($tool in @('gpg.exe', 'gpgv.exe')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $gitUsrBin $tool) -PathType Leaf)) {
+              throw "Git for Windows does not provide required signature tool: $tool"
+            }
+          }
+          $gitUsrBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Install source dependencies without native postinstall
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          pnpm install --frozen-lockfile --ignore-scripts
+          if ($LASTEXITCODE -ne 0) { throw 'pnpm install failed' }
+          git diff --exit-code package.json pnpm-lock.yaml
+          if ($LASTEXITCODE -ne 0) { throw 'frozen install changed dependency files' }
+
+      - name: Run runtime artifact contract tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          node --check config/scripts/ssh-relay-runtime-compatibility.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime compatibility syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-compatibility.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime compatibility test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-reproducibility.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime reproducibility script syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-reproducibility.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime reproducibility test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-baseline.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime baseline script syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-baseline.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime baseline test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-linux-build-evidence.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Linux runtime evidence script syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-linux-build-evidence.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Linux runtime evidence test syntax check failed' }
+          node --check config/scripts/ssh-relay-linux-node-gyp-compiler.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Linux node-gyp compiler script syntax check failed' }
+          node --check config/scripts/ssh-relay-linux-node-gyp-compiler.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Linux node-gyp compiler test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-windows-pe-diagnostic.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Windows PE diagnostic script syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-windows-pe-diagnostic.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Windows PE diagnostic test syntax check failed' }
+          node --check config/scripts/build-ssh-relay-runtime.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime build script syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-build.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime build test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-closure.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime closure script syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-closure.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime closure test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-sbom.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime SBOM script syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-sbom.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime SBOM test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-provenance.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime provenance test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-toolchain.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime toolchain script syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-toolchain.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime toolchain test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-native-signing-plan.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime native signing plan script syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-native-signing-plan.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime native signing plan test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-native-signing-selection.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime native signing selection script syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-native-signing-selection.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime native signing selection test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-native-signing-payload.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime native signing payload script syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-native-signing-payload.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime native signing payload test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-windows-authenticode-assessment.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime Windows Authenticode assessment script syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-windows-authenticode-assessment.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime Windows Authenticode assessment test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-native-signing-stage.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime native signing stage script syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-native-signing-stage.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime native signing stage test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-native-signing-apply.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime native signing apply script syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-native-signing-apply.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime native signing apply test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-macos-signature-verification.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime macOS signature verification script syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-macos-signature-verification.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime macOS signature verification test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-windows-signature-verification.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime Windows signature verification script syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-windows-signature-verification.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime Windows signature verification test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-windows-source-signature-verification.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime Windows source signature verification script syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-windows-source-signature-verification.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime Windows source signature verification test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-release-stage-gate.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime release stage gate syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-release-stage-gate.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime release stage gate test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-draft-recovery.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime draft recovery syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-draft-recovery.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime draft recovery test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-aggregate-input.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime aggregate input syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-aggregate-input.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime aggregate input test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-draft-readback.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime draft read-back syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-draft-readback.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime draft read-back test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-draft-readback-materialization.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime draft read-back materialization test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-draft-release-verification.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime draft release verification syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-draft-release-verification.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime draft release verification test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-readback-archive-execution.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime read-back archive execution syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-readback-archive-execution.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime read-back archive execution test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-draft-upload.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime draft upload syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-draft-upload.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime draft upload test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-release-assets.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime release assets syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-release-assets.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime release assets test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-manifest-validation.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime manifest validation syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-manifest-assembly.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime manifest assembly syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-manifest-assembly.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime manifest assembly test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-manifest-signing-handoff.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime manifest signing handoff syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-manifest-signing-handoff.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime manifest signing handoff test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-manifest-seed-signing.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime manifest seed signing syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-manifest-seed-signing.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime manifest seed signing test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-manifest-artifact-collection.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime manifest artifact collection syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-manifest-aggregate-command.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime manifest aggregate command syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-manifest-aggregate-command.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime manifest aggregate command test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-manifest-signing-workflow.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime manifest signing workflow test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-manifest-aggregate.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime manifest aggregate syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-manifest-aggregate.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime manifest aggregate test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-manifest-tuple.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime manifest tuple syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-manifest-tuple.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime manifest tuple test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-post-sign-metadata.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime post-sign metadata syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-post-sign-metadata.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime post-sign metadata test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-archive-extraction.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime archive extraction syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-archive-extraction.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime archive extraction test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-portable-archive.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime portable archive test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-native-signing-stage-report.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime signing stage report syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-macos-signing.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime macOS signing syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-macos-signing.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime macOS signing test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-native-signing-finalization.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime signing finalization syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-native-signing-finalization.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime signing finalization test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-linux-finalization.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime Linux finalization syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-linux-finalization.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime Linux finalization test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-native-signing-workflow.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime native signing workflow test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-native-signing-rehearsal-workflow.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime native signing rehearsal workflow test syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-build-prerequisite.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime build prerequisite test syntax check failed' }
+          node --check config/scripts/build-windows-ssh-no-input-launcher.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Windows no-input launcher build syntax check failed' }
+          node --check config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Windows no-input launcher test syntax check failed' }
+          pnpm exec vitest run --config config/vitest.config.ts `
+            src/main/ssh/ssh-relay-artifact-schema.test.ts `
+            src/main/ssh/ssh-relay-manifest-signature.test.ts `
+            src/main/ssh/ssh-relay-release-asset.test.ts `
+            src/main/ssh/ssh-relay-artifact-selector.test.ts `
+            src/main/ssh/ssh-relay-libc-detection.test.ts `
+            src/main/ssh/ssh-relay-linux-kernel-detection.test.ts `
+            src/main/ssh/ssh-relay-host-evidence-detection.test.ts `
+            src/main/ssh/ssh-relay-darwin-version-detection.test.ts `
+            src/main/ssh/ssh-relay-darwin-translation-detection.test.ts `
+            src/main/ssh/ssh-relay-linux-libstdcxx-detection.test.ts `
+            src/main/ssh/ssh-relay-windows-compatibility-detection.test.ts `
+            src/main/ssh/ssh-relay-artifact-download.test.ts `
+            src/main/ssh/ssh-relay-artifact-extraction.test.ts `
+            src/main/ssh/ssh-relay-artifact-cache-lock-release.test.ts `
+            src/main/ssh/ssh-relay-artifact-cache-lock.test.ts `
+            src/main/ssh/ssh-relay-artifact-cache-entry.test.ts `
+            src/main/ssh/ssh-relay-artifact-cache-in-use-lease.test.ts `
+            src/main/ssh/ssh-relay-artifact-cache-eviction.test.ts `
+            src/main/ssh/ssh-relay-artifact-cache-root.test.ts `
+            src/main/ssh/ssh-relay-artifact-cache-resolution.test.ts `
+            src/main/ssh/ssh-relay-artifact-cache-population.test.ts `
+            src/main/ssh/ssh-relay-artifact-cache-population-integration.test.ts `
+            src/main/ssh/ssh-relay-artifact-acquisition.test.ts `
+            src/main/ssh/ssh-relay-artifact-acquisition-integration.test.ts `
+            src/main/ssh/ssh-relay-runtime-source-tree.test.ts `
+            src/main/ssh/ssh-relay-runtime-source-scan.test.ts `
+            src/main/ssh/ssh-relay-runtime-source-stream.test.ts `
+            src/main/ssh/ssh-relay-runtime-posix-control-command.test.ts `
+            src/main/ssh/ssh-relay-runtime-posix-file-destination.test.ts `
+            src/main/ssh/ssh-relay-runtime-windows-file-destination.test.ts `
+            src/main/ssh/ssh-relay-runtime-windows-staging-control.test.ts `
+            src/main/ssh/ssh-relay-runtime-windows-tree-transfer.test.ts `
+            src/main/ssh/ssh-relay-runtime-posix-tree-transfer.test.ts `
+            src/main/ssh/ssh-relay-runtime-system-ssh-file-channel.test.ts `
+            src/main/ssh/ssh-relay-runtime-sftp-file-destination.test.ts `
+            src/main/ssh/ssh-relay-runtime-sftp-connection-transfer.test.ts `
+            src/main/ssh/ssh-relay-runtime-sftp-session.test.ts `
+            src/main/ssh/ssh-relay-runtime-sftp-tree-transfer.test.ts `
+            src/main/ssh/ssh-relay-compiled-manifest-trust.test.ts `
+            src/main/ssh/ssh-relay-official-manifest.test.ts `
+            src/main/ssh/ssh-relay-manifest-accepted-keys.test.ts `
+            src/main/ssh/ssh-relay-packaged-manifest.test.ts `
+            src/main/ssh/ssh-relay-runtime-identity.test.ts `
+            config/scripts/ssh-relay-runtime-compatibility.test.mjs `
+            config/scripts/ssh-relay-node-release-verification.test.mjs `
+            config/scripts/ssh-relay-node-tar-inspection.test.mjs `
+            config/scripts/ssh-relay-linux-node-gyp-compiler.test.mjs `
+            config/scripts/ssh-relay-node-pty-build.test.mjs `
+            config/scripts/ssh-relay-node-pty-windows-build-determinism.test.mjs `
+            config/scripts/ssh-relay-node-pty-windows-settlement.test.mjs `
+            config/scripts/ssh-relay-node-zip-inspection.test.mjs `
+            config/scripts/ssh-relay-runtime-artifact.test.mjs `
+            config/scripts/ssh-relay-runtime-portable-archive.test.mjs `
+            config/scripts/ssh-relay-runtime-baseline.test.mjs `
+            config/scripts/ssh-relay-runtime-build.test.mjs `
+            config/scripts/ssh-relay-runtime-linux-build-evidence.test.mjs `
+            config/scripts/ssh-relay-runtime-native-signing-plan.test.mjs `
+            config/scripts/ssh-relay-runtime-native-signing-selection.test.mjs `
+            config/scripts/ssh-relay-runtime-native-signing-payload.test.mjs `
+            config/scripts/ssh-relay-runtime-windows-authenticode-assessment.test.mjs `
+            config/scripts/ssh-relay-runtime-native-signing-stage.test.mjs `
+            config/scripts/ssh-relay-runtime-native-signing-apply.test.mjs `
+            config/scripts/ssh-relay-runtime-macos-signature-verification.test.mjs `
+            config/scripts/ssh-relay-runtime-windows-signature-verification.test.mjs `
+            config/scripts/ssh-relay-runtime-windows-source-signature-verification.test.mjs `
+            config/scripts/ssh-relay-runtime-release-stage-gate.test.mjs `
+            config/scripts/ssh-relay-runtime-draft-recovery.test.mjs `
+            config/scripts/ssh-relay-runtime-aggregate-input.test.mjs `
+            config/scripts/ssh-relay-runtime-draft-readback.test.mjs `
+            config/scripts/ssh-relay-runtime-draft-readback-materialization.test.mjs `
+            config/scripts/ssh-relay-runtime-draft-release-verification.test.mjs `
+            config/scripts/ssh-relay-runtime-readback-archive-execution.test.mjs `
+            config/scripts/ssh-relay-runtime-draft-upload.test.mjs `
+            config/scripts/ssh-relay-runtime-release-assets.test.mjs `
+            config/scripts/ssh-relay-runtime-manifest-assembly.test.mjs `
+            config/scripts/ssh-relay-runtime-manifest-signing-handoff.test.mjs `
+            config/scripts/ssh-relay-runtime-manifest-seed-signing.test.mjs `
+            config/scripts/ssh-relay-runtime-manifest-aggregate-command.test.mjs `
+            config/scripts/ssh-relay-runtime-manifest-signing-workflow.test.mjs `
+            config/scripts/ssh-relay-runtime-manifest-aggregate.test.mjs `
+            config/scripts/ssh-relay-runtime-manifest-tuple.test.mjs `
+            config/scripts/ssh-relay-runtime-post-sign-metadata.test.mjs `
+            config/scripts/ssh-relay-runtime-archive-extraction.test.mjs `
+            config/scripts/ssh-relay-runtime-macos-signing.test.mjs `
+            config/scripts/ssh-relay-runtime-native-signing-finalization.test.mjs `
+            config/scripts/ssh-relay-runtime-linux-finalization.test.mjs `
+            config/scripts/ssh-relay-runtime-native-signing-workflow.test.mjs `
+            config/scripts/ssh-relay-runtime-native-signing-rehearsal-workflow.test.mjs `
+            config/scripts/ssh-relay-runtime-build-prerequisite.test.mjs `
+            config/scripts/ssh-relay-runtime-windows-no-input-launcher.test.mjs `
+            config/scripts/ssh-relay-runtime-closure.test.mjs `
+            config/scripts/ssh-relay-runtime-pty-smoke.test.mjs `
+            config/scripts/ssh-relay-runtime-reproducibility.test.mjs `
+            config/scripts/ssh-relay-runtime-resource-diagnostics.test.mjs `
+            config/scripts/ssh-relay-runtime-provenance.test.mjs `
+            config/scripts/ssh-relay-runtime-sbom.test.mjs `
+            config/scripts/ssh-relay-runtime-toolchain.test.mjs `
+            config/scripts/ssh-relay-runtime-windows-pe-diagnostic.test.mjs `
+            config/scripts/ssh-relay-runtime-windows-tree.test.mjs `
+            config/scripts/ssh-relay-runtime-zip.test.mjs `
+            config/scripts/ssh-relay-runtime-workflow.test.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'runtime artifact contract tests failed' }
+
+      - name: Build disconnected Windows no-input launcher diagnostic
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $launcherRoot = Join-Path $env:RUNNER_TEMP 'orca-ssh-no-input-launcher'
+          $launcherPath = Join-Path $launcherRoot 'orca-ssh-no-input.exe'
+          node config/scripts/build-windows-ssh-no-input-launcher.mjs --output $launcherPath
+          if ($LASTEXITCODE -ne 0) { throw 'Windows no-input launcher build failed' }
+          if (-not (Test-Path -LiteralPath $launcherPath -PathType Leaf)) {
+            throw 'Windows no-input launcher output is missing'
+          }
+          # Why: this artifact is live-test input only; it is not part of runtime or release output.
+          "ORCA_SSH_WINDOWS_NO_INPUT_LAUNCHER=$launcherPath" |
+            Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Download exact Node release inputs
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $inputs = Join-Path $env:RUNNER_TEMP 'node-release-inputs'
+          New-Item -ItemType Directory -Path $inputs | Out-Null
+          $base = 'https://nodejs.org/dist/v24.18.0'
+          $assets = @(
+            'SHASUMS256.txt',
+            'SHASUMS256.txt.sig',
+            '${{ matrix.node_archive }}',
+            'node-v24.18.0-headers.tar.gz',
+            '${{ matrix.node_library }}'
+          )
+          foreach ($asset in $assets) {
+            $destination = Join-Path $inputs $asset
+            New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
+            & curl.exe --fail --silent --show-error --location --proto '=https' --tlsv1.2 `
+              --connect-timeout 20 --max-time 300 --retry 2 --retry-delay 2 --retry-all-errors `
+              "$base/$asset" --output $destination
+            if ($LASTEXITCODE -ne 0) { throw "Node input download failed: $asset" }
+          }
+          "NODE_INPUTS=$inputs" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build twice, inspect, smoke, and compare exact runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $outputRoot = Join-Path $env:RUNNER_TEMP 'ssh-relay-runtime/${{ matrix.tuple }}'
+          New-Item -ItemType Directory -Path $outputRoot -Force | Out-Null
+          $firstOutput = Join-Path $outputRoot 'first'
+          $secondOutput = Join-Path $outputRoot 'second'
+          $workDirectory = Join-Path $env:RUNNER_TEMP 'orca-ssh-relay-runtime-build-work'
+          $sourceCommit = git rev-parse HEAD
+          $sourceDateEpoch = git show -s --format=%ct $sourceCommit
+          foreach ($output in @($firstOutput, $secondOutput)) {
+            "clean_build_output=$output"
+            node config/scripts/build-ssh-relay-runtime.mjs `
+              --tuple '${{ matrix.tuple }}' `
+              --inputs-directory $env:NODE_INPUTS `
+              --output-directory $output `
+              --work-directory $workDirectory `
+              --source-date-epoch $sourceDateEpoch `
+              --git-commit $sourceCommit
+            if ($LASTEXITCODE -ne 0) { throw 'runtime build failed' }
+            $identity = Join-Path $output 'orca-ssh-relay-runtime-${{ matrix.tuple }}.identity.json'
+            $archive = Get-ChildItem -LiteralPath $output -Filter '*.zip' -File | Select-Object -First 1
+            if (-not $archive) { throw 'runtime ZIP is missing' }
+            node config/scripts/verify-ssh-relay-runtime.mjs `
+              --runtime-directory (Join-Path $output 'runtime') `
+              --identity $identity `
+              --archive $archive.FullName
+            if ($LASTEXITCODE -ne 0) { throw 'runtime verification failed' }
+            $prohibited = Get-ChildItem -LiteralPath (Join-Path $output 'runtime') -Recurse -File |
+              Where-Object { $_.Name -in @('npm', 'npm.cmd', 'npx', 'npx.cmd', 'corepack', 'corepack.cmd') -or $_.Name.EndsWith('.map') } |
+              Select-Object -First 1
+            if ($prohibited) { throw "Runtime contains a prohibited file: $($prohibited.FullName)" }
+            $parcelRoot = Join-Path $output 'runtime/node_modules/@parcel'
+            if (@(Get-ChildItem -LiteralPath $parcelRoot -Directory).Count -ne 2) {
+              throw 'Runtime must contain exactly the watcher wrapper and one native package'
+            }
+          }
+          node config/scripts/ssh-relay-runtime-reproducibility.mjs `
+            --tuple '${{ matrix.tuple }}' `
+            --first-output-directory $firstOutput `
+            --second-output-directory $secondOutput
+          if ($LASTEXITCODE -ne 0) {
+            $firstPe = Join-Path $firstOutput 'runtime/node_modules/node-pty/build/Release/conpty_console_list.node'
+            $secondPe = Join-Path $secondOutput 'runtime/node_modules/node-pty/build/Release/conpty_console_list.node'
+            if ((Test-Path -LiteralPath $firstPe -PathType Leaf) -and (Test-Path -LiteralPath $secondPe -PathType Leaf)) {
+              # Why: rejected PE bytes remain local, but bounded headers/ranges identify the producer drift.
+              node config/scripts/ssh-relay-runtime-windows-pe-diagnostic.mjs `
+                --first-pe $firstPe `
+                --second-pe $secondPe
+              if ($LASTEXITCODE -ne 0) { Write-Output 'windows_pe_diagnostic=failed' }
+              if ('${{ matrix.tuple }}' -eq 'win32-arm64') {
+                $llvmObjdump = Get-Command llvm-objdump.exe -ErrorAction SilentlyContinue
+                if ($llvmObjdump) {
+                  foreach ($candidate in @(
+                    @{ Label = 'first'; Path = $firstPe },
+                    @{ Label = 'second'; Path = $secondPe }
+                  )) {
+                    "windows_arm64_disassembly=$($candidate.Label)"
+                    # Why: the first 512 code bytes classify the repeated instruction without retaining rejected files.
+                    & $llvmObjdump.Source --disassemble --start-address=0x180001000 --stop-address=0x180001200 $candidate.Path
+                    if ($LASTEXITCODE -ne 0) { Write-Output 'windows_arm64_disassembly=failed' }
+                  }
+                } else {
+                  Write-Output 'windows_arm64_disassembly=tool-unavailable'
+                }
+              }
+            } else {
+              Write-Output 'windows_pe_diagnostic=skipped_missing_input'
+            }
+            throw 'runtime reproducibility verification failed'
+          }
+          $identity = Join-Path $firstOutput 'orca-ssh-relay-runtime-${{ matrix.tuple }}.identity.json'
+          $archive = Get-ChildItem -LiteralPath $firstOutput -Filter '*.zip' -File | Select-Object -First 1
+          if (-not $archive) { throw 'runtime read-back archive is missing' }
+          $executedRuntime = Join-Path $outputRoot 'readback-executed'
+          # Why: exercise only local verified bytes; release writes and remote consumers stay disconnected.
+          node config/scripts/ssh-relay-runtime-readback-archive-execution.mjs `
+            --identity $identity `
+            --archive $archive.FullName `
+            --output-directory $executedRuntime
+          if ($LASTEXITCODE -ne 0) { throw 'runtime read-back archive execution failed' }
+          Remove-Item -LiteralPath $executedRuntime -Recurse -Force
+          if (Test-Path -LiteralPath $executedRuntime) {
+            throw 'runtime read-back archive execution cleanup failed'
+          }
+          $signingStage = Join-Path $outputRoot 'signing-stage'
+          $signingReport = Join-Path $outputRoot 'orca-ssh-relay-runtime-${{ matrix.tuple }}.signing-stage.json'
+          $reportLines = & node config/scripts/ssh-relay-runtime-native-signing-stage.mjs `
+            --identity (Join-Path $firstOutput 'orca-ssh-relay-runtime-${{ matrix.tuple }}.identity.json') `
+            --runtime-directory (Join-Path $firstOutput 'runtime') `
+            --staging-directory $signingStage
+          if ($LASTEXITCODE -ne 0) { throw 'runtime native signing assessment/staging failed' }
+          $reportJson = $reportLines -join [Environment]::NewLine
+          $report = $reportJson | ConvertFrom-Json
+          if (
+            $report.platform -ne 'win32' -or
+            @($report.assessments).Count -ne 5 -or
+            @($report.signingFiles).Count -ne 3 -or
+            @($report.preservedUpstreamFiles).Count -ne 2 -or
+            -not $report.payload.stagingRequired -or
+            @($report.payload.stagedFiles).Count -ne 3
+          ) {
+            throw 'Windows signing-stage report violates the Authenticode contract'
+          }
+          $preservedPaths = @($report.preservedUpstreamFiles | ForEach-Object { $_.path })
+          foreach ($path in @(
+            'node_modules/node-pty/build/Release/conpty/OpenConsole.exe',
+            'node_modules/node-pty/build/Release/conpty/conpty.dll'
+          )) {
+            if ($path -notin $preservedPaths) { throw "Required upstream signature was not preserved: $path" }
+          }
+          if (@(Get-ChildItem -LiteralPath $signingStage -Recurse -File).Count -ne 3) {
+            throw 'Windows signing stage must contain exactly three unsigned PE files'
+          }
+          if (Test-Path -LiteralPath (Join-Path $signingStage 'bin/node.exe')) {
+            throw 'Official Node must never enter the Windows signing stage'
+          }
+          [System.IO.File]::WriteAllText(
+            $signingReport,
+            "$reportJson`n",
+            [System.Text.UTF8Encoding]::new($false)
+          )
+          $reportJson
+          $sourceSignatureReport = Join-Path $outputRoot 'orca-ssh-relay-runtime-${{ matrix.tuple }}.source-signatures.json'
+          $sourceSignatureLines = & node config/scripts/ssh-relay-runtime-windows-source-signature-verification.mjs `
+            --identity (Join-Path $firstOutput 'orca-ssh-relay-runtime-${{ matrix.tuple }}.identity.json') `
+            --runtime-directory (Join-Path $firstOutput 'runtime') `
+            --signing-report $signingReport
+          if ($LASTEXITCODE -ne 0) { throw 'runtime Windows source signature verification failed' }
+          $sourceSignatureJson = $sourceSignatureLines -join [Environment]::NewLine
+          $sourceSignature = $sourceSignatureJson | ConvertFrom-Json
+          if (
+            $sourceSignature.tupleId -ne '${{ matrix.tuple }}' -or
+            @($sourceSignature.verifiedFiles).Count -ne 3 -or
+            @($sourceSignature.verifiedFiles | Where-Object { $_.signerKind -eq 'official-node' }).Count -ne 1 -or
+            @($sourceSignature.verifiedFiles | Where-Object { $_.signerKind -eq 'preserved-upstream' }).Count -ne 2
+          ) {
+            throw 'Windows source signature report violates the immutable/preserved trust contract'
+          }
+          [System.IO.File]::WriteAllText(
+            $sourceSignatureReport,
+            "$sourceSignatureJson`n",
+            [System.Text.UTF8Encoding]::new($false)
+          )
+          $sourceSignatureJson
+          Remove-Item -LiteralPath $signingStage -Recurse -Force
+          $evidence = Join-Path $env:GITHUB_WORKSPACE 'runtime-evidence/${{ matrix.tuple }}'
+          New-Item -ItemType Directory -Path $evidence -Force | Out-Null
+          $firstArchive = Get-ChildItem -LiteralPath $firstOutput -Filter '*.zip' -File | Select-Object -First 1
+          Copy-Item -LiteralPath $firstArchive.FullName -Destination $evidence
+          Get-ChildItem -LiteralPath $firstOutput -File |
+            Where-Object { $_.Name -match '\.(?:spdx|provenance|identity)\.json$' } |
+            Copy-Item -Destination $evidence
+          Copy-Item -LiteralPath $signingReport -Destination $evidence
+          Copy-Item -LiteralPath $sourceSignatureReport -Destination $evidence
+
+      - name: Measure full-size desktop extraction and cache boundaries
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $firstOutput = Join-Path $env:RUNNER_TEMP 'ssh-relay-runtime/${{ matrix.tuple }}/first'
+          $identity = Join-Path $firstOutput 'orca-ssh-relay-runtime-${{ matrix.tuple }}.identity.json'
+          $archive = Get-ChildItem -LiteralPath $firstOutput -Filter '*.zip' -File | Select-Object -First 1
+          if (-not $archive) { throw 'runtime ZIP is missing for desktop extraction measurement' }
+          $extractionOutput = Join-Path $env:RUNNER_TEMP 'ssh-relay-runtime/${{ matrix.tuple }}/desktop-extraction-measurement'
+          # Why: exact payload size can expose memory behavior that synthetic archive fixtures cannot.
+          $env:ORCA_SSH_RELAY_FULL_SIZE_ARCHIVE = $archive.FullName
+          $env:ORCA_SSH_RELAY_FULL_SIZE_IDENTITY = $identity
+          $env:ORCA_SSH_RELAY_FULL_SIZE_OUTPUT = $extractionOutput
+          pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 --reporter=verbose `
+            src/main/ssh/ssh-relay-artifact-extraction-full-size.test.ts
+          if ($LASTEXITCODE -ne 0) { throw 'full-size desktop extraction measurement failed' }
+          if (Test-Path -LiteralPath $extractionOutput) {
+            throw 'full-size desktop extraction measurement cleanup failed'
+          }
+          pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 --reporter=verbose `
+            src/main/ssh/ssh-relay-artifact-cache-entry-full-size.test.ts
+          if ($LASTEXITCODE -ne 0) { throw 'full-size desktop cache measurement failed' }
+          if (Test-Path -LiteralPath $extractionOutput) {
+            throw 'full-size desktop cache measurement cleanup failed'
+          }
+
+      - name: Start loopback Windows OpenSSH system-SSH fixture
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $windowsPowerShell = Join-Path $env:WINDIR 'System32/WindowsPowerShell/v1.0/powershell.exe'
+          if (-not (Test-Path -LiteralPath $windowsPowerShell -PathType Leaf)) {
+            throw 'Windows PowerShell 5.1 executable is missing'
+          }
+
+          $fixture = Join-Path $env:RUNNER_TEMP 'orca-live-windows-system-ssh'
+          if (Test-Path -LiteralPath $fixture) {
+            throw "Windows OpenSSH fixture root already exists: $fixture"
+          }
+          $remoteRoot = Join-Path $fixture 'remote'
+          $clientHome = Join-Path $fixture 'client-home'
+          $clientSsh = Join-Path $clientHome '.ssh'
+          New-Item -ItemType Directory -Path $fixture, $remoteRoot, $clientSsh | Out-Null
+          $rootMarker = Join-Path $fixture 'fixture-owned'
+          New-Item -ItemType File -Path $rootMarker | Out-Null
+
+          $serviceName = 'sshd'
+          if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) {
+            throw 'Windows OpenSSH fixed service name is already registered'
+          }
+          $releaseTag = '10.0.0.0p2-Preview'
+          $archiveName, $expandedName, $expectedArchiveSha256, $expectedLibcryptoSha256 = switch ($env:RUNNER_ARCH) {
+            'X64' {
+              'OpenSSH-Win64.zip'
+              'OpenSSH-Win64'
+              '23f50f3458c4c5d0b12217c6a5ddfde0137210a30fa870e98b29827f7b43aba5'
+              '4652e861c0335ee80a51306ceab75aa35c8865b235f97ce7dd5a0fd9dab44b5d'
+            }
+            'ARM64' {
+              'OpenSSH-ARM64.zip'
+              'OpenSSH-ARM64'
+              '698c6aec31c1dd0fb996206e8741f4531a97355686b5431ef347d531b07fcd42'
+              '7ad2b7721893c54ad6e4fec1a3477701fb48975323c2c4ac6cd0b8c972ab242a'
+            }
+            default { throw "Unsupported Windows OpenSSH fixture architecture: $env:RUNNER_ARCH" }
+          }
+          $archive = Join-Path $fixture $archiveName
+          $releaseUrl = "https://github.com/PowerShell/Win32-OpenSSH/releases/download/$releaseTag/$archiveName"
+          # Why: this provisions only the CI SSH server; product remotes never perform HTTP downloads.
+          & curl.exe -fL --connect-timeout 20 --max-time 300 --retry 2 -o $archive $releaseUrl
+          if ($LASTEXITCODE -ne 0) { throw 'Official Windows OpenSSH fixture download failed' }
+          $archiveSha256 = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($archiveSha256 -ne $expectedArchiveSha256) {
+            throw "Official Windows OpenSSH fixture archive hash mismatch: $archiveSha256"
+          }
+          $portableRoot = Join-Path $fixture 'portable'
+          Expand-Archive -LiteralPath $archive -DestinationPath $portableRoot
+          $openSshRoot = Join-Path $portableRoot $expandedName
+          $nativeFiles = @(Get-ChildItem -LiteralPath $openSshRoot -Recurse -File | Where-Object {
+            $_.Extension -in @('.exe', '.dll')
+          })
+          $expectedNativeNames = @(
+            'libcrypto.dll',
+            'scp.exe',
+            'sftp-server.exe',
+            'sftp.exe',
+            'ssh-add.exe',
+            'ssh-agent.exe',
+            'ssh-keygen.exe',
+            'ssh-keyscan.exe',
+            'ssh-pkcs11-helper.exe',
+            'ssh-shellhost.exe',
+            'ssh-sk-helper.exe',
+            'ssh.exe',
+            'sshd-auth.exe',
+            'sshd-session.exe',
+            'sshd.exe'
+          ) | Sort-Object
+          $actualNativeNames = @($nativeFiles.Name | Sort-Object)
+          if (($actualNativeNames -join "`n") -ne ($expectedNativeNames -join "`n")) {
+            throw "Official Windows OpenSSH fixture native-file closure changed: $($actualNativeNames -join ',')"
+          }
+          $libcryptoFiles = @($nativeFiles | Where-Object { $_.Name -eq 'libcrypto.dll' })
+          if ($libcryptoFiles.Count -ne 1) {
+            throw 'Official Windows OpenSSH fixture must contain exactly one libcrypto.dll'
+          }
+          $libcrypto = $libcryptoFiles[0]
+          $libcryptoSha256 = (Get-FileHash -LiteralPath $libcrypto.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($libcryptoSha256 -ne $expectedLibcryptoSha256) {
+            throw "Official Windows OpenSSH libcrypto.dll hash mismatch: $libcryptoSha256"
+          }
+          # Why: the pinned fixture uses a distinct Microsoft-managed leaf for its upstream library.
+          $expectedLibcryptoSignerThumbprint = '587116075365AA15BCD8E4FA9CB31BE372B5DE51'
+          $libcryptoSignature = Get-AuthenticodeSignature -LiteralPath $libcrypto.FullName
+          $libcryptoCertificate = $libcryptoSignature.SignerCertificate
+          $libcryptoThumbprint = if ($null -eq $libcryptoCertificate) {
+            '<none>'
+          } else {
+            $libcryptoCertificate.Thumbprint.ToUpperInvariant()
+          }
+          $libcryptoSubject = if ($null -eq $libcryptoCertificate) {
+            '<none>'
+          } else {
+            $libcryptoCertificate.Subject
+          }
+          if (
+            $libcryptoSignature.Status -ne 'Valid' -or
+            $libcryptoThumbprint -ne $expectedLibcryptoSignerThumbprint -or
+            $libcryptoSubject -notmatch '(^|,\s*)CN=Microsoft 3rd Party Application Component(,|$)'
+          ) {
+            throw "Official Windows OpenSSH libcrypto.dll signature identity is invalid: $($libcryptoSignature.Status), $libcryptoThumbprint, $libcryptoSubject"
+          }
+          $expectedExecutableSignerThumbprints = @(
+            'F5877012FBD62FABCBDC8D8CEE9C9585BA30DF79',
+            '3F56A45111684D454E231CFDC4DA5C8D370F9816'
+          )
+          foreach ($nativeFile in $nativeFiles) {
+            if ($nativeFile.Name -eq 'libcrypto.dll') { continue }
+            $signature = Get-AuthenticodeSignature -LiteralPath $nativeFile.FullName
+            $certificate = $signature.SignerCertificate
+            $thumbprint = if ($null -eq $certificate) {
+              '<none>'
+            } else {
+              $certificate.Thumbprint.ToUpperInvariant()
+            }
+            $subject = if ($null -eq $certificate) { '<none>' } else { $certificate.Subject }
+            if (
+              $signature.Status -ne 'Valid' -or
+              $expectedExecutableSignerThumbprints -notcontains $thumbprint -or
+              $subject -notmatch '(^|,\s*)CN=Microsoft Corporation(,|$)'
+            ) {
+              throw "Official Windows OpenSSH fixture signature identity is invalid: $($nativeFile.Name), $($signature.Status), $thumbprint, $subject"
+            }
+          }
+          $sshd = Join-Path $openSshRoot 'sshd.exe'
+          $ssh = Join-Path $openSshRoot 'ssh.exe'
+          $sshKeygen = Join-Path $openSshRoot 'ssh-keygen.exe'
+          foreach ($binary in @($sshd, $ssh, $sshKeygen)) {
+            if (-not (Test-Path -LiteralPath $binary -PathType Leaf)) {
+              throw "Official Windows OpenSSH fixture is missing $binary"
+            }
+          }
+
+          $fixtureUser = 'orca_ssh_fixture'
+          if (Get-LocalUser -Name $fixtureUser -ErrorAction SilentlyContinue) {
+            throw "Windows OpenSSH fixture account already exists: $fixtureUser"
+          }
+          $password = ConvertTo-SecureString "$([Guid]::NewGuid().ToString('N'))aA!7" -AsPlainText -Force
+          # Why: collision rejection makes this marker safe to use for partial-creation cleanup.
+          New-Item -ItemType File -Path (Join-Path $fixture 'account-owned') | Out-Null
+          $account = New-LocalUser -Name $fixtureUser -Password $password -PasswordNeverExpires `
+            -UserMayNotChangePassword -AccountNeverExpires
+          $userSid = $account.SID.Value
+          $systemSid = 'S-1-5-18'
+          $administratorsSid = 'S-1-5-32-544'
+
+          function New-FixtureAclRule(
+            [string]$Sid,
+            [Security.AccessControl.FileSystemRights]$Rights,
+            [Security.AccessControl.InheritanceFlags]$InheritanceFlags
+          ) {
+            $identity = [Security.Principal.SecurityIdentifier]::new($Sid)
+            return [Security.AccessControl.FileSystemAccessRule]::new(
+              $identity,
+              $Rights,
+              $InheritanceFlags,
+              [Security.AccessControl.PropagationFlags]::None,
+              [Security.AccessControl.AccessControlType]::Allow
+            )
+          }
+          function Set-FixtureAcl(
+            [string]$Path,
+            [Security.AccessControl.FileSystemAccessRule[]]$AccessRules,
+            [string[]]$ExpectedSids
+          ) {
+            $item = Get-Item -LiteralPath $Path -Force
+            $security = if ($item.PSIsContainer) {
+              [Security.AccessControl.DirectorySecurity]::new()
+            } else {
+              [Security.AccessControl.FileSecurity]::new()
+            }
+            # Why: replacing the DACL atomically prevents drive-specific defaults from surviving.
+            $security.SetAccessRuleProtection($true, $false)
+            foreach ($accessRule in $AccessRules) {
+              [void]$security.AddAccessRule($accessRule)
+            }
+            Set-Acl -LiteralPath $Path -AclObject $security
+            $acl = Get-Acl -LiteralPath $Path
+            $rules = @($acl.Access)
+            if (-not $acl.AreAccessRulesProtected -or @($rules | Where-Object { $_.IsInherited }).Count -ne 0) {
+              throw "Fixture ACL inheritance remains enabled on $Path"
+            }
+            if (@($rules | Where-Object { $_.AccessControlType -ne 'Allow' }).Count -ne 0) {
+              throw "Fixture ACL contains a deny rule on $Path"
+            }
+            $actualSids = @($rules | ForEach-Object {
+              $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value
+            } | Sort-Object -Unique)
+            $expected = @($ExpectedSids | Sort-Object -Unique)
+            if (($actualSids -join "`n") -ne ($expected -join "`n")) {
+              throw "Fixture ACL trustee closure changed on $Path`: $($actualSids -join ',')"
+            }
+          }
+          function Set-FixtureOwner([string]$Path, [string]$OwnerSid) {
+            & icacls.exe $Path /setowner "*$OwnerSid" | Out-Host
+            if ($LASTEXITCODE -ne 0) { throw "Failed to set fixture owner on $Path" }
+          }
+          $noInheritance = [Security.AccessControl.InheritanceFlags]::None
+          $childInheritance = [Security.AccessControl.InheritanceFlags]::ContainerInherit -bor `
+            [Security.AccessControl.InheritanceFlags]::ObjectInherit
+          $fixtureTrustees = @($systemSid, $administratorsSid, $userSid)
+          Set-FixtureAcl $fixture @(
+            (New-FixtureAclRule $systemSid FullControl $childInheritance),
+            (New-FixtureAclRule $administratorsSid FullControl $childInheritance),
+            (New-FixtureAclRule $userSid ReadAndExecute $noInheritance)
+          ) $fixtureTrustees
+          Set-FixtureAcl $remoteRoot @(
+            (New-FixtureAclRule $systemSid FullControl $childInheritance),
+            (New-FixtureAclRule $administratorsSid FullControl $childInheritance),
+            (New-FixtureAclRule $userSid Modify $childInheritance)
+          ) $fixtureTrustees
+
+          $clientKey = Join-Path $fixture 'client-key'
+          $hostKey = Join-Path $fixture 'host-key'
+          & $sshKeygen -q -t ed25519 -N '' -f $clientKey
+          if ($LASTEXITCODE -ne 0) { throw 'Windows OpenSSH client key generation failed' }
+          & $sshKeygen -q -t ed25519 -N '' -f $hostKey
+          if ($LASTEXITCODE -ne 0) { throw 'Windows OpenSSH host key generation failed' }
+          $authorizedKeys = Join-Path $fixture 'authorized_keys'
+          Copy-Item -LiteralPath "$clientKey.pub" -Destination $authorizedKeys
+          Set-FixtureAcl $authorizedKeys @(
+            (New-FixtureAclRule $systemSid FullControl $noInheritance),
+            (New-FixtureAclRule $administratorsSid FullControl $noInheritance),
+            (New-FixtureAclRule $userSid Read $noInheritance)
+          ) $fixtureTrustees
+          Set-FixtureOwner $authorizedKeys $userSid
+          Set-FixtureAcl $hostKey @(
+            (New-FixtureAclRule $systemSid FullControl $noInheritance),
+            (New-FixtureAclRule $administratorsSid FullControl $noInheritance)
+          ) @($systemSid, $administratorsSid)
+          Set-FixtureOwner $hostKey 'S-1-5-18'
+
+          $port = 22224
+          $knownHosts = Join-Path $clientSsh 'known_hosts'
+          $hostPublicKey = (Get-Content -LiteralPath "$hostKey.pub" -Raw).Trim()
+          [IO.File]::WriteAllText(
+            $knownHosts,
+            "[127.0.0.1]:$port $hostPublicKey`n",
+            [Text.UTF8Encoding]::new($false)
+          )
+          $clientConfig = Join-Path $clientSsh 'config'
+          $knownHostsSshPath = $knownHosts.Replace('\', '/')
+          [IO.File]::WriteAllText(
+            $clientConfig,
+            "Host *`n  StrictHostKeyChecking yes`n  UserKnownHostsFile $knownHostsSshPath`n",
+            [Text.UTF8Encoding]::new($false)
+          )
+
+          $config = Join-Path $fixture 'sshd_config'
+          $pidFile = Join-Path $fixture 'sshd.pid'
+          $log = Join-Path $fixture 'sshd.log'
+          $hostKeySshPath = $hostKey.Replace('\', '/')
+          $authorizedKeysSshPath = $authorizedKeys.Replace('\', '/')
+          $pidSshPath = $pidFile.Replace('\', '/')
+          @(
+            "Port $port",
+            'ListenAddress 127.0.0.1',
+            "HostKey $hostKeySshPath",
+            "PidFile $pidSshPath",
+            "AuthorizedKeysFile $authorizedKeysSshPath",
+            "AllowUsers $fixtureUser",
+            'PubkeyAuthentication yes',
+            'PasswordAuthentication no',
+            'KbdInteractiveAuthentication no',
+            'ChallengeResponseAuthentication no',
+            'StrictModes yes',
+            'LogLevel VERBOSE'
+          ) | Set-Content -LiteralPath $config -Encoding ascii
+          & $sshd -t -f $config
+          if ($LASTEXITCODE -ne 0) { throw 'Windows OpenSSH fixture config validation failed' }
+
+          $binaryPath = "`"$sshd`" -f `"$config`" -E `"$log`""
+          # Why: collision rejection makes this marker safe to use for partial-creation cleanup.
+          New-Item -ItemType File -Path (Join-Path $fixture 'service-owned') | Out-Null
+          New-Service -Name $serviceName -DisplayName 'Orca live Windows OpenSSH fixture' `
+            -BinaryPathName $binaryPath -StartupType Manual | Out-Null
+          Start-Service -Name $serviceName
+
+          $ready = $false
+          for ($attempt = 1; $attempt -le 40; $attempt += 1) {
+            $output = & $ssh -F NUL -i $clientKey -p $port -o BatchMode=yes `
+              -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes `
+              -o "UserKnownHostsFile=$knownHosts" "$fixtureUser@127.0.0.1" `
+              'powershell.exe -NoProfile -NonInteractive -Command "$PSVersionTable.PSVersion.ToString()"' 2>&1
+            if ($LASTEXITCODE -eq 0) {
+              $remotePowerShellVersion = ($output -join '').Trim()
+              $ready = $true
+              break
+            }
+            Start-Sleep -Milliseconds 250
+          }
+          if (-not $ready) {
+            if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log -Tail 200 }
+            throw 'Windows OpenSSH fixture did not accept pinned-key authentication'
+          }
+          if (([Version]$remotePowerShellVersion).Major -ne 5) {
+            throw "Windows OpenSSH did not execute Windows PowerShell 5.1: $remotePowerShellVersion"
+          }
+          $serverVersion = ((& $sshd -V 2>&1) -join ' ').Trim()
+          if (-not $serverVersion) { throw 'Windows OpenSSH server version is empty' }
+          $remoteRootSshPath = $remoteRoot.Replace('\', '/')
+          @(
+            "ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_HOST=127.0.0.1",
+            "ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_PORT=$port",
+            "ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_USER=$fixtureUser",
+            "ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_IDENTITY=$clientKey",
+            "ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_REMOTE_ROOT=$remoteRootSshPath",
+            "ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_SERVER_VERSION=$serverVersion",
+            "ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_ARCHIVE_SHA256=$archiveSha256",
+            "ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_POWERSHELL_VERSION=$remotePowerShellVersion",
+            "ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_CLIENT_HOME=$clientHome",
+            "ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_SERVICE=$serviceName",
+            "ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_ACCOUNT=$fixtureUser"
+          ) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "windows_openssh_server=$serverVersion"
+          "windows_openssh_archive_sha256=$archiveSha256"
+          "windows_powershell=$remotePowerShellVersion"
+
+      - name: Measure exact full-size runtime over Windows system SSH
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $firstOutput = Join-Path $env:RUNNER_TEMP 'ssh-relay-runtime/${{ matrix.tuple }}/first'
+          $env:ORCA_SSH_FORCE_SYSTEM_TRANSPORT = '1'
+          $env:ORCA_SSH_RELAY_FULL_SIZE_RUNTIME_ROOT = Join-Path $firstOutput 'runtime'
+          $env:ORCA_SSH_RELAY_FULL_SIZE_IDENTITY = Join-Path `
+            $firstOutput 'orca-ssh-relay-runtime-${{ matrix.tuple }}.identity.json'
+          # Why: keep exact host-key trust isolated from the hosted runner's real SSH profile.
+          $env:HOME = $env:ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_CLIENT_HOME
+          $env:USERPROFILE = $env:ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_CLIENT_HOME
+          pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 --reporter=verbose `
+            src/main/ssh/ssh-system-no-input-windows-openssh.test.ts
+          if ($LASTEXITCODE -ne 0) { throw 'Windows no-input handle diagnostic failed' }
+          pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 --reporter=verbose `
+            src/main/ssh/ssh-relay-runtime-windows-system-ssh-openssh-full-size.test.ts
+          if ($LASTEXITCODE -ne 0) { throw 'full-size Windows system-SSH measurement failed' }
+
+      - name: Stop loopback Windows OpenSSH system-SSH fixture
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $failures = [Collections.Generic.List[string]]::new()
+          $fixture = Join-Path $env:RUNNER_TEMP 'orca-live-windows-system-ssh'
+          $serviceName = if ($env:ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_SERVICE) {
+            $env:ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_SERVICE
+          } else { 'sshd' }
+          $fixtureUser = if ($env:ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_ACCOUNT) {
+            $env:ORCA_SSH_RELAY_LIVE_WINDOWS_SYSTEM_SSH_ACCOUNT
+          } else { 'orca_ssh_fixture' }
+          $ownsFixture = Test-Path -LiteralPath (Join-Path $fixture 'fixture-owned')
+          $ownsService = Test-Path -LiteralPath (Join-Path $fixture 'service-owned')
+          $ownsAccount = Test-Path -LiteralPath (Join-Path $fixture 'account-owned')
+          $account = if ($ownsAccount) {
+            Get-LocalUser -Name $fixtureUser -ErrorAction SilentlyContinue
+          } else { $null }
+          $userSid = if ($account) { $account.SID.Value } else { $null }
+          $profilePath = Join-Path $env:SystemDrive "Users/$fixtureUser"
+          try {
+            $service = Get-CimInstance Win32_Service -Filter "Name='$serviceName'" -ErrorAction SilentlyContinue
+            $servicePid = if ($service) { [int]$service.ProcessId } else { 0 }
+            if ($ownsService -and $service -and $service.State -ne 'Stopped') {
+              Stop-Service -Name $serviceName -Force -ErrorAction Stop
+              if ($servicePid -gt 0) {
+                Wait-Process -Id $servicePid -Timeout 10 -ErrorAction SilentlyContinue
+                if (Get-Process -Id $servicePid -ErrorAction SilentlyContinue) {
+                  throw "Windows OpenSSH fixture process did not settle: $servicePid"
+                }
+              }
+            }
+            if ($ownsService -and $service) {
+              & sc.exe delete $serviceName | Out-Host
+              if ($LASTEXITCODE -ne 0) { throw 'Windows OpenSSH fixture service deletion failed' }
+              for ($attempt = 1; $attempt -le 20; $attempt += 1) {
+                if (-not (Get-Service -Name $serviceName -ErrorAction SilentlyContinue)) { break }
+                Start-Sleep -Milliseconds 100
+              }
+              if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) {
+                throw 'Windows OpenSSH fixture service remains registered'
+              }
+            }
+          } catch { $failures.Add("service teardown: $($_.Exception.Message)") }
+          $log = Join-Path $fixture 'sshd.log'
+          if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log -Tail 200 }
+          try {
+            if ($ownsAccount -and $userSid) {
+              function Get-FixtureOwnedProcesses([string]$fixtureSid) {
+                return @(
+                  Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | ForEach-Object {
+                    $owner = Invoke-CimMethod -InputObject $_ -MethodName GetOwnerSid `
+                      -ErrorAction SilentlyContinue
+                    if ($owner.Sid -eq $fixtureSid) { $_ }
+                  }
+                )
+              }
+              function Stop-FixtureOwnedProcesses([string]$fixtureSid) {
+                for ($attempt = 1; $attempt -le 20; $attempt += 1) {
+                  $ownedProcesses = @(Get-FixtureOwnedProcesses $fixtureSid)
+                  if ($ownedProcesses.Count -eq 0) { return }
+                  foreach ($ownedProcess in $ownedProcesses) {
+                    Write-Output "fixture_owned_process=$($ownedProcess.Name):$($ownedProcess.ProcessId)"
+                    try {
+                      [void](Invoke-CimMethod -InputObject $ownedProcess -MethodName Terminate `
+                        -ErrorAction Stop)
+                    } catch {
+                      # The bounded ownership recheck handles processes that exit during termination.
+                    }
+                  }
+                  Start-Sleep -Milliseconds 500
+                }
+                $remaining = @(Get-FixtureOwnedProcesses $fixtureSid)
+                if ($remaining.Count -gt 0) {
+                  $identities = $remaining | ForEach-Object { "$($_.Name):$($_.ProcessId)" }
+                  throw "Fixture account processes did not settle within 10 seconds: $($identities -join ',')"
+                }
+              }
+              function Dismount-FixtureRegistryHive([string]$hiveName) {
+                $registryPath = "Registry::HKEY_USERS\$hiveName"
+                if (-not (Test-Path -LiteralPath $registryPath)) { return }
+                $regPath = Join-Path $env:SystemRoot 'System32/reg.exe'
+                $process = Start-Process -FilePath $regPath `
+                  -ArgumentList @('unload', "HKU\$hiveName") -PassThru -WindowStyle Hidden
+                try {
+                  if (-not $process.WaitForExit(2000)) {
+                    $process.Kill()
+                    if (-not $process.WaitForExit(2000)) {
+                      throw "Fixture registry hive unload did not stop: $hiveName"
+                    }
+                    throw "Fixture registry hive unload timed out: $hiveName"
+                  }
+                  if ($process.ExitCode -ne 0) {
+                    throw "Fixture registry hive unload failed ($($process.ExitCode)): $hiveName"
+                  }
+                } finally {
+                  $process.Dispose()
+                }
+              }
+              # Why: sshd's service process can exit before a fixture-user
+              # session descendant releases the profile registry handles.
+              Stop-FixtureOwnedProcesses $userSid
+              $escapedSid = $userSid.Replace("'", "''")
+              $profileFailure = $null
+              for ($attempt = 1; $attempt -le 20; $attempt += 1) {
+                try {
+                  # Why: the fixture's UsrClass hive can outlive sshd; unload only
+                  # this owned SID before asking Windows to delete its profile.
+                  Dismount-FixtureRegistryHive "${userSid}_Classes"
+                  Dismount-FixtureRegistryHive $userSid
+                } catch {
+                  $profileFailure = $_.Exception.Message
+                  Start-Sleep -Milliseconds 500
+                  continue
+                }
+                $profile = Get-CimInstance Win32_UserProfile -Filter "SID='$escapedSid'" `
+                  -ErrorAction SilentlyContinue
+                if (-not $profile) { break }
+                try {
+                  Remove-CimInstance -InputObject $profile -ErrorAction Stop
+                  $profileFailure = $null
+                } catch {
+                  $profileFailure = $_.Exception.Message
+                }
+                Start-Sleep -Milliseconds 500
+              }
+              if (Get-CimInstance Win32_UserProfile -Filter "SID='$escapedSid'" `
+                -ErrorAction SilentlyContinue) {
+                throw "Fixture profile did not settle within 10 seconds: $profileFailure"
+              }
+            }
+          } catch { $failures.Add("profile teardown: $($_.Exception.Message)") }
+          try {
+            if ($account) {
+              Remove-LocalUser -Name $fixtureUser -ErrorAction Stop
+            }
+          } catch { $failures.Add("account teardown: $($_.Exception.Message)") }
+          try {
+            if ($ownsAccount -and (Test-Path -LiteralPath $profilePath)) {
+              Remove-Item -LiteralPath $profilePath -Recurse -Force -ErrorAction Stop
+            }
+            if ($ownsFixture -and (Test-Path -LiteralPath $fixture)) {
+              Remove-Item -LiteralPath $fixture -Recurse -Force -ErrorAction Stop
+            }
+          } catch { $failures.Add("filesystem teardown: $($_.Exception.Message)") }
+          if ($ownsAccount -and (Get-LocalUser -Name $fixtureUser -ErrorAction SilentlyContinue)) {
+            $failures.Add('fixture account remains registered')
+          }
+          if ($ownsAccount -and (Test-Path -LiteralPath $profilePath)) {
+            $failures.Add('fixture profile directory remains')
+          }
+          if ($failures.Count -gt 0) { throw ($failures -join '; ') }
+
+      - name: Upload unpublished artifact evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ssh-relay-runtime-${{ matrix.tuple }}
+          path: runtime-evidence/${{ matrix.tuple }}/
+          if-no-files-found: error
+          retention-days: 7
+
+  verify-linux-runtime-baseline-userland:
+    name: Supplement ${{ matrix.tuple }} oldest userland (kernel gap remains)
+    needs: build-posix-runtime
+    # Why: signing rehearsals need candidate bytes, while qualification stays a separate default-on gate.
+    if: github.event_name != 'workflow_call' || inputs.include-baseline-gates
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            tuple: linux-x64-glibc
+            container_image: docker.io/library/rockylinux@sha256:2d05a9266523bbf24f33ebc3a9832e4d5fd74b973c220f2204ca802286aa275d
+          - runner: ubuntu-24.04-arm
+            tuple: linux-arm64-glibc
+            container_image: docker.io/library/rockylinux@sha256:3c2d0ce12bf79fc5ff05e43b1000e30ff062dc89405525f3307cbff71661f1a0
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    env:
+      ORCA_RUNTIME_REQUESTED_RUNNER: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout exact source revision
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        with:
+          run_install: false
+
+      - name: Setup Node 24.18.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+
+      - name: Record supplemental baseline runner identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'requested_runner=%s\n' "$ORCA_RUNTIME_REQUESTED_RUNNER"
+          printf 'resolved_image_os=%s\n' "${ImageOS:-unknown}"
+          printf 'resolved_image_version=%s\n' "${ImageVersion:-unknown}"
+          printf 'runner_arch=%s\n' "$RUNNER_ARCH"
+          uname -a
+
+      - name: Install verification dependencies without native postinstall
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile --ignore-scripts
+          git diff --exit-code package.json pnpm-lock.yaml
+
+      - name: Download exact unpublished runtime evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ssh-relay-runtime-${{ matrix.tuple }}
+          path: runtime-evidence/${{ matrix.tuple }}
+
+      - name: Verify bytes before supplemental baseline execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$GITHUB_WORKSPACE/runtime-evidence/${{ matrix.tuple }}"
+          mapfile -d '' identities < <(find "$evidence" -maxdepth 1 -type f -name '*.identity.json' -print0)
+          mapfile -d '' archives < <(find "$evidence" -maxdepth 1 -type f -name '*.tar.br' -print0)
+          if (( ${#identities[@]} != 1 || ${#archives[@]} != 1 )); then
+            printf 'runtime baseline evidence is ambiguous: identities=%s archives=%s\n' \
+              "${#identities[@]}" "${#archives[@]}" >&2
+            exit 1
+          fi
+          identity=${identities[0]}
+          archive=${archives[0]}
+          runtime="$RUNNER_TEMP/baseline-runtime/${{ matrix.tuple }}"
+          node config/scripts/ssh-relay-runtime-archive-extraction.mjs \
+            --identity "$identity" \
+            --archive "$archive" \
+            --output-directory "$runtime"
+          node config/scripts/verify-ssh-relay-runtime.mjs \
+            --runtime-directory "$runtime" \
+            --identity "$identity" \
+            --archive "$archive"
+          printf 'BASELINE_RUNTIME=%s\n' "$runtime" >> "$GITHUB_ENV"
+
+      - name: Prove oldest Linux userland and retain the kernel gap
+        shell: bash
+        run: |
+          set -euo pipefail
+          image='${{ matrix.container_image }}'
+          docker pull "$image"
+          docker image inspect "$image" --format 'container_image={{index .RepoDigests 0}}'
+          docker run --rm --network none --read-only --cap-drop all \
+            --security-opt no-new-privileges --pids-limit 128 --memory 1g --cpus 2 \
+            --tmpfs /tmp:rw,nosuid,size=64m \
+            --mount "type=bind,src=$GITHUB_WORKSPACE,dst=/workspace,readonly" \
+            --mount "type=bind,src=$BASELINE_RUNTIME,dst=/runtime,readonly" \
+            --workdir /workspace \
+            "$image" \
+            /runtime/bin/node config/scripts/ssh-relay-runtime-smoke-child.cjs /runtime
+          # Why: the container proves glibc/libstdc++ floors but shares the newer hosted kernel.
+          docker run --rm --network none --read-only --cap-drop all \
+            --security-opt no-new-privileges --pids-limit 128 --memory 1g --cpus 2 \
+            --tmpfs /tmp:rw,nosuid,size=64m \
+            --mount "type=bind,src=$GITHUB_WORKSPACE,dst=/workspace,readonly" \
+            --mount "type=bind,src=$BASELINE_RUNTIME,dst=/runtime,readonly" \
+            --workdir /workspace \
+            "$image" \
+            /runtime/bin/node config/scripts/ssh-relay-runtime-baseline.mjs \
+              --tuple '${{ matrix.tuple }}' \
+              --scope linux-userland \
+              --runtime-directory /runtime
+
+  verify-windows-runtime-baseline:
+    name: Verify ${{ matrix.tuple }} oldest Windows baseline
+    needs: build-windows-runtime
+    # Why: a newer hosted image must not block signing evidence or be mistaken for floor qualification.
+    if: github.event_name != 'workflow_call' || inputs.include-baseline-gates
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2022
+            tuple: win32-x64
+          - runner: windows-11-arm
+            tuple: win32-arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    env:
+      ORCA_RUNTIME_REQUESTED_RUNNER: ${{ matrix.runner }}
+
+    steps:
+      - name: Checkout exact source revision
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        with:
+          run_install: false
+
+      - name: Setup Node 24.18.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+
+      - name: Record oldest-baseline runner identity
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          "requested_runner=$env:ORCA_RUNTIME_REQUESTED_RUNNER"
+          "resolved_image_os=$env:ImageOS"
+          "resolved_image_version=$env:ImageVersion"
+          "runner_arch=$env:RUNNER_ARCH"
+          Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, OsBuildNumber
+
+      - name: Install verification dependencies without native postinstall
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          pnpm install --frozen-lockfile --ignore-scripts
+          if ($LASTEXITCODE -ne 0) { throw 'pnpm install failed' }
+          git diff --exit-code package.json pnpm-lock.yaml
+          if ($LASTEXITCODE -ne 0) { throw 'frozen install changed dependency files' }
+
+      - name: Download exact unpublished runtime evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ssh-relay-runtime-${{ matrix.tuple }}
+          path: runtime-evidence/${{ matrix.tuple }}
+
+      - name: Verify bytes and execute on the declared Windows floor
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $evidence = Join-Path $env:GITHUB_WORKSPACE 'runtime-evidence/${{ matrix.tuple }}'
+          $identities = @(Get-ChildItem -LiteralPath $evidence -Filter '*.identity.json' -File)
+          $archives = @(Get-ChildItem -LiteralPath $evidence -Filter '*.zip' -File)
+          if ($identities.Count -ne 1 -or $archives.Count -ne 1) {
+            throw "runtime baseline evidence is ambiguous: identities=$($identities.Count) archives=$($archives.Count)"
+          }
+          $identity = $identities[0]
+          $archive = $archives[0]
+          $runtime = Join-Path $env:RUNNER_TEMP 'baseline-runtime/${{ matrix.tuple }}'
+          Expand-Archive -LiteralPath $archive.FullName -DestinationPath $runtime
+          node config/scripts/verify-ssh-relay-runtime.mjs `
+            --runtime-directory $runtime `
+            --identity $identity.FullName `
+            --archive $archive.FullName
+          if ($LASTEXITCODE -ne 0) { throw 'runtime baseline verification failed' }
+          node config/scripts/ssh-relay-runtime-baseline.mjs `
+            --tuple '${{ matrix.tuple }}' `
+            --scope full
+          if ($LASTEXITCODE -ne 0) { throw 'runner does not prove the declared Windows floor' }

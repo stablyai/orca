@@ -199,7 +199,10 @@ export default defineConfig({
     define: {
       ORCA_BUILD_IDENTITY: ORCA_BUILD_IDENTITY_LITERAL,
       ORCA_POSTHOG_WRITE_KEY: ORCA_POSTHOG_WRITE_KEY_LITERAL,
-      ORCA_DIAGNOSTICS_TOKEN_URL: ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL
+      ORCA_DIAGNOSTICS_TOKEN_URL: ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL,
+      // Why: leave the bundled-runtime trust root unavailable until reviewed production keys and
+      // immutable resource inputs are separately provisioned; this is never a runtime env lookup.
+      ORCA_SSH_RELAY_MANIFEST_ACCEPTED_KEYS: 'null'
     },
     // Why: @xterm/headless declares "exports": null in package.json, which
     // prevents Vite's default resolver from finding the CJS entry. Point

@@ -16,17 +16,12 @@ function expectedTupleId(tuple: SshRelayRuntimeTuple): string {
 function assertRequiredRuntimeEntries(tuple: SshRelayRuntimeTuple): void {
   const files = tuple.entries.filter((entry) => entry.type === 'file')
   const expectedPaths = new Map([
-    ['node', tuple.os === 'win32' ? 'node.exe' : 'bin/node'],
+    // Why: every archive keeps bundled Node under `bin`, including the Windows ZIP.
+    ['node', tuple.os === 'win32' ? 'bin/node.exe' : 'bin/node'],
     ['relay', 'relay.js'],
     ['relay-watcher', 'relay-watcher.js']
   ])
-  for (const role of [
-    'node',
-    'relay',
-    'relay-watcher',
-    'node-pty-native',
-    'parcel-watcher-native'
-  ]) {
+  for (const role of ['node', 'relay', 'relay-watcher', 'parcel-watcher-native']) {
     const matching = files.filter((file) => file.role === role)
     if (matching.length !== 1) {
       throw new Error(`Runtime tuple ${tuple.tupleId} requires exactly one ${role} entry`)
@@ -34,6 +29,32 @@ function assertRequiredRuntimeEntries(tuple: SshRelayRuntimeTuple): void {
     const expectedPath = expectedPaths.get(role)
     if (expectedPath && matching[0].path !== expectedPath) {
       throw new Error(`Runtime tuple ${tuple.tupleId} has invalid ${role} path`)
+    }
+  }
+  const nativePaths =
+    tuple.os === 'win32'
+      ? {
+          'node-pty-native': [
+            'node_modules/node-pty/build/Release/conpty.node',
+            'node_modules/node-pty/build/Release/conpty_console_list.node'
+          ],
+          'native-runtime': [
+            'node_modules/node-pty/build/Release/conpty/OpenConsole.exe',
+            'node_modules/node-pty/build/Release/conpty/conpty.dll'
+          ]
+        }
+      : {
+          'node-pty-native': ['node_modules/node-pty/build/Release/pty.node'],
+          'native-runtime':
+            tuple.os === 'darwin' ? ['node_modules/node-pty/build/Release/spawn-helper'] : []
+        }
+  for (const [role, expected] of Object.entries(nativePaths)) {
+    const actual = files
+      .filter((entry) => entry.role === role)
+      .map((entry) => entry.path)
+      .sort()
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      throw new Error(`Runtime tuple ${tuple.tupleId} has invalid ${role} closure`)
     }
   }
   for (const requiredPath of [

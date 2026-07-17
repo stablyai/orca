@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { Duplex } from 'node:stream'
+import { Duplex, Writable } from 'node:stream'
 import type { ClientChannel } from 'ssh2'
 import type { SshTarget } from '../../shared/ssh-types'
 import { wrapRemoteCommandForPosixShell, type SshExecOptions } from './ssh-connection-utils'
@@ -17,9 +17,15 @@ export type SystemSshProcess = {
 
 export type SystemSshCommandChannel = ClientChannel & {
   _process?: ChildProcess
+  _systemSshLaunchMode?: SystemSshCommandLaunchMode
 }
 
-type SystemSshCommandOptions = SshExecOptions & SystemSshBuildArgsOptions
+export type SystemSshCommandLaunchMode = 'direct' | 'windows-no-input-launcher'
+
+export type SystemSshCommandOptions = SshExecOptions &
+  SystemSshBuildArgsOptions & {
+    windowsNoInputLauncherPath?: string
+  }
 
 /**
  * Spawn a system ssh process connecting to the given target.
@@ -62,11 +68,33 @@ export function spawnSystemSshCommand(
 
   const remoteCommand =
     options?.wrapCommand === false ? command : wrapRemoteCommandForPosixShell(command)
-  const proc = spawn(sshPath, [...buildSshArgs(target, options), remoteCommand], {
-    stdio: ['pipe', 'pipe', 'pipe'],
+  const noInput = options?.noInput === true
+  const windowsNoInputLauncherPath =
+    noInput && process.platform === 'win32' ? options?.windowsNoInputLauncherPath : undefined
+  const sshArgs = buildSshArgs(
+    target,
+    windowsNoInputLauncherPath ? { ...options, noInput: false } : options
+  )
+  const executable = windowsNoInputLauncherPath ?? sshPath
+  const args = windowsNoInputLauncherPath
+    ? [sshPath, ...sshArgs, remoteCommand]
+    : [...sshArgs, remoteCommand]
+  const stdinMode =
+    windowsNoInputLauncherPath || (noInput && process.platform !== 'win32') ? 'ignore' : 'pipe'
+  const proc = spawn(executable, args, {
+    // Why: Win32-OpenSSH can hang when stdin is mapped to NUL; give it a
+    // proven launcher only when its verified path is explicitly supplied.
+    stdio: [stdinMode, 'pipe', 'pipe'],
     windowsHide: true
   })
-  return wrapCommandProcess(proc)
+  if (noInput && process.platform === 'win32' && !windowsNoInputLauncherPath) {
+    proc.stdin?.destroy()
+  }
+  return wrapCommandProcess(
+    proc,
+    !noInput,
+    windowsNoInputLauncherPath ? 'windows-no-input-launcher' : 'direct'
+  )
 }
 
 function wrapChildProcess(proc: ChildProcess): SystemSshProcess {
@@ -88,13 +116,21 @@ function wrapChildProcess(proc: ChildProcess): SystemSshProcess {
   }
 }
 
-function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
+function wrapCommandProcess(
+  proc: ChildProcess,
+  acceptsInput: boolean,
+  launchMode: SystemSshCommandLaunchMode
+): SystemSshCommandChannel {
   const duplex = new Duplex({
     read() {
       proc.stdout?.resume()
     },
     write(chunk, encoding, cb) {
-      proc.stdin!.write(chunk, encoding, cb)
+      if (!acceptsInput || !proc.stdin) {
+        cb(new Error('System SSH command does not accept stdin'))
+        return
+      }
+      proc.stdin.write(chunk, encoding, cb)
     }
   })
   const channel = duplex as unknown as SystemSshCommandChannel
@@ -103,11 +139,21 @@ function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
     stdin: NodeJS.WritableStream
     stderr: NodeJS.ReadableStream
     _process?: ChildProcess
+    _systemSshLaunchMode?: SystemSshCommandLaunchMode
     close: () => void
   }
-  mutableChannel.stdin = proc.stdin!
+  mutableChannel.stdin =
+    (acceptsInput ? proc.stdin : null) ??
+    new Writable({
+      // Why: ending a no-input facade must not half-close the readable command
+      // channel before the child reports its exit status.
+      write(_chunk, _encoding, cb) {
+        cb(new Error('System SSH command does not accept stdin'))
+      }
+    })
   mutableChannel.stderr = proc.stderr!
   mutableChannel._process = proc
+  mutableChannel._systemSshLaunchMode = launchMode
   mutableChannel.close = () => {
     try {
       proc.kill('SIGTERM')
@@ -122,7 +168,9 @@ function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
     proc.off('exit', onExit)
     proc.off('close', onClose)
     proc.off('error', onProcessError)
-    proc.stdin!.off('error', onStreamError)
+    if (acceptsInput) {
+      proc.stdin?.off('error', onStreamError)
+    }
     proc.stdout!.off('error', onStreamError)
   }
   const fail = (err: Error): void => {
@@ -158,7 +206,9 @@ function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
   proc.on('exit', onExit)
   proc.on('close', onClose)
   proc.on('error', onProcessError)
-  proc.stdin!.on('error', onStreamError)
+  if (acceptsInput) {
+    proc.stdin?.on('error', onStreamError)
+  }
   proc.stdout!.on('error', onStreamError)
 
   return channel

@@ -14,6 +14,8 @@ import {
   writeBufferViaSystemSsh,
   writeFileViaSystemSsh,
   type SystemSshBuildArgsOptions,
+  type SystemSshCommandChannel,
+  type SystemSshCommandOptions,
   type SystemSshProcess
 } from './ssh-system-fallback'
 import { resolveWithSshG, type SshResolvedConfig } from './ssh-config-parser'
@@ -44,6 +46,13 @@ export type { SshConnectionCallbacks } from './ssh-connection-utils'
 
 type SshRemoteFileOptions = {
   hostPlatform?: RemoteHostPlatform
+}
+
+export type SshConnectionSystemSshOptions = {
+  // Why: native qualification must not connect the launcher to a product/default caller yet.
+  windowsNoInputLauncherPath?: string
+  // Why: Win32-OpenSSH resolves host files from the token profile, not isolated test HOME values.
+  strictKnownHostsFile?: string
 }
 
 // Upper bound on waiting, after an abort, for the in-flight open callback or
@@ -77,15 +86,21 @@ export class SshConnection {
   private state: SshConnectionState
   private callbacks: SshConnectionCallbacks
   private target: SshTarget
+  private readonly systemSshOptions: SshConnectionSystemSshOptions
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private disposed = false
   private cachedPassphrase: string | null = null
   private cachedPassword: string | null = null
   private connectGeneration = 0
 
-  constructor(target: SshTarget, callbacks: SshConnectionCallbacks) {
+  constructor(
+    target: SshTarget,
+    callbacks: SshConnectionCallbacks,
+    systemSshOptions: SshConnectionSystemSshOptions = {}
+  ) {
     this.target = target
     this.callbacks = callbacks
+    this.systemSshOptions = { ...systemSshOptions }
     this.state = {
       targetId: target.id,
       status: 'disconnected',
@@ -161,7 +176,7 @@ export class SshConnection {
     )
   }
 
-  async sftp(): Promise<SFTPWrapper> {
+  async sftp(signal?: AbortSignal): Promise<SFTPWrapper> {
     if (this.useSystemSshTransport) {
       throw new Error('SFTP is not available when using system SSH transport')
     }
@@ -169,12 +184,15 @@ export class SshConnection {
       throw new Error('Not connected')
     }
     const client = this.client
-    return this.openSessionChannelWithRetry(() =>
-      this.waitForSshCallback(
-        'SSH SFTP channel timed out',
-        (callback) => client.sftp(callback),
-        (sftp) => sftp.end()
-      )
+    return this.openSessionChannelWithRetry(
+      () =>
+        this.waitForSshCallback(
+          'SSH SFTP channel timed out',
+          (callback) => client.sftp(callback),
+          (sftp) => sftp.end(),
+          signal
+        ),
+      signal
     )
   }
 
@@ -691,16 +709,22 @@ export class SshConnection {
     // Why: this probe runs before remote platform detection. A raw echo works
     // under POSIX shells, cmd.exe, and PowerShell; `/bin/sh` wrapping does not.
     const channel = this.spawnTrackedSystemSshCommand('echo ORCA-SYSTEM-SSH-OK', {
-      wrapCommand: false
+      wrapCommand: false,
+      noInput: true
     })
     try {
       await new Promise<void>((resolve, reject) => {
         let stdout = ''
         let stderr = ''
         let settled = false
+        let sentinelObserved = false
+        let stdoutEnded = false
+        let processExit: number | null | 'not-observed' = 'not-observed'
         const cleanup = (): void => {
           clearTimeout(timeout)
           channel.off('data', onStdoutData)
+          channel.off('end', onStdoutEnd)
+          channel.off('exit', onProcessExit)
           channel.stderr.off('data', onStderrData)
           channel.off('error', onError)
           channel.off('close', onClose)
@@ -716,6 +740,13 @@ export class SshConnection {
         }
         const onStdoutData = (data: Buffer): void => {
           stdout += data.toString('utf-8')
+          sentinelObserved = stdout.includes('ORCA-SYSTEM-SSH-OK')
+        }
+        const onStdoutEnd = (): void => {
+          stdoutEnded = true
+        }
+        const onProcessExit = (code: number | null): void => {
+          processExit = code
         }
         const onStderrData = (data: Buffer): void => {
           stderr += data.toString('utf-8')
@@ -744,14 +775,27 @@ export class SshConnection {
         const timeout = setTimeout(() => {
           settle(() => {
             channel.close()
-            reject(new Error('System SSH connection timed out'))
+            // Why: native Windows can separate process exit from inherited
+            // stdio closure; these booleans diagnose that boundary safely.
+            const launchMode =
+              (channel as SystemSshCommandChannel)._systemSshLaunchMode ?? 'unknown'
+            reject(
+              new Error(
+                `System SSH connection timed out (launchMode=${launchMode}, sentinel=${sentinelObserved}, stdoutEnded=${stdoutEnded}, processExit=${processExit}, channelClosed=false)`
+              )
+            )
           })
         }, CONNECT_TIMEOUT_MS)
 
         channel.on('data', onStdoutData)
+        channel.on('end', onStdoutEnd)
+        channel.on('exit', onProcessExit)
         channel.stderr.on('data', onStderrData)
         channel.on('error', onError)
         channel.on('close', onClose)
+        // Why: native Windows OpenSSH keeps its input worker alive while the
+        // pipe is open, even though this probe can never consume stdin.
+        ;(channel as ClientChannel & { stdin: NodeJS.WritableStream }).stdin.end()
       })
     } catch (err) {
       this.useSystemSshTransport = false
@@ -902,15 +946,26 @@ export class SshConnection {
     return new Error('SSH connection attempt was cancelled')
   }
 
-  private spawnTrackedSystemSshCommand(command: string, options?: SshExecOptions): ClientChannel {
+  private spawnTrackedSystemSshCommand(
+    command: string,
+    options?: SshExecOptions & Pick<SystemSshCommandOptions, 'noInput'>
+  ): ClientChannel {
     if (options?.signal?.aborted) {
       throw createSshOperationAbortError()
     }
     const buildArgsOptions = this.getSystemSshBuildArgsOptions()
+    const windowsNoInputLauncherPath =
+      options?.noInput === true ? this.systemSshOptions.windowsNoInputLauncherPath : undefined
     const commandOptions =
-      options === undefined && Object.keys(buildArgsOptions).length === 0
+      options === undefined &&
+      Object.keys(buildArgsOptions).length === 0 &&
+      windowsNoInputLauncherPath === undefined
         ? undefined
-        : { ...options, ...buildArgsOptions }
+        : {
+            ...options,
+            ...buildArgsOptions,
+            ...(windowsNoInputLauncherPath === undefined ? {} : { windowsNoInputLauncherPath })
+          }
     const channel =
       commandOptions === undefined
         ? spawnSystemSshCommand(this.target, command)
@@ -936,6 +991,9 @@ export class SshConnection {
     }
     if (this.systemSshControlMasterDisabledForSession) {
       options.disableControlMaster = true
+    }
+    if (this.systemSshOptions.strictKnownHostsFile) {
+      options.strictKnownHostsFile = this.systemSshOptions.strictKnownHostsFile
     }
     return options
   }

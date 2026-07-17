@@ -1,8 +1,18 @@
-import { describe, expect, it } from 'vitest'
+import nacl from 'tweetnacl'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 
-import { createSshRelayArtifactTestManifest } from './ssh-relay-artifact-test-manifest'
+import {
+  createSshRelayArtifactTestManifest,
+  createSshRelayDarwinArtifactTestManifest,
+  createSshRelayWindowsArtifactTestManifest
+} from './ssh-relay-artifact-test-manifest'
 import { parseSshRelayArtifactManifest } from './ssh-relay-artifact-schema'
 import { selectSshRelayArtifact } from './ssh-relay-artifact-selector'
+import {
+  signSshRelayArtifactManifest,
+  sshRelayManifestKeyId,
+  verifySshRelayArtifactManifest
+} from './ssh-relay-manifest-signature'
 import { computeSshRelayRuntimeContentId } from './ssh-relay-runtime-identity'
 import { sshRelayRuntimeArchiveName } from './ssh-relay-release-asset'
 
@@ -16,45 +26,73 @@ const compatibleLinuxHost = {
   glibcxxVersion: '3.4.33'
 }
 
-function windowsManifest() {
-  const manifest = createSshRelayArtifactTestManifest()
-  const tuple = structuredClone(manifest.tuples[0]) as unknown as Record<string, unknown>
-  Object.assign(tuple, {
-    tupleId: 'win32-x64',
-    os: 'win32',
-    architecture: 'x64',
-    compatibility: {
-      kind: 'windows',
-      minimumBuild: 20348,
-      minimumOpenSshVersion: '8.1p1',
-      minimumPowerShellVersion: '5.1',
-      minimumDotNetFrameworkRelease: 528040
+const manifestKeyPair = nacl.sign.keyPair.fromSeed(
+  Uint8Array.from({ length: 32 }, (_, index) => index)
+)
+
+function verifiedManifest(manifest = createSshRelayArtifactTestManifest()) {
+  manifest.signatures = [signSshRelayArtifactManifest(manifest, manifestKeyPair.secretKey)]
+  return verifySshRelayArtifactManifest(manifest, [
+    {
+      keyId: sshRelayManifestKeyId(manifestKeyPair.publicKey),
+      publicKey: manifestKeyPair.publicKey
     }
-  })
-  manifest.tuples = [tuple as never]
-  return manifest
+  ])
+}
+
+function windowsManifest({
+  architecture = 'x64',
+  minimumBuild = architecture === 'x64' ? 19045 : 26100
+}: {
+  architecture?: 'x64' | 'arm64'
+  minimumBuild?: number
+} = {}) {
+  return createSshRelayWindowsArtifactTestManifest({ architecture, minimumBuild })
 }
 
 const compatibleWindowsHost = {
   os: 'win32' as const,
   architecture: 'x64' as const,
   processTranslated: false,
-  build: 20348,
+  build: 19045,
   openSshVersion: '8.1p1',
   powerShellVersion: '5.1',
   dotNetFrameworkRelease: 528040
 }
 
 describe('SSH relay artifact selector', () => {
-  it('selects the single compatible glibc tuple', () => {
-    const result = selectSshRelayArtifact(createSshRelayArtifactTestManifest(), compatibleLinuxHost)
+  it('requires a signature-verified manifest type', () => {
+    expectTypeOf(createSshRelayArtifactTestManifest()).not.toMatchTypeOf<
+      Parameters<typeof selectSshRelayArtifact>[0]
+    >()
+  })
 
-    expect(result).toMatchObject({ kind: 'selected', tupleId: 'linux-x64-glibc' })
+  it('selects the single compatible glibc tuple', () => {
+    const manifest = verifiedManifest()
+    const result = selectSshRelayArtifact(manifest, compatibleLinuxHost)
+
+    expect(result).toMatchObject({
+      kind: 'selected',
+      tupleId: 'linux-x64-glibc',
+      contentId: manifest.tuples[0].contentId,
+      releaseTag: 'v1.4.140-rc.1',
+      archive: {
+        name: manifest.tuples[0].archive.name,
+        sha256: manifest.tuples[0].archive.sha256,
+        downloadUrl: `https://github.com/stablyai/orca/releases/download/v1.4.140-rc.1/${manifest.tuples[0].archive.name}`
+      }
+    })
+    expect(JSON.stringify(result)).not.toContain('latest')
+    expect(() => {
+      if (result.kind === 'selected') {
+        Object.defineProperty(result.archive, 'downloadUrl', { value: 'https://example.com' })
+      }
+    }).toThrow(TypeError)
   })
 
   it('accepts every Linux compatibility value at its exact minimum', () => {
     expect(
-      selectSshRelayArtifact(createSshRelayArtifactTestManifest(), {
+      selectSshRelayArtifact(verifiedManifest(), {
         ...compatibleLinuxHost,
         kernelVersion: '4.18',
         libc: { family: 'glibc', version: '2.28' },
@@ -62,6 +100,57 @@ describe('SSH relay artifact selector', () => {
         glibcxxVersion: '3.4.25'
       }).kind
     ).toBe('selected')
+  })
+
+  it.each(['4.18.0-553.5.1.el8_10.x86_64', '5.15.0-107-generic', '6.6.15-0-lts'])(
+    'accepts a supported Linux distro kernel release %s',
+    (kernelVersion) => {
+      expect(
+        selectSshRelayArtifact(verifiedManifest(), {
+          ...compatibleLinuxHost,
+          kernelVersion
+        }).kind
+      ).toBe('selected')
+    }
+  )
+
+  it.each([
+    ['4.18.0-553.5.1.el8_10.x86_64', 'selected'],
+    ['4.17.99-553.5.1.el8_10.x86_64', 'kernel-too-old'],
+    ['4.18.0 bad', 'unknown-kernel'],
+    ['4.18.0/bad', 'unknown-kernel'],
+    ['4.18.0:bad', 'unknown-kernel'],
+    ['4.18.0@bad', 'unknown-kernel']
+  ] as const)('classifies the kernel suffix boundary for %s', (kernelVersion, expected) => {
+    const result = selectSshRelayArtifact(verifiedManifest(), {
+      ...compatibleLinuxHost,
+      kernelVersion
+    })
+
+    expect(result.kind === 'selected' ? result.kind : result.reason).toBe(expected)
+  })
+
+  it('keeps non-kernel version grammars strict', () => {
+    expect(
+      selectSshRelayArtifact(verifiedManifest(), {
+        ...compatibleLinuxHost,
+        libc: { family: 'glibc', version: '2.28_bad' }
+      })
+    ).toEqual({ kind: 'legacy', reason: 'unknown-libc' })
+    expect(
+      selectSshRelayArtifact(verifiedManifest(createSshRelayDarwinArtifactTestManifest()), {
+        os: 'darwin',
+        architecture: 'arm64',
+        processTranslated: false,
+        version: '13.5_bad'
+      })
+    ).toEqual({ kind: 'legacy', reason: 'unknown-os-version' })
+    expect(
+      selectSshRelayArtifact(verifiedManifest(windowsManifest()), {
+        ...compatibleWindowsHost,
+        powerShellVersion: '5.1_bad'
+      })
+    ).toEqual({ kind: 'legacy', reason: 'unknown-powershell' })
   })
 
   it('selects the detected libc family when both Linux variants exist', () => {
@@ -91,13 +180,14 @@ describe('SSH relay artifact selector', () => {
     musl.archive.name = sshRelayRuntimeArchiveName(musl.tupleId, musl.contentId)
     manifest.tuples.push(musl)
     const parsed = parseSshRelayArtifactManifest(manifest)
+    const verified = verifiedManifest(parsed)
 
-    expect(selectSshRelayArtifact(parsed, compatibleLinuxHost)).toMatchObject({
+    expect(selectSshRelayArtifact(verified, compatibleLinuxHost)).toMatchObject({
       kind: 'selected',
       tupleId: 'linux-x64-glibc'
     })
     expect(
-      selectSshRelayArtifact(parsed, {
+      selectSshRelayArtifact(verified, {
         ...compatibleLinuxHost,
         libc: { family: 'musl', version: '1.2.5' }
       })
@@ -121,16 +211,16 @@ describe('SSH relay artifact selector', () => {
     [{ ...compatibleLinuxHost, processTranslated: true }, 'translated-process'],
     [{ ...compatibleLinuxHost, architecture: 'arm64' as const }, 'tuple-unavailable']
   ])('selects legacy for incompatible or unknown host evidence', (host, reason) => {
-    expect(selectSshRelayArtifact(createSshRelayArtifactTestManifest(), host)).toEqual({
+    expect(selectSshRelayArtifact(verifiedManifest(), host)).toEqual({
       kind: 'legacy',
       reason
     })
   })
 
   it('checks Windows bootstrap versions before selection', () => {
-    const manifest = windowsManifest()
+    const manifest = verifiedManifest(windowsManifest())
     expect(selectSshRelayArtifact(manifest, compatibleWindowsHost).kind).toBe('selected')
-    expect(selectSshRelayArtifact(manifest, { ...compatibleWindowsHost, build: 20347 })).toEqual({
+    expect(selectSshRelayArtifact(manifest, { ...compatibleWindowsHost, build: 19044 })).toEqual({
       kind: 'legacy',
       reason: 'os-too-old'
     })
@@ -154,8 +244,27 @@ describe('SSH relay artifact selector', () => {
     ).toEqual({ kind: 'legacy', reason: 'dotnet-too-old' })
   })
 
+  it.each([
+    ['x64', 19044, 19045],
+    ['arm64', 26099, 26100]
+  ] as const)(
+    'enforces the reviewed Windows %s build boundary',
+    (architecture, rejectedBuild, acceptedBuild) => {
+      const manifest = verifiedManifest(windowsManifest({ architecture }))
+      const host = { ...compatibleWindowsHost, architecture }
+
+      expect(selectSshRelayArtifact(manifest, { ...host, build: rejectedBuild })).toEqual({
+        kind: 'legacy',
+        reason: 'os-too-old'
+      })
+      expect(selectSshRelayArtifact(manifest, { ...host, build: acceptedBuild }).kind).toBe(
+        'selected'
+      )
+    }
+  )
+
   it('selects legacy when Windows bootstrap evidence is absent or malformed', () => {
-    const manifest = windowsManifest()
+    const manifest = verifiedManifest(windowsManifest())
     expect(
       selectSshRelayArtifact(manifest, { ...compatibleWindowsHost, openSshVersion: '8.1.0' })
     ).toEqual({ kind: 'legacy', reason: 'unknown-openssh' })
@@ -171,18 +280,10 @@ describe('SSH relay artifact selector', () => {
   })
 
   it('checks the minimum macOS version before selection', () => {
-    const manifest = createSshRelayArtifactTestManifest()
-    const tuple = structuredClone(manifest.tuples[0]) as unknown as Record<string, unknown>
-    Object.assign(tuple, {
-      tupleId: 'darwin-arm64',
-      os: 'darwin',
-      architecture: 'arm64',
-      compatibility: { kind: 'darwin', minimumVersion: '13.5' }
-    })
-    manifest.tuples = [tuple as never]
+    const manifest = createSshRelayDarwinArtifactTestManifest()
 
     expect(
-      selectSshRelayArtifact(manifest, {
+      selectSshRelayArtifact(verifiedManifest(manifest), {
         os: 'darwin',
         architecture: 'arm64',
         processTranslated: false,

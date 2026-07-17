@@ -1,0 +1,357 @@
+name: SSH Relay Runtime Native Signing
+
+on:
+  workflow_call:
+    inputs:
+      source-sha:
+        required: true
+        type: string
+    secrets:
+      MAC_CERTS:
+        required: true
+      MAC_CERTS_PASSWORD:
+        required: true
+      SIGNPATH_API_TOKEN:
+        required: true
+      SLACK_WEBHOOK_URL:
+        required: true
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  sign-macos-runtime:
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            tuple: darwin-arm64
+          - runner: macos-15-intel
+            tuple: darwin-x64
+    runs-on: ${{ matrix.runner }}
+    env:
+      ORCA_RUNTIME_REQUESTED_RUNNER: ${{ matrix.runner }}
+    steps:
+      - name: Checkout exact source revision
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ inputs.source-sha }}
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        with:
+          run_install: false
+
+      - name: Setup Node 24.18.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+
+      - name: Install credential-free finalization dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile --ignore-scripts
+          git diff --exit-code package.json pnpm-lock.yaml
+
+      - name: Verify native archive and signing tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x /usr/bin/codesign
+          security help >/dev/null
+
+      - name: Download exact native build output
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ssh-relay-runtime-${{ matrix.tuple }}
+          path: ${{ runner.temp }}/ssh-relay-runtime-build/${{ matrix.tuple }}
+
+      - name: Reconstruct authenticated unsigned runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/ssh-relay-runtime-build/${{ matrix.tuple }}"
+          identity="$evidence/orca-ssh-relay-runtime-${{ matrix.tuple }}.identity.json"
+          archive=$(find "$evidence" -maxdepth 1 -type f -name 'orca-ssh-relay-runtime-v1-*.tar.br' -print)
+          test "$(printf '%s\n' "$archive" | sed '/^$/d' | wc -l | tr -d ' ')" = 1
+          runtime="$RUNNER_TEMP/ssh-relay-runtime-source/${{ matrix.tuple }}"
+          node config/scripts/ssh-relay-runtime-archive-extraction.mjs \
+            --identity "$identity" \
+            --archive "$archive" \
+            --output-directory "$runtime"
+          printf 'ORCA_RUNTIME_EVIDENCE=%s\n' "$evidence" >> "$GITHUB_ENV"
+          printf 'ORCA_RUNTIME_IDENTITY=%s\n' "$identity" >> "$GITHUB_ENV"
+          printf 'ORCA_RUNTIME_ARCHIVE=%s\n' "$archive" >> "$GITHUB_ENV"
+          printf 'ORCA_RUNTIME_SOURCE=%s\n' "$runtime" >> "$GITHUB_ENV"
+
+      - name: Stage exact native signing payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/ssh-relay-runtime-signing-stage/${{ matrix.tuple }}"
+          report="$RUNNER_TEMP/${{ matrix.tuple }}.signing-stage.json"
+          node config/scripts/ssh-relay-runtime-native-signing-stage.mjs \
+            --identity "$ORCA_RUNTIME_IDENTITY" \
+            --runtime-directory "$ORCA_RUNTIME_SOURCE" \
+            --staging-directory "$stage" > "$report"
+          printf 'ORCA_RUNTIME_SIGNING_STAGE=%s\n' "$stage" >> "$GITHUB_ENV"
+          printf 'ORCA_RUNTIME_SIGNING_REPORT=%s\n' "$report" >> "$GITHUB_ENV"
+
+      - name: Import ephemeral Developer ID certificate
+        shell: bash
+        env:
+          MAC_CERTS: ${{ secrets.MAC_CERTS }}
+          MAC_CERTS_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
+        run: |
+          set -euo pipefail
+          keychain="$RUNNER_TEMP/orca-ssh-relay-signing.keychain-db"
+          certificate="$RUNNER_TEMP/orca-ssh-relay-signing.p12"
+          password=$(openssl rand -base64 24)
+          printf '%s' "$MAC_CERTS" | base64 --decode > "$certificate"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$certificate" -P "$MAC_CERTS_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -k "$password" "$keychain" >/dev/null
+          identities=$(security find-identity -v -p codesigning "$keychain" | \
+            sed -nE 's/^[[:space:]]*[0-9]+\) [0-9A-F]+ "(Developer ID Application: .+ \([A-Z0-9]{10}\))"$/\1/p')
+          test "$(printf '%s\n' "$identities" | sed '/^$/d' | wc -l | tr -d ' ')" = 1
+          team_id=$(printf '%s\n' "$identities" | sed -nE 's/^.*\(([A-Z0-9]{10})\)$/\1/p')
+          test ${#team_id} = 10
+          printf 'ORCA_MAC_SIGNING_IDENTITY=%s\n' "$identities" >> "$GITHUB_ENV"
+          printf 'ORCA_MAC_TEAM_ID=%s\n' "$team_id" >> "$GITHUB_ENV"
+          printf 'ORCA_MAC_KEYCHAIN=%s\n' "$keychain" >> "$GITHUB_ENV"
+          rm -f "$certificate"
+
+      - name: Sign exact macOS native payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          node config/scripts/ssh-relay-runtime-macos-signing.mjs \
+            --identity "$ORCA_RUNTIME_IDENTITY" \
+            --signing-stage-report "$ORCA_RUNTIME_SIGNING_REPORT" \
+            --staging-directory "$ORCA_RUNTIME_SIGNING_STAGE" \
+            --signing-identity "$ORCA_MAC_SIGNING_IDENTITY"
+
+      - name: Finalize verified signed runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          verified_at=$(node -e 'process.stdout.write(new Date().toISOString())')
+          node config/scripts/ssh-relay-runtime-native-signing-finalization.mjs \
+            --identity "$ORCA_RUNTIME_IDENTITY" \
+            --source-runtime-directory "$ORCA_RUNTIME_SOURCE" \
+            --returned-directory "$ORCA_RUNTIME_SIGNING_STAGE" \
+            --signing-stage-report "$ORCA_RUNTIME_SIGNING_REPORT" \
+            --source-archive "$ORCA_RUNTIME_ARCHIVE" \
+            --source-sbom "$ORCA_RUNTIME_EVIDENCE/orca-ssh-relay-runtime-${{ matrix.tuple }}.spdx.json" \
+            --source-provenance "$ORCA_RUNTIME_EVIDENCE/orca-ssh-relay-runtime-${{ matrix.tuple }}.provenance.json" \
+            --output-directory "$RUNNER_TEMP/ssh-relay-runtime-final/${{ matrix.tuple }}" \
+            --node-release config/ssh-relay-node-release-v24.18.0.json \
+            --git-commit '${{ inputs.source-sha }}' \
+            --expected-macos-team-identifier "$ORCA_MAC_TEAM_ID" \
+            --native-verification-tool-version "codesign-${ImageVersion}" \
+            --verified-at "$verified_at"
+
+      - name: Remove ephemeral Developer ID keychain
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${ORCA_MAC_KEYCHAIN:-}" && -e "$ORCA_MAC_KEYCHAIN" ]]; then
+            security delete-keychain "$ORCA_MAC_KEYCHAIN"
+          fi
+
+      - name: Upload immutable signed runtime output
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ssh-relay-runtime-signed-${{ matrix.tuple }}
+          path: |
+            ${{ runner.temp }}/ssh-relay-runtime-final/${{ matrix.tuple }}/assets/
+            ${{ runner.temp }}/ssh-relay-runtime-final/${{ matrix.tuple }}/evidence/
+          if-no-files-found: error
+          retention-days: 7
+
+  sign-windows-runtime:
+    timeout-minutes: 330
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-11-arm
+            tuple: win32-arm64
+          - runner: windows-2022
+            tuple: win32-x64
+    runs-on: ${{ matrix.runner }}
+    env:
+      ORCA_RUNTIME_REQUESTED_RUNNER: ${{ matrix.runner }}
+    steps:
+      - name: Checkout exact source revision
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ inputs.source-sha }}
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        with:
+          run_install: false
+
+      - name: Setup Node 24.18.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+
+      - name: Install credential-free finalization dependencies
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          pnpm install --frozen-lockfile --ignore-scripts
+          if ($LASTEXITCODE -ne 0) { throw 'pnpm install failed' }
+          git diff --exit-code package.json pnpm-lock.yaml
+          if ($LASTEXITCODE -ne 0) { throw 'frozen install changed dependency files' }
+
+      - name: Download exact native build output
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ssh-relay-runtime-${{ matrix.tuple }}
+          path: ${{ runner.temp }}/ssh-relay-runtime-build/${{ matrix.tuple }}
+
+      - name: Reconstruct authenticated unsigned runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $evidence = Join-Path $env:RUNNER_TEMP 'ssh-relay-runtime-build/${{ matrix.tuple }}'
+          $identity = Join-Path $evidence 'orca-ssh-relay-runtime-${{ matrix.tuple }}.identity.json'
+          $archives = @(Get-ChildItem -LiteralPath $evidence -File -Filter 'orca-ssh-relay-runtime-v1-*.zip')
+          if ($archives.Count -ne 1) { throw 'Expected exactly one authenticated Windows archive' }
+          $runtime = Join-Path $env:RUNNER_TEMP 'ssh-relay-runtime-source/${{ matrix.tuple }}'
+          node config/scripts/ssh-relay-runtime-archive-extraction.mjs `
+            --identity $identity `
+            --archive $archives[0].FullName `
+            --output-directory $runtime
+          if ($LASTEXITCODE -ne 0) { throw 'authenticated runtime reconstruction failed' }
+          "ORCA_RUNTIME_EVIDENCE=$evidence" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ORCA_RUNTIME_IDENTITY=$identity" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ORCA_RUNTIME_ARCHIVE=$($archives[0].FullName)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ORCA_RUNTIME_SOURCE=$runtime" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Stage exact native signing payload
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stage = Join-Path $env:RUNNER_TEMP 'ssh-relay-runtime-signing-stage/${{ matrix.tuple }}'
+          $report = Join-Path $env:RUNNER_TEMP '${{ matrix.tuple }}.signing-stage.json'
+          node config/scripts/ssh-relay-runtime-native-signing-stage.mjs `
+            --identity $env:ORCA_RUNTIME_IDENTITY `
+            --runtime-directory $env:ORCA_RUNTIME_SOURCE `
+            --staging-directory $stage | Out-File $report -Encoding utf8
+          if ($LASTEXITCODE -ne 0) { throw 'native signing stage failed' }
+          "ORCA_RUNTIME_SIGNING_STAGE=$stage" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ORCA_RUNTIME_SIGNING_REPORT=$report" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Upload exact unsigned payload for SignPath
+        id: upload-unsigned-runtime
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ssh-relay-runtime-unsigned-${{ matrix.tuple }}-${{ github.run_id }}
+          path: ${{ env.ORCA_RUNTIME_SIGNING_STAGE }}/**
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Install bounded SignPath client
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+          if ($null -eq (Get-PSResourceRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
+            Register-PSResourceRepository -PSGallery -Trusted
+          } else {
+            Set-PSResourceRepository -Name PSGallery -Trusted
+          }
+          Install-PSResource -Name SignPath -Version '[4.0.0,5.0.0)' -Repository PSGallery -Scope CurrentUser -TrustRepository -Reinstall -ErrorAction Stop
+          Import-Module SignPath -ErrorAction Stop
+          Get-Command -Name Get-SignedArtifact -Module SignPath -ErrorAction Stop
+
+      - name: Submit exact SignPath request
+        id: submit-runtime-signing
+        uses: signpath/github-action-submit-signing-request@b9d91eadd323de506c0c81cf0c7fe7438f3360fd # v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: c37aa192-a27a-4377-9c90-5d6c95912dc0
+          project-slug: orca
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: windows-inner-binaries-zip
+          github-artifact-id: ${{ steps.upload-unsigned-runtime.outputs.artifact-id }}
+          wait-for-completion: false
+
+      - name: Notify SignPath approvers
+        shell: pwsh
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SIGNPATH_REQUEST_URL: ${{ steps.submit-runtime-signing.outputs.signing-request-web-url }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:SLACK_WEBHOOK_URL)) {
+            throw 'SLACK_WEBHOOK_URL is required for bounded approval handling'
+          }
+          $message = "SSH relay runtime ${{ matrix.tuple }} is awaiting SignPath approval.`n<$env:SIGNPATH_REQUEST_URL|Open signing request>`n<https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}|Open Actions run>"
+          $payload = @{ text = $message } | ConvertTo-Json
+          Invoke-RestMethod -Method Post -Uri $env:SLACK_WEBHOOK_URL -ContentType 'application/json' -Body $payload
+
+      - name: Download exact signed payload from SignPath
+        shell: pwsh
+        env:
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SIGNPATH_REQUEST_ID: ${{ steps.submit-runtime-signing.outputs.signing-request-id }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = Join-Path $env:RUNNER_TEMP '${{ matrix.tuple }}.signed.zip'
+          $returned = Join-Path $env:RUNNER_TEMP 'ssh-relay-runtime-returned/${{ matrix.tuple }}'
+          Get-SignedArtifact `
+            -OrganizationId c37aa192-a27a-4377-9c90-5d6c95912dc0 `
+            -ApiToken $env:SIGNPATH_API_TOKEN `
+            -SigningRequestId $env:SIGNPATH_REQUEST_ID `
+            -OutputArtifactPath $archive `
+            -Force `
+            -WaitForCompletionTimeoutInSeconds 14400
+          Expand-Archive -LiteralPath $archive -DestinationPath $returned
+          "ORCA_RUNTIME_RETURNED=$returned" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Finalize verified signed runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $verifiedAt = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ss.fffZ')
+          $toolVersion = "PowerShell-$($PSVersionTable.PSVersion)"
+          node config/scripts/ssh-relay-runtime-native-signing-finalization.mjs `
+            --identity $env:ORCA_RUNTIME_IDENTITY `
+            --source-runtime-directory $env:ORCA_RUNTIME_SOURCE `
+            --returned-directory $env:ORCA_RUNTIME_RETURNED `
+            --signing-stage-report $env:ORCA_RUNTIME_SIGNING_REPORT `
+            --source-archive $env:ORCA_RUNTIME_ARCHIVE `
+            --source-sbom "$env:ORCA_RUNTIME_EVIDENCE/orca-ssh-relay-runtime-${{ matrix.tuple }}.spdx.json" `
+            --source-provenance "$env:ORCA_RUNTIME_EVIDENCE/orca-ssh-relay-runtime-${{ matrix.tuple }}.provenance.json" `
+            --output-directory "$env:RUNNER_TEMP/ssh-relay-runtime-final/${{ matrix.tuple }}" `
+            --node-release config/ssh-relay-node-release-v24.18.0.json `
+            --git-commit '${{ inputs.source-sha }}' `
+            --native-verification-tool-version $toolVersion `
+            --verified-at $verifiedAt
+          if ($LASTEXITCODE -ne 0) { throw 'signed runtime finalization failed' }
+
+      - name: Upload immutable signed runtime output
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ssh-relay-runtime-signed-${{ matrix.tuple }}
+          path: |
+            ${{ runner.temp }}/ssh-relay-runtime-final/${{ matrix.tuple }}/assets/
+            ${{ runner.temp }}/ssh-relay-runtime-final/${{ matrix.tuple }}/evidence/
+          if-no-files-found: error
+          retention-days: 7

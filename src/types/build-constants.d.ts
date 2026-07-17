@@ -20,3 +20,7 @@ declare const ORCA_POSTHOG_WRITE_KEY: string | null
 // point a packaged build at a staging server without re-running the
 // release pipeline.
 declare const ORCA_DIAGNOSTICS_TOKEN_URL: string | null
+
+// Parsed only by the main bundle. Current builds inject null until the relay
+// runtime manifest trust root is separately reviewed and provisioned.
+declare const ORCA_SSH_RELAY_MANIFEST_ACCEPTED_KEYS: unknown | null

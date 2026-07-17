@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "nodeVersion": "24.18.0",
+  "baseUrl": "https://nodejs.org/dist/v24.18.0",
+  "checksumDocument": {
+    "name": "SHASUMS256.txt",
+    "sha256": "3927bab574a00ca0560c9583fe19655ba19603a1c5851414e4325d34ac50e469",
+    "maximumBytes": 1048576
+  },
+  "signature": {
+    "name": "SHASUMS256.txt.sig",
+    "sha256": "d771440acfe010e7510a3c01d248525f771daa9cf75dae5784c97ea2b08d9393",
+    "maximumBytes": 65536,
+    "signerFingerprint": "C82FA3AE1CBEDC6BE46B9360C43CEC45C17AB93C",
+    "key": {
+      "path": "ssh-relay-node-release-keys/C82FA3AE1CBEDC6BE46B9360C43CEC45C17AB93C.asc",
+      "sha256": "84b1ca614406f341cb86e72920f5a64687a13ab67ab84038bcf2abba97898a84",
+      "sourceCommit": "b28073028e6d6855cfb53bf7fa0137599c01f967",
+      "sourceUrl": "https://raw.githubusercontent.com/nodejs/release-keys/b28073028e6d6855cfb53bf7fa0137599c01f967/keys/C82FA3AE1CBEDC6BE46B9360C43CEC45C17AB93C.asc"
+    }
+  },
+  "maximumArchiveBytes": 209715200,
+  "archives": {
+    "darwin-arm64": {
+      "name": "node-v24.18.0-darwin-arm64.tar.xz",
+      "sha256": "4477b9f78efb77744cf5eb57a0e9594dba66466b38b4e93fa9f35cb907a095a6"
+    },
+    "darwin-x64": {
+      "name": "node-v24.18.0-darwin-x64.tar.xz",
+      "sha256": "4a3b6bc81542154430825128d9a279e8b364e8d90581544e506ef7579fd1ab6f"
+    },
+    "linux-arm64-glibc": {
+      "name": "node-v24.18.0-linux-arm64.tar.xz",
+      "sha256": "58c9520501f6ae2b52d5b210444e24b9d0c029a58c5011b797bc1fe7105886f6"
+    },
+    "linux-x64-glibc": {
+      "name": "node-v24.18.0-linux-x64.tar.xz",
+      "sha256": "55aa7153f9d88f28d765fcdad5ae6945b5c0f98a36881703817e4c450fa76742"
+    },
+    "win32-arm64": {
+      "name": "node-v24.18.0-win-arm64.zip",
+      "sha256": "f274669adb93b1fd0fbf8f21fd078609e9dcc84333d4f2718d2dde3f9a161a01"
+    },
+    "win32-x64": {
+      "name": "node-v24.18.0-win-x64.zip",
+      "sha256": "0ae68406b42d7725661da979b1403ec9926da205c6770827f33aac9d8f26e821"
+    }
+  },
+  "windowsBuildInputs": {
+    "headersArchive": {
+      "name": "node-v24.18.0-headers.tar.gz",
+      "sha256": "6c7d41d83c3481d2301115b8ce4a44b7d4fbfa52859b1aac14f445d460137887"
+    },
+    "importLibraries": {
+      "win32-arm64": {
+        "name": "win-arm64/node.lib",
+        "sha256": "7da03c5111815b69bbe63ffd2e51b28cd69eec9f545b7ccb8756efffdbb88dc2"
+      },
+      "win32-x64": {
+        "name": "win-x64/node.lib",
+        "sha256": "589684168a73547ca47cd22d76a4e465ef561abe89fb1b2b23fe35bbe857d505"
+      }
+    }
+  }
+}

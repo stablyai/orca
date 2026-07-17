@@ -21,6 +21,27 @@ export type SshRelayManifestAcceptedKey = {
   publicKey: Uint8Array
 }
 
+type DeepReadonly<T> = T extends readonly (infer Item)[]
+  ? readonly DeepReadonly<Item>[]
+  : T extends object
+    ? { readonly [Key in keyof T]: DeepReadonly<T[Key]> }
+    : T
+
+declare const verifiedSshRelayManifest: unique symbol
+
+export type VerifiedSshRelayArtifactManifest = DeepReadonly<SshRelayArtifactManifest> & {
+  readonly [verifiedSshRelayManifest]: true
+}
+
+function deepFreezeManifest<T extends object>(value: T): DeepReadonly<T> {
+  for (const nested of Object.values(value)) {
+    if (nested && typeof nested === 'object' && !Object.isFrozen(nested)) {
+      deepFreezeManifest(nested)
+    }
+  }
+  return Object.freeze(value) as DeepReadonly<T>
+}
+
 function compareAscii(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0
 }
@@ -173,7 +194,7 @@ function acceptedKeyMap(keys: readonly SshRelayManifestAcceptedKey[]): Map<strin
 export function verifySshRelayArtifactManifest(
   input: unknown,
   acceptedKeys: readonly SshRelayManifestAcceptedKey[]
-): SshRelayArtifactManifest {
+): VerifiedSshRelayArtifactManifest {
   const manifest = parseSshRelayArtifactManifest(input)
   const unsignedBytes = canonicalUnsignedSshRelayManifestBytes(manifest)
   const keys = acceptedKeyMap(acceptedKeys)
@@ -194,5 +215,7 @@ export function verifySshRelayArtifactManifest(
   if (validAcceptedSignatures === 0) {
     throw new Error('SSH relay manifest requires at least one valid accepted signature')
   }
-  return manifest
+  // Why: a branded manifest must not be mutable after verification or later consumers could trust
+  // fields whose bytes were never authenticated by the accepted signature.
+  return deepFreezeManifest(manifest) as VerifiedSshRelayArtifactManifest
 }

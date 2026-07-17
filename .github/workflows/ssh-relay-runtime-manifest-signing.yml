@@ -1,0 +1,257 @@
+name: SSH Relay Runtime Manifest Signing
+
+on:
+  workflow_call:
+    inputs:
+      source-sha:
+        required: true
+        type: string
+      release-tag:
+        required: true
+        type: string
+      created-at:
+        required: true
+        type: string
+      relay-protocol-version:
+        required: true
+        type: number
+    secrets:
+      SSH_RELAY_RUNTIME_MANIFEST_SEED:
+        required: true
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  prepare-manifest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact source revision
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ inputs.source-sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        with:
+          run_install: false
+
+      - name: Setup Node 24.18.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+
+      - name: Install credential-free dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Download linux-x64-glibc artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ssh-relay-runtime-linux-x64-glibc
+          path: ${{ runner.temp }}/relay-manifest-inputs/ssh-relay-runtime-linux-x64-glibc
+
+      - name: Download linux-arm64-glibc artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ssh-relay-runtime-linux-arm64-glibc
+          path: ${{ runner.temp }}/relay-manifest-inputs/ssh-relay-runtime-linux-arm64-glibc
+
+      - name: Download signed darwin-x64 artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ssh-relay-runtime-signed-darwin-x64
+          path: ${{ runner.temp }}/relay-manifest-inputs/ssh-relay-runtime-signed-darwin-x64
+
+      - name: Download signed darwin-arm64 artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ssh-relay-runtime-signed-darwin-arm64
+          path: ${{ runner.temp }}/relay-manifest-inputs/ssh-relay-runtime-signed-darwin-arm64
+
+      - name: Download signed win32-x64 artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ssh-relay-runtime-signed-win32-x64
+          path: ${{ runner.temp }}/relay-manifest-inputs/ssh-relay-runtime-signed-win32-x64
+
+      - name: Download signed win32-arm64 artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ssh-relay-runtime-signed-win32-arm64
+          path: ${{ runner.temp }}/relay-manifest-inputs/ssh-relay-runtime-signed-win32-arm64
+
+      - name: Prepare canonical manifest request
+        run: |
+          set -euo pipefail
+          # Why: missing reviewed production keys must stop before signer bytes are exposed.
+          node config/scripts/ssh-relay-runtime-manifest-aggregate-command.mjs prepare \
+            --artifacts-directory '${{ runner.temp }}/relay-manifest-inputs' \
+            --accepted-keys config/ssh-relay-runtime-manifest-accepted-keys.json \
+            --output-directory '${{ runner.temp }}/relay-manifest-prepared' \
+            --source-sha '${{ inputs.source-sha }}' \
+            --release-tag '${{ inputs.release-tag }}' \
+            --created-at '${{ inputs.created-at }}' \
+            --relay-protocol-version '${{ inputs.relay-protocol-version }}'
+
+      - name: Upload canonical signing request
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ssh-relay-runtime-manifest-signing-request
+          path: ${{ runner.temp }}/relay-manifest-prepared/signing-request.json
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload credential-free prepared receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ssh-relay-runtime-manifest-prepared
+          path: ${{ runner.temp }}/relay-manifest-prepared/prepared-aggregate.json
+          if-no-files-found: error
+          retention-days: 1
+
+  sign-manifest:
+    needs: prepare-manifest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: relay-runtime-manifest-signing
+    steps:
+      - name: Checkout exact source revision
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ inputs.source-sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        with:
+          run_install: false
+
+      - name: Setup Node 24.18.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+
+      - name: Install signer dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Download canonical signing request only
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ssh-relay-runtime-manifest-signing-request
+          path: ${{ runner.temp }}/relay-manifest-signing-request
+
+      - name: Sign exact canonical bytes
+        env:
+          SSH_RELAY_RUNTIME_MANIFEST_SEED: ${{ secrets.SSH_RELAY_RUNTIME_MANIFEST_SEED }}
+        run: |
+          set -euo pipefail
+          node config/scripts/ssh-relay-runtime-manifest-seed-signing.mjs \
+            --request '${{ runner.temp }}/relay-manifest-signing-request/signing-request.json' \
+            --output-directory '${{ runner.temp }}/relay-manifest-signing-result'
+
+      - name: Upload signature-only result
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ssh-relay-runtime-manifest-signing-result
+          path: ${{ runner.temp }}/relay-manifest-signing-result/signing-result.json
+          if-no-files-found: error
+          retention-days: 1
+
+  finalize-manifest:
+    needs: [prepare-manifest, sign-manifest]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact source revision
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ inputs.source-sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        with:
+          run_install: false
+
+      - name: Setup Node 24.18.0
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24.18.0
+          cache: pnpm
+
+      - name: Install credential-free dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Download linux-x64-glibc artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ssh-relay-runtime-linux-x64-glibc
+          path: ${{ runner.temp }}/relay-manifest-inputs/ssh-relay-runtime-linux-x64-glibc
+
+      - name: Download linux-arm64-glibc artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ssh-relay-runtime-linux-arm64-glibc
+          path: ${{ runner.temp }}/relay-manifest-inputs/ssh-relay-runtime-linux-arm64-glibc
+
+      - name: Download signed darwin-x64 artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ssh-relay-runtime-signed-darwin-x64
+          path: ${{ runner.temp }}/relay-manifest-inputs/ssh-relay-runtime-signed-darwin-x64
+
+      - name: Download signed darwin-arm64 artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ssh-relay-runtime-signed-darwin-arm64
+          path: ${{ runner.temp }}/relay-manifest-inputs/ssh-relay-runtime-signed-darwin-arm64
+
+      - name: Download signed win32-x64 artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ssh-relay-runtime-signed-win32-x64
+          path: ${{ runner.temp }}/relay-manifest-inputs/ssh-relay-runtime-signed-win32-x64
+
+      - name: Download signed win32-arm64 artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ssh-relay-runtime-signed-win32-arm64
+          path: ${{ runner.temp }}/relay-manifest-inputs/ssh-relay-runtime-signed-win32-arm64
+
+      - name: Download credential-free prepared receipt
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ssh-relay-runtime-manifest-prepared
+          path: ${{ runner.temp }}/relay-manifest-prepared
+
+      - name: Download signature-only result
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ssh-relay-runtime-manifest-signing-result
+          path: ${{ runner.temp }}/relay-manifest-signing-result
+
+      - name: Independently reconstruct and verify final manifest
+        run: |
+          set -euo pipefail
+          node config/scripts/ssh-relay-runtime-manifest-aggregate-command.mjs finalize \
+            --artifacts-directory '${{ runner.temp }}/relay-manifest-inputs' \
+            --accepted-keys config/ssh-relay-runtime-manifest-accepted-keys.json \
+            --prepared-directory '${{ runner.temp }}/relay-manifest-prepared' \
+            --signing-result '${{ runner.temp }}/relay-manifest-signing-result/signing-result.json' \
+            --output-directory '${{ runner.temp }}/relay-manifest-final' \
+            --source-sha '${{ inputs.source-sha }}' \
+            --release-tag '${{ inputs.release-tag }}' \
+            --created-at '${{ inputs.created-at }}' \
+            --relay-protocol-version '${{ inputs.relay-protocol-version }}'
+
+      - name: Upload verified manifest output
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ssh-relay-runtime-signed-manifest
+          path: |
+            ${{ runner.temp }}/relay-manifest-final/assets/
+            ${{ runner.temp }}/relay-manifest-final/evidence/
+          if-no-files-found: error
+          retention-days: 7

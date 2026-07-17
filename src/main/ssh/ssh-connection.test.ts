@@ -900,8 +900,43 @@ describe('SshConnection', () => {
     }
   })
 
+  it('rejects pre-open SFTP cancellation without requesting a channel', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    sftpBehavior = 'pending'
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(conn.sftp(controller.signal)).rejects.toMatchObject({ name: 'AbortError' })
+    expect(pendingSftpCallback).toBeNull()
+  })
+
+  it('ends and awaits a late SFTP channel after mid-open cancellation', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+    sftpBehavior = 'pending'
+    const controller = new AbortController()
+    const lateSftp = Object.assign(new EventEmitter(), { end: vi.fn() })
+    const outcome = conn
+      .sftp(controller.signal)
+      .then(() => 'opened')
+      .catch((error: Error) => error.name)
+
+    controller.abort()
+    pendingSftpCallback?.(undefined, lateSftp)
+    expect(await Promise.race([outcome, Promise.resolve('pending')])).toBe('pending')
+    expect(lateSftp.end).toHaveBeenCalledOnce()
+    lateSftp.emit('close')
+    await expect(outcome).resolves.toBe('AbortError')
+  })
+
   it('uses system SSH transport when ProxyUseFdpass is resolved by OpenSSH', async () => {
     vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    let probeChannel: ReturnType<typeof createSystemCommandChannel> | undefined
+    spawnSystemSshCommandMock.mockImplementationOnce(() => {
+      probeChannel = createSystemCommandChannel()
+      return probeChannel
+    })
     const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
 
     await conn.connect()
@@ -914,8 +949,68 @@ describe('SshConnection', () => {
       'echo ORCA-SYSTEM-SSH-OK',
       {
         wrapCommand: false,
+        noInput: true,
         resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
       }
+    )
+    expect(probeChannel?.stdin.end).toHaveBeenCalledOnce()
+  })
+
+  it('limits the explicit launcher to the probe and carries explicit pinned trust to all commands', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    const launcherPath = 'C:\\fixture\\orca-ssh-no-input-launcher.exe'
+    const knownHostsPath = 'C:\\fixture\\client-home\\.ssh\\known_hosts'
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks(), {
+      windowsNoInputLauncherPath: launcherPath,
+      strictKnownHostsFile: knownHostsPath
+    })
+
+    await conn.connect()
+    await conn.exec('echo after-connect')
+
+    expect(spawnSystemSshCommandMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ configHost: 'fdpass-host' }),
+      'echo ORCA-SYSTEM-SSH-OK',
+      expect.objectContaining({
+        noInput: true,
+        windowsNoInputLauncherPath: launcherPath,
+        strictKnownHostsFile: knownHostsPath
+      })
+    )
+    expect(spawnSystemSshCommandMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ configHost: 'fdpass-host' }),
+      'echo after-connect',
+      expect.objectContaining({ strictKnownHostsFile: knownHostsPath })
+    )
+    expect(spawnSystemSshCommandMock.mock.calls[1][2]).not.toEqual(
+      expect.objectContaining({ windowsNoInputLauncherPath: expect.anything() })
+    )
+  })
+
+  it('does not infer the Windows no-input launcher from the runner environment', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    const previousLauncherPath = process.env.ORCA_SSH_WINDOWS_NO_INPUT_LAUNCHER
+    process.env.ORCA_SSH_WINDOWS_NO_INPUT_LAUNCHER = 'C:\\fixture\\orca-ssh-no-input-launcher.exe'
+    try {
+      const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+      await conn.connect()
+    } finally {
+      if (previousLauncherPath === undefined) {
+        delete process.env.ORCA_SSH_WINDOWS_NO_INPUT_LAUNCHER
+      } else {
+        process.env.ORCA_SSH_WINDOWS_NO_INPUT_LAUNCHER = previousLauncherPath
+      }
+    }
+
+    expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
+      expect.objectContaining({ configHost: 'fdpass-host' }),
+      'echo ORCA-SYSTEM-SSH-OK',
+      expect.not.objectContaining({
+        strictKnownHostsFile: expect.anything(),
+        windowsNoInputLauncherPath: expect.anything()
+      })
     )
   })
 
@@ -966,6 +1061,7 @@ describe('SshConnection', () => {
       'echo ORCA-SYSTEM-SSH-OK',
       expect.objectContaining({
         wrapCommand: false,
+        noInput: true,
         resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
       })
     )
@@ -976,6 +1072,7 @@ describe('SshConnection', () => {
       expect.objectContaining({
         disableControlMaster: true,
         wrapCommand: false,
+        noInput: true,
         resolvedConfig: expect.objectContaining({ proxyUseFdpass: true })
       })
     )
@@ -1014,7 +1111,7 @@ describe('SshConnection', () => {
     expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
       expect.objectContaining({ proxyCommand: 'ssh -W %h:%p bastion.example.com' }),
       'echo ORCA-SYSTEM-SSH-OK',
-      { wrapCommand: false }
+      { wrapCommand: false, noInput: true }
     )
   })
 
@@ -1035,7 +1132,7 @@ describe('SshConnection', () => {
     expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
       expect.objectContaining({ host: '192.168.0.210' }),
       'echo ORCA-SYSTEM-SSH-OK',
-      { wrapCommand: false }
+      { wrapCommand: false, noInput: true }
     )
   })
 
@@ -1175,12 +1272,20 @@ describe('SshConnection', () => {
     const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
 
     try {
-      const connect = expect(conn.connect()).rejects.toThrow('System SSH connection timed out')
+      const connect = expect(conn.connect()).rejects.toThrow(
+        'System SSH connection timed out (launchMode=unknown, sentinel=true, stdoutEnded=true, processExit=0, channelClosed=false)'
+      )
+      await vi.advanceTimersByTimeAsync(0)
+      channel.emit('data', Buffer.from('ORCA-SYSTEM-SSH-OK\r\n'))
+      channel.emit('end')
+      channel.emit('exit', 0)
       await vi.advanceTimersByTimeAsync(30_000)
 
       await connect
       expect(channel.close).toHaveBeenCalled()
       expect(channel.listenerCount('data')).toBe(0)
+      expect(channel.listenerCount('end')).toBe(0)
+      expect(channel.listenerCount('exit')).toBe(0)
       expect(channel.listenerCount('error')).toBe(1)
       expect(channel.listenerCount('close')).toBe(1)
       expect(channel.stderr.listenerCount('data')).toBe(0)

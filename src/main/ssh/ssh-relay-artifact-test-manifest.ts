@@ -166,3 +166,132 @@ export function createSshRelayArtifactTestManifest(): SshRelayArtifactManifest {
     ]
   }
 }
+
+function finalizeTestTuple(manifest: SshRelayArtifactManifest): SshRelayArtifactManifest {
+  const tuple = manifest.tuples[0]
+  const files = tuple.entries.filter((entry) => entry.type === 'file')
+  tuple.contentId = computeSshRelayRuntimeContentId(tuple)
+  tuple.archive.name = sshRelayRuntimeArchiveName(tuple.tupleId, tuple.contentId)
+  tuple.archive.fileCount = files.length
+  tuple.archive.expandedSize = files.reduce((total, entry) => total + entry.size, 0)
+  return manifest
+}
+
+export function createSshRelayWindowsArtifactTestManifest({
+  architecture = 'x64',
+  minimumBuild = architecture === 'x64' ? 19045 : 26100
+}: {
+  architecture?: 'x64' | 'arm64'
+  minimumBuild?: number
+} = {}): SshRelayArtifactManifest {
+  const manifest = createSshRelayArtifactTestManifest()
+  const tuple = manifest.tuples[0]
+  tuple.tupleId = `win32-${architecture}`
+  tuple.os = 'win32'
+  tuple.architecture = architecture
+  tuple.compatibility = {
+    kind: 'windows',
+    minimumBuild,
+    minimumOpenSshVersion: '8.1p1',
+    minimumPowerShellVersion: '5.1',
+    minimumDotNetFrameworkRelease: 528040
+  }
+  const watcherPackage = `watcher-win32-${architecture}`
+  for (const entry of tuple.entries) {
+    entry.path = entry.path
+      .replace('bin/node', 'bin/node.exe')
+      .replace('watcher-linux-x64-glibc', watcherPackage)
+      .replace(
+        'node_modules/node-pty/build/Release/pty.node',
+        'node_modules/node-pty/build/Release/conpty.node'
+      )
+  }
+  tuple.entries.push(
+    {
+      path: 'node_modules/node-pty/build/Release/conpty',
+      type: 'directory',
+      mode: 0o755
+    },
+    {
+      path: 'node_modules/node-pty/build/Release/conpty_console_list.node',
+      type: 'file',
+      role: 'node-pty-native',
+      size: 31,
+      mode: 0o755,
+      sha256: digest('9')
+    },
+    {
+      path: 'node_modules/node-pty/build/Release/conpty/OpenConsole.exe',
+      type: 'file',
+      role: 'native-runtime',
+      size: 32,
+      mode: 0o755,
+      sha256: digest('a')
+    },
+    {
+      path: 'node_modules/node-pty/build/Release/conpty/conpty.dll',
+      type: 'file',
+      role: 'native-runtime',
+      size: 33,
+      mode: 0o755,
+      sha256: digest('b')
+    }
+  )
+  tuple.nativeVerification.policy = 'signpath-authenticode-v1'
+  for (const file of tuple.nativeVerification.files) {
+    file.path = file.path
+      .replace('bin/node', 'bin/node.exe')
+      .replace('watcher-linux-x64-glibc', watcherPackage)
+      .replace(
+        'node_modules/node-pty/build/Release/pty.node',
+        'node_modules/node-pty/build/Release/conpty.node'
+      )
+  }
+  tuple.nativeVerification.files.push(
+    {
+      path: 'node_modules/node-pty/build/Release/conpty_console_list.node',
+      sha256: digest('9')
+    },
+    {
+      path: 'node_modules/node-pty/build/Release/conpty/OpenConsole.exe',
+      sha256: digest('a')
+    },
+    {
+      path: 'node_modules/node-pty/build/Release/conpty/conpty.dll',
+      sha256: digest('b')
+    }
+  )
+  return finalizeTestTuple(manifest)
+}
+
+export function createSshRelayDarwinArtifactTestManifest(
+  architecture: 'x64' | 'arm64' = 'arm64'
+): SshRelayArtifactManifest {
+  const manifest = createSshRelayArtifactTestManifest()
+  const tuple = manifest.tuples[0]
+  tuple.tupleId = `darwin-${architecture}`
+  tuple.os = 'darwin'
+  tuple.architecture = architecture
+  tuple.compatibility = { kind: 'darwin', minimumVersion: '13.5' }
+  const watcherPackage = `watcher-darwin-${architecture}`
+  for (const entry of tuple.entries) {
+    entry.path = entry.path.replace('watcher-linux-x64-glibc', watcherPackage)
+  }
+  tuple.entries.push({
+    path: 'node_modules/node-pty/build/Release/spawn-helper',
+    type: 'file',
+    role: 'native-runtime',
+    size: 31,
+    mode: 0o755,
+    sha256: digest('9')
+  })
+  tuple.nativeVerification.policy = 'apple-developer-id-v1'
+  for (const file of tuple.nativeVerification.files) {
+    file.path = file.path.replace('watcher-linux-x64-glibc', watcherPackage)
+  }
+  tuple.nativeVerification.files.push({
+    path: 'node_modules/node-pty/build/Release/spawn-helper',
+    sha256: digest('9')
+  })
+  return finalizeTestTuple(manifest)
+}

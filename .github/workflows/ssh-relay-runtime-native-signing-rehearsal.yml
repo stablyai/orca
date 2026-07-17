@@ -1,0 +1,61 @@
+name: SSH Relay Runtime Native Signing Rehearsal
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected-source-sha:
+        description: Exact 40-character source commit selected for this credentialed rehearsal
+        required: true
+        type: string
+      confirmation:
+        description: Type SIGN SSH RELAY RUNTIME ARTIFACTS to authorize the rehearsal
+        required: true
+        type: string
+
+concurrency:
+  group: ssh-relay-runtime-native-signing-rehearsal
+  # Why: cancelling after a signing request could abandon an approved set of immutable bytes.
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  authorize-rehearsal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Bind confirmation to the selected exact source
+        shell: bash
+        env:
+          ORCA_RUNTIME_EXPECTED_SOURCE_SHA: ${{ inputs.expected-source-sha }}
+          ORCA_RUNTIME_CONFIRMATION: ${{ inputs.confirmation }}
+          ORCA_RUNTIME_SELECTED_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$ORCA_RUNTIME_EXPECTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo 'Expected source must be an exact lowercase 40-character commit SHA.' >&2
+            exit 1
+          fi
+          if [[ "$ORCA_RUNTIME_EXPECTED_SOURCE_SHA" != "$ORCA_RUNTIME_SELECTED_SOURCE_SHA" ]]; then
+            echo 'Expected source does not match the workflow ref selected for this dispatch.' >&2
+            exit 1
+          fi
+          if [[ "$ORCA_RUNTIME_CONFIRMATION" != 'SIGN SSH RELAY RUNTIME ARTIFACTS' ]]; then
+            echo 'Credentialed signing rehearsal was not explicitly confirmed.' >&2
+            exit 1
+          fi
+
+  build-native-runtimes:
+    needs: authorize-rehearsal
+    uses: ./.github/workflows/ssh-relay-runtime-artifacts.yml
+    with:
+      # Why: candidate signing evidence does not qualify a newer hosted OS as the declared floor.
+      include-baseline-gates: false
+
+  sign-native-runtimes:
+    needs: build-native-runtimes
+    uses: ./.github/workflows/ssh-relay-runtime-native-signing.yml
+    with:
+      source-sha: ${{ github.sha }}
+    secrets: inherit

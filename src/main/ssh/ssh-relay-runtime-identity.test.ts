@@ -49,7 +49,7 @@ describe('SSH relay runtime content identity', () => {
     const manifest = createSshRelayArtifactTestManifest()
     const tuple = structuredClone(manifest.tuples[0])
     tuple.entries.reverse()
-    tuple.archive.name = 'ignored-by-runtime-identity.tar.xz'
+    tuple.archive.name = 'ignored-by-runtime-identity.tar.br'
     tuple.archive.sha256 = `sha256:${'f'.repeat(64)}`
     tuple.metadataAssets.sbom.sha256 = `sha256:${'e'.repeat(64)}`
     tuple.nativeVerification.verifiedAt = '2030-01-01T00:00:00.000Z'

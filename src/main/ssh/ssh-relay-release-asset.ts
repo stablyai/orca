@@ -33,13 +33,13 @@ export function sshRelayRuntimeArchiveName(
   if (!match) {
     throw new Error(`Invalid SSH relay runtime content identity: ${contentId}`)
   }
-  const extension = tupleId.startsWith('win32-') ? 'zip' : 'tar.xz'
+  const extension = tupleId.startsWith('win32-') ? 'zip' : 'tar.br'
   return `orca-ssh-relay-runtime-v1-${tupleId}-${match[1]}.${extension}`
 }
 
 export function sshRelayRuntimeDownloadUrl(tag: string, archiveName: string): string {
   parseSshRelayReleaseTag(tag)
-  if (!/^orca-ssh-relay-runtime-v1-[A-Za-z0-9.-]+\.(?:tar\.xz|zip)$/.test(archiveName)) {
+  if (!/^orca-ssh-relay-runtime-v1-[A-Za-z0-9.-]+\.(?:tar\.br|zip)$/.test(archiveName)) {
     throw new Error(`Invalid SSH relay runtime archive name: ${archiveName}`)
   }
   return `https://github.com/stablyai/orca/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(archiveName)}`

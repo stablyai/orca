@@ -164,6 +164,7 @@ describe('spawnSystemSsh', () => {
       write: ReturnType<typeof vi.fn>
       end: ReturnType<typeof vi.fn>
       on: ReturnType<typeof vi.fn>
+      destroy: ReturnType<typeof vi.fn>
     }
     stdout: { on: ReturnType<typeof vi.fn> }
     stderr: { on: ReturnType<typeof vi.fn> }
@@ -177,7 +178,7 @@ describe('spawnSystemSsh', () => {
     spawnMock.mockReset()
 
     mockProc = {
-      stdin: { write: vi.fn(), end: vi.fn(), on: vi.fn() },
+      stdin: { write: vi.fn(), end: vi.fn(), on: vi.fn(), destroy: vi.fn() },
       stdout: { on: vi.fn() },
       stderr: { on: vi.fn() },
       pid: 12345,
@@ -391,14 +392,91 @@ describe('spawnSystemSsh', () => {
     expect(args).toContain('ServerAliveCountMax=3')
   })
 
+  it('places no-input mode before the destination without disabling connection reuse', () => {
+    const args = buildSshArgs(createTarget(), {
+      noInput: true,
+      resolvedConfig: createResolvedConfig()
+    })
+    const noInputIdx = args.indexOf('-n')
+    const terminatorIdx = args.indexOf('--')
+
+    expect(noInputIdx).toBeGreaterThan(-1)
+    expect(noInputIdx).toBeLessThan(terminatorIdx)
+    expect(args).toContain('ControlMaster=auto')
+    expect(args).toContain('ControlPersist=300')
+    expect(args).not.toContain('-S')
+  })
+
+  it('places explicit pinned host trust before the destination', () => {
+    const knownHostsPath = 'C:\\fixture\\client-home\\.ssh\\known_hosts'
+    const args = buildSshArgs(createTarget(), { strictKnownHostsFile: knownHostsPath })
+    const destinationIdx = args.indexOf('--')
+
+    expect(args).toEqual(
+      expect.arrayContaining([
+        '-o',
+        'StrictHostKeyChecking=yes',
+        '-o',
+        `UserKnownHostsFile=${knownHostsPath}`
+      ])
+    )
+    expect(args.indexOf('StrictHostKeyChecking=yes')).toBeLessThan(destinationIdx)
+    expect(args.indexOf(`UserKnownHostsFile=${knownHostsPath}`)).toBeLessThan(destinationIdx)
+    expect(args).not.toContain('StrictHostKeyChecking=no')
+  })
+
   it('spawns a remote command through the system ssh target', () => {
     spawnSystemSshCommand(createTarget({ configHost: 'fdpass-host' }), 'echo hello')
 
+    const args = spawnMock.mock.calls[0][1] as string[]
+    expect(args).not.toContain('-n')
     expect(spawnMock).toHaveBeenCalledWith(
       SYSTEM_SSH_PATH,
       expect.arrayContaining(['--', 'deploy@fdpass-host', "exec /bin/sh -c 'echo hello'"]),
       expect.objectContaining({ stdio: ['pipe', 'pipe', 'pipe'] })
     )
+  })
+
+  it('spawns a no-input command with the platform-safe child stdin boundary', () => {
+    if (process.platform !== 'win32') {
+      spawnMock.mockReturnValueOnce({ ...mockProc, stdin: null })
+    }
+    const channel = spawnSystemSshCommand(createTarget(), 'echo ready', { noInput: true })
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      SYSTEM_SSH_PATH,
+      expect.arrayContaining(['-n', '--', 'deploy@example.com']),
+      expect.objectContaining({
+        stdio: [process.platform === 'win32' ? 'pipe' : 'ignore', 'pipe', 'pipe']
+      })
+    )
+    if (process.platform === 'win32') {
+      expect(mockProc.stdin.destroy).toHaveBeenCalledOnce()
+    }
+    expect(() => channel.stdin.end()).not.toThrow()
+  })
+
+  it('keeps no-input command output open until the child process closes', async () => {
+    const proc = createMockChildProcess()
+    if (process.platform !== 'win32') {
+      ;(proc as unknown as { stdin: null }).stdin = null
+    }
+    spawnMock.mockReturnValue(proc)
+
+    const channel = spawnSystemSshCommand(createTarget(), 'echo ready', { noInput: true })
+    const output: Buffer[] = []
+    const onClose = vi.fn()
+    channel.on('data', (chunk: Buffer) => output.push(chunk))
+    channel.on('close', onClose)
+
+    channel.stdin.end()
+    proc.stdout.end('ORCA-SYSTEM-SSH-OK\n')
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    expect(Buffer.concat(output).toString('utf8')).toBe('ORCA-SYSTEM-SSH-OK\n')
+    expect(onClose).not.toHaveBeenCalled()
+    proc.emit('close', 0, null)
+    expect(onClose).toHaveBeenCalledWith(0, null)
   })
 
   it('spawns port forwards before the ssh destination terminator', () => {
@@ -497,6 +575,22 @@ describe('spawnSystemSsh', () => {
     await expect(promise).resolves.toBeUndefined()
     expect(proc.stdin.end).toHaveBeenCalledWith(Buffer.from('contents'))
     expect(proc.stderr.listenerCount('data')).toBe(0)
+  })
+
+  it('propagates explicit pinned host trust through file operations', async () => {
+    const proc = createEventedProcess()
+    const knownHostsPath = 'C:\\fixture\\client-home\\.ssh\\known_hosts'
+    spawnMock.mockReturnValue(proc)
+
+    const promise = writeFileViaSystemSsh(createTarget(), '/tmp/file', 'contents', {
+      strictKnownHostsFile: knownHostsPath
+    })
+    proc.emit('close', 0, null)
+
+    await expect(promise).resolves.toBeUndefined()
+    const args = spawnMock.mock.calls[0][1] as string[]
+    expect(args).toContain('StrictHostKeyChecking=yes')
+    expect(args).toContain(`UserKnownHostsFile=${knownHostsPath}`)
   })
 
   it('writes binary buffers to POSIX system SSH targets with exclusive create', async () => {

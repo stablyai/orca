@@ -938,7 +938,16 @@
                 <p>
                   Assemble pinned Node, relay entries, patched <code>node-pty</code>, the exact
                   <code>@parcel/watcher</code> package, and required JavaScript dependencies on
-                  matching CI environments. Run executable smoke probes before archiving.
+                  matching CI environments. Hosted Linux jobs first prove the preinstalled
+                  compiler/toolchain with executable C and C++ probes; only genuinely missing
+                  prerequisites use HTTPS with bounded connection timeouts and retries. Probe or
+                  install exhaustion fails the native build before any artifact is accepted. Run
+                  executable runtime smoke probes before archiving. POSIX relay outputs use
+                  deterministic <code>.tar.br</code> archives produced and consumed with Node's
+                  built-in Brotli streams at quality 9, <code>lgwin=20</code>, and 64 KiB chunks;
+                  Windows relay outputs remain ZIP. This lets every desktop client extract every
+                  remote tuple without a system XZ tool, a packaged native decompressor, or the 64
+                  MiB XZ dictionary that exhausted the desktop extraction budget.
                 </p>
               </div>
               <div class="phase-output">
@@ -993,11 +1002,16 @@
                   streaming is required and uses the SSH channel as a byte-preserving stdin stream
                   into exclusive per-file staging with only the declared shell/file primitives;
                   Windows uses a bounded binary PowerShell/.NET path and must not materialize the
-                  runtime as one JSON/base64 buffer; SFTP uses bounded concurrency. After locally
-                  verifying signed metadata and archive/tree hashes, transfer through authenticated
-                  SSH, restore every declared executable bit, then execute the transferred bundled
-                  Node to hash the entire staging tree. Verify the full tree, run bundled
-                  Node/native-module and minimal PTY/watcher probes, write a structured
+                  runtime as one JSON/base64 buffer. The client may subdivide each borrowed 64 KiB
+                  source chunk into smaller awaited Windows pipe writes, but must not release or
+                  reuse that source buffer until every subwrite settles. Windows pipe writes and
+                  .NET reads use the same conservative 4 KiB quantum to avoid platform pipe
+                  backpressure cycles; the source worker retains its fixed 64 KiB buffer. SFTP uses
+                  bounded concurrency. After locally verifying signed metadata and archive/tree
+                  hashes, transfer through authenticated SSH, restore every declared executable bit,
+                  then execute the transferred bundled Node to hash the entire staging tree. Verify
+                  the full tree, run bundled Node/native-module and minimal PTY/watcher probes,
+                  write a structured
                   <code>.install-complete</code> containing schema, mode, and digest, atomically
                   publish the immutable install, and only then launch. Preserve current locks,
                   reconnect, and garbage collection.
@@ -1037,9 +1051,11 @@
               <div>
                 <h3>Gate rollout by evidence</h3>
                 <p>
-                  Publish assets before consuming them, then progress through opt-in RC, internal
-                  canary, default-on RC, and stable. Enable only tuples with complete live evidence;
-                  keep the fallback through at least two stable cycles.
+                  Publish assets before consuming them, then ship the per-target Beta through RC and
+                  stable while every target remains on legacy unless explicitly opted in. Any
+                  default-on RC or stable promotion requires a separate reviewed decision. Enable
+                  only tuples with complete live evidence; keep the fallback through at least two
+                  stable cycles.
                 </p>
               </div>
               <div class="phase-output">
@@ -1122,8 +1138,10 @@
               candidates require kernel 4.18, glibc 2.28, and libstdc++ 6.0.25 with
               <code>GLIBCXX_3.4.25</code>; macOS candidates require 13.5. Initial Windows x64
               candidates require Windows 10 22H2 build 19045 or Server 2022 build 20348, and arm64
-              requires Windows 11 24H2 build 26100. Windows bootstrap additionally requires OpenSSH
-              for Windows 8.1p1, Windows PowerShell 5.1, and .NET Framework 4.8.
+              requires Windows 11 24H2 build 26100. The immutable manifest's single monotonic
+              <code>minimumBuild</code> is therefore 19045 for x64 (which also admits Server 2022
+              build 20348 and newer builds) and 26100 for arm64. Windows bootstrap additionally
+              requires OpenSSH for Windows 8.1p1, Windows PowerShell 5.1, and .NET Framework 4.8.
             </p>
             <p>
               Node's detached checksum signature is verified against a build-input-pinned official
@@ -1133,22 +1151,82 @@
               Rosetta SSH cell. These are selector eligibility constraints, not tuple enablement;
               every candidate still needs the complete two-layer evidence.
             </p>
+            <p>
+              Implementation evidence on 2026-07-14 rejected Linux native modules built directly on
+              Ubuntu 24.04: the resulting <code>pty.node</code> required <code>GLIBC_2.32</code> and
+              <code>GLIBC_2.34</code> and could not load in the declared glibc 2.28 userland. Linux
+              native modules must therefore be compiled and smoked in the digest-pinned oldest
+              glibc/libstdc++ userland on the tuple-native architecture. A later baseline-container
+              test cannot repair bytes built against a newer ABI, and that userland proof still
+              leaves the exact kernel 4.18 cell open.
+            </p>
+            <p>
+              The prepared Rocky 8 builder pins Python 3.9 because node-gyp 12 cannot run under the
+              distribution's default Python 3.6. GCC 8 uses the draft spelling
+              <code>gnu++2a</code> for the C++20 mode requested by Node v24's build headers, so the
+              Linux-only build step must replace exactly one <code>-std=gnu++20</code> occurrence in
+              the already verified, extracted <code>common.gypi</code> and fail closed on any other
+              count. This build-header compatibility step never changes bundled Node bytes, does not
+              apply to macOS or Windows, and avoids introducing a newer libstdc++ dependency;
+              complete native-module smoke and ABI inspection remain mandatory proof.
+            </p>
+            <p>
+              The offline Linux build container runs as the native GitHub runner's numeric user and
+              group so exclusive staging written through bind mounts remains runner-owned on both
+              hosted architectures. Its writable <code>/tmp</code> is an explicitly mode-1777 tmpfs;
+              the root filesystem remains read-only and the existing no-network, capability-drop,
+              no-new-privileges, process, memory, and CPU bounds remain mandatory. This avoids both
+              root-owned host output and broad permission changes to runner temporary directories.
+            </p>
+            <p>
+              Windows target-native native-module builds use three immutable inputs authenticated by
+              that same signed checksum document: the tuple's official Node ZIP, the exact-version
+              <code>headers.tar.gz</code>, and the tuple's <code>win-*/node.lib</code>. The Windows
+              ZIP does not contain build headers or the import library. Stage only the required
+              executable, license, headers, and import library into the local build root; disable
+              implicit <code>node-gyp</code> downloads so no unrecorded build input can enter.
+            </p>
           </div>
 
           <details open>
             <summary>Archive contents</summary>
             <div class="details-body">
               <ul>
-                <li>Unmodified official Node v24.18.0 executable pinned by source archive hash.</li>
+                <li>
+                  Unmodified official Node v24.18.0 executable pinned by its signed binary-archive
+                  hash. Windows native builds additionally authenticate the signed headers archive
+                  and architecture-specific <code>node.lib</code>, neither of which is shipped in
+                  the Windows runtime ZIP.
+                </li>
                 <li><code>relay.js</code> and crash-isolated <code>relay-watcher.js</code>.</li>
                 <li>Orca-patched <code>node-pty@1.1.0</code> built for the bundled runtime.</li>
+                <li>
+                  Windows also carries the pinned node-pty ConPTY runtime closure (<code
+                    >conpty.dll</code
+                  >
+                  and <code>OpenConsole.exe</code>) for the tuple architecture. Hash both files into
+                  the tree identity, classify them as native runtime inputs for signing/trust, and
+                  run PTY smoke with the production <code>useConptyDll: true</code> behavior rather
+                  than silently exercising system ConPTY.
+                </li>
+                <li>
+                  Manifest role cardinality must match the exact target-native closure: Linux has
+                  one node-pty native file and no native-runtime files, macOS has one node-pty
+                  native file plus <code>spawn-helper</code>, and Windows has both
+                  <code>conpty.node</code> and <code>conpty_console_list.node</code> plus
+                  <code>conpty.dll</code> and <code>OpenConsole.exe</code>. Release and desktop
+                  validators reject either missing or extra role members with the same
+                  tuple-specific rules.
+                </li>
                 <li>
                   <code>@parcel/watcher@2.5.6</code> with exactly one native optional package.
                 </li>
                 <li>Runtime metadata, dependency licenses, and a file-level SHA-256 manifest.</li>
                 <li>
-                  No development dependencies, package manager, compiler, source maps, or PDBs
-                  unless explicitly needed for diagnostics.
+                  No development dependencies, package manager, compiler, source maps, PDBs, or
+                  Orca-built debug symbols unless explicitly needed for diagnostics. Preserve the
+                  verified official Node executable byte-for-byte even when upstream metadata is
+                  present; never strip or rewrite those authenticated bytes.
                 </li>
               </ul>
             </div>
@@ -1294,7 +1372,7 @@
             <p>
               The local verified cache is capped at 2 GiB. Archives are rejected above 100 MiB
               compressed, 350 MiB expanded, 5,000 entries, or 250 MiB for one file. Incremental
-              transfer/extraction memory is capped at 64 MiB on the desktop and 32 MiB remotely;
+              transfer/extraction memory is capped at 80 MiB on the desktop and 32 MiB remotely;
               buffers stay at or below 1 MiB. SFTP starts at four files/channels and never exceeds
               eight open files, dropping to one for <code>MaxSessions=1</code>.
             </p>
@@ -1569,12 +1647,82 @@
                   <td>
                     Full-size runtime over SFTP and POSIX/Windows system SSH; tar/no-tar; no remote
                     hash tools; corrupted upload; bundled-Node corruption/failure; bounded memory
-                    and concurrency; <code>MaxSessions=1</code>; interrupted upload; stale lock
+                    and concurrency; no-input system-SSH probe records bounded native process exit,
+                    stdout-end, sentinel, and channel-close settlement; POSIX no-input probes use an
+                    OS-level ignored stdin handle plus OpenSSH <code>-n</code>; Windows must not map
+                    stdin to <code>NUL</code> because Win32-OpenSSH issues #856/#1330 document a
+                    redirected-handle hang; native x64/arm64 evidence also proves that inherited,
+                    standard-pipe, and overlapped-pipe handles all hang when the Windows client is
+                    simultaneously forced through <code>-n</code>, so those runs do not isolate the
+                    child handle. Native x64/arm64 evidence further rejects the upstream-recommended
+                    standard-pipe EOF when Windows <code>-n</code> is omitted because Node closes
+                    its parent writer only after <code>CreateProcess</code>. Exact native x64/arm64
+                    evidence also rejects stdin-only overlapped EOF with ordinary stdout/stderr and
+                    no <code>-n</code>. Exact native x64/arm64 evidence further rejects a newly
+                    created zero-length regular-file descriptor that is already at EOF before
+                    <code>CreateProcess</code>; its fixture cleanup passes, but the direct client
+                    still times out after the server closes the command session. The next bounded
+                    artifact-only capability was a disconnected Windows launcher with private
+                    anonymous stdin/stdout/stderr pipes, the stdin writer closed before
+                    <code>CreateProcessW</code>, an exact inherited-handle list, hidden process
+                    creation, bounded stdout/stderr pumps, exit propagation, and an owned job object
+                    that kills the SSH child when the launcher is cancelled. Exact native x64/arm64
+                    evidence proves that launcher compiles and passes all of those contracts, but
+                    Win32-OpenSSH still remains alive after authenticated remote command-session
+                    closure. This falsifies Node's pipe type and broad inherited-handle leakage. The
+                    next artifact-only diagnostic used a hidden launcher-owned private real console,
+                    queued console EOF before child creation, and shared that console with the SSH
+                    child while retaining private output pipes, exact handle inheritance, job
+                    ownership, and bounded cancellation. Native x64/arm64 prove the console handle
+                    and zero-byte cooked EOF but the live client still hangs, falsifying stdin
+                    alone. The next one-variable diagnostic retained that console stdin and replaced
+                    only child stdout/stderr pipes with unique delete-on-close regular files under
+                    an explicit per-stream byte ceiling, bounded polling/cancellation, incremental
+                    post-exit replay, and exact cleanup. Native x64/arm64 prove those contracts, but
+                    the live client still hangs with the same lifecycle tuple, falsifying redirected
+                    output pipes as the remaining cause. The bounded verbose trace on native
+                    x64/arm64 then shows that Win32-OpenSSH ignores the workflow's overridden
+                    profile variables for host-key discovery and stops before authentication while
+                    looking for the runner account's missing default <code>known_hosts</code>.
+                    Passing only the fixture's exact pinned <code>known_hosts</code> path then
+                    proves strict trust, authentication, command execution, and natural launcher
+                    exit on both architectures. The following unchanged direct-spawn product probe
+                    still hangs after authenticated remote session close, selecting the
+                    private-console/ bounded-regular-output launcher rather than ConPTY or another
+                    SSH client. Add only an explicitly injected launcher-path adapter first; when
+                    absent, preserve existing behavior, and do not package, sign, or add a product
+                    caller. POSIX retains ignored stdin plus <code>-n</code>; fixture-owned Windows
+                    session processes settle before profile hives are boundedly unloaded and native
+                    profile deletion begins; <code>MaxSessions=1</code>; interrupted upload; stale
+                    lock
                   </td>
                   <td>
                     Bundled Node hashes the full staged tree before sentinel write;
                     corruption/failure leaves no complete install, memory stays in budget, and the
                     ordering is asserted
+                  </td>
+                </tr>
+                <tr>
+                  <td>Hosted Windows OpenSSH fixture trust</td>
+                  <td>
+                    When the hosted ARM64 OS capability is unavailable, use one immutable official
+                    Microsoft Win32-OpenSSH release with exact per-architecture archive hashes.
+                    Require valid Microsoft Authenticode on every PE. The release's sole upstream
+                    native library, <code>libcrypto.dll</code>, must match its separately pinned
+                    per-architecture hash, expected Microsoft 3rd Party Application Component common
+                    name, and exact audited leaf-certificate thumbprint. Every executable must match
+                    the expected Microsoft Corporation common name and one of the audited leaf
+                    thumbprints; any added, missing, differently signed, or differently hashed
+                    native file fails closed.
+                  </td>
+                  <td>
+                    This trust exception provisions only the loopback CI server. Production clients
+                    and SSH hosts perform no fixture download. Fixture host-key and authorized-key
+                    ACL creation replaces volume-specific defaults with the exact allowed,
+                    protected, allow-only SID closure before service start. Owned fixture profiles
+                    are unloaded and removed through a bounded native lifecycle before exact
+                    teardown assertions; none of this weakens runtime artifact, native-signing,
+                    transfer, install, or launch trust.
                   </td>
                 </tr>
                 <tr>
@@ -1749,8 +1897,10 @@
             <article class="risk">
               <strong>Linux baseline mismatch</strong>
               <p>
-                Build against the oldest supported glibc and libstdc++ baseline; run on that exact
-                baseline before promotion.
+                Build native modules in the oldest supported glibc and libstdc++ userland on the
+                tuple-native architecture; run the complete runtime there, then separately run on
+                the exact oldest kernel before promotion. Reject newer-userland producer output even
+                when it smokes successfully on the producer runner.
               </p>
             </article>
             <article class="risk">

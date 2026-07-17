@@ -50,7 +50,7 @@ describe('SSH relay manifest signatures', () => {
     const canonical = canonicalUnsignedSshRelayManifestBytes(manifest)
     expect(canonicalUnsignedSshRelayManifestBytes(reordered)).toEqual(canonical)
     expect(createHash('sha256').update(canonical).digest('hex')).toBe(
-      'e78bf4416628a91055035dc7926035cbf633f29d3618be34e041c6dc5e0794fb'
+      'dc36bff51330eb3aa4791bf30c25eeedd6e8d4cbc57470d50f377c24e0a5ed06'
     )
   })
 
@@ -87,6 +87,16 @@ describe('SSH relay manifest signatures', () => {
     ])
 
     expect(verified.tuples[0].contentId).toBe(manifest.tuples[0].contentId)
+  })
+
+  it('makes verified manifest fields immutable after signature acceptance', () => {
+    const verified = verifySshRelayArtifactManifest(signedManifest(), [
+      { keyId: sshRelayManifestKeyId(keyPair.publicKey), publicKey: keyPair.publicKey }
+    ])
+
+    expect(() => {
+      Object.defineProperty(verified.tuples[0].archive, 'name', { value: 'latest.tar.br' })
+    }).toThrow(TypeError)
   })
 
   it('rejects signed content mutation', () => {

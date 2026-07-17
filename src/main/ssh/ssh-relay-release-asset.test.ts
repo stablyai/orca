@@ -25,7 +25,7 @@ describe('SSH relay release asset identity', () => {
   it('derives a content-qualified archive name and exact direct URL', () => {
     const name = sshRelayRuntimeArchiveName('linux-x64-glibc', contentId)
 
-    expect(name).toBe(`orca-ssh-relay-runtime-v1-linux-x64-glibc-${'a'.repeat(64)}.tar.xz`)
+    expect(name).toBe(`orca-ssh-relay-runtime-v1-linux-x64-glibc-${'a'.repeat(64)}.tar.br`)
     expect(sshRelayRuntimeDownloadUrl('v1.2.3-rc.4', name)).toBe(
       `https://github.com/stablyai/orca/releases/download/v1.2.3-rc.4/${name}`
     )
