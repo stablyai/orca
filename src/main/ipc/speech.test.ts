@@ -65,7 +65,20 @@ describe('registerSpeechHandlers', () => {
     getSpeechModelManagerMock.mockReset()
     getSpeechSttServiceMock.mockReset()
     getPlaybackSuppressionServiceMock.mockReset()
+    getPlaybackSuppressionServiceMock.mockReturnValue({
+      getCapability: vi.fn(async () => ({ available: false, reason: 'test' })),
+      acquire: vi.fn(),
+      release: vi.fn()
+    })
     deleteLocalSpeechModelMock.mockReset()
+  })
+
+  it('starts stranded mute recovery when speech handlers register', async () => {
+    const service = getPlaybackSuppressionServiceMock()
+
+    registerSpeechHandlers({} as never)
+
+    await vi.waitFor(() => expect(service.getCapability).toHaveBeenCalledTimes(1))
   })
 
   it('clears the model download progress callback after completion', async () => {
@@ -194,7 +207,7 @@ describe('registerSpeechHandlers', () => {
   it('releases active playback suppression when its renderer is destroyed', async () => {
     let destroyed: (() => void) | undefined
     const service = {
-      getCapability: vi.fn(),
+      getCapability: vi.fn(async () => ({ available: true, backend: 'test' })),
       acquire: vi.fn(async () => ({ active: true })),
       release: vi.fn(async () => undefined)
     }

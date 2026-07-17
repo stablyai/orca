@@ -17,6 +17,12 @@ import {
 import type { Store } from '../persistence'
 
 export function registerSpeechHandlers(store: Store): void {
+  // Why: a hard exit can bypass renderer cleanup; initialize the local audio
+  // service at startup so a recent same-device mute is repaired immediately.
+  void getPlaybackSuppressionService()
+    .getCapability()
+    .catch(() => undefined)
+
   ipcMain.handle('speech:getCatalog', () => {
     return SPEECH_MODEL_CATALOG
   })

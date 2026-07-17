@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   PlaybackSuppressionService,
   type PlaybackSuppressionAdapter,
+  type PlaybackSuppressionRecoveryStore,
   type PlaybackSuppressionSnapshot
 } from './playback-suppression-service'
 
@@ -84,5 +85,101 @@ describe('PlaybackSuppressionService', () => {
       reason: 'unavailable'
     })
     expect(adapter.setMuted).toHaveBeenCalledTimes(1)
+  })
+
+  it('records recovery state before muting and clears it after restoration', async () => {
+    const calls: string[] = []
+    const snapshot = { backend: 'test', endpointId: 'speaker-1', muted: false }
+    const adapter: PlaybackSuppressionAdapter = {
+      getCapability: vi.fn(async () => ({ available: true as const, backend: 'test' })),
+      snapshot: vi.fn(async () => snapshot),
+      setMuted: vi.fn(async (muted) => {
+        calls.push(muted ? 'mute' : 'restore')
+      })
+    }
+    const recoveryStore: PlaybackSuppressionRecoveryStore = {
+      read: vi.fn(async () => null),
+      write: vi.fn(async () => {
+        calls.push('write')
+      }),
+      clear: vi.fn(async () => {
+        calls.push('clear')
+      })
+    }
+    const service = new PlaybackSuppressionService(adapter, recoveryStore)
+
+    await service.acquire('dictation:1')
+    await service.release('dictation:1')
+
+    expect(calls).toEqual(['write', 'mute', 'restore', 'clear'])
+    expect(recoveryStore.write).toHaveBeenCalledWith(snapshot)
+  })
+
+  it('recovers a stranded mute only on the same endpoint', async () => {
+    const marker = { backend: 'test', endpointId: 'speaker-1', muted: false }
+    const adapter = createAdapter(true)
+    vi.mocked(adapter.snapshot).mockResolvedValue({
+      backend: 'test',
+      endpointId: 'speaker-1',
+      muted: true
+    })
+    const recoveryStore: PlaybackSuppressionRecoveryStore = {
+      read: vi.fn(async () => marker),
+      write: vi.fn(),
+      clear: vi.fn(async () => undefined)
+    }
+    const service = new PlaybackSuppressionService(adapter, recoveryStore)
+
+    await service.getCapability()
+
+    expect(adapter.setMuted).toHaveBeenCalledWith(false, expect.any(AbortSignal))
+    expect(recoveryStore.clear).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not alter a different endpoint during crash recovery', async () => {
+    const adapter = createAdapter(true)
+    vi.mocked(adapter.snapshot).mockResolvedValue({
+      backend: 'test',
+      endpointId: 'speaker-2',
+      muted: true
+    })
+    const recoveryStore: PlaybackSuppressionRecoveryStore = {
+      read: vi.fn(async () => ({ backend: 'test', endpointId: 'speaker-1', muted: false })),
+      write: vi.fn(),
+      clear: vi.fn(async () => undefined)
+    }
+    const service = new PlaybackSuppressionService(adapter, recoveryStore)
+
+    await service.getCapability()
+
+    expect(adapter.setMuted).not.toHaveBeenCalled()
+    expect(recoveryStore.clear).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears recovery state when a failed mute left output unchanged', async () => {
+    const adapter: PlaybackSuppressionAdapter = {
+      getCapability: vi.fn(async () => ({ available: true as const, backend: 'test' })),
+      snapshot: vi.fn(async () => ({
+        backend: 'test',
+        endpointId: 'speaker-1',
+        muted: false
+      })),
+      setMuted: vi.fn(async () => {
+        throw new Error('mute failed')
+      })
+    }
+    const recoveryStore: PlaybackSuppressionRecoveryStore = {
+      read: vi.fn(async () => null),
+      write: vi.fn(async () => undefined),
+      clear: vi.fn(async () => undefined)
+    }
+    const service = new PlaybackSuppressionService(adapter, recoveryStore)
+
+    await expect(service.acquire('dictation:1')).resolves.toEqual({
+      active: false,
+      reason: 'unavailable'
+    })
+
+    expect(recoveryStore.clear).toHaveBeenCalledTimes(1)
   })
 })

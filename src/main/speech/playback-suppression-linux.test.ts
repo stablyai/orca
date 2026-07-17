@@ -10,22 +10,29 @@ describe('Linux playback suppression', () => {
       if (command === 'wpctl' && args[0] === 'get-volume') {
         return { stdout: 'Volume: 0.58\n', stderr: '' }
       }
+      if (command === 'wpctl' && args[0] === 'inspect') {
+        return { stdout: '  * node.name = "bluez_output.speaker_1"\n', stderr: '' }
+      }
       return { stdout: '', stderr: '' }
     })
     const adapter = createLinuxPlaybackSuppressionAdapter(run)
 
-    await expect(adapter.snapshot()).resolves.toEqual({ backend: 'wpctl', muted: false })
+    await expect(adapter.snapshot()).resolves.toEqual({
+      backend: 'wpctl',
+      endpointId: 'bluez_output.speaker_1',
+      muted: false
+    })
     await adapter.setMuted(true)
     await adapter.setMuted(false)
 
     expect(run).toHaveBeenNthCalledWith(
-      2,
+      3,
       'wpctl',
       ['set-mute', '@DEFAULT_AUDIO_SINK@', '1'],
       undefined
     )
     expect(run).toHaveBeenNthCalledWith(
-      3,
+      4,
       'wpctl',
       ['set-mute', '@DEFAULT_AUDIO_SINK@', '0'],
       undefined
@@ -52,6 +59,9 @@ describe('Linux playback suppression', () => {
       if (command === 'pactl' && args[0] === 'get-sink-mute') {
         return { stdout: 'Mute: no\n', stderr: '' }
       }
+      if (command === 'pactl' && args[0] === 'get-default-sink') {
+        return { stdout: 'alsa_output.speaker_1\n', stderr: '' }
+      }
       return { stdout: '', stderr: '' }
     })
     const adapter = createLinuxPlaybackSuppressionAdapter(run)
@@ -67,18 +77,22 @@ describe('Linux playback suppression', () => {
   })
 
   it('does not treat malformed mixer output as an unmuted snapshot', async () => {
-    const run = vi.fn<PlaybackSuppressionCommandRunner>(async (command) => {
+    const run = vi.fn<PlaybackSuppressionCommandRunner>(async (command, args) => {
       if (command === 'wpctl') {
         return { stdout: 'unexpected output\n', stderr: '' }
       }
-      if (command === 'pactl') {
+      if (command === 'pactl' && args[0] === 'get-sink-mute') {
         return { stdout: 'Mute: yes\n', stderr: '' }
+      }
+      if (command === 'pactl' && args[0] === 'get-default-sink') {
+        return { stdout: 'alsa_output.speaker_1\n', stderr: '' }
       }
       throw new Error('not reached')
     })
 
     await expect(createLinuxPlaybackSuppressionAdapter(run).snapshot()).resolves.toEqual({
       backend: 'pactl',
+      endpointId: 'alsa_output.speaker_1',
       muted: true
     })
   })

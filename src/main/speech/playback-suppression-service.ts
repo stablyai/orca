@@ -2,6 +2,7 @@ import type { PlaybackSuppressionCapability } from '../../shared/speech-types'
 
 export type PlaybackSuppressionSnapshot = {
   backend: string
+  endpointId?: string
   muted: boolean
 }
 
@@ -15,21 +16,33 @@ export type PlaybackSuppressionAcquireResult =
   | { active: true }
   | { active: false; reason: 'canceled' | 'unavailable' }
 
+export type PlaybackSuppressionRecoveryStore = {
+  read(): Promise<PlaybackSuppressionSnapshot | null>
+  write(snapshot: PlaybackSuppressionSnapshot): Promise<void>
+  clear(): Promise<void>
+}
+
 export class PlaybackSuppressionService {
   private readonly owners = new Set<string>()
   private activeSnapshot: PlaybackSuppressionSnapshot | null = null
   private pendingActivation: Promise<PlaybackSuppressionAcquireResult> | null = null
   private activationController: AbortController | null = null
+  private recoveryPromise: Promise<void> | null = null
   private generation = 0
 
-  constructor(private readonly adapter: PlaybackSuppressionAdapter) {}
+  constructor(
+    private readonly adapter: PlaybackSuppressionAdapter,
+    private readonly recoveryStore?: PlaybackSuppressionRecoveryStore
+  ) {}
 
-  getCapability(): Promise<PlaybackSuppressionCapability> {
+  async getCapability(): Promise<PlaybackSuppressionCapability> {
+    await this.ensureRecovered()
     return this.adapter.getCapability()
   }
 
   async acquire(owner: string): Promise<PlaybackSuppressionAcquireResult> {
     this.owners.add(owner)
+    await this.ensureRecovered()
 
     while (this.owners.has(owner)) {
       if (this.activeSnapshot) {
@@ -104,12 +117,17 @@ export class PlaybackSuppressionService {
     controller: AbortController
   ): Promise<PlaybackSuppressionAcquireResult> {
     let snapshot: PlaybackSuppressionSnapshot | null = null
+    let recoveryWritten = false
     try {
       snapshot = await this.adapter.snapshot(controller.signal)
       if (!this.isCurrent(generation)) {
         return { active: false, reason: 'canceled' }
       }
       if (!snapshot.muted) {
+        if (snapshot.endpointId) {
+          await this.recoveryStore?.write(snapshot)
+          recoveryWritten = Boolean(this.recoveryStore)
+        }
         await this.adapter.setMuted(true, controller.signal)
       }
       if (!this.isCurrent(generation)) {
@@ -121,6 +139,9 @@ export class PlaybackSuppressionService {
       this.activeSnapshot = snapshot
       return { active: true }
     } catch {
+      if (snapshot && recoveryWritten) {
+        await this.reconcileFailedActivation(snapshot)
+      }
       this.owners.clear()
       return { active: false, reason: 'unavailable' }
     }
@@ -130,7 +151,55 @@ export class PlaybackSuppressionService {
     return this.generation === generation && this.owners.size > 0
   }
 
-  private restore(snapshot: PlaybackSuppressionSnapshot): Promise<void> {
-    return this.adapter.setMuted(snapshot.muted, new AbortController().signal)
+  private async restore(snapshot: PlaybackSuppressionSnapshot): Promise<void> {
+    await this.adapter.setMuted(snapshot.muted, new AbortController().signal)
+    await this.recoveryStore?.clear()
+  }
+
+  private ensureRecovered(): Promise<void> {
+    if (!this.recoveryStore) {
+      return Promise.resolve()
+    }
+    if (!this.recoveryPromise) {
+      this.recoveryPromise = this.recoverStrandedMute()
+    }
+    return this.recoveryPromise
+  }
+
+  private async recoverStrandedMute(): Promise<void> {
+    const marker = await this.recoveryStore?.read()
+    if (!marker || !this.recoveryStore) {
+      return
+    }
+    try {
+      const current = await this.adapter.snapshot()
+      const sameEndpoint =
+        Boolean(marker.endpointId) &&
+        marker.backend === current.backend &&
+        marker.endpointId === current.endpointId
+      if (sameEndpoint && current.muted) {
+        await this.adapter.setMuted(marker.muted, new AbortController().signal)
+      }
+      await this.recoveryStore.clear()
+    } catch {
+      // Keep the marker so a later launch can retry recovery safely.
+    }
+  }
+
+  private async reconcileFailedActivation(snapshot: PlaybackSuppressionSnapshot): Promise<void> {
+    if (!this.recoveryStore) {
+      return
+    }
+    try {
+      const current = await this.adapter.snapshot()
+      const sameEndpoint =
+        snapshot.backend === current.backend && snapshot.endpointId === current.endpointId
+      if (sameEndpoint && current.muted !== snapshot.muted) {
+        await this.adapter.setMuted(snapshot.muted, new AbortController().signal)
+      }
+      await this.recoveryStore.clear()
+    } catch {
+      // Preserve the marker when the current state cannot be proven safe.
+    }
   }
 }

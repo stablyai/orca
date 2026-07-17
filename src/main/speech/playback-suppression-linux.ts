@@ -70,6 +70,28 @@ export function createLinuxPlaybackSuppressionAdapter(
 ): PlaybackSuppressionAdapter {
   let selectedBackend: LinuxBackend | null = null
 
+  const readEndpointId = async (
+    backend: LinuxBackend,
+    signal?: AbortSignal
+  ): Promise<string | undefined> => {
+    try {
+      switch (backend) {
+        case 'wpctl': {
+          const { stdout } = await run('wpctl', ['inspect', '@DEFAULT_AUDIO_SINK@'], signal)
+          return /node\.name\s*=\s*"([^"]+)"/i.exec(stdout)?.[1]
+        }
+        case 'pactl': {
+          const { stdout } = await run('pactl', ['get-default-sink'], signal)
+          return stdout.trim() || undefined
+        }
+        case 'amixer':
+          return undefined
+      }
+    } catch {
+      return undefined
+    }
+  }
+
   const probe = async (signal?: AbortSignal): Promise<PlaybackSuppressionSnapshot> => {
     for (const candidate of backendProbes) {
       try {
@@ -79,7 +101,12 @@ export function createLinuxPlaybackSuppressionAdapter(
           continue
         }
         selectedBackend = candidate.backend
-        return { backend: candidate.backend, muted }
+        const endpointId = await readEndpointId(candidate.backend, signal)
+        return {
+          backend: candidate.backend,
+          ...(endpointId ? { endpointId } : {}),
+          muted
+        }
       } catch {
         // Try the next local mixer backend.
       }

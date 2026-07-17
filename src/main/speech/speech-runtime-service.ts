@@ -1,3 +1,5 @@
+import { app } from 'electron'
+import { join } from 'node:path'
 import { ModelManager } from './model-manager'
 import { SttService } from './stt-service'
 import type { VoiceSettings } from '../../shared/speech-types'
@@ -6,6 +8,7 @@ import {
   PlaybackSuppressionService,
   type PlaybackSuppressionAdapter
 } from './playback-suppression-service'
+import { PlaybackSuppressionRecoveryFile } from './playback-suppression-recovery-file'
 
 type SpeechSettingsStore = {
   getSettings(): {
@@ -51,7 +54,10 @@ export function getPlaybackSuppressionService(): PlaybackSuppressionService {
     playbackSuppressionService = new PlaybackSuppressionService(
       process.platform === 'linux'
         ? createLinuxPlaybackSuppressionAdapter()
-        : unsupportedPlaybackSuppressionAdapter
+        : unsupportedPlaybackSuppressionAdapter,
+      new PlaybackSuppressionRecoveryFile(
+        join(app.getPath('userData'), 'playback-suppression-recovery.json')
+      )
     )
   }
   return playbackSuppressionService
