@@ -176,4 +176,28 @@ describe('Azure DevOps client', () => {
       headSha: 'newsha'
     })
   })
+
+  it('cancels unread error-response bodies so bundled undici cannot crash on socket close', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'https://dev.azure.com/acme/Project/_git/repo\n'
+    })
+    let cancelledBodies = 0
+    const fetchMock = vi.fn(async () => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('<html>proxy error page</html>'))
+        },
+        cancel() {
+          cancelledBodies += 1
+        }
+      })
+      return new Response(body, { status: 502 })
+    })
+    globalThis.fetch = fetchMock as never
+
+    await getAzureDevOpsPullRequestForBranch('/repo', 'refs/heads/feature/azure')
+
+    expect(fetchMock).toHaveBeenCalled()
+    expect(cancelledBodies).toBe(fetchMock.mock.calls.length)
+  })
 })

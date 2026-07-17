@@ -248,4 +248,20 @@ describe('Orca cloud client', () => {
       }
     })
   })
+
+  it('cancels the unread error-response body so bundled undici cannot crash on socket close', async () => {
+    let cancelledBodies = 0
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('<html>gateway error page</html>'))
+      },
+      cancel() {
+        cancelledBodies += 1
+      }
+    })
+    fetchMock.mockResolvedValue(new Response(body, { status: 502 }))
+
+    await expect(refreshOrcaCloudCapabilities(config, session)).rejects.toThrow()
+    expect(cancelledBodies).toBe(1)
+  })
 })

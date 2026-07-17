@@ -193,4 +193,30 @@ describe('Codex backend rate-limit requests', () => {
       })
     )
   })
+
+  it('cancels the unread error-response body so bundled undici cannot crash on socket close', async () => {
+    readFileMock.mockResolvedValue(
+      JSON.stringify({
+        tokens: { access_token: 'access-token', account_id: 'account-id' }
+      })
+    )
+    let cancelledBodies = 0
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('<html>rate-limited error page</html>'))
+      },
+      cancel() {
+        cancelledBodies += 1
+      }
+    })
+    vi.mocked(fetch).mockResolvedValue(new Response(body, { status: 429 }))
+
+    await expect(
+      consumeCodexRateLimitResetCredit({
+        codexHomePath: '/managed/codex-home',
+        idempotencyKey: 'redeem-429'
+      })
+    ).rejects.toThrow('Codex reset failed: HTTP 429')
+    expect(cancelledBodies).toBe(1)
+  })
 })

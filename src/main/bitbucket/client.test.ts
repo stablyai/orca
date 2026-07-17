@@ -122,4 +122,25 @@ describe('Bitbucket client', () => {
       account: 'bitbucket-user'
     })
   })
+
+  it('cancels unread error-response bodies so bundled undici cannot crash on socket close', async () => {
+    let cancelledBodies = 0
+    const fetchMock = vi.fn(async () => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('<html>proxy error page</html>'))
+        },
+        cancel() {
+          cancelledBodies += 1
+        }
+      })
+      return new Response(body, { status: 502 })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getBitbucketPullRequestForBranch('/repo', 'refs/heads/feature/bitbucket')
+
+    expect(fetchMock).toHaveBeenCalled()
+    expect(cancelledBodies).toBe(fetchMock.mock.calls.length)
+  })
 })
