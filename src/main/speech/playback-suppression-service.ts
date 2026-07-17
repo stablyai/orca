@@ -3,13 +3,18 @@ import type { PlaybackSuppressionCapability } from '../../shared/speech-types'
 export type PlaybackSuppressionSnapshot = {
   backend: string
   endpointId?: string
+  endpointTarget?: string
   muted: boolean
 }
 
 export type PlaybackSuppressionAdapter = {
   getCapability(): Promise<PlaybackSuppressionCapability>
   snapshot(signal?: AbortSignal): Promise<PlaybackSuppressionSnapshot>
-  setMuted(muted: boolean, signal?: AbortSignal): Promise<void>
+  setMuted(
+    muted: boolean,
+    signal?: AbortSignal,
+    snapshot?: PlaybackSuppressionSnapshot
+  ): Promise<void>
 }
 
 export type PlaybackSuppressionAcquireResult =
@@ -128,7 +133,7 @@ export class PlaybackSuppressionService {
           await this.recoveryStore?.write(snapshot)
           recoveryWritten = Boolean(this.recoveryStore)
         }
-        await this.adapter.setMuted(true, controller.signal)
+        await this.adapter.setMuted(true, controller.signal, snapshot)
       }
       if (!this.isCurrent(generation)) {
         if (!snapshot.muted) {
@@ -152,7 +157,7 @@ export class PlaybackSuppressionService {
   }
 
   private async restore(snapshot: PlaybackSuppressionSnapshot): Promise<void> {
-    await this.adapter.setMuted(snapshot.muted, new AbortController().signal)
+    await this.adapter.setMuted(snapshot.muted, new AbortController().signal, snapshot)
     await this.recoveryStore?.clear()
   }
 
@@ -178,7 +183,7 @@ export class PlaybackSuppressionService {
         marker.backend === current.backend &&
         marker.endpointId === current.endpointId
       if (sameEndpoint && current.muted) {
-        await this.adapter.setMuted(marker.muted, new AbortController().signal)
+        await this.adapter.setMuted(marker.muted, new AbortController().signal, marker)
       }
       await this.recoveryStore.clear()
     } catch {
@@ -195,7 +200,7 @@ export class PlaybackSuppressionService {
       const sameEndpoint =
         snapshot.backend === current.backend && snapshot.endpointId === current.endpointId
       if (sameEndpoint && current.muted !== snapshot.muted) {
-        await this.adapter.setMuted(snapshot.muted, new AbortController().signal)
+        await this.adapter.setMuted(snapshot.muted, new AbortController().signal, snapshot)
       }
       await this.recoveryStore.clear()
     } catch {

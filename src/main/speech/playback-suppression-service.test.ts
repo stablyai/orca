@@ -22,8 +22,9 @@ describe('PlaybackSuppressionService', () => {
     await expect(service.acquire('dictation:1')).resolves.toEqual({ active: true })
     await service.release('dictation:1')
 
-    expect(adapter.setMuted).toHaveBeenNthCalledWith(1, true, expect.any(AbortSignal))
-    expect(adapter.setMuted).toHaveBeenNthCalledWith(2, false, expect.any(AbortSignal))
+    const snapshot = { backend: 'test', muted: false }
+    expect(adapter.setMuted).toHaveBeenNthCalledWith(1, true, expect.any(AbortSignal), snapshot)
+    expect(adapter.setMuted).toHaveBeenNthCalledWith(2, false, expect.any(AbortSignal), snapshot)
   })
 
   it('does not unmute output that was already muted', async () => {
@@ -72,7 +73,7 @@ describe('PlaybackSuppressionService', () => {
 
     await expect(acquiring).resolves.toEqual({ active: false, reason: 'canceled' })
     await releasing
-    expect(adapter.setMuted).toHaveBeenLastCalledWith(false, expect.any(AbortSignal))
+    expect(adapter.setMuted).toHaveBeenLastCalledWith(false, expect.any(AbortSignal), snapshot)
   })
 
   it('fails open when the platform cannot be muted', async () => {
@@ -89,7 +90,12 @@ describe('PlaybackSuppressionService', () => {
 
   it('records recovery state before muting and clears it after restoration', async () => {
     const calls: string[] = []
-    const snapshot = { backend: 'test', endpointId: 'speaker-1', muted: false }
+    const snapshot = {
+      backend: 'test',
+      endpointId: 'speaker-1',
+      endpointTarget: '118',
+      muted: false
+    }
     const adapter: PlaybackSuppressionAdapter = {
       getCapability: vi.fn(async () => ({ available: true as const, backend: 'test' })),
       snapshot: vi.fn(async () => snapshot),
@@ -113,6 +119,8 @@ describe('PlaybackSuppressionService', () => {
 
     expect(calls).toEqual(['write', 'mute', 'restore', 'clear'])
     expect(recoveryStore.write).toHaveBeenCalledWith(snapshot)
+    expect(adapter.setMuted).toHaveBeenNthCalledWith(1, true, expect.any(AbortSignal), snapshot)
+    expect(adapter.setMuted).toHaveBeenNthCalledWith(2, false, expect.any(AbortSignal), snapshot)
   })
 
   it('recovers a stranded mute only on the same endpoint', async () => {
@@ -132,7 +140,7 @@ describe('PlaybackSuppressionService', () => {
 
     await service.getCapability()
 
-    expect(adapter.setMuted).toHaveBeenCalledWith(false, expect.any(AbortSignal))
+    expect(adapter.setMuted).toHaveBeenCalledWith(false, expect.any(AbortSignal), marker)
     expect(recoveryStore.clear).toHaveBeenCalledTimes(1)
   })
 

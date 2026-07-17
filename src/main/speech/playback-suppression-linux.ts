@@ -69,26 +69,30 @@ export function createLinuxPlaybackSuppressionAdapter(
   run: PlaybackSuppressionCommandRunner = runPlaybackSuppressionCommand
 ): PlaybackSuppressionAdapter {
   let selectedBackend: LinuxBackend | null = null
+  let selectedEndpointTarget: string | undefined
 
-  const readEndpointId = async (
+  const readEndpoint = async (
     backend: LinuxBackend,
     signal?: AbortSignal
-  ): Promise<string | undefined> => {
+  ): Promise<{ endpointId?: string; endpointTarget?: string }> => {
     try {
       switch (backend) {
         case 'wpctl': {
           const { stdout } = await run('wpctl', ['inspect', '@DEFAULT_AUDIO_SINK@'], signal)
-          return /node\.name\s*=\s*"([^"]+)"/i.exec(stdout)?.[1]
+          const endpointId = /node\.name\s*=\s*"([^"]+)"/i.exec(stdout)?.[1]
+          const endpointTarget = /^id\s+(\d+),/im.exec(stdout)?.[1]
+          return { endpointId, endpointTarget }
         }
         case 'pactl': {
           const { stdout } = await run('pactl', ['get-default-sink'], signal)
-          return stdout.trim() || undefined
+          const endpointId = stdout.trim() || undefined
+          return { endpointId, endpointTarget: endpointId }
         }
         case 'amixer':
-          return undefined
+          return {}
       }
     } catch {
-      return undefined
+      return {}
     }
   }
 
@@ -101,10 +105,11 @@ export function createLinuxPlaybackSuppressionAdapter(
           continue
         }
         selectedBackend = candidate.backend
-        const endpointId = await readEndpointId(candidate.backend, signal)
+        const endpoint = await readEndpoint(candidate.backend, signal)
+        selectedEndpointTarget = endpoint.endpointTarget
         return {
           backend: candidate.backend,
-          ...(endpointId ? { endpointId } : {}),
+          ...endpoint,
           muted
         }
       } catch {
@@ -123,16 +128,29 @@ export function createLinuxPlaybackSuppressionAdapter(
     }
   }
 
-  const setMuted = async (muted: boolean, signal?: AbortSignal): Promise<void> => {
+  const setMuted = async (
+    muted: boolean,
+    signal?: AbortSignal,
+    snapshot?: PlaybackSuppressionSnapshot
+  ): Promise<void> => {
     if (!selectedBackend) {
       await probe(signal)
     }
+    const endpointTarget = snapshot?.endpointTarget ?? selectedEndpointTarget
     switch (selectedBackend) {
       case 'wpctl':
-        await run('wpctl', ['set-mute', '@DEFAULT_AUDIO_SINK@', muted ? '1' : '0'], signal)
+        await run(
+          'wpctl',
+          ['set-mute', endpointTarget ?? '@DEFAULT_AUDIO_SINK@', muted ? '1' : '0'],
+          signal
+        )
         return
       case 'pactl':
-        await run('pactl', ['set-sink-mute', '@DEFAULT_SINK@', muted ? '1' : '0'], signal)
+        await run(
+          'pactl',
+          ['set-sink-mute', endpointTarget ?? '@DEFAULT_SINK@', muted ? '1' : '0'],
+          signal
+        )
         return
       case 'amixer':
         await run('amixer', ['set', 'Master', muted ? 'mute' : 'unmute'], signal)

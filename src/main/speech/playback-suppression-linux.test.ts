@@ -11,7 +11,11 @@ describe('Linux playback suppression', () => {
         return { stdout: 'Volume: 0.58\n', stderr: '' }
       }
       if (command === 'wpctl' && args[0] === 'inspect') {
-        return { stdout: '  * node.name = "bluez_output.speaker_1"\n', stderr: '' }
+        return {
+          stdout:
+            'id 118, type PipeWire:Interface:Node\n  * node.name = "bluez_output.speaker_1"\n',
+          stderr: ''
+        }
       }
       return { stdout: '', stderr: '' }
     })
@@ -20,23 +24,14 @@ describe('Linux playback suppression', () => {
     await expect(adapter.snapshot()).resolves.toEqual({
       backend: 'wpctl',
       endpointId: 'bluez_output.speaker_1',
+      endpointTarget: '118',
       muted: false
     })
     await adapter.setMuted(true)
     await adapter.setMuted(false)
 
-    expect(run).toHaveBeenNthCalledWith(
-      3,
-      'wpctl',
-      ['set-mute', '@DEFAULT_AUDIO_SINK@', '1'],
-      undefined
-    )
-    expect(run).toHaveBeenNthCalledWith(
-      4,
-      'wpctl',
-      ['set-mute', '@DEFAULT_AUDIO_SINK@', '0'],
-      undefined
-    )
+    expect(run).toHaveBeenNthCalledWith(3, 'wpctl', ['set-mute', '118', '1'], undefined)
+    expect(run).toHaveBeenNthCalledWith(4, 'wpctl', ['set-mute', '118', '0'], undefined)
   })
 
   it('preserves a muted wpctl snapshot', async () => {
@@ -71,7 +66,7 @@ describe('Linux playback suppression', () => {
 
     expect(run).toHaveBeenLastCalledWith(
       'pactl',
-      ['set-sink-mute', '@DEFAULT_SINK@', '1'],
+      ['set-sink-mute', 'alsa_output.speaker_1', '1'],
       undefined
     )
   })
@@ -93,6 +88,7 @@ describe('Linux playback suppression', () => {
     await expect(createLinuxPlaybackSuppressionAdapter(run).snapshot()).resolves.toEqual({
       backend: 'pactl',
       endpointId: 'alsa_output.speaker_1',
+      endpointTarget: 'alsa_output.speaker_1',
       muted: true
     })
   })

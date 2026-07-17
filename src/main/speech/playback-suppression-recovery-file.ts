@@ -25,6 +25,9 @@ function parseSnapshot(value: unknown): PlaybackSuppressionSnapshot | null {
   return {
     backend: candidate.backend,
     endpointId: candidate.endpointId,
+    ...(typeof candidate.endpointTarget === 'string'
+      ? { endpointTarget: candidate.endpointTarget }
+      : {}),
     muted: candidate.muted
   }
 }
