@@ -8,6 +8,8 @@ import type { TuiAgent } from './types'
 export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   claude: 'Claude',
   'claude-agent-teams': 'Claude Agent Teams',
+  ccb: 'Claude Code Best',
+  codebuddy: 'CodeBuddy',
   openclaude: 'OpenClaude',
   codex: 'Codex',
   devin: 'Devin',

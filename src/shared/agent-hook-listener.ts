@@ -2414,6 +2414,8 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
       // Why: SessionStart lands an idle row (STA-3386) and must also drop stale
       // tool/prompt caches left by the pane's previous session.
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
+    case 'codebuddy':
+      return eventName === 'UserPromptSubmit'
     case 'kimi':
       // Why: Kimi Code emits Claude-compatible hook events, so UserPromptSubmit is its new-turn boundary too.
       return eventName === 'UserPromptSubmit'
@@ -2508,6 +2510,7 @@ function extractToolFields(
   // Why: exhaustive switch so a new AgentHookSource fails typecheck here instead of silently routing through OpenCode's extractor.
   switch (source) {
     case 'claude':
+    case 'codebuddy':
     // Why: Kimi Code uses Claude's tool_name/tool_input payload fields verbatim.
     // falls through
     case 'kimi':
@@ -4239,6 +4242,7 @@ export function normalizeHookPayload(
   let payload: ParsedAgentStatusPayload | null
   switch (source) {
     case 'claude':
+    case 'codebuddy':
       payload = normalizeClaudeEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
     case 'codex':
@@ -4417,6 +4421,7 @@ export function normalizeHookPayload(
 
 export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> = Object.freeze({
   '/hook/claude': 'claude',
+  '/hook/codebuddy': 'codebuddy',
   '/hook/codex': 'codex',
   '/hook/gemini': 'gemini',
   '/hook/antigravity': 'antigravity',

@@ -389,6 +389,20 @@ describe('scanAiVaultSessions', () => {
       ])
     )
 
+    await mkdir(join(roots.codebuddyProjectsDir, 'project'), { recursive: true })
+    await writeFile(
+      join(roots.codebuddyProjectsDir, 'project', 'codebuddy-session.jsonl'),
+      jsonLines([
+        {
+          type: 'user',
+          sessionId: 'codebuddy-session',
+          timestamp: '2026-05-01T10:00:00.000Z',
+          cwd: '/tmp/codebuddy',
+          message: { role: 'user', content: 'CodeBuddy title' }
+        }
+      ])
+    )
+
     await mkdir(join(roots.codexSessionsDir, '2026', '05', '01'), { recursive: true })
     await writeFile(
       join(roots.codexSessionsDir, '2026', '05', '01', 'rollout-2026-codex-session.jsonl'),

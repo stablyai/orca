@@ -20,6 +20,10 @@ describe('agent session resume metadata', () => {
     expect(isResumableTuiAgent('prime-agent')).toBe(true)
   })
 
+  it('treats ccb as a resumable TUI agent', () => {
+    expect(isResumableTuiAgent('ccb')).toBe(true)
+  })
+
   it.each([
     ['claude', { session_id: 'claude-session' }, { key: 'session_id', id: 'claude-session' }],
     ['codex', { session_id: 'codex-session' }, { key: 'session_id', id: 'codex-session' }],

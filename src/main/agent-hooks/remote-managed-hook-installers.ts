@@ -2,6 +2,7 @@ import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallStatus, AgentHookTarget } from '../../shared/agent-hook-types'
 import { ampHookService } from '../amp/hook-service'
 import { claudeHookService } from '../claude/hook-service'
+import { codebuddyHookService } from '../codebuddy/hook-service'
 import { codexHookService } from '../codex/hook-service'
 import { geminiHookService } from '../gemini/hook-service'
 import { antigravityHookService } from '../antigravity/hook-service'
@@ -42,6 +43,7 @@ type RemoteManagedHookInstaller = readonly [
 const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
   ['claude', (sftp, remoteHome) => claudeHookService.installRemote(sftp, remoteHome)],
   ['openclaude', (sftp, remoteHome) => openClaudeHookService.installRemote(sftp, remoteHome)],
+  ['codebuddy', (sftp, remoteHome) => codebuddyHookService.installRemote(sftp, remoteHome)],
   [
     'codex',
     (sftp, remoteHome, options) =>

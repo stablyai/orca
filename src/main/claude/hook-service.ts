@@ -1,6 +1,7 @@
 import { existsSync, rmSync, writeFileSync } from 'node:fs'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import {
   buildManagedCommandHook,
   buildWindowsAgentHookCurlPostCommand,
@@ -49,6 +50,7 @@ type ClaudeHookServiceOptions = {
   agent: AgentHookInstallStatus['agent']
   displayName: string
   settings: ClaudeCompatibleHookSettings
+  hookSource?: AgentHookSource
 }
 
 const DEFAULT_CLAUDE_HOOK_SERVICE_OPTIONS: ClaudeHookServiceOptions = {
@@ -59,8 +61,9 @@ const DEFAULT_CLAUDE_HOOK_SERVICE_OPTIONS: ClaudeHookServiceOptions = {
 
 function getManagedScript(
   target: 'local' | 'posix' = 'local',
-  options: { skipWhenDevinImportsClaude?: boolean } = {}
+  options: { skipWhenDevinImportsClaude?: boolean; hookSource?: AgentHookSource } = {}
 ): string {
+  const hookSource = options.hookSource ?? 'claude'
   if (target === 'local' && process.platform === 'win32') {
     return [
       '@echo off',
@@ -77,7 +80,7 @@ function getManagedScript(
           ]
         : []),
       // Why: use curl.exe to avoid an extra PowerShell startup per hook.
-      buildWindowsAgentHookCurlPostCommand('claude'),
+      buildWindowsAgentHookCurlPostCommand(hookSource),
       'exit /b 0',
       ...buildWindowsHookStdinDrainEpilogue(),
       ''
@@ -105,7 +108,7 @@ function getManagedScript(
     'fi',
     // Why: post form fields because path-bearing payloads are unsafe in hand-built JSON.
     // Why: pipe payload to curl stdin to keep large output off the command line.
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/claude" \\',
+    `printf '%s' "$payload" | curl -sS -X POST "http://127.0.0.1:\${ORCA_AGENT_HOOK_PORT}/hook/${hookSource}" \\`,
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
@@ -209,7 +212,7 @@ export class ClaudeHookService {
     )
     writeManagedScript(
       scriptPath,
-      getManagedScript('local', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
+      getManagedScript('local', { skipWhenDevinImportsClaude: this.options.agent === 'claude', hookSource: this.options.hookSource })
     )
     // Why: the statusline usage feed is Claude-only — OpenClaude data would be misattributed to the Claude provider.
     if (this.options.agent === 'claude') {
@@ -271,7 +274,7 @@ export class ClaudeHookService {
       await writeManagedScriptRemote(
         sftp,
         remoteScriptPath,
-        getManagedScript('posix', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
+        getManagedScript('posix', { skipWhenDevinImportsClaude: this.options.agent === 'claude', hookSource: this.options.hookSource })
       )
       // Why: no statusline install here — this path serves SSH remotes and WSL guests, whose relay hook
       // listener doesn't route /statusline/claude, and an SSH box's Claude login can be a different

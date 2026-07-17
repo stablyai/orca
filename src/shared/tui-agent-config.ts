@@ -55,6 +55,30 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // Why: `claude --prefill <text>` seeds the input without submitting, avoiding the paste-after-ready race (PR https://github.com/stablyai/orca/pull/926).
     draftPromptFlag: '--prefill'
   },
+  ccb: {
+    detectCmd: 'ccb',
+    // Why: `npm i -g claude-code-best` also installs `ccb-bun` (Bun runtime
+    // entrypoint). Both launch the same interactive REPL, so treat the Bun
+    // binary as an alias for PATH detection.
+    detectCmdAliases: ['ccb-bun'],
+    launchCmd: 'ccb',
+    expectedProcess: 'ccb',
+    // Why: CCB is a Claude Code-compatible CLI, so it accepts a positional
+    // argv prompt and the same `--prefill <text>` flag Claude Code documents.
+    promptInjectionMode: 'argv',
+    draftPromptFlag: '--prefill'
+  },
+  codebuddy: {
+    detectCmd: 'codebuddy',
+    launchCmd: 'codebuddy',
+    expectedProcess: 'codebuddy',
+    // Why: `codebuddy "<prompt>"` starts the interactive REPL with the prompt
+    // as the initial turn (docs.codebuddy.ai/cli/cli-reference), so argv is the
+    // right injection mode. No `draftPromptFlag`: CodeBuddy Code exposes no
+    // `--prefill`-style flag, so the draft-launch flow must fall through to the
+    // paste-after-ready path.
+    promptInjectionMode: 'argv'
+  },
   'claude-agent-teams': {
     // Why: an Orca-provided launch mode, not a separate binary; detection follows the Orca CLI.
     detectCmd: 'orca',

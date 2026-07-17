@@ -2635,6 +2635,8 @@ export type ClaudeManagedAccountRuntimeSelection = {
 export type TuiAgent =
   | 'claude' // Claude Code
   | 'claude-agent-teams' // Claude Code Agent Teams via Orca native panes
+  | 'ccb' // Claude Code Best (claude-code-best/claude-code) — a Claude Code-compatible CLI
+  | 'codebuddy' // CodeBuddy CLI (@tencent-ai/codebuddy-code) — a Claude Code-compatible CLI
   | 'openclaude' // OpenClaude
   | 'codex' // OpenAI Codex
   | 'autohand' // Autohand Code CLI

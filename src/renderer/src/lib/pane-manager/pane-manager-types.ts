@@ -1,6 +1,5 @@
 import type { IDisposable, IMarker, Terminal, ITerminalOptions } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
-import type { LigaturesAddon } from '@xterm/addon-ligatures'
 import type { SearchAddon } from '@xterm/addon-search'
 import type { Unicode11Addon } from '@xterm/addon-unicode11'
 import type { WebLinksAddon } from '@xterm/addon-web-links'
@@ -9,6 +8,7 @@ import type { SerializeAddon } from '@xterm/addon-serialize'
 import type { GlobalSettings } from '../../../../shared/types'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import type { TerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
+import type { LigaturesAddon } from './terminal-ligatures-package-shim'
 
 // ---------------------------------------------------------------------------
 // Public interfaces

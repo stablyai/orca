@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
-import { LigaturesAddon } from '@xterm/addon-ligatures'
 import { Moon, Sun } from 'lucide-react'
 import '@xterm/xterm/css/xterm.css'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
 import { buildFontFamily } from '@/components/terminal-pane/layout-serialization'
+import { LigaturesAddon } from '@/lib/pane-manager/terminal-ligatures-package-shim'
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
 import { clampNumber, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
@@ -14,8 +14,8 @@ import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-lig
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
 import { PREVIEW_BUFFER } from './terminal-preview-content'
 import { SettingsSwitch } from './SettingsFormControls'
-import type { GlobalSettings } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
+import type { GlobalSettings } from '../../../../shared/types'
 
 // Why: pinned so PREVIEW_BUFFER never wraps; 36 cols fits the 32-char longest line + margin (larger fonts clip, not wrap).
 const PREVIEW_COLS = 36

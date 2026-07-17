@@ -49,7 +49,10 @@ function resumableStateFactoryFor(
 ): (() => ResumableSessionParseState) | null {
   switch (candidate.agent) {
     case 'claude':
-      return () => createClaudeSessionResumeState(candidate.file)
+    // Why: CodeBuddy transcripts are Claude-format append-only JSONL, so the same
+    // incremental resume state applies.
+    case 'codebuddy':
+      return () => createClaudeSessionResumeState(candidate.file, candidate.agent)
     case 'codex':
       return () => createCodexSessionResumeState(candidate.file, candidate.codexHome)
     case 'cursor':
