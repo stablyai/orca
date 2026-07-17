@@ -12090,7 +12090,8 @@
           "bb7f599ee7": "설정 열기",
           "2d5b9fabf9": "마이크 액세스가 거부되었습니다. 시스템 설정에서 액세스 권한을 부여한 다음 Orca를 다시 시작하세요.",
           "5d2c3e7ae3": "음성이 감지되지 않았습니다.",
-          "c97ad62022": "Could not mute other audio. Dictation will continue."
+          "c97ad62022": "Could not mute other audio. Dictation will continue.",
+          "0080b89cf5": "Could not restore other audio. Unmute it in system controls."
         }
       },
       "dashboard": {

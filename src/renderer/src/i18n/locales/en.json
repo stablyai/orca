@@ -12090,7 +12090,8 @@
           "bb7f599ee7": "Open Settings",
           "2d5b9fabf9": "Microphone access denied. Grant access in system settings, then restart Orca.",
           "5d2c3e7ae3": "No speech detected.",
-          "c97ad62022": "Could not mute other audio. Dictation will continue."
+          "c97ad62022": "Could not mute other audio. Dictation will continue.",
+          "0080b89cf5": "Could not restore other audio. Unmute it in system controls."
         }
       },
       "dashboard": {

@@ -10,6 +10,7 @@ export function useDictationPlaybackSuppression(): {
 } {
   const sessionIdsRef = useRef(new Set<string>())
   const warningShownRef = useRef(false)
+  const restoreWarningShownRef = useRef(false)
 
   const acquirePlaybackSuppression = useCallback(
     async (sessionId: string): Promise<PlaybackSuppressionOutcome> => {
@@ -40,7 +41,19 @@ export function useDictationPlaybackSuppression(): {
     if (!sessionIdsRef.current.delete(sessionId)) {
       return
     }
-    await window.api.speech.releasePlaybackSuppression(sessionId).catch(() => undefined)
+    try {
+      await window.api.speech.releasePlaybackSuppression(sessionId)
+    } catch {
+      if (!restoreWarningShownRef.current) {
+        restoreWarningShownRef.current = true
+        toast.error(
+          translate(
+            'auto.components.dictation.DictationController.0080b89cf5',
+            'Could not restore other audio. Unmute it in system controls.'
+          )
+        )
+      }
+    }
   }, [])
 
   useEffect(() => {

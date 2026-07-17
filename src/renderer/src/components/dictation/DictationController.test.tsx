@@ -11,7 +11,8 @@ const mocks = vi.hoisted(() => ({
   flushBufferedAudio: vi.fn(),
   discardBufferedAudio: vi.fn(),
   getCapturedChunkCount: vi.fn(() => 0),
-  toastMessage: vi.fn()
+  toastMessage: vi.fn(),
+  toastError: vi.fn()
 }))
 
 vi.mock('@/store', () => ({ useAppStore: mocks.useAppStore }))
@@ -25,7 +26,7 @@ vi.mock('@/hooks/use-audio-capture', () => ({
   })
 }))
 vi.mock('sonner', () => ({
-  toast: Object.assign(vi.fn(), { message: mocks.toastMessage, error: vi.fn() })
+  toast: Object.assign(vi.fn(), { message: mocks.toastMessage, error: mocks.toastError })
 }))
 vi.mock('./DictationIndicator', () => ({ DictationIndicator: () => null }))
 vi.mock('./dictation-insertion-target', () => ({
@@ -107,6 +108,7 @@ beforeEach(() => {
   mocks.flushBufferedAudio.mockResolvedValue(undefined)
   mocks.discardBufferedAudio.mockClear()
   mocks.toastMessage.mockClear()
+  mocks.toastError.mockClear()
   state = {
     dictationState: 'idle',
     setDictationState: vi.fn((next) => {
@@ -182,6 +184,25 @@ describe('DictationController playback suppression', () => {
 
     expect(window.api.speech.acquirePlaybackSuppression).not.toHaveBeenCalled()
     expect(mocks.startCapture).toHaveBeenCalledTimes(1)
+  })
+
+  it('finishes dictation and warns when playback restoration still fails', async () => {
+    installApi({
+      release: async () => {
+        throw new Error('persistent restore failure')
+      }
+    })
+    await renderController()
+
+    await toggle()
+    await vi.waitFor(() => expect(state.dictationState).toBe('listening'))
+    await toggle()
+    await vi.waitFor(() => expect(state.dictationState).toBe('idle'))
+
+    expect(window.api.speech.stopDictation).toHaveBeenCalledTimes(1)
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      'Could not restore other audio. Unmute it in system controls.'
+    )
   })
 
   it('restores playback if the controller unmounts during dictation', async () => {

@@ -12090,7 +12090,8 @@
           "bb7f599ee7": "設定を開く",
           "2d5b9fabf9": "マイクへのアクセスが拒否されました。システム設定でアクセスを許可し、Orca を再起動。",
           "5d2c3e7ae3": "音声が検出されませんでした。",
-          "c97ad62022": "Could not mute other audio. Dictation will continue."
+          "c97ad62022": "Could not mute other audio. Dictation will continue.",
+          "0080b89cf5": "Could not restore other audio. Unmute it in system controls."
         }
       },
       "dashboard": {

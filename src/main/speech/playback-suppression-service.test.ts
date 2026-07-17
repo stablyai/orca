@@ -133,11 +133,29 @@ describe('PlaybackSuppressionService', () => {
     const service = new PlaybackSuppressionService(adapter)
 
     await service.acquire('dictation:1')
-    await expect(service.release('dictation:1')).rejects.toThrow('temporary restore failure')
-    await service.acquire('dictation:2')
-    await service.release('dictation:2')
+    await expect(service.release('dictation:1')).resolves.toBeUndefined()
 
     expect(muted).toBe(false)
+    expect(adapter.setMuted).toHaveBeenCalledTimes(3)
+  })
+
+  it('bounds restoration retries and preserves the active snapshot after repeated failure', async () => {
+    const adapter: PlaybackSuppressionAdapter = {
+      getCapability: vi.fn(async () => true),
+      snapshot: vi.fn(async () => ({ backend: 'test', muted: false })),
+      setMuted: vi.fn(async (nextMuted) => {
+        if (!nextMuted) {
+          throw new Error('persistent restore failure')
+        }
+      })
+    }
+    const service = new PlaybackSuppressionService(adapter)
+
+    await service.acquire('dictation:1')
+    await expect(service.release('dictation:1')).rejects.toThrow('persistent restore failure')
+    await expect(service.acquire('dictation:2')).resolves.toEqual({ active: true })
+
+    expect(adapter.setMuted).toHaveBeenCalledTimes(3)
   })
 
   it('fails open when the platform cannot be muted', async () => {

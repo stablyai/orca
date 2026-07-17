@@ -169,7 +169,12 @@ export class PlaybackSuppressionService {
   }
 
   private async restore(snapshot: PlaybackSuppressionSnapshot): Promise<void> {
-    await this.adapter.setMuted(snapshot.muted, new AbortController().signal, snapshot)
+    try {
+      await this.adapter.setMuted(snapshot.muted, new AbortController().signal, snapshot)
+    } catch {
+      // Why: a transient mixer/helper failure must not leave system audio muted until restart.
+      await this.adapter.setMuted(snapshot.muted, new AbortController().signal, snapshot)
+    }
     await this.recoveryStore?.clear()
   }
 
