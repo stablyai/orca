@@ -31,4 +31,22 @@ final class AgentConnectionOwnershipTests: XCTestCase {
             )
         }
     }
+
+    func testStaleOwnerCannotTerminateNewerOwner() throws {
+        let ownership = AgentConnectionOwnershipState()
+        let first = try XCTUnwrap(ownership.claim())
+        let second = try XCTUnwrap(ownership.claim())
+
+        XCTAssertFalse(ownership.beginTermination(ifCurrent: first))
+        XCTAssertTrue(ownership.beginTermination(ifCurrent: second))
+    }
+
+    func testOwnershipCannotChangeAfterTerminationBegins() throws {
+        let ownership = AgentConnectionOwnershipState()
+        let owner = try XCTUnwrap(ownership.claim())
+
+        XCTAssertTrue(ownership.beginTermination(ifCurrent: owner))
+        XCTAssertNil(ownership.claim())
+        XCTAssertFalse(ownership.beginTermination(ifCurrent: owner))
+    }
 }

@@ -4,7 +4,6 @@ import Darwin
 import OrcaComputerUseMacOSCore
 
 enum PointerVisibility {
-    private static let actionDelayMicroseconds: useconds_t = 12_000
     private static let overlay = AgentPointerOverlayController()
 
     static func move(to destination: CGPoint) {
@@ -13,7 +12,7 @@ enum PointerVisibility {
             overlay.move(to: destination)
             return
         }
-        let plan = PointerMotionPolicy.plan(
+        let plan = PointerMotionPolicy.approachPlan(
             from: origin,
             to: destination,
             reduceMotion: overlay.shouldReduceMotion
@@ -34,10 +33,18 @@ enum PointerVisibility {
         overlay.setPressed(true, at: point)
     }
 
-    static func followAction(to destination: CGPoint) {
+    static func dragPlan(from start: CGPoint, to end: CGPoint) -> PointerMotionPlan {
+        PointerMotionPolicy.dragPlan(
+            from: start,
+            to: end,
+            reduceMotion: overlay.shouldReduceMotion
+        )
+    }
+
+    static func followAction(to destination: CGPoint, delayMicroseconds: UInt32) {
         overlay.setPressed(true, at: destination)
-        if !overlay.shouldReduceMotion {
-            usleep(actionDelayMicroseconds)
+        if delayMicroseconds > 0 {
+            usleep(delayMicroseconds)
         }
     }
 

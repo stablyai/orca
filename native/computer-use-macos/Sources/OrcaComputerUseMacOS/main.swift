@@ -2378,8 +2378,12 @@ private enum Input {
         try mouse(.mouseMoved, source: source, point: start, button: .left, pid: pid)
         PointerVisibility.press(at: start)
         try mouse(.leftMouseDown, source: source, point: start, button: .left, pid: pid)
-        for point in PointerMotionPath.points(from: start, to: end, steps: 10) {
-            PointerVisibility.followAction(to: point)
+        let dragPlan = PointerVisibility.dragPlan(from: start, to: end)
+        for point in dragPlan.points {
+            PointerVisibility.followAction(
+                to: point,
+                delayMicroseconds: dragPlan.delayMicroseconds
+            )
             try mouse(
                 .leftMouseDragged,
                 source: source,
@@ -3527,13 +3531,23 @@ private final class SocketListener: @unchecked Sendable {
     private let provider = Provider()
     private let providerLock = NSLock()
     private let stateLock = NSLock()
+    private let ownershipState = AgentConnectionOwnershipState()
     private var socketFd: Int32 = -1
+    private var wakeReadFd: Int32 = -1
+    private var wakeWriteFd: Int32 = -1
     private var isStopped = false
 
     init(socketPath: String, token: String?) throws {
         self.socketPath = socketPath
         self.token = token
         try bindSocket()
+        do {
+            try createWakePipe()
+        } catch {
+            close(socketFd)
+            socketFd = -1
+            throw error
+        }
     }
 
     func start() {
@@ -3543,19 +3557,19 @@ private final class SocketListener: @unchecked Sendable {
     }
 
     func stop() {
-        let fd: Int32
         stateLock.lock()
         if isStopped {
             stateLock.unlock()
             return
         }
         isStopped = true
-        fd = socketFd
-        socketFd = -1
-        stateLock.unlock()
-        if fd >= 0 {
-            close(fd)
+        // Why: the accept thread exclusively owns the listener descriptor;
+        // a wake pipe avoids close-versus-accept descriptor reuse races.
+        if wakeWriteFd >= 0 {
+            var byte: UInt8 = 1
+            _ = write(wakeWriteFd, &byte, 1)
         }
+        stateLock.unlock()
         // Why: the parent owns the private temp directory cleanup; the helper
         // must not unlink arbitrary caller-supplied paths on shutdown.
     }
@@ -3606,15 +3620,72 @@ private final class SocketListener: @unchecked Sendable {
         }
     }
 
+    private func createWakePipe() throws {
+        var descriptors = [Int32](repeating: -1, count: 2)
+        guard Darwin.pipe(&descriptors) == 0 else {
+            throw ProviderError.coded(
+                "accessibility_error",
+                "failed to create computer-use listener wake pipe"
+            )
+        }
+        wakeReadFd = descriptors[0]
+        wakeWriteFd = descriptors[1]
+    }
+
     private func acceptLoop() {
+        stateLock.lock()
+        let listenerFd = socketFd
+        let listenerWakeReadFd = wakeReadFd
+        let listenerWakeWriteFd = wakeWriteFd
+        stateLock.unlock()
+        defer {
+            closeListenerDescriptors(
+                listenerFd: listenerFd,
+                wakeReadFd: listenerWakeReadFd,
+                wakeWriteFd: listenerWakeWriteFd
+            )
+        }
+
+        var descriptors = [
+            pollfd(fd: listenerFd, events: Int16(POLLIN), revents: 0),
+            pollfd(fd: listenerWakeReadFd, events: Int16(POLLIN), revents: 0),
+        ]
         while true {
-            guard let listenerFd = activeSocketFd() else { return }
+            let pollResult = Darwin.poll(&descriptors, nfds_t(descriptors.count), -1)
+            if pollResult < 0 {
+                if errno == EINTR { continue }
+                if !stopped() {
+                    fputs("computer-use socket poll failed: \(String(cString: strerror(errno)))\n", stderr)
+                    DispatchQueue.main.async {
+                        NSApp.terminate(nil)
+                    }
+                }
+                return
+            }
+            if descriptors[1].revents & Int16(POLLIN) != 0 {
+                return
+            }
+            let listenerErrorEvents = Int16(POLLERR | POLLHUP | POLLNVAL)
+            if descriptors[0].revents & listenerErrorEvents != 0 {
+                if !stopped() {
+                    fputs("computer-use socket listener became unavailable\n", stderr)
+                    DispatchQueue.main.async {
+                        NSApp.terminate(nil)
+                    }
+                }
+                return
+            }
+            guard descriptors[0].revents & Int16(POLLIN) != 0 else { continue }
             let fd = accept(listenerFd, nil, nil)
             if fd < 0 {
                 if !stopped() {
                     fputs("computer-use socket accept failed: \(String(cString: strerror(errno)))\n", stderr)
                 }
                 continue
+            }
+            if stopped() {
+                close(fd)
+                return
             }
             Thread.detachNewThread { [weak self] in
                 self?.handleConnection(fd)
@@ -3623,10 +3694,11 @@ private final class SocketListener: @unchecked Sendable {
     }
 
     private func handleConnection(_ fd: Int32) {
-        var ownsHelperLifetime = false
+        var ownerGeneration: UInt64?
         defer {
             close(fd)
-            if ownsHelperLifetime {
+            if let ownerGeneration,
+               ownershipState.beginTermination(ifCurrent: ownerGeneration) {
                 // Why: the client starts a replacement helper after transport
                 // loss, so an authenticated connection is this process's owner.
                 DispatchQueue.main.async {
@@ -3648,7 +3720,7 @@ private final class SocketListener: @unchecked Sendable {
                 expectedToken: token,
                 authorizedPeer: authorizedPeer
             ) {
-                ownsHelperLifetime = true
+                ownerGeneration = ownershipState.claim()
             }
             let response = handleRequest(
                 provider: provider,
@@ -3661,10 +3733,19 @@ private final class SocketListener: @unchecked Sendable {
         }
     }
 
-    private func activeSocketFd() -> Int32? {
+    private func closeListenerDescriptors(
+        listenerFd: Int32,
+        wakeReadFd: Int32,
+        wakeWriteFd: Int32
+    ) {
         stateLock.lock()
-        defer { stateLock.unlock() }
-        return isStopped || socketFd < 0 ? nil : socketFd
+        if socketFd == listenerFd { socketFd = -1 }
+        if self.wakeReadFd == wakeReadFd { self.wakeReadFd = -1 }
+        if self.wakeWriteFd == wakeWriteFd { self.wakeWriteFd = -1 }
+        stateLock.unlock()
+        if listenerFd >= 0 { close(listenerFd) }
+        if wakeReadFd >= 0 { close(wakeReadFd) }
+        if wakeWriteFd >= 0 { close(wakeWriteFd) }
     }
 
     private func stopped() -> Bool {

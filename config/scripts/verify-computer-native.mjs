@@ -365,7 +365,16 @@ function verifyNativeArgumentGuardrails() {
   ) {
     failures.push('macOS secure fields must redact verification-code/password-style values')
   }
-  if (/sharingType\s*=\s*(?:NSWindow\.SharingType\.)?none/.test(macosPointer)) {
+  const legacySharingPattern = /sharingType\s*=\s*(?:NSWindow\.SharingType\.)?\.?none/
+  const legacySharingExamples = [
+    'sharingType = none',
+    'sharingType = .none',
+    'sharingType = NSWindow.SharingType.none'
+  ]
+  if (!legacySharingExamples.every((source) => legacySharingPattern.test(source))) {
+    failures.push('macOS legacy sharing guard must recognize supported Swift spellings')
+  }
+  if (legacySharingPattern.test(macosPointer)) {
     failures.push('macOS agent pointer must not rely on legacy NSWindow capture sharing flags')
   }
   if (macos.includes('.post(tap:') || macosPointer.includes('.post(tap:')) {
