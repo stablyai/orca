@@ -1722,11 +1722,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
               )}
 
               {servicesStatus &&
-                (servicesStatus === 'create_failed' ? (
+                (servicesStatus === 'create_failed' || servicesStatus === 'destroy_failed' ? (
                   <button
                     type="button"
                     onClick={handleRetryServices}
-                    className="contents"
+                    className="inline-flex rounded p-0 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                     title={translate(
                       'auto.components.sidebar.WorktreeCard.retryServices',
                       'Retry services provisioning'

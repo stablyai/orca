@@ -260,8 +260,11 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
       const reuseLabel = [...(current?.container.querySelectorAll('label') ?? [])].find((label) =>
         label.textContent?.includes('Reuse branch')
       )
-      const checkbox = reuseLabel?.querySelector<HTMLInputElement>('input[type="checkbox"]')
+      const checkbox = reuseLabel
+        ? (reuseLabel.ownerDocument.getElementById(reuseLabel.htmlFor) as HTMLButtonElement | null)
+        : null
       expect(checkbox).toBeTruthy()
+      expect(checkbox?.getAttribute('role')).toBe('checkbox')
       act(() => checkbox?.click())
     }
 

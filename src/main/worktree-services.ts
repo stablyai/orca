@@ -18,7 +18,8 @@ import type {
 import {
   SERVICE_STATUS_TIMEOUT_MS,
   runServiceCommand,
-  sanitizeServiceCommandOutput
+  sanitizeServiceCommandOutput,
+  type ServiceCommandResult
 } from './worktree-service-command'
 
 export {
@@ -89,23 +90,44 @@ export async function provisionWorktreeServices(
     updatedAt: now
   })
 
+  if (services.length === 0) {
+    return upsertWorktreeServicesRecord(userDataPath, {
+      worktreeId,
+      repoId: repo.id,
+      slot,
+      slug,
+      serviceIds: [],
+      env: contextEnv,
+      status: 'create_failed',
+      error: 'The worktree has no valid isolated service recipes.',
+      createdAt,
+      updatedAt: new Date().toISOString()
+    })
+  }
+
   const commandEnv = { ...contextEnv, ORCA_WORKTREE_PATH: worktreePath }
   const resolvedEnv: Record<string, string> = { ...contextEnv }
   const created: OrcaServiceRecipe[] = []
 
   for (const service of services) {
-    const result = await runServiceCommand(
-      service.create,
-      worktreePath,
-      commandEnv,
-      (stream, chunk) =>
+    let result: ServiceCommandResult
+    try {
+      result = await runServiceCommand(service.create, worktreePath, commandEnv, (stream, chunk) =>
         args.onEvent?.({
           provisionId,
           serviceId: service.id,
           stream,
           chunk: sanitizeServiceCommandOutput(chunk)
         })
-    )
+      )
+    } catch (error) {
+      // Why: a synchronous child-process failure must become retryable state;
+      // leaving `provisioning` persisted would hide the retry until app restart.
+      result = {
+        success: false,
+        output: error instanceof Error ? error.message : String(error)
+      }
+    }
     if (!result.success) {
       await destroyCreatedServices(created.toReversed(), worktreePath, contextEnv)
       return upsertWorktreeServicesRecord(userDataPath, {
@@ -123,6 +145,10 @@ export async function provisionWorktreeServices(
       })
     }
     Object.assign(resolvedEnv, resolveServiceEnv(service.env, contextEnv))
+    // Why: parser validation protects normal yaml input, but lifecycle code can
+    // also receive programmatic/legacy recipes. The allocated context remains
+    // authoritative so later destroy commands target the same slot as create.
+    Object.assign(resolvedEnv, contextEnv)
     created.push(service)
   }
 
@@ -158,6 +184,7 @@ export async function destroyWorktreeServices(args: {
   worktreePath: string
   repo: Repo
   services: OrcaServiceRecipe[]
+  releaseRecord?: boolean
 }): Promise<{ success: boolean; errors: string[] }> {
   const { userDataPath, worktreeId, worktreePath, services } = args
   const record = getWorktreeServicesRecord(userDataPath, worktreeId)
@@ -193,9 +220,12 @@ export async function destroyWorktreeServices(args: {
     }
   }
 
-  // Why: freeing the slot must not depend on destroy success — a failed destroy
-  // otherwise leaks the slot forever. Removal is non-blocking per spec.
-  removeWorktreeServicesRecord(userDataPath, worktreeId)
+  // Why: ordinary/orphan cleanup frees the slot even when a destroy command
+  // fails, but worktree deletion retains it until Git removal commits so a
+  // failed delete cannot race a new worktree onto the same deterministic ports.
+  if (args.releaseRecord !== false) {
+    removeWorktreeServicesRecord(userDataPath, worktreeId)
+  }
   return { success: errors.length === 0, errors }
 }
 
@@ -211,31 +241,32 @@ export async function getWorktreeServicesRuntime(args: {
   }
   const env = { ...record.env, ORCA_WORKTREE_PATH: args.worktreePath }
   const provisioned = new Set(record.serviceIds)
-  const states: WorktreeServiceRuntimeState[] = []
-  for (const service of args.services) {
-    if (!provisioned.has(service.id)) {
-      continue
-    }
-    let runState: WorktreeServiceRuntimeState['runState'] = 'unknown'
-    if (service.status) {
-      const result = await runServiceCommand(
-        service.status,
-        args.worktreePath,
-        env,
-        undefined,
-        SERVICE_STATUS_TIMEOUT_MS
-      )
-      runState = result.success ? 'running' : 'stopped'
-    }
-    states.push({
-      serviceId: service.id,
-      name: service.name,
-      runState,
-      canStart: Boolean(service.start),
-      canStop: Boolean(service.stop)
+  const services = args.services.filter((service) => provisioned.has(service.id))
+  // Why: status probes are read-only and independent. Serial awaits make panel
+  // latency N×30s when several services are unhealthy; parallel probes cap it
+  // at the slowest service while preserving recipe order in the returned array.
+  return Promise.all(
+    services.map(async (service): Promise<WorktreeServiceRuntimeState> => {
+      let runState: WorktreeServiceRuntimeState['runState'] = 'unknown'
+      if (service.status) {
+        const result = await runServiceCommand(
+          service.status,
+          args.worktreePath,
+          env,
+          undefined,
+          SERVICE_STATUS_TIMEOUT_MS
+        )
+        runState = result.success ? 'running' : 'stopped'
+      }
+      return {
+        serviceId: service.id,
+        name: service.name,
+        runState,
+        canStart: Boolean(service.start),
+        canStop: Boolean(service.stop)
+      }
     })
-  }
-  return states
+  )
 }
 
 export async function runWorktreeServiceAction(args: {

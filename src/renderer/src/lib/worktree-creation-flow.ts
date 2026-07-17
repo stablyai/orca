@@ -188,6 +188,12 @@ async function executeWorktreeCreation(
   if (preparedRequest.provisionServices) {
     await hydrateServicesAfterCreate()
   }
+  const serviceInitializationBlocked = Boolean(result.serviceProvisioningError)
+  if (result.serviceProvisioningError) {
+    // Why: the worktree exists and remains usable for retry, but automatic
+    // commands were withheld so they cannot fall back to shared services.
+    toast.error(result.serviceProvisioningError.slice(0, 300))
+  }
   await attachEphemeralVmRuntimeToWorkspace(preparedRequest, worktree.id)
 
   const backendSpawned = result.startupTerminal?.spawned === true
@@ -196,7 +202,9 @@ async function executeWorktreeCreation(
     // startup, so both halves of the handoff share one renderer-session token.
     preparedRequest.startupPlan.launchToken = createBrowserUuid()
   }
-  const startupOpt = buildStartupOpt(preparedRequest, backendSpawned)
+  const startupOpt = serviceInitializationBlocked
+    ? undefined
+    : buildStartupOpt(preparedRequest, backendSpawned)
 
   if (worktree.path) {
     const repoConnectionId =
@@ -244,7 +252,7 @@ async function executeWorktreeCreation(
   // Why: clearing synchronously right after activation lets React commit the
   // panel→terminal swap in one frame — no two-row flicker, no empty-terminal flash.
   useAppStore.getState().removePendingWorktreeCreation(creationId, { cleanupVm: false })
-  if (preparedRequest.startupPlan && preparedRequest.agent) {
+  if (!serviceInitializationBlocked && preparedRequest.startupPlan && preparedRequest.agent) {
     const optionScopeKey = primaryTabId ?? result.startupTerminal?.tabId
     if (optionScopeKey) {
       seedNativeChatAppliedSessionOptions(
@@ -254,7 +262,7 @@ async function executeWorktreeCreation(
       )
     }
   }
-  if (preparedRequest.startupPlan && !backendSpawned) {
+  if (preparedRequest.startupPlan && !backendSpawned && !serviceInitializationBlocked) {
     void ensureAgentStartupInTerminal({
       worktreeId: worktree.id,
       primaryTabId,

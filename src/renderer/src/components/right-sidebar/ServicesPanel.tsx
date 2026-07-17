@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { Database, Play, RefreshCw, Square } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -12,10 +12,10 @@ import type {
 } from '../../../../shared/worktree-services'
 
 const STATUS_BADGE_CLASS: Record<WorktreeServicesStatus, string> = {
-  ready: 'border-emerald-500/25 bg-emerald-500/5 text-emerald-600 dark:text-emerald-300',
-  provisioning: 'border-sky-500/25 bg-sky-500/5 text-sky-600 dark:text-sky-300',
-  create_failed: 'border-red-500/25 bg-red-500/5 text-red-600 dark:text-red-300',
-  destroy_failed: 'border-red-500/25 bg-red-500/5 text-red-600 dark:text-red-300'
+  ready: 'border-border bg-muted/30 text-foreground',
+  provisioning: 'border-border bg-muted/30 text-muted-foreground',
+  create_failed: 'border-destructive/30 bg-destructive/10 text-destructive',
+  destroy_failed: 'border-destructive/30 bg-destructive/10 text-destructive'
 }
 
 const STATUS_LABEL: Record<WorktreeServicesStatus, () => string> = {
@@ -29,8 +29,8 @@ const STATUS_LABEL: Record<WorktreeServicesStatus, () => string> = {
 }
 
 const RUN_STATE_DOT: Record<WorktreeServiceRuntimeState['runState'], string> = {
-  running: 'bg-emerald-500',
-  stopped: 'bg-rose-500',
+  running: 'bg-primary',
+  stopped: 'bg-muted-foreground',
   unknown: 'bg-muted-foreground/40'
 }
 
@@ -51,8 +51,24 @@ function SectionLabel({ children }: { children: React.ReactNode }): React.JSX.El
 
 export default function ServicesPanel(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  // Why: retry/action/probe state belongs to one worktree. Keying the stateful
+  // body prevents a late response from the previous workspace from disabling
+  // controls or replacing runtime state in the newly selected workspace.
+  return (
+    <WorktreeServicesPanel
+      key={activeWorktreeId ?? 'no-active-worktree'}
+      activeWorktreeId={activeWorktreeId}
+    />
+  )
+}
+
+function WorktreeServicesPanel({
+  activeWorktreeId
+}: {
+  activeWorktreeId: string | null
+}): React.JSX.Element {
   const record = useAppStore((s) =>
-    activeWorktreeId ? s.worktreeServicesRecords[activeWorktreeId] : undefined
+    activeWorktreeId ? s.worktreeServicesRecords?.[activeWorktreeId] : undefined
   )
   const hydrateWorktreeServices = useAppStore((s) => s.hydrateWorktreeServices)
   const [retrying, setRetrying] = useState(false)
@@ -61,10 +77,6 @@ export default function ServicesPanel(): React.JSX.Element {
   const [pendingAction, setPendingAction] = useState<string | null>(null)
 
   const worktreeId = record?.worktreeId
-  // Why: the panel stays mounted across worktree switches; a slow probe for the
-  // previous worktree must not clobber the current one's display.
-  const probeTargetRef = useRef<string | undefined>(worktreeId)
-  probeTargetRef.current = worktreeId
   const refreshRuntime = useCallback(async (): Promise<void> => {
     if (!worktreeId) {
       return
@@ -72,22 +84,15 @@ export default function ServicesPanel(): React.JSX.Element {
     setProbing(true)
     try {
       const states = await window.api.worktreeServices.runtime({ worktreeId })
-      if (probeTargetRef.current === worktreeId) {
-        setRuntime(states)
-      }
+      setRuntime(states)
     } catch {
-      if (probeTargetRef.current === worktreeId) {
-        setRuntime(null)
-      }
+      setRuntime(null)
     } finally {
-      if (probeTargetRef.current === worktreeId) {
-        setProbing(false)
-      }
+      setProbing(false)
     }
   }, [worktreeId])
 
   useEffect(() => {
-    setRuntime(null)
     void refreshRuntime()
   }, [refreshRuntime])
 
@@ -191,7 +196,7 @@ export default function ServicesPanel(): React.JSX.Element {
       {record.error && (
         <p className="px-3 pt-1 text-[11px] text-destructive break-words">{record.error}</p>
       )}
-      {record.status === 'create_failed' && (
+      {(record.status === 'create_failed' || record.status === 'destroy_failed') && (
         <div className="px-3 pt-2">
           <Button size="sm" variant="outline" onClick={handleRetry} disabled={retrying}>
             <RefreshCw className={cn('size-3', retrying && 'animate-spin')} />
@@ -244,8 +249,9 @@ export default function ServicesPanel(): React.JSX.Element {
             <div className="flex min-w-0 items-center gap-1.5">
               <span
                 className={cn('size-[7px] shrink-0 rounded-full', RUN_STATE_DOT[state.runState])}
-                title={RUN_STATE_LABEL[state.runState]()}
+                aria-hidden="true"
               />
+              <span className="sr-only">{RUN_STATE_LABEL[state.runState]()}</span>
               <span className="truncate font-mono text-[11px]">{state.serviceId}</span>
               <span className="truncate text-[11px] text-muted-foreground">{state.name}</span>
             </div>

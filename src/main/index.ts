@@ -208,7 +208,10 @@ import { CliInstaller } from './cli/cli-installer'
 import { installLinuxBareOrcaDispatcher } from './cli/linux-bare-orca-dispatcher'
 import { reconcileManagedWslCliRegistrations } from './cli/wsl-cli-registration-reconciliation'
 import { selfHealRuntimeEnvironmentFocus } from './runtime-environment-focus-self-heal'
-import { cleanupOrphanedWorktreeServices } from './worktree-services-orphan-cleanup'
+import {
+  cleanupOrphanedWorktreeServices,
+  isWorktreeServicesPathDefinitelyMissing
+} from './worktree-services-orphan-cleanup'
 
 let mainWindow: BrowserWindow | null = null
 /** Whether a manual app.quit() (Cmd+Q, etc.) is in progress. Shared with the
@@ -1792,7 +1795,10 @@ app.whenReady().then(async () => {
   cleanupOrphanedWorktreeServices({
     userDataPath: app.getPath('userData'),
     existingWorktreeIds: new Set(Object.keys(bootStore.getAllWorktreeMeta())),
-    resolveRepo: (repoId) => bootStore.getRepo(repoId) ?? null
+    resolveRepo: (repoId) => bootStore.getRepo(repoId) ?? null,
+    // Why: metadata can be reset independently of Git worktrees. Confirm the
+    // path is truly gone before startup cleanup destroys a still-live database.
+    isWorktreeDefinitelyMissing: isWorktreeServicesPathDefinitelyMissing
   }).catch((error) => {
     console.warn('[services] startup orphan cleanup failed:', error)
   })

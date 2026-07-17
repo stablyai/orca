@@ -112,6 +112,8 @@ const detachedHeadAutoDerivedDisplayNames = new Map<string, string>()
 const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
 const hostedReviewPushTargetLookupsInFlight = new Set<string>()
 const detectedWorktreeRefreshesInFlight = new Map<string, Promise<DetectedWorktreeListResult>>()
+let worktreeServicesHydrationRequestId = 0
+let initialWorktreeServicesHydration: Promise<void> | null = null
 
 type BackgroundRuntimeRefreshOptions = {
   reuseRecentCompatibilityFailure?: boolean
@@ -2318,20 +2320,52 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   worktreeServicesEnv: {},
   worktreeServicesStatus: {},
   worktreeServicesRecords: {},
+  hasHydratedWorktreeServices: false,
 
-  hydrateWorktreeServices: async () => {
-    const records = await window.api.worktreeServices.list()
-    const worktreeServicesEnv: Record<string, Record<string, string>> = {}
-    const worktreeServicesStatus: Record<string, WorktreeServicesStatus> = {}
-    const worktreeServicesRecords: Record<string, WorktreeServicesRecord> = {}
-    for (const record of records) {
-      worktreeServicesStatus[record.worktreeId] = record.status
-      worktreeServicesRecords[record.worktreeId] = record
-      if (record.status === 'ready') {
-        worktreeServicesEnv[record.worktreeId] = record.env
+  hydrateWorktreeServices: async (options) => {
+    if (options?.ifNeeded) {
+      if (get().hasHydratedWorktreeServices) {
+        return
+      }
+      if (initialWorktreeServicesHydration) {
+        return initialWorktreeServicesHydration
       }
     }
-    set({ worktreeServicesEnv, worktreeServicesStatus, worktreeServicesRecords })
+    const requestId = ++worktreeServicesHydrationRequestId
+    const hydration = (async (): Promise<void> => {
+      const records = await window.api.worktreeServices.list()
+      const worktreeServicesEnv: Record<string, Record<string, string>> = {}
+      const worktreeServicesStatus: Record<string, WorktreeServicesStatus> = {}
+      const worktreeServicesRecords: Record<string, WorktreeServicesRecord> = {}
+      for (const record of records) {
+        worktreeServicesStatus[record.worktreeId] = record.status
+        worktreeServicesRecords[record.worktreeId] = record
+        if (record.status === 'ready') {
+          worktreeServicesEnv[record.worktreeId] = record.env
+        }
+      }
+      // Why: a mutation-triggered refresh can overtake boot hydration. Only
+      // the newest response may publish, or the older empty snapshot can erase
+      // freshly provisioned env and make subsequent PTYs target shared services.
+      if (requestId === worktreeServicesHydrationRequestId) {
+        set({
+          worktreeServicesEnv,
+          worktreeServicesStatus,
+          worktreeServicesRecords,
+          hasHydratedWorktreeServices: true
+        })
+      }
+    })()
+    if (options?.ifNeeded) {
+      initialWorktreeServicesHydration = hydration
+    }
+    try {
+      await hydration
+    } finally {
+      if (initialWorktreeServicesHydration === hydration) {
+        initialWorktreeServicesHydration = null
+      }
+    }
   },
 
   fetchDetectedWorktrees: async (repoId) => {
@@ -2531,11 +2565,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   fetchAllWorktrees: async (options) => {
     const { repos } = get()
 
-    // Why: hydrate per-worktree service env/status alongside the boot worktree
-    // refresh so PTY spawns and the sidebar badge see ready services. Idempotent.
-    // Best-effort — a failed IPC round-trip here must never block worktree refresh.
-    void get()
-      .hydrateWorktreeServices()
+    // Why: restored terminal reconnect runs after this startup refresh and must
+    // see isolated env before spawning. Only the first refresh reads the secure
+    // file; later worktree refreshes return immediately with no IPC or disk I/O.
+    await get()
+      .hydrateWorktreeServices({ ifNeeded: true })
       .catch(() => {})
 
     // Why: once the one-shot hydration-time purge has fired, subsequent

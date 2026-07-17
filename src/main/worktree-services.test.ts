@@ -13,6 +13,7 @@ vi.mock('node:child_process', async (importOriginal) => {
 
 import {
   destroyWorktreeServices,
+  getWorktreeServicesRuntime,
   loadServiceRecipesForWorktree,
   provisionWorktreeServices,
   runWorktreeServiceAction
@@ -69,6 +70,34 @@ describe('provisionWorktreeServices', () => {
     expect(getWorktreeServicesRecord(dir, 'wt-1')?.status).toBe('ready')
   })
 
+  it('keeps allocated ORCA context authoritative over legacy recipe env', async () => {
+    execSucceeds()
+    const record = await provisionWorktreeServices({
+      userDataPath: dir,
+      worktreeId: 'wt-1',
+      worktreeName: 'task',
+      worktreePath: '/tmp/x',
+      repo,
+      services: [{ ...services[0]!, env: { ORCA_PORT_0: '29999' } }]
+    })
+    expect(record.env.ORCA_PORT_0).toBe('20000')
+  })
+
+  it('persists retryable failure state when no valid recipes remain', async () => {
+    const record = await provisionWorktreeServices({
+      userDataPath: dir,
+      worktreeId: 'wt-1',
+      worktreeName: 'task',
+      worktreePath: '/tmp/x',
+      repo,
+      services: []
+    })
+    expect(record.status).toBe('create_failed')
+    expect(record.error).toContain('no valid')
+    expect(getWorktreeServicesRecord(dir, 'wt-1')).toEqual(record)
+    expect(execMock).not.toHaveBeenCalled()
+  })
+
   it('survives a provision event listener that throws mid-stream', async () => {
     execMock.mockImplementation((_cmd, _opts, cb) => {
       const child = Object.assign(new EventEmitter(), {
@@ -112,6 +141,22 @@ describe('provisionWorktreeServices', () => {
     expect(record.status).toBe('create_failed')
     expect(record.error).toContain('db')
     expect(getWorktreeServicesRecord(dir, 'wt-1')?.status).toBe('create_failed')
+  })
+
+  it('marks create_failed when child-process startup throws synchronously', async () => {
+    execMock.mockImplementation(() => {
+      throw new Error('invalid environment')
+    })
+    const record = await provisionWorktreeServices({
+      userDataPath: dir,
+      worktreeId: 'wt-1',
+      worktreeName: 'task',
+      worktreePath: '/tmp/x',
+      repo,
+      services
+    })
+    expect(record.status).toBe('create_failed')
+    expect(record.error).toContain('invalid environment')
   })
 
   it('reuses the slot and slug when re-provisioning an existing ready record', async () => {
@@ -189,6 +234,28 @@ describe('destroyWorktreeServices', () => {
     expect(getWorktreeServicesRecord(dir, 'wt-1')).toBeNull()
   })
 
+  it('retains the record and slot when the caller has not committed removal', async () => {
+    execSucceeds()
+    await provisionWorktreeServices({
+      userDataPath: dir,
+      worktreeId: 'wt-1',
+      worktreeName: 'task',
+      worktreePath: '/tmp/x',
+      repo,
+      services
+    })
+    await destroyWorktreeServices({
+      userDataPath: dir,
+      worktreeId: 'wt-1',
+      worktreePath: '/tmp/x',
+      repo,
+      services,
+      releaseRecord: false
+    })
+    expect(getWorktreeServicesRecord(dir, 'wt-1')).not.toBeNull()
+    expect(allocateServiceSlot(dir)).toBe(1)
+  })
+
   it('is a no-op without a record', async () => {
     const result = await destroyWorktreeServices({
       userDataPath: dir,
@@ -227,6 +294,47 @@ describe('destroyWorktreeServices', () => {
       true
     )
     expect(getWorktreeServicesRecord(dir, 'wt-1')).toBeNull()
+  })
+})
+
+describe('getWorktreeServicesRuntime', () => {
+  it('starts independent status probes concurrently and preserves recipe order', async () => {
+    const runtimeServices: OrcaServiceRecipe[] = [
+      { ...services[0]!, status: 'status-db' },
+      { id: 'cache', name: 'Cache', create: 'create-cache', status: 'status-cache' }
+    ]
+    execSucceeds()
+    await provisionWorktreeServices({
+      userDataPath: dir,
+      worktreeId: 'wt-1',
+      worktreeName: 'task',
+      worktreePath: '/tmp/x',
+      repo,
+      services: runtimeServices
+    })
+
+    let releaseProbes!: () => void
+    const probesMayFinish = new Promise<void>((resolve) => {
+      releaseProbes = resolve
+    })
+    execMock.mockReset()
+    execMock.mockImplementation((_cmd, _opts, cb) => {
+      void probesMayFinish.then(() => cb(null, '', ''))
+      return { kill: vi.fn() }
+    })
+
+    const runtimePromise = getWorktreeServicesRuntime({
+      userDataPath: dir,
+      worktreeId: 'wt-1',
+      worktreePath: '/tmp/x',
+      services: runtimeServices
+    })
+    expect(execMock).toHaveBeenCalledTimes(2)
+    releaseProbes()
+    await expect(runtimePromise).resolves.toMatchObject([
+      { serviceId: 'db', runState: 'running' },
+      { serviceId: 'cache', runState: 'running' }
+    ])
   })
 })
 

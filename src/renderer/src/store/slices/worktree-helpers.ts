@@ -126,7 +126,8 @@ export type WorktreeSlice = {
   worktreeServicesStatus: Record<string, WorktreeServicesStatus>
   // Full provisioning record per worktree, drives the Services right-sidebar panel.
   worktreeServicesRecords: Record<string, WorktreeServicesRecord>
-  hydrateWorktreeServices: () => Promise<void>
+  hasHydratedWorktreeServices: boolean
+  hydrateWorktreeServices: (options?: { ifNeeded?: boolean }) => Promise<void>
   fetchDetectedWorktrees: (repoId: string) => Promise<DetectedWorktreeListResult | null>
   fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<boolean>
   fetchAllWorktrees: (options?: { hydrationPurge?: 'allow' | 'defer' }) => Promise<void>

@@ -19,7 +19,9 @@ import {
   Server
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Command, CommandEmpty, CommandItem, CommandList } from '@/components/ui/command'
+import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { SettingsSwitch } from '@/components/settings/SettingsFormControls'
@@ -635,6 +637,8 @@ export default function NewWorkspaceComposerCard({
   const updateSettings = useAppStore((s) => s.updateSettings)
   const nameInputFocusFrameRef = React.useRef<number | null>(null)
   const branchNameInputId = React.useId()
+  const reuseBranchInputId = React.useId()
+  const isolatedServicesInputId = React.useId()
   const submitShortcutModifierLabel = getScreenSubmitModifierLabel()
   const selectedRepoName = React.useMemo(() => {
     const repo = eligibleRepos.find((candidate) => candidate.id === repoId)
@@ -1000,39 +1004,23 @@ export default function NewWorkspaceComposerCard({
           >
             <div className="min-h-0">
               <div className="space-y-1 pt-1">
-                <label className="group flex w-fit items-center gap-2 text-xs text-foreground">
-                  <span
-                    className={cn(
-                      'flex size-4 items-center justify-center rounded-[3px] border shadow-sm transition',
-                      reuseSelectedBranch
-                        ? 'border-emerald-500/60 bg-emerald-500 text-white'
-                        : 'border-foreground/20 bg-background dark:border-white/20 dark:bg-muted/10'
-                    )}
-                  >
-                    <Check
-                      className={cn(
-                        'size-3 transition-opacity',
-                        reuseSelectedBranch ? 'opacity-100' : 'opacity-0'
-                      )}
-                    />
-                  </span>
-                  <input
-                    type="checkbox"
+                <div className="flex w-fit items-center gap-2">
+                  <Checkbox
+                    id={reuseBranchInputId}
                     checked={reuseSelectedBranch}
-                    onChange={(event) => onReuseSelectedBranchChange(event.target.checked)}
+                    onCheckedChange={(checked) => onReuseSelectedBranchChange(checked === true)}
                     // Why: while collapsed the row is aria-hidden, so disable the
                     // input too — keeps a hidden control out of the tab order and
                     // fully inert (no focusable control inside an aria-hidden tree).
                     disabled={!canReuseSelectedBranch}
-                    className="sr-only"
                   />
-                  <span>
+                  <Label htmlFor={reuseBranchInputId} className="cursor-pointer text-xs">
                     {translate(
                       'auto.components.NewWorkspaceComposerCard.reuseExistingBranch',
                       'Reuse branch'
                     )}
-                  </span>
-                </label>
+                  </Label>
+                </div>
                 <p className="pl-6 text-[11px] text-muted-foreground">
                   {translate(
                     'auto.components.NewWorkspaceComposerCard.reuseExistingBranchHint',
@@ -1055,36 +1043,20 @@ export default function NewWorkspaceComposerCard({
           >
             <div className="min-h-0">
               <div className="space-y-1 pt-1">
-                <label className="group flex w-fit items-center gap-2 text-xs text-foreground">
-                  <span
-                    className={cn(
-                      'flex size-4 items-center justify-center rounded-[3px] border shadow-sm transition',
-                      provisionServices
-                        ? 'border-emerald-500/60 bg-emerald-500 text-white'
-                        : 'border-foreground/20 bg-background dark:border-white/20 dark:bg-muted/10'
-                    )}
-                  >
-                    <Check
-                      className={cn(
-                        'size-3 transition-opacity',
-                        provisionServices ? 'opacity-100' : 'opacity-0'
-                      )}
-                    />
-                  </span>
-                  <input
-                    type="checkbox"
+                <div className="flex w-fit items-center gap-2">
+                  <Checkbox
+                    id={isolatedServicesInputId}
                     checked={provisionServices}
-                    onChange={(event) => onProvisionServicesChange?.(event.target.checked)}
+                    onCheckedChange={(checked) => onProvisionServicesChange?.(checked === true)}
                     disabled={!repoHasServiceRecipes}
-                    className="sr-only"
                   />
-                  <span>
+                  <Label htmlFor={isolatedServicesInputId} className="cursor-pointer text-xs">
                     {translate(
                       'auto.components.NewWorkspaceComposerCard.provisionIsolatedServices',
                       'Isolated services'
                     )}
-                  </span>
-                </label>
+                  </Label>
+                </div>
                 <p className="pl-6 text-[11px] text-muted-foreground">
                   {translate(
                     'auto.components.NewWorkspaceComposerCard.provisionIsolatedServicesHint',

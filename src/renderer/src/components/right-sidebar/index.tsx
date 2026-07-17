@@ -85,7 +85,7 @@ function RightSidebarInner(): React.JSX.Element {
   const isFolder = isFolderWorkspace || (activeRepo ? isFolderRepo(activeRepo) : false)
   const isSshRepo = Boolean(activeRepo?.connectionId)
   const hasWorktreeServices = useAppStore((s) =>
-    Boolean(activeWorktreeId && s.worktreeServicesRecords[activeWorktreeId])
+    Boolean(activeWorktreeId && s.worktreeServicesRecords?.[activeWorktreeId])
   )
 
   const activityItems = useMemo<ActivityBarItem[]>(

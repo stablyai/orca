@@ -10,7 +10,10 @@ vi.mock('node:child_process', async (importOriginal) => {
   return { ...actual, exec: execMock }
 })
 
-import { cleanupOrphanedWorktreeServices } from './worktree-services-orphan-cleanup'
+import {
+  cleanupOrphanedWorktreeServices,
+  isWorktreeServicesPathDefinitelyMissing
+} from './worktree-services-orphan-cleanup'
 import {
   getWorktreeServicesRecord,
   upsertWorktreeServicesRecord
@@ -95,5 +98,23 @@ describe('cleanupOrphanedWorktreeServices', () => {
     expect(demoted?.error).toContain('interrupted')
     // The worktree still exists, so it is not an orphan — destroy must not run.
     expect(execMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps a live worktree whose persisted metadata is missing', async () => {
+    const worktreeDir = mkdtempSync(join(tmpdir(), 'orca-svc-live-worktree-'))
+    const worktreeId = `repo-1::${worktreeDir}`
+    try {
+      upsertWorktreeServicesRecord(userDataDir, record(worktreeId, 0))
+      await cleanupOrphanedWorktreeServices({
+        userDataPath: userDataDir,
+        existingWorktreeIds: new Set(),
+        resolveRepo: () => ({ id: 'repo-1', path: repoDir }) as Repo,
+        isWorktreeDefinitelyMissing: isWorktreeServicesPathDefinitelyMissing
+      })
+      expect(execMock).not.toHaveBeenCalled()
+      expect(getWorktreeServicesRecord(userDataDir, worktreeId)).not.toBeNull()
+    } finally {
+      rmSync(worktreeDir, { recursive: true, force: true })
+    }
   })
 })

@@ -926,10 +926,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     selectedRecipeRepoId,
     selectedRepoIsGit
   ])
-  // Why: a stale opt-in from a previous repo must not leak into the next create.
-  useEffect(() => {
-    setProvisionServices(false)
-  }, [repoId])
   const selectedRepoConnectionId = selectedRepo?.connectionId ?? null
   const selectedRepoSshState = selectedRepoConnectionId
     ? (sshConnectionStates.get(selectedRepoConnectionId) ?? null)
@@ -1110,7 +1106,15 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // is the explicit checkbox value driving whether reuse actually happens.
   const [reuseEligibleBranch, setReuseEligibleBranch] = useState<string | null>(null)
   const [reuseSelectedBranch, setReuseSelectedBranch] = useState(false)
-  const [provisionServices, setProvisionServices] = useState(false)
+  const [provisionServicesRepoId, setProvisionServicesRepoId] = useState<string | null>(null)
+  // Why: key the opt-in to the repo where the user selected it. Deriving the
+  // visible value avoids an effect render where a newly selected repo briefly
+  // inherits the previous repo's checked state.
+  const provisionServices = provisionServicesRepoId === repoId
+  const setProvisionServices = useCallback(
+    (enabled: boolean) => setProvisionServicesRepoId(enabled ? repoId : null),
+    [repoId]
+  )
   const [pushTarget, setPushTarget] = useState<GitPushTarget | undefined>(undefined)
   // Why: when a repo switch wipes a prior Start-from selection, surface the
   // reset inline (e.g. "was PR #8778") so the change is recoverable visually
@@ -1179,6 +1183,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // instead of a second hooks.check IPC round trip per repo switch.
   const repoHasServiceRecipes = Boolean(
     selectedRepoIsGit &&
+    !isProjectGroupTarget &&
     !selectedRepo?.connectionId &&
     // Why: a local repo whose active target is a paired runtime — or a selected
     // per-workspace VM recipe (which swaps in a runtime-owned repo at create) —

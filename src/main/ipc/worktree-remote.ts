@@ -59,7 +59,11 @@ import {
   parseOrcaYaml,
   shouldRunSetupForCreate
 } from '../hooks'
-import { loadServiceRecipesForWorktree, provisionWorktreeServices } from '../worktree-services'
+import {
+  loadServiceRecipesForWorktree,
+  provisionWorktreeServices,
+  sanitizeServiceCommandOutput
+} from '../worktree-services'
 import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
@@ -2585,6 +2589,7 @@ export async function createLocalWorktree(
   // resolved service env can be injected into the setup runner. A failed
   // provision must not abort creation — the worktree stays, retry is offered.
   let serviceEnv: Record<string, string> = {}
+  let serviceProvisioningError: string | undefined
   await timing.time('prepare_setup', async () => {
     const createdYamlHooks = loadHooks(worktreePath)
     const createdEffectiveHooks = getEffectiveHooksFromConfig(repo, createdYamlHooks)
@@ -2594,7 +2599,7 @@ export async function createLocalWorktree(
     // root. loadServiceRecipesForWorktree reads raw yaml (like defaultTabs);
     // getEffectiveHooksFromConfig only carries setup/archive and would drop them.
     const serviceRecipes = loadServiceRecipesForWorktree(worktreePath, repo.path)
-    if (args.provisionServices && serviceRecipes.length > 0) {
+    if (args.provisionServices) {
       try {
         const record = await provisionWorktreeServices({
           userDataPath: app.getPath('userData'),
@@ -2608,10 +2613,22 @@ export async function createLocalWorktree(
         })
         if (record.status === 'ready') {
           serviceEnv = record.env
+        } else {
+          serviceProvisioningError = record.error ?? 'Isolated services could not be provisioned.'
         }
       } catch (error) {
+        serviceProvisioningError = sanitizeServiceCommandOutput(
+          error instanceof Error ? error.message : String(error)
+        )
         console.error(`[services] provisioning failed for ${worktreePath}:`, error)
       }
+    }
+
+    // Why: setup/default-tab commands commonly run migrations. If isolated
+    // provisioning failed, launching them without service env can mutate the
+    // shared database this opt-in exists to protect.
+    if (serviceProvisioningError) {
+      return
     }
 
     try {
@@ -2670,9 +2687,11 @@ export async function createLocalWorktree(
   // wins over the launch env), matching the setup runner and every renderer PTY
   // path, so the isolated DB/port always beats a colliding shared-env default.
   const startupWithServiceEnv =
-    args.startup && Object.keys(serviceEnv).length > 0
+    !serviceProvisioningError && args.startup && Object.keys(serviceEnv).length > 0
       ? { ...args.startup, env: { ...args.startup.env, ...serviceEnv } }
-      : args.startup
+      : serviceProvisioningError
+        ? undefined
+        : args.startup
   const stagedStartup = await timing.time('spawn_startup_terminal', () =>
     spawnLocalStartupAndSetupTerminals({
       runtime,
@@ -2695,6 +2714,7 @@ export async function createLocalWorktree(
         ? { setup }
         : {}),
     ...(defaultTabs ? { defaultTabs } : {}),
+    ...(serviceProvisioningError ? { serviceProvisioningError } : {}),
     ...(addResult.localBaseRefRefresh
       ? { localBaseRefRefresh: addResult.localBaseRefRefresh }
       : {}),

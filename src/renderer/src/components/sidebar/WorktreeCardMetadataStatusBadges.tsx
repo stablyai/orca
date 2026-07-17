@@ -51,9 +51,25 @@ export function ServicesStatusBadge({
           'auto.components.sidebar.WorktreeCardMetadataStatusBadges.servicesFailed',
           'Services: Failed'
         )}
-        className="border-red-500/25 bg-red-500/5 text-red-600 dark:text-red-300"
+        className="border-destructive/30 bg-destructive/10 text-destructive"
       >
         <DatabaseZap />
+      </MetadataStatusBadge>
+    )
+  }
+  if (status === 'provisioning') {
+    return (
+      <MetadataStatusBadge
+        label={`${translate(
+          'auto.components.sidebar.WorktreeCardMetadataStatusBadges.servicesReady',
+          'Services'
+        )}: ${translate(
+          'auto.components.right.sidebar.ServicesPanel.statusProvisioning',
+          'Provisioning'
+        )}`}
+        className="border-border bg-muted/30 text-muted-foreground"
+      >
+        <Database />
       </MetadataStatusBadge>
     )
   }
@@ -63,7 +79,7 @@ export function ServicesStatusBadge({
         'auto.components.sidebar.WorktreeCardMetadataStatusBadges.servicesReady',
         'Services'
       )}
-      className="border-sky-500/25 bg-sky-500/5 text-sky-600 dark:text-sky-300"
+      className="border-border bg-muted/30 text-muted-foreground"
     >
       <Database />
     </MetadataStatusBadge>

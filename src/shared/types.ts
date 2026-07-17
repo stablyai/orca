@@ -2203,6 +2203,9 @@ export type CreateWorktreeResult = {
   setup?: WorktreeSetupLaunch
   defaultTabs?: WorktreeDefaultTabsLaunch
   warning?: string
+  /** Worktree creation succeeded, but isolated services failed. Automatic
+   * setup/default-tab/agent commands are withheld to protect shared services. */
+  serviceProvisioningError?: string
   initialBaseStatus?: WorktreeBaseStatusEvent
   localBaseRefRefresh?: LocalBaseRefRefreshResult
   localBaseRefUpdateSuggestion?: LocalBaseRefUpdateSuggestion

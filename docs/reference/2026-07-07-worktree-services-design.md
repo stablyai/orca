@@ -67,12 +67,12 @@ services:
 
 ## Error Handling Summary
 
-| Failure | Behavior |
-| --- | --- |
-| `create` fails | Error on creation card; worktree kept; retry action |
-| `destroy` fails on removal | Warning toast; removal proceeds; slot freed |
-| Orphaned state (crash) | Startup cleanup re-runs `destroy`, frees slot |
-| Malformed recipe | Doctor diagnostic in repo settings |
+| Failure                    | Behavior                                            |
+| -------------------------- | --------------------------------------------------- |
+| `create` fails             | Error on creation card; worktree kept; retry action |
+| `destroy` fails on removal | Warning toast; removal proceeds; slot freed         |
+| Orphaned state (crash)     | Startup cleanup re-runs `destroy`, frees slot       |
+| Malformed recipe           | Doctor diagnostic in repo settings                  |
 
 ## Testing
 
@@ -93,5 +93,5 @@ Unit tests only — no Docker-dependent e2e:
 ## Implementation Notes
 
 - **Services right-sidebar panel & lifecycle commands (added post-v1).** Recipes support optional `start`, `stop`, and `status` commands (`status` exit 0 = running). A "Services" right-sidebar tab (visible only for worktrees with a provisioning record) lists each provisioned service with a live run-state dot probed via `status` (30s timeout; no `status` command → "unknown"), per-service and whole-environment start/stop actions, the slot/port block, resolved env vars, and retry-on-failure. Orca still does not monitor liveness continuously — the state is probed on panel open and after actions.
-- **Startup PTY race (known limitation).** Terminals pre-spawned at app boot can miss the service env if they spawn before the async services hydration resolves; freshly created PTYs (new tabs, splits) always get it.
+- **Startup PTY ordering.** Freshly created worktrees pass resolved service env directly to the main-spawned startup terminal. App restore awaits the one-time services hydration before reconnecting persisted terminals, so cold fresh-spawns receive the same env as new tabs and splits.
 - **Remote (SSH) provisioning is deferred to a follow-up.** v1 provisions only local and WSL worktrees; the opt-in is hidden and lifecycle skipped whenever `repo.connectionId` is set. To extend to remote repos, run each service command on the connection host by following the `runRemoteArchiveHook` pattern (`src/main/ipc/worktrees.ts:322`, invoked at the archive-hook site near line 1591) instead of the local `exec` / WSL `wsl.exe` branches in `src/main/worktree-services.ts`. The slot store, slug/port derivation, and env-injection paths are provider-agnostic and can be reused as-is.

@@ -134,8 +134,16 @@ function normalizeServiceEnv(
   index: number,
   diagnostics: OrcaVmRecipeDiagnostic[]
 ): Record<string, string> | undefined {
+  if (value === undefined) {
+    return undefined
+  }
   const record = asRecord(value)
   if (!record) {
+    diagnostics.push({
+      index,
+      field: 'env',
+      message: `Service "${serviceId}" env must be a mapping.`
+    })
     return undefined
   }
   const env: Record<string, string> = {}
@@ -148,6 +156,16 @@ function normalizeServiceEnv(
         index,
         field: 'env',
         message: `Service "${serviceId}" env key "${key}" is not a valid environment variable name.`
+      })
+      continue
+    }
+    // Why: Orca uses this namespace for the stable slot/port contract. Letting
+    // recipe env replace it would make create and destroy target different services.
+    if (key.startsWith('ORCA_')) {
+      diagnostics.push({
+        index,
+        field: 'env',
+        message: `Service "${serviceId}" env key "${key}" is reserved by Orca.`
       })
       continue
     }
@@ -166,6 +184,10 @@ function normalizeServiceEnv(
 
 function normalizeServices(value: unknown): ServiceParseResult {
   const diagnostics: OrcaVmRecipeDiagnostic[] = []
+  if (value !== undefined && !Array.isArray(value)) {
+    diagnostics.push({ index: 0, message: 'Services must be a list.' })
+    return { services: [], diagnostics }
+  }
   if (!Array.isArray(value)) {
     return { services: [], diagnostics }
   }
