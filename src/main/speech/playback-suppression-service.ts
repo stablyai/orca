@@ -31,6 +31,7 @@ export class PlaybackSuppressionService {
   private readonly owners = new Set<string>()
   private activeSnapshot: PlaybackSuppressionSnapshot | null = null
   private pendingActivation: Promise<PlaybackSuppressionAcquireResult> | null = null
+  private pendingRestoration: Promise<void> | null = null
   private activationController: AbortController | null = null
   private recoveryPromise: Promise<void> | null = null
   private generation = 0
@@ -50,6 +51,10 @@ export class PlaybackSuppressionService {
     await this.ensureRecovered()
 
     while (this.owners.has(owner)) {
+      if (this.pendingRestoration) {
+        await this.pendingRestoration.catch(() => undefined)
+        continue
+      }
       if (this.activeSnapshot) {
         return { active: true }
       }
@@ -98,7 +103,18 @@ export class PlaybackSuppressionService {
     const activeSnapshot = this.activeSnapshot
     this.activeSnapshot = null
     if (activeSnapshot && !activeSnapshot.muted) {
-      await this.restore(activeSnapshot)
+      const restoration = this.restore(activeSnapshot).catch((error: unknown) => {
+        this.activeSnapshot = activeSnapshot
+        throw error
+      })
+      this.pendingRestoration = restoration
+      try {
+        await restoration
+      } finally {
+        if (this.pendingRestoration === restoration) {
+          this.pendingRestoration = null
+        }
+      }
       return
     }
     await this.pendingActivation

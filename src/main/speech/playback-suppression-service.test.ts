@@ -76,6 +76,70 @@ describe('PlaybackSuppressionService', () => {
     expect(adapter.setMuted).toHaveBeenLastCalledWith(false, expect.any(AbortSignal), snapshot)
   })
 
+  it('waits for restoration before activating a new owner', async () => {
+    let muted = false
+    let finishRestore: (() => void) | undefined
+    const adapter: PlaybackSuppressionAdapter = {
+      getCapability: vi.fn(async () => ({ available: true as const, backend: 'test' })),
+      snapshot: vi.fn(async () => ({ backend: 'test', muted })),
+      setMuted: vi.fn(
+        (nextMuted) =>
+          new Promise<void>((resolve) => {
+            if (!nextMuted) {
+              finishRestore = () => {
+                muted = false
+                resolve()
+              }
+              return
+            }
+            muted = true
+            resolve()
+          })
+      )
+    }
+    const service = new PlaybackSuppressionService(adapter)
+    await service.acquire('dictation:1')
+
+    const releasing = service.release('dictation:1')
+    await vi.waitFor(() => expect(finishRestore).toBeTypeOf('function'))
+    let acquisitionFinished = false
+    const acquiring = service.acquire('dictation:2').then((result) => {
+      acquisitionFinished = true
+      return result
+    })
+    await Promise.resolve()
+
+    expect(acquisitionFinished).toBe(false)
+    finishRestore?.()
+    await releasing
+    await expect(acquiring).resolves.toEqual({ active: true })
+    expect(muted).toBe(true)
+  })
+
+  it('retries restoration after a transient failure', async () => {
+    let muted = false
+    let failRestore = true
+    const adapter: PlaybackSuppressionAdapter = {
+      getCapability: vi.fn(async () => ({ available: true as const, backend: 'test' })),
+      snapshot: vi.fn(async () => ({ backend: 'test', muted })),
+      setMuted: vi.fn(async (nextMuted) => {
+        if (!nextMuted && failRestore) {
+          failRestore = false
+          throw new Error('temporary restore failure')
+        }
+        muted = nextMuted
+      })
+    }
+    const service = new PlaybackSuppressionService(adapter)
+
+    await service.acquire('dictation:1')
+    await expect(service.release('dictation:1')).rejects.toThrow('temporary restore failure')
+    await service.acquire('dictation:2')
+    await service.release('dictation:2')
+
+    expect(muted).toBe(false)
+  })
+
   it('fails open when the platform cannot be muted', async () => {
     const adapter = createAdapter(false)
     vi.mocked(adapter.setMuted).mockRejectedValueOnce(new Error('unavailable'))
