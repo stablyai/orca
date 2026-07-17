@@ -1,6 +1,7 @@
 import type { SpriteAnimation } from '../../shared/types'
 import {
   CODEX_PET_ANIMATIONS,
+  CODEX_PET_ANIMATIONS_UNTIMED,
   CODEX_PET_DEFAULT_ANIMATION,
   CODEX_PET_DEFAULT_FPS,
   CODEX_PET_FRAME,
@@ -11,6 +12,7 @@ import {
 // in shared/ so the renderer can reuse the same fingerprint for upgrades.
 export {
   CODEX_PET_ANIMATIONS,
+  CODEX_PET_ANIMATIONS_UNTIMED,
   CODEX_PET_DEFAULT_ANIMATION,
   CODEX_PET_DEFAULT_FPS,
   CODEX_PET_FRAME,
@@ -61,7 +63,11 @@ export function applyCodexPetDefaults<T extends PetManifestLike>(
     frame: manifest.frame ?? CODEX_PET_FRAME,
     fps: manifest.fps ?? CODEX_PET_DEFAULT_FPS,
     defaultAnimation: manifest.defaultAnimation ?? CODEX_PET_DEFAULT_ANIMATION,
-    animations: manifest.animations ?? CODEX_PET_ANIMATIONS
+    // Why: honor an explicit fps by baking the untimed layout — the timed Codex
+    // durations would otherwise override the requested uniform pacing.
+    animations:
+      manifest.animations ??
+      (manifest.fps === undefined ? CODEX_PET_ANIMATIONS : CODEX_PET_ANIMATIONS_UNTIMED)
   }
 }
 

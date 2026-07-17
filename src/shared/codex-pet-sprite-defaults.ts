@@ -30,6 +30,13 @@ export const CODEX_PET_ANIMATIONS: Record<string, SpriteAnimation> = {
   review: { row: 8, frames: 6, frameDurationsMs: appStateDurations(6, 150, 280) }
 }
 
+// Codex bakes per-frame durations by default. A bundle that pins an explicit
+// `fps` wants uniform pacing at that rate instead, so it gets the same layout
+// without durations — SpriteFrame prefers durations over fps when both exist.
+export const CODEX_PET_ANIMATIONS_UNTIMED: Record<string, SpriteAnimation> = Object.fromEntries(
+  Object.entries(CODEX_PET_ANIMATIONS).map(([name, { row, frames }]) => [name, { row, frames }])
+)
+
 export type CustomPetSprite = NonNullable<CustomPet['sprite']>
 
 /** The exact sprite an old Orca build baked for an imported Codex bundle:

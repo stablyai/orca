@@ -75,9 +75,9 @@ function spriteDiv(container: HTMLElement): HTMLDivElement {
   return div
 }
 
-// The @keyframes name is `pet-<useId>-<dragGeneration>`; the generation suffix
-// changes only when a grab mints a fresh restart, so it proves the frame-0
-// restart is wired.
+// The @keyframes name is `pet-<useId>-<animationName>-<dragGeneration>`: the
+// animation name keeps a switched-to row from reusing the prior timeline, and
+// the generation suffix restarts a same-row grab from frame 0.
 function animationName(container: HTMLElement): string {
   return spriteDiv(container).style.animation.split(' ')[0]
 }
@@ -118,6 +118,7 @@ describe('PetOverlay grab-and-hold pointer interaction', () => {
     // it renders as step-end rather than steps()).
     expect(spriteDiv(container).style.animationPlayState).toBe('running')
     expect(spriteDiv(container).style.animation).toContain('step-end')
+    expect(animationName(container)).toContain('idle')
     const idleName = animationName(container)
 
     // Grab and hold still: mint a fresh restart (frame 0) and freeze there while
@@ -126,6 +127,7 @@ describe('PetOverlay grab-and-hold pointer interaction', () => {
     expect(spriteDiv(container).style.animationPlayState).toBe('paused')
     expect(spriteDiv(container).style.animation).toContain('step-end')
     expect(animationName(container)).not.toBe(idleName)
+    const heldName = animationName(container)
 
     // A sub-4px twitch stays frozen (deadzone).
     firePointer(wrapper, 'pointermove', 52, 51)
@@ -136,14 +138,19 @@ describe('PetOverlay grab-and-hold pointer interaction', () => {
     expect(spriteDiv(container).style.animationPlayState).toBe('paused')
 
     // Drag right past the 4px deadzone: switch to the running-right row (row 1,
-    // 8 frames, no durations → steps(8)) and resume animating.
+    // 8 frames, no durations → steps(8)) and resume animating. The keyframes
+    // name changes with the row, so it starts from frame 0 rather than reusing
+    // the idle timeline.
     firePointer(wrapper, 'pointermove', 70, 80)
     expect(spriteDiv(container).style.animationPlayState).toBe('running')
     expect(spriteDiv(container).style.animation).toContain('steps(8)')
+    expect(animationName(container)).toContain('running-right')
+    expect(animationName(container)).not.toBe(heldName)
 
     // Release restores the live agent state (idle) and resumes animating.
     firePointer(wrapper, 'pointerup', 70, 80)
     expect(spriteDiv(container).style.animationPlayState).toBe('running')
     expect(spriteDiv(container).style.animation).toContain('step-end')
+    expect(animationName(container)).toContain('idle')
   })
 })

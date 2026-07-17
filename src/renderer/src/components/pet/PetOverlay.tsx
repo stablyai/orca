@@ -61,7 +61,11 @@ function SpriteFrame({
   // that restarts from frame 0 even when the state row is unchanged.
   restartKey: number
 }): React.JSX.Element {
-  const animKeyframesId = `${useId().replace(/[^a-zA-Z0-9_-]/g, '')}-${restartKey}`
+  // Why: key the @keyframes name on the selected animation too. Reusing one
+  // name across rows lets the browser preserve currentTime, so a switched-to
+  // row would enter mid-cycle instead of frame 0; a distinct name per animation
+  // (plus restartKey for same-row grabs) starts each one cleanly.
+  const animKeyframesId = `${useId().replace(/[^a-zA-Z0-9_-]/g, '')}-${animationName}-${restartKey}`
   const anim =
     sprite.animations?.[animationName] ||
     (sprite.defaultAnimation && sprite.animations?.[sprite.defaultAnimation]) ||

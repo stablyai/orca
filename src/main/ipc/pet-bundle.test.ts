@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   CODEX_PET_ANIMATIONS,
+  CODEX_PET_ANIMATIONS_UNTIMED,
   CODEX_PET_FRAME,
   CODEX_PET_SPRITESHEET_PATH,
   applyCodexPetDefaults,
@@ -61,6 +62,18 @@ describe('applyCodexPetDefaults', () => {
     expect(manifest.frame).toEqual(CODEX_PET_FRAME)
     expect(manifest.defaultAnimation).toBe('idle')
     expect(manifest.animations).toEqual(CODEX_PET_ANIMATIONS)
+  })
+
+  it('bakes untimed rows when a Codex-layout bundle pins an explicit fps', () => {
+    // The timed durations would override the requested uniform pacing, so an
+    // explicit fps must keep the layout durationless.
+    const manifest = applyCodexPetDefaults({ id: 'zippy', displayName: 'Zippy', fps: 4 })
+
+    expect(manifest.fps).toBe(4)
+    expect(manifest.animations).toEqual(CODEX_PET_ANIMATIONS_UNTIMED)
+    for (const anim of Object.values(manifest.animations ?? {})) {
+      expect(anim.frameDurationsMs).toBeUndefined()
+    }
   })
 
   it('does not override explicit Orca bundle sprite metadata', () => {
