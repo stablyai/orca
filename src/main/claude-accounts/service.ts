@@ -108,10 +108,12 @@ export class ClaudeAccountService {
     return this.serializeMutation(() => this.doAddAccount(target))
   }
 
-  // Why: adds a managed account from an already-authenticated CLAUDE_CONFIG_DIR
-  // instead of driving the interactive browser login here. Enables the
-  // `orca account add` CLI to run `claude login` in the user's own terminal on a
-  // headless host, then register the captured credentials without a desktop GUI.
+  /**
+   * Adds a managed Claude account from an already-authenticated `CLAUDE_CONFIG_DIR`
+   * instead of driving the interactive browser login here. Enables the
+   * `orca account add` CLI to run `claude login` in the user's own terminal on a
+   * headless host, then register the captured credentials without a desktop GUI.
+   */
   async addAccountFromConfigDir(
     configDir: string,
     target?: ClaudeAccountAddTarget
@@ -205,7 +207,10 @@ export class ClaudeAccountService {
       throw new Error('A Claude config directory path is required.')
     }
     const resolvedDir = resolve(trimmed)
-    if (!existsSync(join(resolvedDir, '.credentials.json'))) {
+    // Why: macOS keeps Claude credentials in the Keychain rather than a file, so
+    // only require `.credentials.json` off-darwin; captureAuthFromConfigDir reads
+    // the scoped Keychain item on macOS.
+    if (process.platform !== 'darwin' && !existsSync(join(resolvedDir, '.credentials.json'))) {
       throw new Error(
         `No Claude credentials found in ${resolvedDir}. Run \`claude login\` into this directory first.`
       )
@@ -275,7 +280,13 @@ export class ClaudeAccountService {
     previousSettings: ReturnType<Store['getSettings']>
   ): Promise<void> {
     this.restoreClaudeSettings(previousSettings)
-    await this.runtimeAuth.forceMaterializeCurrentSelectionForRollback()
+    // Why: rollback is best-effort — a failed rematerialization must not skip the
+    // managed-auth cleanup below, and the caller rethrows the original add error.
+    try {
+      await this.runtimeAuth.forceMaterializeCurrentSelectionForRollback()
+    } catch (rollbackError) {
+      console.warn('[claude-accounts] Rollback rematerialization failed:', rollbackError)
+    }
     await this.safeRemoveManagedAuth(accountId, managedAuthPath)
   }
 

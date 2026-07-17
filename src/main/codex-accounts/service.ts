@@ -285,10 +285,12 @@ export class CodexAccountService {
     return this.serializeMutation(() => this.doAddAccount(target))
   }
 
-  // Why: register a Codex account from an already-authenticated CODEX_HOME
-  // instead of driving `codex login` here. Lets the `orca account add --agent
-  // codex` CLI run the login in the user's own terminal on a headless host and
-  // then import the captured auth.json into managed storage.
+  /**
+   * Registers a managed Codex account from an already-authenticated `CODEX_HOME`
+   * instead of driving `codex login` here. Lets the `orca account add --agent codex`
+   * CLI run the login in the user's own terminal on a headless host and then import
+   * the captured `auth.json` into managed storage.
+   */
   async addAccountFromHome(
     sourceHome: string,
     target?: CodexAccountAddTarget
@@ -811,11 +813,37 @@ export class CodexAccountService {
         targetSelection
       )
     })
-    this.safeSyncCanonicalConfigToManagedHomes()
-    this.runtimeHome.clearLastWrittenAuthJson(account.id)
-    this.runtimeHome.syncForCurrentSelection(targetSelection)
+    try {
+      this.safeSyncCanonicalConfigToManagedHomes()
+      this.runtimeHome.clearLastWrittenAuthJson(account.id)
+      // Why: pass the account's selection target so a WSL account syncs the WSL
+      // runtime home instead of the default host target.
+      this.runtimeHome.syncForCurrentSelection(targetSelection)
 
-    // Why: switching activates the new account, so cache the outgoing account's usage for the switcher.
+    } catch (error) {
+      // Why: settings were already written; if a post-write step fails, restore the
+      // previous account/selection so the caller's managed-home cleanup cannot leave
+      // a dangling, broken managed account behind in settings.
+      this.store.updateSettings({
+        codexManagedAccounts: settings.codexManagedAccounts,
+        activeCodexManagedAccountId: settings.activeCodexManagedAccountId,
+        activeCodexManagedAccountIdsByRuntime: settings.activeCodexManagedAccountIdsByRuntime
+      })
+      // Why: a failed post-write step must restore both persisted selection and
+      // the runtime home it drives before the new managed home is removed.
+      try {
+        this.runtimeHome.syncForCurrentSelection(targetSelection)
+      } catch (rollbackError) {
+        console.warn(
+          '[codex-accounts] Failed to restore runtime home during rollback:',
+          rollbackError
+        )
+      }
+      throw error
+    }
+
+    // Why: switching activates the new account, so cache the outgoing account's usage for the
+    // switcher — in the background, since the probe must never block or fail a durable add.
     const outgoingAccountId = getSelectedCodexAccountIdForTarget(settings, targetSelection)
     this.startQuotaRefreshInBackground(outgoingAccountId, targetSelection)
     return this.getSnapshot()

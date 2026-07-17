@@ -20,6 +20,7 @@ type AccountsBlock = {
   activeAccountId: string | null
 }
 
+/** Renders a provider's managed-account list as a human-readable block, marking the active account. */
 function formatAccountsBlock(label: string, block: AccountsBlock): string {
   if (block.accounts.length === 0) {
     return `No managed ${label} accounts.`
@@ -30,9 +31,11 @@ function formatAccountsBlock(label: string, block: AccountsBlock): string {
   return `Managed ${label} accounts (${block.accounts.length}):\n${lines.join('\n')}`
 }
 
-// Why: run the real agent login attached to the user's terminal so the OAuth
-// URL/device-code prompt is visible and the code can be pasted back — the desktop
-// GUI flow drives this via a browser Orca can't reach on a headless host.
+/**
+ * Runs the real agent login attached to the user's terminal so the OAuth
+ * URL/device-code prompt is visible and the code can be pasted back — the desktop
+ * GUI flow drives this via a browser Orca can't reach on a headless host.
+ */
 async function runAgentLoginInTerminal(
   command: string,
   args: string[],
@@ -41,7 +44,11 @@ async function runAgentLoginInTerminal(
   await new Promise<void>((resolvePromise, rejectPromise) => {
     const child = spawn(command, args, {
       stdio: 'inherit',
-      env: { ...process.env, ...extraEnv }
+      env: { ...process.env, ...extraEnv },
+      // Why: on Windows the agent CLIs are `.cmd` shims that Node's spawn cannot
+      // execute without a shell; args here are fixed literals, so there is no
+      // interpolation/injection risk from enabling the shell.
+      shell: process.platform === 'win32'
     })
     child.on('error', (error) =>
       rejectPromise(
@@ -66,6 +73,7 @@ async function runAgentLoginInTerminal(
   })
 }
 
+/** Logs into a Claude account in a temp config dir, then registers it with the local runtime. */
 async function addClaudeAccount({ client, json }: HandlerContext): Promise<void> {
   const configDir = mkdtempSync(join(tmpdir(), 'orca-account-add-claude-'))
   try {
@@ -82,6 +90,7 @@ async function addClaudeAccount({ client, json }: HandlerContext): Promise<void>
   }
 }
 
+/** Logs into a Codex account in a temp CODEX_HOME, then registers it with the local runtime. */
 async function addCodexAccount({ client, json }: HandlerContext): Promise<void> {
   const codexHome = mkdtempSync(join(tmpdir(), 'orca-account-add-codex-'))
   try {
@@ -95,6 +104,7 @@ async function addCodexAccount({ client, json }: HandlerContext): Promise<void> 
   }
 }
 
+/** CLI handlers for `orca account add [--agent claude|codex]` and `orca account list`. */
 export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
   'account add': async (ctx) => {
     const agentFlag = ctx.flags.get('agent')
