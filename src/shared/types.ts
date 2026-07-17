@@ -2715,6 +2715,14 @@ export type GlobalSettings = {
   openInApplications?: OpenInApplication[]
   /** Deprecated: migration/backward-compat only. Use PersistedUIState.rightSidebarOpen. */
   rightSidebarOpenByDefault: boolean
+  /** When enabled (default), hovering near the window's right edge while the
+   *  right sidebar is closed peeks it as a floating overlay. Opt-out for users
+   *  who only want the explicit toggle/shortcut. Optional for legacy profiles;
+   *  readers treat absent as true. */
+  rightSidebarEdgePeekEnabled?: boolean
+  /** One-shot coachmark after first closing the right sidebar while edge peek
+   *  is enabled. Absent/false means the tip can still show. */
+  rightSidebarEdgePeekTipDismissed?: boolean
   showGitIgnoredFiles?: boolean
   /** Preferred Source Control changes layout. Per-user, not per-workspace. */
   sourceControlViewMode: SourceControlViewMode

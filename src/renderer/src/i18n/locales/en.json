@@ -7353,6 +7353,10 @@
               "workspaceOptions": "workspace options",
               "detailed": "detailed"
             },
+            "rightSidebarEdgePeek": {
+              "title": "Right Sidebar Edge Peek",
+              "description": "Hover the window edge to temporarily reveal a closed right sidebar."
+            },
             "antigravityUsageTitle": "Antigravity Usage",
             "antigravityUsageDescription": "Show Antigravity subscription usage in the status bar.",
             "antigravityKeyword": "antigravity",
@@ -10280,6 +10284,17 @@
             "archivedJumpUnavailable": "This session is in an archived worktree.",
             "noActiveWorktreeMatch": "No active worktree matches this session.",
             "noActiveWorktreeTarget": "No active worktree is available."
+          },
+          "edge": {
+            "peek": {
+              "tip": {
+                "title": "Hover the right edge to peek",
+                "description": "The right sidebar slides over the editor without reflowing it. Click the toggle or use the shortcut to pin it open. Change this anytime in Settings › Appearance.",
+                "titleLong": "Hover over the right edge of the screen to quickly show this sidebar.",
+                "settingsPrefix": "Turn this off in",
+                "settingsLink": "Settings"
+              }
+            }
           },
           "AiVaultSessionSubagents": {
             "subagentsCount": "Subagents ({{value0}})",

@@ -30,6 +30,7 @@ import {
 } from './worktree-file-change-event'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { markFileChangedOnDisk } from '@/components/editor/editor-changed-on-disk-mark'
+import { isRightSidebarRevealed } from '@/lib/right-sidebar-visibility'
 
 // Why: atomic-write patterns (Claude Code's Edit tool, editors like vim,
 // VSCode) land as a short burst of `update` events — or `delete + create` on
@@ -96,6 +97,7 @@ export type EditorExternalWatchTargetState = Pick<
   | 'activeWorktreeId'
   | 'settings'
   | 'rightSidebarOpen'
+  | 'rightSidebarPeek'
   | 'rightSidebarTab'
   | 'rightSidebarExplorerView'
   | 'gitStatusHugeByWorktree'
@@ -107,7 +109,7 @@ let cachedWorktreesByRepo: AppState['worktreesByRepo'] | null = null
 let cachedRepos: AppState['repos'] | null = null
 let cachedActiveWorktreeId: string | null = null
 let cachedRuntimeEnvironmentId: string | undefined
-let cachedRightSidebarOpen: boolean | null = null
+let cachedRightSidebarRevealed: boolean | null = null
 let cachedRightSidebarTab: AppState['rightSidebarTab'] | null = null
 let cachedRightSidebarExplorerView: AppState['rightSidebarExplorerView'] | null = null
 let cachedGitStatusHugeByWorktree: AppState['gitStatusHugeByWorktree'] | null = null
@@ -129,13 +131,14 @@ export function getEditorExternalWatchTargets(
   state: EditorExternalWatchTargetState
 ): WatchedTargetsSnapshot {
   const runtimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim() || undefined
+  const rightSidebarRevealed = isRightSidebarRevealed(state)
   if (
     cachedOpenFiles === state.openFiles &&
     cachedWorktreesByRepo === state.worktreesByRepo &&
     cachedRepos === state.repos &&
     cachedActiveWorktreeId === state.activeWorktreeId &&
     cachedRuntimeEnvironmentId === runtimeEnvironmentId &&
-    cachedRightSidebarOpen === state.rightSidebarOpen &&
+    cachedRightSidebarRevealed === rightSidebarRevealed &&
     cachedRightSidebarTab === state.rightSidebarTab &&
     cachedRightSidebarExplorerView === state.rightSidebarExplorerView &&
     cachedGitStatusHugeByWorktree === state.gitStatusHugeByWorktree &&
@@ -175,7 +178,7 @@ export function getEditorExternalWatchTargets(
       state.sshConnectionStates.get(activeRepo.connectionId)?.status === 'connected')
   const activeWorktreeNeedsSidebarWatch =
     activeWorktreeId !== null &&
-    state.rightSidebarOpen &&
+    rightSidebarRevealed &&
     ((state.rightSidebarTab === 'explorer' && state.rightSidebarExplorerView === 'files') ||
       (state.rightSidebarTab === 'source-control' && sourceControlCanConsumeWatch))
   if (activeWorktreeNeedsSidebarWatch) {
@@ -222,7 +225,7 @@ export function getEditorExternalWatchTargets(
   cachedRepos = state.repos
   cachedActiveWorktreeId = state.activeWorktreeId
   cachedRuntimeEnvironmentId = runtimeEnvironmentId
-  cachedRightSidebarOpen = state.rightSidebarOpen
+  cachedRightSidebarRevealed = rightSidebarRevealed
   cachedRightSidebarTab = state.rightSidebarTab
   cachedRightSidebarExplorerView = state.rightSidebarExplorerView
   cachedGitStatusHugeByWorktree = state.gitStatusHugeByWorktree

@@ -199,6 +199,22 @@ describe('createEditorSlice right sidebar state', () => {
     expect(store.getState().rightSidebarExplorerViewByWorktree).toEqual({ 'wt-1': 'files' })
   })
 
+  it('keeps content routing transient while the sidebar is peeking', () => {
+    const store = createEditorStore()
+    const routes = [
+      () => store.getState().showRightSidebarFiles(),
+      () => store.getState().showRightSidebarSearch(),
+      () => store.getState().revealInExplorer('wt-1', '/repo/file.ts')
+    ]
+
+    for (const route of routes) {
+      store.setState({ rightSidebarOpen: false, rightSidebarPeek: true })
+      route()
+      expect(store.getState().rightSidebarOpen).toBe(false)
+      expect(store.getState().rightSidebarPeek).toBe(true)
+    }
+  })
+
   it('showRightSidebarSearch opens Explorer search and requests focus without payload', () => {
     const store = createEditorStore()
     store.getState().updateFileSearchState('wt-1', {

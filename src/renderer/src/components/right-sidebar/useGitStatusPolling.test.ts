@@ -15,6 +15,7 @@ type PollState = {
   gitConflictOperationByWorktree: Record<string, unknown>
   sshConnectionStates: Map<string, { status: string }>
   rightSidebarOpen?: boolean
+  rightSidebarPeek?: boolean
   rightSidebarTab?: string
   rightSidebarExplorerView?: string
   openFiles?: unknown[]

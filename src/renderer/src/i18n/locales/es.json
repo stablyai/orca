@@ -7293,6 +7293,10 @@
             },
             "9a115966d3": "Minimizar a la bandeja al cerrar",
             "4d5b9427b5": "Cuando está activado, cerrar la ventana mantiene Orca en ejecución en la bandeja del sistema en lugar de salir.",
+            "rightSidebarEdgePeek": {
+              "title": "Right Sidebar Edge Peek",
+              "description": "Hover the window edge to temporarily reveal a closed right sidebar."
+            },
             "antigravityUsageTitle": "Uso de Antigravity",
             "antigravityUsageDescription": "Muestra el uso de suscripción de Antigravity en la barra de estado.",
             "antigravityKeyword": "antigravity",
@@ -10257,6 +10261,17 @@
             "archivedJumpUnavailable": "Esta sesión está en un worktree archivado.",
             "noActiveWorktreeMatch": "Ningún worktree activo coincide con esta sesión.",
             "noActiveWorktreeTarget": "No hay ningún worktree activo disponible."
+          },
+          "edge": {
+            "peek": {
+              "tip": {
+                "title": "Hover the right edge to peek",
+                "description": "The right sidebar slides over the editor without reflowing it. Click the toggle or use the shortcut to pin it open. Change this anytime in Settings › Appearance.",
+                "titleLong": "Hover over the right edge of the screen to quickly show this sidebar.",
+                "settingsPrefix": "Turn this off in",
+                "settingsLink": "Settings"
+              }
+            }
           },
           "AiVaultSessionSubagents": {
             "subagentsCount": "Subagentes ({{value0}})",

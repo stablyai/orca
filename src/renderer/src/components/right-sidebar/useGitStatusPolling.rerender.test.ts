@@ -174,7 +174,10 @@ describe('useGitStatusPolling rerender stability', () => {
     expect(refreshMock).toHaveBeenCalledTimes(2)
   })
 
-  it('refreshes immediately when Source Control becomes visible', async () => {
+  it.each([
+    ['opens', { rightSidebarOpen: true }],
+    ['peeks', { rightSidebarPeek: true }]
+  ])('refreshes immediately when Source Control %s', async (_label, revealState) => {
     useAppStore.setState({ rightSidebarOpen: false })
     await renderHook()
     await flushMicrotasks()
@@ -183,7 +186,7 @@ describe('useGitStatusPolling rerender stability', () => {
     // Let the 3 s anti-churn floor from the mount refresh elapse first.
     await vi.advanceTimersByTimeAsync(3000)
     await act(async () => {
-      useAppStore.setState({ rightSidebarOpen: true })
+      useAppStore.setState(revealState)
     })
     await flushMicrotasks()
 

@@ -59,6 +59,7 @@ describe('getEditorExternalWatchTargets', () => {
     activeWorktreeId?: string | null
     runtimeEnvironmentId?: string | null
     rightSidebarOpen?: boolean
+    rightSidebarPeek?: boolean
     rightSidebarTab?: EditorExternalWatchTargetState['rightSidebarTab']
     rightSidebarExplorerView?: EditorExternalWatchTargetState['rightSidebarExplorerView']
     gitStatusHugeByWorktree?: EditorExternalWatchTargetState['gitStatusHugeByWorktree']
@@ -69,6 +70,7 @@ describe('getEditorExternalWatchTargets', () => {
     repos: [args.repo],
     activeWorktreeId: args.activeWorktreeId ?? null,
     rightSidebarOpen: args.rightSidebarOpen ?? false,
+    rightSidebarPeek: args.rightSidebarPeek ?? false,
     rightSidebarTab: args.rightSidebarTab ?? 'explorer',
     rightSidebarExplorerView: args.rightSidebarExplorerView ?? 'files',
     gitStatusHugeByWorktree: args.gitStatusHugeByWorktree ?? {},
@@ -130,6 +132,29 @@ describe('getEditorExternalWatchTargets', () => {
       {
         worktreeId: 'wt-active-visible',
         worktreePath: '/repo-active-visible/worktree',
+        connectionId: undefined,
+        runtimeEnvironmentId: null
+      }
+    ])
+  })
+
+  it('keeps watching the active worktree while the file explorer is peeked', () => {
+    const repo = makeRepo('repo-active-peeked')
+    const worktree = makeWorktree(repo.id, 'wt-active-peeked')
+
+    expect(
+      getEditorExternalWatchTargets(
+        makeState({
+          repo,
+          worktree,
+          activeWorktreeId: worktree.id,
+          rightSidebarPeek: true
+        })
+      ).targets
+    ).toEqual([
+      {
+        worktreeId: 'wt-active-peeked',
+        worktreePath: '/repo-active-peeked/worktree',
         connectionId: undefined,
         runtimeEnvironmentId: null
       }

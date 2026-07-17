@@ -154,8 +154,17 @@ describe('renderer startup runtime routing', () => {
 
   it('defers background polling until the workspace session is ready', () => {
     const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const syncGateSource = readFileSync(
+      join(
+        process.cwd(),
+        'src/renderer/src/components/right-sidebar/WorkspaceGitAndFileWatchGate.tsx'
+      ),
+      'utf8'
+    )
 
-    expect(source).toContain('useGitStatusPolling({ enabled: workspaceSessionReady })')
+    expect(source).toContain('<WorkspaceGitAndFileWatchGate enabled={workspaceSessionReady} />')
+    expect(syncGateSource).toContain('useGitStatusPolling({ enabled })')
+    expect(syncGateSource).toContain('useEditorExternalWatch()')
     expect(source).toContain('<WorkspacePortScanner enabled={workspaceSessionReady} />')
   })
 

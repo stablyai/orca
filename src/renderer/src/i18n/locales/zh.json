@@ -7278,6 +7278,10 @@
             },
             "9a115966d3": "关闭时最小化到托盘",
             "4d5b9427b5": "启用后，关闭窗口会让 Orca 继续在系统托盘中运行，而不是退出。",
+            "rightSidebarEdgePeek": {
+              "title": "Right Sidebar Edge Peek",
+              "description": "Hover the window edge to temporarily reveal a closed right sidebar."
+            },
             "antigravityUsageTitle": "Antigravity 使用量",
             "antigravityUsageDescription": "在状态栏中显示 Antigravity 订阅使用量。",
             "antigravityKeyword": "antigravity",
@@ -10257,6 +10261,17 @@
             "archivedJumpUnavailable": "此会话位于已归档的工作树中。",
             "noActiveWorktreeMatch": "没有与此会话匹配的活动工作树。",
             "noActiveWorktreeTarget": "没有可用的活动工作树。"
+          },
+          "edge": {
+            "peek": {
+              "tip": {
+                "title": "Hover the right edge to peek",
+                "description": "The right sidebar slides over the editor without reflowing it. Click the toggle or use the shortcut to pin it open. Change this anytime in Settings › Appearance.",
+                "titleLong": "Hover over the right edge of the screen to quickly show this sidebar.",
+                "settingsPrefix": "Turn this off in",
+                "settingsLink": "Settings"
+              }
+            }
           },
           "AiVaultSessionSubagents": {
             "subagentsCount": "子智能体（{{value0}}）",

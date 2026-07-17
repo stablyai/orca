@@ -56,6 +56,8 @@ import {
   useSystemPrefersDark
 } from './components/terminal-pane/use-system-prefers-dark'
 import RightSidebar from './components/right-sidebar'
+import { RightSidebarEdgePeekZone } from './components/right-sidebar/right-sidebar-edge-peek'
+import { RightSidebarEdgePeekTipHost } from './components/right-sidebar/right-sidebar-edge-peek-tip-host'
 import { StarNagCard } from './components/StarNagCard'
 import { StarNagAgentValueMomentObserver } from './components/star-nag/StarNagAgentValueMomentObserver'
 import { StarNagToastHost } from './components/star-nag/StarNagToastHost'
@@ -88,8 +90,7 @@ import { RecoverableRenderErrorBoundary } from './components/error-boundaries/Re
 import { ConfirmationDialogProvider } from './components/confirmation-dialog'
 import { LinkRoutingPreferenceDialogProvider } from './components/link-routing-preference-dialog'
 import RecentTabSwitcher from './components/tab-bar/RecentTabSwitcher'
-import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPolling'
-import { useEditorExternalWatch } from './hooks/useEditorExternalWatch'
+import { WorkspaceGitAndFileWatchGate } from './components/right-sidebar/WorkspaceGitAndFileWatchGate'
 import { useAutoAckViewedAgent } from './hooks/useAutoAckViewedAgent'
 import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
 import {
@@ -740,21 +741,6 @@ function App(): React.JSX.Element {
   // than being called inline here so its high-churn store subscriptions
   // (agentStatusByPaneKey ticks at PTY event frequency)
   // do not re-render the App tree on every agent status update.
-  // Why: git conflict-operation state also drives the worktree cards. Polling
-  // cannot live under RightSidebar because App unmounts that subtree when the
-  // sidebar is closed, which leaves stale "Rebasing"/"Merging" badges behind
-  // until some unrelated view remount happens to refresh them.
-  // Why: visible-window polling runs immediately on mount. Wait until the
-  // workspace session has hydrated so git status work cannot compete with the
-  // first window becoming usable.
-  useGitStatusPolling({ enabled: workspaceSessionReady })
-  // Why: the editor must hear external filesystem changes regardless of
-  // which right-sidebar panel is visible (Explorer unmounts when the user
-  // switches to Source Control or Checks). Wiring this at App level mirrors
-  // VSCode's workbench-scoped `TextFileEditorModelManager`, which reloads
-  // clean models from a single always-on file-change subscription instead
-  // of tying reloads to the Explorer UI lifecycle.
-  useEditorExternalWatch()
   useGlobalFileDrop()
   useAutoAckViewedAgent()
 
@@ -2159,6 +2145,9 @@ function App(): React.JSX.Element {
           className="sidebar-toggle mr-2"
           onClick={actions.toggleRightSidebar}
           aria-label={translate('auto.App.9e0b441a91', 'Toggle right sidebar')}
+          // Why: one-shot edge-peek tip anchors to this titlebar control after
+          // the first close (the control reappears when the sidebar is closed).
+          data-right-sidebar-toggle=""
         >
           <PanelRight size={16} />
         </button>
@@ -2250,6 +2239,9 @@ function App(): React.JSX.Element {
         <ConfirmationDialogProvider>
           <LinkRoutingPreferenceDialogProvider>
             <WorkspacePortScanner enabled={workspaceSessionReady} />
+            {/* Why: keep Git status and editor file watching workspace-scoped
+            without letting their sidebar subscriptions re-render App. */}
+            <WorkspaceGitAndFileWatchGate enabled={workspaceSessionReady} />
             {/* Why: leaf-mounted retention sync keeps agent-status retention
             subscriptions from re-rendering the App tree. */}
             <RetainedAgentsSyncGate />
@@ -2266,7 +2258,10 @@ function App(): React.JSX.Element {
                 'The app is still running. Retry the shell or use the menu to report the crash details.'
               )}
             >
-              <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
+              {/* Why: relative anchors the right-sidebar edge-peek overlay to
+              this row, so a peek spans the same height as the docked sidebar
+              and ends above the status bar. */}
+              <div className="relative flex flex-row flex-1 min-h-0 overflow-hidden">
                 {/* Why: the non-workspace titlebar lives inside this left+center
               wrapper so it does not span over the right-sidebar column —
               when the right sidebar is open, its own header anchors at the
@@ -2483,6 +2478,8 @@ function App(): React.JSX.Element {
               Its heavy panels disconnect while closed so workspace wake stays
               responsive. Unmount on the tasks view since that surface is
               intentionally distraction-free. */}
+                {showRightSidebarControls ? <RightSidebarEdgePeekZone /> : null}
+                {showRightSidebarControls ? <RightSidebarEdgePeekTipHost /> : null}
                 {showRightSidebarControls ? (
                   <RecoverableRenderErrorBoundary
                     boundaryId="right-sidebar"

@@ -25,6 +25,7 @@ import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { useChecksPanelTerminalWorktree } from './use-checks-panel-terminal-worktree'
 import { cn } from '@/lib/utils'
 import { openHttpLink } from '@/lib/http-link-routing'
+import { isRightSidebarRevealed } from '@/lib/right-sidebar-visibility'
 import { Button } from '@/components/ui/button'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import {
@@ -376,9 +377,9 @@ export default function ChecksPanel(): React.JSX.Element {
   // Why: the sidebar stays mounted when closed (for performance). Gate
   // polling on visibility so we don't fetch checks/comments — or poll the
   // terminal cwd — in the background when the panel isn't visible.
-  const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
+  const rightSidebarRevealed = useAppStore(isRightSidebarRevealed)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
-  const isPanelVisible = rightSidebarOpen && rightSidebarTab === 'checks'
+  const isPanelVisible = rightSidebarRevealed && rightSidebarTab === 'checks'
 
   // Follow the active terminal's cwd so linked-PR/checks state tracks the
   // worktree the terminal is actually operating in (e.g. across a stack),

@@ -7315,6 +7315,10 @@
             },
             "9a115966d3": "閉じるときにトレイへ最小化",
             "4d5b9427b5": "有効にすると、ウィンドウを閉じてもOrcaは終了せず、システムトレイで実行を続けます。",
+            "rightSidebarEdgePeek": {
+              "title": "Right Sidebar Edge Peek",
+              "description": "Hover the window edge to temporarily reveal a closed right sidebar."
+            },
             "antigravityUsageTitle": "Antigravity の使用状況",
             "antigravityUsageDescription": "ステータスバーに Antigravity サブスクリプションの使用量を表示します。",
             "antigravityKeyword": "antigravity",
@@ -10257,6 +10261,17 @@
             "archivedJumpUnavailable": "このセッションはアーカイブされたワークツリーにあります。",
             "noActiveWorktreeMatch": "このセッションに一致するアクティブなワークツリーはありません。",
             "noActiveWorktreeTarget": "利用可能なアクティブなワークツリーはありません。"
+          },
+          "edge": {
+            "peek": {
+              "tip": {
+                "title": "Hover the right edge to peek",
+                "description": "The right sidebar slides over the editor without reflowing it. Click the toggle or use the shortcut to pin it open. Change this anytime in Settings › Appearance.",
+                "titleLong": "Hover over the right edge of the screen to quickly show this sidebar.",
+                "settingsPrefix": "Turn this off in",
+                "settingsLink": "Settings"
+              }
+            }
           },
           "AiVaultSessionSubagents": {
             "subagentsCount": "サブエージェント ({{value0}})",

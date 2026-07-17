@@ -289,6 +289,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     nativeChatSessionOptions: {},
     openInApplications: [...DEFAULT_OPEN_IN_APPLICATIONS],
     rightSidebarOpenByDefault: true,
+    rightSidebarEdgePeekEnabled: true,
+    rightSidebarEdgePeekTipDismissed: false,
     showGitIgnoredFiles: true,
     sourceControlViewMode: 'list',
     sourceControlGroupOrder: DEFAULT_SOURCE_CONTROL_GROUP_ORDER,

@@ -42,6 +42,7 @@ import { detectLanguage } from '@/lib/language-detect'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
+import { isRightSidebarRevealed } from '@/lib/right-sidebar-visibility'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
@@ -1267,12 +1268,12 @@ function SourceControlInner(): React.JSX.Element {
     recordKey: activePullRequestGenerationKey,
     record: activePullRequestGenerationRecord
   })
-  const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
-  // Why: gate polling on both the active tab AND the sidebar being open.
+  const rightSidebarRevealed = useAppStore(isRightSidebarRevealed)
+  // Why: gate polling on both the active tab AND the sidebar being revealed.
   // The sidebar now stays mounted when closed (for performance), so without
   // this guard the branchCompare interval and PR fetch would keep running
   // with no visible consumer, wasting git process spawns and API calls.
-  const isBranchVisible = rightSidebarTab === 'source-control' && rightSidebarOpen
+  const isBranchVisible = rightSidebarTab === 'source-control' && rightSidebarRevealed
 
   const refreshActiveGitStatus = useCallback(async (): Promise<void> => {
     if (!activeWorktreeId || !worktreePath || isFolder) {

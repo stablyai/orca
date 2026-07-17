@@ -20,6 +20,7 @@ import {
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { translate } from '@/i18n/i18n'
 import { isEditableTarget } from '@/lib/editable-target'
+import { isRightSidebarRevealed } from '@/lib/right-sidebar-visibility'
 
 export function shouldIgnoreFileExplorerKeyTarget(target: EventTarget | null): boolean {
   return (
@@ -52,7 +53,7 @@ export function useFileExplorerKeys(opts: {
   scrollToIndex: (index: number) => void
   activeWorktreeId: string | null
 }): void {
-  const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
+  const rightSidebarRevealed = useAppStore(isRightSidebarRevealed)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const rightSidebarExplorerView = useAppStore((s) => s.rightSidebarExplorerView)
   const keybindings = useAppStore((s) => s.keybindings)
@@ -139,7 +140,7 @@ export function useFileExplorerKeys(opts: {
 
     const onKeyDown = (e: KeyboardEvent): void => {
       if (
-        !rightSidebarOpen ||
+        !rightSidebarRevealed ||
         rightSidebarTab !== 'explorer' ||
         rightSidebarExplorerView !== 'files'
       ) {
@@ -290,5 +291,11 @@ export function useFileExplorerKeys(opts: {
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [keybindings, rightSidebarExplorerView, rightSidebarOpen, rightSidebarTab, opts.containerRef])
+  }, [
+    keybindings,
+    rightSidebarExplorerView,
+    rightSidebarRevealed,
+    rightSidebarTab,
+    opts.containerRef
+  ])
 }
