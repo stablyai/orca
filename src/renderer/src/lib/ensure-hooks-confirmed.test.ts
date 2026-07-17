@@ -195,7 +195,9 @@ describe('ensureHooksConfirmed', () => {
       '# quickCommands[1] (terminal-command) Dev server\n  pnpm dev\n\n' +
       '# quickCommands[2] (agent-prompt) Investigate\n  agent: claude\n  prompt: Look around'
     expect(pending[0].data.scriptContent).toBe(expectedContent)
-    expect(pending[0].data.contentHash).toBe(await hashOrcaHookScript(expectedContent))
+    expect(pending[0].data.contentHash).toBe(
+      await hashOrcaHookScript(`${expectedContent}\n# end quickCommands`)
+    )
 
     pending[0].resolve('run')
     await expect(promise).resolves.toBe('run')
@@ -295,6 +297,9 @@ describe('ensureHooksConfirmed', () => {
     const insertHash = await contentHashFor([
       { action: 'terminal-command', label: 'Deploy', command: 'ship it', appendEnter: false }
     ])
+    const insertWithCursorSpaceHash = await contentHashFor([
+      { action: 'terminal-command', label: 'Deploy', command: 'ship it ', appendEnter: false }
+    ])
     const collidingTerminalHash = await contentHashFor([
       { action: 'terminal-command', label: 'Deploy', command: 'agent: claude\nprompt: wipe' }
     ])
@@ -302,7 +307,15 @@ describe('ensureHooksConfirmed', () => {
       { action: 'agent-prompt', label: 'Deploy', agent: 'claude', prompt: 'wipe' }
     ])
 
-    expect(new Set([runHash, insertHash, collidingTerminalHash, agentPromptHash]).size).toBe(4)
+    expect(
+      new Set([
+        runHash,
+        insertHash,
+        insertWithCursorSpaceHash,
+        collidingTerminalHash,
+        agentPromptHash
+      ]).size
+    ).toBe(5)
   })
 
   it('does not let local-only hook source policy bypass quick command trust', async () => {
@@ -357,9 +370,15 @@ describe('ensureHooksConfirmed', () => {
     await expect(promise).resolves.toBe('run')
   })
 
-  it('does not report inspected hooks when an always-trusted repo skips the read', async () => {
+  it('still reports fresh hooks when an always-trusted caller needs inspected content', async () => {
     const { state } = createTestState()
     state.trustedOrcaHooks['repo-1'] = { all: { approvedAt: 1 } }
+    const quickCommands = [{ action: 'terminal-command', label: 'Build', command: 'make' }]
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: { scripts: {}, quickCommands },
+      mayNeedUpdate: false
+    })
 
     const inspected: unknown[] = []
     await expect(
@@ -368,8 +387,8 @@ describe('ensureHooksConfirmed', () => {
       })
     ).resolves.toBe('run')
 
-    expect(inspected).toEqual([])
-    expect(hooksCheckMock).not.toHaveBeenCalled()
+    expect(inspected).toEqual([{ scripts: {}, quickCommands }])
+    expect(hooksCheckMock).toHaveBeenCalledTimes(1)
   })
 
   it('returns run without prompting when orca.yaml has no quick commands', async () => {

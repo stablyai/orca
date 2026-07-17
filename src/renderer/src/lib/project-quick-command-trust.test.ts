@@ -46,6 +46,7 @@ function seedStore(overrides?: Record<string, unknown>): void {
       repos: [{ id: 'repo-1', displayName: 'Repo One' }],
       settings: null,
       projectQuickCommandsByRepo: {},
+      projectQuickCommandOwnerByRepo: {},
       openModal: (_modal: string, data: Record<string, unknown>) => {
         pending.push({ data, resolve: data.onResolve as (d: 'run' | 'skip') => void })
       },
@@ -156,7 +157,10 @@ describe('ensureProjectQuickCommandTrusted', () => {
     seedStore({
       trustedOrcaHooks: {
         'repo-1': {
-          quickCommands: { contentHash: await hashOrcaHookScript(approvedContent), approvedAt: 1 }
+          quickCommands: {
+            contentHash: await hashOrcaHookScript(`${approvedContent}\n# end quickCommands`),
+            approvedAt: 1
+          }
         }
       }
     })
@@ -175,13 +179,13 @@ describe('ensureProjectQuickCommandTrusted', () => {
   it('does not resurrect the cache bucket when the repo was removed during the prompt', async () => {
     // Why: the repo can be removed (and its bucket pruned) while the trust prompt
     // is open; approving must not write an orphaned bucket for a gone repo.
-    seedStore({ repos: [{ id: 'other-repo', displayName: 'Other' }] })
     checkRuntimeHooksMock.mockResolvedValue(
       okHooksResult([{ action: 'terminal-command', label: 'Dev server', command: 'echo fresh' }])
     )
 
     const promise = ensureProjectQuickCommandTrusted(cachedProjectCommand)
     await vi.waitFor(() => expect(pending).toHaveLength(1))
+    useAppStore.setState({ repos: [{ id: 'other-repo', displayName: 'Other' }] } as never)
     pending[0].resolve('run')
 
     const trusted = await promise
@@ -218,12 +222,19 @@ describe('ensureProjectQuickCommandTrusted', () => {
     expect(pending).toHaveLength(0)
   })
 
-  it('runs the cached command as-is for an always-trusted repo without re-reading hooks', async () => {
+  it('runs freshly inspected content for an always-trusted repo', async () => {
     seedStore({ trustedOrcaHooks: { 'repo-1': { all: { approvedAt: 1 } } } })
-
-    await expect(ensureProjectQuickCommandTrusted(cachedProjectCommand)).resolves.toBe(
-      cachedProjectCommand
+    checkRuntimeHooksMock.mockResolvedValue(
+      okHooksResult([
+        { action: 'terminal-command', label: 'Dev server', command: 'echo fresh-from-yaml' }
+      ])
     )
-    expect(checkRuntimeHooksMock).not.toHaveBeenCalled()
+
+    await expect(ensureProjectQuickCommandTrusted(cachedProjectCommand)).resolves.toMatchObject({
+      id: 'orca-yaml:dev-server',
+      command: 'echo fresh-from-yaml'
+    })
+    expect(checkRuntimeHooksMock).toHaveBeenCalledTimes(1)
+    expect(pending).toHaveLength(0)
   })
 })

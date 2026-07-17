@@ -233,6 +233,7 @@ import {
 } from './terminal-unified-tab-lookup'
 import { resolveNativeChatLeafTitleAgent } from './native-chat-leaf-title-agent'
 import { useRepoById } from '@/store/selectors'
+import { selectProjectQuickCommandsForRepo } from '@/store/slices/project-quick-commands'
 import {
   isXtermHelperTextarea,
   releaseTerminalFocusForOutsidePointerDown,
@@ -896,16 +897,18 @@ function TerminalPane(
   const globalQuickCommands = validQuickCommands.filter(
     (command) => getTerminalQuickCommandScope(command).type === 'global'
   )
-  const projectQuickCommands =
-    useAppStore((s) =>
-      quickCommandRepoId !== null ? s.projectQuickCommandsByRepo[quickCommandRepoId] : undefined
-    ) ?? EMPTY_PROJECT_QUICK_COMMANDS
+  const cachedProjectQuickCommands = useAppStore((s) =>
+    quickCommandRepoId !== null
+      ? selectProjectQuickCommandsForRepo(s, quickCommandRepoId)
+      : undefined
+  )
+  const projectQuickCommands = cachedProjectQuickCommands ?? EMPTY_PROJECT_QUICK_COMMANDS
   const loadProjectQuickCommands = useAppStore((s) => s.loadProjectQuickCommands)
   useEffect(() => {
     if (quickCommandRepoId !== null) {
       void loadProjectQuickCommands(quickCommandRepoId)
     }
-  }, [quickCommandRepoId, loadProjectQuickCommands])
+  }, [cachedProjectQuickCommands, quickCommandRepoId, loadProjectQuickCommands])
   const quickCommandGroupId =
     useAppStore(
       (s) =>

@@ -82,6 +82,12 @@ function getQuickCommandsTrustContent(yamlHooks: OrcaHooks | null): string {
     .join('\n\n')
 }
 
+function getTrustHashInput(scriptKind: HookScriptKind, scriptContent: string): string {
+  // Why: hashOrcaHookScript trims outer whitespace, but a final insert-only
+  // command's cursor space is behavior. A fixed terminator keeps it interior.
+  return scriptKind === 'quickCommands' ? `${scriptContent}\n# end quickCommands` : scriptContent
+}
+
 function getVmRecipeTrustContent(yamlHooks: OrcaHooks | null): string {
   return (yamlHooks?.environmentRecipes ?? [])
     .map((recipe) =>
@@ -133,8 +139,8 @@ function settingsForHookRepoOwner(
 
 export type EnsureHooksConfirmedOptions = {
   /** Called with the parsed orca.yaml hooks from the same read that produced
-   *  the trust hash, so callers can execute exactly what was reviewed. Not
-   *  called when the read is skipped (trusted-all, local-only, errors). */
+   *  the trust hash, so callers can execute exactly what was reviewed.
+   *  Providing this callback forces a read even for always-trusted repos. */
   onSharedHooksInspected?: (yamlHooks: OrcaHooks | null) => void
 }
 
@@ -148,7 +154,10 @@ export async function ensureHooksConfirmed(
 ): Promise<'run' | 'skip'> {
   return enqueueTrustPrompt(async () => {
     const hasDuplicateRepoId = state.repos.filter((repo) => repo.id === repoId).length > 1
-    if (state.trustedOrcaHooks[repoId]?.all && !(hostId && hasDuplicateRepoId)) {
+    const canUseAlwaysTrust = Boolean(
+      state.trustedOrcaHooks[repoId]?.all && !(hostId && hasDuplicateRepoId)
+    )
+    if (canUseAlwaysTrust && !opts?.onSharedHooksInspected) {
       return 'run'
     }
 
@@ -214,11 +223,14 @@ export async function ensureHooksConfirmed(
       return 'skip'
     }
 
+    if (canUseAlwaysTrust) {
+      return 'run'
+    }
     if (!scriptContent) {
       return 'run'
     }
 
-    const contentHash = await hashOrcaHookScript(scriptContent)
+    const contentHash = await hashOrcaHookScript(getTrustHashInput(scriptKind, scriptContent))
     const existingHash = state.trustedOrcaHooks[repoId]?.[scriptKind]?.contentHash
     if (existingHash === contentHash) {
       return 'run'

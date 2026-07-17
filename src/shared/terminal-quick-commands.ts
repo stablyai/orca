@@ -299,6 +299,40 @@ export function getProjectTerminalQuickCommands(
   return normalizeTerminalQuickCommands(candidates).filter(isTerminalQuickCommandComplete)
 }
 
+export function terminalQuickCommandListsMatch(
+  previous: readonly TerminalQuickCommand[] | undefined,
+  next: readonly TerminalQuickCommand[]
+): boolean {
+  if (!previous || previous.length !== next.length) {
+    return false
+  }
+  return previous.every((command, index) => {
+    const candidate = next[index]
+    if (
+      command.id !== candidate.id ||
+      command.label !== candidate.label ||
+      command.scope?.type !== candidate.scope?.type ||
+      (command.scope?.type === 'repo' &&
+        candidate.scope?.type === 'repo' &&
+        command.scope.repoId !== candidate.scope.repoId)
+    ) {
+      return false
+    }
+    if (command.action === 'agent-prompt') {
+      return (
+        candidate.action === 'agent-prompt' &&
+        command.agent === candidate.agent &&
+        command.prompt === candidate.prompt
+      )
+    }
+    return (
+      candidate.action !== 'agent-prompt' &&
+      command.command === candidate.command &&
+      command.appendEnter === candidate.appendEnter
+    )
+  })
+}
+
 export function buildTerminalQuickCommandInput(command: TerminalCommandQuickCommand): string {
   return command.appendEnter ? `${command.command}\r` : command.command
 }

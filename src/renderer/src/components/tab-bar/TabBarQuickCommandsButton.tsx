@@ -18,6 +18,7 @@ import type { TerminalQuickCommand } from '../../../../shared/types'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
 import { TabBarQuickCommandsMenu } from './TabBarQuickCommandsMenu'
+import { selectProjectQuickCommandsForRepo } from '@/store/slices/project-quick-commands'
 
 type TabBarQuickCommandsButtonProps = {
   worktreeId: string
@@ -63,14 +64,14 @@ export function TabBarQuickCommandsButton({
   }, [allCommands, repoId])
 
   const cachedProjectCommands = useAppStore((s) =>
-    repoId !== null ? s.projectQuickCommandsByRepo[repoId] : undefined
+    repoId !== null ? selectProjectQuickCommandsForRepo(s, repoId) : undefined
   )
   const loadProjectQuickCommands = useAppStore((s) => s.loadProjectQuickCommands)
   useEffect(() => {
     if (repoId !== null) {
       void loadProjectQuickCommands(repoId)
     }
-  }, [repoId, loadProjectQuickCommands])
+  }, [cachedProjectCommands, repoId, loadProjectQuickCommands])
   // Why: a background refresh on open picks up orca.yaml edits (e.g. after a
   // git pull) while the cached list renders without flicker.
   const refreshProjectCommands = useCallback((): void => {

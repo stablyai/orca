@@ -3,8 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import {
   __resetProjectQuickCommandsFetchesForTests,
+  collectProjectQuickCommandsForRepos,
   createProjectQuickCommandsSlice,
-  omitProjectQuickCommandsForRepos
+  omitProjectQuickCommandsForRepos,
+  selectProjectQuickCommandsForRepo
 } from './project-quick-commands'
 
 const checkRuntimeHooksMock = vi.fn()
@@ -87,6 +89,37 @@ describe('createProjectQuickCommandsSlice', () => {
     expect(checkRuntimeHooksMock).toHaveBeenCalledTimes(2)
   })
 
+  it('preserves cache references when a refresh returns unchanged commands', async () => {
+    const store = createTestStore()
+    checkRuntimeHooksMock.mockResolvedValue(
+      okHooksResult([{ action: 'terminal-command', label: 'Build', command: 'make' }])
+    )
+    await store.getState().loadProjectQuickCommands('repo-1')
+    const previousMap = store.getState().projectQuickCommandsByRepo
+    const previousCommands = previousMap['repo-1']
+    const subscriber = vi.fn()
+    const unsubscribe = store.subscribe(subscriber)
+
+    await store.getState().loadProjectQuickCommands('repo-1', { refresh: true })
+
+    expect(store.getState().projectQuickCommandsByRepo).toBe(previousMap)
+    expect(store.getState().projectQuickCommandsByRepo['repo-1']).toBe(previousCommands)
+    expect(subscriber).not.toHaveBeenCalled()
+
+    checkRuntimeHooksMock.mockResolvedValue(
+      okHooksResult([{ action: 'terminal-command', label: 'Build', command: 'make test' }])
+    )
+    await store.getState().loadProjectQuickCommands('repo-1', { refresh: true })
+
+    expect(store.getState().projectQuickCommandsByRepo).not.toBe(previousMap)
+    expect(store.getState().projectQuickCommandsByRepo['repo-1']).not.toBe(previousCommands)
+    expect(store.getState().projectQuickCommandsByRepo['repo-1']?.[0]).toMatchObject({
+      command: 'make test'
+    })
+    expect(subscriber).toHaveBeenCalledTimes(1)
+    unsubscribe()
+  })
+
   it('keeps the previous snapshot when a refresh fails', async () => {
     const store = createTestStore()
     checkRuntimeHooksMock.mockResolvedValueOnce(
@@ -122,21 +155,106 @@ describe('createProjectQuickCommandsSlice', () => {
         { id: 'repo-1', displayName: 'Repo One (ssh)' }
       ]
     } as unknown as Partial<AppState>)
+    expect(selectProjectQuickCommandsForRepo(store.getState(), 'repo-1')).toBeUndefined()
+    expect(collectProjectQuickCommandsForRepos(store.getState())).toEqual([])
     await store.getState().loadProjectQuickCommands('repo-1', { refresh: true })
 
     expect(checkRuntimeHooksMock).toHaveBeenCalledTimes(1)
     expect(store.getState().projectQuickCommandsByRepo).toEqual({})
+  })
+
+  it('reloads a cached bare repo id when its owner host changes', async () => {
+    const store = createTestStore()
+    checkRuntimeHooksMock.mockResolvedValueOnce(
+      okHooksResult([{ action: 'terminal-command', label: 'Local', command: 'echo local' }])
+    )
+    await store.getState().loadProjectQuickCommands('repo-1')
+
+    store.setState({
+      repos: [{ id: 'repo-1', displayName: 'Repo One (SSH)', connectionId: 'ssh-1' }]
+    } as unknown as Partial<AppState>)
+    expect(selectProjectQuickCommandsForRepo(store.getState(), 'repo-1')).toBeUndefined()
+    checkRuntimeHooksMock.mockResolvedValueOnce(
+      okHooksResult([{ action: 'terminal-command', label: 'SSH', command: 'echo ssh' }])
+    )
+
+    await store.getState().loadProjectQuickCommands('repo-1')
+
+    expect(checkRuntimeHooksMock).toHaveBeenCalledTimes(2)
+    expect(selectProjectQuickCommandsForRepo(store.getState(), 'repo-1')?.[0]).toMatchObject({
+      label: 'SSH',
+      command: 'echo ssh'
+    })
+  })
+
+  it('does not resurrect a removed repo bucket after an in-flight read completes', async () => {
+    const store = createTestStore()
+    let resolveRead!: (value: ReturnType<typeof okHooksResult>) => void
+    checkRuntimeHooksMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRead = resolve
+      })
+    )
+
+    const load = store.getState().loadProjectQuickCommands('repo-1')
+    await vi.waitFor(() => expect(checkRuntimeHooksMock).toHaveBeenCalledTimes(1))
+    store.setState({ repos: [] })
+    resolveRead(
+      okHooksResult([{ action: 'terminal-command', label: 'Stale', command: 'echo stale' }])
+    )
+    await load
+
+    expect(store.getState().projectQuickCommandsByRepo).toEqual({})
+  })
+
+  it('does not coalesce a replacement host with the previous owner request', async () => {
+    const store = createTestStore()
+    const pendingReads: ((value: ReturnType<typeof okHooksResult>) => void)[] = []
+    checkRuntimeHooksMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          pendingReads.push(resolve)
+        })
+    )
+
+    const oldOwnerLoad = store.getState().loadProjectQuickCommands('repo-1')
+    await vi.waitFor(() => expect(pendingReads).toHaveLength(1))
+    store.setState({
+      repos: [{ id: 'repo-1', displayName: 'Repo One (SSH)', connectionId: 'ssh-1' }]
+    } as unknown as Partial<AppState>)
+    const newOwnerLoad = store.getState().loadProjectQuickCommands('repo-1', { refresh: true })
+    await vi.waitFor(() => expect(pendingReads).toHaveLength(2))
+
+    pendingReads[1](
+      okHooksResult([{ action: 'terminal-command', label: 'New', command: 'echo new' }])
+    )
+    await newOwnerLoad
+    expect(store.getState().projectQuickCommandsByRepo['repo-1']?.[0]).toMatchObject({
+      label: 'New',
+      command: 'echo new'
+    })
+
+    pendingReads[0](
+      okHooksResult([{ action: 'terminal-command', label: 'Old', command: 'echo old' }])
+    )
+    await oldOwnerLoad
+    expect(store.getState().projectQuickCommandsByRepo['repo-1']?.[0]).toMatchObject({
+      label: 'New',
+      command: 'echo new'
+    })
   })
 })
 
 describe('omitProjectQuickCommandsForRepos', () => {
   it('drops buckets for removed repos and reports no change otherwise', () => {
     const state = {
-      projectQuickCommandsByRepo: { 'repo-1': [], 'repo-2': [] }
-    } as unknown as Pick<AppState, 'projectQuickCommandsByRepo'>
+      projectQuickCommandsByRepo: { 'repo-1': [], 'repo-2': [] },
+      projectQuickCommandOwnerByRepo: { 'repo-1': 'local', 'repo-2': 'ssh:ssh-1' }
+    } as unknown as Pick<AppState, 'projectQuickCommandsByRepo' | 'projectQuickCommandOwnerByRepo'>
 
     expect(omitProjectQuickCommandsForRepos(state, ['repo-2'])).toEqual({
-      projectQuickCommandsByRepo: { 'repo-1': [] }
+      projectQuickCommandsByRepo: { 'repo-1': [] },
+      projectQuickCommandOwnerByRepo: { 'repo-1': 'local' }
     })
     expect(omitProjectQuickCommandsForRepos(state, ['repo-3'])).toEqual({})
     expect(omitProjectQuickCommandsForRepos(state, [])).toEqual({})

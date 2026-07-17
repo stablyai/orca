@@ -1,27 +1,82 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { TerminalQuickCommand } from '../../../../shared/types'
-import { getProjectTerminalQuickCommands } from '../../../../shared/terminal-quick-commands'
+import {
+  getProjectTerminalQuickCommands,
+  terminalQuickCommandListsMatch
+} from '../../../../shared/terminal-quick-commands'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
+import { getRepoHostIdentity } from './repo-host-identity'
 
 export type ProjectQuickCommandsSlice = {
   /** Repo-scoped quick commands projected from each repo's orca.yaml
    *  `quickCommands` key. Lazily populated by `loadProjectQuickCommands`;
    *  missing key means "not yet fetched", empty array means "none defined". */
   projectQuickCommandsByRepo: Record<string, TerminalQuickCommand[]>
+  projectQuickCommandOwnerByRepo: Record<string, string>
   loadProjectQuickCommands: (repoId: string, opts?: { refresh?: boolean }) => Promise<void>
 }
 
 // Why: in-flight guards live outside the store — promises are not
 // serializable state, and a module map keeps repeat callers coalesced.
-const inFlightByRepo = new Map<string, Promise<void>>()
+const inFlightByOwner = new Map<string, Promise<void>>()
 
 export function __resetProjectQuickCommandsFetchesForTests(): void {
-  inFlightByRepo.clear()
+  inFlightByOwner.clear()
 }
 
-type ProjectQuickCommandsMaps = Pick<AppState, 'projectQuickCommandsByRepo'>
+type ProjectQuickCommandsMaps = Pick<
+  AppState,
+  'projectQuickCommandsByRepo' | 'projectQuickCommandOwnerByRepo'
+>
+
+type ProjectQuickCommandsCacheState = ProjectQuickCommandsMaps & Pick<AppState, 'repos'>
+
+// Why: Zustand selectors run on every store write; cache the owner index by
+// repos-array identity so terminal/status churn does not repeatedly scan repos.
+const uniqueOwnerIdentityByRepos = new WeakMap<
+  ProjectQuickCommandsCacheState['repos'],
+  ReadonlyMap<string, string | null>
+>()
+
+function getUniqueOwnerIdentityByRepo(
+  repos: ProjectQuickCommandsCacheState['repos']
+): ReadonlyMap<string, string | null> {
+  const cached = uniqueOwnerIdentityByRepos.get(repos)
+  if (cached) {
+    return cached
+  }
+  const owners = new Map<string, string | null>()
+  for (const repo of repos) {
+    owners.set(repo.id, owners.has(repo.id) ? null : getRepoHostIdentity(repo))
+  }
+  uniqueOwnerIdentityByRepos.set(repos, owners)
+  return owners
+}
+
+export function selectProjectQuickCommandsForRepo(
+  state: ProjectQuickCommandsCacheState,
+  repoId: string
+): TerminalQuickCommand[] | undefined {
+  const ownerIdentity = getUniqueOwnerIdentityByRepo(state.repos).get(repoId)
+  if (!ownerIdentity || state.projectQuickCommandOwnerByRepo[repoId] !== ownerIdentity) {
+    return undefined
+  }
+  return state.projectQuickCommandsByRepo[repoId]
+}
+
+export function collectProjectQuickCommandsForRepos(
+  state: ProjectQuickCommandsCacheState
+): TerminalQuickCommand[] {
+  const commands: TerminalQuickCommand[] = []
+  for (const [repoId, ownerIdentity] of getUniqueOwnerIdentityByRepo(state.repos)) {
+    if (ownerIdentity && state.projectQuickCommandOwnerByRepo[repoId] === ownerIdentity) {
+      commands.push(...(state.projectQuickCommandsByRepo[repoId] ?? []))
+    }
+  }
+  return commands
+}
 
 // Why: like sparse presets, the per-repo cache is populated lazily but must not
 // outlive the repo. Called from the repo-removal reducers.
@@ -33,15 +88,24 @@ export function omitProjectQuickCommandsForRepos(
   if (removed.size === 0) {
     return {}
   }
-  let changed = false
-  const out = { ...s.projectQuickCommandsByRepo }
+  let commandsChanged = false
+  let ownersChanged = false
+  const commands = { ...s.projectQuickCommandsByRepo }
+  const owners = { ...s.projectQuickCommandOwnerByRepo }
   for (const id of removed) {
-    if (id in out) {
-      delete out[id]
-      changed = true
+    if (id in commands) {
+      delete commands[id]
+      commandsChanged = true
+    }
+    if (id in owners) {
+      delete owners[id]
+      ownersChanged = true
     }
   }
-  return changed ? { projectQuickCommandsByRepo: out } : {}
+  return {
+    ...(commandsChanged ? { projectQuickCommandsByRepo: commands } : {}),
+    ...(ownersChanged ? { projectQuickCommandOwnerByRepo: owners } : {})
+  }
 }
 
 export const createProjectQuickCommandsSlice: StateCreator<
@@ -51,6 +115,7 @@ export const createProjectQuickCommandsSlice: StateCreator<
   ProjectQuickCommandsSlice
 > = (set, get) => ({
   projectQuickCommandsByRepo: {},
+  projectQuickCommandOwnerByRepo: {},
 
   loadProjectQuickCommands: async (repoId, opts) => {
     if (!repoId) {
@@ -59,15 +124,27 @@ export const createProjectQuickCommandsSlice: StateCreator<
     // Why: duplicate bare repo ids cannot be routed to one owner host (see
     // findRepoOwner); a bare-id cache could serve another host's commands, so
     // skip loading and drop any cached bucket until the ambiguity clears.
-    if (get().repos.filter((repo) => repo.id === repoId).length > 1) {
+    const owners = get().repos.filter((repo) => repo.id === repoId)
+    if (owners.length !== 1) {
+      set((s) => {
+        const omitted = omitProjectQuickCommandsForRepos(s, [repoId])
+        return omitted.projectQuickCommandsByRepo || omitted.projectQuickCommandOwnerByRepo
+          ? omitted
+          : s
+      })
+      return
+    }
+    const ownerIdentity = getRepoHostIdentity(owners[0])
+    const cachedState = get()
+    const cached = cachedState.projectQuickCommandsByRepo[repoId]
+    const cachedOwner = cachedState.projectQuickCommandOwnerByRepo[repoId]
+    if (cached !== undefined && cachedOwner === ownerIdentity && !opts?.refresh) {
+      return
+    }
+    if (cachedOwner !== undefined && cachedOwner !== ownerIdentity) {
       set((s) => omitProjectQuickCommandsForRepos(s, [repoId]))
-      return
     }
-    const cached = get().projectQuickCommandsByRepo[repoId]
-    if (cached !== undefined && !opts?.refresh) {
-      return
-    }
-    const existing = inFlightByRepo.get(repoId)
+    const existing = inFlightByOwner.get(ownerIdentity)
     if (existing) {
       return existing
     }
@@ -83,17 +160,47 @@ export const createProjectQuickCommandsSlice: StateCreator<
         return
       }
       const commands = getProjectTerminalQuickCommands(result.hooks?.quickCommands, repoId)
-      set((s) => ({
-        projectQuickCommandsByRepo: { ...s.projectQuickCommandsByRepo, [repoId]: commands }
-      }))
+      set((s) => {
+        const currentOwners = s.repos.filter((repo) => repo.id === repoId)
+        if (currentOwners.length !== 1) {
+          // Why: a removal/collision while the read was in flight must not
+          // resurrect an orphaned or ambiguously owned cache bucket.
+          const omitted = omitProjectQuickCommandsForRepos(s, [repoId])
+          return omitted.projectQuickCommandsByRepo || omitted.projectQuickCommandOwnerByRepo
+            ? omitted
+            : s
+        }
+        if (getRepoHostIdentity(currentOwners[0]) !== ownerIdentity) {
+          // Why: a replacement owner may already have published its own read;
+          // the stale request must neither overwrite nor delete that snapshot.
+          return s
+        }
+        if (
+          s.projectQuickCommandOwnerByRepo[repoId] === ownerIdentity &&
+          terminalQuickCommandListsMatch(s.projectQuickCommandsByRepo[repoId], commands)
+        ) {
+          // Why: menu-open revalidation is common; preserving the array keeps
+          // unchanged reads from re-rendering the large TerminalPane tree.
+          return s
+        }
+        return {
+          projectQuickCommandsByRepo: { ...s.projectQuickCommandsByRepo, [repoId]: commands },
+          projectQuickCommandOwnerByRepo: {
+            ...s.projectQuickCommandOwnerByRepo,
+            [repoId]: ownerIdentity
+          }
+        }
+      })
     })().catch((err: unknown) => {
       console.warn(`Failed to load project quick commands for repo ${repoId}:`, err)
     })
-    inFlightByRepo.set(repoId, fetchPromise)
+    inFlightByOwner.set(ownerIdentity, fetchPromise)
     try {
       await fetchPromise
     } finally {
-      inFlightByRepo.delete(repoId)
+      if (inFlightByOwner.get(ownerIdentity) === fetchPromise) {
+        inFlightByOwner.delete(ownerIdentity)
+      }
     }
   }
 })

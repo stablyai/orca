@@ -14,6 +14,7 @@ import { getSettingOwnershipSummary } from './setting-ownership'
 import { translate } from '@/i18n/i18n'
 import { QuickCommandsList } from './QuickCommandsList'
 import { GLOBAL_SCOPE_KEY, QuickCommandsScopeFilter } from './QuickCommandsScopeFilter'
+import { collectProjectQuickCommandsForRepos } from '@/store/slices/project-quick-commands'
 
 type QuickCommandsPaneProps = {
   settings: GlobalSettings
@@ -31,6 +32,32 @@ type EditorState =
       command: TerminalQuickCommand
     }
   | null
+
+// Why: four keeps cross-repo Settings results progressive without flooding a
+// local IPC, SSH relay, or runtime transport with one request per repo.
+const MAX_CONCURRENT_PROJECT_COMMAND_LOADS = 4
+
+export async function warmProjectQuickCommandCaches(
+  repoIds: readonly string[],
+  load: (repoId: string) => Promise<void>,
+  isCancelled: () => boolean = () => false
+): Promise<void> {
+  const pendingRepoIds = [...new Set(repoIds)]
+  let nextIndex = 0
+  const worker = async (): Promise<void> => {
+    while (!isCancelled() && nextIndex < pendingRepoIds.length) {
+      const repoId = pendingRepoIds[nextIndex]
+      nextIndex += 1
+      await load(repoId)
+    }
+  }
+  await Promise.all(
+    Array.from(
+      { length: Math.min(MAX_CONCURRENT_PROJECT_COMMAND_LOADS, pendingRepoIds.length) },
+      worker
+    )
+  )
+}
 
 export function shouldOpenQuickCommandAddIntent(
   addCommandIntentSignal: number | undefined,
@@ -51,12 +78,21 @@ export function QuickCommandsPane({
   const confirm = useConfirmationDialog()
 
   const projectQuickCommandsByRepo = useAppStore((s) => s.projectQuickCommandsByRepo)
+  const projectQuickCommandOwnerByRepo = useAppStore((s) => s.projectQuickCommandOwnerByRepo)
   const loadProjectQuickCommands = useAppStore((s) => s.loadProjectQuickCommands)
   useEffect(() => {
-    // Why: the pane lists commands across every project, so warm the orca.yaml
-    // cache for all repos; the slice coalesces and tolerates offline hosts.
-    for (const repo of repos) {
-      void loadProjectQuickCommands(repo.id)
+    let cancelled = false
+    // Why: Settings needs every repo, but a bounded worker pool avoids a burst
+    // of local/SSH/runtime reads when users have many projects.
+    void warmProjectQuickCommandCaches(
+      repos.map((repo) => repo.id),
+      loadProjectQuickCommands,
+      () => cancelled
+    ).catch((err: unknown) => {
+      console.warn('Failed to warm project quick commands:', err)
+    })
+    return () => {
+      cancelled = true
     }
   }, [repos, loadProjectQuickCommands])
 
@@ -89,14 +125,13 @@ export function QuickCommandsPane({
   })
 
   const projectCommands = useMemo(
-    // Why: dedupe repo ids so a duplicate bare repo id (same id on two hosts)
-    // doesn't emit the same cached bucket twice — that would collide row keys and
-    // show duplicate rows until the slice's dup-id fail-safe prunes the bucket.
     () =>
-      [...new Set(repos.map((repo) => repo.id))].flatMap(
-        (id) => projectQuickCommandsByRepo[id] ?? []
-      ),
-    [repos, projectQuickCommandsByRepo]
+      collectProjectQuickCommandsForRepos({
+        repos,
+        projectQuickCommandsByRepo,
+        projectQuickCommandOwnerByRepo
+      }),
+    [repos, projectQuickCommandsByRepo, projectQuickCommandOwnerByRepo]
   )
   const visibleProjectCommands = projectCommands.filter((command) => {
     if (showAll) {
