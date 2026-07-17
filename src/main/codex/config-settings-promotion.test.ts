@@ -220,6 +220,26 @@ describe('codex settings write-back promotion', () => {
     expect(readRuntimeConfig()).toContain('model = "outside-edit"')
   })
 
+  it('retries a runtime change after a missing system config returns', () => {
+    writeSystemConfig('model = "gpt-5"\n')
+    syncSystemConfigIntoManagedCodexHome()
+    const baselineBeforeSourceLoss = readFileSync(baselinePath(), 'utf-8')
+
+    rmSync(systemConfigPath())
+    simulateCodexSettingWrite('model', '"o4"')
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readRuntimeConfig()).toContain('model = "o4"')
+    expect(existsSync(systemConfigPath())).toBe(false)
+    expect(readFileSync(baselinePath(), 'utf-8')).toBe(baselineBeforeSourceLoss)
+
+    writeSystemConfig('model = "gpt-5"\n')
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readSystemConfig()).toBe('model = "o4"\n')
+    expect(readRuntimeConfig()).toContain('model = "o4"')
+  })
+
   it('inserts a key ~/.codex lacks into the preamble without disturbing the rest', () => {
     writeSystemConfig('# my codex config\nmodel = "gpt-5"\n\n[features]\nhooks = true\n')
     syncSystemConfigIntoManagedCodexHome()
