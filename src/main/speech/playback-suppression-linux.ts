@@ -137,7 +137,8 @@ export function createLinuxPlaybackSuppressionAdapter(
       await probe(signal)
     }
     const endpointTarget = snapshot?.endpointTarget ?? selectedEndpointTarget
-    switch (selectedBackend) {
+    const backend = snapshot?.backend ?? selectedBackend
+    switch (backend) {
       case 'wpctl':
         await run(
           'wpctl',
@@ -156,6 +157,7 @@ export function createLinuxPlaybackSuppressionAdapter(
         await run('amixer', ['set', 'Master', muted ? 'mute' : 'unmute'], signal)
         return
       case null:
+      default:
         throw new Error(UNSUPPORTED_REASON)
     }
   }

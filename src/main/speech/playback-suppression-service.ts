@@ -183,7 +183,7 @@ export class PlaybackSuppressionService {
         marker.backend === current.backend &&
         marker.endpointId === current.endpointId
       if (sameEndpoint && current.muted) {
-        await this.adapter.setMuted(marker.muted, new AbortController().signal, marker)
+        await this.adapter.setMuted(marker.muted, new AbortController().signal, current)
       }
       await this.recoveryStore.clear()
     } catch {

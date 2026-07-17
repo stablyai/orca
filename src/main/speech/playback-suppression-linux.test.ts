@@ -71,6 +71,40 @@ describe('Linux playback suppression', () => {
     )
   })
 
+  it('restores through the backend captured in the snapshot', async () => {
+    let wpctlAvailable = true
+    const run = vi.fn<PlaybackSuppressionCommandRunner>(async (command, args) => {
+      if (command === 'wpctl' && args[0] === 'get-volume' && wpctlAvailable) {
+        return { stdout: 'Volume: 0.58\n', stderr: '' }
+      }
+      if (command === 'wpctl' && args[0] === 'inspect' && wpctlAvailable) {
+        return {
+          stdout:
+            'id 118, type PipeWire:Interface:Node\n  * node.name = "bluez_output.speaker_1"\n',
+          stderr: ''
+        }
+      }
+      if (command === 'wpctl' && args[0] === 'get-volume') {
+        throw new Error('temporarily unavailable')
+      }
+      if (command === 'pactl' && args[0] === 'get-sink-mute') {
+        return { stdout: 'Mute: no\n', stderr: '' }
+      }
+      if (command === 'pactl' && args[0] === 'get-default-sink') {
+        return { stdout: 'alsa_output.speaker_1\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+    const adapter = createLinuxPlaybackSuppressionAdapter(run)
+    const snapshot = await adapter.snapshot()
+    wpctlAvailable = false
+
+    await adapter.getCapability()
+    await adapter.setMuted(false, undefined, snapshot)
+
+    expect(run).toHaveBeenLastCalledWith('wpctl', ['set-mute', '118', '0'], undefined)
+  })
+
   it('does not treat malformed mixer output as an unmuted snapshot', async () => {
     const run = vi.fn<PlaybackSuppressionCommandRunner>(async (command, args) => {
       if (command === 'wpctl') {

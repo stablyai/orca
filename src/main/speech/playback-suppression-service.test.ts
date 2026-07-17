@@ -124,13 +124,20 @@ describe('PlaybackSuppressionService', () => {
   })
 
   it('recovers a stranded mute only on the same endpoint', async () => {
-    const marker = { backend: 'test', endpointId: 'speaker-1', muted: false }
-    const adapter = createAdapter(true)
-    vi.mocked(adapter.snapshot).mockResolvedValue({
+    const marker = {
       backend: 'test',
       endpointId: 'speaker-1',
+      endpointTarget: 'old-target',
+      muted: false
+    }
+    const adapter = createAdapter(true)
+    const current = {
+      backend: 'test',
+      endpointId: 'speaker-1',
+      endpointTarget: 'current-target',
       muted: true
-    })
+    }
+    vi.mocked(adapter.snapshot).mockResolvedValue(current)
     const recoveryStore: PlaybackSuppressionRecoveryStore = {
       read: vi.fn(async () => marker),
       write: vi.fn(),
@@ -140,7 +147,7 @@ describe('PlaybackSuppressionService', () => {
 
     await service.getCapability()
 
-    expect(adapter.setMuted).toHaveBeenCalledWith(false, expect.any(AbortSignal), marker)
+    expect(adapter.setMuted).toHaveBeenCalledWith(false, expect.any(AbortSignal), current)
     expect(recoveryStore.clear).toHaveBeenCalledTimes(1)
   })
 
