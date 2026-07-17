@@ -5022,7 +5022,11 @@
         "AppIconSelector": {
           "d5a112dc9b": "Icono siguiente",
           "415fa76f64": "Icono de aplicación seleccionada",
-          "5f5142a62a": "Icono anterior"
+          "5f5142a62a": "Icono anterior",
+          "4239e200e8": "Reinicia Orca para aplicar este icono en Windows.",
+          "95572fdc77": "Si Orca está anclado, desancla el icono anterior y vuelve a anclar Orca después de reiniciar.",
+          "8d399921d9": "Reiniciando…",
+          "ca8a78988d": "Reiniciar ahora"
         },
         "AppearancePane": {
           "3057983501": "No asignado",

@@ -12,7 +12,12 @@ import watercolorIcon from '../../resources/app-icons/orca-watercolor.png?asset'
 import watercolorMacDockIcon from '../../resources/app-icons/orca-watercolor.png?asset&asarUnpack'
 import blueIcon from '../../resources/app-icons/orca-blue.png?asset'
 import blueMacDockIcon from '../../resources/app-icons/orca-blue.png?asset&asarUnpack'
+import classicWindowsIcon from '../../resources/build/icon.ico?asset&asarUnpack'
+import classicDevWindowsIcon from '../../resources/app-icons/orca-classic-dev.ico?asset&asarUnpack'
+import watercolorWindowsIcon from '../../resources/app-icons/orca-watercolor.ico?asset&asarUnpack'
+import blueWindowsIcon from '../../resources/app-icons/orca-blue.ico?asset&asarUnpack'
 import { normalizeAppIconId, type AppIconId } from '../shared/app-icon'
+import { updateWindowsAppShortcutIcon } from './windows-app-shortcut-icon'
 
 const APP_ICON_PATHS = {
   classic: is.dev ? classicDevIcon : classicIcon,
@@ -24,6 +29,12 @@ const MAC_DOCK_ICON_PATHS = {
   watercolor: watercolorMacDockIcon,
   blue: blueMacDockIcon
 } satisfies Record<Exclude<AppIconId, 'classic'>, string>
+
+const WINDOWS_TASKBAR_ICON_PATHS = {
+  classic: is.dev ? classicDevWindowsIcon : classicWindowsIcon,
+  watercolor: watercolorWindowsIcon,
+  blue: blueWindowsIcon
+} satisfies Record<AppIconId, string>
 
 type ExecFile = (
   file: string,
@@ -74,7 +85,12 @@ let macDockIconPersistenceGeneration = 0
 let macDockIconPersistenceQueue = Promise.resolve()
 
 export function getAppIconPath(value: unknown): string {
-  return APP_ICON_PATHS[normalizeAppIconId(value)]
+  const iconId = normalizeAppIconId(value)
+  return process.platform === 'win32' ? WINDOWS_TASKBAR_ICON_PATHS[iconId] : APP_ICON_PATHS[iconId]
+}
+
+export function getWindowsAppIconPath(value: unknown): string {
+  return WINDOWS_TASKBAR_ICON_PATHS[normalizeAppIconId(value)]
 }
 
 export function createAppIconImage(value: unknown): Electron.NativeImage {
@@ -301,4 +317,7 @@ export function applyAppIcon(value: unknown): void {
     }
   }
   persistMacDockIcon(value)
+  // Why: both settings-time changes and startup self-healing must update the
+  // same Orca-owned Windows launchers without changing the running AUMID.
+  updateWindowsAppShortcutIcon(getWindowsAppIconPath(value))
 }

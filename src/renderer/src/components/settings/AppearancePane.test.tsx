@@ -9,6 +9,7 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings, StatusBarItem } from '../../../../shared/types'
 
 const mocks = vi.hoisted(() => ({
+  restartApp: vi.fn(),
   state: {
     appPlatform: 'linux' as NodeJS.Platform,
     availableStatusBarToggles: [] as {
@@ -183,10 +184,14 @@ describe('AppearancePane', () => {
     mocks.state.appPlatform = 'linux'
     mocks.state.settingsSearchQuery = 'automations'
     mocks.state.usagePercentageDisplay = 'used'
+    mocks.restartApp.mockReset().mockResolvedValue(undefined)
     // UIZoomControl reads window.api.ui on mount; the inline-expansion pane can
     // render the full Interface section, so provide a minimal renderer bridge
     // without clobbering happy-dom's window.location.
     ;(window as unknown as { api: unknown }).api = {
+      app: {
+        restart: mocks.restartApp
+      },
       platform: {
         get: () => ({ platform: mocks.state.appPlatform })
       },
@@ -345,6 +350,72 @@ describe('AppearancePane', () => {
         appIconImage &&
         interfaceRow.compareDocumentPosition(appIconImage) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy()
+  })
+
+  it('offers restart and re-pin guidance after changing the app icon on Windows', async () => {
+    mocks.state.appPlatform = 'win32'
+    mocks.state.settingsSearchQuery = ''
+    const updateSettings = vi.fn()
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'), updateSettings)
+    const nextIconButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Next icon"]'
+    )
+
+    await act(async () => {
+      nextIconButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ appIcon: 'watercolor' })
+    expect(container.textContent).toContain('Restart Orca to apply this icon on Windows.')
+    expect(container.textContent).toContain('unpin the old icon and pin Orca again after restart')
+
+    const restartButton = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent === 'Restart now'
+    )
+    await act(async () => {
+      restartButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(mocks.restartApp).toHaveBeenCalledOnce()
+  })
+
+  it('keeps restart guidance across pane remounts and clears it after reverting the icon', async () => {
+    mocks.state.appPlatform = 'win32'
+    mocks.state.settingsSearchQuery = ''
+    const initialSettings = getDefaultSettings('/tmp')
+    const firstContainer = await renderAppearancePane(initialSettings)
+    const nextIconButton = firstContainer.querySelector<HTMLButtonElement>(
+      'button[aria-label="Next icon"]'
+    )
+
+    await act(async () => {
+      nextIconButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    const firstRoot = mountedRoots.pop()
+    await act(async () => {
+      firstRoot?.unmount()
+    })
+    firstContainer.remove()
+
+    const updateSettings = vi.fn()
+    const remountedContainer = await renderAppearancePane(
+      { ...initialSettings, appIcon: 'watercolor' },
+      updateSettings
+    )
+    expect(remountedContainer.textContent).toContain('Restart Orca to apply this icon on Windows.')
+
+    const previousIconButton = remountedContainer.querySelector<HTMLButtonElement>(
+      'button[aria-label="Previous icon"]'
+    )
+    await act(async () => {
+      previousIconButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ appIcon: 'classic' })
+    expect(remountedContainer.textContent).not.toContain(
+      'Restart Orca to apply this icon on Windows.'
+    )
   })
 
   it('reveals an advanced sidebar control when its search matches, even though it is hidden by default', async () => {

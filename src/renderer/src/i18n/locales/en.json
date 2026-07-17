@@ -5045,7 +5045,11 @@
         "AppIconSelector": {
           "d5a112dc9b": "Next icon",
           "415fa76f64": "Selected app icon",
-          "5f5142a62a": "Previous icon"
+          "5f5142a62a": "Previous icon",
+          "4239e200e8": "Restart Orca to apply this icon on Windows.",
+          "95572fdc77": "If Orca is pinned, unpin the old icon and pin Orca again after restart.",
+          "8d399921d9": "Restarting…",
+          "ca8a78988d": "Restart now"
         },
         "AppearancePane": {
           "3057983501": "Unassigned",
