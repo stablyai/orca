@@ -48,6 +48,21 @@ describe('reconcileSerializedMarkdown', () => {
     expect(reconciled).not.toContain('- one')
   })
 
+  it('applies edits after non-ASCII text without dropping the save', () => {
+    const originalSource = '*   item\n\n터미널텔레그램통합실행마지막\n'
+    const baseCanonical = '- item\n\n터미널텔레그램통합실행마지막\n'
+    const edited = baseCanonical.replace('통합실행', '통합-실행')
+
+    const reconciled = reconcileSerializedMarkdown({
+      originalSource,
+      baseCanonical,
+      edited,
+      roundTrip: (markdown) => markdown.replace(/^\* +/, '- ')
+    })
+
+    expect(reconciled).toBe('*   item\n\n터미널텔레그램통합-실행마지막\n')
+  })
+
   it('preserves the trailing newline of the original source', () => {
     const originalSource = '# H\n\n_word_\n'
     const edited = fakeCanonicalize(originalSource).replace('# H', '# H!')

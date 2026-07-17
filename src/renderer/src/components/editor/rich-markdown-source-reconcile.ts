@@ -3,7 +3,9 @@ import {
   cleanupEfficiency,
   cleanupSemantic,
   makeDiff,
-  makePatches
+  makePatches,
+  parsePatch,
+  stringifyPatches
 } from '@sanity/diff-match-patch'
 
 // Why: bound the safety re-parse cost — it builds a throwaway TipTap editor per
@@ -106,8 +108,13 @@ export function reconcileSerializedMarkdown({
     diffs = cleanupSemantic(diffs)
     diffs = cleanupEfficiency(diffs)
   }
-  const patches = makePatches(baseLf, diffs)
-  const [reconciledLf, results] = applyPatches(patches, originalSourceLf)
+  // `makePatches` stores start offsets as UCS-2, but `applyPatches` reads them
+  // as UTF-8 bytes. The wire format normalizes them; exceeding is allowed
+  // because the intentionally non-canonical target can shift a byte boundary.
+  const patches = parsePatch(stringifyPatches(makePatches(baseLf, diffs)))
+  const [reconciledLf, results] = applyPatches(patches, originalSourceLf, {
+    allowExceedingIndices: true
+  })
 
   // Branch 5: a hunk that failed to locate in the non-canonical source → the
   // fuzzy match is unreliable here, so fall back to canonical.
