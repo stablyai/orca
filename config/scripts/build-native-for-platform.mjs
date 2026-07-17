@@ -2,6 +2,10 @@
 
 import { spawnSync } from 'node:child_process'
 
+// Why: git-native builds on every platform (Rust), unlike the host-only
+// Swift/C# helpers dispatched below.
+runNodeScript('config/scripts/build-git-native.mjs')
+
 if (process.platform === 'win32') {
   runNodeScript('config/scripts/build-windows-cli-launcher.mjs')
   process.exit(0)

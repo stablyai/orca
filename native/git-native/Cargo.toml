@@ -1,0 +1,24 @@
+[package]
+name = "git-native"
+version = "0.1.0"
+edition = "2021"
+# Oldest rustc verified to compile this crate (the kstring pin exists to keep it so).
+rust-version = "1.95"
+publish = false
+
+[lib]
+# "lib" for cargo tests.
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+napi = { version = "3", default-features = false, features = ["napi8"] }
+napi-derive = "3"
+# Cargo.lock pins kstring 2.0.2: newer releases require rustc >= 1.96.
+gix = "0.73"
+
+[build-dependencies]
+napi-build = "2"
+
+[profile.release]
+lto = true
+strip = "symbols"
