@@ -10,7 +10,7 @@ import {
   isSharedControlReady,
   waitForSharedControlReadyWithTimeout
 } from './remote-runtime-shared-control-ready'
-import { scheduleSharedControlReconnectOrFinish } from './remote-runtime-shared-control-reconnect'
+import { scheduleSharedControlReconnectUntilClosed } from './remote-runtime-shared-control-reconnect'
 import { requestSharedControl } from './remote-runtime-shared-control-requests'
 import { SharedControlReadyStableResetTimer } from './remote-runtime-shared-control-stability'
 import * as sharedControlState from './remote-runtime-shared-control-state'
@@ -286,12 +286,11 @@ export class RemoteRuntimeSharedControlConnection {
   }
 
   private scheduleReconnect(): void {
-    const scheduled = scheduleSharedControlReconnectOrFinish({
+    const scheduled = scheduleSharedControlReconnectUntilClosed({
       current: this.reconnectTimer,
       intentionallyClosed: this.intentionallyClosed,
       reconnectAttempt: this.reconnectAttempt,
       delaysMs: [250, 500, 1000, 2000, 4000, 8000, 15_000],
-      subscriptions: this.subscriptions,
       open: () => {
         this.reconnectTimer = null
         this.open()

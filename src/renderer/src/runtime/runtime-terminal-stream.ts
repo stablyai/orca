@@ -52,6 +52,28 @@ export function runtimeTerminalErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+export function isRecoverableRuntimeTransportError(error: unknown): boolean {
+  const code =
+    error instanceof RuntimeRpcCallError
+      ? error.code
+      : typeof error === 'object' && error !== null && 'code' in error
+        ? (error as { code?: unknown }).code
+        : null
+  if (code === 'remote_runtime_unavailable' || code === 'runtime_timeout') {
+    return true
+  }
+  const message = runtimeTerminalErrorMessage(error).toLowerCase()
+  return (
+    message.includes('remote orca runtime stopped responding') ||
+    message.includes('could not connect to the remote orca runtime') ||
+    message.includes('remote orca runtime closed the connection') ||
+    message.includes('timed out waiting for the remote orca runtime') ||
+    message.includes('remote orca runtime connection could not be restored') ||
+    message.includes('stream connection was reset') ||
+    message.includes('resetting the control connection')
+  )
+}
+
 export async function subscribeToRuntimeTerminalData(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   ptyId: string,

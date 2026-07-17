@@ -16,6 +16,7 @@ import { unwrapRuntimeRpcResult } from '../../runtime/runtime-rpc-client'
 import {
   getRemoteRuntimePtyEnvironmentId,
   getRemoteRuntimeTerminalHandle,
+  isRecoverableRuntimeTransportError,
   runtimeTerminalErrorMessage,
   toRemoteRuntimePtyId
 } from '../../runtime/runtime-terminal-stream'
@@ -41,6 +42,7 @@ const REMOTE_TERMINAL_INPUT_FLUSH_MS = 8
 const REMOTE_TERMINAL_VIEWPORT_FLUSH_MS = 33
 const HOST_SESSION_ATTACH_POLL_MS = 150
 const HOST_SESSION_ATTACH_TIMEOUT_MS = 15_000
+const REMOTE_TERMINAL_RESUBSCRIBE_DELAYS_MS = [250, 500, 1000, 2000, 4000, 8000, 15_000]
 
 function isRemoteTerminalGoneMessage(message: string): boolean {
   return (
@@ -91,6 +93,9 @@ export function createRemoteRuntimePtyTransport(
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
   let resubscribing = false
   let resubscribeRequested = false
+  let resubscribeRetryAttempt = 0
+  let resubscribeRetryTimer: ReturnType<typeof setTimeout> | null = null
+  let resubscribeCycle = 0
   let subscriptionGeneration = 0
   let pendingViewportClaim = false
   let pendingClaimInput = ''
@@ -404,6 +409,7 @@ export function createRemoteRuntimePtyTransport(
 
   function retireRemoteTerminalId(): void {
     connected = false
+    stopResubscribeRetries()
     clearPendingViewportClaim()
     const stalePtyId = remotePtyId
     handle = null
@@ -416,6 +422,11 @@ export function createRemoteRuntimePtyTransport(
 
   function handleRemoteTerminalError(error: unknown): void {
     const message = runtimeTerminalErrorMessage(error)
+    if (isRecoverableRuntimeTransportError(error)) {
+      // Why: the liveness path owns recovery; transient sleep/network gaps are
+      // not terminal failures and must not leave a red banner in the PTY.
+      return
+    }
     if (message === REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE) {
       // Why: an oversized initial snapshot is skipped but live output keeps
       // flowing — informational, not fatal, so never surface a red xterm banner.
@@ -435,10 +446,16 @@ export function createRemoteRuntimePtyTransport(
   // handle (reconnect, epoch or PTY change). Re-derive it from the current
   // session snapshot instead of resubscribing the stale closure value, which
   // would mirror (and type into) whatever PTY now sits behind it (#7718).
-  async function resubscribeAfterTransportClose(previousHandle: string): Promise<void> {
+  async function resubscribeAfterTransportClose(
+    previousHandle: string,
+    cycle: number
+  ): Promise<void> {
+    if (cycle !== resubscribeCycle) {
+      return
+    }
     if (tabId && isWebTerminalSurfaceTabId(tabId)) {
       const nextHandle = await listHostSessionHandle(toHostSessionTabId(tabId))
-      if (destroyed || !connected || handle !== previousHandle) {
+      if (cycle !== resubscribeCycle || destroyed || !connected || handle !== previousHandle) {
         return
       }
       if (!nextHandle) {
@@ -453,7 +470,37 @@ export function createRemoteRuntimePtyTransport(
         onPtySpawn?.(remotePtyId)
       }
     }
+    if (cycle !== resubscribeCycle) {
+      return
+    }
     await subscribeToHandle()
+  }
+
+  function stopResubscribeRetries(): void {
+    resubscribeCycle += 1
+    if (resubscribeRetryTimer) {
+      clearTimeout(resubscribeRetryTimer)
+      resubscribeRetryTimer = null
+    }
+    resubscribeRetryAttempt = 0
+    resubscribeRequested = false
+    resubscribing = false
+  }
+
+  function scheduleResubscribeRetry(): void {
+    if (resubscribeRetryTimer || destroyed || !connected || !handle) {
+      return
+    }
+    const delay =
+      REMOTE_TERMINAL_RESUBSCRIBE_DELAYS_MS[
+        Math.min(resubscribeRetryAttempt, REMOTE_TERMINAL_RESUBSCRIBE_DELAYS_MS.length - 1)
+      ]
+    resubscribeRetryAttempt += 1
+    resubscribeRequested = false
+    resubscribeRetryTimer = setTimeout(() => {
+      resubscribeRetryTimer = null
+      scheduleResubscribeAfterTransportClose()
+    }, delay)
   }
 
   function scheduleResubscribeAfterTransportClose(): void {
@@ -464,18 +511,36 @@ export function createRemoteRuntimePtyTransport(
       resubscribeRequested = true
       return
     }
+    if (resubscribeRetryTimer) {
+      return
+    }
     resubscribing = true
+    const cycle = resubscribeCycle
     const resubscribeHandle = handle
-    void resubscribeAfterTransportClose(resubscribeHandle)
+    void resubscribeAfterTransportClose(resubscribeHandle, cycle)
+      .then(() => {
+        if (cycle === resubscribeCycle) {
+          resubscribeRetryAttempt = 0
+        }
+      })
       .catch((error) => {
-        if (!destroyed && connected && handle) {
+        if (cycle === resubscribeCycle && !destroyed && connected && handle) {
           clearPendingViewportClaim()
-          handleRemoteTerminalError(error)
+          if (isRecoverableRuntimeTransportError(error)) {
+            // Why: Tailscale/Wi-Fi can lag behind wake. Keep the pane alive and
+            // retry at a capped cadence until the runtime is reachable again.
+            scheduleResubscribeRetry()
+          } else {
+            handleRemoteTerminalError(error)
+          }
         }
       })
       .finally(() => {
+        if (cycle !== resubscribeCycle) {
+          return
+        }
         resubscribing = false
-        if (resubscribeRequested) {
+        if (resubscribeRequested && !resubscribeRetryTimer) {
           resubscribeRequested = false
           scheduleResubscribeAfterTransportClose()
         }
@@ -537,6 +602,7 @@ export function createRemoteRuntimePtyTransport(
           }
           outputProcessor.clearAccumulatedState()
           connected = false
+          stopResubscribeRetries()
           handle = null
           remotePtyId = null
           multiplexedStream = null
@@ -688,6 +754,8 @@ export function createRemoteRuntimePtyTransport(
     },
 
     attach(options) {
+      stopResubscribeRetries()
+      const attachCycle = resubscribeCycle
       storedCallbacks = options.callbacks
       currentRuntimeEnvironmentId =
         getRemoteRuntimePtyEnvironmentId(options.existingPtyId) ?? runtimeEnvironmentId
@@ -716,14 +784,21 @@ export function createRemoteRuntimePtyTransport(
       const targetHandle = handle
       const targetPtyId = remotePtyId
       void subscribeToHandle().catch((error) => {
-        if (!isCurrentRemoteTerminal(targetHandle, targetPtyId)) {
+        if (
+          attachCycle !== resubscribeCycle ||
+          !isCurrentRemoteTerminal(targetHandle, targetPtyId)
+        ) {
           return
         }
         if (handle === targetHandle && multiplexedStreamHandle !== targetHandle) {
           closeMultiplexedStream()
         }
         clearPendingViewportClaim()
-        handleRemoteTerminalError(error)
+        if (isRecoverableRuntimeTransportError(error)) {
+          scheduleResubscribeAfterTransportClose()
+        } else {
+          handleRemoteTerminalError(error)
+        }
       })
     },
 
@@ -732,6 +807,7 @@ export function createRemoteRuntimePtyTransport(
       inputBatcher.clear()
       viewportBatcher.flush()
       outputProcessor.clearAccumulatedState()
+      stopResubscribeRetries()
       if (!connected && !handle) {
         return
       }
@@ -752,6 +828,7 @@ export function createRemoteRuntimePtyTransport(
       inputBatcher.clear()
       viewportBatcher.flush()
       outputProcessor.clearAccumulatedState()
+      stopResubscribeRetries()
       connected = false
       clearPendingViewportClaim()
       closeMultiplexedStream()

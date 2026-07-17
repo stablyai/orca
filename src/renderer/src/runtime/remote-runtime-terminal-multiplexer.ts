@@ -340,7 +340,15 @@ class RemoteRuntimeTerminalMultiplexer {
           {
             onResponse: (response) => this.handleResponse(response),
             onBinary: (bytes) => this.handleBinary(bytes),
-            onError: (error) => this.failConnection(new Error(error.message)),
+            onError: (error) => {
+              if (error.code === 'remote_runtime_unavailable' || error.code === 'runtime_timeout') {
+                // Why: liveness/network failures are followed by a terminal close;
+                // drive recovery without painting a fatal PTY error first.
+                this.handleClose()
+                return
+              }
+              this.failConnection(new Error(error.message))
+            },
             onClose: () => this.handleClose('Remote Orca runtime closed the connection.')
           }
         )
