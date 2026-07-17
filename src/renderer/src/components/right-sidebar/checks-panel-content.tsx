@@ -1940,7 +1940,6 @@ function CommentRow({
         ) : (
           <CommentMarkdown
             content={comment.body}
-            allowRemoteImages
             className={cn(
               isReply ? presentation.commentBodyReply : presentation.commentBody,
               presentation.commentBodyMarkdown

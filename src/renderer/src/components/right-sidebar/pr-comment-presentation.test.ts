@@ -45,6 +45,7 @@ describe('pr-comment-presentation', () => {
       // The compact renderer emits no <p>, so a [&_p] rule would be dead code.
       expect(markdown).not.toContain('[&_p]:')
       expect(markdown).toContain('[&_.comment-md-p]:block')
+      expect(markdown).toContain('[&_.comment-md-p+.comment-md-p]:mt-2')
       // Rhythm must key off every top-level block: a <details>/<div> between two
       // paragraphs breaks an adjacent-sibling chain and zeroes the tail spacing.
       expect(markdown).toContain('[&>*+*]:mt-2')
@@ -93,6 +94,7 @@ describe('pr-comment-presentation', () => {
     const label = '[&_.comment-md-p>strong:first-child:has(+br)'
     expect(markdown).toContain(`${label}]:text-[15px]`)
     expect(markdown).toContain(`${label}]:block`)
+    expect(markdown).toContain('[&_.comment-md-p:first-child>strong:first-child:has(+br)]:mt-0')
     // Blocking the label makes its own <br> a duplicate break.
     expect(markdown).toContain(`${label}+br]:hidden`)
   })

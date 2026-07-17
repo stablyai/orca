@@ -49,17 +49,8 @@ function handleMarkdownImageClick(
   onLinkClick(event, src)
 }
 
-function isRemoteHttpImageSrc(src: string | undefined): src is string {
-  if (!src) {
-    return false
-  }
-  const normalized = src.trim().toLowerCase()
-  return normalized.startsWith('https://') || normalized.startsWith('http://')
-}
-
 export function createCompactCommentMarkdownComponents(
-  onLinkClick?: CommentMarkdownLinkClickHandler,
-  allowRemoteImages = false
+  onLinkClick?: CommentMarkdownLinkClickHandler
 ): Components {
   return {
     // Strip <p> wrappers to avoid double margins in the tight card layout.
@@ -106,16 +97,38 @@ export function createCompactCommentMarkdownComponents(
     li: ({ children }) => (
       <li className="leading-normal [&>input]:pointer-events-none">{children}</li>
     ),
-    // comment-md-h markers are inert until a parent (see MARKDOWN_BASE in
-    // pr-comment-presentation.ts) opts into block flow and sizing.
-    h1: ({ children }) => <span className="comment-md-h comment-md-h1 font-bold">{children}</span>,
-    h2: ({ children }) => <span className="comment-md-h comment-md-h2 font-bold">{children}</span>,
-    h3: ({ children }) => (
-      <span className="comment-md-h comment-md-h3 font-semibold">{children}</span>
+    // Spans preserve compact flow on shared surfaces; roles keep the source
+    // heading hierarchy navigable when the PR sidebar promotes them visually.
+    h1: ({ children }) => (
+      <span className="comment-md-h comment-md-h1 font-bold" role="heading" aria-level={1}>
+        {children}
+      </span>
     ),
-    h4: ({ children }) => <span className="comment-md-h font-semibold">{children}</span>,
-    h5: ({ children }) => <span className="comment-md-h font-semibold">{children}</span>,
-    h6: ({ children }) => <span className="comment-md-h font-semibold">{children}</span>,
+    h2: ({ children }) => (
+      <span className="comment-md-h comment-md-h2 font-bold" role="heading" aria-level={2}>
+        {children}
+      </span>
+    ),
+    h3: ({ children }) => (
+      <span className="comment-md-h comment-md-h3 font-semibold" role="heading" aria-level={3}>
+        {children}
+      </span>
+    ),
+    h4: ({ children }) => (
+      <span className="comment-md-h font-semibold" role="heading" aria-level={4}>
+        {children}
+      </span>
+    ),
+    h5: ({ children }) => (
+      <span className="comment-md-h font-semibold" role="heading" aria-level={5}>
+        {children}
+      </span>
+    ),
+    h6: ({ children }) => (
+      <span className="comment-md-h font-semibold" role="heading" aria-level={6}>
+        {children}
+      </span>
+    ),
     // Horizontal rules as a subtle divider
     hr: () => <hr className="my-1 border-border/50" />,
     // Compact blockquotes
@@ -126,11 +139,9 @@ export function createCompactCommentMarkdownComponents(
     ),
     // Why: agent replies and workspace notes often carry screenshot markdown
     // like "Image #1"; compact cards inline app-managed thumbnails without
-    // auto-fetching arbitrary remote image URLs. allowRemoteImages opts a
-    // surface into fetching them — it leaks the viewer's IP to the host.
-    img: ({ alt, src, width, height }) => {
-      const isRemote = allowRemoteImages && isRemoteHttpImageSrc(src)
-      if (!isTrustedCompactImageSrc(src) && !isRemote) {
+    // auto-fetching arbitrary remote image URLs.
+    img: ({ alt, src }) => {
+      if (!isTrustedCompactImageSrc(src)) {
         if (!src) {
           return alt ? <span>{alt}</span> : null
         }
@@ -144,21 +155,6 @@ export function createCompactCommentMarkdownComponents(
           >
             {alt || src}
           </a>
-        )
-      }
-
-      // Why: bot badges size themselves via width/height and ship their own <a>/<picture>
-      // wrappers. Re-wrapping orphans <picture>'s <source> children (they only apply to a
-      // direct <img> child) and nests anchors; inline undoes preflight's `img{display:block}`.
-      if (isRemote) {
-        return (
-          <img
-            src={src}
-            alt={alt ?? ''}
-            width={width}
-            height={height}
-            className="inline-block max-w-full align-middle"
-          />
         )
       }
 
