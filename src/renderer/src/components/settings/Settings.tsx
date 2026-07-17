@@ -12,6 +12,7 @@ import {
 import { toast } from 'sonner'
 import type { GlobalSettings, OrcaHooks, ProjectHostSetup, Repo } from '../../../../shared/types'
 import type { SpeechModelState } from '../../../../shared/speech-types'
+import type { SkillFreshnessInventory } from '../../../../shared/skill-freshness'
 import type {
   SourceControlAiSettings,
   SourceControlAiSettingsPatch
@@ -100,6 +101,8 @@ import {
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+import { useSkillFreshness } from '@/hooks/useSkillFreshness'
+import { getSkillFreshnessDisplayStatus } from '@/lib/skill-freshness-display-status'
 import { deriveNeededSectionIds, getInitialMountedSectionIds } from './settings-load-performance'
 import { translate } from '@/i18n/i18n'
 import { getProjectHostSetupProjectionFromState } from '../../store/selectors'
@@ -205,13 +208,18 @@ function getSettingsNavGroupDefinitionsForSearch(
 }
 
 function getSkillNavInstallStatus(skill: {
+  name: string
   installed: boolean
   loading: boolean
+  inventory: SkillFreshnessInventory | null
 }): SettingsNavInstallStatus {
   if (skill.loading) {
     return 'checking'
   }
-  return skill.installed ? 'installed' : 'install'
+  if (!skill.installed) {
+    return 'install'
+  }
+  return getSkillFreshnessDisplayStatus(skill.inventory, skill.name)
 }
 
 function hasReadyVoiceModel(
@@ -346,6 +354,10 @@ function Settings(): React.JSX.Element {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
+  // Why: mirror the setup cards — freshness only speaks for the validated global
+  // rail, which doesn't run under WSL, so the nav pill stays presence-only there.
+  const { inventory: skillFreshnessInventory } = useSkillFreshness()
+  const skillFreshnessApplies = activeSkillRuntime.agentRuntime?.runtime !== 'wsl'
   const [voiceModelStatesLoading, setVoiceModelStatesLoading] = useState(showDesktopOnlySettings)
   // Why: the Terminal settings section shares one search index with the
   // sidebar. We trim platform-only entries on other platforms so search never
@@ -725,12 +737,15 @@ function Settings(): React.JSX.Element {
   const { installed: computerUseSkillInstalled, loading: computerUseSkillLoading } =
     computerUseSkill
   const capabilityInstallStatusBySectionId = useMemo(() => {
+    const applicableFreshnessInventory = skillFreshnessApplies ? skillFreshnessInventory : null
     const next = new Map<string, SettingsNavInstallStatus>([
       [
         'orchestration',
         getSkillNavInstallStatus({
+          name: ORCHESTRATION_SKILL_NAME,
           installed: orchestrationSkillInstalled,
-          loading: orchestrationSkillLoading
+          loading: orchestrationSkillLoading,
+          inventory: applicableFreshnessInventory
         })
       ]
     ])
@@ -738,8 +753,10 @@ function Settings(): React.JSX.Element {
       next.set(
         'computer-use',
         getSkillNavInstallStatus({
+          name: COMPUTER_USE_SKILL_NAME,
           installed: computerUseSkillInstalled,
-          loading: computerUseSkillLoading
+          loading: computerUseSkillLoading,
+          inventory: applicableFreshnessInventory
         })
       )
       if (settings) {
@@ -762,6 +779,8 @@ function Settings(): React.JSX.Element {
     orchestrationSkillLoading,
     settings,
     showDesktopOnlySettings,
+    skillFreshnessApplies,
+    skillFreshnessInventory,
     voiceModelStatesLoading
   ])
   const navSections = useMemo(

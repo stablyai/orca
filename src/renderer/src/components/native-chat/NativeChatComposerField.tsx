@@ -14,6 +14,10 @@ import {
 import { NativeChatComposerActions } from './NativeChatComposerActions'
 import { nativeChatComposerPlaceholder } from './native-chat-composer-target'
 import type { DiscoveredSkill } from '../../../../shared/skills'
+import type {
+  SessionOptionDescriptor,
+  SessionOptionsSurface
+} from '../../../../shared/native-chat-session-options'
 
 export type NativeChatComposerFieldProps = {
   textareaRef: RefObject<HTMLTextAreaElement | null>
@@ -45,6 +49,8 @@ export type NativeChatComposerFieldProps = {
   onDictationHoldEnd: () => void
   onSend: () => void
   onStop?: () => void
+  sessionOptionsSurface: SessionOptionsSurface | null
+  sessionOptionsSnapshot: SessionOptionDescriptor[]
 }
 
 export type NativeChatComposerImageAttachment = {
@@ -81,7 +87,9 @@ export function NativeChatComposerField({
   onDictationHoldStart,
   onDictationHoldEnd,
   onSend,
-  onStop
+  onStop,
+  sessionOptionsSurface,
+  sessionOptionsSnapshot
 }: NativeChatComposerFieldProps): React.JSX.Element {
   return (
     <div className="shrink-0 bg-background">
@@ -182,6 +190,8 @@ export function NativeChatComposerField({
                 onDictationHoldEnd={onDictationHoldEnd}
                 onSend={onSend}
                 onStop={onStop}
+                sessionOptionsSurface={sessionOptionsSurface}
+                sessionOptionsSnapshot={sessionOptionsSnapshot}
               />
             </div>
           </div>

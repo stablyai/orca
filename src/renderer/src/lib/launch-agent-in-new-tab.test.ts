@@ -340,7 +340,8 @@ describe('launchAgentInNewTab', () => {
       environmentId: 'web-runtime',
       targetGroupId: 'group-1',
       activate: true,
-      command: "codex '--model' 'gpt-5' '--reasoning-effort' 'high' 'fix the spinner'",
+      command:
+        "codex '-m' 'gpt-5.6-sol' '-c' 'model_reasoning_effort=medium' '--model' 'gpt-5' '--reasoning-effort' 'high' 'fix the spinner'",
       env: { CODEX_PROFILE: 'captured' },
       startupCommandDelivery: 'shell-ready',
       launchConfig: {
@@ -485,7 +486,8 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: "claude '--dangerously-skip-permissions' --prefill 'review Bob''s change'"
+        command:
+          "claude '--model' 'sonnet' '--effort' 'high' '--dangerously-skip-permissions' --prefill 'review Bob''s change'"
       })
     )
   })
@@ -503,7 +505,7 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: 'claude "--dangerously-skip-permissions"'
+        command: 'claude "--model" "sonnet" "--effort" "high" "--dangerously-skip-permissions"'
       })
     )
   })
@@ -521,7 +523,7 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: "claude '--dangerously-skip-permissions'"
+        command: "claude '--model' 'sonnet' '--effort' 'high' '--dangerously-skip-permissions'"
       })
     )
   })
@@ -541,7 +543,8 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: 'codex "--model" "gpt-5" "fix the spinner"'
+        command:
+          'codex "-m" "gpt-5.6-sol" "-c" "model_reasoning_effort=medium" "--model" "gpt-5" "fix the spinner"'
       })
     )
   })
@@ -561,7 +564,8 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: "claude '--dangerously-skip-permissions' --prefill 'review Bob'\\''s change'"
+        command:
+          "claude '--model' 'sonnet' '--effort' 'high' '--dangerously-skip-permissions' --prefill 'review Bob'\\''s change'"
       })
     )
   })
@@ -579,7 +583,7 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: "claude '--dangerously-skip-permissions'"
+        command: "claude '--model' 'sonnet' '--effort' 'high' '--dangerously-skip-permissions'"
       })
     )
   })
@@ -616,7 +620,8 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: "claude '--dangerously-skip-permissions' --prefill 'review Bob'\\''s change'"
+        command:
+          "claude '--model' 'sonnet' '--effort' 'high' '--dangerously-skip-permissions' --prefill 'review Bob'\\''s change'"
       })
     )
   })
@@ -637,7 +642,7 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: "claude '--dangerously-skip-permissions'"
+        command: "claude '--model' 'sonnet' '--effort' 'high' '--dangerously-skip-permissions'"
       })
     )
     expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
@@ -843,7 +848,7 @@ describe('launchAgentInNewTab', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: "codex '--model' 'gpt-5.5'"
+        command: "codex '-m' 'gpt-5.6-sol' '-c' 'model_reasoning_effort=medium' '--model' 'gpt-5.5'"
       })
     )
   })

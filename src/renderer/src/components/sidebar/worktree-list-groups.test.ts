@@ -1933,6 +1933,73 @@ describe('project groups', () => {
     expect(rows[0]).toMatchObject({ label: 'Platform' })
   })
 
+  it('keeps sleep-filtered Project Group members as empty project headers', () => {
+    // Why: #8865 — Hide sleeping removes workspace cards; membership placeholders
+    // must still project the grouped project header so the group count stays honest.
+    const group: ProjectGroup = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const sleepingRepo: Repo = {
+      ...repo,
+      id: 'repo-sleeping',
+      displayName: 'sleeping-project',
+      projectGroupId: group.id
+    }
+    const awakeRepo: Repo = {
+      ...repo,
+      id: 'repo-awake',
+      displayName: 'awake-project',
+      projectGroupId: group.id
+    }
+    const awakeWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-awake',
+      repoId: awakeRepo.id,
+      path: '/tmp/awake'
+    }
+
+    const rows = buildRows(
+      'repo',
+      [awakeWorktree],
+      new Map([
+        [sleepingRepo.id, sleepingRepo],
+        [awakeRepo.id, awakeRepo]
+      ]),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([[awakeWorktree.id, awakeWorktree]]),
+      false,
+      undefined,
+      [group],
+      new Set([sleepingRepo.id])
+    )
+
+    expect(rows[0]).toMatchObject({
+      type: 'header',
+      key: 'project-group:group-1',
+      count: 2
+    })
+    // Why: empty/placeholder projects sort after projects with visible activity.
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
+      'project-group:group-1',
+      `repo:${awakeRepo.id}`,
+      `repo:${sleepingRepo.id}`
+    ])
+  })
+
   it('renders ungrouped repos as top-level repo rows when Project Groups exist', () => {
     const group: ProjectGroup = {
       id: 'group-1',

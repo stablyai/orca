@@ -5,7 +5,11 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { getPiAgentStatusExtensionSource } from './agent-status-extension-source'
 
-type HookHandler = (event?: unknown) => Promise<void> | void
+type HookContext = {
+  isIdle: () => boolean
+}
+
+type HookHandler = (event?: unknown, context?: HookContext) => Promise<void> | void
 
 type FakeCurlChild = {
   on: ReturnType<typeof vi.fn>
@@ -25,7 +29,7 @@ type Harness = {
   }
   handlers: Record<string, HookHandler>
   processEnv: Record<string, string | undefined>
-  callHook: (name: string, event?: unknown) => Promise<void>
+  callHook: (name: string, event?: unknown, context?: HookContext) => Promise<void>
   // Re-invoke the extension factory in the same process (as Pi does on an
   // in-process extension reload), swapping in the freshly registered handlers.
   reload: () => void
@@ -160,8 +164,8 @@ function createHarness(args: {
     fsMock,
     handlers,
     processEnv: processMock.env,
-    callHook: async (name, event) => {
-      await handlers[name]?.(event)
+    callHook: async (name, event, hookContext) => {
+      await handlers[name]?.(event, hookContext)
     },
     reload: () => {
       for (const key of Object.keys(handlers)) {
@@ -434,6 +438,130 @@ describe('getPiAgentStatusExtensionSource', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('reports only agent_settled after multiple first-run agent_end events', async () => {
+    vi.useFakeTimers()
+    try {
+      const harness = createHarness({ kind: 'pi' })
+      const context = { isIdle: vi.fn(() => false) }
+
+      for (let index = 0; index < 3; index += 1) {
+        await harness.callHook('agent_end', undefined, context)
+        await vi.advanceTimersByTimeAsync(700)
+      }
+      expect(harness.fetchMock).not.toHaveBeenCalled()
+
+      await harness.callHook('agent_settled')
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(harness.fetchMock).toHaveBeenCalledTimes(1)
+      expect(JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body)).payload).toEqual({
+        hook_event_name: 'agent_end'
+      })
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not duplicate completion when idle is observed before agent_settled', async () => {
+    vi.useFakeTimers()
+    try {
+      const harness = createHarness({ kind: 'pi' })
+      const context = { isIdle: vi.fn(() => true) }
+
+      await harness.callHook('agent_end', undefined, context)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(harness.fetchMock).toHaveBeenCalledTimes(1)
+
+      await harness.callHook('agent_settled')
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(harness.fetchMock).toHaveBeenCalledTimes(1)
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('cancels an ambiguous agent_end when modern Pi resumes work', async () => {
+    vi.useFakeTimers()
+    try {
+      const harness = createHarness({ kind: 'pi' })
+      const context = { isIdle: vi.fn(() => false) }
+
+      await harness.callHook('agent_end', undefined, context)
+      await vi.advanceTimersByTimeAsync(100)
+      await harness.callHook('agent_start')
+      await harness.callHook('agent_end', undefined, context)
+      await vi.advanceTimersByTimeAsync(2_000)
+      await harness.callHook('agent_settled')
+      await vi.advanceTimersByTimeAsync(0)
+
+      const events = harness.fetchMock.mock.calls.map(
+        (call) => JSON.parse(String(call[1]?.body)).payload.hook_event_name
+      )
+      expect(events).toEqual(['agent_start', 'agent_end'])
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drops a pending legacy fallback when its context becomes stale on reload', async () => {
+    vi.useFakeTimers()
+    try {
+      const harness = createHarness({ kind: 'pi' })
+      let active = true
+      const context = {
+        isIdle: vi.fn(() => {
+          if (!active) {
+            throw new Error('stale extension context')
+          }
+          return false
+        })
+      }
+
+      await harness.callHook('agent_end', undefined, context)
+      await vi.advanceTimersByTimeAsync(100)
+      active = false
+      harness.reload()
+      await vi.advanceTimersByTimeAsync(100)
+
+      expect(harness.fetchMock).not.toHaveBeenCalled()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps reporting legacy Pi and OMP once their agent_end handlers settle', async () => {
+    vi.useFakeTimers()
+    try {
+      for (const kind of ['pi', 'omp'] as const) {
+        const harness = createHarness({ kind })
+        let idle = false
+        const context = { isIdle: vi.fn(() => idle) }
+
+        await harness.callHook('agent_end', undefined, context)
+        await vi.advanceTimersByTimeAsync(100)
+        expect(harness.fetchMock).not.toHaveBeenCalled()
+
+        idle = true
+        await vi.advanceTimersByTimeAsync(100)
+        expect(harness.fetchMock).toHaveBeenCalledTimes(1)
+      }
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps immediate agent_end fallback for runtimes without an idle context', async () => {
+    const harness = createHarness({ kind: 'omp' })
+
+    await harness.callHook('agent_end')
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(1))
   })
 
   it('does not treat WSLENV alone as WSL evidence', async () => {

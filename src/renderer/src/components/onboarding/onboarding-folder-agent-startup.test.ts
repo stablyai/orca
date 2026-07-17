@@ -14,7 +14,8 @@ describe('buildOnboardingFolderAgentStartup', () => {
     })
 
     expect(startup).toEqual({
-      command: "codex '--dangerously-bypass-approvals-and-sandbox'",
+      command:
+        "codex '-m' 'gpt-5.6-sol' '-c' 'model_reasoning_effort=medium' '--dangerously-bypass-approvals-and-sandbox'",
       env: {},
       launchAgent: 'codex',
       launchConfig: {
@@ -22,6 +23,7 @@ describe('buildOnboardingFolderAgentStartup', () => {
         agentArgs: '--dangerously-bypass-approvals-and-sandbox',
         agentEnv: {}
       },
+      sessionOptions: { model: 'gpt-5.6-sol', effort: 'medium' },
       telemetry: {
         agent_kind: 'codex',
         launch_source: 'onboarding',
@@ -97,7 +99,8 @@ describe('buildOnboardingFolderAgentStartup', () => {
         false
       )
     ).toEqual({
-      command: "echo onboarding-folder-agent '--dangerously-bypass-approvals-and-sandbox'",
+      command:
+        "echo onboarding-folder-agent '-m' 'gpt-5.6-sol' '-c' 'model_reasoning_effort=medium' '--dangerously-bypass-approvals-and-sandbox'",
       env: {},
       launchAgent: 'codex',
       launchConfig: {
@@ -105,6 +108,7 @@ describe('buildOnboardingFolderAgentStartup', () => {
         agentArgs: '--dangerously-bypass-approvals-and-sandbox',
         agentEnv: {}
       },
+      sessionOptions: { model: 'gpt-5.6-sol', effort: 'medium' },
       telemetry: {
         agent_kind: 'codex',
         launch_source: 'onboarding',

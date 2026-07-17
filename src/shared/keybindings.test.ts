@@ -242,6 +242,43 @@ describe('keybindings', () => {
     })
   })
 
+  it('keeps zoom reset on Mod+0 and focuses worktree list on a distinct chord', () => {
+    // Why: both actions previously defaulted to Mod+0, so main-process zoom
+    // reset always won and Focus worktree list was unreachable (#8584).
+    for (const platform of ['darwin', 'linux', 'win32'] as const) {
+      expect(getEffectiveKeybindingsForAction('zoom.reset', platform)).toEqual(['Mod+0'])
+      expect(getEffectiveKeybindingsForAction('sidebar.focusWorktreeList', platform)).toEqual([
+        'Mod+Shift+0'
+      ])
+    }
+
+    const zoomResetInput = {
+      key: '0',
+      code: 'Digit0',
+      meta: true,
+      control: false,
+      alt: false,
+      shift: false
+    }
+    const focusListInput = { ...zoomResetInput, shift: true }
+
+    expect(keybindingMatchesAction('zoom.reset', zoomResetInput, 'darwin')).toBe(true)
+    expect(keybindingMatchesAction('sidebar.focusWorktreeList', zoomResetInput, 'darwin')).toBe(
+      false
+    )
+    expect(keybindingMatchesAction('sidebar.focusWorktreeList', focusListInput, 'darwin')).toBe(
+      true
+    )
+    expect(keybindingMatchesAction('zoom.reset', focusListInput, 'darwin')).toBe(false)
+
+    expect(
+      findKeybindingConflicts('darwin', { 'sidebar.focusWorktreeList': ['Mod+0'] })
+    ).toContainEqual({
+      binding: 'Mod+0',
+      actionIds: expect.arrayContaining(['zoom.reset', 'sidebar.focusWorktreeList'])
+    })
+  })
+
   it('reports quick-command menu conflicts with global shortcuts and digit ranges', () => {
     expect(
       findKeybindingConflicts('darwin', {
@@ -712,6 +749,41 @@ describe('keybindings', () => {
       keybindingMatchesAction(
         'tab.newAgent',
         { key: 't', code: 'KeyT', meta: true, control: false, alt: true, shift: false },
+        'darwin'
+      )
+    ).toBe(true)
+  })
+
+  // Why: #8533 — both previously defaulted to Mod+Shift+E on darwin; emulator won.
+  it('keeps explorer on Mod+Shift+E and gives the mobile emulator a non-colliding macOS default', () => {
+    expect(getEffectiveKeybindingsForAction('sidebar.explorer.toggle', 'darwin')).toEqual([
+      'Mod+Shift+E'
+    ])
+    expect(getEffectiveKeybindingsForAction('tab.newSimulator', 'darwin')).toEqual([
+      'Mod+Alt+Shift+E'
+    ])
+    expect(getEffectiveKeybindingsForAction('tab.newSimulator', 'linux')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('tab.newSimulator', 'win32')).toEqual([])
+    expect(formatKeybindingList(['Mod+Alt+Shift+E'], 'darwin')).toBe('⌘⌥⇧E')
+
+    expect(
+      keybindingMatchesAction(
+        'sidebar.explorer.toggle',
+        { key: 'e', code: 'KeyE', meta: true, control: false, alt: false, shift: true },
+        'darwin'
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'tab.newSimulator',
+        { key: 'e', code: 'KeyE', meta: true, control: false, alt: false, shift: true },
+        'darwin'
+      )
+    ).toBe(false)
+    expect(
+      keybindingMatchesAction(
+        'tab.newSimulator',
+        { key: 'e', code: 'KeyE', meta: true, control: false, alt: true, shift: true },
         'darwin'
       )
     ).toBe(true)

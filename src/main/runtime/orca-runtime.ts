@@ -264,6 +264,7 @@ import {
 } from '../../shared/worktree-ownership'
 import {
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
+  BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION,
@@ -349,7 +350,6 @@ import {
   buildHeadlessTabGroupSplit
 } from './headless-tab-group-split-layout'
 import { RuntimeEmulatorCommands, setEmulatorBridge } from './orca-runtime-emulator'
-import { serveSimStateWatcher } from '../emulator/serve-sim-state-watcher'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import { RuntimeFileCommands } from './orca-runtime-files'
 import { RuntimeGitCommands } from './orca-runtime-git'
@@ -2409,6 +2409,15 @@ export class OrcaRuntimeService {
   // `applyMobileDisplayMode` to pick the active phone-fit viewport. See
   // docs/mobile-presence-lock.md.
   private currentDriver = new Map<string, DriverState>()
+  private mobileInputFloorClaims = new Map<
+    string,
+    {
+      base: DriverState
+      generation: number
+      committedGeneration: number
+      pending: Map<symbol, { clientId: string; generation: number }>
+    }
+  >()
   private currentBrowserDriver = new Map<string, RuntimeBrowserDriverState>()
 
   // Why: remote (relay/shared-control) desktop viewers of a PTY are keyed by
@@ -3053,6 +3062,12 @@ export class OrcaRuntimeService {
     if (hasOffscreen) {
       capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)
     }
+    // Why: certificate proceed is owned by the browser-hosting process for both
+    // desktop webviews and offscreen pages. Advertise whenever either backend
+    // can host a page so remote clients can surface Proceed Anyway (Unsafe).
+    if (canBrowse) {
+      capabilities.push(BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY)
+    }
     return {
       runtimeId: this.runtimeId,
       rendererGraphEpoch: this.rendererGraphEpoch,
@@ -3422,13 +3437,16 @@ export class OrcaRuntimeService {
       allowAttachedWindow?: boolean
       onlyServeOwnedTerminals?: boolean
     } = {}
-  ): void {
+  ): Set<string> {
+    // Why: report which worktrees were reconciled in place so callers don't
+    // reconcile them a second time (see notifyMobileSessionTabsChanged).
+    const reconciledWorktreeIds = new Set<string>()
     if (this.getAvailableAuthoritativeWindow() && options.allowAttachedWindow !== true) {
-      return
+      return reconciledWorktreeIds
     }
     const session = this.store?.getWorkspaceSession?.()
     if (!session) {
-      return
+      return reconciledWorktreeIds
     }
     const entries =
       worktreeId !== undefined
@@ -3447,6 +3465,7 @@ export class OrcaRuntimeService {
         // Reconcile just the browser tabs against the live bridge instead of
         // leaving a stale snapshot that omits a freshly-opened browser tab.
         this.reconcileHeadlessMobileSessionBrowserTabs(entryWorktreeId, existing)
+        reconciledWorktreeIds.add(entryWorktreeId)
         continue
       }
       const terminalTabs = this.buildHeadlessMobileSessionTerminalTabs(
@@ -3546,6 +3565,7 @@ export class OrcaRuntimeService {
         tabs: mergedTabs
       })
     }
+    return reconciledWorktreeIds
   }
 
   // Why: keep an existing snapshot's browser tabs in sync with the live bridge
@@ -3560,13 +3580,11 @@ export class OrcaRuntimeService {
     }
     const liveBrowserTabs = this.buildHeadlessMobileSessionBrowserTabs(worktreeId)
     const liveIds = liveBrowserTabs.map((tab) => tab.id)
-    const existingBrowserIds = existing.tabs
-      .filter((tab): tab is RuntimeMobileSessionBrowserTab => tab.type === 'browser')
-      .map((tab) => tab.id)
-    const unchanged =
-      liveIds.length === existingBrowserIds.length &&
-      liveIds.every((id, index) => existingBrowserIds[index] === id)
-    if (unchanged) {
+    const existingBrowserTabs = existing.tabs.filter(
+      (tab): tab is RuntimeMobileSessionBrowserTab => tab.type === 'browser'
+    )
+    const existingBrowserIds = existingBrowserTabs.map((tab) => tab.id)
+    if (this.headlessBrowserTabsUnchanged(liveBrowserTabs, existingBrowserTabs)) {
       return
     }
     const nonBrowserTabs = existing.tabs.filter((tab) => tab.type !== 'browser')
@@ -4043,11 +4061,82 @@ export class OrcaRuntimeService {
         loading: false,
         canGoBack: false,
         canGoForward: false,
+        loadError: tab.loadError ?? undefined,
+        certificateFailure: tab.certificateFailure ?? undefined,
         ...(persistedProps ? { color: persistedProps.color } : {}),
         ...(persistedProps ? { isPinned: persistedProps.isPinned === true } : {}),
         isActive: tab.active === true
       }
     })
+  }
+
+  // Why: change detection for headless browser tabs. Compares the fields that
+  // actually vary (a JSON.stringify equality was order-sensitive and silently
+  // dropped `undefined` keys, so it only worked while both sides shared one
+  // construction path).
+  private headlessBrowserTabsUnchanged(
+    live: RuntimeMobileSessionBrowserTab[],
+    existing: RuntimeMobileSessionBrowserTab[]
+  ): boolean {
+    if (live.length !== existing.length) {
+      return false
+    }
+    return live.every((tab, index) => {
+      const prev = existing[index]
+      return (
+        tab.id === prev.id &&
+        tab.title === prev.title &&
+        tab.url === prev.url &&
+        tab.isActive === prev.isActive &&
+        (tab.isPinned ?? false) === (prev.isPinned ?? false) &&
+        (tab.color ?? null) === (prev.color ?? null) &&
+        this.browserLoadErrorsEqual(tab.loadError, prev.loadError) &&
+        this.browserCertificateFailuresEqual(tab.certificateFailure, prev.certificateFailure)
+      )
+    })
+  }
+
+  private browserLoadErrorsEqual(
+    a: RuntimeMobileSessionBrowserTab['loadError'],
+    b: RuntimeMobileSessionBrowserTab['loadError']
+  ): boolean {
+    const left = a ?? null
+    const right = b ?? null
+    if (left === right) {
+      return true
+    }
+    if (!left || !right) {
+      return false
+    }
+    return (
+      left.code === right.code &&
+      left.description === right.description &&
+      left.validatedUrl === right.validatedUrl
+    )
+  }
+
+  private browserCertificateFailuresEqual(
+    a: RuntimeMobileSessionBrowserTab['certificateFailure'],
+    b: RuntimeMobileSessionBrowserTab['certificateFailure']
+  ): boolean {
+    const left = a ?? null
+    const right = b ?? null
+    if (left === right) {
+      return true
+    }
+    if (!left || !right) {
+      return false
+    }
+    return (
+      left.challengeId === right.challengeId &&
+      left.browserPageId === right.browserPageId &&
+      left.errorCode === right.errorCode &&
+      left.error === right.error &&
+      left.origin === right.origin &&
+      left.displayHost === right.displayHost &&
+      left.canProceed === right.canProceed &&
+      left.observedAt === right.observedAt
+    )
   }
 
   private getPersistedUnifiedSessionTabProps(
@@ -4677,26 +4766,33 @@ export class OrcaRuntimeService {
         (candidate) => candidate.type === 'terminal' && candidate.parentTabId === tab.parentTabId
       ).length
       const closingWholeParent = tab.id !== tabId || parentLeafCount <= 1
+      // Why: a runtime-owned headless tab is absent from renderer state, so the
+      // closeTerminalTab relay below would ack success without killing its PTY,
+      // and syncMobileSessionTabs would republish the "closed" tab. Only bypass
+      // the relay when no renderer owns the parent: an adopted tab needs the
+      // renderer's live pin guard and durable close transaction.
+      if (closingWholeParent && !this.tabs.has(tab.parentTabId)) {
+        this.closeHeadlessMobileTerminalTab(worktreeId, snapshot!, tab)
+        this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
+        this.store?.flushOrThrow?.()
+        return { closed: true }
+      }
       if (closingWholeParent && this.notifier?.closeTerminalTab) {
         // Why: whole-tab close is a lifecycle transaction. The renderer reply
         // arrives only after canonical retirement and a forced session flush.
         await this.notifier.closeTerminalTab(tab.parentTabId)
         return { closed: true }
       }
-      if (!this.notifier?.closeTerminal) {
+      // Why: notifier implementations without the acknowledged relay may expose
+      // only raw pane close. Runtime-owned parents still need de-persist + kill.
+      if (closingWholeParent && this.isRuntimeOwnedHeadlessMobileTab(worktreeId, tab)) {
         this.closeHeadlessMobileTerminalTab(worktreeId, snapshot!, tab)
+        this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
         this.store?.flushOrThrow?.()
         return { closed: true }
       }
-      // Why: a runtime-owned headless tab whose whole parent is being closed must
-      // be torn down authoritatively even with a renderer attached — kill the
-      // PTY, drop the persisted binding, and prune+emit — or syncMobileSessionTabs
-      // keeps republishing the "closed" tab with a live PTY. Best-effort notify the
-      // renderer too so any adopted pane closes (no dead pane). A single split leaf
-      // (exact id, multi-leaf parent) keeps the per-leaf path so siblings survive.
-      if (closingWholeParent && this.isRuntimeOwnedHeadlessMobileTab(worktreeId, tab)) {
+      if (!this.notifier?.closeTerminal) {
         this.closeHeadlessMobileTerminalTab(worktreeId, snapshot!, tab)
-        this.notifier?.closeTerminal(tab.parentTabId)
         this.store?.flushOrThrow?.()
         return { closed: true }
       }
@@ -4722,6 +4818,19 @@ export class OrcaRuntimeService {
       this.notifier?.closeSessionTab?.(tab.id, worktreeId)
     }
     return { closed: true }
+  }
+
+  private notifyRendererOfHeadlessTerminalClose(parentTabId: string): void {
+    // Why: this relay is advisory after main owns teardown; renderer failure must
+    // not prevent the authoritative session flush or turn the close into failure.
+    try {
+      this.notifier?.closeTerminal(parentTabId)
+    } catch (error) {
+      console.warn('[runtime] failed to notify renderer after headless terminal close', {
+        parentTabId,
+        error
+      })
+    }
   }
 
   private async closeHeadlessMobileBrowserTab(
@@ -5466,6 +5575,8 @@ export class OrcaRuntimeService {
   listMobileFiles: RuntimeFileCommands['listMobileFiles'] = this.fileCommands.listMobileFiles.bind(
     this.fileCommands
   )
+  searchMobileFilePaths: RuntimeFileCommands['searchMobileFilePaths'] =
+    this.fileCommands.searchMobileFilePaths.bind(this.fileCommands)
   openMobileFile: RuntimeFileCommands['openMobileFile'] = this.fileCommands.openMobileFile.bind(
     this.fileCommands
   )
@@ -5871,7 +5982,6 @@ export class OrcaRuntimeService {
     // `Network: https://local.example.com:3001/`) so the workspace ports
     // panel can surface them in place of the kernel bind address.
     advertisedUrlWatcher.ingest(ptyId, data, at)
-    serveSimStateWatcher.ingestPtyOutput(ptyId, data)
     // Why: reply ownership is captured per chunk, here at ingestion — the
     // same module state and tick as the hidden-gate drop sites — and rides
     // the writeChain link. A mark/setting/subscriber flip before the queued
@@ -8694,7 +8804,6 @@ export class OrcaRuntimeService {
 
   onPtyExit(ptyId: string, exitCode: number): void {
     advertisedUrlWatcher.unbindPty(ptyId)
-    serveSimStateWatcher.unbindPty(ptyId)
     // Clean up new mobile state for this PTY
     this.mobileSubscribers.delete(ptyId)
     this.remoteTerminalViewSubscriberCounts.delete(ptyId)
@@ -9145,18 +9254,108 @@ export class OrcaRuntimeService {
     this.setDriver(ptyId, { kind: 'mobile', clientId })
   }
 
+  beginMobileInputFloor(
+    ptyId: string,
+    clientId: string
+  ): { commit: () => Promise<void>; rollback: () => void } | null {
+    // Why: admit a client still inside its soft-leave grace (mirrors
+    // mobileTookFloor) so a write landing in that window reserves the floor
+    // instead of being dropped; post-grace/orphaned writers stay rejected.
+    const softLeaver = this.pendingSoftLeavers.get(ptyId)
+    if (!this.mobileSubscribers.get(ptyId)?.has(clientId) && softLeaver?.clientId !== clientId) {
+      return null
+    }
+    const state = this.mobileInputFloorClaims.get(ptyId) ?? {
+      base: this.getDriver(ptyId),
+      generation: 0,
+      committedGeneration: 0,
+      pending: new Map<symbol, { clientId: string; generation: number }>()
+    }
+    this.mobileInputFloorClaims.set(ptyId, state)
+    const token = Symbol('mobile-input-floor')
+    const generation = ++state.generation
+    state.pending.set(token, { clientId, generation })
+    this.setDriver(ptyId, { kind: 'mobile', clientId })
+    let settled = false
+    return {
+      commit: async () => {
+        if (settled) {
+          return
+        }
+        settled = true
+        state.pending.delete(token)
+        // Why: a newer accepted write owns the floor; an older claim that was
+        // delayed before commit must not replace its rollback baseline or driver.
+        if (generation < state.committedGeneration) {
+          if (state.pending.size === 0 && this.mobileInputFloorClaims.get(ptyId) === state) {
+            this.mobileInputFloorClaims.delete(ptyId)
+          }
+          return
+        }
+        const previousFloor = state.base
+        // Why: a successful write becomes the rollback baseline for any
+        // overlapping reservations that have not reached the PTY yet.
+        state.committedGeneration = generation
+        state.base = { kind: 'mobile', clientId }
+        await this.mobileTookFloor(
+          ptyId,
+          clientId,
+          previousFloor,
+          () =>
+            this.mobileInputFloorClaims.get(ptyId) === state &&
+            state.committedGeneration === generation
+        )
+        if (state.pending.size === 0 && this.mobileInputFloorClaims.get(ptyId) === state) {
+          this.mobileInputFloorClaims.delete(ptyId)
+        }
+      },
+      rollback: () => {
+        if (settled) {
+          return
+        }
+        settled = true
+        state.pending.delete(token)
+        if (this.mobileInputFloorClaims.get(ptyId) !== state) {
+          return
+        }
+        const current = this.getDriver(ptyId)
+        if (current.kind === 'mobile' && current.clientId === clientId) {
+          const pendingClientId = Array.from(state.pending.values()).at(-1)?.clientId
+          this.setDriver(
+            ptyId,
+            pendingClientId ? { kind: 'mobile', clientId: pendingClientId } : state.base
+          )
+        }
+        if (state.pending.size === 0) {
+          this.mobileInputFloorClaims.delete(ptyId)
+        }
+      }
+    }
+  }
+
   // Why: invoked from mobile RPC method handlers (terminal.send / setDisplayMode /
   // resizeForClient / fresh subscribe with auto). Records the actor as the
   // most recent mobile driver and re-applies phone-fit if we were previously
   // in `desktop` mode (mobile reclaims a take-back). Mobile-to-mobile hand-offs
   // are no-ops for resize.
-  async mobileTookFloor(ptyId: string, clientId: string): Promise<void> {
+  async mobileTookFloor(
+    ptyId: string,
+    clientId: string,
+    previousFloor?: DriverState,
+    isCurrent: () => boolean = () => true
+  ): Promise<void> {
     const inner = this.mobileSubscribers.get(ptyId)
     const sub = inner?.get(clientId)
+    const softLeaver = this.pendingSoftLeavers.get(ptyId)
+    // Why: native chat pauses terminal output, so its later sends have no
+    // subscriber lifecycle that could release a newly-created desktop lock.
+    if (!sub && softLeaver?.clientId !== clientId) {
+      return
+    }
     if (sub) {
       sub.lastActedAt = Date.now()
     }
-    const prev = this.getDriver(ptyId)
+    const prev = previousFloor ?? this.getDriver(ptyId)
     const currentMode = this.mobileDisplayModes.get(ptyId)
     // Why: a deliberate mobile action implies mobile is resuming control.
     // If the display mode is currently 'desktop' (set by an earlier
@@ -9167,6 +9366,11 @@ export class OrcaRuntimeService {
         this.mobileDisplayModes.delete(ptyId)
       }
       await this.applyMobileDisplayMode(ptyId)
+    }
+    // Why: display changes are async; a later PTY write must keep the floor
+    // when an older phone-fit operation eventually completes.
+    if (!isCurrent()) {
+      return
     }
     this.setDriver(ptyId, { kind: 'mobile', clientId })
   }
@@ -10819,6 +11023,8 @@ export class OrcaRuntimeService {
     },
     options: {
       beforeWrite?: (ptyId: string) => void | Promise<void>
+      reserveWrite?: (ptyId: string) => void
+      afterWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string
     } = {}
   ): Promise<RuntimeTerminalSend> {
@@ -11231,6 +11437,8 @@ export class OrcaRuntimeService {
     payload: string,
     options: {
       beforeWrite?: (ptyId: string) => void | Promise<void>
+      reserveWrite?: (ptyId: string) => void
+      afterWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string
     } = {}
   ): Promise<void> {
@@ -11248,6 +11456,7 @@ export class OrcaRuntimeService {
       }
       try {
         await options.beforeWrite?.(ptyId)
+        options.reserveWrite?.(ptyId)
       } catch (error) {
         if (options.suffixFailureError) {
           throw new Error(options.suffixFailureError)
@@ -11258,6 +11467,7 @@ export class OrcaRuntimeService {
       if (!suffixWrote) {
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
       }
+      await options.afterWrite?.(ptyId)
       return
     }
     if (hasText) {
@@ -11265,10 +11475,12 @@ export class OrcaRuntimeService {
     }
 
     await options.beforeWrite?.(ptyId)
+    options.reserveWrite?.(ptyId)
     const wrote = this.ptyController?.write(ptyId, payload) ?? false
     if (!wrote) {
       throw new Error('terminal_not_writable')
     }
+    await options.afterWrite?.(ptyId)
   }
 
   private async writeTerminalInputChunks(
@@ -11276,16 +11488,20 @@ export class OrcaRuntimeService {
     text: string,
     options: {
       beforeWrite?: (ptyId: string) => void | Promise<void>
+      reserveWrite?: (ptyId: string) => void
+      afterWrite?: (ptyId: string) => void | Promise<void>
     } = {}
   ): Promise<void> {
     const chunks = iterateTerminalInputChunks(text)
     let chunk = chunks.next()
     while (!chunk.done) {
       await options.beforeWrite?.(ptyId)
+      options.reserveWrite?.(ptyId)
       const wrote = this.ptyController?.write(ptyId, chunk.value) ?? false
       if (!wrote) {
         throw new Error('terminal_not_writable')
       }
+      await options.afterWrite?.(ptyId)
       chunk = chunks.next()
       if (!chunk.done) {
         await new Promise((resolve) => setTimeout(resolve, 0))
@@ -17490,7 +17706,6 @@ export class OrcaRuntimeService {
     // purge history and process-local caches before the ID points at new state.
     store.removeWorktreeMeta(worktreeId)
     advertisedUrlWatcher.forgetWorktree(worktreeId)
-    serveSimStateWatcher.forgetWorktree(worktreeId)
     deleteWorktreeHistoryDir(worktreeId)
     this.closeHeadlessBrowserPagesForWorktree(worktreeId)
   }
@@ -20966,7 +21181,6 @@ export class OrcaRuntimeService {
       // Why: restored/controller-discovered PTYs learn their worktree here
       // without registerPty(), so URL enrichment must bind at this source.
       advertisedUrlWatcher.bindPty(ptyId, worktreeId)
-      serveSimStateWatcher.bindPty(ptyId, worktreeId)
       return pty
     }
 
@@ -21002,7 +21216,6 @@ export class OrcaRuntimeService {
     // Why: recordPtyWorktree is the common lifecycle point for every path that
     // resolves a PTY's worktree, including renderer restore and controller list.
     advertisedUrlWatcher.bindPty(ptyId, worktreeId)
-    serveSimStateWatcher.bindPty(ptyId, worktreeId)
     return pty
   }
 
@@ -21115,8 +21328,6 @@ export class OrcaRuntimeService {
   }
 
   private dropDisconnectedPtyRecord(ptyId: string): void {
-    // Why: pruning can remove a PTY without the normal exit callback.
-    serveSimStateWatcher.unbindPty(ptyId)
     this.ptysById.delete(ptyId)
     this.recentPtyOutputById.delete(ptyId)
     this.clearWaitBlockedCheckState(ptyId)
@@ -21434,6 +21645,17 @@ export class OrcaRuntimeService {
     if (!worktreeId) {
       this.notifyMobileSessionTabSnapshots()
       return
+    }
+    if (this.offscreenBrowserBackend) {
+      const reconciled = this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
+      // Why: hydrate already reconciles an existing snapshot in place; only
+      // reconcile here when it didn't (fresh build or an early-returned hydrate).
+      if (!reconciled.has(worktreeId)) {
+        const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
+        if (existing) {
+          this.reconcileHeadlessMobileSessionBrowserTabs(worktreeId, existing)
+        }
+      }
     }
     // Why: structural changes (tab add/remove/activate) must propagate promptly,
     // so cancel any pending coalesced title/status notify — this immediate emit
@@ -25348,6 +25570,8 @@ export class OrcaRuntimeService {
 
   browserTabList: RuntimeBrowserCommands['browserTabList'] =
     this.browserCommands.browserTabList.bind(this.browserCommands)
+  browserProceedCertificate: RuntimeBrowserCommands['browserProceedCertificate'] =
+    this.browserCommands.browserProceedCertificate.bind(this.browserCommands)
 
   browserTabShow: RuntimeBrowserCommands['browserTabShow'] =
     this.browserCommands.browserTabShow.bind(this.browserCommands)
@@ -25607,18 +25831,6 @@ export class OrcaRuntimeService {
     this.emulatorCommands.emulatorLogcat.bind(this.emulatorCommands)
   emulatorUnregisterActive: RuntimeEmulatorCommands['emulatorUnregisterActive'] =
     this.emulatorCommands.emulatorUnregisterActive.bind(this.emulatorCommands)
-
-  // Why: serve-sim-state-watcher runs from main/index.ts startup; keep window IPC behind runtime (getAuthoritativeWindow is private).
-  notifyEmulatorAutoAttachFromWatcher(
-    worktreeId: string,
-    info: { deviceUdid: string; streamUrl: string; wsUrl: string; axUrl?: string }
-  ): void {
-    try {
-      this.getAuthoritativeWindow().webContents.send('ui:emulatorAutoAttach', { worktreeId, info })
-    } catch {
-      // Window may not exist during shutdown
-    }
-  }
 
   private getAuthoritativeWindow(): BrowserWindow {
     const win = this.getAvailableAuthoritativeWindow()

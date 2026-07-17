@@ -472,6 +472,43 @@ describe('WebSocketTransport', () => {
       expect(transport.resolvedPort).toBe(fallbackPort)
     })
 
+    it('binds the preferred port first when preferPinnedPort is set and both are free', async () => {
+      // Why: issue #8535 — `orca serve --port <P>` clients dial the pin. A
+      // free but stale mobile-ws-fallback-port.json must not pre-empt it.
+      const preferredPort = await reserveFreePort()
+      const fallbackPort = await reserveFreePort()
+
+      const transport = new WebSocketTransport({
+        host: '127.0.0.1',
+        port: preferredPort,
+        fallbackPort,
+        preferPinnedPort: true
+      })
+      transports.push(transport)
+      await transport.start()
+      expect(transport.resolvedPort).toBe(preferredPort)
+    })
+
+    it('falls back when preferPinnedPort is set but the preferred port is taken', async () => {
+      // Why: explicit pins still degrade to the STA-1511 fallback on
+      // EADDRINUSE so previously-paired mobile devices remain reachable.
+      const preferredHolder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
+      transports.push(preferredHolder)
+      await preferredHolder.start()
+      const preferredPort = preferredHolder.resolvedPort
+      const fallbackPort = await reserveFreePort()
+
+      const transport = new WebSocketTransport({
+        host: '127.0.0.1',
+        port: preferredPort,
+        fallbackPort,
+        preferPinnedPort: true
+      })
+      transports.push(transport)
+      await transport.start()
+      expect(transport.resolvedPort).toBe(fallbackPort)
+    })
+
     it('binds the preferred port when the persisted fallback is taken', async () => {
       const fallbackHolder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
       transports.push(fallbackHolder)

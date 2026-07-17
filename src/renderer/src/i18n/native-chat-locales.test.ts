@@ -8,6 +8,7 @@ import zh from './locales/zh.json'
 const localizedCatalogs = { es, ja, ko, zh }
 const englishSetting = en.auto.components.settings.ExperimentalPane.nativeChat
 const englishSearch = en.auto.components.settings.experimental.search.nativeChat
+const englishComposer = en.components['native-chat'].composer
 
 describe('native chat locale copy', () => {
   it.each(Object.entries(localizedCatalogs))(
@@ -25,6 +26,25 @@ describe('native chat locale copy', () => {
         expect(localized).not.toBe(english)
       }
       expect(search.grok).toBe('grok')
+      const composer = catalog.components['native-chat'].composer
+      for (const key of [
+        'model',
+        'modelWithValue',
+        'effort',
+        'effortWithValue',
+        'fastMode',
+        'thinking',
+        'options',
+        'sessionOptions',
+        'chooseInAgentPicker',
+        'sentNotConfirmed'
+      ] as const) {
+        expect(composer[key].trim()).not.toBe('')
+        expect(composer[key]).not.toBe(englishComposer[key])
+      }
+      for (const key of ['fast', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const) {
+        expect(composer.optionValue[key]).not.toBe(englishComposer.optionValue[key])
+      }
     }
   )
 })

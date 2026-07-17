@@ -133,6 +133,7 @@ import {
 } from '../../../shared/linear-links'
 import PRFilterDropdowns, { type PRFilterChange } from '@/components/github/PRFilterDropdowns'
 import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
+import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
 import { buildGitHubRepoUrl, parseGitHubIssueOrPRLink } from '@/lib/github-links'
 import {
   findGithubWorkItemWorkspaceAttachment,
@@ -1520,17 +1521,16 @@ function ReviewChipAvatar({
   reviewer: GitHubPRPrimaryReviewer | null
 }): React.JSX.Element {
   if (reviewer?.login) {
-    // Why: `gh pr list --json reviewRequests` can return only logins; GitHub's
-    // public avatar endpoint keeps the list visual aligned with assignee cells.
-    const avatarUrl = reviewer.avatarUrl || `https://github.com/${reviewer.login}.png?size=40`
+    // Why: `gh pr list --json reviewRequests` can return only logins. Prefer the
+    // API avatar_url so GHE renders; GitHubUserAvatar falls back to the login URL
+    // and then an initials placeholder when no avatar loads. See #8784.
     return (
-      <img
-        src={avatarUrl}
-        alt=""
-        loading="lazy"
-        decoding="async"
+      <GitHubUserAvatar
+        login={reviewer.login}
+        name={reviewer.name}
+        avatarUrl={reviewer.avatarUrl}
         title={reviewer.name ? `${reviewer.name} (${reviewer.login})` : reviewer.login}
-        className="size-5 shrink-0 rounded-full border border-border/50 bg-muted object-cover"
+        className="size-5"
       />
     )
   }

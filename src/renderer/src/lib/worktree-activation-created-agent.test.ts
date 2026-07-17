@@ -96,7 +96,8 @@ describe('activateAndRevealWorktree created agent reopen', () => {
     expect(result).toEqual({ primaryTabId: reopenedTab?.id })
     expect(reopenedTab).toBeDefined()
     expect(state.pendingStartupByTabId[reopenedTab!.id]).toEqual({
-      command: "codex '--dangerously-bypass-approvals-and-sandbox'",
+      command:
+        "codex '-m' 'gpt-5.6-sol' '-c' 'model_reasoning_effort=medium' '--dangerously-bypass-approvals-and-sandbox'",
       env: {},
       launchAgent: 'codex',
       launchConfig: {
@@ -105,6 +106,7 @@ describe('activateAndRevealWorktree created agent reopen', () => {
         agentEnv: {}
       },
       launchToken: expect.any(String),
+      sessionOptions: { model: 'gpt-5.6-sol', effort: 'medium' },
       telemetry: {
         agent_kind: 'codex',
         launch_source: 'sidebar',

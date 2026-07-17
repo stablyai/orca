@@ -3,12 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // Mock the IO seam so the test stays pure: we only assert the write order and
 // the inter-write delay, not the local-vs-remote pty branching.
 const sendRuntimePtyInput = vi.fn()
+const sendRuntimePtyInputVerified = vi.fn()
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
-  sendRuntimePtyInput: (...args: unknown[]) => sendRuntimePtyInput(...args)
+  sendRuntimePtyInput: (...args: unknown[]) => sendRuntimePtyInput(...args),
+  sendRuntimePtyInputVerified: (...args: unknown[]) => sendRuntimePtyInputVerified(...args)
 }))
 
 import {
   sendNativeChatMessage,
+  sendNativeChatMessageVerified,
   sendNativeChatMessageWithImageAttachments,
   submitNativeChatPrompt,
   sendNativeChatAskAnswer,
@@ -72,6 +75,52 @@ describe('sendNativeChatMessage', () => {
 
   it('matches orca-runtime writeTerminalAction Enter gap (500ms)', () => {
     expect(NATIVE_CHAT_SUBMIT_DELAY_MS).toBe(500)
+  })
+})
+
+describe('sendNativeChatMessageVerified', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    sendRuntimePtyInputVerified.mockReset().mockResolvedValue(true)
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('awaits body acceptance before the delayed Enter write', async () => {
+    const result = sendNativeChatMessageVerified(SETTINGS, PTY, '/model sonnet')
+    await Promise.resolve()
+
+    expect(sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
+    expect(sendRuntimePtyInputVerified).toHaveBeenCalledWith(
+      SETTINGS,
+      PTY,
+      buildNativeChatPasteBytes('/model sonnet')
+    )
+
+    await vi.advanceTimersByTimeAsync(NATIVE_CHAT_SUBMIT_DELAY_MS)
+
+    expect(await result).toBe(true)
+    expect(sendRuntimePtyInputVerified).toHaveBeenLastCalledWith(SETTINGS, PTY, NATIVE_CHAT_SUBMIT)
+  })
+
+  it('does not send Enter when the body is rejected', async () => {
+    sendRuntimePtyInputVerified.mockResolvedValueOnce(false)
+
+    await expect(sendNativeChatMessageVerified(SETTINGS, PTY, '/model sonnet')).resolves.toBe(false)
+    await vi.runAllTimersAsync()
+
+    expect(sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels the pending Enter when its composer detaches', async () => {
+    const controller = new AbortController()
+    const result = sendNativeChatMessageVerified(SETTINGS, PTY, '/model sonnet', controller.signal)
+    await Promise.resolve()
+    controller.abort()
+
+    expect(await result).toBe(false)
+    expect(sendRuntimePtyInputVerified).toHaveBeenCalledTimes(1)
   })
 })
 

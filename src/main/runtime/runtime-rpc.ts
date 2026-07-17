@@ -53,6 +53,10 @@ type OrcaRuntimeRpcServerOptions = {
   platform?: NodeJS.Platform
   enableWebSocket?: boolean
   wsPort?: number
+  // Why: true when the caller set an explicit port (e.g. `orca serve --port`).
+  // Distinguishes that pin from the DEFAULT_WS_PORT default so transport bind
+  // order can prefer the pin over a stale STA-1511 fallback (issue #8535).
+  preferPinnedWsPort?: boolean
   webClientRoot?: string
   // Why: test-only overrides for the two time-bound constants below.
   // Production callers must not pass these — defaults are set by the design
@@ -199,6 +203,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'files.readTerminalArtifact',
   'files.readTerminalArtifactPreview',
   'files.resolveTerminalPath',
+  'files.searchPaths',
   'files.writeTerminalArtifact',
   'folderWorkspace.list',
   'git.abortMerge',
@@ -449,6 +454,7 @@ export class OrcaRuntimeRpcServer {
   private readonly platform: NodeJS.Platform
   private readonly enableWebSocket: boolean
   private readonly wsPort: number
+  private readonly preferPinnedWsPort: boolean
   private readonly webClientRoot: string | undefined
   private readonly authToken = randomBytes(24).toString('hex')
   private readonly keepaliveIntervalMs: number
@@ -481,6 +487,7 @@ export class OrcaRuntimeRpcServer {
     platform = process.platform,
     enableWebSocket = false,
     wsPort = DEFAULT_WS_PORT,
+    preferPinnedWsPort = false,
     webClientRoot,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
     longPollCap = LONG_POLL_CAP
@@ -492,6 +499,7 @@ export class OrcaRuntimeRpcServer {
     this.platform = platform
     this.enableWebSocket = enableWebSocket
     this.wsPort = wsPort
+    this.preferPinnedWsPort = preferPinnedWsPort
     this.webClientRoot = webClientRoot
     this.keepaliveIntervalMs = keepaliveIntervalMs
     this.longPollCap = longPollCap
@@ -862,10 +870,11 @@ export class OrcaRuntimeRpcServer {
           staticRoot: this.webClientRoot,
           // Why: keep the fallback port stable across restarts so paired
           // devices' stored endpoints stay valid (STA-1511) — the transport
-          // binds a persisted fallback before the preferred port. wsPort 0
-          // means the caller explicitly wants a random port (E2E) — don't
-          // pin it.
-          ...(this.wsPort !== 0 ? { fallbackPort: readWsFallbackPort(this.userDataPath) } : {})
+          // binds a persisted fallback before the preferred port unless the
+          // caller explicitly pinned a port (serve --port). wsPort 0 means
+          // the caller wants a random port (E2E) — don't pin it.
+          ...(this.wsPort !== 0 ? { fallbackPort: readWsFallbackPort(this.userDataPath) } : {}),
+          ...(this.preferPinnedWsPort ? { preferPinnedPort: true } : {})
         })
         const mobileSocketWiring = new MobileSocketWiring({
           deviceRegistry: this.deviceRegistry,

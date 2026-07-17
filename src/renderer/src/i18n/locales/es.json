@@ -31,6 +31,10 @@
         "portsToggleDescription": "Muestra los puertos activos de los espacios de trabajo. Haz clic para ver los puertos de cada espacio de trabajo y los puertos externos.",
         "antigravityToggleDescription": "Muestra el uso de suscripción de Antigravity para el espacio de trabajo activo.",
         "grokToggleDescription": "Muestra el uso de créditos de suscripción de Grok cuando has iniciado sesión con Grok CLI."
+      },
+      "menuBarIcon": {
+        "title": "Mostrar icono en la barra de menús",
+        "description": "Mantén un acceso directo de Orca e indicador de actividad en la barra de menús de macOS."
       }
     }
   },
@@ -67,7 +71,8 @@
     "quit": "Salir",
     "minimizeNotice": {
       "body": "Orca sigue ejecutándose en la bandeja del sistema"
-    }
+    },
+    "activityWaiting": "Orca: actividad en espera"
   },
   "worktreeJumpPalette": {
     "matchLabel": {
@@ -3219,7 +3224,11 @@
             "42fdd4da1d": "Se está actualizando el inicio de sesión de Claude. Las sesiones de agentes pueden seguir iniciadas.",
             "c06c1d215d": "No se pudo actualizar el uso de Claude porque falló la solicitud de red.",
             "cabdc2a9e0": "No se pudieron leer las credenciales de inicio de sesión de Claude.",
-            "a7517cccb6": "El uso de Claude no está disponible ahora."
+            "a7517cccb6": "El uso de Claude no está disponible ahora.",
+            "e2c6a4f917": "Run Grok to refresh",
+            "d1b7f509ac": "Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.",
+            "f90b3d7a16": "Run Kimi to refresh",
+            "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage."
           },
           "SshTargetStatusRow": {
             "sshHost": "Host SSH"
@@ -3596,6 +3605,64 @@
           "cd7893fbc1": "Escaneando skills",
           "35b9a724a0": "Disponible",
           "0c74e7ff34": "Local"
+        },
+        "SkillFreshnessNudge": {
+          "titleOne": "Una skill de Orca instalada está desactualizada",
+          "titleMany": "{{value0}} skills de Orca instaladas están desactualizadas",
+          "updateOne": "Actualizar skill",
+          "updateMany": "Actualizar skills",
+          "description": "Actualiza {{value0}} para que los Agents sigan las instrucciones actuales de esta versión de Orca."
+        },
+        "SkillFreshnessRow": {
+          "statusUpdateAvailable": "Actualización disponible",
+          "statusCantUpdate": "No se puede actualizar",
+          "cantUpdateReason": "Esta skill está instalada en un lugar que Orca no puede actualizar de forma segura, así que el comando npx skills update la deja sin cambios.",
+          "chipCurrent": "Actual",
+          "chipUnrecognized": "No reconocida",
+          "chipInaccessible": "Inaccesible",
+          "chipDuplicate": "Duplicada",
+          "chipExternalLink": "Enlace externo",
+          "chipBrokenLink": "Enlace roto",
+          "chipReadOnly": "Solo lectura",
+          "chipInRepo": "En un repo",
+          "chipPluginCache": "Caché de plugin",
+          "tipCurrent": "La skill aquí ya está actualizada; la actualización no la cambiará.",
+          "tipUnrecognized": "El contenido de la skill aquí no coincide con ninguna versión oficial, así que Orca no puede actualizarla de forma segura. Elimina o reemplaza lo que hay aquí para permitir las actualizaciones.",
+          "tipInaccessible": "Orca no pudo leer la skill aquí (un error de permisos o de archivo), así que no puede comprobarla ni actualizarla.",
+          "tipDuplicate": "La skill también está instalada aquí, aparte de la principal, así que el comando npx skills update no puede alcanzarla. Elimínala para permitir las actualizaciones.",
+          "tipExternalLink": "Es un acceso directo que apunta fuera de las carpetas de skills de Orca; la actualización no lo seguirá.",
+          "tipBrokenLink": "Es un acceso directo a algo que ya no existe; puedes eliminarlo sin problema.",
+          "tipReadOnly": "La skill aquí está en una ubicación de solo lectura, así que no se puede actualizar hasta que cambies sus permisos.",
+          "tipInRepo": "La skill aquí vive dentro de un proyecto, no en tus skills globales; Orca solo actualiza las globales.",
+          "tipPluginCache": "La skill aquí la gestiona un plugin; actualiza el plugin en su lugar.",
+          "skippedReasonUnrecognized": "The copy here doesn’t match the official version — it may be modified, or a different skill with the same name. Orca left it out of the update so it won’t overwrite it. Remove it if you want Orca to update this skill.",
+          "skippedReasonReadOnly": "This copy is in a read-only location, so Orca left it out of the update. Change its permissions to let Orca update it.",
+          "skippedReasonInaccessible": "Orca couldn’t read this copy, so it left the skill out of the update.",
+          "skippedReasonInRepo": "This is a project skill, not a global one — Orca only updates your global skills, so it left this out of the update.",
+          "skippedReasonPluginCache": "A plugin manages this skill, so Orca left it out of the update — update the plugin instead.",
+          "skippedReasonExternalLink": "This copy is a shortcut pointing outside Orca’s skill folders, so Orca left it out of the update.",
+          "skippedReasonBrokenLink": "This copy is a shortcut to something that no longer exists, so Orca left it out — you can safely delete it."
+        },
+        "SkillFreshnessUpdateDialog": {
+          "title": "Actualizar skills",
+          "checking": "Comprobando las skills de Orca instaladas…",
+          "none": "No se encontraron skills de Orca instaladas.",
+          "updateOne": "Se puede actualizar 1 skill de forma segura",
+          "updateMany": "Se pueden actualizar {{value0}} skills de forma segura",
+          "success": "Todas las skills de Orca instaladas están actualizadas.",
+          "attention": "Algunas skills de Orca instaladas no se pueden actualizar automáticamente.",
+          "attentionDescription": "Abre Detalles de la actualización para ver por qué no se puede actualizar cada una.",
+          "details": "Detalles de la actualización",
+          "terminalTitle": "Actualizar skills de Orca",
+          "terminalDescription": "Revisa el comando pre-rellenado y pulsa Intro para ejecutarlo.",
+          "terminalAria": "Terminal de actualización de skills de Orca",
+          "checkNow": "Comprobar ahora",
+          "close": "Cerrar"
+        },
+        "SkillFreshnessStatusPill": {
+          "updateAvailable": "Actualización disponible",
+          "upToDate": "Actualizado",
+          "installed": "Instalado"
         }
       },
       "sidebar": {
@@ -9032,7 +9099,9 @@
           "b7e2d9f0a3": "El mismo porcentaje de créditos semanales que la pantalla grok /usage en la terminal.",
           "c6d1a8f4e2": "Se restablece {{when}}",
           "e6dadc1e2b": "Monthly usage",
-          "75e396bf42": "Included monthly usage for Grok unified-billing accounts."
+          "75e396bf42": "Included monthly usage for Grok unified-billing accounts.",
+          "b36fa2c908": "Signed in. Orca reads the Grok CLI session stored on disk.",
+          "f08c41de73": "Session expired — run grok on the computer running Orca and wait for it to start. If prompted, complete sign-in, then click Refresh usage. No chat message is needed."
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Usado",
@@ -13115,7 +13184,30 @@
         "pastedImageLabel": "Imagen pegada",
         "imagePasteFailed": "Error al pegar imagen.",
         "worktreeNotReady": "Worktree no está listo — intenta de nuevo en un momento.",
-        "uploadingAttachments": "Subiendo {{value0}} archivo(s) al remoto…"
+        "uploadingAttachments": "Subiendo {{value0}} archivo(s) al remoto…",
+        "model": "Modelo",
+        "modelWithValue": "Modelo: {{value0}}",
+        "effort": "Esfuerzo",
+        "effortWithValue": "Esfuerzo: {{value0}}",
+        "fastMode": "Modo rápido",
+        "thinking": "Razonamiento",
+        "options": "Opciones",
+        "sessionOptions": "Opciones de sesión",
+        "chooseInAgentPicker": "Elegir en el selector del agente…",
+        "toggleOption": "Alternar {{value0}}",
+        "sentNotConfirmed": "Enviado al agente — sin confirmar",
+        "setWhenSessionStarts": "Configúralo al iniciar la sesión.",
+        "availableAfterSessionStarts": "Disponible después de iniciar la sesión.",
+        "optionUpdateFailed": "No se pudo actualizar la opción",
+        "optionValue": {
+          "fast": "Rápido",
+          "minimal": "Mínimo",
+          "low": "Bajo",
+          "medium": "Medio",
+          "high": "Alto",
+          "xhigh": "Muy alto",
+          "max": "Máximo"
+        }
       },
       "tool": {
         "running": "Ejecutando…",
@@ -13138,6 +13230,7 @@
           "title": "No se pudo cargar la conversación",
           "subtitle": "No se pudo leer la transcripción. Vuelva a la terminal para seguir trabajando."
         },
+        "pairHost": "Empareje un host para ver el historial de chat del agente.",
         "notAgent": {
           "title": "No hay conversación aquí",
           "subtitle": "Este terminal no está ejecutando un agente de código reconocido."
@@ -13190,6 +13283,29 @@
           "githubPullRequestNumber": "PR #{{value0}}"
         }
       }
+    }
+  },
+  "browser": {
+    "loadFailure": {
+      "connectionNotSecure": "Connection isn't secure",
+      "cantReachHost": "Can't reach {{value0}}",
+      "cantLoadPage": "Can't load this page",
+      "certificateNameMismatch": "The certificate doesn't match {{value0}}.",
+      "certificateDateInvalid": "The certificate for {{value0}} isn't valid at the current date and time.",
+      "certificateAuthorityInvalid": "Orca doesn't trust the authority that issued the certificate for {{value0}}.",
+      "certificateVerificationFailed": "Orca couldn't verify the certificate for {{value0}}.",
+      "trustedCertificateGuidance": "For local development, use a trusted local certificate when possible.",
+      "retry": "Retry",
+      "copyAddress": "Copy Address",
+      "addressCopied": "Copied the current page address.",
+      "openExternally": "Open Externally",
+      "tryHttps": "Try HTTPS",
+      "proceedUnsafe": "Proceed Anyway (Unsafe)",
+      "connecting": "Connecting…",
+      "certificateChallengeExpired": "This certificate approval expired. Retry the page to request a new one.",
+      "certificateChallengeChanged": "The certificate request changed. Retry the page and review the new warning.",
+      "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
+      "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
     }
   }
 }

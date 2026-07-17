@@ -54,6 +54,11 @@ export type WebSocketTransportOptions = {
   // the (now free) preferred port instead would strand those pairings
   // (STA-1511). Callers pass the previously assigned fallback port here.
   fallbackPort?: number
+  // Why: `orca serve --port <P>` clients dial the pinned port. Prefer that port
+  // first (fallback second) so a stale mobile-ws-fallback-port.json cannot
+  // silently steal the pin (issue #8535). Default auto/desktop keeps
+  // fallback-first for STA-1511 pairing stability.
+  preferPinnedPort?: boolean
 }
 
 export class WebSocketTransport implements RpcTransport {
@@ -65,6 +70,7 @@ export class WebSocketTransport implements RpcTransport {
   private readonly preAuthTimeoutMs: number
   private readonly staticRoot: string | undefined
   private readonly fallbackPort: number | undefined
+  private readonly preferPinnedPort: boolean
   private httpServer: HttpsServer | HttpServer | null = null
   private wss: WebSocketServer | null = null
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null
@@ -89,7 +95,8 @@ export class WebSocketTransport implements RpcTransport {
     heartbeatIntervalMs,
     preAuthTimeoutMs,
     staticRoot,
-    fallbackPort
+    fallbackPort,
+    preferPinnedPort
   }: WebSocketTransportOptions) {
     this.host = host
     this.port = port
@@ -99,6 +106,7 @@ export class WebSocketTransport implements RpcTransport {
     this.preAuthTimeoutMs = preAuthTimeoutMs ?? PRE_AUTH_TIMEOUT_MS
     this.staticRoot = staticRoot
     this.fallbackPort = fallbackPort
+    this.preferPinnedPort = preferPinnedPort === true
   }
 
   onMessage(handler: WebSocketMessageHandler): void {
@@ -150,10 +158,12 @@ export class WebSocketTransport implements RpcTransport {
       return
     }
 
-    // Why: a persisted fallback port is bound FIRST — devices paired while it
-    // was active store ws://ip:<fallback> and would be permanently stranded if
-    // a later launch grabbed the (now free) preferred port instead (STA-1511).
-    // Without a persisted fallback the preferred port is tried first. On
+    // Why: default order binds a persisted fallback FIRST — devices paired
+    // while it was active store ws://ip:<fallback> and would be stranded if a
+    // later launch grabbed the (now free) preferred port instead (STA-1511).
+    // Explicit serve --port flips the order so the pinned port wins when free
+    // (issue #8535); fallback remains a secondary candidate for EADDRINUSE.
+    // Without a persisted fallback only the preferred port is tried. On
     // EADDRINUSE each candidate falls through to the next, ending at port 0
     // (OS-assigned) so mobile pairing still works when everything is taken.
     // The QR code reads resolvedPort after start, so it always advertises the
@@ -163,7 +173,11 @@ export class WebSocketTransport implements RpcTransport {
         ? this.fallbackPort
         : undefined
     const candidatePorts =
-      persistedFallbackPort !== undefined ? [persistedFallbackPort, this.port] : [this.port]
+      persistedFallbackPort === undefined
+        ? [this.port]
+        : this.preferPinnedPort
+          ? [this.port, persistedFallbackPort]
+          : [persistedFallbackPort, this.port]
     for (const port of candidatePorts) {
       try {
         await this.tryListen(port)

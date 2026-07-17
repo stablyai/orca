@@ -7,6 +7,29 @@
       "webDescription": "Retry the web client or reconnect to the paired runtime."
     }
   },
+  "browser": {
+    "loadFailure": {
+      "connectionNotSecure": "Connection isn't secure",
+      "cantReachHost": "Can't reach {{value0}}",
+      "cantLoadPage": "Can't load this page",
+      "certificateNameMismatch": "The certificate doesn't match {{value0}}.",
+      "certificateDateInvalid": "The certificate for {{value0}} isn't valid at the current date and time.",
+      "certificateAuthorityInvalid": "Orca doesn't trust the authority that issued the certificate for {{value0}}.",
+      "certificateVerificationFailed": "Orca couldn't verify the certificate for {{value0}}.",
+      "trustedCertificateGuidance": "For local development, use a trusted local certificate when possible.",
+      "retry": "Retry",
+      "copyAddress": "Copy Address",
+      "addressCopied": "Copied the current page address.",
+      "openExternally": "Open Externally",
+      "tryHttps": "Try HTTPS",
+      "proceedUnsafe": "Proceed Anyway (Unsafe)",
+      "connecting": "Connecting…",
+      "certificateChallengeExpired": "This certificate approval expired. Retry the page to request a new one.",
+      "certificateChallengeChanged": "The certificate request changed. Retry the page and review the new warning.",
+      "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
+      "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
+    }
+  },
   "settings": {
     "appearance": {
       "language": {
@@ -31,6 +54,10 @@
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
         "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI."
+      },
+      "menuBarIcon": {
+        "title": "Show Menu Bar Icon",
+        "description": "Keep an Orca shortcut and activity indicator in the macOS menu bar."
       }
     }
   },
@@ -67,7 +94,8 @@
     "quit": "Quit",
     "minimizeNotice": {
       "body": "Orca is still running in the system tray"
-    }
+    },
+    "activityWaiting": "Orca - activity waiting"
   },
   "worktreeJumpPalette": {
     "matchLabel": {
@@ -3219,7 +3247,11 @@
             "42fdd4da1d": "Claude sign-in is being refreshed. Agent sessions may still be signed in.",
             "c06c1d215d": "Claude usage could not be refreshed because the network request failed.",
             "cabdc2a9e0": "Claude sign-in credentials could not be read.",
-            "a7517cccb6": "Claude usage is unavailable right now."
+            "a7517cccb6": "Claude usage is unavailable right now.",
+            "e2c6a4f917": "Run Grok to refresh",
+            "d1b7f509ac": "Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.",
+            "f90b3d7a16": "Run Kimi to refresh",
+            "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage."
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
@@ -3596,6 +3628,64 @@
           "cd7893fbc1": "Scanning skills",
           "35b9a724a0": "Available",
           "0c74e7ff34": "Local"
+        },
+        "SkillFreshnessNudge": {
+          "titleOne": "An installed Orca skill is out of date",
+          "titleMany": "{{value0}} installed Orca skills are out of date",
+          "description": "Update {{value0}} so agents follow the current instructions for this version of Orca.",
+          "updateOne": "Update skill",
+          "updateMany": "Update skills"
+        },
+        "SkillFreshnessRow": {
+          "statusUpdateAvailable": "Update available",
+          "statusCantUpdate": "Skipped",
+          "cantUpdateReason": "Orca left this skill out of the update command.",
+          "skippedReasonUnrecognized": "The copy here doesn’t match the official version — it may be modified, or a different skill with the same name. Orca left it out of the update so it won’t overwrite it. Remove it if you want Orca to update this skill.",
+          "skippedReasonReadOnly": "This copy is in a read-only location, so Orca left it out of the update. Change its permissions to let Orca update it.",
+          "skippedReasonInaccessible": "Orca couldn’t read this copy, so it left the skill out of the update.",
+          "skippedReasonInRepo": "This is a project skill, not a global one — Orca only updates your global skills, so it left this out of the update.",
+          "skippedReasonPluginCache": "A plugin manages this skill, so Orca left it out of the update — update the plugin instead.",
+          "skippedReasonExternalLink": "This copy is a shortcut pointing outside Orca’s skill folders, so Orca left it out of the update.",
+          "skippedReasonBrokenLink": "This copy is a shortcut to something that no longer exists, so Orca left it out — you can safely delete it.",
+          "chipCurrent": "Current",
+          "chipUnrecognized": "Unrecognized",
+          "chipInaccessible": "Inaccessible",
+          "chipDuplicate": "Duplicate",
+          "chipExternalLink": "External link",
+          "chipBrokenLink": "Broken link",
+          "chipReadOnly": "Read only",
+          "chipInRepo": "In a repo",
+          "chipPluginCache": "Plugin cache",
+          "tipCurrent": "This copy matches the current official version.",
+          "tipUnrecognized": "This copy doesn’t match any official version — it may be modified, or a different skill with the same name.",
+          "tipInaccessible": "Orca couldn’t read this copy (a permissions or file error).",
+          "tipDuplicate": "A separate copy of this skill, installed apart from the main one.",
+          "tipExternalLink": "A shortcut pointing outside Orca’s skill folders.",
+          "tipBrokenLink": "A shortcut to something that no longer exists.",
+          "tipReadOnly": "This copy is in a read-only location.",
+          "tipInRepo": "This copy lives inside a project, not your global skills.",
+          "tipPluginCache": "This copy is managed by a plugin."
+        },
+        "SkillFreshnessUpdateDialog": {
+          "title": "Update skills",
+          "checking": "Checking installed Orca skills…",
+          "none": "No installed Orca skills found.",
+          "updateOne": "1 skill can be updated safely",
+          "updateMany": "{{value0}} skills can be updated safely",
+          "success": "All installed Orca skills are up to date.",
+          "attention": "Some installed Orca skills were left out of the update.",
+          "attentionDescription": "Open Update details to see why each one was skipped.",
+          "details": "Update details",
+          "terminalTitle": "Update Orca skills",
+          "terminalDescription": "Review the pre-filled command, then press Enter to run it.",
+          "terminalAria": "Orca skill update terminal",
+          "checkNow": "Re-check",
+          "close": "Close"
+        },
+        "SkillFreshnessStatusPill": {
+          "updateAvailable": "Update available",
+          "upToDate": "Up to date",
+          "installed": "Installed"
         }
       },
       "sidebar": {
@@ -9032,7 +9122,9 @@
           "b7e2d9f0a3": "Same weekly credit % as the grok /usage screen in the terminal.",
           "c6d1a8f4e2": "Resets {{when}}",
           "e6dadc1e2b": "Monthly usage",
-          "75e396bf42": "Included monthly usage for Grok unified-billing accounts."
+          "75e396bf42": "Included monthly usage for Grok unified-billing accounts.",
+          "b36fa2c908": "Signed in. Orca reads the Grok CLI session stored on disk.",
+          "f08c41de73": "Session expired — run grok on the computer running Orca and wait for it to start. If prompted, complete sign-in, then click Refresh usage. No chat message is needed."
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Used",
@@ -13115,7 +13207,30 @@
         "pastedImageLabel": "Pasted image",
         "imagePasteFailed": "Image paste failed.",
         "worktreeNotReady": "Worktree not ready — try again in a moment.",
-        "uploadingAttachments": "Uploading {{value0}} file(s) to remote…"
+        "uploadingAttachments": "Uploading {{value0}} file(s) to remote…",
+        "model": "Model",
+        "modelWithValue": "Model: {{value0}}",
+        "effort": "Effort",
+        "effortWithValue": "Effort: {{value0}}",
+        "fastMode": "Fast mode",
+        "thinking": "Thinking",
+        "options": "Options",
+        "sessionOptions": "Session options",
+        "chooseInAgentPicker": "Choose in agent picker…",
+        "toggleOption": "Toggle {{value0}}",
+        "sentNotConfirmed": "Sent to the agent — not confirmed",
+        "setWhenSessionStarts": "Set when the session starts.",
+        "availableAfterSessionStarts": "Available after the session starts.",
+        "optionUpdateFailed": "Could not update option",
+        "optionValue": {
+          "fast": "Fast",
+          "minimal": "Minimal",
+          "low": "Low",
+          "medium": "Medium",
+          "high": "High",
+          "xhigh": "Extra high",
+          "max": "Max"
+        }
       },
       "tool": {
         "running": "Running…",
@@ -13138,6 +13253,7 @@
           "title": "Could not load conversation",
           "subtitle": "The transcript could not be read. Toggle back to the terminal to keep working."
         },
+        "pairHost": "Pair a host to view agent chat history.",
         "notAgent": {
           "title": "No conversation here",
           "subtitle": "This terminal is not running a recognized coding agent."

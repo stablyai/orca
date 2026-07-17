@@ -48,14 +48,10 @@ import {
   useNativeChatContextMenu
 } from './use-native-chat-context-menu'
 import type { NativeChatContextMenuActions } from './use-native-chat-context-menu'
-import {
-  resolveNativeChatFileLink,
-  resolveNativeChatFileLinkContext
-} from './native-chat-file-link'
+import { resolveNativeChatFileLinkContext } from './native-chat-file-link'
 import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owner'
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
-import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
-import { openDetectedFilePath } from '@/components/terminal-pane/terminal-file-open-routing'
+import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
 
 export type NativeChatViewProps = {
   /** The terminal tab hosting the agent. paneKey is `${tabId}:${leafId}`. */
@@ -70,17 +66,12 @@ export type NativeChatViewProps = {
   resolvedAgent?: TuiAgent | null
   /** Return this pane to the hosted terminal surface. */
   onSwitchToTerminal?: () => void
+  /** Current xterm screen reader used to recover agent-reported session state. */
+  readTerminalScreen?: () => string | null
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }
 
-/**
- * Native chat surface for an agent terminal. Resolves the pane to its agent +
- * session id, streams the assembled conversation via the U4 live-session hook,
- * and renders the message list, live status, and all empty/loading/error
- * states. When no session id is known yet the hook surfaces live hook state on
- * an empty transcript; a true scrollback-scrape fallback (U6) is wired but only
- * runs when scrollback is obtainable — it degrades to the empty state otherwise.
- */
+/** Resolves an agent terminal into its native conversation and composer UI. */
 export default function NativeChatView({
   terminalTabId,
   paneKey: preferredPaneKey,
@@ -88,6 +79,7 @@ export default function NativeChatView({
   launchAgent,
   resolvedAgent,
   onSwitchToTerminal,
+  readTerminalScreen,
   contextMenuActions
 }: NativeChatViewProps): React.JSX.Element {
   // Select only this tab's status entry (shallow-compared) so an unrelated
@@ -120,6 +112,7 @@ export default function NativeChatView({
           targetPtyId={targetPtyId}
           terminalTabId={terminalTabId}
           onSwitchToTerminal={onSwitchToTerminal}
+          readTerminalScreen={readTerminalScreen}
           contextMenuActions={contextMenuActions}
         />
       )}
@@ -135,6 +128,7 @@ function NativeChatResolvedView({
   targetPtyId,
   terminalTabId,
   onSwitchToTerminal,
+  readTerminalScreen,
   contextMenuActions
 }: {
   paneKey: string
@@ -144,6 +138,7 @@ function NativeChatResolvedView({
   targetPtyId: string | null
   terminalTabId: string
   onSwitchToTerminal?: () => void
+  readTerminalScreen?: () => string | null
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }): React.JSX.Element {
   // Primitive owner selection (no useShallow): routes the pane's read/subscribe to
@@ -356,24 +351,7 @@ function NativeChatResolvedView({
     setWorkingInterrupted(true)
     interactiveSend.cancel()
   }, [interactiveSend])
-  const openNativeChatFileLink = useCallback<CommentMarkdownLinkClickHandler>(
-    (event, href) => {
-      const target = resolveNativeChatFileLink(href, fileLinkContext)
-      if (!target || !fileLinkContext) {
-        return
-      }
-      event.preventDefault()
-      event.stopPropagation()
-      openDetectedFilePath(target.absolutePath, target.line, target.column, {
-        worktreeId: fileLinkContext.worktreeId,
-        worktreePath: fileLinkContext.worktreePath,
-        runtimeEnvironmentId: fileLinkContext.runtimeEnvironmentId,
-        openWithSystemDefault: event.shiftKey
-      })
-    },
-    [fileLinkContext]
-  )
-  const nativeChatFileLinkClick = fileLinkContext ? openNativeChatFileLink : undefined
+  const nativeChatFileLinkClick = useNativeChatFileLinkClick(fileLinkContext)
 
   // Chat-only font zoom via Cmd/Ctrl +/-/0, gated to the live conversation so
   // the chord is inert on the loading/empty/error states and elsewhere.
@@ -460,6 +438,8 @@ function NativeChatResolvedView({
           onOptimisticSend={onOptimisticSend}
           onOptimisticSendCanceled={onOptimisticSendCanceled}
           onSlashCommand={onSlashCommand}
+          onSwitchToTerminal={onSwitchToTerminal}
+          readTerminalScreen={readTerminalScreen}
         />
       )}
       {contextMenu.menu}

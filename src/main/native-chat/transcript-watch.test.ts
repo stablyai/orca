@@ -1,9 +1,13 @@
-import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
-import { getActiveNativeChatWatcherCount, subscribeNativeChatTranscript } from './transcript-watch'
+import {
+  getActiveNativeChatWatcherCount,
+  readNativeChatTranscriptTail,
+  subscribeNativeChatTranscript
+} from './transcript-watch'
 
 let tempRoots: string[] = []
 
@@ -52,6 +56,191 @@ async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<void
 }
 
 describe('subscribeNativeChatTranscript', () => {
+  it('delivers the offset-0 drain as one initial snapshot, then only live appends', async () => {
+    const filePath = await tempFile(claudeLine('u-1', 'user', 'first'))
+    const snapshots: NativeChatMessage[][] = []
+    const appends: NativeChatMessage[][] = []
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'ignored',
+      filePath,
+      onInitialSnapshot: (messages) => snapshots.push(messages),
+      onAppend: (messages) => appends.push(messages),
+      debounceMs: 5
+    })
+
+    expect(sub.watching).toBe(true)
+    await waitFor(() => snapshots.length === 1)
+    expect(snapshots[0]?.map((message) => message.id)).toEqual(['u-1'])
+    expect(appends).toEqual([])
+
+    await appendFile(filePath, claudeLine('a-1', 'assistant', 'reply'))
+    await waitFor(() => appends.flat().some((message) => message.id === 'a-1'))
+    sub.unsubscribe()
+
+    expect(snapshots).toHaveLength(1)
+    expect(appends.flat().map((message) => message.id)).toEqual(['a-1'])
+  })
+
+  it('delivers an empty initial snapshot so clients do not remain loading', async () => {
+    const filePath = await tempFile('')
+    const snapshots: NativeChatMessage[][] = []
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'ignored',
+      filePath,
+      onInitialSnapshot: (messages) => snapshots.push(messages),
+      onAppend: () => {},
+      debounceMs: 5
+    })
+
+    await waitFor(() => snapshots.length === 1)
+    sub.unsubscribe()
+    expect(snapshots).toEqual([[]])
+  })
+
+  it('emits a bulk append in bounded ordered batches', async () => {
+    const filePath = await tempFile('')
+    const batches: NativeChatMessage[][] = []
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'ignored',
+      filePath,
+      onAppend: (messages) => batches.push(messages),
+      debounceMs: 5
+    })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    await appendFile(
+      filePath,
+      Array.from({ length: 95 }, (_unused, index) =>
+        claudeLine(`bulk-${index}`, 'user', `message-${index}`)
+      ).join('')
+    )
+
+    await waitFor(() => batches.flat().length === 95)
+    sub.unsubscribe()
+    expect(batches.map((batch) => batch.length)).toEqual([40, 40, 15])
+    expect(batches.flat().map((message) => message.id)).toEqual(
+      Array.from({ length: 95 }, (_unused, index) => `bulk-${index}`)
+    )
+  })
+
+  it('drops one oversized record without retaining or blocking the next append', async () => {
+    const filePath = await tempFile('')
+    const seen: NativeChatMessage[] = []
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'ignored',
+      filePath,
+      onAppend: (messages) => seen.push(...messages),
+      debounceMs: 5
+    })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    await appendFile(
+      filePath,
+      claudeLine('oversized', 'user', 'x'.repeat(2 * 1024 * 1024)) +
+        claudeLine('after-oversized', 'user', 'still delivered')
+    )
+
+    await waitFor(() => seen.some((message) => message.id === 'after-oversized'))
+    sub.unsubscribe()
+    expect(seen.some((message) => message.id === 'oversized')).toBe(false)
+  })
+
+  it('returns a bounded tail snapshot with exact pagination state', async () => {
+    const transcript = Array.from({ length: 800 }, (_unused, index) =>
+      claudeLine(`u-${index}`, 'user', `message-${index}-${'x'.repeat(100)}`)
+    ).join('')
+    const filePath = await tempFile(transcript)
+    const snapshots: { ids: string[]; hasMore: boolean }[] = []
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'ignored',
+      filePath,
+      initialLimit: 2,
+      onInitialSnapshot: (messages, hasMore) =>
+        snapshots.push({ ids: messages.map((message) => message.id), hasMore }),
+      onAppend: () => {},
+      debounceMs: 5
+    })
+
+    await waitFor(() => snapshots.length === 1)
+    sub.unsubscribe()
+    expect(snapshots).toEqual([{ ids: ['u-798', 'u-799'], hasMore: true }])
+  })
+
+  it('keeps an explicit zero-limit snapshot empty instead of reading unbounded', async () => {
+    const filePath = await tempFile(claudeLine('u-0', 'user', 'hello'))
+    const snapshots: { ids: string[]; hasMore: boolean }[] = []
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'ignored',
+      filePath,
+      initialLimit: 0,
+      onInitialSnapshot: (messages, hasMore) =>
+        snapshots.push({ ids: messages.map((message) => message.id), hasMore }),
+      onAppend: () => {},
+      debounceMs: 5
+    })
+
+    await waitFor(() => snapshots.length === 1)
+    sub.unsubscribe()
+    expect(snapshots).toEqual([{ ids: [], hasMore: false }])
+  })
+
+  it('pages older history by byte cursor without resending the growing tail', async () => {
+    const filePath = await tempFile(
+      Array.from({ length: 10 }, (_unused, index) =>
+        claudeLine(`page-${index}`, 'user', `message-${index}`)
+      ).join('')
+    )
+    const newest = await readNativeChatTranscriptTail({
+      agent: 'claude',
+      sessionId: 'ignored',
+      filePath,
+      limit: 3
+    })
+    if ('error' in newest) {
+      throw new Error(newest.error)
+    }
+    const older = await readNativeChatTranscriptTail({
+      agent: 'claude',
+      sessionId: 'ignored',
+      filePath,
+      limit: 3,
+      beforeOffset: newest.beforeOffset
+    })
+
+    expect(newest.messages.map((message) => message.id)).toEqual(['page-7', 'page-8', 'page-9'])
+    expect('messages' in older && older.messages.map((message) => message.id)).toEqual([
+      'page-4',
+      'page-5',
+      'page-6'
+    ])
+  })
+
+  it('decodes multi-chunk records once into the bounded tail order', async () => {
+    const large = 'x'.repeat(200_000)
+    const filePath = await tempFile(
+      claudeLine('u-large-1', 'user', large) + claudeLine('u-large-2', 'user', large)
+    )
+    const snapshots: { ids: string[]; hasMore: boolean }[] = []
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'ignored',
+      filePath,
+      initialLimit: 1,
+      onInitialSnapshot: (messages, hasMore) =>
+        snapshots.push({ ids: messages.map((message) => message.id), hasMore }),
+      onAppend: () => {},
+      debounceMs: 5
+    })
+
+    await waitFor(() => snapshots.length === 1)
+    sub.unsubscribe()
+    expect(snapshots).toEqual([{ ids: ['u-large-2'], hasMore: true }])
+  })
+
   it('re-emits from the top on first drain so appended turns are never dropped', async () => {
     const filePath = await tempFile(claudeLine('u-1', 'user', 'first'))
     const batches: NativeChatMessage[][] = []
@@ -233,6 +422,109 @@ describe('subscribeNativeChatTranscript', () => {
     expect(ids).toContain('a-2')
   })
 
+  it('detects same-size and larger in-place transcript replacement', async () => {
+    const filePath = await tempFile(claudeLine('u-old', 'user', 'old'))
+    const seen: NativeChatMessage[] = []
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'ignored',
+      filePath,
+      onAppend: (messages) => seen.push(...messages),
+      debounceMs: 5
+    })
+    await waitFor(() => seen.some((message) => message.id === 'u-old'))
+
+    await writeFile(filePath, claudeLine('u-new', 'user', 'new'))
+    await waitFor(() => seen.some((message) => message.id === 'u-new'))
+    await writeFile(filePath, claudeLine('u-bigger', 'user', 'larger replacement text'))
+    await waitFor(() => seen.some((message) => message.id === 'u-bigger'))
+    sub.unsubscribe()
+
+    expect(seen.filter((message) => message.id === 'u-new')).toHaveLength(1)
+    expect(seen.filter((message) => message.id === 'u-bigger')).toHaveLength(1)
+  })
+
+  it('keeps watching after atomic rename replacement', async () => {
+    const filePath = await tempFile(claudeLine('atomic-old', 'user', 'old'))
+    const replacementPath = `${filePath}.replacement`
+    const seen: NativeChatMessage[] = []
+    const replacements: string[][] = []
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'ignored',
+      filePath,
+      initialLimit: 40,
+      onInitialSnapshot: (messages) => seen.push(...messages),
+      onReplace: (messages) => {
+        replacements.push(messages.map((message) => message.id))
+        seen.splice(0, seen.length, ...messages)
+      },
+      onAppend: (messages) => seen.push(...messages),
+      debounceMs: 5
+    })
+    await waitFor(() => seen.some((message) => message.id === 'atomic-old'))
+
+    await writeFile(replacementPath, claudeLine('atomic-new', 'user', 'replacement'))
+    await rename(replacementPath, filePath)
+    await waitFor(() => seen.some((message) => message.id === 'atomic-new'))
+    await appendFile(filePath, claudeLine('atomic-followup', 'assistant', 'still watched'))
+    await waitFor(() => seen.some((message) => message.id === 'atomic-followup'))
+    sub.unsubscribe()
+
+    expect(replacements).toEqual([['atomic-new']])
+    expect(seen.some((message) => message.id === 'atomic-old')).toBe(false)
+    expect(seen.filter((message) => message.id === 'atomic-followup')).toHaveLength(1)
+  })
+
+  it('does not resurrect the watcher when unsubscribe races an atomic replacement', async () => {
+    const filePath = await tempFile(claudeLine('race-old', 'user', 'old'))
+    const replacementPath = `${filePath}.replacement`
+    const before = getActiveNativeChatWatcherCount()
+    const seen: NativeChatMessage[] = []
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'ignored',
+      filePath,
+      onAppend: (messages) => seen.push(...messages),
+      debounceMs: 0
+    })
+    await waitFor(() => seen.some((message) => message.id === 'race-old'))
+
+    await writeFile(replacementPath, claudeLine('race-new', 'user', 'replacement'))
+    await rename(replacementPath, filePath)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    sub.unsubscribe()
+    await new Promise((resolve) => setTimeout(resolve, 30))
+
+    expect(getActiveNativeChatWatcherCount()).toBe(before)
+    await appendFile(filePath, claudeLine('race-after', 'assistant', 'must stay closed'))
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    expect(seen.some((message) => message.id === 'race-after')).toBe(false)
+  })
+
+  it('recovers after an unlink/recreate gap outlasts the fast retry window', async () => {
+    const filePath = await tempFile(claudeLine('unlink-old', 'user', 'old'))
+    const seen: NativeChatMessage[] = []
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'ignored',
+      filePath,
+      onAppend: (messages) => seen.push(...messages),
+      debounceMs: 0
+    })
+    await waitFor(() => seen.some((message) => message.id === 'unlink-old'))
+
+    await rm(filePath)
+    await new Promise((resolve) => setTimeout(resolve, 1_200))
+    await writeFile(filePath, claudeLine('unlink-new', 'user', 'replacement'))
+    await waitFor(() => seen.some((message) => message.id === 'unlink-new'))
+    await appendFile(filePath, claudeLine('unlink-after', 'assistant', 'still watched'))
+    await waitFor(() => seen.some((message) => message.id === 'unlink-after'))
+    sub.unsubscribe()
+
+    expect(seen.filter((message) => message.id === 'unlink-after')).toHaveLength(1)
+  })
+
   it('returns a no-op unsubscribe when the file cannot be resolved', async () => {
     const before = getActiveNativeChatWatcherCount()
     const sub = await subscribeNativeChatTranscript({
@@ -240,6 +532,7 @@ describe('subscribeNativeChatTranscript', () => {
       sessionId: '',
       onAppend: () => {}
     })
+    expect(sub.watching).toBe(false)
     expect(getActiveNativeChatWatcherCount()).toBe(before)
     // Must not throw.
     sub.unsubscribe()

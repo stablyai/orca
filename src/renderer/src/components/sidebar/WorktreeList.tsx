@@ -142,7 +142,10 @@ import {
   type ScrollToCurrentWorkspaceRevealRequestDetail
 } from '@/lib/scroll-to-current-workspace-status'
 import { isRepoHeaderActionTarget, useRepoHeaderDrag } from './project-header-drag'
-import { getSidebarOrderedRepoHeaderIdsByBucket } from './project-header-drop'
+import {
+  getLogicalRepoOrderRankById,
+  getSidebarOrderedRepoHeaderIdsByBucket
+} from './project-header-drop'
 import { useProjectGroupHeaderDrag } from './project-group-header-drag'
 import { getSidebarOrderedProjectGroupHeaderIdsByBucket } from './project-group-header-drop'
 import {
@@ -5670,9 +5673,7 @@ const WorktreeList = React.memo(function WorktreeList({
     })
   }, [defaultHostId, folderWorkspaces, projectGroups, visibleHostIdSet])
   const repoOrder = useMemo(() => {
-    const map = new Map<string, number>()
-    repos.forEach((r, i) => map.set(r.id, i))
-    return map
+    return getLogicalRepoOrderRankById(repos.map((repo) => repo.id))
   }, [repos])
   const [importedWorktreeCardActionState, setImportedWorktreeCardActionState] = useState<
     Map<string, ImportedWorktreeCardActionState>
@@ -5710,9 +5711,10 @@ const WorktreeList = React.memo(function WorktreeList({
       groupBy,
       repos: visibleReposForRows,
       worktreesByRepo,
+      visibleWorktrees,
       filterRepoIds
     })
-  }, [filterRepoIds, groupBy, visibleReposForRows, worktreesByRepo])
+  }, [filterRepoIds, groupBy, visibleReposForRows, visibleWorktrees, worktreesByRepo])
   const allRepoIds = useMemo(() => repos.map((r) => r.id), [repos])
 
   // Why: buildRows only needs which creates exist and their repo. Subscribe on a

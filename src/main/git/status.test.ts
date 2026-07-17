@@ -476,6 +476,37 @@ describe('getDiff', () => {
     })
   })
 
+  it('flags a deleted image so previewers can fall back to the original bytes', async () => {
+    const pngBuffer = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00])
+    gitExecFileAsyncBufferMock.mockResolvedValueOnce({ stdout: pngBuffer })
+    statMock.mockRejectedValueOnce(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+
+    const result = await getDiff('/repo', 'assets/deleted.png', false)
+
+    expect(result.kind).toBe('binary')
+    if (result.kind !== 'binary') {
+      throw new Error('expected binary diff result')
+    }
+    expect(result.modifiedDeleted).toBe(true)
+    expect(result.originalContent).toBe(pngBuffer.toString('base64'))
+    expect(result.modifiedContent).toBe('')
+  })
+
+  it('does not treat an unreadable working-tree image as a deletion', async () => {
+    const pngBuffer = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00])
+    gitExecFileAsyncBufferMock.mockResolvedValueOnce({ stdout: pngBuffer })
+    statMock.mockResolvedValueOnce({ isFile: () => true, size: 5 })
+    readFileMock.mockRejectedValueOnce(new Error('EIO'))
+
+    const result = await getDiff('/repo', 'assets/unreadable.png', false)
+
+    expect(result.kind).toBe('binary')
+    if (result.kind !== 'binary') {
+      throw new Error('expected binary diff result')
+    }
+    expect(result.modifiedDeleted).toBeUndefined()
+  })
+
   it('coalesces concurrent identical staged diff reads while in flight', async () => {
     const leftBlob = deferredBuffer('head-content\n')
     const rightBlob = deferredBuffer('index-content\n')

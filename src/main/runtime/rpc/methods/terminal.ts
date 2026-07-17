@@ -335,6 +335,61 @@ function resolveMobileFloorClientId(
   return null
 }
 
+async function sendTerminalStreamInput(
+  runtime: OrcaRuntimeService,
+  args: {
+    terminal: string
+    text: string
+    client: TerminalViewportClient | undefined
+    isMobile: boolean
+  }
+): Promise<void> {
+  const action = { text: args.text, enter: false, interrupt: false }
+  const clientId = args.isMobile ? args.client?.id : undefined
+  const floorClaim: MobileInputFloorClaimHolder = { current: null }
+  try {
+    if (!clientId) {
+      await runtime.sendTerminal(args.terminal, action)
+      return
+    }
+    const result = await runtime.sendTerminal(args.terminal, action, {
+      reserveWrite: (writePtyId) => {
+        const claim = runtime.beginMobileInputFloor(writePtyId, clientId)
+        if (!claim) {
+          throw new Error('mobile_input_floor_unavailable')
+        }
+        floorClaim.current = claim
+      },
+      afterWrite: () => commitMobileInputFloorClaim(floorClaim)
+    })
+    if (!result.accepted) {
+      floorClaim.current?.rollback()
+    }
+  } catch {
+    floorClaim.current?.rollback()
+  }
+}
+
+type MobileInputFloorClaimHolder = {
+  current: ReturnType<OrcaRuntimeService['beginMobileInputFloor']>
+}
+
+async function commitMobileInputFloorClaim(claim: MobileInputFloorClaimHolder): Promise<void> {
+  const current = claim.current
+  if (!current) {
+    return
+  }
+  try {
+    await current.commit()
+  } finally {
+    // Why: the runtime may yield before the next chunk/suffix, so that write
+    // needs a fresh reservation if desktop reclaimed the floor meanwhile.
+    if (claim.current === current) {
+      claim.current = null
+    }
+  }
+}
+
 function getTerminalSendGuardRefusedReason(error: unknown): 'no-agent' | 'permission' | undefined {
   const message = error instanceof Error ? error.message : String(error)
   if (message.includes('terminal_guard_permission')) {
@@ -946,7 +1001,8 @@ const TerminalSubscribe = TerminalHandle.extend({
   capabilities: z
     .object({
       terminalBinaryStream: z.literal(1).optional(),
-      desktopViewportClaims: z.literal(1).optional()
+      desktopViewportClaims: z.literal(1).optional(),
+      mobileInputLeaseOnly: z.literal(1).optional()
     })
     .optional()
 })
@@ -1265,6 +1321,19 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           }
         }
       }
+      const mobileFloorClientId = resolveMobileFloorClientId(driver, params.client)
+      const mobileFloorClaim: MobileInputFloorClaimHolder = { current: null }
+      const beforeWrite = assertSendPreconditions
+      const reserveWrite =
+        params.inputKind !== 'query-reply' && leaf?.ptyId && mobileFloorClientId
+          ? (ptyId: string): void => {
+              const claim = runtime.beginMobileInputFloor(ptyId, mobileFloorClientId)
+              if (!claim) {
+                throw new Error('mobile_input_floor_unavailable')
+              }
+              mobileFloorClaim.current = claim
+            }
+          : undefined
       let result
       try {
         result = await runtime.sendTerminal(
@@ -1274,9 +1343,16 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             enter: params.enter === true,
             interrupt: params.interrupt === true
           },
-          { beforeWrite: assertSendPreconditions }
+          {
+            beforeWrite,
+            ...(reserveWrite ? { reserveWrite } : {}),
+            ...(params.inputKind !== 'query-reply' && mobileFloorClientId
+              ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }
+              : {})
+          }
         )
       } catch (error) {
+        mobileFloorClaim.current?.rollback()
         const refusedReason = getTerminalSendGuardRefusedReason(error)
         if (refusedReason) {
           return {
@@ -1299,15 +1375,14 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         }
         throw error
       }
+      if (result.accepted !== true) {
+        mobileFloorClaim.current?.rollback()
+      }
       // Why: deliberate mobile input is a take-floor action. Drives the
       // `* → mobile{clientId}` driver transition so the desktop banner
       // remounts (if previously reclaimed) and active phone-fit dims follow
       // the most recent actor. Clientless sends are old mobile builds, so use
       // the current mobile driver as their compatibility identity.
-      const mobileFloorClientId = resolveMobileFloorClientId(driver, params.client)
-      if (params.inputKind !== 'query-reply' && leaf?.ptyId && mobileFloorClientId) {
-        await runtime.mobileTookFloor(leaf.ptyId, mobileFloorClientId)
-      }
       return { send: result }
     }
   }),
@@ -1799,22 +1874,17 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           // Mobile already has the higher-priority floor; a rejected desktop
           // viewport claim must never suppress later phone input.
           const inputClaimTail = stream.isMobile ? Promise.resolve(true) : stream.desktopClaimTail
-          void inputClaimTail
-            .then((claimed) =>
-              !claimed || isTerminalInputLockedForClient(runtime, stream.ptyId, stream.client)
-                ? null
-                : runtime.sendTerminal(stream.terminal, {
-                    text,
-                    enter: false,
-                    interrupt: false
-                  })
-            )
-            .then(async () => {
-              if (stream.isMobile && stream.client?.id) {
-                await runtime.mobileTookFloor(stream.ptyId, stream.client.id)
-              }
+          void inputClaimTail.then((claimed) => {
+            if (!claimed || isTerminalInputLockedForClient(runtime, stream.ptyId, stream.client)) {
+              return
+            }
+            return sendTerminalStreamInput(runtime, {
+              terminal: stream.terminal,
+              text,
+              client: stream.client,
+              isMobile: stream.isMobile
             })
-            .catch(() => {})
+          })
           return
         }
         if (frame.opcode === TerminalStreamOpcode.Resize && stream.client) {
@@ -2451,6 +2521,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
 
       const ptyId = leaf.ptyId
       const clientId = params.client?.id
+      const mobileInputLeaseOnly =
+        isMobile && params.capabilities?.mobileInputLeaseOnly === 1 && Boolean(clientId)
       // Why: the initial mount/PTY wait and phone-fit can both emit a redraw
       // that creates suffix-only state, so preserve the pre-mount absence signal.
       const missingHeadlessStateBeforeMobileFit =
@@ -2462,6 +2534,48 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           : runtime.getRendererTerminalSerializerGeneration(ptyId)
         : 0
       const supportsDesktopViewportClaims = params.capabilities?.desktopViewportClaims === 1
+      if (mobileInputLeaseOnly && clientId) {
+        let closed = false
+        let resolveStream = (): void => {}
+        const streamClosed = new Promise<void>((resolve) => {
+          resolveStream = resolve
+        })
+        const subscriptionId = `${params.terminal}:${clientId}`
+        // Why: chat needs the input-floor acknowledgement without registering
+        // a view subscriber or transporting duplicate PTY output.
+        runtime.registerSubscriptionCleanup(
+          subscriptionId,
+          () => {
+            closed = true
+            runtime.handleMobileUnsubscribe(ptyId, clientId)
+            emit({ type: 'end' })
+            resolveStream()
+          },
+          connectionId
+        )
+        void runtime
+          .waitForTerminal(params.terminal, { condition: 'exit', signal })
+          .then(() => runtime.cleanupSubscription(subscriptionId))
+          .catch(() => runtime.cleanupSubscription(subscriptionId))
+        try {
+          await runtime.handleMobileSubscribe(ptyId, clientId, params.viewport)
+          if (closed || signal?.aborted) {
+            // Why: a disconnect can win the awaited subscribe and otherwise
+            // resurrect mobile presence after cleanup already released it.
+            runtime.handleMobileUnsubscribe(ptyId, clientId)
+            if (!closed) {
+              runtime.cleanupSubscription(subscriptionId)
+            }
+            return
+          }
+          emit({ type: 'subscribed', streamId: null, lines: [], truncated: false })
+          await streamClosed
+        } catch (error) {
+          runtime.cleanupSubscription(subscriptionId)
+          throw error
+        }
+        return
+      }
       // Why: only unregister the width floor this subscription took (see the
       // multiplex stream's registeredRemoteDesktopDriver note).
       let registeredRemoteDesktopDriver = false
@@ -2675,22 +2789,17 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             if (isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
               return
             }
-            void desktopClaimTail
-              .then((claimed) =>
-                !claimed || isTerminalInputLockedForClient(runtime, ptyId, params.client)
-                  ? null
-                  : runtime.sendTerminal(params.terminal, {
-                      text,
-                      enter: false,
-                      interrupt: false
-                    })
-              )
-              .then(async () => {
-                if (isMobile && clientId) {
-                  await runtime.mobileTookFloor(ptyId, clientId)
-                }
+            void desktopClaimTail.then(async (claimed) => {
+              if (!claimed || isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
+                return
+              }
+              await sendTerminalStreamInput(runtime, {
+                terminal: params.terminal,
+                text,
+                client: params.client,
+                isMobile
               })
-              .catch(() => {})
+            })
             return
           }
           if (frame.opcode === TerminalStreamOpcode.Resize && params.client) {

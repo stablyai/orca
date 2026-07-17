@@ -44,7 +44,7 @@ export function toRuntimeNativeChatErrorMessage(err: unknown): string {
 const localNativeChatTransport: NativeChatSessionTransport = {
   readSession: (agent, sessionId, limit, transcriptPath) =>
     window.api.nativeChat.readSession(agent, sessionId, limit, transcriptPath),
-  subscribe: (args, onAppended) => window.api.nativeChat.subscribe(args, onAppended)
+  subscribe: (args, onFrame) => window.api.nativeChat.subscribe(args, onFrame)
 }
 
 function createRuntimeNativeChatTransport(environmentId: string): NativeChatSessionTransport {
@@ -63,25 +63,33 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
         return { error: toRuntimeNativeChatErrorMessage(err) }
       }
     },
-    subscribe: (args, onAppended) => {
-      const { subscriptionId, agent, sessionId, transcriptPath } = args
+    subscribe: (args, onFrame) => {
+      const { subscriptionId, agent, sessionId, transcriptPath, limit } = args
       let cancelled = false
+      let receivedInitial = false
       let handleUnsubscribe: (() => void) | null = null
       let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+      let activeAttempt = 0
+      let reconnectPendingAttempt: number | null = null
 
       // A mid-stream drop (runtime restart, network blip, relay reconnect) closes
       // the dedicated stream socket. Re-open it after a short backoff so the live
       // tail resumes without a manual chat toggle; the fresh drain re-emits the
       // windowed tail, which merges by id so no turn is duplicated. An initial
       // connect failure lands in `.catch` instead (and is surfaced through the
-      // parallel readSession error), so a too-old/absent runtime never spins here.
-      const scheduleReconnect = (): void => {
+      // initial error frame), so a too-old/absent runtime never spins here.
+      const scheduleReconnect = (attempt: number): void => {
+        if (attempt !== activeAttempt) {
+          return
+        }
         handleUnsubscribe = null
+        reconnectPendingAttempt = attempt
         if (cancelled || reconnectTimer) {
           return
         }
         reconnectTimer = setTimeout(() => {
           reconnectTimer = null
+          reconnectPendingAttempt = null
           if (!cancelled) {
             openStream()
           }
@@ -89,48 +97,121 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
       }
 
       const openStream = (): void => {
+        const attempt = ++activeAttempt
         void window.api.runtimeEnvironments
           .subscribe(
             {
               selector: environmentId,
               method: 'nativeChat.subscribe',
-              params: { subscriptionId, agent, sessionId, transcriptPath },
+              params: { subscriptionId, agent, sessionId, transcriptPath, limit },
               timeoutMs: 15_000
             },
             {
               onResponse: (response) => {
-                if (cancelled) {
+                if (cancelled || attempt !== activeAttempt) {
                   return
                 }
                 if (response.ok === false) {
+                  if (!receivedInitial) {
+                    receivedInitial = true
+                    onFrame({
+                      type: 'snapshot',
+                      messages: [],
+                      hasMore: false,
+                      error: toRuntimeNativeChatErrorMessage(new RuntimeRpcCallError(response))
+                    })
+                  } else {
+                    handleUnsubscribe?.()
+                    scheduleReconnect(attempt)
+                  }
                   return
                 }
                 const frame = response.result as {
                   type?: string
                   messages?: NativeChatAppendedMessages
+                  hasMore?: boolean
+                  error?: string
                 }
-                if (frame?.type === 'appended' && Array.isArray(frame.messages)) {
-                  onAppended(frame.messages)
+                if (
+                  (frame?.type === 'appended' ||
+                    frame?.type === 'snapshot' ||
+                    frame?.type === 'replacement') &&
+                  Array.isArray(frame.messages)
+                ) {
+                  if (!receivedInitial) {
+                    receivedInitial = true
+                    onFrame({
+                      type: 'snapshot',
+                      messages: frame.messages,
+                      hasMore: frame.hasMore ?? frame.messages.length >= (limit ?? 300),
+                      ...(frame.error ? { error: frame.error } : {})
+                    })
+                  } else if (frame.type === 'snapshot') {
+                    onFrame({
+                      type: 'snapshot',
+                      messages: frame.messages,
+                      hasMore: frame.hasMore ?? false,
+                      ...(frame.error ? { error: frame.error } : {})
+                    })
+                  } else {
+                    onFrame(
+                      frame.type === 'replacement'
+                        ? {
+                            type: 'replacement',
+                            messages: frame.messages,
+                            hasMore: frame.hasMore ?? false
+                          }
+                        : { type: 'appended', messages: frame.messages }
+                    )
+                  }
+                } else if (!receivedInitial) {
+                  // Why: an ok response whose payload shape we don't recognize
+                  // would otherwise never flip receivedInitial, stranding the view
+                  // on 'loading'. Settle it with an empty snapshot (carrying any
+                  // error the runtime sent) so the UI resolves.
+                  receivedInitial = true
+                  onFrame({
+                    type: 'snapshot',
+                    messages: [],
+                    hasMore: false,
+                    ...(frame?.error ? { error: frame.error } : {})
+                  })
                 }
               },
               // Established-then-dropped: resume the tail. onClose also fires on our
               // own teardown, but `cancelled` short-circuits the reconnect there.
-              onError: scheduleReconnect,
-              onClose: scheduleReconnect
+              onError: () => scheduleReconnect(attempt),
+              onClose: () => scheduleReconnect(attempt)
             }
           )
           .then((handle) => {
-            handleUnsubscribe = handle.unsubscribe
-            // The stream resolved after teardown already ran — close it now so the
-            // late-arriving handle doesn't leak (same race as runtime-file-client).
-            if (cancelled) {
+            // Why: reconnect attempts may resolve out of order. A stale handle
+            // must never replace or tear down the current stream.
+            if (cancelled || attempt !== activeAttempt || reconnectPendingAttempt === attempt) {
               handle.unsubscribe()
-              handleUnsubscribe = null
+              return
             }
+            handleUnsubscribe = handle.unsubscribe
           })
-          .catch(() => {
+          .catch((err: unknown) => {
+            if (cancelled || attempt !== activeAttempt) {
+              return
+            }
             // Initial subscribe failed (e.g. a too-old runtime lacking the method).
-            // The parallel readSession surfaces the error; don't reconnect-spin.
+            // Surface the same compatibility-specific copy as a direct read.
+            if (!receivedInitial) {
+              receivedInitial = true
+              onFrame({
+                type: 'snapshot',
+                messages: [],
+                hasMore: false,
+                error: toRuntimeNativeChatErrorMessage(err)
+              })
+              return
+            }
+            // Why: a failed reconnect is still a transient dropped-stream state;
+            // keep retrying after the backoff instead of stranding a live view.
+            scheduleReconnect(attempt)
           })
       }
 
@@ -147,6 +228,7 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
           clearTimeout(reconnectTimer)
           reconnectTimer = null
         }
+        reconnectPendingAttempt = null
         handleUnsubscribe?.()
         handleUnsubscribe = null
       }

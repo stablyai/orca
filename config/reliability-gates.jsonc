@@ -1950,7 +1950,6 @@
         "daemon stream",
         "main PTY batching",
         "runtime path provenance",
-        "runtime serve-sim detection",
         "runtime terminal wait detection",
         "renderer ACK",
         "xterm scheduler",
@@ -1971,7 +1970,7 @@
         "macos"
       ],
       "coveredProviders": [],
-      "coverageNotes": "Local macOS evidence covers the existing main-process pending-output caps plus deterministic runtime path-provenance history reuse, idle-path serve-sim detection, and saturated-tail wait detection. Daemon stream write(false)/drain contracts, cross-session drain priority, and bounded queued tails arrive with the pending perf slice; live flood/latency artifacts remain gaps.",
+      "coverageNotes": "Local macOS evidence covers the existing main-process pending-output caps plus deterministic runtime path-provenance history reuse and saturated-tail wait detection. Daemon stream write(false)/drain contracts, cross-session drain priority, and bounded queued tails arrive with the pending perf slice; live flood/latency artifacts remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6836",
         "https://github.com/stablyai/orca/pull/6858",
@@ -1979,17 +1978,15 @@
         "https://github.com/stablyai/orca/pull/7054"
       ],
       "invariant": "High-volume terminal output must stay bounded across daemon socket writes, main runtime metadata, detectors, and tail checks, main-to-renderer in-flight bytes, renderer scheduler queues, and hidden-output restore without starving focused input.",
-      "oracle": "The current executable slice injects daemon socket backpressure and main-process renderer backlog pressure, then asserts write(false)/drain ordering, bounded queued daemon bytes, unchanged path-provenance history reuse for pathless output, idle serve-sim detection with split-JSON continuity, ordinary terminal-wait detection without a joined-tail allocation and with full prompt-family continuity, per-PTY and total pending-output caps, preserved sequenced-tail metadata, active-pending protection ahead of background trimming, and ACK-gated in-flight bounds. The live Electron perf oracle adds hidden-output floods, renderer scheduler queue depth, dropped-output-zero normal scenarios, and active key latency budgets before promotion.",
+      "oracle": "The current executable slice injects main-process renderer backlog pressure, then asserts unchanged path-provenance history reuse for pathless output, ordinary terminal-wait detection without a joined-tail allocation and with full prompt-family continuity, per-PTY and total pending-output caps, preserved sequenced-tail metadata, active-pending protection ahead of background trimming, and ACK-gated in-flight bounds. The live Electron perf oracle adds hidden-output floods, renderer scheduler queue depth, dropped-output-zero normal scenarios, and active key latency budgets before promotion.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-path-candidate-history.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/emulator/serve-sim-state-watcher.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/orca-runtime-tail-wait-memo.test.ts"
       ],
       "testFiles": [
         "src/main/ipc/pty.test.ts",
         "src/main/runtime/orca-runtime-path-candidate-history.test.ts",
-        "src/main/emulator/serve-sim-state-watcher.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "src/main/runtime/orca-runtime-tail-wait-memo.test.ts"
       ],
@@ -2007,13 +2004,6 @@
           "assertions": [
             "reuses path-candidate history across repeated pathless PTY output",
             "copies history when new output adds a path candidate"
-          ]
-        },
-        {
-          "file": "src/main/emulator/serve-sim-state-watcher.test.ts",
-          "assertions": [
-            "does not buffer repeated brace-free PTY output while waiting for metadata",
-            "detects serve-sim metadata split across PTY chunks and releases the partial object"
           ]
         },
         {
@@ -2057,15 +2047,6 @@
           "date": "2026-07-10",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/emulator/serve-sim-state-watcher.test.ts",
-          "result": "passed",
-          "durationSeconds": 0.37,
-          "summary": "1 test file passed, 6 tests passed on pushed commit f0e3a185593b."
-        },
-        {
-          "date": "2026-07-10",
-          "runner": "local",
-          "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/orca-runtime-tail-wait-memo.test.ts",
           "result": "passed",
           "durationSeconds": 21.33,
@@ -2078,11 +2059,11 @@
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "Daemon stream backpressure and focused main/renderer backlog tests are deterministic unit slices. The combined perf soak still needs runtime history before promotion."
+        "evidence": "Focused main-process backlog tests are deterministic unit slices. The combined perf soak still needs runtime history before promotion."
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Tests assert daemon stream writes pause after socket write(false), later stream data queues behind the pressured socket, flush-immediate output from another session is prioritized ahead of unrelated queued background backlog on drain while preserving per-session order, queued lines resume on drain, global cleanup clears clients that only have backpressured writes, queued daemon stream bytes are bounded by keeping priority output and the newest tail under sustained pressure, pathless runtime output reuses unchanged path-provenance history with zero old-candidate byte scans, ordinary output leaves the niche serve-sim detector idle while split JSON still emits and releases its partial buffer, ordinary saturated terminal tails retain no rebuilt wait text or repeated phrase scans while every blocked/ready prompt family remains live, main pending renderer output is capped per PTY and in total, total-pressure trimming prefers background pending output before active pending output, trimmed pending tails preserve seq/rawLength metadata, and ACK-gated in-flight output remains bounded. Intentionally restoring the old path-history shape failed the focused scale test after 774ms and 4,096 replacements; restoring the old serve-sim buffer failed its scale test after 180ms with 4,096 buffer writes; disabling the ordinary-tail branch failed with a retained 253,999-character waitText. The fixed shapes passed their focused suites. Existing renderer tests cover replay/backlog slices. Needs broader hidden-output/input-latency perf artifacts before promotion."
+        "evidence": "Tests assert pathless runtime output reuses unchanged path-provenance history with zero old-candidate byte scans, ordinary saturated terminal tails retain no rebuilt wait text or repeated phrase scans while every blocked/ready prompt family remains live, main pending renderer output is capped per PTY and in total, total-pressure trimming prefers background pending output before active pending output, trimmed pending tails preserve seq/rawLength metadata, and ACK-gated in-flight output remains bounded. Intentionally restoring the old path-history shape failed the focused scale test after 774ms and 4,096 replacements; disabling the ordinary-tail branch failed with a retained 253,999-character waitText. The fixed shapes passed their focused suites. Existing renderer tests cover replay/backlog slices. Needs daemon-stream contract coverage and broader hidden-output/input-latency perf artifacts before promotion."
       },
       "performanceBudget": {
         "required": true,
@@ -2094,9 +2075,8 @@
         "Keep stress variants non-blocking until stable runtime history exists."
       ],
       "knownGaps": [
-        "Current command asserts daemon stream write(false)/drain/cleanup at the batcher contract layer and main pending renderer caps at the IPC contract layer.",
+        "Daemon stream write(false)/drain/cleanup and bounded queued-tail contracts are not registered in the current command.",
         "Runtime provenance coverage is deterministic and does not include a live high-throughput provider artifact.",
-        "Serve-sim detector coverage is deterministic and does not include a live external simulator helper.",
         "Terminal-wait scale evidence is deterministic and does not yet include a live saturated-tail event-loop artifact.",
         "Current command does not prove renderer parse pressure, scheduler queue depth, event-loop delay, or active key latency.",
         "Live hidden-output pressure, active input latency, and full Electron perf artifacts remain unproved."
@@ -3896,6 +3876,7 @@
       "layer": "runtime-rpc-contract",
       "surfaces": [
         "mobile terminal",
+        "native-chat terminal overlay",
         "runtime RPC",
         "binary multiplex",
         "JSON subscribe fallback",
@@ -3917,21 +3898,25 @@
         "macos"
       ],
       "coveredProviders": [],
-      "coverageNotes": "Local macOS evidence over the runtime-RPC stream budgets on main@1282f5c2d. The pending stack adds byte-exact 512KB/2MB/256KB/48KB budget assertions; legacy JSON subscribe parity remains undecided.",
+      "coverageNotes": "Local macOS evidence over the runtime-RPC stream budgets on main@1282f5c2d. PR #5824 adds a platform-neutral mobile decision gate proving chat-covered terminal streams pause and resume only after the mounted WebView is ready; live Android restore evidence remains required. The pending stack adds byte-exact 512KB/2MB/256KB/48KB budget assertions; legacy JSON subscribe parity remains undecided.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6951",
         "https://github.com/stablyai/orca/pull/6955",
         "https://github.com/stablyai/orca/pull/7009"
       ],
-      "invariant": "Runtime and mobile terminal subscriptions must cap initial snapshots, live output buffered while snapshots load, chunk sizes, and batch sizes, while preserving output order, input locks, resize/driver events, and fallback parity or explicit fallback deprecation.",
-      "oracle": "The current executable slice asserts mobile initial snapshots downgrade until they fit <=512KB, requested binary snapshots downgrade until they fit <=2MB, binary live output queued while the initial snapshot loads stays <=256KB while preserving the newest tail, large binary output is split into <=48KB frames, output bursts are coalesced before emit, aborts do not register stale listeners, and stale mobile resize re-stream completions are dropped. JSON fallback parity/deprecation remains an explicit gap.",
+      "invariant": "Runtime and mobile terminal subscriptions must cap initial snapshots, live output buffered while snapshots load, chunk sizes, and batch sizes; a terminal covered by native chat must have no live output subscription and must restore from fresh scrollback when revealed, while preserving output order, input locks, resize/driver events, and fallback parity or explicit fallback deprecation.",
+      "oracle": "The current executable slice asserts mobile initial snapshots downgrade until they fit <=512KB, requested binary snapshots downgrade until they fit <=2MB, binary live output queued while the initial snapshot loads stays <=256KB while preserving the newest tail, large binary output is split into <=48KB frames, output bursts are coalesced before emit, aborts do not register stale listeners, and stale mobile resize re-stream completions are dropped. The mobile native-chat decision test asserts an active stream pauses while covered and resumes only for a ready active terminal. JSON fallback parity and live Android scrollback restoration remain explicit gaps.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/main/runtime/rpc/terminal-output-batching.test.ts src/main/runtime/rpc/terminal-multiplex.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/main/runtime/rpc/terminal-output-batching.test.ts src/main/runtime/rpc/terminal-multiplex.test.ts",
+        "pnpm --dir mobile exec vitest run --root .. mobile/src/session/mobile-native-chat-terminal-stream.test.ts",
+        "pnpm --dir mobile exec vitest run --root .. mobile/src/session/use-mobile-native-chat-terminal-stream.test.ts"
       ],
       "testFiles": [
         "src/main/runtime/rpc/terminal-subscribe-buffer.test.ts",
         "src/main/runtime/rpc/terminal-output-batching.test.ts",
-        "src/main/runtime/rpc/terminal-multiplex.test.ts"
+        "src/main/runtime/rpc/terminal-multiplex.test.ts",
+        "mobile/src/session/mobile-native-chat-terminal-stream.test.ts",
+        "mobile/src/session/use-mobile-native-chat-terminal-stream.test.ts"
       ],
       "assertionRefs": [
         {
@@ -3956,6 +3941,21 @@
             "oversized live output frames are bounded for subscribed binary streams",
             "multibyte live output flushes when encoded bytes reach the batch budget"
           ]
+        },
+        {
+          "file": "mobile/src/session/mobile-native-chat-terminal-stream.test.ts",
+          "assertions": [
+            "an active terminal stream pauses while native chat covers its WebView",
+            "the stream resumes only for the ready active terminal after chat closes",
+            "non-terminal and already-settled stream states perform no lifecycle work"
+          ]
+        },
+        {
+          "file": "mobile/src/session/use-mobile-native-chat-terminal-stream.test.ts",
+          "assertions": [
+            "a late WebView-ready transition converts a cold-start lease-only stream back to output",
+            "ordinary WebView readiness does not rerender the mobile session route"
+          ]
         }
       ],
       "evidenceRuns": [
@@ -3967,6 +3967,15 @@
           "result": "passed",
           "durationSeconds": 3.8,
           "summary": "3 test file(s) passed, 28 tests passed on main@1282f5c2d in a clean checkout."
+        },
+        {
+          "date": "2026-07-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/session/mobile-native-chat-terminal-stream.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.2,
+          "summary": "The focused mobile native-chat suite passed with 3 terminal-stream lifecycle assertions in the staged PR #5824 worktree."
         }
       ],
       "runtimeBudget": {
@@ -3991,7 +4000,7 @@
         "Record byte counts and order/cursor artifacts on failure."
       ],
       "knownGaps": [
-        "Current command covers binary runtime/mobile stream contracts only.",
+        "The pure mobile decision gate does not yet prove live Android WebView scrollback restore after a chat toggle.",
         "Legacy JSON subscribe parity is undecided."
       ],
       "demotionRule": "Cannot promote while a supported stream path has uncapped snapshot or live-output buffering."

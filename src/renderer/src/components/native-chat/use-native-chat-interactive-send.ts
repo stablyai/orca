@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useRef } from 'react'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import type { AgentType } from '../../../../shared/native-chat-types'
+import { shouldStepNativeChatAskAnswer } from '../../../../shared/native-chat-agent-support'
 import {
   buildAskAnswerKeys,
   formatAskAnswer,
@@ -80,10 +81,11 @@ export function useNativeChatInteractiveSend(
       // highlighted option, not a pasted label, so answer it with per-option
       // keystrokes (by option number), paced so each step renders before the next.
       // Other agents' question tools commit a pasted answer, so send label text.
-      const handle: NativeChatSendHandle =
-        agent === 'claude'
-          ? sendNativeChatAskAnswer(settings, targetPtyId, buildAskAnswerKeys(prompt, selections))
-          : sendNativeChatMessage(settings, targetPtyId, formatAskAnswer(prompt, selections))
+      // Gate on the transcript agent (not `=== 'claude'`) so OpenClaude — which
+      // runs the same selector — takes the keystroke path too.
+      const handle: NativeChatSendHandle = shouldStepNativeChatAskAnswer(agent)
+        ? sendNativeChatAskAnswer(settings, targetPtyId, buildAskAnswerKeys(prompt, selections))
+        : sendNativeChatMessage(settings, targetPtyId, formatAskAnswer(prompt, selections))
       inFlightRef.current = handle
       return handle.settleAfterMs
     },
