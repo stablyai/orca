@@ -38,7 +38,7 @@ describe('ProjectDefaultPathSetting', () => {
     expect(updateSettings).toHaveBeenCalledWith({ projectDefaultPath: '/Users/me/code' })
   })
 
-  it('clears the setting when Clear is pressed', () => {
+  it('clears the setting when Reset is pressed', () => {
     const updateSettings = vi.fn()
     render(
       <ProjectDefaultPathSetting
@@ -46,7 +46,12 @@ describe('ProjectDefaultPathSetting', () => {
         updateSettings={updateSettings}
       />
     )
-    fireEvent.click(screen.getByRole('button', { name: /clear/i }))
+    fireEvent.click(screen.getByRole('button', { name: /reset/i }))
     expect(updateSettings).toHaveBeenCalledWith({ projectDefaultPath: '' })
+  })
+
+  it('exposes an accessible name on the Browse button', () => {
+    render(<ProjectDefaultPathSetting settings={settingsWith('')} updateSettings={vi.fn()} />)
+    expect(screen.getByRole('button', { name: /browse/i })).toBeInTheDocument()
   })
 })

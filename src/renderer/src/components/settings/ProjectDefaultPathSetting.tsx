@@ -40,8 +40,9 @@ export function ProjectDefaultPathSetting({
   }
 
   const handleBrowse = async (): Promise<void> => {
-    // Why: pick with no defaultPath applied here — seeding this picker with the
-    // value being edited would be circular. Seed from the current value only.
+    // Why: seed the picker with the current draft so re-browsing starts near the
+    // in-progress edit. When the draft is empty, the main-process handler falls
+    // back to the saved projectDefaultPath setting on its own.
     const picked = await window.api.repos.pickFolder(
       draftRef.current ? { defaultPath: draftRef.current } : undefined
     )
@@ -51,24 +52,24 @@ export function ProjectDefaultPathSetting({
     }
   }
 
+  const title = translate(
+    'auto.components.settings.ProjectDefaultPathSetting.title',
+    'Project default directory'
+  )
+  const description = translate(
+    'auto.components.settings.ProjectDefaultPathSetting.description',
+    'Where the add-project and clone folder pickers open. Leave empty to use the last-used location.'
+  )
+
   return (
     <SearchableSetting
-      title={translate(
-        'auto.components.settings.ProjectDefaultPathSetting.title',
-        'Project default directory'
-      )}
-      description={translate(
-        'auto.components.settings.ProjectDefaultPathSetting.description',
-        'Where the add-project and clone folder pickers open. Leave empty to use the last-used location.'
-      )}
+      title={title}
+      description={description}
+      keywords={['project', 'default', 'directory', 'folder', 'path', 'clone', 'location']}
+      className="space-y-2"
     >
+      <Label htmlFor={inputId}>{title}</Label>
       <div className="flex items-center gap-2">
-        <Label htmlFor={inputId} className="sr-only">
-          {translate(
-            'auto.components.settings.ProjectDefaultPathSetting.title',
-            'Project default directory'
-          )}
-        </Label>
         <Input
           id={inputId}
           value={draft}
@@ -81,7 +82,16 @@ export function ProjectDefaultPathSetting({
             }
           }}
         />
-        <Button type="button" variant="outline" size="icon" onClick={() => void handleBrowse()}>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          aria-label={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.5567191a6e',
+            'Browse'
+          )}
+          onClick={() => void handleBrowse()}
+        >
           <FolderOpen className="size-4" />
         </Button>
         <Button
@@ -89,8 +99,8 @@ export function ProjectDefaultPathSetting({
           variant="outline"
           size="icon"
           aria-label={translate(
-            'auto.components.settings.ProjectDefaultPathSetting.clear',
-            'Clear'
+            'auto.components.settings.ProjectDefaultPathSetting.reset',
+            'Reset'
           )}
           onClick={() => {
             setDraftValue('')
@@ -100,6 +110,7 @@ export function ProjectDefaultPathSetting({
           <RotateCcw className="size-4" />
         </Button>
       </div>
+      <p className="text-xs text-muted-foreground">{description}</p>
     </SearchableSetting>
   )
 }
