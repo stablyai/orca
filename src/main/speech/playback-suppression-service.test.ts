@@ -247,10 +247,75 @@ describe('PlaybackSuppressionService', () => {
     }
     const service = new PlaybackSuppressionService(adapter, recoveryStore)
 
-    await service.getCapability()
+    await expect(service.getCapability()).resolves.toBe(false)
 
     expect(adapter.setMuted).not.toHaveBeenCalled()
     expect(recoveryStore.clear).not.toHaveBeenCalled()
+  })
+
+  it('does not overwrite recovery state for a different endpoint', async () => {
+    const adapter = createAdapter(false)
+    vi.mocked(adapter.snapshot).mockResolvedValue({
+      backend: 'test',
+      endpointId: 'speaker-2',
+      endpointTarget: 'speaker-2',
+      muted: false
+    })
+    const recoveryStore: PlaybackSuppressionRecoveryStore = {
+      read: vi.fn(async () => ({
+        backend: 'test',
+        endpointId: 'speaker-1',
+        endpointTarget: 'speaker-1',
+        muted: false
+      })),
+      write: vi.fn(async () => undefined),
+      clear: vi.fn(async () => undefined)
+    }
+    const service = new PlaybackSuppressionService(adapter, recoveryStore)
+
+    await expect(service.acquire('dictation:1')).resolves.toEqual({
+      active: false,
+      reason: 'unavailable'
+    })
+
+    expect(adapter.setMuted).not.toHaveBeenCalled()
+    expect(recoveryStore.write).not.toHaveBeenCalled()
+    expect(recoveryStore.clear).not.toHaveBeenCalled()
+  })
+
+  it('retries unresolved recovery when the captured endpoint returns', async () => {
+    const adapter = createAdapter(false)
+    const returnedEndpoint = {
+      backend: 'test',
+      endpointId: 'speaker-1',
+      endpointTarget: 'speaker-1-current-target',
+      muted: true
+    }
+    vi.mocked(adapter.snapshot)
+      .mockResolvedValueOnce({
+        backend: 'test',
+        endpointId: 'speaker-2',
+        endpointTarget: 'speaker-2',
+        muted: false
+      })
+      .mockResolvedValueOnce(returnedEndpoint)
+    const recoveryStore: PlaybackSuppressionRecoveryStore = {
+      read: vi.fn(async () => ({
+        backend: 'test',
+        endpointId: 'speaker-1',
+        endpointTarget: 'speaker-1-old-target',
+        muted: false
+      })),
+      write: vi.fn(async () => undefined),
+      clear: vi.fn(async () => undefined)
+    }
+    const service = new PlaybackSuppressionService(adapter, recoveryStore)
+
+    await expect(service.getCapability()).resolves.toBe(false)
+    await expect(service.getCapability()).resolves.toBe(true)
+
+    expect(adapter.setMuted).toHaveBeenCalledWith(false, expect.any(AbortSignal), returnedEndpoint)
+    expect(recoveryStore.clear).toHaveBeenCalledTimes(1)
   })
 
   it('clears recovery state when a failed mute left output unchanged', async () => {

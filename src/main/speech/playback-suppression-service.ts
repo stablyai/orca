@@ -31,7 +31,8 @@ export class PlaybackSuppressionService {
   private pendingActivation: Promise<PlaybackSuppressionAcquireResult> | null = null
   private pendingRestoration: Promise<void> | null = null
   private activationController: AbortController | null = null
-  private recoveryPromise: Promise<void> | null = null
+  private recoveryPromise: Promise<boolean> | null = null
+  private recoveryComplete = false
   private generation = 0
 
   constructor(
@@ -40,13 +41,18 @@ export class PlaybackSuppressionService {
   ) {}
 
   async getCapability(): Promise<boolean> {
-    await this.ensureRecovered()
+    if (!(await this.ensureRecovered())) {
+      return false
+    }
     return this.adapter.getCapability()
   }
 
   async acquire(owner: string): Promise<PlaybackSuppressionAcquireResult> {
     this.owners.add(owner)
-    await this.ensureRecovered()
+    if (!(await this.ensureRecovered())) {
+      this.owners.delete(owner)
+      return { active: false, reason: 'unavailable' }
+    }
 
     while (this.owners.has(owner)) {
       if (this.pendingRestoration) {
@@ -163,22 +169,34 @@ export class PlaybackSuppressionService {
     await this.recoveryStore?.clear()
   }
 
-  private ensureRecovered(): Promise<void> {
-    if (!this.recoveryStore) {
-      return Promise.resolve()
+  private ensureRecovered(): Promise<boolean> {
+    if (!this.recoveryStore || this.recoveryComplete) {
+      return Promise.resolve(true)
     }
     if (!this.recoveryPromise) {
-      this.recoveryPromise = this.recoverStrandedMute()
+      const attempt = this.recoverStrandedMute()
+      this.recoveryPromise = attempt
+      void attempt.then((recovered) => {
+        if (recovered) {
+          this.recoveryComplete = true
+        }
+        if (this.recoveryPromise === attempt) {
+          this.recoveryPromise = null
+        }
+      })
     }
     return this.recoveryPromise
   }
 
-  private async recoverStrandedMute(): Promise<void> {
-    const marker = await this.recoveryStore?.read()
-    if (!marker || !this.recoveryStore) {
-      return
+  private async recoverStrandedMute(): Promise<boolean> {
+    if (!this.recoveryStore) {
+      return true
     }
     try {
+      const marker = await this.recoveryStore.read()
+      if (!marker) {
+        return true
+      }
       const current = await this.adapter.snapshot()
       const sameEndpoint =
         Boolean(marker.endpointId) &&
@@ -186,14 +204,16 @@ export class PlaybackSuppressionService {
         marker.endpointId === current.endpointId
       if (!sameEndpoint) {
         // Why: the marker is the only durable path to restore the captured endpoint later.
-        return
+        return false
       }
       if (current.muted) {
         await this.adapter.setMuted(marker.muted, new AbortController().signal, current)
       }
       await this.recoveryStore.clear()
+      return true
     } catch {
       // Keep the marker so a later launch can retry recovery safely.
+      return false
     }
   }
 
