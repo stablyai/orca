@@ -153,7 +153,11 @@ export class PlaybackSuppressionService {
       return { active: true }
     } catch {
       if (snapshot && recoveryWritten) {
-        await this.reconcileFailedActivation(snapshot)
+        const recovered = await this.reconcileFailedActivation(snapshot)
+        if (!recovered) {
+          // Why: later acquisitions must not overwrite the unresolved durable marker.
+          this.recoveryComplete = false
+        }
       }
       this.owners.clear()
       return { active: false, reason: 'unavailable' }
@@ -217,9 +221,9 @@ export class PlaybackSuppressionService {
     }
   }
 
-  private async reconcileFailedActivation(snapshot: PlaybackSuppressionSnapshot): Promise<void> {
+  private async reconcileFailedActivation(snapshot: PlaybackSuppressionSnapshot): Promise<boolean> {
     if (!this.recoveryStore) {
-      return
+      return true
     }
     try {
       const current = await this.adapter.snapshot()
@@ -227,14 +231,16 @@ export class PlaybackSuppressionService {
         snapshot.backend === current.backend && snapshot.endpointId === current.endpointId
       if (!sameEndpoint) {
         // Why: clearing here can strand the captured endpoint in a muted state.
-        return
+        return false
       }
       if (current.muted !== snapshot.muted) {
         await this.adapter.setMuted(snapshot.muted, new AbortController().signal, current)
       }
       await this.recoveryStore.clear()
+      return true
     } catch {
       // Preserve the marker when the current state cannot be proven safe.
+      return false
     }
   }
 }

@@ -398,15 +398,21 @@ describe('PlaybackSuppressionService', () => {
     }
     const adapter: PlaybackSuppressionAdapter = {
       getCapability: vi.fn(async () => true),
-      snapshot: vi.fn().mockResolvedValueOnce(before).mockResolvedValueOnce(current),
-      setMuted: vi.fn(async () => {
-        throw new Error('mute failed while the default endpoint changed')
-      })
+      snapshot: vi.fn().mockResolvedValueOnce(before).mockResolvedValue(current),
+      setMuted: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('mute failed while the default endpoint changed'))
+        .mockResolvedValue(undefined)
     }
+    let storedMarker: PlaybackSuppressionSnapshot | null = null
     const recoveryStore: PlaybackSuppressionRecoveryStore = {
-      read: vi.fn(async () => null),
-      write: vi.fn(async () => undefined),
-      clear: vi.fn(async () => undefined)
+      read: vi.fn(async () => storedMarker),
+      write: vi.fn(async (snapshot) => {
+        storedMarker = snapshot
+      }),
+      clear: vi.fn(async () => {
+        storedMarker = null
+      })
     }
     const service = new PlaybackSuppressionService(adapter, recoveryStore)
 
@@ -414,8 +420,13 @@ describe('PlaybackSuppressionService', () => {
       active: false,
       reason: 'unavailable'
     })
+    await expect(service.acquire('dictation:2')).resolves.toEqual({
+      active: false,
+      reason: 'unavailable'
+    })
 
     expect(adapter.setMuted).toHaveBeenCalledTimes(1)
+    expect(recoveryStore.write).toHaveBeenCalledTimes(1)
     expect(recoveryStore.clear).not.toHaveBeenCalled()
   })
 })
