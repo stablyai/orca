@@ -8,15 +8,18 @@ internal static class OrcaPlaybackSuppression
     {
         try
         {
+            if (args.Length == 1 && args[0] == "self-test")
+            {
+                // Why: release builds need a hardware-independent launch and JSON contract check.
+                Console.WriteLine(SnapshotJson("orca-test-endpoint", false));
+                return 0;
+            }
+
             if (args.Length == 1 && args[0] == "snapshot")
             {
                 using (AudioEndpoint endpoint = AudioEndpoint.OpenDefault())
                 {
-                    Console.WriteLine(
-                        "{\"endpointId\":\"{0}\",\"endpointTarget\":\"{0}\",\"muted\":{1}}",
-                        JsonEscape(endpoint.Id),
-                        endpoint.Muted ? "true" : "false"
-                    );
+                    Console.WriteLine(SnapshotJson(endpoint.Id, endpoint.Muted));
                 }
                 return 0;
             }
@@ -54,6 +57,14 @@ internal static class OrcaPlaybackSuppression
             Console.Error.WriteLine(error.Message);
             return 1;
         }
+    }
+
+    private static string SnapshotJson(string endpointId, bool muted)
+    {
+        string escapedId = JsonEscape(endpointId);
+        return "{\"endpointId\":\"" + escapedId +
+            "\",\"endpointTarget\":\"" + escapedId +
+            "\",\"muted\":" + (muted ? "true" : "false") + "}";
     }
 
     private static string JsonEscape(string value)
