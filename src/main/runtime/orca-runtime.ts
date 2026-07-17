@@ -18258,6 +18258,7 @@ export class OrcaRuntimeService {
             removalCompleted = true
           } else if (isOrphanedWorktreeError(error)) {
             const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
+            let localCleanupError: unknown
             if (
               await canSafelyRemoveOrphanedWorktreeDirectory(
                 toLocalWorktreeRuntimePath(canonicalWorktreePath, localWorktreeGitOptions),
@@ -18267,22 +18268,42 @@ export class OrcaRuntimeService {
               )
             ) {
               await this.closeFileWatchersForRemoval(canonicalWorktreePath)
-              await removeLocalWorktreePath(canonicalWorktreePath, localWorktreeGitOptions).catch(
-                () => {}
-              )
+              try {
+                await removeLocalWorktreePath(canonicalWorktreePath, localWorktreeGitOptions)
+              } catch (cleanupError) {
+                localCleanupError = cleanupError
+              }
             } else {
               console.warn(
                 `[worktrees] Refusing recursive cleanup for unproven worktree directory: ${canonicalWorktreePath}`
               )
             }
+            if (localCleanupError) {
+              throw new Error(
+                formatWorktreeRemovalError(localCleanupError, canonicalWorktreePath, force)
+              )
+            }
+            if (
+              !(await isRuntimeWorktreePathMissing(
+                repo,
+                canonicalWorktreePath,
+                localWorktreeGitOptions
+              ))
+            ) {
+              throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
+            }
             // Why: `git worktree remove` failed, so git's internal worktree tracking
             // (`.git/worktrees/<name>`) is still intact. Without pruning, `git worktree
             // list` continues to show the stale entry and the branch it had checked out
             // remains locked — other worktrees cannot check it out.
-            await gitExecFileAsync(['worktree', 'prune'], {
-              cwd: repo.path,
-              ...localWorktreeGitOptions
-            }).catch(() => {})
+            try {
+              await gitExecFileAsync(['worktree', 'prune'], {
+                cwd: repo.path,
+                ...localWorktreeGitOptions
+              })
+            } catch (pruneError) {
+              throw new Error(formatWorktreeRemovalError(pruneError, canonicalWorktreePath, force))
+            }
             await cleanupUnusedWorktreePushTargetRemote(
               repo.path,
               removalTarget.id,
