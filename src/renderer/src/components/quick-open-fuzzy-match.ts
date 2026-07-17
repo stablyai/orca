@@ -136,6 +136,13 @@ function matchQueryFromAnchor(
       isIdentifierSeparator(query[qi]) &&
       qi + 1 < query.length &&
       hasMatchedChar &&
+      // Why: a zero-width case transition can only sit between two non-separator
+      // chars. When a preceding space already consumed a '/' or '.' run,
+      // lastMatchIdx is on that separator, so there is nothing to bridge — and
+      // firing here would let a typed '-'/'_' cross a '/'/'.' via a deeper
+      // same-letter camelCase decoy while consumption lands on the crossing.
+      path[lastMatchIdx] !== '/' &&
+      path[lastMatchIdx] !== '.' &&
       hasIdentifierTransitionMatchBeforeSeparator(path, wordStarts, lastMatchIdx + 1, query[qi + 1])
     ) {
       // Why: typed separators also bridge zero-width case transitions. Rank

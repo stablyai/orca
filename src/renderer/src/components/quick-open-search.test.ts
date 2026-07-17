@@ -500,6 +500,16 @@ describe('quick-open-search', () => {
     expect(rankQuickOpenFiles('a -b', prepareQuickOpenFiles(['src/a/b.ts']))).toEqual([])
     expect(rankQuickOpenFiles('foo -ts', prepareQuickOpenFiles(['src/foo.ts']))).toEqual([])
 
+    // Why: a deeper same-letter camelCase transition ("Page", "tsTest") must not
+    // authorize a bridge whose match then lands on the /- or .-induced word start.
+    expect(
+      rankQuickOpenFiles(
+        'user -profile',
+        prepareQuickOpenFiles(['src/user/profilePage.ts', 'src/user/profile_page.ts'])
+      )
+    ).toEqual([])
+    expect(rankQuickOpenFiles('foo -ts', prepareQuickOpenFiles(['src/foo.tsTest.ts']))).toEqual([])
+
     // Why: a genuine camelCase/acronym transition (prior char is a letter) must
     // still bridge for a space-then-separator query.
     expect(
