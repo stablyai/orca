@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/types'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
-import type {
-  PlaybackSuppressionCapability,
-  SpeechModelManifest,
-  VoiceSettings
-} from '../../../../shared/speech-types'
+import type { SpeechModelManifest, VoiceSettings } from '../../../../shared/speech-types'
 import { Separator } from '../ui/separator'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -32,8 +28,9 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
   const markFeatureTipsSeen = useAppStore((s) => s.markFeatureTipsSeen)
   const settingsSearchQuery = useAppStore((s) => s.settingsSearchQuery ?? '')
   const [catalog, setCatalog] = useState<SpeechModelManifest[]>([])
-  const [playbackSuppressionCapability, setPlaybackSuppressionCapability] =
-    useState<PlaybackSuppressionCapability | null>(null)
+  const [playbackSuppressionCapability, setPlaybackSuppressionCapability] = useState<
+    boolean | null
+  >(null)
   const [permissionPending, setPermissionPending] = useState(false)
   const [openAiDialogOpen, setOpenAiDialogOpen] = useState(false)
   const [openAiApiKeyDraft, setOpenAiApiKeyDraft] = useState('')
@@ -93,10 +90,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
       })
       .catch(() => {
         if (!cancelled) {
-          setPlaybackSuppressionCapability({
-            available: false,
-            reason: 'System audio muting is unavailable.'
-          })
+          setPlaybackSuppressionCapability(false)
         }
       })
     return () => {

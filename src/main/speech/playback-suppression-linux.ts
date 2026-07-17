@@ -3,7 +3,6 @@ import type {
   PlaybackSuppressionAdapter,
   PlaybackSuppressionSnapshot
 } from './playback-suppression-service'
-import type { PlaybackSuppressionCapability } from '../../shared/speech-types'
 
 type CommandResult = { stdout: string; stderr: string }
 
@@ -110,12 +109,12 @@ export function createLinuxPlaybackSuppressionAdapter(
     throw new Error(UNSUPPORTED_REASON)
   }
 
-  const getCapability = async (): Promise<PlaybackSuppressionCapability> => {
+  const getCapability = async (): Promise<boolean> => {
     try {
-      const snapshot = await probe()
-      return { available: true, backend: snapshot.backend }
+      await probe()
+      return true
     } catch {
-      return { available: false, reason: UNSUPPORTED_REASON }
+      return false
     }
   }
 

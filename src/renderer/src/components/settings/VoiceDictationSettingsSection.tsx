@@ -1,4 +1,4 @@
-import type { PlaybackSuppressionCapability, VoiceSettings } from '../../../../shared/speech-types'
+import type { VoiceSettings } from '../../../../shared/speech-types'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -6,7 +6,7 @@ import { translate } from '@/i18n/i18n'
 
 type VoiceDictationSettingsSectionProps = {
   voiceSettings: VoiceSettings
-  playbackSuppressionCapability: PlaybackSuppressionCapability | null
+  playbackSuppressionCapability: boolean | null
   permissionPending: boolean
   onToggleVoiceDictation: () => void
   onUpdateVoiceSettings: (updates: Partial<VoiceSettings>) => void
@@ -69,12 +69,12 @@ export function VoiceDictationSettingsSection({
             )}
           </Label>
           <p className="text-xs text-muted-foreground">
-            {playbackSuppressionCapability?.available
+            {playbackSuppressionCapability === true
               ? translate(
                   'auto.components.settings.VoicePane.66296e0568',
                   "Temporarily mute this computer's output while the microphone is active."
                 )
-              : playbackSuppressionCapability
+              : playbackSuppressionCapability !== null
                 ? translate(
                     'auto.components.settings.VoicePane.a2f0263871',
                     'System audio muting is not available on this computer.'
@@ -92,7 +92,7 @@ export function VoiceDictationSettingsSection({
             'auto.components.settings.VoicePane.6b0ed79a8f',
             'Mute other audio while dictating'
           )}
-          disabled={!voiceSettings.enabled || playbackSuppressionCapability?.available !== true}
+          disabled={!voiceSettings.enabled || playbackSuppressionCapability !== true}
           onClick={() =>
             onUpdateVoiceSettings({
               muteSystemAudioDuringDictation: !voiceSettings.muteSystemAudioDuringDictation
@@ -103,7 +103,7 @@ export function VoiceDictationSettingsSection({
               ? 'bg-foreground'
               : 'bg-muted-foreground/30'
           } ${
-            !voiceSettings.enabled || playbackSuppressionCapability?.available !== true
+            !voiceSettings.enabled || playbackSuppressionCapability !== true
               ? 'cursor-not-allowed opacity-50'
               : ''
           }`}

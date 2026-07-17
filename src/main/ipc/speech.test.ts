@@ -66,7 +66,7 @@ describe('registerSpeechHandlers', () => {
     getSpeechSttServiceMock.mockReset()
     getPlaybackSuppressionServiceMock.mockReset()
     getPlaybackSuppressionServiceMock.mockReturnValue({
-      getCapability: vi.fn(async () => ({ available: false, reason: 'test' })),
+      getCapability: vi.fn(async () => false),
       acquire: vi.fn(),
       release: vi.fn()
     })
@@ -176,7 +176,7 @@ describe('registerSpeechHandlers', () => {
 
   it('scopes playback suppression to the renderer and dictation session', async () => {
     const service = {
-      getCapability: vi.fn(async () => ({ available: true, backend: 'wpctl' })),
+      getCapability: vi.fn(async () => true),
       acquire: vi.fn(async () => ({ active: true })),
       release: vi.fn(async () => undefined)
     }
@@ -186,7 +186,7 @@ describe('registerSpeechHandlers', () => {
 
     const capability = getHandler('speech:getPlaybackSuppressionCapability') as unknown as (event: {
       sender: typeof sender
-    }) => Promise<{ available: boolean }>
+    }) => Promise<boolean>
     const acquire = getHandler('speech:acquirePlaybackSuppression') as unknown as (
       event: { sender: typeof sender },
       sessionId: string
@@ -196,7 +196,7 @@ describe('registerSpeechHandlers', () => {
       sessionId: string
     ) => Promise<void>
 
-    await expect(capability({ sender })).resolves.toEqual({ available: true, backend: 'wpctl' })
+    await expect(capability({ sender })).resolves.toBe(true)
     await expect(acquire({ sender }, 'session-1')).resolves.toEqual({ active: true })
     await release({ sender }, 'session-1')
 
@@ -207,7 +207,7 @@ describe('registerSpeechHandlers', () => {
   it('releases active playback suppression when its renderer is destroyed', async () => {
     let destroyed: (() => void) | undefined
     const service = {
-      getCapability: vi.fn(async () => ({ available: true, backend: 'test' })),
+      getCapability: vi.fn(async () => true),
       acquire: vi.fn(async () => ({ active: true })),
       release: vi.fn(async () => undefined)
     }

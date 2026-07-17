@@ -8,7 +8,7 @@ import {
 
 function createAdapter(initiallyMuted = false): PlaybackSuppressionAdapter {
   return {
-    getCapability: vi.fn(async () => ({ available: true as const, backend: 'test' })),
+    getCapability: vi.fn(async () => true),
     snapshot: vi.fn(async () => ({ backend: 'test', muted: initiallyMuted })),
     setMuted: vi.fn(async () => undefined)
   }
@@ -54,7 +54,7 @@ describe('PlaybackSuppressionService', () => {
     let finishMute: (() => void) | undefined
     const snapshot: PlaybackSuppressionSnapshot = { backend: 'test', muted: false }
     const adapter: PlaybackSuppressionAdapter = {
-      getCapability: vi.fn(async () => ({ available: true as const, backend: 'test' })),
+      getCapability: vi.fn(async () => true),
       snapshot: vi.fn(async () => snapshot),
       setMuted: vi.fn((muted) =>
         muted
@@ -80,7 +80,7 @@ describe('PlaybackSuppressionService', () => {
     let muted = false
     let finishRestore: (() => void) | undefined
     const adapter: PlaybackSuppressionAdapter = {
-      getCapability: vi.fn(async () => ({ available: true as const, backend: 'test' })),
+      getCapability: vi.fn(async () => true),
       snapshot: vi.fn(async () => ({ backend: 'test', muted })),
       setMuted: vi.fn(
         (nextMuted) =>
@@ -120,7 +120,7 @@ describe('PlaybackSuppressionService', () => {
     let muted = false
     let failRestore = true
     const adapter: PlaybackSuppressionAdapter = {
-      getCapability: vi.fn(async () => ({ available: true as const, backend: 'test' })),
+      getCapability: vi.fn(async () => true),
       snapshot: vi.fn(async () => ({ backend: 'test', muted })),
       setMuted: vi.fn(async (nextMuted) => {
         if (!nextMuted && failRestore) {
@@ -179,7 +179,7 @@ describe('PlaybackSuppressionService', () => {
       muted: false
     }
     const adapter: PlaybackSuppressionAdapter = {
-      getCapability: vi.fn(async () => ({ available: true as const, backend: 'test' })),
+      getCapability: vi.fn(async () => true),
       snapshot: vi.fn(async () => snapshot),
       setMuted: vi.fn(async (muted) => {
         calls.push(muted ? 'mute' : 'restore')
@@ -255,7 +255,7 @@ describe('PlaybackSuppressionService', () => {
 
   it('clears recovery state when a failed mute left output unchanged', async () => {
     const adapter: PlaybackSuppressionAdapter = {
-      getCapability: vi.fn(async () => ({ available: true as const, backend: 'test' })),
+      getCapability: vi.fn(async () => true),
       snapshot: vi.fn(async () => ({
         backend: 'test',
         endpointId: 'speaker-1',

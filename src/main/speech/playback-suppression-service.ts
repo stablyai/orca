@@ -1,5 +1,3 @@
-import type { PlaybackSuppressionCapability } from '../../shared/speech-types'
-
 export type PlaybackSuppressionSnapshot = {
   backend: string
   endpointId?: string
@@ -8,7 +6,7 @@ export type PlaybackSuppressionSnapshot = {
 }
 
 export type PlaybackSuppressionAdapter = {
-  getCapability(): Promise<PlaybackSuppressionCapability>
+  getCapability(): Promise<boolean>
   snapshot(signal?: AbortSignal): Promise<PlaybackSuppressionSnapshot>
   setMuted(
     muted: boolean,
@@ -41,7 +39,7 @@ export class PlaybackSuppressionService {
     private readonly recoveryStore?: PlaybackSuppressionRecoveryStore
   ) {}
 
-  async getCapability(): Promise<PlaybackSuppressionCapability> {
+  async getCapability(): Promise<boolean> {
     await this.ensureRecovered()
     return this.adapter.getCapability()
   }

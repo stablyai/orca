@@ -147,7 +147,6 @@ import type {
 import type { AgentInterruptInferenceRequest } from '../shared/agent-interrupt-intent'
 import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
 import type {
-  PlaybackSuppressionCapability,
   SpeechErrorEvent,
   SpeechLifecycleEvent,
   SpeechModelManifest,
@@ -4435,7 +4434,7 @@ const api = {
   },
 
   speech: {
-    getPlaybackSuppressionCapability: (): Promise<PlaybackSuppressionCapability> =>
+    getPlaybackSuppressionCapability: (): Promise<boolean> =>
       ipcRenderer.invoke('speech:getPlaybackSuppressionCapability'),
     acquirePlaybackSuppression: (
       sessionId: string

@@ -55,10 +55,6 @@ export type UserModelConfig = {
 
 export type DictationMode = 'toggle' | 'hold'
 
-export type PlaybackSuppressionCapability =
-  | { available: true; backend: string }
-  | { available: false; reason: string }
-
 export type VoiceSettings = {
   enabled: boolean
   sttModel: string

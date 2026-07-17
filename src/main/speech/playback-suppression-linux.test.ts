@@ -68,7 +68,7 @@ describe('Linux playback suppression', () => {
     })
     const adapter = createLinuxPlaybackSuppressionAdapter(run)
 
-    await expect(adapter.getCapability()).resolves.toEqual({ available: true, backend: 'pactl' })
+    await expect(adapter.getCapability()).resolves.toBe(true)
     await adapter.setMuted(true)
 
     expect(run).toHaveBeenLastCalledWith(
@@ -167,10 +167,7 @@ describe('Linux playback suppression', () => {
       throw new Error('ENOENT')
     })
 
-    await expect(createLinuxPlaybackSuppressionAdapter(run).getCapability()).resolves.toEqual({
-      available: false,
-      reason: 'No supported Linux audio mixer was found.'
-    })
+    await expect(createLinuxPlaybackSuppressionAdapter(run).getCapability()).resolves.toBe(false)
   })
 
   it('reports unsupported when no known Linux mixer is usable', async () => {
@@ -179,10 +176,7 @@ describe('Linux playback suppression', () => {
     })
     const adapter = createLinuxPlaybackSuppressionAdapter(run)
 
-    await expect(adapter.getCapability()).resolves.toEqual({
-      available: false,
-      reason: 'No supported Linux audio mixer was found.'
-    })
+    await expect(adapter.getCapability()).resolves.toBe(false)
     await expect(adapter.snapshot()).rejects.toThrow('No supported Linux audio mixer was found.')
   })
 })

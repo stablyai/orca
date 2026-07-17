@@ -21,10 +21,7 @@ let sttService: SttService | null = null
 let playbackSuppressionService: PlaybackSuppressionService | null = null
 
 const unsupportedPlaybackSuppressionAdapter: PlaybackSuppressionAdapter = {
-  getCapability: async () => ({
-    available: false,
-    reason: 'System audio muting is not supported on this operating system yet.'
-  }),
+  getCapability: async () => false,
   snapshot: async () => {
     throw new Error('System audio muting is not supported on this operating system yet.')
   },

@@ -51,10 +51,7 @@ function installWindowApi(
         request: vi.fn(requestMicrophonePermission)
       },
       speech: {
-        getPlaybackSuppressionCapability: vi.fn(async () => ({
-          available: true,
-          backend: 'wpctl'
-        })),
+        getPlaybackSuppressionCapability: vi.fn(async () => true),
         getCatalog: vi.fn(async () => []),
         getOpenAiApiKeyStatus: vi.fn(async () => ({ configured: false })),
         saveOpenAiApiKey: vi.fn(async () => ({ configured: true })),
