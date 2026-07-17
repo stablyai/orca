@@ -3,6 +3,7 @@ import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
+import { SettingsSwitch } from './SettingsFormControls'
 
 type VoiceDictationSettingsSectionProps = {
   voiceSettings: VoiceSettings
@@ -85,35 +86,19 @@ export function VoiceDictationSettingsSection({
                   )}
           </p>
         </div>
-        <button
-          role="switch"
-          aria-checked={voiceSettings.muteSystemAudioDuringDictation}
-          aria-label={translate(
+        <SettingsSwitch
+          checked={voiceSettings.muteSystemAudioDuringDictation}
+          ariaLabel={translate(
             'auto.components.settings.VoicePane.6b0ed79a8f',
             'Mute other audio while dictating'
           )}
           disabled={!voiceSettings.enabled || playbackSuppressionCapability !== true}
-          onClick={() =>
+          onChange={() =>
             onUpdateVoiceSettings({
               muteSystemAudioDuringDictation: !voiceSettings.muteSystemAudioDuringDictation
             })
           }
-          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-            voiceSettings.muteSystemAudioDuringDictation
-              ? 'bg-foreground'
-              : 'bg-muted-foreground/30'
-          } ${
-            !voiceSettings.enabled || playbackSuppressionCapability !== true
-              ? 'cursor-not-allowed opacity-50'
-              : ''
-          }`}
-        >
-          <span
-            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-              voiceSettings.muteSystemAudioDuringDictation ? 'translate-x-4' : 'translate-x-0.5'
-            }`}
-          />
-        </button>
+        />
       </div>
 
       <Separator />
