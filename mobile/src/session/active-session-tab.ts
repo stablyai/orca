@@ -28,6 +28,9 @@ export function resolveActiveSessionTab<T extends SessionTabLike>(
     }
   }
 
+  // Why: only browser tabs need client-side stickiness. Their snapshot `isActive`
+  // flag can lag the user's current selection across refresh and navigation.
+  // Terminal, markdown, and file tabs stay under snapshot authority.
   const currentActiveTab =
     tabs.find((tab) => tab.id === opts.currentActiveSessionTabId && tab.type === 'browser') ?? null
   if (currentActiveTab) {

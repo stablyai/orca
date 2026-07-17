@@ -104,4 +104,16 @@ describe('resolveActiveSessionTab', () => {
       clearPendingActiveSessionTabId: true
     })
   })
+
+  it('clears a stale pending activation when its tab is gone and no browser tab is current', () => {
+    const result = resolveActiveSessionTab([terminalTab('agent', true)], {
+      pendingActiveSessionTabId: 'removed-tab',
+      currentActiveSessionTabId: 'agent'
+    })
+
+    expect(result).toEqual({
+      activeTab: expect.objectContaining({ id: 'agent', type: 'terminal' }),
+      clearPendingActiveSessionTabId: true
+    })
+  })
 })
