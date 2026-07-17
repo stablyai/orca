@@ -6,6 +6,11 @@
  * Title classifiers only recognized OpenCode when the token "opencode" appeared.
  * Native `OC | …` titles fell through, so AgentIcon rendered Claude/"?".
  *
+ * OpenCode source (packages/tui/src/app.tsx) sets titles as:
+ *   - "OpenCode" on home / default session titles
+ *   - `OC | ${title}` for named sessions (title truncated at 40 chars)
+ *   - `OC | ${pluginId}` on plugin routes
+ *
  * Related: #8940 (OpenCode activity frames mislabeled Claude Code — separate
  * braille-without-token path; not fully solved here).
  *
@@ -15,7 +20,6 @@
  */
 import { describe, expect, it } from 'vitest'
 import { getAgentLabel, isClaudeAgent } from './agent-detection'
-import { agentTypeToIconAgent } from '../renderer/src/lib/agent-status'
 import {
   resolveExplicitTerminalTitleAgentType,
   resolveTerminalTitleAgentType
@@ -30,19 +34,16 @@ describe('#8478 OpenCode native OC | titles map to OpenCode icon', () => {
     expect(isClaudeAgent(native)).toBe(false)
   })
 
-  it('maps native OpenCode title to the OpenCode icon agent', () => {
-    const native = 'OC | Understand about the plugin'
-    const agentType = resolveTerminalTitleAgentType(native)
-    expect(agentType).toBe('opencode')
-    expect(agentTypeToIconAgent(agentType)).toBe('opencode')
-  })
-
-  it('keeps Claude-style prefixes as Claude and explicit OpenCode tokens as OpenCode', () => {
+  // Why: bare "OpenCode" is what the TUI sets on home/default sessions; keep it
+  // classified so the icon path stays OpenCode without the OC | abbreviation.
+  it('keeps bare OpenCode home titles and Claude-style frames classified correctly', () => {
+    expect(getAgentLabel('OpenCode')).toBe('OpenCode')
+    expect(resolveTerminalTitleAgentType('OpenCode')).toBe('opencode')
+    expect(getAgentLabel('OpenCode ready')).toBe('OpenCode')
+    expect(resolveTerminalTitleAgentType('OpenCode ready')).toBe('opencode')
     // Same family as #8940: braille/task frames without "opencode" still become Claude
     // when they lack the native OC marker — documented, out of scope for this fix.
     expect(isClaudeAgent('⠋ implementing the feature')).toBe(true)
     expect(getAgentLabel('⠋ implementing the feature')).toBe('Claude Code')
-    expect(getAgentLabel('OpenCode ready')).toBe('OpenCode')
-    expect(resolveTerminalTitleAgentType('OpenCode ready')).toBe('opencode')
   })
 })
