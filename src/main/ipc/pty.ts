@@ -4026,8 +4026,13 @@ export function registerPtyHandlers(
       }
     },
     write: (ptyId, data) => {
+      const provider = getProviderForPty(ptyId)
       try {
-        getProviderForPty(ptyId).write(ptyId, data)
+        // Why: provider.write() silently no-ops for a pty it no longer has; report not-written so the send isn't recorded as delivered (#9169).
+        if (provider.hasPty && !provider.hasPty(ptyId)) {
+          return false
+        }
+        provider.write(ptyId, data)
         return true
       } catch {
         return false

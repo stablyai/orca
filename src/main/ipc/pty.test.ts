@@ -15490,4 +15490,28 @@ describe('registerPtyHandlers', () => {
       }
     })
   })
+
+  describe('controller.write to a pty with no live process', () => {
+    it('reports failure instead of a silent success (#9169)', () => {
+      const runtime = {
+        setPtyController: vi.fn(),
+        onPtyExit: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(
+        mainWindow as never,
+        runtime as never,
+        undefined,
+        undefined,
+        undefined,
+        undefined
+      )
+      const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+        write: (ptyId: string, data: string) => boolean
+      }
+
+      // Why: the provider no-ops on an unknown pty; the controller must report not-written, not a phantom success (#9169).
+      expect(controller.write('never-spawned-pty', 'echo hi\n')).toBe(false)
+    })
+  })
 })
