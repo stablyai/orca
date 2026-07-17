@@ -33,13 +33,20 @@ function safeChunk(
 // commands routinely print connection strings and credentials, so scrub the
 // obvious secret shapes and cap the size before anything leaves this module.
 export function sanitizeServiceCommandOutput(text: string): string {
-  return text
-    .replace(/(\w+:\/\/[^\s:@/]+):[^\s@/]+@/g, '$1:[redacted]@')
-    .replace(
-      /((?:password|passwd|token|secret|api[_-]?key|access[_-]?key)\s*[=:]\s*)\S+/gi,
-      '$1[redacted]'
-    )
-    .slice(0, 2000)
+  return (
+    text
+      .replace(/(\w+:\/\/[^\s:@/]+):[^\s@/]+@/g, '$1:[redacted]@')
+      .replace(
+        /((?:password|passwd|token|secret|api[_-]?key|access[_-]?key)\s*[=:]\s*)\S+/gi,
+        '$1[redacted]'
+      )
+      // Why: HTTP auth headers routinely print during service create (curl, docker
+      // login); redact the whole credential after Authorization, plus any bare
+      // `Bearer <token>`.
+      .replace(/((?:authorization)\s*[=:]\s*)[^\n]+/gi, '$1[redacted]')
+      .replace(/\b(bearer\s+)\S+/gi, '$1[redacted]')
+      .slice(0, 2000)
+  )
 }
 
 function getServiceShell(): string {

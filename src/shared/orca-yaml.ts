@@ -140,6 +140,17 @@ function normalizeServiceEnv(
   }
   const env: Record<string, string> = {}
   for (const [key, raw] of Object.entries(record)) {
+    // Why: keys become child-process env var names (and, on WSL, WSLENV entries
+    // joined by ':'), so a key with '=', ':' or whitespace would corrupt the
+    // environment passed to the recipe command.
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+      diagnostics.push({
+        index,
+        field: 'env',
+        message: `Service "${serviceId}" env key "${key}" is not a valid environment variable name.`
+      })
+      continue
+    }
     if (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') {
       env[key] = String(raw)
     } else {

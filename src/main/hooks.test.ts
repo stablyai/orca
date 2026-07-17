@@ -352,6 +352,29 @@ describe('parseOrcaYaml', () => {
     expect(result?.serviceDiagnostics).toHaveLength(4)
     expect(result?.serviceDiagnostics?.at(-1)?.message).toContain('BAD')
   })
+
+  it('drops invalid env keys and reports a diagnostic', () => {
+    const yaml = [
+      'services:',
+      '  - id: db',
+      '    name: A',
+      '    create: echo a',
+      '    env:',
+      '      GOOD_KEY: ok',
+      '      "BAD:KEY": nope',
+      '      "A=B": nope'
+    ].join('\n')
+    const result = parseOrcaYaml(yaml)
+    expect(result?.services).toEqual([
+      { id: 'db', name: 'A', create: 'echo a', env: { GOOD_KEY: 'ok' } }
+    ])
+    expect(result?.serviceDiagnostics).toHaveLength(2)
+    expect(
+      result?.serviceDiagnostics?.every((diagnostic) =>
+        diagnostic.message.includes('valid environment variable name')
+      )
+    ).toBe(true)
+  })
 })
 
 describe('hasUnrecognizedOrcaYamlKeys', () => {

@@ -82,4 +82,18 @@ describe('cleanupOrphanedWorktreeServices', () => {
     expect(execMock).not.toHaveBeenCalled()
     expect(getWorktreeServicesRecord(userDataDir, 'wt-gone')).toBeNull()
   })
+
+  it('demotes an interrupted provisioning record for a still-existing worktree', async () => {
+    upsertWorktreeServicesRecord(userDataDir, { ...record('wt-live', 0), status: 'provisioning' })
+    await cleanupOrphanedWorktreeServices({
+      userDataPath: userDataDir,
+      existingWorktreeIds: new Set(['wt-live']),
+      resolveRepo: () => ({ id: 'repo-1', path: repoDir }) as Repo
+    })
+    const demoted = getWorktreeServicesRecord(userDataDir, 'wt-live')
+    expect(demoted?.status).toBe('create_failed')
+    expect(demoted?.error).toContain('interrupted')
+    // The worktree still exists, so it is not an orphan — destroy must not run.
+    expect(execMock).not.toHaveBeenCalled()
+  })
 })

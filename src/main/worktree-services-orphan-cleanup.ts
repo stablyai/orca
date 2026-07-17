@@ -2,7 +2,8 @@ import { loadHooks } from './hooks'
 import { destroyWorktreeServices } from './worktree-services'
 import {
   listWorktreeServicesRecords,
-  removeWorktreeServicesRecord
+  removeWorktreeServicesRecord,
+  upsertWorktreeServicesRecord
 } from '../shared/worktree-services-store'
 import type { Repo } from '../shared/types'
 
@@ -13,6 +14,18 @@ export async function cleanupOrphanedWorktreeServices(args: {
 }): Promise<void> {
   for (const record of listWorktreeServicesRecords(args.userDataPath)) {
     if (args.existingWorktreeIds.has(record.worktreeId)) {
+      // Why: a provision interrupted by app exit persists 'provisioning' forever
+      // — the worktree still exists (so it's not an orphan) but retry is only
+      // offered for create_failed. Demote it so the badge/panel offer a retry.
+      if (record.status === 'provisioning') {
+        upsertWorktreeServicesRecord(args.userDataPath, {
+          ...record,
+          status: 'create_failed',
+          error:
+            'Provisioning was interrupted when Orca exited. Retry to finish setting up services.',
+          updatedAt: new Date().toISOString()
+        })
+      }
       continue
     }
     const repo = args.resolveRepo(record.repoId)

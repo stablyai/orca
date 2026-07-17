@@ -66,9 +66,11 @@ export async function provisionWorktreeServices(
   const { userDataPath, worktreeId, worktreeName, worktreePath, repo, services } = args
   const provisionId = args.provisionId ?? worktreeId
 
-  // Why: a retry of a create_failed worktree must reuse its slot/slug so ports stay stable.
+  // Why: reuse any existing record's slot/slug/createdAt on re-provision (retry
+  // of a create_failed worktree, or a repeat provision of a ready one) so ports
+  // stay stable and the prior slug's containers are never orphaned by a fresh slot.
   const existing = getWorktreeServicesRecord(userDataPath, worktreeId)
-  const reuse = existing?.status === 'create_failed' ? existing : null
+  const reuse = existing
   const slot = reuse ? reuse.slot : allocateServiceSlot(userDataPath)
   const slug = reuse ? reuse.slug : deriveServiceSlug(worktreeName, slot)
   const contextEnv = buildServiceContextEnv(slug, slot)
@@ -174,6 +176,19 @@ export async function destroyWorktreeServices(args: {
     if (!result.success) {
       errors.push(
         `Service "${service.id}" destroy failed: ${sanitizeServiceCommandOutput(result.output)}`.trim()
+      )
+    }
+  }
+
+  // Why: recipes are re-resolved from the current yaml at destroy time. If a
+  // provisioned service's id is no longer declared (a branch or agent edit of
+  // orca.yaml between provision and removal), its containers can't be torn down;
+  // surface that instead of silently reporting success while it keeps running.
+  const currentServiceIds = new Set(services.map((service) => service.id))
+  for (const serviceId of record.serviceIds) {
+    if (!currentServiceIds.has(serviceId)) {
+      errors.push(
+        `Service "${serviceId}" recipe is no longer declared in orca.yaml; it may still be running.`
       )
     }
   }

@@ -1180,6 +1180,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const repoHasServiceRecipes = Boolean(
     selectedRepoIsGit &&
     !selectedRepo?.connectionId &&
+    // Why: a local repo whose active target is a paired runtime — or a selected
+    // per-workspace VM recipe (which swaps in a runtime-owned repo at create) —
+    // routes create through RPC, which drops provisionServices. Hide the opt-in
+    // so a checked box can't be silently ignored (v1 provisions locally only).
+    !runtimeEnvironmentId &&
+    !selectedEphemeralVmRecipeId &&
     repoId &&
     checkedHooksRepoId === repoId &&
     (yamlHooks?.services?.length ?? 0) > 0

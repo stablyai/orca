@@ -59,7 +59,7 @@ import {
   parseOrcaYaml,
   shouldRunSetupForCreate
 } from '../hooks'
-import { provisionWorktreeServices } from '../worktree-services'
+import { loadServiceRecipesForWorktree, provisionWorktreeServices } from '../worktree-services'
 import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
@@ -2588,10 +2588,12 @@ export async function createLocalWorktree(
   await timing.time('prepare_setup', async () => {
     const createdYamlHooks = loadHooks(worktreePath)
     const createdEffectiveHooks = getEffectiveHooksFromConfig(repo, createdYamlHooks)
-    // Why: services come from the raw parsed yaml (like defaultTabs) —
-    // getEffectiveHooksFromConfig only carries setup/archive scripts and
-    // returns null when both are absent, which would drop services entirely.
-    const serviceRecipes = createdYamlHooks?.services ?? []
+    // Why: prefer the new worktree branch's own services, falling back to the
+    // repo root — the composer opt-in is gated on the repo's primary checkout,
+    // so a base branch whose orca.yaml omits services must still provision from
+    // root. loadServiceRecipesForWorktree reads raw yaml (like defaultTabs);
+    // getEffectiveHooksFromConfig only carries setup/archive and would drop them.
+    const serviceRecipes = loadServiceRecipesForWorktree(worktreePath, repo.path)
     if (args.provisionServices && serviceRecipes.length > 0) {
       try {
         const record = await provisionWorktreeServices({
@@ -2664,10 +2666,12 @@ export async function createLocalWorktree(
   // Why: the startup (agent) terminal spawns in-main before the renderer's
   // services hydration resolves, so without this merge the first terminal of a
   // freshly provisioned worktree — where the agent runs migrations — would
-  // miss the isolated-service env entirely.
+  // miss the isolated-service env entirely. Service env is authoritative (it
+  // wins over the launch env), matching the setup runner and every renderer PTY
+  // path, so the isolated DB/port always beats a colliding shared-env default.
   const startupWithServiceEnv =
     args.startup && Object.keys(serviceEnv).length > 0
-      ? { ...args.startup, env: { ...serviceEnv, ...args.startup.env } }
+      ? { ...args.startup, env: { ...args.startup.env, ...serviceEnv } }
       : args.startup
   const stagedStartup = await timing.time('spawn_startup_terminal', () =>
     spawnLocalStartupAndSetupTerminals({

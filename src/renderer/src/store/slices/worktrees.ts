@@ -2199,6 +2199,12 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     deleteStateByWorktreeId: omitByWorktree(s.deleteStateByWorktreeId),
     baseStatusByWorktreeId: omitByWorktree(s.baseStatusByWorktreeId),
     remoteBranchConflictByWorktreeId: omitByWorktree(s.remoteBranchConflictByWorktreeId),
+    // Why: mirror the single-worktree removal cleanup on this bulk reconcile path
+    // (external removal / authoritative-scan purge). Without it a same-path
+    // recreate could inject the deleted worktree's stale isolated-service env.
+    worktreeServicesEnv: omitByWorktree(s.worktreeServicesEnv),
+    worktreeServicesStatus: omitByWorktree(s.worktreeServicesStatus),
+    worktreeServicesRecords: omitByWorktree(s.worktreeServicesRecords),
     // File search
     fileSearchStateByWorktree: omitByWorktree(s.fileSearchStateByWorktree),
     // Browser state
@@ -3686,6 +3692,25 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           })(),
           defaultTerminalTabsAppliedByWorktreeId: (() => {
             const next = { ...s.defaultTerminalTabsAppliedByWorktreeId }
+            delete next[worktreeId]
+            return next
+          })(),
+          // Why: worktree IDs are path-derived and can be reused by a same-name
+          // recreate. Drop this worktree's service env/status/record so a new
+          // worktree at the same path never inherits stale isolated-service env
+          // (injected into every PTY) or a phantom badge/panel from the deleted one.
+          worktreeServicesEnv: (() => {
+            const next = { ...s.worktreeServicesEnv }
+            delete next[worktreeId]
+            return next
+          })(),
+          worktreeServicesStatus: (() => {
+            const next = { ...s.worktreeServicesStatus }
+            delete next[worktreeId]
+            return next
+          })(),
+          worktreeServicesRecords: (() => {
+            const next = { ...s.worktreeServicesRecords }
             delete next[worktreeId]
             return next
           })(),

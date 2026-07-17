@@ -17,7 +17,11 @@ import {
   provisionWorktreeServices,
   runWorktreeServiceAction
 } from './worktree-services'
-import { getWorktreeServicesRecord } from '../shared/worktree-services-store'
+import {
+  allocateServiceSlot,
+  getWorktreeServicesRecord,
+  listWorktreeServicesRecords
+} from '../shared/worktree-services-store'
 import type { OrcaServiceRecipe, Repo } from '../shared/types'
 
 const repo = { id: 'repo-1', path: '/tmp/repo' } as Repo
@@ -109,6 +113,32 @@ describe('provisionWorktreeServices', () => {
     expect(record.error).toContain('db')
     expect(getWorktreeServicesRecord(dir, 'wt-1')?.status).toBe('create_failed')
   })
+
+  it('reuses the slot and slug when re-provisioning an existing ready record', async () => {
+    execSucceeds()
+    const first = await provisionWorktreeServices({
+      userDataPath: dir,
+      worktreeId: 'wt-1',
+      worktreeName: 'My Task',
+      worktreePath: '/tmp/x',
+      repo,
+      services
+    })
+    const second = await provisionWorktreeServices({
+      userDataPath: dir,
+      worktreeId: 'wt-1',
+      worktreeName: 'Renamed Task',
+      worktreePath: '/tmp/x',
+      repo,
+      services
+    })
+    expect(second.slot).toBe(first.slot)
+    expect(second.slug).toBe(first.slug)
+    // A single record — no orphaned prior slug on a fresh slot.
+    expect(listWorktreeServicesRecords(dir)).toHaveLength(1)
+    // Slot 0 stays taken by the reused record, so the next allocation is 1.
+    expect(allocateServiceSlot(dir)).toBe(1)
+  })
 })
 
 describe('destroyWorktreeServices', () => {
@@ -169,6 +199,34 @@ describe('destroyWorktreeServices', () => {
     })
     expect(result).toEqual({ success: true, errors: [] })
     expect(execMock).not.toHaveBeenCalled()
+  })
+
+  it('reports an error when a provisioned service is no longer declared in orca.yaml', async () => {
+    execSucceeds()
+    await provisionWorktreeServices({
+      userDataPath: dir,
+      worktreeId: 'wt-1',
+      worktreeName: 'task',
+      worktreePath: '/tmp/x',
+      repo,
+      services
+    })
+    // Drift: the recipes resolved at destroy time no longer declare "db".
+    const driftedServices: OrcaServiceRecipe[] = [
+      { id: 'redis', name: 'Redis', create: 'echo up', destroy: 'echo down' }
+    ]
+    const result = await destroyWorktreeServices({
+      userDataPath: dir,
+      worktreeId: 'wt-1',
+      worktreePath: '/tmp/x',
+      repo,
+      services: driftedServices
+    })
+    expect(result.success).toBe(false)
+    expect(result.errors.some((e) => e.includes('db') && e.includes('no longer declared'))).toBe(
+      true
+    )
+    expect(getWorktreeServicesRecord(dir, 'wt-1')).toBeNull()
   })
 })
 
