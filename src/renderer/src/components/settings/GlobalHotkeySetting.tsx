@@ -64,13 +64,22 @@ export function eventToAccelerator(event: {
 }): string | null {
   const parts: string[] = []
 
-  // Why: Super (not CommandOrControl) so recording Ctrl+X and Cmd+X stay
-  // distinct chords; Electron maps Super to Cmd on macOS and Win elsewhere.
-  if (event.metaKey) {
-    parts.push('Super')
-  }
-  if (event.ctrlKey) {
-    parts.push('Control')
+  // Why: keep the platform-primary modifier first while preserving the other
+  // physical modifier as a distinct chord instead of aliasing both to CmdOrCtrl.
+  if (isMac) {
+    if (event.metaKey) {
+      parts.push('Super')
+    }
+    if (event.ctrlKey) {
+      parts.push('Control')
+    }
+  } else {
+    if (event.ctrlKey) {
+      parts.push('Control')
+    }
+    if (event.metaKey) {
+      parts.push('Super')
+    }
   }
   if (event.altKey) {
     parts.push('Alt')

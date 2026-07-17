@@ -36,7 +36,7 @@ describe('eventToAccelerator', () => {
       eventToAccelerator(
         keyEvent({ metaKey: true, ctrlKey: true, shiftKey: true, key: 'p', code: 'KeyP' })
       )
-    ).toBe('Super+Control+Shift+P')
+    ).toBe('Control+Super+Shift+P')
   })
 
   it('rejects chords without a modifier', () => {

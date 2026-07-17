@@ -61,6 +61,7 @@ import {
   configureDevUserDataPath,
   configureOrcaUserDataPathEnv,
   enableMainProcessGpuFeatures,
+  enableWaylandGlobalShortcutsPortal,
   installDevParentDisconnectQuit,
   installDevParentSignalQuit,
   installDevParentWatchdog,
@@ -661,6 +662,9 @@ if (hasSingleInstanceLock) {
     platform: process.platform
   })
   configureElectronNetworkCompatibility()
+  if (!isServeMode) {
+    enableWaylandGlobalShortcutsPortal()
+  }
   enableRendererHeapHeadroom()
   maybeApplyGpuFallbackForThisLaunch()
   if (!gpuFallbackActiveThisLaunch) {

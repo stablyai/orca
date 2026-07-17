@@ -260,6 +260,53 @@ describe('configureElectronNetworkCompatibility', () => {
   })
 })
 
+describe('enableWaylandGlobalShortcutsPortal', () => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+  const originalWaylandDisplay = process.env.WAYLAND_DISPLAY
+
+  afterEach(async () => {
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
+    if (originalWaylandDisplay === undefined) {
+      delete process.env.WAYLAND_DISPLAY
+    } else {
+      process.env.WAYLAND_DISPLAY = originalWaylandDisplay
+    }
+    const { app } = await import('electron')
+    vi.mocked(app.commandLine.getSwitchValue).mockReset().mockReturnValue('')
+  })
+
+  it('enables Electron global shortcuts through the portal on Wayland', async () => {
+    const { app } = await import('electron')
+    const { enableWaylandGlobalShortcutsPortal } = await import('./configure-process')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    process.env.WAYLAND_DISPLAY = 'wayland-1'
+    vi.mocked(app.commandLine.getSwitchValue).mockImplementation((switchName: string) =>
+      switchName === 'enable-features' ? 'ExistingFeature' : ''
+    )
+
+    enableWaylandGlobalShortcutsPortal()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'enable-features',
+      'ExistingFeature,GlobalShortcutsPortal'
+    )
+  })
+
+  it('does not enable the portal outside Wayland', async () => {
+    const { app } = await import('electron')
+    const { enableWaylandGlobalShortcutsPortal } = await import('./configure-process')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    delete process.env.WAYLAND_DISPLAY
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+
+    enableWaylandGlobalShortcutsPortal()
+
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalled()
+  })
+})
+
 describe('enableMainProcessGpuFeatures', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
   const originalE2EUserDataDir = process.env.ORCA_E2E_USER_DATA_DIR
