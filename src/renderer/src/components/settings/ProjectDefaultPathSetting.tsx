@@ -58,7 +58,7 @@ export function ProjectDefaultPathSetting({
   )
   const description = translate(
     'auto.components.settings.ProjectDefaultPathSetting.description',
-    'Where the add-project and clone folder pickers open. Leave empty to use the last-used location.'
+    'Where the folder pickers for adding or cloning a project open. Leave empty to use the last-used location.'
   )
 
   return (
