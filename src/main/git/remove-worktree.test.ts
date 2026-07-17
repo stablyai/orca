@@ -1308,7 +1308,7 @@ branch refs/heads/main
     const calls = getGitCalls()
     expect(calls).toEqual(
       expect.arrayContaining([
-        'git worktree add --no-checkout --no-track -b feature/test /repo-feature',
+        'git -c checkout.workers=0 worktree add --no-checkout --no-track -b feature/test /repo-feature',
         'git config --get push.autoSetupRemote',
         'git config --local push.autoSetupRemote true',
         'git sparse-checkout init --cone',
