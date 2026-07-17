@@ -9248,6 +9248,11 @@
         },
         "MobileRelayBetaNotice": {
           "notice": "Orca Relay is in beta."
+        },
+        "ProjectDefaultPathSetting": {
+          "title": "Project default directory",
+          "description": "Where the add-project and clone folder pickers open. Leave empty to use the last-used location.",
+          "clear": "Clear"
         }
       },
       "right": {
