@@ -82,7 +82,9 @@ export function createNixLanguageConfiguration(
       },
       {
         // Why: `in` is intentionally absent — nixfmt does not indent after it.
-        beforeText: /^.*\b(?:let|with|if|then|else|rec|or|and|assert|inherit)\s*$/,
+        // `and` (present in the vscode-nix-ide source config) is excluded too:
+        // it is a plain identifier in Nix, not a keyword (conjunction is &&).
+        beforeText: /^.*\b(?:let|with|if|then|else|rec|or|assert|inherit)\s*$/,
         action: { indentAction: IndentAction.Indent }
       }
     ]

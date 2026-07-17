@@ -59,6 +59,16 @@ describe('createNixLanguageConfiguration', () => {
 
     expect(indentedStringRule?.action.indentAction).toBe(2)
   })
+
+  it('indents after keywords but not after the plain identifier `and`', () => {
+    const configuration = createNixLanguageConfiguration(createMonacoMock() as never)
+
+    const matchesRule = (line: string) =>
+      configuration.onEnterRules?.some((rule) => !rule.afterText && rule.beforeText.test(line))
+
+    expect(matchesRule('  packages = with')).toBe(true)
+    expect(matchesRule('  value = and')).toBe(false)
+  })
 })
 
 describe('loadNixTextMateGrammar', () => {
