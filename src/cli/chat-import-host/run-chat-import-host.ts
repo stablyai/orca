@@ -40,7 +40,21 @@ export function runChatImportHost(options: {
       }
     }
     const respond = (raw: string): void => {
-      options.output.write(encodeNativeMessage(processChatImportHostMessage(db, raw, now())))
+      const response = processChatImportHostMessage(db, raw, now())
+      let frame: Buffer
+      try {
+        frame = encodeNativeMessage(response)
+      } catch (err) {
+        // Why: a response can exceed Chrome's 1 MB outbound limit (e.g. a large
+        // INGESTED_IDS list). encodeNativeMessage throws rather than emit a frame
+        // the browser would drop; answer with a small ERROR frame instead of
+        // letting the exception crash the host inside the 'data' listener.
+        frame = encodeNativeMessage({
+          type: 'ERROR',
+          error: err instanceof Error ? err.message : String(err)
+        })
+      }
+      options.output.write(frame)
     }
     options.input.on('data', (chunk: Buffer) => {
       let frames: string[]
