@@ -3,12 +3,9 @@ import { join } from 'node:path'
 import { ModelManager } from './model-manager'
 import { SttService } from './stt-service'
 import type { VoiceSettings } from '../../shared/speech-types'
-import { createLinuxPlaybackSuppressionAdapter } from './playback-suppression-linux'
-import {
-  PlaybackSuppressionService,
-  type PlaybackSuppressionAdapter
-} from './playback-suppression-service'
+import { PlaybackSuppressionService } from './playback-suppression-service'
 import { PlaybackSuppressionRecoveryFile } from './playback-suppression-recovery-file'
+import { createPlaybackSuppressionAdapter } from './playback-suppression-platform'
 
 type SpeechSettingsStore = {
   getSettings(): {
@@ -19,16 +16,6 @@ type SpeechSettingsStore = {
 let modelManager: ModelManager | null = null
 let sttService: SttService | null = null
 let playbackSuppressionService: PlaybackSuppressionService | null = null
-
-const unsupportedPlaybackSuppressionAdapter: PlaybackSuppressionAdapter = {
-  getCapability: async () => false,
-  snapshot: async () => {
-    throw new Error('System audio muting is not supported on this operating system yet.')
-  },
-  setMuted: async () => {
-    throw new Error('System audio muting is not supported on this operating system yet.')
-  }
-}
 
 export function getSpeechModelManager(store: SpeechSettingsStore): ModelManager {
   if (!modelManager) {
@@ -49,9 +36,10 @@ export function getSpeechSttService(store: SpeechSettingsStore): SttService {
 export function getPlaybackSuppressionService(): PlaybackSuppressionService {
   if (!playbackSuppressionService) {
     playbackSuppressionService = new PlaybackSuppressionService(
-      process.platform === 'linux'
-        ? createLinuxPlaybackSuppressionAdapter()
-        : unsupportedPlaybackSuppressionAdapter,
+      createPlaybackSuppressionAdapter(process.platform, {
+        isPackaged: app.isPackaged,
+        resourcesPath: process.resourcesPath
+      }),
       new PlaybackSuppressionRecoveryFile(
         join(app.getPath('userData'), 'playback-suppression-recovery.json')
       )

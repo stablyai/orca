@@ -355,11 +355,35 @@ function getElectronExecutable() {
   return path.join(repoRoot, 'node_modules', '.bin', 'electron')
 }
 
+function preparePlaybackSuppressionHelper() {
+  const script =
+    process.platform === 'darwin'
+      ? 'build-playback-suppression-macos.mjs'
+      : process.platform === 'win32'
+        ? 'build-playback-suppression-windows.mjs'
+        : null
+  if (!script) {
+    return
+  }
+  const args = [path.join(repoRoot, 'config', 'scripts', script)]
+  if (process.platform === 'darwin') {
+    args.push('--single-arch')
+  }
+  try {
+    execFileSync(process.execPath, args, { stdio: 'inherit' })
+  } catch (error) {
+    // Why: missing native toolchains should disable muting in development,
+    // not prevent the rest of Orca from starting.
+    console.warn(`[orca-dev] playback suppression helper build failed: ${error?.message ?? error}`)
+  }
+}
+
 if (process.env.ORCA_SKIP_DEV_CLI_PREPARE !== '1') {
   prepareDevCliWrapper()
 }
 
 seedDevInstanceIdentityEnv()
+preparePlaybackSuppressionHelper()
 if (!useStableElectronName && process.env.ORCA_SKIP_DEV_ELECTRON_APP_PREPARE !== '1') {
   prepareMacDevElectronApp()
 }

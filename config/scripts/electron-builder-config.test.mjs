@@ -51,6 +51,10 @@ describe('electron-builder config', () => {
         expect.objectContaining({
           from: 'native/computer-use-macos/.build/release/Orca Computer Use.app',
           to: 'Orca Computer Use.app'
+        }),
+        expect.objectContaining({
+          from: 'native/playback-suppression-macos/.build/release/orca-playback-suppression',
+          to: 'playback-suppression/orca-playback-suppression'
         })
       ])
     )
@@ -71,6 +75,10 @@ describe('electron-builder config', () => {
         expect.objectContaining({
           from: 'native/windows-cli-launcher/.build/orca.exe',
           to: 'bin/orca.exe'
+        }),
+        expect.objectContaining({
+          from: 'native/playback-suppression-windows/.build/orca-playback-suppression.exe',
+          to: 'playback-suppression/orca-playback-suppression.exe'
         })
       ])
     )
