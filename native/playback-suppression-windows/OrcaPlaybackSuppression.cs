@@ -111,7 +111,8 @@ internal sealed class AudioEndpoint : IDisposable
     {
         get
         {
-            Marshal.ThrowExceptionForHR(volume.GetMute(out bool muted));
+            bool muted;
+            Marshal.ThrowExceptionForHR(volume.GetMute(out muted));
             return muted;
         }
         set
