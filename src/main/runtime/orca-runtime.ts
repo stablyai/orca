@@ -12933,11 +12933,9 @@ export class OrcaRuntimeService {
       await prepareLocalWorktreeRootForRepo(this.store, updated)
       invalidateAuthorizedRootsCache()
     }
+    this.invalidateResolvedWorktreeCache()
     if ('worktreeBasePath' in updates) {
-      this.invalidateResolvedWorktreeCache()
       this.invalidateWorktreeScanCacheForRepo(repo.id)
-    } else {
-      this.invalidateResolvedWorktreeCache()
     }
     this.notifyReposChanged()
     return updated
