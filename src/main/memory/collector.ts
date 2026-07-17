@@ -22,6 +22,7 @@
 import { basename } from 'node:path'
 import { exec, execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { performance } from 'node:perf_hooks'
 import os from 'node:os'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
 import {
@@ -46,6 +47,7 @@ export type MemorySnapshotStore = Pick<Store, 'getRepo' | 'getWorktreeMeta'>
 
 let inflight: Promise<MemorySnapshot> | null = null
 let windowsProcessBackend: 'typeperf' | 'cim' = 'typeperf'
+let previousWindowsCpuSample: WindowsCpuSample | null = null
 
 // ─── Public API ─────────────────────────────────────────────────────
 
@@ -85,7 +87,7 @@ const TYPEPERF_MAX_LINE_CHARS = 1024 * 1024
 type ProcRow = {
   pid: number
   ppid: number
-  /** Percent of one core (may exceed 100 on multi-core). 0 on Windows. */
+  /** Percent of one core (may exceed 100 on multi-core). */
   cpu: number
   /** Resident memory in bytes. */
   memory: number
@@ -95,6 +97,16 @@ type ProcRow = {
 type ProcIndex = {
   byPid: Map<number, ProcRow>
   childrenOf: Map<number, number[]>
+}
+
+type WindowsCpuTimes = {
+  cpuTicks: number
+  startTimeId: string
+}
+
+type WindowsCpuSample = {
+  sampledAtMs: number
+  byPid: Map<number, WindowsCpuTimes>
 }
 
 function clampNumber(value: unknown): number {
@@ -234,6 +246,45 @@ export function parsePsOutput(stdout: string): ProcRow[] {
 }
 
 async function enumerateWindows(): Promise<ProcRow[]> {
+  // Why: Typeperf's formatted CPU counter blocks for a rate interval. Sampling
+  // cumulative process time in parallel keeps the existing fast memory path.
+  const [rows, cpuSample] = await Promise.all([
+    enumerateWindowsProcessRows(),
+    enumerateWindowsCpuSample()
+  ])
+  if (!cpuSample) {
+    return rows
+  }
+
+  const previous = previousWindowsCpuSample
+  previousWindowsCpuSample = cpuSample
+  if (!previous) {
+    return rows
+  }
+  const elapsedMs = cpuSample.sampledAtMs - previous.sampledAtMs
+  if (elapsedMs <= 0) {
+    return rows
+  }
+  for (const row of rows) {
+    const currentTimes = cpuSample.byPid.get(row.pid)
+    const previousTimes = previous.byPid.get(row.pid)
+    // Start time distinguishes a live process from a later process that reused
+    // the same PID; counter resets likewise produce a zero sample, not a spike.
+    if (
+      !currentTimes ||
+      !previousTimes ||
+      currentTimes.startTimeId !== previousTimes.startTimeId ||
+      currentTimes.cpuTicks < previousTimes.cpuTicks
+    ) {
+      continue
+    }
+    const cpuMs = (currentTimes.cpuTicks - previousTimes.cpuTicks) / 10_000
+    row.cpu = clampNumber((cpuMs / elapsedMs) * 100)
+  }
+  return rows
+}
+
+async function enumerateWindowsProcessRows(): Promise<ProcRow[]> {
   // Why: WMIC is removed from current Windows releases, while WMI/CIM can be
   // slow or unavailable on otherwise healthy machines. typeperf reads the
   // built-in process counters without WMI and includes the PID, parent PID,
@@ -250,6 +301,48 @@ async function enumerateWindows(): Promise<ProcRow[]> {
     windowsProcessBackend = 'cim'
   }
   return enumerateWindowsWithCim()
+}
+
+async function enumerateWindowsCpuSample(): Promise<WindowsCpuSample | null> {
+  const args = [
+    '-NoLogo',
+    '-NoProfile',
+    '-NonInteractive',
+    '-Command',
+    'Get-Process | ForEach-Object { try { [string]::Join([char]9, @($_.Id, $_.TotalProcessorTime.Ticks, $_.StartTime.Ticks)) } catch {} }'
+  ]
+  try {
+    const stdout = await execFileText('powershell.exe', args)
+    return { sampledAtMs: performance.now(), byPid: parseWindowsCpuOutput(stdout) }
+  } catch (err) {
+    console.warn('[memory] PowerShell CPU sampling failed', err)
+    return null
+  }
+}
+
+function parseWindowsCpuOutput(stdout: string): Map<number, WindowsCpuTimes> {
+  const byPid = new Map<number, WindowsCpuTimes>()
+  for (const line of iterateProcessOutputLines(stdout)) {
+    const fields = getProcessOutputFields(line, 3)
+    if (fields.length < 3) {
+      continue
+    }
+    const pid = Number.parseInt(fields[0], 10)
+    const cpuTicks = Number.parseInt(fields[1], 10)
+    const startTimeId = fields[2]
+    if (
+      !Number.isSafeInteger(pid) ||
+      pid <= 0 ||
+      !Number.isSafeInteger(cpuTicks) ||
+      cpuTicks < 0 ||
+      !/^\d+$/.test(startTimeId) ||
+      /^0+$/.test(startTimeId)
+    ) {
+      continue
+    }
+    byPid.set(pid, { cpuTicks, startTimeId })
+  }
+  return byPid
 }
 
 async function enumerateWindowsWithTypeperf(): Promise<ProcRow[]> {
