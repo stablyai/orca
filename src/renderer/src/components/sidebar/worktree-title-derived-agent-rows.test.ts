@@ -3,6 +3,7 @@ import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
 import type { TerminalLayoutSnapshot, TerminalTab, TuiAgent } from '../../../../shared/types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
+import { resolveAgentTypeFromTerminalTitle } from './worktree-title-derived-agent-rows'
 
 const LEAF_ID_1 = '77777777-7777-4777-8777-777777777777'
 const LEAF_ID_2 = '88888888-8888-4888-8888-888888888888'
@@ -219,6 +220,14 @@ describe('buildTitleDerivedAgentRows', () => {
     expect(rowsFor('⠋ implementing the feature')).toHaveLength(0)
     expect(rowsFor('⠋ Claude Code').map((row) => row.agentType)).toEqual(['claude'])
     expect(rowsFor('zsh')).toHaveLength(0)
+  })
+
+  it('uses explicit owner evidence when resolving provider-neutral activity titles', () => {
+    expect(resolveAgentTypeFromTerminalTitle('⠋ implementing the feature', 'opencode')).toBe(
+      'opencode'
+    )
+    expect(resolveAgentTypeFromTerminalTitle('⠋ implementing the feature')).toBeNull()
+    expect(resolveAgentTypeFromTerminalTitle('⠋ Claude Code', 'opencode')).toBe('claude')
   })
 
   it('adds an idle Claude row for the Claude agents surface', () => {

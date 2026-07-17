@@ -228,7 +228,7 @@ export function resolveAgentTypeFromTerminalTitle(
   const label = resolveTitleActivityLabel(normalizedTitle)
   return label
     ? (resolveCompatibleAgentTypeForOwner(
-        resolveTitleDerivedAgentType(normalizedTitle, label),
+        resolveTitleDerivedAgentType(normalizedTitle, label, ownerAgentType),
         ownerAgentType
       ) ?? null)
     : null
