@@ -2967,6 +2967,31 @@ describe('terminal multiplex RPC', () => {
     expect(messages.map((msg) => JSON.parse(msg).result?.type)).toEqual(['subscribed', 'end'])
   })
 
+  it('waits for a desktop legacy subscriber PTY before the scrollback-only fallback', async () => {
+    const messages: string[] = []
+    const runtime = stubRuntime({
+      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
+      waitForLeafPtyId: vi.fn().mockRejectedValue(new Error('timeout')),
+      requestRendererTerminalTabMount: vi.fn().mockReturnValue(true),
+      readTerminal: vi.fn().mockResolvedValue({ tail: ['scrollback'], truncated: false })
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+    const dispatchPromise = dispatcher.dispatchStreaming(
+      makeRequest('terminal.subscribe', {
+        terminal: 'terminal-1',
+        client: { id: 'desktop-1', type: 'desktop' }
+      }),
+      (msg) => messages.push(msg),
+      { connectionId: 'conn-desktop-legacy' }
+    )
+    await dispatchPromise
+    // Widened gate: a desktop client must mount + await its late PTY, not skip
+    // straight to the bare scrollback path the way it did under the mobile-only gate.
+    expect(runtime.requestRendererTerminalTabMount).toHaveBeenCalledWith('terminal-1')
+    expect(runtime.waitForLeafPtyId).toHaveBeenCalledWith('terminal-1', 10_000, undefined)
+    expect(messages.map((msg) => JSON.parse(msg).result?.type)).toEqual(['subscribed', 'end'])
+  })
+
   it('keeps view-subscriber releases balanced when a same-streamId subscribe overwrites a blocked one', async () => {
     const messages: string[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
