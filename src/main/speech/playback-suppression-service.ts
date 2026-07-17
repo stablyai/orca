@@ -118,19 +118,6 @@ export class PlaybackSuppressionService {
     await this.pendingActivation
   }
 
-  async releaseAll(): Promise<void> {
-    this.owners.clear()
-    this.generation += 1
-    this.activationController?.abort()
-    const activeSnapshot = this.activeSnapshot
-    this.activeSnapshot = null
-    if (activeSnapshot && !activeSnapshot.muted) {
-      await this.restore(activeSnapshot)
-      return
-    }
-    await this.pendingActivation
-  }
-
   private async activate(
     generation: number,
     controller: AbortController
