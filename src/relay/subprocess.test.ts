@@ -54,9 +54,14 @@ afterAll(async () => {
   }
 })
 
-function spawn(args: string[] = [], env?: NodeJS.ProcessEnv): RelayProcess {
+function spawnRelayEntry(
+  entryPath: string,
+  args: string[] = [],
+  env?: NodeJS.ProcessEnv
+): RelayProcess {
   let relayArgs = args
   if (!args.includes('--sock-path')) {
+    // Why: Windows relays require a named pipe; filesystem socket paths fail with EACCES.
     const socketDir = mkdtempSync(path.join(tmpdir(), 'relay-sock-'))
     spawnedSocketDirs.push(socketDir)
     relayArgs = [
@@ -67,7 +72,11 @@ function spawn(args: string[] = [], env?: NodeJS.ProcessEnv): RelayProcess {
       path.join(socketDir, 'agent-hooks')
     ]
   }
-  return spawnRelay(relayEntry, relayArgs, env ? { env } : undefined)
+  return spawnRelay(entryPath, relayArgs, env ? { env } : undefined)
+}
+
+function spawn(args: string[] = [], env?: NodeJS.ProcessEnv): RelayProcess {
+  return spawnRelayEntry(relayEntry, args, env)
 }
 
 function waitForChildExit(
@@ -132,7 +141,7 @@ describe('Subprocess: Relay entry point', () => {
     const repairedRelayEntry = path.join(tmpDir, 'relay.js')
     copyFileSync(relayEntry, repairedRelayEntry)
 
-    relay = spawnRelay(repairedRelayEntry)
+    relay = spawnRelayEntry(repairedRelayEntry)
     await relay.sentinelReceived
 
     const failedId = relay.send('pty.spawn', { cols: 80, rows: 24 })
@@ -157,7 +166,7 @@ describe('Subprocess: Relay entry point', () => {
       true
     )
 
-    relay = spawnRelay(repairedRelayEntry)
+    relay = spawnRelayEntry(repairedRelayEntry)
     await relay.sentinelReceived
 
     const failedId = relay.send('pty.spawn', { cols: 80, rows: 24 })
