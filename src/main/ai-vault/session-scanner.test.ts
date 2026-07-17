@@ -2,12 +2,11 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
+import { AI_VAULT_AGENTS, WEB_CHAT_AGENTS } from '../../shared/ai-vault-types'
 import { scanAiVaultSessions } from './session-scanner'
 import {
   isolatedScanRoots,
   jsonLines,
-  seedWebChatDb,
   writeAntigravityScannerFixture
 } from './session-scanner-test-fixtures'
 
@@ -726,19 +725,16 @@ describe('scanAiVaultSessions', () => {
       ])
     )
 
-    // Web chat: imported conversations live in a chat-import SQLite DB, one
-    // row per source (chatgpt/claude-web/gemini-web), not on the filesystem.
-    await seedWebChatDb(roots.webchatDbPath, [
-      ['CHATGPT', 'chatgpt-session', 'ChatGPT vault title'],
-      ['CLAUDE', 'claude-web-session', 'Claude web vault title'],
-      ['GEMINI', 'gemini-web-session', 'Gemini web vault title']
-    ])
-
     const result = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
 
     expect(result.issues).toEqual([])
+    // Web chat sources live in a SQLite DB, not on the filesystem; this
+    // filesystem scan covers the CLI agents. Web chat scanning has its own
+    // suites (session-scanner-webchat-*.test.ts).
+    const webChatAgents: ReadonlySet<string> = new Set(WEB_CHAT_AGENTS)
+    const filesystemAgents = AI_VAULT_AGENTS.filter((agent) => !webChatAgents.has(agent))
     expect(new Set(result.sessions.map((session) => session.agent))).toEqual(
-      new Set(AI_VAULT_AGENTS)
+      new Set(filesystemAgents)
     )
 
     const commandByAgent = new Map(
@@ -777,11 +773,6 @@ describe('scanAiVaultSessions', () => {
     expect(commandByAgent.get('kimi')).toBe(
       "cd '/tmp/kimi' && kimi --session 'session_kimi-session'"
     )
-    // Web chat conversations are read-only imports, not a launchable CLI agent.
-    expect(commandByAgent.get('chatgpt')).toBe('')
-    expect(commandByAgent.get('claude-web')).toBe('')
-    expect(commandByAgent.get('gemini-web')).toBe('')
-
     const ompSession = result.sessions.find((session) => session.agent === 'omp')
     expect(ompSession?.model).toBe('gpt-5.4-mini')
     expect(ompSession?.totalTokens).toBe(160)
