@@ -40,12 +40,18 @@ export async function ensureProjectQuickCommandTrusted(
   }
   const ownerIdentity = getRepoHostIdentity(owners[0])
   let inspectedHooks: OrcaHooks | null | undefined
-  const decision = await ensureHooksConfirmed(state, scope.repoId, 'quickCommands',
-    undefined, undefined, {
-    onSharedHooksInspected: (yamlHooks) => {
-      inspectedHooks = yamlHooks
+  const decision = await ensureHooksConfirmed(
+    state,
+    scope.repoId,
+    'quickCommands',
+    undefined,
+    undefined,
+    {
+      onSharedHooksInspected: (yamlHooks) => {
+        inspectedHooks = yamlHooks
+      }
     }
-  })
+  )
   if (decision !== 'run') {
     return null
   }
@@ -54,6 +60,12 @@ export async function ensureProjectQuickCommandTrusted(
     return null
   }
   const fresh = getProjectTerminalQuickCommands(inspectedHooks?.quickCommands, scope.repoId)
+  const currentOwners = useAppStore.getState().repos.filter((repo) => repo.id === scope.repoId)
+  if (currentOwners.length !== 1 || getRepoHostIdentity(currentOwners[0]) !== ownerIdentity) {
+    // Why: the trust prompt can outlive repo removal or owner replacement;
+    // content inspected on the old host must never execute in the new context.
+    return null
+  }
   // Keep the menu cache honest: it should reflect the read the user just acted
   // on. Guard the owner identity so removal/replacement during the prompt can't
   // resurrect an orphaned bucket or publish one host's commands for another.

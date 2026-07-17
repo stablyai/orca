@@ -177,9 +177,9 @@ describe('ensureProjectQuickCommandTrusted', () => {
     expect(trusted).toMatchObject({ id: 'orca-yaml:dev-server', command: 'echo approved-safe' })
   })
 
-  it('does not resurrect the cache bucket when the repo was removed during the prompt', async () => {
-    // Why: the repo can be removed (and its bucket pruned) while the trust prompt
-    // is open; approving must not write an orphaned bucket for a gone repo.
+  it('refuses execution when the repo was removed during the prompt', async () => {
+    // Why: the repo can be removed while the trust prompt is open; approving
+    // content inspected on its former host must neither execute nor repopulate it.
     checkRuntimeHooksMock.mockResolvedValue(
       okHooksResult([{ action: 'terminal-command', label: 'Dev server', command: 'echo fresh' }])
     )
@@ -189,10 +189,26 @@ describe('ensureProjectQuickCommandTrusted', () => {
     useAppStore.setState({ repos: [{ id: 'other-repo', displayName: 'Other' }] } as never)
     pending[0].resolve('run')
 
-    const trusted = await promise
-    // Execution still proceeds with the freshly read command...
-    expect(trusted).toMatchObject({ id: 'orca-yaml:dev-server', command: 'echo fresh' })
-    // ...but no bucket is written for the repo that no longer exists.
+    await expect(promise).resolves.toBeNull()
+    expect(
+      (useAppStore.getState() as never as Record<string, Record<string, unknown>>)
+        .projectQuickCommandsByRepo
+    ).not.toHaveProperty('repo-1')
+  })
+
+  it('refuses execution when the repo owner changes during the prompt', async () => {
+    checkRuntimeHooksMock.mockResolvedValue(
+      okHooksResult([{ action: 'terminal-command', label: 'Dev server', command: 'echo local' }])
+    )
+
+    const promise = ensureProjectQuickCommandTrusted(cachedProjectCommand)
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    useAppStore.setState({
+      repos: [{ id: 'repo-1', displayName: 'Repo One (SSH)', connectionId: 'ssh-1' }]
+    } as never)
+    pending[0].resolve('run')
+
+    await expect(promise).resolves.toBeNull()
     expect(
       (useAppStore.getState() as never as Record<string, Record<string, unknown>>)
         .projectQuickCommandsByRepo
