@@ -17,6 +17,9 @@ vi.mock('node:child_process', async (importOriginal) =>
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+vi.mock('../opencode/config-source', () =>
+  import('./pty-ipc-mock-registry').then((m) => m.openCodeConfigSourceModuleMock())
+)
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )

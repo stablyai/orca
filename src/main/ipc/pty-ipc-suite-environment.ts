@@ -20,6 +20,7 @@ import {
   loginPreflightExecFileMock,
   spawnMock,
   openCodeBuildPtyEnvMock,
+  resolveDefaultOpenCodeConfigDirMock,
   mimoCodeBuildPtyEnvMock,
   openCodeClearPtyMock,
   buildAgentHookEnvMock,
@@ -143,6 +144,7 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     loginPreflightExecFileMock.mockReset()
     spawnMock.mockReset()
     openCodeBuildPtyEnvMock.mockReset()
+    resolveDefaultOpenCodeConfigDirMock.mockReset()
     mimoCodeBuildPtyEnvMock.mockReset()
     openCodeClearPtyMock.mockReset()
     buildAgentHookEnvMock.mockReset()
@@ -204,6 +206,7 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
     // size: the shell wrapper writer verifies each generated file is non-empty.
     statSyncMock.mockReturnValue({ isDirectory: () => true, mode: 0o755, size: 1 })
     readFileSyncMock.mockReturnValue('')
+    resolveDefaultOpenCodeConfigDirMock.mockReturnValue(undefined)
     openCodeBuildPtyEnvMock.mockImplementation((_ptyId: string, existingConfigDir?: string) => ({
       ORCA_OPENCODE_HOOK_PORT: '4567',
       ORCA_OPENCODE_HOOK_TOKEN: 'opencode-token',
