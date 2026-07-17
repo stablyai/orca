@@ -91,10 +91,6 @@ export function getAppIconPath(value: unknown): string {
   return process.platform === 'win32' ? WINDOWS_APP_ICON_PATHS[iconId] : APP_ICON_PATHS[iconId]
 }
 
-export function getWindowsAppIconPath(value: unknown): string {
-  return WINDOWS_APP_ICON_PATHS[normalizeAppIconId(value)]
-}
-
 export function createAppIconImage(value: unknown): Electron.NativeImage {
   return nativeImage.createFromPath(getAppIconPath(value))
 }
@@ -319,7 +315,8 @@ export function applyAppIcon(value: unknown): void {
     }
   }
   persistMacDockIcon(value)
-  // Why: both settings-time changes and startup self-healing must update the
-  // same Orca-owned Windows launchers without changing the running AUMID.
-  updateWindowsAppShortcutIcon(getWindowsAppIconPath(value))
+  // Why: shortcut mutation is Windows-only; the callee's guard protects direct callers.
+  if (process.platform === 'win32') {
+    updateWindowsAppShortcutIcon(getAppIconPath(value))
+  }
 }

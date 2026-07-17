@@ -73,7 +73,7 @@ vi.mock('../../resources/app-icons/orca-blue.ico?asset&asarUnpack', () => ({
   default: 'blue-windows-icon-unpacked'
 }))
 
-import { applyAppIcon, getAppIconPath, getWindowsAppIconPath, persistMacDockIcon } from './app-icon'
+import { applyAppIcon, getAppIconPath, persistMacDockIcon } from './app-icon'
 
 function waitForQueuedPersistence(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve))
@@ -108,12 +108,7 @@ describe('app icon selection', () => {
     vi.useRealTimers()
   })
 
-  it('resolves platform app icons and Windows shortcut icons', () => {
-    expect(getWindowsAppIconPath('classic')).toBe('classic-windows-icon-unpacked')
-    expect(getWindowsAppIconPath('watercolor')).toBe('watercolor-windows-icon-unpacked')
-    expect(getWindowsAppIconPath('blue')).toBe('blue-windows-icon-unpacked')
-    expect(getWindowsAppIconPath('missing')).toBe('classic-windows-icon-unpacked')
-
+  it('resolves app icons for the current platform', () => {
     const expectedPaths =
       process.platform === 'win32'
         ? [
@@ -130,6 +125,25 @@ describe('app icon selection', () => {
       getAppIconPath('blue'),
       getAppIconPath('missing')
     ]).toEqual(expectedPaths)
+  })
+
+  it('resolves Windows ICO paths through the platform-aware icon API', () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    try {
+      expect([
+        getAppIconPath('classic'),
+        getAppIconPath('watercolor'),
+        getAppIconPath('blue'),
+        getAppIconPath('missing')
+      ]).toEqual([
+        'classic-windows-icon-unpacked',
+        'watercolor-windows-icon-unpacked',
+        'blue-windows-icon-unpacked',
+        'classic-windows-icon-unpacked'
+      ])
+    } finally {
+      platformSpy.mockRestore()
+    }
   })
 
   it('applies the selected icon to the dock and live windows', () => {
@@ -156,9 +170,13 @@ describe('app icon selection', () => {
     }
     expect(windowSetIconMock).toHaveBeenCalledWith(image)
     expect(windowSetAppDetailsMock).not.toHaveBeenCalled()
-    expect(updateWindowsAppShortcutIconMock).toHaveBeenCalledWith(
-      'watercolor-windows-icon-unpacked'
-    )
+    if (process.platform === 'win32') {
+      expect(updateWindowsAppShortcutIconMock).toHaveBeenCalledWith(
+        'watercolor-windows-icon-unpacked'
+      )
+    } else {
+      expect(updateWindowsAppShortcutIconMock).not.toHaveBeenCalled()
+    }
   })
 
   it.skipIf(process.platform !== 'win32')(
