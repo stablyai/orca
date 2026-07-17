@@ -1,3 +1,4 @@
+import { loadHooks } from './hooks'
 import {
   buildServiceContextEnv,
   deriveServiceSlug,
@@ -24,6 +25,22 @@ export {
   SERVICE_COMMAND_TIMEOUT_MS,
   sanitizeServiceCommandOutput
 } from './worktree-service-command'
+
+// Why: provisioning reads recipes from the worktree's own orca.yaml (the
+// checked-out branch may declare services the repo's default checkout does
+// not), so every later lifecycle command (status/start/stop/destroy/retry)
+// must resolve from the same source, falling back to the repo root only when
+// the worktree copy is missing or declares none.
+export function loadServiceRecipesForWorktree(
+  worktreePath: string,
+  repoPath: string
+): OrcaServiceRecipe[] {
+  const worktreeServices = loadHooks(worktreePath)?.services
+  if (worktreeServices && worktreeServices.length > 0) {
+    return worktreeServices
+  }
+  return loadHooks(repoPath)?.services ?? []
+}
 
 export type ServiceProvisionEvent = {
   provisionId: string
@@ -221,6 +238,17 @@ export async function runWorktreeServiceAction(args: {
   const env = { ...record.env, ORCA_WORKTREE_PATH: args.worktreePath }
   const provisioned = new Set(record.serviceIds)
   const errors: string[] = []
+  // Why: a stale panel can target a service that is no longer provisioned or
+  // declared; silently succeeding would hide that the action never ran.
+  if (
+    args.serviceId &&
+    !args.services.some((s) => s.id === args.serviceId && provisioned.has(s.id))
+  ) {
+    return {
+      success: false,
+      errors: [`Service "${args.serviceId}" is not provisioned for this worktree.`]
+    }
+  }
   for (const service of args.services) {
     if (!provisioned.has(service.id)) {
       continue

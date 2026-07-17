@@ -15,6 +15,14 @@ vi.mock('electron', () => ({
   ipcMain: { handle: handleMock, removeHandler: removeHandlerMock }
 }))
 
+const { provisionMock } = vi.hoisted(() => ({ provisionMock: vi.fn() }))
+vi.mock('../worktree-services', () => ({
+  getWorktreeServicesRuntime: vi.fn(),
+  loadServiceRecipesForWorktree: vi.fn(() => []),
+  provisionWorktreeServices: provisionMock,
+  runWorktreeServiceAction: vi.fn()
+}))
+
 import { registerWorktreeServicesHandlers } from './worktree-services'
 import { upsertWorktreeServicesRecord } from '../../shared/worktree-services-store'
 import type { WorktreeServicesRecord } from '../../shared/worktree-services'
@@ -64,5 +72,29 @@ describe('registerWorktreeServicesHandlers', () => {
     const list = handlers.get('worktreeServices:list')!
     const result = await list({}, undefined as never)
     expect(result).toEqual([record('wt-1')])
+  })
+
+  it('joins concurrent retries for the same worktree instead of double-provisioning', async () => {
+    const repoStore = {
+      getRepo: vi.fn(() => ({ id: 'repo-1', path: '/tmp/repo' })),
+      getWorktreeMeta: vi.fn(() => undefined)
+    } as never
+    let release: ((value: WorktreeServicesRecord) => void) | undefined
+    provisionMock.mockImplementation(
+      () =>
+        new Promise<WorktreeServicesRecord>((resolve) => {
+          release = resolve
+        })
+    )
+    registerWorktreeServicesHandlers(repoStore)
+    const retry = handlers.get('worktreeServices:retry')!
+    const event = { sender: { send: vi.fn() } }
+    const worktreeId = 'repo-1::/tmp/wt'
+    const first = retry(event, { worktreeId } as never)
+    const second = retry(event, { worktreeId } as never)
+    release!(record(worktreeId))
+    const [a, b] = await Promise.all([first, second])
+    expect(provisionMock).toHaveBeenCalledTimes(1)
+    expect(a).toEqual(b)
   })
 })

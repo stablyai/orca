@@ -1,4 +1,5 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { EventEmitter } from 'node:events'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -10,7 +11,12 @@ vi.mock('node:child_process', async (importOriginal) => {
   return { ...actual, exec: execMock }
 })
 
-import { destroyWorktreeServices, provisionWorktreeServices } from './worktree-services'
+import {
+  destroyWorktreeServices,
+  loadServiceRecipesForWorktree,
+  provisionWorktreeServices,
+  runWorktreeServiceAction
+} from './worktree-services'
 import { getWorktreeServicesRecord } from '../shared/worktree-services-store'
 import type { OrcaServiceRecipe, Repo } from '../shared/types'
 
@@ -57,6 +63,33 @@ describe('provisionWorktreeServices', () => {
     expect(record.env.DATABASE_URL).toBe('pg://localhost:20000/app')
     expect(record.env.ORCA_WORKTREE_SLUG).toBe('my-task-s0')
     expect(getWorktreeServicesRecord(dir, 'wt-1')?.status).toBe('ready')
+  })
+
+  it('survives a provision event listener that throws mid-stream', async () => {
+    execMock.mockImplementation((_cmd, _opts, cb) => {
+      const child = Object.assign(new EventEmitter(), {
+        stdout: new EventEmitter(),
+        stderr: new EventEmitter(),
+        kill: vi.fn()
+      })
+      queueMicrotask(() => {
+        child.stdout.emit('data', 'pulling image…')
+        cb(null, 'ok', '')
+      })
+      return child
+    })
+    const record = await provisionWorktreeServices({
+      userDataPath: dir,
+      worktreeId: 'wt-1',
+      worktreeName: 'task',
+      worktreePath: '/tmp/x',
+      repo,
+      services,
+      onEvent: () => {
+        throw new Error('window destroyed')
+      }
+    })
+    expect(record.status).toBe('ready')
   })
 
   it('marks create_failed and keeps the record on command failure', async () => {
@@ -136,5 +169,72 @@ describe('destroyWorktreeServices', () => {
     })
     expect(result).toEqual({ success: true, errors: [] })
     expect(execMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('runWorktreeServiceAction', () => {
+  it('fails when the targeted service is not provisioned', async () => {
+    execSucceeds()
+    await provisionWorktreeServices({
+      userDataPath: dir,
+      worktreeId: 'wt-1',
+      worktreeName: 'task',
+      worktreePath: '/tmp/x',
+      repo,
+      services
+    })
+    execMock.mockClear()
+    const result = await runWorktreeServiceAction({
+      userDataPath: dir,
+      worktreeId: 'wt-1',
+      worktreePath: '/tmp/x',
+      services,
+      action: 'start',
+      serviceId: 'ghost'
+    })
+    expect(result.success).toBe(false)
+    expect(result.errors[0]).toContain('ghost')
+    expect(execMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('loadServiceRecipesForWorktree', () => {
+  it('prefers the worktree orca.yaml over the repo root', () => {
+    const worktreeDir = join(dir, 'wt')
+    const repoDir = join(dir, 'repo')
+    mkdirSync(worktreeDir, { recursive: true })
+    mkdirSync(repoDir, { recursive: true })
+    writeFileSync(
+      join(worktreeDir, 'orca.yaml'),
+      'services:\n  - id: branch-db\n    name: Branch DB\n    create: echo up\n'
+    )
+    writeFileSync(
+      join(repoDir, 'orca.yaml'),
+      'services:\n  - id: root-db\n    name: Root DB\n    create: echo up\n'
+    )
+    expect(loadServiceRecipesForWorktree(worktreeDir, repoDir).map((s) => s.id)).toEqual([
+      'branch-db'
+    ])
+  })
+
+  it('falls back to the repo root when the worktree declares no services', () => {
+    const worktreeDir = join(dir, 'wt')
+    const repoDir = join(dir, 'repo')
+    mkdirSync(worktreeDir, { recursive: true })
+    mkdirSync(repoDir, { recursive: true })
+    writeFileSync(join(worktreeDir, 'orca.yaml'), 'scripts:\n  setup: echo hi\n')
+    writeFileSync(
+      join(repoDir, 'orca.yaml'),
+      'services:\n  - id: root-db\n    name: Root DB\n    create: echo up\n'
+    )
+    expect(loadServiceRecipesForWorktree(worktreeDir, repoDir).map((s) => s.id)).toEqual([
+      'root-db'
+    ])
+  })
+
+  it('returns empty when neither location declares services', () => {
+    const worktreeDir = join(dir, 'wt')
+    mkdirSync(worktreeDir, { recursive: true })
+    expect(loadServiceRecipesForWorktree(worktreeDir, join(dir, 'missing'))).toEqual([])
   })
 })

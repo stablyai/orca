@@ -1,9 +1,9 @@
 import { basename } from 'node:path'
 import { app, ipcMain } from 'electron'
 import type { Store } from '../persistence'
-import { loadHooks } from '../hooks'
 import {
   getWorktreeServicesRuntime,
+  loadServiceRecipesForWorktree,
   provisionWorktreeServices,
   runWorktreeServiceAction
 } from '../worktree-services'
@@ -28,7 +28,7 @@ function resolveServicesContext(
   if (repo.connectionId) {
     throw new Error('Isolated services are not supported for remote repositories.')
   }
-  return { repo, worktreePath, services: loadHooks(repo.path)?.services ?? [] }
+  return { repo, worktreePath, services: loadServiceRecipesForWorktree(worktreePath, repo.path) }
 }
 
 export function registerWorktreeServicesHandlers(store: Store): void {
@@ -41,13 +41,20 @@ export function registerWorktreeServicesHandlers(store: Store): void {
     listWorktreeServicesRecords(app.getPath('userData'))
   )
 
+  // Why: the card badge retry has no disabled state; a double-click must join
+  // the in-flight provision instead of racing two create runs on one slug.
+  const retriesInFlight = new Map<string, Promise<WorktreeServicesRecord>>()
   ipcMain.handle(
     'worktreeServices:retry',
     async (event, args: { worktreeId: string }): Promise<WorktreeServicesRecord> => {
+      const inFlight = retriesInFlight.get(args.worktreeId)
+      if (inFlight) {
+        return inFlight
+      }
       const { repo, worktreePath, services } = resolveServicesContext(store, args.worktreeId)
       const worktreeName =
         store.getWorktreeMeta(args.worktreeId)?.displayName ?? basename(worktreePath)
-      return provisionWorktreeServices({
+      const retry = provisionWorktreeServices({
         userDataPath: app.getPath('userData'),
         worktreeId: args.worktreeId,
         worktreeName,
@@ -56,7 +63,9 @@ export function registerWorktreeServicesHandlers(store: Store): void {
         services,
         onEvent: (provisionEvent) =>
           event.sender.send('worktreeServices:provisionEvent', provisionEvent)
-      })
+      }).finally(() => retriesInFlight.delete(args.worktreeId))
+      retriesInFlight.set(args.worktreeId, retry)
+      return retry
     }
   )
 

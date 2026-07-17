@@ -1,12 +1,33 @@
 import { exec, execFile } from 'node:child_process'
+import { promptGuardShellEnv } from './git/runner'
 import { isWslPath, parseWslPath, toLinuxPath } from './wsl'
 
 export const SERVICE_COMMAND_TIMEOUT_MS = 600_000
 // Why: status probes run on every panel open; a hung probe must not sit for 10 minutes.
 export const SERVICE_STATUS_TIMEOUT_MS = 30_000
+// Why: exec kills the child once buffered output exceeds maxBuffer; the default
+// 1 MiB is routinely blown by `docker compose up` image pulls, which would fail
+// (and roll back) an otherwise healthy create. Output persisted to the store is
+// still capped by sanitizeServiceCommandOutput.
+const SERVICE_COMMAND_MAX_BUFFER = 64 * 1024 * 1024
 
 export type ServiceCommandResult = { success: boolean; output: string }
 export type ServiceCommandStreamHandler = (stream: 'stdout' | 'stderr', chunk: string) => void
+
+// Why: stream handlers forward to webContents.send, which throws once the
+// window is destroyed mid-provision; a throw inside a stream 'data' listener
+// would escape the promise as an uncaught main-process exception.
+function safeChunk(
+  onChunk: ServiceCommandStreamHandler | undefined,
+  stream: 'stdout' | 'stderr',
+  chunk: unknown
+): void {
+  try {
+    onChunk?.(stream, String(chunk))
+  } catch {
+    // Drop the chunk — provisioning must outlive its progress listener.
+  }
+}
 
 // Why: raw create/destroy output is persisted and surfaced in the UI; service
 // commands routinely print connection strings and credentials, so scrub the
@@ -43,7 +64,11 @@ export function runServiceCommand(
         cwd: worktreePath,
         shell: getServiceShell(),
         timeout: timeoutMs,
-        env: { ...process.env, ...env }
+        maxBuffer: SERVICE_COMMAND_MAX_BUFFER,
+        // Why: service commands run unattended — same Git Credential Manager
+        // prompt guard as the hook runner (issue #7652), so a `git fetch`
+        // inside a recipe cannot pop an OAuth window and hang the provision.
+        env: promptGuardShellEnv({ ...process.env, ...env })
       },
       (error, stdout, stderr) => {
         resolve({
@@ -52,8 +77,8 @@ export function runServiceCommand(
         })
       }
     )
-    child.stdout?.on('data', (chunk: string) => onChunk?.('stdout', String(chunk)))
-    child.stderr?.on('data', (chunk: string) => onChunk?.('stderr', String(chunk)))
+    child.stdout?.on('data', (chunk: string) => safeChunk(onChunk, 'stdout', chunk))
+    child.stderr?.on('data', (chunk: string) => safeChunk(onChunk, 'stderr', chunk))
   })
 }
 
@@ -88,7 +113,11 @@ function runServiceCommandWsl(
       {
         timeout: timeoutMs,
         encoding: 'utf-8',
-        env: { ...process.env, ...wslEnv }
+        maxBuffer: SERVICE_COMMAND_MAX_BUFFER,
+        // Why: same unattended Git Credential Manager guard as the hook
+        // runner's WSL branch (issue #7652); its WSLENV registration is what
+        // carries the guard across the wsl.exe boundary into the distro.
+        env: promptGuardShellEnv({ ...process.env, ...wslEnv })
       },
       (error, stdout, stderr) => {
         resolve({
@@ -97,7 +126,7 @@ function runServiceCommandWsl(
         })
       }
     )
-    child.stdout?.on('data', (chunk: string) => onChunk?.('stdout', String(chunk)))
-    child.stderr?.on('data', (chunk: string) => onChunk?.('stderr', String(chunk)))
+    child.stdout?.on('data', (chunk: string) => safeChunk(onChunk, 'stdout', chunk))
+    child.stderr?.on('data', (chunk: string) => safeChunk(onChunk, 'stderr', chunk))
   })
 }

@@ -1,7 +1,7 @@
 /* oxlint-disable max-lines */
 import type { BrowserWindow } from 'electron'
 import { app, ipcMain } from 'electron'
-import { destroyWorktreeServices } from '../worktree-services'
+import { destroyWorktreeServices, loadServiceRecipesForWorktree } from '../worktree-services'
 import { getWorktreeServicesRecord } from '../../shared/worktree-services-store'
 import { readFile, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
@@ -1837,7 +1837,7 @@ export function registerWorktreeHandlers(
               worktreeId: args.worktreeId,
               worktreePath: canonicalWorktreePath,
               repo,
-              services: loadHooks(repo.path)?.services ?? []
+              services: loadServiceRecipesForWorktree(canonicalWorktreePath, repo.path)
             })
             if (!destroyResult.success) {
               serviceDestroyErrors = destroyResult.errors
