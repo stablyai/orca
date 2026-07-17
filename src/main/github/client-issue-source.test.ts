@@ -206,6 +206,43 @@ describe('GitHub issue source split', () => {
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(2, prListArgs('fork/orca'), {})
   })
 
+  it('does not run a repo-less issue search when the issue source is unresolved (recent)', async () => {
+    // #9202: gh api search/issues ignores cwd, so a repo-less issue query returns
+    // issues from all of GitHub. When the issue source can't be resolved (e.g. the
+    // default remote is not named origin), the issue side must stay empty instead
+    // of leaking foreign issues stamped with this project.
+    resolveIssueSourceMock.mockResolvedValueOnce({ source: null, fellBack: false })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+
+    const result = await listWorkItems('/repo-root', 10)
+
+    // Only the PR list runs; the issue side never spawns a search/issues call.
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    const ranIssueSearch = ghExecFileAsyncMock.mock.calls.some((call) =>
+      (call[0] as string[]).some((arg) => arg.startsWith('search/issues?'))
+    )
+    expect(ranIssueSearch).toBe(false)
+    expect(result.items).toEqual([])
+    expect(result.sources.issues).toBeNull()
+  })
+
+  it('does not run a repo-less issue search when the issue source is unresolved (queried)', async () => {
+    // #9202: same guard for the explicit-query path.
+    resolveIssueSourceMock.mockResolvedValueOnce({ source: null, fellBack: false })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+
+    const result = await listWorkItems('/repo-root', 10, 'is:open')
+
+    const ranIssueSearch = ghExecFileAsyncMock.mock.calls.some((call) =>
+      (call[0] as string[]).some((arg) => arg.startsWith('search/issues?'))
+    )
+    expect(ranIssueSearch).toBe(false)
+    expect(result.items).toEqual([])
+    expect(result.sources.issues).toBeNull()
+  })
+
   it('uses upstream for issue-only queries and origin for PR-only queries', async () => {
     getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'fork', repo: 'orca' })

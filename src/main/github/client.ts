@@ -1164,11 +1164,12 @@ async function listRecentWorkItems(
     // PR half — the UI renders partial results plus a banner for the failing
     // side, matching the parent design doc's partial-failure rule (§2).
     const [issuesSettled, prsSettled] = await Promise.allSettled([
+      // Why: gh api search/issues ignores cwd/--repo, so a repo-less issue query
+      // silently searches all of GitHub. Only run it with a resolved owner/repo;
+      // otherwise scope issues to empty rather than leaking foreign issues (#9202).
       issueOwnerRepo
         ? ghExecFileAsync(issueRequest.args, ghOptions)
-        : requiresExplicitRepo
-          ? Promise.resolve({ stdout: '[]' })
-          : ghCwdResolvedExec(repoContext, issueRequest.args, ghOptions),
+        : Promise.resolve({ stdout: '[]' }),
       prOwnerRepo
         ? ghExecFileAsync(prRequest.args, ghOptions)
         : requiresExplicitRepo
@@ -1225,17 +1226,14 @@ async function listRecentWorkItems(
     }
   }
 
-  // Why: the fallback path (non-GitHub remote — neither issueOwnerRepo nor
-  // prOwnerRepo resolved) intentionally stays on Promise.all rather than the
-  // Promise.allSettled + per-side classification used above. There are no
-  // `sources` to surface on this branch and nothing for the partial-failure
-  // banner to render, so a single-side failure here means the whole call is
-  // effectively unusable for the feature — reject-all matches reality. If
-  // non-GitHub remotes ever grow source metadata, revisit this symmetry.
-  const [issuesResult, prsResult] = await Promise.all([
-    ghCwdResolvedExec(repoContext, issueRequest.args, ghOptions),
-    ghCwdResolvedExec(repoContext, prRequest.args, ghOptions)
-  ])
+  // Why: the fallback path (neither issueOwnerRepo nor prOwnerRepo resolved)
+  // has no `sources` to surface and nothing for the partial-failure banner to
+  // render, so a PR-side failure means the whole call is effectively unusable
+  // for the feature — letting it reject matches reality. The issue side stays
+  // empty because gh api search/issues ignores cwd, so a repo-less query would
+  // silently search all of GitHub rather than this repo (#9202).
+  const issuesResult = { stdout: '[]' }
+  const prsResult = await ghCwdResolvedExec(repoContext, prRequest.args, ghOptions)
 
   const issues = (JSON.parse(issuesResult.stdout) as Record<string, unknown>[])
     .filter((item) => !('pull_request' in item))
@@ -1281,7 +1279,10 @@ async function listQueriedWorkItems(
     if (!issueScope) {
       return { items: [] }
     }
-    if (requiresExplicitRepo && !issueOwnerRepo) {
+    // Why: gh api search/issues ignores cwd/--repo, so without a resolved
+    // owner/repo the query silently searches all of GitHub. Return empty rather
+    // than leaking foreign issues (#9202). PRs below can still resolve via cwd.
+    if (!issueOwnerRepo) {
       return { items: [] }
     }
     const request = buildWorkItemListRequest({
@@ -1292,9 +1293,7 @@ async function listQueriedWorkItems(
       page: page ?? 1
     })
     try {
-      const { stdout } = issueOwnerRepo
-        ? await ghExecFileAsync(request.args, ghOptions)
-        : await ghCwdResolvedExec(repoContext, request.args, ghOptions)
+      const { stdout } = await ghExecFileAsync(request.args, ghOptions)
       const items = (JSON.parse(stdout) as Record<string, unknown>[])
         .filter((item) => !('pull_request' in item))
         .map(mapIssueWorkItem)

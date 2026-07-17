@@ -114,12 +114,14 @@ describe('listWorkItems', () => {
     )
 
     await expect(listWorkItems('/no-remote-repo', 36)).rejects.toThrow('no git remotes found')
-    // The first refresh pays the two cwd-fallback spawns (issue + pr list).
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    // The first refresh pays a single cwd-fallback spawn (pr list). The issue
+    // side no longer spawns a repo-less search/issues, which gh api runs against
+    // all of GitHub because it ignores cwd (#9202).
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
 
     await expect(listWorkItems('/no-remote-repo', 36)).rejects.toThrow('no git remotes found')
     // The second refresh is served from the negative cache — zero new spawns.
-    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
   it('runs both issue and PR GitHub searches for a mixed query and merges the results by recency', async () => {
