@@ -59,22 +59,29 @@ export function createLinuxPlaybackSuppressionAdapter(
   run: PlaybackSuppressionCommandRunner = runPlaybackSuppressionCommand
 ): PlaybackSuppressionAdapter {
   let selectedBackend: LinuxBackend | null = null
+  let selectedEndpointId: string | undefined
   let selectedEndpointTarget: string | undefined
+
+  const readWpctlEndpoint = async (
+    target: string,
+    signal?: AbortSignal
+  ): Promise<{ endpointId: string; endpointTarget: string }> => {
+    const { stdout } = await run('wpctl', ['inspect', target], signal)
+    const endpointId = /node\.name\s*=\s*"([^"]+)"/i.exec(stdout)?.[1]
+    const endpointTarget = /^id\s+(\d+),/im.exec(stdout)?.[1]
+    if (!endpointId || !endpointTarget) {
+      throw new Error('Could not identify the wpctl endpoint.')
+    }
+    return { endpointId, endpointTarget }
+  }
 
   const readEndpoint = async (
     backend: LinuxBackend,
     signal?: AbortSignal
   ): Promise<{ endpointId: string; endpointTarget: string }> => {
     switch (backend) {
-      case 'wpctl': {
-        const { stdout } = await run('wpctl', ['inspect', '@DEFAULT_AUDIO_SINK@'], signal)
-        const endpointId = /node\.name\s*=\s*"([^"]+)"/i.exec(stdout)?.[1]
-        const endpointTarget = /^id\s+(\d+),/im.exec(stdout)?.[1]
-        if (!endpointId || !endpointTarget) {
-          throw new Error('Could not identify the default wpctl endpoint.')
-        }
-        return { endpointId, endpointTarget }
-      }
+      case 'wpctl':
+        return readWpctlEndpoint('@DEFAULT_AUDIO_SINK@', signal)
       case 'pactl': {
         const { stdout } = await run('pactl', ['get-default-sink'], signal)
         const endpointId = stdout.trim()
@@ -96,6 +103,7 @@ export function createLinuxPlaybackSuppressionAdapter(
         }
         selectedBackend = candidate.backend
         const endpoint = await readEndpoint(candidate.backend, signal)
+        selectedEndpointId = endpoint.endpointId
         selectedEndpointTarget = endpoint.endpointTarget
         return {
           backend: candidate.backend,
@@ -126,16 +134,21 @@ export function createLinuxPlaybackSuppressionAdapter(
     if (!selectedBackend) {
       await probe(signal)
     }
+    const endpointId = snapshot?.endpointId ?? selectedEndpointId
     const endpointTarget = snapshot?.endpointTarget ?? selectedEndpointTarget
     const backend = snapshot?.backend ?? selectedBackend
     switch (backend) {
-      case 'wpctl':
-        await run(
-          'wpctl',
-          ['set-mute', endpointTarget ?? '@DEFAULT_AUDIO_SINK@', muted ? '1' : '0'],
-          signal
-        )
+      case 'wpctl': {
+        if (!endpointId || !endpointTarget) {
+          throw new Error('Muting requires a captured wpctl endpoint.')
+        }
+        const current = await readWpctlEndpoint(endpointTarget, signal)
+        if (current.endpointId !== endpointId || current.endpointTarget !== endpointTarget) {
+          throw new Error('The captured wpctl endpoint is no longer available.')
+        }
+        await run('wpctl', ['set-mute', endpointTarget, muted ? '1' : '0'], signal)
         return
+      }
       case 'pactl':
         await run(
           'pactl',

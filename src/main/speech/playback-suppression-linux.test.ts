@@ -30,8 +30,8 @@ describe('Linux playback suppression', () => {
     await adapter.setMuted(true)
     await adapter.setMuted(false)
 
-    expect(run).toHaveBeenNthCalledWith(3, 'wpctl', ['set-mute', '118', '1'], undefined)
-    expect(run).toHaveBeenNthCalledWith(4, 'wpctl', ['set-mute', '118', '0'], undefined)
+    expect(run).toHaveBeenNthCalledWith(4, 'wpctl', ['set-mute', '118', '1'], undefined)
+    expect(run).toHaveBeenNthCalledWith(6, 'wpctl', ['set-mute', '118', '0'], undefined)
   })
 
   it('preserves a muted wpctl snapshot', async () => {
@@ -84,7 +84,7 @@ describe('Linux playback suppression', () => {
       if (command === 'wpctl' && args[0] === 'get-volume' && wpctlAvailable) {
         return { stdout: 'Volume: 0.58\n', stderr: '' }
       }
-      if (command === 'wpctl' && args[0] === 'inspect' && wpctlAvailable) {
+      if (command === 'wpctl' && args[0] === 'inspect' && (wpctlAvailable || args[1] === '118')) {
         return {
           stdout:
             'id 118, type PipeWire:Interface:Node\n  * node.name = "bluez_output.speaker_1"\n',
@@ -110,6 +110,30 @@ describe('Linux playback suppression', () => {
     await adapter.setMuted(false, undefined, snapshot)
 
     expect(run).toHaveBeenLastCalledWith('wpctl', ['set-mute', '118', '0'], undefined)
+  })
+
+  it('refuses to restore a wpctl node ID that now belongs to another endpoint', async () => {
+    let endpointId = 'bluez_output.speaker_1'
+    const run = vi.fn<PlaybackSuppressionCommandRunner>(async (command, args) => {
+      if (command === 'wpctl' && args[0] === 'get-volume') {
+        return { stdout: 'Volume: 0.58\n', stderr: '' }
+      }
+      if (command === 'wpctl' && args[0] === 'inspect') {
+        return {
+          stdout: `id 118, type PipeWire:Interface:Node\n  * node.name = "${endpointId}"\n`,
+          stderr: ''
+        }
+      }
+      return { stdout: '', stderr: '' }
+    })
+    const adapter = createLinuxPlaybackSuppressionAdapter(run)
+    const snapshot = await adapter.snapshot()
+    endpointId = 'bluez_output.speaker_2'
+
+    await expect(adapter.setMuted(false, undefined, snapshot)).rejects.toThrow(
+      'captured wpctl endpoint'
+    )
+    expect(run).not.toHaveBeenCalledWith('wpctl', ['set-mute', '118', '0'], undefined)
   })
 
   it('does not treat malformed mixer output as an unmuted snapshot', async () => {
