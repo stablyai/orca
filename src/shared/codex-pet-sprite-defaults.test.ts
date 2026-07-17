@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   CODEX_PET_ANIMATIONS,
+  CODEX_PET_DEFAULT_COLUMNS,
   CODEX_PET_DEFAULT_FPS,
   applyCodexSpriteTimingDefaults,
   type CustomPetSprite
@@ -75,6 +76,28 @@ describe('applyCodexSpriteTimingDefaults', () => {
 
   it('leaves sprites without animations untouched', () => {
     const sprite = { ...legacyCodexSprite(), animations: undefined }
+    expect(applyCodexSpriteTimingDefaults(sprite)).toBe(sprite)
+  })
+
+  it('leaves a hand-authored 8 fps sheet that only reuses the Codex row map untouched', () => {
+    // Same fps + nine Codex rows, but non-Codex frame geometry — must not retime.
+    const sprite: CustomPetSprite = {
+      ...legacyCodexSprite(),
+      frameWidth: 32,
+      frameHeight: 32,
+      sheetWidth: CODEX_PET_DEFAULT_COLUMNS * 32,
+      sheetHeight: 9 * 32
+    }
+    expect(applyCodexSpriteTimingDefaults(sprite)).toBe(sprite)
+  })
+
+  it('leaves a sheet with a non-idle default animation untouched', () => {
+    const sprite = { ...legacyCodexSprite(), defaultAnimation: 'running' }
+    expect(applyCodexSpriteTimingDefaults(sprite)).toBe(sprite)
+  })
+
+  it('leaves a sheet with a non-Codex column count untouched', () => {
+    const sprite = { ...legacyCodexSprite(), columns: CODEX_PET_DEFAULT_COLUMNS + 2 }
     expect(applyCodexSpriteTimingDefaults(sprite)).toBe(sprite)
   })
 })
