@@ -734,15 +734,23 @@ final class Provider {
         recoverWindow(snapshot.app)
         if let elementIndex = try optionalInteger(params, "elementIndex") {
             let record = try element(snapshot, elementIndex)
-            if count <= 1, let actionName = try performClickAction(record: record, mouseButton: button) {
-                return actionMetadata(path: "accessibility", actionName: actionName)
+            let point = center(record.localFrame, in: snapshot.windowBounds)
+            if count <= 1 {
+                if let point {
+                    PointerVisibility.move(to: point)
+                    PointerVisibility.indicateAction(at: point)
+                }
+                if let actionName = try performClickAction(record: record, mouseButton: button) {
+                    return actionMetadata(path: "accessibility", actionName: actionName)
+                }
             }
-            if let point = center(record.localFrame, in: snapshot.windowBounds) {
+            if let point {
                 try Input.click(
                     pid: snapshot.app.pid,
                     at: point,
                     button: mouseButton(button),
-                    count: count
+                    count: count,
+                    movePointer: count > 1
                 )
                 return actionMetadata(path: "synthetic", fallbackReason: "actionUnsupported")
             }
@@ -777,6 +785,10 @@ final class Provider {
         let action = record.actions.first { SnapshotRenderHeuristics.prettyAction($0).caseInsensitiveCompare(requested) == .orderedSame || $0.caseInsensitiveCompare(requested) == .orderedSame }
         guard let action else {
             throw ProviderError.coded("action_not_supported", "'\(requested)' is not a valid secondary action for element \(record.index)")
+        }
+        if let point = center(record.localFrame, in: snapshot.windowBounds) {
+            PointerVisibility.move(to: point)
+            PointerVisibility.indicateAction(at: point)
         }
         guard performAction(record.element, action) else {
             throw ProviderError.coded("accessibility_error", "AXUIElementPerformAction(\(action)) failed")
@@ -868,18 +880,31 @@ final class Provider {
         let pages = try positiveNumber(params["pages"]?.number, defaultValue: 1, name: "pages")
         if let elementIndex = try optionalInteger(params, "elementIndex") {
             let record = try element(snapshot, elementIndex)
+            let point = center(record.localFrame, in: snapshot.windowBounds)
+            if let point {
+                PointerVisibility.move(to: point)
+            }
             let action = "AXScroll\(direction.capitalized)ByPage"
             if pages.rounded() == pages, let pageCount = boundedInteger(pages, as: Int.self),
                record.actions.contains(action) {
+                if let point {
+                    PointerVisibility.indicateAction(at: point)
+                }
                 for _ in 0..<max(1, pageCount) {
                     _ = performAction(record.element, action)
                 }
                 return actionMetadata(path: "accessibility", actionName: action)
             }
-            guard let point = center(record.localFrame, in: snapshot.windowBounds) else {
+            guard let point else {
                 throw ProviderError.coded("element_not_found", "element \(record.index) has no scrollable frame")
             }
-            try Input.scroll(pid: snapshot.app.pid, at: point, direction: direction, pages: pages)
+            try Input.scroll(
+                pid: snapshot.app.pid,
+                at: point,
+                direction: direction,
+                pages: pages,
+                movePointer: false
+            )
             return actionMetadata(path: "synthetic", fallbackReason: "actionUnsupported")
         }
         let point = try coordinatePoint(params: params, xKey: "x", yKey: "y", snapshot: snapshot)
@@ -2282,10 +2307,20 @@ private func resizePng(_ image: CGImage, scale: CGFloat) -> BoundedPNG? {
 }
 
 private enum Input {
-    static func click(pid: pid_t, at point: CGPoint, button: MouseButton, count: Int) throws {
+    static func click(
+        pid: pid_t,
+        at point: CGPoint,
+        button: MouseButton,
+        count: Int,
+        movePointer: Bool = true
+    ) throws {
         guard let source = CGEventSource(stateID: .combinedSessionState) else {
             throw ProviderError.coded("accessibility_error", "failed to create event source")
         }
+        if movePointer {
+            PointerVisibility.move(to: point)
+        }
+        PointerVisibility.indicateAction(at: point)
         for _ in 0..<max(count, 1) {
             try mouse(.mouseMoved, source: source, point: point, button: button.cgButton, pid: pid)
             try mouse(button.downEvent, source: source, point: point, button: button.cgButton, pid: pid)
@@ -2293,7 +2328,13 @@ private enum Input {
         }
     }
 
-    static func scroll(pid: pid_t, at point: CGPoint, direction: String, pages: Double) throws {
+    static func scroll(
+        pid: pid_t,
+        at point: CGPoint,
+        direction: String,
+        pages: Double,
+        movePointer: Bool = true
+    ) throws {
         guard let delta = boundedInteger(max(1, (12 * pages).rounded()), as: Int32.self) else {
             throw ProviderError.coded("invalid_argument", "pages is out of range")
         }
@@ -2302,6 +2343,10 @@ private enum Input {
         guard let event = CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 2, wheel1: wheel1, wheel2: wheel2, wheel3: 0) else {
             throw ProviderError.coded("accessibility_error", "failed to create scroll event")
         }
+        if movePointer {
+            PointerVisibility.move(to: point)
+        }
+        PointerVisibility.indicateAction(at: point)
         event.location = point
         event.postToPid(pid)
     }
@@ -2310,19 +2355,22 @@ private enum Input {
         guard let source = CGEventSource(stateID: .combinedSessionState) else {
             throw ProviderError.coded("accessibility_error", "failed to create event source")
         }
+        PointerVisibility.move(to: start)
         try mouse(.mouseMoved, source: source, point: start, button: .left, pid: pid)
+        PointerVisibility.press(at: start)
         try mouse(.leftMouseDown, source: source, point: start, button: .left, pid: pid)
-        for step in 1...10 {
-            let progress = CGFloat(step) / 10
+        for point in PointerMotionPath.points(from: start, to: end, steps: 10) {
+            PointerVisibility.followAction(to: point)
             try mouse(
                 .leftMouseDragged,
                 source: source,
-                point: CGPoint(x: start.x + (end.x - start.x) * progress, y: start.y + (end.y - start.y) * progress),
+                point: point,
                 button: .left,
                 pid: pid
             )
         }
         try mouse(.leftMouseUp, source: source, point: end, button: .left, pid: pid)
+        PointerVisibility.release(at: end)
     }
 
     static func typeText(_ text: String, pid: pid_t) throws {
@@ -3606,6 +3654,7 @@ private func isTrustedOrcaApplication(_ pid: pid_t) -> Bool {
     // Why: dev validation runs from per-worktree wrapper apps with stable
     // Orca-owned bundle ids; the sidecar peer check must still authorize them.
     return bundleId == "com.stablyai.orca" ||
+        bundleId == "com.stablyai.orca.dev" ||
         bundleId.hasPrefix("com.stablyai.orca.dev.") ||
         bundleId == "com.github.Electron"
 }
