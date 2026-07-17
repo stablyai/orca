@@ -1,9 +1,9 @@
 import { execFile } from 'node:child_process'
 import type {
   PlaybackSuppressionAdapter,
-  PlaybackSuppressionCapability,
   PlaybackSuppressionSnapshot
 } from './playback-suppression-service'
+import type { PlaybackSuppressionCapability } from '../../shared/speech-types'
 
 type CommandResult = { stdout: string; stderr: string }
 

@@ -1,6 +1,4 @@
-export type PlaybackSuppressionCapability =
-  | { available: true; backend: string }
-  | { available: false; reason: string }
+import type { PlaybackSuppressionCapability } from '../../shared/speech-types'
 
 export type PlaybackSuppressionSnapshot = {
   backend: string

@@ -371,6 +371,7 @@ import type {
   RateLimitState
 } from '../shared/rate-limit-types'
 import type {
+  PlaybackSuppressionCapability,
   SpeechErrorEvent,
   SpeechLifecycleEvent,
   SpeechModelManifest,
@@ -3247,6 +3248,11 @@ export type PreloadApi = {
     onRelayStatusChanged: (callback: (status: MobileRelayStatus) => void) => () => void
   }
   speech: {
+    getPlaybackSuppressionCapability: () => Promise<PlaybackSuppressionCapability>
+    acquirePlaybackSuppression: (
+      sessionId: string
+    ) => Promise<{ active: true } | { active: false; reason: 'canceled' | 'unavailable' }>
+    releasePlaybackSuppression: (sessionId: string) => Promise<void>
     getCatalog: () => Promise<SpeechModelManifest[]>
     getModelStates: () => Promise<SpeechModelState[]>
     getOpenAiApiKeyStatus: () => Promise<{ configured: boolean }>

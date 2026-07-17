@@ -5,12 +5,14 @@ const {
   fromWebContentsMock,
   getSpeechModelManagerMock,
   getSpeechSttServiceMock,
+  getPlaybackSuppressionServiceMock,
   deleteLocalSpeechModelMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   fromWebContentsMock: vi.fn(),
   getSpeechModelManagerMock: vi.fn(),
   getSpeechSttServiceMock: vi.fn(),
+  getPlaybackSuppressionServiceMock: vi.fn(),
   deleteLocalSpeechModelMock: vi.fn()
 }))
 
@@ -36,7 +38,8 @@ vi.mock('../speech/model-catalog', () => ({
 
 vi.mock('../speech/speech-runtime-service', () => ({
   getSpeechModelManager: getSpeechModelManagerMock,
-  getSpeechSttService: getSpeechSttServiceMock
+  getSpeechSttService: getSpeechSttServiceMock,
+  getPlaybackSuppressionService: getPlaybackSuppressionServiceMock
 }))
 
 vi.mock('../speech/speech-model-deletion', () => ({
@@ -61,6 +64,7 @@ describe('registerSpeechHandlers', () => {
     fromWebContentsMock.mockReset()
     getSpeechModelManagerMock.mockReset()
     getSpeechSttServiceMock.mockReset()
+    getPlaybackSuppressionServiceMock.mockReset()
     deleteLocalSpeechModelMock.mockReset()
   })
 
@@ -155,5 +159,62 @@ describe('registerSpeechHandlers', () => {
       sttService,
       modelId: 'model-1'
     })
+  })
+
+  it('scopes playback suppression to the renderer and dictation session', async () => {
+    const service = {
+      getCapability: vi.fn(async () => ({ available: true, backend: 'wpctl' })),
+      acquire: vi.fn(async () => ({ active: true })),
+      release: vi.fn(async () => undefined)
+    }
+    const sender = { id: 7, once: vi.fn() }
+    getPlaybackSuppressionServiceMock.mockReturnValue(service)
+    registerSpeechHandlers({} as never)
+
+    const capability = getHandler('speech:getPlaybackSuppressionCapability') as unknown as (event: {
+      sender: typeof sender
+    }) => Promise<{ available: boolean }>
+    const acquire = getHandler('speech:acquirePlaybackSuppression') as unknown as (
+      event: { sender: typeof sender },
+      sessionId: string
+    ) => Promise<{ active: boolean }>
+    const release = getHandler('speech:releasePlaybackSuppression') as unknown as (
+      event: { sender: typeof sender },
+      sessionId: string
+    ) => Promise<void>
+
+    await expect(capability({ sender })).resolves.toEqual({ available: true, backend: 'wpctl' })
+    await expect(acquire({ sender }, 'session-1')).resolves.toEqual({ active: true })
+    await release({ sender }, 'session-1')
+
+    expect(service.acquire).toHaveBeenCalledWith('desktop:7:session-1')
+    expect(service.release).toHaveBeenCalledWith('desktop:7:session-1')
+  })
+
+  it('releases active playback suppression when its renderer is destroyed', async () => {
+    let destroyed: (() => void) | undefined
+    const service = {
+      getCapability: vi.fn(),
+      acquire: vi.fn(async () => ({ active: true })),
+      release: vi.fn(async () => undefined)
+    }
+    const sender = {
+      id: 9,
+      once: vi.fn((event: string, listener: () => void) => {
+        if (event === 'destroyed') {
+          destroyed = listener
+        }
+      })
+    }
+    getPlaybackSuppressionServiceMock.mockReturnValue(service)
+    registerSpeechHandlers({} as never)
+    const acquire = getHandler('speech:acquirePlaybackSuppression') as unknown as (
+      event: { sender: typeof sender },
+      sessionId: string
+    ) => Promise<{ active: boolean }>
+
+    await acquire({ sender }, 'session-2')
+    destroyed?.()
+    await vi.waitFor(() => expect(service.release).toHaveBeenCalledWith('desktop:9:session-2'))
   })
 })

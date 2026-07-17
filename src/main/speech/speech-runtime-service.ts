@@ -1,6 +1,11 @@
 import { ModelManager } from './model-manager'
 import { SttService } from './stt-service'
 import type { VoiceSettings } from '../../shared/speech-types'
+import { createLinuxPlaybackSuppressionAdapter } from './playback-suppression-linux'
+import {
+  PlaybackSuppressionService,
+  type PlaybackSuppressionAdapter
+} from './playback-suppression-service'
 
 type SpeechSettingsStore = {
   getSettings(): {
@@ -10,6 +15,20 @@ type SpeechSettingsStore = {
 
 let modelManager: ModelManager | null = null
 let sttService: SttService | null = null
+let playbackSuppressionService: PlaybackSuppressionService | null = null
+
+const unsupportedPlaybackSuppressionAdapter: PlaybackSuppressionAdapter = {
+  getCapability: async () => ({
+    available: false,
+    reason: 'System audio muting is not supported on this operating system yet.'
+  }),
+  snapshot: async () => {
+    throw new Error('System audio muting is not supported on this operating system yet.')
+  },
+  setMuted: async () => {
+    throw new Error('System audio muting is not supported on this operating system yet.')
+  }
+}
 
 export function getSpeechModelManager(store: SpeechSettingsStore): ModelManager {
   if (!modelManager) {
@@ -25,4 +44,15 @@ export function getSpeechSttService(store: SpeechSettingsStore): SttService {
     sttService = new SttService(getSpeechModelManager(store))
   }
   return sttService
+}
+
+export function getPlaybackSuppressionService(): PlaybackSuppressionService {
+  if (!playbackSuppressionService) {
+    playbackSuppressionService = new PlaybackSuppressionService(
+      process.platform === 'linux'
+        ? createLinuxPlaybackSuppressionAdapter()
+        : unsupportedPlaybackSuppressionAdapter
+    )
+  }
+  return playbackSuppressionService
 }
