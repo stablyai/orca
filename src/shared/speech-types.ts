@@ -61,6 +61,7 @@ export type VoiceSettings = {
   modelsDir: string
   language: string
   dictationMode: DictationMode
+  muteSystemAudioDuringDictation: boolean
   terminalConfirmBeforeInsert: boolean
   userModels: UserModelConfig[]
   openAiApiKeyConfigured: boolean

@@ -418,6 +418,7 @@ export function getDefaultVoiceSettings(): VoiceSettings {
     modelsDir: '',
     language: 'en',
     dictationMode: 'toggle' as const,
+    muteSystemAudioDuringDictation: false,
     terminalConfirmBeforeInsert: false,
     userModels: [],
     openAiApiKeyConfigured: false
