@@ -145,10 +145,11 @@ export class PlaybackSuppressionService {
         return { active: false, reason: 'canceled' }
       }
       if (!snapshot.muted) {
-        if (snapshot.endpointId) {
-          await this.recoveryStore?.write(snapshot)
-          recoveryWritten = Boolean(this.recoveryStore)
+        if (this.recoveryStore && (!snapshot.endpointId || !snapshot.endpointTarget)) {
+          throw new Error('Playback endpoint cannot be restored safely.')
         }
+        await this.recoveryStore?.write(snapshot)
+        recoveryWritten = Boolean(this.recoveryStore)
         await this.adapter.setMuted(true, controller.signal, snapshot)
       }
       if (!this.isCurrent(generation)) {

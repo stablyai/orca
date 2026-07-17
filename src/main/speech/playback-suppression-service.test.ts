@@ -152,6 +152,24 @@ describe('PlaybackSuppressionService', () => {
     expect(adapter.setMuted).toHaveBeenCalledTimes(1)
   })
 
+  it('does not mute without an exact endpoint recovery target', async () => {
+    const adapter = createAdapter(false)
+    const recoveryStore: PlaybackSuppressionRecoveryStore = {
+      read: vi.fn(async () => null),
+      write: vi.fn(async () => undefined),
+      clear: vi.fn(async () => undefined)
+    }
+    const service = new PlaybackSuppressionService(adapter, recoveryStore)
+
+    await expect(service.acquire('dictation:1')).resolves.toEqual({
+      active: false,
+      reason: 'unavailable'
+    })
+
+    expect(adapter.setMuted).not.toHaveBeenCalled()
+    expect(recoveryStore.write).not.toHaveBeenCalled()
+  })
+
   it('records recovery state before muting and clears it after restoration', async () => {
     const calls: string[] = []
     const snapshot = {
@@ -241,6 +259,7 @@ describe('PlaybackSuppressionService', () => {
       snapshot: vi.fn(async () => ({
         backend: 'test',
         endpointId: 'speaker-1',
+        endpointTarget: 'speaker-1',
         muted: false
       })),
       setMuted: vi.fn(async () => {

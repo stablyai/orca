@@ -13,7 +13,7 @@ export type PlaybackSuppressionCommandRunner = (
   signal?: AbortSignal
 ) => Promise<CommandResult>
 
-type LinuxBackend = 'wpctl' | 'pactl' | 'amixer'
+type LinuxBackend = 'wpctl' | 'pactl'
 
 const UNSUPPORTED_REASON = 'No supported Linux audio mixer was found.'
 
@@ -36,15 +36,6 @@ const backendProbes: {
     parseMuted: (stdout) => {
       const match = /Mute:\s*(yes|no)/i.exec(stdout)
       return match ? match[1]?.toLowerCase() === 'yes' : null
-    }
-  },
-  {
-    backend: 'amixer',
-    command: 'amixer',
-    args: ['get', 'Master'],
-    parseMuted: (stdout) => {
-      const match = /\[(on|off)\]/i.exec(stdout)
-      return match ? match[1]?.toLowerCase() === 'off' : null
     }
   }
 ]
@@ -74,25 +65,25 @@ export function createLinuxPlaybackSuppressionAdapter(
   const readEndpoint = async (
     backend: LinuxBackend,
     signal?: AbortSignal
-  ): Promise<{ endpointId?: string; endpointTarget?: string }> => {
-    try {
-      switch (backend) {
-        case 'wpctl': {
-          const { stdout } = await run('wpctl', ['inspect', '@DEFAULT_AUDIO_SINK@'], signal)
-          const endpointId = /node\.name\s*=\s*"([^"]+)"/i.exec(stdout)?.[1]
-          const endpointTarget = /^id\s+(\d+),/im.exec(stdout)?.[1]
-          return { endpointId, endpointTarget }
+  ): Promise<{ endpointId: string; endpointTarget: string }> => {
+    switch (backend) {
+      case 'wpctl': {
+        const { stdout } = await run('wpctl', ['inspect', '@DEFAULT_AUDIO_SINK@'], signal)
+        const endpointId = /node\.name\s*=\s*"([^"]+)"/i.exec(stdout)?.[1]
+        const endpointTarget = /^id\s+(\d+),/im.exec(stdout)?.[1]
+        if (!endpointId || !endpointTarget) {
+          throw new Error('Could not identify the default wpctl endpoint.')
         }
-        case 'pactl': {
-          const { stdout } = await run('pactl', ['get-default-sink'], signal)
-          const endpointId = stdout.trim() || undefined
-          return { endpointId, endpointTarget: endpointId }
-        }
-        case 'amixer':
-          return {}
+        return { endpointId, endpointTarget }
       }
-    } catch {
-      return {}
+      case 'pactl': {
+        const { stdout } = await run('pactl', ['get-default-sink'], signal)
+        const endpointId = stdout.trim()
+        if (!endpointId) {
+          throw new Error('Could not identify the default pactl endpoint.')
+        }
+        return { endpointId, endpointTarget: endpointId }
+      }
     }
   }
 
@@ -152,9 +143,6 @@ export function createLinuxPlaybackSuppressionAdapter(
           ['set-sink-mute', endpointTarget ?? '@DEFAULT_SINK@', muted ? '1' : '0'],
           signal
         )
-        return
-      case 'amixer':
-        await run('amixer', ['set', 'Master', muted ? 'mute' : 'unmute'], signal)
         return
       case null:
       default:

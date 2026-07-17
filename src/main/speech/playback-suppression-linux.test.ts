@@ -35,13 +35,20 @@ describe('Linux playback suppression', () => {
   })
 
   it('preserves a muted wpctl snapshot', async () => {
-    const run = vi.fn<PlaybackSuppressionCommandRunner>(async () => ({
-      stdout: 'Volume: 0.58 [MUTED]\n',
-      stderr: ''
-    }))
+    const run = vi.fn<PlaybackSuppressionCommandRunner>(async (_command, args) =>
+      args[0] === 'inspect'
+        ? {
+            stdout:
+              'id 118, type PipeWire:Interface:Node\n  * node.name = "bluez_output.speaker_1"\n',
+            stderr: ''
+          }
+        : { stdout: 'Volume: 0.58 [MUTED]\n', stderr: '' }
+    )
 
     await expect(createLinuxPlaybackSuppressionAdapter(run).snapshot()).resolves.toEqual({
       backend: 'wpctl',
+      endpointId: 'bluez_output.speaker_1',
+      endpointTarget: '118',
       muted: true
     })
   })
@@ -124,6 +131,45 @@ describe('Linux playback suppression', () => {
       endpointId: 'alsa_output.speaker_1',
       endpointTarget: 'alsa_output.speaker_1',
       muted: true
+    })
+  })
+
+  it('falls back when wpctl cannot identify an exact endpoint target', async () => {
+    const run = vi.fn<PlaybackSuppressionCommandRunner>(async (command, args) => {
+      if (command === 'wpctl' && args[0] === 'get-volume') {
+        return { stdout: 'Volume: 0.58\n', stderr: '' }
+      }
+      if (command === 'wpctl' && args[0] === 'inspect') {
+        return { stdout: 'unrecognized output\n', stderr: '' }
+      }
+      if (command === 'pactl' && args[0] === 'get-sink-mute') {
+        return { stdout: 'Mute: no\n', stderr: '' }
+      }
+      if (command === 'pactl' && args[0] === 'get-default-sink') {
+        return { stdout: 'alsa_output.speaker_1\n', stderr: '' }
+      }
+      throw new Error('not reached')
+    })
+
+    await expect(createLinuxPlaybackSuppressionAdapter(run).snapshot()).resolves.toEqual({
+      backend: 'pactl',
+      endpointId: 'alsa_output.speaker_1',
+      endpointTarget: 'alsa_output.speaker_1',
+      muted: false
+    })
+  })
+
+  it('does not advertise amixer without an exact device target', async () => {
+    const run = vi.fn<PlaybackSuppressionCommandRunner>(async (command) => {
+      if (command === 'amixer') {
+        return { stdout: "Simple mixer control 'Master',0\n  Front Left: [on]\n", stderr: '' }
+      }
+      throw new Error('ENOENT')
+    })
+
+    await expect(createLinuxPlaybackSuppressionAdapter(run).getCapability()).resolves.toEqual({
+      available: false,
+      reason: 'No supported Linux audio mixer was found.'
     })
   })
 
